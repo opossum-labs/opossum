@@ -31,6 +31,7 @@ const NODE_PARABOLA: Asset = asset!("/assets/icons/node_parabola.svg");
 const NODE_PARAXIAL: Asset = asset!("/assets/icons/node_paraxial.svg");
 const NODE_PROPAGATION: Asset = asset!("/assets/icons/node_propagation.svg");
 const NODE_SOURCE: Asset = asset!("/assets/icons/node_source.svg");
+const NODE_SOURCEPORT: Asset = asset!("/assets/icons/node_source.svg");
 const NODE_SPECTROMETER: Asset = asset!("/assets/icons/node_spectrometer.svg");
 const NODE_WAVEFRONT: Asset = asset!("/assets/icons/node_wavefront.svg");
 const NODE_SPOTDIAGRAM: Asset = asset!("/assets/icons/node_spotdiagram.svg");
@@ -60,15 +61,14 @@ impl NodeType {
     fn icon(&self) -> Option<Asset> {
         match self {
             Self::Optical(node_type) => match node_type.as_str() {
-                // "dummy" => Some(NODE_UNKNOWN),
                 "beam splitter" => Some(NODE_BEAMSPLITTER),
                 "energy meter" => Some(NODE_ENERGY_METER),
                 "group" => Some(NODE_GROUP),
                 "ideal filter" => Some(NODE_FILTER),
                 "reflective grating" => Some(NODE_GRATING),
-                // "reference" => Some(NODE_UNKNOWN),
                 "lens" => Some(NODE_LENS),
                 "cylindric lens" => Some(NODE_CYLINDRIC_LENS),
+                "source port" => Some(NODE_SOURCEPORT),
                 "source" => Some(NODE_SOURCE),
                 "spectrometer" => Some(NODE_SPECTROMETER),
                 "spot diagram" => Some(NODE_SPOTDIAGRAM),

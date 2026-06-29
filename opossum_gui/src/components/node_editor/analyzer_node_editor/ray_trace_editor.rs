@@ -14,19 +14,16 @@ use opossum_core::{
     analyzers::propagation_strategy::MissedSurfaceStrategy, joule, prelude::*,
     types::api_types::SourcePortDto, utils::default_from_name::DefaultFromName,
 };
-use uom::si::f64::Energy;
 use uuid::Uuid;
 
 #[component]
 pub fn RayTraceEditor(
-    node_id: Memo<Uuid>,
+    node_id: Uuid,
     ray_trace_config: RayTraceConfig,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let mut ray_trace_config_sig = use_signal(|| ray_trace_config);
     let mut available_sources = use_signal(Vec::<SourcePortDto>::new);
 
-    // Fetch the globally available SourcePorts from the backend recursively on mount
     use_future(move || async move {
         if let Ok(sources) = api::get_available_sources().await {
             available_sources.set(sources);
@@ -37,41 +34,69 @@ pub fn RayTraceEditor(
         }
     });
 
-    let ray_trace_config_handler = EventHandler::new(move |ray_trace_config: RayTraceConfig| {
-        on_change.call(NodeChangeEvent {
-            node_id: *node_id.read(),
-            action: NodeChangeAction::AnalyzerType(AnalyzerType::RayTrace(ray_trace_config)),
-        });
-    });
-
-    let max_refractions_handler = EventHandler::new(move |max_refractions: usize| {
-        ray_trace_config_sig
-            .write()
-            .set_max_number_of_refractions(max_refractions);
-        ray_trace_config_handler.call((*ray_trace_config_sig.read()).clone());
-    });
-    let max_bounces_handler = EventHandler::new(move |max_bounces: usize| {
-        ray_trace_config_sig
-            .write()
-            .set_max_number_of_bounces(max_bounces);
-        ray_trace_config_handler.call((*ray_trace_config_sig.read()).clone());
-    });
-    let min_ray_energy_handler = EventHandler::new(move |min_ray_energy: Energy| {
-        if ray_trace_config_sig
-            .write()
-            .set_min_energy_per_ray(min_ray_energy)
-            .is_ok()
-        {
-            ray_trace_config_handler.call((*ray_trace_config_sig.read()).clone());
+    let on_save_max_refractions = {
+        let config = ray_trace_config.clone();
+        move |val: String| {
+            if let Ok(max_refractions) = val.parse::<usize>() {
+                let mut local_config = config.clone();
+                local_config.set_max_number_of_refractions(max_refractions);
+                on_change.call(NodeChangeEvent {
+                    node_id,
+                    action: NodeChangeAction::AnalyzerType(AnalyzerType::RayTrace(local_config)),
+                });
+            }
         }
-    });
-    let missed_surface_strategy_handler =
-        EventHandler::new(move |missed_surface_strategy: MissedSurfaceStrategy| {
-            ray_trace_config_sig
-                .write()
-                .set_missed_surface_strategy(missed_surface_strategy);
-            ray_trace_config_handler.call((*ray_trace_config_sig.read()).clone());
-        });
+    };
+
+    let on_save_max_bounces = {
+        let config = ray_trace_config.clone();
+        move |val: String| {
+            if let Ok(max_bounces) = val.parse::<usize>() {
+                let mut local_config = config.clone();
+                local_config.set_max_number_of_bounces(max_bounces);
+                on_change.call(NodeChangeEvent {
+                    node_id,
+                    action: NodeChangeAction::AnalyzerType(AnalyzerType::RayTrace(local_config)),
+                });
+            }
+        }
+    };
+
+    let on_change_min_energy = {
+        let config = ray_trace_config.clone();
+        move |val: f64| {
+            if val >= 0.0 {
+                let mut local_config = config.clone();
+                if local_config.set_min_energy_per_ray(joule!(val)).is_ok() {
+                    on_change.call(NodeChangeEvent {
+                        node_id,
+                        action: NodeChangeAction::AnalyzerType(AnalyzerType::RayTrace(
+                            local_config,
+                        )),
+                    });
+                }
+            } else {
+                OPOSSUM_UI_LOGS
+                    .write()
+                    .add_log("Minimum ray energy must be non-negative.");
+            }
+        }
+    };
+
+    let on_change_missed_strategy = {
+        let config = ray_trace_config.clone();
+        move |e: Event<FormData>| {
+            let val = e.value();
+            if let Some(surface_strategy) = MissedSurfaceStrategy::default_from_name(val.as_str()) {
+                let mut local_config = config.clone();
+                local_config.set_missed_surface_strategy(surface_strategy);
+                on_change.call(NodeChangeEvent {
+                    node_id,
+                    action: NodeChangeAction::AnalyzerType(AnalyzerType::RayTrace(local_config)),
+                });
+            }
+        }
+    };
 
     let sources_list = available_sources.read().clone();
 
@@ -80,67 +105,42 @@ pub fn RayTraceEditor(
             FlushableTextInput {
                 id: "rayTraceMaxRefr".to_string(),
                 label: "Max refractions".to_string(),
-                value: format!("{}", ray_trace_config_sig.read().max_number_of_refractions()),
+                value: format!("{}", ray_trace_config.max_number_of_refractions()),
                 r#type: "number",
                 step: "1",
                 min: "0",
                 container_class: "form-floating border-start".to_string(),
                 input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
                 label_class: "form-label text-secondary".to_string(),
-                on_save: move |val: String| {
-                    if let Ok(max_refractions) = val.parse::<usize>() {
-                        max_refractions_handler.call(max_refractions);
-                    }
-                },
+                on_save: on_save_max_refractions,
             }
             FlushableTextInput {
                 id: "rayTraceMaxBounces".to_string(),
                 label: "Max bounces".to_string(),
-                value: format!("{}", ray_trace_config_sig.read().max_number_of_bounces()),
+                value: format!("{}", ray_trace_config.max_number_of_bounces()),
                 r#type: "number",
                 step: "1",
                 min: "0",
                 container_class: "form-floating border-start".to_string(),
                 input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
                 label_class: "form-label text-secondary".to_string(),
-                on_save: move |val: String| {
-                    if let Ok(max_bounces) = val.parse::<usize>() {
-                        max_bounces_handler.call(max_bounces);
-                    }
-                },
+                on_save: on_save_max_bounces,
             }
             NodeConfigUnitInput {
                 id: "rayTraceMinEnergy".to_string(),
                 label: "Minimum ray energy".to_string(),
-                value: ray_trace_config_sig.read().min_energy_per_ray().value,
+                value: ray_trace_config.min_energy_per_ray().value,
                 unit_config: UnitHandling::new("J", true),
-                onchange: move |val: f64| {
-                    if val >= 0.0 {
-                        min_ray_energy_handler.call(joule!(val));
-                    } else {
-                        OPOSSUM_UI_LOGS.write().add_log("Minimum ray energy must be non-negative.");
-                    }
-                },
+                onchange: on_change_min_energy,
             }
 
             LabeledSelect {
                 id: "rayTraceMissedSurf".to_string(),
                 label: "Missed-Surface Strategy".to_string(),
-                options: select_options_from_enum_iterator(
-                    ray_trace_config_sig.read().missed_surface_strategy(),
-                    None,
-                ),
-                onchange: move |e: Event<FormData>| {
-                    let val = e.value();
-                    if let Some(surface_strategy) = MissedSurfaceStrategy::default_from_name(
-                        val.as_str(),
-                    ) {
-                        missed_surface_strategy_handler.call(surface_strategy);
-                    }
-                },
+                options: select_options_from_enum_iterator(ray_trace_config.missed_surface_strategy(), None),
+                onchange: on_change_missed_strategy,
             }
 
-            // --- Sektion für das Zuordnen von SourcePort Eigenschaften ---
             div { class: "mt-4 border-top pt-3 text-light",
                 h6 { class: "text-secondary mb-3", "Sources Definitions" }
 
@@ -156,8 +156,9 @@ pub fn RayTraceEditor(
                                 SourcePortCard {
                                     key: "{port.uuid}",
                                     port,
-                                    ray_trace_config_sig,
-                                    ray_trace_config_handler,
+                                    ray_trace_config: ray_trace_config.clone(),
+                                    on_change,
+                                    analyzer_id: node_id,
                                 }
                             }
                         })
@@ -170,17 +171,18 @@ pub fn RayTraceEditor(
 #[component]
 fn SourcePortCard(
     port: SourcePortDto,
-    ray_trace_config_sig: Signal<RayTraceConfig>,
-    ray_trace_config_handler: EventHandler<RayTraceConfig>,
+    ray_trace_config: RayTraceConfig,
+    on_change: EventHandler<NodeChangeEvent>,
+    analyzer_id: Uuid, // Cleaned up: Only analyzer_id needed
 ) -> Element {
     let mut is_collapsed = use_signal(|| true);
     let port_uuid = port.uuid;
     let port_name = port.name;
 
-    let existing_source = ray_trace_config_sig
-        .read()
+    let existing_source = ray_trace_config
         .get_source(&port_uuid)
         .map_or_else(RayDataSource::default, |builder| builder.source().clone());
+
     rsx! {
         div { class: "card bg-dark border-secondary mb-2",
             div {
@@ -199,19 +201,25 @@ fn SourcePortCard(
             }
 
             if !is_collapsed() {
-                div { class: "card-body p-2 bg-dark text-light",
+                div {
+                    key: "{analyzer_id}",
+                    class: "card-body p-2 bg-dark text-light",
+
                     RaySourceEditor {
                         ray_data_builder: existing_source,
                         readonly: false,
                         on_save: move |light_builder| {
-                            // Extract the concrete RayDataBuilder from the generic LightDataBuilder enum
                             if let LightDataBuilder::Geometric(updated_builder) = light_builder {
-                                let mut updated_config = (*ray_trace_config_sig.read()).clone();
+                                let mut updated_config = ray_trace_config.clone();
                                 updated_config.map_source(port_uuid, updated_builder.into());
 
-                                // Push the entire updated configuration up the standard pipeline
-                                ray_trace_config_sig.set(updated_config.clone());
-                                ray_trace_config_handler.call(updated_config);
+                                on_change
+                                    .call(NodeChangeEvent {
+                                        node_id: analyzer_id,
+                                        action: NodeChangeAction::AnalyzerType(
+                                            AnalyzerType::RayTrace(updated_config),
+                                        ),
+                                    });
                             }
                         },
                     }

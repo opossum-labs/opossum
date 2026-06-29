@@ -5,6 +5,7 @@ use crate::{
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
     },
 };
+
 use dioxus::prelude::*;
 use opossum_core::{
     analyzers::energy::EnergyConfig,
@@ -15,16 +16,12 @@ use uuid::Uuid;
 
 #[component]
 pub fn EnergyEditor(
-    node_id: Memo<Uuid>,
+    node_id: Uuid,
     energy_config: EnergyConfig,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let energy_config_sig = use_signal(|| energy_config);
-
-    // Signal to store the slim DTOs of all available SourcePorts in the model
     let mut available_sources = use_signal(Vec::<SourcePortDto>::new);
 
-    // Fetch globally available SourcePorts from the backend recursively on mount
     use_future(move || async move {
         if let Ok(sources) = api::get_available_sources().await {
             available_sources.set(sources);
@@ -35,19 +32,10 @@ pub fn EnergyEditor(
         }
     });
 
-    let energy_config_handler = EventHandler::new(move |energy_config: EnergyConfig| {
-        on_change.call(NodeChangeEvent {
-            node_id: *node_id.read(),
-            action: NodeChangeAction::AnalyzerType(AnalyzerType::Energy(energy_config)),
-        });
-    });
-
-    // CRITICAL LIFETIME FIX: Clone the data outside the rsx tree to release the read guard immediately
     let sources_list = available_sources.read().clone();
 
     rsx! {
       div { class: "energy-analyzer-fields",
-        // --- Section for configuring SourcePort properties ---
         div { class: "mt-2 text-light",
           h6 { class: "text-secondary mb-3", "Sources Definitions" }
 
@@ -63,8 +51,9 @@ pub fn EnergyEditor(
                         SourcePortCard {
                           key: "{port.uuid}",
                           port,
-                          energy_config_sig,
-                          energy_config_handler,
+                          energy_config: energy_config.clone(),
+                          on_change,
+                          analyzer_id: node_id,
                         }
                       }
                   })
@@ -77,16 +66,15 @@ pub fn EnergyEditor(
 #[component]
 fn SourcePortCard(
     port: SourcePortDto,
-    energy_config_sig: Signal<EnergyConfig>,
-    energy_config_handler: EventHandler<EnergyConfig>,
+    energy_config: EnergyConfig,
+    on_change: EventHandler<NodeChangeEvent>,
+    analyzer_id: Uuid, // Cleaned up: Only analyzer_id needed
 ) -> Element {
     let mut is_collapsed = use_signal(|| true);
     let port_uuid = port.uuid;
     let port_name = port.name;
 
-    // Safely look up the existing configuration via the mapped energy builder inside the core state
-    let existing_source = energy_config_sig
-        .read()
+    let existing_source = energy_config
         .get_source(&port_uuid)
         .cloned()
         .unwrap_or_else(EnergyDataBuilder::default);
@@ -109,19 +97,25 @@ fn SourcePortCard(
         }
 
         if !is_collapsed() {
-          div { class: "card-body p-2 bg-dark text-light",
+          div {
+            key: "{analyzer_id}",
+            class: "card-body p-2 bg-dark text-light",
+
             EnergySourceEditor {
               energy_data_builder: existing_source,
               readonly: false,
               on_save: move |light_builder| {
-                  // Extract the concrete EnergyDataBuilder from the generic LightDataBuilder enum
                   if let LightDataBuilder::Energy(updated_builder) = light_builder {
-                      let mut updated_config = (*energy_config_sig.read()).clone();
+                      let mut updated_config = energy_config.clone();
                       updated_config.map_source(port_uuid, updated_builder);
 
-                      // Push the entire updated configuration up the standard pipeline
-                      energy_config_sig.set(updated_config.clone());
-                      energy_config_handler.call(updated_config);
+                      on_change
+                          .call(NodeChangeEvent {
+                              node_id: analyzer_id,
+                              action: NodeChangeAction::AnalyzerType(
+                                  AnalyzerType::Energy(updated_config),
+                              ),
+                          });
                   }
               },
             }

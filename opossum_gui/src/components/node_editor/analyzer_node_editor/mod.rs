@@ -7,8 +7,7 @@ pub mod ray_trace_editor;
 use crate::components::{
     node_editor::{
         analyzer_node_editor::{
-            energy_editor::EnergyEditor, // <-- NEU
-            ghost_focus_editor::GhostFocusEditor,
+            energy_editor::EnergyEditor, ghost_focus_editor::GhostFocusEditor,
             ray_trace_editor::RayTraceEditor,
         },
         node_config_editor::NodeChangeEvent,
@@ -26,21 +25,24 @@ pub fn AnalyzerNodeEditor(
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let node_id = use_memo(move || active_node.read().node_id);
+
+    // CRITICAL FIX: Pair the node_id directly inside the async future with the fetched info.
+    // This ensures that the ID and the Config data update at the EXACT same millisecond.
     let resource_future = use_resource(move || async move {
-        let node_id = *node_id.read();
-        match api::get_analyzer(node_id).await {
-            Ok(analyzer_info) => Some(analyzer_info),
+        let current_id = *node_id.read();
+        match api::get_analyzer(current_id).await {
+            Ok(analyzer_info) => Some((current_id, analyzer_info)), // Paired Tuple
             Err(err_str) => {
                 OPOSSUM_UI_LOGS.write().add_log(&err_str);
                 None
             }
         }
     });
+
     match &*resource_future.read_unchecked() {
-        Some(Some(analyzer_info)) => {
+        Some(Some((loaded_id, analyzer_info))) => {
+            let loaded_id_val = *loaded_id;
             rsx! {
-                // --- GLOBAL SCROLL CONTAINER ---
-                // Provides unified vertical scrolling for all analyzer types
                 div {
                     class: "analyzer-node-editor-container p-1",
                     style: "max-height: 75vh; overflow-y: auto; overflow-x: hidden; padding-right: 4px;",
@@ -57,17 +59,17 @@ pub fn AnalyzerNodeEditor(
                             match analyzer_info.analyzer_type().clone() {
                                 AnalyzerType::Energy(energy_config) => {
                                     rsx! {
-                                        EnergyEditor { node_id, energy_config, on_change }
+                                        EnergyEditor { node_id: loaded_id_val, energy_config, on_change }
                                     }
                                 }
                                 AnalyzerType::RayTrace(ray_trace_config) => {
                                     rsx! {
-                                        RayTraceEditor { node_id, ray_trace_config, on_change }
+                                        RayTraceEditor { node_id: loaded_id_val, ray_trace_config, on_change }
                                     }
                                 }
                                 AnalyzerType::GhostFocus(ghost_focus_config) => {
                                     rsx! {
-                                        GhostFocusEditor { node_id, ghost_focus_config, on_change }
+                                        GhostFocusEditor { node_id: loaded_id_val, ghost_focus_config, on_change }
                                     }
                                 }
                             }
