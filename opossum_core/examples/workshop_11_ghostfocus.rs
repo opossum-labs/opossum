@@ -69,7 +69,7 @@ fn main() -> OpmResult<()> {
     // The physical beam properties are assigned later through the
     // GhostFocus analyzer configuration.
     let mut src = SourcePort::new("collimated ray source");
-      // Assign the laser-induced damage threshold (LIDT) of the source output.
+    // Assign the laser-induced damage threshold (LIDT) of the source output.
     src.set_lidt(&PortType::Output, "output_1", J_per_cm2!(2.0))?;
     // Add the source to the optical system.
     let i_src = scenery.add_node(src)?;
@@ -121,7 +121,7 @@ fn main() -> OpmResult<()> {
     lens2.set_lidt(&PortType::Output, "output_1", J_per_cm2!(2.0))?;
     let i_l2 = scenery.add_node(lens2)?;
 
-   // Final mirror directing the beam to the system output.
+    // Final mirror directing the beam to the system output.
     let mir3 = scenery.add_node(ThinMirror::new("Mirror 3"))?; // .with_tilt(degree!(5., 0., 0.))?)?;
 
     // Connect all optical components.
@@ -134,7 +134,7 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_l2, "output_1", mir3, "input_1", millimeter!(150.0))?;
 
     let mut doc = OpmDocument::new(scenery);
-    
+
     // Define the physical laser source used by the GhostFocus analyzer.
     //
     // The beam consists of:

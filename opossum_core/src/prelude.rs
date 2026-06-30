@@ -1,6 +1,6 @@
 // Re-export the most common items
 pub use super::{
-    analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
+    analyzers::{AnalyzerType, EnergyConfig, GhostFocusConfig, RayTraceConfig},
     apertures::{Aperture, ApertureShape, ApertureType},
     centimeter,
     core_optics::{Alignable, OpticNode, PortType},
@@ -16,8 +16,8 @@ pub use super::{
     nodes::{
         BeamSplitter, ConnectionInfo, CylindricLens, Dummy, EnergyMeter, FluenceDetector,
         IdealFilter, Lens, Metertype, NodeGroup, NodeReference, ParabolicMirror, ParaxialSurface,
-        RayPropagationVisualizer, ReflectiveGrating, Source, SourcePort, Spectrometer,
-        SpectrometerType, SplittingConfigBuilder, SpotDiagram, ThinMirror, WaveFront, Wedge,
+        RayPropagationVisualizer, ReflectiveGrating, SourcePort, Spectrometer, SpectrometerType,
+        SplittingConfigBuilder, SpotDiagram, ThinMirror, WaveFront, Wedge,
         collimated_line_ray_builder,
         ideal_filter::{
             BandFilter, BandFilterType, EdgeFilter, EdgeFilterType, FilterTypeBuilder,

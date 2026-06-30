@@ -35,7 +35,6 @@ mod paraxial_surface;
 pub mod ray_propagation_visualizer;
 mod reference;
 pub mod reflective_grating;
-mod source;
 mod source_helper;
 mod source_port;
 mod spectrometer;
@@ -57,18 +56,16 @@ pub use paraxial_surface::ParaxialSurface;
 pub use ray_propagation_visualizer::RayPropagationVisualizer;
 pub use reference::NodeReference;
 pub use reflective_grating::ReflectiveGrating;
-pub use spectrometer::{Spectrometer, SpectrometerType};
-pub use thin_mirror::ThinMirror;
-pub use wavefront::WaveFront;
-pub use wavefront::wavefront_data::{WaveFrontData, WaveFrontMap};
-
-pub use source::Source;
 pub use source_helper::{
     collimated_line_ray_builder, point_ray_builder, round_collimated_ray_builder,
 };
 pub use source_port::SourcePort;
+pub use spectrometer::{Spectrometer, SpectrometerType};
 pub use spot_diagram::SpotDiagram;
 use std::sync::{Arc, Mutex};
+pub use thin_mirror::ThinMirror;
+pub use wavefront::WaveFront;
+pub use wavefront::wavefront_data::{WaveFrontData, WaveFrontMap};
 pub use wedge::Wedge;
 
 use crate::{

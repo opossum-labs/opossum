@@ -30,7 +30,6 @@ const NODE_MIRROR: Asset = asset!("/assets/icons/node_mirror.svg");
 const NODE_PARABOLA: Asset = asset!("/assets/icons/node_parabola.svg");
 const NODE_PARAXIAL: Asset = asset!("/assets/icons/node_paraxial.svg");
 const NODE_PROPAGATION: Asset = asset!("/assets/icons/node_propagation.svg");
-const NODE_SOURCE: Asset = asset!("/assets/icons/node_source.svg");
 const NODE_SOURCEPORT: Asset = asset!("/assets/icons/node_source.svg");
 const NODE_SPECTROMETER: Asset = asset!("/assets/icons/node_spectrometer.svg");
 const NODE_WAVEFRONT: Asset = asset!("/assets/icons/node_wavefront.svg");
@@ -69,7 +68,6 @@ impl NodeType {
                 "lens" => Some(NODE_LENS),
                 "cylindric lens" => Some(NODE_CYLINDRIC_LENS),
                 "source port" => Some(NODE_SOURCEPORT),
-                "source" => Some(NODE_SOURCE),
                 "spectrometer" => Some(NODE_SPECTROMETER),
                 "spot diagram" => Some(NODE_SPOTDIAGRAM),
                 "wavefront monitor" => Some(NODE_WAVEFRONT),

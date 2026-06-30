@@ -11,13 +11,12 @@ pub mod ghostfocus;
 pub mod propagation_strategy;
 pub mod raytrace;
 
-use crate::{
-    analyzers::energy::EnergyConfig, error::OpmResult, nodes::NodeGroup,
-    reporting::analysis_report::AnalysisReport,
-};
+use crate::{error::OpmResult, nodes::NodeGroup, reporting::analysis_report::AnalysisReport};
 pub use analyzable::Analyzable;
+pub use energy::EnergyConfig;
 pub use ghostfocus::GhostFocusConfig;
 pub use raytrace::RayTraceConfig;
+
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use utoipa::ToSchema;
