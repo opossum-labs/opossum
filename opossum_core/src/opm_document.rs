@@ -16,11 +16,11 @@ use crate::{
         file_utils::{create_f_path, create_file_instance},
     },
 };
+use indexmap::IndexMap;
 use log::{info, warn};
 use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
     fs::{self, File},
     io::Write,
     path::Path,
@@ -77,8 +77,8 @@ pub struct OpmDocument {
     scenery: NodeGroup,
     #[serde(default, rename = "global")]
     global_conf: Arc<Mutex<SceneryResources>>,
-    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    analyzers: HashMap<Uuid, AnalyzerInfo>,
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    analyzers: IndexMap<Uuid, AnalyzerInfo>,
 }
 impl Default for OpmDocument {
     fn default() -> Self {
@@ -86,7 +86,7 @@ impl Default for OpmDocument {
             opm_file_version: env!("OPM_FILE_VERSION").to_string(),
             scenery: NodeGroup::default(),
             global_conf: Arc::new(Mutex::new(SceneryResources::default())),
-            analyzers: HashMap::default(),
+            analyzers: IndexMap::default(),
         }
     }
 }
@@ -180,7 +180,7 @@ impl OpmDocument {
     }
     /// Returns the list of analyzers of this [`OpmDocument`].
     #[must_use]
-    pub fn analyzers(&self) -> HashMap<Uuid, AnalyzerInfo> {
+    pub fn analyzers(&self) -> IndexMap<Uuid, AnalyzerInfo> {
         self.analyzers.clone()
     }
     /// Returns a mutable reference of the analyzer with the given [`Uuid`] of this [`OpmDocument`].
@@ -242,7 +242,7 @@ impl OpmDocument {
     ///
     /// This function will return an error if an [`AnalyzerType`] with the given [`Uuid`] was not found.
     pub fn remove_analyzer(&mut self, id: Uuid) -> OpmResult<()> {
-        if self.analyzers.remove(&id).is_some() {
+        if self.analyzers.shift_remove(&id).is_some() {
             Ok(())
         } else {
             Err(OpossumError::OpmDocument(
@@ -307,7 +307,7 @@ impl OpmDocument {
         Ok(reports)
     }
     /// Returns a mutable reference to the analyzers of this [`OpmDocument`].
-    pub const fn analyzers_mut(&mut self) -> &mut HashMap<Uuid, AnalyzerInfo> {
+    pub const fn analyzers_mut(&mut self) -> &mut IndexMap<Uuid, AnalyzerInfo> {
         &mut self.analyzers
     }
     /// Create a DOT & SVG diagram file of optical model (scenery).

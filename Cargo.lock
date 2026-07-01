@@ -5077,6 +5077,7 @@ dependencies = [
  "embed-doc-image",
  "fastrand",
  "image 0.25.10",
+ "indexmap 2.14.0",
  "inventory",
  "itertools 0.15.0",
  "kahan",

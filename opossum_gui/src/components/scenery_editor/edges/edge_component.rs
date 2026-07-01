@@ -123,7 +123,7 @@ pub fn EdgeComponent(edge: ReadStore<ConnectInfo>) -> Element {
                     input_class: "edge_distance_input".to_string(),
                 }
             }
-        
+
         }
     }
 }

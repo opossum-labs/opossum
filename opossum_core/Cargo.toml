@@ -62,6 +62,7 @@ earcutr = "0.5"
 num-traits = "0.2"
 mutants = "0.0.4"
 inventory = "0.3"
+indexmap = { version = "2.14", features = ["serde"] }
 
 [features]
 doc-images = []
