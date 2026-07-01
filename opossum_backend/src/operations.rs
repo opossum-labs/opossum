@@ -686,8 +686,8 @@ pub async fn post_convert_nodes_to_group(
     // Create new group: add nodes and connections
     let new_group = build_new_group_from_refs_and_conns(node_refs, &split)?;
 
-    // Add new group to scenery
-    let new_group_id = add_converted_group_to_scenery(
+    // Add new group to scenery and fetch remapped external connections
+    let (new_group_id, external_connections) = add_converted_group_to_scenery(
         &data,
         group_id,
         nodes_to_convert,
@@ -698,9 +698,6 @@ pub async fn post_convert_nodes_to_group(
 
     // Create the nodeinfo struct for the GUI
     let new_group_node_info = create_new_group_node_info(&data, new_group_id, pos)?;
-
-    let mut external_connections = split.input;
-    external_connections.extend(split.output);
 
     Ok(Json((new_group_node_info, external_connections)))
 }
