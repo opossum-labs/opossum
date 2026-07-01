@@ -270,6 +270,11 @@ impl From<Vector2<f64>> for Proptype {
         Self::Vec2(value)
     }
 }
+impl From<Vector3<f64>> for Proptype {
+    fn from(value: Vector3<f64>) -> Self {
+        Self::Vec3(value)
+    }
+}
 impl From<CollimatedSrc> for Proptype {
     fn from(val: CollimatedSrc) -> Self {
         Self::LightDataBuilder(LightDataBuilder::Geometric(RayDataSource::Collimated(val)))

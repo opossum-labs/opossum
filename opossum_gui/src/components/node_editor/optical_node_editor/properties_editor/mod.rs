@@ -15,6 +15,7 @@ mod refractive_index_editor;
 mod splitter_type_editor;
 mod string_editor;
 mod vec2_editor;
+mod vec3_editor;
 
 use crate::components::node_editor::{
     accordion::AccordionItem,
@@ -26,7 +27,7 @@ use crate::components::node_editor::{
         isometry_option_editor::IsometryOptionEditor, length_editor::LengthEditor,
         length_option_editor::LengthOptionEditor, linear_density_editor::LinearDensityEditor,
         refractive_index_editor::RefractiveIndexEditor, splitter_type_editor::SplitterTypeEditor,
-        string_editor::StringEditor, vec2_editor::Vec2Editor,
+        string_editor::StringEditor, vec2_editor::Vec2Editor, vec3_editor::Vec3Editor,
     },
 };
 use dioxus::prelude::*;
@@ -136,6 +137,15 @@ fn get_primitive_editor(
         }),
         Proptype::Vec2(vector) => Some(rsx! {
             Vec2Editor {
+                node_id,
+                vector,
+                property_key,
+                on_change,
+                readonly,
+            }
+        }),
+        Proptype::Vec3(vector) => Some(rsx! {
+            Vec3Editor {
                 node_id,
                 vector,
                 property_key,
