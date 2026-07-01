@@ -132,7 +132,6 @@ pub fn Node(
                     }
                 }
             },
-
             oncontextmenu: {
                 move |event: Event<MouseData>| {
                     event.prevent_default();
@@ -141,18 +140,24 @@ pub fn Node(
                             node_id,
                             (position.x + NODE_WIDTH, position.y + 100.0),
                         );
+
+                        // Initialize the context menu with an empty entries vector
                         let mut cx_menu = CxMenu::new(
                             event.page_coordinates().x,
                             event.page_coordinates().y,
-                            vec![
-                                (
-                                    "Create reference".to_owned(),
-                                    CxtCommand::AddRefNode(new_ref_node),
-                                ),
-                            ],
+                            vec![],
                         );
 
-                        if active_optical_node_ids.len() > 1 {
+                        // Conditional rendering of menu items based on the selection count
+                        if active_optical_node_ids.len() <= 1 {
+                            // Show reference option only if 0 or 1 optical nodes are selected
+                            cx_menu
+                                .entries
+                                .push((
+                                    "Create reference".to_owned(),
+                                    CxtCommand::AddRefNode(new_ref_node),
+                                ));
+                        } else {
                             cx_menu
                                 .entries
                                 .push((
