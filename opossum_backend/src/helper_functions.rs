@@ -243,7 +243,7 @@ pub fn connect_from_info(group: &mut NodeGroup, conn: &ConnectInfo) -> OpmResult
 /// The function:
 /// - Removes all specified nodes from the source group
 /// - Inserts the new group node
-/// - Reconnects external input and output connections
+/// - Reconnects external input and output connections using the new group's ID
 ///
 /// # Arguments
 ///
@@ -255,15 +255,12 @@ pub fn connect_from_info(group: &mut NodeGroup, conn: &ConnectInfo) -> OpmResult
 ///
 /// # Returns
 ///
-/// Returns the UUID of the newly inserted group node.
+/// Returns a tuple containing the UUID of the newly inserted group node
+/// and a vector of updated external connections.
 ///
 /// # Errors
 ///
-/// This function will return an error if:
-/// - The group was not found
-/// - Any node deletion fails
-/// - The new group cannot be inserted
-/// - Reconnecting external connections fails
+/// This function will return an error if node deletion, insertion, or reconnection fails.
 #[allow(clippy::significant_drop_tightening)]
 pub fn add_converted_group_to_scenery(
     data: &web::Data<AppState>,
@@ -272,9 +269,11 @@ pub fn add_converted_group_to_scenery(
     new_group: NodeGroup,
     map_input_connections: &[ConnectInfo],
     map_output_connections: &[ConnectInfo],
-) -> Result<Uuid, BackEndErrorResponse> {
+) -> Result<(Uuid, Vec<ConnectInfo>), BackEndErrorResponse> {
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
+
+    // Remove the original inner nodes from the parent scenery
     while let Some(node) = nodes_to_convert.pop() {
         let deleted = scenery.delete_node(node)?;
         for del_id in &deleted {
@@ -285,20 +284,64 @@ pub fn add_converted_group_to_scenery(
     scenery.with_group_node_mut(group_id, |g| {
         match g.add_node(new_group) {
             Ok(new_group_id) => {
-                //connect the output ports and connect within scenery
+                let mut updated_connections = Vec::new();
+
+                // Connect the output ports on the parent group level.
+                // The source node is now the newly created group node itself.
                 for map_out in map_output_connections {
-                    connect_from_info(g, map_out)?;
+                    g.connect_nodes(
+                        new_group_id,
+                        map_out.src_port(),
+                        map_out.target_uuid(),
+                        map_out.target_port(),
+                        meter!(map_out.distance()),
+                    )?;
+
+                    // Check if the external target node is a reference node
+                    let is_reference = g
+                        .with_node_attr(map_out.target_uuid(), |attr| {
+                            attr.properties().get("reference id").is_ok()
+                        })
+                        .unwrap_or(false);
+
+                    updated_connections.push(ConnectInfo::new(
+                        new_group_id,
+                        map_out.src_port().to_string(),
+                        map_out.target_uuid(),
+                        map_out.target_port().to_string(),
+                        map_out.distance(),
+                        is_reference,
+                    ));
                 }
-                //connect the input ports
+
+                // Connect the input ports on the parent group level.
+                // The target node is now the newly created group node itself.
                 for map_in in map_input_connections {
-                    connect_from_info(g, map_in)?;
+                    g.connect_nodes(
+                        map_in.src_uuid(),
+                        map_in.src_port(),
+                        new_group_id,
+                        map_in.target_port(),
+                        meter!(map_in.distance()),
+                    )?;
+
+                    // The target is the new group node, which is not a reference node
+                    updated_connections.push(ConnectInfo::new(
+                        map_in.src_uuid(),
+                        map_in.src_port().to_string(),
+                        new_group_id,
+                        map_in.target_port().to_string(),
+                        map_in.distance(),
+                        false,
+                    ));
                 }
-                Ok(new_group_id)
+
+                Ok((new_group_id, updated_connections))
             }
             Err(e) => Err(BackEndErrorResponse::new(
                 404,
                 "Opossum",
-                &format!("Could not add group node{e}"),
+                &format!("Could not add group node: {e}"),
             )),
         }
     })?
