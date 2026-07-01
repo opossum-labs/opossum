@@ -102,7 +102,7 @@ pub fn EdgeComponent(edge: ReadStore<ConnectInfo>) -> Element {
                         edge.src_uuid().as_simple(),
                         edge.target_uuid().as_simple(),
                     ),
-                    label: String::new(),
+                    label: "distance".to_string(),
                     value: edge.distance(),
                     readonly: edge.targets_reference(),
                     unit_config: UnitHandling::new("m", true),
@@ -123,7 +123,7 @@ pub fn EdgeComponent(edge: ReadStore<ConnectInfo>) -> Element {
                     input_class: "edge_distance_input".to_string(),
                 }
             }
-
+        
         }
     }
 }
