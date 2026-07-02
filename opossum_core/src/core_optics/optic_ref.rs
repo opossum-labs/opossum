@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::{
     analyzers::Analyzable,
-    core_optics::{NodeAttr, OpticNode, SceneryResources, node_attr::HasNodeAttr},
+    core_optics::{NodeAttr, SceneryResources, node_attr::HasNodeAttr},
     nodes::{OpticGraph, create_node_ref},
     utils::LockExt,
 };
@@ -148,7 +148,6 @@ impl<'de> Deserialize<'de> for OpticRef {
 mod test {
     use super::*;
     use crate::{
-        core_optics::OpticNode,
         error::{OpmResult, OpossumError},
         nodes::Dummy,
         utils::LockExt,

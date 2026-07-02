@@ -10,7 +10,7 @@ use opossum_core::{
     error::OpossumError,
     light::lightdata::{energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder},
     nodes::{NodeReference, create_node_ref},
-    prelude::{AnalyzerType, OpmDocument, OpticNode, Proptype},
+    prelude::{AnalyzerType, OpmDocument, Proptype},
     types::api_types::{ErrorResponse, NewNode, NewRefNode, NodeInfo, UpdateNodeRequest},
     utils::LockExt,
 };

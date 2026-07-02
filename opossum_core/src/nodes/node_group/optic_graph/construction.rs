@@ -693,7 +693,7 @@ impl OpticGraph {
 mod test {
     use super::*;
     use crate::{
-        core_optics::{OpticNode, node_attr::HasNodeAttr},
+        core_optics::node_attr::HasNodeAttr,
         millimeter,
         nodes::{BeamSplitter, Dummy, NodeGroup, NodeReference, SplittingConfigBuilder},
     };

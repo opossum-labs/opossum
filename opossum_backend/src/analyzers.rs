@@ -3,7 +3,7 @@ use actix_web::{
     web::{self},
 };
 use opossum_core::{
-    core_optics::{OpticNode, node_attr::HasNodeAttr},
+    core_optics::node_attr::HasNodeAttr,
     error::OpossumError,
     light::lightdata::{energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder},
     nodes::NodeGroup,
