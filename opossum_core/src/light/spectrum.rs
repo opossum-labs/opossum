@@ -13,7 +13,6 @@ use crate::{
     utils::{to_f64, try_f64_to_usize},
     validated, validated_type, validated_vec, validated_vec_type,
 };
-use csv::ReaderBuilder;
 use kahan::KahanSummator;
 use log::warn;
 use nalgebra::MatrixXx2;
@@ -24,6 +23,7 @@ use std::{
     f64::consts::PI,
     fmt::{Debug, Display},
     fs::File,
+    io::{BufRead, BufReader},
     ops::Range,
     path::Path,
 };
@@ -110,54 +110,80 @@ impl Spectrum {
         self.data.set(data)?;
         Ok(())
     }
-    /// Create a new [`Spectrum`] from a CSV (comma-separated values) file.
+    /// Create a new [`Spectrum`] from a text-based file (CSV, TSV, or space-separated).
     ///
-    /// Currently this function is relatively limited. The CSV file must have a specific format in
-    /// order to be successfully parsed. It must be a file with two columns and `;` as separator.
-    /// The first column corresponds to the wavelength in nm, the second columns represent values in
-    /// percent. This file format corresponds to the CSV export format from an transmission (Excel) file
-    /// as provided by Thorlabs.
-    ///
-    /// # Panics
-    ///
-    /// Panics if ???
+    /// The file must contain exactly two columns per line. Columns can be separated by
+    /// semicolons, commas, tabs, or spaces (even mixed). The first column corresponds to
+    /// the wavelength in nm, the second column represents values in percent.
+    /// The decimal separator must strictly be a dot `.`.
     ///
     /// # Errors
     ///
     /// This function will return an [`OpossumError::Spectrum`] if
     ///   - the file path is not found or could not be read.
-    ///   - the file is empty.
-    ///   - the file could not be parsed.
+    ///   - the file contains lines that do not resolve to exactly two columns.
+    ///   - the values within the columns cannot be parsed into 64-bit floating-point numbers.
+    ///   - no valid data was found in the file.
     pub fn from_csv(path: &Path) -> OpmResult<Self> {
+        // Open the file and wrap it in a BufReader for efficient line-by-line reading
         let file = File::open(path).map_err(|e| OpossumError::Spectrum(e.to_string()))?;
-        let mut reader = ReaderBuilder::new()
-            .has_headers(false)
-            .delimiter(b';')
-            .from_reader(file);
+        let reader = BufReader::new(file);
         let mut datas: Vec<(f64, f64)> = Vec::new();
-        for record in reader.records() {
-            let record = record.map_err(|e| OpossumError::Spectrum(e.to_string()))?;
-            let lambda = record
-                .get(0)
-                .ok_or_else(|| {
-                    OpossumError::Spectrum("Could not read wavelength in CSV file".into())
-                })?
-                .trim()
-                .parse::<f64>()
-                .map_err(|e| OpossumError::Spectrum(e.to_string()))?;
-            let data = record
-                .get(1)
-                .ok_or_else(|| OpossumError::Spectrum("Could not read data in CSV file".into()))?
-                .trim()
-                .parse::<f64>()
-                .map_err(|e| OpossumError::Spectrum(e.to_string()))?;
-            datas.push((lambda * 1.0E-3, data * 0.01)); // (nanometers -> micrometers, percent -> transmisison)
+
+        for (index, line_result) in reader.lines().enumerate() {
+            let line = line_result.map_err(|e| OpossumError::Spectrum(e.to_string()))?;
+            let line = line.trim();
+
+            // Gracefully skip completely empty lines (e.g., at the end of the file)
+            if line.is_empty() {
+                continue;
+            }
+
+            // Split the line using an array of allowed delimiter characters
+            // and filter out empty strings caused by consecutive delimiters.
+            let tokens: Vec<&str> = line
+                .split([';', ',', '\t', ' '])
+                .filter(|s| !s.is_empty())
+                .collect();
+
+            // Enforce the strict rule of having exactly two columns
+            if tokens.len() != 2 {
+                return Err(OpossumError::Spectrum(format!(
+                    "Invalid format at line {}: expected exactly 2 columns, found {}",
+                    index + 1,
+                    tokens.len()
+                )));
+            }
+
+            // Parse the wavelength (first column)
+            let lambda = tokens[0].parse::<f64>().map_err(|e| {
+                OpossumError::Spectrum(format!(
+                    "Line {}: Failed to parse wavelength ({})",
+                    index + 1,
+                    e
+                ))
+            })?;
+
+            // Parse the data value (second column)
+            let data = tokens[1].parse::<f64>().map_err(|e| {
+                OpossumError::Spectrum(format!(
+                    "Line {}: Failed to parse data value ({})",
+                    index + 1,
+                    e
+                ))
+            })?;
+
+            // Convert units: nanometers -> micrometers, percent -> transmission (0.0 to 1.0)
+            datas.push((lambda * 1.0E-3, data * 0.01));
         }
+
+        // Ensure we actually collected some data
         if datas.is_empty() {
             return Err(OpossumError::Spectrum(
-                "no csv data was found in file".into(),
+                "No valid data was found in the file".into(),
             ));
         }
+
         let mut spec = Self::default();
         spec.set_data(datas)?;
         Ok(spec)
@@ -784,6 +810,8 @@ pub fn merge_spectra(s1: Option<Spectrum>, s2: Option<Spectrum>) -> Option<Spect
 }
 #[cfg(test)]
 mod test {
+    use std::io::Write;
+
     use super::*;
     use crate::prelude::{EdgeFilter, EdgeFilterType, SpectralFilterBuilder};
     use crate::{joule, nanometer};
@@ -794,6 +822,7 @@ mod test {
         utils::test_helper::test_helper::check_logs,
     };
     use approx::{AbsDiffEq, assert_abs_diff_eq, assert_relative_eq};
+    use tempfile::NamedTempFile;
     use testing_logger;
     fn prep() -> OpmResult<Spectrum> {
         Spectrum::new(micrometer!(1.0)..micrometer!(4.0), micrometer!(0.5))
@@ -876,6 +905,106 @@ mod test {
                 "files_for_testing/spectrum/spec_to_csv_test_04.csv"
             ))
             .is_err()
+        );
+    }
+    // Helper function to create a temporary file populated with test data.
+    // The file will be automatically deleted when the returned NamedTempFile goes out of scope.
+    fn create_temp_spec_file(content: &str) -> NamedTempFile {
+        let mut file = NamedTempFile::new().expect("Failed to create temporary file");
+        file.write_all(content.as_bytes())
+            .expect("Failed to write to temporary file");
+        file
+    }
+
+    #[test]
+    fn test_from_csv_legacy_semicolon() {
+        // Standard semicolon format (regression test)
+        let content = "500.0;50.0\n600.0;100.0";
+        let file = create_temp_spec_file(content);
+
+        let result = Spectrum::from_csv(file.path());
+        assert!(result.is_ok(), "Failed to parse standard semicolon CSV");
+    }
+
+    #[test]
+    fn test_from_csv_comprehensive_stresstest() {
+        // A comprehensive test containing:
+        // Line 1: Standard comma with extreme spaces inside
+        // Line 2: Tab separator with Windows style line ending (\r\n)
+        // Line 3: Mixed delimiters (space and semicolon) with trailing whitespace
+        // Line 4: Scientific notation with mixed tabs and spaces
+        let content = "500.0                ,         50.0\r\n\
+                       600.0\t100.0\n\
+                       700.0 ; 85.5   \r\n\
+                       8.0E2 \t , \t 9.0e1";
+
+        let file = create_temp_spec_file(content);
+        let result = Spectrum::from_csv(file.path());
+
+        assert!(
+            result.is_ok(),
+            "Failed comprehensive stress test with mixed delimiters, line endings, and whitespace"
+        );
+
+        // Verify the content was parsed correctly into 4 distinct data points
+        let spec = result.unwrap();
+        assert_eq!(spec.data.len(), 4);
+    }
+
+    #[test]
+    fn test_from_csv_mixed_whitespace_and_empty_lines() {
+        // Testing consecutive spaces, mixed delimiters, and trailing empty lines
+        let content = "500.0,   50.0\n\n600.0 \t ; 100.0\n   \n";
+        let file = create_temp_spec_file(content);
+
+        let result = Spectrum::from_csv(file.path());
+        assert!(
+            result.is_ok(),
+            "Failed to handle mixed whitespace and empty lines gracefully"
+        );
+    }
+
+    #[test]
+    fn test_from_csv_exponential_notation() {
+        // Testing scientific/exponential notation for float values
+        let content = "5.0E2;5.0E1\n6.0e2;1.0e2";
+        let file = create_temp_spec_file(content);
+
+        let result = Spectrum::from_csv(file.path());
+        assert!(result.is_ok(), "Failed to parse exponential float notation");
+    }
+
+    #[test]
+    fn test_from_csv_invalid_columns_fail() {
+        // Case 1: Too few columns (only 1)
+        let content_too_few = "500.0\n600.0;100.0";
+        let file_too_few = create_temp_spec_file(content_too_few);
+        let result_too_few = Spectrum::from_csv(file_too_few.path());
+        assert!(
+            result_too_few.is_err(),
+            "Expected error for missing column, but parsed successfully"
+        );
+
+        // Case 2: Too many columns (3 columns)
+        let content_too_many = "500.0;50.0;extra_token\n600.0;100.0";
+        let file_too_many = create_temp_spec_file(content_too_many);
+        let result_too_many = Spectrum::from_csv(file_too_many.path());
+        assert!(
+            result_too_many.is_err(),
+            "Expected error for extra column, but parsed successfully"
+        );
+    }
+
+    #[test]
+    fn test_from_csv_invalid_parse_fail() {
+        // Testing alphabetical strings that cannot be parsed into f64
+        let content = "wavelength;transmission\n500.0;50.0";
+        let file = create_temp_spec_file(content);
+
+        let result = Spectrum::from_csv(file.path());
+        assert!(
+            result.is_err(),
+            "Expected parsing error due to text header, but it passed"
         );
     }
     #[test]

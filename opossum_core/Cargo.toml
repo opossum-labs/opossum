@@ -43,7 +43,6 @@ utoipa.workspace = true
 uuid.workspace = true
 
 petgraph = { version = "0.8.2", features = ["serde-1"] } # the graph library
-csv = "1"
 plotters = "0.3"
 libm = { version = "0.2" }
 embed-doc-image = "0.1" # allows for embedded images in the rust API doc
