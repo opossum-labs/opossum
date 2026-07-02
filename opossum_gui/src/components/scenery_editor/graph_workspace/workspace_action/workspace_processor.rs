@@ -18,21 +18,12 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use crate::{
-    OPOSSUM_UI_LOGS,
-    api::{self, delete_document, eval_action_run},
-    components::scenery_editor::{
-        NodeType,
-        constants::{
+    OPOSSUM_UI_LOGS, api::{self, delete_document, eval_action_run}, components::scenery_editor::{
+        NodeType, constants::{
             HEADER_HEIGHT, MIN_NODE_DISTANCE_RADIUS, NODE_PLACEMENT_MAX_ITERATIONS, NODE_WIDTH,
-        },
-        graph_workspace::{
-            EditorStateStoreExt, GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceState,
-            GraphsWorkspaceStateStoreExt, GraphsWorkspaceStateStoreImplExt,
-            WorkSpaceSignalHandlers,
-            workspace_action::GraphsWorkspaceAction,
-            workspace_state::{GraphInfo, optimize_layout},
-        },
-        node::MIN_NODE_BODY_HEIGHT,
+        }, graph_workspace::{
+            EditorStateStoreExt, GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceState, GraphsWorkspaceStateStoreExt, GraphsWorkspaceStateStoreImplExt, WorkSpaceSignalHandlers, workspace_action::GraphsWorkspaceAction, workspace_state::{GraphInfo, optimize_layout},
+        }, node::MIN_NODE_BODY_HEIGHT,
     },
 };
 #[allow(clippy::too_many_lines)]
