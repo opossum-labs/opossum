@@ -74,7 +74,7 @@ testing_logger = "0.1"
 criterion = { version = "0.8.0", features = ["html_reports"] }
 
 [build-dependencies]
-vergen-git2 = { version = "9.1.0" } # get git version infos compiled in binary
+vergen-git2 = { version = "10.0" } # get git version infos compiled in binary
 
 [[example]]
 name = "hhts"
