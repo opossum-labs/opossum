@@ -41,7 +41,6 @@ inventory::submit! {
 pub struct Dummy {
     node_attr: NodeAttr,
 }
-unsafe impl Send for Dummy {}
 
 impl Default for Dummy {
     fn default() -> Self {
@@ -117,12 +116,6 @@ impl AnalysisRayTrace for Dummy {
     }
 }
 impl OpticNode for Dummy {
-    fn node_attr(&self) -> &NodeAttr {
-        &self.node_attr
-    }
-    fn node_attr_mut(&mut self) -> &mut NodeAttr {
-        &mut self.node_attr
-    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
     }

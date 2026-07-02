@@ -51,7 +51,6 @@ pub struct WaveFront {
     #[serde(skip)]
     reference_surface: Option<GeoSurfaceRef>,
 }
-unsafe impl Send for WaveFront {}
 
 impl Default for WaveFront {
     /// create a wavefront monitor.
@@ -205,12 +204,6 @@ impl OpticNode for WaveFront {
         } else {
             Ok(None)
         }
-    }
-    fn node_attr(&self) -> &NodeAttr {
-        &self.node_attr
-    }
-    fn node_attr_mut(&mut self) -> &mut NodeAttr {
-        &mut self.node_attr
     }
     fn reset_data(&mut self) {
         self.light_data = None;

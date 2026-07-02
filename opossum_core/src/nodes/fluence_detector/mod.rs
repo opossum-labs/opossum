@@ -48,7 +48,7 @@ pub struct FluenceDetector {
     apodization_warning: bool,
     light_data: Option<LightData>,
 }
-unsafe impl Send for FluenceDetector {}
+
 impl Default for FluenceDetector {
     /// creates a fluence detector.
     fn default() -> Self {
@@ -149,12 +149,6 @@ impl OpticNode for FluenceDetector {
             uuid,
             props,
         )))
-    }
-    fn node_attr(&self) -> &NodeAttr {
-        &self.node_attr
-    }
-    fn node_attr_mut(&mut self) -> &mut NodeAttr {
-        &mut self.node_attr
     }
     fn reset_data(&mut self) {
         self.light_data = None;

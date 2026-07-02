@@ -58,7 +58,7 @@ pub struct RayPropagationVisualizer {
     node_attr: NodeAttr,
     apodization_warning: bool,
 }
-unsafe impl Send for RayPropagationVisualizer {}
+
 impl Default for RayPropagationVisualizer {
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("ray propagation");
@@ -150,12 +150,6 @@ impl OpticNode for RayPropagationVisualizer {
              ));
         }
         Ok(Some(report))
-    }
-    fn node_attr(&self) -> &NodeAttr {
-        &self.node_attr
-    }
-    fn node_attr_mut(&mut self) -> &mut NodeAttr {
-        &mut self.node_attr
     }
     fn reset_data(&mut self) {
         self.light_data = None;

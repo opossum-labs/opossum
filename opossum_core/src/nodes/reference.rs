@@ -5,7 +5,7 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, OpticNode, OpticPorts, OpticRef},
+    core_optics::{NodeAttr, OpticNode, OpticPorts, OpticRef, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
     light::LightResult,
     nodes::NodeRegistration,
@@ -114,12 +114,6 @@ impl OpticNode for NodeReference {
     fn as_refnode_mut(&mut self) -> OpmResult<&mut NodeReference> {
         Ok(self)
     }
-    fn node_attr(&self) -> &NodeAttr {
-        &self.node_attr
-    }
-    fn node_attr_mut(&mut self) -> &mut NodeAttr {
-        &mut self.node_attr
-    }
     fn isometry(&self) -> Option<Isometry> {
         self.reference.as_ref().and_then(|rf| {
             rf.upgrade()
@@ -165,7 +159,6 @@ impl AnalysisEnergy for NodeReference {
         output
     }
 }
-unsafe impl Send for NodeReference {}
 
 impl AnalysisRayTrace for NodeReference {
     fn analyze(

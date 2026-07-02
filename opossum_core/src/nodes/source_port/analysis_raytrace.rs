@@ -2,6 +2,7 @@ use log::info;
 
 use crate::{
     analyzers::raytrace::AnalysisRayTrace,
+    core_optics::node_attr::HasNodeAttr,
     error::{OpmResult, OpossumError},
     joule,
     light::{LightData, LightResult, Ray, Rays},

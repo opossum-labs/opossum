@@ -7,7 +7,7 @@ use actix_web::{
 use futures_util::StreamExt;
 use log::{error, info, warn};
 use opossum_core::{
-    core_optics::{OpticNode, SceneryResources},
+    core_optics::{SceneryResources, node_attr::HasNodeAttr},
     opm_document::OpmDocument,
     types::api_types::{ErrorResponse, LoadDocumentResponse},
 };

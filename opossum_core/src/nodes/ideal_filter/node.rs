@@ -39,7 +39,6 @@ inventory::submit! {
 pub struct IdealFilter {
     node_attr: NodeAttr,
 }
-unsafe impl Send for IdealFilter {}
 
 impl Default for IdealFilter {
     /// Create an ideal filter node with a transmission of 100%.
@@ -131,12 +130,6 @@ impl IdealFilter {
 impl OpticNode for IdealFilter {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
-    }
-    fn node_attr(&self) -> &NodeAttr {
-        &self.node_attr
-    }
-    fn node_attr_mut(&mut self) -> &mut NodeAttr {
-        &mut self.node_attr
     }
 }
 impl AnalysisGhostFocus for IdealFilter {

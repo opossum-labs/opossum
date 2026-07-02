@@ -152,7 +152,6 @@ inventory::submit! {
 pub struct BeamSplitter {
     node_attr: NodeAttr,
 }
-unsafe impl Send for BeamSplitter {}
 
 impl Default for BeamSplitter {
     /// Create a 50:50 beamsplitter.
@@ -382,12 +381,6 @@ impl BeamSplitter {
     }
 }
 impl OpticNode for BeamSplitter {
-    fn node_attr(&self) -> &NodeAttr {
-        &self.node_attr
-    }
-    fn node_attr_mut(&mut self) -> &mut NodeAttr {
-        &mut self.node_attr
-    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
 

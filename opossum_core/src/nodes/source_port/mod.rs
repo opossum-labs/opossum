@@ -28,7 +28,6 @@ mod analysis_raytrace;
 pub struct SourcePort {
     node_attr: NodeAttr,
 }
-unsafe impl Send for SourcePort {}
 
 inventory::submit! {
     NodeRegistration::new::<SourcePort>("source port", "light source port")
@@ -65,12 +64,6 @@ impl OpticNode for SourcePort {
     fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
         self.node_attr.set_property(name, prop)
     }
-    fn node_attr(&self) -> &NodeAttr {
-        &self.node_attr
-    }
-    fn node_attr_mut(&mut self) -> &mut NodeAttr {
-        &mut self.node_attr
-    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         // A source port only has an output port, so we only need to update the flat single surface for the output port.
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
@@ -90,6 +83,7 @@ mod test {
     use super::*;
     use crate::{
         analyzers::{Analyzer, raytrace::RayTracingAnalyzer},
+        core_optics::node_attr::HasNodeAttr,
         joule, millimeter,
         nodes::{
             NodeGroup, ParaxialSurface, RayPropagationVisualizer, round_collimated_ray_builder,

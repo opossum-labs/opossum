@@ -45,7 +45,7 @@ inventory::submit! {
 pub struct ParaxialSurface {
     node_attr: NodeAttr,
 }
-unsafe impl Send for ParaxialSurface {}
+
 impl Default for ParaxialSurface {
     /// Create a default paraxial surface (ideal thin lens) with a focal length of 10 mm.
     fn default() -> Self {
@@ -84,12 +84,6 @@ impl ParaxialSurface {
 impl OpticNode for ParaxialSurface {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
-    }
-    fn node_attr(&self) -> &NodeAttr {
-        &self.node_attr
-    }
-    fn node_attr_mut(&mut self) -> &mut NodeAttr {
-        &mut self.node_attr
     }
 }
 impl AnalysisGhostFocus for ParaxialSurface {

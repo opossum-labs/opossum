@@ -1,4 +1,4 @@
-use opossum_core::prelude::*;
+use opossum_core::{core_optics::node_attr::HasNodeAttr, prelude::*};
 use uom::si::f64::Length;
 
 pub fn treacy_compressor(alignment_wvl: Length) -> OpmResult<NodeGroup> {
