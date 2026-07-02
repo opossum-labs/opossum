@@ -42,7 +42,7 @@ uom.workspace = true
 utoipa.workspace = true
 uuid.workspace = true
 
-petgraph = { version = "0.8.2", features = ["serde-1"] } # the graph library
+petgraph = { version = "0.8", features = ["serde-1"] } # the graph library
 plotters = "0.3"
 libm = { version = "0.2" }
 embed-doc-image = "0.1" # allows for embedded images in the rust API doc
@@ -54,14 +54,14 @@ delaunator = "1"
 kahan = "0.1"
 roots = "0.0.8"
 voronator = "0.2"
-rayon = "1.10"
+rayon = "1"
 tinytemplate = "1"
-spade = "2.12"
+spade = "2"
 earcutr = "0.5"
 num-traits = "0.2"
 mutants = "0.0.4"
 inventory = "0.3"
-indexmap = { version = "2.14", features = ["serde"] }
+indexmap = { version = "2", features = ["serde"] }
 
 [features]
 doc-images = []

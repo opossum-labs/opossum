@@ -29,18 +29,18 @@ tempfile.workspace = true
 uom.workspace = true
 uuid.workspace = true
 
-dioxus = { version = "0.7.2" }
-dioxus-free-icons = { version = "0.10.0", features = ["font-awesome-solid"] }
-directories = "6.0.0"
-futures-util = "0.3.31"
+dioxus = { version = "0.7" }
+dioxus-free-icons = { version = "0.10", features = ["font-awesome-solid"] }
+directories = "6"
+futures-util = "0.3"
 ico = "0.5"
-Inflector = "0.11.4"
-reqwest = { version = "0.13.2", features = ["json", "stream"] }
-rfd = { version = "0.17.2" }
-rust-sugiyama = "0.4.0"
+Inflector = "0.11"
+reqwest = { version = "0.13", features = ["json", "stream"] }
+rfd = { version = "0.17" }
+rust-sugiyama = "0.4"
 dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1", default-features = false }
-regex = "1.12.2"
-webbrowser = "1.2"
+regex = "1"
+webbrowser = "1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", features = ["process"] }
