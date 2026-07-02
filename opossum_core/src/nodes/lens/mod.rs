@@ -52,7 +52,7 @@ inventory::submit! {
 pub struct Lens {
     node_attr: NodeAttr,
 }
-unsafe impl Send for Lens {}
+
 impl Default for Lens {
     /// Create a lens with a center thickness of 10.0 mm. front & back radii of curvature of 500.0 mm and a refractive index of 1.5.
     fn default() -> Self {

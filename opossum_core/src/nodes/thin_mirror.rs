@@ -46,7 +46,6 @@ inventory::submit! {
 pub struct ThinMirror {
     node_attr: NodeAttr,
 }
-unsafe impl Send for ThinMirror {}
 
 impl Default for ThinMirror {
     /// Create a thin mirror with a flat surface.

@@ -68,7 +68,6 @@ pub struct EnergyMeter {
     node_attr: NodeAttr,
     apodization_warning: bool,
 }
-unsafe impl Send for EnergyMeter {}
 
 impl Default for EnergyMeter {
     fn default() -> Self {

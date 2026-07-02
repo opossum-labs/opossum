@@ -51,7 +51,6 @@ inventory::submit! {
 pub struct ReflectiveGrating {
     node_attr: NodeAttr,
 }
-unsafe impl Send for ReflectiveGrating {}
 
 impl Default for ReflectiveGrating {
     /// Create a reflective grating with a specified line density.

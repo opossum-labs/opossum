@@ -107,8 +107,6 @@ impl Default for NodeGroup {
     }
 }
 
-unsafe impl Send for NodeGroup {}
-
 impl NodeGroup {
     /// Creates a new [`NodeGroup`].
     /// # Attributes

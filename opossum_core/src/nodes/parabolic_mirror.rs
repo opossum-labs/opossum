@@ -354,7 +354,6 @@ impl ParabolicMirror {
         Ok((*focal_length, *oa_angle, *oa_dir, *collimating))
     }
 }
-unsafe impl Send for ParabolicMirror {}
 
 impl OpticNode for ParabolicMirror {
     fn update_surfaces(&mut self) -> OpmResult<()> {

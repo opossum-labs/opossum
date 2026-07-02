@@ -159,7 +159,6 @@ impl AnalysisEnergy for NodeReference {
         output
     }
 }
-unsafe impl Send for NodeReference {}
 
 impl AnalysisRayTrace for NodeReference {
     fn analyze(

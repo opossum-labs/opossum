@@ -51,7 +51,6 @@ pub struct WaveFront {
     #[serde(skip)]
     reference_surface: Option<GeoSurfaceRef>,
 }
-unsafe impl Send for WaveFront {}
 
 impl Default for WaveFront {
     /// create a wavefront monitor.

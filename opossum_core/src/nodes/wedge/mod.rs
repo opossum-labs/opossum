@@ -48,7 +48,6 @@ inventory::submit! {
 pub struct Wedge {
     node_attr: NodeAttr,
 }
-unsafe impl Send for Wedge {}
 
 impl Default for Wedge {
     /// Create a wedge with a center thickness of 10.0 mm, refractive index of 1.5 and no wedge angle (flat windows)

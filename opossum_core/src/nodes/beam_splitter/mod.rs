@@ -152,7 +152,6 @@ inventory::submit! {
 pub struct BeamSplitter {
     node_attr: NodeAttr,
 }
-unsafe impl Send for BeamSplitter {}
 
 impl Default for BeamSplitter {
     /// Create a 50:50 beamsplitter.

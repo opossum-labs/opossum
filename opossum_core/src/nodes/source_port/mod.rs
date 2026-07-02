@@ -28,7 +28,6 @@ mod analysis_raytrace;
 pub struct SourcePort {
     node_attr: NodeAttr,
 }
-unsafe impl Send for SourcePort {}
 
 inventory::submit! {
     NodeRegistration::new::<SourcePort>("source port", "light source port")

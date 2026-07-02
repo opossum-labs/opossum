@@ -69,7 +69,6 @@ pub struct Spectrometer {
     node_attr: NodeAttr,
     apodization_warning: bool,
 }
-unsafe impl Send for Spectrometer {}
 
 impl Default for Spectrometer {
     /// create an ideal spectrometer.

@@ -41,7 +41,6 @@ inventory::submit! {
 pub struct Dummy {
     node_attr: NodeAttr,
 }
-unsafe impl Send for Dummy {}
 
 impl Default for Dummy {
     fn default() -> Self {

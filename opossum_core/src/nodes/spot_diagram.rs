@@ -62,7 +62,6 @@ pub struct SpotDiagram {
     node_attr: NodeAttr,
     apodization_warning: bool,
 }
-unsafe impl Send for SpotDiagram {}
 
 impl Default for SpotDiagram {
     /// create a spot-diagram monitor.

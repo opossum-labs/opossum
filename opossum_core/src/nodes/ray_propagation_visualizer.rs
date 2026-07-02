@@ -58,7 +58,7 @@ pub struct RayPropagationVisualizer {
     node_attr: NodeAttr,
     apodization_warning: bool,
 }
-unsafe impl Send for RayPropagationVisualizer {}
+
 impl Default for RayPropagationVisualizer {
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("ray propagation");

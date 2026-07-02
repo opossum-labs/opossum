@@ -52,7 +52,6 @@ inventory::submit! {
 pub struct CylindricLens {
     node_attr: NodeAttr,
 }
-unsafe impl Send for CylindricLens {}
 
 impl Default for CylindricLens {
     /// Create a cylindric biconvex lens with a center thickness of 10.0 mm. front & back radii of curvature of 500.0 mm and a refractive index of 1.5.
