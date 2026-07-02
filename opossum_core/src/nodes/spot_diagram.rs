@@ -159,12 +159,6 @@ impl OpticNode for SpotDiagram {
         }
         Ok(Some(report))
     }
-    fn node_attr(&self) -> &NodeAttr {
-        &self.node_attr
-    }
-    fn node_attr_mut(&mut self) -> &mut NodeAttr {
-        &mut self.node_attr
-    }
     fn reset_data(&mut self) {
         self.light_data = None;
         self.reset_optic_surfaces();
@@ -338,7 +332,7 @@ impl Plottable for SpotDiagram {
 mod test {
     use super::*;
     use crate::{
-        core_optics::PortType,
+        core_optics::{PortType, node_attr::HasNodeAttr},
         distributions::position::Hexapolar,
         joule,
         light::{Rays, light_result::LightRays, spectrum_helper::create_he_ne_spec},

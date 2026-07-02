@@ -321,6 +321,12 @@ impl NodeAttr {
     }
 }
 
+/// Trait for basic optical node attribute access.
+pub trait HasNodeAttr {
+    fn node_attr(&self) -> &NodeAttr;
+    fn node_attr_mut(&mut self) -> &mut NodeAttr;
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

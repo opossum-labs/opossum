@@ -10,7 +10,7 @@ use crate::{
     apertures::Aperture,
     coatings::CoatingType,
     core_optics::{
-        NodeAttr, OpticPorts, PortType, SceneryResources, hit_map::HitMap,
+        NodeAttr, OpticPorts, PortType, SceneryResources, hit_map::HitMap, node_attr::HasNodeAttr,
         optic_surface::OpticSurface,
     },
     error::{OpmResult, OpossumError},
@@ -26,7 +26,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 /// This is the basic trait that must be implemented by all concrete optical components.
-pub trait OpticNode: Dottable {
+pub trait OpticNode: Dottable + HasNodeAttr {
     ///Sets the apodization warning on nodes that have that attribute
     fn set_apodization_warning(&mut self, _apodized: bool) {
         warn!(
@@ -447,10 +447,6 @@ pub trait OpticNode: Dottable {
     fn node_report(&self, _uuid: &str) -> OpmResult<Option<NodeReport>> {
         Ok(None)
     }
-    /// Get the [`NodeAttr`] (common attributes) of an [`OpticNode`].
-    fn node_attr(&self) -> &NodeAttr;
-    /// Get the mutable[`NodeAttr`] (common attributes) of an [`OpticNode`].
-    fn node_attr_mut(&mut self) -> &mut NodeAttr;
     /// Update node attributes of this [`OpticNode`] from given [`NodeAttr`].
     ///
     /// # Errors

@@ -4,7 +4,7 @@ use crate::{
         propagation_strategy::MissedSurfaceStrategy, raytrace::AnalysisRayTrace,
     },
     coatings::CoatingConstantR,
-    core_optics::{NodeAttr, OpticNode, PortType},
+    core_optics::{NodeAttr, OpticNode, PortType, node_attr::HasNodeAttr},
     degree,
     error::{OpmResult, OpossumError},
     geometry::{Parabola, geo_surface::GeoSurfaceRef},
@@ -357,12 +357,6 @@ impl ParabolicMirror {
 unsafe impl Send for ParabolicMirror {}
 
 impl OpticNode for ParabolicMirror {
-    fn node_attr(&self) -> &NodeAttr {
-        &self.node_attr
-    }
-    fn node_attr_mut(&mut self) -> &mut NodeAttr {
-        &mut self.node_attr
-    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
         let anchor_point_iso = self.calc_off_axis_isometry()?;

@@ -2,16 +2,16 @@
 //! # Node groups
 //!
 //! A node group is a special type of optical node that can contain other optical nodes (including other groups) and connections between them. It allows to build up complex optical systems in a hierarchical way. The internal structure of a node group can be hidden or shown in the dot format by setting the `expand view` property of the group node. To use a node group from the outside, internal nodes / ports must be mapped to be visible (see [`map_input_port`](NodeGroup::map_input_port()) & [`map_output_port`](NodeGroup::map_output_port()) functions).
+use opm_macros_lib::OpmNode;
 mod analysis_energy;
 mod analysis_ghostfocus;
 mod analysis_raytrace;
 mod optic_graph;
 pub mod port_map;
 use crate::{
-    analyzers::Analyzable,
     core_optics::{
         NodeAttr, OpticNode, OpticPorts, OpticRef, PortType, SceneryResources,
-        optic_surface::OpticSurface,
+        node_attr::HasNodeAttr, optic_surface::OpticSurface,
     },
     error::{OpmResult, OpossumError},
     light::{
@@ -44,7 +44,7 @@ use uuid::Uuid;
 inventory::submit! {
     NodeRegistration::new::<NodeGroup>("group", "group node containing other nodes or groups")
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(OpmNode, Debug, Clone, Serialize, Deserialize)]
 /// The basic building block of an optical system. It represents a group of other optical
 /// nodes ([`OpticNode`]s) arranged in a (sub)graph.
 ///
@@ -971,12 +971,6 @@ impl OpticNode for NodeGroup {
             )))
         }
     }
-    fn node_attr(&self) -> &NodeAttr {
-        &self.node_attr
-    }
-    fn node_attr_mut(&mut self) -> &mut NodeAttr {
-        &mut self.node_attr
-    }
     fn set_global_conf(&mut self, global_conf: Option<Arc<Mutex<SceneryResources>>>) {
         let node_attr = self.node_attr_mut();
         node_attr.set_global_conf(global_conf.clone());
@@ -1032,7 +1026,6 @@ impl Dottable for NodeGroup {
         "yellow"
     }
 }
-impl Analyzable for NodeGroup {}
 #[cfg(test)]
 mod test {
     use super::*;

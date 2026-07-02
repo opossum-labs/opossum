@@ -6,7 +6,7 @@ use actix_web::{
 };
 use nalgebra::Point2;
 use opossum_core::{
-    core_optics::OpticRef,
+    core_optics::{OpticRef, node_attr::HasNodeAttr},
     error::OpossumError,
     light::lightdata::{energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder},
     nodes::{NodeReference, create_node_ref},

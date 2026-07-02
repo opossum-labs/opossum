@@ -6,7 +6,7 @@ use crate::{
         propagation_strategy::MissedSurfaceStrategy, raytrace::AnalysisRayTrace,
     },
     coatings::CoatingConstantR,
-    core_optics::{NodeAttr, OpticNode, PortType},
+    core_optics::{NodeAttr, OpticNode, PortType, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
     geometry::{Plane, Sphere, geo_surface::GeoSurfaceRef},
     light::{LightData, LightResult, Rays, light_result::LightRays},
@@ -111,12 +111,6 @@ impl ThinMirror {
     }
 }
 impl OpticNode for ThinMirror {
-    fn node_attr(&self) -> &NodeAttr {
-        &self.node_attr
-    }
-    fn node_attr_mut(&mut self) -> &mut NodeAttr {
-        &mut self.node_attr
-    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
         let Ok(Proptype::Curvature(curvature)) = self.node_attr.get_property("curvature") else {

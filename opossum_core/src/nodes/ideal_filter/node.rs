@@ -132,12 +132,6 @@ impl OpticNode for IdealFilter {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
     }
-    fn node_attr(&self) -> &NodeAttr {
-        &self.node_attr
-    }
-    fn node_attr_mut(&mut self) -> &mut NodeAttr {
-        &mut self.node_attr
-    }
 }
 impl AnalysisGhostFocus for IdealFilter {
     fn analyze(

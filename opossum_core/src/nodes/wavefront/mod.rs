@@ -206,12 +206,6 @@ impl OpticNode for WaveFront {
             Ok(None)
         }
     }
-    fn node_attr(&self) -> &NodeAttr {
-        &self.node_attr
-    }
-    fn node_attr_mut(&mut self) -> &mut NodeAttr {
-        &mut self.node_attr
-    }
     fn reset_data(&mut self) {
         self.light_data = None;
         self.reset_optic_surfaces();

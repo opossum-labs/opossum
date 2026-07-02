@@ -5,7 +5,7 @@ use crate::{
         GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
         propagation_strategy::MissedSurfaceStrategy, raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, OpticNode, PortType},
+    core_optics::{NodeAttr, OpticNode, PortType, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
     light::{LightData, LightRays, LightResult, Rays},
     nodes::NodeRegistration,
@@ -261,12 +261,6 @@ impl AnalysisRayTrace for ReflectiveGrating {
 impl OpticNode for ReflectiveGrating {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
-    }
-    fn node_attr(&self) -> &NodeAttr {
-        &self.node_attr
-    }
-    fn node_attr_mut(&mut self) -> &mut NodeAttr {
-        &mut self.node_attr
     }
 }
 

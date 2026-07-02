@@ -5,6 +5,7 @@ use uuid::Uuid;
 use super::{GhostFocusConfig, GhostFocusHistory};
 use crate::{
     analyzers::{Analyzer, raytrace::AnalysisRayTrace},
+    core_optics::node_attr::HasNodeAttr,
     error::OpmResult,
     light::{
         Rays,

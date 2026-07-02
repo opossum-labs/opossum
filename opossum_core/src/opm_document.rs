@@ -353,7 +353,7 @@ mod test {
             Analyzer, GhostFocusConfig, RayTraceConfig, energy::EnergyConfig,
             ghostfocus::GhostFocusAnalyzer, raytrace::RayTracingAnalyzer,
         },
-        core_optics::{Alignable, OpticNode},
+        core_optics::{Alignable, OpticNode, node_attr::HasNodeAttr},
         degree, joule, millimeter, nanometer,
         nodes::round_collimated_ray_builder,
         prelude::*,

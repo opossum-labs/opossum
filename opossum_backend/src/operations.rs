@@ -15,7 +15,7 @@ use actix_web::{
 };
 use nalgebra::Point2;
 use opossum_core::{
-    core_optics::OpticRef,
+    core_optics::{OpticRef, node_attr::HasNodeAttr},
     nodes::{ConnectionInfo, NodeGroup, create_node_ref},
     opm_document::AnalyzerInfo,
     prelude::{OpticNode, PortMap, PortType, Proptype},

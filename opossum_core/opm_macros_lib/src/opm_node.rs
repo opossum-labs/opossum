@@ -12,6 +12,15 @@ pub fn impl_derive_opm_node(input: TokenStream) -> TokenStream {
         impl Analyzable for #struct_name {}
         impl Alignable for #struct_name {}
         impl LIDT for #struct_name {}
+        // Automatically implement the attribute access trait
+        impl crate::core_optics::node_attr::HasNodeAttr for #struct_name {
+            fn node_attr(&self) -> &crate::core_optics::NodeAttr {
+                &self.node_attr
+            }
+            fn node_attr_mut(&mut self) -> &mut crate::core_optics::NodeAttr {
+                &mut self.node_attr
+            }
+        }
     };
     let attrs = struct_input
         .attrs
