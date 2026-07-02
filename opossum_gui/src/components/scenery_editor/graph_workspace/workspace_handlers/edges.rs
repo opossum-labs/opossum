@@ -48,9 +48,9 @@ impl EdgeHandlers {
         self.update_edge.call((edge, graph_id));
     }
 
-    pub fn update_edges(&self, edges: Vec<ConnectInfo>, graph_id: Uuid) {
-        self.update_edges.call((edges, graph_id));
-    }
+    // pub fn update_edges(&self, edges: Vec<ConnectInfo>, graph_id: Uuid) {
+    //     self.update_edges.call((edges, graph_id));
+    // }
 
     pub fn add_group_edges(&self, group_id: Uuid, edges: Vec<ConnectInfo>) {
         self.add_group_edges.call((group_id, edges));

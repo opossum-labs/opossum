@@ -227,12 +227,12 @@ pub enum GraphsWorkspaceAction {
     },
 
     /// Replaces all edges in the graph with a new set of connections.
-    UpdateEdges {
-        /// The complete list of connections to apply.
-        connections: Vec<ConnectInfo>,
-        /// The ID of the graph being updated.
-        graph_id: Uuid,
-    },
+    // UpdateEdges {
+    //     /// The complete list of connections to apply.
+    //     connections: Vec<ConnectInfo>,
+    //     /// The ID of the graph being updated.
+    //     graph_id: Uuid,
+    // },
 
     /// Updates a single edge in the graph.
     UpdateEdge {

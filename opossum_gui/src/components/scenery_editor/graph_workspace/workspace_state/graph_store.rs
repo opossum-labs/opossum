@@ -14,7 +14,7 @@ use opossum_core::{
     utils::to_f64,
 };
 use rust_sugiyama::{configure::Config, from_edges};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use uuid::Uuid;
 
 #[derive(Clone, PartialEq, Store, Default)]
@@ -321,7 +321,6 @@ impl GraphStore {
         rect
     }
 }
-
 /// Calculates optimized positions for all nodes in the graph.
 /// Places Analyzers at the top, disconnected nodes below them,
 /// and the connected Sugiyama layout at the bottom.
@@ -354,109 +353,215 @@ pub fn optimize_layout(
         }
     }
 
-    // Sort to ensure a deterministic layout (always the same order on repeated calls)
+    // Sort to ensure a deterministic layout
     analyzers.sort();
     disconnected_nodes.sort();
 
     // Define layout spacing constants
-    let h_gap = 50.0; // Horizontal gap between single nodes
-    let v_gap = 100.0; // Vertical gap between rows and subgraphs
+    let h_gap = 50.0;
+    let v_gap = 100.0;
 
     let mut current_y = 0.0;
 
     // --- Row 1: Analyzers ---
     if !analyzers.is_empty() {
-        let mut current_x = 0.0;
-        let mut max_row_height = 0.0;
-
-        for id in &analyzers {
-            new_positions.insert(*id, Point2D::new(current_x, current_y));
-            current_x += NODE_WIDTH + h_gap;
-
-            if let Some(node) = nodes.get(id) {
-                let height = node.get_bounding_box().height();
-                if height > max_row_height {
-                    max_row_height = height;
-                }
-            }
-        }
-        current_y += max_row_height + v_gap;
+        current_y = layout_horizontal_row(
+            &analyzers,
+            nodes,
+            current_y,
+            h_gap,
+            v_gap,
+            &mut new_positions,
+        );
     }
 
     // --- Row 2: Disconnected Optical Nodes ---
     if !disconnected_nodes.is_empty() {
-        let mut current_x = 0.0;
-        let mut max_row_height = 0.0;
-
-        for id in &disconnected_nodes {
-            new_positions.insert(*id, Point2D::new(current_x, current_y));
-            current_x += NODE_WIDTH + h_gap;
-
-            if let Some(node) = nodes.get(id) {
-                let height = node.get_bounding_box().height();
-                if height > max_row_height {
-                    max_row_height = height;
-                }
-            }
-        }
-        current_y += max_row_height + v_gap;
+        current_y = layout_horizontal_row(
+            &disconnected_nodes,
+            nodes,
+            current_y,
+            h_gap,
+            v_gap,
+            &mut new_positions,
+        );
     }
 
-    // --- Row 3: Connected Nodes (Sugiyama Layout) ---
+    // --- Row 3: Connected Nodes (Sugiyama Layout with Post-Processing) ---
     if !connected_node_ids.is_empty() && !edges.is_empty() {
-        let sugiyama_config = Config {
-            vertex_spacing: SUGIYAMA_VERTEX_SPACING,
-            ..Default::default()
-        };
-
-        let mut reg = UuidRegistry::new();
-        let edges_u32: Vec<(u32, u32)> = edges
-            .iter()
-            .map(|edge| {
-                let src = reg.register(edge.src_uuid());
-                let target = reg.register(edge.target_uuid());
-                (src, target)
-            })
-            .collect();
-
-        let layouts = from_edges(&edges_u32, &sugiyama_config);
-
-        // Use current_y as the starting point for the connected graphs.
-        let mut current_sugiyama_y = current_y;
-
-        for (layout, _group_height, _) in layouts {
-            let mut max_y_in_group = current_sugiyama_y;
-
-            for l in layout {
-                if let Some(uuid) = reg.get_uuid(u32::try_from(l.0).unwrap()) {
-                    // X position from Sugiyama
-                    let x = to_f64(l.1.1);
-
-                    // Y position: calculate base Y from Sugiyama and add our vertical offset
-                    let base_y = to_f64(l.1.0) * SUGIYAMA_VERT_PATH_FACTOR;
-                    let final_y = current_sugiyama_y + base_y;
-
-                    new_positions.insert(uuid, Point2D::new(x, final_y));
-
-                    // Track the lowest point of this specific subgraph to know where the next one should start
-                    if final_y > max_y_in_group {
-                        max_y_in_group = final_y;
-                    }
-                }
-            }
-            // Start the next subgraph directly below the current one, adding a sensible gap
-            current_sugiyama_y = max_y_in_group + v_gap;
-        }
+        layout_sugiyama_connected(nodes, edges, current_y, v_gap, &mut new_positions);
     }
 
     new_positions
 }
 
+/// Helper function to lay out a single flat row of nodes horizontally.
+/// Returns the updated next available Y position.
+fn layout_horizontal_row(
+    node_ids: &[Uuid],
+    nodes: &HashMap<Uuid, NodeElement>,
+    current_y: f64,
+    h_gap: f64,
+    v_gap: f64,
+    new_positions: &mut HashMap<Uuid, Point2D<f64>>,
+) -> f64 {
+    let mut current_x = 0.0;
+    let mut max_row_height = 0.0;
+
+    for id in node_ids {
+        new_positions.insert(*id, Point2D::new(current_x, current_y));
+        current_x += NODE_WIDTH + h_gap;
+
+        if let Some(node) = nodes.get(id) {
+            let height = node.get_bounding_box().height();
+            if height > max_row_height {
+                max_row_height = height;
+            }
+        }
+    }
+
+    current_y + max_row_height + v_gap
+}
+
+/// Helper function to process the Sugiyama layout and apply custom post-processing barycenter logic.
+fn layout_sugiyama_connected(
+    nodes: &HashMap<Uuid, NodeElement>,
+    edges: &[ConnectInfo],
+    start_y: f64,
+    v_gap: f64,
+    new_positions: &mut HashMap<Uuid, Point2D<f64>>,
+) {
+    let sugiyama_config = Config {
+        vertex_spacing: SUGIYAMA_VERTEX_SPACING,
+        ..Default::default()
+    };
+
+    let mut reg = UuidRegistry::new();
+
+    // The rust_sugiyama crate strictly requires u32 for node IDs on input.
+    let edges_u32: Vec<(u32, u32)> = edges
+        .iter()
+        .map(|edge| {
+            let src = reg.register(edge.src_uuid());
+            let target = reg.register(edge.target_uuid());
+            (src, target)
+        })
+        .collect();
+
+    let layouts = from_edges(&edges_u32, &sugiyama_config);
+    let mut current_sugiyama_y = start_y;
+
+    for (layout, _group_height, _) in layouts {
+        // Group nodes by their X-coordinate.
+        let mut layers: BTreeMap<usize, Vec<u32>> = BTreeMap::new();
+        for &(node_id, (_y_pos, x_layer)) in &layout {
+            // Safely handle potential negative coordinates from layout engine before casting
+            let positive_x = x_layer.round().max(0.0);
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let discrete_layer = positive_x as usize;
+
+            // Safely convert usize back to u32 since IDs originated from our u32 registry
+            let node_id_u32 = u32::try_from(node_id).expect(
+                "Sugiyama node ID exceeded u32 limits, which is impossible based on Registry",
+            );
+
+            layers.entry(discrete_layer).or_default().push(node_id_u32);
+        }
+
+        let mut subgraph_positions: HashMap<Uuid, Point2D<f64>> = HashMap::new();
+        let mut max_y_in_group = current_sugiyama_y;
+
+        // Process each layer from left to right
+        for (&orig_x_layer, node_ids_in_layer) in &layers {
+            let mut node_ideal_ys: Vec<(u32, f64)> = Vec::new();
+
+            for &node_id_u32 in node_ids_in_layer {
+                let target_uuid = reg.get_uuid(node_id_u32).unwrap();
+                let mut sum_y = 0.0;
+                let mut count = 0.0;
+
+                // Find incoming edges to calculate the ideal vertical position
+                for edge in edges {
+                    if edge.target_uuid() == target_uuid {
+                        let src_uuid = edge.src_uuid();
+
+                        if let Some(src_pos) = subgraph_positions.get(&src_uuid)
+                            && let Some(src_node) = nodes.get(&src_uuid)
+                        {
+                            let port_rel_pos =
+                                src_node.rel_port_position(PortType::Output, edge.src_port());
+                            let port_abs_y = src_pos.y + port_rel_pos.y;
+                            sum_y += port_abs_y;
+                            count += 1.0;
+                        }
+                    }
+                }
+
+                // Average the Y positions (Barycenter logic)
+                let ideal_y = if count > 0.0 {
+                    sum_y / count
+                } else {
+                    // Fallback: extract the original f64 Y order from Sugiyama.
+                    let orig_y_pos = layout
+                        .iter()
+                        .find(|l| l.0 == usize::try_from(node_id_u32).unwrap())
+                        .unwrap()
+                        .1
+                        .0;
+                    orig_y_pos * SUGIYAMA_VERT_PATH_FACTOR
+                };
+
+                node_ideal_ys.push((node_id_u32, ideal_y));
+            }
+
+            // Sort nodes safely
+            node_ideal_ys
+                .sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+
+            // Extract original f64 vertical slots.
+            let mut original_ys: Vec<f64> = node_ids_in_layer
+                .iter()
+                .map(|&id| {
+                    layout
+                        .iter()
+                        .find(|l| l.0 == usize::try_from(id).unwrap())
+                        .unwrap()
+                        .1
+                        .0
+                })
+                .collect();
+
+            original_ys.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+            // Assign final positions
+            for (i, &(node_id_u32, _)) in node_ideal_ys.iter().enumerate() {
+                let uuid = reg.get_uuid(node_id_u32).unwrap();
+                let final_x = to_f64(orig_x_layer);
+
+                let assigned_y_val = original_ys[i];
+                let final_y = assigned_y_val.mul_add(SUGIYAMA_VERT_PATH_FACTOR, current_sugiyama_y);
+
+                let final_pos = Point2D::new(final_x, final_y);
+                subgraph_positions.insert(uuid, final_pos);
+                new_positions.insert(uuid, final_pos);
+
+                if final_y > max_y_in_group {
+                    max_y_in_group = final_y;
+                }
+            }
+        }
+        // Move down for the next disconnected subgraph
+        current_sugiyama_y = max_y_in_group + v_gap;
+    }
+}
+
+/// Registry to map UUIDs to u32 IDs.
 struct UuidRegistry {
     forward: HashMap<Uuid, u32>,
     backward: HashMap<u32, Uuid>,
     next_id: u32,
 }
+
 impl UuidRegistry {
     fn new() -> Self {
         Self {
@@ -465,6 +570,7 @@ impl UuidRegistry {
             next_id: 0,
         }
     }
+
     fn register(&mut self, uuid: Uuid) -> u32 {
         if let Some(&id) = self.forward.get(&uuid) {
             return id;
@@ -475,6 +581,7 @@ impl UuidRegistry {
         self.backward.insert(id, uuid);
         id
     }
+
     fn get_uuid(&self, id: u32) -> Option<Uuid> {
         self.backward.get(&id).copied()
     }

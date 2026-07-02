@@ -110,10 +110,10 @@ pub fn use_workspace_processor(
                         graph_id,
                         save_changes,
                     } => workspace_handlers.view.zoom_to_fit(graph_id, save_changes),
-                    GraphsWorkspaceAction::UpdateEdges {
-                        connections,
-                        graph_id,
-                    } => workspace_handlers.edges.update_edges(connections, graph_id),
+                    // GraphsWorkspaceAction::UpdateEdges {
+                    //     connections,
+                    //     graph_id,
+                    // } => workspace_handlers.edges.update_edges(connections, graph_id),
                     GraphsWorkspaceAction::InvertNode {
                         inverted,
                         graph_id,
