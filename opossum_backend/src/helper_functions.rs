@@ -7,7 +7,7 @@ use actix_web::{
 };
 use nalgebra::Point2;
 use opossum_core::{
-    core_optics::OpticRef,
+    core_optics::{NodeAttrExt, OpticRef},
     error::OpmResult,
     meter,
     nodes::{ConnectionInfo, NodeGroup},

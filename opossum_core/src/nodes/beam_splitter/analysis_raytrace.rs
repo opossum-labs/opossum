@@ -1,6 +1,6 @@
 use crate::{
     analyzers::{AnalyzerType, RayTraceConfig, raytrace::AnalysisRayTrace},
-    core_optics::OpticNode,
+    core_optics::NodeAttrExt,
     error::{OpmResult, OpossumError},
     light::{LightData, LightResult},
 };

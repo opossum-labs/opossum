@@ -1,7 +1,7 @@
 use super::Wedge;
 use crate::{
     analyzers::{GhostFocusConfig, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace},
-    core_optics::{OpticNode, PortType},
+    core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, PortType},
     error::OpmResult,
     light::{LightRays, Rays},
 };

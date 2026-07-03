@@ -5,7 +5,9 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, OpticNode, PortType, optic_surface::OpticSurface},
+    core_optics::{
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, optic_surface::OpticSurface,
+    },
     error::OpmResult,
     light::{LightData, LightResult, Rays},
     nanometer,
@@ -158,15 +160,11 @@ impl OpticNode for SpotDiagram {
         }
         Ok(Some(report))
     }
-    fn reset_data(&mut self) {
-        self.light_data = None;
-        self.reset_optic_surfaces();
-    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
     }
-    fn set_light_data(&mut self, ld: LightData) {
-        self.light_data = Some(ld);
+    fn set_light_data(&mut self, ld: Option<LightData>) {
+        self.light_data = ld;
     }
 }
 impl AnalysisEnergy for SpotDiagram {

@@ -22,7 +22,10 @@
 //! Import `opossum_core` modules:
 //! - `FluenceEstimator` for defining how detectors measure light
 //! - `prelude::*` brings in the core optical system types and helpers
-use opossum_core::{core_optics::hit_map::fluence_estimator::FluenceEstimator, prelude::*};
+use opossum_core::{
+    core_optics::{NodeAttrExt, OpticNodeExt, hit_map::fluence_estimator::FluenceEstimator},
+    prelude::*,
+};
 use std::path::Path;
 
 /// Entry point for the program; returns `OpmResult<()>` to handle errors

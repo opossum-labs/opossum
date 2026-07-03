@@ -12,7 +12,10 @@
 //! 6. Connect elements using distances
 //! 7. Configure ray tracing
 //! 8. Run analysis and save output
-use opossum_core::prelude::*;
+use opossum_core::{
+    core_optics::{NodeAttrExt, OpticNodeExt},
+    prelude::*,
+};
 use std::{env, path::Path};
 
 fn main() -> OpmResult<()> {

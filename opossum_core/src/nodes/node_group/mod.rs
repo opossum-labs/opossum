@@ -10,8 +10,8 @@ mod optic_graph;
 pub mod port_map;
 use crate::{
     core_optics::{
-        NodeAttr, OpticNode, OpticPorts, OpticRef, PortType, SceneryResources,
-        node_attr::HasNodeAttr, optic_surface::OpticSurface,
+        NodeAttr, NodeAttrExt, OpticNode, OpticPorts, OpticRef, PortType, SceneryResources,
+        node_attr::HasNodeAttr,
     },
     error::{OpmResult, OpossumError},
     light::{
@@ -20,8 +20,8 @@ use crate::{
     },
     nodes::NodeRegistration,
     properties::{Properties, Proptype},
-    reporting::Dottable,
     reporting::{
+        Dottable,
         analysis_report::AnalysisReport,
         node_report::NodeReport,
         report_note::{ReportLevel, ReportNote},
@@ -988,9 +988,9 @@ impl OpticNode for NodeGroup {
         }
         self.accumulated_rays = Vec::<HashMap<Uuid, Rays>>::new();
     }
-    fn get_optic_surface_mut(&mut self, _surf_name: &str) -> Option<&mut OpticSurface> {
-        None
-    }
+    // fn get_optic_surface_mut(&mut self, _surf_name: &str) -> Option<&mut OpticSurface> {
+    //     None
+    // }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         Ok(())
     }
@@ -1201,6 +1201,11 @@ mod test {
             assert!(false)
         }
         Ok(())
+    }
+    #[test]
+    fn get_optic_surface_mut() {
+        let mut scenery = NodeGroup::default();
+        assert!(scenery.get_optic_surface_mut("input_1").is_none())
     }
 }
 

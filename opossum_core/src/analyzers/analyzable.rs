@@ -4,7 +4,7 @@ use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
     },
-    core_optics::OpticNode,
+    core_optics::{NodeAttrExt, OpticNode},
 };
 use core::fmt::Debug;
 use std::fmt::Display;

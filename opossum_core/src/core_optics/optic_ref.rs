@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::{
     analyzers::Analyzable,
-    core_optics::{NodeAttr, SceneryResources, node_attr::HasNodeAttr},
+    core_optics::{NodeAttr, NodeAttrExt, SceneryResources, node_attr::HasNodeAttr},
     nodes::{OpticGraph, create_node_ref},
     utils::LockExt,
 };

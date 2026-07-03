@@ -1,4 +1,4 @@
-use opossum_core::prelude::*;
+use opossum_core::{core_optics::NodeAttrExt, prelude::*};
 
 pub fn cambox_2w() -> OpmResult<NodeGroup> {
     let mut cb = NodeGroup::new("CamBox 2w");

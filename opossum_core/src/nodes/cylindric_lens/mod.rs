@@ -5,7 +5,7 @@
 use crate::refractive_index::RefractiveIndex;
 use crate::{
     analyzers::energy::AnalysisEnergy,
-    core_optics::{NodeAttr, OpticNode, PortType},
+    core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType},
     error::{OpmResult, OpossumError},
     geometry::{Cylinder, Plane, geo_surface::GeoSurfaceRef},
     meter, millimeter,
@@ -163,7 +163,7 @@ impl OpticNode for CylindricLens {
             )
         };
         self.update_surface(
-            &"input_1".to_string(),
+            "input_1",
             front_geosurface,
             anchor_point_iso_front,
             &PortType::Input,
@@ -202,7 +202,7 @@ impl OpticNode for CylindricLens {
             )
         };
         self.update_surface(
-            &"output_1".to_string(),
+            "output_1",
             rear_geosurface,
             anchor_point_iso_rear,
             &PortType::Output,
@@ -219,6 +219,7 @@ mod test {
             energy::{AnalysisEnergy, EnergyConfig},
             raytrace::AnalysisRayTrace,
         },
+        core_optics::NodeAttrExt,
         distributions::position::Hexapolar,
         joule,
         light::{LightData, LightResult, Rays},

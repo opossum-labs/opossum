@@ -49,6 +49,7 @@
 //!   save the generated `.opm` file.
 
 use opossum_core::coatings::CoatingConstantR;
+use opossum_core::core_optics::OpticNodeExt;
 use opossum_core::core_optics::node_attr::HasNodeAttr;
 use opossum_core::{
     J_per_cm2, coatings::CoatingType, distributions::energy::General2DGaussian,

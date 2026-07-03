@@ -7,7 +7,7 @@ pub mod test_helper {
             raytrace::AnalysisRayTrace,
         },
         apertures::{ApertureShape, ApertureType, CircleShape},
-        core_optics::{OpticNode, PortType},
+        core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, PortType},
         distributions::position::Hexapolar,
         error::OpmResult,
         joule,

@@ -8,7 +8,7 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, OpticNode, PortType},
+    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType},
     error::{OpmResult, OpossumError},
     geometry::geo_surface::GeoSurfaceRef,
     light::{LightData, LightResult},
@@ -111,13 +111,13 @@ impl OpticNode for WaveFront {
         });
 
         self.update_surface(
-            &"input_1".to_string(),
+            "input_1",
             geosurface.clone(),
             Isometry::identity(),
             &PortType::Input,
         )?;
         self.update_surface(
-            &"output_1".to_string(),
+            "output_1",
             geosurface,
             Isometry::identity(),
             &PortType::Output,
@@ -205,12 +205,8 @@ impl OpticNode for WaveFront {
             Ok(None)
         }
     }
-    fn reset_data(&mut self) {
-        self.light_data = None;
-        self.reset_optic_surfaces();
-    }
-    fn set_light_data(&mut self, ld: LightData) {
-        self.light_data = Some(ld);
+    fn set_light_data(&mut self, ld: Option<LightData>) {
+        self.light_data = ld;
     }
 }
 impl From<WaveFrontMap> for Proptype {

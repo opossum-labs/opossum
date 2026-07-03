@@ -4,7 +4,9 @@ use crate::{
         propagation_strategy::MissedSurfaceStrategy, raytrace::AnalysisRayTrace,
     },
     coatings::CoatingConstantR,
-    core_optics::{NodeAttr, OpticNode, PortType, node_attr::HasNodeAttr},
+    core_optics::{
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, node_attr::HasNodeAttr,
+    },
     degree,
     error::{OpmResult, OpossumError},
     geometry::{Parabola, geo_surface::GeoSurfaceRef},
@@ -363,13 +365,13 @@ impl OpticNode for ParabolicMirror {
         let parabola = Parabola::new(-1. * self.calc_parent_focal_length()?, total_iso)?;
         let para_geo_surface = GeoSurfaceRef(Arc::new(Mutex::new(parabola)));
         self.update_surface(
-            &"input_1".to_string(),
+            "input_1",
             para_geo_surface.clone(),
             anchor_point_iso,
             &PortType::Input,
         )?;
         self.update_surface(
-            &"output_1".to_string(),
+            "output_1",
             para_geo_surface,
             anchor_point_iso,
             &PortType::Output,

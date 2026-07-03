@@ -8,10 +8,9 @@ use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, OpticNode},
+    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt},
     error::OpmResult,
-    light::LightData,
-    light::{Rays, Spectrum},
+    light::{LightData, Rays, Spectrum},
     nanometer,
     nodes::NodeRegistration,
     properties::{Properties, Proptype},
@@ -192,12 +191,8 @@ impl OpticNode for Spectrometer {
             props,
         )))
     }
-    fn reset_data(&mut self) {
-        self.light_data = None;
-        self.reset_optic_surfaces();
-    }
-    fn set_light_data(&mut self, ld: LightData) {
-        self.light_data = Some(ld);
+    fn set_light_data(&mut self, ld: Option<LightData>) {
+        self.light_data = ld;
     }
 }
 impl Debug for Spectrometer {

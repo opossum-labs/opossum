@@ -4,11 +4,11 @@ use std::{
 };
 
 use crate::{
-    core_optics::NodeAttr,
+    core_optics::{NodeAttr, OpticNodeExt},
     error::OpmResult,
     geometry::{Plane, geo_surface::GeoSurfaceRef},
     nodes::NodeRegistration,
-    prelude::{Isometry, OpticNode, PortType, Proptype},
+    prelude::{Isometry, OpticNode, PortType},
 };
 use opm_macros_lib::OpmNode;
 
@@ -61,15 +61,12 @@ impl Display for SourcePort {
 }
 
 impl OpticNode for SourcePort {
-    fn set_property(&mut self, name: &str, prop: Proptype) -> OpmResult<()> {
-        self.node_attr.set_property(name, prop)
-    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         // A source port only has an output port, so we only need to update the flat single surface for the output port.
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
         let geosurface = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso))));
         self.update_surface(
-            &"output_1".to_string(),
+            "output_1",
             geosurface,
             Isometry::identity(),
             &PortType::Output,
@@ -83,7 +80,7 @@ mod test {
     use super::*;
     use crate::{
         analyzers::{Analyzer, raytrace::RayTracingAnalyzer},
-        core_optics::node_attr::HasNodeAttr,
+        core_optics::{NodeAttrExt, node_attr::HasNodeAttr},
         joule, millimeter,
         nodes::{
             NodeGroup, ParaxialSurface, RayPropagationVisualizer, round_collimated_ray_builder,

@@ -26,6 +26,7 @@
 //! This is similar to situations with two real mirrors or lenses in telescopes or microscopes:
 //! even if we try to collimate a beam, the image may show distortions due to non-ideal lens surfaces.
 //! This workshop helps us understand how to minimize such aberrations and optimize imaging quality.
+use opossum_core::core_optics::{NodeAttrExt, OpticNodeExt};
 use opossum_core::distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines};
 use opossum_core::prelude::*;
 use std::env;

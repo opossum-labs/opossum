@@ -4,9 +4,7 @@ use std::sync::{Arc, Mutex};
 use crate::refractive_index::RefractiveIndex;
 use crate::{
     analyzers::energy::AnalysisEnergy,
-    core_optics::NodeAttr,
-    core_optics::OpticNode,
-    core_optics::PortType,
+    core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType},
     degree,
     error::{OpmResult, OpossumError},
     geometry::{Plane, geo_surface::GeoSurfaceRef},
@@ -134,7 +132,7 @@ impl OpticNode for Wedge {
         let front_geosurface = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso))));
 
         self.update_surface(
-            &"input_1".to_string(),
+            "input_1",
             front_geosurface,
             Isometry::identity(),
             &PortType::Input,
@@ -165,7 +163,7 @@ impl OpticNode for Wedge {
         ))));
 
         self.update_surface(
-            &"output_1".to_string(),
+            "output_1",
             rear_geosurface,
             anchor_point_iso,
             &PortType::Output,
@@ -184,7 +182,7 @@ mod test {
             energy::{AnalysisEnergy, EnergyConfig},
             raytrace::AnalysisRayTrace,
         },
-        core_optics::PortType,
+        core_optics::{NodeAttrExt, PortType},
         degree, joule,
         light::{LightData, LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
         nanometer,

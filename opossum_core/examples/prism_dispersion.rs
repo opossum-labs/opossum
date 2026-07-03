@@ -1,5 +1,6 @@
 use nalgebra::Point2;
 use num::Zero;
+use opossum_core::core_optics::NodeAttrExt;
 use opossum_core::prelude::*;
 use opossum_core::{
     distributions::energy::UniformDist, distributions::position::Grid,

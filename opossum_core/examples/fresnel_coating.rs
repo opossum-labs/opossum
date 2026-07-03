@@ -1,4 +1,5 @@
 use nalgebra::Point2;
+use opossum_core::core_optics::OpticNodeExt;
 use opossum_core::prelude::*;
 use opossum_core::{
     coatings::CoatingType, core_optics::PortType, distributions::energy::UniformDist,

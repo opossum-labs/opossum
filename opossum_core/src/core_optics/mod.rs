@@ -1,13 +1,17 @@
 pub mod hit_map;
 pub mod node_attr;
+pub mod node_attr_ext;
 pub mod optic_node;
+pub mod optic_node_ext;
 pub mod optic_ports;
 pub mod optic_ref;
 mod optic_scenery_rsc;
 pub mod optic_surface;
 pub use node_attr::NodeAttr;
+pub use node_attr_ext::NodeAttrExt;
 pub use optic_node::Alignable;
 pub use optic_node::OpticNode;
+pub use optic_node_ext::OpticNodeExt;
 pub use optic_ports::{OpticPorts, PortType};
 pub use optic_ref::OpticRef;
 pub use optic_scenery_rsc::SceneryResources;

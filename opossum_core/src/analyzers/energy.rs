@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use super::{Analyzer, AnalyzerRegistration, AnalyzerType};
 use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
-    core_optics::{OpticNode, node_attr::HasNodeAttr},
+    core_optics::{NodeAttrExt, OpticNode, node_attr::HasNodeAttr},
     error::OpmResult,
     light::LightResult,
     nodes::NodeGroup,
@@ -144,7 +144,7 @@ pub trait AnalysisEnergy: OpticNode {
                 self.node_type()
             );
         }
-        self.set_light_data(data.clone());
+        self.set_light_data(Some(data.clone()));
         Ok(LightResult::from([(out_port.clone(), data)]))
     }
 }

@@ -27,6 +27,7 @@
 //! External crates:
 //! - `nalgebra::Point2` used to define 2D coordinates for constructing the spatial emission grid
 use nalgebra::Point2;
+use opossum_core::core_optics::NodeAttrExt;
 use opossum_core::distributions::{energy::UniformDist, position::Grid, spectral::LaserLines};
 use opossum_core::prelude::*;
 use std::env;

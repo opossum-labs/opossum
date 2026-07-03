@@ -1,4 +1,4 @@
-use opossum_core::{nodes::round_collimated_ray_builder, prelude::*};
+use opossum_core::{core_optics::OpticNodeExt, nodes::round_collimated_ray_builder, prelude::*};
 use std::path::Path;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();

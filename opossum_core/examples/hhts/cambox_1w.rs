@@ -1,4 +1,7 @@
-use opossum_core::prelude::*;
+use opossum_core::{
+    core_optics::{NodeAttrExt, OpticNodeExt},
+    prelude::*,
+};
 
 pub fn cambox_1w() -> OpmResult<NodeGroup> {
     let cam_aperture = Aperture::new_rectangle(

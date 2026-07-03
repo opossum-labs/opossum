@@ -18,15 +18,15 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, OpticNode},
+    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt},
     error::{OpmResult, OpossumError},
     light::{LightData, LightResult, Spectrum},
     millimeter,
     nodes::NodeRegistration,
     properties::{Properties, Proptype, validator::Validator},
-    reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     reporting::{
         node_report::NodeReport,
+        plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
         report_note::{ReportLevel, ReportNote},
     },
 };
@@ -151,12 +151,8 @@ impl OpticNode for RayPropagationVisualizer {
         }
         Ok(Some(report))
     }
-    fn reset_data(&mut self) {
-        self.light_data = None;
-        self.reset_optic_surfaces();
-    }
-    fn set_light_data(&mut self, new_data: LightData) {
-        self.light_data = Some(new_data);
+    fn set_light_data(&mut self, new_data: Option<LightData>) {
+        self.light_data = new_data;
     }
 }
 impl AnalysisGhostFocus for RayPropagationVisualizer {}

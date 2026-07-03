@@ -1,4 +1,5 @@
 use opossum_core::coatings::CoatingConstantR;
+use opossum_core::core_optics::OpticNodeExt;
 use opossum_core::{J_per_cm2, percent, prelude::*};
 use opossum_core::{
     distributions::{energy::General2DGaussian, position::HexagonalTiling, spectral::LaserLines},

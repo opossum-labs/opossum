@@ -1,5 +1,6 @@
 use opossum_core::{
-    coatings::CoatingConstantR, nodes::round_collimated_ray_builder, percent, prelude::*,
+    coatings::CoatingConstantR, core_optics::OpticNodeExt, nodes::round_collimated_ray_builder,
+    percent, prelude::*,
 };
 use std::path::Path;
 

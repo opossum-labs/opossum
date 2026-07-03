@@ -15,7 +15,11 @@
 //! 6. Ray propagation visualization
 //!
 //! Distances between components are specified in millimeters.
-use opossum_core::{nodes::round_collimated_ray_builder, prelude::*};
+use opossum_core::{
+    core_optics::{NodeAttrExt, OpticNodeExt},
+    nodes::round_collimated_ray_builder,
+    prelude::*,
+};
 use std::{env, path::Path};
 /// Entry point for the Kepler wavefront aberration example.
 ///

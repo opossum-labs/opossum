@@ -1,10 +1,9 @@
 use crate::{
     analyzers::energy::{AnalysisEnergy, EnergyConfig},
-    core_optics::node_attr::HasNodeAttr,
+    core_optics::{NodeAttrExt, node_attr::HasNodeAttr},
     error::OpossumError,
     light::{LightData, LightResult},
     nodes::SourcePort,
-    prelude::OpticNode,
 };
 
 impl AnalysisEnergy for SourcePort {

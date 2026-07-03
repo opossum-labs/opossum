@@ -1,7 +1,7 @@
 use super::BeamSplitter;
 use crate::{
     analyzers::energy::{AnalysisEnergy, EnergyConfig},
-    core_optics::OpticNode,
+    core_optics::NodeAttrExt,
     error::OpmResult,
     light::LightResult,
 };

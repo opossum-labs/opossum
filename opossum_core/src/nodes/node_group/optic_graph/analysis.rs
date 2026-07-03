@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::{
     analyzers::energy::{AnalysisEnergy, EnergyConfig},
+    core_optics::NodeAttrExt,
     error::{OpmResult, OpossumError},
     light::{LightData, LightResult},
     utils::LockExt,

@@ -1,5 +1,6 @@
 use opossum_core::{
-    prelude::*, refractive_index::RefrIndexConst, utils::geom_transformation::Isometry,
+    core_optics::NodeAttrExt, prelude::*, refractive_index::RefrIndexConst,
+    utils::geom_transformation::Isometry,
 };
 use std::path::Path;
 

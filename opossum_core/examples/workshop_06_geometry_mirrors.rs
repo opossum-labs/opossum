@@ -26,6 +26,7 @@
 //! - `prelude::*` brings in core optical system types and helpers
 //!
 use opossum_core::coatings::CoatingConstantR;
+use opossum_core::core_optics::{NodeAttrExt, OpticNodeExt};
 use opossum_core::{percent, prelude::*};
 use std::env;
 // Import `Path` from the standard library for working with file paths

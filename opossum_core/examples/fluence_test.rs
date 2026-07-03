@@ -1,3 +1,4 @@
+use opossum_core::core_optics::NodeAttrExt;
 use opossum_core::distributions::spectral::LaserLines;
 use opossum_core::prelude::*;
 use opossum_core::{

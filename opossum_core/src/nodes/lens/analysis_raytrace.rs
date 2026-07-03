@@ -1,7 +1,7 @@
 use super::Lens;
 use crate::{
     analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
-    core_optics::{OpticNode, PortType},
+    core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, PortType},
     error::{OpmResult, OpossumError},
     light::{LightData, LightResult},
 };

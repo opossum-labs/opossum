@@ -6,14 +6,13 @@ mod analysis_raytrace;
 
 use crate::{
     analyzers::{AnalyzerType, propagation_strategy::MissedSurfaceStrategy},
-    core_optics::NodeAttr,
-    core_optics::OpticNode,
-    core_optics::PortType,
+    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType},
     error::{OpmResult, OpossumError},
     geometry::{Plane, geo_surface::GeoSurfaceRef},
-    light::LightData,
-    light::Rays,
-    light::spectrum::{Spectrum, merge_spectra},
+    light::{
+        LightData, Rays,
+        spectrum::{Spectrum, merge_spectra},
+    },
     nodes::{NodeRegistration, ideal_filter::SpectralFilterBuilder},
     properties::{Proptype, validator::Validator},
     utils::{default_from_name::DefaultFromName, geom_transformation::Isometry},
@@ -390,7 +389,7 @@ impl OpticNode for BeamSplitter {
         let anchor_point_iso = Isometry::identity();
         for in_surf_name in &input_surf_name_list {
             self.update_surface(
-                &(*in_surf_name).to_string(),
+                in_surf_name,
                 geosurface.clone(),
                 anchor_point_iso,
                 &PortType::Input,
@@ -398,7 +397,7 @@ impl OpticNode for BeamSplitter {
         }
         for out_surf_name in &output_surf_name_list {
             self.update_surface(
-                &(*out_surf_name).to_string(),
+                out_surf_name,
                 geosurface.clone(),
                 anchor_point_iso,
                 &PortType::Output,
@@ -410,7 +409,10 @@ impl OpticNode for BeamSplitter {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{core_optics::PortType, nodes::test_helper::test_helper::*};
+    use crate::{
+        core_optics::{NodeAttrExt, PortType},
+        nodes::test_helper::test_helper::*,
+    };
     #[test]
     fn default() -> OpmResult<()> {
         let mut node = BeamSplitter::default();

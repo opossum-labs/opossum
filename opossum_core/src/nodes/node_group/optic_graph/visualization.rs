@@ -1,5 +1,6 @@
 use super::OpticGraph;
 use crate::{
+    core_optics::NodeAttrExt,
     error::{OpmResult, OpossumError},
     light::LightFlow,
     properties::proptype::format_quantity,

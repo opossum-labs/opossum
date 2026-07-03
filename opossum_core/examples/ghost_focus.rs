@@ -1,6 +1,6 @@
 use opossum_core::{
     coatings::{CoatingConstantR, CoatingType},
-    core_optics::PortType,
+    core_optics::{OpticNodeExt, PortType},
     distributions::{energy::General2DGaussian, position::HexagonalTiling, spectral::LaserLines},
     percent,
     prelude::*,

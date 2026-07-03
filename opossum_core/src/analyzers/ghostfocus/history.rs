@@ -8,6 +8,7 @@ use uom::si::length::millimeter;
 use uuid::Uuid;
 
 use crate::{
+    core_optics::NodeAttrExt,
     error::{OpmResult, OpossumError},
     light::Rays,
     millimeter,

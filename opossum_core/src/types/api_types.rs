@@ -7,7 +7,10 @@ use uuid::Uuid;
 use crate::{
     analyzers::Analyzable,
     coatings::CoatingType,
-    core_optics::optic_ports::{PortConfig, ValidatedLidt},
+    core_optics::{
+        NodeAttrExt,
+        optic_ports::{PortConfig, ValidatedLidt},
+    },
     nodes::ConnectionInfo,
     opm_document::AnalyzerInfo,
     prelude::{AnalyzerType, Aperture, Isometry, PortMap, PortType, Properties},

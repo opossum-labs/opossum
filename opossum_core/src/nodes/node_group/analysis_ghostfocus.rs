@@ -2,7 +2,7 @@
 use super::NodeGroup;
 use crate::{
     analyzers::{GhostFocusConfig, ghostfocus::AnalysisGhostFocus},
-    core_optics::{OpticNode, PortType},
+    core_optics::{NodeAttrExt, PortType},
     error::{OpmResult, OpossumError},
     light::{
         LightData, LightRays, Rays,

@@ -5,7 +5,7 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, OpticNode, OpticPorts, OpticRef, node_attr::HasNodeAttr},
+    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticPorts, OpticRef, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
     light::LightResult,
     nodes::NodeRegistration,

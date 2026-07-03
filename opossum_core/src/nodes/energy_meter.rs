@@ -3,8 +3,7 @@ use crate::{
     analyzers::{
         energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
     },
-    core_optics::NodeAttr,
-    core_optics::OpticNode,
+    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt},
     error::OpmResult,
     joule,
     light::LightData,
@@ -174,15 +173,11 @@ impl OpticNode for EnergyMeter {
             props,
         )))
     }
-    fn reset_data(&mut self) {
-        self.light_data = None;
-        self.reset_optic_surfaces();
-    }
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }
-    fn set_light_data(&mut self, new_data: LightData) {
-        self.light_data = Some(new_data);
+    fn set_light_data(&mut self, new_data: Option<LightData>) {
+        self.light_data = new_data;
     }
 }
 

@@ -6,7 +6,7 @@ use std::{
 use super::graph::OpticGraph;
 use crate::{
     analyzers::Analyzable,
-    core_optics::OpticRef,
+    core_optics::{NodeAttrExt, OpticRef},
     error::{OpmResult, OpossumError},
     light::LightFlow,
     prelude::PortType,

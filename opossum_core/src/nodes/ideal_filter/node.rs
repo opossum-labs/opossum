@@ -7,7 +7,7 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::NodeAttr,
+    core_optics::{NodeAttr, NodeAttrExt, OpticNodeExt},
     error::{OpmResult, OpossumError},
     light::{
         LightData, LightRays, LightResult, Rays,

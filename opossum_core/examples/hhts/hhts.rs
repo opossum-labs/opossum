@@ -8,6 +8,7 @@ use cambox_2w::cambox_2w;
 use hhts_input::hhts_input;
 
 use num::Zero;
+use opossum_core::core_optics::OpticNodeExt;
 use opossum_core::light::lightdata::ray_data_builder::RayDataBuilder;
 use opossum_core::prelude::*;
 use opossum_core::{

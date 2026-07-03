@@ -5,7 +5,7 @@ use uuid::Uuid;
 use super::{GhostFocusConfig, GhostFocusHistory};
 use crate::{
     analyzers::{Analyzer, raytrace::AnalysisRayTrace},
-    core_optics::node_attr::HasNodeAttr,
+    core_optics::{NodeAttrExt, OpticNodeExt, node_attr::HasNodeAttr},
     error::OpmResult,
     light::{
         Rays,
@@ -226,10 +226,7 @@ mod test_ghost_focus_analyzer {
     use crate::{
         analyzers::Analyzer,
         coatings::CoatingConstantR,
-        core_optics::{
-            PortType,
-            optic_node::{Alignable, OpticNode},
-        },
+        core_optics::{PortType, optic_node::Alignable},
         degree, joule,
         light::LightResult,
         millimeter,
@@ -306,14 +303,14 @@ mod test_ghost_analysis_nested_groups_inversion {
     use crate::{
         analyzers::ghostfocus::config::GhostFocusConfig,
         coatings::CoatingConstantR,
+        core_optics::{NodeAttrExt, OpticNodeExt},
         distributions::{position::Hexapolar, spectral::LaserLines},
         error::OpmResult,
         joule, millimeter, nanometer,
         nodes::{Lens, NodeGroup, SourcePort},
         percent,
         prelude::{
-            AnalyzerType, CollimatedSrc, OpmDocument, OpticNode, PortType, RayDataSource,
-            RefrIndexConst,
+            AnalyzerType, CollimatedSrc, OpmDocument, PortType, RayDataSource, RefrIndexConst,
         },
         radian,
         utils::LockExt,

@@ -6,7 +6,9 @@ use crate::{
         propagation_strategy::MissedSurfaceStrategy, raytrace::AnalysisRayTrace,
     },
     coatings::CoatingConstantR,
-    core_optics::{NodeAttr, OpticNode, PortType, node_attr::HasNodeAttr},
+    core_optics::{
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, node_attr::HasNodeAttr,
+    },
     error::{OpmResult, OpossumError},
     geometry::{Plane, Sphere, geo_surface::GeoSurfaceRef},
     light::{LightData, LightResult, Rays, light_result::LightRays},
@@ -132,17 +134,12 @@ impl OpticNode for ThinMirror {
             )
         };
         self.update_surface(
-            &"input_1".to_string(),
+            "input_1",
             geosurface.clone(),
             anchor_point_iso,
             &PortType::Input,
         )?;
-        self.update_surface(
-            &"output_1".to_string(),
-            geosurface,
-            anchor_point_iso,
-            &PortType::Output,
-        )?;
+        self.update_surface("output_1", geosurface, anchor_point_iso, &PortType::Output)?;
         Ok(())
     }
 }

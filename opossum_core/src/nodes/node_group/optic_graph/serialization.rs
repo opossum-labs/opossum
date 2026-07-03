@@ -1,8 +1,7 @@
 use super::{super::port_map::PortMap, ConnectionInfo, OpticGraph};
 use crate::{
-    core_optics::{OpticRef, node_attr::HasNodeAttr},
+    core_optics::{NodeAttrExt, OpticRef, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
-    prelude::OpticNode,
     properties::Proptype,
     utils::LockExt,
 };

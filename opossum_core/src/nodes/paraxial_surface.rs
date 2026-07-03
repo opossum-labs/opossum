@@ -5,7 +5,7 @@ use crate::{
         GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, OpticNode, PortType},
+    core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType},
     error::{OpmResult, OpossumError},
     light::{LightData, LightRays, LightResult, Rays},
     millimeter,
@@ -153,7 +153,7 @@ mod test {
     use super::*;
     use crate::{
         analyzers::RayTraceConfig,
-        core_optics::PortType,
+        core_optics::{NodeAttrExt, PortType},
         degree, joule,
         light::{Ray, Rays},
         millimeter, nanometer,
