@@ -21,7 +21,7 @@ pub trait OpticNodeExt {
     ///
     /// The effective input isometry is the base isometry modified by the local alignment isometry (if any).
     fn effective_node_iso(&self) -> Option<Isometry>;
-    /// Return the effective input isometry of an [`OpticSurface`].
+    /// Return the effective input isometry of an [`OpticSurface`](crate::core_optics::optic_surface::OpticSurface).
     ///
     /// The effective input isometry is the base isometry modified by the local alignment isometry (if any) and the anchor point isometry.  
     ///
@@ -74,7 +74,7 @@ pub trait OpticNodeExt {
 
     /// Update the surfaces of nodes with a single interacting surface. E.g. detectors
     /// # Errors
-    /// This function errors if the function [`OpticNode::update_surface`] fails
+    /// This function errors if the function `OpticNode::update_surface` fails
     fn update_flat_single_surfaces(&mut self) -> OpmResult<()>;
 
     /// Updates a single surface of this node

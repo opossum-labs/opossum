@@ -94,7 +94,7 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     /// Set this [`OpticNode`] as inverted.
     ///
     /// This flag signifies that the [`OpticNode`] should be propagated in reverse order. This function normally simply sets the
-    /// `inverted` property. For [`NodeGroup`] it also sets the `inverted` flag of the underlying `OpticGraph`.
+    /// `inverted` property. For [`NodeGroup`](crate::nodes::NodeGroup) it also sets the `inverted` flag of the underlying `OpticGraph`.
     ///
     /// # Errors
     /// This function returns an error, if the node cannot be inverted. This is the case, if

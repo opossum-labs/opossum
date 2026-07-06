@@ -20,8 +20,8 @@ use crate::{
 /// Structure for storing an optical node.
 ///
 /// This structure stores a reference to an optical node (a structure implementing the
-/// [`OpticNode`] trait). This [`OpticRef`] is then stored
-/// as a node in a `NodeGroup`)[`crate::nodes::NodeGroup`].
+/// [`OpticNode`](crate::core_optics::OpticNode) trait). This [`OpticRef`] is then stored
+/// as a node in a [`NodeGroup`].
 pub struct OpticRef {
     /// The underlying optical reference.
     pub optical_ref: Arc<Mutex<dyn Analyzable>>,

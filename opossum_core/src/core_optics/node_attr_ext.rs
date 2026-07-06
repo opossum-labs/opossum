@@ -17,16 +17,16 @@ use std::sync::{Arc, Mutex};
 pub trait NodeAttrExt {
     // --- Immutable Methods (Getters) ---
 
-    /// Get the node type of this [`OpticNode`]
+    /// Get the node type of this [`OpticNode`](crate::core_optics::OpticNode)
     fn node_type(&self) -> &str;
 
-    /// Get the name of this [`OpticNode`]
+    /// Get the name of this [`OpticNode`](crate::core_optics::OpticNode)
     fn name(&self) -> &str;
 
-    /// Get the gui position of this [`OpticNode`].
+    /// Get the gui position of this [`OpticNode`](crate::core_optics::OpticNode).
     fn gui_position(&self) -> Option<Point2<f64>>;
 
-    /// Return all properties of this [`OpticNode`].
+    /// Return all properties of this [`OpticNode`](crate::core_optics::OpticNode).
     fn properties(&self) -> &Properties;
 
     /// Returns `true` if the node should be analyzed in reverse direction.
@@ -43,17 +43,17 @@ pub trait NodeAttrExt {
     /// Return a [`String`] in the form `'name' (type)` for display purposes.
     fn node_info(&self) -> String;
 
-    /// Returns a reference to an [`OpticSurface`] of this [`OpticNode`] with the key `surf_name`
+    /// Returns a reference to an [`OpticSurface`] of this [`OpticNode`](crate::core_optics::OpticNode) with the key `surf_name`
     /// # Attributes
     /// - `surf_name`: name of the optical surface, which is the key in the [`OpticPorts`] hashmap stat stores the surfaces
     fn get_optic_surface(&self, surf_name: &str) -> Option<&OpticSurface>;
 
-    /// Return all hit maps (if any) of this [`OpticNode`].
+    /// Return all hit maps (if any) of this [`OpticNode`](crate::core_optics::OpticNode).
     fn hit_maps(&self) -> HashMap<String, HitMap>;
 
     // --- Mutable Methods (Setters / Actions) ---
 
-    /// Set a property of this [`OpticNode`].
+    /// Set a property of this [`OpticNode`](crate::core_optics::OpticNode).
     ///
     /// Set a property of an optical node. This property must already exist (e.g. defined in `new()` / `default()` functions of the node).
     ///
@@ -61,10 +61,10 @@ pub trait NodeAttrExt {
     /// This function will return an error if a non-defined property is set or the property has the wrong data type.
     fn set_property(&mut self, name: &str, proptype: Proptype) -> OpmResult<()>;
 
-    /// Return the available (input & output) ports of this [`OpticNode`] as mutables.
+    /// Return the available (input & output) ports of this [`OpticNode`](crate::core_optics::OpticNode) as mutables.
     fn ports_mut(&mut self) -> &mut OpticPorts;
 
-    /// Returns a mutable reference to an [`OpticSurface`] of this [`OpticNode`] with the key `surf_name`
+    /// Returns a mutable reference to an [`OpticSurface`] of this [`OpticNode`](crate::core_optics::OpticNode) with the key `surf_name`
     /// # Attributes
     /// - `surf_name`: name of the optical surface, which is the key in the [`OpticPorts`] hashmap stat stores the surfaces
     fn get_optic_surface_mut(&mut self, surf_name: &str) -> Option<&mut OpticSurface>;
@@ -73,7 +73,7 @@ pub trait NodeAttrExt {
     /// This includes the forward and backward rays cache, as well as the hitmaps
     fn reset_optic_surfaces(&mut self);
 
-    /// Update node attributes of this [`OpticNode`] from given [`NodeAttr`].
+    /// Update node attributes of this [`OpticNode`](crate::core_optics::OpticNode) from given [`NodeAttr`].
     ///
     /// # Errors
     /// Returns an error if validation fails.
