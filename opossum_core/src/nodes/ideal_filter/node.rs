@@ -249,7 +249,7 @@ mod test {
     use uom::si::energy::joule;
     #[test]
     fn default() -> OpmResult<()> {
-        let mut node = IdealFilter::default();
+        let node = IdealFilter::default();
         assert_eq!(
             node.filter_type()?,
             FilterType::Constant(FilterConst::default())
@@ -258,7 +258,6 @@ mod test {
         assert_eq!(node.node_type(), "ideal filter");
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "darkgray");
-        assert!(node.as_group_mut().is_err());
         Ok(())
     }
     #[test]

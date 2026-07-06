@@ -172,12 +172,11 @@ mod test {
     };
     #[test]
     fn default() {
-        let mut node = FluenceDetector::default();
+        let node = FluenceDetector::default();
         assert_eq!(node.name(), "fluence detector");
         assert_eq!(node.node_type(), "fluence detector");
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "hotpink");
-        assert!(node.as_group_mut().is_err());
     }
     #[test]
     fn new() {

@@ -2,6 +2,7 @@ use super::{ConnectionInfo, OpticGraph};
 use crate::{
     core_optics::{OpticRef, PortType},
     error::{OpmResult, OpossumError},
+    nodes::NodeGroup,
     utils::LockExt,
 };
 use petgraph::{Direction, algo::connected_components, graph::NodeIndex, visit::EdgeRef};
@@ -81,7 +82,7 @@ impl OpticGraph {
         } else {
             for node_ref in self.g.node_weights() {
                 let mut node = node_ref.optical_ref.lock_opm()?;
-                if let Ok(group) = node.as_group_mut()
+                if let Some(group) = node.as_any_mut().downcast_mut::<NodeGroup>()
                     && let Ok((node, group_id)) = group.node_recursive(uuid)
                 {
                     return Ok((node, group_id));
@@ -332,7 +333,7 @@ impl OpticGraph {
             if node.node_attr().node_type() == "source port" {
                 source_ports.push(node_id);
             }
-            if let Ok(group) = node.as_group_mut() {
+            if let Some(group) = node.as_any_mut().downcast_mut::<NodeGroup>() {
                 let sub_ports = group.graph.find_source_ports()?;
                 source_ports.extend(sub_ports);
             }

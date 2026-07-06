@@ -184,7 +184,7 @@ pub fn EnergyLaserLineEditor(
                 value: "Add laser line",
                 readonly,
                 disabled: readonly,
-            
+
             }
             LaserLineList {
                 laser_lines: energy_laser_lines.clone(),

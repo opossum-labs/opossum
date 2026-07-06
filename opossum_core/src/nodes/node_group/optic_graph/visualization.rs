@@ -3,6 +3,7 @@ use crate::{
     core_optics::NodeAttrExt,
     error::{OpmResult, OpossumError},
     light::LightFlow,
+    nodes::NodeGroup,
     properties::proptype::format_quantity,
     utils::LockExt,
 };
@@ -29,7 +30,7 @@ impl OpticGraph {
         let node_ref = self.node_by_idx(end_node_idx)?;
         let node_id = format!("i{}", node_ref.uuid().as_simple());
         let mut node = node_ref.optical_ref.lock_opm()?;
-        if let Ok(group_node) = node.as_group_mut() {
+        if let Some(group_node) = node.as_any_mut().downcast_mut::<NodeGroup>() {
             Ok(group_node.get_mapped_port_str(light_port, &node_id)?)
         } else {
             Ok(format!("{node_id}:{light_port}"))

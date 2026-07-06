@@ -465,17 +465,15 @@ pub fn collect_optical_nodes_to_copy_recursive(
         let group_nodes_opt = {
             let guard = node.optical_ref.lock_opm()?;
 
-            guard.as_group().map_or_else(
-                |_| None,
-                |group| {
-                    input_port_maps
-                        .insert(node_id, group.graph().port_map(&PortType::Input).clone());
-                    output_port_maps
-                        .insert(node_id, group.graph().port_map(&PortType::Output).clone());
+            // Attempt to downcast the node reference to a NodeGroup
+            guard.as_any().downcast_ref::<NodeGroup>().map(|group| {
+                // These side-effects only run if the downcast was successful (Some)
+                input_port_maps.insert(node_id, group.graph().port_map(&PortType::Input).clone());
+                output_port_maps.insert(node_id, group.graph().port_map(&PortType::Output).clone());
 
-                    Some(group.nodes().iter().copied().cloned().collect::<Vec<_>>())
-                },
-            )
+                // Return the collected nodes, which will be wrapped in Some() by map()
+                group.nodes().iter().copied().cloned().collect::<Vec<_>>()
+            })
         };
         let copied_node = collect_optical_node_to_copy(
             scenery,

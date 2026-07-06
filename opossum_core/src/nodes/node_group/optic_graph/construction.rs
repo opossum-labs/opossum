@@ -9,6 +9,7 @@ use crate::{
     core_optics::{NodeAttrExt, OpticRef},
     error::{OpmResult, OpossumError},
     light::LightFlow,
+    nodes::NodeGroup,
     prelude::PortType,
     properties::Proptype,
     utils::LockExt,
@@ -105,7 +106,7 @@ impl OpticGraph {
                 // collect all node ids of nodes that are contained in a group
                 if let Ok(node_ref) = self.node_by_idx(node_idx) {
                     let node = node_ref.optical_ref.lock_opm()?;
-                    if let Ok(group) = node.as_group()
+                    if let Some(group) = node.as_any().downcast_ref::<NodeGroup>()
                         && let Ok(sub_ids) = group.collect_all_contained_node_ids_recursive()
                     {
                         for id in sub_ids {
@@ -130,7 +131,7 @@ impl OpticGraph {
         // now check if subnodes exist and delete recusively
         for node_ref in self.nodes() {
             let mut node = node_ref.optical_ref.lock_opm()?;
-            if let Ok(group) = node.as_group_mut()
+            if let Some(group) = node.as_any_mut().downcast_mut::<NodeGroup>()
                 && let Ok(deleted_nodes_in_group) = group.graph.delete_node(node_id)
             {
                 nodes_deleted.extend(deleted_nodes_in_group);
@@ -215,7 +216,7 @@ impl OpticGraph {
             }
             let node = node_ref.optical_ref.lock_opm()?;
             let node_attrs = node.node_attr().clone();
-            if let Ok(group) = node.as_group() {
+            if let Some(group) = node.as_any().downcast_ref::<NodeGroup>() {
                 let ref_nodes_map = group
                     .graph()
                     .find_all_nodes_referring_to_uuid(node_id, group.node_attr.uuid())?;

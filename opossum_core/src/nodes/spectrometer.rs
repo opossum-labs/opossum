@@ -256,14 +256,13 @@ mod test {
     }
     #[test]
     fn default() {
-        let mut node = Spectrometer::default();
+        let node = Spectrometer::default();
         assert!(node.light_data.is_none());
         assert_eq!(node.spectrometer_type(), SpectrometerType::Ideal);
         assert_eq!(node.name(), "spectrometer");
         assert_eq!(node.node_type(), "spectrometer");
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "lightseagreen");
-        assert!(node.as_group_mut().is_err());
     }
     #[test]
     fn new() -> OpmResult<()> {

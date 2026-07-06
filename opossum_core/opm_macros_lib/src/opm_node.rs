@@ -21,6 +21,15 @@ pub fn impl_derive_opm_node(input: TokenStream) -> TokenStream {
                 &mut self.node_attr
             }
         }
+        // Automatically implement the downcasting trait
+        impl crate::core_optics::optic_node::OpticNodeAny for #struct_name {
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
+            }
+            fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+                self
+            }
+        }
     };
     let attrs = struct_input
         .attrs

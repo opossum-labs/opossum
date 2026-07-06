@@ -247,13 +247,12 @@ mod test {
     };
     #[test]
     fn default() {
-        let mut node = WaveFront::default();
+        let node = WaveFront::default();
         assert!(node.light_data.is_none());
         assert_eq!(node.name(), "wavefront monitor");
         assert_eq!(node.node_type(), "wavefront monitor");
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "goldenrod1");
-        assert!(node.as_group_mut().is_err());
     }
     #[test]
     fn new() -> OpmResult<()> {

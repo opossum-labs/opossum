@@ -9,6 +9,7 @@ use crate::{
     core_optics::NodeAttrExt,
     error::{OpmResult, OpossumError},
     light::{LightData, LightResult},
+    nodes::NodeGroup,
     utils::LockExt,
 };
 
@@ -255,7 +256,7 @@ impl OpticGraph {
             let distance_from_predecessor =
                 self.distance_from_predecessor(node_id, incoming_edge.0)?;
             let mut node = node_ref.optical_ref.lock_opm()?;
-            if let Ok(group) = node.as_group_mut() {
+            if let Some(group) = node.as_any_mut().downcast_mut::<NodeGroup>() {
                 group.add_input_port_distance(incoming_edge.0, distance_from_predecessor);
             }
             let LightData::Geometric(rays) = incoming_edge.1 else {

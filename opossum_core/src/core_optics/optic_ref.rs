@@ -11,7 +11,7 @@ use uuid::Uuid;
 use crate::{
     analyzers::Analyzable,
     core_optics::{NodeAttr, NodeAttrExt, SceneryResources, node_attr::HasNodeAttr},
-    nodes::{OpticGraph, create_node_ref},
+    nodes::{NodeGroup, OpticGraph, create_node_ref},
     utils::LockExt,
 };
 
@@ -90,7 +90,7 @@ impl Serialize for OpticRef {
     {
         let optical_ref = self.optical_ref.lock_opm().unwrap();
 
-        if let Ok(group_node) = optical_ref.as_group() {
+        if let Some(group_node) = optical_ref.as_any().downcast_ref::<NodeGroup>() {
             FlattenedOpticRefGroup {
                 attributes: group_node.node_attr(),
                 graph: group_node.graph(),
@@ -131,7 +131,13 @@ impl<'de> Deserialize<'de> for OpticRef {
         // If the node is a group node, set its graph.
         // The 'intermediate.graph' will always contain a valid OpticGraph
         // (either deserialized from the source or a default one).
-        if let Ok(group_node) = node_ref.optical_ref.lock_opm().unwrap().as_group_mut() {
+        if let Some(group_node) = node_ref
+            .optical_ref
+            .lock_opm()
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut::<NodeGroup>()
+        {
             group_node.set_graph(intermediate.graph);
         }
         node_ref

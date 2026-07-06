@@ -203,14 +203,13 @@ mod test {
     };
     #[test]
     fn default() {
-        let mut node = EnergyMeter::default();
+        let node = EnergyMeter::default();
         assert!(node.light_data.is_none());
         assert_eq!(node.meter_type(), Metertype::IdealEnergyMeter);
         assert_eq!(node.name(), "energy meter");
         assert_eq!(node.node_type(), "energy meter");
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "whitesmoke");
-        assert!(node.as_group_mut().is_err());
     }
     #[test]
     fn new() -> OpmResult<()> {

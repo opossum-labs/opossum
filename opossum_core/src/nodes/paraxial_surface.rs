@@ -164,8 +164,8 @@ mod test {
     use assert_matches::assert_matches;
     use nalgebra::Vector3;
     #[test]
-    fn default() {
-        let mut node = ParaxialSurface::default();
+    fn default() -> OpmResult<()> {
+        let node = ParaxialSurface::default();
         assert_eq!(node.name(), "paraxial surface");
         assert_eq!(node.node_type(), "paraxial surface");
         assert_eq!(node.inverted(), false);
@@ -174,13 +174,13 @@ mod test {
             node.properties().get("focal length").unwrap(),
             Proptype::Length(_)
         );
-        if let Ok(Proptype::Length(dist)) = node.properties().get("focal length") {
+        if let Proptype::Length(dist) = node.properties().get("focal length")? {
             assert_eq!(*dist, millimeter!(10.0));
         } else {
             assert!(false, "cannot read focal length");
         }
         assert_eq!(node.node_color(), "palegreen");
-        assert!(node.as_group_mut().is_err());
+        Ok(())
     }
     #[test]
     fn new() -> OpmResult<()> {

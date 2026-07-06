@@ -44,7 +44,7 @@ impl GhostFocusAnalyzer {
     ) -> OpmResult<()> {
         for node_ref in group.graph().nodes() {
             let node = node_ref.optical_ref.lock_opm()?;
-            if let Ok(g) = node.as_group() {
+            if let Some(g) = node.as_any().downcast_ref::<NodeGroup>() {
                 self.node_group_report(g, analysis_report)?;
             } else {
                 let node_name = &node.name().to_string();
@@ -479,7 +479,7 @@ mod test_ghost_analysis_nested_groups_inversion {
     fn check_not_inverted(group: &NodeGroup) -> bool {
         for opt_ref in group.graph().nodes() {
             let node = opt_ref.optical_ref.lock_opm().expect("error getting lock");
-            if let Ok(g) = node.as_group() {
+            if let Some(g) = node.as_any().downcast_ref::<NodeGroup>() {
                 if !check_not_inverted(g) {
                     return false;
                 }

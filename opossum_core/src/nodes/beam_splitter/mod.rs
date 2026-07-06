@@ -415,7 +415,7 @@ mod test {
     };
     #[test]
     fn default() -> OpmResult<()> {
-        let mut node = BeamSplitter::default();
+        let node = BeamSplitter::default();
         assert!(matches!(
             node.splitting_config()?,
             SplittingConfig::Ratio(_)
@@ -424,7 +424,6 @@ mod test {
         assert_eq!(node.node_type(), "beam splitter");
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "lightpink");
-        assert!(node.as_group_mut().is_err());
         Ok(())
     }
     #[test]

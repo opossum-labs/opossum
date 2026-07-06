@@ -11,15 +11,28 @@ use crate::{
     core_optics::{PortType, SceneryResources, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
     light::LightData,
-    nodes::{NodeGroup, NodeReference, fluence_detector::Fluence},
+    nodes::{NodeReference, fluence_detector::Fluence},
     reporting::{Dottable, node_report::NodeReport},
     utils::geom_transformation::Isometry,
 };
-use std::sync::{Arc, Mutex};
+use std::{
+    any::Any,
+    sync::{Arc, Mutex},
+};
+
+/// Helper trait for dynamic downcasting of optical nodes.
+/// This trait is automatically implemented by the `#[derive(OpmNode)]` macro.
+pub trait OpticNodeAny {
+    /// Returns an immutable reference to `Any` for downcasting.
+    fn as_any(&self) -> &dyn Any;
+
+    /// Returns a mutable reference to `Any` for downcasting.
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+}
 
 /// This is the basic trait that must be implemented by all concrete optical components.
-pub trait OpticNode: Dottable + HasNodeAttr {
-    ///Sets the apodization warning on nodes that have that attribute
+pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
+    /// Sets the apodization warning on nodes that have that attribute
     fn set_apodization_warning(&mut self, _apodized: bool) {
         warn!(
             "\"set_apodization_warning\" is not implemented for '{}' ({})",
@@ -42,20 +55,6 @@ pub trait OpticNode: Dottable + HasNodeAttr {
     fn reset_data(&mut self) {
         self.set_light_data(None);
         self.reset_optic_surfaces();
-    }
-    /// Return a downcasted mutable reference of a [`NodeGroup`].
-    ///
-    /// # Errors
-    /// This function will return an error if the [`OpticNode`] does not have the `node_type` property "group".
-    fn as_group_mut(&mut self) -> OpmResult<&mut NodeGroup> {
-        Err(OpossumError::Other("cannot cast to group".into()))
-    }
-    /// Return a downcasted reference of a [`NodeGroup`].
-    ///
-    /// # Errors
-    /// This function will return an error if the [`OpticNode`] does not have the `node_type` property "group".
-    fn as_group(&self) -> OpmResult<&NodeGroup> {
-        Err(OpossumError::Other("cannot cast to group".into()))
     }
     /// This function is called right after a node has been deserialized (e.g. read from a file). By default, this
     /// function does nothing and returns no error.

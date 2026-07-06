@@ -206,7 +206,7 @@ impl NodeGroup {
             result.push(uuid);
 
             // If it is a group -> collect recursively
-            if let Ok(group) = node.as_group() {
+            if let Some(group) = node.as_any().downcast_ref::<Self>() {
                 let mut sub_ids = group.collect_all_contained_node_ids_recursive()?;
                 result.append(&mut sub_ids);
             }
@@ -340,7 +340,9 @@ impl NodeGroup {
         }
         let arc = self.node_recursive(node_id)?.0.optical_ref;
         let guard = arc.lock_opm()?;
-        let group = guard.as_group()?;
+        let Some(group) = guard.as_any().downcast_ref::<Self>() else {
+            return Err(OpossumError::Other("could not cast to NodeGroup".into()));
+        };
         let out = f(group);
         drop(guard);
 
@@ -386,7 +388,9 @@ impl NodeGroup {
         let arc = self.node_recursive(node_id)?.0.optical_ref;
         let mut guard = arc.lock_opm()?;
 
-        let group = guard.as_group_mut()?;
+        let Some(group) = guard.as_any_mut().downcast_mut::<Self>() else {
+            return Err(OpossumError::Other("could not cast to NodeGroup".into()));
+        };
         let out = f(group);
         drop(guard);
         Ok(out)
@@ -935,12 +939,6 @@ impl OpticNode for NodeGroup {
         ports.set_apertures(ports_to_be_set.clone()).unwrap();
         ports
     }
-    fn as_group_mut(&mut self) -> OpmResult<&mut NodeGroup> {
-        Ok(self)
-    }
-    fn as_group(&self) -> OpmResult<&NodeGroup> {
-        Ok(self)
-    }
     fn after_deserialization_hook(&mut self) -> OpmResult<()> {
         self.graph.set_is_inverted(self.node_attr.inverted());
         Ok(())
@@ -1044,13 +1042,12 @@ mod test {
     use num::Zero;
     #[test]
     fn default() -> OpmResult<()> {
-        let mut node = NodeGroup::default();
+        let node = NodeGroup::default();
         assert_eq!(node.name(), "group");
         assert_eq!(node.node_type(), "group");
         assert_eq!(node.node_attr().inverted(), false);
         assert_eq!(node.expand_view()?, false);
         assert_eq!(node.node_color(), "yellow");
-        assert!(node.as_group_mut().is_ok());
         assert_eq!(node.graph.edge_count(), 0);
         assert_eq!(node.graph.node_count(), 0);
         Ok(())

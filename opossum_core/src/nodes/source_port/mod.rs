@@ -90,13 +90,12 @@ mod test {
 
     #[test]
     fn default() {
-        let mut node = SourcePort::default();
+        let node = SourcePort::default();
         assert_eq!(node.name(), "source port");
         assert_eq!(node.node_type(), "source port");
         assert_eq!(node.isometry(), Some(Isometry::identity()));
         assert_eq!(node.node_attr().inverted(), false);
         assert_eq!(node.node_color(), "slateblue");
-        assert!(node.as_group_mut().is_err());
     }
     #[test]
     fn new() {

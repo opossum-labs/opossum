@@ -407,13 +407,12 @@ mod test {
     use uom::si::length::{millimeter, nanometer};
     #[test]
     fn default() {
-        let mut node = RayPropagationVisualizer::default();
+        let node = RayPropagationVisualizer::default();
         assert!(node.light_data.is_none());
         assert_eq!(node.name(), "ray propagation");
         assert_eq!(node.node_type(), "ray propagation");
         assert_eq!(node.inverted(), false);
         assert_eq!(node.node_color(), "darkgreen");
-        assert!(node.as_group_mut().is_err());
     }
     #[test]
     fn new() -> OpmResult<()> {
