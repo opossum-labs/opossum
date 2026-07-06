@@ -378,12 +378,6 @@ impl From<ApertureShape> for Proptype {
     }
 }
 
-impl From<RectangleShape> for ApertureShape {
-    fn from(rect: RectangleShape) -> Self {
-        Self::BinaryRectangle(rect)
-    }
-}
-
 /// Trait for the calculation of the transmission factor for each shape.
 pub trait Shape {
     /// Calculate the transmission factor (always treated as aperture type `hole`).

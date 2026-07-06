@@ -107,4 +107,10 @@ mod test {
         assert_eq!(c.transmission_factor(&meter!(1.000001, 0.0, 0.0)), 0.0);
         Ok(())
     }
+    #[test]
+    fn from() {
+        let cs = CircleShape::default();
+        let aps: ApertureShape = cs.into();
+        assert!(matches!(aps, ApertureShape::BinaryCircle(_)))
+    }
 }

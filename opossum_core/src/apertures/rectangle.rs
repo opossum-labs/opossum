@@ -5,7 +5,7 @@ use utoipa::ToSchema;
 
 use super::Shape;
 use crate::{
-    error::OpmResult, generic_validators::ValidateTrait,
+    apertures::ApertureShape, error::OpmResult, generic_validators::ValidateTrait,
     types::validated_type_definitions::ValidatedSideLengths2D,
 };
 use opm_macros_lib::EnsureValidated;
@@ -16,6 +16,12 @@ use opm_macros_lib::EnsureValidated;
 pub struct RectangleShape {
     #[schema(value_type = Object)]
     side_length: ValidatedSideLengths2D,
+}
+
+impl From<RectangleShape> for ApertureShape {
+    fn from(rect: RectangleShape) -> Self {
+        Self::BinaryRectangle(rect)
+    }
 }
 
 impl RectangleShape {
