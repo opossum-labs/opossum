@@ -111,9 +111,6 @@ impl OpticNode for NodeReference {
                 ports
             })
     }
-    fn as_refnode_mut(&mut self) -> OpmResult<&mut NodeReference> {
-        Ok(self)
-    }
     fn isometry(&self) -> Option<Isometry> {
         self.reference.as_ref().and_then(|rf| {
             rf.upgrade()

@@ -165,11 +165,6 @@ mod test {
         test_set_aperture::<Dummy>("input_1", "output_1");
     }
     #[test]
-    fn as_ref_node_mut() {
-        let mut node = Dummy::default();
-        assert!(node.as_refnode_mut().is_err());
-    }
-    #[test]
     fn report() -> OpmResult<()> {
         let report = Dummy::default().node_report("123")?;
         assert!(report.is_none());

@@ -16,7 +16,8 @@ use actix_web::{
 use nalgebra::Point2;
 use opossum_core::{
     core_optics::{NodeAttrExt, OpticRef, node_attr::HasNodeAttr},
-    nodes::{ConnectionInfo, NodeGroup, create_node_ref},
+    error::OpossumError,
+    nodes::{ConnectionInfo, NodeGroup, NodeReference, create_node_ref},
     opm_document::AnalyzerInfo,
     prelude::{OpticNode, PortMap, PortType, Proptype},
     types::api_types::{
@@ -386,7 +387,7 @@ fn resolve_references(
 
         if let Some(referenced_node) = referenced_node_opt {
             scenery.with_node_mut(*new_id, |node| {
-                if let Ok(ref_node) = node.as_refnode_mut() {
+                if let Some(ref_node) = node.as_any_mut().downcast_mut::<NodeReference>() {
                     let _ = ref_node.assign_reference(&referenced_node);
                 }
             })?;
@@ -625,7 +626,14 @@ pub fn copy_from_optic_ref(
     let new_node_ref = create_node_ref(&node_type)?;
     let mut node = new_node_ref.optical_ref.lock_opm()?;
     if let Some(referenced_node) = referenced_node_opt {
-        node.as_refnode_mut()?.assign_reference(&referenced_node)?;
+        // Attempt to downcast the node mutably to a NodeReference
+        if let Some(ref_node) = node.as_any_mut().downcast_mut::<NodeReference>() {
+            ref_node.assign_reference(&referenced_node)?;
+        } else {
+            // Return an error if the node is not of type NodeReference,
+            // replicating the behavior of the previous `as_refnode_mut()?` call.
+            return Err(OpossumError::Other("Cannot cast to reference node".into()).into());
+        }
     }
 
     let node_attr = node.node_attr_mut();

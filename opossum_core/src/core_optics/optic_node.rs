@@ -9,9 +9,9 @@ use crate::core_optics::{NodeAttrExt, OpticPorts};
 use crate::{
     analyzers::Analyzable,
     core_optics::{PortType, SceneryResources, node_attr::HasNodeAttr},
-    error::{OpmResult, OpossumError},
+    error::OpmResult,
     light::LightData,
-    nodes::{NodeReference, fluence_detector::Fluence},
+    nodes::fluence_detector::Fluence,
     reporting::{Dottable, node_report::NodeReport},
     utils::geom_transformation::Isometry,
 };
@@ -90,13 +90,6 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     /// **Note**: This function should normally only be used internally by `OpticRef`.
     fn set_global_conf(&mut self, global_conf: Option<Arc<Mutex<SceneryResources>>>) {
         self.node_attr_mut().set_global_conf(global_conf);
-    }
-    /// Return a downcasted mutable reference of a [`NodeReference`].
-    ///
-    /// # Errors
-    /// This function will return an error if the [`OpticNode`] does not have the `node_type` property "reference".
-    fn as_refnode_mut(&mut self) -> OpmResult<&mut NodeReference> {
-        Err(OpossumError::Other("cannot cast to reference node".into()))
     }
     /// Set this [`OpticNode`] as inverted.
     ///
@@ -195,7 +188,13 @@ mod tests {
     use approx::assert_abs_diff_eq;
 
     use super::*;
-    use crate::{core_optics::OpticNodeExt, degree, error::assert_err, millimeter, nodes::Dummy};
+    use crate::{
+        core_optics::OpticNodeExt,
+        degree,
+        error::{OpossumError, assert_err},
+        millimeter,
+        nodes::Dummy,
+    };
 
     #[test]
     fn set_alignment() -> OpmResult<()> {

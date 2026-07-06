@@ -381,10 +381,4 @@ mod test {
         }
         Ok(())
     }
-
-    #[test]
-    fn as_ref_node_mut() {
-        let mut node = ParaxialSurface::default();
-        assert!(node.as_refnode_mut().is_err());
-    }
 }

@@ -2,6 +2,7 @@ use super::{super::port_map::PortMap, ConnectionInfo, OpticGraph};
 use crate::{
     core_optics::{NodeAttrExt, OpticRef, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
+    nodes::NodeReference,
     properties::Proptype,
     utils::LockExt,
 };
@@ -56,7 +57,12 @@ impl TryFrom<SerializableGraph> for OpticGraph {
 }
 
 fn assign_reference_to_ref_node(node_ref: &OpticRef, graph: &OpticGraph) -> OpmResult<()> {
-    if let Ok(ref_node) = node_ref.optical_ref.lock_opm()?.as_refnode_mut() {
+    if let Some(ref_node) = node_ref
+        .optical_ref
+        .lock_opm()?
+        .as_any_mut()
+        .downcast_mut::<NodeReference>()
+    {
         // if Ok, the node was indeed a reference node
         let node_props = ref_node.properties().clone();
         let uuid = if let Proptype::Uuid(uuid) = node_props.get("reference id").unwrap() {
