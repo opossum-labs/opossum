@@ -36,91 +36,81 @@ use uom::si::{
 
 use super::fluence_estimator::FluenceEstimator;
 
-/// A hit point as part of a [`RaysHitMap`].
-///
-/// It stores the position (intersection point) and the energy of a [`Ray`](crate::light::ray::Ray) that
-/// has hit an [`OpticSurface`](crate::core_optics::optic_surface::OpticSurface)
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct EnergyHitPoint {
-    /// position of the intersection point
-    pub position: Point3<Length>,
-    /// energy of the ray that intersected the surface
-    pub value: Energy,
+/// Trait to ensure that a generic physical quantity can be validated
+/// for being finite and positive.
+pub trait QuantityValidation {
+    /// Returns true if the underlying value is finite.
+    fn is_finite(&self) -> bool;
+    /// Returns true if the underlying value is negative.
+    fn is_sign_negative(&self) -> bool;
 }
 
-impl EnergyHitPoint {
-    /// Create a new [`EnergyHitPoint`].
+// Implement the validation trait for Energy
+impl QuantityValidation for Energy {
+    fn is_finite(&self) -> bool {
+        self.value.is_finite()
+    }
+    fn is_sign_negative(&self) -> bool {
+        self.value.is_sign_negative()
+    }
+}
+
+// Implement the validation trait for Fluence
+impl QuantityValidation for Fluence {
+    fn is_finite(&self) -> bool {
+        self.value.is_finite()
+    }
+    fn is_sign_negative(&self) -> bool {
+        self.value.is_sign_negative()
+    }
+}
+
+/// A generic hit point storing a position and a generic value (e.g., Energy or Fluence).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BaseHitPoint<V> {
+    /// Position of the intersection point
+    pub position: Point3<Length>,
+    /// Value (Energy or Fluence) of the ray that intersected the surface
+    pub value: V,
+}
+
+impl<V> BaseHitPoint<V>
+where
+    V: Copy + QuantityValidation, // Use our custom trait bound here
+{
+    /// Creates a new generic hit point.
     ///
     /// # Errors
-    ///
-    /// This function will return an error if
-    ///   - the given value is negative or not finite.
-    ///   - the position coordinates (x/y/z) are not finite.
-    pub fn new(position: Point3<Length>, value: Energy) -> OpmResult<Self> {
-        if !value.is_finite() | value.is_sign_negative() {
+    /// Returns an error if the value is negative or not finite, or if the
+    /// position coordinates are not finite.
+    pub fn new(position: Point3<Length>, value: V) -> OpmResult<Self> {
+        // Correct check for NaN, infinity, and negative values
+        if !value.is_finite() || value.is_sign_negative() {
             return Err(OpossumError::Other(
-                "value must be positive and finite".into(),
+                "Value must be positive and finite".into(),
             ));
         }
+        // Validate the position coordinates
         if !position.x.is_finite() || !position.y.is_finite() || !position.z.is_finite() {
-            return Err(OpossumError::Other("position must be finite".into()));
+            return Err(OpossumError::Other("Position must be finite".into()));
         }
         Ok(Self { position, value })
     }
-    /// Returns the position of this [`EnergyHitPoint`].
+    /// Returns the position of this hit point.
     #[must_use]
     pub fn position(&self) -> Point3<Length> {
         self.position
     }
-    /// Returns the energy of this [`EnergyHitPoint`].
+    /// Returns the value of this hit point.
     #[must_use]
-    pub fn value(&self) -> Energy {
+    pub const fn value(&self) -> V {
         self.value
     }
 }
 
-/// A hit point as part of a [`RaysHitMap`].
-///
-/// It stores the position (intersection point) and the energy of a [`Ray`](crate::light::ray::Ray) that
-/// has hit an [`OpticSurface`](crate::core_optics::optic_surface::OpticSurface)
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct FluenceHitPoint {
-    /// position of the intersection point
-    pub position: Point3<Length>,
-    /// fluence of the ray that intersected the surface
-    pub value: Fluence,
-}
-
-impl FluenceHitPoint {
-    /// Create a new [`FluenceHitPoint`].
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    ///   - the given value is negative or not finite.
-    ///   - the position coordinates (x/y/z) are not finite.
-    pub fn new(position: Point3<Length>, value: Fluence) -> OpmResult<Self> {
-        if !value.is_finite() | value.is_sign_negative() {
-            return Err(OpossumError::Other(
-                "value must be positive and finite".into(),
-            ));
-        }
-        if !position.x.is_finite() || !position.y.is_finite() || !position.z.is_finite() {
-            return Err(OpossumError::Other("position must be finite".into()));
-        }
-        Ok(Self { position, value })
-    }
-    /// Returns the position of this [`FluenceHitPoint`].
-    #[must_use]
-    pub fn position(&self) -> Point3<Length> {
-        self.position
-    }
-    /// Returns the energy of this [`FluenceHitPoint`].
-    #[must_use]
-    pub fn value(&self) -> Fluence {
-        self.value
-    }
-}
+// Define the type aliases for seamless integration
+pub type EnergyHitPoint = BaseHitPoint<Energy>;
+pub type FluenceHitPoint = BaseHitPoint<Fluence>;
 
 /// Enum to store different types of hit point quantities in a hitmap
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
