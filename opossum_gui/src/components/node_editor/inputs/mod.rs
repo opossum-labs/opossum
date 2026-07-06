@@ -61,7 +61,7 @@ where
             self.create_id_string().as_str(),
             self.create_callback(obj.clone(), handler), // Für Legacy/Events
             self.create_callback_str(obj, handler),     // Für Flushable
-            value_str,
+            value_str.to_string(),
             readonly,
         )
     }

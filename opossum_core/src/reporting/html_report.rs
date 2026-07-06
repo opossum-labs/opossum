@@ -88,7 +88,7 @@ impl HtmlReport {
                 .format("%Y/%m/%d %H:%M")
                 .to_string(),
             report.analysis_type().to_string(),
-            scenery.node_attr().name(),
+            scenery.node_attr().name().to_string(),
             html_node_reports,
             report
                 .notes()

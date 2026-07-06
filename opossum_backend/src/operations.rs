@@ -611,7 +611,7 @@ pub fn copy_from_optic_ref(
                 _ => None,
             });
 
-        let node_type = node.node_type();
+        let node_type = node.node_type().to_string();
         let node_attr_clone = node.node_attr().clone();
         drop(node);
 

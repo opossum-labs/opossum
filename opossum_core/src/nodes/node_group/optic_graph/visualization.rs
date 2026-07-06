@@ -53,7 +53,7 @@ impl OpticGraph {
             let inverted = node.inverted();
             let ports = node.ports();
             let uuid = node.node_attr().uuid().as_simple().to_string();
-            dot_string += &node.to_dot(&uuid, &node_name, inverted, &ports, rankdir)?;
+            dot_string += &node.to_dot(&uuid, node_name, inverted, &ports, rankdir)?;
         }
         for edge_idx in self.g.edge_indices() {
             let light: &LightFlow = self.edge_by_idx(edge_idx)?;

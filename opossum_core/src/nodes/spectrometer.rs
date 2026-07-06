@@ -185,8 +185,8 @@ impl OpticNode for Spectrometer {
         }
 
         Ok(Some(NodeReport::new(
-            &self.node_type(),
-            &self.name(),
+            self.node_type(),
+            self.name(),
             uuid,
             props,
         )))

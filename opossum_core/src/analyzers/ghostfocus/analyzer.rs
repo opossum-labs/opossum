@@ -47,7 +47,7 @@ impl GhostFocusAnalyzer {
             if let Ok(g) = node.as_group() {
                 self.node_group_report(g, analysis_report)?;
             } else {
-                let node_name = &node.name();
+                let node_name = &node.name().to_string();
                 let hit_maps = node.hit_maps();
                 drop(node);
                 for hit_map in &hit_maps {

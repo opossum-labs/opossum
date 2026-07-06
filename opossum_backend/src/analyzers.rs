@@ -25,7 +25,7 @@ fn get_all_source_port_uuids(scenery: &NodeGroup) -> Vec<Uuid> {
                 .iter()
                 .map(|n| {
                     let node = n.optical_ref.lock_opm()?;
-                    let node_type = node.node_attr().node_type();
+                    let node_type = node.node_attr().node_type().to_string();
                     let node_uuid = node.node_attr().uuid();
                     drop(node);
                     Ok((node_uuid, node_type))
@@ -287,9 +287,9 @@ pub async fn get_available_sources(
                 .iter()
                 .map(|n| {
                     let node = n.optical_ref.lock_opm()?;
-                    let node_type = node.node_attr().node_type();
+                    let node_type = node.node_attr().node_type().to_string();
                     let node_uuid = node.node_attr().uuid();
-                    let node_name = node.node_attr().name();
+                    let node_name = node.node_attr().name().to_string();
                     drop(node);
                     Ok((node_uuid, node_type, node_name))
                 })

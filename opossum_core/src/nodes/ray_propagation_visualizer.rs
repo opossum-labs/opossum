@@ -113,7 +113,7 @@ impl OpticNode for RayPropagationVisualizer {
     fn node_report(&self, uuid: &str) -> OpmResult<Option<NodeReport>> {
         let mut props = Properties::default();
         let mut report =
-            NodeReport::new(&self.node_type(), &self.name(), uuid, Properties::default());
+            NodeReport::new(self.node_type(), self.name(), uuid, Properties::default());
 
         let data = &self.light_data;
         if let Some(LightData::Geometric(rays)) = data
@@ -132,7 +132,7 @@ impl OpticNode for RayPropagationVisualizer {
             )?;
 
             // Re-create report with properties if any were added
-            report = NodeReport::new(&self.node_type(), &self.name(), uuid, props);
+            report = NodeReport::new(self.node_type(), self.name(), uuid, props);
 
             if self.apodization_warning {
                 report.add_note(ReportNote::new(

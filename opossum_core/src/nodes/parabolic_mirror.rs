@@ -504,7 +504,7 @@ mod test {
     #[test]
     fn default() -> OpmResult<()> {
         let parabola = ParabolicMirror::default();
-        assert_eq!(parabola.node_attr.name().as_str(), "parabolic mirror");
+        assert_eq!(parabola.node_attr.name(), "parabolic mirror");
 
         let Proptype::Length(focal_length) = parabola.node_attr.get_property("focal length")?
         else {
@@ -541,7 +541,7 @@ mod test {
     #[test]
     fn name() -> OpmResult<()> {
         let p = ParabolicMirror::new("Parabola", meter!(1.), true)?;
-        assert_eq!(p.node_attr.name().as_str(), "Parabola");
+        assert_eq!(p.node_attr.name(), "Parabola");
         Ok(())
     }
     #[test]

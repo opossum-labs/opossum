@@ -196,8 +196,8 @@ impl OpticNode for WaveFront {
             }
 
             Ok(Some(NodeReport::new(
-                &self.node_type(),
-                &self.name(),
+                self.node_type(),
+                self.name(),
                 uuid,
                 props,
             )))

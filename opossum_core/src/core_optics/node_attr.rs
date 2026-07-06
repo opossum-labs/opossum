@@ -108,8 +108,8 @@ impl NodeAttr {
     ///
     /// This function will return an error if the property `name` and the property `node_type` does not exist.
     #[must_use]
-    pub fn name(&self) -> String {
-        self.name.clone()
+    pub fn name(&self) -> &str {
+        &self.name
     }
     /// Returns the node-type property of this node.
     ///
@@ -117,8 +117,8 @@ impl NodeAttr {
     ///
     /// This function will return an error if the property `node_type` does not exist.
     #[must_use]
-    pub fn node_type(&self) -> String {
-        self.node_type.clone()
+    pub fn node_type(&self) -> &str {
+        &self.node_type
     }
     /// Returns the inversion property of thie node.
     ///

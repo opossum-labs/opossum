@@ -142,10 +142,10 @@ impl OpticNode for SpotDiagram {
                     radius.into(),
                 )?;
             }
-            NodeReport::new(&self.node_type(), &self.name(), uuid, props)
+            NodeReport::new(self.node_type(), self.name(), uuid, props)
         } else {
             let mut report =
-                NodeReport::new(&self.node_type(), &self.name(), uuid, Properties::default());
+                NodeReport::new(self.node_type(), self.name(), uuid, Properties::default());
             report.add_note(ReportNote::new(
                 ReportLevel::Warning,
                 "A spot diagram can only be displayed for a ray tracing or ghostfocus analysis.",

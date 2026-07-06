@@ -184,7 +184,7 @@ pub fn EnergyLaserLineEditor(
                 value: "Add laser line",
                 readonly,
                 disabled: readonly,
-
+            
             }
             LaserLineList {
                 laser_lines: energy_laser_lines.clone(),
@@ -204,7 +204,7 @@ fn LaserLineList(
 ) -> Element {
     rsx! {
         ul { class: "list-group border-start", id: "laserLineList",
-            for (i, line) in laser_lines.clone().lines().iter().enumerate() {
+            for (i , line) in laser_lines.clone().lines().iter().enumerate() {
                 {
                     let class = if i % 2 == 0 {
                         "list-group-item d-grid text-secondary"

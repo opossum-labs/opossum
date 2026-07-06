@@ -132,9 +132,9 @@ impl NodeInfo {
     ) -> Self {
         Self {
             uuid: node.node_attr().uuid(),
-            name: node.name(),
+            name: node.name().to_string(),
             inverted: node.inverted(),
-            node_type: node.node_type(),
+            node_type: node.node_type().to_string(),
             input_ports: node.ports().names(&PortType::Input),
             output_ports: node.ports().names(&PortType::Output),
             gui_position: gui_position.unwrap_or_else(|| node.gui_position().map(|p| (p.x, p.y))),

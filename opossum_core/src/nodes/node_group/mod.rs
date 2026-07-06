@@ -241,7 +241,7 @@ impl NodeGroup {
         let mut group_hierarchy = Vec::<(Uuid, String)>::new();
 
         self.with_node_attr(node_id, |node_attr| {
-            group_hierarchy.push((node_id, node_attr.name()));
+            group_hierarchy.push((node_id, node_attr.name().to_string()));
         })?;
 
         if self.node_attr().uuid() != node_id {
@@ -953,8 +953,8 @@ impl OpticNode for NodeGroup {
                 && let Some(node_report) = node_ref.node_report(&sub_uuid)?
             {
                 let node_name = node_ref.name();
-                if !(group_props.contains(&node_name)) {
-                    group_props.create(&node_name, "", node_report.into())?;
+                if !(group_props.contains(node_name)) {
+                    group_props.create(node_name, "", node_report.into())?;
                 }
             }
         }
@@ -962,8 +962,8 @@ impl OpticNode for NodeGroup {
             Ok(None)
         } else {
             Ok(Some(NodeReport::new(
-                &self.node_type(),
-                &self.name(),
+                self.node_type(),
+                self.name(),
                 uuid,
                 group_props,
             )))

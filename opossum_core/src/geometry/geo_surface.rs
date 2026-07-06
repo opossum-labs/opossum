@@ -51,7 +51,7 @@ pub trait GeoSurface: Send + Sync + Debug {
     /// This function can be used to place and align the [`GeoSurface`] in 3D space.
     fn set_isometry(&mut self, isometry: Isometry);
     /// Return the surface type as string (for debugging purposes)
-    fn name(&self) -> String;
+    fn name(&self) -> &str;
 }
 
 /// Reference for a [`GeoSurface`].

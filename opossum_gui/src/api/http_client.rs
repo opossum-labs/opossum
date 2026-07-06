@@ -28,7 +28,7 @@ impl HTTPClient {
         &self.client
     }
     #[must_use]
-    pub const fn base_url(&self) -> &String {
+    pub fn base_url(&self) -> &str {
         &self.base_url
     }
     #[must_use]

@@ -334,8 +334,8 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
     ) -> OpmResult<()> {
         let uuid = self.node_attr().uuid();
         let iso = self.effective_surface_iso(optic_surf_name)?;
-        let node_name = self.node_attr().name();
-        let node_type = self.node_attr().node_type();
+        let node_name = self.name().to_string();
+        let node_type = self.node_type().to_string();
 
         let Some(surf) = self.get_optic_surface_mut(optic_surf_name) else {
             return Err(OpossumError::Analysis(format!(

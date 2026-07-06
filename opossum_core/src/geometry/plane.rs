@@ -81,8 +81,8 @@ impl GeoSurface for Plane {
     fn isometry(&self) -> &Isometry {
         &self.isometry
     }
-    fn name(&self) -> String {
-        "plane".into()
+    fn name(&self) -> &'static str {
+        "plane"
     }
 }
 // impl Color for Plane {

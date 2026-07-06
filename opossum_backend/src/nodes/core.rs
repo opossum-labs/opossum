@@ -97,7 +97,12 @@ async fn post_children(
     let _ = scenery.with_group_node_mut(uuid, |g| g.add_node_ref(new_node_ref.clone()))??;
 
     // --- AUTOMATICALLY INJECT MAPPINGS INTO ALL ANALYZERS IF NEW NODE IS A SOURCE PORT ---
-    let node_type_str = new_node_ref.optical_ref.lock_opm()?.node_attr().node_type();
+    let node_type_str = new_node_ref
+        .optical_ref
+        .lock_opm()?
+        .node_attr()
+        .node_type()
+        .to_string();
     let new_node_uuid = new_node_ref.optical_ref.lock_opm()?.node_attr().uuid();
 
     if node_type_str == "source port" {

@@ -18,10 +18,10 @@ pub trait NodeAttrExt {
     // --- Immutable Methods (Getters) ---
 
     /// Get the node type of this [`OpticNode`]
-    fn node_type(&self) -> String;
+    fn node_type(&self) -> &str;
 
     /// Get the name of this [`OpticNode`]
-    fn name(&self) -> String;
+    fn name(&self) -> &str;
 
     /// Get the gui position of this [`OpticNode`].
     fn gui_position(&self) -> Option<Point2<f64>>;
@@ -82,11 +82,11 @@ pub trait NodeAttrExt {
 
 /// Blanket implementation for any type that provides access to `NodeAttr`.
 impl<T: ?Sized + HasNodeAttr> NodeAttrExt for T {
-    fn node_type(&self) -> String {
+    fn node_type(&self) -> &str {
         self.node_attr().node_type()
     }
 
-    fn name(&self) -> String {
+    fn name(&self) -> &str {
         self.node_attr().name()
     }
 
@@ -179,7 +179,7 @@ impl<T: ?Sized + HasNodeAttr> NodeAttrExt for T {
         if let Some(alignment) = node_attributes.alignment() {
             node_attr_mut.set_alignment(*alignment);
         }
-        node_attr_mut.set_name(&node_attributes.name());
+        node_attr_mut.set_name(node_attributes.name());
         node_attr_mut.set_inverted(node_attributes.inverted());
         if let Some((node_idx, distance)) = node_attributes.get_align_like_node_at_distance() {
             node_attr_mut.set_align_like_node_at_distance(*node_idx, *distance);

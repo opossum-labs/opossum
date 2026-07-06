@@ -104,7 +104,7 @@ async fn put_document(
     let mut document = data.document.lock();
     *document = OpmDocument::from_string(&opm_file_string)?;
 
-    let name = document.scenery().node_attr().name();
+    let name = document.scenery().node_attr().name().to_string();
     // Check if the graph is missing GUI coordinates using the method we defined earlier
     let needs_autolayout = document.needs_autolayout();
 

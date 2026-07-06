@@ -361,8 +361,8 @@ impl OpticGraph {
                 target_port
             )));
         }
-        let src_name = source.optical_ref.lock_opm()?.name();
-        let target_name = target.optical_ref.lock_opm()?.name();
+        let src_name = source.optical_ref.lock_opm()?.name().to_string();
+        let target_name = target.optical_ref.lock_opm()?.name().to_string();
         let light = LightFlow::new(src_port, target_port, distance)?;
         let edge_index = self.g.add_edge(src_node, target_node, light);
         if is_cyclic_directed(&self.g) {

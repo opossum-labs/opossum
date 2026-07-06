@@ -120,7 +120,7 @@ impl<'de> Deserialize<'de> for OpticRef {
         let intermediate = OpticRefIntermediate::deserialize(deserializer)?;
 
         let node_type = intermediate.attributes.node_type();
-        let node_ref = create_node_ref(&node_type).map_err(|e| de::Error::custom(e.to_string()))?;
+        let node_ref = create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
         node_ref
             .optical_ref
             .lock_opm()

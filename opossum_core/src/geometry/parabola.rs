@@ -132,8 +132,8 @@ impl GeoSurface for Parabola {
         self.isometry = isometry;
     }
 
-    fn name(&self) -> String {
-        "parabolic".into()
+    fn name(&self) -> &'static str {
+        "parabolic"
     }
 }
 
