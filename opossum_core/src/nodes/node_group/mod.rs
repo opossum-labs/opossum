@@ -152,7 +152,7 @@ impl NodeGroup {
     /// # Returns
     /// The UUID of the added node.
     pub fn add_node_ref(&mut self, node: OpticRef) -> OpmResult<Uuid> {
-        let uuid = node.uuid();
+        let uuid = node.uuid()?;
         self.graph.add_node_ref(node)?;
         // save uuid of node in rays if present
         // self.store_node_uuid_in_rays_bundle(&node.optical_ref.borrow(), idx)?;
@@ -772,7 +772,7 @@ impl NodeGroup {
         let sorted = self.graph.topologically_sorted()?;
         for idx in sorted {
             let node_ref = self.graph.node_by_idx(idx)?;
-            let uuid = node_ref.uuid();
+            let uuid = node_ref.uuid()?;
             if self.graph.is_stale_node(uuid)? {
                 analysis_report.add_note(ReportNote::new(
                     ReportLevel::Warning,
@@ -946,7 +946,7 @@ impl OpticNode for NodeGroup {
     fn node_report(&self, uuid: &str) -> OpmResult<Option<NodeReport>> {
         let mut group_props = Properties::default();
         for node in self.graph.nodes() {
-            let sub_uuid = node.uuid().as_simple().to_string();
+            let sub_uuid = node.uuid()?.as_simple().to_string();
             if let Ok(node_ref) = node.optical_ref.lock_opm()
                 && let Some(node_report) = node_ref.node_report(&sub_uuid)?
             {
@@ -1183,7 +1183,7 @@ mod test {
         raytrace_config.set_min_energy_per_ray(joule!(0.5))?;
         raytrace_config.map_source(i_s, ray_data_builder.into());
         AnalysisRayTrace::analyze(&mut scenery, LightResult::default(), &raytrace_config)?;
-        let uuid = scenery.node(i_e)?.uuid().as_simple().to_string();
+        let uuid = scenery.node(i_e)?.uuid()?.as_simple().to_string();
         let Some(report) = scenery
             .node(i_e)?
             .optical_ref

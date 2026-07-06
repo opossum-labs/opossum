@@ -147,7 +147,7 @@ impl OpticGraph {
         let mut light_result = LightResult::default();
         for idx in sorted {
             let node = self.node_by_idx(idx)?.optical_ref;
-            let node_id = self.node_by_idx(idx)?.uuid();
+            let node_id = self.node_by_idx(idx)?.uuid()?;
             if self.is_stale_node(node_id)? {
                 warn!(
                     "graph contains stale (completely unconnected) node {}. Skipping.",
@@ -170,7 +170,7 @@ impl OpticGraph {
                     } else {
                         &self.output_port_map
                     };
-                    let node_id = self.node_by_idx(idx)?.uuid();
+                    let node_id = self.node_by_idx(idx)?.uuid()?;
                     let assigned_ports = portmap.assigned_ports_for_node(node_id);
                     for port in assigned_ports {
                         if let Some(light_data) = outgoing_edges.get(&port.1) {

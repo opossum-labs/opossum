@@ -159,12 +159,7 @@ impl<T: ?Sized + HasNodeAttr> NodeAttrExt for T {
 
     fn reset_optic_surfaces(&mut self) {
         let runtime = self.node_attr_mut().runtime_surfaces_mut();
-        for optic_surf in runtime.inputs.values_mut() {
-            optic_surf.set_backwards_rays_cache(Vec::<Rays>::new());
-            optic_surf.set_forward_rays_cache(Vec::<Rays>::new());
-            optic_surf.reset_hit_map();
-        }
-        for optic_surf in runtime.outputs.values_mut() {
+        for optic_surf in runtime.values_mut() {
             optic_surf.set_backwards_rays_cache(Vec::<Rays>::new());
             optic_surf.set_forward_rays_cache(Vec::<Rays>::new());
             optic_surf.reset_hit_map();

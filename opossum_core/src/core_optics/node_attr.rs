@@ -24,7 +24,17 @@ pub struct RuntimeSurfaces {
     pub inputs: BTreeMap<String, OpticSurface>,
     pub outputs: BTreeMap<String, OpticSurface>,
 }
+impl RuntimeSurfaces {
+    /// Returns an iterator over all mutable optic surfaces (inputs and outputs).
+    pub fn values_mut(&mut self) -> impl Iterator<Item = &mut OpticSurface> {
+        self.inputs.values_mut().chain(self.outputs.values_mut())
+    }
 
+    /// Returns an iterator over all optic surfaces (inputs and outputs) and their port names.
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &OpticSurface)> {
+        self.inputs.iter().chain(self.outputs.iter())
+    }
+}
 fn deserialize_name<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: serde::Deserializer<'de>,

@@ -85,19 +85,22 @@ impl AnalysisRayTrace for NodeGroup {
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        // set stored distances from predecessors
+        // Set stored distances from predecessors
         self.graph
             .set_external_distances(self.input_port_distances.clone());
 
         let sorted = self.graph.topologically_sorted()?;
         let mut light_result = LightResult::default();
         let mut up_direction = Vector3::<f64>::y();
+
         for idx in sorted {
-            let node_id = self
-                .graph
-                .node_by_idx(idx)
-                .map_or_else(|_| Uuid::nil(), |node| node.uuid());
+            let node_id = match self.graph.node_by_idx(idx) {
+                Ok(node) => node.uuid()?,
+                Err(_) => Uuid::nil(),
+            };
+
             let has_no_input_connections = !self.graph.has_input_connections(node_id)?;
+
             let already_placed = self
                 .graph
                 .node_by_idx(idx)?
@@ -105,6 +108,7 @@ impl AnalysisRayTrace for NodeGroup {
                 .lock_opm()?
                 .isometry()
                 .is_some();
+
             if has_no_input_connections && !already_placed {
                 let node_info = if let Ok(node) = self.graph.node_by_idx(idx) {
                     format!("{}", node.optical_ref.lock_opm()?)
@@ -125,6 +129,7 @@ impl AnalysisRayTrace for NodeGroup {
                 )?;
             }
         }
+
         self.reset_data();
         Ok(light_result)
     }

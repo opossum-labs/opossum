@@ -53,20 +53,31 @@ impl OpticGraph {
     ///
     /// # Errors
     ///
-    /// This function will return an error if the node with the given [`Uuid`] does not exist.
+    /// This function will return an error if the node with the given [`Uuid`] does not exist
+    /// or if retrieving the node's UUID fails.
     pub fn node(&self, uuid: Uuid) -> OpmResult<OpticRef> {
-        self.g
+        // 1. Map items to a Result tuple containing the evaluated UUID matching state
+        let found_node = self
+            .g
             .node_weights()
-            .find(|node| node.uuid() == uuid)
-            .cloned()
-            .map_or_else(
-                || {
-                    Err(OpossumError::OpticScenery(
-                        "node with given uuid does not exist".into(),
-                    ))
-                },
-                Ok,
-            )
+            .map(|node| {
+                // Evaluate node.uuid() which now returns an OpmResult<Uuid>
+                node.uuid().map(|node_uuid| (node_uuid == uuid, node))
+            })
+            // 2. Find the first item that either matches or encountered an error
+            .find(|res| match res {
+                Ok((is_match, _)) => *is_match,
+                Err(_) => true, // Keep the error so we can propagate it via '?'
+            });
+
+        // 3. Process the find result and convert it to the final OpmResult<OpticRef>
+        match found_node {
+            Some(Ok((_, node))) => Ok(node.clone()),
+            Some(Err(err)) => Err(err), // Propagate the internal error (e.g., poisoning)
+            None => Err(OpossumError::OpticScenery(
+                "node with given uuid does not exist".into(),
+            )),
+        }
     }
     /// Returns a reference to the optical node specified by its [`Uuid`] and the Uuid of the group in which it is contained.
     ///
@@ -123,16 +134,23 @@ impl OpticGraph {
     }
     /// Return the (internal graph) [`NodeIndex`] of the node with the given [`Uuid`].
     ///
-    /// `None` is returned if the node with the given [`Uuid`] does not exist.
-    ///
-    /// # Panics
-    ///
-    /// Panics theoretically, if the internal [`NodeIndex`] was not found while looping over all nodes.
+    /// `None` is returned if the node with the given [`Uuid`] does not exist
+    /// or if an error occurs while accessing a node's UUID.
     #[must_use]
     pub fn node_idx_by_uuid(&self, uuid: Uuid) -> Option<NodeIndex> {
-        self.g
-            .node_indices()
-            .find(|idx| self.g.node_weight(*idx).unwrap().uuid() == uuid)
+        self.g.node_indices().find(|&idx| {
+            // Safely get the node weight without unwrap
+            self.g
+                .node_weight(idx)
+                .is_some_and(|node| match node.uuid() {
+                    Ok(node_uuid) => node_uuid == uuid,
+                    Err(err) => {
+                        // Log the error to maintain visibility in the homelab/server environment
+                        log::error!("Failed to retrieve UUID for node at index {idx:?}: {err:?}");
+                        false
+                    }
+                })
+        })
     }
     /// Returns all nodes of this [`OpticGraph`].
     #[must_use]
@@ -148,9 +166,14 @@ impl OpticGraph {
     pub fn connections(&self) -> Vec<ConnectionInfo> {
         let mut connections = Vec::<ConnectionInfo>::new();
         for edge_ref in self.g.edge_references() {
-            let src_id = self.g.node_weight(edge_ref.source()).unwrap().uuid();
+            let src_id = self
+                .g
+                .node_weight(edge_ref.source())
+                .unwrap()
+                .uuid()
+                .unwrap();
             let target = self.g.node_weight(edge_ref.target()).unwrap();
-            let target_id = target.uuid();
+            let target_id = target.uuid().unwrap();
             let src_port = edge_ref.weight().src_port();
             let target_port = edge_ref.weight().target_port();
             let dist = edge_ref.weight().distance();
@@ -183,12 +206,22 @@ impl OpticGraph {
     pub fn get_outgoing_connection_info_of_node(&self, node_id: Uuid) -> Vec<ConnectionInfo> {
         let mut connections = Vec::<ConnectionInfo>::new();
         for edge_ref in self.g.edge_references() {
-            let src_id = self.g.node_weight(edge_ref.source()).unwrap().uuid();
+            let src_id = self
+                .g
+                .node_weight(edge_ref.source())
+                .unwrap()
+                .uuid()
+                .unwrap();
             if node_id == src_id {
                 let connection = ConnectionInfo {
                     src_id,
                     src_port: edge_ref.weight().src_port().to_string(),
-                    target_id: self.g.node_weight(edge_ref.target()).unwrap().uuid(),
+                    target_id: self
+                        .g
+                        .node_weight(edge_ref.target())
+                        .unwrap()
+                        .uuid()
+                        .unwrap(),
                     target_port: edge_ref.weight().target_port().to_string(),
                     distance: *edge_ref.weight().distance(),
                 };
@@ -217,11 +250,11 @@ impl OpticGraph {
         for edge_ref in self.g.edge_references() {
             let src = self.g.node_weight(edge_ref.source()).unwrap();
             let target = self.g.node_weight(edge_ref.target()).unwrap();
-            if node_id == src.uuid() || node_id == target.uuid() {
+            if node_id == src.uuid().unwrap() || node_id == target.uuid().unwrap() {
                 let connection = ConnectionInfo {
-                    src_id: src.uuid(),
+                    src_id: src.uuid().unwrap(),
                     src_port: edge_ref.weight().src_port().to_string(),
-                    target_id: target.uuid(),
+                    target_id: target.uuid().unwrap(),
                     target_port: edge_ref.weight().target_port().to_string(),
                     distance: *edge_ref.weight().distance(),
                 };
@@ -248,10 +281,20 @@ impl OpticGraph {
     pub fn get_incoming_connection_info_of_node(&self, node_id: Uuid) -> Vec<ConnectionInfo> {
         let mut connections = Vec::<ConnectionInfo>::new();
         for edge_ref in self.g.edge_references() {
-            let target_id = self.g.node_weight(edge_ref.target()).unwrap().uuid();
+            let target_id = self
+                .g
+                .node_weight(edge_ref.target())
+                .unwrap()
+                .uuid()
+                .unwrap();
             if node_id == target_id {
                 let connection = ConnectionInfo {
-                    src_id: self.g.node_weight(edge_ref.source()).unwrap().uuid(),
+                    src_id: self
+                        .g
+                        .node_weight(edge_ref.source())
+                        .unwrap()
+                        .uuid()
+                        .unwrap(),
                     src_port: edge_ref.weight().src_port().to_string(),
                     target_id,
                     target_port: edge_ref.weight().target_port().to_string(),
@@ -328,7 +371,7 @@ impl OpticGraph {
     pub fn find_source_ports(&self) -> OpmResult<Vec<Uuid>> {
         let mut source_ports = Vec::new();
         for node_ref in self.nodes() {
-            let node_id = node_ref.uuid();
+            let node_id = node_ref.uuid()?;
             let mut node = node_ref.optical_ref.lock_opm()?;
             if node.node_attr().node_type() == "source port" {
                 source_ports.push(node_id);

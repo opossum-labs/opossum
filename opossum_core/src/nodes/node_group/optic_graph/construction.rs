@@ -102,7 +102,7 @@ impl OpticGraph {
             // This inner loop finds all nodes that are or reference the current_id_to_check
             while let Some(node_idx) = self.find_first_node_with_uuid(current_id_to_check) {
                 // We have to get the uuid of the node, which could be the (initially) given uuid or the uuid of a reference node
-                let actual_node_id = self.node_by_idx(node_idx)?.uuid();
+                let actual_node_id = self.node_by_idx(node_idx)?.uuid()?;
                 // collect all node ids of nodes that are contained in a group
                 if let Ok(node_ref) = self.node_by_idx(node_idx) {
                     let node = node_ref.optical_ref.lock_opm()?;
@@ -158,7 +158,7 @@ impl OpticGraph {
     fn find_first_node_with_uuid(&self, node_id: Uuid) -> Option<NodeIndex> {
         for node_idx in self.g.node_indices() {
             let node_ref = self.node_by_idx(node_idx).unwrap();
-            if node_ref.uuid() == node_id {
+            if node_ref.uuid().unwrap() == node_id {
                 return Some(node_idx);
             }
             let node = node_ref.optical_ref.lock_opm().unwrap();
@@ -207,7 +207,7 @@ impl OpticGraph {
         let mut nodes_indices = HashMap::<Uuid, Vec<Uuid>>::new();
         for node_idx in self.g.node_indices() {
             let node_ref = self.node_by_idx(node_idx)?;
-            if node_ref.uuid() == node_id {
+            if node_ref.uuid()? == node_id {
                 if let Some(node_refs) = nodes_indices.get_mut(&group_id) {
                     node_refs.push(node_id);
                 } else {
@@ -497,7 +497,7 @@ impl OpticGraph {
                         self.connect_nodes(
                             node_id,
                             output_port,
-                            target_node.uuid(),
+                            target_node.uuid()?,
                             outgoing_edge.3.target_port(),
                             *outgoing_edge.3.distance(),
                         )?;
@@ -511,7 +511,7 @@ impl OpticGraph {
                         )
                     {
                         self.connect_nodes(
-                            src_node.uuid(),
+                            src_node.uuid()?,
                             incoming_edge.3.src_port(),
                             node_id,
                             input_port,
@@ -1041,7 +1041,7 @@ mod test {
         assert!(graph.find_first_node_with_uuid(Uuid::nil()).is_none());
         let mut nodes = vec![];
         while let Some(node_idx) = graph.find_first_node_with_uuid(i_d2) {
-            nodes.push(graph.node_by_idx(node_idx)?.uuid());
+            nodes.push(graph.node_by_idx(node_idx)?.uuid()?);
             graph.g.remove_node(node_idx);
         }
         assert_eq!(nodes.len(), 1);
@@ -1058,7 +1058,7 @@ mod test {
 
         let mut nodes = vec![];
         while let Some(node_idx) = graph.find_first_node_with_uuid(i_d1) {
-            nodes.push(graph.node_by_idx(node_idx)?.uuid());
+            nodes.push(graph.node_by_idx(node_idx)?.uuid()?);
             graph.g.remove_node(node_idx);
         }
         assert_eq!(nodes.len(), 2);
@@ -1282,11 +1282,11 @@ mod test {
         let i_d2 = graph.add_node(Dummy::default())?;
 
         assert_eq!(
-            graph.node_recursive(i_d1, uuid::Uuid::nil())?.0.uuid(),
+            graph.node_recursive(i_d1, uuid::Uuid::nil())?.0.uuid()?,
             i_d1
         );
         assert_eq!(
-            graph.node_recursive(i_d2, uuid::Uuid::nil())?.0.uuid(),
+            graph.node_recursive(i_d2, uuid::Uuid::nil())?.0.uuid()?,
             i_d2
         );
         assert!(
@@ -1311,13 +1311,13 @@ mod test {
 
         let group_id = group.node_attr().uuid();
         let i_g = graph.add_node(group)?;
-        assert_eq!(graph.node_recursive(i_d, group_id)?.0.uuid(), i_d);
-        assert_eq!(graph.node_recursive(i_g, group_id)?.0.uuid(), i_g);
-        assert_eq!(graph.node_recursive(i_g_d1, group_id)?.0.uuid(), i_g_d1);
-        assert_eq!(graph.node_recursive(i_g_d2, group_id)?.0.uuid(), i_g_d2);
-        assert_eq!(graph.node_recursive(i_g_g2, group_id)?.0.uuid(), i_g_g2);
+        assert_eq!(graph.node_recursive(i_d, group_id)?.0.uuid()?, i_d);
+        assert_eq!(graph.node_recursive(i_g, group_id)?.0.uuid()?, i_g);
+        assert_eq!(graph.node_recursive(i_g_d1, group_id)?.0.uuid()?, i_g_d1);
+        assert_eq!(graph.node_recursive(i_g_d2, group_id)?.0.uuid()?, i_g_d2);
+        assert_eq!(graph.node_recursive(i_g_g2, group_id)?.0.uuid()?, i_g_g2);
         assert_eq!(
-            graph.node_recursive(i_g_g2_d, group_id).unwrap().0.uuid(),
+            graph.node_recursive(i_g_g2_d, group_id).unwrap().0.uuid()?,
             i_g_g2_d
         );
         Ok(())

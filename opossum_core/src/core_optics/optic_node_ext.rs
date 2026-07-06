@@ -369,8 +369,22 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         optic_surf_name: &str,
         refri_after_surf: Option<RefractiveIndexType>,
     ) -> OpmResult<LightResult> {
-        let in_port_name = self.ports().names(&PortType::Input)[0].clone();
-        let out_port_name = self.ports().names(&PortType::Output)[0].clone();
+        let in_port_name = self
+            .ports()
+            .names(&PortType::Input)
+            .first()
+            .cloned()
+            .ok_or_else(|| {
+                OpossumError::Analysis(format!("No input port found on node '{}'", self.name()))
+            })?;
+        let out_port_name = self
+            .ports()
+            .names(&PortType::Output)
+            .first()
+            .cloned()
+            .ok_or_else(|| {
+                OpossumError::Analysis(format!("No output port found on node '{}'", self.name()))
+            })?;
         let Some(data) = incoming_data.remove(&in_port_name) else {
             return Ok(LightResult::default());
         };

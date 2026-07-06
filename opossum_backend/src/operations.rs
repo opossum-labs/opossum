@@ -105,7 +105,7 @@ async fn post_cut_nodes(
     while let Some(cache) = node_cache.pop() {
         match cache {
             NodeCacheItem::Optical(optic_ref) => {
-                nodes_to_delete.push(optic_ref.uuid());
+                nodes_to_delete.push(optic_ref.uuid()?);
             }
             NodeCacheItem::Analyzer(analyzer_dto) => {
                 // Access the ID inside the DTO
@@ -461,7 +461,7 @@ pub fn collect_optical_nodes_to_copy_recursive(
         (HashMap::<Uuid, Vec<ConnectionInfo>>::new(), is_root_group),
     );
     for node in copied_optical_nodes {
-        let node_id = node.uuid();
+        let node_id = node.uuid()?;
 
         let group_nodes_opt = {
             let guard = node.optical_ref.lock_opm()?;
@@ -575,7 +575,7 @@ pub fn collect_optical_node_to_copy(
 
     drop(node);
 
-    node_id_link.insert(old_node_id, new_node_ref.uuid());
+    node_id_link.insert(old_node_id, new_node_ref.uuid()?);
 
     let parent_group_id = scenery.node_recursive(old_node_id)?.1;
 

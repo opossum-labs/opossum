@@ -11,6 +11,7 @@ use uuid::Uuid;
 use crate::{
     analyzers::Analyzable,
     core_optics::{NodeAttr, NodeAttrExt, SceneryResources, node_attr::HasNodeAttr},
+    error::OpmResult,
     nodes::{NodeGroup, OpticGraph, create_node_ref},
     utils::LockExt,
 };
@@ -40,12 +41,11 @@ impl OpticRef {
     }
     /// Returns the [`Uuid`] of the node, reference to by this [`OpticRef`].
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// This function might theoretically panic if locking of an internal mutex fails.
-    #[must_use]
-    pub fn uuid(&self) -> Uuid {
-        self.optical_ref.lock_opm().unwrap().node_attr().uuid()
+    /// This function might theoretically return an error if the locking of an internal mutex fails.
+    pub fn uuid(&self) -> OpmResult<Uuid> {
+        Ok(self.optical_ref.lock_opm()?.node_attr().uuid())
     }
     /// Update the reference to the global configuration.
     /// **Note**: This functions is normally only called from `OpticGraph`.
@@ -161,12 +161,13 @@ mod test {
     use std::{fs::File, io::Read, path::PathBuf};
     use uuid::uuid;
     #[test]
-    fn new() {
+    fn new() -> OpmResult<()> {
         let uuid = Uuid::new_v4();
         let mut dummy = Dummy::default();
         dummy.node_attr_mut().set_uuid(uuid);
         let optic_ref = OpticRef::new(Arc::new(Mutex::new(dummy)), None);
-        assert_eq!(optic_ref.uuid(), uuid);
+        assert_eq!(optic_ref.uuid()?, uuid);
+        Ok(())
     }
     #[test]
     fn serialize() {
@@ -188,7 +189,7 @@ mod test {
             OpossumError::OpmDocument(format!("Error parsing opm file string: {e}"))
         })?;
         assert_eq!(
-            optic_ref.uuid(),
+            optic_ref.uuid()?,
             uuid!("a2534789-ec98-4e9b-a1da-315a59d9da43")
         );
         let optic_ref = optic_ref.optical_ref.lock_opm()?;

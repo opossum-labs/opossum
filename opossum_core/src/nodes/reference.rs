@@ -92,7 +92,7 @@ impl NodeReference {
     /// - an internal `reference_id` property cannot be assigned.
     pub fn assign_reference(&mut self, node: &OpticRef) -> OpmResult<()> {
         self.node_attr_mut()
-            .set_property("reference id", Proptype::Uuid(node.uuid()))?;
+            .set_property("reference id", Proptype::Uuid(node.uuid()?))?;
         let ref_name = format!("ref ({})", node.optical_ref.lock_opm()?.name());
         self.node_attr.set_name(&ref_name);
         self.reference = Some(Arc::downgrade(&node.optical_ref));
