@@ -15,11 +15,11 @@ use uuid::Uuid;
 
 use crate::{
     OPOSSUM_UI_LOGS,
-    api::{get_ports_of_group, patch_node_port_config},
+    api::get_ports_of_group,
     components::node_editor::{
         accordion::AccordionItem,
         inputs::input_components::{NodeConfigUnitInput, UnitHandling},
-        node_config_editor::NodeChangeEvent,
+        node_config_editor::{NodeChangeAction, NodeChangeEvent},
         optical_node_editor::port_config_editor::{
             aperture_editor::ApertureEditor, coating_editor::CoatingEditor,
         },
@@ -47,15 +47,14 @@ pub fn PortConfigEditor(
     });
 
     let handle_port_update = move |(p_name, p_type, req): (String, PortType, UpdatePortRequest)| {
-        let n_id = *node_id.read();
-
-        // start new asynchronous task to perform the API call, so that the UI doesn't freeze while waiting for the response.
-        spawn(async move {
-            if let Err(err) = patch_node_port_config(n_id, p_name, p_type, req).await {
-                OPOSSUM_UI_LOGS
-                    .write()
-                    .add_log(&format!("API Error: {err}"));
-            }
+        // Forward the event to the central node config processor
+        on_change.call(NodeChangeEvent {
+            node_id: *node_id.read(),
+            action: NodeChangeAction::PortConfig {
+                port_name: p_name,
+                port_type: p_type,
+                request: req,
+            },
         });
     };
 
