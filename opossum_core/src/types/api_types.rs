@@ -380,7 +380,7 @@ pub struct NodePortsResponse {
 }
 
 /// Request payload for partial updates of a specific port
-#[derive(Debug, Default, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Default, Serialize, Deserialize, ToSchema, Clone, PartialEq)]
 pub struct UpdatePortRequest {
     /// The new aperture of the port
     pub aperture: Option<Aperture>,
