@@ -878,7 +878,8 @@ async fn process_convert_nodes_to_group(
     current_group_id: Uuid,
     ws_handler: WorkSpaceSignalHandlers,
 ) {
-    if !nodes.is_empty() { // guard, if the nodes vector is empty (e.g. all nodes filtered out before)
+    if !nodes.is_empty() {
+        // guard, if the nodes vector is empty (e.g. all nodes filtered out before)
         match api::convert_nodes_to_group(nodes.clone(), current_group_id).await {
             Ok((new_group_info, port_mapping)) => {
                 //remove nodes that have been converted to a group from graph

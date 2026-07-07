@@ -51,9 +51,11 @@ pub fn collect_node_refs_and_pos(
         .filter_map(|node| {
             scenery.node_recursive(*node).ok().map(|(r, _)| {
                 if let Ok(opt_ref) = r.optical_ref.lock_opm() {
-                    let pos = opt_ref.gui_position().unwrap();
-                    corner.x = corner.x.min(pos.x);
-                    corner.y = corner.y.min(pos.y);
+                    // Safely handle cases where a node might not have a GUI position assigned yet
+                    if let Some(pos) = opt_ref.gui_position() {
+                        corner.x = corner.x.min(pos.x);
+                        corner.y = corner.y.min(pos.y);
+                    }
                 }
                 r
             })
@@ -370,10 +372,9 @@ pub fn create_new_group_node_info(
 ) -> OpmResult<NodeInfo> {
     let document = data.document.lock();
     let scenery = document.scenery();
-
     let (new_group_ref, _) = scenery.node_recursive(new_group_id)?;
-    let new_group_node = new_group_ref.optical_ref.lock_opm()?;
-
+    let mut new_group_node = new_group_ref.optical_ref.lock_opm()?;
+    new_group_node.node_attr_mut().set_gui_position(Some(pos));
     Ok(NodeInfo::from_analyzable(
         &*new_group_node,
         Some(Some((pos.x, pos.y))),
