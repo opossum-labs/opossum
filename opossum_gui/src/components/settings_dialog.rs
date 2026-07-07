@@ -4,29 +4,45 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn SettingsDialog(show: Signal<bool>) -> Element {
+    // 1. CRITICAL: Hooks must always be at the very top of the component,
+    // unconditionally, before any early returns!
+    let mut active_tab = use_signal(|| 0);
+
+    // Create a local temporary buffer of the entire configuration struct.
+    let mut temp_config = use_signal(|| APP_CONFIG.read().clone());
+
+    // 2. Synchronization: Whenever the dialog opens (show transitions to true),
+    // we explicitly overwrite our local buffer with a fresh clone of the global configuration.
+    use_effect(move || {
+        if show() {
+            *temp_config.write() = APP_CONFIG.read().clone();
+        }
+    });
+
+    // Early return for visibility is now safely placed AFTER the hooks.
     if !show() {
         return rsx! {};
     }
-    let mut active_tab = use_signal(|| 0);
+
     rsx! {
       div {
         class: "modal d-block",
         "tabindex": "-1",
         style: "background-color: rgba(0,0,0,0.5);",
-        // Komfort-Feature analog zum Simulationsfenster: Schließen mit Esc
+        // Convenience feature: Close with Escape key
         onkeydown: move |evt| {
             if evt.key() == Key::Escape {
                 show.set(false);
             }
         },
-        // Automatisch fokussieren, damit Tastatureingaben (wie Esc) sofort funktionieren
+        // Automatically focus to capture keyboard inputs instantly
         onmounted: async move |evt| {
             let _ = evt.set_focus(true).await;
         },
         div { class: "modal-dialog modal-lg modal-dialog-centered",
           div { class: "modal-content bg-dark text-white",
 
-            // Header (Clean ohne manuelle Rahmenstriche)
+            // Header (Clean without manual borders)
             div { class: "modal-header",
               h5 { class: "modal-title", "OPOSSUM Settings" }
               button {
@@ -36,38 +52,46 @@ pub fn SettingsDialog(show: Signal<bool>) -> Element {
               }
             }
 
-            // Body mit Split-Layout
+            // Body with split layout
             div {
               class: "modal-body d-flex p-0",
-              style: "min-height: 400px;", // Korrigiert von '400 char' zu '400px'
+              style: "min-height: 400px;",
 
-              // Linke Spalte: Navigations-Tabs im einheitlichen Dark-Look
+              // Left column: Navigation tabs with explicit active highlighting
               div { class: "list-group list-group-flush w-25 bg-dark border-end border-secondary",
                 button {
                   class: format!(
-                      "list-group-item list-group-item-action text-white bg-dark py-3 border-0 {}",
-                      if active_tab() == 0 { "active bg-secondary" } else { "" },
+                      "list-group-item list-group-item-action py-3 border-0 {}",
+                      if active_tab() == 0 {
+                          "bg-secondary text-white fw-bold"
+                      } else {
+                          "bg-dark text-white-50"
+                      },
                   ),
                   onclick: move |_| active_tab.set(0),
                   "General"
                 }
                 button {
                   class: format!(
-                      "list-group-item list-group-item-action text-white bg-dark py-3 border-0 {}",
-                      if active_tab() == 1 { "active bg-secondary" } else { "" },
+                      "list-group-item list-group-item-action py-3 border-0 {}",
+                      if active_tab() == 1 {
+                          "bg-secondary text-white fw-bold"
+                      } else {
+                          "bg-dark text-white-50"
+                      },
                   ),
                   onclick: move |_| active_tab.set(1),
                   "Physics / Model"
                 }
               }
 
-              // Rechte Spalte: Dynamischer Inhalt eingebettet im konsistenten #1e1e1e Konsolen-Hintergrund
+              // Right column: Dynamic content embedded in consistent #1e1e1e console background
               div {
                 class: "p-4 flex-grow-1",
                 style: "background-color: #1e1e1e; border-radius: 0 0 4px 0;",
                 match active_tab() {
                     0 => rsx! {
-                      GeneralSettingsTab {}
+                      GeneralSettingsTab { temp_config }
                     },
                     1 => rsx! {
                       PhysicsSettingsTab {}
@@ -79,7 +103,7 @@ pub fn SettingsDialog(show: Signal<bool>) -> Element {
               }
             }
 
-            // Footer mit getrennten Buttons für "Abbrechen" und "Speichern"
+            // Footer with separate buttons for Cancel and Save
             div { class: "modal-footer",
               button {
                 r#type: "button",
@@ -89,8 +113,12 @@ pub fn SettingsDialog(show: Signal<bool>) -> Element {
               }
               button {
                 r#type: "button",
-                class: "btn btn-success", // Konsistentes Grün für positive Aktionen
+                class: "btn btn-success", // Consistent green for positive actions
                 onclick: move |_| {
+                    // 3. Commit: Write the entire validated temporary struct back to the global state
+                    *APP_CONFIG.write() = temp_config.read().clone();
+
+                    // Save the updated configuration to disk
                     if let Err(e) = APP_CONFIG.read().to_file() {
                         eprintln!("Error while saving configuration: {e}");
                     }
@@ -106,9 +134,9 @@ pub fn SettingsDialog(show: Signal<bool>) -> Element {
 }
 
 #[component]
-fn GeneralSettingsTab() -> Element {
-    let config = APP_CONFIG();
-    let current_path_str = config.report_dir().map_or_else(
+fn GeneralSettingsTab(mut temp_config: Signal<crate::AppConfig>) -> Element {
+    // Read directly from the temporary configuration clone
+    let current_path_str = temp_config.read().report_dir().map_or_else(
         || "No default dir set".to_string(),
         |p| p.to_string_lossy().into_owned(),
     );
@@ -133,8 +161,8 @@ fn GeneralSettingsTab() -> Element {
               onclick: move |_| {
                   spawn(async move {
                       if let Some(folder) = select_folder_path().await {
-                          let mut app_config = APP_CONFIG.write();
-                          if let Err(e) = app_config.set_report_dir(&folder) {
+                          // Mutate only the temporary configuration clone
+                          if let Err(e) = temp_config.write().set_report_dir(&folder) {
                               eprintln!("Error setting directory: {e}");
                           }
                       }
@@ -150,8 +178,6 @@ fn GeneralSettingsTab() -> Element {
 
 #[component]
 fn PhysicsSettingsTab() -> Element {
-    // let config = APP_CONFIG();
-
     rsx! {
       div { class: "d-flex flex-column gap-3",
         h4 { class: "mb-3", "Default Model Parameters" }
