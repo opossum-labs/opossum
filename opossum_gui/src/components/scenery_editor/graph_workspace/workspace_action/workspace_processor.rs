@@ -878,23 +878,26 @@ async fn process_convert_nodes_to_group(
     current_group_id: Uuid,
     ws_handler: WorkSpaceSignalHandlers,
 ) {
-    match api::convert_nodes_to_group(nodes.clone(), current_group_id).await {
-        Ok((new_group_info, port_mapping)) => {
-            //remove nodes that have been converted to a group from graph
-            ws_handler.nodes.remove_nodes(nodes, current_group_id);
+    if !nodes.is_empty() {
+        // guard, if the nodes vector is empty (e.g. all nodes filtered out before)
+        match api::convert_nodes_to_group(nodes.clone(), current_group_id).await {
+            Ok((new_group_info, port_mapping)) => {
+                //remove nodes that have been converted to a group from graph
+                ws_handler.nodes.remove_nodes(nodes, current_group_id);
 
-            //add new group node
-            ws_handler
-                .nodes
-                .add_optical_node(new_group_info, current_group_id);
+                //add new group node
+                ws_handler
+                    .nodes
+                    .add_optical_node(new_group_info, current_group_id);
 
-            //connect group node
-            for edge in port_mapping {
-                ws_handler.edges.add_edge(edge, current_group_id);
+                //connect group node
+                for edge in port_mapping {
+                    ws_handler.edges.add_edge(edge, current_group_id);
+                }
             }
-        }
-        Err(err_str) => {
-            OPOSSUM_UI_LOGS.write().add_log(&err_str);
+            Err(err_str) => {
+                OPOSSUM_UI_LOGS.write().add_log(&err_str);
+            }
         }
     }
 }
