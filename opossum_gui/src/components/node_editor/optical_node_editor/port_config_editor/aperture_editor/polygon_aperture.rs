@@ -11,7 +11,7 @@ use crate::{
 };
 use dioxus::prelude::*;
 use opossum_core::meter;
-use opossum_core::{apertures::PolygonConfig, prelude::ApertureShape};
+use opossum_core::{apertures::PolygonShape, prelude::ApertureShape};
 use strum::EnumIter;
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq, EnumIter)]
@@ -29,7 +29,7 @@ impl From<PolygonConfigParam> for InputParam {
     }
 }
 
-impl IntoInputDataStrings<PolygonConfig> for PolygonConfigParam {
+impl IntoInputDataStrings<PolygonShape> for PolygonConfigParam {
     fn create_id_string(&self) -> String {
         let id_str = match self {
             Self::X => "PosX",
@@ -37,7 +37,7 @@ impl IntoInputDataStrings<PolygonConfig> for PolygonConfigParam {
         };
         format!("polygonConfig{id_str}Input")
     }
-    fn create_value_string(&self, obj: &PolygonConfig) -> String {
+    fn create_value_string(&self, obj: &PolygonShape) -> String {
         obj.points().last().map_or_else(
             || match self {
                 Self::X | Self::Y => format!("{}", 0.0),
@@ -50,20 +50,20 @@ impl IntoInputDataStrings<PolygonConfig> for PolygonConfigParam {
     }
 }
 
-impl IntoInputData<f64, PolygonConfig, ApertureShape> for PolygonConfigParam {
+impl IntoInputData<f64, PolygonShape, ApertureShape> for PolygonConfigParam {
     fn parse_value(&self, e: Event<FormData>) -> Option<f64> {
         let e_value = e.value();
         e_value.parse::<f64>().ok()
     }
 
-    fn setter_from_obj(&self) -> impl FnMut(&mut PolygonConfig, f64) {
-        move |_: &mut PolygonConfig, _: f64| {}
+    fn setter_from_obj(&self) -> impl FnMut(&mut PolygonShape, f64) {
+        move |_: &mut PolygonShape, _: f64| {}
     }
 }
 
 #[component]
 pub fn PolygonApertureInput(
-    polygon_config: PolygonConfig,
+    polygon_config: PolygonShape,
     on_shape_change: EventHandler<ApertureShape>,
     readonly: bool,
 ) -> Element {
@@ -150,13 +150,13 @@ pub fn PolygonApertureInput(
 
 #[component]
 fn PolygonPointList(
-    polygon_config: PolygonConfig,
+    polygon_config: PolygonShape,
     on_shape_change: EventHandler<ApertureShape>,
     readonly: bool,
 ) -> Element {
     rsx! {
         ul { class: "list-group border-start", id: "polygonPointList",
-            for (i, point) in polygon_config.clone().points().iter().enumerate() {
+            for (i , point) in polygon_config.clone().points().iter().enumerate() {
                 {
                     let class = if i % 2 == 0 {
                         "list-group-item d-grid text-secondary"

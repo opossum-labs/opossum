@@ -15,30 +15,30 @@ use utoipa::ToSchema;
 
 /// Configuration of a polygonal aperture defined by a given set of points.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnsureValidated, ToSchema)]
-pub struct PolygonConfig {
+pub struct PolygonShape {
     #[schema(value_type = Object)]
     points: ValidatedPolygonPoints2D,
     #[validate(skip)]
     triangle_indices: Vec<Vec<usize>>,
 }
-impl From<PolygonConfig> for ApertureShape {
-    fn from(value: PolygonConfig) -> Self {
+impl From<PolygonShape> for ApertureShape {
+    fn from(value: PolygonShape) -> Self {
         Self::BinaryPolygon(value)
     }
 }
-impl Default for PolygonConfig {
+impl Default for PolygonShape {
     fn default() -> Self {
         let points = vec![
-            Point2::new(millimeter!(-12.5), millimeter!(-12.5)),
-            Point2::new(millimeter!(12.5), millimeter!(-12.5)),
-            Point2::new(millimeter!(12.5), millimeter!(12.5)),
-            Point2::new(millimeter!(-12.5), millimeter!(12.5)),
+            millimeter!(-12.5, -12.5),
+            millimeter!(12.5, -12.5),
+            millimeter!(12.5, 12.5),
+            millimeter!(-12.5, 12.5),
         ];
         Self::new(points).unwrap()
     }
 }
 
-impl PolygonConfig {
+impl PolygonShape {
     /// Create a new polygonal aperture configuration by a set of given 2D points.
     ///
     /// The order of the points must follow the outline of the polygon. Otherwise intersections may occur.
@@ -124,7 +124,7 @@ impl PolygonConfig {
         Ok(())
     }
 }
-impl Shape for PolygonConfig {
+impl Shape for PolygonShape {
     fn transmission_factor(&self, point: &Point3<Length>) -> f64 {
         if self.in_polygon(point) { 1.0 } else { 0.0 }
     }
@@ -136,9 +136,9 @@ mod test {
     #[test]
     fn new() {
         let ok_points = vec![meter!(0.0, 0.0), meter!(2.0, 0.0), meter!(1.0, 1.0)];
-        assert!(PolygonConfig::new(ok_points).is_ok());
+        assert!(PolygonShape::new(ok_points).is_ok());
         let too_little_points = vec![meter!(0.0, 0.0), meter!(2.0, 0.0)];
-        assert!(PolygonConfig::new(too_little_points).is_err());
+        assert!(PolygonShape::new(too_little_points).is_err());
     }
     #[test]
     fn getters() -> OpmResult<()> {
@@ -148,13 +148,13 @@ mod test {
             meter!(2.0, 0.0),
             meter!(1.0, 1.0),
         ];
-        let poly = PolygonConfig::new(points.clone())?;
+        let poly = PolygonShape::new(points.clone())?;
         assert_eq!(poly.points(), points.as_slice());
         Ok(())
     }
     #[test]
     fn transmission_factor() -> OpmResult<()> {
-        let poly = PolygonConfig::new(vec![
+        let poly = PolygonShape::new(vec![
             meter!(0.0, 0.0),
             meter!(1.0, 0.5),
             meter!(2.0, 0.0),
@@ -181,7 +181,7 @@ mod test {
             meter!(1.0, 3.0),
             meter!(0.0, 3.0),
         ];
-        let poly = PolygonConfig::new(points)?;
+        let poly = PolygonShape::new(points)?;
 
         // Inside the "arms"
         assert_eq!(poly.transmission_factor(&meter!(0.5, 2.0, 0.0)), 1.0);
@@ -193,5 +193,57 @@ mod test {
         // Bottom bar
         assert_eq!(poly.transmission_factor(&meter!(1.5, 0.5, 0.0)), 1.0);
         Ok(())
+    }
+    #[test]
+    fn from() {
+        let ps = PolygonShape::default();
+        let aps: ApertureShape = ps.into();
+        assert!(matches!(aps, ApertureShape::BinaryPolygon(_)))
+    }
+    #[test]
+    fn default() {
+        let ps = PolygonShape::default();
+        let expected = vec![
+            millimeter!(-12.5, -12.5),
+            millimeter!(12.5, -12.5),
+            millimeter!(12.5, 12.5),
+            millimeter!(-12.5, 12.5),
+        ];
+        for (point, expected) in ps.points().iter().zip(expected) {
+            assert_eq!(point, &expected);
+        }
+    }
+    #[test]
+    fn remove_add_point() {
+        let mut ps = PolygonShape::default();
+        assert!(ps.delete_point(4).is_err());
+        assert!(ps.delete_point(1).is_ok());
+        let expected = vec![
+            millimeter!(-12.5, -12.5),
+            millimeter!(12.5, 12.5),
+            millimeter!(-12.5, 12.5),
+        ];
+        for (point, expected) in ps.points().iter().zip(expected) {
+            assert_eq!(point, &expected);
+        }
+        assert!(ps.add_points(&vec![millimeter!(f64::NAN, 0.0)]).is_err());
+        assert!(
+            ps.add_points(&vec![millimeter!(f64::INFINITY, 0.0)])
+                .is_err()
+        );
+        assert!(
+            ps.add_points(&vec![millimeter!(f64::NEG_INFINITY, 0.0)])
+                .is_err()
+        );
+        assert!(ps.add_points(&vec![millimeter!(0.0, 0.0)]).is_ok());
+        let expected = vec![
+            millimeter!(-12.5, -12.5),
+            millimeter!(12.5, 12.5),
+            millimeter!(-12.5, 12.5),
+            millimeter!(0.0, 0.0),
+        ];
+        for (point, expected) in ps.points().iter().zip(expected) {
+            assert_eq!(point, &expected);
+        }
     }
 }

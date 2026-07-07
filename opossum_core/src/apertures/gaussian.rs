@@ -71,7 +71,7 @@ impl Shape for GaussianShape {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::meter;
+    use crate::{meter, millimeter};
     use approx::assert_abs_diff_eq;
 
     #[test]
@@ -119,5 +119,29 @@ mod test {
         let t_1sigma_y = g.transmission_factor(&meter!(0.0, 2.0, 0.0));
         assert_abs_diff_eq!(t_1sigma_y, (-0.5_f64).exp(), epsilon = 1e-12);
         Ok(())
+    }
+    #[test]
+    fn from() {
+        let gs = GaussianShape::default();
+        let aps: ApertureShape = gs.into();
+        assert!(matches!(aps, ApertureShape::Gaussian(_)))
+    }
+    #[test]
+    fn set_sigma_xy() {
+        let mut gs = GaussianShape::default();
+        assert!(gs.set_sigma_x(millimeter!(1.23)).is_ok());
+        assert!(gs.set_sigma_y(millimeter!(4.56)).is_ok());
+        assert_eq!(gs.sigma.get().x, millimeter!(1.23));
+        assert_eq!(gs.sigma.get().y, millimeter!(4.56));
+        assert!(gs.set_sigma_x(millimeter!(-0.1)).is_err());
+        assert!(gs.set_sigma_y(millimeter!(-0.1)).is_err());
+        assert!(gs.set_sigma_x(millimeter!(f64::NAN)).is_err());
+        assert!(gs.set_sigma_y(millimeter!(f64::NAN)).is_err());
+        assert!(gs.set_sigma_x(millimeter!(f64::INFINITY)).is_err());
+        assert!(gs.set_sigma_y(millimeter!(f64::INFINITY)).is_err());
+        assert!(gs.set_sigma_x(millimeter!(f64::NEG_INFINITY)).is_err());
+        assert!(gs.set_sigma_y(millimeter!(f64::NEG_INFINITY)).is_err());
+        assert!(gs.set_sigma_x(millimeter!(0.0)).is_err());
+        assert!(gs.set_sigma_y(millimeter!(0.0)).is_err());
     }
 }
