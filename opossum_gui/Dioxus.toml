@@ -11,7 +11,13 @@ publisher = "OpossumLabs"
 short_description = "Open-source optic simulation system and unified modeler"
 long_description = "An open-source framework for the simulation of optical (laser) systems based on directed network graphs"
 category = "Utility"
-icon = ["assets/Logo_square.png"]
+icon = [
+    "assets/icons/32x32.png",
+    "assets/icons/64x64.png",
+    "assets/icons/128x128.png",
+    "assets/icons/256x256.png",
+    "assets/icons/512x512.png"
+]
 resources = ["opm_examples/workshop_00_kepler_paraxial.opm",
             "opm_examples/workshop_01_kepler_real_lenses.opm",
             "opm_examples/workshop_02_kepler_chromatism.opm",
