@@ -202,16 +202,16 @@ pub fn build_new_group_from_refs_and_conns(
         connect_from_info(&mut new_group, conn)?;
     }
 
+    // Generate unique external names for output ports using the source node's UUID
     for map_out in &connections.output {
-        new_group.map_output_port(map_out.src_uuid(), map_out.src_port(), map_out.src_port())?;
+        let ext_port_name = format!("{}_{}", map_out.src_uuid(), map_out.src_port());
+        new_group.map_output_port(map_out.src_uuid(), map_out.src_port(), &ext_port_name)?;
     }
 
+    // Generate unique external names for input ports using the target node's UUID
     for map_in in &connections.input {
-        new_group.map_input_port(
-            map_in.target_uuid(),
-            map_in.target_port(),
-            map_in.target_port(),
-        )?;
+        let ext_port_name = format!("{}_{}", map_in.target_uuid(), map_in.target_port());
+        new_group.map_input_port(map_in.target_uuid(), map_in.target_port(), &ext_port_name)?;
     }
 
     Ok(new_group)
@@ -289,17 +289,18 @@ pub fn add_converted_group_to_scenery(
                 let mut updated_connections = Vec::new();
 
                 // Connect the output ports on the parent group level.
-                // The source node is now the newly created group node itself.
                 for map_out in map_output_connections {
+                    // Generate the exact same unique external port name as during group build
+                    let ext_port_name = format!("{}_{}", map_out.src_uuid(), map_out.src_port());
+
                     g.connect_nodes(
                         new_group_id,
-                        map_out.src_port(),
+                        &ext_port_name, // Use the unique group port name
                         map_out.target_uuid(),
                         map_out.target_port(),
                         meter!(map_out.distance()),
                     )?;
 
-                    // Check if the external target node is a reference node
                     let is_reference = g
                         .with_node_attr(map_out.target_uuid(), |attr| {
                             attr.properties().get("reference id").is_ok()
@@ -308,7 +309,7 @@ pub fn add_converted_group_to_scenery(
 
                     updated_connections.push(ConnectInfo::new(
                         new_group_id,
-                        map_out.src_port().to_string(),
+                        ext_port_name, // Expose the correct unique port name to the frontend
                         map_out.target_uuid(),
                         map_out.target_port().to_string(),
                         map_out.distance(),
@@ -317,27 +318,28 @@ pub fn add_converted_group_to_scenery(
                 }
 
                 // Connect the input ports on the parent group level.
-                // The target node is now the newly created group node itself.
                 for map_in in map_input_connections {
+                    // Generate the exact same unique external port name as during group build
+                    let ext_port_name =
+                        format!("{}_{}", map_in.target_uuid(), map_in.target_port());
+
                     g.connect_nodes(
                         map_in.src_uuid(),
                         map_in.src_port(),
                         new_group_id,
-                        map_in.target_port(),
+                        &ext_port_name, // Use the unique group port name
                         meter!(map_in.distance()),
                     )?;
 
-                    // The target is the new group node, which is not a reference node
                     updated_connections.push(ConnectInfo::new(
                         map_in.src_uuid(),
                         map_in.src_port().to_string(),
                         new_group_id,
-                        map_in.target_port().to_string(),
+                        ext_port_name, // Expose the correct unique port name to the frontend
                         map_in.distance(),
                         false,
                     ));
                 }
-
                 Ok((new_group_id, updated_connections))
             }
             Err(e) => Err(BackEndErrorResponse::new(
