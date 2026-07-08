@@ -485,12 +485,6 @@ impl From<BandFilter> for Spectrum {
             }
             let half_band = width_in_um / 2.0;
             let transition = smooth_width_in_um / 2.0;
-            // let lower_start = -half_band - transition;
-            // let lower_end = -half_band + transition;
-            // let upper_start = half_band - transition;
-            // let upper_end = half_band + transition;
-            // let transmission_diff =
-            //     band_filter.transmission_range().end - band_filter.transmission_range().start;
             spectrum
                 .set_data(
                     spectrum_data
@@ -532,5 +526,43 @@ impl From<BandFilter> for Spectrum {
                 .unwrap();
         }
         spectrum
+    }
+}
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn new() {
+        assert!(
+            BandFilter::new(
+                BandFilterType::BandPass,
+                nanometer!(1000.0),
+                nanometer!(30.0),
+                0.0..1.0,
+                Some(nanometer!(2.0)),
+                nanometer!(900.0)..nanometer!(1100.0),
+                nanometer!(0.5)
+            )
+            .is_ok()
+        );
+    }
+    #[test]
+    fn display() {
+        assert_eq!(BandFilterType::BandPass.to_string(), "Band pass");
+        assert_eq!(BandFilterType::Notch.to_string(), "Notch");
+    }
+    #[test]
+    fn filter_type_from_str() -> OpmResult<()> {
+        assert!(matches!(
+            BandFilterType::from_str("Notch")?,
+            BandFilterType::Notch
+        ));
+        assert!(matches!(
+            BandFilterType::from_str("Band pass")?,
+            BandFilterType::BandPass
+        ));
+        assert!(BandFilterType::from_str("wrong").is_err());
+        Ok(())
     }
 }

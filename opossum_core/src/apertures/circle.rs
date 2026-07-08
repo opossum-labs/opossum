@@ -65,7 +65,7 @@ impl Shape for CircleShape {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::meter;
+    use crate::{meter, millimeter};
 
     #[test]
     fn new() {
@@ -112,5 +112,17 @@ mod test {
         let cs = CircleShape::default();
         let aps: ApertureShape = cs.into();
         assert!(matches!(aps, ApertureShape::BinaryCircle(_)))
+    }
+    #[test]
+    fn set_radius() -> OpmResult<()> {
+        let mut cs = CircleShape::default();
+        assert!(cs.set_radius(millimeter!(1.23)).is_ok());
+        assert_eq!(cs.radius.get(), &millimeter!(1.23));
+        assert!(cs.set_radius(millimeter!(-0.1)).is_err());
+        assert!(cs.set_radius(millimeter!(f64::NAN)).is_err());
+        assert!(cs.set_radius(millimeter!(f64::INFINITY)).is_err());
+        assert!(cs.set_radius(millimeter!(f64::NEG_INFINITY)).is_err());
+        assert!(cs.set_radius(millimeter!(0.0)).is_ok());
+        Ok(())
     }
 }

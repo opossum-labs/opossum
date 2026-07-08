@@ -54,7 +54,7 @@ use uom::si::{
 
 pub use circle::CircleShape;
 pub use gaussian::GaussianShape;
-pub use polygon::PolygonConfig;
+pub use polygon::PolygonShape;
 pub use rectangle::RectangleShape;
 pub use stack::StackShape;
 use utoipa::ToSchema;
@@ -278,7 +278,7 @@ impl Aperture {
         translation: Option<Point2<Length>>,
         rotation: Option<Angle>,
     ) -> OpmResult<Self> {
-        let config = PolygonConfig::new(points)?;
+        let config = PolygonShape::new(points)?;
         Self::new(
             ApertureShape::BinaryPolygon(config),
             aperture_type,
@@ -326,7 +326,7 @@ pub enum ApertureShape {
     BinaryRectangle(RectangleShape),
     /// binary (either transparent or opaque) polygonial aperture defined by a set of 2D points. This polygon can also be
     /// non-convex but should not intersect.
-    BinaryPolygon(PolygonConfig),
+    BinaryPolygon(PolygonShape),
     /// variable transmission aperture using a 2D Gaussian function.
     Gaussian(GaussianShape),
     /// a stack of an arbitrary number of the above apertures. The transmission factor at a given point is the
@@ -506,7 +506,7 @@ impl Plottable for Aperture {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::meter;
+    use crate::{meter, millimeter};
     #[test]
     fn default() {
         assert!(matches!(ApertureShape::default(), ApertureShape::Open));
@@ -519,7 +519,6 @@ mod test {
         // Invalid radius (negative)
         assert!(Aperture::new_circle(meter!(-1.0), ApertureType::Hole, Some(center)).is_err());
     }
-
     #[test]
     fn test_new_rectangle() {
         let center = meter!(0.0, 0.0);
@@ -604,7 +603,35 @@ mod test {
         }
         Ok(())
     }
-
+    #[test]
+    fn display_shape() {
+        assert_eq!(ApertureShape::Open.to_string(), "Open");
+        assert_eq!(
+            ApertureShape::BinaryCircle(CircleShape::default()).to_string(),
+            "Circle"
+        );
+        assert_eq!(
+            ApertureShape::BinaryRectangle(RectangleShape::default()).to_string(),
+            "Rectangle"
+        );
+        assert_eq!(
+            ApertureShape::Gaussian(GaussianShape::default()).to_string(),
+            "Gaussian"
+        );
+        assert_eq!(
+            ApertureShape::BinaryPolygon(PolygonShape::default()).to_string(),
+            "Polygon"
+        );
+        assert_eq!(
+            ApertureShape::Stack(StackShape::default()).to_string(),
+            "Stacked apertures"
+        );
+    }
+    #[test]
+    fn display_aperture_type() {
+        assert_eq!(ApertureType::Hole.to_string(), "Hole");
+        assert_eq!(ApertureType::Obstruction.to_string(), "Obstruction");
+    }
     #[test]
     fn test_is_none() -> OpmResult<()> {
         assert!(ApertureShape::Open.is_none());
@@ -631,6 +658,26 @@ mod test {
 
         assert_eq!(block.apodize(&p_inside), 0.0);
         assert_eq!(block.apodize(&p_outside), 1.0);
+        Ok(())
+    }
+    #[test]
+    fn aperture_type() {
+        let mut ap = Aperture::default();
+        assert_eq!(ap.aperture_type(), &ApertureType::Hole);
+        ap.set_aperture_type(ApertureType::Obstruction);
+        assert_eq!(ap.aperture_type(), &ApertureType::Obstruction);
+    }
+    #[test]
+    fn isometry() -> OpmResult<()> {
+        let mut ap = Aperture::default();
+        assert_eq!(ap.isometry(), None);
+        ap.set_isometry(Isometry::identity());
+        assert_eq!(ap.isometry(), None);
+        ap.set_isometry(Isometry::new_along_z(millimeter!(1.0))?);
+        assert_eq!(
+            ap.isometry(),
+            Some(&Isometry::new_along_z(millimeter!(1.0))?)
+        );
         Ok(())
     }
 }

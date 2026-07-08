@@ -110,4 +110,10 @@ mod test {
         assert_eq!(r.transmission_factor(&meter!(0.0, 1.1, 0.)), 0.0);
         Ok(())
     }
+    #[test]
+    fn from() {
+        let rs = RectangleShape::default();
+        let aps: ApertureShape = rs.into();
+        assert!(matches!(aps, ApertureShape::BinaryRectangle(_)))
+    }
 }
