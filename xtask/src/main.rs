@@ -163,7 +163,7 @@ fn task_bundle() -> Result<(), anyhow::Error> {
         let mut bundle_args = Vec::new();
 
         if cfg!(target_os = "windows") {
-            bundle_args.extend(["--package-types", "nsis", "--package-types", "msi"]);
+            bundle_args.extend(["--package-types", "msi"]);
         } else if cfg!(target_os = "linux") {
             bundle_args.extend(["--package-types", "deb", "--package-types", "appimage"]);
         } else if cfg!(target_os = "macos") {
