@@ -171,6 +171,14 @@ fn task_bundle() -> Result<(), anyhow::Error> {
         }
         cmd!(sh, "dx bundle --release {bundle_args...}").run()?;
     }
+    // 6. Windows-specific: Compile the final EXE Installer using Inno Setup
+    #[cfg(target_os = "windows")]
+    {
+        println!("\n🛠️ Running Inno Setup Compiler (ISCC) for EXE Installer...");
+        // The `_dir` guard from step 5 dropped, so we are back at the workspace root.
+        // This executes the Inno Setup compiler using the script created above.
+        cmd!(sh, "'C:\\Program Files\\Inno Setup 7\\ISCC.exe' .\\installer.iss").run()?;
+    }
     println!("\n✅ Bundle successfully created!");
     Ok(())
 }
