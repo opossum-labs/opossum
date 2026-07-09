@@ -5,7 +5,9 @@
 
 | Version | Date       | Key Highlights                                                                 |
 |---------|------------|--------------------------------------------------------------------------------|
-| 0.7.0   | 2025-12    | Graphical user interface, first version for wider audience                           |
+| 0.7.2   | 2026-07    | Full support for node groups in GUI, Improved source definitions               |
+| 0.7.1   | 2026-03-16 | Bug fix release                                                                |
+| 0.7.0   | 2026-02-18 | Graphical user interface, first version for wider audience                     |
 | 0.6.0   | 2024-12-18 | Coatings support, gratings, ghost focus analysis, major refactoring, bug fixes |
 | 0.5.0   | 2024-07-26 | Global coordinate system, 3D node alignment, SDF primitives, ambient medium    |
 | 0.4.0   | 2024-04-04 | Real lens ray tracing, wavefront analysis, fluence detector, dispersion models |
@@ -17,7 +19,7 @@
 
 ## Narrative Summaries
 
-### Version 0.7.0 (2025-12)
+### Version 0.7.0 (2026-02-18)
 
 Version 0.7.0 is a major step toward wider accessibility, introducing a graphical user interface (GUI) that lets users build optical systems visually. Users can place and connect nodes on an interactive canvas, configure node properties via contextual panels, and get immediate visual feedback — simplifying setup, exploration, and iteration for both new and experienced users.
 

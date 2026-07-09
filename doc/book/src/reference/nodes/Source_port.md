@@ -1,4 +1,6 @@
-## Source Port
+# Source Port
+
+![source port icon](../images/icons/node_source.svg)
 
 The Source Port node replaces the previous Source node. Unlike the previous implementation, the Source Port node no longer contains source properties. Instead, all source related properties are defined and controlled through the associated Analyzer.
 

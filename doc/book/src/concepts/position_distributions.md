@@ -17,7 +17,8 @@ In simple terms, it answers the question:
 The choice of distribution affects how many rays are required to obtain stable results, how uniform the spot diagram appears, and whether clusters, gaps, or regular geometric patterns become visible in the sampled beam.
 
 The spot diagram therefore provides a convenient way to compare different position distributions and to evaluate how the result changes as the number of rays increases.
-### spot Diagrams
+
+### Spot diagrams
 
 The spot diagram in the ray tracing analysis report is the main tool to visualize the effect of a position distribution. Because every ray starts from a defined spatial pattern, the final spot diagram reflects:
 

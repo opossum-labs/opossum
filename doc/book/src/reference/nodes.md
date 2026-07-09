@@ -25,11 +25,11 @@ All nodes con be configured through node properties. All nodes have a common set
 
 - `inverted`
 
-	Flag denoting the direction of the passing light. It might be necessary to propagate through a node in a reverse
-	direction (e.g. for back reflection / ghost-focus analysis). Hence each node should have a "reverse" function. In the case 
-	of a propagation node, this would be identical. For a basic node, it might change the sign of some properties such as the 
-	radius of curvature. For group nodes, the underlying order of sub-nodes has to be reversed. The reference node only needs
-	a qualifier to denote whether the propagation is reversed or not.
+  Flag denoting the direction of the passing light. It might be necessary to propagate through a node in a reverse
+  direction (e.g. for back reflection / ghost-focus analysis). Hence each node should have a "reverse" function. In the case 
+  of a propagation node, this would be identical. For a basic node, it might change the sign of some properties such as the 
+  radius of curvature. For group nodes, the underlying order of sub-nodes has to be reversed. The reference node only needs
+  a qualifier to denote whether the propagation is reversed or not.
 
 - `global position`
 
@@ -39,7 +39,7 @@ All nodes con be configured through node properties. All nodes have a common set
 
     Local position / alignment relative to the `global position`.
 
--  `damage threshold`
+- `damage threshold`
 
 ## Ports
 
