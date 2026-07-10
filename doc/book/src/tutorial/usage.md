@@ -97,6 +97,38 @@ For now, connect the detectors and set a distance of **50 mm** between the last 
 
 ![seventh step](../images/opossum_gui_first_steps_7.PNG)
 
+# Groups
+
+Groups allow multiple nodes in an optical system to be combined into a single grouped element. The grouped nodes remain accessible individually when the group is opened, while the main system view displays the group as a simplified structure.
+
+Groups can also contain other groups, allowing complex systems to be organized hierarchically.
+
+## Creating a Group
+
+A group can be created in different ways:
+
+`Group option from nodes`
+: Select the required nodes and use the **Group** option to create a new group.
+
+`Convert selection to group`
+: Select multiple nodes by dragging the cursor over them. After the selection is made, choose **Convert to Group** to create a group from the selected nodes.
+
+`Drag and drop`
+: Additional nodes can be added to an existing group using drag and drop.
+
+## Connecting a Group
+
+A group can be connected to the main optical system using input and output ports.
+
+`Map Port to Group`
+: Right-click a node inside the group and select Map Port to Group. This maps the selected input or output port to the group, making it available at the group level.
+
+A group can have one input port and one output port. When using a beam splitter, two ports can be mapped and connected to the main optical system.
+
+## Working with Groups
+
+When a group is opened, the individual nodes inside the group remain accessible and can be edited independently. In the main system view, the group is displayed as a single simplified element.
+
 
 ### Performing the Simulation
 
