@@ -1,28 +1,46 @@
-# Source Port
+# Source_port
 
-![source port icon](../images/icons/node_source.svg)
+![Source_port logo](../images/icons/node_source.svg)
 
-The Source Port node replaces the previous Source node. Unlike the previous implementation, the Source Port node no longer contains source properties. Instead, all source related properties are defined and controlled through the associated Analyzer.
+## Analysis
 
-The Source Port node itself has no configurable properties. It serves as an interface between the optical system and the Analyzer, where the source definition and behavior are configured.
+The Source Port is a node in the optical system that does not define any properties itself. Source-related properties are defined and configured through the associated Analyzer rather than the Source Port itself.
 
-The following source parameters can be configured in the Analyzer:
+## Ports
 
-* Ray type, which can be Collimated, Point, or Image.
-* Ray tracing properties, including position, spectral, and energy distributions.
-* The same source configuration options are available in the Ghost Focus Analyzer, providing a consistent workflow across analyzers.
+`input_1`
+: Input port. This port is not used by the Source Port.
 
-If multiple Source Port nodes are used in the same optical setup, each Source Port can be assigned a unique name, allowing different Analyzers to reference different source definitions.
+`output_1`
+: Light output. This port delivers the light data defined by the associated Analyzer.
 
-## Why use a Source Port?
 
-The Source Port Node enables a more flexible workflow by separating the source definition from the optical model. Instead of storing source properties directly in the node, the source is configured through the associated Analyzer. This allows different analyzers to use the same optical configuration with different source settings.
+## Properties
+
+## Properties
+
+The Source Port itself has no properties.
+The following source parameters are configured in the associated Analyzer:
+
+`ray type`
+: Ray type, which can be Collimated, Point, or Image.
+
+`ray tracing`
+: Ray tracing properties, including position, spectral, and energy distributions.
+
+`ghost focus analyzer`
+: A similar set of source configuration options are available in the Ghost Focus Analyzer, providing a consistent workflow across analyzers.
+
+
+If multiple Source Ports are used in the same optical setup, each Source Port can be assigned a unique name, allowing different Analyzers to reference different source definitions.
+
+The Source Port separates the source definition from the optical model by storing all source configuration in the associated Analyzer. This allows the same optical system to be evaluated with different source configurations without modifying the optical model.
 
 For example, the same optical setup can be used with:
 
 * A Ray Tracing Analyzer using one set of source parameters.
 * An Energy Analyzer using a different source configuration.
-* Multiple Source Port nodes to evaluate different source images or optical paths simultaneously.
+* Multiple Source Ports to evaluate different source images or optical paths simultaneously.
 * A Wavefront Analyzer using the same optical configuration without modifying the model.
 
-Because the source definition is managed by the Analyzer, the optical system only needs to be created once. Different analyzers can apply their own source configurations without duplicating or rebuilding the setup. This makes the Source Port Node suitable for simulating the same optical system under different source conditions.
+Because the source definition is managed by the Analyzer, the optical system only needs to be created once. Different Analyzers can apply their own source configurations to the same optical setup without duplicating or rebuilding the optical model.
