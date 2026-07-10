@@ -23,3 +23,5 @@ As a detector node, incoming light data is simply passed unmodified through the 
 - KDE:
 - Binning:
 - HelperRays:
+
+Further information can be found [here](../../concepts/fluence.md)
