@@ -132,6 +132,14 @@ pub async fn remove_port_map(
         let c = g.graph().get_connection_info_of_node(group_id);
         c.iter()
             .map(|c| ConnectInfo::from_connection_info(c, false))
+            .filter(|c| match port_type {
+                PortType::Output => {
+                    c.src_uuid() == group_id && c.src_port() == external_port_name
+                }
+                PortType::Input => {
+                    c.target_uuid() == group_id && c.target_port() == external_port_name
+                }
+            })
             .collect::<Vec<ConnectInfo>>()
     })?;
 
@@ -193,5 +201,68 @@ mod test {
 
         let resp = app.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    /// Removing one port mapping must only disconnect the external connection that used
+    /// that specific port, not every external connection to the group.
+    #[actix_web::test]
+    async fn test_remove_port_map_only_removes_matching_connection() {
+        use opossum_core::{meter, nodes::Dummy, nodes::NodeGroup};
+
+        let app_state = create_test_state();
+        let (group_id, ext_node_a, ext_node_b) = {
+            let mut document = app_state.document.lock();
+            let scenery = document.scenery_mut();
+
+            let mut group = NodeGroup::new("inner group");
+            let n1 = group.add_node(Dummy::default()).unwrap();
+            let n2 = group.add_node(Dummy::default()).unwrap();
+            group.map_input_port(n1, "input_1", "ext_in_1").unwrap();
+            group.map_input_port(n2, "input_1", "ext_in_2").unwrap();
+
+            let group_id = scenery.add_node(group).unwrap();
+            let ext_node_a = scenery.add_node(Dummy::default()).unwrap();
+            let ext_node_b = scenery.add_node(Dummy::default()).unwrap();
+
+            scenery
+                .connect_nodes(ext_node_a, "output_1", group_id, "ext_in_1", meter!(0.1))
+                .unwrap();
+            scenery
+                .connect_nodes(ext_node_b, "output_1", group_id, "ext_in_2", meter!(0.1))
+                .unwrap();
+
+            (group_id, ext_node_a, ext_node_b)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(remove_port_map),
+        )
+        .await;
+
+        let req = test::TestRequest::delete()
+            .uri(&format!(
+                "/{group_id}/port_mappings?external_port_name=ext_in_1&port_type=Input"
+            ))
+            .to_request();
+
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body: RemovePortMapResponse = test::read_body_json(resp).await;
+        assert!(body.port_removed);
+        assert_eq!(body.connections.len(), 1);
+        assert_eq!(body.connections[0].src_uuid(), ext_node_a);
+        assert_eq!(body.connections[0].target_uuid(), group_id);
+        assert_eq!(body.connections[0].target_port(), "ext_in_1");
+
+        // the connection to the *other* mapped port must still be intact
+        let document = app_state.document.lock();
+        let remaining = document.scenery().graph().get_connection_info_of_node(group_id);
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].src_id, ext_node_b);
+        assert_eq!(remaining[0].target_id, group_id);
+        assert_eq!(remaining[0].target_port, "ext_in_2");
     }
 }
