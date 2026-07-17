@@ -10,6 +10,10 @@ A sequential analyzer uses the node relations defined by the edges of the model 
 
 The analyzer type also determines the type of data "flowing" between the nodes. While the for the energy analyzer the data mainly consists of a light spectrum, the ray tracing analyzer uses bundles of geometric rays. These rays itself contain things like position, direction, wavelength etc. Furthermore, each analyzer can have a specific set of configuration parameters that influence the respective analysis algorithm.
 
+The analyzer is also used to configure the properties of source ports.
+
+Depending on the selected analyzer type, different source port configuration options are available.
+
 The following analyzers are implemented:
 
 - Energy Analysis
@@ -18,11 +22,28 @@ The following analyzers are implemented:
     nodes attenuate the spectrum while beam splitter nodes divide the energy spectrum in two arms according to the splitting 
     config. On the other hand, many other nodes such as lenses or gratings do not influence the data during the pass. Hence, 
     this analyzer gives you rather limited information about an optical system. The advantage on the other side is, that this 
-    analyzer is really fast. The energy analzer has no further configuration parameters.
-    
+    analyzer is really fast. The energy analyzer has no further configuration parameters.
+
+    The analyzer is also used to configure the properties of source ports. For the energy analyzer, the source port configuration
+    provides the energy type, wavelength, energy, and resolution.
+
 - Ray tracing Analysis
+
+    The ray tracing analyzer uses bundles of geometric rays. These rays contain information such as position, direction,
+     wavelength, etc. The ray tracing analyzer provides configuration parameters including the maximum number of refractions,
+     maximum number of bounces, minimum ray energy, and missed surface strategy. The missed surface strategy provides the
+     options Stop and Ignore.
+
+     The analyzer is also used to configure the properties of source ports. For the ray tracing analyzer,
+     the source port configuration provides options for the `Ray type`, `Position distribution`, `Energy distribution`, and
+     `Spectral distribution`. The available ray types are `Collimated`, `Point`, and `Image`.
+
+
 
 - Ghost focus Analysis
 
     The ghost focus analyzer can be seen as an extended ray tracing analyzer. In fact, the ghost focus analyzer with the `max bounces`
     parameter set to zero (see below) is the basic ray tracing analysis presented above.
+
+   The ghost focus analyzer provides the `Max bounces` configuration parameter. Additionally, it provides a `Fluence Estimator`
+ option, which allows selecting the fluence estimator used for the analysis.
