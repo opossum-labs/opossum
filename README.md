@@ -72,6 +72,45 @@ The project is broken down into several key components:
    cd opossum_gui # in a new terminal
    dx serve
    ```
+## Generating the Handbook
+
+Follow these steps to generate and preview the handbook.
+
+1. Navigate to the project directory.
+
+   ```bash
+   cd ..
+   ```
+
+2. Install mdBook if it is not already installed.
+
+   ```bash
+   cargo install mdbook
+   ```
+
+   If prompted during the installation, select `Yes`.
+
+3. Navigate to the handbook directory.
+
+   ```bash
+   cd doc/book
+   ```
+
+4. Start the handbook server.
+
+   ```bash
+   mdbook serve
+   ```
+
+5. After the server starts, the terminal displays the local URL, typically:
+
+   ```text
+   http://localhost:3000
+   ```
+
+6. Open the URL in a web browser to view the handbook.
+
+
 
 ## 🤝 Contributing
 
