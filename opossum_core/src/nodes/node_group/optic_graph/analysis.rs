@@ -272,7 +272,13 @@ impl OpticGraph {
                 // check, if the resulting isometry is consistent
                 {
                     if let Some(iso) = node.isometry() {
-                        if iso != node_iso {
+                        if node
+                            .ports()
+                            .ports(&crate::core_optics::PortType::Input)
+                            .len()
+                            > 1
+                            && iso != node_iso
+                        {
                             warn!("Node {} cannot be consistently positioned.", node.name());
                             warn!("Position based on previous input port is: {iso}");
                             warn!("Position based on this port would be:     {node_iso}");
@@ -341,12 +347,16 @@ mod test {
     use crate::{
         core_optics::OpticNode,
         core_optics::PortType,
+        joule,
         light::spectrum_helper::create_he_ne_spec,
-        nodes::{BeamSplitter, Dummy, SourcePort, SplittingConfigBuilder},
+        light::{Ray, Rays},
+        millimeter, nanometer,
+        nodes::{BeamSplitter, Dummy, NodeReference, SourcePort, SplittingConfigBuilder},
         utils::{geom_transformation::Isometry, test_helper::test_helper::check_logs},
     };
     use approx::assert_abs_diff_eq;
     use num::Zero;
+    use std::collections::BTreeMap;
 
     #[test]
     fn analyze_empty() -> OpmResult<()> {
@@ -444,6 +454,30 @@ mod test {
         input.insert("wrong".into(), input_light.clone());
         let output = graph.analyze_energy(&input, &EnergyConfig::default())?;
         assert!(output.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn single_input_reference_does_not_warn_about_inconsistent_isometry() -> OpmResult<()> {
+        let mut graph = OpticGraph::default();
+        let mut referenced = Dummy::default();
+        referenced.set_isometry(Isometry::identity())?;
+        let referenced_id = graph.add_node(referenced)?;
+        let reference = NodeReference::from_node(&graph.node(referenced_id)?)?;
+        let reference_id = graph.add_node(reference)?;
+        graph.map_port(reference_id, &PortType::Input, "input_1", "input_1")?;
+        graph.set_external_distances(BTreeMap::from([("input_1".into(), millimeter!(10.0))]));
+
+        let rays = Rays::from(Ray::new_collimated(
+            millimeter!(0.0, 0.0, 0.0),
+            nanometer!(1053.0),
+            joule!(1.0),
+        )?);
+        let incoming = LightResult::from([("input_1".into(), LightData::Geometric(rays))]);
+
+        testing_logger::setup();
+        graph.set_node_isometry(&incoming, reference_id, Vector3::y())?;
+        check_logs(log::Level::Warn, vec![]);
         Ok(())
     }
 
