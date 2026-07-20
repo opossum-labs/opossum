@@ -250,6 +250,10 @@ pub fn App() -> Element {
             tabindex: 0,
             onkeydown: move |e| {
                 if let Some(action) = get_action_from_event(&e) {
+                    // Without this, the webview's native handling for the same key combo (e.g. Ctrl+Z
+                    // is also "undo typing" in a focused text input) fires alongside our own action,
+                    // corrupting whatever input currently has focus.
+                    e.prevent_default();
                     process_command(AppCommand::from(action));
                 }
             },

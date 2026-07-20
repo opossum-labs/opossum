@@ -1,4 +1,5 @@
 use crate::components::node_editor::{
+    hooks::use_synced_signal,
     inputs::input_components::{NodeConfigUnitInput, UnitHandling},
     node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::on_save_proptype_handler,
@@ -17,7 +18,7 @@ pub fn LinearDensityEditor(
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    let linear_density_sig = use_signal(|| linear_density);
+    let linear_density_sig = use_synced_signal(linear_density);
 
     let on_save = on_save_proptype_handler(
         linear_density_sig,

@@ -37,6 +37,7 @@ pub fn PortConfigEditor(
     let mut editor_inputs = Vec::new();
 
     let ports_resource = use_resource(move || async move {
+        crate::NODE_DETAILS_REFRESH();
         match get_ports_of_group(current_node_id).await {
             Ok(ports_info) => Some(ports_info),
             Err(err_str) => {

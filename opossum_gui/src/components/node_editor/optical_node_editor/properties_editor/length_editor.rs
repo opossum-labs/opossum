@@ -1,4 +1,5 @@
 use crate::components::node_editor::{
+    hooks::use_synced_signal,
     inputs::input_components::{NodeConfigUnitInput, UnitHandling},
     node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::on_save_proptype_handler,
@@ -18,7 +19,7 @@ pub fn LengthEditor(
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    let length_sig = use_signal(|| length);
+    let length_sig = use_synced_signal(length);
     let on_save =
         on_save_proptype_handler(length_sig, property_key.clone(), on_change, node_id.into());
 

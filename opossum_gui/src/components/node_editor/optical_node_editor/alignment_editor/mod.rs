@@ -5,6 +5,7 @@ use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
         accordion::{AccordionItem, ElementList},
+        hooks::use_synced_signal,
         inputs::input_components::{
             LabeledSelect, NodeConfigUnitInput, RowedElements, UnitHandling,
         },
@@ -71,7 +72,7 @@ pub fn AlignmentInputs(
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    let mut alignment_sig = use_signal(|| alignment);
+    let mut alignment_sig = use_synced_signal(alignment);
     let on_save = EventHandler::new(move |new_iso: Isometry| {
         on_change.call(NodeChangeEvent {
             node_id: *node_id.read(),
@@ -193,7 +194,7 @@ pub fn PositioningInputs(
     node_id: Memo<Uuid>,
     readonly: bool,
 ) -> Element {
-    let mut position_opt_sig = use_signal(|| position_opt);
+    let mut position_opt_sig = use_synced_signal(position_opt);
     let position_memo = use_memo(move || position_opt_sig.read().unwrap_or_default());
     let mut last_absolute_position = use_signal(|| position_opt.unwrap_or_default());
 

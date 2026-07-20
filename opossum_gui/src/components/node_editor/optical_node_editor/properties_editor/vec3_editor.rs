@@ -1,4 +1,5 @@
 use crate::components::node_editor::{
+    hooks::use_synced_signal,
     inputs::{
         InputData, InputParam,
         input_components::{LabeledSelect, RowedInputs},
@@ -48,7 +49,7 @@ pub fn Vec3Editor(
     readonly: bool,
 ) -> Element {
     let select_label = property_key.to_sentence_case();
-    let vec_sig = use_signal(|| vector);
+    let vec_sig = use_synced_signal(vector);
 
     // Create the save handler to propagate changes up to the core
     let on_save =

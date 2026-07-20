@@ -9,6 +9,7 @@ use opossum_core::{
 
 use crate::components::node_editor::{
     accordion::AccordionItem,
+    hooks::use_synced_signal,
     inputs::{
         InputData, IntoInputData,
         input_components::{LabeledSelect, RowedInputs},
@@ -31,7 +32,7 @@ pub fn ApertureEditor(
     on_change: EventHandler<Aperture>,
     readonly: bool,
 ) -> Element {
-    let mut aperture_sig = use_signal(|| aperture.clone());
+    let mut aperture_sig = use_synced_signal(aperture.clone());
 
     // Fallback to Isometry::identity() if the option is None
     let alignment_sig = use_memo(move || aperture.isometry().copied().unwrap_or_default());

@@ -28,7 +28,7 @@ pub fn AnalyzerNodeEditor(
 
     // CRITICAL FIX: Pair the node_id directly inside the async future with the fetched info.
     // This ensures that the ID and the Config data update at the EXACT same millisecond.
-    let resource_future = use_resource(move || async move {
+    let mut resource_future = use_resource(move || async move {
         let current_id = *node_id.read();
         match api::get_analyzer(current_id).await {
             Ok(analyzer_info) => Some((current_id, analyzer_info)), // Paired Tuple
@@ -37,6 +37,11 @@ pub fn AnalyzerNodeEditor(
                 None
             }
         }
+    });
+
+    use_effect(move || {
+        crate::NODE_DETAILS_REFRESH();
+        resource_future.restart();
     });
 
     match &*resource_future.read_unchecked() {

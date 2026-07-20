@@ -194,6 +194,11 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                 match result {
                     Ok(()) => {
                         is_modified_handler.call(true);
+                        // Keep the properties panel's own fetched data (node_info_sig etc., not
+                        // mirrored into GraphStore) in sync with what was just saved - without this,
+                        // it only reflects the backend's truth after an undo/redo-triggered refetch,
+                        // never after a normal direct edit.
+                        *crate::NODE_DETAILS_REFRESH.write() += 1;
                     }
                     Err(err_str) => {
                         OPOSSUM_UI_LOGS.write().add_log(&err_str);

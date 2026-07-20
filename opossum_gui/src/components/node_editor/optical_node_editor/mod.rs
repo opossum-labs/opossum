@@ -30,7 +30,6 @@ pub fn OpticalNodeEditor(
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let node_id = use_memo(move || active_node.read().node_id);
-
     let mut node_info_sig = use_signal(NodeInfo::default);
     let mut node_properties_sig = use_signal(Properties::default);
     let mut readonly = use_signal(|| false);
@@ -47,7 +46,7 @@ pub fn OpticalNodeEditor(
         }
     });
 
-    let resource_future: Resource<(Option<NodeInfo>, Option<Properties>)> =
+    let mut resource_future: Resource<(Option<NodeInfo>, Option<Properties>)> =
         use_resource(move || async move {
             let node_id = active_node.read().node_id;
             let node_info = match api::get_node_info(node_id).await {
@@ -73,6 +72,11 @@ pub fn OpticalNodeEditor(
             };
             (node_info, properties)
         });
+
+    use_effect(move || {
+        crate::NODE_DETAILS_REFRESH();
+        resource_future.restart();
+    });
 
     if let Some((Some(node_info), Some(_))) = &*resource_future.read_unchecked()
         && node_info.uuid == node_info_sig.read().uuid

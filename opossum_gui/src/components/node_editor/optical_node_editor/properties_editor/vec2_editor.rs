@@ -1,6 +1,7 @@
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
+        hooks::use_synced_signal,
         inputs::{
             InputData, InputParam,
             input_components::{LabeledSelect, RowedInputs},
@@ -49,7 +50,7 @@ pub fn Vec2Editor(
     readonly: bool,
 ) -> Element {
     let select_label = property_key.to_sentence_case();
-    let vec_sig = use_signal(|| vector);
+    let vec_sig = use_synced_signal(vector);
 
     let on_save =
         on_save_proptype_handler(vec_sig, property_key.clone(), on_change, node_id.into());

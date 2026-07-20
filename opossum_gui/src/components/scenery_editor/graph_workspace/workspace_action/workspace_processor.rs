@@ -23,7 +23,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use crate::{
-    OPOSSUM_UI_LOGS,
+    NODE_DETAILS_REFRESH, OPOSSUM_UI_LOGS,
     api::{self, delete_document, eval_action_run},
     components::scenery_editor::{
         NodeType,
@@ -388,10 +388,11 @@ pub fn use_workspace_processor(
 /// same `WorkSpaceSignalHandlers` calls the corresponding *normal* action already uses - so undo/redo
 /// updates the canvas precisely, without reloading the whole workspace.
 ///
-/// `NodeDetailsChanged`/`AnalyzerChanged` (custom properties, isometry, alignment, port config,
-/// analyzer settings) aren't mirrored in `GraphStore` at all - only the properties panel shows them,
-/// and it re-fetches from the backend whenever a node is (re)selected, so no action is needed here;
-/// the panel may show stale data for the currently-selected node until it's reselected.
+/// `NodeDetailsChanged`/`AnalyzerChanged`/`NodePatched` (custom properties, isometry, alignment, port
+/// config, analyzer settings) aren't mirrored in `GraphStore` at all - only the properties panel shows
+/// them. Rather than growing this function to know every such field, those three arms instead bump
+/// `NODE_DETAILS_REFRESH`, a signal the properties panel's own `use_resource` reads unconditionally so it
+/// refetches even when the selected node's identity hasn't changed (see that signal's doc comment).
 async fn apply_document_changes(
     changes: Vec<DocumentChange>,
     root_graph_id: Memo<Uuid>,
@@ -441,8 +442,13 @@ async fn apply_document_changes(
                     positions.insert(uuid, Point2D::new(pos.0, pos.1));
                     ws_handler.nodes.update_node_positions(positions, graph_id);
                 }
+                // Fields not mirrored into GraphStore (isometry, alignment, ...) are only shown in the
+                // properties panel, which re-fetches on its own via this counter - see its use_resource.
+                *NODE_DETAILS_REFRESH.write() += 1;
             }
-            DocumentChange::NodeDetailsChanged { .. } | DocumentChange::AnalyzerChanged { .. } => {}
+            DocumentChange::NodeDetailsChanged { .. } | DocumentChange::AnalyzerChanged { .. } => {
+                *NODE_DETAILS_REFRESH.write() += 1;
+            }
             DocumentChange::EdgeAdded {
                 graph_id,
                 connect_info,
@@ -1056,7 +1062,15 @@ async fn process_open_group_tab(
         }),
     );
 
-    process_fill_graph_of_group(root_scenery_id, group_id, ws_handler, false, true, workspace).await;
+    process_fill_graph_of_group(
+        root_scenery_id,
+        group_id,
+        ws_handler,
+        false,
+        true,
+        workspace,
+    )
+    .await;
 }
 
 async fn process_fill_graph_of_group(
