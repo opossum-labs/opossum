@@ -250,7 +250,7 @@ pub struct UpdateNodeRequest {
 
     /// The new alignment isometry (local decenter and tilt)
     #[schema(value_type = Option<Object>)]
-    pub alignment: Option<Isometry>,
+    pub alignment: Option<Option<Isometry>>, // Option<Option> erlaubt explizites Null-Setzen!
 
     /// The GUI position on the 2D canvas
     #[schema(example = json!([100.5, 200.0]))]

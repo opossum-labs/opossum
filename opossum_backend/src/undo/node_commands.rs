@@ -350,8 +350,8 @@ fn apply_node_request(
     if let Some(iso_opt) = new.isometry {
         node_attr.set_isometry_option(iso_opt);
     }
-    if let Some(align) = new.alignment {
-        node_attr.set_alignment(align);
+    if let Some(align_opt) = new.alignment {
+        node_attr.set_alignment_option(align_opt);
     }
     if let Some(gui_pos_opt) = new.gui_position {
         node_attr.set_gui_position(gui_pos_opt.map(|(x, y)| Point2::new(x, y)));
@@ -370,10 +370,7 @@ pub fn capture_old_node_request(
         name: new.name.as_ref().map(|_| node_attr.name().to_string()),
         inverted: new.inverted.map(|_| node_attr.inverted()),
         isometry: new.isometry.map(|_| node_attr.isometry()),
-        // `alignment` (unlike `isometry`/`gui_position`) isn't a double-`Option` in `UpdateNodeRequest`,
-        // so there's no way to express "clear it back to unset" - if it was unset before, undo leaves
-        // it unchanged rather than clearing it. Pre-existing limitation of the request shape, not new.
-        alignment: new.alignment.and_then(|_| *node_attr.alignment()),
+        alignment: new.alignment.map(|_| *node_attr.alignment()),
         gui_position: new
             .gui_position
             .map(|_| node_attr.gui_position().map(|p| (p.x, p.y))),

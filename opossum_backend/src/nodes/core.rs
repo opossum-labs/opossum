@@ -422,6 +422,100 @@ async fn get_node_hierarchy(
     Ok(Json(group_hierarchy))
 }
 
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::document::undo_document;
+    use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
+    use opossum_core::{millimeter, nodes::Dummy, utils::geom_transformation::Isometry};
+
+    /// Regression test for the bug where undoing an alignment change didn't restore the old value.
+    /// `UpdateNodeRequest::alignment` used to be a single `Option`, which can express "set to X" but
+    /// not "clear back to unset" - so capturing the old value as `None` (the node's alignment was
+    /// unset before the edit) silently did nothing on undo. Covers both the previously-broken
+    /// unset-to-set case and the already-working set-to-different-set case.
+    #[actix_web::test]
+    async fn test_undo_alignment_change_restores_old_value() {
+        let app_state = Data::new(AppState::default());
+        let node_id = {
+            let mut document = app_state.document.lock();
+            document
+                .scenery_mut()
+                .add_node(Dummy::default())
+                .unwrap()
+        };
+        // Confirm the node starts with no alignment set - the case that was silently broken.
+        assert!(
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .with_node_attr(node_id, |attr| attr.alignment().is_none())
+                .unwrap()
+        );
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(patch_node)
+                .service(undo_document),
+        )
+        .await;
+
+        let iso_a = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+        let req = test::TestRequest::patch()
+            .uri(&format!("/{node_id}"))
+            .set_json(&UpdateNodeRequest {
+                alignment: Some(Some(iso_a)),
+                ..Default::default()
+            })
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+        let iso_b = Isometry::new_along_z(millimeter!(20.0)).unwrap();
+        let req = test::TestRequest::patch()
+            .uri(&format!("/{node_id}"))
+            .set_json(&UpdateNodeRequest {
+                alignment: Some(Some(iso_b)),
+                ..Default::default()
+            })
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+        // First undo: alignment must go from iso_b back to iso_a (the already-working case).
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .with_node_attr(node_id, |attr| *attr.alignment())
+                .unwrap(),
+            Some(iso_a),
+            "undo must restore the previous concrete alignment value"
+        );
+
+        // Second undo: alignment must go from iso_a back to unset (the case that was broken).
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .with_node_attr(node_id, |attr| *attr.alignment())
+                .unwrap(),
+            None,
+            "undo must clear the alignment back to unset, not leave it at iso_a"
+        );
+    }
+}
+
 fn get_nested_referenced_node_from_state(
     uuid: Uuid,
     document: &MutexGuard<'_, OpmDocument>,

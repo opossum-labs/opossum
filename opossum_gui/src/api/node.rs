@@ -250,7 +250,7 @@ pub async fn get_node_references(node_id: Uuid) -> Result<HashMap<Uuid, Vec<Uuid
 /// This function will return an error if the `node_id` was not found or if the alignment cannot be serialized.
 pub async fn update_node_alignment(node_id: Uuid, alignment: Isometry) -> Result<(), String> {
     let update_node_request = UpdateNodeRequest {
-        alignment: Some(alignment),
+        alignment: Some(Some(alignment)),
         ..Default::default()
     };
     HTTP_API_CLIENT()
