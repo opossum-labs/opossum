@@ -7,7 +7,9 @@ use opossum_core::{
     error::OpossumError,
     opm_document::OpmDocument,
     prelude::{PortType, Proptype},
-    types::api_types::{ConnectInfo, DocumentChange, NodeInfo, UpdateNodeRequest, UpdatePortRequest},
+    types::api_types::{
+        ConnectInfo, DocumentChange, NodeInfo, UpdateNodeRequest, UpdatePortRequest,
+    },
     utils::LockExt,
 };
 use uuid::Uuid;

@@ -20,6 +20,7 @@ use uuid::Uuid;
 use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
+    helper_functions::capture_node_connections,
     undo::{AddNode, Command, PatchNode, RemoveNode, capture_old_node_request},
 };
 
@@ -275,6 +276,11 @@ async fn delete_node(
         (target_ref, parent_group_id, cascaded)
     };
 
+    // Captured before deletion, since `delete_node` silently drops the node's incident edges in its
+    // parent graph - without this, undo would restore the node but leave it disconnected (bug 4).
+    let connections =
+        capture_node_connections(document.scenery(), parent_group_id, uuid).unwrap_or_default();
+
     let scenery = document.scenery_mut();
     let deleted_nodes = scenery.delete_node(uuid)?;
 
@@ -310,7 +316,7 @@ async fn delete_node(
         parent_group_id,
         node: target_ref,
         cascaded,
-        connections: Vec::new(),
+        connections,
     }));
 
     drop(document);
@@ -439,10 +445,7 @@ mod test {
         let app_state = Data::new(AppState::default());
         let node_id = {
             let mut document = app_state.document.lock();
-            document
-                .scenery_mut()
-                .add_node(Dummy::default())
-                .unwrap()
+            document.scenery_mut().add_node(Dummy::default()).unwrap()
         };
         // Confirm the node starts with no alignment set - the case that was silently broken.
         assert!(
@@ -512,6 +515,105 @@ mod test {
                 .unwrap(),
             None,
             "undo must clear the alignment back to unset, not leave it at iso_a"
+        );
+    }
+
+    /// Regression test for the bug where undoing the deletion of a *connected* node only restored the
+    /// node itself, not its connections in the parent graph - `delete_node` never captured them before
+    /// calling `scenery.delete_node`, unlike the copy/paste flow's `capture_node_connections` use (see
+    /// `helper_functions.rs`). Not group-specific - any deleted node with parent-graph connections lost
+    /// them on undo - but most visible for groups, which typically have more external wiring, so this
+    /// mirrors `test_undo_group_conversion_restores_internal_and_boundary_connections` in
+    /// `document.rs`: converts `{node_a, node_b}` into a group connected to `node_c`, deletes the group
+    /// node, undoes the deletion, and asserts both the group and its external connection to `node_c` are
+    /// restored.
+    #[actix_web::test]
+    async fn test_undo_delete_group_node_restores_external_connection() {
+        use crate::document::undo_document;
+        use opossum_core::{meter, nodes::NodeGroup, types::api_types::ConvertToGroupRequest};
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, node_a, node_b, node_c) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let scenery = document.scenery_mut();
+            let node_a = scenery.add_node(Dummy::default()).unwrap();
+            let node_b = scenery.add_node(Dummy::default()).unwrap();
+            let node_c = scenery.add_node(Dummy::default()).unwrap();
+            scenery
+                .connect_nodes(node_a, "output_1", node_b, "input_1", meter!(0.1))
+                .unwrap();
+            scenery
+                .connect_nodes(node_b, "output_1", node_c, "input_1", meter!(0.2))
+                .unwrap();
+            (root_id, node_a, node_b, node_c)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(crate::operations::post_convert_nodes_to_group)
+                .service(delete_node)
+                .service(undo_document),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/convert_to_group")
+            .set_json(&ConvertToGroupRequest {
+                group_id: root_id,
+                nodes_to_convert: vec![node_a, node_b],
+            })
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let group_id = app_state
+            .document
+            .lock()
+            .scenery()
+            .node_recursive(node_a)
+            .unwrap()
+            .1;
+
+        let req = test::TestRequest::delete()
+            .uri(&format!("/{group_id}"))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .node_recursive(group_id)
+                .is_err(),
+            "group node must be gone after delete"
+        );
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::OK,
+            "undo of the delete must not error"
+        );
+
+        let document = app_state.document.lock();
+        assert!(
+            document.scenery().node_recursive(group_id).is_ok(),
+            "group node must be restored after undo"
+        );
+        assert!(document.scenery().node_recursive(node_c).is_ok());
+
+        let connections = document
+            .scenery()
+            .with_group_node(root_id, NodeGroup::connections)
+            .unwrap();
+        assert!(
+            connections
+                .iter()
+                .any(|c| c.src_id == group_id && c.target_id == node_c),
+            "the group node's external connection to node_c must be restored"
         );
     }
 }
