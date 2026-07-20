@@ -8,6 +8,7 @@ use crate::{
         collect_group_connections, collect_node_refs_and_pos, connect_from_info,
         create_new_group_node_info, split_sort_connections,
     },
+    undo::{AddNode, Command, ExtractGroup, RemoveNode},
 };
 use actix_web::{
     post,
@@ -129,17 +130,44 @@ async fn post_cut_nodes(
         scenery_id
     };
 
+    let mut removals = Vec::new();
+
     if scenery_id == paste_in_group_id {
         for analyzer_id in &analyzers_to_delete {
+            if let Ok(info) = document.analyzer(*analyzer_id) {
+                // Undoing this deletion means adding the analyzer back.
+                removals.push(Command::AddAnalyzer {
+                    id: *analyzer_id,
+                    info,
+                });
+            }
             deleted_nodes.push(*analyzer_id);
             document.remove_analyzer(*analyzer_id)?;
         }
     }
 
+    let captured_nodes: Vec<(Uuid, OpticRef)> = nodes_to_delete
+        .iter()
+        .filter_map(|id| document.scenery().node_recursive(*id).ok())
+        .map(|(node, parent_group_id)| (parent_group_id, node))
+        .collect();
+
     let scenery = document.scenery_mut();
 
     for node in &nodes_to_delete {
         deleted_nodes.extend(scenery.delete_node(*node)?);
+    }
+
+    for (parent_group_id, node) in captured_nodes {
+        // Undoing this deletion means adding the node back.
+        removals.push(Command::AddNode(AddNode {
+            parent_group_id,
+            node,
+            cascaded: Vec::new(),
+        }));
+    }
+    if !removals.is_empty() {
+        data.push_undo(Command::Batch(removals));
     }
 
     Ok(Json((deleted_nodes, group_id)))
@@ -264,6 +292,30 @@ async fn post_paste_nodes(
             grouped_connect_info.insert(mapped_group_id, connect_info);
         }
     }
+
+    // One paste = one undo step: removing every pasted node/analyzer undoes the whole paste at once.
+    let mut removals = Vec::new();
+    for (group_id, infos) in &grouped_node_infos {
+        for info in infos {
+            if let Ok((node_ref, _)) = scenery.node_recursive(info.uuid()) {
+                removals.push(Command::RemoveNode(RemoveNode {
+                    parent_group_id: *group_id,
+                    node: node_ref,
+                    cascaded: Vec::new(),
+                }));
+            }
+        }
+    }
+    for analyzer in &analyzers {
+        removals.push(Command::RemoveAnalyzer {
+            id: analyzer.id,
+            info: analyzer.info.clone(),
+        });
+    }
+    if !removals.is_empty() {
+        data.push_undo(Command::Batch(removals));
+    }
+
     Ok(Json((grouped_node_infos, analyzers, grouped_connect_info)))
 }
 
@@ -683,6 +735,7 @@ pub async fn post_convert_nodes_to_group(
     let req = request.into_inner();
     let group_id = req.group_id;
     let nodes_to_convert = req.nodes_to_convert;
+    let member_ids = nodes_to_convert.clone();
 
     // Collect data
     let (node_refs, pos) = collect_node_refs_and_pos(&data, &nodes_to_convert);
@@ -704,6 +757,29 @@ pub async fn post_convert_nodes_to_group(
 
     // Create the nodeinfo struct for the GUI
     let new_group_node_info = create_new_group_node_info(&data, new_group_id, pos)?;
+
+    // Undoing this conversion means extracting the new group's members back into `group_id` - see
+    // `Command::ExtractGroup`'s docs for why capturing the group's own `OpticRef` is enough (its
+    // internal members/connections are untouched, whether or not it's currently attached), and why it
+    // separately needs `restore_connections` (every connection that touched a converted node before
+    // grouping, in original member-uuid terms) rather than `external_connections` (which only makes
+    // sense once the group itself exists again).
+    let restore_connections: Vec<ConnectInfo> = split
+        .inside
+        .iter()
+        .chain(split.input.iter())
+        .chain(split.output.iter())
+        .cloned()
+        .collect();
+    if let Ok((group_ref, _)) = data.document.lock().scenery().node_recursive(new_group_id) {
+        data.push_undo(Command::ExtractGroup(ExtractGroup {
+            parent_group_id: group_id,
+            group: group_ref,
+            member_ids,
+            external_connections: external_connections.clone(),
+            restore_connections,
+        }));
+    }
 
     Ok(Json((new_group_node_info, external_connections)))
 }
@@ -734,6 +810,7 @@ pub async fn post_move_nodes(
     let from_group_id = req.source_group_id;
     let drop_group_id = req.target_group_id;
     let mut nodes_to_drop = req.nodes_to_move;
+    let original_node_ids = nodes_to_drop.clone();
 
     // Collect data
     let (node_refs, _) = collect_node_refs_and_pos(&data, &nodes_to_drop);
@@ -760,6 +837,12 @@ pub async fn post_move_nodes(
     for conn in &split.inside {
         scenery.with_group_node_mut(drop_group_id, |g| connect_from_info(g, conn))??;
     }
+
+    data.push_undo(Command::MoveNodes(MoveNodesRequest {
+        source_group_id: drop_group_id,
+        target_group_id: from_group_id,
+        nodes_to_move: original_node_ids,
+    }));
 
     drop(document);
     Ok(())

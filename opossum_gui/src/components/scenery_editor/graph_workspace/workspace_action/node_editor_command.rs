@@ -37,6 +37,8 @@ pub enum NodeEditorCommand {
         group_port_name: String,
         port_type: PortType,
     },
+    Undo,
+    Redo,
 }
 
 pub fn node_editor_command(
@@ -136,6 +138,12 @@ pub fn node_editor_command(
                     mapped_node_id,
                     parent,
                 });
+            }
+            NodeEditorCommand::Undo => {
+                workspace_processor.send(GraphsWorkspaceAction::Undo);
+            }
+            NodeEditorCommand::Redo => {
+                workspace_processor.send(GraphsWorkspaceAction::Redo);
             }
         }
         node_editor_command_handler.call(None);

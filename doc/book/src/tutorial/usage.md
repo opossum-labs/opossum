@@ -38,7 +38,11 @@ In this tutorial, we will model a simple Kepler telescope consisting of a source
 
 ### Adding an Optical Node and Using the Canvas
 
-Use the `Edit` menu to add either an optical node or an analyzer node. Let's start by selecting an optical node: a `Source` node, which represents the starting point of our optical system.
+<!-- TODO: the screenshots in this section still show the pre-split menu bar (File Edit Layout Help)
+     without the "Node" menu added when Add Node/Add Analyzer were split out of Edit. Recapture them
+     next time the tutorial images are updated. -->
+
+Use the `Node` menu to add either an optical node or an analyzer node. Let's start by selecting an optical node: a `Source` node, which represents the starting point of our optical system.
 
 Once selected, the source node appears on the canvas. You can move the node by simply clicking and dragging it. Next, add two `Lens` nodes and place them on the canvas as well.
 
@@ -82,7 +86,7 @@ Finally, select the `Source` node to configure the spectral properties. Navigate
 
 ### Adding an Analyzer
 
-Although the optical setup is complete, we must define the analysis method. Select `Add Analyzer` from the `Edit` menu and choose **RayTracing**. As implied, this node performs the ray tracing calculations. We will keep the default settings for this tutorial.
+Although the optical setup is complete, we must define the analysis method. Select `Add Analyzer` from the `Node` menu and choose **RayTracing**. As implied, this node performs the ray tracing calculations. We will keep the default settings for this tutorial.
 
 ![sixth step](../images/opossum_gui_first_steps_6.PNG)
 

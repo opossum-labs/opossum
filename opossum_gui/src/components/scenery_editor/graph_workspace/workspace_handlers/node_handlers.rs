@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::components::scenery_editor::graph_workspace::{
-    GraphStateStoreExt, GraphStoreStoreImplExt, GraphsWorkspaceState, GraphsWorkspaceStateStoreExt,
-    GraphsWorkspaceStateStoreImplExt,
+    GraphStateStoreExt, GraphStore, GraphStoreStoreImplExt, GraphsWorkspaceState,
+    GraphsWorkspaceStateStoreExt, GraphsWorkspaceStateStoreImplExt,
     workspace_handlers::helper_functions::{for_each_tab, with_graph_store, with_tab},
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
@@ -30,6 +30,7 @@ pub struct NodeHandlers {
     set_node_active: EventHandler<(Uuid, Uuid, bool, usize)>,
     remove_from_node_selection: EventHandler<(Uuid, Uuid)>,
     add_to_node_selection: EventHandler<(Uuid, Uuid, bool)>,
+    clear_graph_store: EventHandler<Uuid>,
 }
 
 impl NodeHandlers {
@@ -51,7 +52,15 @@ impl NodeHandlers {
             set_node_active: set_node_active_handler(workspace),
             remove_from_node_selection: remove_from_node_selection_handler(workspace),
             add_to_node_selection: add_to_node_selection_handler(workspace),
+            clear_graph_store: clear_graph_store_handler(workspace),
         }
+    }
+
+    /// Wipes a single tab's canvas mirror (nodes/edges/selection/port-maps) back to empty, so it can
+    /// be refilled from scratch - used when undo/redo reports a structural change too coarse to patch
+    /// incrementally (see `DocumentChange::GraphNeedsRefresh`).
+    pub fn clear_graph_store(&self, graph_id: Uuid) {
+        self.clear_graph_store.call(graph_id);
     }
 
     pub fn remove_from_node_selection(&self, graph_id: Uuid, node_id: Uuid) {
@@ -350,5 +359,13 @@ fn add_group_analyzers_handler(
 fn remove_droppable_group_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandler<()> {
     EventHandler::new(move |()| {
         workspace.drop_in_group().set(None);
+    })
+}
+
+fn clear_graph_store_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandler<Uuid> {
+    EventHandler::new(move |graph_id: Uuid| {
+        if let Some(graph_state) = workspace.tabs().get(graph_id) {
+            graph_state.graph_store().set(GraphStore::default());
+        }
     })
 }

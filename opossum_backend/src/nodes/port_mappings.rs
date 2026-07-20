@@ -12,7 +12,11 @@ use opossum_core::{
 };
 use uuid::Uuid;
 
-use crate::{app_state::AppState, error::BackEndErrorResponse};
+use crate::{
+    app_state::AppState,
+    error::BackEndErrorResponse,
+    undo::{AddPortMap, Command, RemovePortMap},
+};
 
 /// Get the port mappings of a group node
 #[utoipa::path(tag = "node",
@@ -94,6 +98,16 @@ pub async fn post_port_mapping(
                 Ok::<(Vec<String>, Vec<String>), OpossumError>((inputs, outputs)) // <-- OpossumError statt BackEndErrorResponse!
             })??;
 
+    let (_, parent_group_id) = data.document.lock().scenery().node_recursive(group_id)?;
+    data.push_undo(Command::RemovePortMap(RemovePortMap {
+        group_id,
+        parent_group_id,
+        query: RemovePortMapQuery {
+            external_port_name: pmap_inf.external_port_name.clone(),
+            port_type: pmap_inf.port_type,
+        },
+    }));
+
     let response = PortNamesResponse { inputs, outputs };
     Ok(HttpResponse::Created().json(response)) // 201 Created
 }
@@ -133,14 +147,20 @@ pub async fn remove_port_map(
         c.iter()
             .map(|c| ConnectInfo::from_connection_info(c, false))
             .filter(|c| match port_type {
-                PortType::Output => {
-                    c.src_uuid() == group_id && c.src_port() == external_port_name
-                }
+                PortType::Output => c.src_uuid() == group_id && c.src_port() == external_port_name,
                 PortType::Input => {
                     c.target_uuid() == group_id && c.target_port() == external_port_name
                 }
             })
             .collect::<Vec<ConnectInfo>>()
+    })?;
+
+    // Capture what this mapping pointed at internally, so undo can recreate it.
+    let internal = scenery.with_group_node_mut(group_id, |g| {
+        g.graph()
+            .port_map(&port_type)
+            .get(&external_port_name)
+            .cloned()
     })?;
 
     // Disconnect (idiomatisches Error-Handling mit OpossumError)
@@ -154,6 +174,26 @@ pub async fn remove_port_map(
     let port_removed = scenery.with_group_node_mut(group_id, |g| {
         g.remove_mapped_port(&external_port_name, port_type)
     })?;
+
+    if port_removed && let Some((internal_node_id, internal_port_name)) = internal {
+        let mut inverse = vec![Command::AddPortMap(AddPortMap {
+            group_id,
+            parent_group_id: parent_group,
+            request: AddPortMappingRequest {
+                internal_node_id,
+                internal_port_name,
+                external_port_name: external_port_name.clone(),
+                port_type,
+            },
+        })];
+        for c in &connections {
+            inverse.push(Command::AddEdge {
+                group_id: parent_group,
+                connect_info: c.clone(),
+            });
+        }
+        data.push_undo(Command::Batch(inverse));
+    }
 
     let response = RemovePortMapResponse {
         port_removed,
@@ -259,7 +299,10 @@ mod test {
 
         // the connection to the *other* mapped port must still be intact
         let document = app_state.document.lock();
-        let remaining = document.scenery().graph().get_connection_info_of_node(group_id);
+        let remaining = document
+            .scenery()
+            .graph()
+            .get_connection_info_of_node(group_id);
         assert_eq!(remaining.len(), 1);
         assert_eq!(remaining[0].src_id, ext_node_b);
         assert_eq!(remaining[0].target_id, group_id);

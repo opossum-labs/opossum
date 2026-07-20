@@ -28,6 +28,7 @@ pub fn GraphEditor(
     model_file_path: ReadSignal<Option<PathBuf>>,
     model_file_path_handler: EventHandler<Option<PathBuf>>,
     root_tab_open_handler: EventHandler<bool>,
+    undo_redo_status_handler: EventHandler<(bool, bool)>,
 ) -> Element {
     let workspace = use_store(GraphsWorkspaceState::default);
     use_context_provider(|| ReadStore::from(workspace));
@@ -45,6 +46,7 @@ pub fn GraphEditor(
         root_graph_id,
         workspace_handlers,
         model_file_path_handler,
+        undo_redo_status_handler,
     );
 
     let active_tab = use_memo(move || *workspace.active_tab().read());

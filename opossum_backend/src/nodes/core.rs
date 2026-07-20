@@ -17,7 +17,11 @@ use opossum_core::{
 use parking_lot::MutexGuard;
 use uuid::Uuid;
 
-use crate::{app_state::AppState, error::BackEndErrorResponse};
+use crate::{
+    app_state::AppState,
+    error::BackEndErrorResponse,
+    undo::{AddNode, Command, PatchNode, RemoveNode, capture_old_node_request},
+};
 
 /// Get all nodes of a group node
 ///
@@ -128,6 +132,12 @@ async fn post_children(
 
     drop(document);
 
+    data.push_undo(Command::RemoveNode(RemoveNode {
+        parent_group_id: uuid,
+        node: new_node_ref.clone(),
+        cascaded: Vec::new(),
+    }));
+
     let node = new_node_ref.optical_ref.lock_opm()?;
     let node_info = NodeInfo::from_analyzable(&*node, None);
     drop(node);
@@ -206,28 +216,23 @@ async fn patch_node(
     update: web::Json<UpdateNodeRequest>,
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let uuid = path.into_inner();
-    let update = update.into_inner();
-    data.document
-        .lock()
-        .scenery_mut()
-        .with_node_attr_mut(uuid, |node_attr| {
-            if let Some(name) = update.name {
-                node_attr.set_name(&name);
-            }
-            if let Some(inverted) = update.inverted {
-                node_attr.set_inverted(inverted);
-            }
-            if let Some(iso_opt) = update.isometry {
-                node_attr.set_isometry_option(iso_opt);
-            }
-            if let Some(align) = update.alignment {
-                node_attr.set_alignment(align);
-            }
-            if let Some(gui_pos_opt) = update.gui_position {
-                node_attr.set_gui_position(gui_pos_opt.map(|(x, y)| Point2::new(x, y)));
-            }
-            Ok::<(), OpossumError>(())
-        })??;
+    let new = update.into_inner();
+    let mut document = data.document.lock();
+
+    let old = document
+        .scenery()
+        .with_node_attr(uuid, |node_attr| capture_old_node_request(node_attr, &new))?;
+    let parent_group_id = document.scenery().node_recursive(uuid)?.1;
+
+    let inverse = Command::PatchNode(PatchNode {
+        uuid,
+        parent_group_id,
+        old,
+        new,
+    })
+    .apply(&mut document)?;
+    data.push_undo(inverse);
+    drop(document);
 
     Ok(HttpResponse::NoContent().finish())
 }
@@ -248,6 +253,27 @@ async fn delete_node(
 ) -> Result<Json<Vec<Uuid>>, BackEndErrorResponse> {
     let uuid = path.into_inner();
     let mut document = data.document.lock();
+
+    // Capture the target node and, since deleting it cascades to any reference nodes pointing at it
+    // (see `NodeGroup::delete_node`), every one of those too - each as a live `OpticRef` handle plus
+    // its own parent group, so undo can restore the whole cascade exactly as it was.
+    let (target_ref, parent_group_id, cascaded) = {
+        let scenery = document.scenery();
+        let (target_ref, parent_group_id) = scenery.node_recursive(uuid)?;
+        let referring = scenery
+            .graph()
+            .find_all_nodes_referring_to_uuid(uuid, scenery.node_attr().uuid())?;
+        let mut cascaded = Vec::new();
+        for ref_ids in referring.values() {
+            for ref_id in ref_ids {
+                if let Ok((r, p)) = scenery.node_recursive(*ref_id) {
+                    cascaded.push((p, r));
+                }
+            }
+        }
+        (target_ref, parent_group_id, cascaded)
+    };
+
     let scenery = document.scenery_mut();
     let deleted_nodes = scenery.delete_node(uuid)?;
 
@@ -272,6 +298,18 @@ async fn delete_node(
             }
         }
     }
+
+    // Only claim cascaded nodes that `delete_node` actually removed, in case its cascade rules ever
+    // diverge from what `find_all_nodes_referring_to_uuid` predicted.
+    let cascaded: Vec<(Uuid, OpticRef)> = cascaded
+        .into_iter()
+        .filter(|(_, r)| r.uuid().is_ok_and(|id| deleted_nodes.contains(&id)))
+        .collect();
+    data.push_undo(Command::AddNode(AddNode {
+        parent_group_id,
+        node: target_ref,
+        cascaded,
+    }));
 
     drop(document);
     Ok(web::Json(deleted_nodes))

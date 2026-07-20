@@ -1,4 +1,8 @@
-use crate::{app_state::AppState, error::BackEndErrorResponse};
+use crate::{
+    app_state::AppState,
+    error::BackEndErrorResponse,
+    undo::{Command, PatchProperty},
+};
 use actix_web::{HttpRequest, HttpResponse, get, patch, web};
 use opossum_core::{
     core_optics::NodeAttr,
@@ -100,12 +104,22 @@ pub async fn patch_property(
         )
     })?;
 
-    data.document
-        .lock()
-        .scenery_mut()
-        .with_node_attr_mut(uuid, |node_attr| {
-            node_attr.set_property(&prop_name, new_value)
-        })??;
+    let mut document = data.document.lock();
+    let old_value = document.scenery().with_node_attr(uuid, |node_attr| {
+        node_attr.properties().get(&prop_name).cloned()
+    })??;
+    let parent_group_id = document.scenery().node_recursive(uuid)?.1;
+
+    let inverse = Command::PatchProperty(PatchProperty {
+        uuid,
+        parent_group_id,
+        prop_name,
+        old: old_value,
+        new: new_value,
+    })
+    .apply(&mut document)?;
+    data.push_undo(inverse);
+    drop(document);
 
     Ok(HttpResponse::NoContent().finish())
 }

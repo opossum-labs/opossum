@@ -218,22 +218,6 @@ pub async fn update_distance(
         .patch::<UpdateConnectionRequest>(&format!("/api/nodes/{group_id}/connections"), connection)
         .await
 }
-/// Update the GUI position coordinates of the node with the given `node_id`.
-///
-/// # Errors
-///
-/// This function will return an error if the `node_id` was not found.
-pub async fn update_node_position(node_id: Uuid, gui_position: Point2D<f64>) -> Result<(), String> {
-    let position = (gui_position.x, gui_position.y);
-    let update_node_request = UpdateNodeRequest {
-        gui_position: Some(Some(position)),
-        ..Default::default()
-    };
-    HTTP_API_CLIENT()
-        .patch::<UpdateNodeRequest>(&format!("/api/nodes/{node_id}"), update_node_request)
-        .await
-}
-
 /// Update the name of the node with the given `node_id`.
 ///
 /// # Errors

@@ -1,4 +1,8 @@
-use crate::{app_state::AppState, error::BackEndErrorResponse};
+use crate::{
+    app_state::AppState,
+    error::BackEndErrorResponse,
+    undo::{Command, PatchPort},
+};
 use actix_web::{HttpResponse, get, patch, web};
 use opossum_core::{
     core_optics::PortType,
@@ -75,31 +79,39 @@ pub async fn patch_port(
     update: web::Json<UpdatePortRequest>,
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let (uuid, port_type, port_name) = path.into_inner();
-    let update_data = update.into_inner();
+    let new = update.into_inner();
+    let mut document = data.document.lock();
 
-    data.document
-        .lock()
-        .scenery_mut()
-        .with_node_attr_mut(uuid, |node_attr| {
-            let port_map = node_attr.raw_ports_mut().ports_mut(&port_type);
-
-            if let Some(port) = port_map.get_mut(&port_name) {
-                if let Some(new_aperture) = update_data.aperture {
-                    port.aperture = new_aperture;
-                }
-                if let Some(new_coating) = update_data.coating {
-                    port.coating = new_coating;
-                }
-                if let Some(new_lidt) = update_data.lidt {
-                    port.lidt = new_lidt;
-                }
-                Ok::<(), OpossumError>(()) // <-- Expliziter Typ für den Compiler
-            } else {
+    let old = document.scenery().with_node_attr(uuid, |node_attr| {
+        let port_map = node_attr.raw_ports().ports(&port_type);
+        port_map.get(&port_name).map_or_else(
+            || {
                 Err(OpossumError::Other(format!(
                     "{port_type} port '{port_name}' not found"
                 )))
-            }
-        })??;
+            },
+            |port| {
+                Ok(UpdatePortRequest {
+                    aperture: new.aperture.is_some().then(|| port.aperture.clone()),
+                    coating: new.coating.is_some().then_some(port.coating),
+                    lidt: new.lidt.is_some().then_some(port.lidt),
+                })
+            },
+        )
+    })??;
+    let parent_group_id = document.scenery().node_recursive(uuid)?.1;
+
+    let inverse = Command::PatchPort(PatchPort {
+        uuid,
+        parent_group_id,
+        port_type,
+        port_name,
+        old,
+        new,
+    })
+    .apply(&mut document)?;
+    data.push_undo(inverse);
+    drop(document);
 
     Ok(HttpResponse::NoContent().finish()) // <-- REST-konformer Abschluss
 }

@@ -15,7 +15,12 @@ use opossum_core::{
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
 
-use crate::{app_state::AppState, error::BackEndErrorResponse, helper_functions::Ron};
+use crate::{
+    app_state::AppState,
+    error::BackEndErrorResponse,
+    helper_functions::Ron,
+    undo::{Command, PatchAnalyzer, RepositionAnalyzer},
+};
 
 // --- NEW INTERNAL HELPER FUNCTION FOR RECURSIVE SOURCE PORT LOOKUP ---
 fn get_all_source_port_uuids(scenery: &NodeGroup) -> Vec<Uuid> {
@@ -146,6 +151,10 @@ pub async fn post_analyzer(
         }
         analyzer_info.set_analyzer_type(&a_type);
     }
+
+    if let Ok(info) = document.analyzer(uuid) {
+        data.push_undo(Command::RemoveAnalyzer { id: uuid, info });
+    }
     drop(document);
     HttpResponse::Created().json(uuid) // 201 Created
 }
@@ -165,7 +174,11 @@ pub async fn delete_analyzer(
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let uuid = path.into_inner();
-    data.document.lock().remove_analyzer(uuid)?;
+    let mut document = data.document.lock();
+    let info = document.analyzer(uuid)?;
+    document.remove_analyzer(uuid)?;
+    data.push_undo(Command::AddAnalyzer { id: uuid, info });
+    drop(document);
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -211,16 +224,20 @@ pub async fn patch_analyzer(
     body: Ron<AnalyzerType>,
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let uuid = path.into_inner();
-    let analyzer_type = body.into_inner();
-    if let Some(analyzer_info) = data.document.lock().analyzer_mut(uuid) {
-        analyzer_info.set_analyzer_type(&analyzer_type);
-    } else {
-        return Err(BackEndErrorResponse::new(
-            404,
-            "Opossum",
-            "UUID not found in analyzers",
-        ));
-    }
+    let new = body.into_inner();
+    let mut document = data.document.lock();
+
+    let old = document
+        .analyzer_mut(uuid)
+        .ok_or_else(|| BackEndErrorResponse::new(404, "Opossum", "UUID not found in analyzers"))?
+        .analyzer_type()
+        .clone();
+
+    let inverse =
+        Command::PatchAnalyzer(PatchAnalyzer { id: uuid, old, new }).apply(&mut document)?;
+    data.push_undo(inverse);
+    drop(document);
+
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -249,18 +266,24 @@ pub async fn put_analyzer_gui_position(
     gui_position: web::Json<(f64, f64)>,
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let uuid = path.into_inner();
-    let pos = gui_position.into_inner();
+    let new_pos = gui_position.into_inner();
+    let mut document = data.document.lock();
 
-    if let Some(analyzer_info) = data.document.lock().analyzer_mut(uuid) {
-        // Wir konvertieren das Tuple in den von OPOSSUM erwarteten Point2
-        analyzer_info.set_gui_position(Some(nalgebra::Point2::new(pos.0, pos.1)));
-    } else {
-        return Err(BackEndErrorResponse::new(
-            404,
-            "Opossum",
-            "UUID not found in analyzers",
-        ));
-    }
+    let old_pos = document
+        .analyzer_mut(uuid)
+        .ok_or_else(|| BackEndErrorResponse::new(404, "Opossum", "UUID not found in analyzers"))?
+        .gui_position()
+        .map_or((0., 0.), |p| (p.x, p.y));
+
+    let inverse = Command::RepositionAnalyzer(RepositionAnalyzer {
+        id: uuid,
+        old_pos,
+        new_pos,
+    })
+    .apply(&mut document)?;
+    data.push_undo(inverse);
+    drop(document);
+
     Ok(HttpResponse::NoContent().finish())
 }
 

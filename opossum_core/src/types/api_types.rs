@@ -366,6 +366,18 @@ pub struct UpdateConnectionRequest {
     #[schema(example = 0.15)]
     pub distance: f64,
 }
+
+/// One entry of a batched GUI-position update, as sent at the end of a multi-node drag or an
+/// auto-layout pass - grouping every moved node/analyzer into a single request keeps it a single
+/// undo/redo step, rather than one per node.
+#[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
+pub struct PositionUpdate {
+    pub uuid: Uuid,
+    /// True for an optical node, false for an analyzer.
+    pub is_optical: bool,
+    #[schema(example = json!([100.0, 200.0]))]
+    pub gui_position: (f64, f64),
+}
 // ============================================================================
 // PORTS & PORT MAPPINGS
 // ============================================================================
@@ -403,7 +415,7 @@ pub struct AddPortMappingRequest {
 }
 
 /// Query parameters to remove a port mapping
-#[derive(Debug, Deserialize, IntoParams, ToSchema)]
+#[derive(Debug, Clone, Deserialize, IntoParams, ToSchema)]
 pub struct RemovePortMapQuery {
     /// External port name of the group port mapping
     #[schema(example = "group_in_1")]
@@ -525,4 +537,78 @@ pub struct LoadDocumentResponse {
 pub struct SourcePortDto {
     pub uuid: Uuid,
     pub name: String,
+}
+
+// ============================================================================
+// UNDO / REDO
+// ============================================================================
+
+/// One user-visible effect of an undo/redo step, shaped so the GUI can react to it the same way it
+/// reacts to the corresponding normal create/update/delete call - see each variant's matching
+/// endpoint/DTO. `GraphNeedsRefresh` is the fallback for structural operations (port mapping, moving
+/// nodes between groups, grouping/ungrouping) where reconstructing a fully precise incremental diff
+/// isn't worth the complexity: the GUI just re-fetches that one tab's nodes/edges/port-maps, instead
+/// of every open tab the way a whole-document reload would.
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub enum DocumentChange {
+    /// Mirrors `POST /api/nodes/{uuid}/children`'s response.
+    NodeAdded { graph_id: Uuid, node: Box<NodeInfo> },
+    /// Mirrors `DELETE /api/nodes/{uuid}`'s response (a single uuid here; cascaded reference-node
+    /// deletions are reported as their own separate `NodeRemoved` entries).
+    NodeRemoved { graph_id: Uuid, uuid: Uuid },
+    /// Mirrors `PATCH /api/nodes/{uuid}`. Only `name`/`inverted`/`gui_position` are mirrored into the
+    /// GUI's canvas state; a non-`None` `name` or `inverted` should also be applied to every node that
+    /// references `uuid` (the same fan-out `PATCH .../name` already does), which the GUI resolves via
+    /// `GET /api/nodes/{uuid}/references` exactly as it does for a normal rename.
+    NodePatched {
+        graph_id: Uuid,
+        uuid: Uuid,
+        name: Option<String>,
+        inverted: Option<bool>,
+        gui_position: Option<Option<(f64, f64)>>,
+    },
+    /// A custom property or port config changed. Not mirrored anywhere in the GUI's canvas state - if
+    /// `uuid` is the currently selected node, the properties panel should simply re-fetch it.
+    NodeDetailsChanged { uuid: Uuid },
+    /// Mirrors `POST /api/nodes/{uuid}/connections`.
+    EdgeAdded {
+        graph_id: Uuid,
+        connect_info: ConnectInfo,
+    },
+    /// Mirrors `DELETE /api/nodes/{uuid}/connections`.
+    EdgeRemoved {
+        graph_id: Uuid,
+        connect_info: ConnectInfo,
+    },
+    /// Mirrors `PATCH /api/nodes/{uuid}/connections` (distance only).
+    EdgeUpdated {
+        graph_id: Uuid,
+        connect_info: ConnectInfo,
+    },
+    /// Mirrors `POST /api/analyzers`.
+    AnalyzerAdded { analyzer: AnalyzerItemDto },
+    /// Mirrors `DELETE /api/analyzers/{uuid}`.
+    AnalyzerRemoved { id: Uuid },
+    /// The analyzer's config or position changed; not mirrored in canvas state beyond position, which
+    /// the GUI already re-fetches via the analyzer list on tab load - a details refetch is sufficient.
+    AnalyzerChanged { id: Uuid },
+    /// One tab's nodes/edges/port-maps should be re-fetched from scratch (see the type's own doc
+    /// comment for which operations use this).
+    GraphNeedsRefresh { graph_id: Uuid },
+}
+
+/// Response returned by `POST /api/document/undo` and `POST /api/document/redo`.
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct UndoRedoResponse {
+    pub changes: Vec<DocumentChange>,
+    pub can_undo: bool,
+    pub can_redo: bool,
+}
+
+/// Response returned whenever the undo/redo stacks change shape without an accompanying document
+/// change being reported separately (currently unused by any endpoint, kept for symmetry/future use).
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct UndoStatusResponse {
+    pub can_undo: bool,
+    pub can_redo: bool,
 }

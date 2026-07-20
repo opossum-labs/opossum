@@ -1,6 +1,6 @@
 mod connections;
 mod core;
-mod port_mappings;
+pub(crate) mod port_mappings;
 mod ports;
 mod properties;
 

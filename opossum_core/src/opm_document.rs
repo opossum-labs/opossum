@@ -250,6 +250,14 @@ impl OpmDocument {
             ))
         }
     }
+    /// Re-inserts a previously-removed analyzer under its original [`Uuid`].
+    ///
+    /// Unlike [`add_analyzer_with_position`](Self::add_analyzer_with_position), this does not mint a new id -
+    /// it is used to restore an analyzer to the exact identity it had before, which undo/redo relies on so that
+    /// later history entries referencing that id (e.g. a config patch) keep resolving correctly.
+    pub fn insert_analyzer(&mut self, id: Uuid, info: AnalyzerInfo) {
+        self.analyzers.insert(id, info);
+    }
     /// Returns a reference to the scenery of this [`OpmDocument`].
     #[must_use]
     pub const fn scenery(&self) -> &NodeGroup {

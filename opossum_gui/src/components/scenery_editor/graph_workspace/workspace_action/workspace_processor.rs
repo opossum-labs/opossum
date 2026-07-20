@@ -1,6 +1,10 @@
 #![allow(clippy::future_not_send)]
 #![allow(clippy::large_types_passed_by_value)]
-use std::{collections::HashSet, fs, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+    path::PathBuf,
+};
 
 use dioxus::{
     html::geometry::euclid::default::{Point2D, Rect, Size2D},
@@ -10,8 +14,9 @@ use futures_util::StreamExt;
 use opossum_core::{
     prelude::{AnalyzerType, PortType},
     types::api_types::{
-        AnalyzerItemDto, ConnectInfo, NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo,
-        NodePortsResponse, PortMappingsResponse, UpdateConnectionRequest,
+        AnalyzerItemDto, ConnectInfo, DocumentChange, NewAnalyzerInfo, NewNode, NewRefNode,
+        NodeInfo, NodePortsResponse, PortMappingsResponse, PositionUpdate, UndoRedoResponse,
+        UpdateConnectionRequest,
     },
 };
 use serde_json::Value;
@@ -41,6 +46,7 @@ pub fn use_workspace_processor(
     root_graph_id: Memo<Uuid>,
     workspace_handlers: WorkSpaceSignalHandlers,
     set_file_path_handler: EventHandler<Option<PathBuf>>,
+    undo_redo_status_handler: EventHandler<(bool, bool)>,
 ) -> Coroutine<GraphsWorkspaceAction> {
     use_coroutine(move |mut rx: UnboundedReceiver<GraphsWorkspaceAction>| {
         async move {
@@ -56,6 +62,8 @@ pub fn use_workspace_processor(
                             set_file_path_handler,
                         )
                         .await;
+                        // The backend clears its undo/redo history on every load; mirror that here.
+                        undo_redo_status_handler.call((false, false));
                     }
                     GraphsWorkspaceAction::SaveToFile(path) => {
                         process_save_root_scenery_to_file(
@@ -69,6 +77,8 @@ pub fn use_workspace_processor(
                     GraphsWorkspaceAction::DeleteRootScenery => {
                         process_delete_root_scenery(workspace_handlers, set_file_path_handler)
                             .await;
+                        // The backend clears its undo/redo history on every reset; mirror that here.
+                        undo_redo_status_handler.call((false, false));
                     }
                     GraphsWorkspaceAction::AddRootSceneryTab { name } => {
                         process_add_root_scenery_tab(workspace, workspace_handlers, name).await;
@@ -156,18 +166,17 @@ pub fn use_workspace_processor(
                         let nodes_cut = *workspace.nodes_cut().read();
                         process_paste_nodes(pos, workspace_handlers, graph_id, nodes_cut).await;
                     }
-                    GraphsWorkspaceAction::SyncNodePosition {
-                        node_id,
-                        pos,
-                        is_optical,
-                    } => {
-                        let res = if is_optical {
-                            api::update_node_position(node_id, pos).await
-                        } else {
-                            api::update_analyzer_position(node_id, pos).await
-                        };
+                    GraphsWorkspaceAction::SyncNodePositions { moves } => {
+                        let updates = moves
+                            .iter()
+                            .map(|(uuid, is_optical, pos)| PositionUpdate {
+                                uuid: *uuid,
+                                is_optical: *is_optical,
+                                gui_position: (pos.x, pos.y),
+                            })
+                            .collect();
                         eval_action_run(
-                            res,
+                            api::patch_positions(updates).await,
                             Some(move |()| {
                                 workspace_handlers.workspace.set_needs_saving(true);
                             }),
@@ -339,10 +348,146 @@ pub fn use_workspace_processor(
                     GraphsWorkspaceAction::GetEditorArea => {
                         process_get_editor_area(workspace, workspace_handlers).await;
                     }
+                    GraphsWorkspaceAction::Undo => {
+                        eval_action_run(
+                            api::undo_document().await,
+                            Some(move |r: UndoRedoResponse| {
+                                undo_redo_status_handler.call((r.can_undo, r.can_redo));
+                                workspace_handlers.workspace.set_needs_saving(true);
+                                spawn(apply_document_changes(
+                                    r.changes,
+                                    root_graph_id,
+                                    workspace,
+                                    workspace_handlers,
+                                ));
+                            }),
+                        );
+                    }
+                    GraphsWorkspaceAction::Redo => {
+                        eval_action_run(
+                            api::redo_document().await,
+                            Some(move |r: UndoRedoResponse| {
+                                undo_redo_status_handler.call((r.can_undo, r.can_redo));
+                                workspace_handlers.workspace.set_needs_saving(true);
+                                spawn(apply_document_changes(
+                                    r.changes,
+                                    root_graph_id,
+                                    workspace,
+                                    workspace_handlers,
+                                ));
+                            }),
+                        );
+                    }
                 }
             }
         }
     })
+}
+
+/// Applies the `DocumentChange`s returned by an undo/redo, by replaying each one through the exact
+/// same `WorkSpaceSignalHandlers` calls the corresponding *normal* action already uses - so undo/redo
+/// updates the canvas precisely, without reloading the whole workspace.
+///
+/// `NodeDetailsChanged`/`AnalyzerChanged` (custom properties, isometry, alignment, port config,
+/// analyzer settings) aren't mirrored in `GraphStore` at all - only the properties panel shows them,
+/// and it re-fetches from the backend whenever a node is (re)selected, so no action is needed here;
+/// the panel may show stale data for the currently-selected node until it's reselected.
+async fn apply_document_changes(
+    changes: Vec<DocumentChange>,
+    root_graph_id: Memo<Uuid>,
+    workspace: ReadStore<GraphsWorkspaceState>,
+    ws_handler: WorkSpaceSignalHandlers,
+) {
+    for change in changes {
+        match change {
+            DocumentChange::NodeAdded { graph_id, node } => {
+                ws_handler.nodes.add_optical_node(*node, graph_id);
+            }
+            DocumentChange::NodeRemoved { graph_id, uuid } => {
+                ws_handler.nodes.remove_nodes(vec![uuid], graph_id);
+            }
+            DocumentChange::NodePatched {
+                graph_id,
+                uuid,
+                name,
+                inverted,
+                gui_position,
+            } => {
+                if let Some(name) = name {
+                    // Mirror the fan-out a normal rename does: propagate to every node referencing it.
+                    if let Ok(node_refs_grouped) = api::get_node_references(uuid).await {
+                        let ref_name = format!("ref ({name})");
+                        for (group_id, ref_ids) in &node_refs_grouped {
+                            for ref_id in ref_ids {
+                                let new_name = if uuid == *ref_id {
+                                    name.clone()
+                                } else {
+                                    ref_name.clone()
+                                };
+                                ws_handler
+                                    .nodes
+                                    .set_node_name(new_name, *ref_id, *group_id, true);
+                            }
+                        }
+                    } else {
+                        ws_handler.nodes.set_node_name(name, uuid, graph_id, true);
+                    }
+                }
+                if let Some(inverted) = inverted {
+                    ws_handler.nodes.invert_node(uuid, inverted, graph_id);
+                }
+                if let Some(Some(pos)) = gui_position {
+                    let mut positions = HashMap::new();
+                    positions.insert(uuid, Point2D::new(pos.0, pos.1));
+                    ws_handler.nodes.update_node_positions(positions, graph_id);
+                }
+            }
+            DocumentChange::NodeDetailsChanged { .. } | DocumentChange::AnalyzerChanged { .. } => {}
+            DocumentChange::EdgeAdded {
+                graph_id,
+                connect_info,
+            } => {
+                ws_handler.edges.add_edge(connect_info, graph_id);
+            }
+            DocumentChange::EdgeRemoved {
+                graph_id,
+                connect_info,
+            } => {
+                ws_handler.edges.delete_edge(connect_info, graph_id);
+            }
+            DocumentChange::EdgeUpdated {
+                graph_id,
+                connect_info,
+            } => {
+                ws_handler.edges.update_edge(connect_info, graph_id);
+            }
+            DocumentChange::AnalyzerAdded { analyzer } => {
+                ws_handler.nodes.add_analyzer_node(
+                    NewAnalyzerInfo::from(analyzer.info.clone()),
+                    analyzer.id,
+                    *root_graph_id.read(),
+                );
+            }
+            DocumentChange::AnalyzerRemoved { id } => {
+                ws_handler
+                    .nodes
+                    .remove_nodes(vec![id], *root_graph_id.read());
+            }
+            DocumentChange::GraphNeedsRefresh { graph_id } => {
+                if workspace.tabs().contains_key(&graph_id) {
+                    ws_handler.nodes.clear_graph_store(graph_id);
+                    process_fill_graph_of_group(
+                        root_graph_id.into(),
+                        graph_id,
+                        ws_handler,
+                        false,
+                        workspace,
+                    )
+                    .await;
+                }
+            }
+        }
+    }
 }
 
 async fn process_get_editor_area(
@@ -606,40 +751,30 @@ async fn process_optimize_layout(
     // Note: ensure optimize_layout is imported from graph_workspace::workspace_state
     let new_positions = optimize_layout(&nodes, &edges);
 
-    // --- ASYNC PHASE: Sync with backend ---
-    let mut sync_failed = false;
+    // --- ASYNC PHASE: sync with backend, batched into a single undo step ---
+    let updates: Vec<PositionUpdate> = new_positions
+        .iter()
+        .map(|(node_id, pos)| {
+            let is_optical = nodes
+                .get(node_id)
+                .is_none_or(|node| matches!(node.node_type(), NodeType::Optical(_)));
+            PositionUpdate {
+                uuid: *node_id,
+                is_optical,
+                gui_position: (pos.x, pos.y),
+            }
+        })
+        .collect();
 
-    for (node_id, pos) in &new_positions {
-        // Determine the type of the node to call the correct API endpoint
-        let is_optical = nodes
-            .get(node_id)
-            .is_none_or(|node| matches!(node.node_type(), NodeType::Optical(_)));
-
-        let api_result = if is_optical {
-            api::update_node_position(*node_id, *pos).await
-        } else {
-            api::update_analyzer_position(*node_id, *pos).await
-        };
-
-        if let Err(err_str) = api_result {
-            OPOSSUM_UI_LOGS.write().add_log(&format!(
-                "Failed to sync position for node {node_id}: {err_str}"
-            ));
-            sync_failed = true;
-        }
-    }
-
-    // --- WRITE PHASE: Update UI state if successful ---
-    // If you want partial updates even on errors, remove the `!sync_failed` check.
-    if sync_failed {
-        OPOSSUM_UI_LOGS
-            .write()
-            .add_log("Layout optimization finished with synchronization errors.");
-    } else {
-        ws_handler
-            .nodes
-            .update_node_positions(new_positions, graph_id);
-    }
+    // --- WRITE PHASE: update UI state if the sync succeeded ---
+    eval_action_run(
+        api::patch_positions(updates).await,
+        Some(move |()| {
+            ws_handler
+                .nodes
+                .update_node_positions(new_positions, graph_id);
+        }),
+    );
 }
 
 async fn process_add_analyzer(

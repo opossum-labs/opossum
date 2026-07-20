@@ -270,19 +270,20 @@ pub fn use_drag_end(
                 DragStatus::Nodes => {
                     if droppable_groups.is_none() {
                         let selected_nodes = graph_store().selected_nodes();
-                        for node_id in selected_nodes.keys() {
-                            if let Some((pos, is_optical)) = graph_store
-                                .nodes()
-                                .read()
-                                .get(node_id)
-                                .map(|n| (n.pos(), n.is_optical_node()))
-                            {
-                                workspace_processor.send(GraphsWorkspaceAction::SyncNodePosition {
-                                    pos,
-                                    node_id: *node_id,
-                                    is_optical,
-                                });
-                            }
+                        let nodes_field = graph_store.nodes();
+                        let nodes = nodes_field.read();
+                        let moves: Vec<(Uuid, bool, Point2D<f64>)> = selected_nodes
+                            .keys()
+                            .filter_map(|node_id| {
+                                nodes
+                                    .get(node_id)
+                                    .map(|n| (*node_id, n.is_optical_node(), n.pos()))
+                            })
+                            .collect();
+                        drop(nodes);
+                        if !moves.is_empty() {
+                            workspace_processor
+                                .send(GraphsWorkspaceAction::SyncNodePositions { moves });
                         }
                     } else if let Some((to_graph_id, _)) = droppable_groups {
                         let selected_optical_nodes = graph_store().selected_optical_nodes();

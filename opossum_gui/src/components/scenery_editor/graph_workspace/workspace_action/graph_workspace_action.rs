@@ -300,13 +300,11 @@ pub enum GraphsWorkspaceAction {
         graph_id: Uuid,
     },
 
-    /// Synchronizes a node's position with an external update.
-    SyncNodePosition {
-        /// The new position of the node.
-        pos: Point2D<f64>,
-        /// The ID of the node to update.
-        node_id: Uuid,
-        is_optical: bool,
+    /// Synchronizes one or more nodes' positions with an external update (e.g. the end of a drag, or
+    /// an auto-layout pass). Batched into a single request/undo-step, even for a multi-node drag.
+    SyncNodePositions {
+        /// The moved nodes: id, whether it's an optical node (vs. an analyzer), and its new position.
+        moves: Vec<(Uuid, bool, Point2D<f64>)>,
     },
 
     /// Deletes a node from the graph.
@@ -326,4 +324,9 @@ pub enum GraphsWorkspaceAction {
         /// The ID of the destination graph or group.
         to_graph_id: Uuid,
     },
+
+    /// Undoes the last checkpointed document edit.
+    Undo,
+    /// Redoes the last undone document edit.
+    Redo,
 }
