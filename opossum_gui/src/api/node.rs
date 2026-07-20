@@ -94,29 +94,34 @@ pub async fn post_copy_nodes(nodes: HashSet<Uuid>) -> Result<String, String> {
         .await
 }
 
+/// Pastes the currently copied nodes into `group_id` at `pos`. If `cut` is set, the copied nodes'
+/// originals are deleted as part of the same request, so the backend can push a single undo step that
+/// reverts both the paste and the delete together - see the backend's `post_paste_nodes` doc comment.
+/// The response's last element mirrors what the removed `post_cut_nodes` used to return: the deleted
+/// node ids and their former parent graph id, present only when `cut` was set.
 pub async fn post_paste_nodes(
     group_id: Uuid,
     pos: Point2D<f64>,
+    cut: bool,
 ) -> Result<
     (
         HashMap<Uuid, Vec<NodeInfo>>,
         Vec<AnalyzerItemDto>,
         HashMap<Uuid, Vec<ConnectInfo>>,
+        Option<(Vec<Uuid>, Uuid)>,
     ),
     String,
 > {
     HTTP_API_CLIENT()
-        .post::<(Uuid, (f64, f64)), (
+        .post::<(Uuid, (f64, f64), bool), (
             HashMap<Uuid, Vec<NodeInfo>>,
             Vec<AnalyzerItemDto>,
             HashMap<Uuid, Vec<ConnectInfo>>,
-        )>("/api/operations/paste_nodes", (group_id, (pos.x, pos.y)))
-        .await
-}
-
-pub async fn post_cut_nodes(group_id: Uuid) -> Result<(Vec<Uuid>, Uuid), String> {
-    HTTP_API_CLIENT()
-        .post::<Uuid, (Vec<Uuid>, Uuid)>("/api/operations/cut_nodes", group_id)
+            Option<(Vec<Uuid>, Uuid)>,
+        )>(
+            "/api/operations/paste_nodes",
+            (group_id, (pos.x, pos.y), cut),
+        )
         .await
 }
 

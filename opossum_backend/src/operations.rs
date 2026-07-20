@@ -5,8 +5,8 @@ use crate::{
     error::BackEndErrorResponse,
     helper_functions::{
         add_converted_group_to_scenery, build_new_group_from_refs_and_conns,
-        collect_group_connections, collect_node_refs_and_pos, connect_from_info,
-        create_new_group_node_info, split_sort_connections,
+        capture_node_connections, collect_group_connections, collect_node_refs_and_pos,
+        connect_from_info, create_new_group_node_info, split_sort_connections,
     },
     undo::{AddNode, Command, ExtractGroup, RemoveNode},
 };
@@ -83,102 +83,15 @@ async fn post_copy_nodes(
     }
 }
 
-/// Delete all nodes that have been cut out previously and
-///
-/// This function sends already copied nodes to the frontend
-#[utoipa::path(tag = "operations",
-    responses(
-        (status = OK, body= NodeInfo, description = "Cut-out nodes successfully  removed and cache cleared", content_type="application/json"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
-    )
-)]
-#[allow(clippy::significant_drop_tightening)]
-#[post("/cut_nodes")]
-async fn post_cut_nodes(
-    data: web::Data<AppState>,
-    paste_in_group_id: web::Json<Uuid>,
-) -> Result<Json<(Vec<Uuid>, Uuid)>, BackEndErrorResponse> {
-    let paste_in_group_id = paste_in_group_id.into_inner();
-    let mut nodes_to_delete = vec![];
-    let mut analyzers_to_delete = vec![];
-    let mut node_cache = data.node_copy_cache.lock();
-
-    while let Some(cache) = node_cache.pop() {
-        match cache {
-            NodeCacheItem::Optical(optic_ref) => {
-                nodes_to_delete.push(optic_ref.uuid()?);
-            }
-            NodeCacheItem::Analyzer(analyzer_dto) => {
-                // Access the ID inside the DTO
-                analyzers_to_delete.push(analyzer_dto.id);
-            }
-        }
-    }
-    drop(node_cache);
-
-    let mut document = data.document.lock();
-    let mut deleted_nodes = vec![];
-    let scenery = document.scenery();
-    let scenery_id = scenery.node_attr().uuid();
-
-    let group_id = if analyzers_to_delete.is_empty()
-        && let Some(id) = nodes_to_delete.first()
-    {
-        let (_, group_id) = scenery.node_recursive(*id)?;
-        group_id
-    } else {
-        scenery_id
-    };
-
-    let mut removals = Vec::new();
-
-    if scenery_id == paste_in_group_id {
-        for analyzer_id in &analyzers_to_delete {
-            if let Ok(info) = document.analyzer(*analyzer_id) {
-                // Undoing this deletion means adding the analyzer back.
-                removals.push(Command::AddAnalyzer {
-                    id: *analyzer_id,
-                    info,
-                });
-            }
-            deleted_nodes.push(*analyzer_id);
-            document.remove_analyzer(*analyzer_id)?;
-        }
-    }
-
-    let captured_nodes: Vec<(Uuid, OpticRef)> = nodes_to_delete
-        .iter()
-        .filter_map(|id| document.scenery().node_recursive(*id).ok())
-        .map(|(node, parent_group_id)| (parent_group_id, node))
-        .collect();
-
-    let scenery = document.scenery_mut();
-
-    for node in &nodes_to_delete {
-        deleted_nodes.extend(scenery.delete_node(*node)?);
-    }
-
-    for (parent_group_id, node) in captured_nodes {
-        // Undoing this deletion means adding the node back.
-        removals.push(Command::AddNode(AddNode {
-            parent_group_id,
-            node,
-            cascaded: Vec::new(),
-        }));
-    }
-    if !removals.is_empty() {
-        data.push_undo(Command::Batch(removals));
-    }
-
-    Ok(Json((deleted_nodes, group_id)))
-}
-
 /// Paste copied nodes
 ///
-/// This function sends already copied nodes to the frontend
+/// This function sends already copied nodes to the frontend. If `cut` is set, the nodes/analyzers
+/// currently in the copy cache are also deleted from wherever they came from, as part of the *same* undo
+/// step as the paste - so a single undo reverts both the paste and the delete together, matching what
+/// feels like one "move" gesture to the user, rather than requiring two separate undos.
 #[utoipa::path(tag = "operations",
-    request_body(content = (Uuid, (f64, f64)),
-        description = "Uuid of the group node to be pasted in, the position at which the node should be pasted",
+    request_body(content = (Uuid, (f64, f64), bool),
+        description = "Uuid of the group node to be pasted in, the position at which the node should be pasted, and whether this paste is also a cut (delete the copied nodes' originals)",
         content_type = "application/json",
     ),
     responses(
@@ -190,16 +103,17 @@ async fn post_cut_nodes(
 #[post("/paste_nodes")]
 async fn post_paste_nodes(
     data: web::Data<AppState>,
-    node_paste_info: web::Json<(Uuid, (f64, f64))>,
+    node_paste_info: web::Json<(Uuid, (f64, f64), bool)>,
 ) -> Result<
     Json<(
         HashMap<Uuid, Vec<NodeInfo>>,
         Vec<AnalyzerItemDto>, // Updated return type to AnalyzerItemDto
         HashMap<Uuid, Vec<ConnectInfo>>,
+        Option<(Vec<Uuid>, Uuid)>,
     )>,
     BackEndErrorResponse,
 > {
-    let (paste_group_id, node_pos) = node_paste_info.into_inner();
+    let (paste_group_id, node_pos, cut) = node_paste_info.into_inner();
     let paste_in_scenery = data.document.lock().scenery().node_attr().uuid() == paste_group_id;
 
     let copied_nodes = data.node_copy_cache.lock();
@@ -302,6 +216,7 @@ async fn post_paste_nodes(
                     parent_group_id: *group_id,
                     node: node_ref,
                     cascaded: Vec::new(),
+                    connections: Vec::new(),
                 }));
             }
         }
@@ -312,11 +227,88 @@ async fn post_paste_nodes(
             info: analyzer.info.clone(),
         });
     }
+
+    // If this paste is also a "cut", delete the nodes/analyzers still in the copy cache (the
+    // originals this paste was copied from) and extend the SAME `removals` batch, so one undo reverts
+    // both the paste and the delete as a single step.
+    let cut_result = if cut {
+        let mut nodes_to_delete = vec![];
+        let mut analyzers_to_delete = vec![];
+        let mut node_cache = data.node_copy_cache.lock();
+        while let Some(cache) = node_cache.pop() {
+            match cache {
+                NodeCacheItem::Optical(optic_ref) => nodes_to_delete.push(optic_ref.uuid()?),
+                NodeCacheItem::Analyzer(analyzer_dto) => {
+                    analyzers_to_delete.push(analyzer_dto.id);
+                }
+            }
+        }
+        drop(node_cache);
+
+        let scenery_id = document.scenery().node_attr().uuid();
+        let cut_from_group_id = if analyzers_to_delete.is_empty()
+            && let Some(id) = nodes_to_delete.first()
+        {
+            document.scenery().node_recursive(*id)?.1
+        } else {
+            scenery_id
+        };
+
+        let mut deleted_nodes = vec![];
+        if scenery_id == paste_group_id {
+            for analyzer_id in &analyzers_to_delete {
+                if let Ok(info) = document.analyzer(*analyzer_id) {
+                    // Undoing this deletion means adding the analyzer back.
+                    removals.push(Command::AddAnalyzer {
+                        id: *analyzer_id,
+                        info,
+                    });
+                }
+                deleted_nodes.push(*analyzer_id);
+                document.remove_analyzer(*analyzer_id)?;
+            }
+        }
+
+        let captured_nodes: Vec<(Uuid, OpticRef, Vec<ConnectInfo>)> = nodes_to_delete
+            .iter()
+            .filter_map(|id| {
+                let (node, parent_group_id) = document.scenery().node_recursive(*id).ok()?;
+                let connections =
+                    capture_node_connections(document.scenery(), parent_group_id, *id).ok()?;
+                Some((parent_group_id, node, connections))
+            })
+            .collect();
+
+        let scenery = document.scenery_mut();
+        for node in &nodes_to_delete {
+            deleted_nodes.extend(scenery.delete_node(*node)?);
+        }
+
+        for (parent_group_id, node, connections) in captured_nodes {
+            // Undoing this deletion means adding the node back, reconnected.
+            removals.push(Command::AddNode(AddNode {
+                parent_group_id,
+                node,
+                cascaded: Vec::new(),
+                connections,
+            }));
+        }
+
+        Some((deleted_nodes, cut_from_group_id))
+    } else {
+        None
+    };
+
     if !removals.is_empty() {
         data.push_undo(Command::Batch(removals));
     }
 
-    Ok(Json((grouped_node_infos, analyzers, grouped_connect_info)))
+    Ok(Json((
+        grouped_node_infos,
+        analyzers,
+        grouped_connect_info,
+        cut_result,
+    )))
 }
 
 fn upper_left_corner_of_nodes(
@@ -850,9 +842,111 @@ pub async fn post_move_nodes(
 
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(post_copy_nodes);
-    cfg.service(post_cut_nodes);
     cfg.service(post_paste_nodes);
 
     cfg.service(post_convert_nodes_to_group);
     cfg.service(post_move_nodes);
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::document::undo_document;
+    use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
+    use opossum_core::{meter, nodes::Dummy};
+
+    /// Regression test for the bug where "cutting" a connected node (copy + paste elsewhere + delete
+    /// the original, as one user gesture) took two separate undo steps to fully revert: a single undo
+    /// only restored the original node, leaving both its lost connection and the pasted duplicate
+    /// behind. Builds `node_a -> node_b`, copies+cuts `node_a` to a new position in the same graph, then
+    /// asserts a *single* undo removes the pasted duplicate, restores the original `node_a`, and
+    /// restores its connection to `node_b`.
+    #[actix_web::test]
+    async fn test_undo_cut_paste_restores_node_connection_and_removes_duplicate() {
+        let app_state = Data::new(AppState::default());
+        let (root_id, node_a, node_b) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let scenery = document.scenery_mut();
+            let node_a = scenery.add_node(Dummy::default()).unwrap();
+            let node_b = scenery.add_node(Dummy::default()).unwrap();
+            scenery
+                .connect_nodes(node_a, "output_1", node_b, "input_1", meter!(0.1))
+                .unwrap();
+            (root_id, node_a, node_b)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_copy_nodes)
+                .service(post_paste_nodes)
+                .service(undo_document),
+        )
+        .await;
+
+        let mut nodes_to_copy = HashSet::new();
+        nodes_to_copy.insert(node_a);
+        let req = test::TestRequest::post()
+            .uri("/copy_nodes")
+            .set_json(&nodes_to_copy)
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+        let req = test::TestRequest::post()
+            .uri("/paste_nodes")
+            .set_json(&(root_id, (500.0, 500.0), true))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let pasted_node_a = {
+            let document = app_state.document.lock();
+            assert!(
+                document.scenery().node_recursive(node_a).is_err(),
+                "the original node_a must be gone right after the cut"
+            );
+            // The pasted duplicate is whatever new node exists in root_id besides node_b.
+            document
+                .scenery()
+                .with_group_node(root_id, |g| {
+                    g.nodes()
+                        .iter()
+                        .filter_map(|n| n.uuid().ok())
+                        .find(|id| *id != node_b)
+                })
+                .unwrap()
+                .expect("a pasted duplicate node must exist")
+        };
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::OK,
+            "a single undo of the cut+paste must not error"
+        );
+
+        let document = app_state.document.lock();
+        assert!(
+            document.scenery().node_recursive(node_a).is_ok(),
+            "the original node_a must be restored"
+        );
+        assert!(
+            document.scenery().node_recursive(pasted_node_a).is_err(),
+            "the pasted duplicate must be removed by the same single undo"
+        );
+        let connections = document
+            .scenery()
+            .with_group_node(root_id, opossum_core::nodes::NodeGroup::connections)
+            .unwrap();
+        assert_eq!(connections.len(), 1, "the connection must be restored");
+        assert!(
+            connections
+                .iter()
+                .any(|c| c.src_id == node_a && c.target_id == node_b),
+            "the restored connection must point at the original node_a and node_b"
+        );
+    }
 }

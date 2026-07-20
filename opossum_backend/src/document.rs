@@ -137,7 +137,7 @@ async fn put_document(
     )
 )]
 #[post("/undo")]
-async fn undo_document(
+pub(crate) async fn undo_document(
     data: web::Data<AppState>,
 ) -> Result<Json<UndoRedoResponse>, BackEndErrorResponse> {
     let Some(command) = data.undo_stack.lock().pop_back() else {
@@ -435,6 +435,7 @@ mod test {
             parent_group_id: root_id,
             node: node_ref,
             cascaded: Vec::new(),
+            connections: Vec::new(),
         }));
         assert!(
             app_state

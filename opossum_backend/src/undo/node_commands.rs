@@ -7,29 +7,34 @@ use opossum_core::{
     error::OpossumError,
     opm_document::OpmDocument,
     prelude::{PortType, Proptype},
-    types::api_types::{DocumentChange, NodeInfo, UpdateNodeRequest, UpdatePortRequest},
+    types::api_types::{ConnectInfo, DocumentChange, NodeInfo, UpdateNodeRequest, UpdatePortRequest},
     utils::LockExt,
 };
 use uuid::Uuid;
 
 use super::Command;
-use crate::error::BackEndErrorResponse;
+use crate::{error::BackEndErrorResponse, helper_functions::connect_from_info};
 
-/// Inserts `node` (and any `cascaded` reference nodes) into `parent_group_id`.
+/// Inserts `node` (and any `cascaded` reference nodes) into `parent_group_id`, reconnecting
+/// `connections` - the node's own connections in `parent_group_id`'s graph at the time it was captured
+/// (e.g. by a delete or cut), so undoing a deletion restores both the node and its wiring.
 #[derive(Clone)]
 pub struct AddNode {
     pub parent_group_id: Uuid,
     pub node: OpticRef,
     pub cascaded: Vec<(Uuid, OpticRef)>,
+    pub connections: Vec<ConnectInfo>,
 }
 
 /// Removes the node identified by `node`'s own uuid from the graph (cascading to reference nodes that
-/// point at it, mirroring `NodeGroup::delete_node`'s existing behavior).
+/// point at it, mirroring `NodeGroup::delete_node`'s existing behavior). `connections` is carried through
+/// unchanged so a subsequent undo (via the `AddNode` this produces) can restore it.
 #[derive(Clone)]
 pub struct RemoveNode {
     pub parent_group_id: Uuid,
     pub node: OpticRef,
     pub cascaded: Vec<(Uuid, OpticRef)>,
+    pub connections: Vec<ConnectInfo>,
 }
 
 /// Applies `new`'s populated fields to the node's standard properties; `old` mirrors the same
@@ -79,6 +84,7 @@ pub(super) fn apply_add_node(
         parent_group_id,
         node,
         cascaded,
+        connections,
     } = cmd;
     document
         .scenery_mut()
@@ -88,10 +94,16 @@ pub(super) fn apply_add_node(
             .scenery_mut()
             .with_group_node_mut(*member_parent, |g| g.add_node_ref(member.clone()))??;
     }
+    for conn in &connections {
+        document
+            .scenery_mut()
+            .with_group_node_mut(parent_group_id, |g| connect_from_info(g, conn))??;
+    }
     Ok(Command::RemoveNode(RemoveNode {
         parent_group_id,
         node,
         cascaded,
+        connections,
     }))
 }
 
@@ -107,6 +119,7 @@ pub(super) fn describe_add_node(
         parent_group_id,
         node,
         cascaded,
+        connections,
     } = cmd;
     let mut changes = vec![DocumentChange::NodeAdded {
         graph_id: *parent_group_id,
@@ -116,6 +129,12 @@ pub(super) fn describe_add_node(
         changes.push(DocumentChange::NodeAdded {
             graph_id: *member_parent,
             node: Box::new(node_info(member)?),
+        });
+    }
+    for conn in connections {
+        changes.push(DocumentChange::EdgeAdded {
+            graph_id: *parent_group_id,
+            connect_info: conn.clone(),
         });
     }
     Ok(changes)
@@ -136,6 +155,7 @@ pub(super) fn apply_remove_node(
         parent_group_id,
         node,
         cascaded,
+        connections,
     } = cmd;
     let uuid = node.uuid()?;
     document.scenery_mut().delete_node(uuid)?;
@@ -143,6 +163,7 @@ pub(super) fn apply_remove_node(
         parent_group_id,
         node,
         cascaded,
+        connections,
     }))
 }
 
@@ -158,6 +179,7 @@ pub(super) fn describe_remove_node(
         parent_group_id,
         node,
         cascaded,
+        connections,
     } = cmd;
     let mut changes = vec![DocumentChange::NodeRemoved {
         graph_id: *parent_group_id,
@@ -167,6 +189,12 @@ pub(super) fn describe_remove_node(
         changes.push(DocumentChange::NodeRemoved {
             graph_id: *member_parent,
             uuid: member.uuid()?,
+        });
+    }
+    for conn in connections {
+        changes.push(DocumentChange::EdgeRemoved {
+            graph_id: *parent_group_id,
+            connect_info: conn.clone(),
         });
     }
     Ok(changes)

@@ -616,8 +616,8 @@ async fn process_paste_nodes(
     graph_id: Uuid,
     cut_nodes: bool,
 ) {
-    match api::post_paste_nodes(graph_id, pos).await {
-        Ok((optical_nodes, analyzer_nodes, edges)) => {
+    match api::post_paste_nodes(graph_id, pos, cut_nodes).await {
+        Ok((optical_nodes, analyzer_nodes, edges, cut_result)) => {
             let mut pasted_groups = Vec::<Uuid>::new();
             for (graph_id, n) in &optical_nodes {
                 for node in n {
@@ -680,15 +680,10 @@ async fn process_paste_nodes(
                 }
             }
 
-            if cut_nodes {
-                eval_action_run(
-                    api::post_cut_nodes(graph_id).await,
-                    Some(move |(deleted_nodes, cut_from_graph_id)| {
-                        ws_handler
-                            .nodes
-                            .remove_nodes(deleted_nodes, cut_from_graph_id);
-                    }),
-                );
+            if let Some((deleted_nodes, cut_from_graph_id)) = cut_result {
+                ws_handler
+                    .nodes
+                    .remove_nodes(deleted_nodes, cut_from_graph_id);
             }
         }
         Err(e) => {

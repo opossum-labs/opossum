@@ -136,6 +136,7 @@ async fn post_children(
         parent_group_id: uuid,
         node: new_node_ref.clone(),
         cascaded: Vec::new(),
+        connections: Vec::new(),
     }));
 
     let node = new_node_ref.optical_ref.lock_opm()?;
@@ -309,6 +310,7 @@ async fn delete_node(
         parent_group_id,
         node: target_ref,
         cascaded,
+        connections: Vec::new(),
     }));
 
     drop(document);
