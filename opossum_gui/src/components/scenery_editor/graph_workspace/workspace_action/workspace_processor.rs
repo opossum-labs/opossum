@@ -476,10 +476,14 @@ async fn apply_document_changes(
             DocumentChange::GraphNeedsRefresh { graph_id } => {
                 if workspace.tabs().contains_key(&graph_id) {
                     ws_handler.nodes.clear_graph_store(graph_id);
+                    // Undo/redo re-syncing an already-open tab shouldn't jump the view - unlike the
+                    // other callers of this helper (first tab open, file load, drop-into-group), the
+                    // user hasn't just navigated anywhere.
                     process_fill_graph_of_group(
                         root_graph_id.into(),
                         graph_id,
                         ws_handler,
+                        false,
                         false,
                         workspace,
                     )
@@ -991,6 +995,7 @@ async fn process_drop_nodes_into_group(
                 drop_group_id,
                 ws_handler,
                 false,
+                true,
                 workspace,
             )
             .await;
@@ -1051,7 +1056,7 @@ async fn process_open_group_tab(
         }),
     );
 
-    process_fill_graph_of_group(root_scenery_id, group_id, ws_handler, false, workspace).await;
+    process_fill_graph_of_group(root_scenery_id, group_id, ws_handler, false, true, workspace).await;
 }
 
 async fn process_fill_graph_of_group(
@@ -1059,6 +1064,7 @@ async fn process_fill_graph_of_group(
     group_id: Uuid,
     ws_handler: WorkSpaceSignalHandlers,
     needs_autolayout: bool,
+    should_center: bool,
     workspace: ReadStore<GraphsWorkspaceState>, // <-- Neu: Workspace
 ) {
     eval_action_run(
@@ -1123,7 +1129,9 @@ async fn process_fill_graph_of_group(
         );
     }
 
-    ws_handler.view.center_graph(group_id, false);
+    if should_center {
+        ws_handler.view.center_graph(group_id, false);
+    }
 }
 
 async fn process_load_from_file(
@@ -1154,6 +1162,7 @@ async fn process_load_from_file(
                 scenery_id,
                 ws_handler,
                 response.needs_autolayout,
+                true,
                 workspace, // <-- Workspace durchreichen
             )
             .await;
