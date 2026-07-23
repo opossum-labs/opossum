@@ -438,15 +438,83 @@ pub struct PortNamesResponse {
     pub outputs: Vec<String>,
 }
 
-/// Response payload after removing a port map, containing affected connections
+/// Response payload after removing a port map, reporting every level of the cascade (the
+/// requested mapping, plus any mapping it was itself chained through in an outer group) and
+/// whichever live connection the cascade finally tore down.
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct RemovePortMapResponse {
     /// True if a mapping was actually found and removed
     pub port_removed: bool,
-    /// Connections that were disconnected as a result
-    pub connections: Vec<ConnectInfo>,
-    /// UUID of the parent group
-    pub parent_group_uuid: Uuid,
+    /// `(group_id, internal_node_id, external_port_name, port_type)` per cascade level actually
+    /// removed, innermost (the requested group) first - same shape as
+    /// `DeleteNodeResponse::removed_port_mappings`, so the GUI can reuse that exact handling.
+    pub removed_port_mappings: Vec<(Uuid, Uuid, String, PortType)>,
+    /// Live connection(s) disconnected where the cascade terminated, paired with the group whose
+    /// graph held them - empty if the chain was already orphaned (nothing consuming it at the top).
+    pub disconnected_connections: Vec<(Uuid, ConnectInfo)>,
+}
+
+/// Response payload after deleting a node, containing any external connections that were disconnected
+/// as a side effect - because they depended on a port mapping of the deleted node (or of a node
+/// cascade-deleted alongside it) that no longer exists.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct DeleteNodeResponse {
+    /// UUIDs of all nodes actually deleted (the target plus any cascaded reference nodes)
+    pub deleted_nodes: Vec<Uuid>,
+    /// Connections disconnected as a side effect, paired with the group they lived in
+    pub disconnected_connections: Vec<(Uuid, ConnectInfo)>,
+    /// `(group_id, node_id, external_port_name, port_type)` tuples for each port mapping removed as a
+    /// side effect - lets the GUI prune exactly the affected entries from its own cached port-map list
+    /// (instead of clearing and refetching a whole group's mappings, which would also drop still-valid
+    /// mappings of other, untouched nodes) and shrink the group's own displayed port handles precisely.
+    pub removed_port_mappings: Vec<(Uuid, Uuid, String, PortType)>,
+}
+
+/// Response payload after moving nodes into a different group, reporting any connections rerouted (not
+/// disconnected) as a side effect, plus which groups' port-map/exposed-port displays changed.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct MoveNodesResponse {
+    /// Connections newly created (a boundary sibling reconnected through a fresh port mapping on the
+    /// destination group, or a direct reconnect when the other endpoint already lived there), paired
+    /// with the group each lives in.
+    pub new_connections: Vec<(Uuid, ConnectInfo)>,
+    /// Connections torn down as a side effect - always alongside a matching `new_connections` entry that
+    /// restores the same logical link through a new route.
+    pub removed_connections: Vec<(Uuid, ConnectInfo)>,
+    /// Groups whose port-map/exposed-port display changed and need a GUI refresh - always includes the
+    /// destination group; includes the source group (or a higher ancestor) only when a pre-existing
+    /// mapping was rerouted there.
+    pub port_map_groups_changed: Vec<Uuid>,
+    /// `(group_id, node_id)` pairs whose port-map entry was removed with no replacement under the same
+    /// external name - lets the GUI prune exactly that entry, since a purely additive refresh wouldn't
+    /// otherwise notice a key that's simply gone.
+    pub removed_port_mappings: Vec<(Uuid, Uuid)>,
+}
+
+/// Response payload after converting nodes into a new subgroup, reporting the new group plus
+/// anything that changed as a side effect - shaped like [`MoveNodesResponse`] since converting is
+/// conceptually "create an empty group, then move the selected nodes into it," reusing the same
+/// reroute machinery.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct ConvertToGroupResponse {
+    /// The newly created group node.
+    pub new_group: NodeInfo,
+    /// Connections newly created (a boundary sibling reconnected through a fresh port mapping on the
+    /// new group, or a direct reconnect when the other endpoint already lived there), paired with the
+    /// group each lives in.
+    pub new_connections: Vec<(Uuid, ConnectInfo)>,
+    /// Connections torn down as a side effect - always alongside a matching `new_connections` entry
+    /// that restores the same logical link through a new route.
+    pub removed_connections: Vec<(Uuid, ConnectInfo)>,
+    /// Groups whose port-map/exposed-port display changed and need a GUI refresh - always includes
+    /// the new group; includes the source group too whenever a pre-existing mapping of a converted
+    /// node was rerouted through the new group.
+    pub port_map_groups_changed: Vec<Uuid>,
+    /// `(group_id, node_id)` pairs whose port-map entry was removed with no replacement under the same
+    /// external name. Always empty for this endpoint today (the equivalent of a move's "collapse"
+    /// case, which converting into a brand-new, always-empty group can never trigger) - kept for
+    /// parity with `MoveNodesResponse` so the GUI can share one code path.
+    pub removed_port_mappings: Vec<(Uuid, Uuid)>,
 }
 
 // ============================================================================

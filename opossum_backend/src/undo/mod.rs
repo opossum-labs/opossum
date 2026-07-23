@@ -26,7 +26,7 @@ mod port_map_commands;
 
 pub use analyzer_commands::{PatchAnalyzer, RepositionAnalyzer};
 pub use edge_commands::UpdateEdgeDistance;
-pub use group_commands::{ExtractGroup, InsertGroup};
+pub use group_commands::{ExtractGroup, InsertGroup, ReroutedMapping};
 pub use node_commands::{
     AddNode, PatchNode, PatchPort, PatchProperty, RemoveNode, capture_old_node_request,
 };

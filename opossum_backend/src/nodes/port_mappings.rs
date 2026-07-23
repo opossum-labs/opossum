@@ -6,7 +6,7 @@ use opossum_core::{
     error::OpossumError,
     prelude::{OpticNode, PortType},
     types::api_types::{
-        AddPortMappingRequest, ConnectInfo, ErrorResponse, PortMappingsResponse, PortNamesResponse,
+        AddPortMappingRequest, ErrorResponse, PortMappingsResponse, PortNamesResponse,
         RemovePortMapQuery, RemovePortMapResponse,
     },
 };
@@ -15,6 +15,7 @@ use uuid::Uuid;
 use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
+    helper_functions::remove_port_map_cascade,
     undo::{AddPortMap, Command, RemovePortMap},
 };
 
@@ -140,65 +141,59 @@ pub async fn remove_port_map(
     let mut document = data.document.lock();
     let scenery = document.scenery_mut();
 
-    let (_, parent_group) = scenery.node_recursive(group_id)?;
+    let Some(cascade) = remove_port_map_cascade(scenery, group_id, &external_port_name, port_type)?
+    else {
+        let response = RemovePortMapResponse {
+            port_removed: false,
+            removed_port_mappings: Vec::new(),
+            disconnected_connections: Vec::new(),
+        };
+        return Ok(HttpResponse::Ok().json(response));
+    };
 
-    let connections = scenery.with_group_node_mut(parent_group, |g| {
-        let c = g.graph().get_connection_info_of_node(group_id);
-        c.iter()
-            .map(|c| ConnectInfo::from_connection_info(c, false))
-            .filter(|c| match port_type {
-                PortType::Output => c.src_uuid() == group_id && c.src_port() == external_port_name,
-                PortType::Input => {
-                    c.target_uuid() == group_id && c.target_port() == external_port_name
-                }
-            })
-            .collect::<Vec<ConnectInfo>>()
-    })?;
-
-    // Capture what this mapping pointed at internally, so undo can recreate it.
-    let internal = scenery.with_group_node_mut(group_id, |g| {
-        g.graph()
-            .port_map(&port_type)
-            .get(&external_port_name)
-            .cloned()
-    })?;
-
-    // Disconnect (idiomatisches Error-Handling mit OpossumError)
-    scenery.with_group_node_mut(parent_group, |g| {
-        for c in &connections {
-            g.disconnect_nodes(c.src_uuid(), c.src_port())?;
-        }
-        Ok::<(), OpossumError>(())
-    })??;
-
-    let port_removed = scenery.with_group_node_mut(group_id, |g| {
-        g.remove_mapped_port(&external_port_name, port_type)
-    })?;
-
-    if port_removed && let Some((internal_node_id, internal_port_name)) = internal {
-        let mut inverse = vec![Command::AddPortMap(AddPortMap {
-            group_id,
-            parent_group_id: parent_group,
+    // One removal = one undo step: an `AddPortMap` per level, innermost first (each level's own
+    // restoration depends on the next-inner level already existing, since an outer level's
+    // "internal port" is the inner group's own currently-mapped external name), then an `AddEdge`
+    // per connection the cascade tore down.
+    let mut inverse =
+        Vec::with_capacity(cascade.levels.len() + cascade.disconnected_connections.len());
+    for level in &cascade.levels {
+        inverse.push(Command::AddPortMap(AddPortMap {
+            group_id: level.group_id,
+            parent_group_id: level.parent_group_id,
             request: AddPortMappingRequest {
-                internal_node_id,
-                internal_port_name,
-                external_port_name: external_port_name.clone(),
-                port_type,
+                internal_node_id: level.internal_node_id,
+                internal_port_name: level.internal_port_name.clone(),
+                external_port_name: level.external_port_name.clone(),
+                port_type: level.port_type,
             },
-        })];
-        for c in &connections {
-            inverse.push(Command::AddEdge {
-                group_id: parent_group,
-                connect_info: c.clone(),
-            });
-        }
-        data.push_undo(Command::Batch(inverse));
+        }));
     }
+    for (owning_group_id, connect_info) in &cascade.disconnected_connections {
+        inverse.push(Command::AddEdge {
+            group_id: *owning_group_id,
+            connect_info: connect_info.clone(),
+        });
+    }
+    data.push_undo(Command::Batch(inverse));
+
+    let removed_port_mappings = cascade
+        .levels
+        .into_iter()
+        .map(|level| {
+            (
+                level.group_id,
+                level.internal_node_id,
+                level.external_port_name,
+                level.port_type,
+            )
+        })
+        .collect();
 
     let response = RemovePortMapResponse {
-        port_removed,
-        connections,
-        parent_group_uuid: parent_group,
+        port_removed: true,
+        removed_port_mappings,
+        disconnected_connections: cascade.disconnected_connections,
     };
 
     Ok(HttpResponse::Ok().json(response)) // 200 OK (Daten werden zurückgegeben)
@@ -247,11 +242,16 @@ mod test {
     /// that specific port, not every external connection to the group.
     #[actix_web::test]
     async fn test_remove_port_map_only_removes_matching_connection() {
-        use opossum_core::{meter, nodes::Dummy, nodes::NodeGroup};
+        use opossum_core::{
+            core_optics::node_attr::HasNodeAttr,
+            meter,
+            nodes::{Dummy, NodeGroup},
+        };
 
         let app_state = create_test_state();
-        let (group_id, ext_node_a, ext_node_b) = {
+        let (root_id, group_id, node_a, ext_node_a, ext_node_b) = {
             let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
             let scenery = document.scenery_mut();
 
             let mut group = NodeGroup::new("inner group");
@@ -271,7 +271,7 @@ mod test {
                 .connect_nodes(ext_node_b, "output_1", group_id, "ext_in_2", meter!(0.1))
                 .unwrap();
 
-            (group_id, ext_node_a, ext_node_b)
+            (root_id, group_id, n1, ext_node_a, ext_node_b)
         };
 
         let app = test::init_service(
@@ -292,10 +292,17 @@ mod test {
 
         let body: RemovePortMapResponse = test::read_body_json(resp).await;
         assert!(body.port_removed);
-        assert_eq!(body.connections.len(), 1);
-        assert_eq!(body.connections[0].src_uuid(), ext_node_a);
-        assert_eq!(body.connections[0].target_uuid(), group_id);
-        assert_eq!(body.connections[0].target_port(), "ext_in_1");
+        assert_eq!(
+            body.removed_port_mappings,
+            vec![(group_id, node_a, "ext_in_1".to_string(), PortType::Input)],
+            "exactly the requested single-level mapping must be reported removed - the group has \
+             no further chain to walk, so the cascade stops after 1 level"
+        );
+        assert_eq!(body.disconnected_connections.len(), 1);
+        assert_eq!(body.disconnected_connections[0].0, root_id);
+        assert_eq!(body.disconnected_connections[0].1.src_uuid(), ext_node_a);
+        assert_eq!(body.disconnected_connections[0].1.target_uuid(), group_id);
+        assert_eq!(body.disconnected_connections[0].1.target_port(), "ext_in_1");
 
         // the connection to the *other* mapped port must still be intact
         let document = app_state.document.lock();
@@ -307,5 +314,205 @@ mod test {
         assert_eq!(remaining[0].src_id, ext_node_b);
         assert_eq!(remaining[0].target_id, group_id);
         assert_eq!(remaining[0].target_port, "ext_in_2");
+    }
+
+    /// Regression test for the bug where removing a port mapping chained through nested groups
+    /// only removed the innermost entry, leaving the rest of the chain (and the live connection
+    /// it ultimately depended on) dangling. Builds `root { G2 { G1 { L } } }`: `L`'s output is
+    /// mapped to `G1`'s own external port `g1_ext_out`; `G1` itself is a member of `G2`, which
+    /// maps `g1_ext_out` to `G2`'s own external port `g2_ext_out`; `G2`'s `g2_ext_out` is
+    /// connected to sibling `N` at the root. Removes the innermost mapping (on `G1`, exposing
+    /// `L`) and asserts the response reports both mapping levels removed (innermost first) and
+    /// the root-level `G2 -> N` connection disconnected, all three actually gone from the
+    /// document, and a single undo restores the entire chain.
+    #[actix_web::test]
+    async fn test_remove_port_map_cascades_through_nested_groups() {
+        use crate::document::undo_document;
+        use opossum_core::{
+            core_optics::node_attr::HasNodeAttr,
+            meter,
+            nodes::{Dummy, NodeGroup},
+        };
+
+        let app_state = create_test_state();
+        let (root_id, g1_id, g2_id, lens, n) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let scenery = document.scenery_mut();
+
+            let mut g1 = NodeGroup::new("G1");
+            let lens = g1.add_node(Dummy::default()).unwrap();
+            g1.map_output_port(lens, "output_1", "g1_ext_out").unwrap();
+
+            let mut g2 = NodeGroup::new("G2");
+            let g1_id = g2.add_node(g1).unwrap();
+            g2.map_output_port(g1_id, "g1_ext_out", "g2_ext_out")
+                .unwrap();
+
+            let g2_id = scenery.add_node(g2).unwrap();
+            let n = scenery.add_node(Dummy::default()).unwrap();
+            scenery
+                .connect_nodes(g2_id, "g2_ext_out", n, "input_1", meter!(0.1))
+                .unwrap();
+
+            (root_id, g1_id, g2_id, lens, n)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(remove_port_map)
+                .service(undo_document),
+        )
+        .await;
+
+        let req = test::TestRequest::delete()
+            .uri(&format!(
+                "/{g1_id}/port_mappings?external_port_name=g1_ext_out&port_type=Output"
+            ))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body: RemovePortMapResponse = test::read_body_json(resp).await;
+        assert!(body.port_removed);
+        assert_eq!(
+            body.removed_port_mappings,
+            vec![
+                (g1_id, lens, "g1_ext_out".to_string(), PortType::Output),
+                (g2_id, g1_id, "g2_ext_out".to_string(), PortType::Output),
+            ],
+            "both chained levels must be reported removed, innermost (G1) first"
+        );
+        assert_eq!(body.disconnected_connections.len(), 1);
+        assert_eq!(body.disconnected_connections[0].0, root_id);
+        assert_eq!(body.disconnected_connections[0].1.src_uuid(), g2_id);
+        assert_eq!(body.disconnected_connections[0].1.target_uuid(), n);
+
+        {
+            let document = app_state.document.lock();
+            let g1_mapping = document
+                .scenery()
+                .with_group_node(g1_id, |g| {
+                    g.graph()
+                        .port_map(&PortType::Output)
+                        .get("g1_ext_out")
+                        .cloned()
+                })
+                .unwrap();
+            assert_eq!(g1_mapping, None, "G1's own mapping must be gone");
+            let g2_mapping = document
+                .scenery()
+                .with_group_node(g2_id, |g| {
+                    g.graph()
+                        .port_map(&PortType::Output)
+                        .get("g2_ext_out")
+                        .cloned()
+                })
+                .unwrap();
+            assert_eq!(g2_mapping, None, "G2's chained mapping must be gone too");
+            let root_connections = document.scenery().graph().connections();
+            assert!(
+                !root_connections
+                    .iter()
+                    .any(|c| c.src_id == g2_id && c.target_id == n),
+                "the root-level G2 -> N connection must be gone"
+            );
+        }
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::OK,
+            "a single undo must restore the entire chain"
+        );
+
+        let document = app_state.document.lock();
+        let g1_mapping = document
+            .scenery()
+            .with_group_node(g1_id, |g| {
+                g.graph()
+                    .port_map(&PortType::Output)
+                    .get("g1_ext_out")
+                    .cloned()
+            })
+            .unwrap();
+        assert_eq!(g1_mapping, Some((lens, "output_1".to_string())));
+        let g2_mapping = document
+            .scenery()
+            .with_group_node(g2_id, |g| {
+                g.graph()
+                    .port_map(&PortType::Output)
+                    .get("g2_ext_out")
+                    .cloned()
+            })
+            .unwrap();
+        assert_eq!(g2_mapping, Some((g1_id, "g1_ext_out".to_string())));
+        let root_connections = document.scenery().graph().connections();
+        assert!(
+            root_connections
+                .iter()
+                .any(|c| c.src_id == g2_id && c.target_id == n),
+            "the root-level G2 -> N connection must be restored"
+        );
+    }
+
+    /// Regression test for the "orphaned top of chain" case: if the outermost group in a mapping
+    /// chain has no live connection consuming it (nothing wired to it yet), the cascade must still
+    /// remove every chained mapping level - there's just nothing to disconnect at the end. Same
+    /// `G2 { G1 { L } }` setup as the connected case, but `G2`'s own `g2_ext_out` is never
+    /// connected to anything.
+    #[actix_web::test]
+    async fn test_remove_port_map_cascade_with_no_live_connection_at_top() {
+        use opossum_core::nodes::{Dummy, NodeGroup};
+
+        let app_state = create_test_state();
+        let (g1_id, g2_id, lens) = {
+            let mut document = app_state.document.lock();
+            let scenery = document.scenery_mut();
+
+            let mut g1 = NodeGroup::new("G1");
+            let lens = g1.add_node(Dummy::default()).unwrap();
+            g1.map_output_port(lens, "output_1", "g1_ext_out").unwrap();
+
+            let mut g2 = NodeGroup::new("G2");
+            let g1_id = g2.add_node(g1).unwrap();
+            g2.map_output_port(g1_id, "g1_ext_out", "g2_ext_out")
+                .unwrap();
+
+            let g2_id = scenery.add_node(g2).unwrap();
+
+            (g1_id, g2_id, lens)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(remove_port_map),
+        )
+        .await;
+
+        let req = test::TestRequest::delete()
+            .uri(&format!(
+                "/{g1_id}/port_mappings?external_port_name=g1_ext_out&port_type=Output"
+            ))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body: RemovePortMapResponse = test::read_body_json(resp).await;
+        assert!(body.port_removed);
+        assert_eq!(
+            body.removed_port_mappings,
+            vec![
+                (g1_id, lens, "g1_ext_out".to_string(), PortType::Output),
+                (g2_id, g1_id, "g2_ext_out".to_string(), PortType::Output),
+            ],
+            "both chained levels must still be removed even with nothing to disconnect at the top"
+        );
+        assert!(
+            body.disconnected_connections.is_empty(),
+            "nothing was ever connected to G2's own export, so nothing should be disconnected"
+        );
     }
 }

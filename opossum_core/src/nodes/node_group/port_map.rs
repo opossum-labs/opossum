@@ -73,6 +73,10 @@ impl PortMap {
         let len_after = self.0.len();
         len_after < len_before
     }
+    /// Remove all port mappings from this [`PortMap`].
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
     /// Returns the port names of this [`PortMap`].
     #[must_use]
     pub fn port_names(&self) -> Vec<String> {
@@ -194,6 +198,16 @@ mod tests {
         assert_eq!(port_map.remove_all_from_uuid(uuid1), true);
         assert_eq!(port_map.0.len(), 3);
         assert_eq!(port_map.remove_all_from_uuid(uuid2), true);
+        assert!(port_map.0.is_empty());
+        Ok(())
+    }
+    #[test]
+    fn clear() -> OpmResult<()> {
+        let mut port_map = PortMap::default();
+        port_map.add("external1", Uuid::new_v4(), "internal1")?;
+        port_map.add("external2", Uuid::new_v4(), "internal2")?;
+        assert_eq!(port_map.0.len(), 2);
+        port_map.clear();
         assert!(port_map.0.is_empty());
         Ok(())
     }

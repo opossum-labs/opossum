@@ -1,10 +1,9 @@
 //! `apply`/`describe` bodies for the group port-mapping [`Command`] variants: [`Command::AddPortMap`],
 //! [`Command::RemovePortMap`].
 use opossum_core::{
-    error::OpossumError,
     opm_document::OpmDocument,
     prelude::PortType,
-    types::api_types::{AddPortMappingRequest, ConnectInfo, DocumentChange, RemovePortMapQuery},
+    types::api_types::{AddPortMappingRequest, DocumentChange, RemovePortMapQuery},
 };
 use uuid::Uuid;
 
@@ -69,10 +68,19 @@ pub(super) fn apply_add_port_map(
     }))
 }
 
-/// Removes an external port mapping from `cmd.group_id`, disconnecting anything wired to it first.
-/// Returns a [`Command::Batch`] of the [`Command::AddPortMap`] that recreates the mapping plus one
-/// [`Command::AddEdge`] per connection that had to be torn down, since undoing the removal means
-/// restoring both.
+/// Removes an external port mapping from `cmd.group_id`, cascading outward through any group it's
+/// itself chained through (see [`crate::helper_functions::remove_port_map_cascade`]) until it
+/// reaches and disconnects a live connection, or runs out of chain. Returns a [`Command::Batch`]
+/// of one [`Command::AddPortMap`] per level removed (innermost first) plus one
+/// [`Command::AddEdge`] per connection torn down, since undoing the removal means restoring all
+/// of it.
+///
+/// A bare [`Command::RemovePortMap`] is only ever constructed as the undo of an [`AddPortMap`] -
+/// and adding a mapping can never have anything chained onto it yet (mapping requires the port
+/// not already be connected), so by LIFO undo/redo ordering, anything chained onto it afterward
+/// must already be undone before this ever runs. The cascade discovered here is therefore always
+/// exactly the 1 level `cmd` itself names - this only calls the shared multi-level helper to avoid
+/// duplicating its logic, not because more than 1 level is actually expected here.
 ///
 /// # Errors
 ///
@@ -91,68 +99,49 @@ pub(super) fn apply_remove_port_map(
         external_port_name,
         port_type,
     } = query;
-    let (_, parent_group) = document.scenery().node_recursive(group_id)?;
-    debug_assert_eq!(
-        parent_group, parent_group_id,
-        "captured parent_group_id must match the group's actual current parent"
-    );
 
-    // Capture the internal node/port this mapping pointed at, so the inverse can recreate it.
-    let internal = document.scenery_mut().with_group_node_mut(group_id, |g| {
-        g.graph()
-            .port_map(&port_type)
-            .get(&external_port_name)
-            .cloned()
-    })?;
-    let Some((internal_node_id, internal_port_name)) = internal else {
+    let Some(cascade) = crate::helper_functions::remove_port_map_cascade(
+        document.scenery_mut(),
+        group_id,
+        &external_port_name,
+        port_type,
+    )?
+    else {
         return Err(BackEndErrorResponse::new(
             400,
             "Opossum",
             &format!("Port mapping '{external_port_name}' not found"),
         ));
     };
+    debug_assert_eq!(
+        cascade.levels.len(),
+        1,
+        "a bare RemovePortMap must only ever discover exactly the 1 level it names - see this \
+         function's own doc comment"
+    );
+    debug_assert_eq!(
+        cascade.levels.first().map(|l| l.parent_group_id),
+        Some(parent_group_id),
+        "captured parent_group_id must match the group's actual current parent"
+    );
 
-    // Disconnect any external connections using this mapped port, capturing them for the inverse.
-    let torn_down = document
-        .scenery_mut()
-        .with_group_node_mut(parent_group, |g| {
-            let connections = g
-                .graph()
-                .get_connection_info_of_node(group_id)
-                .iter()
-                .map(|c| ConnectInfo::from_connection_info(c, false))
-                .filter(|c| match port_type {
-                    PortType::Output => {
-                        c.src_uuid() == group_id && c.src_port() == external_port_name
-                    }
-                    PortType::Input => {
-                        c.target_uuid() == group_id && c.target_port() == external_port_name
-                    }
-                })
-                .collect::<Vec<_>>();
-            for c in &connections {
-                g.disconnect_nodes(c.src_uuid(), c.src_port())?;
-            }
-            Ok::<_, OpossumError>(connections)
-        })??;
-
-    document.scenery_mut().with_group_node_mut(group_id, |g| {
-        g.remove_mapped_port(&external_port_name, port_type)
-    })?;
-
-    let mut inverse = vec![Command::AddPortMap(AddPortMap {
-        group_id,
-        parent_group_id,
-        request: AddPortMappingRequest {
-            internal_node_id,
-            internal_port_name,
-            external_port_name,
-            port_type,
-        },
-    })];
-    for connect_info in torn_down {
+    let mut inverse =
+        Vec::with_capacity(cascade.levels.len() + cascade.disconnected_connections.len());
+    for level in cascade.levels {
+        inverse.push(Command::AddPortMap(AddPortMap {
+            group_id: level.group_id,
+            parent_group_id: level.parent_group_id,
+            request: AddPortMappingRequest {
+                internal_node_id: level.internal_node_id,
+                internal_port_name: level.internal_port_name,
+                external_port_name: level.external_port_name,
+                port_type: level.port_type,
+            },
+        }));
+    }
+    for (owning_group_id, connect_info) in cascade.disconnected_connections {
         inverse.push(Command::AddEdge {
-            group_id: parent_group,
+            group_id: owning_group_id,
             connect_info,
         });
     }

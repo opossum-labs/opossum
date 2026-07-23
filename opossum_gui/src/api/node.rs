@@ -3,9 +3,10 @@ use opossum_core::{
     prelude::*,
     types::api_types::{
         AddPortMappingRequest, AnalyzerItemDto, ConnectInfo, ConvertToGroupRequest,
-        MoveNodesRequest, NewNode, NewRefNode, NodeInfo, NodePortsResponse, NodePropertiesResponse,
-        PortMappingsResponse, PortNamesResponse, RemovePortMapResponse, UpdateConnectionRequest,
-        UpdateNodeRequest, UpdatePortRequest,
+        ConvertToGroupResponse, DeleteNodeResponse, MoveNodesRequest, MoveNodesResponse, NewNode,
+        NewRefNode, NodeInfo, NodePortsResponse, NodePropertiesResponse, PortMappingsResponse,
+        PortNamesResponse, RemovePortMapResponse, UpdateConnectionRequest, UpdateNodeRequest,
+        UpdatePortRequest,
     },
 };
 use std::collections::{HashMap, HashSet};
@@ -108,7 +109,12 @@ pub async fn post_paste_nodes(
         HashMap<Uuid, Vec<NodeInfo>>,
         Vec<AnalyzerItemDto>,
         HashMap<Uuid, Vec<ConnectInfo>>,
-        Option<(Vec<Uuid>, Uuid)>,
+        Option<(
+            Vec<Uuid>,
+            Vec<Uuid>,
+            Vec<(Uuid, ConnectInfo)>,
+            Vec<(Uuid, Uuid, String, PortType)>,
+        )>,
     ),
     String,
 > {
@@ -117,7 +123,12 @@ pub async fn post_paste_nodes(
             HashMap<Uuid, Vec<NodeInfo>>,
             Vec<AnalyzerItemDto>,
             HashMap<Uuid, Vec<ConnectInfo>>,
-            Option<(Vec<Uuid>, Uuid)>,
+            Option<(
+                Vec<Uuid>,
+                Vec<Uuid>,
+                Vec<(Uuid, ConnectInfo)>,
+                Vec<(Uuid, Uuid, String, PortType)>,
+            )>,
         )>(
             "/api/operations/paste_nodes",
             (group_id, (pos.x, pos.y), cut),
@@ -152,9 +163,9 @@ pub async fn post_add_ref_node(
 /// This function will return an error if
 /// - the provided [`Uuid`] cannot be serialized or found
 /// - the returned response cannot be deserialized into a vector of [`Uuid`]
-pub async fn delete_node(id: Uuid) -> Result<Vec<Uuid>, String> {
+pub async fn delete_node(id: Uuid) -> Result<DeleteNodeResponse, String> {
     HTTP_API_CLIENT()
-        .delete::<String, Vec<Uuid>>(&format!("/api/nodes/{id}"), String::new())
+        .delete::<String, DeleteNodeResponse>(&format!("/api/nodes/{id}"), String::new())
         .await
 }
 /// Get the `NodeInfo` of an optical node.
@@ -280,13 +291,13 @@ pub async fn get_group_hierarchy(group_id: Uuid) -> Result<Vec<(Uuid, String)>, 
 pub async fn convert_nodes_to_group(
     nodes: Vec<Uuid>,
     group_id: Uuid,
-) -> Result<(NodeInfo, Vec<ConnectInfo>), String> {
+) -> Result<ConvertToGroupResponse, String> {
     let convert_to_group_request = ConvertToGroupRequest {
         group_id,
         nodes_to_convert: nodes,
     };
     HTTP_API_CLIENT()
-        .post::<ConvertToGroupRequest, (NodeInfo, Vec<ConnectInfo>)>(
+        .post::<ConvertToGroupRequest, ConvertToGroupResponse>(
             "/api/operations/convert_to_group",
             convert_to_group_request,
         )
@@ -303,14 +314,17 @@ pub async fn drop_nodes_into_group(
     nodes: Vec<Uuid>,
     from_group_id: Uuid,
     drop_group_id: Uuid,
-) -> Result<String, String> {
+) -> Result<MoveNodesResponse, String> {
     let move_nodes_request = MoveNodesRequest {
         source_group_id: from_group_id,
         target_group_id: drop_group_id,
         nodes_to_move: nodes.clone(),
     };
     HTTP_API_CLIENT()
-        .post::<MoveNodesRequest, String>("/api/operations/move_nodes", move_nodes_request)
+        .post::<MoveNodesRequest, MoveNodesResponse>(
+            "/api/operations/move_nodes",
+            move_nodes_request,
+        )
         .await
 }
 

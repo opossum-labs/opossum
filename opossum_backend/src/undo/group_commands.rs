@@ -1,27 +1,56 @@
 //! `apply`/`describe` bodies for the group-structure [`Command`] variants: [`Command::MoveNodes`],
 //! [`Command::InsertGroup`], [`Command::ExtractGroup`].
-use std::collections::HashSet;
-
 use opossum_core::{
     core_optics::OpticRef,
     error::OpossumError,
     nodes::NodeGroup,
     opm_document::OpmDocument,
+    prelude::PortType,
     types::api_types::{ConnectInfo, DocumentChange, MoveNodesRequest},
     utils::LockExt,
 };
 use uuid::Uuid;
 
 use super::Command;
-use crate::{error::BackEndErrorResponse, helper_functions::connect_from_info};
+use crate::{
+    error::BackEndErrorResponse,
+    helper_functions::{
+        connect_from_info, disconnect_moved_node_connections, reconnect_moved_node_connections,
+        split_sort_connections_from_document,
+    },
+};
+
+/// A port-map-only export (no live connection at this level) that was rerouted through the group
+/// instead of a live edge: `parent_group_id`'s own `external_name` used to map directly to
+/// `member_id`'s `member_port`, and now instead resolves through the group's own internal mapping
+/// `group_internal_name -> (member_id, member_port)`. Neither `external_connections` nor
+/// `restore_connections` (both live-edge shapes) can represent this - it's the group-conversion
+/// analogue of `disconnect_moved_node_connections`/`reconnect_moved_node_connections`'s own
+/// `from_group_external_name` reroute case, just needing to survive across undo/redo instead of
+/// being applied once.
+#[derive(Clone)]
+pub struct ReroutedMapping {
+    /// `parent_group_id`'s own external name - constant across undo/redo, never changes.
+    pub external_name: String,
+    pub port_type: PortType,
+    /// The member node's original uuid - stable across undo/redo since it's the same live `OpticRef`.
+    pub member_id: Uuid,
+    /// The member's own internal port name.
+    pub member_port: String,
+    /// The group's own external name for the same port, on its own untouched internal port map -
+    /// baked in once when the mapping was first rerouted, and reused unchanged on every redo since
+    /// the group's internal structure never changes across detach/reattach cycles.
+    pub group_internal_name: String,
+}
 
 /// Removes `member_ids` from `parent_group_id`'s flat graph and inserts the previously captured `group`
 /// node in their place, reconnecting `external_connections` (in terms of the *group's own*
-/// uuid/exposed-port-names) to its exposed ports. The group's internal members/connections are
-/// untouched - they live inside `group`'s own nested graph the whole time, whether or not `group` is
-/// currently attached to the document. `restore_connections` is carried through unchanged for the
-/// [`ExtractGroup`] this produces - see its docs for why it needs a different, member-uuid-based
-/// representation of the same connections.
+/// uuid/exposed-port-names) to its exposed ports, and re-establishing any `rerouted_mappings` on
+/// `parent_group_id`'s own port map. The group's internal members/connections are untouched - they
+/// live inside `group`'s own nested graph the whole time, whether or not `group` is currently attached
+/// to the document. `restore_connections` is carried through unchanged for the [`ExtractGroup`] this
+/// produces - see its docs for why it needs a different, member-uuid-based representation of the same
+/// connections.
 #[derive(Clone)]
 pub struct InsertGroup {
     pub parent_group_id: Uuid,
@@ -29,13 +58,16 @@ pub struct InsertGroup {
     pub member_ids: Vec<Uuid>,
     pub external_connections: Vec<ConnectInfo>,
     pub restore_connections: Vec<ConnectInfo>,
+    pub rerouted_mappings: Vec<ReroutedMapping>,
 }
 
 /// The inverse of [`InsertGroup`]: removes `group` from `parent_group_id` and re-inserts its members as
 /// flat nodes in its place. Reconnects `restore_connections` - every connection that touched a member
 /// *before* grouping (both formerly-internal and formerly-boundary), expressed in terms of the original
 /// member uuids/ports - rather than `external_connections`, which references the group's own uuid and
-/// can't be used once the group node has just been deleted.
+/// can't be used once the group node has just been deleted. Re-establishes any `rerouted_mappings`
+/// directly onto each member's own port, since `parent_group_id`'s own mapping to the (about to be
+/// deleted) group is stripped by this same command's `delete_node` call.
 #[derive(Clone)]
 pub struct ExtractGroup {
     pub parent_group_id: Uuid,
@@ -43,11 +75,17 @@ pub struct ExtractGroup {
     pub member_ids: Vec<Uuid>,
     pub external_connections: Vec<ConnectInfo>,
     pub restore_connections: Vec<ConnectInfo>,
+    pub rerouted_mappings: Vec<ReroutedMapping>,
 }
 
 /// Moves `request.nodes_to_move` (and the connections purely between them) from
 /// `request.source_group_id` to `request.target_group_id`, returning the swapped [`Command::MoveNodes`]
-/// that undoes it.
+/// that undoes it. Any connection that can't directly follow the move (a boundary sibling left behind, or
+/// a pre-existing external mapping of a moved node's own port) is preserved via
+/// `preserve_moved_node_connections` rather than disconnected - see its own docs for why that makes the
+/// returned inverse a plain swapped `MoveNodes`, with no extra captured state needed: re-running this same
+/// discovery from live state on the next call (whichever direction that is) is enough to correctly unwind
+/// whatever this call set up.
 ///
 /// # Errors
 ///
@@ -62,23 +100,26 @@ pub(super) fn apply_move_nodes(
         nodes_to_move: node_ids,
     } = request;
 
-    let node_set: HashSet<Uuid> = node_ids.iter().copied().collect();
+    // Re-derived fresh from the live document on every call (not carried in the command), so this stays
+    // correct across arbitrary undo/redo cycles - each call only captures what's actually still there to
+    // lose at the moment it runs.
     let connections = document
         .scenery()
         .with_group_node(from_group_id, NodeGroup::connections)?;
-    let inside = connections
-        .iter()
-        .filter(|c| node_set.contains(&c.src_id) && node_set.contains(&c.target_id))
-        .map(|c| {
-            let is_reference = document
-                .scenery()
-                .with_node_attr(c.target_id, |attr| {
-                    attr.properties().get("reference id").is_ok()
-                })
-                .unwrap_or(false);
-            ConnectInfo::from_connection_info(c, is_reference)
-        })
-        .collect::<Vec<_>>();
+    let split = split_sort_connections_from_document(document, &connections, &node_ids);
+    let boundary_connections: Vec<ConnectInfo> =
+        split.input.into_iter().chain(split.output).collect();
+
+    // Tear down anything that would otherwise be lost by the move, before the nodes are actually deleted
+    // from `from_group_id`. What's captured here can only be re-established once the nodes actually exist
+    // in `to_group_id` (see `disconnect_moved_node_connections`'s own docs), so that happens further down.
+    let (pending, _removed_connections) = disconnect_moved_node_connections(
+        document.scenery_mut(),
+        from_group_id,
+        to_group_id,
+        &boundary_connections,
+        &node_ids,
+    )?;
 
     let node_refs: Vec<OpticRef> = node_ids
         .iter()
@@ -93,11 +134,13 @@ pub(super) fn apply_move_nodes(
             .scenery_mut()
             .with_group_node_mut(to_group_id, |g| g.add_node_ref(node_ref.clone()))??;
     }
-    for conn in &inside {
+    for conn in &split.inside {
         document
             .scenery_mut()
             .with_group_node_mut(to_group_id, |g| connect_from_info(g, conn))??;
     }
+
+    reconnect_moved_node_connections(document.scenery_mut(), from_group_id, to_group_id, pending)?;
 
     Ok(Command::MoveNodes(MoveNodesRequest {
         source_group_id: to_group_id,
@@ -135,10 +178,12 @@ pub(super) fn apply_insert_group(
         member_ids,
         external_connections,
         restore_connections,
+        rerouted_mappings,
     } = cmd;
     for member_id in &member_ids {
         document.scenery_mut().delete_node(*member_id)?;
     }
+    let group_id = group.uuid()?;
     document
         .scenery_mut()
         .with_group_node_mut(parent_group_id, |g| g.add_node_ref(group.clone()))??;
@@ -147,12 +192,28 @@ pub(super) fn apply_insert_group(
             .scenery_mut()
             .with_group_node_mut(parent_group_id, |g| connect_from_info(g, conn))??;
     }
+    // Re-point `parent_group_id`'s own mapping at the group's own already-correct internal
+    // mapping for the same port - the group's internal structure never changes across
+    // detach/reattach cycles, so `group_internal_name` is still valid.
+    for m in &rerouted_mappings {
+        document
+            .scenery_mut()
+            .with_group_node_mut(parent_group_id, |g| match m.port_type {
+                PortType::Input => {
+                    g.map_input_port(group_id, &m.group_internal_name, &m.external_name)
+                }
+                PortType::Output => {
+                    g.map_output_port(group_id, &m.group_internal_name, &m.external_name)
+                }
+            })??;
+    }
     Ok(Command::ExtractGroup(ExtractGroup {
         parent_group_id,
         group,
         member_ids,
         external_connections,
         restore_connections,
+        rerouted_mappings,
     }))
 }
 
@@ -174,6 +235,7 @@ pub(super) fn apply_extract_group(
         member_ids,
         external_connections,
         restore_connections,
+        rerouted_mappings,
     } = cmd;
     let group_id = group.uuid()?;
     document.scenery_mut().delete_node(group_id)?;
@@ -196,12 +258,26 @@ pub(super) fn apply_extract_group(
             .scenery_mut()
             .with_group_node_mut(parent_group_id, |g| connect_from_info(g, conn))??;
     }
+    // Re-point `parent_group_id`'s own mapping directly at the member's own port - the old entry
+    // pointing at the (now-deleted) group is already gone, stripped by this function's own
+    // `delete_node(group_id)` call above.
+    for m in &rerouted_mappings {
+        document
+            .scenery_mut()
+            .with_group_node_mut(parent_group_id, |g| match m.port_type {
+                PortType::Input => g.map_input_port(m.member_id, &m.member_port, &m.external_name),
+                PortType::Output => {
+                    g.map_output_port(m.member_id, &m.member_port, &m.external_name)
+                }
+            })??;
+    }
     Ok(Command::InsertGroup(InsertGroup {
         parent_group_id,
         group,
         member_ids,
         external_connections,
         restore_connections,
+        rerouted_mappings,
     }))
 }
 

@@ -14,9 +14,9 @@ use futures_util::StreamExt;
 use opossum_core::{
     prelude::{AnalyzerType, PortType},
     types::api_types::{
-        AnalyzerItemDto, ConnectInfo, DocumentChange, NewAnalyzerInfo, NewNode, NewRefNode,
-        NodeInfo, NodePortsResponse, PortMappingsResponse, PositionUpdate, UndoRedoResponse,
-        UpdateConnectionRequest,
+        AnalyzerItemDto, ConnectInfo, DeleteNodeResponse, DocumentChange, NewAnalyzerInfo, NewNode,
+        NewRefNode, NodeInfo, NodePortsResponse, PortMappingsResponse, PositionUpdate,
+        UndoRedoResponse, UpdateConnectionRequest,
     },
 };
 use serde_json::Value;
@@ -164,7 +164,15 @@ pub fn use_workspace_processor(
                     }
                     GraphsWorkspaceAction::PasteNode { pos, graph_id } => {
                         let nodes_cut = *workspace.nodes_cut().read();
-                        process_paste_nodes(pos, workspace_handlers, graph_id, nodes_cut).await;
+                        process_paste_nodes(
+                            pos,
+                            workspace_handlers,
+                            graph_id,
+                            nodes_cut,
+                            root_graph_id,
+                            workspace,
+                        )
+                        .await;
                     }
                     GraphsWorkspaceAction::SyncNodePositions { moves } => {
                         let updates = moves
@@ -192,7 +200,12 @@ pub fn use_workspace_processor(
                         group_id,
                         group_name,
                     } => {
-                        let group_tab_already_open = workspace.tabs().contains_key(&group_id);
+                        // A tab's data can exist in `tabs()` without being visible yet (silently
+                        // seeded by `ensure_group_tab` for a group that was never opened) - judge
+                        // "already open" by tab bar visibility, not data existence, or a
+                        // silently-seeded group would never actually open.
+                        let group_tab_already_open =
+                            workspace.tab_order().read().contains(&group_id);
                         if group_tab_already_open {
                             workspace_handlers.workspace.set_active_tab(group_id);
                         } else {
@@ -207,7 +220,13 @@ pub fn use_workspace_processor(
                         }
                     }
                     GraphsWorkspaceAction::ConvertToGroup { nodes, graph_id } => {
-                        process_convert_nodes_to_group(nodes, graph_id, workspace_handlers).await;
+                        process_convert_nodes_to_group(
+                            nodes,
+                            graph_id,
+                            workspace_handlers,
+                            workspace,
+                        )
+                        .await;
                     }
                     GraphsWorkspaceAction::DropNodesIntoGroup {
                         nodes,
@@ -599,8 +618,25 @@ async fn process_delete_node(
             NodeType::Optical(_) => {
                 eval_action_run(
                     api::delete_node(node_id).await,
-                    Some(move |deleted_ids| {
-                        ws_handler.nodes.remove_nodes(deleted_ids, graph_id);
+                    Some(move |response: DeleteNodeResponse| {
+                        ws_handler
+                            .nodes
+                            .remove_nodes(response.deleted_nodes, graph_id);
+                        for (group_id, node_id, external_port_name, port_type) in
+                            response.removed_port_mappings
+                        {
+                            ws_handler
+                                .workspace
+                                .remove_port_maps_for_node(group_id, node_id);
+                            ws_handler.nodes.remove_group_port(
+                                external_port_name,
+                                group_id,
+                                port_type,
+                            );
+                        }
+                        for (group_id, edge) in response.disconnected_connections {
+                            ws_handler.edges.delete_edge(edge, group_id);
+                        }
                     }),
                 );
             }
@@ -620,11 +656,55 @@ async fn process_delete_node(
     }
 }
 
+/// Refreshes a single group's external port-map list and its displayed port-name handles from the
+/// backend's current state. Used both for a group that was just pasted into (its content is new to the
+/// GUI) and for a group that nodes were just cut *out of* (its port maps/handles may have shrunk and need
+/// to be reconciled with the now-authoritative backend state).
+async fn refresh_group_ports(ws_handler: WorkSpaceSignalHandlers, group_id: Uuid) {
+    eval_action_run(
+        api::get_port_maps_of_group(group_id).await,
+        Some(move |port_mappings_response: PortMappingsResponse| {
+            for (group_port_name, (mapped_node_id, mapped_node_port_name)) in
+                &port_mappings_response.inputs
+            {
+                ws_handler.workspace.add_port_map(
+                    group_id,
+                    group_port_name.clone(),
+                    mapped_node_port_name.clone(),
+                    *mapped_node_id,
+                );
+            }
+            for (group_port_name, (mapped_node_id, mapped_node_port_name)) in
+                &port_mappings_response.outputs
+            {
+                ws_handler.workspace.add_port_map(
+                    group_id,
+                    group_port_name.clone(),
+                    mapped_node_port_name.clone(),
+                    *mapped_node_id,
+                );
+            }
+        }),
+    );
+    eval_action_run(
+        api::get_ports_of_group(group_id).await,
+        Some(move |ports_config: NodePortsResponse| {
+            let input_ports = ports_config.inputs.into_keys().collect();
+            let output_ports = ports_config.outputs.into_keys().collect();
+            ws_handler
+                .nodes
+                .update_group_ports(input_ports, output_ports, group_id);
+        }),
+    );
+}
+
 async fn process_paste_nodes(
     pos: Point2D<f64>,
     ws_handler: WorkSpaceSignalHandlers,
     graph_id: Uuid,
     cut_nodes: bool,
+    root_scenery_id: Memo<Uuid>,
+    workspace: ReadStore<GraphsWorkspaceState>,
 ) {
     match api::post_paste_nodes(graph_id, pos, cut_nodes).await {
         Ok((optical_nodes, analyzer_nodes, edges, cut_result)) => {
@@ -646,42 +726,29 @@ async fn process_paste_nodes(
                 );
             }
 
+            let pasted_a_group = !pasted_groups.is_empty();
             for group_id in pasted_groups {
-                eval_action_run(
-                    api::get_port_maps_of_group(group_id).await,
-                    Some(move |port_mappings_response: PortMappingsResponse| {
-                        for (group_port_name, (mapped_node_id, mapped_node_port_name)) in
-                            &port_mappings_response.inputs
-                        {
-                            ws_handler.workspace.add_port_map(
-                                group_id,
-                                group_port_name.clone(),
-                                mapped_node_port_name.clone(),
-                                *mapped_node_id,
-                            );
-                        }
-                        for (group_port_name, (mapped_node_id, mapped_node_port_name)) in
-                            &port_mappings_response.outputs
-                        {
-                            ws_handler.workspace.add_port_map(
-                                group_id,
-                                group_port_name.clone(),
-                                mapped_node_port_name.clone(),
-                                *mapped_node_id,
-                            );
-                        }
-                    }),
-                );
-                eval_action_run(
-                    api::get_ports_of_group(group_id).await,
-                    Some(move |ports_config: NodePortsResponse| {
-                        let input_ports = ports_config.inputs.into_keys().collect();
-                        let output_ports = ports_config.outputs.into_keys().collect();
-                        ws_handler
-                            .nodes
-                            .update_group_ports(input_ports, output_ports, group_id);
-                    }),
-                );
+                refresh_group_ports(ws_handler, group_id).await;
+            }
+            if pasted_a_group {
+                // A pasted group's own box, shown in `graph_id` (the tab the paste landed in),
+                // needs its ports/mapped marker to appear too. `refresh_group_ports` above patches
+                // the box's existing `NodeElement` in place via a cross-tab scan, but that patch
+                // isn't triggering a redraw (same known gap already sidestepped for drag-into-group
+                // - see `process_drop_nodes_into_group`). Re-fetch `graph_id`'s own children as
+                // full `NodeInfo` instead - the same proven-correct mechanism a manual tab
+                // close+reopen already goes through. No autolayout/re-centering: this is a
+                // background data refresh of a tab the user is already looking at, not a fresh
+                // open.
+                process_fill_graph_of_group(
+                    root_scenery_id.into(),
+                    graph_id,
+                    ws_handler,
+                    false,
+                    false,
+                    workspace,
+                )
+                .await;
             }
 
             for (graph_id, edges) in &edges {
@@ -690,10 +757,40 @@ async fn process_paste_nodes(
                 }
             }
 
-            if let Some((deleted_nodes, cut_from_graph_id)) = cut_result {
-                ws_handler
-                    .nodes
-                    .remove_nodes(deleted_nodes, cut_from_graph_id);
+            if let Some((
+                deleted_nodes,
+                cut_from_group_ids,
+                disconnected_connections,
+                removed_port_mappings,
+            )) = cut_result
+            {
+                // A multi-select cut can span more than one parent group - apply the removal
+                // against each (a no-op for any group a given node doesn't actually belong to).
+                for group_id in &cut_from_group_ids {
+                    ws_handler
+                        .nodes
+                        .remove_nodes(deleted_nodes.clone(), *group_id);
+                }
+                // Only the cut node(s)' own mapping entries are gone - prune exactly those from the
+                // GUI's cached port-map list rather than clearing the whole group (which would also drop
+                // still-valid mappings of any other, untouched node in the same group). Shrink the
+                // group's own port handles by the same precise diff rather than a full refetch - that
+                // extra round trip used to be what visually cleared every mapping in the group instead
+                // of just the cut node's.
+                for (group_id, node_id, external_port_name, port_type) in removed_port_mappings {
+                    ws_handler
+                        .workspace
+                        .remove_port_maps_for_node(group_id, node_id);
+                    ws_handler
+                        .nodes
+                        .remove_group_port(external_port_name, group_id, port_type);
+                }
+                // Any external connection that depended on one of those now-gone mappings is also
+                // already correctly disconnected server-side - the GUI's own edge list needs the same
+                // explicit removal.
+                for (group_id, edge) in disconnected_connections {
+                    ws_handler.edges.delete_edge(edge, group_id);
+                }
             }
         }
         Err(e) => {
@@ -924,20 +1021,29 @@ async fn process_remove_port_map(
     port_type: PortType,
     ws_handler: WorkSpaceSignalHandlers,
 ) {
-    match api::remove_port_map(group_port_name.clone(), group_id, port_type).await {
+    match api::remove_port_map(group_port_name, group_id, port_type).await {
         Ok(response) => {
-            for edge in &response.connections {
-                ws_handler
-                    .edges
-                    .delete_edge(edge.clone(), response.parent_group_uuid);
-            }
             if response.port_removed {
-                ws_handler
-                    .workspace
-                    .remove_port_map(group_id, group_port_name.clone());
-                ws_handler
-                    .nodes
-                    .remove_group_port(group_port_name, group_id, port_type);
+                // Removing a mapping can cascade outward through however many groups it's
+                // chained through (see `remove_port_map_cascade` on the backend) - apply exactly
+                // what's reported for each level: prune the internal "mapped" bookkeeping and
+                // shrink that group's own displayed port handle, same pattern already used for a
+                // deleted node's port mapping (`process_delete_node`).
+                for (level_group_id, node_id, external_port_name, level_port_type) in
+                    response.removed_port_mappings
+                {
+                    ws_handler
+                        .workspace
+                        .remove_port_maps_for_node(level_group_id, node_id);
+                    ws_handler.nodes.remove_group_port(
+                        external_port_name,
+                        level_group_id,
+                        level_port_type,
+                    );
+                }
+                for (owning_group_id, edge) in response.disconnected_connections {
+                    ws_handler.edges.delete_edge(edge, owning_group_id);
+                }
             } else {
                 OPOSSUM_UI_LOGS
                     .write()
@@ -984,6 +1090,31 @@ async fn process_add_port_map(
     }
 }
 
+/// Silently seed a tab for `group_id` if it doesn't exist yet (e.g. a subgroup that was just
+/// created but never opened), so subsequent writes into its own graph store - nodes, edges, port
+/// maps - actually land instead of silently no-op'ing against a tab that was never created. Does
+/// not touch `tab_order`/`active_tab`, so it never pops open a tab the user didn't ask for.
+async fn ensure_group_tab_exists(
+    group_id: Uuid,
+    ws_handler: WorkSpaceSignalHandlers,
+    workspace: ReadStore<GraphsWorkspaceState>,
+) {
+    if workspace.tabs().contains_key(&group_id) {
+        return;
+    }
+    if let Ok(hierarchy) = api::get_group_hierarchy(group_id).await {
+        let name = hierarchy
+            .last()
+            .map(|(_, name)| name.clone())
+            .unwrap_or_default();
+        ws_handler.workspace.ensure_group_tab(GraphInfo {
+            name,
+            id: group_id,
+            hierarchy,
+        });
+    }
+}
+
 async fn process_drop_nodes_into_group(
     nodes: Vec<Uuid>,
     from_group_id: Uuid,
@@ -993,8 +1124,38 @@ async fn process_drop_nodes_into_group(
     workspace: ReadStore<GraphsWorkspaceState>,
 ) {
     match api::drop_nodes_into_group(nodes.clone(), from_group_id, drop_group_id).await {
-        Ok(_) => {
+        Ok(response) => {
             ws_handler.nodes.remove_nodes(nodes, from_group_id);
+            // A moved node's connection to a sibling left behind, or to an external node via a
+            // pre-existing port mapping, is preserved rather than dropped - rerouted through a new
+            // mapping on the destination group (or reconnected directly if the other endpoint already
+            // lives there). Reflect exactly what the backend reports: new edges, torn-down old ones, and
+            // any port-map entry removed with no replacement under the same name (a purely additive
+            // refresh below wouldn't otherwise notice a key that's simply gone).
+            for (group_id, edge) in response.new_connections {
+                ws_handler.edges.add_edge(edge, group_id);
+            }
+            for (group_id, edge) in response.removed_connections {
+                ws_handler.edges.delete_edge(edge, group_id);
+            }
+            for (group_id, node_id) in response.removed_port_mappings {
+                ws_handler
+                    .workspace
+                    .remove_port_maps_for_node(group_id, node_id);
+            }
+            // The destination group (and any other group whose port map changed) may never have
+            // been opened before - make sure its tab exists before writing into it below.
+            for group_id in response
+                .port_map_groups_changed
+                .iter()
+                .copied()
+                .chain(std::iter::once(drop_group_id))
+            {
+                ensure_group_tab_exists(group_id, ws_handler, workspace).await;
+            }
+            for group_id in response.port_map_groups_changed {
+                refresh_group_ports(ws_handler, group_id).await;
+            }
 
             process_fill_graph_of_group(
                 root_scenery_id.into(),
@@ -1005,6 +1166,50 @@ async fn process_drop_nodes_into_group(
                 workspace,
             )
             .await;
+
+            // The subgroup's box, as shown in `from_group_id`'s own (already-open) tab, needs its
+            // new port(s) and "mapped" marker to appear too. `refresh_group_ports` above patches
+            // the box's existing `NodeElement` in place via a cross-tab scan, but that patch isn't
+            // triggering a redraw. Re-fetch `from_group_id`'s own children as full `NodeInfo`
+            // instead - the same proven-correct mechanism a manual tab close+reopen already goes
+            // through - to rebuild the subgroup's `NodeElement` (ports included) from scratch. No
+            // autolayout/re-centering: this is a background data refresh of a tab the user is
+            // already actively looking at, not a fresh open.
+            process_fill_graph_of_group(
+                root_scenery_id.into(),
+                from_group_id,
+                ws_handler,
+                false,
+                false,
+                workspace,
+            )
+            .await;
+
+            // If the moved node had its own external mapping, `from_group_id`'s own port map got
+            // repointed too (same external name, new internal target) - so `from_group_id`'s own
+            // box, as shown one level further out in *its* parent's tab, needs the same redraw
+            // sidestep as above. `GraphInfo::get_parent` has its own off-by-one for a group that's
+            // a *direct* child of the root (returns `None` instead of `Some(root)`) - mirror the
+            // same root-id fallback `hooks.rs`'s context menu already uses for that case, and skip
+            // entirely when `from_group_id` is the root itself (calling `get_parent` on a
+            // single-entry hierarchy underflows).
+            let root_id = *root_scenery_id.read();
+            if from_group_id != root_id {
+                let from_group_parent_id = workspace
+                    .tabs()
+                    .get(from_group_id)
+                    .and_then(|g| g.graph_info().read().get_parent())
+                    .map_or(root_id, |(id, _)| id);
+                process_fill_graph_of_group(
+                    root_scenery_id.into(),
+                    from_group_parent_id,
+                    ws_handler,
+                    false,
+                    false,
+                    workspace,
+                )
+                .await;
+            }
         }
         Err(err_str) => {
             OPOSSUM_UI_LOGS.write().add_log(&err_str);
@@ -1018,22 +1223,58 @@ async fn process_convert_nodes_to_group(
     nodes: Vec<Uuid>,
     current_group_id: Uuid,
     ws_handler: WorkSpaceSignalHandlers,
+    workspace: ReadStore<GraphsWorkspaceState>,
 ) {
     if !nodes.is_empty() {
         // guard, if the nodes vector is empty (e.g. all nodes filtered out before)
         match api::convert_nodes_to_group(nodes.clone(), current_group_id).await {
-            Ok((new_group_info, port_mapping)) => {
-                //remove nodes that have been converted to a group from graph
+            Ok(response) => {
+                let new_group_id = response.new_group.uuid();
+
+                // remove nodes that have been converted to a group from graph
                 ws_handler.nodes.remove_nodes(nodes, current_group_id);
 
-                //add new group node
+                // Add the new group node - built server-side from a `NodeInfo` already fully
+                // resolved (ports included, reflecting any pre-existing mapping a converted node
+                // had that got rerouted through it), so its box shows correctly immediately.
+                // Unlike patching an *existing* node's ports in place cross-tab (the known
+                // `update_group_ports_handler` redraw gap - see `process_drop_nodes_into_group`),
+                // inserting a brand-new node doesn't hit that issue: the node list's key set
+                // changes, which does reliably trigger a redraw.
                 ws_handler
                     .nodes
-                    .add_optical_node(new_group_info, current_group_id);
+                    .add_optical_node(response.new_group, current_group_id);
 
-                //connect group node
-                for edge in port_mapping {
-                    ws_handler.edges.add_edge(edge, current_group_id);
+                // Reflect exactly what the backend reports: a boundary sibling reconnected
+                // through the new group, any edge torn down as a side effect, and any port-map
+                // entry removed with no replacement under the same name.
+                for (group_id, edge) in response.new_connections {
+                    ws_handler.edges.add_edge(edge, group_id);
+                }
+                for (group_id, edge) in response.removed_connections {
+                    ws_handler.edges.delete_edge(edge, group_id);
+                }
+                for (group_id, node_id) in response.removed_port_mappings {
+                    ws_handler
+                        .workspace
+                        .remove_port_maps_for_node(group_id, node_id);
+                }
+
+                // The new group's own tab may never be opened - seed it (same as
+                // `process_drop_nodes_into_group` does for its drop target) so its internal
+                // port-map bookkeeping is correct regardless, and so `current_group_id`'s own
+                // port-map cache picks up the new group as the rerouted target for a converted
+                // node's pre-existing mapping, if any.
+                for group_id in response
+                    .port_map_groups_changed
+                    .iter()
+                    .copied()
+                    .chain(std::iter::once(new_group_id))
+                {
+                    ensure_group_tab_exists(group_id, ws_handler, workspace).await;
+                }
+                for group_id in response.port_map_groups_changed {
+                    refresh_group_ports(ws_handler, group_id).await;
                 }
             }
             Err(err_str) => {

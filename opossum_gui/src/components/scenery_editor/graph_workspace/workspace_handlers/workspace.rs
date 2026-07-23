@@ -21,13 +21,14 @@ use uuid::Uuid;
 #[derive(Clone, PartialEq, Copy)]
 pub struct WorkspaceHandlers {
     add_new_group_tab: EventHandler<GraphInfo>,
+    ensure_group_tab: EventHandler<GraphInfo>,
     set_root_scenery_id: EventHandler<Uuid>,
     remove_tabs: EventHandler<Vec<Uuid>>,
     set_needs_saving: EventHandler<bool>,
     clear_workspace: EventHandler<()>,
     set_active_tab: EventHandler<Uuid>,
     add_port_map: EventHandler<((Uuid, Uuid), (String, String))>,
-    remove_port_map: EventHandler<(Uuid, String)>,
+    remove_port_maps_for_node: EventHandler<(Uuid, Uuid)>,
     set_drag_status: EventHandler<DragStatus>,
     set_drop_in_group: EventHandler<Option<(Uuid, usize)>>,
     set_selection_box: EventHandler<Option<Rect<f64>>>,
@@ -42,13 +43,14 @@ impl WorkspaceHandlers {
     pub fn new(workspace: Store<GraphsWorkspaceState>) -> Self {
         Self {
             add_new_group_tab: add_new_group_tab_handler(workspace),
+            ensure_group_tab: ensure_group_tab_handler(workspace),
             set_root_scenery_id: set_root_scenery_id_handler(workspace),
             remove_tabs: remove_tabs_handler(workspace),
             set_needs_saving: set_needs_saving_handler(workspace),
             clear_workspace: clear_workspace_handler(workspace),
             set_active_tab: set_active_tab_handler(workspace),
             add_port_map: add_port_map_handler(workspace),
-            remove_port_map: remove_port_map_handler(workspace),
+            remove_port_maps_for_node: remove_port_maps_for_node_handler(workspace),
             set_drag_status: set_drag_status_handler(workspace),
             set_drop_in_group: set_drop_in_group_handler(workspace),
             set_selection_box: set_selection_box_handler(workspace),
@@ -89,6 +91,13 @@ impl WorkspaceHandlers {
     pub fn add_new_group_tab(&self, graph_info: GraphInfo) {
         self.add_new_group_tab.call(graph_info);
     }
+    /// Silently seed a group's tab data if it doesn't already exist, without opening it in the tab
+    /// bar (no `tab_order`/`active_tab` change). Lets background writes (port maps, nodes, edges)
+    /// for a group the user has never navigated into actually land, instead of silently no-op'ing
+    /// against a tab that was never created.
+    pub fn ensure_group_tab(&self, graph_info: GraphInfo) {
+        self.ensure_group_tab.call(graph_info);
+    }
     pub fn set_root_scenery_id(&self, id: Uuid) {
         self.set_root_scenery_id.call(id);
     }
@@ -116,8 +125,8 @@ impl WorkspaceHandlers {
             (group_port_name, mapped_node_port_name),
         ));
     }
-    pub fn remove_port_map(&self, group_id: Uuid, group_port_name: String) {
-        self.remove_port_map.call((group_id, group_port_name));
+    pub fn remove_port_maps_for_node(&self, group_id: Uuid, node_id: Uuid) {
+        self.remove_port_maps_for_node.call((group_id, node_id));
     }
 }
 
@@ -261,17 +270,15 @@ fn set_drag_status_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandl
     })
 }
 
-fn remove_port_map_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandler<(Uuid, String)> {
-    EventHandler::new(move |(group_id, group_port_name): (Uuid, String)| {
-        if let Some(graph_store) = workspace.tabs().get(group_id).map(|g| g.graph_store())
-            && !graph_store
+fn remove_port_maps_for_node_handler(
+    workspace: Store<GraphsWorkspaceState>,
+) -> EventHandler<(Uuid, Uuid)> {
+    EventHandler::new(move |(group_id, node_id): (Uuid, Uuid)| {
+        if let Some(graph_store) = workspace.tabs().get(group_id).map(|g| g.graph_store()) {
+            graph_store
                 .mapped_ports()
                 .write()
-                .remove_key(&group_port_name)
-        {
-            OPOSSUM_UI_LOGS.write().add_log(&format!(
-                "Could not remove port mapping of port: {group_port_name}"
-            ));
+                .remove_all_from_uuid(node_id);
         }
     })
 }
@@ -300,12 +307,31 @@ fn add_port_map_handler(
 fn add_new_group_tab_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandler<GraphInfo> {
     EventHandler::new(move |graph_info: GraphInfo| {
         let id = graph_info.id;
-        let graph_state =
-            GraphState::new(GraphStore::default(), EditorState::default(), graph_info);
-        workspace.tabs().write().insert(id, graph_state);
-
-        workspace.tab_order().write().push(id);
+        // The tab's data may already have been silently seeded by `ensure_group_tab` (e.g. a
+        // subgroup a node was dragged into before it was ever opened) - don't blow that away, the
+        // caller always follows up with a full refetch anyway, which reconciles either way.
+        if !workspace.tabs().read().contains_key(&id) {
+            let graph_state =
+                GraphState::new(GraphStore::default(), EditorState::default(), graph_info);
+            workspace.tabs().write().insert(id, graph_state);
+        }
+        if !workspace.tab_order().read().contains(&id) {
+            workspace.tab_order().write().push(id);
+        }
         workspace.active_tab().set(id);
+    })
+}
+
+/// Silently seed `graph_info.id`'s tab data if it doesn't already exist, without adding it to
+/// `tab_order` or making it the active tab - see [`WorkspaceHandlers::ensure_group_tab`].
+fn ensure_group_tab_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandler<GraphInfo> {
+    EventHandler::new(move |graph_info: GraphInfo| {
+        let id = graph_info.id;
+        if !workspace.tabs().read().contains_key(&id) {
+            let graph_state =
+                GraphState::new(GraphStore::default(), EditorState::default(), graph_info);
+            workspace.tabs().write().insert(id, graph_state);
+        }
     })
 }
 

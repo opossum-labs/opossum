@@ -10,8 +10,11 @@ use opossum_core::{
     error::OpossumError,
     light::lightdata::{energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder},
     nodes::{NodeReference, create_node_ref},
-    prelude::{AnalyzerType, OpmDocument, Proptype},
-    types::api_types::{ErrorResponse, NewNode, NewRefNode, NodeInfo, UpdateNodeRequest},
+    prelude::{AnalyzerType, OpmDocument, PortType, Proptype},
+    types::api_types::{
+        AddPortMappingRequest, ConnectInfo, DeleteNodeResponse, ErrorResponse, NewNode, NewRefNode,
+        NodeInfo, UpdateNodeRequest,
+    },
     utils::LockExt,
 };
 use parking_lot::MutexGuard;
@@ -20,8 +23,8 @@ use uuid::Uuid;
 use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
-    helper_functions::capture_node_connections,
-    undo::{AddNode, Command, PatchNode, RemoveNode, capture_old_node_request},
+    helper_functions::{capture_node_connections, disconnect_stale_external_connections_for_node},
+    undo::{AddNode, AddPortMap, Command, PatchNode, RemoveNode, capture_old_node_request},
 };
 
 /// Get all nodes of a group node
@@ -242,17 +245,18 @@ async fn patch_node(
 /// Delete a node
 ///
 /// This function deletes a node. It also deletes reference nodes which refer to this node.
-/// A list of UUIDs of the effectively deleted nodes is returned.
+/// Returns the UUIDs of the effectively deleted nodes, plus any external connections that had to be
+/// disconnected as a side effect (e.g. because they depended on a port mapping of the deleted node).
 #[utoipa::path(tag = "node",
 responses(
-    (status = OK, body= Vec<Uuid>, description = "UUIDs of the deleted nodes", content_type="application/json"),
+    (status = OK, body = DeleteNodeResponse, description = "UUIDs of the deleted nodes and any disconnected connections", content_type="application/json"),
     (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
 ))]
 #[delete("/{uuid}")]
 async fn delete_node(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
-) -> Result<Json<Vec<Uuid>>, BackEndErrorResponse> {
+) -> Result<Json<DeleteNodeResponse>, BackEndErrorResponse> {
     let uuid = path.into_inner();
     let mut document = data.document.lock();
 
@@ -282,6 +286,17 @@ async fn delete_node(
         capture_node_connections(document.scenery(), parent_group_id, uuid).unwrap_or_default();
 
     let scenery = document.scenery_mut();
+    let mut disconnected_mappings =
+        disconnect_stale_external_connections_for_node(scenery, parent_group_id, uuid)?;
+    for (member_parent, member_ref) in &cascaded {
+        if let Ok(member_uuid) = member_ref.uuid() {
+            disconnected_mappings.extend(disconnect_stale_external_connections_for_node(
+                scenery,
+                *member_parent,
+                member_uuid,
+            )?);
+        }
+    }
     let deleted_nodes = scenery.delete_node(uuid)?;
 
     // --- AUTOMATICALLY REMOVE OBSOLETE MAPPINGS FROM ALL ANALYZERS ---
@@ -312,15 +327,57 @@ async fn delete_node(
         .into_iter()
         .filter(|(_, r)| r.uuid().is_ok_and(|id| deleted_nodes.contains(&id)))
         .collect();
-    data.push_undo(Command::AddNode(AddNode {
+    let disconnected_connections: Vec<(Uuid, ConnectInfo)> = disconnected_mappings
+        .iter()
+        .map(|d| (d.mapping_parent_group_id, d.connect_info.clone()))
+        .collect();
+    let removed_port_mappings: Vec<(Uuid, Uuid, String, PortType)> = disconnected_mappings
+        .iter()
+        .map(|d| {
+            (
+                d.mapping_group_id,
+                d.internal_node_id,
+                d.external_port_name.clone(),
+                d.port_type,
+            )
+        })
+        .collect();
+
+    let add_node = Command::AddNode(AddNode {
         parent_group_id,
         node: target_ref,
         cascaded,
         connections,
-    }));
+    });
+    if disconnected_mappings.is_empty() {
+        data.push_undo(add_node);
+    } else {
+        let mut batch = vec![add_node];
+        for d in disconnected_mappings {
+            batch.push(Command::AddPortMap(AddPortMap {
+                group_id: d.mapping_group_id,
+                parent_group_id: d.mapping_parent_group_id,
+                request: AddPortMappingRequest {
+                    internal_node_id: d.internal_node_id,
+                    internal_port_name: d.internal_port_name,
+                    external_port_name: d.external_port_name,
+                    port_type: d.port_type,
+                },
+            }));
+            batch.push(Command::AddEdge {
+                group_id: d.mapping_parent_group_id,
+                connect_info: d.connect_info,
+            });
+        }
+        data.push_undo(Command::Batch(batch));
+    }
 
     drop(document);
-    Ok(web::Json(deleted_nodes))
+    Ok(web::Json(DeleteNodeResponse {
+        deleted_nodes,
+        disconnected_connections,
+        removed_port_mappings,
+    }))
 }
 
 /// Get nodes that reference a certain node uuid
@@ -614,6 +671,125 @@ mod test {
                 .iter()
                 .any(|c| c.src_id == group_id && c.target_id == node_c),
             "the group node's external connection to node_c must be restored"
+        );
+    }
+
+    /// Regression test for the bug where deleting a node whose port was externally mapped left a
+    /// dangling connection behind: `OpticGraph::delete_node` correctly prunes the port-map *entry*
+    /// pointing at the deleted node, but the *external connection* that used that mapping - a separate
+    /// edge one level up, in the mapping group's own parent graph - was never touched. Builds a group
+    /// `G` containing node `A`, maps `A`'s input to `G`'s external port `ext_in_1`, connects a sibling
+    /// `S` (in the root, `G`'s parent) to `G:ext_in_1`, deletes `A`, and asserts the `S -> G` connection
+    /// is gone. One undo must restore `A`, the port mapping, and the `S -> G` connection together.
+    ///
+    /// Also covers the follow-up bug where `G`'s own displayed port handle (as seen from `G`'s
+    /// parent) stayed visible after the deletion: the response's `removed_port_mappings` used to
+    /// carry only `(group_id, node_id)`, not enough for the GUI to call the handler that shrinks a
+    /// group's own port handles (`remove_group_port`, which needs the external port name + type) -
+    /// asserts the response now carries that name and type too.
+    #[actix_web::test]
+    async fn test_undo_delete_mapped_node_restores_port_map_and_external_connection() {
+        use opossum_core::{
+            meter,
+            nodes::{Dummy, NodeGroup},
+            prelude::PortType,
+        };
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, group_id, node_a, sibling_s) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let scenery = document.scenery_mut();
+
+            let mut group = NodeGroup::new("inner group");
+            let node_a = group.add_node(Dummy::default()).unwrap();
+            group.map_input_port(node_a, "input_1", "ext_in_1").unwrap();
+            let group_id = scenery.add_node(group).unwrap();
+
+            let sibling_s = scenery.add_node(Dummy::default()).unwrap();
+            scenery
+                .connect_nodes(sibling_s, "output_1", group_id, "ext_in_1", meter!(0.1))
+                .unwrap();
+
+            (root_id, group_id, node_a, sibling_s)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(delete_node)
+                .service(undo_document),
+        )
+        .await;
+
+        let req = test::TestRequest::delete()
+            .uri(&format!("/{node_a}"))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let response: DeleteNodeResponse = test::read_body_json(resp).await;
+        assert!(
+            response
+                .disconnected_connections
+                .iter()
+                .any(|(group_id_, c)| *group_id_ == root_id
+                    && c.src_uuid() == sibling_s
+                    && c.target_uuid() == group_id),
+            "the response must report the disconnected S -> G connection"
+        );
+        assert_eq!(
+            response.removed_port_mappings,
+            vec![(group_id, node_a, "ext_in_1".to_string(), PortType::Input)],
+            "the response must carry the external port name and type, so the GUI can shrink \
+             G's own displayed port handle instead of leaving it stale"
+        );
+
+        {
+            let document = app_state.document.lock();
+            let connections = document
+                .scenery()
+                .with_group_node(root_id, NodeGroup::connections)
+                .unwrap();
+            assert!(
+                !connections
+                    .iter()
+                    .any(|c| c.src_id == sibling_s && c.target_id == group_id),
+                "the dangling S -> G connection must be gone once A (and its mapping) is deleted"
+            );
+        }
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK, "undo must not error");
+
+        let document = app_state.document.lock();
+        assert!(
+            document.scenery().node_recursive(node_a).is_ok(),
+            "node A must be restored"
+        );
+        let restored_mapping = document
+            .scenery()
+            .with_group_node(group_id, |g| {
+                g.graph()
+                    .port_map(&PortType::Input)
+                    .get("ext_in_1")
+                    .cloned()
+            })
+            .unwrap();
+        assert_eq!(
+            restored_mapping,
+            Some((node_a, "input_1".to_string())),
+            "the port mapping must be restored"
+        );
+        let connections = document
+            .scenery()
+            .with_group_node(root_id, NodeGroup::connections)
+            .unwrap();
+        assert!(
+            connections.iter().any(|c| c.src_id == sibling_s
+                && c.target_id == group_id
+                && c.target_port == "ext_in_1"),
+            "the S -> G external connection must be restored"
         );
     }
 }

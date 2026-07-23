@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::components::scenery_editor::graph_workspace::{
-    GraphStateStoreExt, GraphStore, GraphStoreStoreImplExt, GraphsWorkspaceState,
-    GraphsWorkspaceStateStoreExt, GraphsWorkspaceStateStoreImplExt,
+    GraphStateStoreExt, GraphStore, GraphStoreStoreExt, GraphStoreStoreImplExt,
+    GraphsWorkspaceState, GraphsWorkspaceStateStoreExt, GraphsWorkspaceStateStoreImplExt,
     workspace_handlers::helper_functions::{for_each_tab, with_graph_store, with_tab},
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
@@ -215,22 +215,18 @@ fn remove_group_port_handler(
 ) -> EventHandler<(String, Uuid, PortType)> {
     EventHandler::new(
         move |(removed_port, group_id, port_type): (String, Uuid, PortType)| {
-            let root_id = *workspace.root_scenery_id().read();
-
-            let parent_id_opt = workspace.tabs().get(group_id).map(|graph_state| {
-                graph_state
-                    .graph_info()
-                    .read()
-                    .get_parent_id()
-                    .unwrap_or(root_id)
+            // A group's own box (with its port handles) is rendered by whichever tab holds it as a
+            // member node - that's its true parent, and it's independent of whether the group's own tab
+            // has ever been opened (looking up the parent via the group's own cached `hierarchy`, as
+            // before, silently no-ops whenever it hasn't - the common case when a node is only ever
+            // viewed/dragged from its parent's tab). Scanning every open tab for the one that actually
+            // contains `group_id` as a node finds the right target regardless.
+            for_each_tab(workspace, false, |tab| {
+                let mut graph_store = tab.graph_store();
+                if graph_store.nodes().get(group_id).is_some() {
+                    graph_store.remove_port_of_node(group_id, &removed_port, port_type);
+                }
             });
-            if let Some(p_id) = parent_id_opt
-                && let Some(graph_state) = workspace.tabs().get(p_id)
-            {
-                graph_state
-                    .graph_store()
-                    .remove_port_of_node(group_id, &removed_port, port_type);
-            }
         },
     )
 }
@@ -240,19 +236,17 @@ fn update_group_ports_handler(
 ) -> EventHandler<(Vec<String>, Vec<String>, Uuid)> {
     EventHandler::new(
         move |(input_ports, output_ports, group_id): (Vec<String>, Vec<String>, Uuid)| {
-            let parent_id_opt = workspace.tabs().get(group_id).map(|graph_state| {
-                let graph_info = graph_state.graph_info();
-                let hierarchy = &graph_info.read().hierarchy;
-                let parent_hierarchy_pos = hierarchy.len() - 2;
-                hierarchy[parent_hierarchy_pos].0
+            // See `remove_group_port_handler`'s comment - same reasoning applies here.
+            for_each_tab(workspace, false, |tab| {
+                let mut graph_store = tab.graph_store();
+                if graph_store.nodes().get(group_id).is_some() {
+                    graph_store.update_ports_of_node(
+                        group_id,
+                        input_ports.clone(),
+                        output_ports.clone(),
+                    );
+                }
             });
-            if let Some(parent_id) = parent_id_opt
-                && let Some(graph_state) = workspace.tabs().get(parent_id)
-            {
-                graph_state
-                    .graph_store()
-                    .update_ports_of_node(group_id, input_ports, output_ports);
-            }
         },
     )
 }

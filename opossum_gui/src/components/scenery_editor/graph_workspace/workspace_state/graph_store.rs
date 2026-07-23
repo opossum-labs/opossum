@@ -39,18 +39,10 @@ impl GraphState {
 }
 
 impl GraphInfo {
-    pub fn get_parent_id(&self) -> Option<Uuid> {
-        let parent_hierarchy_pos = self.hierarchy.len() - 2;
-        if parent_hierarchy_pos > 0 {
-            Some(self.hierarchy[parent_hierarchy_pos].0)
-        } else {
-            None
-        }
-    }
     pub fn get_parent(&self) -> Option<(Uuid, String)> {
-        let parent_hierarchy_pos = self.hierarchy.len() - 2;
-        if parent_hierarchy_pos > 0 {
-            Some(self.hierarchy[parent_hierarchy_pos].clone())
+        let hierarchy_len = self.hierarchy.len();
+        if hierarchy_len > 2 {
+            Some(self.hierarchy[hierarchy_len - 2].clone())
         } else {
             None
         }

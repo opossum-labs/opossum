@@ -167,7 +167,7 @@ pub(crate) async fn undo_document(
     )
 )]
 #[post("/redo")]
-async fn redo_document(
+pub(crate) async fn redo_document(
     data: web::Data<AppState>,
 ) -> Result<Json<UndoRedoResponse>, BackEndErrorResponse> {
     let Some(command) = data.redo_stack.lock().pop_back() else {
