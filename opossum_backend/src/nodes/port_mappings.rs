@@ -16,7 +16,7 @@ use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
     helper_functions::remove_port_map_cascade,
-    undo::{AddPortMap, Command, EdgeSnapshot, RemovePortMap},
+    undo::{Command, EdgeSnapshot, RemovePortMap},
 };
 
 /// Get the port mappings of a group node
@@ -158,16 +158,7 @@ pub async fn remove_port_map(
     let mut inverse =
         Vec::with_capacity(cascade.levels.len() + cascade.disconnected_connections.len());
     for level in &cascade.levels {
-        inverse.push(Command::AddPortMap(AddPortMap {
-            group_id: level.group_id,
-            parent_group_id: level.parent_group_id,
-            request: AddPortMappingRequest {
-                internal_node_id: level.internal_node_id,
-                internal_port_name: level.internal_port_name.clone(),
-                external_port_name: level.external_port_name.clone(),
-                port_type: level.port_type,
-            },
-        }));
+        inverse.push(Command::AddPortMap(level.into()));
     }
     for (owning_group_id, connect_info) in &cascade.disconnected_connections {
         inverse.push(Command::AddEdge(EdgeSnapshot {

@@ -8,7 +8,10 @@ use opossum_core::{
 use uuid::Uuid;
 
 use super::{Command, EdgeSnapshot};
-use crate::error::BackEndErrorResponse;
+use crate::{
+    error::BackEndErrorResponse,
+    helper_functions::{DisconnectedPortMapping, RemovedPortMapLevel},
+};
 
 /// Exposes an internal node's port as an external port on `group_id`. `parent_group_id` (`group_id`'s own
 /// parent) is carried only so undo/redo responses can tell the GUI which tab renders `group_id`'s node
@@ -19,6 +22,58 @@ pub struct AddPortMap {
     pub group_id: Uuid,
     pub parent_group_id: Uuid,
     pub request: AddPortMappingRequest,
+}
+
+impl From<RemovedPortMapLevel> for AddPortMap {
+    /// Builds the mapping-restoring command for one level torn down by
+    /// [`crate::helper_functions::remove_port_map_cascade`].
+    fn from(level: RemovedPortMapLevel) -> Self {
+        Self {
+            group_id: level.group_id,
+            parent_group_id: level.parent_group_id,
+            request: AddPortMappingRequest {
+                internal_node_id: level.internal_node_id,
+                internal_port_name: level.internal_port_name,
+                external_port_name: level.external_port_name,
+                port_type: level.port_type,
+            },
+        }
+    }
+}
+
+impl From<&RemovedPortMapLevel> for AddPortMap {
+    /// Builds the mapping-restoring command for one level torn down by
+    /// [`crate::helper_functions::remove_port_map_cascade`], when the levels are still needed
+    /// afterward (e.g. to build a response) and so can't be consumed by value.
+    fn from(level: &RemovedPortMapLevel) -> Self {
+        Self {
+            group_id: level.group_id,
+            parent_group_id: level.parent_group_id,
+            request: AddPortMappingRequest {
+                internal_node_id: level.internal_node_id,
+                internal_port_name: level.internal_port_name.clone(),
+                external_port_name: level.external_port_name.clone(),
+                port_type: level.port_type,
+            },
+        }
+    }
+}
+
+impl From<&DisconnectedPortMapping> for AddPortMap {
+    /// Builds the mapping-restoring command for a connection torn down by
+    /// [`crate::helper_functions::disconnect_stale_external_connections_for_node`].
+    fn from(mapping: &DisconnectedPortMapping) -> Self {
+        Self {
+            group_id: mapping.mapping_group_id,
+            parent_group_id: mapping.mapping_parent_group_id,
+            request: AddPortMappingRequest {
+                internal_node_id: mapping.internal_node_id,
+                internal_port_name: mapping.internal_port_name.clone(),
+                external_port_name: mapping.external_port_name.clone(),
+                port_type: mapping.port_type,
+            },
+        }
+    }
 }
 
 /// Removes an external port mapping from `group_id`, disconnecting anything wired to it first.
@@ -128,16 +183,7 @@ pub(super) fn apply_remove_port_map(
     let mut inverse =
         Vec::with_capacity(cascade.levels.len() + cascade.disconnected_connections.len());
     for level in cascade.levels {
-        inverse.push(Command::AddPortMap(AddPortMap {
-            group_id: level.group_id,
-            parent_group_id: level.parent_group_id,
-            request: AddPortMappingRequest {
-                internal_node_id: level.internal_node_id,
-                internal_port_name: level.internal_port_name,
-                external_port_name: level.external_port_name,
-                port_type: level.port_type,
-            },
-        }));
+        inverse.push(Command::AddPortMap(level.into()));
     }
     for (owning_group_id, connect_info) in cascade.disconnected_connections {
         inverse.push(Command::AddEdge(EdgeSnapshot {

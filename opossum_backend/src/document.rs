@@ -372,7 +372,7 @@ mod test {
     use super::*;
     use crate::{
         app_state::AppState,
-        undo::{Command, RemoveNode},
+        undo::{Command, NodeSnapshot},
     };
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
     use opossum_core::{core_optics::SceneryResources, nodes::create_node_ref};
@@ -431,7 +431,7 @@ mod test {
                 .unwrap();
             root_id
         };
-        app_state.push_undo(Command::RemoveNode(RemoveNode {
+        app_state.push_undo(Command::RemoveNode(NodeSnapshot {
             parent_group_id: root_id,
             node: node_ref,
             cascaded: Vec::new(),

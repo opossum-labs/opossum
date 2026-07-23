@@ -153,7 +153,7 @@ pub async fn post_analyzer(
     }
 
     if let Ok(info) = document.analyzer(uuid) {
-        data.push_undo(Command::RemoveAnalyzer { id: uuid, info });
+        data.push_undo(Command::RemoveAnalyzer(AnalyzerItemDto { id: uuid, info }));
     }
     drop(document);
     HttpResponse::Created().json(uuid) // 201 Created
@@ -177,7 +177,7 @@ pub async fn delete_analyzer(
     let mut document = data.document.lock();
     let info = document.analyzer(uuid)?;
     document.remove_analyzer(uuid)?;
-    data.push_undo(Command::AddAnalyzer { id: uuid, info });
+    data.push_undo(Command::AddAnalyzer(AnalyzerItemDto { id: uuid, info }));
     drop(document);
     Ok(HttpResponse::NoContent().finish())
 }

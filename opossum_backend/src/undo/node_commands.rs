@@ -17,25 +17,23 @@ use uuid::Uuid;
 use super::Command;
 use crate::{error::BackEndErrorResponse, helper_functions::connect_from_info};
 
-/// Inserts `node` (and any `cascaded` reference nodes) into `parent_group_id`, reconnecting
-/// `connections` - the node's own connections in `parent_group_id`'s graph at the time it was captured
-/// (e.g. by a delete or cut), so undoing a deletion restores both the node and its wiring.
+/// A captured node, ready to be (re)inserted into or removed from the graph.
+///
+/// Used by both [`Command::AddNode`] (inserts `node`, reconnecting `connections`) and
+/// [`Command::RemoveNode`] (deletes the node identified by `node`'s own uuid, cascading to reference
+/// nodes that point at it, mirroring `NodeGroup::delete_node`'s existing behavior) - the two are each
+/// other's inverse, so they carry exactly the same data.
 #[derive(Clone)]
-pub struct AddNode {
+pub struct NodeSnapshot {
+    /// The group the node lives (or lived) in.
     pub parent_group_id: Uuid,
+    /// The node itself.
     pub node: OpticRef,
+    /// Reference nodes that point at `node` and must be inserted/removed alongside it, each paired with
+    /// its own parent group.
     pub cascaded: Vec<(Uuid, OpticRef)>,
-    pub connections: Vec<ConnectInfo>,
-}
-
-/// Removes the node identified by `node`'s own uuid from the graph (cascading to reference nodes that
-/// point at it, mirroring `NodeGroup::delete_node`'s existing behavior). `connections` is carried through
-/// unchanged so a subsequent undo (via the `AddNode` this produces) can restore it.
-#[derive(Clone)]
-pub struct RemoveNode {
-    pub parent_group_id: Uuid,
-    pub node: OpticRef,
-    pub cascaded: Vec<(Uuid, OpticRef)>,
+    /// `node`'s own connections in `parent_group_id`'s graph at the time it was captured (e.g. by a
+    /// delete or cut), so undoing a deletion restores both the node and its wiring.
     pub connections: Vec<ConnectInfo>,
 }
 
@@ -80,9 +78,9 @@ pub struct PatchPort {
 /// Returns an error if `parent_group_id` (or a cascaded node's own parent) doesn't resolve to a group.
 pub(super) fn apply_add_node(
     document: &mut OpmDocument,
-    cmd: AddNode,
+    cmd: NodeSnapshot,
 ) -> Result<Command, BackEndErrorResponse> {
-    let AddNode {
+    let NodeSnapshot {
         parent_group_id,
         node,
         cascaded,
@@ -101,7 +99,7 @@ pub(super) fn apply_add_node(
             .scenery_mut()
             .with_group_node_mut(parent_group_id, |g| connect_from_info(g, conn))??;
     }
-    Ok(Command::RemoveNode(RemoveNode {
+    Ok(Command::RemoveNode(NodeSnapshot {
         parent_group_id,
         node,
         cascaded,
@@ -115,9 +113,9 @@ pub(super) fn apply_add_node(
 ///
 /// Returns an error if building a [`NodeInfo`] for `node` or any cascaded node fails.
 pub(super) fn describe_add_node(
-    cmd: &AddNode,
+    cmd: &NodeSnapshot,
 ) -> Result<Vec<DocumentChange>, BackEndErrorResponse> {
-    let AddNode {
+    let NodeSnapshot {
         parent_group_id,
         node,
         cascaded,
@@ -151,9 +149,9 @@ pub(super) fn describe_add_node(
 /// Returns an error if `node`'s uuid can't be resolved or the delete itself fails.
 pub(super) fn apply_remove_node(
     document: &mut OpmDocument,
-    cmd: RemoveNode,
+    cmd: NodeSnapshot,
 ) -> Result<Command, BackEndErrorResponse> {
-    let RemoveNode {
+    let NodeSnapshot {
         parent_group_id,
         node,
         cascaded,
@@ -161,7 +159,7 @@ pub(super) fn apply_remove_node(
     } = cmd;
     let uuid = node.uuid()?;
     document.scenery_mut().delete_node(uuid)?;
-    Ok(Command::AddNode(AddNode {
+    Ok(Command::AddNode(NodeSnapshot {
         parent_group_id,
         node,
         cascaded,
@@ -175,9 +173,9 @@ pub(super) fn apply_remove_node(
 ///
 /// Returns an error if `node`'s or any cascaded node's uuid can't be resolved.
 pub(super) fn describe_remove_node(
-    cmd: &RemoveNode,
+    cmd: &NodeSnapshot,
 ) -> Result<Vec<DocumentChange>, BackEndErrorResponse> {
-    let RemoveNode {
+    let NodeSnapshot {
         parent_group_id,
         node,
         cascaded,

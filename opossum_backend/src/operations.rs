@@ -9,10 +9,7 @@ use crate::{
         disconnect_moved_node_connections, disconnect_stale_external_connections_for_node,
         reconnect_moved_node_connections, split_sort_connections,
     },
-    undo::{
-        AddNode, AddPortMap, Command, EdgeSnapshot, ExtractGroup, PatchProperty, RemoveNode,
-        ReroutedMapping,
-    },
+    undo::{Command, EdgeSnapshot, GroupConversion, NodeSnapshot, PatchProperty, ReroutedMapping},
 };
 use actix_web::{
     post,
@@ -26,8 +23,8 @@ use opossum_core::{
     opm_document::AnalyzerInfo,
     prelude::{OpticNode, PortMap, PortType, Proptype},
     types::api_types::{
-        AddPortMappingRequest, AnalyzerItemDto, ConnectInfo, ConvertToGroupRequest,
-        ConvertToGroupResponse, ErrorResponse, MoveNodesRequest, MoveNodesResponse, NodeInfo,
+        AnalyzerItemDto, ConnectInfo, ConvertToGroupRequest, ConvertToGroupResponse, ErrorResponse,
+        MoveNodesRequest, MoveNodesResponse, NodeInfo,
     },
     utils::LockExt,
 };
@@ -236,7 +233,7 @@ async fn post_paste_nodes(
     if let Some(infos) = grouped_node_infos.get(&paste_group_id) {
         for info in infos {
             if let Ok((node_ref, _)) = scenery.node_recursive(info.uuid()) {
-                removals.push(Command::RemoveNode(RemoveNode {
+                removals.push(Command::RemoveNode(NodeSnapshot {
                     parent_group_id: paste_group_id,
                     node: node_ref,
                     cascaded: Vec::new(),
@@ -246,10 +243,7 @@ async fn post_paste_nodes(
         }
     }
     for analyzer in &analyzers {
-        removals.push(Command::RemoveAnalyzer {
-            id: analyzer.id,
-            info: analyzer.info.clone(),
-        });
+        removals.push(Command::RemoveAnalyzer(analyzer.clone()));
     }
 
     // If this paste is also a "cut", delete the nodes/analyzers still in the copy cache (the
@@ -291,10 +285,10 @@ async fn post_paste_nodes(
             for analyzer_id in &analyzers_to_delete {
                 if let Ok(info) = document.analyzer(*analyzer_id) {
                     // Undoing this deletion means adding the analyzer back.
-                    removals.push(Command::AddAnalyzer {
+                    removals.push(Command::AddAnalyzer(AnalyzerItemDto {
                         id: *analyzer_id,
                         info,
-                    });
+                    }));
                 }
                 deleted_nodes.push(*analyzer_id);
                 document.remove_analyzer(*analyzer_id)?;
@@ -396,7 +390,7 @@ async fn post_paste_nodes(
 
         for (parent_group_id, node, connections) in captured_nodes {
             // Undoing this deletion means adding the node back, reconnected.
-            removals.push(Command::AddNode(AddNode {
+            removals.push(Command::AddNode(NodeSnapshot {
                 parent_group_id,
                 node,
                 cascaded: Vec::new(),
@@ -432,16 +426,7 @@ async fn post_paste_nodes(
         for d in disconnected_mappings {
             // Undoing this deletion also means restoring the port mapping it depended on, and the
             // external connection that used that mapping.
-            removals.push(Command::AddPortMap(AddPortMap {
-                group_id: d.mapping_group_id,
-                parent_group_id: d.mapping_parent_group_id,
-                request: AddPortMappingRequest {
-                    internal_node_id: d.internal_node_id,
-                    internal_port_name: d.internal_port_name,
-                    external_port_name: d.external_port_name,
-                    port_type: d.port_type,
-                },
-            }));
+            removals.push(Command::AddPortMap((&d).into()));
             removals.push(Command::AddEdge(EdgeSnapshot {
                 group_id: d.mapping_parent_group_id,
                 connect_info: d.connect_info,
@@ -1012,7 +997,7 @@ pub async fn post_convert_nodes_to_group(
     port_map_groups_changed.dedup();
 
     let group_ref = scenery.node_recursive(new_group_id)?.0;
-    data.push_undo(Command::ExtractGroup(ExtractGroup {
+    data.push_undo(Command::ExtractGroup(GroupConversion {
         parent_group_id: group_id,
         group: group_ref,
         member_ids: original_node_ids,

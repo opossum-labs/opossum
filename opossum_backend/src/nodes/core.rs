@@ -12,8 +12,8 @@ use opossum_core::{
     nodes::{NodeReference, create_node_ref},
     prelude::{AnalyzerType, OpmDocument, PortType, Proptype},
     types::api_types::{
-        AddPortMappingRequest, ConnectInfo, DeleteNodeResponse, ErrorResponse, NewNode, NewRefNode,
-        NodeInfo, UpdateNodeRequest,
+        ConnectInfo, DeleteNodeResponse, ErrorResponse, NewNode, NewRefNode, NodeInfo,
+        UpdateNodeRequest,
     },
     utils::LockExt,
 };
@@ -24,9 +24,7 @@ use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
     helper_functions::{capture_node_connections, disconnect_stale_external_connections_for_node},
-    undo::{
-        AddNode, AddPortMap, Command, EdgeSnapshot, PatchNode, RemoveNode, capture_old_node_request,
-    },
+    undo::{Command, EdgeSnapshot, NodeSnapshot, PatchNode, capture_old_node_request},
 };
 
 /// Get all nodes of a group node
@@ -138,7 +136,7 @@ async fn post_children(
 
     drop(document);
 
-    data.push_undo(Command::RemoveNode(RemoveNode {
+    data.push_undo(Command::RemoveNode(NodeSnapshot {
         parent_group_id: uuid,
         node: new_node_ref.clone(),
         cascaded: Vec::new(),
@@ -345,7 +343,7 @@ async fn delete_node(
         })
         .collect();
 
-    let add_node = Command::AddNode(AddNode {
+    let add_node = Command::AddNode(NodeSnapshot {
         parent_group_id,
         node: target_ref,
         cascaded,
@@ -356,16 +354,7 @@ async fn delete_node(
     } else {
         let mut batch = vec![add_node];
         for d in disconnected_mappings {
-            batch.push(Command::AddPortMap(AddPortMap {
-                group_id: d.mapping_group_id,
-                parent_group_id: d.mapping_parent_group_id,
-                request: AddPortMappingRequest {
-                    internal_node_id: d.internal_node_id,
-                    internal_port_name: d.internal_port_name,
-                    external_port_name: d.external_port_name,
-                    port_type: d.port_type,
-                },
-            }));
+            batch.push(Command::AddPortMap((&d).into()));
             batch.push(Command::AddEdge(EdgeSnapshot {
                 group_id: d.mapping_parent_group_id,
                 connect_info: d.connect_info,

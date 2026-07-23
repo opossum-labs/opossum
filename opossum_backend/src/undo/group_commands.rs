@@ -43,38 +43,33 @@ pub struct ReroutedMapping {
     pub group_internal_name: String,
 }
 
-/// Removes `member_ids` from `parent_group_id`'s flat graph and inserts the previously captured `group`
-/// node in their place, reconnecting `external_connections` (in terms of the *group's own*
-/// uuid/exposed-port-names) to its exposed ports, and re-establishing any `rerouted_mappings` on
-/// `parent_group_id`'s own port map. The group's internal members/connections are untouched - they
-/// live inside `group`'s own nested graph the whole time, whether or not `group` is currently attached
-/// to the document. `restore_connections` is carried through unchanged for the [`ExtractGroup`] this
-/// produces - see its docs for why it needs a different, member-uuid-based representation of the same
-/// connections.
+/// A captured group/flat-members pair, ready to be converted in either direction.
+///
+/// Used by both [`Command::InsertGroup`] (removes `member_ids` from `parent_group_id`'s flat graph and
+/// inserts `group` in their place, reconnecting `external_connections` - in terms of the *group's own*
+/// uuid/exposed-port-names - to its exposed ports, and re-establishing `rerouted_mappings` on
+/// `parent_group_id`'s own port map) and [`Command::ExtractGroup`] (the inverse: removes `group` from
+/// `parent_group_id` and re-inserts its members as flat nodes in its place, reconnecting
+/// `restore_connections` - every connection that touched a member *before* grouping, expressed in terms
+/// of the original member uuids/ports, since `external_connections` references the group's own uuid and
+/// can't be used once the group node has just been deleted - and re-establishing `rerouted_mappings`
+/// directly onto each member's own port). The two are each other's inverse, so they carry exactly the
+/// same data; the group's internal members/connections are untouched by either direction - they live
+/// inside `group`'s own nested graph the whole time, whether or not `group` is currently attached to the
+/// document.
 #[derive(Clone)]
-pub struct InsertGroup {
+pub struct GroupConversion {
+    /// The group both `group` and its flat `member_ids` attach to/detach from.
     pub parent_group_id: Uuid,
+    /// The group node itself.
     pub group: OpticRef,
+    /// The group's direct members, as flat node uuids in `parent_group_id`'s graph.
     pub member_ids: Vec<Uuid>,
+    /// Connections to `group`'s own exposed ports, in terms of the group's uuid/port names.
     pub external_connections: Vec<ConnectInfo>,
+    /// Connections to a member's own port, in terms of that member's uuid/port name.
     pub restore_connections: Vec<ConnectInfo>,
-    pub rerouted_mappings: Vec<ReroutedMapping>,
-}
-
-/// The inverse of [`InsertGroup`]: removes `group` from `parent_group_id` and re-inserts its members as
-/// flat nodes in its place. Reconnects `restore_connections` - every connection that touched a member
-/// *before* grouping (both formerly-internal and formerly-boundary), expressed in terms of the original
-/// member uuids/ports - rather than `external_connections`, which references the group's own uuid and
-/// can't be used once the group node has just been deleted. Re-establishes any `rerouted_mappings`
-/// directly onto each member's own port, since `parent_group_id`'s own mapping to the (about to be
-/// deleted) group is stripped by this same command's `delete_node` call.
-#[derive(Clone)]
-pub struct ExtractGroup {
-    pub parent_group_id: Uuid,
-    pub group: OpticRef,
-    pub member_ids: Vec<Uuid>,
-    pub external_connections: Vec<ConnectInfo>,
-    pub restore_connections: Vec<ConnectInfo>,
+    /// Port-map-only exports rerouted through the group instead of a live edge.
     pub rerouted_mappings: Vec<ReroutedMapping>,
 }
 
@@ -170,9 +165,9 @@ pub(super) fn describe_move_nodes(request: &MoveNodesRequest) -> Vec<DocumentCha
 /// Returns an error if `parent_group_id` doesn't resolve to a group or a member id can't be deleted.
 pub(super) fn apply_insert_group(
     document: &mut OpmDocument,
-    cmd: InsertGroup,
+    cmd: GroupConversion,
 ) -> Result<Command, BackEndErrorResponse> {
-    let InsertGroup {
+    let GroupConversion {
         parent_group_id,
         group,
         member_ids,
@@ -207,7 +202,7 @@ pub(super) fn apply_insert_group(
                 }
             })??;
     }
-    Ok(Command::ExtractGroup(ExtractGroup {
+    Ok(Command::ExtractGroup(GroupConversion {
         parent_group_id,
         group,
         member_ids,
@@ -227,9 +222,9 @@ pub(super) fn apply_insert_group(
 /// found inside it.
 pub(super) fn apply_extract_group(
     document: &mut OpmDocument,
-    cmd: ExtractGroup,
+    cmd: GroupConversion,
 ) -> Result<Command, BackEndErrorResponse> {
-    let ExtractGroup {
+    let GroupConversion {
         parent_group_id,
         group,
         member_ids,
@@ -271,7 +266,7 @@ pub(super) fn apply_extract_group(
                 }
             })??;
     }
-    Ok(Command::InsertGroup(InsertGroup {
+    Ok(Command::InsertGroup(GroupConversion {
         parent_group_id,
         group,
         member_ids,

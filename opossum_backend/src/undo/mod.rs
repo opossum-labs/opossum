@@ -11,8 +11,8 @@
 use std::collections::HashSet;
 
 use opossum_core::{
-    opm_document::{AnalyzerInfo, OpmDocument},
-    types::api_types::{DocumentChange, MoveNodesRequest},
+    opm_document::OpmDocument,
+    types::api_types::{AnalyzerItemDto, DocumentChange, MoveNodesRequest},
 };
 use uuid::Uuid;
 
@@ -26,19 +26,19 @@ mod port_map_commands;
 
 pub use analyzer_commands::{PatchAnalyzer, RepositionAnalyzer};
 pub use edge_commands::{EdgeSnapshot, UpdateEdgeDistance};
-pub use group_commands::{ExtractGroup, InsertGroup, ReroutedMapping};
+pub use group_commands::{GroupConversion, ReroutedMapping};
 pub use node_commands::{
-    AddNode, PatchNode, PatchPort, PatchProperty, RemoveNode, capture_old_node_request,
+    NodeSnapshot, PatchNode, PatchPort, PatchProperty, capture_old_node_request,
 };
 pub use port_map_commands::{AddPortMap, RemovePortMap};
 
 /// A reversible document mutation. See the module docs for the overall design.
 #[derive(Clone)]
 pub enum Command {
-    /// See [`AddNode`].
-    AddNode(AddNode),
-    /// See [`RemoveNode`].
-    RemoveNode(RemoveNode),
+    /// See [`NodeSnapshot`]. Inserts the node.
+    AddNode(NodeSnapshot),
+    /// See [`NodeSnapshot`]. Removes the node.
+    RemoveNode(NodeSnapshot),
     /// See [`PatchNode`].
     PatchNode(PatchNode),
     /// See [`PatchProperty`].
@@ -56,9 +56,9 @@ pub enum Command {
     /// See [`RemovePortMap`].
     RemovePortMap(RemovePortMap),
     /// Re-inserts a previously removed analyzer under its original id.
-    AddAnalyzer { id: Uuid, info: AnalyzerInfo },
+    AddAnalyzer(AnalyzerItemDto),
     /// Removes the analyzer with the given id.
-    RemoveAnalyzer { id: Uuid, info: AnalyzerInfo },
+    RemoveAnalyzer(AnalyzerItemDto),
     /// See [`PatchAnalyzer`].
     PatchAnalyzer(PatchAnalyzer),
     /// See [`RepositionAnalyzer`].
@@ -68,10 +68,10 @@ pub enum Command {
     /// inverse - no separate wrapper struct is needed since `MoveNodesRequest` already holds exactly
     /// this shape.
     MoveNodes(MoveNodesRequest),
-    /// See [`InsertGroup`].
-    InsertGroup(InsertGroup),
-    /// See [`ExtractGroup`].
-    ExtractGroup(ExtractGroup),
+    /// See [`GroupConversion`]. Converts flat members into the group.
+    InsertGroup(GroupConversion),
+    /// See [`GroupConversion`]. Converts the group back into flat members.
+    ExtractGroup(GroupConversion),
     /// Applies each sub-command in order; its inverse is the sub-commands' inverses in reverse order,
     /// so undoing/redoing a multi-step user action (paste, cut, multi-node drag) is a single step.
     Batch(Vec<Command>),
@@ -98,12 +98,8 @@ impl Command {
             }
             Self::AddPortMap(cmd) => port_map_commands::apply_add_port_map(document, cmd),
             Self::RemovePortMap(cmd) => port_map_commands::apply_remove_port_map(document, cmd),
-            Self::AddAnalyzer { id, info } => {
-                Ok(analyzer_commands::apply_add_analyzer(document, id, info))
-            }
-            Self::RemoveAnalyzer { id, info } => {
-                analyzer_commands::apply_remove_analyzer(document, id, info)
-            }
+            Self::AddAnalyzer(cmd) => Ok(analyzer_commands::apply_add_analyzer(document, cmd)),
+            Self::RemoveAnalyzer(cmd) => analyzer_commands::apply_remove_analyzer(document, cmd),
             Self::PatchAnalyzer(cmd) => analyzer_commands::apply_patch_analyzer(document, cmd),
             Self::RepositionAnalyzer(cmd) => {
                 analyzer_commands::apply_reposition_analyzer(document, cmd)
@@ -148,17 +144,17 @@ impl Command {
                 parent_group_id,
                 ..
             }) => port_map_commands::describe(group_id, parent_group_id),
-            Self::AddAnalyzer { id, info } => analyzer_commands::describe_add_analyzer(id, info),
-            Self::RemoveAnalyzer { id, .. } => analyzer_commands::describe_remove_analyzer(id),
+            Self::AddAnalyzer(cmd) => analyzer_commands::describe_add_analyzer(cmd),
+            Self::RemoveAnalyzer(cmd) => analyzer_commands::describe_remove_analyzer(&cmd.id),
             Self::PatchAnalyzer(PatchAnalyzer { id, .. })
             | Self::RepositionAnalyzer(RepositionAnalyzer { id, .. }) => {
                 analyzer_commands::describe_analyzer_changed(id)
             }
             Self::MoveNodes(request) => group_commands::describe_move_nodes(request),
-            Self::InsertGroup(InsertGroup {
+            Self::InsertGroup(GroupConversion {
                 parent_group_id, ..
             })
-            | Self::ExtractGroup(ExtractGroup {
+            | Self::ExtractGroup(GroupConversion {
                 parent_group_id, ..
             }) => group_commands::describe_group_structure_change(parent_group_id),
             Self::Batch(commands) => {

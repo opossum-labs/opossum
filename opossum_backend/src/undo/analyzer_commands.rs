@@ -2,7 +2,7 @@
 //! [`Command::RemoveAnalyzer`], [`Command::PatchAnalyzer`], [`Command::RepositionAnalyzer`].
 use nalgebra::Point2;
 use opossum_core::{
-    opm_document::{AnalyzerInfo, OpmDocument},
+    opm_document::OpmDocument,
     prelude::AnalyzerType,
     types::api_types::{AnalyzerItemDto, DocumentChange},
 };
@@ -29,13 +29,9 @@ pub struct RepositionAnalyzer {
 
 /// Re-inserts a previously removed analyzer under its original id, returning the
 /// [`Command::RemoveAnalyzer`] that undoes it.
-pub(super) fn apply_add_analyzer(
-    document: &mut OpmDocument,
-    id: Uuid,
-    info: AnalyzerInfo,
-) -> Command {
-    document.insert_analyzer(id, info.clone());
-    Command::RemoveAnalyzer { id, info }
+pub(super) fn apply_add_analyzer(document: &mut OpmDocument, analyzer: AnalyzerItemDto) -> Command {
+    document.insert_analyzer(analyzer.id, analyzer.info.clone());
+    Command::RemoveAnalyzer(analyzer)
 }
 
 /// Removes the analyzer with the given id, returning the [`Command::AddAnalyzer`] that undoes it.
@@ -45,11 +41,10 @@ pub(super) fn apply_add_analyzer(
 /// Returns an error if `id` doesn't resolve to an analyzer.
 pub(super) fn apply_remove_analyzer(
     document: &mut OpmDocument,
-    id: Uuid,
-    info: AnalyzerInfo,
+    analyzer: AnalyzerItemDto,
 ) -> Result<Command, BackEndErrorResponse> {
-    document.remove_analyzer(id)?;
-    Ok(Command::AddAnalyzer { id, info })
+    document.remove_analyzer(analyzer.id)?;
+    Ok(Command::AddAnalyzer(analyzer))
 }
 
 /// Replaces an analyzer's config, returning the [`Command::PatchAnalyzer`] that undoes it (`old`/`new`
@@ -101,12 +96,9 @@ pub(super) fn apply_reposition_analyzer(
 }
 
 /// Describes the effect of a [`Command::AddAnalyzer`] in the GUI-facing [`DocumentChange`] shape.
-pub(super) fn describe_add_analyzer(id: &Uuid, info: &AnalyzerInfo) -> Vec<DocumentChange> {
+pub(super) fn describe_add_analyzer(analyzer: &AnalyzerItemDto) -> Vec<DocumentChange> {
     vec![DocumentChange::AnalyzerAdded {
-        analyzer: AnalyzerItemDto {
-            id: *id,
-            info: info.clone(),
-        },
+        analyzer: analyzer.clone(),
     }]
 }
 
