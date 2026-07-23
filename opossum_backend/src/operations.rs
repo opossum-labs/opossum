@@ -7,7 +7,8 @@ use crate::{
         PendingReconnect, capture_node_connections, collect_group_connections,
         collect_node_refs_and_pos, connect_from_info, create_new_group_node_info,
         disconnect_moved_node_connections, disconnect_stale_external_connections_for_node,
-        reconnect_moved_node_connections, split_sort_connections,
+        reconnect_moved_node_connections, split_disconnected_mappings_for_response,
+        split_sort_connections,
     },
     undo::{Command, EdgeSnapshot, GroupConversion, NodeSnapshot, PatchProperty, ReroutedMapping},
 };
@@ -405,23 +406,8 @@ async fn post_paste_nodes(
             }));
         }
 
-        let disconnected_connections: Vec<(Uuid, ConnectInfo)> = disconnected_mappings
-            .iter()
-            .map(|d| (d.mapping_parent_group_id, d.connect_info.clone()))
-            .collect();
-        // Also carry the external port name + type, so the GUI can shrink the group's own
-        // exposed-port handles precisely (`remove_group_port`) instead of re-fetching them.
-        let removed_port_mappings: Vec<(Uuid, Uuid, String, PortType)> = disconnected_mappings
-            .iter()
-            .map(|d| {
-                (
-                    d.mapping_group_id,
-                    d.internal_node_id,
-                    d.external_port_name.clone(),
-                    d.port_type,
-                )
-            })
-            .collect();
+        let (disconnected_connections, removed_port_mappings) =
+            split_disconnected_mappings_for_response(&disconnected_mappings);
 
         for d in disconnected_mappings {
             // Undoing this deletion also means restoring the port mapping it depended on, and the

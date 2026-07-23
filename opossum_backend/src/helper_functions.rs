@@ -132,6 +132,37 @@ pub struct DisconnectedPortMapping {
     pub connect_info: ConnectInfo,
 }
 
+/// Splits a set of torn-down port mappings into the two response shapes callers report to the GUI: the
+/// external connections that were disconnected, and the port-map entries that were removed.
+///
+/// Used by both `delete_node` and `post_paste_nodes`'s cut branch, since both tear down mappings via
+/// [`disconnect_stale_external_connections_for_node`] and report the result the same way.
+pub fn split_disconnected_mappings_for_response(
+    mappings: &[DisconnectedPortMapping],
+) -> (
+    Vec<(Uuid, ConnectInfo)>,
+    Vec<(Uuid, Uuid, String, PortType)>,
+) {
+    let disconnected_connections = mappings
+        .iter()
+        .map(|d| (d.mapping_parent_group_id, d.connect_info.clone()))
+        .collect();
+    // Also carries the external port name + type, so the GUI can shrink the group's own
+    // exposed-port handles precisely (`remove_group_port`) instead of re-fetching them.
+    let removed_port_mappings = mappings
+        .iter()
+        .map(|d| {
+            (
+                d.mapping_group_id,
+                d.internal_node_id,
+                d.external_port_name.clone(),
+                d.port_type,
+            )
+        })
+        .collect();
+    (disconnected_connections, removed_port_mappings)
+}
+
 /// Before `node_id` (living in `parent_group_id`) is deleted, disconnects any external connection in
 /// `parent_group_id`'s own parent graph that depends on a port mapping of one of `node_id`'s ports - i.e.
 /// `parent_group_id` exposes one of `node_id`'s ports externally under some name, and a sibling node

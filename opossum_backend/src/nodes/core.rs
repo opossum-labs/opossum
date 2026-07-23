@@ -10,10 +10,9 @@ use opossum_core::{
     error::OpossumError,
     light::lightdata::{energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder},
     nodes::{NodeReference, create_node_ref},
-    prelude::{AnalyzerType, OpmDocument, PortType, Proptype},
+    prelude::{AnalyzerType, OpmDocument, Proptype},
     types::api_types::{
-        ConnectInfo, DeleteNodeResponse, ErrorResponse, NewNode, NewRefNode, NodeInfo,
-        UpdateNodeRequest,
+        DeleteNodeResponse, ErrorResponse, NewNode, NewRefNode, NodeInfo, UpdateNodeRequest,
     },
     utils::LockExt,
 };
@@ -23,7 +22,10 @@ use uuid::Uuid;
 use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
-    helper_functions::{capture_node_connections, disconnect_stale_external_connections_for_node},
+    helper_functions::{
+        capture_node_connections, disconnect_stale_external_connections_for_node,
+        split_disconnected_mappings_for_response,
+    },
     undo::{Command, EdgeSnapshot, NodeSnapshot, PatchNode, capture_old_node_request},
 };
 
@@ -327,21 +329,8 @@ async fn delete_node(
         .into_iter()
         .filter(|(_, r)| r.uuid().is_ok_and(|id| deleted_nodes.contains(&id)))
         .collect();
-    let disconnected_connections: Vec<(Uuid, ConnectInfo)> = disconnected_mappings
-        .iter()
-        .map(|d| (d.mapping_parent_group_id, d.connect_info.clone()))
-        .collect();
-    let removed_port_mappings: Vec<(Uuid, Uuid, String, PortType)> = disconnected_mappings
-        .iter()
-        .map(|d| {
-            (
-                d.mapping_group_id,
-                d.internal_node_id,
-                d.external_port_name.clone(),
-                d.port_type,
-            )
-        })
-        .collect();
+    let (disconnected_connections, removed_port_mappings) =
+        split_disconnected_mappings_for_response(&disconnected_mappings);
 
     let add_node = Command::AddNode(NodeSnapshot {
         parent_group_id,
