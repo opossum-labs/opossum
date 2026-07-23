@@ -7,7 +7,7 @@ use opossum_core::{
 };
 use uuid::Uuid;
 
-use super::Command;
+use super::{Command, EdgeSnapshot};
 use crate::error::BackEndErrorResponse;
 
 /// Exposes an internal node's port as an external port on `group_id`. `parent_group_id` (`group_id`'s own
@@ -140,10 +140,10 @@ pub(super) fn apply_remove_port_map(
         }));
     }
     for (owning_group_id, connect_info) in cascade.disconnected_connections {
-        inverse.push(Command::AddEdge {
+        inverse.push(Command::AddEdge(EdgeSnapshot {
             group_id: owning_group_id,
             connect_info,
-        });
+        }));
     }
     Ok(Command::Batch(inverse))
 }

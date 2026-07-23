@@ -16,7 +16,7 @@ use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
     helper_functions::remove_port_map_cascade,
-    undo::{AddPortMap, Command, RemovePortMap},
+    undo::{AddPortMap, Command, EdgeSnapshot, RemovePortMap},
 };
 
 /// Get the port mappings of a group node
@@ -170,10 +170,10 @@ pub async fn remove_port_map(
         }));
     }
     for (owning_group_id, connect_info) in &cascade.disconnected_connections {
-        inverse.push(Command::AddEdge {
+        inverse.push(Command::AddEdge(EdgeSnapshot {
             group_id: *owning_group_id,
             connect_info: connect_info.clone(),
-        });
+        }));
     }
     data.push_undo(Command::Batch(inverse));
 

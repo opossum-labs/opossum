@@ -10,7 +10,8 @@ use crate::{
         reconnect_moved_node_connections, split_sort_connections,
     },
     undo::{
-        AddNode, AddPortMap, Command, ExtractGroup, PatchProperty, RemoveNode, ReroutedMapping,
+        AddNode, AddPortMap, Command, EdgeSnapshot, ExtractGroup, PatchProperty, RemoveNode,
+        ReroutedMapping,
     },
 };
 use actix_web::{
@@ -404,10 +405,10 @@ async fn post_paste_nodes(
         }
 
         for (group_id, connect_info) in mutual_connections {
-            removals.push(Command::AddEdge {
+            removals.push(Command::AddEdge(EdgeSnapshot {
                 group_id,
                 connect_info,
-            });
+            }));
         }
 
         let disconnected_connections: Vec<(Uuid, ConnectInfo)> = disconnected_mappings
@@ -441,10 +442,10 @@ async fn post_paste_nodes(
                     port_type: d.port_type,
                 },
             }));
-            removals.push(Command::AddEdge {
+            removals.push(Command::AddEdge(EdgeSnapshot {
                 group_id: d.mapping_parent_group_id,
                 connect_info: d.connect_info,
-            });
+            }));
         }
 
         Some((

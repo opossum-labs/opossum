@@ -12,7 +12,7 @@ use std::collections::HashSet;
 
 use opossum_core::{
     opm_document::{AnalyzerInfo, OpmDocument},
-    types::api_types::{ConnectInfo, DocumentChange, MoveNodesRequest},
+    types::api_types::{DocumentChange, MoveNodesRequest},
 };
 use uuid::Uuid;
 
@@ -25,7 +25,7 @@ mod node_commands;
 mod port_map_commands;
 
 pub use analyzer_commands::{PatchAnalyzer, RepositionAnalyzer};
-pub use edge_commands::UpdateEdgeDistance;
+pub use edge_commands::{EdgeSnapshot, UpdateEdgeDistance};
 pub use group_commands::{ExtractGroup, InsertGroup, ReroutedMapping};
 pub use node_commands::{
     AddNode, PatchNode, PatchPort, PatchProperty, RemoveNode, capture_old_node_request,
@@ -45,16 +45,10 @@ pub enum Command {
     PatchProperty(PatchProperty),
     /// See [`PatchPort`].
     PatchPort(PatchPort),
-    /// Connects `connect_info` inside `group_id`.
-    AddEdge {
-        group_id: Uuid,
-        connect_info: ConnectInfo,
-    },
-    /// Disconnects `connect_info` inside `group_id`.
-    RemoveEdge {
-        group_id: Uuid,
-        connect_info: ConnectInfo,
-    },
+    /// See [`EdgeSnapshot`]. Connects the edge.
+    AddEdge(EdgeSnapshot),
+    /// See [`EdgeSnapshot`]. Disconnects the edge.
+    RemoveEdge(EdgeSnapshot),
     /// See [`UpdateEdgeDistance`].
     UpdateEdgeDistance(UpdateEdgeDistance),
     /// See [`AddPortMap`].
@@ -97,14 +91,8 @@ impl Command {
             Self::PatchNode(cmd) => node_commands::apply_patch_node(document, cmd),
             Self::PatchProperty(cmd) => node_commands::apply_patch_property(document, cmd),
             Self::PatchPort(cmd) => node_commands::apply_patch_port(document, cmd),
-            Self::AddEdge {
-                group_id,
-                connect_info,
-            } => edge_commands::apply_add_edge(document, group_id, connect_info),
-            Self::RemoveEdge {
-                group_id,
-                connect_info,
-            } => edge_commands::apply_remove_edge(document, group_id, connect_info),
+            Self::AddEdge(cmd) => edge_commands::apply_add_edge(document, cmd),
+            Self::RemoveEdge(cmd) => edge_commands::apply_remove_edge(document, cmd),
             Self::UpdateEdgeDistance(cmd) => {
                 edge_commands::apply_update_edge_distance(document, cmd)
             }
@@ -147,14 +135,8 @@ impl Command {
             | Self::PatchPort(PatchPort { uuid, .. }) => {
                 node_commands::describe_node_details_changed(uuid)
             }
-            Self::AddEdge {
-                group_id,
-                connect_info,
-            } => edge_commands::describe_add_edge(group_id, connect_info),
-            Self::RemoveEdge {
-                group_id,
-                connect_info,
-            } => edge_commands::describe_remove_edge(group_id, connect_info),
+            Self::AddEdge(cmd) => edge_commands::describe_add_edge(cmd),
+            Self::RemoveEdge(cmd) => edge_commands::describe_remove_edge(cmd),
             Self::UpdateEdgeDistance(cmd) => edge_commands::describe_update_edge_distance(cmd),
             Self::AddPortMap(AddPortMap {
                 group_id,

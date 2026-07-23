@@ -14,7 +14,7 @@ use uuid::Uuid;
 use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
-    undo::{Command, UpdateEdgeDistance},
+    undo::{Command, EdgeSnapshot, UpdateEdgeDistance},
 };
 
 #[derive(Debug, Deserialize, IntoParams)]
@@ -113,10 +113,10 @@ pub async fn post_connection(
     let mut connect_info = connect_info.into_inner();
     connect_info.set_is_reference(is_ref_node);
 
-    data.push_undo(Command::RemoveEdge {
+    data.push_undo(Command::RemoveEdge(EdgeSnapshot {
         group_id: group_uuid,
         connect_info: connect_info.clone(),
-    });
+    }));
     drop(document);
 
     Ok(HttpResponse::Created().json(connect_info)) // <-- REST Standard
@@ -233,10 +233,10 @@ pub async fn delete_connection(
             group.disconnect_nodes(query.src_uuid, &query.src_port)
         })??;
 
-    data.push_undo(Command::AddEdge {
+    data.push_undo(Command::AddEdge(EdgeSnapshot {
         group_id: group_uuid,
         connect_info,
-    });
+    }));
     drop(document);
     Ok(HttpResponse::NoContent().finish())
 }

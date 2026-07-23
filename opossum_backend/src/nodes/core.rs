@@ -24,7 +24,9 @@ use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
     helper_functions::{capture_node_connections, disconnect_stale_external_connections_for_node},
-    undo::{AddNode, AddPortMap, Command, PatchNode, RemoveNode, capture_old_node_request},
+    undo::{
+        AddNode, AddPortMap, Command, EdgeSnapshot, PatchNode, RemoveNode, capture_old_node_request,
+    },
 };
 
 /// Get all nodes of a group node
@@ -364,10 +366,10 @@ async fn delete_node(
                     port_type: d.port_type,
                 },
             }));
-            batch.push(Command::AddEdge {
+            batch.push(Command::AddEdge(EdgeSnapshot {
                 group_id: d.mapping_parent_group_id,
                 connect_info: d.connect_info,
-            });
+            }));
         }
         data.push_undo(Command::Batch(batch));
     }

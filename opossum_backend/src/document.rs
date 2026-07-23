@@ -653,7 +653,7 @@ mod test {
     /// succeeds and second is guaranteed to fail, and asserts the document is restored byte-for-byte.
     #[actix_web::test]
     async fn test_failed_undo_rolls_back_partial_mutation() {
-        use crate::undo::Command;
+        use crate::undo::{Command, EdgeSnapshot};
         use opossum_core::{nodes::Dummy, types::api_types::ConnectInfo};
         use uuid::Uuid;
 
@@ -672,7 +672,7 @@ mod test {
         // Step 1 succeeds (connects two real, currently-unconnected nodes); step 2 is guaranteed to
         // fail (disconnecting a connection between two uuids that don't exist).
         app_state.push_undo(Command::Batch(vec![
-            Command::AddEdge {
+            Command::AddEdge(EdgeSnapshot {
                 group_id: root_id,
                 connect_info: ConnectInfo::new(
                     node_x,
@@ -682,8 +682,8 @@ mod test {
                     0.1,
                     false,
                 ),
-            },
-            Command::RemoveEdge {
+            }),
+            Command::RemoveEdge(EdgeSnapshot {
                 group_id: root_id,
                 connect_info: ConnectInfo::new(
                     Uuid::new_v4(),
@@ -693,7 +693,7 @@ mod test {
                     0.1,
                     false,
                 ),
-            },
+            }),
         ]));
 
         let app = test::init_service(

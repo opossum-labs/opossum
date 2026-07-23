@@ -19,7 +19,17 @@ pub struct UpdateEdgeDistance {
     pub new: ConnectInfo,
 }
 
-/// Connects `connect_info` inside `group_id`, returning the [`Command::RemoveEdge`] that undoes it.
+/// One connection inside a group, as needed by [`Command::AddEdge`]/[`Command::RemoveEdge`] to either
+/// (re)create or tear it down.
+#[derive(Clone)]
+pub struct EdgeSnapshot {
+    /// The group the connection lives in.
+    pub group_id: Uuid,
+    /// The connection itself (endpoints, ports, distance).
+    pub connect_info: ConnectInfo,
+}
+
+/// Connects `cmd.connect_info` inside `cmd.group_id`, returning the [`Command::RemoveEdge`] that undoes it.
 ///
 /// # Errors
 ///
@@ -27,9 +37,12 @@ pub struct UpdateEdgeDistance {
 /// uuid/port, or already connected).
 pub(super) fn apply_add_edge(
     document: &mut OpmDocument,
-    group_id: Uuid,
-    connect_info: ConnectInfo,
+    cmd: EdgeSnapshot,
 ) -> Result<Command, BackEndErrorResponse> {
+    let EdgeSnapshot {
+        group_id,
+        connect_info,
+    } = cmd;
     document.scenery_mut().with_group_node_mut(group_id, |g| {
         g.connect_nodes(
             connect_info.src_uuid(),
@@ -39,29 +52,32 @@ pub(super) fn apply_add_edge(
             meter!(connect_info.distance()),
         )
     })??;
-    Ok(Command::RemoveEdge {
+    Ok(Command::RemoveEdge(EdgeSnapshot {
         group_id,
         connect_info,
-    })
+    }))
 }
 
-/// Disconnects `connect_info` inside `group_id`, returning the [`Command::AddEdge`] that undoes it.
+/// Disconnects `cmd.connect_info` inside `cmd.group_id`, returning the [`Command::AddEdge`] that undoes it.
 ///
 /// # Errors
 ///
 /// Returns an error if `group_id` doesn't resolve to a group or the connection doesn't exist.
 pub(super) fn apply_remove_edge(
     document: &mut OpmDocument,
-    group_id: Uuid,
-    connect_info: ConnectInfo,
+    cmd: EdgeSnapshot,
 ) -> Result<Command, BackEndErrorResponse> {
+    let EdgeSnapshot {
+        group_id,
+        connect_info,
+    } = cmd;
     document.scenery_mut().with_group_node_mut(group_id, |g| {
         g.disconnect_nodes(connect_info.src_uuid(), connect_info.src_port())
     })??;
-    Ok(Command::AddEdge {
+    Ok(Command::AddEdge(EdgeSnapshot {
         group_id,
         connect_info,
-    })
+    }))
 }
 
 /// Updates a connection's distance to `new.distance()`, returning the [`Command::UpdateEdgeDistance`]
@@ -86,24 +102,18 @@ pub(super) fn apply_update_edge_distance(
 }
 
 /// Describes the effect of a [`Command::AddEdge`] in the GUI-facing [`DocumentChange`] shape.
-pub(super) fn describe_add_edge(
-    group_id: &Uuid,
-    connect_info: &ConnectInfo,
-) -> Vec<DocumentChange> {
+pub(super) fn describe_add_edge(cmd: &EdgeSnapshot) -> Vec<DocumentChange> {
     vec![DocumentChange::EdgeAdded {
-        graph_id: *group_id,
-        connect_info: connect_info.clone(),
+        graph_id: cmd.group_id,
+        connect_info: cmd.connect_info.clone(),
     }]
 }
 
 /// Describes the effect of a [`Command::RemoveEdge`] in the GUI-facing [`DocumentChange`] shape.
-pub(super) fn describe_remove_edge(
-    group_id: &Uuid,
-    connect_info: &ConnectInfo,
-) -> Vec<DocumentChange> {
+pub(super) fn describe_remove_edge(cmd: &EdgeSnapshot) -> Vec<DocumentChange> {
     vec![DocumentChange::EdgeRemoved {
-        graph_id: *group_id,
-        connect_info: connect_info.clone(),
+        graph_id: cmd.group_id,
+        connect_info: cmd.connect_info.clone(),
     }]
 }
 
