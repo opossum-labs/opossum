@@ -940,9 +940,10 @@ pub async fn post_convert_nodes_to_group(
         &original_node_ids,
     )?;
 
-    // `pending`'s `from_group_external_name` entries are what this fix is about - extract what's
-    // needed to restore them across undo/redo now, since `reconnect_moved_node_connections` below
-    // consumes `pending` by value.
+    // `pending`'s rerouted-mapping entries (whether their consumer was a live edge or, since nothing
+    // outward consumed the export, preserved anyway because the new group is `group_id`'s own child)
+    // are what this fix is about - extract what's needed to restore them across undo/redo now, since
+    // `reconnect_moved_node_connections` below consumes `pending` by value.
     let rerouted_from_pending: Vec<(String, Uuid, String, PortType)> = pending
         .iter()
         .filter_map(|p| match p {
@@ -953,7 +954,22 @@ pub async fn post_convert_nodes_to_group(
                 port_type,
                 ..
             } => Some((name.clone(), *moved_node_id, moved_port.clone(), *port_type)),
-            _ => None,
+            PendingReconnect::MappingReroute {
+                external_name,
+                moved_node_id,
+                internal_port_name,
+                port_type,
+            } => Some((
+                external_name.clone(),
+                *moved_node_id,
+                internal_port_name.clone(),
+                *port_type,
+            )),
+            PendingReconnect::Edge {
+                from_group_external_name: None,
+                ..
+            }
+            | PendingReconnect::MappingCollapse { .. } => None,
         })
         .collect();
 
@@ -2487,6 +2503,100 @@ mod test {
             "redo must not error"
         );
         assert_routed_through_new_group(&app_state);
+    }
+
+    /// Regression test for the bug where converting a group's own mapped members into a new subgroup
+    /// silently dropped the mapping instead of rerouting it, specifically when nothing is currently
+    /// plugged into the group's exposed port. Root cause:
+    /// `disconnect_moved_node_connections`'s handling of `find_pre_existing_mapping_consumer`'s
+    /// `Orphaned` result unconditionally treated "nothing outward currently consumes this export" as
+    /// "safe to drop" - correct for a real cross-group move (the member leaves for good, nothing is
+    /// left for the old mapping to point at), but wrong for convert-to-group, where the source group
+    /// never disappears - the member just relocates one level deeper inside it, so the source group's
+    /// own export stays just as meaningful regardless of whether anything happens to be connected to
+    /// it right now (this is exactly the state a freshly pasted/cut group is in, before being rewired
+    /// to a neighbor). Same `root { P { A, B } }` setup as
+    /// `test_convert_nodes_to_group_preserves_pre_existing_port_mapping`, but deliberately *without*
+    /// the live `P -> S` connection that test wires up - so `P`'s `ext_out_1` mapping has no live
+    /// consumer anywhere outward at all. Asserts the mapping still survives, rerouted through the new
+    /// group, exactly as it does in the live-connected case.
+    #[actix_web::test]
+    async fn test_convert_nodes_to_group_preserves_unconnected_pre_existing_port_mapping() {
+        use opossum_core::{
+            nodes::{Dummy, NodeGroup},
+            prelude::PortType,
+        };
+
+        let app_state = Data::new(AppState::default());
+        let (p_id, node_a, node_b) = {
+            let mut document = app_state.document.lock();
+            let scenery = document.scenery_mut();
+
+            let mut p = NodeGroup::new("P");
+            let node_a = p.add_node(Dummy::default()).unwrap();
+            let node_b = p.add_node(Dummy::default()).unwrap();
+            p.with_node_attr_mut(node_a, |attr| {
+                attr.set_gui_position(Some(Point2::new(0.0, 0.0)));
+            })
+            .unwrap();
+            p.with_node_attr_mut(node_b, |attr| {
+                attr.set_gui_position(Some(Point2::new(50.0, 0.0)));
+            })
+            .unwrap();
+            p.map_output_port(node_a, "output_1", "ext_out_1").unwrap();
+            let p_id = scenery.add_node(p).unwrap();
+
+            (p_id, node_a, node_b)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_convert_nodes_to_group),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/convert_to_group")
+            .set_json(&ConvertToGroupRequest {
+                group_id: p_id,
+                nodes_to_convert: vec![node_a, node_b],
+            })
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let response: ConvertToGroupResponse = test::read_body_json(resp).await;
+        let new_group_id = response.new_group.uuid();
+
+        let document = app_state.document.lock();
+        let mapping = document
+            .scenery()
+            .with_group_node(p_id, |g| {
+                g.graph()
+                    .port_map(&PortType::Output)
+                    .get("ext_out_1")
+                    .cloned()
+            })
+            .unwrap()
+            .expect(
+                "P's ext_out_1 mapping must still exist even though nothing was plugged into it",
+            );
+        assert_eq!(
+            mapping.0, new_group_id,
+            "P's ext_out_1 mapping must resolve through the new group, not directly to A"
+        );
+        let inner_name = document
+            .scenery()
+            .with_group_node(new_group_id, |g| {
+                g.graph()
+                    .port_map(&PortType::Output)
+                    .external_port_of_mapped_port(node_a, "output_1")
+            })
+            .unwrap();
+        assert!(
+            inner_name.is_some(),
+            "the new group must expose A's output under some external name"
+        );
     }
 
     /// Regression test for the bug where a *second*, deeper convert-to-group call lost a
