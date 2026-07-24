@@ -1,6 +1,7 @@
 use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
+    helper_functions::parent_group_id_or_self,
     undo::{Command, PatchProperty},
 };
 use actix_web::{HttpRequest, HttpResponse, get, patch, web};
@@ -108,7 +109,7 @@ pub async fn patch_property(
     let old_value = document.scenery().with_node_attr(uuid, |node_attr| {
         node_attr.properties().get(&prop_name).cloned()
     })??;
-    let parent_group_id = document.scenery().node_recursive(uuid)?.1;
+    let parent_group_id = parent_group_id_or_self(document.scenery(), uuid)?;
 
     let inverse = Command::PatchProperty(PatchProperty {
         uuid,

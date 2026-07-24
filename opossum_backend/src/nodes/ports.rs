@@ -1,6 +1,7 @@
 use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
+    helper_functions::parent_group_id_or_self,
     undo::{Command, PatchPort},
 };
 use actix_web::{HttpResponse, get, patch, web};
@@ -109,7 +110,7 @@ pub async fn patch_port(
             },
         )
     })??;
-    let parent_group_id = document.scenery().node_recursive(uuid)?.1;
+    let parent_group_id = parent_group_id_or_self(document.scenery(), uuid)?;
 
     let inverse = Command::PatchPort(PatchPort {
         uuid,

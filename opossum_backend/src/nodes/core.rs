@@ -24,7 +24,7 @@ use crate::{
     error::BackEndErrorResponse,
     helper_functions::{
         capture_node_connections, disconnect_stale_external_connections_for_node,
-        split_disconnected_mappings_for_response,
+        parent_group_id_or_self, split_disconnected_mappings_for_response,
     },
     undo::{Command, EdgeSnapshot, NodeSnapshot, PatchNode, capture_old_node_request},
 };
@@ -229,7 +229,7 @@ async fn patch_node(
     let old = document
         .scenery()
         .with_node_attr(uuid, |node_attr| capture_old_node_request(node_attr, &new))?;
-    let parent_group_id = document.scenery().node_recursive(uuid)?.1;
+    let parent_group_id = parent_group_id_or_self(document.scenery(), uuid)?;
 
     let inverse = Command::PatchNode(PatchNode {
         uuid,
@@ -552,6 +552,42 @@ mod test {
                 .unwrap(),
             None,
             "undo must clear the alignment back to unset, not leave it at iso_a"
+        );
+    }
+
+    /// Regression test for the bug where `PATCH /api/nodes/{uuid}` always 400ed when `uuid` named the
+    /// scenery root itself. Root cause: the handler derived `parent_group_id` via
+    /// `NodeGroup::node_recursive`, which only ever searches a group's *children* for a matching uuid -
+    /// so it could never succeed for the root's own uuid, since the root is never a child of itself.
+    /// This fired on every GUI startup, since the GUI renames the root scenery tab to match the
+    /// project's file name right after mounting. Fixed via `parent_group_id_or_self`
+    /// (`helper_functions.rs`), which reports the root's own uuid as its "parent" - the same
+    /// self-as-parent sentinel `remove_port_map_cascade` already uses for the same reason. Patches the
+    /// scenery root's own name and asserts success (204), not the previous 400.
+    #[actix_web::test]
+    async fn test_patch_node_on_scenery_root_succeeds() {
+        let app_state = Data::new(AppState::default());
+        let root_id = app_state.document.lock().scenery().node_attr().uuid();
+
+        let app =
+            test::init_service(App::new().app_data(app_state.clone()).service(patch_node)).await;
+
+        let req = test::TestRequest::patch()
+            .uri(&format!("/{root_id}"))
+            .set_json(&UpdateNodeRequest {
+                name: Some("renamed".to_string()),
+                ..Default::default()
+            })
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::NO_CONTENT,
+            "patching the scenery root itself must succeed, not 400"
+        );
+        assert_eq!(
+            app_state.document.lock().scenery().node_attr().name(),
+            "renamed"
         );
     }
 

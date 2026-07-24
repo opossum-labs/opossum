@@ -2,6 +2,7 @@
 use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
+    helper_functions::parent_group_id_or_self,
     sse_logger::SENDER,
     undo::{Command, PatchNode, RepositionAnalyzer, capture_old_node_request},
 };
@@ -242,7 +243,7 @@ fn apply_position_updates(
                 .with_node_attr(update.uuid, |node_attr| {
                     capture_old_node_request(node_attr, &new)
                 })?;
-            let parent_group_id = document.scenery().node_recursive(update.uuid)?.1;
+            let parent_group_id = parent_group_id_or_self(document.scenery(), update.uuid)?;
             Command::PatchNode(PatchNode {
                 uuid: update.uuid,
                 parent_group_id,

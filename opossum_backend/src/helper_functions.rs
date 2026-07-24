@@ -118,6 +118,21 @@ pub fn capture_node_connections(
         .collect())
 }
 
+/// Returns `uuid`'s parent group id, or `uuid` itself if it names the scenery root - which has no
+/// real parent to report, matching the same self-as-parent sentinel `remove_port_map_cascade` uses
+/// for the same reason.
+///
+/// # Errors
+///
+/// Returns an error if `uuid` doesn't resolve to a node in `scenery`.
+pub fn parent_group_id_or_self(scenery: &NodeGroup, uuid: Uuid) -> OpmResult<Uuid> {
+    if uuid == scenery.node_attr().uuid() {
+        Ok(uuid)
+    } else {
+        Ok(scenery.node_recursive(uuid)?.1)
+    }
+}
+
 /// Everything needed to restore one external connection that had to be torn down because it depended on a
 /// port mapping of a node that's about to be deleted.
 pub struct DisconnectedPortMapping {

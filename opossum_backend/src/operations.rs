@@ -7,8 +7,8 @@ use crate::{
         PendingReconnect, capture_node_connections, collect_group_connections,
         collect_node_refs_and_pos, connect_from_info, create_new_group_node_info,
         disconnect_moved_node_connections, disconnect_stale_external_connections_for_node,
-        reconnect_moved_node_connections, split_disconnected_mappings_for_response,
-        split_sort_connections,
+        parent_group_id_or_self, reconnect_moved_node_connections,
+        split_disconnected_mappings_for_response, split_sort_connections,
     },
     undo::{Command, EdgeSnapshot, GroupConversion, NodeSnapshot, PatchProperty, ReroutedMapping},
 };
@@ -776,7 +776,7 @@ pub fn collect_optical_node_to_copy(
 
     node_id_link.insert(old_node_id, new_node_ref.uuid()?);
 
-    let parent_group_id = scenery.node_recursive(old_node_id)?.1;
+    let parent_group_id = parent_group_id_or_self(scenery, old_node_id)?;
 
     let connect = scenery.with_group_node(parent_group_id, |group| {
         group
