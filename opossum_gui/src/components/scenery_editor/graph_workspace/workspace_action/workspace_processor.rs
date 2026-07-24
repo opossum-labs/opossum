@@ -16,7 +16,7 @@ use opossum_core::{
     types::api_types::{
         AnalyzerItemDto, ConnectInfo, DeleteNodeResponse, DocumentChange, NewAnalyzerInfo, NewNode,
         NewRefNode, NodeInfo, NodePortsResponse, PortMappingsResponse, PositionUpdate,
-        UndoRedoResponse, UpdateConnectionRequest,
+        UndoRedoResponse, UpdateConnectionRequest, Viewport,
     },
 };
 use serde_json::Value;
@@ -26,7 +26,7 @@ use crate::{
     NODE_DETAILS_REFRESH, OPOSSUM_UI_LOGS,
     api::{self, delete_document, eval_action_run},
     components::scenery_editor::{
-        NodeType,
+        DragStatus, NodeType,
         constants::{
             HEADER_HEIGHT, MIN_NODE_DISTANCE_RADIUS, NODE_PLACEMENT_MAX_ITERATIONS, NODE_WIDTH,
         },
@@ -50,6 +50,9 @@ pub fn use_workspace_processor(
 ) -> Coroutine<GraphsWorkspaceAction> {
     use_coroutine(move |mut rx: UnboundedReceiver<GraphsWorkspaceAction>| {
         async move {
+            // Viewport of the active tab captured when a graph-pan drag started, so the completed pan can
+            // be recorded as one undo step on release. `None` unless a graph pan is in progress.
+            let mut pan_before: Option<Viewport> = None;
             // This loop runs forever in the background, waiting for actions.
             while let Some(action) = rx.next().await {
                 match action {
@@ -71,6 +74,8 @@ pub fn use_workspace_processor(
                             set_file_path_handler,
                             workspace_handlers,
                             root_graph_id(),
+                            workspace,
+                            undo_redo_status_handler,
                         )
                         .await;
                     }
@@ -115,11 +120,27 @@ pub fn use_workspace_processor(
                     GraphsWorkspaceAction::CenterGraph {
                         graph_id,
                         save_changes,
-                    } => workspace_handlers.view.center_graph(graph_id, save_changes),
+                    } => {
+                        let before = current_viewport(workspace, graph_id);
+                        workspace_handlers.view.center_graph(graph_id, save_changes);
+                        if let (Some(before), Some(after)) =
+                            (before, current_viewport(workspace, graph_id))
+                        {
+                            push_viewport_change(before, after);
+                        }
+                    }
                     GraphsWorkspaceAction::ZoomToFit {
                         graph_id,
                         save_changes,
-                    } => workspace_handlers.view.zoom_to_fit(graph_id, save_changes),
+                    } => {
+                        let before = current_viewport(workspace, graph_id);
+                        workspace_handlers.view.zoom_to_fit(graph_id, save_changes);
+                        if let (Some(before), Some(after)) =
+                            (before, current_viewport(workspace, graph_id))
+                        {
+                            push_viewport_change(before, after);
+                        }
+                    }
                     // GraphsWorkspaceAction::UpdateEdges {
                     //     connections,
                     //     graph_id,
@@ -274,6 +295,24 @@ pub fn use_workspace_processor(
                         .await;
                     }
                     GraphsWorkspaceAction::SetDragStatus(drag_status) => {
+                        // A graph pan is a viewport gesture: remember the camera when it starts, and on
+                        // release record the whole pan as one undo step. Node drags / selection use other
+                        // DragStatus values and are left alone (their position edit is a separate step).
+                        match drag_status {
+                            DragStatus::Graph => {
+                                pan_before =
+                                    current_viewport(workspace, *workspace.active_tab().read());
+                            }
+                            DragStatus::None => {
+                                if let Some(before) = pan_before.take()
+                                    && let Some(after) =
+                                        current_viewport(workspace, before.graph_id)
+                                {
+                                    push_viewport_change(before, after);
+                                }
+                            }
+                            _ => {}
+                        }
                         workspace_handlers.workspace.set_drag_status(drag_status);
                     }
                     GraphsWorkspaceAction::SetDropInGroup(droppable_group) => workspace_handlers
@@ -403,6 +442,29 @@ pub fn use_workspace_processor(
     })
 }
 
+/// Reads `graph_id`'s current viewport (pan/zoom) from its `EditorState`, if that tab exists.
+fn current_viewport(
+    workspace: ReadStore<GraphsWorkspaceState>,
+    graph_id: Uuid,
+) -> Option<Viewport> {
+    let editor_state = workspace.tabs().get(graph_id).map(|g| g.editor_state())?;
+    let zoom = *editor_state.zoom().peek();
+    let shift = *editor_state.shift().peek();
+    Some(Viewport {
+        graph_id,
+        zoom,
+        shift: (shift.x, shift.y),
+    })
+}
+
+/// Records a viewport change (`before` -> `after`) as its own undo step, fire-and-forget. Consecutive
+/// camera moves with no intervening edit coalesce into a single undo step backend-side.
+fn push_viewport_change(before: Viewport, after: Viewport) {
+    spawn(async move {
+        let _ = api::post_viewport_change(before, after).await;
+    });
+}
+
 /// Applies the `DocumentChange`s returned by an undo/redo, by replaying each one through the exact
 /// same `WorkSpaceSignalHandlers` calls the corresponding *normal* action already uses - so undo/redo
 /// updates the canvas precisely, without reloading the whole workspace.
@@ -412,6 +474,7 @@ pub fn use_workspace_processor(
 /// them. Rather than growing this function to know every such field, those three arms instead bump
 /// `NODE_DETAILS_REFRESH`, a signal the properties panel's own `use_resource` reads unconditionally so it
 /// refetches even when the selected node's identity hasn't changed (see that signal's doc comment).
+#[allow(clippy::too_many_lines)]
 async fn apply_document_changes(
     changes: Vec<DocumentChange>,
     root_graph_id: Memo<Uuid>,
@@ -513,6 +576,21 @@ async fn apply_document_changes(
                         workspace,
                     )
                     .await;
+                }
+            }
+            DocumentChange::ViewportChanged {
+                graph_id,
+                zoom,
+                shift,
+            } => {
+                // Undo/redo of a camera move: switch to that tab (so the user sees it) and restore its
+                // pan/zoom. Purely a view change - no document/canvas mutation here.
+                if workspace.tabs().contains_key(&graph_id) {
+                    ws_handler.workspace.set_active_tab(graph_id);
+                    ws_handler.view.set_zoom(graph_id, zoom);
+                    ws_handler
+                        .view
+                        .set_shift(graph_id, Point2D::new(shift.0, shift.1));
                 }
             }
         }
@@ -1446,11 +1524,26 @@ async fn process_save_root_scenery_to_file(
     set_file_path_handler: EventHandler<Option<PathBuf>>,
     ws_handler: WorkSpaceSignalHandlers,
     root_id: Uuid,
+    workspace: ReadStore<GraphsWorkspaceState>,
+    undo_redo_status_handler: EventHandler<(bool, bool)>,
 ) {
     if let Some(f_stem) = path.file_stem()
         && let Some(fname) = f_stem.to_str()
     {
-        process_rename_root_scenery(ws_handler, fname.to_string(), root_id, false).await;
+        // Only rename the root scenery when its name actually differs from the file's. The rename goes
+        // through `patch_node`, which pushes an undoable `PatchNode` and thereby clears the redo stack -
+        // so doing it unconditionally on every save silently wiped the redo history and appended a no-op
+        // rename entry. Comparing against the root tab's current name skips that in the common case.
+        let current_root_name = workspace
+            .tabs()
+            .get(root_id)
+            .map(|g| g.graph_info().read().name.clone());
+        if current_root_name.as_deref() != Some(fname) {
+            process_rename_root_scenery(ws_handler, fname.to_string(), root_id, false).await;
+            // That rename just created a new undo entry and cleared redo - reflect it in the buttons,
+            // which the save flow otherwise never refreshes.
+            undo_redo_status_handler.call((true, false));
+        }
         eval_action_run(
             api::get_document().await,
             Some(move |opm_string| {

@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    CONTEXT_MENU,
+    CONTEXT_MENU, api,
     components::scenery_editor::{
         GraphState, NodeType,
         constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
@@ -18,7 +18,10 @@ use dioxus::{
     html::{geometry::euclid::default::Point2D, input_data::MouseButton},
     prelude::*,
 };
-use opossum_core::{prelude::*, types::api_types::ConnectInfo};
+use opossum_core::{
+    prelude::*,
+    types::api_types::{ConnectInfo, Viewport},
+};
 use uuid::Uuid;
 
 pub fn use_zoom() -> impl FnMut(WheelEvent) {
@@ -52,6 +55,22 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
         workspace_processor.send(GraphsWorkspaceAction::SetShift {
             graph_id,
             shift: Point2D::new(new_shift_x, new_shift_y),
+        });
+
+        // Record this zoom tick as an undo step. Each wheel tick posts its own before/after; the backend
+        // coalesces a whole scroll burst into a single undo step (see `post_viewport_change`).
+        let before = Viewport {
+            graph_id,
+            zoom: current_graph_zoom,
+            shift: (current_graph_shift.x, current_graph_shift.y),
+        };
+        let after = Viewport {
+            graph_id,
+            zoom: new_graph_zoom,
+            shift: (new_shift_x, new_shift_y),
+        };
+        spawn(async move {
+            let _ = api::post_viewport_change(before, after).await;
         });
     }
 }

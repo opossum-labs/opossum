@@ -12,7 +12,7 @@ use std::collections::HashSet;
 
 use opossum_core::{
     opm_document::OpmDocument,
-    types::api_types::{AnalyzerItemDto, DocumentChange, MoveNodesRequest},
+    types::api_types::{AnalyzerItemDto, DocumentChange},
 };
 use uuid::Uuid;
 
@@ -20,17 +20,21 @@ use crate::error::BackEndErrorResponse;
 
 mod analyzer_commands;
 mod edge_commands;
+mod global_conf_commands;
 mod group_commands;
 mod node_commands;
 mod port_map_commands;
+mod viewport_commands;
 
 pub use analyzer_commands::{PatchAnalyzer, RepositionAnalyzer};
 pub use edge_commands::{EdgeSnapshot, UpdateEdgeDistance};
-pub use group_commands::{GroupConversion, ReroutedMapping};
+pub use global_conf_commands::PatchGlobalConf;
+pub use group_commands::{GroupConversion, MoveNodes, ReroutedMapping};
 pub use node_commands::{
     NodeSnapshot, PatchNode, PatchPort, PatchProperty, capture_old_node_request,
 };
 pub use port_map_commands::{AddPortMap, RemovePortMap};
+pub use viewport_commands::SetViewport;
 
 /// A reversible document mutation. See the module docs for the overall design.
 #[derive(Clone)]
@@ -63,15 +67,18 @@ pub enum Command {
     PatchAnalyzer(PatchAnalyzer),
     /// See [`RepositionAnalyzer`].
     RepositionAnalyzer(RepositionAnalyzer),
-    /// Moves the request's `nodes_to_move` (and the connections purely between them) from its
-    /// `source_group_id` to its `target_group_id`. `apply` swaps the two group ids to build its own
-    /// inverse - no separate wrapper struct is needed since `MoveNodesRequest` already holds exactly
-    /// this shape.
-    MoveNodes(MoveNodesRequest),
+    /// See [`MoveNodes`]. Moves nodes between two groups; `apply` swaps source/target to build its
+    /// inverse and carries `affected_groups` through, so undo/redo can refresh every tab a reroute
+    /// touched - not just source and target.
+    MoveNodes(MoveNodes),
     /// See [`GroupConversion`]. Converts flat members into the group.
     InsertGroup(GroupConversion),
     /// See [`GroupConversion`]. Converts the group back into flat members.
     ExtractGroup(GroupConversion),
+    /// See [`PatchGlobalConf`]. Replaces the document's global scenery config.
+    PatchGlobalConf(PatchGlobalConf),
+    /// See [`SetViewport`]. Moves the canvas camera (pan/zoom) of a tab; does not touch the document.
+    SetViewport(SetViewport),
     /// Applies each sub-command in order; its inverse is the sub-commands' inverses in reverse order,
     /// so undoing/redoing a multi-step user action (paste, cut, multi-node drag) is a single step.
     Batch(Vec<Command>),
@@ -104,9 +111,13 @@ impl Command {
             Self::RepositionAnalyzer(cmd) => {
                 analyzer_commands::apply_reposition_analyzer(document, cmd)
             }
-            Self::MoveNodes(request) => group_commands::apply_move_nodes(document, request),
+            Self::MoveNodes(cmd) => group_commands::apply_move_nodes(document, cmd),
             Self::InsertGroup(cmd) => group_commands::apply_insert_group(document, cmd),
             Self::ExtractGroup(cmd) => group_commands::apply_extract_group(document, cmd),
+            Self::PatchGlobalConf(cmd) => {
+                Ok(global_conf_commands::apply_patch_global_conf(document, cmd))
+            }
+            Self::SetViewport(cmd) => Ok(viewport_commands::apply_set_viewport(cmd)),
             Self::Batch(commands) => {
                 let mut inverses = Vec::with_capacity(commands.len());
                 for command in commands {
@@ -150,13 +161,19 @@ impl Command {
             | Self::RepositionAnalyzer(RepositionAnalyzer { id, .. }) => {
                 analyzer_commands::describe_analyzer_changed(id)
             }
-            Self::MoveNodes(request) => group_commands::describe_move_nodes(request),
+            Self::MoveNodes(cmd) => group_commands::describe_move_nodes(cmd),
             Self::InsertGroup(GroupConversion {
-                parent_group_id, ..
+                parent_group_id,
+                affected_groups,
+                ..
             })
             | Self::ExtractGroup(GroupConversion {
-                parent_group_id, ..
-            }) => group_commands::describe_group_structure_change(parent_group_id),
+                parent_group_id,
+                affected_groups,
+                ..
+            }) => group_commands::describe_group_structure_change(parent_group_id, affected_groups),
+            Self::PatchGlobalConf(_) => global_conf_commands::describe_patch_global_conf(),
+            Self::SetViewport(cmd) => viewport_commands::describe_set_viewport(cmd),
             Self::Batch(commands) => {
                 let mut changes = Vec::new();
                 for command in commands {
@@ -198,7 +215,8 @@ fn dedup_against_full_refreshes(changes: Vec<DocumentChange>) -> Vec<DocumentCha
             DocumentChange::NodeDetailsChanged { .. }
             | DocumentChange::AnalyzerAdded { .. }
             | DocumentChange::AnalyzerRemoved { .. }
-            | DocumentChange::AnalyzerChanged { .. } => true,
+            | DocumentChange::AnalyzerChanged { .. }
+            | DocumentChange::ViewportChanged { .. } => true,
         })
         .collect()
 }

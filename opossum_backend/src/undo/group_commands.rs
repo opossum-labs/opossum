@@ -43,6 +43,22 @@ pub struct ReroutedMapping {
     pub group_internal_name: String,
 }
 
+/// A node move plus the extra groups its reroute touched.
+///
+/// [`Command::MoveNodes`] carries the [`MoveNodesRequest`] (which already names source and target) plus
+/// `affected_groups`: any *other* group whose port map a reroute changed as a side effect (a moved node's
+/// pre-existing external mapping can be consumed arbitrarily far out - see `post_move_nodes`). Source and
+/// target are always refreshed on undo/redo; `affected_groups` ensures a third tab showing a rerouted
+/// export is refreshed too. The set is symmetric across a move and its reverse, so it is carried through
+/// `apply` unchanged rather than recomputed.
+#[derive(Clone)]
+pub struct MoveNodes {
+    /// The move itself (source group, target group, nodes).
+    pub request: MoveNodesRequest,
+    /// Groups beyond source/target whose port map a reroute touched.
+    pub affected_groups: Vec<Uuid>,
+}
+
 /// A captured group/flat-members pair, ready to be converted in either direction.
 ///
 /// Used by both [`Command::InsertGroup`] (removes `member_ids` from `parent_group_id`'s flat graph and
@@ -71,6 +87,10 @@ pub struct GroupConversion {
     pub restore_connections: Vec<ConnectInfo>,
     /// Port-map-only exports rerouted through the group instead of a live edge.
     pub rerouted_mappings: Vec<ReroutedMapping>,
+    /// Groups (beyond `parent_group_id`) whose port map a reroute touched during this conversion -
+    /// refreshed on undo/redo so a tab showing a rerouted export elsewhere isn't left stale. Symmetric
+    /// across insert/extract, so carried through unchanged.
+    pub affected_groups: Vec<Uuid>,
 }
 
 /// Moves `request.nodes_to_move` (and the connections purely between them) from
@@ -87,8 +107,12 @@ pub struct GroupConversion {
 /// Returns an error if either group id doesn't resolve, or a moved node's uuid can't be found.
 pub(super) fn apply_move_nodes(
     document: &mut OpmDocument,
-    request: MoveNodesRequest,
+    cmd: MoveNodes,
 ) -> Result<Command, BackEndErrorResponse> {
+    let MoveNodes {
+        request,
+        affected_groups,
+    } = cmd;
     let MoveNodesRequest {
         source_group_id: from_group_id,
         target_group_id: to_group_id,
@@ -137,23 +161,29 @@ pub(super) fn apply_move_nodes(
 
     reconnect_moved_node_connections(document.scenery_mut(), from_group_id, to_group_id, pending)?;
 
-    Ok(Command::MoveNodes(MoveNodesRequest {
-        source_group_id: to_group_id,
-        target_group_id: from_group_id,
-        nodes_to_move: node_ids,
+    // `affected_groups` is the same set for this move and its reverse, so carry it through unchanged.
+    Ok(Command::MoveNodes(MoveNodes {
+        request: MoveNodesRequest {
+            source_group_id: to_group_id,
+            target_group_id: from_group_id,
+            nodes_to_move: node_ids,
+        },
+        affected_groups,
     }))
 }
 
-/// Describes the effect of a [`Command::MoveNodes`] in the GUI-facing [`DocumentChange`] shape.
-pub(super) fn describe_move_nodes(request: &MoveNodesRequest) -> Vec<DocumentChange> {
-    vec![
-        DocumentChange::GraphNeedsRefresh {
-            graph_id: request.source_group_id,
-        },
-        DocumentChange::GraphNeedsRefresh {
-            graph_id: request.target_group_id,
-        },
-    ]
+/// Describes the effect of a [`Command::MoveNodes`] in the GUI-facing [`DocumentChange`] shape: a
+/// `GraphNeedsRefresh` for source, target, and every extra group a reroute touched (`affected_groups`),
+/// deduplicated.
+pub(super) fn describe_move_nodes(cmd: &MoveNodes) -> Vec<DocumentChange> {
+    let mut graph_ids = vec![cmd.request.source_group_id, cmd.request.target_group_id];
+    graph_ids.extend(cmd.affected_groups.iter().copied());
+    graph_ids.sort();
+    graph_ids.dedup();
+    graph_ids
+        .into_iter()
+        .map(|graph_id| DocumentChange::GraphNeedsRefresh { graph_id })
+        .collect()
 }
 
 /// Removes `member_ids` from `parent_group_id`'s flat graph and inserts the previously captured `group`
@@ -174,6 +204,7 @@ pub(super) fn apply_insert_group(
         external_connections,
         restore_connections,
         rerouted_mappings,
+        affected_groups,
     } = cmd;
     for member_id in &member_ids {
         document.scenery_mut().delete_node(*member_id)?;
@@ -209,6 +240,7 @@ pub(super) fn apply_insert_group(
         external_connections,
         restore_connections,
         rerouted_mappings,
+        affected_groups,
     }))
 }
 
@@ -231,6 +263,7 @@ pub(super) fn apply_extract_group(
         external_connections,
         restore_connections,
         rerouted_mappings,
+        affected_groups,
     } = cmd;
     let group_id = group.uuid()?;
     document.scenery_mut().delete_node(group_id)?;
@@ -273,13 +306,81 @@ pub(super) fn apply_extract_group(
         external_connections,
         restore_connections,
         rerouted_mappings,
+        affected_groups,
     }))
 }
 
 /// Describes the effect of a [`Command::InsertGroup`] or [`Command::ExtractGroup`] in the GUI-facing
-/// [`DocumentChange`] shape.
-pub(super) fn describe_group_structure_change(parent_group_id: &Uuid) -> Vec<DocumentChange> {
-    vec![DocumentChange::GraphNeedsRefresh {
-        graph_id: *parent_group_id,
-    }]
+/// [`DocumentChange`] shape: a `GraphNeedsRefresh` for `parent_group_id` and every extra group a
+/// reroute touched (`affected_groups`), deduplicated.
+pub(super) fn describe_group_structure_change(
+    parent_group_id: &Uuid,
+    affected_groups: &[Uuid],
+) -> Vec<DocumentChange> {
+    let mut graph_ids = vec![*parent_group_id];
+    graph_ids.extend(affected_groups.iter().copied());
+    graph_ids.sort();
+    graph_ids.dedup();
+    graph_ids
+        .into_iter()
+        .map(|graph_id| DocumentChange::GraphNeedsRefresh { graph_id })
+        .collect()
+}
+
+#[cfg(test)]
+mod test {
+    use super::{
+        DocumentChange, MoveNodes, MoveNodesRequest, describe_group_structure_change,
+        describe_move_nodes,
+    };
+    use uuid::Uuid;
+
+    fn refreshed_graph_ids(changes: &[DocumentChange]) -> Vec<Uuid> {
+        changes
+            .iter()
+            .filter_map(|c| match c {
+                DocumentChange::GraphNeedsRefresh { graph_id } => Some(*graph_id),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Regression test for the gap where undoing a move only refreshed source and target, leaving a
+    /// third group whose port map a reroute touched visually stale. `describe_move_nodes` must now emit
+    /// a `GraphNeedsRefresh` for source, target, and every `affected_group`.
+    #[test]
+    fn describe_move_nodes_refreshes_source_target_and_affected_groups() {
+        let source = Uuid::new_v4();
+        let target = Uuid::new_v4();
+        let third = Uuid::new_v4();
+        let cmd = MoveNodes {
+            request: MoveNodesRequest {
+                source_group_id: source,
+                target_group_id: target,
+                nodes_to_move: vec![Uuid::new_v4()],
+            },
+            affected_groups: vec![third],
+        };
+        let refreshed = refreshed_graph_ids(&describe_move_nodes(&cmd));
+        assert!(refreshed.contains(&source), "source tab must be refreshed");
+        assert!(refreshed.contains(&target), "target tab must be refreshed");
+        assert!(
+            refreshed.contains(&third),
+            "a third group a reroute touched must also be refreshed on undo/redo"
+        );
+    }
+
+    /// Regression test for the same gap on the group-conversion path: undoing a convert/ungroup must
+    /// refresh the parent tab *and* every extra group a reroute touched.
+    #[test]
+    fn describe_group_structure_change_refreshes_parent_and_affected_groups() {
+        let parent = Uuid::new_v4();
+        let third = Uuid::new_v4();
+        let refreshed = refreshed_graph_ids(&describe_group_structure_change(&parent, &[third]));
+        assert!(refreshed.contains(&parent), "parent tab must be refreshed");
+        assert!(
+            refreshed.contains(&third),
+            "a third group a reroute touched must also be refreshed on undo/redo"
+        );
+    }
 }

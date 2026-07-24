@@ -663,6 +663,27 @@ pub enum DocumentChange {
     /// One tab's nodes/edges/port-maps should be re-fetched from scratch (see the type's own doc
     /// comment for which operations use this).
     GraphNeedsRefresh { graph_id: Uuid },
+    /// The canvas camera (pan/zoom) of `graph_id` should move to `zoom`/`shift`. Emitted when undoing or
+    /// redoing a viewport change (see `Command::SetViewport`); purely a GUI/camera effect, never touches
+    /// the document model.
+    ViewportChanged {
+        graph_id: Uuid,
+        zoom: f64,
+        shift: (f64, f64),
+    },
+}
+
+/// A per-tab canvas viewport (pan/zoom). Purely a GUI concern - never part of the saved `.opm` document -
+/// but round-tripped through the backend so a camera move can be a reversible entry on the undo stack
+/// (see `Command::SetViewport`).
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, ToSchema)]
+pub struct Viewport {
+    /// The tab (graph) the viewport belongs to.
+    pub graph_id: Uuid,
+    /// Zoom factor.
+    pub zoom: f64,
+    /// Pan offset `(x, y)` in screen space.
+    pub shift: (f64, f64),
 }
 
 /// Response returned by `POST /api/document/undo` and `POST /api/document/redo`.

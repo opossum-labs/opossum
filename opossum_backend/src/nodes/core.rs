@@ -26,7 +26,9 @@ use crate::{
         capture_node_connections, disconnect_stale_external_connections_for_node,
         parent_group_id_or_self, split_disconnected_mappings_for_response,
     },
-    undo::{Command, EdgeSnapshot, NodeSnapshot, PatchNode, capture_old_node_request},
+    undo::{
+        Command, EdgeSnapshot, NodeSnapshot, PatchAnalyzer, PatchNode, capture_old_node_request,
+    },
 };
 
 /// Get all nodes of a group node
@@ -115,11 +117,16 @@ async fn post_children(
         .to_string();
     let new_node_uuid = new_node_ref.optical_ref.lock_opm()?.node_attr().uuid();
 
+    // Auto-injecting a source-port mapping mutates each analyzer's config as a side effect - capture the
+    // inverse (restore the analyzer's pre-injection config) per changed analyzer, so undoing this add also
+    // strips the mappings it injected instead of leaving them dangling on a removed node.
+    let mut analyzer_inverses: Vec<Command> = Vec::new();
     if node_type_str == "source port" {
         let analyzer_keys: Vec<Uuid> = document.analyzers().keys().copied().collect();
         for az_uuid in analyzer_keys {
             if let Some(analyzer_info) = document.analyzer_mut(az_uuid) {
-                let mut a_type = analyzer_info.analyzer_type().clone();
+                let old_type = analyzer_info.analyzer_type().clone();
+                let mut a_type = old_type.clone();
                 match &mut a_type {
                     AnalyzerType::Energy(cfg) => {
                         cfg.map_source(new_node_uuid, EnergyDataBuilder::default());
@@ -131,19 +138,34 @@ async fn post_children(
                         cfg.map_source(new_node_uuid, RayDataBuilder::default());
                     }
                 }
-                analyzer_info.set_analyzer_type(&a_type);
+                if a_type != old_type {
+                    analyzer_info.set_analyzer_type(&a_type);
+                    analyzer_inverses.push(Command::PatchAnalyzer(PatchAnalyzer {
+                        id: az_uuid,
+                        old: a_type,
+                        new: old_type,
+                    }));
+                }
             }
         }
     }
 
     drop(document);
 
-    data.push_undo(Command::RemoveNode(NodeSnapshot {
+    let remove_node = Command::RemoveNode(NodeSnapshot {
         parent_group_id: uuid,
         node: new_node_ref.clone(),
         cascaded: Vec::new(),
         connections: Vec::new(),
-    }));
+    });
+    if analyzer_inverses.is_empty() {
+        data.push_undo(remove_node);
+    } else {
+        // One add = one undo step: removing the node and restoring every analyzer it touched.
+        let mut batch = vec![remove_node];
+        batch.extend(analyzer_inverses);
+        data.push_undo(Command::Batch(batch));
+    }
 
     let node = new_node_ref.optical_ref.lock_opm()?;
     let node_info = NodeInfo::from_analyzable(&*node, None);
@@ -274,6 +296,13 @@ async fn delete_node(
         let mut cascaded = Vec::new();
         for ref_ids in referring.values() {
             for ref_id in ref_ids {
+                // `find_all_nodes_referring_to_uuid` reports the queried node itself as one of its own
+                // "referrers" - skip that self-match (same as the cut path in `operations.rs`), or the
+                // target node ends up in `cascaded` too and undo re-adds it twice (a duplicate uuid in
+                // the scenery, which crashes the analyzer editor's keyed source-port list).
+                if *ref_id == uuid {
+                    continue;
+                }
                 if let Ok((r, p)) = scenery.node_recursive(*ref_id) {
                     cascaded.push((p, r));
                 }
@@ -301,27 +330,9 @@ async fn delete_node(
     }
     let deleted_nodes = scenery.delete_node(uuid)?;
 
-    // --- AUTOMATICALLY REMOVE OBSOLETE MAPPINGS FROM ALL ANALYZERS ---
-    for deleted_uuid in &deleted_nodes {
-        let analyzer_keys: Vec<Uuid> = document.analyzers().keys().copied().collect();
-        for az_uuid in analyzer_keys {
-            if let Some(analyzer_info) = document.analyzer_mut(az_uuid) {
-                let mut a_type = analyzer_info.analyzer_type().clone();
-                match &mut a_type {
-                    AnalyzerType::Energy(cfg) => {
-                        let _ = cfg.remove_source(deleted_uuid);
-                    }
-                    AnalyzerType::RayTrace(cfg) => {
-                        let _ = cfg.remove_source(deleted_uuid);
-                    }
-                    AnalyzerType::GhostFocus(cfg) => {
-                        let _ = cfg.remove_source(deleted_uuid);
-                    }
-                }
-                analyzer_info.set_analyzer_type(&a_type);
-            }
-        }
-    }
+    // Deleting a source-port node strips its mapping from every analyzer - capture the inverse commands
+    // that restore those mappings, so undo isn't a silent data loss (see the helper).
+    let analyzer_inverses = prune_analyzer_source_mappings(&mut document, &deleted_nodes);
 
     // Only claim cascaded nodes that `delete_node` actually removed, in case its cascade rules ever
     // diverge from what `find_all_nodes_referring_to_uuid` predicted.
@@ -338,7 +349,7 @@ async fn delete_node(
         cascaded,
         connections,
     });
-    if disconnected_mappings.is_empty() {
+    if disconnected_mappings.is_empty() && analyzer_inverses.is_empty() {
         data.push_undo(add_node);
     } else {
         let mut batch = vec![add_node];
@@ -349,6 +360,7 @@ async fn delete_node(
                 connect_info: d.connect_info,
             }));
         }
+        batch.extend(analyzer_inverses);
         data.push_undo(Command::Batch(batch));
     }
 
@@ -433,10 +445,22 @@ async fn post_reference(
             ref_node_info.gui_position().1,
         )));
 
-    let scenery = document.scenery_mut();
-    let _ = scenery.with_group_node_mut(group_uuid, |g| g.add_node(node_reference.clone()))??;
+    let new_ref_uuid = document
+        .scenery_mut()
+        .with_group_node_mut(group_uuid, |g| g.add_node(node_reference.clone()))??;
 
+    // Capture the inserted reference node's live `OpticRef` so undo can restore it exactly, mirroring
+    // `post_children`. A reference node has neither a cascade nor its own connections at creation time,
+    // so both are empty; its *deletion* is already covered symmetrically by `delete_node`'s `AddNode`.
+    let node_ref = document.scenery().node_recursive(new_ref_uuid)?.0;
     drop(document);
+    data.push_undo(Command::RemoveNode(NodeSnapshot {
+        parent_group_id: group_uuid,
+        node: node_ref,
+        cascaded: Vec::new(),
+        connections: Vec::new(),
+    }));
+
     let node_info = NodeInfo::from_analyzable(&node_reference, None);
     Ok(HttpResponse::Created().json(node_info))
 }
@@ -808,6 +832,317 @@ mod test {
             "the S -> G external connection must be restored"
         );
     }
+
+    /// Regression test for the gap where creating a reference node (`POST /{uuid}/references`) pushed
+    /// no undo command at all - so a freshly added reference node could not be removed via undo, even
+    /// though *deleting* one is already covered by `delete_node`'s `AddNode`. Adds a reference node
+    /// pointing at a dummy, undoes the creation (node must be gone), and redoes it (node must reappear
+    /// under the same uuid).
+    #[actix_web::test]
+    async fn test_undo_redo_add_reference_node() {
+        use crate::document::{redo_document, undo_document};
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, target_id) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let target_id = document.scenery_mut().add_node(Dummy::default()).unwrap();
+            (root_id, target_id)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_reference)
+                .service(undo_document)
+                .service(redo_document),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri(&format!("/{root_id}/references"))
+            .set_json(&NewRefNode::new(target_id, (10.0, 20.0)))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let ref_info: NodeInfo = test::read_body_json(resp).await;
+        let ref_uuid = ref_info.uuid();
+        assert!(
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .node_recursive(ref_uuid)
+                .is_ok(),
+            "the reference node must exist right after creation"
+        );
+
+        // Undo removes the just-created reference node.
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .node_recursive(ref_uuid)
+                .is_err(),
+            "undo must remove the reference node"
+        );
+
+        // Redo restores it under the same uuid.
+        let req = test::TestRequest::post().uri("/redo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .node_recursive(ref_uuid)
+                .is_ok(),
+            "redo must restore the reference node under the same uuid"
+        );
+    }
+
+    /// Regression test for the cascade gap where *adding* a `"source port"` node injected a default
+    /// mapping into every analyzer, but the undo (a bare `RemoveNode`) only removed the node - leaving a
+    /// dangling mapping to a nonexistent uuid behind. Sets up an (empty) Energy analyzer, adds a source
+    /// port via `post_children` (which injects the mapping), and asserts a single undo removes both the
+    /// node and the injected analyzer mapping.
+    #[actix_web::test]
+    async fn test_undo_add_source_port_removes_injected_analyzer_mapping() {
+        use crate::document::undo_document;
+        use opossum_core::prelude::{AnalyzerType, EnergyConfig};
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, analyzer_id, empty_type) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let analyzer_id = document
+                .add_analyzer_with_position(AnalyzerType::Energy(EnergyConfig::default()), None);
+            let empty_type = document
+                .analyzer(analyzer_id)
+                .unwrap()
+                .analyzer_type()
+                .clone();
+            (root_id, analyzer_id, empty_type)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_children)
+                .service(undo_document),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri(&format!("/{root_id}/children"))
+            .set_json(&NewNode::new("source port".to_string(), (0.0, 0.0)))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let src_info: NodeInfo = test::read_body_json(resp).await;
+        let src_uuid = src_info.uuid();
+
+        assert_ne!(
+            *app_state
+                .document
+                .lock()
+                .analyzer(analyzer_id)
+                .unwrap()
+                .analyzer_type(),
+            empty_type,
+            "adding the source port must have injected a mapping into the analyzer"
+        );
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        {
+            let document = app_state.document.lock();
+            assert!(
+                document.scenery().node_recursive(src_uuid).is_err(),
+                "undo must remove the source-port node"
+            );
+            assert_eq!(
+                *document.analyzer(analyzer_id).unwrap().analyzer_type(),
+                empty_type,
+                "undo must also strip the analyzer mapping the add injected, not leave it dangling"
+            );
+        }
+    }
+
+    /// Regression test for the sharper direction of the same gap: *deleting* a mapped `"source port"`
+    /// node stripped its mapping from every analyzer, but the undo (an `AddNode`) restored only the
+    /// node, silently losing the analyzer's source mapping. Builds a source port already mapped in an
+    /// Energy analyzer, deletes it (mapping must be gone), and asserts one undo restores BOTH the node
+    /// and the analyzer mapping.
+    #[actix_web::test]
+    async fn test_undo_delete_source_port_restores_analyzer_mapping() {
+        use crate::document::undo_document;
+        use opossum_core::{
+            light::lightdata::energy_data_builder::EnergyDataBuilder,
+            nodes::create_node_ref,
+            prelude::{AnalyzerType, EnergyConfig},
+        };
+
+        let app_state = Data::new(AppState::default());
+        let (src_uuid, analyzer_id, mapped_type) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+
+            let src_ref = create_node_ref("source port").unwrap();
+            let src_uuid = src_ref.uuid().unwrap();
+            document
+                .scenery_mut()
+                .with_group_node_mut(root_id, |g| g.add_node_ref(src_ref))
+                .unwrap()
+                .unwrap();
+
+            let mut cfg = EnergyConfig::default();
+            cfg.map_source(src_uuid, EnergyDataBuilder::default());
+            let analyzer_id = document.add_analyzer_with_position(AnalyzerType::Energy(cfg), None);
+            let mapped_type = document
+                .analyzer(analyzer_id)
+                .unwrap()
+                .analyzer_type()
+                .clone();
+            (src_uuid, analyzer_id, mapped_type)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(delete_node)
+                .service(undo_document),
+        )
+        .await;
+
+        let req = test::TestRequest::delete()
+            .uri(&format!("/{src_uuid}"))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_ne!(
+            *app_state
+                .document
+                .lock()
+                .analyzer(analyzer_id)
+                .unwrap()
+                .analyzer_type(),
+            mapped_type,
+            "deleting the source port must have removed its analyzer mapping"
+        );
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK, "undo must not error");
+        {
+            let document = app_state.document.lock();
+            assert!(
+                document.scenery().node_recursive(src_uuid).is_ok(),
+                "undo must restore the source-port node"
+            );
+            assert_eq!(
+                *document.analyzer(analyzer_id).unwrap().analyzer_type(),
+                mapped_type,
+                "undo must also restore the analyzer source mapping, not just the node"
+            );
+        }
+    }
+
+    /// Regression test for the live-QA crash: analyzer present, create a `"source port"`, delete it,
+    /// undo - the analyzer editor then listed the source port *twice* and crashed Dioxus with a
+    /// duplicate-key panic. The editor's list is fed by `get_available_sources` (a scenery walk), so a
+    /// duplicate there means the scenery holds two nodes with the same source-port uuid after undo.
+    /// Mirrors the exact flow (`post_children` source port, `delete_node`, `/undo`) and asserts exactly
+    /// one source port is visible afterwards.
+    #[actix_web::test]
+    async fn test_undo_delete_source_port_yields_exactly_one_source() {
+        use crate::{analyzers::get_available_sources, document::undo_document};
+        use opossum_core::{
+            prelude::{AnalyzerType, EnergyConfig},
+            types::api_types::SourcePortDto,
+        };
+
+        let app_state = Data::new(AppState::default());
+        let root_id = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            // An analyzer exists first, matching the user's flow.
+            document
+                .add_analyzer_with_position(AnalyzerType::Energy(EnergyConfig::default()), None);
+            root_id
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_children)
+                .service(delete_node)
+                .service(undo_document)
+                .service(get_available_sources),
+        )
+        .await;
+
+        // Create the source port (post_children injects it into the analyzer).
+        let req = test::TestRequest::post()
+            .uri(&format!("/{root_id}/children"))
+            .set_json(&NewNode::new("source port".to_string(), (0.0, 0.0)))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let src: NodeInfo = test::read_body_json(resp).await;
+        let src_uuid = src.uuid();
+
+        let count_sources = |state: &Data<AppState>| -> usize {
+            let document = state.document.lock();
+            let root = document.scenery().node_attr().uuid();
+            document
+                .scenery()
+                .with_group_node(root, |g| {
+                    g.nodes()
+                        .iter()
+                        .filter(|n| {
+                            n.optical_ref
+                                .lock_opm()
+                                .map_or(false, |node| node.node_attr().node_type() == "source port")
+                        })
+                        .count()
+                })
+                .unwrap()
+        };
+        assert_eq!(count_sources(&app_state), 1, "one source after create");
+
+        // Delete it.
+        let req = test::TestRequest::delete()
+            .uri(&format!("/{src_uuid}"))
+            .to_request();
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
+        assert_eq!(count_sources(&app_state), 0, "zero sources after delete");
+
+        // Undo the delete.
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
+        assert_eq!(count_sources(&app_state), 1, "one source after undo");
+
+        // Exactly one source port must be visible - not two.
+        let req = test::TestRequest::get()
+            .uri("/available_sources")
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let sources: Vec<SourcePortDto> = test::read_body_json(resp).await;
+        assert_eq!(
+            sources.len(),
+            1,
+            "after delete+undo there must be exactly one source port, got {sources:?}"
+        );
+        assert_eq!(sources[0].uuid, src_uuid);
+    }
 }
 
 fn get_nested_referenced_node_from_state(
@@ -830,4 +1165,66 @@ fn get_nested_referenced_node_from_state(
     } else {
         Ok(optic_ref)
     }
+}
+
+/// Removes the source mappings of every just-deleted node from all analyzers (deleting a `"source port"`
+/// node must strip it from each analyzer's source map), returning the `PatchAnalyzer` inverse commands
+/// that restore each changed analyzer's mapping on undo. Each returned command's own inverse re-prunes on
+/// redo, so folding these into the delete's undo batch keeps the whole cascade reversible.
+///
+/// # Arguments
+///
+/// - `document`: the live document whose analyzers are pruned in place.
+/// - `deleted_nodes`: the uuids that `delete_node` just removed (target plus any cascaded reference nodes).
+///
+/// # Returns
+///
+/// One `Command::PatchAnalyzer` per analyzer whose config actually changed; empty if none did.
+fn prune_analyzer_source_mappings(
+    document: &mut OpmDocument,
+    deleted_nodes: &[Uuid],
+) -> Vec<Command> {
+    // Snapshot each analyzer's config *before* pruning (indexed by id for lookup afterward), so undo can
+    // restore whatever the prune below removes.
+    let old_analyzer_types: HashMap<Uuid, AnalyzerType> = document
+        .analyzers()
+        .iter()
+        .map(|(id, info)| (*id, info.analyzer_type().clone()))
+        .collect();
+
+    for deleted_uuid in deleted_nodes {
+        let analyzer_keys: Vec<Uuid> = document.analyzers().keys().copied().collect();
+        for az_uuid in analyzer_keys {
+            if let Some(analyzer_info) = document.analyzer_mut(az_uuid) {
+                let mut a_type = analyzer_info.analyzer_type().clone();
+                match &mut a_type {
+                    AnalyzerType::Energy(cfg) => {
+                        let _ = cfg.remove_source(deleted_uuid);
+                    }
+                    AnalyzerType::RayTrace(cfg) => {
+                        let _ = cfg.remove_source(deleted_uuid);
+                    }
+                    AnalyzerType::GhostFocus(cfg) => {
+                        let _ = cfg.remove_source(deleted_uuid);
+                    }
+                }
+                analyzer_info.set_analyzer_type(&a_type);
+            }
+        }
+    }
+
+    let mut inverses = Vec::new();
+    for (az_uuid, old_type) in &old_analyzer_types {
+        if let Ok(info) = document.analyzer(*az_uuid) {
+            let new_type = info.analyzer_type().clone();
+            if new_type != *old_type {
+                inverses.push(Command::PatchAnalyzer(PatchAnalyzer {
+                    id: *az_uuid,
+                    old: new_type,
+                    new: old_type.clone(),
+                }));
+            }
+        }
+    }
+    inverses
 }

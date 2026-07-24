@@ -1,4 +1,6 @@
-use opossum_core::types::api_types::{LoadDocumentResponse, PositionUpdate, UndoRedoResponse};
+use opossum_core::types::api_types::{
+    LoadDocumentResponse, PositionUpdate, UndoRedoResponse, Viewport,
+};
 use uuid::Uuid;
 
 use crate::HTTP_API_CLIENT;
@@ -66,5 +68,17 @@ pub async fn redo_document() -> Result<UndoRedoResponse, String> {
 pub async fn patch_positions(updates: Vec<PositionUpdate>) -> Result<(), String> {
     HTTP_API_CLIENT()
         .patch("/api/document/positions", updates)
+        .await
+}
+
+/// Record a canvas viewport change (pan/zoom of a tab) as its own undo step, given the viewport
+/// `before` and `after` the gesture. Consecutive camera moves coalesce backend-side into one step.
+///
+/// # Errors
+///
+/// This function will return an error if the request fails.
+pub async fn post_viewport_change(before: Viewport, after: Viewport) -> Result<(), String> {
+    HTTP_API_CLIENT()
+        .post_receive_no_content("/api/document/viewport_change", (before, after))
         .await
 }

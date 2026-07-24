@@ -4,7 +4,10 @@ use crate::{
     error::BackEndErrorResponse,
     helper_functions::parent_group_id_or_self,
     sse_logger::SENDER,
-    undo::{Command, PatchNode, RepositionAnalyzer, capture_old_node_request},
+    undo::{
+        Command, PatchGlobalConf, PatchNode, RepositionAnalyzer, SetViewport,
+        capture_old_node_request,
+    },
 };
 use actix_web::{
     Error, HttpResponse, Responder, delete, get, patch, post, put,
@@ -17,6 +20,7 @@ use opossum_core::{
     opm_document::OpmDocument,
     types::api_types::{
         ErrorResponse, LoadDocumentResponse, PositionUpdate, UndoRedoResponse, UpdateNodeRequest,
+        Viewport,
     },
 };
 use std::{path::PathBuf, str::FromStr};
@@ -59,10 +63,18 @@ async fn get_global_conf(data: web::Data<AppState>) -> impl Responder {
 async fn patch_global_conf(
     data: web::Data<AppState>,
     new_global_conf: web::Json<SceneryResources>,
-) -> impl Responder {
-    let global_conf = new_global_conf.into_inner();
-    data.document.lock().set_global_conf(global_conf.clone());
-    web::Json(global_conf)
+) -> Result<Json<SceneryResources>, BackEndErrorResponse> {
+    let new = new_global_conf.into_inner();
+    let mut document = data.document.lock();
+    let old = document.global_conf().lock().unwrap().clone();
+    let inverse = Command::PatchGlobalConf(PatchGlobalConf {
+        old,
+        new: new.clone(),
+    })
+    .apply(&mut document)?;
+    data.push_undo(inverse);
+    drop(document);
+    Ok(Json(new))
 }
 #[utoipa::path(tag = "document",
     responses((status = 200, description = "Scenery Uuid", body = SceneryResources))
@@ -185,6 +197,51 @@ pub(crate) async fn redo_document(
         can_undo: true,
         can_redo: !data.redo_stack.lock().is_empty(),
     }))
+}
+
+/// Record a canvas viewport change (pan/zoom of a tab) as its own undo step.
+///
+/// The body is `(before, after)` - the viewport before and after the gesture. Pushes a `SetViewport`
+/// whose undo restores `before` and whose redo restores `after`. The camera is purely a GUI concern and
+/// never touches the document; this only makes the change reversible on the shared undo stack, so a
+/// single undo reverts a camera move (or an edit), one step at a time.
+///
+/// **Coalescing:** consecutive camera adjustments on the same tab with no intervening edit (a scroll-zoom
+/// burst is dozens of these) collapse into a single undo step - the top `SetViewport`'s original undo
+/// target is kept and only its redo target is extended to the newest viewport. A non-viewport edit (or a
+/// tab switch to a different graph) breaks the chain, so the next camera move starts a fresh step.
+#[utoipa::path(tag = "document",
+    request_body(content = (Viewport, Viewport), description = "The viewport before and after the gesture"),
+    responses((status = NO_CONTENT, description = "Viewport change recorded"))
+)]
+#[post("/viewport_change")]
+async fn post_viewport_change(
+    data: web::Data<AppState>,
+    body: web::Json<(Viewport, Viewport)>,
+) -> impl Responder {
+    let (before, after) = body.into_inner();
+    // A gesture that didn't actually move the camera (e.g. a middle-click without a drag, or centering an
+    // already-centered graph) must not create a no-op undo step.
+    if before == after {
+        return HttpResponse::NoContent().finish();
+    }
+    let mut undo_stack = data.undo_stack.lock();
+    if let Some(Command::SetViewport(top)) = undo_stack.back_mut()
+        && top.to.graph_id == before.graph_id
+    {
+        // Extend the ongoing camera step forward to `after`, keeping its original undo target (`to`).
+        top.from = after;
+        drop(undo_stack);
+        data.redo_stack.lock().clear();
+    } else {
+        drop(undo_stack);
+        // Undo (applying this command) moves the camera back to `before`; its inverse (redo) to `after`.
+        data.push_undo(Command::SetViewport(SetViewport {
+            from: after,
+            to: before,
+        }));
+    }
+    HttpResponse::NoContent().finish()
 }
 
 /// Batch-update the GUI positions of several nodes/analyzers in one step.
@@ -364,6 +421,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
 
     cfg.service(undo_document);
     cfg.service(redo_document);
+    cfg.service(post_viewport_change);
     cfg.service(patch_positions);
 
     // cfg.service(simulate);
@@ -866,6 +924,190 @@ mod test {
             )),
             "a change already covered by the GraphNeedsRefresh must not also appear separately, got: {:?}",
             body.changes
+        );
+    }
+
+    /// Regression test for the gap where `PATCH /global_conf` replaced the document's global scenery
+    /// config without pushing any undo command. Patches the config to a distinct value and asserts a
+    /// single undo restores the previous one.
+    #[actix_web::test]
+    async fn test_undo_patch_global_conf_restores_old_config() {
+        use opossum_core::refractive_index::{RefrIndexConst, RefractiveIndexType};
+
+        let app_state = Data::new(AppState::default());
+        let old_repr = format!(
+            "{:?}",
+            *app_state.document.lock().global_conf().lock().unwrap()
+        );
+
+        let new_conf = SceneryResources {
+            ambient_refr_index: RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()),
+        };
+        let new_repr = format!("{new_conf:?}");
+        assert_ne!(
+            old_repr, new_repr,
+            "the test's replacement config must differ from the default"
+        );
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(patch_global_conf)
+                .service(undo_document),
+        )
+        .await;
+
+        let req = test::TestRequest::patch()
+            .uri("/global_conf")
+            .set_json(&new_conf)
+            .to_request();
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
+        assert_eq!(
+            format!(
+                "{:?}",
+                *app_state.document.lock().global_conf().lock().unwrap()
+            ),
+            new_repr,
+            "the patch must have applied the new config"
+        );
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
+        assert_eq!(
+            format!(
+                "{:?}",
+                *app_state.document.lock().global_conf().lock().unwrap()
+            ),
+            old_repr,
+            "undo must restore the old global config"
+        );
+    }
+
+    /// Regression test for fix6 (camera as its own undo step): recording a viewport change must make it
+    /// reversible on the same undo stack. Undo emits a `ViewportChanged` back to the pre-gesture
+    /// viewport, redo emits one forward to the post-gesture viewport - and neither touches the document.
+    #[actix_web::test]
+    async fn test_viewport_change_undo_redo_round_trip() {
+        use opossum_core::types::api_types::{DocumentChange, Viewport};
+
+        let app_state = Data::new(AppState::default());
+        let graph_id = app_state.document.lock().scenery().node_attr().uuid();
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_viewport_change)
+                .service(undo_document)
+                .service(redo_document),
+        )
+        .await;
+
+        let before = Viewport {
+            graph_id,
+            zoom: 1.0,
+            shift: (0.0, 0.0),
+        };
+        let after = Viewport {
+            graph_id,
+            zoom: 2.0,
+            shift: (50.0, -10.0),
+        };
+
+        let req = test::TestRequest::post()
+            .uri("/viewport_change")
+            .set_json(&(before, after))
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        // Undo must move the camera back to `before` (zoom 1.0, shift (0,0)).
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: UndoRedoResponse = test::read_body_json(resp).await;
+        assert!(
+            matches!(
+                body.changes.as_slice(),
+                [DocumentChange::ViewportChanged { graph_id: g, zoom, shift }]
+                    if *g == graph_id && (*zoom - 1.0).abs() < f64::EPSILON && *shift == (0.0, 0.0)
+            ),
+            "undo must move the camera back to `before`, got {:?}",
+            body.changes
+        );
+
+        // Redo must move it forward to `after` (zoom 2.0, shift (50,-10)).
+        let req = test::TestRequest::post().uri("/redo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: UndoRedoResponse = test::read_body_json(resp).await;
+        assert!(
+            matches!(
+                body.changes.as_slice(),
+                [DocumentChange::ViewportChanged { graph_id: g, zoom, shift }]
+                    if *g == graph_id && (*zoom - 2.0).abs() < f64::EPSILON && *shift == (50.0, -10.0)
+            ),
+            "redo must move the camera forward to `after`, got {:?}",
+            body.changes
+        );
+    }
+
+    /// A scroll-zoom burst is dozens of tiny viewport changes; they must coalesce into a *single* undo
+    /// step that returns to the pre-burst viewport, not one step per tick. Pushes three consecutive
+    /// changes and asserts one undo entry, and that a single undo jumps back to the very first viewport.
+    #[actix_web::test]
+    async fn test_viewport_change_coalesces_consecutive_camera_moves() {
+        use opossum_core::types::api_types::{DocumentChange, Viewport};
+
+        let app_state = Data::new(AppState::default());
+        let graph_id = app_state.document.lock().scenery().node_attr().uuid();
+        let vp = |zoom: f64| Viewport {
+            graph_id,
+            zoom,
+            shift: (0.0, 0.0),
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_viewport_change)
+                .service(undo_document),
+        )
+        .await;
+
+        for (before, after) in [(vp(1.0), vp(1.5)), (vp(1.5), vp(2.0)), (vp(2.0), vp(2.5))] {
+            let req = test::TestRequest::post()
+                .uri("/viewport_change")
+                .set_json(&(before, after))
+                .to_request();
+            assert_eq!(
+                app.call(req).await.unwrap().status(),
+                StatusCode::NO_CONTENT
+            );
+        }
+        assert_eq!(
+            app_state.undo_stack.lock().len(),
+            1,
+            "the whole burst must be a single undo step, not one per tick"
+        );
+
+        // One undo jumps all the way back to the pre-burst viewport (zoom 1.0).
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: UndoRedoResponse = test::read_body_json(resp).await;
+        assert!(
+            matches!(
+                body.changes.as_slice(),
+                [DocumentChange::ViewportChanged { zoom, .. }] if (*zoom - 1.0).abs() < f64::EPSILON
+            ),
+            "one undo must return to the pre-burst viewport, got {:?}",
+            body.changes
+        );
+        assert!(
+            !body.can_undo,
+            "the burst was a single step, so nothing left to undo"
         );
     }
 }

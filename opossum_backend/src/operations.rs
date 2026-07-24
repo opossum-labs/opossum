@@ -10,7 +10,10 @@ use crate::{
         parent_group_id_or_self, reconnect_moved_node_connections,
         split_disconnected_mappings_for_response, split_sort_connections,
     },
-    undo::{Command, EdgeSnapshot, GroupConversion, NodeSnapshot, PatchProperty, ReroutedMapping},
+    undo::{
+        Command, EdgeSnapshot, GroupConversion, MoveNodes, NodeSnapshot, PatchProperty,
+        ReroutedMapping,
+    },
 };
 use actix_web::{
     post,
@@ -1033,6 +1036,8 @@ pub async fn post_convert_nodes_to_group(
             .collect(),
         restore_connections,
         rerouted_mappings,
+        // Refresh every group a reroute touched (not just the parent) on undo/redo of this conversion.
+        affected_groups: port_map_groups_changed.clone(),
     }));
 
     drop(document);
@@ -1127,16 +1132,21 @@ pub async fn post_move_nodes(
     let preserved =
         reconnect_moved_node_connections(scenery, from_group_id, drop_group_id, pending)?;
 
-    data.push_undo(Command::MoveNodes(MoveNodesRequest {
-        source_group_id: drop_group_id,
-        target_group_id: from_group_id,
-        nodes_to_move: original_node_ids,
-    }));
-
     let mut port_map_groups_changed = preserved.port_map_groups_changed;
     port_map_groups_changed.push(drop_group_id);
     port_map_groups_changed.sort();
     port_map_groups_changed.dedup();
+
+    // Carry the touched-group set into the undo command so undo/redo refreshes every affected tab, not
+    // just source and target.
+    data.push_undo(Command::MoveNodes(MoveNodes {
+        request: MoveNodesRequest {
+            source_group_id: drop_group_id,
+            target_group_id: from_group_id,
+            nodes_to_move: original_node_ids,
+        },
+        affected_groups: port_map_groups_changed.clone(),
+    }));
 
     drop(document);
     Ok(Json(MoveNodesResponse {

@@ -154,6 +154,23 @@ impl HTTPClient {
             |_response| Ok(()),
         )
     }
+
+    /// Send a POST request to the given route with the provided body, expecting no content (204).
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the request fails (e.g. the route is not reachable).
+    pub async fn post_receive_no_content<B: Serialize + DeserializeOwned>(
+        &self,
+        route: &str,
+        body: B,
+    ) -> Result<(), String> {
+        let res = self.client().post(self.url(route)).json(&body).send().await;
+        res.map_or_else(
+            |_| Err(format!("Error on post request on route: \"{route}\"")),
+            |_response| Ok(()),
+        )
+    }
     /// Send a PATCH request to the given route with the provided body.
     ///
     /// # Errors
