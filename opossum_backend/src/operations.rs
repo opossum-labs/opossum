@@ -195,6 +195,7 @@ async fn post_paste_nodes(
 
     reconfigure_ports(
         scenery,
+        &grouped_node_refs,
         &input_port_maps,
         &output_port_maps,
         &node_id_link,
@@ -470,15 +471,34 @@ fn upper_left_corner_of_nodes(
     Ok(corner)
 }
 
+/// Replays every pasted group's own port map onto its freshly-created (still portless) copy.
+///
+/// Must process groups in `grouped_node_refs`'s own order (innermost/child groups before their
+/// ancestors) rather than iterating `input_port_maps`/`output_port_maps` directly: a group's ports
+/// are computed dynamically from its own port map, so mapping an ancestor's external port to a
+/// nested group node only works once *that nested group's own* port map has already been rebuilt -
+/// otherwise the nested group doesn't look like a valid mapping target yet and
+/// `map_input_port`/`map_output_port` rejects it. `grouped_node_refs` already has exactly this
+/// child-before-parent order, since `collect_optical_nodes_to_copy_recursive` only pushes a group's
+/// own entry after its recursive call for its children has returned.
+///
+/// # Errors
+///
+/// Returns an error if a group's own port-map replay fails (e.g. an internal port name no longer
+/// matching, which shouldn't happen given the maps were captured from the live original).
 fn reconfigure_ports(
     scenery: &mut NodeGroup,
+    grouped_node_refs: &[(Uuid, Vec<OpticRef>, bool)],
     input_port_maps: &HashMap<Uuid, PortMap>,
     output_port_maps: &HashMap<Uuid, PortMap>,
     node_id_link: &HashMap<Uuid, Uuid>,
     grouped_node_infos: &mut HashMap<Uuid, Vec<NodeInfo>>,
 ) -> Result<(), BackEndErrorResponse> {
     // output port maps
-    for (old_group_id, output_port_map) in output_port_maps {
+    for (old_group_id, _, _) in grouped_node_refs {
+        let Some(output_port_map) = output_port_maps.get(old_group_id) else {
+            continue;
+        };
         for (external_port_name, (input_node, internal_port_name)) in output_port_map {
             if let (Some(new_group_id), Some(new_mapped_node_id)) =
                 (node_id_link.get(old_group_id), node_id_link.get(input_node))
@@ -495,7 +515,10 @@ fn reconfigure_ports(
         }
     }
     // input port maps
-    for (old_group_id, input_port_map) in input_port_maps {
+    for (old_group_id, _, _) in grouped_node_refs {
+        let Some(input_port_map) = input_port_maps.get(old_group_id) else {
+            continue;
+        };
         for (external_port_name, (input_node, internal_port_name)) in input_port_map {
             if let (Some(new_group_id), Some(new_mapped_node_id)) =
                 (node_id_link.get(old_group_id), node_id_link.get(input_node))
@@ -1586,6 +1609,113 @@ mod test {
             connections.len(),
             1,
             "the pasted group's internal A -> B connection must survive undo+redo"
+        );
+    }
+
+    /// Regression test for the bug where pasting a group that itself contains a nested group with its
+    /// own port map failed with `OpticGroup:node to be mapped is not an input_1/output_1 node of the
+    /// group`. Root cause: `reconfigure_ports` replayed the pasted subtree's collected port maps by
+    /// iterating a plain `HashMap`, in arbitrary order - so an outer group's port map (which maps one
+    /// of its own external ports to a *nested* group node) could be replayed before that nested
+    /// group's own port map had been rebuilt, at which point the nested group didn't yet look like a
+    /// valid mapping target. Builds `root -> G1 -> G2 -> [A, B]`, where `G2` maps `A`'s input and `B`'s
+    /// output to its own external names, and `G1` maps `G2`'s external names to its own - mirroring the
+    /// reported repro exactly (a group inside a group, both with port maps). Copies and pastes `G1` and
+    /// asserts the paste succeeds and the pasted copy's external ports match the original.
+    #[actix_web::test]
+    async fn test_paste_doubly_nested_group_with_port_maps_at_both_levels() {
+        use opossum_core::{
+            nodes::{Dummy, NodeGroup},
+            prelude::PortType,
+        };
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, g1_id) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let scenery = document.scenery_mut();
+
+            let mut g2 = NodeGroup::new("G2");
+            let node_a = g2.add_node(Dummy::default()).unwrap();
+            let node_b = g2.add_node(Dummy::default()).unwrap();
+            g2.connect_nodes(node_a, "output_1", node_b, "input_1", meter!(0.1))
+                .unwrap();
+            g2.map_input_port(node_a, "input_1", "g2_ext_in").unwrap();
+            g2.map_output_port(node_b, "output_1", "g2_ext_out")
+                .unwrap();
+
+            let mut g1 = NodeGroup::new("G1");
+            let g2_id = g1.add_node(g2).unwrap();
+            g1.map_input_port(g2_id, "g2_ext_in", "g1_ext_in").unwrap();
+            g1.map_output_port(g2_id, "g2_ext_out", "g1_ext_out")
+                .unwrap();
+
+            let g1_id = scenery.add_node(g1).unwrap();
+
+            (root_id, g1_id)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_copy_nodes)
+                .service(post_paste_nodes),
+        )
+        .await;
+
+        let mut nodes_to_copy = HashSet::new();
+        nodes_to_copy.insert(g1_id);
+        let req = test::TestRequest::post()
+            .uri("/copy_nodes")
+            .set_json(&nodes_to_copy)
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        let req = test::TestRequest::post()
+            .uri("/paste_nodes")
+            .set_json(&(root_id, (500.0, 500.0), false))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::OK,
+            "pasting a group containing a nested, port-mapped group must not error"
+        );
+
+        let pasted_g1_id = {
+            let document = app_state.document.lock();
+            document
+                .scenery()
+                .with_group_node(root_id, |g| {
+                    g.nodes()
+                        .iter()
+                        .filter_map(|n| n.uuid().ok())
+                        .find(|id| *id != g1_id)
+                })
+                .unwrap()
+                .expect("a pasted duplicate of G1 must exist")
+        };
+
+        let document = app_state.document.lock();
+        let (input_names, output_names) = document
+            .scenery()
+            .with_group_node(pasted_g1_id, |g| {
+                (
+                    g.ports().names(&PortType::Input),
+                    g.ports().names(&PortType::Output),
+                )
+            })
+            .unwrap();
+        assert!(
+            input_names.contains(&"g1_ext_in".to_string()),
+            "the pasted G1's external input port must be restored"
+        );
+        assert!(
+            output_names.contains(&"g1_ext_out".to_string()),
+            "the pasted G1's external output port must be restored"
         );
     }
 
