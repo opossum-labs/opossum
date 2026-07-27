@@ -133,9 +133,7 @@ pub async fn remove_port_map(
         c.iter()
             .map(|c| ConnectInfo::from_connection_info(c, false))
             .filter(|c| match port_type {
-                PortType::Output => {
-                    c.src_uuid() == group_id && c.src_port() == external_port_name
-                }
+                PortType::Output => c.src_uuid() == group_id && c.src_port() == external_port_name,
                 PortType::Input => {
                     c.target_uuid() == group_id && c.target_port() == external_port_name
                 }
@@ -259,7 +257,10 @@ mod test {
 
         // the connection to the *other* mapped port must still be intact
         let document = app_state.document.lock();
-        let remaining = document.scenery().graph().get_connection_info_of_node(group_id);
+        let remaining = document
+            .scenery()
+            .graph()
+            .get_connection_info_of_node(group_id);
         assert_eq!(remaining.len(), 1);
         assert_eq!(remaining[0].src_id, ext_node_b);
         assert_eq!(remaining[0].target_id, group_id);

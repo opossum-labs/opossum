@@ -440,7 +440,7 @@ mod test {
             Proptype::NodeReport(NodeReport::new("test1", "test2", "test3", Properties::default()))
                 .to_html("id", "property_name",0)
                 ?,
-            "<div class=\"accordion-item\">\n  <h5 class=\"accordion-header\">\n    <button class=\"accordion-button\" type=\"button\" data-bs-toggle=\"collapse\" data-bs-target=\"#test3\">\n      <span class=\"h5 me-2\">test2</span><small class=\"muted\">test1</small>\n    </button>\n  </h5>\n  <div id=\"test3\" class=\"accordion-collapse collapse \">\n    <div class=\"accordion-body\">\n      \n      <table class=\"table table-sm table-bordered\">\n        <tbody>\n          \n        </tbody>\n      </table>\n    </div>\n  </div>\n</div>\n".to_string()
+            "<div class=\"accordion-item\">\n  <h5 class=\"accordion-header\">\n    <button class=\"accordion-button collapsed\" type=\"button\" data-bs-toggle=\"collapse\" data-bs-target=\"#test3\">\n      <span class=\"h5 me-2\">test2</span><small class=\"muted\">test1</small>\n    </button>\n  </h5>\n  <div id=\"test3\" class=\"accordion-collapse collapse \">\n    <div class=\"accordion-body\">\n      \n      <table class=\"table table-sm table-bordered\">\n        <tbody>\n          \n        </tbody>\n      </table>\n    </div>\n  </div>\n</div>".to_string()
         );
         assert_eq!(
             Proptype::Fluence(J_per_m2!(1.234567)).to_html("id", "property_name", 0)?,

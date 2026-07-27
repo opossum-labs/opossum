@@ -177,7 +177,11 @@ fn task_bundle() -> Result<(), anyhow::Error> {
         println!("\n🛠️ Running Inno Setup Compiler (ISCC) for EXE Installer...");
         // The `_dir` guard from step 5 dropped, so we are back at the workspace root.
         // This executes the Inno Setup compiler using the script created above.
-        cmd!(sh, "'C:\\Program Files\\Inno Setup 7\\ISCC.exe' .\\installer.iss").run()?;
+        cmd!(
+            sh,
+            "'C:\\Program Files\\Inno Setup 7\\ISCC.exe' .\\installer.iss"
+        )
+        .run()?;
     }
     println!("\n✅ Bundle successfully created!");
     Ok(())
