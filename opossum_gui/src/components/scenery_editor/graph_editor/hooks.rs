@@ -69,6 +69,8 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
             zoom: new_graph_zoom,
             shift: (new_shift_x, new_shift_y),
         };
+        // A zoom is undoable, so enable Undo / grey out Redo like any other edit.
+        *crate::UNDO_REDO_STATUS.write() = (true, false);
         spawn(async move {
             let _ = api::post_viewport_change(before, after).await;
         });

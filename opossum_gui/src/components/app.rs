@@ -393,12 +393,6 @@ fn CommonAppLayout(
 ) -> Element {
     let mut root_tab_open = use_signal(|| true);
     let root_tab_open_handler = EventHandler::<bool>::new(move |b| root_tab_open.set(b));
-    let mut can_undo = use_signal(|| false);
-    let mut can_redo = use_signal(|| false);
-    let undo_redo_status_handler = EventHandler::new(move |(undo, redo): (bool, bool)| {
-        can_undo.set(undo);
-        can_redo.set(redo);
-    });
     let mut height = use_signal(|| 100.0);
     let mut dragging = use_signal(|| false);
     let mut last_y = use_signal(|| 0.0);
@@ -434,8 +428,6 @@ fn CommonAppLayout(
                         model_modified_sig,
                         on_menu_action,
                         root_tab_open,
-                        can_undo,
-                        can_redo,
                     }
                 }
             }
@@ -447,7 +439,6 @@ fn CommonAppLayout(
                 model_file_path,
                 model_file_path_handler,
                 root_tab_open_handler,
-                undo_redo_status_handler,
             }
             Logger { drag_handler: on_mousedown, height }
         }

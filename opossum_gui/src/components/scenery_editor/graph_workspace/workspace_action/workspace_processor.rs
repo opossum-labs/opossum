@@ -46,7 +46,6 @@ pub fn use_workspace_processor(
     root_graph_id: Memo<Uuid>,
     workspace_handlers: WorkSpaceSignalHandlers,
     set_file_path_handler: EventHandler<Option<PathBuf>>,
-    undo_redo_status_handler: EventHandler<(bool, bool)>,
 ) -> Coroutine<GraphsWorkspaceAction> {
     use_coroutine(move |mut rx: UnboundedReceiver<GraphsWorkspaceAction>| {
         async move {
@@ -55,6 +54,10 @@ pub fn use_workspace_processor(
             let mut pan_before: Option<Viewport> = None;
             // This loop runs forever in the background, waiting for actions.
             while let Some(action) = rx.next().await {
+                // A document-mutating action pushes an undo entry on the backend (=> can_undo becomes
+                // true, can_redo false). Capture that classification before `action` is consumed and
+                // reflect it after processing, so the Edit menu's Undo/Redo enabled-state stays correct.
+                let was_document_edit = is_document_edit_action(&action);
                 match action {
                     GraphsWorkspaceAction::LoadFromFile(path) => {
                         process_load_from_file(
@@ -66,7 +69,7 @@ pub fn use_workspace_processor(
                         )
                         .await;
                         // The backend clears its undo/redo history on every load; mirror that here.
-                        undo_redo_status_handler.call((false, false));
+                        *crate::UNDO_REDO_STATUS.write() = (false, false);
                     }
                     GraphsWorkspaceAction::SaveToFile(path) => {
                         process_save_root_scenery_to_file(
@@ -75,7 +78,6 @@ pub fn use_workspace_processor(
                             workspace_handlers,
                             root_graph_id(),
                             workspace,
-                            undo_redo_status_handler,
                         )
                         .await;
                     }
@@ -83,7 +85,7 @@ pub fn use_workspace_processor(
                         process_delete_root_scenery(workspace_handlers, set_file_path_handler)
                             .await;
                         // The backend clears its undo/redo history on every reset; mirror that here.
-                        undo_redo_status_handler.call((false, false));
+                        *crate::UNDO_REDO_STATUS.write() = (false, false);
                     }
                     GraphsWorkspaceAction::AddRootSceneryTab { name } => {
                         process_add_root_scenery_tab(workspace, workspace_handlers, name).await;
@@ -410,7 +412,7 @@ pub fn use_workspace_processor(
                         eval_action_run(
                             api::undo_document().await,
                             Some(move |r: UndoRedoResponse| {
-                                undo_redo_status_handler.call((r.can_undo, r.can_redo));
+                                *crate::UNDO_REDO_STATUS.write() = (r.can_undo, r.can_redo);
                                 workspace_handlers.workspace.set_needs_saving(true);
                                 spawn(apply_document_changes(
                                     r.changes,
@@ -425,7 +427,7 @@ pub fn use_workspace_processor(
                         eval_action_run(
                             api::redo_document().await,
                             Some(move |r: UndoRedoResponse| {
-                                undo_redo_status_handler.call((r.can_undo, r.can_redo));
+                                *crate::UNDO_REDO_STATUS.write() = (r.can_undo, r.can_redo);
                                 workspace_handlers.workspace.set_needs_saving(true);
                                 spawn(apply_document_changes(
                                     r.changes,
@@ -436,6 +438,12 @@ pub fn use_workspace_processor(
                             }),
                         );
                     }
+                }
+                if was_document_edit {
+                    // The edit pushed an undo entry on the backend; reflect that so the Edit menu enables
+                    // Undo and greys out Redo. (Viewport gestures and node-editor edits mark this at their
+                    // own push points.)
+                    *crate::UNDO_REDO_STATUS.write() = (true, false);
                 }
             }
         }
@@ -460,9 +468,35 @@ fn current_viewport(
 /// Records a viewport change (`before` -> `after`) as its own undo step, fire-and-forget. Consecutive
 /// camera moves with no intervening edit coalesce into a single undo step backend-side.
 fn push_viewport_change(before: Viewport, after: Viewport) {
+    // A camera move is undoable, so enable Undo / grey out Redo like any other edit.
+    *crate::UNDO_REDO_STATUS.write() = (true, false);
     spawn(async move {
         let _ = api::post_viewport_change(before, after).await;
     });
+}
+
+/// Whether processing this action mutates the document (and therefore pushes an undo entry on the
+/// backend). Used to keep [`crate::UNDO_REDO_STATUS`] correct after edits. Viewport gestures mark it at
+/// their own push point ([`push_viewport_change`]); `InvertNode`/`SetNodeName` are GUI mirrors whose
+/// real edit is marked in the node editor - so both are excluded here.
+const fn is_document_edit_action(action: &GraphsWorkspaceAction) -> bool {
+    matches!(
+        action,
+        GraphsWorkspaceAction::AddOpticNode { .. }
+            | GraphsWorkspaceAction::AddOpticReference { .. }
+            | GraphsWorkspaceAction::AddAnalyzer { .. }
+            | GraphsWorkspaceAction::OptimizeLayout { .. }
+            | GraphsWorkspaceAction::UpdateEdge { .. }
+            | GraphsWorkspaceAction::DeleteEdge { .. }
+            | GraphsWorkspaceAction::PasteNode { .. }
+            | GraphsWorkspaceAction::AddEdge { .. }
+            | GraphsWorkspaceAction::DeleteNode { .. }
+            | GraphsWorkspaceAction::ConvertToGroup { .. }
+            | GraphsWorkspaceAction::DropNodesIntoGroup { .. }
+            | GraphsWorkspaceAction::MapNodePort { .. }
+            | GraphsWorkspaceAction::RemovePortMap { .. }
+            | GraphsWorkspaceAction::SyncNodePositions { .. }
+    )
 }
 
 /// Applies the `DocumentChange`s returned by an undo/redo, by replaying each one through the exact
@@ -1525,7 +1559,6 @@ async fn process_save_root_scenery_to_file(
     ws_handler: WorkSpaceSignalHandlers,
     root_id: Uuid,
     workspace: ReadStore<GraphsWorkspaceState>,
-    undo_redo_status_handler: EventHandler<(bool, bool)>,
 ) {
     if let Some(f_stem) = path.file_stem()
         && let Some(fname) = f_stem.to_str()
@@ -1542,7 +1575,7 @@ async fn process_save_root_scenery_to_file(
             process_rename_root_scenery(ws_handler, fname.to_string(), root_id, false).await;
             // That rename just created a new undo entry and cleared redo - reflect it in the buttons,
             // which the save flow otherwise never refreshes.
-            undo_redo_status_handler.call((true, false));
+            *crate::UNDO_REDO_STATUS.write() = (true, false);
         }
         eval_action_run(
             api::get_document().await,

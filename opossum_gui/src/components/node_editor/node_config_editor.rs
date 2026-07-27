@@ -199,6 +199,8 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                         // it only reflects the backend's truth after an undo/redo-triggered refetch,
                         // never after a normal direct edit.
                         *crate::NODE_DETAILS_REFRESH.write() += 1;
+                        // The edit pushed an undo entry on the backend; reflect that in the Edit menu.
+                        *crate::UNDO_REDO_STATUS.write() = (true, false);
                     }
                     Err(err_str) => {
                         OPOSSUM_UI_LOGS.write().add_log(&err_str);

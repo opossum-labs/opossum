@@ -46,8 +46,6 @@ pub fn MenuBar(
     model_modified_sig: ReadSignal<bool>,
     on_menu_action: EventHandler<AppCommand>,
     root_tab_open: ReadSignal<bool>,
-    can_undo: ReadSignal<bool>,
-    can_redo: ReadSignal<bool>,
 ) -> Element {
     let mut about_window: Signal<bool> = use_signal(|| false);
 
@@ -127,12 +125,12 @@ pub fn MenuBar(
                         ul { class: "dropdown-menu",
                             MenuListItemShortCut {
                                 short_cut_action: ShortCutAction::Undo,
-                                disabled: !can_undo(),
+                                disabled: !crate::UNDO_REDO_STATUS().0,
                                 on_click: move |_| on_menu_action.call(AppCommand::Undo),
                             }
                             MenuListItemShortCut {
                                 short_cut_action: ShortCutAction::Redo,
-                                disabled: !can_redo(),
+                                disabled: !crate::UNDO_REDO_STATUS().1,
                                 on_click: move |_| on_menu_action.call(AppCommand::Redo),
                             }
                         }

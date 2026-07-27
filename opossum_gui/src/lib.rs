@@ -21,6 +21,11 @@ static CONTEXT_MENU: GlobalSignal<Option<CxMenu>> = Signal::global(|| None::<CxM
 /// so it refetches even when the selected node's identity hasn't changed (which Dioxus's equality-dedup'd
 /// memos would otherwise treat as "nothing to do").
 static NODE_DETAILS_REFRESH: GlobalSignal<usize> = Signal::global(|| 0);
+/// `(can_undo, can_redo)` availability, mirrored from the backend's undo/redo stacks. Every edit path
+/// (canvas coroutine, node editor, viewport gestures) writes this so the Edit menu's Undo/Redo entries
+/// reflect reality; the backend is the source of truth on undo/redo. A global (rather than a
+/// prop-threaded handler) so all edit paths can update it without plumbing.
+static UNDO_REDO_STATUS: GlobalSignal<(bool, bool)> = Signal::global(|| (false, false));
 
 pub static APP_CONFIG: GlobalSignal<AppConfig> = Signal::global(|| {
     AppConfig::from_file().unwrap_or_else(|_| {
