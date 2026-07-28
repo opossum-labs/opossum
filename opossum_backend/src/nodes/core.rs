@@ -230,7 +230,9 @@ async fn get_node(
 /// Update optical node properties
 ///
 /// Modifies the standard properties (name, inversion, isometries, GUI position) of an optical node
-/// specified by its UUID. Only the fields provided in the request body will be updated.
+/// specified by its UUID. Only the fields provided in the request body will be updated. Patching
+/// the scenery root itself is applied but not recorded as an undo step - the root is only ever
+/// patched programmatically (see the comment in the handler).
 #[utoipa::path(
     tag = "node",
     request_body = UpdateNodeRequest,
@@ -253,6 +255,12 @@ async fn patch_node(
         .scenery()
         .with_node_attr(uuid, |node_attr| capture_old_node_request(node_attr, &new))?;
     let parent_group_id = parent_group_id_or_self(document.scenery(), uuid)?;
+    // `parent_group_id_or_self` reports the scenery root as its own parent, so this equality holds
+    // exactly for the root. A root patch is never a user edit - the GUI renames the root to mirror
+    // the project's file name on new project/load/save, and there is no UI path for a user to
+    // rename it - so recording it would leave a phantom undo step right after opening a new or
+    // loaded project (and needlessly wipe the redo stack on save-under-a-new-name).
+    let is_root = parent_group_id == uuid;
 
     let inverse = Command::PatchNode(PatchNode {
         uuid,
@@ -261,7 +269,9 @@ async fn patch_node(
         new,
     })
     .apply(&mut document)?;
-    data.push_undo(inverse);
+    if !is_root {
+        data.push_undo(inverse);
+    }
     drop(document);
 
     Ok(HttpResponse::NoContent().finish())
@@ -607,6 +617,65 @@ mod test {
         assert_eq!(
             app_state.document.lock().scenery().node_attr().name(),
             "renamed"
+        );
+    }
+
+    /// Regression test for the bug where Undo was available right after creating a new (empty)
+    /// project: the GUI renames the scenery root to the project's file name (or "unsaved")
+    /// directly after `DELETE /api/document` cleared the undo history, and `patch_node`
+    /// unconditionally pushed an undo entry for that programmatic rename - so Ctrl+Z on a fresh
+    /// project would "undo" internal bookkeeping. A root patch must apply without becoming an
+    /// undo step, while a patch of an ordinary node must still be undoable.
+    #[actix_web::test]
+    async fn test_patch_scenery_root_is_not_undoable() {
+        let app_state = Data::new(AppState::default());
+        let (root_id, node_id) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let node_id = document.scenery_mut().add_node(Dummy::default()).unwrap();
+            (root_id, node_id)
+        };
+
+        let app =
+            test::init_service(App::new().app_data(app_state.clone()).service(patch_node)).await;
+
+        let req = test::TestRequest::patch()
+            .uri(&format!("/{root_id}"))
+            .set_json(&UpdateNodeRequest {
+                name: Some("unsaved".to_string()),
+                ..Default::default()
+            })
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+        assert_eq!(
+            app_state.document.lock().scenery().node_attr().name(),
+            "unsaved",
+            "the root rename must still be applied"
+        );
+        assert!(
+            app_state.undo_stack.lock().is_empty(),
+            "renaming the scenery root is programmatic bookkeeping and must not become an undo step"
+        );
+
+        // Guard against over-suppression: patching an ordinary node must still push an undo entry.
+        let req = test::TestRequest::patch()
+            .uri(&format!("/{node_id}"))
+            .set_json(&UpdateNodeRequest {
+                name: Some("user renamed".to_string()),
+                ..Default::default()
+            })
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+        assert_eq!(
+            app_state.undo_stack.lock().len(),
+            1,
+            "a normal node rename must remain undoable"
         );
     }
 
