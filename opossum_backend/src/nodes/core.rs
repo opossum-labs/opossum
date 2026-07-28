@@ -259,13 +259,57 @@ async fn patch_node(
     // loaded project (and needlessly wipe the redo stack on save-under-a-new-name).
     let is_root = parent_group_id == uuid;
 
-    let inverse = Command::PatchNode(PatchNode {
+    let mut commands = vec![Command::PatchNode(PatchNode {
         uuid,
         parent_group_id,
         old,
-        new,
-    })
-    .apply(&mut document)?;
+        new: new.clone(),
+    })];
+
+    // A rename propagates to every reference node pointing at `uuid` - they store their own name copy
+    // (`ref (name)`, see `NodeReference`), so without this the model (and saved `.opm`) keeps stale
+    // reference names. Capturing them as extra `PatchNode`s in the same batch makes the whole rename a
+    // single undo step (previously the GUI fanned out one PATCH per reference = one undo step each).
+    // Skipped for the root, which has no references.
+    if let Some(name) = &new.name
+        && !is_root
+    {
+        let ref_name = format!("ref ({name})");
+        let root_uuid = document.scenery().node_attr().uuid();
+        let referring = document
+            .scenery()
+            .graph()
+            .find_all_nodes_referring_to_uuid(uuid, root_uuid)?;
+        for ref_id in referring.values().flatten() {
+            // `find_all_nodes_referring_to_uuid` reports the queried node as its own referrer - skip it.
+            if *ref_id == uuid {
+                continue;
+            }
+            let ref_new = UpdateNodeRequest {
+                name: Some(ref_name.clone()),
+                ..Default::default()
+            };
+            let ref_old = document.scenery().with_node_attr(*ref_id, |node_attr| {
+                capture_old_node_request(node_attr, &ref_new)
+            })?;
+            let ref_parent = parent_group_id_or_self(document.scenery(), *ref_id)?;
+            commands.push(Command::PatchNode(PatchNode {
+                uuid: *ref_id,
+                parent_group_id: ref_parent,
+                old: ref_old,
+                new: ref_new,
+            }));
+        }
+    }
+
+    // A single command stays a single command (no needless Batch wrapper); a rename with references
+    // becomes one Batch = one undo step.
+    let command = if commands.len() == 1 {
+        commands.pop().unwrap()
+    } else {
+        Command::Batch(commands)
+    };
+    let inverse = command.apply(&mut document)?;
     if !is_root {
         data.push_undo(inverse);
     }
@@ -1207,6 +1251,91 @@ mod test {
                 .iter()
                 .any(|c| c.src_id == sibling_s && c.target_id == g1_id && c.target_port == "g1_in"),
             "the S -> G1 external connection must be restored"
+        );
+    }
+
+    /// Regression test for the bug where renaming a node that has a reference took TWO undos: the GUI
+    /// fanned the rename out into one PATCH per node (original + each reference), each its own undo
+    /// step. The backend now propagates the rename to reference nodes itself and records it as a
+    /// single `Command::Batch`, so one undo restores both names.
+    #[actix_web::test]
+    async fn test_rename_with_reference_is_one_undo_step() {
+        use crate::document::undo_document;
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, node_a, original_name) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let node_a = document.scenery_mut().add_node(Dummy::default()).unwrap();
+            let original_name = document
+                .scenery()
+                .with_node_attr(node_a, |a| a.name().to_string())
+                .unwrap();
+            (root_id, node_a, original_name)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_reference)
+                .service(patch_node)
+                .service(undo_document),
+        )
+        .await;
+
+        // Add a reference to A - its name is `ref (<A's name>)`.
+        let req = test::TestRequest::post()
+            .uri(&format!("/{root_id}/references"))
+            .set_json(&NewRefNode::new(node_a, (10.0, 20.0)))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let ref_info: NodeInfo = test::read_body_json(resp).await;
+        let ref_id = ref_info.uuid();
+
+        // Rename A - this must propagate to the reference and add exactly one undo step (creating the
+        // reference already pushed one, so measure the growth rather than the absolute stack size).
+        let undo_len_before = app_state.undo_stack.lock().len();
+        let req = test::TestRequest::patch()
+            .uri(&format!("/{node_a}"))
+            .set_json(&UpdateNodeRequest {
+                name: Some("renamed".to_string()),
+                ..Default::default()
+            })
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        let read_name = |id| {
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .with_node_attr(id, |a| a.name().to_string())
+                .unwrap()
+        };
+        assert_eq!(read_name(node_a), "renamed");
+        assert_eq!(
+            read_name(ref_id),
+            "ref (renamed)",
+            "the rename must propagate to the reference node"
+        );
+        assert_eq!(
+            app_state.undo_stack.lock().len(),
+            undo_len_before + 1,
+            "renaming a node with a reference must add exactly one undo step, not one per node"
+        );
+
+        // One undo restores both names.
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
+        assert_eq!(read_name(node_a), original_name);
+        assert_eq!(
+            read_name(ref_id),
+            format!("ref ({original_name})"),
+            "one undo must restore the reference's name too"
         );
     }
 

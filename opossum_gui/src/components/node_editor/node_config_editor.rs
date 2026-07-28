@@ -134,27 +134,33 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                 let result: Result<(), String> = match event.action {
                     NodeChangeAction::Name(name) => match api::get_node_references(uuid).await {
                         Ok(node_refs_grouped) => {
-                            let ref_name = format!("ref ({name})");
-                            for (group_id, ref_ids) in &node_refs_grouped {
-                                for ref_id in ref_ids {
-                                    let new_name = if uuid == *ref_id { &name } else { &ref_name };
-                                    if let Err(e) =
-                                        api::update_node_name(*ref_id, new_name).await.map(|()| {
+                            // Send a single rename; the backend propagates it to reference nodes as one
+                            // undo step (see `patch_node`). We only fan out the *local* canvas display
+                            // for the node and its references here - no extra backend PATCHes.
+                            match api::update_node_name(uuid, &name).await {
+                                Ok(()) => {
+                                    let ref_name = format!("ref ({name})");
+                                    for (group_id, ref_ids) in &node_refs_grouped {
+                                        for ref_id in ref_ids {
+                                            let new_name = if uuid == *ref_id {
+                                                name.clone()
+                                            } else {
+                                                ref_name.clone()
+                                            };
                                             workspace_processor.send(
                                                 GraphsWorkspaceAction::SetNodeName {
-                                                    name: new_name.clone(),
+                                                    name: new_name,
                                                     graph_id: *group_id,
                                                     node_id: *ref_id,
                                                     needs_saving: true,
                                                 },
                                             );
-                                        })
-                                    {
-                                        OPOSSUM_UI_LOGS.write().add_log(&e);
+                                        }
                                     }
+                                    Ok(())
                                 }
+                                Err(e) => Err(e),
                             }
-                            Ok(())
                         }
                         Err(e) => Err(e),
                     },
