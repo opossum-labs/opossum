@@ -313,9 +313,14 @@ pub(super) fn apply_extract_group(
 /// Describes the effect of a [`Command::InsertGroup`] or [`Command::ExtractGroup`] in the GUI-facing
 /// [`DocumentChange`] shape: a `GraphNeedsRefresh` for `parent_group_id` and every extra group a
 /// reroute touched (`affected_groups`), deduplicated.
+///
+/// `exclude` names a group that must NOT be refreshed even if it appears in `affected_groups` - used
+/// by `ExtractGroup`, which deletes the group node it names: refreshing that (now-gone) group's tab
+/// would make the GUI fetch a uuid that no longer exists and 400.
 pub(super) fn describe_group_structure_change(
     parent_group_id: &Uuid,
     affected_groups: &[Uuid],
+    exclude: Option<Uuid>,
 ) -> Vec<DocumentChange> {
     let mut graph_ids = vec![*parent_group_id];
     graph_ids.extend(affected_groups.iter().copied());
@@ -323,6 +328,7 @@ pub(super) fn describe_group_structure_change(
     graph_ids.dedup();
     graph_ids
         .into_iter()
+        .filter(|graph_id| exclude != Some(*graph_id))
         .map(|graph_id| DocumentChange::GraphNeedsRefresh { graph_id })
         .collect()
 }
@@ -376,11 +382,44 @@ mod test {
     fn describe_group_structure_change_refreshes_parent_and_affected_groups() {
         let parent = Uuid::new_v4();
         let third = Uuid::new_v4();
-        let refreshed = refreshed_graph_ids(&describe_group_structure_change(&parent, &[third]));
+        let refreshed =
+            refreshed_graph_ids(&describe_group_structure_change(&parent, &[third], None));
         assert!(refreshed.contains(&parent), "parent tab must be refreshed");
         assert!(
             refreshed.contains(&third),
             "a third group a reroute touched must also be refreshed on undo/redo"
+        );
+    }
+
+    /// Regression test for the three `400 node with given uuid does not exist` logs on undoing a
+    /// convert-to-group: `ExtractGroup` deletes the group node, so `describe` must exclude that
+    /// group's own uuid from the refresh set even though it rode along in `affected_groups` (pushed
+    /// there by the forward conversion so a redo would refresh it). Excluding it stops the GUI from
+    /// refreshing a tab whose group no longer exists.
+    #[test]
+    fn describe_group_structure_change_excludes_the_deleted_group() {
+        let parent = Uuid::new_v4();
+        let deleted_group = Uuid::new_v4();
+        // As on `ExtractGroup`: the deleted group's own uuid is in `affected_groups`.
+        let refreshed = refreshed_graph_ids(&describe_group_structure_change(
+            &parent,
+            &[deleted_group],
+            Some(deleted_group),
+        ));
+        assert!(refreshed.contains(&parent), "parent tab must still refresh");
+        assert!(
+            !refreshed.contains(&deleted_group),
+            "the group that extract just deleted must not be refreshed"
+        );
+        // Without an exclusion (the `InsertGroup`/redo direction) it is refreshed.
+        let refreshed_insert = refreshed_graph_ids(&describe_group_structure_change(
+            &parent,
+            &[deleted_group],
+            None,
+        ));
+        assert!(
+            refreshed_insert.contains(&deleted_group),
+            "inserting (re)creates the group, so its tab is refreshed"
         );
     }
 }

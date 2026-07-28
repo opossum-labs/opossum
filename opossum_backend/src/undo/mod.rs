@@ -172,12 +172,29 @@ impl Command {
                 parent_group_id,
                 affected_groups,
                 ..
-            })
-            | Self::ExtractGroup(GroupConversion {
+            }) => {
+                // Inserting (re)creates the group, so refreshing its own tab is wanted.
+                group_commands::describe_group_structure_change(
+                    parent_group_id,
+                    affected_groups,
+                    None,
+                )
+            }
+            Self::ExtractGroup(GroupConversion {
                 parent_group_id,
                 affected_groups,
+                group,
                 ..
-            }) => group_commands::describe_group_structure_change(parent_group_id, affected_groups),
+            }) => {
+                // Extracting *deletes* the group node, so its uuid must be excluded from the refresh
+                // set - otherwise the GUI refreshes a tab whose group no longer exists and its three
+                // group-fetch GETs each 400 with "node with given uuid does not exist".
+                group_commands::describe_group_structure_change(
+                    parent_group_id,
+                    affected_groups,
+                    group.uuid().ok(),
+                )
+            }
             Self::PatchGlobalConf(_) => global_conf_commands::describe_patch_global_conf(),
             Self::SetViewport(cmd) => viewport_commands::describe_set_viewport(cmd),
             Self::Batch(commands) => {
