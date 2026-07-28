@@ -163,10 +163,10 @@ impl Command {
             }) => port_map_commands::describe(group_id, parent_group_id),
             Self::AddAnalyzer(cmd) => analyzer_commands::describe_add_analyzer(cmd),
             Self::RemoveAnalyzer(cmd) => analyzer_commands::describe_remove_analyzer(&cmd.id),
-            Self::PatchAnalyzer(PatchAnalyzer { id, .. })
-            | Self::RepositionAnalyzer(RepositionAnalyzer { id, .. }) => {
+            Self::PatchAnalyzer(PatchAnalyzer { id, .. }) => {
                 analyzer_commands::describe_analyzer_changed(id)
             }
+            Self::RepositionAnalyzer(cmd) => analyzer_commands::describe_reposition_analyzer(cmd),
             Self::MoveNodes(cmd) => group_commands::describe_move_nodes(cmd),
             Self::InsertGroup(GroupConversion {
                 parent_group_id,
@@ -239,6 +239,7 @@ fn dedup_against_full_refreshes(changes: Vec<DocumentChange>) -> Vec<DocumentCha
             | DocumentChange::AnalyzerAdded { .. }
             | DocumentChange::AnalyzerRemoved { .. }
             | DocumentChange::AnalyzerChanged { .. }
+            | DocumentChange::AnalyzerMoved { .. }
             | DocumentChange::ViewportChanged { .. } => true,
         })
         .collect()

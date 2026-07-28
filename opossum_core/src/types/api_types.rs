@@ -696,9 +696,11 @@ pub enum DocumentChange {
     AnalyzerAdded { analyzer: AnalyzerItemDto },
     /// Mirrors `DELETE /api/analyzers/{uuid}`.
     AnalyzerRemoved { id: Uuid },
-    /// The analyzer's config or position changed; not mirrored in canvas state beyond position, which
-    /// the GUI already re-fetches via the analyzer list on tab load - a details refetch is sufficient.
+    /// The analyzer's config changed (not its position); the properties panel should re-fetch it.
     AnalyzerChanged { id: Uuid },
+    /// The analyzer moved on the canvas to `gui_position`. Emitted when undoing/redoing an analyzer
+    /// reposition, so the GUI can move it back (a details refetch alone doesn't touch canvas state).
+    AnalyzerMoved { id: Uuid, gui_position: (f64, f64) },
     /// One tab's nodes/edges/port-maps should be re-fetched from scratch (see the type's own doc
     /// comment for which operations use this).
     GraphNeedsRefresh { graph_id: Uuid },

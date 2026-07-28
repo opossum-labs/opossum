@@ -579,6 +579,15 @@ async fn apply_document_changes(
             DocumentChange::NodeDetailsChanged { .. } | DocumentChange::AnalyzerChanged { .. } => {
                 *NODE_DETAILS_REFRESH.write() += 1;
             }
+            DocumentChange::AnalyzerMoved { id, gui_position } => {
+                // Analyzers live at the root scenery; move the analyzer's canvas node back on
+                // undo/redo (a details refresh alone wouldn't touch its position).
+                let mut positions = HashMap::new();
+                positions.insert(id, Point2D::new(gui_position.0, gui_position.1));
+                ws_handler
+                    .nodes
+                    .update_node_positions(positions, *root_graph_id.read());
+            }
             DocumentChange::EdgeAdded {
                 graph_id,
                 connect_info,
