@@ -10,7 +10,7 @@ use uuid::Uuid;
 use super::{Command, EdgeSnapshot};
 use crate::{
     error::BackEndErrorResponse,
-    helper_functions::{DisconnectedPortMapping, PortMapCascadeRemoval, RemovedPortMapLevel},
+    helper_functions::{PortMapCascadeRemoval, RemovedPortMapLevel},
 };
 
 /// Exposes an internal node's port as an external port on `group_id`. `parent_group_id` (`group_id`'s own
@@ -42,23 +42,6 @@ impl From<&RemovedPortMapLevel> for AddPortMap {
     }
 }
 
-impl From<&DisconnectedPortMapping> for AddPortMap {
-    /// Builds the mapping-restoring command for a connection torn down by
-    /// [`crate::helper_functions::disconnect_stale_external_connections_for_node`].
-    fn from(mapping: &DisconnectedPortMapping) -> Self {
-        Self {
-            group_id: mapping.mapping_group_id,
-            parent_group_id: mapping.mapping_parent_group_id,
-            request: AddPortMappingRequest {
-                internal_node_id: mapping.internal_node_id,
-                internal_port_name: mapping.internal_port_name.clone(),
-                external_port_name: mapping.external_port_name.clone(),
-                port_type: mapping.port_type,
-            },
-        }
-    }
-}
-
 impl From<&PortMapCascadeRemoval> for Command {
     /// Builds the single undo step that restores everything a cascade removal tore down: one
     /// [`Command::AddPortMap`] per removed level, innermost first (each level's own restoration
@@ -79,26 +62,6 @@ impl From<&PortMapCascadeRemoval> for Command {
         }
         Self::Batch(inverse)
     }
-}
-
-/// Builds, per torn-down [`DisconnectedPortMapping`], the two commands that restore it on undo:
-/// the port-map entry itself, then the external connection that depended on it. Shared by
-/// `delete_node` and the cut half of `post_paste_nodes`, which tear down mappings the same way
-/// (via [`crate::helper_functions::disconnect_stale_external_connections_for_node`]) and must
-/// restore them the same way.
-pub fn mapping_restore_commands(
-    mappings: Vec<DisconnectedPortMapping>,
-) -> impl Iterator<Item = Command> {
-    mappings.into_iter().flat_map(|d| {
-        let add_map = Command::AddPortMap((&d).into());
-        [
-            add_map,
-            Command::AddEdge(EdgeSnapshot {
-                group_id: d.mapping_parent_group_id,
-                connect_info: d.connect_info,
-            }),
-        ]
-    })
 }
 
 /// Removes an external port mapping from `group_id`, disconnecting anything wired to it first.

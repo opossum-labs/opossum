@@ -6,13 +6,13 @@ use crate::{
     helper_functions::{
         PendingReconnect, capture_node_connections, collect_group_connections,
         collect_node_refs_and_pos, connect_from_info, create_new_group_node_info,
-        disconnect_moved_node_connections, disconnect_stale_external_connections_for_node,
+        disconnect_exposed_port_cascades_for_node, disconnect_moved_node_connections,
         is_reference_target, parent_group_id_or_self, reconnect_moved_node_connections,
-        split_disconnected_mappings_for_response, split_sort_connections,
+        split_cascades_for_response, split_sort_connections,
     },
     undo::{
         Command, EdgeSnapshot, GroupConversion, MoveNodes, NodeSnapshot, PatchProperty,
-        ReroutedMapping, mapping_restore_commands,
+        ReroutedMapping,
     },
 };
 use actix_web::{
@@ -342,7 +342,7 @@ fn perform_cut(
     let mut captured_nodes: Vec<(Uuid, OpticRef, Vec<ConnectInfo>)> = Vec::new();
     let mut mutual_connections: Vec<(Uuid, ConnectInfo)> = Vec::new();
     let mut seen_mutual: HashSet<(Uuid, String, Uuid, String)> = HashSet::new();
-    let mut disconnected_mappings = Vec::new();
+    let mut cascades = Vec::new();
     for id in &nodes_to_delete {
         let Ok((node, parent_group_id)) = scenery.node_recursive(*id) else {
             continue;
@@ -416,7 +416,7 @@ fn perform_cut(
             }
         }
 
-        disconnected_mappings.extend(disconnect_stale_external_connections_for_node(
+        cascades.extend(disconnect_exposed_port_cascades_for_node(
             scenery,
             parent_group_id,
             *id,
@@ -446,12 +446,11 @@ fn perform_cut(
         }));
     }
 
-    let (disconnected_connections, removed_port_mappings) =
-        split_disconnected_mappings_for_response(&disconnected_mappings);
+    let (disconnected_connections, removed_port_mappings) = split_cascades_for_response(&cascades);
 
-    // Undoing this deletion also means restoring the port mappings it depended on, and the
-    // external connections that used those mappings.
-    removals.extend(mapping_restore_commands(disconnected_mappings));
+    // Undoing this deletion also means restoring the port-map chains it tore down (one restore
+    // command per cascade: AddPortMap per level innermost-first, then the terminal AddEdge).
+    removals.extend(cascades.iter().map(Command::from));
 
     Ok(CutResult {
         deleted_nodes,

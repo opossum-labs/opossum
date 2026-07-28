@@ -23,13 +23,10 @@ use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
     helper_functions::{
-        capture_node_connections, disconnect_stale_external_connections_for_node,
-        parent_group_id_or_self, split_disconnected_mappings_for_response,
+        capture_node_connections, disconnect_exposed_port_cascades_for_node,
+        parent_group_id_or_self, split_cascades_for_response,
     },
-    undo::{
-        Command, NodeSnapshot, PatchAnalyzer, PatchNode, capture_old_node_request,
-        mapping_restore_commands,
-    },
+    undo::{Command, NodeSnapshot, PatchAnalyzer, PatchNode, capture_old_node_request},
 };
 
 /// Get all nodes of a group node
@@ -328,11 +325,10 @@ async fn delete_node(
         capture_node_connections(document.scenery(), parent_group_id, uuid).unwrap_or_default();
 
     let scenery = document.scenery_mut();
-    let mut disconnected_mappings =
-        disconnect_stale_external_connections_for_node(scenery, parent_group_id, uuid)?;
+    let mut cascades = disconnect_exposed_port_cascades_for_node(scenery, parent_group_id, uuid)?;
     for (member_parent, member_ref) in &cascaded {
         if let Ok(member_uuid) = member_ref.uuid() {
-            disconnected_mappings.extend(disconnect_stale_external_connections_for_node(
+            cascades.extend(disconnect_exposed_port_cascades_for_node(
                 scenery,
                 *member_parent,
                 member_uuid,
@@ -351,8 +347,7 @@ async fn delete_node(
         .into_iter()
         .filter(|(_, r)| r.uuid().is_ok_and(|id| deleted_nodes.contains(&id)))
         .collect();
-    let (disconnected_connections, removed_port_mappings) =
-        split_disconnected_mappings_for_response(&disconnected_mappings);
+    let (disconnected_connections, removed_port_mappings) = split_cascades_for_response(&cascades);
 
     let add_node = Command::AddNode(NodeSnapshot {
         parent_group_id,
@@ -360,11 +355,14 @@ async fn delete_node(
         cascaded,
         connections,
     });
-    if disconnected_mappings.is_empty() && analyzer_inverses.is_empty() {
+    if cascades.is_empty() && analyzer_inverses.is_empty() {
         data.push_undo(add_node);
     } else {
+        // AddNode first (the node must exist before its ports can be re-mapped), then one restore
+        // command per cascade (each an inner batch: AddPortMap per level innermost-first, then the
+        // AddEdge that reconnects the terminal external connection).
         let mut batch = vec![add_node];
-        batch.extend(mapping_restore_commands(disconnected_mappings));
+        batch.extend(cascades.iter().map(Command::from));
         batch.extend(analyzer_inverses);
         data.push_undo(Command::Batch(batch));
     }
@@ -894,6 +892,165 @@ mod test {
                 && c.target_id == group_id
                 && c.target_port == "ext_in_1"),
             "the S -> G external connection must be restored"
+        );
+    }
+
+    /// Regression test for the serious bug where deleting a node inside a *doubly*-nested group did
+    /// not cascade its port-map teardown outward: `root -> G1 -> G2 -> B`, where B's input is exposed
+    /// on G2, re-exposed on G1, and finally consumed by a live connection `S -> G1` at the root.
+    /// The old single-hop teardown only looked one level up from G2 (at G1), found no live connection
+    /// there (G1 re-exposes rather than consuming), and gave up - leaving G1's mapping and the root
+    /// connection dangling. Deleting B must now remove *both* mapping levels and the root connection,
+    /// report both levels, and undo must restore the node, both mappings, and the connection.
+    #[actix_web::test]
+    async fn test_undo_delete_doubly_nested_mapped_node_cascades_outward() {
+        use opossum_core::{
+            meter,
+            nodes::{Dummy, NodeGroup},
+            prelude::PortType,
+        };
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, g1_id, g2_id, node_b, sibling_s) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let scenery = document.scenery_mut();
+
+            // Innermost group G2 exposes B's input as "g2_in".
+            let mut g2 = NodeGroup::new("G2");
+            let node_b = g2.add_node(Dummy::default()).unwrap();
+            g2.map_input_port(node_b, "input_1", "g2_in").unwrap();
+
+            // G1 contains G2 and re-exposes "g2_in" as its own "g1_in".
+            let mut g1 = NodeGroup::new("G1");
+            let g2_id = g1.add_node(g2).unwrap();
+            g1.map_input_port(g2_id, "g2_in", "g1_in").unwrap();
+
+            // Root contains G1 and a sibling S wired into G1's "g1_in".
+            let g1_id = scenery.add_node(g1).unwrap();
+            let sibling_s = scenery.add_node(Dummy::default()).unwrap();
+            scenery
+                .connect_nodes(sibling_s, "output_1", g1_id, "g1_in", meter!(0.1))
+                .unwrap();
+
+            (root_id, g1_id, g2_id, node_b, sibling_s)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(delete_node)
+                .service(undo_document),
+        )
+        .await;
+
+        let req = test::TestRequest::delete()
+            .uri(&format!("/{node_b}"))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let response: DeleteNodeResponse = test::read_body_json(resp).await;
+
+        // Both cascade levels must be reported (innermost G2 first, then G1).
+        assert!(
+            response.removed_port_mappings.contains(&(
+                g2_id,
+                node_b,
+                "g2_in".to_string(),
+                PortType::Input
+            )),
+            "G2's own mapping of B must be reported removed, got {:?}",
+            response.removed_port_mappings
+        );
+        assert!(
+            response.removed_port_mappings.contains(&(
+                g1_id,
+                g2_id,
+                "g1_in".to_string(),
+                PortType::Input
+            )),
+            "G1's re-exposed mapping must be reported removed too, got {:?}",
+            response.removed_port_mappings
+        );
+        assert!(
+            response
+                .disconnected_connections
+                .iter()
+                .any(|(gid, c)| *gid == root_id
+                    && c.src_uuid() == sibling_s
+                    && c.target_uuid() == g1_id),
+            "the terminal S -> G1 connection must be reported disconnected, got {:?}",
+            response.disconnected_connections
+        );
+
+        // Live state: both mappings gone, root connection gone.
+        {
+            let document = app_state.document.lock();
+            let g1_mapping = document
+                .scenery()
+                .with_group_node(g1_id, |g| {
+                    g.graph().port_map(&PortType::Input).get("g1_in").cloned()
+                })
+                .unwrap();
+            assert!(
+                g1_mapping.is_none(),
+                "G1's mapping must be gone once B (deep inside) is deleted - this is the bug"
+            );
+            let connections = document
+                .scenery()
+                .with_group_node(root_id, NodeGroup::connections)
+                .unwrap();
+            assert!(
+                !connections
+                    .iter()
+                    .any(|c| c.src_id == sibling_s && c.target_id == g1_id),
+                "the dangling S -> G1 connection must be gone"
+            );
+        }
+
+        // Undo restores the node, both mapping levels, and the root connection.
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::OK,
+            "undo must not error"
+        );
+        let document = app_state.document.lock();
+        assert!(
+            document.scenery().node_recursive(node_b).is_ok(),
+            "node B must be restored"
+        );
+        let g2_mapping = document
+            .scenery()
+            .with_group_node(g2_id, |g| {
+                g.graph().port_map(&PortType::Input).get("g2_in").cloned()
+            })
+            .unwrap();
+        assert_eq!(
+            g2_mapping,
+            Some((node_b, "input_1".to_string())),
+            "G2's mapping of B must be restored"
+        );
+        let g1_mapping = document
+            .scenery()
+            .with_group_node(g1_id, |g| {
+                g.graph().port_map(&PortType::Input).get("g1_in").cloned()
+            })
+            .unwrap();
+        assert_eq!(
+            g1_mapping,
+            Some((g2_id, "g2_in".to_string())),
+            "G1's re-exposed mapping must be restored"
+        );
+        let connections = document
+            .scenery()
+            .with_group_node(root_id, NodeGroup::connections)
+            .unwrap();
+        assert!(
+            connections
+                .iter()
+                .any(|c| c.src_id == sibling_s && c.target_id == g1_id && c.target_port == "g1_in"),
+            "the S -> G1 external connection must be restored"
         );
     }
 

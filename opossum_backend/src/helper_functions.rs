@@ -143,145 +143,87 @@ pub fn parent_group_id_or_self(scenery: &NodeGroup, uuid: Uuid) -> OpmResult<Uui
     }
 }
 
-/// Everything needed to restore one external connection that had to be torn down because it depended on a
-/// port mapping of a node that's about to be deleted.
-pub struct DisconnectedPortMapping {
-    /// The group whose port map exposed this connection (== the deleted node's own parent).
-    pub mapping_group_id: Uuid,
-    /// `mapping_group_id`'s own parent, where the external connection actually lived.
-    pub mapping_parent_group_id: Uuid,
-    /// The node whose port was mapped (the node about to be deleted, or one cascade-deleted with it).
-    pub internal_node_id: Uuid,
-    /// The mapped port's name on `internal_node_id` itself.
-    pub internal_port_name: String,
-    /// The name under which `mapping_group_id` exposed the port externally.
-    pub external_port_name: String,
-    /// Whether the mapping exposed an input or an output port.
-    pub port_type: PortType,
-    /// The external connection that was wired to the exposed port and had to be disconnected.
-    pub connect_info: ConnectInfo,
-}
-
-/// Splits a set of torn-down port mappings into the two response shapes callers report to the GUI: the
-/// external connections that were disconnected, and the port-map entries that were removed.
+/// Before `node_id` (living in `parent_group_id`) is deleted, tears down every port-map chain that
+/// exposes one of its ports outward, cascading through *all* re-exporting groups - not just one hop.
 ///
-/// Used by both `delete_node` and `post_paste_nodes`'s cut branch, since both tear down mappings via
-/// [`disconnect_stale_external_connections_for_node`] and report the result the same way.
-pub fn split_disconnected_mappings_for_response(
-    mappings: &[DisconnectedPortMapping],
-) -> (
-    Vec<(Uuid, ConnectInfo)>,
-    Vec<(Uuid, Uuid, String, PortType)>,
-) {
-    let disconnected_connections = mappings
-        .iter()
-        .map(|d| (d.mapping_parent_group_id, d.connect_info.clone()))
-        .collect();
-    // Also carries the external port name + type, so the GUI can shrink the group's own
-    // exposed-port handles precisely (`remove_group_port`) instead of re-fetching them.
-    let removed_port_mappings = mappings
-        .iter()
-        .map(|d| {
-            (
-                d.mapping_group_id,
-                d.internal_node_id,
-                d.external_port_name.clone(),
-                d.port_type,
-            )
-        })
-        .collect();
-    (disconnected_connections, removed_port_mappings)
-}
-
-/// Before `node_id` (living in `parent_group_id`) is deleted, disconnects any external connection in
-/// `parent_group_id`'s own parent graph that depends on a port mapping of one of `node_id`'s ports - i.e.
-/// `parent_group_id` exposes one of `node_id`'s ports externally under some name, and a sibling node
-/// outside `parent_group_id` is wired to that external port. Mirrors `apply_remove_port_map`'s
-/// find-then-disconnect steps (`undo/port_map_commands.rs`), but triggered by "this node is about to be
-/// deleted" rather than "this specific mapping is being removed by name," and runs for every mapping the
-/// node has, in both directions.
+/// If a node's port is exposed on its own group `G`, re-exposed one level further out on `G`'s parent,
+/// and so on until some ancestor holds the live connection that ultimately consumes it, deleting the
+/// node must remove every one of those chained port-map entries and disconnect that terminal
+/// connection. A single-hop teardown (which this replaces) left the outer groups' mappings and the
+/// terminal edge dangling for a doubly-nested node. Delegates the actual outward walk to
+/// [`remove_port_map_cascade`] (the same one the remove-port-map endpoint uses), invoked once per port
+/// `node_id` exposes on `parent_group_id`.
 ///
-/// Deliberately does not remove the port-map entries themselves - the caller's subsequent
-/// `NodeGroup::delete_node` already prunes them via `PortMap::remove_all_from_uuid`. This is only about
-/// tearing down the now-stale external edge before that happens, so it doesn't outlive the mapping it
-/// depends on.
+/// Unlike the previous single-hop helper, this *does* remove the port-map entries as it goes (that is
+/// what the cascade requires); the caller's subsequent `NodeGroup::delete_node` then finds the
+/// innermost entry already gone and only prunes anything the cascade didn't reach.
 ///
-/// `scenery` must be the document root (`document.scenery_mut()`) - `parent_group_id`'s own parent is
-/// resolved via `scenery.node_recursive`, and if `parent_group_id` *is* the root there is no grandparent to
-/// look in, so this returns `Ok(vec![])` immediately without a lookup.
+/// `scenery` must be the document root (`document.scenery_mut()`). If `parent_group_id` is the root
+/// itself, a node there exposes nothing outward, so this returns `Ok(vec![])`.
 ///
 /// # Errors
 ///
-/// Returns an error if `parent_group_id` doesn't resolve to a group, or if disconnecting a found
-/// connection fails.
-pub fn disconnect_stale_external_connections_for_node(
+/// Returns an error if `parent_group_id` doesn't resolve to a group, or a cascade step fails.
+pub fn disconnect_exposed_port_cascades_for_node(
     scenery: &mut NodeGroup,
     parent_group_id: Uuid,
     node_id: Uuid,
-) -> OpmResult<Vec<DisconnectedPortMapping>> {
+) -> OpmResult<Vec<PortMapCascadeRemoval>> {
     if parent_group_id == scenery.node_attr().uuid() {
         return Ok(Vec::new());
     }
 
-    let mapped: Vec<(PortType, String, String)> =
-        scenery.with_group_node(parent_group_id, |g| {
-            [PortType::Input, PortType::Output]
-                .into_iter()
-                .flat_map(|port_type| {
-                    g.graph()
-                        .port_map(&port_type)
-                        .assigned_ports_for_node(node_id)
-                        .into_iter()
-                        .map(move |(external_name, internal_name)| {
-                            (port_type, external_name, internal_name)
-                        })
-                })
-                .collect::<Vec<_>>()
-        })?;
+    let mapped: Vec<(PortType, String)> = scenery.with_group_node(parent_group_id, |g| {
+        [PortType::Input, PortType::Output]
+            .into_iter()
+            .flat_map(|port_type| {
+                g.graph()
+                    .port_map(&port_type)
+                    .assigned_ports_for_node(node_id)
+                    .into_iter()
+                    .map(move |(external_name, _internal_name)| (port_type, external_name))
+            })
+            .collect::<Vec<_>>()
+    })?;
 
-    if mapped.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let (_, grandparent_id) = scenery.node_recursive(parent_group_id)?;
-
-    let mut disconnected = Vec::new();
-    for (port_type, external_port_name, internal_port_name) in mapped {
-        let connections = scenery.with_group_node_mut(grandparent_id, |g| {
-            let connections = g
-                .graph()
-                .get_connection_info_of_node(parent_group_id)
-                .iter()
-                .map(|c| ConnectInfo::from_connection_info(c, false))
-                .filter(|c| match port_type {
-                    PortType::Output => {
-                        c.src_uuid() == parent_group_id && c.src_port() == external_port_name
-                    }
-                    PortType::Input => {
-                        c.target_uuid() == parent_group_id && c.target_port() == external_port_name
-                    }
-                })
-                .collect::<Vec<ConnectInfo>>();
-            for c in &connections {
-                g.disconnect_nodes(c.src_uuid(), c.src_port())?;
-            }
-            Ok::<Vec<ConnectInfo>, OpossumError>(connections)
-        })??;
-
-        for connect_info in connections {
-            disconnected.push(DisconnectedPortMapping {
-                mapping_group_id: parent_group_id,
-                mapping_parent_group_id: grandparent_id,
-                internal_node_id: node_id,
-                internal_port_name: internal_port_name.clone(),
-                external_port_name: external_port_name.clone(),
-                port_type,
-                connect_info,
-            });
+    let mut cascades = Vec::new();
+    for (port_type, external_name) in mapped {
+        if let Some(cascade) =
+            remove_port_map_cascade(scenery, parent_group_id, &external_name, port_type)?
+        {
+            cascades.push(cascade);
         }
     }
+    Ok(cascades)
+}
 
-    Ok(disconnected)
+/// Flattens the cascades torn down by [`disconnect_exposed_port_cascades_for_node`] into the two
+/// response shapes the GUI consumes: every external connection disconnected (paired with the group
+/// whose graph held it) and every port-map entry removed `(group_id, internal_node_id,
+/// external_port_name, port_type)` across all cascade levels. Same shapes as `DeleteNodeResponse`'s
+/// fields; the GUI applies each removal per `group_id`, so a multi-level cascade updates every
+/// affected group's tab.
+#[must_use]
+pub fn split_cascades_for_response(
+    cascades: &[PortMapCascadeRemoval],
+) -> (
+    Vec<(Uuid, ConnectInfo)>,
+    Vec<(Uuid, Uuid, String, PortType)>,
+) {
+    let mut disconnected_connections = Vec::new();
+    let mut removed_port_mappings = Vec::new();
+    for cascade in cascades {
+        disconnected_connections.extend(cascade.disconnected_connections.iter().cloned());
+        for level in &cascade.levels {
+            removed_port_mappings.push((
+                level.group_id,
+                level.internal_node_id,
+                level.external_port_name.clone(),
+                level.port_type,
+            ));
+        }
+    }
+    (disconnected_connections, removed_port_mappings)
 }
 
 /// One level of a cascading port-map removal - one group's own mapping entry that was removed,

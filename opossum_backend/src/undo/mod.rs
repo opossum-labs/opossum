@@ -33,7 +33,7 @@ pub use group_commands::{GroupConversion, MoveNodes, ReroutedMapping};
 pub use node_commands::{
     NodeSnapshot, PatchNode, PatchPort, PatchProperty, capture_old_node_request,
 };
-pub use port_map_commands::{AddPortMap, RemovePortMap, mapping_restore_commands};
+pub use port_map_commands::{AddPortMap, RemovePortMap};
 pub use viewport_commands::SetViewport;
 
 /// A reversible document mutation. See the module docs for the overall design.
