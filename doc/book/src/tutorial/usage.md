@@ -110,6 +110,7 @@ Almost every editing action in the GUI can be undone and redone:
 - Composite actions count as a single step: pasting several nodes, cutting a selection, or dragging a multi-node selection is reverted by one undo.
 - Camera movements (panning, zooming, centering, zoom-to-fit) are undo steps of their own, so undoing a model edit never moves the camera and undoing a camera move never changes the model. A continuous scroll-zoom burst or consecutive, sperate scroll-zooms are combined into a single step.
 - The history holds the last 100 steps and is cleared when a file is loaded or a new document is created. Undo and redo count as modifications, so the document is marked as unsaved afterwards.
+- The reflective grating's Littrow alignment aids (reference wavelength, incident/diffracted mode) are entry helpers, not stored with the model, so they are not undoable — only the resulting alignment is.
 
 # Groups
 
