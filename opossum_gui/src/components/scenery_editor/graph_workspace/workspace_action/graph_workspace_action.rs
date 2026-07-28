@@ -229,6 +229,11 @@ pub enum GraphsWorkspaceAction {
         graph_id: Uuid,
         /// Whether the new zoom/position should be saved.
         save_changes: bool,
+        /// Whether this fit should be folded into the immediately preceding edit's undo step
+        /// instead of becoming its own. True for the fitting that Auto Layout runs right after
+        /// re-positioning the nodes, so a single undo reverts both the layout and the fit; false
+        /// for a user-triggered zoom-to-fit, which is its own undo step.
+        merge_into_previous_undo: bool,
     },
 
     /// Replaces all edges in the graph with a new set of connections.

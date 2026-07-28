@@ -737,6 +737,10 @@ pub struct ViewportChangeRequest {
     pub after: Viewport,
     /// Whether this move may merge with a preceding coalescing move on the same tab.
     pub coalesce: bool,
+    /// Whether this move should be folded into the immediately preceding edit's undo entry (if that
+    /// entry is a batch) instead of pushing its own. Set for Auto Layout's post-layout fit, so a
+    /// single undo reverts both the node re-positioning and the fit.
+    pub merge_into_previous: bool,
 }
 
 /// Response returned by `POST /api/document/undo` and `POST /api/document/redo`.

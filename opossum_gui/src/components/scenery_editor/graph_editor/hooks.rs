@@ -73,7 +73,7 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
         *crate::UNDO_REDO_STATUS.write() = (true, false);
         spawn(async move {
             // coalesce=true: consecutive scroll-zoom ticks collapse into one undo step.
-            let _ = api::post_viewport_change(before, after, true).await;
+            let _ = api::post_viewport_change(before, after, true, false).await;
         });
     }
 }

@@ -81,6 +81,9 @@ pub fn node_editor_command(
                 workspace_processor.send(GraphsWorkspaceAction::ZoomToFit {
                     graph_id: active_tab(),
                     save_changes: true,
+                    // Part of Auto Layout: fold this fit into the node re-positioning above so a
+                    // single undo reverts the whole auto-layout, camera included.
+                    merge_into_previous_undo: true,
                 });
             }
             NodeEditorCommand::CenterGraph => {
@@ -94,6 +97,7 @@ pub fn node_editor_command(
                 workspace_processor.send(GraphsWorkspaceAction::ZoomToFit {
                     graph_id: active_tab(),
                     save_changes: false,
+                    merge_into_previous_undo: false,
                 });
             }
             NodeEditorCommand::LoadFile(path) => {

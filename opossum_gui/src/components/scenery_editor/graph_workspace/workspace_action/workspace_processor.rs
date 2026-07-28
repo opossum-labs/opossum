@@ -130,19 +130,20 @@ pub fn use_workspace_processor(
                             && let (Some(before), Some(after)) =
                                 (before, current_viewport(workspace, graph_id))
                         {
-                            push_viewport_change(before, after);
+                            push_viewport_change(before, after, false);
                         }
                     }
                     GraphsWorkspaceAction::ZoomToFit {
                         graph_id,
                         save_changes,
+                        merge_into_previous_undo,
                     } => {
                         let before = current_viewport(workspace, graph_id);
                         workspace_handlers.view.zoom_to_fit(graph_id, save_changes);
                         if let (Some(before), Some(after)) =
                             (before, current_viewport(workspace, graph_id))
                         {
-                            push_viewport_change(before, after);
+                            push_viewport_change(before, after, merge_into_previous_undo);
                         }
                     }
                     // GraphsWorkspaceAction::UpdateEdges {
@@ -312,7 +313,7 @@ pub fn use_workspace_processor(
                                     && let Some(after) =
                                         current_viewport(workspace, before.graph_id)
                                 {
-                                    push_viewport_change(before, after);
+                                    push_viewport_change(before, after, false);
                                 }
                             }
                             _ => {}
@@ -467,19 +468,23 @@ fn current_viewport(
     })
 }
 
-/// Records a discrete camera gesture (pan, center, zoom-to-fit) as its own undo step, fire-and-forget.
-/// Sent with `coalesce=false`, so it never merges with an adjacent zoom - each such gesture stays a
+/// Records a discrete camera gesture (pan, center, zoom-to-fit) as an undo step, fire-and-forget.
+/// Sent with `coalesce=false`, so it never merges with an adjacent *zoom* - each such gesture stays a
 /// separate undo step. A no-op move (`before == after`, e.g. centering an already-centered graph) is
 /// dropped entirely: the backend would discard it anyway, but the optimistic status write below must
 /// not enable the Undo button for it either.
-fn push_viewport_change(before: Viewport, after: Viewport) {
+///
+/// `merge_into_previous` folds this move into the immediately preceding edit's undo entry instead of
+/// pushing its own - used for the zoom-to-fit Auto Layout runs right after re-positioning the nodes,
+/// so a single undo reverts both.
+fn push_viewport_change(before: Viewport, after: Viewport, merge_into_previous: bool) {
     if before == after {
         return;
     }
     // A camera move is undoable, so enable Undo / grey out Redo like any other edit.
     *crate::UNDO_REDO_STATUS.write() = (true, false);
     spawn(async move {
-        let _ = api::post_viewport_change(before, after, false).await;
+        let _ = api::post_viewport_change(before, after, false, merge_into_previous).await;
     });
 }
 

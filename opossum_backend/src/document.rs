@@ -210,8 +210,14 @@ pub(crate) async fn redo_document(
 /// undo target, moving its redo target to `after`) - so a whole scroll-zoom burst is one step. Discrete
 /// gestures (pan, center, zoom-to-fit) send `coalesce: false`: they never merge, and nothing merges into
 /// them - so a pan after a zoom is a separate undo step.
+///
+/// **Merging into the previous edit:** when `merge_into_previous` is set and the top undo entry is a
+/// [`Command::Batch`], this appends the camera move to that batch instead of pushing its own entry -
+/// so Auto Layout's post-layout fit rides on the same undo step as the node re-positioning it just did.
+/// The GUI only sets this immediately after the edit it means to fold into, so the top entry is that
+/// edit's batch; if it happens not to be a batch, this falls back to pushing a normal entry.
 #[utoipa::path(tag = "document",
-    request_body(content = ViewportChangeRequest, description = "The viewport before/after the gesture and whether it may coalesce"),
+    request_body(content = ViewportChangeRequest, description = "The viewport before/after the gesture, whether it may coalesce, and whether it folds into the previous edit"),
     responses((status = NO_CONTENT, description = "Viewport change recorded"))
 )]
 #[post("/viewport_change")]
@@ -223,17 +229,28 @@ async fn post_viewport_change(
         before,
         after,
         coalesce,
+        merge_into_previous,
     } = body.into_inner();
     // A gesture that didn't actually move the camera (e.g. a middle-click without a drag, or centering an
     // already-centered graph) must not create a no-op undo step.
     if before == after {
         return HttpResponse::NoContent().finish();
     }
+    // Undo (applying the pushed command) moves the camera back to `before`; its inverse (redo) to `after`.
+    let before_graph_id = before.graph_id;
     let mut undo_stack = data.undo_stack.lock();
-    if coalesce
+    if merge_into_previous && let Some(Command::Batch(commands)) = undo_stack.back_mut() {
+        // Fold into the preceding edit's undo step; its push already cleared the redo stack.
+        commands.push(Command::SetViewport(SetViewport {
+            from: after,
+            to: before,
+            coalescing: coalesce,
+        }));
+        drop(undo_stack);
+    } else if coalesce
         && let Some(Command::SetViewport(top)) = undo_stack.back_mut()
         && top.coalescing
-        && top.to.graph_id == before.graph_id
+        && top.to.graph_id == before_graph_id
     {
         // Extend the ongoing coalescing camera step forward to `after`, keeping its undo target (`to`).
         top.from = after;
@@ -241,7 +258,6 @@ async fn post_viewport_change(
         data.redo_stack.lock().clear();
     } else {
         drop(undo_stack);
-        // Undo (applying this command) moves the camera back to `before`; its inverse (redo) to `after`.
         data.push_undo(Command::SetViewport(SetViewport {
             from: after,
             to: before,
@@ -1025,6 +1041,7 @@ mod test {
                 before,
                 after,
                 coalesce: false,
+                merge_into_previous: false,
             })
             .to_request();
         assert_eq!(
@@ -1093,6 +1110,7 @@ mod test {
                     before,
                     after,
                     coalesce: true,
+                    merge_into_previous: false,
                 })
                 .to_request();
             assert_eq!(
@@ -1158,6 +1176,7 @@ mod test {
                     before,
                     after,
                     coalesce,
+                    merge_into_previous: false,
                 })
                 .to_request();
             assert_eq!(
@@ -1169,6 +1188,103 @@ mod test {
             app_state.undo_stack.lock().len(),
             3,
             "different gesture types (zoom, pan, pan) must each be their own undo step"
+        );
+    }
+
+    /// Auto Layout re-positions the nodes (one `patch_positions` batch = one undo step) and then fits
+    /// the view. That fit is sent with `merge_into_previous: true` so it folds into the position batch
+    /// instead of being a second undo step - a single undo must then revert both. Simulates the two
+    /// requests, asserts the undo stack still has exactly one entry, and that undoing it reports both
+    /// the position change and the viewport change together.
+    #[actix_web::test]
+    async fn test_viewport_change_merges_into_preceding_position_batch() {
+        use opossum_core::{
+            nodes::Dummy,
+            types::api_types::{DocumentChange, PositionUpdate, Viewport, ViewportChangeRequest},
+        };
+
+        let app_state = Data::new(AppState::default());
+        let (graph_id, node_id) = {
+            let mut document = app_state.document.lock();
+            let graph_id = document.scenery().node_attr().uuid();
+            let node_id = document.scenery_mut().add_node(Dummy::default()).unwrap();
+            (graph_id, node_id)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(patch_positions)
+                .service(post_viewport_change)
+                .service(undo_document),
+        )
+        .await;
+
+        // Auto Layout step 1: reposition the node (one batched undo step).
+        let req = test::TestRequest::patch()
+            .uri("/positions")
+            .set_json(&vec![PositionUpdate {
+                uuid: node_id,
+                is_optical: true,
+                gui_position: (123.0, 456.0),
+            }])
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        // Auto Layout step 2: fit the view, folded into the same undo step.
+        let req = test::TestRequest::post()
+            .uri("/viewport_change")
+            .set_json(&ViewportChangeRequest {
+                before: Viewport {
+                    graph_id,
+                    zoom: 1.0,
+                    shift: (0.0, 0.0),
+                },
+                after: Viewport {
+                    graph_id,
+                    zoom: 2.0,
+                    shift: (10.0, 20.0),
+                },
+                coalesce: false,
+                merge_into_previous: true,
+            })
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        assert_eq!(
+            app_state.undo_stack.lock().len(),
+            1,
+            "the fit must fold into the position batch, not become a second undo step"
+        );
+
+        // One undo reverts both the reposition and the fit.
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: UndoRedoResponse = test::read_body_json(resp).await;
+        assert!(
+            body.changes
+                .iter()
+                .any(|c| matches!(c, DocumentChange::ViewportChanged { .. })),
+            "undo must revert the fit, got {:?}",
+            body.changes
+        );
+        assert!(
+            body.changes
+                .iter()
+                .any(|c| matches!(c, DocumentChange::NodePatched { .. })),
+            "undo must revert the reposition, got {:?}",
+            body.changes
+        );
+        assert!(
+            !body.can_undo,
+            "both were one step, so nothing left to undo"
         );
     }
 }
