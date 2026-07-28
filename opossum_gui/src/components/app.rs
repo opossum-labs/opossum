@@ -14,7 +14,7 @@ use crate::{
         },
         scenery_editor::{GraphEditor, NodeEditorCommand},
         settings_dialog::SettingsDialog,
-        short_cuts::{PendingAction, get_action_from_event},
+        short_cuts::{PendingAction, SHORTCUTS, Shortcut},
     },
 };
 use dioxus::prelude::*;
@@ -24,6 +24,77 @@ use std::path::PathBuf;
 use crate::{ProcessHandle, components::simulation::simulation_window::SimulationWindow};
 #[cfg(not(target_arch = "wasm32"))]
 use dioxus::desktop::{tao::window::ResizeDirection, use_window};
+
+/// Registers the app's keyboard shortcuts on the `document`, so they fire no matter where DOM focus
+/// currently is, and routes each match through `process_command`.
+///
+/// Why not a plain element `onkeydown`: a DOM keydown only reaches an element handler while that
+/// element (or a descendant) holds focus. A properties-panel re-render can remove the focused input
+/// (e.g. undoing a dropdown variant change swaps out the sub-editor), which drops focus to `<body>` -
+/// outside any app element - so element-scoped shortcuts silently die until the user clicks back in.
+/// A `document`-level listener sidesteps that entirely.
+///
+/// The listener (see [`build_shortcut_listener_js`]) suppresses the browser default only for our own
+/// combos and posts the matched shortcut's index back over the `dioxus.send` channel; here we map that
+/// index to its [`ShortCutAction`] and dispatch it.
+fn use_global_shortcuts(process_command: impl FnMut(AppCommand) + Clone + 'static) {
+    let shortcuts: Vec<&'static Shortcut> = SHORTCUTS.values().collect();
+    use_future(move || {
+        let shortcuts = shortcuts.clone();
+        let mut process = process_command.clone();
+        async move {
+            let mut eval = dioxus::document::eval(&build_shortcut_listener_js(&shortcuts));
+            while let Ok(value) = eval.recv::<serde_json::Value>().await {
+                if let Some(index) = value.as_u64()
+                    && let Some(shortcut) = shortcuts.get(index as usize)
+                {
+                    process(AppCommand::from(shortcut.action));
+                }
+            }
+        }
+    });
+}
+
+/// Builds the JS that installs the `document` keydown listener for [`use_global_shortcuts`].
+///
+/// Each shortcut is emitted as a small object `{i, ctrl, shift, alt, key}` where `i` is its index in
+/// `shortcuts` (so the JS never needs to know the actual action, only its number). On a keydown the
+/// listener ignores anything without a Ctrl/Cmd or Alt modifier, then looks for a combo whose modifiers
+/// and (case-insensitive) key all match; on a hit it calls `preventDefault` (so native handling like a
+/// text field's own Ctrl+Z is suppressed for our combos, while Ctrl+C/V/A stay native) and sends the
+/// index `i` back to Rust via `dioxus.send`.
+fn build_shortcut_listener_js(shortcuts: &[&Shortcut]) -> String {
+    let combos = shortcuts
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            format!(
+                "{{i:{i},ctrl:{},shift:{},alt:{},key:\"{}\"}}",
+                s.ctrl_or_meta,
+                s.shift,
+                s.alt,
+                s.key.to_uppercase()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    r#"
+const combos=[__COMBOS__];
+document.addEventListener('keydown', function(e){
+    const ctrl = e.ctrlKey || e.metaKey;          // treat Ctrl and Cmd as the same modifier
+    if(!ctrl && !e.altKey) return;                 // only modifier combos can be one of our shortcuts
+    const key = (e.key || '').toUpperCase();
+    for(const c of combos){
+        if(c.ctrl===ctrl && c.shift===e.shiftKey && c.alt===e.altKey && c.key===key){
+            e.preventDefault();                    // suppress the browser default for our combos only
+            dioxus.send(c.i);                      // forward the matched shortcut's index to Rust
+            return;
+        }
+    }
+});
+"#
+    .replace("__COMBOS__", &combos)
+}
 
 #[component]
 pub fn App() -> Element {
@@ -139,7 +210,7 @@ pub fn App() -> Element {
     };
 
     let mut execute_immediate_for_alert = execute_immediate.clone();
-    let mut process_command = move |cmd: AppCommand| match cmd {
+    let process_command = move |cmd: AppCommand| match cmd {
         AppCommand::NewProject => {
             if *model_modified_sig.read() {
                 pending_action.set(Some(PendingAction::NewProject));
@@ -174,6 +245,10 @@ pub fn App() -> Element {
         _ => execute_immediate(cmd),
     };
     let process_command_for_menu = process_command.clone();
+
+    // Keyboard shortcuts are handled globally (on `document`, not a focusable element) so they keep
+    // working after a panel re-render drops DOM focus - see `use_global_shortcuts`.
+    use_global_shortcuts(process_command.clone());
 
     let on_alert_confirm = move |_| {
         if let Some(action) = *pending_action.read() {
@@ -248,15 +323,9 @@ pub fn App() -> Element {
         div {
             class: "app-container",
             tabindex: 0,
-            onkeydown: move |e| {
-                if let Some(action) = get_action_from_event(&e) {
-                    // Without this, the webview's native handling for the same key combo (e.g. Ctrl+Z
-                    // is also "undo typing" in a focused text input) fires alongside our own action,
-                    // corrupting whatever input currently has focus.
-                    e.prevent_default();
-                    process_command(AppCommand::from(action));
-                }
-            },
+            // Keyboard shortcuts are handled by the document-level listener installed above, not here -
+            // an element `onkeydown` only fires while focus is inside it, which breaks after a panel
+            // re-render drops focus to `<body>`.
             div {
                 class: "resize-handle-top",
                 onmousedown: {
