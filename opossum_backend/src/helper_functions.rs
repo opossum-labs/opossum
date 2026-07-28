@@ -90,6 +90,20 @@ pub fn collect_group_connections(
     scenery.with_group_node(group_id, opossum_core::nodes::NodeGroup::connections)
 }
 
+/// Returns whether `node_id` names a reference node (i.e. one carrying a "reference id" property).
+///
+/// A node that cannot be resolved counts as "not a reference" rather than erroring - callers only
+/// use this to enrich a [`ConnectInfo`]'s `is_reference` flag for the GUI, where a missing target
+/// is not worth failing the whole request for.
+#[must_use]
+pub fn is_reference_target(scenery: &NodeGroup, node_id: Uuid) -> bool {
+    scenery
+        .with_node_attr(node_id, |attr| {
+            attr.properties().get("reference id").is_ok()
+        })
+        .unwrap_or(false)
+}
+
 /// Captures every connection touching `node_id` within `parent_group_id`'s graph, as `ConnectInfo`s.
 /// Used to snapshot a node's wiring before it's deleted, so `Command::AddNode`/`RemoveNode`'s
 /// `connections` field can restore it on undo - must be called before the node is actually removed from
@@ -108,11 +122,7 @@ pub fn capture_node_connections(
         .iter()
         .filter(|c| c.src_id == node_id || c.target_id == node_id)
         .map(|c| {
-            let is_reference = scenery
-                .with_node_attr(c.target_id, |attr| {
-                    attr.properties().get("reference id").is_ok()
-                })
-                .unwrap_or(false);
+            let is_reference = is_reference_target(scenery, c.target_id);
             ConnectInfo::from_connection_info(c, is_reference)
         })
         .collect())
@@ -593,11 +603,7 @@ fn build_connect_info(
     target_port: &str,
     distance: f64,
 ) -> ConnectInfo {
-    let is_reference = scenery
-        .with_node_attr(target_id, |attr| {
-            attr.properties().get("reference id").is_ok()
-        })
-        .unwrap_or(false);
+    let is_reference = is_reference_target(scenery, target_id);
     ConnectInfo::new(
         src_id,
         src_port.to_string(),
@@ -1081,12 +1087,7 @@ pub fn split_sort_connections_from_document(
 
     let scenery = document.scenery();
     for c in connections {
-        let is_reference = scenery
-            .with_node_attr(c.target_id, |attr| {
-                attr.properties().get("reference id").is_ok()
-            })
-            .unwrap_or(false);
-
+        let is_reference = is_reference_target(scenery, c.target_id);
         let c_info = ConnectInfo::from_connection_info(c, is_reference);
 
         let src_inside = node_set.contains(&c_info.src_uuid());

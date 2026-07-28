@@ -7,7 +7,7 @@ use crate::{
         PendingReconnect, capture_node_connections, collect_group_connections,
         collect_node_refs_and_pos, connect_from_info, create_new_group_node_info,
         disconnect_moved_node_connections, disconnect_stale_external_connections_for_node,
-        parent_group_id_or_self, reconnect_moved_node_connections,
+        is_reference_target, parent_group_id_or_self, reconnect_moved_node_connections,
         split_disconnected_mappings_for_response, split_sort_connections,
     },
     undo::{
@@ -739,12 +739,7 @@ fn set_copied_connections(
         let enriched: Vec<_> = conns
             .iter()
             .map(|c| {
-                let is_reference = scenery
-                    .with_node_attr(c.target_id, |attr| {
-                        attr.properties().get("reference id").is_ok()
-                    })
-                    .unwrap_or(false);
-
+                let is_reference = is_reference_target(scenery, c.target_id);
                 (c, is_reference)
             })
             .collect();
