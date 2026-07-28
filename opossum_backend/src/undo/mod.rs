@@ -133,6 +133,12 @@ impl Command {
     ///
     /// Call this *before* consuming the command via [`Self::apply`] (or on a clone) - it describes
     /// what applying `self` is about to do, which is what actually happened once `apply` returns.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if building a captured node's [`opossum_core::types::api_types::NodeInfo`]
+    /// fails (its `OpticRef` lock cannot be acquired) - only the node-carrying variants
+    /// ([`Self::AddNode`]/[`Self::RemoveNode`] and batches containing them) are fallible.
     pub fn describe(&self) -> Result<Vec<DocumentChange>, BackEndErrorResponse> {
         Ok(match self {
             Self::AddNode(cmd) => node_commands::describe_add_node(cmd)?,

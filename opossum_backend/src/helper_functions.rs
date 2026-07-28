@@ -150,10 +150,15 @@ pub struct DisconnectedPortMapping {
     pub mapping_group_id: Uuid,
     /// `mapping_group_id`'s own parent, where the external connection actually lived.
     pub mapping_parent_group_id: Uuid,
+    /// The node whose port was mapped (the node about to be deleted, or one cascade-deleted with it).
     pub internal_node_id: Uuid,
+    /// The mapped port's name on `internal_node_id` itself.
     pub internal_port_name: String,
+    /// The name under which `mapping_group_id` exposed the port externally.
     pub external_port_name: String,
+    /// Whether the mapping exposed an input or an output port.
     pub port_type: PortType,
+    /// The external connection that was wired to the exposed port and had to be disconnected.
     pub connect_info: ConnectInfo,
 }
 
@@ -282,11 +287,18 @@ pub fn disconnect_stale_external_connections_for_node(
 /// One level of a cascading port-map removal - one group's own mapping entry that was removed,
 /// with enough captured to recreate it on undo.
 pub struct RemovedPortMapLevel {
+    /// The group whose own port-map entry was removed at this level.
     pub group_id: Uuid,
+    /// `group_id`'s own parent (where `group_id`'s exposed port is rendered/connected).
     pub parent_group_id: Uuid,
+    /// The external name `group_id` exposed the port under.
     pub external_port_name: String,
+    /// The node the removed entry pointed at - a plain node at the innermost level, the next-inner
+    /// group at every re-exporting level further out.
     pub internal_node_id: Uuid,
+    /// The port name on `internal_node_id` the removed entry pointed at.
     pub internal_port_name: String,
+    /// Whether the mapping exposed an input or an output port.
     pub port_type: PortType,
 }
 
@@ -595,6 +607,9 @@ pub enum PendingReconnect {
     },
 }
 
+/// Builds a [`ConnectInfo`] from raw connection endpoints, enriching it with whether the target
+/// node is a reference node (see [`is_reference_target`]) - the flag the GUI uses to style
+/// reference edges differently.
 fn build_connect_info(
     scenery: &NodeGroup,
     src_id: Uuid,
@@ -614,6 +629,9 @@ fn build_connect_info(
     )
 }
 
+/// Returns `base` if `port_map` has no external port of that name yet, otherwise the first free
+/// numbered variant (`base_2`, `base_3`, ...) - used when auto-creating a port mapping whose
+/// preferred external name may already be taken on the target group.
 fn generate_unique_external_name(port_map: &PortMap, base: &str) -> String {
     if !port_map.contains_external_name(base) {
         return base.to_string();
@@ -668,6 +686,10 @@ fn reroute_pre_existing_mapping(
     Ok(())
 }
 
+/// The pending reconnects captured by [`disconnect_moved_node_connections`], paired with the connections
+/// it tore down outright (each `(group_id, ConnectInfo)`) so the caller can report both to the GUI.
+pub type DisconnectedMovedNodeConnections = (Vec<PendingReconnect>, Vec<(Uuid, ConnectInfo)>);
+
 /// Before `moved_node_ids` (currently living in `from_group_id`) are deleted from it, tears down every
 /// connection/mapping that would otherwise dangle once they're gone - a direct connection to a sibling
 /// left behind in `from_group_id` (`boundary_connections` - the `input`/`output` halves of a
@@ -687,10 +709,6 @@ fn reroute_pre_existing_mapping(
 /// "reroute" (the external link's own name/edge is left completely untouched, only its internal target
 /// changes later) - nothing is written to `to_group_id` itself at this point.
 ///
-/// The pending reconnects captured by [`disconnect_moved_node_connections`], paired with the connections
-/// it tore down outright (each `(group_id, ConnectInfo)`) so the caller can report both to the GUI.
-pub type DisconnectedMovedNodeConnections = (Vec<PendingReconnect>, Vec<(Uuid, ConnectInfo)>);
-
 /// # Errors
 ///
 /// Returns an error if `from_group_id` doesn't resolve, a node/port can't be resolved, or a
