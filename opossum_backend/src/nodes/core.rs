@@ -27,7 +27,8 @@ use crate::{
         parent_group_id_or_self, split_disconnected_mappings_for_response,
     },
     undo::{
-        Command, EdgeSnapshot, NodeSnapshot, PatchAnalyzer, PatchNode, capture_old_node_request,
+        Command, NodeSnapshot, PatchAnalyzer, PatchNode, capture_old_node_request,
+        mapping_restore_commands,
     },
 };
 
@@ -353,13 +354,7 @@ async fn delete_node(
         data.push_undo(add_node);
     } else {
         let mut batch = vec![add_node];
-        for d in disconnected_mappings {
-            batch.push(Command::AddPortMap((&d).into()));
-            batch.push(Command::AddEdge(EdgeSnapshot {
-                group_id: d.mapping_parent_group_id,
-                connect_info: d.connect_info,
-            }));
-        }
+        batch.extend(mapping_restore_commands(disconnected_mappings));
         batch.extend(analyzer_inverses);
         data.push_undo(Command::Batch(batch));
     }

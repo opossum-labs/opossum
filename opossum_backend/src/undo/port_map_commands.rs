@@ -10,7 +10,7 @@ use uuid::Uuid;
 use super::{Command, EdgeSnapshot};
 use crate::{
     error::BackEndErrorResponse,
-    helper_functions::{DisconnectedPortMapping, RemovedPortMapLevel},
+    helper_functions::{DisconnectedPortMapping, PortMapCascadeRemoval, RemovedPortMapLevel},
 };
 
 /// Exposes an internal node's port as an external port on `group_id`. `parent_group_id` (`group_id`'s own
@@ -24,27 +24,10 @@ pub struct AddPortMap {
     pub request: AddPortMappingRequest,
 }
 
-impl From<RemovedPortMapLevel> for AddPortMap {
-    /// Builds the mapping-restoring command for one level torn down by
-    /// [`crate::helper_functions::remove_port_map_cascade`].
-    fn from(level: RemovedPortMapLevel) -> Self {
-        Self {
-            group_id: level.group_id,
-            parent_group_id: level.parent_group_id,
-            request: AddPortMappingRequest {
-                internal_node_id: level.internal_node_id,
-                internal_port_name: level.internal_port_name,
-                external_port_name: level.external_port_name,
-                port_type: level.port_type,
-            },
-        }
-    }
-}
-
 impl From<&RemovedPortMapLevel> for AddPortMap {
     /// Builds the mapping-restoring command for one level torn down by
-    /// [`crate::helper_functions::remove_port_map_cascade`], when the levels are still needed
-    /// afterward (e.g. to build a response) and so can't be consumed by value.
+    /// [`crate::helper_functions::remove_port_map_cascade`]. Takes a reference since callers
+    /// still need the levels afterward (e.g. to build a response).
     fn from(level: &RemovedPortMapLevel) -> Self {
         Self {
             group_id: level.group_id,
@@ -74,6 +57,48 @@ impl From<&DisconnectedPortMapping> for AddPortMap {
             },
         }
     }
+}
+
+impl From<&PortMapCascadeRemoval> for Command {
+    /// Builds the single undo step that restores everything a cascade removal tore down: one
+    /// [`Command::AddPortMap`] per removed level, innermost first (each level's own restoration
+    /// depends on the next-inner level already existing, since an outer level's "internal port"
+    /// is the inner group's own currently-mapped external name), then one [`Command::AddEdge`]
+    /// per live connection the cascade disconnected.
+    fn from(cascade: &PortMapCascadeRemoval) -> Self {
+        let mut inverse =
+            Vec::with_capacity(cascade.levels.len() + cascade.disconnected_connections.len());
+        for level in &cascade.levels {
+            inverse.push(Self::AddPortMap(level.into()));
+        }
+        for (owning_group_id, connect_info) in &cascade.disconnected_connections {
+            inverse.push(Self::AddEdge(EdgeSnapshot {
+                group_id: *owning_group_id,
+                connect_info: connect_info.clone(),
+            }));
+        }
+        Self::Batch(inverse)
+    }
+}
+
+/// Builds, per torn-down [`DisconnectedPortMapping`], the two commands that restore it on undo:
+/// the port-map entry itself, then the external connection that depended on it. Shared by
+/// `delete_node` and the cut half of `post_paste_nodes`, which tear down mappings the same way
+/// (via [`crate::helper_functions::disconnect_stale_external_connections_for_node`]) and must
+/// restore them the same way.
+pub fn mapping_restore_commands(
+    mappings: Vec<DisconnectedPortMapping>,
+) -> impl Iterator<Item = Command> {
+    mappings.into_iter().flat_map(|d| {
+        let add_map = Command::AddPortMap((&d).into());
+        [
+            add_map,
+            Command::AddEdge(EdgeSnapshot {
+                group_id: d.mapping_parent_group_id,
+                connect_info: d.connect_info,
+            }),
+        ]
+    })
 }
 
 /// Removes an external port mapping from `group_id`, disconnecting anything wired to it first.
@@ -180,18 +205,7 @@ pub(super) fn apply_remove_port_map(
         "captured parent_group_id must match the group's actual current parent"
     );
 
-    let mut inverse =
-        Vec::with_capacity(cascade.levels.len() + cascade.disconnected_connections.len());
-    for level in cascade.levels {
-        inverse.push(Command::AddPortMap(level.into()));
-    }
-    for (owning_group_id, connect_info) in cascade.disconnected_connections {
-        inverse.push(Command::AddEdge(EdgeSnapshot {
-            group_id: owning_group_id,
-            connect_info,
-        }));
-    }
-    Ok(Command::Batch(inverse))
+    Ok(Command::from(&cascade))
 }
 
 /// Describes the effect of a [`Command::AddPortMap`] or [`Command::RemovePortMap`] in the GUI-facing

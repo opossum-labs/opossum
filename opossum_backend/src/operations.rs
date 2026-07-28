@@ -12,7 +12,7 @@ use crate::{
     },
     undo::{
         Command, EdgeSnapshot, GroupConversion, MoveNodes, NodeSnapshot, PatchProperty,
-        ReroutedMapping,
+        ReroutedMapping, mapping_restore_commands,
     },
 };
 use actix_web::{
@@ -449,15 +449,9 @@ fn perform_cut(
     let (disconnected_connections, removed_port_mappings) =
         split_disconnected_mappings_for_response(&disconnected_mappings);
 
-    for d in disconnected_mappings {
-        // Undoing this deletion also means restoring the port mapping it depended on, and the
-        // external connection that used that mapping.
-        removals.push(Command::AddPortMap((&d).into()));
-        removals.push(Command::AddEdge(EdgeSnapshot {
-            group_id: d.mapping_parent_group_id,
-            connect_info: d.connect_info,
-        }));
-    }
+    // Undoing this deletion also means restoring the port mappings it depended on, and the
+    // external connections that used those mappings.
+    removals.extend(mapping_restore_commands(disconnected_mappings));
 
     Ok(CutResult {
         deleted_nodes,

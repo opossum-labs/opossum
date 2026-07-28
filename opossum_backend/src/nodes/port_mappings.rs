@@ -16,7 +16,7 @@ use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
     helper_functions::remove_port_map_cascade,
-    undo::{Command, EdgeSnapshot, RemovePortMap},
+    undo::{Command, RemovePortMap},
 };
 
 /// Get the port mappings of a group node
@@ -151,22 +151,9 @@ pub async fn remove_port_map(
         return Ok(HttpResponse::Ok().json(response));
     };
 
-    // One removal = one undo step: an `AddPortMap` per level, innermost first (each level's own
-    // restoration depends on the next-inner level already existing, since an outer level's
-    // "internal port" is the inner group's own currently-mapped external name), then an `AddEdge`
-    // per connection the cascade tore down.
-    let mut inverse =
-        Vec::with_capacity(cascade.levels.len() + cascade.disconnected_connections.len());
-    for level in &cascade.levels {
-        inverse.push(Command::AddPortMap(level.into()));
-    }
-    for (owning_group_id, connect_info) in &cascade.disconnected_connections {
-        inverse.push(Command::AddEdge(EdgeSnapshot {
-            group_id: *owning_group_id,
-            connect_info: connect_info.clone(),
-        }));
-    }
-    data.push_undo(Command::Batch(inverse));
+    // One removal = one undo step - see `From<&PortMapCascadeRemoval> for Command` for how the
+    // restore batch is ordered and why.
+    data.push_undo(Command::from(&cascade));
 
     let removed_port_mappings = cascade
         .levels
