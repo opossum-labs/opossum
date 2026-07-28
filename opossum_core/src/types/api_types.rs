@@ -1,4 +1,7 @@
-use std::{collections::BTreeMap, fmt::Display};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fmt::Display,
+};
 
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
@@ -515,6 +518,42 @@ pub struct ConvertToGroupResponse {
     /// case, which converting into a brand-new, always-empty group can never trigger) - kept for
     /// parity with `MoveNodesResponse` so the GUI can share one code path.
     pub removed_port_mappings: Vec<(Uuid, Uuid)>,
+}
+
+/// The "cut" half of a cut-paste (see [`PasteNodesResponse::cut_result`]), reporting everything
+/// that deleting the cut originals changed.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct CutResult {
+    /// UUIDs of every original actually deleted: the cut nodes and analyzers themselves, plus any
+    /// reference node deleted alongside them by the cascade.
+    pub deleted_nodes: Vec<Uuid>,
+    /// The immediate parent group of every cut node (plus the scenery root when analyzers were
+    /// cut) - a multi-select cut can span several groups, and each one's node list and exposed
+    /// ports need a GUI refresh.
+    pub cut_from_group_ids: Vec<Uuid>,
+    /// Connections disconnected as a side effect, paired with the group they lived in - same shape
+    /// as [`DeleteNodeResponse::disconnected_connections`].
+    pub disconnected_connections: Vec<(Uuid, ConnectInfo)>,
+    /// `(group_id, node_id, external_port_name, port_type)` per port mapping removed as a side
+    /// effect - same shape as [`DeleteNodeResponse::removed_port_mappings`], so the GUI can reuse
+    /// that exact handling.
+    pub removed_port_mappings: Vec<(Uuid, Uuid, String, PortType)>,
+}
+
+/// Response payload after pasting the copy cache into a group - optionally cutting the originals
+/// in the same request, so paste and delete revert together as a single undo step.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct PasteNodesResponse {
+    /// Freshly created optical nodes, keyed by the group each was inserted into - the paste
+    /// target itself, plus one entry per nested group a pasted group brought along.
+    pub pasted_nodes: HashMap<Uuid, Vec<NodeInfo>>,
+    /// Freshly created analyzers - only ever non-empty when pasting into the scenery root, since
+    /// analyzers live at document level.
+    pub pasted_analyzers: Vec<AnalyzerItemDto>,
+    /// Re-created connections between pasted nodes, keyed by the group each lives in.
+    pub pasted_connections: HashMap<Uuid, Vec<ConnectInfo>>,
+    /// Present only when the request had `cut` set: what deleting the cut originals changed.
+    pub cut_result: Option<CutResult>,
 }
 
 // ============================================================================

@@ -27,8 +27,8 @@ use opossum_core::{
     opm_document::AnalyzerInfo,
     prelude::{OpticNode, PortMap, PortType, Proptype},
     types::api_types::{
-        AnalyzerItemDto, ConnectInfo, ConvertToGroupRequest, ConvertToGroupResponse, ErrorResponse,
-        MoveNodesRequest, MoveNodesResponse, NodeInfo,
+        AnalyzerItemDto, ConnectInfo, ConvertToGroupRequest, ConvertToGroupResponse, CutResult,
+        ErrorResponse, MoveNodesRequest, MoveNodesResponse, NodeInfo, PasteNodesResponse,
     },
     utils::LockExt,
 };
@@ -100,7 +100,7 @@ async fn post_copy_nodes(
         content_type = "application/json",
     ),
     responses(
-        (status = OK, body= NodeInfo, description = "Node successfully pasted", content_type="application/json"),
+        (status = OK, body= PasteNodesResponse, description = "Node successfully pasted", content_type="application/json"),
         (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
@@ -109,20 +109,7 @@ async fn post_copy_nodes(
 async fn post_paste_nodes(
     data: web::Data<AppState>,
     node_paste_info: web::Json<(Uuid, (f64, f64), bool)>,
-) -> Result<
-    Json<(
-        HashMap<Uuid, Vec<NodeInfo>>,
-        Vec<AnalyzerItemDto>, // Updated return type to AnalyzerItemDto
-        HashMap<Uuid, Vec<ConnectInfo>>,
-        Option<(
-            Vec<Uuid>,
-            Vec<Uuid>,
-            Vec<(Uuid, ConnectInfo)>,
-            Vec<(Uuid, Uuid, String, PortType)>,
-        )>,
-    )>,
-    BackEndErrorResponse,
-> {
+) -> Result<Json<PasteNodesResponse>, BackEndErrorResponse> {
     let (paste_group_id, node_pos, cut) = node_paste_info.into_inner();
     let paste_in_scenery = data.document.lock().scenery().node_attr().uuid() == paste_group_id;
 
@@ -423,12 +410,12 @@ async fn post_paste_nodes(
             }));
         }
 
-        Some((
+        Some(CutResult {
             deleted_nodes,
             cut_from_group_ids,
             disconnected_connections,
             removed_port_mappings,
-        ))
+        })
     } else {
         None
     };
@@ -439,12 +426,12 @@ async fn post_paste_nodes(
         data.push_undo(Command::Batch(removals));
     }
 
-    Ok(Json((
-        grouped_node_infos,
-        analyzers,
-        grouped_connect_info,
+    Ok(Json(PasteNodesResponse {
+        pasted_nodes: grouped_node_infos,
+        pasted_analyzers: analyzers,
+        pasted_connections: grouped_connect_info,
         cut_result,
-    )))
+    }))
 }
 
 fn upper_left_corner_of_nodes(
@@ -1328,20 +1315,13 @@ mod test {
             .to_request();
         let resp = app.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        type PasteResponse = (
-            HashMap<Uuid, Vec<NodeInfo>>,
-            Vec<AnalyzerItemDto>,
-            HashMap<Uuid, Vec<ConnectInfo>>,
-            Option<(
-                Vec<Uuid>,
-                Vec<Uuid>,
-                Vec<(Uuid, ConnectInfo)>,
-                Vec<(Uuid, Uuid, String, PortType)>,
-            )>,
-        );
-        let (_, _, _, cut_result): PasteResponse = test::read_body_json(resp).await;
-        let (_, cut_from_group_ids, disconnected, removed_port_mappings) =
-            cut_result.expect("this paste was a cut");
+        let response: PasteNodesResponse = test::read_body_json(resp).await;
+        let CutResult {
+            cut_from_group_ids,
+            disconnected_connections: disconnected,
+            removed_port_mappings,
+            ..
+        } = response.cut_result.expect("this paste was a cut");
         assert!(
             disconnected
                 .iter()
@@ -1482,20 +1462,12 @@ mod test {
         let resp = app.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
 
-        type PasteResponse = (
-            HashMap<Uuid, Vec<NodeInfo>>,
-            Vec<AnalyzerItemDto>,
-            HashMap<Uuid, Vec<ConnectInfo>>,
-            Option<(
-                Vec<Uuid>,
-                Vec<Uuid>,
-                Vec<(Uuid, ConnectInfo)>,
-                Vec<(Uuid, Uuid, String, PortType)>,
-            )>,
-        );
-        let (_, _, _, cut_result): PasteResponse = test::read_body_json(resp).await;
-        let (_, cut_from_group_ids, _, removed_port_mappings) =
-            cut_result.expect("this paste was a cut");
+        let response: PasteNodesResponse = test::read_body_json(resp).await;
+        let CutResult {
+            cut_from_group_ids,
+            removed_port_mappings,
+            ..
+        } = response.cut_result.expect("this paste was a cut");
 
         assert_eq!(
             cut_from_group_ids,

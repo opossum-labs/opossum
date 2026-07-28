@@ -14,9 +14,9 @@ use futures_util::StreamExt;
 use opossum_core::{
     prelude::{AnalyzerType, PortType},
     types::api_types::{
-        AnalyzerItemDto, ConnectInfo, DeleteNodeResponse, DocumentChange, NewAnalyzerInfo, NewNode,
-        NewRefNode, NodeInfo, NodePortsResponse, PortMappingsResponse, PositionUpdate,
-        UndoRedoResponse, UpdateConnectionRequest, Viewport,
+        AnalyzerItemDto, ConnectInfo, CutResult, DeleteNodeResponse, DocumentChange,
+        NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo, NodePortsResponse, PasteNodesResponse,
+        PortMappingsResponse, PositionUpdate, UndoRedoResponse, UpdateConnectionRequest, Viewport,
     },
 };
 use serde_json::Value;
@@ -820,9 +820,14 @@ async fn process_paste_nodes(
     workspace: ReadStore<GraphsWorkspaceState>,
 ) {
     match api::post_paste_nodes(graph_id, pos, cut_nodes).await {
-        Ok((optical_nodes, analyzer_nodes, edges, cut_result)) => {
+        Ok(PasteNodesResponse {
+            pasted_nodes,
+            pasted_analyzers,
+            pasted_connections,
+            cut_result,
+        }) => {
             let mut pasted_groups = Vec::<Uuid>::new();
-            for (graph_id, n) in &optical_nodes {
+            for (graph_id, n) in &pasted_nodes {
                 for node in n {
                     ws_handler.nodes.add_optical_node(node.clone(), *graph_id);
                     if node.node_type() == "group" {
@@ -830,7 +835,7 @@ async fn process_paste_nodes(
                     }
                 }
             }
-            for a in &analyzer_nodes {
+            for a in &pasted_analyzers {
                 let analyzer_id = a.id; // <-- ID aus dem DTO
                 ws_handler.nodes.add_analyzer_node(
                     NewAnalyzerInfo::from(a.info.clone()), // <-- info aus dem DTO extrahieren
@@ -864,18 +869,18 @@ async fn process_paste_nodes(
                 .await;
             }
 
-            for (graph_id, edges) in &edges {
+            for (graph_id, edges) in &pasted_connections {
                 for edge in edges {
                     ws_handler.edges.add_edge(edge.clone(), *graph_id);
                 }
             }
 
-            if let Some((
+            if let Some(CutResult {
                 deleted_nodes,
                 cut_from_group_ids,
                 disconnected_connections,
                 removed_port_mappings,
-            )) = cut_result
+            }) = cut_result
             {
                 // A multi-select cut can span more than one parent group - apply the removal
                 // against each (a no-op for any group a given node doesn't actually belong to).

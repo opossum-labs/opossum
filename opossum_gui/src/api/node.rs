@@ -2,9 +2,9 @@ use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_core::{
     prelude::*,
     types::api_types::{
-        AddPortMappingRequest, AnalyzerItemDto, ConnectInfo, ConvertToGroupRequest,
-        ConvertToGroupResponse, DeleteNodeResponse, MoveNodesRequest, MoveNodesResponse, NewNode,
-        NewRefNode, NodeInfo, NodePortsResponse, NodePropertiesResponse, PortMappingsResponse,
+        AddPortMappingRequest, ConnectInfo, ConvertToGroupRequest, ConvertToGroupResponse,
+        DeleteNodeResponse, MoveNodesRequest, MoveNodesResponse, NewNode, NewRefNode, NodeInfo,
+        NodePortsResponse, NodePropertiesResponse, PasteNodesResponse, PortMappingsResponse,
         PortNamesResponse, RemovePortMapResponse, UpdateConnectionRequest, UpdateNodeRequest,
         UpdatePortRequest,
     },
@@ -98,38 +98,20 @@ pub async fn post_copy_nodes(nodes: HashSet<Uuid>) -> Result<String, String> {
 /// Pastes the currently copied nodes into `group_id` at `pos`. If `cut` is set, the copied nodes'
 /// originals are deleted as part of the same request, so the backend can push a single undo step that
 /// reverts both the paste and the delete together - see the backend's `post_paste_nodes` doc comment.
-/// The response's last element mirrors what the removed `post_cut_nodes` used to return: the deleted
-/// node ids and their former parent graph id, present only when `cut` was set.
+/// The response's `cut_result` field mirrors what the removed `post_cut_nodes` used to return (the
+/// deleted node ids and their former parent graph ids), present only when `cut` was set.
+///
+/// # Errors
+///
+/// This function will return an error if the request fails (e.g. the target group does not exist)
+/// or the response cannot be deserialized into a [`PasteNodesResponse`].
 pub async fn post_paste_nodes(
     group_id: Uuid,
     pos: Point2D<f64>,
     cut: bool,
-) -> Result<
-    (
-        HashMap<Uuid, Vec<NodeInfo>>,
-        Vec<AnalyzerItemDto>,
-        HashMap<Uuid, Vec<ConnectInfo>>,
-        Option<(
-            Vec<Uuid>,
-            Vec<Uuid>,
-            Vec<(Uuid, ConnectInfo)>,
-            Vec<(Uuid, Uuid, String, PortType)>,
-        )>,
-    ),
-    String,
-> {
+) -> Result<PasteNodesResponse, String> {
     HTTP_API_CLIENT()
-        .post::<(Uuid, (f64, f64), bool), (
-            HashMap<Uuid, Vec<NodeInfo>>,
-            Vec<AnalyzerItemDto>,
-            HashMap<Uuid, Vec<ConnectInfo>>,
-            Option<(
-                Vec<Uuid>,
-                Vec<Uuid>,
-                Vec<(Uuid, ConnectInfo)>,
-                Vec<(Uuid, Uuid, String, PortType)>,
-            )>,
-        )>(
+        .post::<(Uuid, (f64, f64), bool), PasteNodesResponse>(
             "/api/operations/paste_nodes",
             (group_id, (pos.x, pos.y), cut),
         )
