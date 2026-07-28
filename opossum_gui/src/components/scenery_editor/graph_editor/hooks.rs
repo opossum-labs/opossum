@@ -260,10 +260,17 @@ pub fn use_on_key_down(
                     }
                     event.stop_propagation();
                 } else if event.data().key() == Key::Delete {
-                    let nodes_to_delete = graph_store.read().selected_nodes();
-                    for node_id in nodes_to_delete.keys() {
-                        workspace_processor.send(GraphsWorkspaceAction::DeleteNode {
-                            node_id: *node_id,
+                    let node_ids: Vec<Uuid> = graph_store
+                        .read()
+                        .selected_nodes()
+                        .keys()
+                        .copied()
+                        .collect();
+                    if !node_ids.is_empty() {
+                        // One action for the whole selection, so deleting several nodes at once is a
+                        // single undo step instead of one per node.
+                        workspace_processor.send(GraphsWorkspaceAction::DeleteNodes {
+                            node_ids,
                             graph_id: graph_state.graph_info().read().id,
                         });
                     }

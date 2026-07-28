@@ -291,7 +291,92 @@ async fn delete_node(
 ) -> Result<Json<DeleteNodeResponse>, BackEndErrorResponse> {
     let uuid = path.into_inner();
     let mut document = data.document.lock();
+    let (inverse, response) = delete_node_capturing(&mut document, uuid)?;
+    drop(document);
+    push_delete_inverse(&data, inverse);
+    Ok(web::Json(response))
+}
 
+/// Delete several nodes in one step
+///
+/// Deletes every node in the request body (each cascading to its reference nodes and tearing down its
+/// exposed-port chains, exactly like [`delete_node`]), pushing a *single* undo entry so one undo
+/// restores the whole selection - unlike issuing one `DELETE /{uuid}` per node, which would be one
+/// undo step each. A uuid already removed by a prior node's cascade is skipped. Returns the merged
+/// [`DeleteNodeResponse`] across all deletions.
+#[utoipa::path(tag = "node",
+    request_body(content = Vec<Uuid>, description = "UUIDs of the nodes to delete together"),
+    responses(
+        (status = OK, body = DeleteNodeResponse, description = "Merged deletion result", content_type="application/json"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "A UUID could not be deleted", content_type="application/json")
+    )
+)]
+#[post("/delete")]
+async fn delete_nodes(
+    data: web::Data<AppState>,
+    body: web::Json<Vec<Uuid>>,
+) -> Result<Json<DeleteNodeResponse>, BackEndErrorResponse> {
+    let uuids = body.into_inner();
+    let mut document = data.document.lock();
+
+    let mut inverse: Vec<Command> = Vec::new();
+    let mut merged = DeleteNodeResponse {
+        deleted_nodes: Vec::new(),
+        disconnected_connections: Vec::new(),
+        removed_port_mappings: Vec::new(),
+    };
+    for uuid in uuids {
+        // A node earlier in the selection may have cascade-deleted this one (a reference node); its
+        // restoration is already captured in that node's own `AddNode.cascaded`, so just skip it.
+        if document.scenery().node_recursive(uuid).is_err() {
+            continue;
+        }
+        let (node_inverse, response) = delete_node_capturing(&mut document, uuid)?;
+        // Prepend each node's inverse so the batch ends up in reverse deletion order: on undo a node's
+        // captured connections only reference nodes that were still alive when it was deleted (i.e.
+        // deleted later, or not at all), so restoring later-deleted nodes first guarantees every
+        // reconnect target already exists.
+        let mut combined = node_inverse;
+        combined.append(&mut inverse);
+        inverse = combined;
+
+        merged.deleted_nodes.extend(response.deleted_nodes);
+        merged
+            .disconnected_connections
+            .extend(response.disconnected_connections);
+        merged
+            .removed_port_mappings
+            .extend(response.removed_port_mappings);
+    }
+    drop(document);
+
+    push_delete_inverse(&data, inverse);
+    Ok(web::Json(merged))
+}
+
+/// Pushes the inverse commands captured by [`delete_node_capturing`] as one undo entry: nothing if
+/// empty, the single command directly if there is exactly one, otherwise a [`Command::Batch`].
+fn push_delete_inverse(data: &AppState, inverse: Vec<Command>) {
+    match inverse.len() {
+        0 => {}
+        1 => data.push_undo(inverse.into_iter().next().unwrap()),
+        _ => data.push_undo(Command::Batch(inverse)),
+    }
+}
+
+/// Deletes `uuid` from `document` and returns `(inverse, response)`: the commands that undo the
+/// deletion (in application order - `AddNode` first, so the node exists before its ports are
+/// re-mapped or its analyzer mappings restored) and the [`DeleteNodeResponse`] describing what was
+/// torn down. Does not push anything onto the undo stack - the caller decides whether this is its own
+/// undo step ([`delete_node`]) or part of a batch ([`delete_nodes`]).
+///
+/// # Errors
+///
+/// Returns an error if `uuid` doesn't resolve to a node, or a cascade/removal step fails.
+fn delete_node_capturing(
+    document: &mut OpmDocument,
+    uuid: Uuid,
+) -> Result<(Vec<Command>, DeleteNodeResponse), BackEndErrorResponse> {
     // Capture the target node and, since deleting it cascades to any reference nodes pointing at it
     // (see `NodeGroup::delete_node`), every one of those too - each as a live `OpticRef` handle plus
     // its own parent group, so undo can restore the whole cascade exactly as it was.
@@ -339,7 +424,7 @@ async fn delete_node(
 
     // Deleting a source-port node strips its mapping from every analyzer - capture the inverse commands
     // that restore those mappings, so undo isn't a silent data loss (see the helper).
-    let analyzer_inverses = prune_analyzer_source_mappings(&mut document, &deleted_nodes);
+    let analyzer_inverses = prune_analyzer_source_mappings(document, &deleted_nodes);
 
     // Only claim cascaded nodes that `delete_node` actually removed, in case its cascade rules ever
     // diverge from what `find_all_nodes_referring_to_uuid` predicted.
@@ -349,30 +434,26 @@ async fn delete_node(
         .collect();
     let (disconnected_connections, removed_port_mappings) = split_cascades_for_response(&cascades);
 
-    let add_node = Command::AddNode(NodeSnapshot {
+    // AddNode first (the node must exist before its ports can be re-mapped), then one restore command
+    // per cascade (each an inner batch: AddPortMap per level innermost-first, then the AddEdge that
+    // reconnects the terminal external connection), then the analyzer-mapping restores.
+    let mut inverse = vec![Command::AddNode(NodeSnapshot {
         parent_group_id,
         node: target_ref,
         cascaded,
         connections,
-    });
-    if cascades.is_empty() && analyzer_inverses.is_empty() {
-        data.push_undo(add_node);
-    } else {
-        // AddNode first (the node must exist before its ports can be re-mapped), then one restore
-        // command per cascade (each an inner batch: AddPortMap per level innermost-first, then the
-        // AddEdge that reconnects the terminal external connection).
-        let mut batch = vec![add_node];
-        batch.extend(cascades.iter().map(Command::from));
-        batch.extend(analyzer_inverses);
-        data.push_undo(Command::Batch(batch));
-    }
+    })];
+    inverse.extend(cascades.iter().map(Command::from));
+    inverse.extend(analyzer_inverses);
 
-    drop(document);
-    Ok(web::Json(DeleteNodeResponse {
-        deleted_nodes,
-        disconnected_connections,
-        removed_port_mappings,
-    }))
+    Ok((
+        inverse,
+        DeleteNodeResponse {
+            deleted_nodes,
+            disconnected_connections,
+            removed_port_mappings,
+        },
+    ))
 }
 
 /// Get nodes that reference a certain node uuid
@@ -892,6 +973,81 @@ mod test {
                 && c.target_id == group_id
                 && c.target_port == "ext_in_1"),
             "the S -> G external connection must be restored"
+        );
+    }
+
+    /// Regression test for the multi-delete-needs-N-undos bug: selecting several connected nodes and
+    /// deleting them in one gesture used to fire one `DELETE /{uuid}` per node, so each became its own
+    /// undo step. `POST /delete` deletes the whole selection as a single undo step: one undo must
+    /// restore every node *and* the connection between them.
+    #[actix_web::test]
+    async fn test_delete_nodes_batch_is_one_undo_step() {
+        use opossum_core::{
+            meter,
+            nodes::{Dummy, NodeGroup},
+        };
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, node_b, node_c) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let scenery = document.scenery_mut();
+            let node_b = scenery.add_node(Dummy::default()).unwrap();
+            let node_c = scenery.add_node(Dummy::default()).unwrap();
+            scenery
+                .connect_nodes(node_b, "output_1", node_c, "input_1", meter!(0.1))
+                .unwrap();
+            (root_id, node_b, node_c)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(delete_nodes)
+                .service(undo_document),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/delete")
+            .set_json(&vec![node_b, node_c])
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let response: DeleteNodeResponse = test::read_body_json(resp).await;
+        assert!(
+            response.deleted_nodes.contains(&node_b) && response.deleted_nodes.contains(&node_c),
+            "both nodes must be reported deleted, got {:?}",
+            response.deleted_nodes
+        );
+        assert_eq!(
+            app_state.undo_stack.lock().len(),
+            1,
+            "deleting a multi-node selection must be a single undo step, not one per node"
+        );
+
+        // One undo restores both nodes and the connection between them.
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::OK,
+            "a single undo must restore the whole selection"
+        );
+        let document = app_state.document.lock();
+        assert!(
+            document.scenery().node_recursive(node_b).is_ok()
+                && document.scenery().node_recursive(node_c).is_ok(),
+            "both nodes must be restored by one undo"
+        );
+        let connections = document
+            .scenery()
+            .with_group_node(root_id, NodeGroup::connections)
+            .unwrap();
+        assert!(
+            connections
+                .iter()
+                .any(|c| c.src_id == node_b && c.target_id == node_c),
+            "the connection between the two deleted nodes must be restored too"
         );
     }
 

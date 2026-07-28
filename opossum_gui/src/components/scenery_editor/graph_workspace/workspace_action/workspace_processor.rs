@@ -219,8 +219,9 @@ pub fn use_workspace_processor(
                     GraphsWorkspaceAction::AddEdge { new_edge, graph_id } => {
                         process_add_edge(new_edge, workspace_handlers, graph_id).await;
                     }
-                    GraphsWorkspaceAction::DeleteNode { node_id, graph_id } => {
-                        process_delete_node(node_id, workspace, workspace_handlers, graph_id).await;
+                    GraphsWorkspaceAction::DeleteNodes { node_ids, graph_id } => {
+                        process_delete_nodes(node_ids, workspace, workspace_handlers, graph_id)
+                            .await;
                     }
                     GraphsWorkspaceAction::OpenGroupTab {
                         group_id,
@@ -503,7 +504,7 @@ const fn is_document_edit_action(action: &GraphsWorkspaceAction) -> bool {
             | GraphsWorkspaceAction::DeleteEdge { .. }
             | GraphsWorkspaceAction::PasteNode { .. }
             | GraphsWorkspaceAction::AddEdge { .. }
-            | GraphsWorkspaceAction::DeleteNode { .. }
+            | GraphsWorkspaceAction::DeleteNodes { .. }
             | GraphsWorkspaceAction::ConvertToGroup { .. }
             | GraphsWorkspaceAction::DropNodesIntoGroup { .. }
             | GraphsWorkspaceAction::MapNodePort { .. }
@@ -719,65 +720,61 @@ async fn process_add_edge(
     );
 }
 
-async fn process_delete_node(
-    node_id: Uuid,
+/// Deletes a whole multi-node selection. Optical nodes are removed together via the batch endpoint
+/// (`api::delete_nodes`), so one undo restores the whole group; any analyzers in the selection are
+/// still deleted individually (they live at document level and are rarely multi-selected with nodes).
+async fn process_delete_nodes(
+    node_ids: Vec<Uuid>,
     workspace: ReadStore<GraphsWorkspaceState>,
     ws_handler: WorkSpaceSignalHandlers,
     graph_id: Uuid,
 ) {
-    let node_type_to_delete = {
-        let graph = workspace.tabs().get(graph_id);
-
-        let Some(graph) = graph else {
-            OPOSSUM_UI_LOGS.write().add_log(&format!(
-                "No graph with id '{}' found",
-                graph_id.as_simple()
-            ));
-            return;
-        };
-
-        graph.graph_store().read().get_node_type(node_id)
+    let Some(graph) = workspace.tabs().get(graph_id) else {
+        OPOSSUM_UI_LOGS.write().add_log(&format!(
+            "No graph with id '{}' found",
+            graph_id.as_simple()
+        ));
+        return;
     };
-    if let Some(node_type) = node_type_to_delete {
-        match node_type {
-            NodeType::Optical(_) => {
-                eval_action_run(
-                    api::delete_node(node_id).await,
-                    Some(move |response: DeleteNodeResponse| {
-                        ws_handler
-                            .nodes
-                            .remove_nodes(response.deleted_nodes, graph_id);
-                        for (group_id, node_id, external_port_name, port_type) in
-                            response.removed_port_mappings
-                        {
-                            ws_handler
-                                .workspace
-                                .remove_port_maps_for_node(group_id, node_id);
-                            ws_handler.nodes.remove_group_port(
-                                external_port_name,
-                                group_id,
-                                port_type,
-                            );
-                        }
-                        for (group_id, edge) in response.disconnected_connections {
-                            ws_handler.edges.delete_edge(edge, group_id);
-                        }
-                    }),
-                );
-            }
-            NodeType::Analyzer(_) => {
-                eval_action_run(
-                    api::delete_analyzer(node_id).await,
-                    Some(move |deleted_id| {
-                        ws_handler.nodes.remove_nodes(vec![deleted_id], graph_id);
-                    }),
-                );
-            }
-        }
-    } else {
-        OPOSSUM_UI_LOGS
-            .write()
-            .add_log("Node could not be deleted, as uuid was not found");
+    let (optical, analyzers): (Vec<Uuid>, Vec<Uuid>) = {
+        let graph_store = graph.graph_store();
+        let store = graph_store.read();
+        node_ids
+            .into_iter()
+            .partition(|id| matches!(store.get_node_type(*id), Some(NodeType::Optical(_))))
+    };
+
+    if !optical.is_empty() {
+        eval_action_run(
+            api::delete_nodes(optical).await,
+            Some(move |response: DeleteNodeResponse| {
+                ws_handler
+                    .nodes
+                    .remove_nodes(response.deleted_nodes, graph_id);
+                for (group_id, node_id, external_port_name, port_type) in
+                    response.removed_port_mappings
+                {
+                    ws_handler
+                        .workspace
+                        .remove_port_maps_for_node(group_id, node_id);
+                    ws_handler
+                        .nodes
+                        .remove_group_port(external_port_name, group_id, port_type);
+                }
+                for (group_id, edge) in response.disconnected_connections {
+                    ws_handler.edges.delete_edge(edge, group_id);
+                }
+            }),
+        );
+    }
+
+    for analyzer_id in analyzers {
+        eval_action_run(
+            api::delete_analyzer(analyzer_id).await,
+            Some(move |deleted_id| {
+                ws_handler.nodes.remove_nodes(vec![deleted_id], graph_id);
+            }),
+        );
     }
 }
 

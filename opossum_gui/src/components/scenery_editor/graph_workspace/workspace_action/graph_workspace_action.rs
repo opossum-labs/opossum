@@ -317,11 +317,13 @@ pub enum GraphsWorkspaceAction {
         moves: Vec<(Uuid, bool, Point2D<f64>)>,
     },
 
-    /// Deletes a node from the graph.
-    DeleteNode {
-        /// The ID of the node to delete.
-        node_id: Uuid,
-        /// The ID of the graph containing the node.
+    /// Deletes one or more selected nodes together as a single undo step (see the backend's
+    /// `delete_nodes`). Optical nodes go through the batch endpoint; any analyzers in the selection
+    /// are still deleted individually. A single-node delete is just a one-element selection.
+    DeleteNodes {
+        /// The IDs of the selected nodes to delete.
+        node_ids: Vec<Uuid>,
+        /// The ID of the graph containing the nodes.
         graph_id: Uuid,
     },
 

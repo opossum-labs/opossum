@@ -135,19 +135,16 @@ pub async fn post_add_ref_node(
         .post::<NewRefNode, NodeInfo>(&format!("/api/nodes/{group_id}/references"), new_ref_info)
         .await
 }
-/// Delete a node and all its connections.
-///
-/// This function will return a vector of [`Uuid`]s that were actually deleted. This could include
-/// the provided [`Uuid`] and possibly any other nodes that reference it.
+/// Delete one or more nodes together in one request, so the backend records a single undo step for
+/// the whole selection (see the backend's `delete_nodes`). Returns the merged [`DeleteNodeResponse`].
 ///
 /// # Errors
 ///
-/// This function will return an error if
-/// - the provided [`Uuid`] cannot be serialized or found
-/// - the returned response cannot be deserialized into a vector of [`Uuid`]
-pub async fn delete_node(id: Uuid) -> Result<DeleteNodeResponse, String> {
+/// This function will return an error if the request fails or the response cannot be deserialized
+/// into a [`DeleteNodeResponse`].
+pub async fn delete_nodes(ids: Vec<Uuid>) -> Result<DeleteNodeResponse, String> {
     HTTP_API_CLIENT()
-        .delete::<String, DeleteNodeResponse>(&format!("/api/nodes/{id}"), String::new())
+        .post::<Vec<Uuid>, DeleteNodeResponse>("/api/nodes/delete", ids)
         .await
 }
 /// Get the `NodeInfo` of an optical node.
