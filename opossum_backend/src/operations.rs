@@ -24,7 +24,7 @@ use opossum_core::{
     core_optics::{NodeAttrExt, OpticRef, node_attr::HasNodeAttr},
     error::OpossumError,
     nodes::{ConnectionInfo, NodeGroup, NodeReference, create_node_ref},
-    opm_document::AnalyzerInfo,
+    opm_document::{AnalyzerInfo, OpmDocument},
     prelude::{OpticNode, PortMap, PortType, Proptype},
     types::api_types::{
         AnalyzerItemDto, ConnectInfo, ConvertToGroupRequest, ConvertToGroupResponse, CutResult,
@@ -242,180 +242,14 @@ async fn post_paste_nodes(
     // originals this paste was copied from) and extend the SAME `removals` batch, so one undo reverts
     // both the paste and the delete as a single step.
     let cut_result = if cut {
-        let mut nodes_to_delete = vec![];
-        let mut analyzers_to_delete = vec![];
-        let mut node_cache = data.node_copy_cache.lock();
-        while let Some(cache) = node_cache.pop() {
-            match cache {
-                NodeCacheItem::Optical(optic_ref) => nodes_to_delete.push(optic_ref.uuid()?),
-                NodeCacheItem::Analyzer(analyzer_dto) => {
-                    analyzers_to_delete.push(analyzer_dto.id);
-                }
-            }
-        }
-        drop(node_cache);
-
-        let scenery_id = document.scenery().node_attr().uuid();
-        // Every distinct immediate parent group among the cut nodes needs its ports refreshed -
-        // a multi-select cut can span more than one group, so picking just one (e.g. the first)
-        // would silently skip refreshing the others.
-        let mut cut_from_group_ids: HashSet<Uuid> = nodes_to_delete
-            .iter()
-            .filter_map(|id| document.scenery().node_recursive(*id).ok())
-            .map(|(_, parent_id)| parent_id)
-            .collect();
-        if !analyzers_to_delete.is_empty() {
-            cut_from_group_ids.insert(scenery_id);
-        }
-        if cut_from_group_ids.is_empty() {
-            cut_from_group_ids.insert(scenery_id);
-        }
-        let cut_from_group_ids: Vec<Uuid> = cut_from_group_ids.into_iter().collect();
-
-        let mut deleted_nodes = vec![];
-        if scenery_id == paste_group_id {
-            for analyzer_id in &analyzers_to_delete {
-                if let Ok(info) = document.analyzer(*analyzer_id) {
-                    // Undoing this deletion means adding the analyzer back.
-                    removals.push(Command::AddAnalyzer(AnalyzerItemDto {
-                        id: *analyzer_id,
-                        info,
-                    }));
-                }
-                deleted_nodes.push(*analyzer_id);
-                document.remove_analyzer(*analyzer_id)?;
-            }
-        }
-
-        let scenery = document.scenery_mut();
-        let root_uuid = scenery.node_attr().uuid();
-        let nodes_to_delete_set: HashSet<Uuid> = nodes_to_delete.iter().copied().collect();
-        let mut captured_nodes: Vec<(Uuid, OpticRef, Vec<ConnectInfo>)> = Vec::new();
-        let mut mutual_connections: Vec<(Uuid, ConnectInfo)> = Vec::new();
-        let mut seen_mutual: HashSet<(Uuid, String, Uuid, String)> = HashSet::new();
-        let mut disconnected_mappings = Vec::new();
-        for id in &nodes_to_delete {
-            let Ok((node, parent_group_id)) = scenery.node_recursive(*id) else {
-                continue;
-            };
-
-            // Retarget any reference node pointing at this node to the pasted copy's fresh uuid, before
-            // the original is deleted - a cut+paste is conceptually a move, not a deletion, so a
-            // reference to the cut node should keep resolving to it in its new location, not be
-            // cascade-deleted the way an actual delete legitimately cascades. Retargeting first means
-            // `NodeGroup::delete_node`'s own cascade search (which looks for nodes still referencing
-            // `id`) simply won't find this reference anymore, so it's left untouched.
-            if let Some(new_id) = node_id_link.get(id).copied()
-                && let Ok(referring) = scenery
-                    .graph()
-                    .find_all_nodes_referring_to_uuid(*id, root_uuid)
-            {
-                for ref_ids in referring.values() {
-                    for ref_id in ref_ids {
-                        // `find_all_nodes_referring_to_uuid` reports the queried node itself as one of
-                        // its own "referrers" - skip that self-match, only genuine reference nodes
-                        // pointing at `id` should be retargeted.
-                        if *ref_id == *id {
-                            continue;
-                        }
-                        let Ok((_, ref_parent_id)) = scenery.node_recursive(*ref_id) else {
-                            continue;
-                        };
-                        if scenery
-                            .with_node_attr_mut(*ref_id, |attr| {
-                                attr.set_property("reference id", Proptype::Uuid(new_id))
-                            })
-                            .is_ok()
-                        {
-                            // Undoing this retarget means pointing the reference back at the original.
-                            // Pushed into `retarget_patches`, not `removals` directly - it must run
-                            // *before* the pasted duplicate's own `RemoveNode` (already in `removals`) is
-                            // applied, or the reference (still pointing at the duplicate at that point)
-                            // gets swept away by `NodeGroup::delete_node`'s own cascade first, and this
-                            // retarget-back then fails, targeting an already-deleted node.
-                            retarget_patches.push(Command::PatchProperty(PatchProperty {
-                                uuid: *ref_id,
-                                parent_group_id: ref_parent_id,
-                                prop_name: "reference id".to_string(),
-                                old: Proptype::Uuid(new_id),
-                                new: Proptype::Uuid(*id),
-                            }));
-                        }
-                    }
-                }
-            }
-
-            // Connections to another node also being cut in this same gesture need special handling:
-            // restoring them via each node's own `AddNode.connections` field would try to reconnect to
-            // a node that may not have been re-added yet (undo batches apply in order) - so pull them
-            // out and restore them once, as standalone `AddEdge`s, after every `AddNode` has run.
-            let all_connections =
-                capture_node_connections(scenery, parent_group_id, *id).unwrap_or_default();
-            let (mutual, own): (Vec<_>, Vec<_>) = all_connections.into_iter().partition(|c| {
-                nodes_to_delete_set.contains(&c.src_uuid())
-                    && nodes_to_delete_set.contains(&c.target_uuid())
-            });
-            for c in mutual {
-                let key = (
-                    c.src_uuid(),
-                    c.src_port().to_string(),
-                    c.target_uuid(),
-                    c.target_port().to_string(),
-                );
-                if seen_mutual.insert(key) {
-                    mutual_connections.push((parent_group_id, c));
-                }
-            }
-
-            disconnected_mappings.extend(disconnect_stale_external_connections_for_node(
-                scenery,
-                parent_group_id,
-                *id,
-            )?);
-
-            captured_nodes.push((parent_group_id, node, own));
-        }
-
-        for node in &nodes_to_delete {
-            deleted_nodes.extend(scenery.delete_node(*node)?);
-        }
-
-        for (parent_group_id, node, connections) in captured_nodes {
-            // Undoing this deletion means adding the node back, reconnected.
-            removals.push(Command::AddNode(NodeSnapshot {
-                parent_group_id,
-                node,
-                cascaded: Vec::new(),
-                connections,
-            }));
-        }
-
-        for (group_id, connect_info) in mutual_connections {
-            removals.push(Command::AddEdge(EdgeSnapshot {
-                group_id,
-                connect_info,
-            }));
-        }
-
-        let (disconnected_connections, removed_port_mappings) =
-            split_disconnected_mappings_for_response(&disconnected_mappings);
-
-        for d in disconnected_mappings {
-            // Undoing this deletion also means restoring the port mapping it depended on, and the
-            // external connection that used that mapping.
-            removals.push(Command::AddPortMap((&d).into()));
-            removals.push(Command::AddEdge(EdgeSnapshot {
-                group_id: d.mapping_parent_group_id,
-                connect_info: d.connect_info,
-            }));
-        }
-
-        Some(CutResult {
-            deleted_nodes,
-            cut_from_group_ids,
-            disconnected_connections,
-            removed_port_mappings,
-        })
+        Some(perform_cut(
+            &data,
+            &mut document,
+            paste_group_id,
+            &node_id_link,
+            &mut removals,
+            &mut retarget_patches,
+        )?)
     } else {
         None
     };
@@ -432,6 +266,205 @@ async fn post_paste_nodes(
         pasted_connections: grouped_connect_info,
         cut_result,
     }))
+}
+
+/// Deletes the originals of a cut+paste (the nodes/analyzers still in the copy cache) after the
+/// paste half has already inserted their duplicates, and returns the [`CutResult`] reported to the
+/// GUI. The inverse commands are pushed onto the paste's own `removals` batch, so a single undo
+/// reverts both the paste and the delete together.
+///
+/// Reference nodes pointing at a cut node are retargeted to its pasted duplicate instead of being
+/// cascade-deleted (a cut+paste is conceptually a move, not a deletion); their inverse patches go
+/// into `retarget_patches`, which the caller prepends to the very front of the undo batch - on
+/// undo they must apply *before* the duplicate's own `RemoveNode`, or the reference (still
+/// pointing at the duplicate at that point) would be swept away by the delete cascade first.
+///
+/// # Errors
+///
+/// Returns an error if a cached node's uuid cannot be read, or if deleting one of the originals
+/// (or an analyzer) from the document fails.
+fn perform_cut(
+    data: &AppState,
+    document: &mut OpmDocument,
+    paste_group_id: Uuid,
+    node_id_link: &HashMap<Uuid, Uuid>,
+    removals: &mut Vec<Command>,
+    retarget_patches: &mut Vec<Command>,
+) -> Result<CutResult, BackEndErrorResponse> {
+    let mut nodes_to_delete = vec![];
+    let mut analyzers_to_delete = vec![];
+    let mut node_cache = data.node_copy_cache.lock();
+    while let Some(cache) = node_cache.pop() {
+        match cache {
+            NodeCacheItem::Optical(optic_ref) => nodes_to_delete.push(optic_ref.uuid()?),
+            NodeCacheItem::Analyzer(analyzer_dto) => {
+                analyzers_to_delete.push(analyzer_dto.id);
+            }
+        }
+    }
+    drop(node_cache);
+
+    let scenery_id = document.scenery().node_attr().uuid();
+    // Every distinct immediate parent group among the cut nodes needs its ports refreshed -
+    // a multi-select cut can span more than one group, so picking just one (e.g. the first)
+    // would silently skip refreshing the others.
+    let mut cut_from_group_ids: HashSet<Uuid> = nodes_to_delete
+        .iter()
+        .filter_map(|id| document.scenery().node_recursive(*id).ok())
+        .map(|(_, parent_id)| parent_id)
+        .collect();
+    if !analyzers_to_delete.is_empty() {
+        cut_from_group_ids.insert(scenery_id);
+    }
+    if cut_from_group_ids.is_empty() {
+        cut_from_group_ids.insert(scenery_id);
+    }
+    let cut_from_group_ids: Vec<Uuid> = cut_from_group_ids.into_iter().collect();
+
+    let mut deleted_nodes = vec![];
+    if scenery_id == paste_group_id {
+        for analyzer_id in &analyzers_to_delete {
+            if let Ok(info) = document.analyzer(*analyzer_id) {
+                // Undoing this deletion means adding the analyzer back.
+                removals.push(Command::AddAnalyzer(AnalyzerItemDto {
+                    id: *analyzer_id,
+                    info,
+                }));
+            }
+            deleted_nodes.push(*analyzer_id);
+            document.remove_analyzer(*analyzer_id)?;
+        }
+    }
+
+    let scenery = document.scenery_mut();
+    let root_uuid = scenery.node_attr().uuid();
+    let nodes_to_delete_set: HashSet<Uuid> = nodes_to_delete.iter().copied().collect();
+    let mut captured_nodes: Vec<(Uuid, OpticRef, Vec<ConnectInfo>)> = Vec::new();
+    let mut mutual_connections: Vec<(Uuid, ConnectInfo)> = Vec::new();
+    let mut seen_mutual: HashSet<(Uuid, String, Uuid, String)> = HashSet::new();
+    let mut disconnected_mappings = Vec::new();
+    for id in &nodes_to_delete {
+        let Ok((node, parent_group_id)) = scenery.node_recursive(*id) else {
+            continue;
+        };
+
+        // Retarget any reference node pointing at this node to the pasted copy's fresh uuid, before
+        // the original is deleted - a cut+paste is conceptually a move, not a deletion, so a
+        // reference to the cut node should keep resolving to it in its new location, not be
+        // cascade-deleted the way an actual delete legitimately cascades. Retargeting first means
+        // `NodeGroup::delete_node`'s own cascade search (which looks for nodes still referencing
+        // `id`) simply won't find this reference anymore, so it's left untouched.
+        if let Some(new_id) = node_id_link.get(id).copied()
+            && let Ok(referring) = scenery
+                .graph()
+                .find_all_nodes_referring_to_uuid(*id, root_uuid)
+        {
+            for ref_ids in referring.values() {
+                for ref_id in ref_ids {
+                    // `find_all_nodes_referring_to_uuid` reports the queried node itself as one of
+                    // its own "referrers" - skip that self-match, only genuine reference nodes
+                    // pointing at `id` should be retargeted.
+                    if *ref_id == *id {
+                        continue;
+                    }
+                    let Ok((_, ref_parent_id)) = scenery.node_recursive(*ref_id) else {
+                        continue;
+                    };
+                    if scenery
+                        .with_node_attr_mut(*ref_id, |attr| {
+                            attr.set_property("reference id", Proptype::Uuid(new_id))
+                        })
+                        .is_ok()
+                    {
+                        // Undoing this retarget means pointing the reference back at the original.
+                        // Pushed into `retarget_patches`, not `removals` directly - it must run
+                        // *before* the pasted duplicate's own `RemoveNode` (already in `removals`) is
+                        // applied, or the reference (still pointing at the duplicate at that point)
+                        // gets swept away by `NodeGroup::delete_node`'s own cascade first, and this
+                        // retarget-back then fails, targeting an already-deleted node.
+                        retarget_patches.push(Command::PatchProperty(PatchProperty {
+                            uuid: *ref_id,
+                            parent_group_id: ref_parent_id,
+                            prop_name: "reference id".to_string(),
+                            old: Proptype::Uuid(new_id),
+                            new: Proptype::Uuid(*id),
+                        }));
+                    }
+                }
+            }
+        }
+
+        // Connections to another node also being cut in this same gesture need special handling:
+        // restoring them via each node's own `AddNode.connections` field would try to reconnect to
+        // a node that may not have been re-added yet (undo batches apply in order) - so pull them
+        // out and restore them once, as standalone `AddEdge`s, after every `AddNode` has run.
+        let all_connections =
+            capture_node_connections(scenery, parent_group_id, *id).unwrap_or_default();
+        let (mutual, own): (Vec<_>, Vec<_>) = all_connections.into_iter().partition(|c| {
+            nodes_to_delete_set.contains(&c.src_uuid())
+                && nodes_to_delete_set.contains(&c.target_uuid())
+        });
+        for c in mutual {
+            let key = (
+                c.src_uuid(),
+                c.src_port().to_string(),
+                c.target_uuid(),
+                c.target_port().to_string(),
+            );
+            if seen_mutual.insert(key) {
+                mutual_connections.push((parent_group_id, c));
+            }
+        }
+
+        disconnected_mappings.extend(disconnect_stale_external_connections_for_node(
+            scenery,
+            parent_group_id,
+            *id,
+        )?);
+
+        captured_nodes.push((parent_group_id, node, own));
+    }
+
+    for node in &nodes_to_delete {
+        deleted_nodes.extend(scenery.delete_node(*node)?);
+    }
+
+    for (parent_group_id, node, connections) in captured_nodes {
+        // Undoing this deletion means adding the node back, reconnected.
+        removals.push(Command::AddNode(NodeSnapshot {
+            parent_group_id,
+            node,
+            cascaded: Vec::new(),
+            connections,
+        }));
+    }
+
+    for (group_id, connect_info) in mutual_connections {
+        removals.push(Command::AddEdge(EdgeSnapshot {
+            group_id,
+            connect_info,
+        }));
+    }
+
+    let (disconnected_connections, removed_port_mappings) =
+        split_disconnected_mappings_for_response(&disconnected_mappings);
+
+    for d in disconnected_mappings {
+        // Undoing this deletion also means restoring the port mapping it depended on, and the
+        // external connection that used that mapping.
+        removals.push(Command::AddPortMap((&d).into()));
+        removals.push(Command::AddEdge(EdgeSnapshot {
+            group_id: d.mapping_parent_group_id,
+            connect_info: d.connect_info,
+        }));
+    }
+
+    Ok(CutResult {
+        deleted_nodes,
+        cut_from_group_ids,
+        disconnected_connections,
+        removed_port_mappings,
+    })
 }
 
 fn upper_left_corner_of_nodes(
