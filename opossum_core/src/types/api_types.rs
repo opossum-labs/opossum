@@ -249,11 +249,11 @@ pub struct UpdateNodeRequest {
 
     /// The new base isometry (position and rotation in 3D space)
     #[schema(value_type = Option<Object>)]
-    pub isometry: Option<Option<Isometry>>, // Option<Option> erlaubt explizites Null-Setzen!
+    pub isometry: Option<Option<Isometry>>, // Option<Option> allows explicitly setting null!
 
     /// The new alignment isometry (local decenter and tilt)
     #[schema(value_type = Option<Object>)]
-    pub alignment: Option<Option<Isometry>>, // Option<Option> erlaubt explizites Null-Setzen!
+    pub alignment: Option<Option<Isometry>>, // Option<Option> allows explicitly setting null!
 
     /// The GUI position on the 2D canvas
     #[schema(example = json!([100.5, 200.0]))]
@@ -743,14 +743,6 @@ pub struct ViewportChangeRequest {
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct UndoRedoResponse {
     pub changes: Vec<DocumentChange>,
-    pub can_undo: bool,
-    pub can_redo: bool,
-}
-
-/// Response returned whenever the undo/redo stacks change shape without an accompanying document
-/// change being reported separately (currently unused by any endpoint, kept for symmetry/future use).
-#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
-pub struct UndoStatusResponse {
     pub can_undo: bool,
     pub can_redo: bool,
 }

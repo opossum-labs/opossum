@@ -158,7 +158,7 @@ pub(crate) async fn undo_document(
     };
     let changes = command.describe()?;
     let mut document = data.document.lock();
-    let inverse = apply_with_rollback(&mut document, command)?;
+    let inverse = with_rollback(&mut document, |d| command.apply(d))?;
     drop(document);
     data.redo_stack.lock().push_back(inverse);
 
@@ -188,7 +188,7 @@ pub(crate) async fn redo_document(
     };
     let changes = command.describe()?;
     let mut document = data.document.lock();
-    let inverse = apply_with_rollback(&mut document, command)?;
+    let inverse = with_rollback(&mut document, |d| command.apply(d))?;
     drop(document);
     data.undo_stack.lock().push_back(inverse);
 
@@ -270,17 +270,10 @@ async fn patch_positions(
     }
 
     let mut document = data.document.lock();
-    let backup = document.to_opm_file_string()?;
-    let mut inverses = match apply_position_updates(&mut document, updates) {
-        Ok(inverses) => inverses,
-        Err(err) => {
-            // A later update in the batch failed after earlier ones already mutated the document -
-            // undo those too, so a partial batch can never leave the document (and the GUI, which
-            // only applies changes on a successful response) out of sync.
-            *document = OpmDocument::from_string(&backup)?;
-            return Err(err);
-        }
-    };
+    // Rolled back as a whole on failure: a later update failing after earlier ones already mutated
+    // the document must not leave a partial batch behind - the GUI only applies changes on a
+    // successful response.
+    let mut inverses = with_rollback(&mut document, |d| apply_position_updates(d, updates))?;
     inverses.reverse();
     data.push_undo(Command::Batch(inverses));
     drop(document);
@@ -335,16 +328,22 @@ fn apply_position_updates(
     Ok(inverses)
 }
 
-/// Applies `command` to `document`, restoring `document` to exactly its pre-call state if `apply`
-/// fails - so a bug in a multi-step [`Command::apply`] (e.g. a `Batch` or group conversion that fails
-/// partway through) can never leave the live document silently torn.
-fn apply_with_rollback(
+/// Runs `mutate` against `document`, restoring `document` to exactly its pre-call state if it
+/// fails - so a bug in a multi-step mutation (e.g. a [`Command::Batch`] applied by undo/redo, or a
+/// position-update batch that fails partway through) can never leave the live document silently
+/// torn.
+///
+/// # Errors
+///
+/// Returns `mutate`'s own error after restoring the backup, or an error if the document cannot be
+/// serialized/deserialized for the backup itself.
+fn with_rollback<T>(
     document: &mut OpmDocument,
-    command: Command,
-) -> Result<Command, BackEndErrorResponse> {
+    mutate: impl FnOnce(&mut OpmDocument) -> Result<T, BackEndErrorResponse>,
+) -> Result<T, BackEndErrorResponse> {
     let backup = document.to_opm_file_string()?;
-    match command.apply(document) {
-        Ok(inverse) => Ok(inverse),
+    match mutate(document) {
+        Ok(value) => Ok(value),
         Err(err) => {
             *document = OpmDocument::from_string(&backup)?;
             Err(err)
