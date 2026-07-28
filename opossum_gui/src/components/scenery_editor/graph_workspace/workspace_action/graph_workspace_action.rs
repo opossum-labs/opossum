@@ -214,6 +214,11 @@ pub enum GraphsWorkspaceAction {
         graph_id: Uuid,
         /// Whether the new position should be saved.
         save_changes: bool,
+        /// Whether the camera move should become an undo step. True for user-triggered centering
+        /// (Layout menu, double-middle-click); false for programmatic centering (the graph view's
+        /// mount effect on new project / file load), which must not make Undo available on a
+        /// fresh document.
+        record_undo: bool,
     },
 
     /// Adjusts zoom and position so the entire graph fits within the viewport.

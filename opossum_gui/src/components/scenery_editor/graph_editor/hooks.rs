@@ -139,6 +139,7 @@ pub fn use_on_mouse_down(
                         workspace_processor.send(GraphsWorkspaceAction::CenterGraph {
                             graph_id,
                             save_changes: true,
+                            record_undo: true,
                         });
                         last_click.set(None);
                     }

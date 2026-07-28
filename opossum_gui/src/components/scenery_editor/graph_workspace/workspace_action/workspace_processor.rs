@@ -122,11 +122,13 @@ pub fn use_workspace_processor(
                     GraphsWorkspaceAction::CenterGraph {
                         graph_id,
                         save_changes,
+                        record_undo,
                     } => {
                         let before = current_viewport(workspace, graph_id);
                         workspace_handlers.view.center_graph(graph_id, save_changes);
-                        if let (Some(before), Some(after)) =
-                            (before, current_viewport(workspace, graph_id))
+                        if record_undo
+                            && let (Some(before), Some(after)) =
+                                (before, current_viewport(workspace, graph_id))
                         {
                             push_viewport_change(before, after);
                         }
@@ -467,8 +469,13 @@ fn current_viewport(
 
 /// Records a discrete camera gesture (pan, center, zoom-to-fit) as its own undo step, fire-and-forget.
 /// Sent with `coalesce=false`, so it never merges with an adjacent zoom - each such gesture stays a
-/// separate undo step.
+/// separate undo step. A no-op move (`before == after`, e.g. centering an already-centered graph) is
+/// dropped entirely: the backend would discard it anyway, but the optimistic status write below must
+/// not enable the Undo button for it either.
 fn push_viewport_change(before: Viewport, after: Viewport) {
+    if before == after {
+        return;
+    }
     // A camera move is undoable, so enable Undo / grey out Redo like any other edit.
     *crate::UNDO_REDO_STATUS.write() = (true, false);
     spawn(async move {
@@ -1569,19 +1576,15 @@ async fn process_save_root_scenery_to_file(
     if let Some(f_stem) = path.file_stem()
         && let Some(fname) = f_stem.to_str()
     {
-        // Only rename the root scenery when its name actually differs from the file's. The rename goes
-        // through `patch_node`, which pushes an undoable `PatchNode` and thereby clears the redo stack -
-        // so doing it unconditionally on every save silently wiped the redo history and appended a no-op
-        // rename entry. Comparing against the root tab's current name skips that in the common case.
+        // Only rename the root scenery when its name actually differs from the file's - the rename
+        // is pure bookkeeping (`patch_node` deliberately records no undo step for root patches),
+        // so skipping the no-op case just avoids a pointless request.
         let current_root_name = workspace
             .tabs()
             .get(root_id)
             .map(|g| g.graph_info().read().name.clone());
         if current_root_name.as_deref() != Some(fname) {
             process_rename_root_scenery(ws_handler, fname.to_string(), root_id, false).await;
-            // That rename just created a new undo entry and cleared redo - reflect it in the buttons,
-            // which the save flow otherwise never refreshes.
-            *crate::UNDO_REDO_STATUS.write() = (true, false);
         }
         eval_action_run(
             api::get_document().await,

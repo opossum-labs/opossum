@@ -87,6 +87,7 @@ pub fn node_editor_command(
                 workspace_processor.send(GraphsWorkspaceAction::CenterGraph {
                     graph_id: active_tab(),
                     save_changes: false,
+                    record_undo: true,
                 });
             }
             NodeEditorCommand::ZoomToFit => {
