@@ -465,13 +465,14 @@ fn current_viewport(
     })
 }
 
-/// Records a viewport change (`before` -> `after`) as its own undo step, fire-and-forget. Consecutive
-/// camera moves with no intervening edit coalesce into a single undo step backend-side.
+/// Records a discrete camera gesture (pan, center, zoom-to-fit) as its own undo step, fire-and-forget.
+/// Sent with `coalesce=false`, so it never merges with an adjacent zoom - each such gesture stays a
+/// separate undo step.
 fn push_viewport_change(before: Viewport, after: Viewport) {
     // A camera move is undoable, so enable Undo / grey out Redo like any other edit.
     *crate::UNDO_REDO_STATUS.write() = (true, false);
     spawn(async move {
-        let _ = api::post_viewport_change(before, after).await;
+        let _ = api::post_viewport_change(before, after, false).await;
     });
 }
 

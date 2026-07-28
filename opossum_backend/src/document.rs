@@ -20,7 +20,7 @@ use opossum_core::{
     opm_document::OpmDocument,
     types::api_types::{
         ErrorResponse, LoadDocumentResponse, PositionUpdate, UndoRedoResponse, UpdateNodeRequest,
-        Viewport,
+        ViewportChangeRequest,
     },
 };
 use std::{path::PathBuf, str::FromStr};
@@ -201,35 +201,41 @@ pub(crate) async fn redo_document(
 
 /// Record a canvas viewport change (pan/zoom of a tab) as its own undo step.
 ///
-/// The body is `(before, after)` - the viewport before and after the gesture. Pushes a `SetViewport`
-/// whose undo restores `before` and whose redo restores `after`. The camera is purely a GUI concern and
-/// never touches the document; this only makes the change reversible on the shared undo stack, so a
-/// single undo reverts a camera move (or an edit), one step at a time.
+/// Pushes a `SetViewport` whose undo restores `before` and whose redo restores `after`. The camera is
+/// purely a GUI concern and never touches the document; this only makes the change reversible on the
+/// shared undo stack, so a single undo reverts a camera move (or an edit), one step at a time.
 ///
-/// **Coalescing:** consecutive camera adjustments on the same tab with no intervening edit (a scroll-zoom
-/// burst is dozens of these) collapse into a single undo step - the top `SetViewport`'s original undo
-/// target is kept and only its redo target is extended to the newest viewport. A non-viewport edit (or a
-/// tab switch to a different graph) breaks the chain, so the next camera move starts a fresh step.
+/// **Coalescing is gesture-type-aware:** only when the request's `coalesce` is `true` *and* the top undo
+/// entry is itself a coalescing `SetViewport` on the same tab does this extend that entry (keeping its
+/// undo target, moving its redo target to `after`) - so a whole scroll-zoom burst is one step. Discrete
+/// gestures (pan, center, zoom-to-fit) send `coalesce: false`: they never merge, and nothing merges into
+/// them - so a pan after a zoom is a separate undo step.
 #[utoipa::path(tag = "document",
-    request_body(content = (Viewport, Viewport), description = "The viewport before and after the gesture"),
+    request_body(content = ViewportChangeRequest, description = "The viewport before/after the gesture and whether it may coalesce"),
     responses((status = NO_CONTENT, description = "Viewport change recorded"))
 )]
 #[post("/viewport_change")]
 async fn post_viewport_change(
     data: web::Data<AppState>,
-    body: web::Json<(Viewport, Viewport)>,
+    body: web::Json<ViewportChangeRequest>,
 ) -> impl Responder {
-    let (before, after) = body.into_inner();
+    let ViewportChangeRequest {
+        before,
+        after,
+        coalesce,
+    } = body.into_inner();
     // A gesture that didn't actually move the camera (e.g. a middle-click without a drag, or centering an
     // already-centered graph) must not create a no-op undo step.
     if before == after {
         return HttpResponse::NoContent().finish();
     }
     let mut undo_stack = data.undo_stack.lock();
-    if let Some(Command::SetViewport(top)) = undo_stack.back_mut()
+    if coalesce
+        && let Some(Command::SetViewport(top)) = undo_stack.back_mut()
+        && top.coalescing
         && top.to.graph_id == before.graph_id
     {
-        // Extend the ongoing camera step forward to `after`, keeping its original undo target (`to`).
+        // Extend the ongoing coalescing camera step forward to `after`, keeping its undo target (`to`).
         top.from = after;
         drop(undo_stack);
         data.redo_stack.lock().clear();
@@ -239,6 +245,7 @@ async fn post_viewport_change(
         data.push_undo(Command::SetViewport(SetViewport {
             from: after,
             to: before,
+            coalescing: coalesce,
         }));
     }
     HttpResponse::NoContent().finish()
@@ -988,7 +995,7 @@ mod test {
     /// viewport, redo emits one forward to the post-gesture viewport - and neither touches the document.
     #[actix_web::test]
     async fn test_viewport_change_undo_redo_round_trip() {
-        use opossum_core::types::api_types::{DocumentChange, Viewport};
+        use opossum_core::types::api_types::{DocumentChange, Viewport, ViewportChangeRequest};
 
         let app_state = Data::new(AppState::default());
         let graph_id = app_state.document.lock().scenery().node_attr().uuid();
@@ -1015,7 +1022,11 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/viewport_change")
-            .set_json(&(before, after))
+            .set_json(&ViewportChangeRequest {
+                before,
+                after,
+                coalesce: false,
+            })
             .to_request();
         assert_eq!(
             app.call(req).await.unwrap().status(),
@@ -1058,7 +1069,7 @@ mod test {
     /// changes and asserts one undo entry, and that a single undo jumps back to the very first viewport.
     #[actix_web::test]
     async fn test_viewport_change_coalesces_consecutive_camera_moves() {
-        use opossum_core::types::api_types::{DocumentChange, Viewport};
+        use opossum_core::types::api_types::{DocumentChange, Viewport, ViewportChangeRequest};
 
         let app_state = Data::new(AppState::default());
         let graph_id = app_state.document.lock().scenery().node_attr().uuid();
@@ -1079,7 +1090,11 @@ mod test {
         for (before, after) in [(vp(1.0), vp(1.5)), (vp(1.5), vp(2.0)), (vp(2.0), vp(2.5))] {
             let req = test::TestRequest::post()
                 .uri("/viewport_change")
-                .set_json(&(before, after))
+                .set_json(&ViewportChangeRequest {
+                    before,
+                    after,
+                    coalesce: true,
+                })
                 .to_request();
             assert_eq!(
                 app.call(req).await.unwrap().status(),
@@ -1108,6 +1123,53 @@ mod test {
         assert!(
             !body.can_undo,
             "the burst was a single step, so nothing left to undo"
+        );
+    }
+
+    /// Gesture types stay separate: a coalescing move (zoom, `coalesce=true`) followed by discrete
+    /// gestures (pan, `coalesce=false`) must NOT merge. A `coalesce=false` push is never merged into and
+    /// never merges. So zoom → pan → pan is three undo steps, not one.
+    #[actix_web::test]
+    async fn test_viewport_change_does_not_coalesce_across_gesture_types() {
+        use opossum_core::types::api_types::{Viewport, ViewportChangeRequest};
+
+        let app_state = Data::new(AppState::default());
+        let graph_id = app_state.document.lock().scenery().node_attr().uuid();
+        let vp = |zoom: f64, x: f64| Viewport {
+            graph_id,
+            zoom,
+            shift: (x, 0.0),
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_viewport_change),
+        )
+        .await;
+
+        for (before, after, coalesce) in [
+            (vp(1.0, 0.0), vp(2.0, 0.0), true),      // zoom (coalescing)
+            (vp(2.0, 0.0), vp(2.0, 100.0), false),   // pan (discrete)
+            (vp(2.0, 100.0), vp(2.0, 200.0), false), // another pan (discrete)
+        ] {
+            let req = test::TestRequest::post()
+                .uri("/viewport_change")
+                .set_json(&ViewportChangeRequest {
+                    before,
+                    after,
+                    coalesce,
+                })
+                .to_request();
+            assert_eq!(
+                app.call(req).await.unwrap().status(),
+                StatusCode::NO_CONTENT
+            );
+        }
+        assert_eq!(
+            app_state.undo_stack.lock().len(),
+            3,
+            "different gesture types (zoom, pan, pan) must each be their own undo step"
         );
     }
 }

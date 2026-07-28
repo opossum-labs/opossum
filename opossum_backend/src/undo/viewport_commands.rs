@@ -16,13 +16,24 @@ pub struct SetViewport {
     pub from: Viewport,
     /// The viewport that applying this command moves the camera to.
     pub to: Viewport,
+    /// Whether a subsequent coalescing move may merge into this entry. Set for scroll-zoom ticks, unset
+    /// for discrete gestures (pan, center, zoom-to-fit) so gesture types stay separate undo steps.
+    pub coalescing: bool,
 }
 
 /// Returns the [`Command::SetViewport`] that undoes `cmd` (its `from`/`to` swapped). Does not touch the
 /// document - the viewport lives only in the GUI; the effect is carried by [`describe_set_viewport`].
-pub(super) fn apply_set_viewport(cmd: SetViewport) -> Command {
-    let SetViewport { from, to } = cmd;
-    Command::SetViewport(SetViewport { from: to, to: from })
+pub(super) const fn apply_set_viewport(cmd: SetViewport) -> Command {
+    let SetViewport {
+        from,
+        to,
+        coalescing,
+    } = cmd;
+    Command::SetViewport(SetViewport {
+        from: to,
+        to: from,
+        coalescing,
+    })
 }
 
 /// Describes the effect of applying `cmd` in the GUI-facing [`DocumentChange`] shape: move the camera of

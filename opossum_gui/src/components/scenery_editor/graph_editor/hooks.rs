@@ -72,7 +72,8 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
         // A zoom is undoable, so enable Undo / grey out Redo like any other edit.
         *crate::UNDO_REDO_STATUS.write() = (true, false);
         spawn(async move {
-            let _ = api::post_viewport_change(before, after).await;
+            // coalesce=true: consecutive scroll-zoom ticks collapse into one undo step.
+            let _ = api::post_viewport_change(before, after, true).await;
         });
     }
 }

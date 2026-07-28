@@ -686,6 +686,20 @@ pub struct Viewport {
     pub shift: (f64, f64),
 }
 
+/// Body of `POST /api/document/viewport_change`: a camera move from `before` to `after`, plus whether it
+/// may coalesce with an immediately preceding *coalescing* move on the same tab into one undo step. Set
+/// `coalesce: true` for scroll-zoom ticks (a whole burst = one step) and `false` for discrete gestures
+/// (pan, center, zoom-to-fit) so different gesture types stay separate undo steps.
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct ViewportChangeRequest {
+    /// The viewport before the gesture (undo restores this).
+    pub before: Viewport,
+    /// The viewport after the gesture (redo restores this).
+    pub after: Viewport,
+    /// Whether this move may merge with a preceding coalescing move on the same tab.
+    pub coalesce: bool,
+}
+
 /// Response returned by `POST /api/document/undo` and `POST /api/document/redo`.
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct UndoRedoResponse {

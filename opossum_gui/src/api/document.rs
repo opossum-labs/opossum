@@ -1,5 +1,5 @@
 use opossum_core::types::api_types::{
-    LoadDocumentResponse, PositionUpdate, UndoRedoResponse, Viewport,
+    LoadDocumentResponse, PositionUpdate, UndoRedoResponse, Viewport, ViewportChangeRequest,
 };
 use uuid::Uuid;
 
@@ -72,13 +72,26 @@ pub async fn patch_positions(updates: Vec<PositionUpdate>) -> Result<(), String>
 }
 
 /// Record a canvas viewport change (pan/zoom of a tab) as its own undo step, given the viewport
-/// `before` and `after` the gesture. Consecutive camera moves coalesce backend-side into one step.
+/// `before` and `after` the gesture. `coalesce` = true for scroll-zoom ticks (a whole burst collapses to
+/// one undo step backend-side), false for discrete gestures (pan, center, zoom-to-fit) so they stay
+/// separate undo steps and never merge with an adjacent zoom.
 ///
 /// # Errors
 ///
 /// This function will return an error if the request fails.
-pub async fn post_viewport_change(before: Viewport, after: Viewport) -> Result<(), String> {
+pub async fn post_viewport_change(
+    before: Viewport,
+    after: Viewport,
+    coalesce: bool,
+) -> Result<(), String> {
     HTTP_API_CLIENT()
-        .post_receive_no_content("/api/document/viewport_change", (before, after))
+        .post_receive_no_content(
+            "/api/document/viewport_change",
+            ViewportChangeRequest {
+                before,
+                after,
+                coalesce,
+            },
+        )
         .await
 }
