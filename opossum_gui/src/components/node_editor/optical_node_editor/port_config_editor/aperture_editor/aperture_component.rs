@@ -32,7 +32,7 @@ pub fn ApertureEditor(
     on_change: EventHandler<Aperture>,
     readonly: bool,
 ) -> Element {
-    let mut aperture_sig = use_synced_signal(aperture.clone());
+    let mut aperture_sig = use_synced_signal(aperture);
 
     // Derive from the synced `aperture_sig` (not the raw `aperture` prop) so the rotation/translation
     // inputs re-pull after an undo/redo refetch - a memo over the plain prop only computes once on

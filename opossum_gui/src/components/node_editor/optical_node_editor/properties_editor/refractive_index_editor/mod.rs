@@ -37,7 +37,7 @@ pub fn RefractiveIndexEditor(
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    let ref_ind_type_sig = use_synced_signal(ref_ind_type.clone());
+    let ref_ind_type_sig = use_synced_signal(ref_ind_type);
 
     let on_save = on_save_proptype_handler(
         ref_ind_type_sig,

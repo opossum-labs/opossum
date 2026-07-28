@@ -19,7 +19,7 @@ pub fn EdgeFilterEditor(
     on_spectral_filter_change: EventHandler<SpectralFilterBuilder>,
     readonly: bool,
 ) -> Element {
-    let mut edge_filter_sig = use_synced_signal(edge_filter.clone());
+    let mut edge_filter_sig = use_synced_signal(edge_filter);
 
     let on_edge_filter_change = EventHandler::new(move |new_edge_filter: EdgeFilter| {
         if new_edge_filter != *edge_filter_sig.read() {

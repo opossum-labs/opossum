@@ -370,9 +370,10 @@ pub struct UpdateConnectionRequest {
     pub distance: f64,
 }
 
-/// One entry of a batched GUI-position update, as sent at the end of a multi-node drag or an
-/// auto-layout pass - grouping every moved node/analyzer into a single request keeps it a single
-/// undo/redo step, rather than one per node.
+/// One entry of a batched GUI-position update.
+///
+/// Sent at the end of a multi-node drag or an auto-layout pass - grouping every moved
+/// node/analyzer into a single request keeps it a single undo/redo step, rather than one per node.
 #[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 pub struct PositionUpdate {
     pub uuid: Uuid,
@@ -441,9 +442,10 @@ pub struct PortNamesResponse {
     pub outputs: Vec<String>,
 }
 
-/// Response payload after removing a port map, reporting every level of the cascade (the
-/// requested mapping, plus any mapping it was itself chained through in an outer group) and
-/// whichever live connection the cascade finally tore down.
+/// Response payload after removing a port map.
+///
+/// Reports every level of the cascade (the requested mapping, plus any mapping it was itself
+/// chained through in an outer group) and whichever live connection the cascade finally tore down.
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct RemovePortMapResponse {
     /// True if a mapping was actually found and removed
@@ -457,9 +459,11 @@ pub struct RemovePortMapResponse {
     pub disconnected_connections: Vec<(Uuid, ConnectInfo)>,
 }
 
-/// Response payload after deleting a node, containing any external connections that were disconnected
-/// as a side effect - because they depended on a port mapping of the deleted node (or of a node
-/// cascade-deleted alongside it) that no longer exists.
+/// Response payload after deleting a node.
+///
+/// Contains any external connections that were disconnected as a side effect - because they
+/// depended on a port mapping of the deleted node (or of a node cascade-deleted alongside it)
+/// that no longer exists.
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct DeleteNodeResponse {
     /// UUIDs of all nodes actually deleted (the target plus any cascaded reference nodes)
@@ -494,10 +498,11 @@ pub struct MoveNodesResponse {
     pub removed_port_mappings: Vec<(Uuid, Uuid)>,
 }
 
-/// Response payload after converting nodes into a new subgroup, reporting the new group plus
-/// anything that changed as a side effect - shaped like [`MoveNodesResponse`] since converting is
-/// conceptually "create an empty group, then move the selected nodes into it," reusing the same
-/// reroute machinery.
+/// Response payload after converting nodes into a new subgroup.
+///
+/// Reports the new group plus anything that changed as a side effect - shaped like
+/// [`MoveNodesResponse`] since converting is conceptually "create an empty group, then move the
+/// selected nodes into it," reusing the same reroute machinery.
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ConvertToGroupResponse {
     /// The newly created group node.
@@ -650,12 +655,14 @@ pub struct SourcePortDto {
 // UNDO / REDO
 // ============================================================================
 
-/// One user-visible effect of an undo/redo step, shaped so the GUI can react to it the same way it
-/// reacts to the corresponding normal create/update/delete call - see each variant's matching
-/// endpoint/DTO. `GraphNeedsRefresh` is the fallback for structural operations (port mapping, moving
-/// nodes between groups, grouping/ungrouping) where reconstructing a fully precise incremental diff
-/// isn't worth the complexity: the GUI just re-fetches that one tab's nodes/edges/port-maps, instead
-/// of every open tab the way a whole-document reload would.
+/// One user-visible effect of an undo/redo step.
+///
+/// Shaped so the GUI can react to it the same way it reacts to the corresponding normal
+/// create/update/delete call - see each variant's matching endpoint/DTO. `GraphNeedsRefresh` is
+/// the fallback for structural operations (port mapping, moving nodes between groups,
+/// grouping/ungrouping) where reconstructing a fully precise incremental diff isn't worth the
+/// complexity: the GUI just re-fetches that one tab's nodes/edges/port-maps, instead of every
+/// open tab the way a whole-document reload would.
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub enum DocumentChange {
     /// Mirrors `POST /api/nodes/{uuid}/children`'s response.
@@ -718,9 +725,11 @@ pub enum DocumentChange {
     },
 }
 
-/// A per-tab canvas viewport (pan/zoom). Purely a GUI concern - never part of the saved `.opm` document -
-/// but round-tripped through the backend so a camera move can be a reversible entry on the undo stack
-/// (see `Command::SetViewport`).
+/// A per-tab canvas viewport (pan/zoom).
+///
+/// Purely a GUI concern - never part of the saved `.opm` document - but round-tripped through
+/// the backend so a camera move can be a reversible entry on the undo stack (see
+/// `Command::SetViewport`).
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, ToSchema)]
 pub struct Viewport {
     /// The tab (graph) the viewport belongs to.
@@ -731,10 +740,12 @@ pub struct Viewport {
     pub shift: (f64, f64),
 }
 
-/// Body of `POST /api/document/viewport_change`: a camera move from `before` to `after`, plus whether it
-/// may coalesce with an immediately preceding *coalescing* move on the same tab into one undo step. Set
-/// `coalesce: true` for scroll-zoom ticks (a whole burst = one step) and `false` for discrete gestures
-/// (pan, center, zoom-to-fit) so different gesture types stay separate undo steps.
+/// Body of `POST /api/document/viewport_change`.
+///
+/// A camera move from `before` to `after`, plus whether it may coalesce with an immediately
+/// preceding *coalescing* move on the same tab into one undo step. Set `coalesce: true` for
+/// scroll-zoom ticks (a whole burst = one step) and `false` for discrete gestures (pan, center,
+/// zoom-to-fit) so different gesture types stay separate undo steps.
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct ViewportChangeRequest {
     /// The viewport before the gesture (undo restores this).

@@ -170,6 +170,7 @@ impl<T: NumLike> XInRange<T> {
     ///
     /// * `true` if `val` is within the range according to `inclusive`.
     /// * `false` otherwise.
+    #[allow(dead_code)]
     pub fn is_in_range(&self, val: &T) -> bool {
         if self.inclusive {
             *val >= self.min && *val <= self.max
@@ -220,6 +221,7 @@ impl<T: NumLike> YInRange<T> {
     ///
     /// * `true` if `val` is within the range according to `inclusive`.
     /// * `false` otherwise.
+    #[allow(dead_code)]
     pub fn is_in_range(&self, val: &T) -> bool {
         if self.inclusive {
             *val >= self.min && *val <= self.max

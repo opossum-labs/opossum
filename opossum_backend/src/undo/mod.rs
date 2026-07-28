@@ -81,7 +81,7 @@ pub enum Command {
     SetViewport(SetViewport),
     /// Applies each sub-command in order; its inverse is the sub-commands' inverses in reverse order,
     /// so undoing/redoing a multi-step user action (paste, cut, multi-node drag) is a single step.
-    Batch(Vec<Command>),
+    Batch(Vec<Self>),
 }
 
 impl Command {

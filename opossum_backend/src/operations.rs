@@ -104,7 +104,7 @@ async fn post_copy_nodes(
         (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
-#[allow(clippy::significant_drop_tightening)]
+#[allow(clippy::significant_drop_tightening, clippy::too_many_lines)]
 #[post("/paste_nodes")]
 async fn post_paste_nodes(
     data: web::Data<AppState>,
@@ -283,6 +283,7 @@ async fn post_paste_nodes(
 ///
 /// Returns an error if a cached node's uuid cannot be read, or if deleting one of the originals
 /// (or an analyzer) from the document fails.
+#[allow(clippy::too_many_lines)]
 fn perform_cut(
     data: &AppState,
     document: &mut OpmDocument,
@@ -898,6 +899,7 @@ fn get_shifted_pos_of_ref(
         (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
+#[allow(clippy::too_many_lines)]
 #[post("/convert_to_group")]
 pub async fn post_convert_nodes_to_group(
     data: web::Data<AppState>,

@@ -20,7 +20,7 @@ pub struct PatchAnalyzer {
 }
 
 /// Repositions an analyzer on the GUI canvas.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct RepositionAnalyzer {
     pub id: Uuid,
     pub old_pos: (f64, f64),

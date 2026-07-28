@@ -150,7 +150,7 @@ async fn put_document(
     )
 )]
 #[post("/undo")]
-pub(crate) async fn undo_document(
+pub async fn undo_document(
     data: web::Data<AppState>,
 ) -> Result<Json<UndoRedoResponse>, BackEndErrorResponse> {
     let Some(command) = data.undo_stack.lock().pop_back() else {
@@ -180,7 +180,7 @@ pub(crate) async fn undo_document(
     )
 )]
 #[post("/redo")]
-pub(crate) async fn redo_document(
+pub async fn redo_document(
     data: web::Data<AppState>,
 ) -> Result<Json<UndoRedoResponse>, BackEndErrorResponse> {
     let Some(command) = data.redo_stack.lock().pop_back() else {
@@ -426,7 +426,7 @@ async fn simulate(data: web::Data<AppState>, report_dir: String) -> impl Respond
         .content_type("text/event-stream")
         .streaming(
             ReceiverStream::new(rx).map(|s| -> Result<actix_web::web::Bytes, Error> {
-                Ok(actix_web::web::Bytes::from(format!("data: {}\n\n", &s)))
+                Ok(actix_web::web::Bytes::from(format!("data: {s}\n\n")))
             }),
         )
 }

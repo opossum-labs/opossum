@@ -19,7 +19,7 @@ pub fn BandFilterEditor(
     on_spectral_filter_change: EventHandler<SpectralFilterBuilder>,
     readonly: bool,
 ) -> Element {
-    let mut band_filter_sig = use_synced_signal(band_filter.clone());
+    let mut band_filter_sig = use_synced_signal(band_filter);
 
     let on_band_filter_change = EventHandler::new(move |new_band_filter: BandFilter| {
         if new_band_filter != *band_filter_sig.read() {

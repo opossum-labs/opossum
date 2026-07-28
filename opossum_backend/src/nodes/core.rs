@@ -454,10 +454,11 @@ fn delete_node_capturing(
         capture_node_connections(document.scenery(), parent_group_id, uuid).unwrap_or_default();
 
     let scenery = document.scenery_mut();
-    let mut cascades = disconnect_exposed_port_cascades_for_node(scenery, parent_group_id, uuid)?;
+    let mut removed_port_cascades =
+        disconnect_exposed_port_cascades_for_node(scenery, parent_group_id, uuid)?;
     for (member_parent, member_ref) in &cascaded {
         if let Ok(member_uuid) = member_ref.uuid() {
-            cascades.extend(disconnect_exposed_port_cascades_for_node(
+            removed_port_cascades.extend(disconnect_exposed_port_cascades_for_node(
                 scenery,
                 *member_parent,
                 member_uuid,
@@ -476,7 +477,8 @@ fn delete_node_capturing(
         .into_iter()
         .filter(|(_, r)| r.uuid().is_ok_and(|id| deleted_nodes.contains(&id)))
         .collect();
-    let (disconnected_connections, removed_port_mappings) = split_cascades_for_response(&cascades);
+    let (disconnected_connections, removed_port_mappings) =
+        split_cascades_for_response(&removed_port_cascades);
 
     // AddNode first (the node must exist before its ports can be re-mapped), then one restore command
     // per cascade (each an inner batch: AddPortMap per level innermost-first, then the AddEdge that
@@ -487,7 +489,7 @@ fn delete_node_capturing(
         cascaded,
         connections,
     })];
-    inverse.extend(cascades.iter().map(Command::from));
+    inverse.extend(removed_port_cascades.iter().map(Command::from));
     inverse.extend(analyzer_inverses);
 
     Ok((

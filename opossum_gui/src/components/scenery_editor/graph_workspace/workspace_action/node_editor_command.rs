@@ -41,6 +41,7 @@ pub enum NodeEditorCommand {
     Redo,
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn node_editor_command(
     node_editor_command_handler: EventHandler<Option<NodeEditorCommand>>,
     active_tab: ReadSignal<Uuid>,

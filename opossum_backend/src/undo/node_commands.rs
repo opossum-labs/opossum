@@ -218,7 +218,7 @@ pub(super) fn apply_patch_node(
     } = cmd;
     document
         .scenery_mut()
-        .with_node_attr_mut(uuid, |node_attr| apply_node_request(node_attr, &new))??;
+        .with_node_attr_mut(uuid, |node_attr| apply_node_request(node_attr, &new))?;
     Ok(Command::PatchNode(PatchNode {
         uuid,
         parent_group_id,
@@ -337,10 +337,7 @@ fn node_info(node: &OpticRef) -> Result<NodeInfo, BackEndErrorResponse> {
 }
 
 /// Applies `new`'s populated fields to `node_attr`, mirroring `patch_node`'s existing field-by-field logic.
-fn apply_node_request(
-    node_attr: &mut NodeAttr,
-    new: &UpdateNodeRequest,
-) -> Result<(), OpossumError> {
+fn apply_node_request(node_attr: &mut NodeAttr, new: &UpdateNodeRequest) {
     if let Some(name) = &new.name {
         node_attr.set_name(name);
     }
@@ -356,7 +353,6 @@ fn apply_node_request(
     if let Some(gui_pos_opt) = new.gui_position {
         node_attr.set_gui_position(gui_pos_opt.map(|(x, y)| Point2::new(x, y)));
     }
-    Ok(())
 }
 
 /// Builds the `UpdateNodeRequest` describing `node_attr`'s current values for exactly the fields that

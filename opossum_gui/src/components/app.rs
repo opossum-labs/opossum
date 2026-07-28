@@ -46,7 +46,8 @@ fn use_global_shortcuts(process_command: impl FnMut(AppCommand) + Clone + 'stati
             let mut eval = dioxus::document::eval(&build_shortcut_listener_js(&shortcuts));
             while let Ok(value) = eval.recv::<serde_json::Value>().await {
                 if let Some(index) = value.as_u64()
-                    && let Some(shortcut) = shortcuts.get(index as usize)
+                    && let Ok(idx) = usize::try_from(index)
+                    && let Some(shortcut) = shortcuts.get(idx)
                 {
                     process(AppCommand::from(shortcut.action));
                 }
@@ -78,7 +79,7 @@ fn build_shortcut_listener_js(shortcuts: &[&Shortcut]) -> String {
         })
         .collect::<Vec<_>>()
         .join(",");
-    r#"
+    r"
 const combos=[__COMBOS__];
 document.addEventListener('keydown', function(e){
     const ctrl = e.ctrlKey || e.metaKey;          // treat Ctrl and Cmd as the same modifier
@@ -92,7 +93,7 @@ document.addEventListener('keydown', function(e){
         }
     }
 });
-"#
+"
     .replace("__COMBOS__", &combos)
 }
 
@@ -248,7 +249,7 @@ pub fn App() -> Element {
 
     // Keyboard shortcuts are handled globally (on `document`, not a focusable element) so they keep
     // working after a panel re-render drops DOM focus - see `use_global_shortcuts`.
-    use_global_shortcuts(process_command.clone());
+    use_global_shortcuts(process_command);
 
     let on_alert_confirm = move |_| {
         if let Some(action) = *pending_action.read() {

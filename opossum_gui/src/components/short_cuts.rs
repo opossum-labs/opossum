@@ -117,6 +117,7 @@ pub static SHORTCUTS: LazyLock<HashMap<ShortCutAction, Shortcut>> = LazyLock::ne
     m
 });
 
+#[allow(dead_code)]
 pub fn get_action_from_event(event: &KeyboardEvent) -> Option<ShortCutAction> {
     SHORTCUTS
         .values()
@@ -158,6 +159,7 @@ impl Shortcut {
         }
     }
 
+    #[allow(dead_code)]
     pub fn matches(&self, event: &KeyboardEvent) -> bool {
         let modifiers = event.modifiers();
         let key = match event.data().key() {

@@ -21,6 +21,11 @@ use uuid::Uuid;
 
 use crate::{app_state::AppState, error::BackEndErrorResponse};
 
+type CascadeRemovalResult = (
+    Vec<(Uuid, ConnectInfo)>,
+    Vec<(Uuid, Uuid, String, PortType)>,
+);
+
 /// Collect the optical references and top-left position of the given nodes.
 ///
 /// Iterates over all provided node UUIDs, resolves their corresponding
@@ -204,12 +209,7 @@ pub fn disconnect_exposed_port_cascades_for_node(
 /// fields; the GUI applies each removal per `group_id`, so a multi-level cascade updates every
 /// affected group's tab.
 #[must_use]
-pub fn split_cascades_for_response(
-    cascades: &[PortMapCascadeRemoval],
-) -> (
-    Vec<(Uuid, ConnectInfo)>,
-    Vec<(Uuid, Uuid, String, PortType)>,
-) {
+pub fn split_cascades_for_response(cascades: &[PortMapCascadeRemoval]) -> CascadeRemovalResult {
     let mut disconnected_connections = Vec::new();
     let mut removed_port_mappings = Vec::new();
     for cascade in cascades {
@@ -578,10 +578,10 @@ fn generate_unique_external_name(port_map: &PortMap, base: &str) -> String {
     if !port_map.contains_external_name(base) {
         return base.to_string();
     }
-    (2..)
+    (2..10001)
         .map(|n| format!("{base}_{n}"))
         .find(|name| !port_map.contains_external_name(name))
-        .expect("an unbounded search for a free name always terminates")
+        .expect("bounded search for free port name within 10000 attempts")
 }
 
 /// Reroutes `from_group_id`'s pre-existing mapping of `moved_node_id`'s `moved_port` (exposed under
@@ -655,6 +655,7 @@ pub type DisconnectedMovedNodeConnections = (Vec<PendingReconnect>, Vec<(Uuid, C
 ///
 /// Returns an error if `from_group_id` doesn't resolve, a node/port can't be resolved, or a
 /// `disconnect_nodes`/`remove_mapped_port` step fails.
+#[allow(clippy::too_many_lines)]
 pub fn disconnect_moved_node_connections(
     scenery: &mut NodeGroup,
     from_group_id: Uuid,
@@ -843,6 +844,7 @@ pub fn disconnect_moved_node_connections(
 ///
 /// Returns an error if `from_group_id`/`to_group_id` don't resolve, a moved node's port can't be resolved,
 /// or a `connect_nodes`/`map_input_port`/`map_output_port` step fails.
+#[allow(clippy::too_many_lines)]
 pub fn reconnect_moved_node_connections(
     scenery: &mut NodeGroup,
     from_group_id: Uuid,

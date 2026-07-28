@@ -273,7 +273,9 @@ pub(super) fn apply_extract_group(
             let inner_group = node.as_any().downcast_ref::<NodeGroup>().ok_or_else(|| {
                 OpossumError::Other("captured group node is not a NodeGroup".into())
             })?;
-            inner_group.node_recursive(*member_id)?.0
+            let result = inner_group.node_recursive(*member_id)?.0;
+            drop(node);
+            result
         };
         document
             .scenery_mut()
