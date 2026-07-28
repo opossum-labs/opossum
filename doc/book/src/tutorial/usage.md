@@ -101,6 +101,16 @@ For now, connect the detectors and set a distance of **50 mm** between the last 
 
 ![seventh step](../images/opossum_gui_first_steps_7.PNG)
 
+# Undo and Redo
+
+Almost every editing action in the GUI can be undone and redone:
+
+- Press `Ctrl + Z` to undo and `Ctrl + Y` to redo, or use the corresponding entries in the `Edit` menu. The menu entries are grayed out while there is nothing to undo or redo.
+- All model edits are covered: adding, deleting, moving, renaming and reconfiguring nodes and analyzers, connecting and disconnecting ports, changing connection distances, cut/copy/paste, group operations (creating groups, converting a selection to a group, dragging nodes into a group) and port mappings.
+- Composite actions count as a single step: pasting several nodes, cutting a selection, or dragging a multi-node selection is reverted by one undo.
+- Camera movements (panning, zooming, centering, zoom-to-fit) are undo steps of their own, so undoing a model edit never moves the camera and undoing a camera move never changes the model. A continuous scroll-zoom burst or consecutive, sperate scroll-zooms are combined into a single step.
+- The history holds the last 100 steps and is cleared when a file is loaded or a new document is created. Undo and redo count as modifications, so the document is marked as unsaved afterwards.
+
 # Groups
 
 Groups allow multiple nodes in an optical system to be combined into a single grouped element. The grouped nodes remain accessible individually when the group is opened, while the main system view displays the group as a simplified structure.
