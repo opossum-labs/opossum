@@ -186,9 +186,9 @@ impl Command {
                 group,
                 ..
             }) => {
-                // Extracting *deletes* the group node, so its uuid must be excluded from the refresh
-                // set - otherwise the GUI refreshes a tab whose group no longer exists and its three
-                // group-fetch GETs each 400 with "node with given uuid does not exist".
+                // Extracting *deletes* the group node, so its uuid is passed as `dissolved_group`:
+                // excluded from the refresh set (refreshing a gone group 400s on its fetch GETs) and
+                // turned into a `GraphClosed` so the GUI closes the dissolved group's own tab.
                 group_commands::describe_group_structure_change(
                     parent_group_id,
                     affected_groups,
@@ -240,6 +240,7 @@ fn dedup_against_full_refreshes(changes: Vec<DocumentChange>) -> Vec<DocumentCha
             | DocumentChange::AnalyzerRemoved { .. }
             | DocumentChange::AnalyzerChanged { .. }
             | DocumentChange::AnalyzerMoved { .. }
+            | DocumentChange::GraphClosed { .. }
             | DocumentChange::ViewportChanged { .. } => true,
         })
         .collect()

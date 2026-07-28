@@ -618,6 +618,12 @@ async fn apply_document_changes(
                     .nodes
                     .remove_nodes(vec![id], *root_graph_id.read());
             }
+            DocumentChange::GraphClosed { graph_id } => {
+                // The group was dissolved (e.g. undo of convert-to-group); close its tab if open so
+                // the view doesn't keep showing a group that no longer exists. `remove_tabs` also
+                // switches away to the root tab if this was the active one.
+                ws_handler.workspace.remove_tabs(vec![graph_id]);
+            }
             DocumentChange::GraphNeedsRefresh { graph_id } => {
                 if workspace.tabs().contains_key(&graph_id) {
                     ws_handler.nodes.clear_graph_store(graph_id);

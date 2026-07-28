@@ -704,6 +704,10 @@ pub enum DocumentChange {
     /// One tab's nodes/edges/port-maps should be re-fetched from scratch (see the type's own doc
     /// comment for which operations use this).
     GraphNeedsRefresh { graph_id: Uuid },
+    /// The group `graph_id` no longer exists (e.g. undoing a convert-to-group dissolves it), so its
+    /// tab should be closed if open. Distinct from a node removal in the *parent* view - the parent
+    /// is refreshed separately; this closes the dissolved group's own tab.
+    GraphClosed { graph_id: Uuid },
     /// The canvas camera (pan/zoom) of `graph_id` should move to `zoom`/`shift`. Emitted when undoing or
     /// redoing a viewport change (see `Command::SetViewport`); purely a GUI/camera effect, never touches
     /// the document model.

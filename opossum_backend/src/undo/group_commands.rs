@@ -314,23 +314,28 @@ pub(super) fn apply_extract_group(
 /// [`DocumentChange`] shape: a `GraphNeedsRefresh` for `parent_group_id` and every extra group a
 /// reroute touched (`affected_groups`), deduplicated.
 ///
-/// `exclude` names a group that must NOT be refreshed even if it appears in `affected_groups` - used
-/// by `ExtractGroup`, which deletes the group node it names: refreshing that (now-gone) group's tab
-/// would make the GUI fetch a uuid that no longer exists and 400.
+/// `dissolved_group` names the group node this change *deletes* (set by `ExtractGroup`, `None` for
+/// `InsertGroup` which re-creates it). It is excluded from the refresh set - refreshing a now-gone
+/// group would make the GUI fetch a uuid that no longer exists and 400 - and instead gets a
+/// `GraphClosed` so the GUI closes its (now-orphaned) tab.
 pub(super) fn describe_group_structure_change(
     parent_group_id: &Uuid,
     affected_groups: &[Uuid],
-    exclude: Option<Uuid>,
+    dissolved_group: Option<Uuid>,
 ) -> Vec<DocumentChange> {
     let mut graph_ids = vec![*parent_group_id];
     graph_ids.extend(affected_groups.iter().copied());
     graph_ids.sort();
     graph_ids.dedup();
-    graph_ids
+    let mut changes: Vec<DocumentChange> = graph_ids
         .into_iter()
-        .filter(|graph_id| exclude != Some(*graph_id))
+        .filter(|graph_id| dissolved_group != Some(*graph_id))
         .map(|graph_id| DocumentChange::GraphNeedsRefresh { graph_id })
-        .collect()
+        .collect();
+    if let Some(graph_id) = dissolved_group {
+        changes.push(DocumentChange::GraphClosed { graph_id });
+    }
+    changes
 }
 
 #[cfg(test)]
@@ -420,6 +425,31 @@ mod test {
         assert!(
             refreshed_insert.contains(&deleted_group),
             "inserting (re)creates the group, so its tab is refreshed"
+        );
+    }
+
+    /// Undoing a convert-to-group (`ExtractGroup`) must also tell the GUI to close the dissolved
+    /// group's own tab (`GraphClosed`), else it stays open showing a group that no longer exists.
+    /// `InsertGroup` (redo, which re-creates the group) must NOT close it.
+    #[test]
+    fn describe_group_structure_change_closes_the_dissolved_group_tab() {
+        let parent = Uuid::new_v4();
+        let dissolved = Uuid::new_v4();
+
+        let extract = describe_group_structure_change(&parent, &[dissolved], Some(dissolved));
+        assert!(
+            extract.iter().any(
+                |c| matches!(c, DocumentChange::GraphClosed { graph_id } if *graph_id == dissolved)
+            ),
+            "extracting must emit GraphClosed for the dissolved group, got {extract:?}"
+        );
+
+        let insert = describe_group_structure_change(&parent, &[dissolved], None);
+        assert!(
+            !insert
+                .iter()
+                .any(|c| matches!(c, DocumentChange::GraphClosed { .. })),
+            "inserting must not close any tab, got {insert:?}"
         );
     }
 }
