@@ -632,6 +632,207 @@ fn reroute_pre_existing_mapping(
 /// it tore down outright (each `(group_id, ConnectInfo)`) so the caller can report both to the GUI.
 pub type DisconnectedMovedNodeConnections = (Vec<PendingReconnect>, Vec<(Uuid, ConnectInfo)>);
 
+/// Disconnects one boundary connection (a direct edge to a sibling staying behind in `from_group_id`)
+/// and builds the [`PendingReconnect::Edge`] that re-establishes it once the moved node lands in
+/// `to_group_id`. One iteration of [`disconnect_moved_node_connections`]'s boundary-connection loop.
+///
+/// # Errors
+///
+/// Returns an error if the connection's other endpoint doesn't resolve, or `disconnect_nodes` fails.
+fn disconnect_boundary_connection(
+    scenery: &mut NodeGroup,
+    from_group_id: Uuid,
+    c: &ConnectInfo,
+    moved_node_ids: &[Uuid],
+) -> OpmResult<(PendingReconnect, (Uuid, ConnectInfo))> {
+    let moved_is_target = moved_node_ids.contains(&c.target_uuid());
+    let (moved_node_id, moved_port, other_node_id, other_port) = if moved_is_target {
+        (
+            c.target_uuid(),
+            c.target_port().to_string(),
+            c.src_uuid(),
+            c.src_port().to_string(),
+        )
+    } else {
+        (
+            c.src_uuid(),
+            c.src_port().to_string(),
+            c.target_uuid(),
+            c.target_port().to_string(),
+        )
+    };
+    let port_type = if moved_is_target {
+        PortType::Input
+    } else {
+        PortType::Output
+    };
+    let (_, other_parent_id) = scenery.node_recursive(other_node_id)?;
+
+    scenery.with_group_node_mut(from_group_id, |g| {
+        g.disconnect_nodes(c.src_uuid(), c.src_port())
+    })??;
+
+    Ok((
+        PendingReconnect::Edge {
+            moved_node_id,
+            moved_port,
+            port_type,
+            other_node_id,
+            other_port,
+            distance: c.distance(),
+            other_parent_id,
+            from_group_external_name: None,
+        },
+        (from_group_id, c.clone()),
+    ))
+}
+
+/// One pre-existing external mapping site for [`disconnect_pre_existing_mapping`] to process -
+/// bundled into a struct since `disconnect_moved_node_connections` otherwise has to thread through
+/// more loose parameters than fit comfortably in a positional argument list.
+struct PreExistingMappingSite {
+    from_group_id: Uuid,
+    to_group_id: Uuid,
+    to_group_is_child_of_from_group: bool,
+    moved_node_id: Uuid,
+    port_type: PortType,
+    external_name: String,
+    internal_port_name: String,
+}
+
+/// The pending reconnect and/or torn-down connection produced by disconnecting one pre-existing
+/// mapping or boundary connection - `None` in either slot where that particular outcome doesn't apply.
+type MappingDisconnectOutcome = (Option<PendingReconnect>, Option<(Uuid, ConnectInfo)>);
+
+/// Handles one pre-existing external mapping of `site.moved_node_id`'s `site.port_type` port on
+/// `site.from_group_id` (found by walking [`find_pre_existing_mapping_consumer`]), returning whatever
+/// [`disconnect_moved_node_connections`] needs to push into its own `pending`/`removed_connections`
+/// accumulators - one iteration of its pre-existing-mapping loop.
+///
+/// # Errors
+///
+/// Returns an error if `from_group_id`/`to_group_id` don't resolve, the mapping's consumer can't be
+/// found, or a `remove_mapped_port`/`disconnect_nodes`/`node_recursive` step fails.
+fn disconnect_pre_existing_mapping(
+    scenery: &mut NodeGroup,
+    site: PreExistingMappingSite,
+) -> OpmResult<MappingDisconnectOutcome> {
+    let PreExistingMappingSite {
+        from_group_id,
+        to_group_id,
+        to_group_is_child_of_from_group,
+        moved_node_id,
+        port_type,
+        external_name,
+        internal_port_name,
+    } = site;
+    let consumer = find_pre_existing_mapping_consumer(
+        scenery,
+        from_group_id,
+        to_group_id,
+        &external_name,
+        port_type,
+    )?;
+    match consumer {
+        PreExistingMappingConsumer::Orphaned => {
+            if to_group_is_child_of_from_group {
+                // `from_group_id` isn't losing this member for good - it's only moving one level
+                // deeper inside `from_group_id`'s own subtree - so the export is preserved by
+                // rerouting it, exactly as the `LiveEdge` case does, just without an outer edge to
+                // also account for.
+                scenery.with_group_node_mut(from_group_id, |g| {
+                    g.remove_mapped_port(&external_name, port_type)
+                })?;
+                Ok((
+                    Some(PendingReconnect::MappingReroute {
+                        moved_node_id,
+                        internal_port_name,
+                        port_type,
+                        external_name,
+                    }),
+                    None,
+                ))
+            } else {
+                // The member is genuinely leaving `from_group_id` for good, and nothing anywhere
+                // consumes this export - it'll be silently pruned once it does
+                // (`PortMap::remove_all_from_uuid`).
+                Ok((None, None))
+            }
+        }
+        PreExistingMappingConsumer::Collapse { outer_name } => {
+            // Only ever reachable on the walk's first hop: both callers guarantee `to_group_id` is
+            // exactly one level adjacent to `from_group_id`, so `to_group_id` can't also be 2+ levels
+            // out. That means this is always `from_group_id`'s own entry collapsing directly into
+            // `to_group_id`'s.
+            scenery.with_group_node_mut(from_group_id, |g| {
+                g.remove_mapped_port(&external_name, port_type)
+            })?;
+            scenery.with_group_node_mut(to_group_id, |g| {
+                g.remove_mapped_port(&outer_name, port_type)
+            })?;
+            Ok((
+                Some(PendingReconnect::MappingCollapse {
+                    moved_node_id,
+                    internal_port_name,
+                    port_type,
+                    grandparent_id: to_group_id,
+                    outer_name,
+                }),
+                None,
+            ))
+        }
+        PreExistingMappingConsumer::LiveEdge {
+            holder_group_id,
+            edge,
+        } => {
+            let (other_node_id, other_port) = match port_type {
+                PortType::Output => (edge.target_id, edge.target_port.clone()),
+                PortType::Input => (edge.src_id, edge.src_port.clone()),
+            };
+            let (_, other_parent_id) = scenery.node_recursive(other_node_id)?;
+
+            // The old entry referenced `moved_node_id` directly, which is about to move away -
+            // remove it now so the reconnect phase can re-add the same external name (in either
+            // branch) without colliding with it (`map_input_port`/`map_output_port` refuse to
+            // overwrite an existing name).
+            scenery.with_group_node_mut(from_group_id, |g| {
+                g.remove_mapped_port(&external_name, port_type)
+            })?;
+
+            // Only the "collapse" case (the other endpoint already lives in `to_group_id`) actually
+            // needs the outer edge itself torn down - it becomes a direct sibling connection instead.
+            // In the common "reroute" case the external name stays exactly as it was; only what it
+            // resolves to internally changes (in the reconnect phase), so the edge referencing that
+            // name is left completely untouched here.
+            let removed_connection = if other_parent_id == to_group_id {
+                scenery.with_group_node_mut(holder_group_id, |g| {
+                    g.disconnect_nodes(edge.src_id, &edge.src_port)
+                })??;
+                Some((
+                    holder_group_id,
+                    ConnectInfo::from_connection_info(&edge, false),
+                ))
+            } else {
+                None
+            };
+
+            Ok((
+                Some(PendingReconnect::Edge {
+                    moved_node_id,
+                    moved_port: internal_port_name,
+                    port_type,
+                    other_node_id,
+                    other_port,
+                    distance: edge.distance.value,
+                    other_parent_id,
+                    from_group_external_name: Some(external_name),
+                }),
+                removed_connection,
+            ))
+        }
+    }
+}
+
 /// Before `moved_node_ids` (currently living in `from_group_id`) are deleted from it, tears down every
 /// connection/mapping that would otherwise dangle once they're gone - a direct connection to a sibling
 /// left behind in `from_group_id` (`boundary_connections` - the `input`/`output` halves of a
@@ -655,7 +856,6 @@ pub type DisconnectedMovedNodeConnections = (Vec<PendingReconnect>, Vec<(Uuid, C
 ///
 /// Returns an error if `from_group_id` doesn't resolve, a node/port can't be resolved, or a
 /// `disconnect_nodes`/`remove_mapped_port` step fails.
-#[allow(clippy::too_many_lines)]
 pub fn disconnect_moved_node_connections(
     scenery: &mut NodeGroup,
     from_group_id: Uuid,
@@ -676,44 +876,10 @@ pub fn disconnect_moved_node_connections(
 
     // A direct connection to a sibling staying behind in `from_group_id`.
     for c in boundary_connections {
-        let moved_is_target = moved_node_ids.contains(&c.target_uuid());
-        let (moved_node_id, moved_port, other_node_id, other_port) = if moved_is_target {
-            (
-                c.target_uuid(),
-                c.target_port().to_string(),
-                c.src_uuid(),
-                c.src_port().to_string(),
-            )
-        } else {
-            (
-                c.src_uuid(),
-                c.src_port().to_string(),
-                c.target_uuid(),
-                c.target_port().to_string(),
-            )
-        };
-        let port_type = if moved_is_target {
-            PortType::Input
-        } else {
-            PortType::Output
-        };
-        let (_, other_parent_id) = scenery.node_recursive(other_node_id)?;
-
-        scenery.with_group_node_mut(from_group_id, |g| {
-            g.disconnect_nodes(c.src_uuid(), c.src_port())
-        })??;
-        removed_connections.push((from_group_id, c.clone()));
-
-        pending.push(PendingReconnect::Edge {
-            moved_node_id,
-            moved_port,
-            port_type,
-            other_node_id,
-            other_port,
-            distance: c.distance(),
-            other_parent_id,
-            from_group_external_name: None,
-        });
+        let (reconnect, removed) =
+            disconnect_boundary_connection(scenery, from_group_id, c, moved_node_ids)?;
+        pending.push(reconnect);
+        removed_connections.push(removed);
     }
 
     // A pre-existing external mapping of one of the moved nodes' own ports on `from_group_id`.
@@ -725,98 +891,23 @@ pub fn disconnect_moved_node_connections(
                     .assigned_ports_for_node(*moved_node_id)
             })?;
             for (external_name, internal_port_name) in assigned {
-                let consumer = find_pre_existing_mapping_consumer(
+                let (reconnect, removed) = disconnect_pre_existing_mapping(
                     scenery,
-                    from_group_id,
-                    to_group_id,
-                    &external_name,
-                    port_type,
+                    PreExistingMappingSite {
+                        from_group_id,
+                        to_group_id,
+                        to_group_is_child_of_from_group,
+                        moved_node_id: *moved_node_id,
+                        port_type,
+                        external_name,
+                        internal_port_name,
+                    },
                 )?;
-                match consumer {
-                    PreExistingMappingConsumer::Orphaned => {
-                        if to_group_is_child_of_from_group {
-                            // `from_group_id` isn't losing this member for good - it's only moving
-                            // one level deeper inside `from_group_id`'s own subtree - so the export
-                            // is preserved by rerouting it, exactly as the `LiveEdge` case does,
-                            // just without an outer edge to also account for.
-                            scenery.with_group_node_mut(from_group_id, |g| {
-                                g.remove_mapped_port(&external_name, port_type)
-                            })?;
-                            pending.push(PendingReconnect::MappingReroute {
-                                moved_node_id: *moved_node_id,
-                                internal_port_name,
-                                port_type,
-                                external_name,
-                            });
-                        }
-                        // Otherwise the member is genuinely leaving `from_group_id` for good, and
-                        // nothing anywhere consumes this export - it'll be silently pruned once it
-                        // does (`PortMap::remove_all_from_uuid`).
-                    }
-                    PreExistingMappingConsumer::Collapse { outer_name } => {
-                        // Only ever reachable on the walk's first hop: both callers guarantee
-                        // `to_group_id` is exactly one level adjacent to `from_group_id`, so
-                        // `to_group_id` can't also be 2+ levels out. That means this is always
-                        // `from_group_id`'s own entry collapsing directly into `to_group_id`'s.
-                        scenery.with_group_node_mut(from_group_id, |g| {
-                            g.remove_mapped_port(&external_name, port_type)
-                        })?;
-                        scenery.with_group_node_mut(to_group_id, |g| {
-                            g.remove_mapped_port(&outer_name, port_type)
-                        })?;
-                        pending.push(PendingReconnect::MappingCollapse {
-                            moved_node_id: *moved_node_id,
-                            internal_port_name,
-                            port_type,
-                            grandparent_id: to_group_id,
-                            outer_name,
-                        });
-                    }
-                    PreExistingMappingConsumer::LiveEdge {
-                        holder_group_id,
-                        edge,
-                    } => {
-                        let (other_node_id, other_port) = match port_type {
-                            PortType::Output => (edge.target_id, edge.target_port.clone()),
-                            PortType::Input => (edge.src_id, edge.src_port.clone()),
-                        };
-                        let (_, other_parent_id) = scenery.node_recursive(other_node_id)?;
-
-                        // The old entry referenced `moved_node_id` directly, which is about to move
-                        // away - remove it now so the reconnect phase can re-add the same external
-                        // name (in either branch) without colliding with it
-                        // (`map_input_port`/`map_output_port` refuse to overwrite an existing name).
-                        scenery.with_group_node_mut(from_group_id, |g| {
-                            g.remove_mapped_port(&external_name, port_type)
-                        })?;
-
-                        // Only the "collapse" case (the other endpoint already lives in
-                        // `to_group_id`) actually needs the outer edge itself torn down - it becomes
-                        // a direct sibling connection instead. In the common "reroute" case the
-                        // external name stays exactly as it was; only what it resolves to internally
-                        // changes (in the reconnect phase), so the edge referencing that name is left
-                        // completely untouched here.
-                        if other_parent_id == to_group_id {
-                            scenery.with_group_node_mut(holder_group_id, |g| {
-                                g.disconnect_nodes(edge.src_id, &edge.src_port)
-                            })??;
-                            removed_connections.push((
-                                holder_group_id,
-                                ConnectInfo::from_connection_info(&edge, false),
-                            ));
-                        }
-
-                        pending.push(PendingReconnect::Edge {
-                            moved_node_id: *moved_node_id,
-                            moved_port: internal_port_name,
-                            port_type,
-                            other_node_id,
-                            other_port,
-                            distance: edge.distance.value,
-                            other_parent_id,
-                            from_group_external_name: Some(external_name),
-                        });
-                    }
+                if let Some(reconnect) = reconnect {
+                    pending.push(reconnect);
+                }
+                if let Some(removed) = removed {
+                    removed_connections.push(removed);
                 }
             }
         }
