@@ -957,6 +957,79 @@ fn get_shifted_pos_of_ref(
     Ok(new_pos)
 }
 
+/// Picks out `pending`'s rerouted-mapping entries (whether their consumer was a live edge or, since
+/// nothing outward consumed the export, preserved anyway because the new group is `group_id`'s own
+/// child) - `(external_name, member_id, member_port, port_type)` per entry, needed to restore them
+/// across undo/redo since [`reconnect_moved_node_connections`] consumes `pending` by value.
+fn extract_rerouted_pending(pending: &[PendingReconnect]) -> Vec<(String, Uuid, String, PortType)> {
+    pending
+        .iter()
+        .filter_map(|p| match p {
+            PendingReconnect::Edge {
+                from_group_external_name: Some(name),
+                moved_node_id,
+                moved_port,
+                port_type,
+                ..
+            } => Some((name.clone(), *moved_node_id, moved_port.clone(), *port_type)),
+            PendingReconnect::MappingReroute {
+                external_name,
+                moved_node_id,
+                internal_port_name,
+                port_type,
+            } => Some((
+                external_name.clone(),
+                *moved_node_id,
+                internal_port_name.clone(),
+                *port_type,
+            )),
+            PendingReconnect::Edge {
+                from_group_external_name: None,
+                ..
+            }
+            | PendingReconnect::MappingCollapse { .. } => None,
+        })
+        .collect()
+}
+
+/// Resolves, for each rerouted pre-existing mapping captured by [`extract_rerouted_pending`], the new
+/// group's own external name for the same port - callable only once
+/// [`reconnect_moved_node_connections`] has actually created it - so undo/redo can restore/reapply
+/// this mapping later without re-deriving it.
+///
+/// # Errors
+///
+/// Returns an error if `new_group_id` doesn't resolve, or a rerouted mapping's external name can't be
+/// found on it (it should always exist by this point).
+fn resolve_rerouted_mappings(
+    scenery: &NodeGroup,
+    new_group_id: Uuid,
+    rerouted_from_pending: Vec<(String, Uuid, String, PortType)>,
+) -> OpmResult<Vec<ReroutedMapping>> {
+    let mut rerouted_mappings = Vec::new();
+    for (external_name, member_id, member_port, port_type) in rerouted_from_pending {
+        let group_internal_name = scenery
+            .with_group_node(new_group_id, |g| {
+                g.graph()
+                    .port_map(&port_type)
+                    .external_port_of_mapped_port(member_id, &member_port)
+            })?
+            .ok_or_else(|| {
+                OpossumError::Other(
+                    "rerouted mapping vanished before it could be captured for undo".into(),
+                )
+            })?;
+        rerouted_mappings.push(ReroutedMapping {
+            external_name,
+            port_type,
+            member_id,
+            member_port,
+            group_internal_name,
+        });
+    }
+    Ok(rerouted_mappings)
+}
+
 /// Convert the given nodes into a new subgroup within an existing group.
 ///
 /// The request body must contain the ID of the source group (`group_id`) and a
@@ -988,7 +1061,6 @@ fn get_shifted_pos_of_ref(
         (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
     )
 )]
-#[allow(clippy::too_many_lines)]
 #[post("/convert_to_group")]
 pub async fn post_convert_nodes_to_group(
     data: web::Data<AppState>,
@@ -1042,38 +1114,10 @@ pub async fn post_convert_nodes_to_group(
         &original_node_ids,
     )?;
 
-    // `pending`'s rerouted-mapping entries (whether their consumer was a live edge or, since nothing
-    // outward consumed the export, preserved anyway because the new group is `group_id`'s own child)
-    // are what this fix is about - extract what's needed to restore them across undo/redo now, since
-    // `reconnect_moved_node_connections` below consumes `pending` by value.
-    let rerouted_from_pending: Vec<(String, Uuid, String, PortType)> = pending
-        .iter()
-        .filter_map(|p| match p {
-            PendingReconnect::Edge {
-                from_group_external_name: Some(name),
-                moved_node_id,
-                moved_port,
-                port_type,
-                ..
-            } => Some((name.clone(), *moved_node_id, moved_port.clone(), *port_type)),
-            PendingReconnect::MappingReroute {
-                external_name,
-                moved_node_id,
-                internal_port_name,
-                port_type,
-            } => Some((
-                external_name.clone(),
-                *moved_node_id,
-                internal_port_name.clone(),
-                *port_type,
-            )),
-            PendingReconnect::Edge {
-                from_group_external_name: None,
-                ..
-            }
-            | PendingReconnect::MappingCollapse { .. } => None,
-        })
-        .collect();
+    // `pending`'s rerouted-mapping entries are what this fix is about - extract what's needed to
+    // restore them across undo/redo now, since `reconnect_moved_node_connections` below consumes
+    // `pending` by value.
+    let rerouted_from_pending = extract_rerouted_pending(&pending);
 
     // Delete the converted nodes from group_id
     while let Some(node) = nodes_to_convert.pop() {
@@ -1093,30 +1137,10 @@ pub async fn post_convert_nodes_to_group(
 
     let preserved = reconnect_moved_node_connections(scenery, group_id, new_group_id, pending)?;
 
-    // Resolve, for each rerouted pre-existing mapping, the new group's own external name for the
-    // same port - now that the reconnect step above has created it - so undo/redo can restore/
-    // reapply this mapping later without re-deriving it.
-    let mut rerouted_mappings = Vec::new();
-    for (external_name, member_id, member_port, port_type) in rerouted_from_pending {
-        let group_internal_name = scenery
-            .with_group_node(new_group_id, |g| {
-                g.graph()
-                    .port_map(&port_type)
-                    .external_port_of_mapped_port(member_id, &member_port)
-            })?
-            .ok_or_else(|| {
-                OpossumError::Other(
-                    "rerouted mapping vanished before it could be captured for undo".into(),
-                )
-            })?;
-        rerouted_mappings.push(ReroutedMapping {
-            external_name,
-            port_type,
-            member_id,
-            member_port,
-            group_internal_name,
-        });
-    }
+    // Now that the reconnect step above has created them, resolve each rerouted mapping's new
+    // group-side external name so undo/redo can restore/reapply it later without re-deriving it.
+    let rerouted_mappings =
+        resolve_rerouted_mappings(scenery, new_group_id, rerouted_from_pending)?;
 
     let mut port_map_groups_changed = preserved.port_map_groups_changed;
     port_map_groups_changed.push(new_group_id);
