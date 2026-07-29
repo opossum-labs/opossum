@@ -88,58 +88,28 @@ async fn post_copy_nodes(
     }
 }
 
-/// Paste copied nodes
+/// The pasted-in node/connection info [`insert_copied_nodes`] hands back to [`post_paste_nodes`].
+struct PastedNodes {
+    grouped_node_infos: HashMap<Uuid, Vec<NodeInfo>>,
+    grouped_connect_info: HashMap<Uuid, Vec<ConnectInfo>>,
+    node_id_link: HashMap<Uuid, Uuid>,
+}
+
+/// Copies `copied_optical_nodes` into `paste_group_id` (recursively, preserving group structure),
+/// replays their port maps and reference targets, and reconnects their captured internal connections
+/// through the fresh uuids - the whole "materialize a paste" phase of [`post_paste_nodes`], shared
+/// between a plain paste and the paste half of a cut+paste.
 ///
-/// This function sends already copied nodes to the frontend. If `cut` is set, the nodes/analyzers
-/// currently in the copy cache are also deleted from wherever they came from, as part of the *same* undo
-/// step as the paste - so a single undo reverts both the paste and the delete together, matching what
-/// feels like one "move" gesture to the user, rather than requiring two separate undos.
-#[utoipa::path(tag = "operations",
-    request_body(content = (Uuid, (f64, f64), bool),
-        description = "Uuid of the group node to be pasted in, the position at which the node should be pasted, and whether this paste is also a cut (delete the copied nodes' originals)",
-        content_type = "application/json",
-    ),
-    responses(
-        (status = OK, body= PasteNodesResponse, description = "Node successfully pasted", content_type="application/json"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
-    )
-)]
-#[allow(clippy::significant_drop_tightening, clippy::too_many_lines)]
-#[post("/paste_nodes")]
-async fn post_paste_nodes(
-    data: web::Data<AppState>,
-    node_paste_info: web::Json<(Uuid, (f64, f64), bool)>,
-) -> Result<Json<PasteNodesResponse>, BackEndErrorResponse> {
-    let (paste_group_id, node_pos, cut) = node_paste_info.into_inner();
-    let paste_in_scenery = data.document.lock().scenery().node_attr().uuid() == paste_group_id;
-
-    let copied_nodes = data.node_copy_cache.lock();
-    let min_pos = upper_left_corner_of_nodes(&copied_nodes)?;
-    drop(copied_nodes);
-    let shift = Point2::new(node_pos.0 - min_pos.x, node_pos.1 - min_pos.y);
-
-    let mut copied_optical_nodes = Vec::<OpticRef>::new();
-    let mut copied_analyzer_nodes = Vec::<AnalyzerItemDto>::new();
-
-    for cache in data.node_copy_cache.lock().iter() {
-        match cache {
-            NodeCacheItem::Optical(optic_ref) => copied_optical_nodes.push(optic_ref.clone()),
-            NodeCacheItem::Analyzer(analyzer_dto) => {
-                copied_analyzer_nodes.push(analyzer_dto.clone());
-            }
-        }
-    }
-
-    let mut analyzers = Vec::new();
-    if paste_in_scenery {
-        for analyzer_dto in &copied_analyzer_nodes {
-            // Pass the internal AnalyzerInfo to copy_analyzer
-            analyzers.push(copy_analyzer(&data, shift, &analyzer_dto.info));
-        }
-    }
-
-    let mut document = data.document.lock();
-    let scenery = document.scenery_mut();
+/// # Errors
+///
+/// Returns an error if the recursive copy, reference resolution, port-map replay, or connection replay
+/// step fails.
+fn insert_copied_nodes(
+    scenery: &mut NodeGroup,
+    paste_group_id: Uuid,
+    shift: Point2<f64>,
+    copied_optical_nodes: &[OpticRef],
+) -> Result<PastedNodes, BackEndErrorResponse> {
     let mut grouped_node_refs = Vec::<(Uuid, Vec<OpticRef>, bool)>::new();
     let mut grouped_node_infos = HashMap::<Uuid, Vec<NodeInfo>>::new();
     let mut grouped_connect_info = HashMap::<Uuid, Vec<ConnectInfo>>::new();
@@ -153,7 +123,7 @@ async fn post_paste_nodes(
         scenery,
         paste_group_id,
         shift,
-        &copied_optical_nodes,
+        copied_optical_nodes,
         &mut node_id_link,
         &mut grouped_connections,
         &mut grouped_node_refs,
@@ -205,6 +175,75 @@ async fn post_paste_nodes(
         }
     }
 
+    Ok(PastedNodes {
+        grouped_node_infos,
+        grouped_connect_info,
+        node_id_link,
+    })
+}
+
+/// Paste copied nodes
+///
+/// This function sends already copied nodes to the frontend. If `cut` is set, the nodes/analyzers
+/// currently in the copy cache are also deleted from wherever they came from, as part of the *same* undo
+/// step as the paste - so a single undo reverts both the paste and the delete together, matching what
+/// feels like one "move" gesture to the user, rather than requiring two separate undos.
+#[utoipa::path(tag = "operations",
+    request_body(content = (Uuid, (f64, f64), bool),
+        description = "Uuid of the group node to be pasted in, the position at which the node should be pasted, and whether this paste is also a cut (delete the copied nodes' originals)",
+        content_type = "application/json",
+    ),
+    responses(
+        (status = OK, body= PasteNodesResponse, description = "Node successfully pasted", content_type="application/json"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
+    )
+)]
+#[allow(clippy::significant_drop_tightening)]
+#[post("/paste_nodes")]
+async fn post_paste_nodes(
+    data: web::Data<AppState>,
+    node_paste_info: web::Json<(Uuid, (f64, f64), bool)>,
+) -> Result<Json<PasteNodesResponse>, BackEndErrorResponse> {
+    let (paste_group_id, node_pos, cut) = node_paste_info.into_inner();
+    let paste_in_scenery = data.document.lock().scenery().node_attr().uuid() == paste_group_id;
+
+    let copied_nodes = data.node_copy_cache.lock();
+    let min_pos = upper_left_corner_of_nodes(&copied_nodes)?;
+    drop(copied_nodes);
+    let shift = Point2::new(node_pos.0 - min_pos.x, node_pos.1 - min_pos.y);
+
+    let mut copied_optical_nodes = Vec::<OpticRef>::new();
+    let mut copied_analyzer_nodes = Vec::<AnalyzerItemDto>::new();
+
+    for cache in data.node_copy_cache.lock().iter() {
+        match cache {
+            NodeCacheItem::Optical(optic_ref) => copied_optical_nodes.push(optic_ref.clone()),
+            NodeCacheItem::Analyzer(analyzer_dto) => {
+                copied_analyzer_nodes.push(analyzer_dto.clone());
+            }
+        }
+    }
+
+    let mut analyzers = Vec::new();
+    if paste_in_scenery {
+        for analyzer_dto in &copied_analyzer_nodes {
+            // Pass the internal AnalyzerInfo to copy_analyzer
+            analyzers.push(copy_analyzer(&data, shift, &analyzer_dto.info));
+        }
+    }
+
+    let mut document = data.document.lock();
+    let PastedNodes {
+        grouped_node_infos,
+        grouped_connect_info,
+        node_id_link,
+    } = insert_copied_nodes(
+        document.scenery_mut(),
+        paste_group_id,
+        shift,
+        &copied_optical_nodes,
+    )?;
+
     // One paste = one undo step: removing every pasted node/analyzer undoes the whole paste at once.
     let mut removals = Vec::new();
     // Reference-retarget undo steps, kept separate and prepended to the very front of `removals` at the
@@ -224,7 +263,7 @@ async fn post_paste_nodes(
     // `connections` list, so redo can't reconnect what this already tore down).
     if let Some(infos) = grouped_node_infos.get(&paste_group_id) {
         for info in infos {
-            if let Ok((node_ref, _)) = scenery.node_recursive(info.uuid()) {
+            if let Ok((node_ref, _)) = document.scenery().node_recursive(info.uuid()) {
                 removals.push(Command::RemoveNode(NodeSnapshot {
                     parent_group_id: paste_group_id,
                     node: node_ref,
