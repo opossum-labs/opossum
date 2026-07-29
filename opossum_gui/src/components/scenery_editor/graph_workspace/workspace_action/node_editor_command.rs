@@ -41,7 +41,81 @@ pub enum NodeEditorCommand {
     Redo,
 }
 
-#[allow(clippy::too_many_lines)]
+/// Dispatches [`NodeEditorCommand::DeleteAll`]: clears the root scenery and reopens a fresh unsaved tab.
+fn dispatch_delete_all(workspace_processor: Coroutine<GraphsWorkspaceAction>) {
+    workspace_processor.send(GraphsWorkspaceAction::DeleteRootScenery);
+    workspace_processor.send(GraphsWorkspaceAction::AddRootSceneryTab {
+        name: "unsaved".to_string(),
+    });
+}
+
+/// Dispatches [`NodeEditorCommand::AddNode`].
+fn dispatch_add_node(
+    workspace_processor: Coroutine<GraphsWorkspaceAction>,
+    node_type: String,
+    graph_id: Uuid,
+) {
+    workspace_processor.send(GraphsWorkspaceAction::AddOpticNode {
+        node_type,
+        graph_id,
+    });
+}
+
+/// Dispatches [`NodeEditorCommand::AddNodeRef`].
+fn dispatch_add_node_ref(
+    workspace_processor: Coroutine<GraphsWorkspaceAction>,
+    new_ref_node: NewRefNode,
+    graph_id: Uuid,
+) {
+    workspace_processor.send(GraphsWorkspaceAction::AddOpticReference {
+        new_ref_node,
+        graph_id,
+    });
+}
+
+/// Dispatches [`NodeEditorCommand::AddAnalyzer`].
+fn dispatch_add_analyzer(
+    workspace_processor: Coroutine<GraphsWorkspaceAction>,
+    analyzer_type: AnalyzerType,
+    graph_id: Uuid,
+) {
+    workspace_processor.send(GraphsWorkspaceAction::AddAnalyzer {
+        analyzer_type,
+        graph_id,
+    });
+}
+
+/// Dispatches [`NodeEditorCommand::AutoLayout`]: re-runs the layout, then fits the camera to it as
+/// part of the same undo step (`merge_into_previous_undo: true`) so one undo reverts both together.
+fn dispatch_auto_layout(workspace_processor: Coroutine<GraphsWorkspaceAction>, graph_id: Uuid) {
+    workspace_processor.send(GraphsWorkspaceAction::OptimizeLayout { graph_id });
+    workspace_processor.send(GraphsWorkspaceAction::ZoomToFit {
+        graph_id,
+        save_changes: true,
+        // Part of Auto Layout: fold this fit into the node re-positioning above so a
+        // single undo reverts the whole auto-layout, camera included.
+        merge_into_previous_undo: true,
+    });
+}
+
+/// Dispatches [`NodeEditorCommand::CenterGraph`].
+fn dispatch_center_graph(workspace_processor: Coroutine<GraphsWorkspaceAction>, graph_id: Uuid) {
+    workspace_processor.send(GraphsWorkspaceAction::CenterGraph {
+        graph_id,
+        save_changes: false,
+        record_undo: true,
+    });
+}
+
+/// Dispatches [`NodeEditorCommand::ZoomToFit`].
+fn dispatch_zoom_to_fit(workspace_processor: Coroutine<GraphsWorkspaceAction>, graph_id: Uuid) {
+    workspace_processor.send(GraphsWorkspaceAction::ZoomToFit {
+        graph_id,
+        save_changes: false,
+        merge_into_previous_undo: false,
+    });
+}
+
 pub fn node_editor_command(
     node_editor_command_handler: EventHandler<Option<NodeEditorCommand>>,
     active_tab: ReadSignal<Uuid>,
@@ -51,55 +125,24 @@ pub fn node_editor_command(
     let cmd = command.read().clone();
     if let Some(command) = cmd {
         match command {
-            NodeEditorCommand::DeleteAll => {
-                workspace_processor.send(GraphsWorkspaceAction::DeleteRootScenery);
-                workspace_processor.send(GraphsWorkspaceAction::AddRootSceneryTab {
-                    name: "unsaved".to_string(),
-                });
-            }
+            NodeEditorCommand::DeleteAll => dispatch_delete_all(workspace_processor),
             NodeEditorCommand::AddNode(node_type) => {
-                workspace_processor.send(GraphsWorkspaceAction::AddOpticNode {
-                    node_type,
-                    graph_id: active_tab(),
-                });
+                dispatch_add_node(workspace_processor, node_type, active_tab());
             }
             NodeEditorCommand::AddNodeRef(new_ref_node) => {
-                workspace_processor.send(GraphsWorkspaceAction::AddOpticReference {
-                    new_ref_node,
-                    graph_id: active_tab(),
-                });
+                dispatch_add_node_ref(workspace_processor, new_ref_node, active_tab());
             }
             NodeEditorCommand::AddAnalyzer(analyzer_type) => {
-                workspace_processor.send(GraphsWorkspaceAction::AddAnalyzer {
-                    analyzer_type,
-                    graph_id: active_tab(),
-                });
+                dispatch_add_analyzer(workspace_processor, analyzer_type, active_tab());
             }
             NodeEditorCommand::AutoLayout => {
-                workspace_processor.send(GraphsWorkspaceAction::OptimizeLayout {
-                    graph_id: active_tab(),
-                });
-                workspace_processor.send(GraphsWorkspaceAction::ZoomToFit {
-                    graph_id: active_tab(),
-                    save_changes: true,
-                    // Part of Auto Layout: fold this fit into the node re-positioning above so a
-                    // single undo reverts the whole auto-layout, camera included.
-                    merge_into_previous_undo: true,
-                });
+                dispatch_auto_layout(workspace_processor, active_tab());
             }
             NodeEditorCommand::CenterGraph => {
-                workspace_processor.send(GraphsWorkspaceAction::CenterGraph {
-                    graph_id: active_tab(),
-                    save_changes: false,
-                    record_undo: true,
-                });
+                dispatch_center_graph(workspace_processor, active_tab());
             }
             NodeEditorCommand::ZoomToFit => {
-                workspace_processor.send(GraphsWorkspaceAction::ZoomToFit {
-                    graph_id: active_tab(),
-                    save_changes: false,
-                    merge_into_previous_undo: false,
-                });
+                dispatch_zoom_to_fit(workspace_processor, active_tab());
             }
             NodeEditorCommand::LoadFile(path) => {
                 workspace_processor.send(GraphsWorkspaceAction::LoadFromFile(path));
