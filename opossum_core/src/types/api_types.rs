@@ -657,6 +657,17 @@ pub struct SourcePortDto {
 // UNDO / REDO
 // ============================================================================
 
+/// Which of the node-editor sidebar's 5 accordion sections (`OpticalNodeEditor`) a document change
+/// belongs to, so undo/redo can auto-select the node and open the panel whose value it just changed.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize, ToSchema)]
+pub enum NodeEditorPanel {
+    General,
+    PortConfig,
+    Properties,
+    Positioning,
+    Alignment,
+}
+
 /// One user-visible effect of an undo/redo step.
 ///
 /// Shaped so the GUI can react to it the same way it reacts to the corresponding normal
@@ -682,10 +693,17 @@ pub enum DocumentChange {
         name: Option<String>,
         inverted: Option<bool>,
         gui_position: Option<Option<(f64, f64)>>,
+        /// Which node-editor panel `name`/`inverted`/`isometry`/`alignment` belongs to, if any - `None`
+        /// when only `gui_position` changed (a canvas drag), which no sidebar panel shows.
+        panel: Option<NodeEditorPanel>,
     },
     /// A custom property or port config changed. Not mirrored anywhere in the GUI's canvas state - if
     /// `uuid` is the currently selected node, the properties panel should simply re-fetch it.
-    NodeDetailsChanged { uuid: Uuid },
+    NodeDetailsChanged {
+        uuid: Uuid,
+        graph_id: Uuid,
+        panel: NodeEditorPanel,
+    },
     /// Mirrors `POST /api/nodes/{uuid}/connections`.
     EdgeAdded {
         graph_id: Uuid,

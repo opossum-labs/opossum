@@ -10,7 +10,7 @@ pub(super) use alignment_editor::{
 
 use crate::components::{
     node_editor::{
-        accordion::{NodeEditorPanel, open_accordion_section},
+        accordion::open_accordion_section,
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
         optical_node_editor::{
             alignment_editor::{AlignmentEditor, PositioningEditor},
@@ -23,7 +23,10 @@ use crate::components::{
 };
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
-use opossum_core::{prelude::Properties, types::api_types::NodeInfo};
+use opossum_core::{
+    prelude::Properties,
+    types::api_types::{NodeEditorPanel, NodeInfo},
+};
 
 #[component]
 pub fn OpticalNodeEditor(
@@ -103,6 +106,31 @@ pub fn OpticalNodeEditor(
     use_effect(move || {
         crate::NODE_DETAILS_REFRESH();
         resource_future.restart();
+    });
+
+    // Undo/redo just auto-selected this node because it (or its tab) wasn't already displayed - open
+    // the panel it changed once this node's data has actually loaded (the accordion DOM for a freshly
+    // selected node doesn't exist until then). Reading `resource_future` here (not just the pending
+    // signal) means this effect naturally re-runs once the fetch resolves, instead of needing to poll.
+    use_effect(move || {
+        let Some((uuid, panel)) = *crate::PENDING_PANEL_OPEN.read() else {
+            return;
+        };
+        if uuid != *node_id.read() {
+            return;
+        }
+        let Some((Some(node_info), Some(_))) = &*resource_future.read_unchecked() else {
+            return;
+        };
+        if node_info.uuid != uuid {
+            return; // stale in-flight fetch for a previous node
+        }
+        // PortConfig has its own, separately-loaded resource in `PortConfigEditor` - it clears the
+        // pending signal itself once *its* data has loaded, to avoid the same missing-DOM race here.
+        if panel != NodeEditorPanel::PortConfig {
+            open_accordion_section(panel);
+            *crate::PENDING_PANEL_OPEN.write() = None;
+        }
     });
 
     if let Some((Some(node_info), Some(_))) = &*resource_future.read_unchecked()

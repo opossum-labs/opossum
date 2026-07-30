@@ -8,7 +8,7 @@ use opossum_core::{
     core_optics::optic_ports::PortConfig,
     nodes::fluence_detector::Fluence,
     prelude::{Aperture, PortType},
-    types::api_types::{NodeInfo, NodePortsResponse, UpdatePortRequest},
+    types::api_types::{NodeEditorPanel, NodeInfo, NodePortsResponse, UpdatePortRequest},
 };
 use uom::si::radiant_exposure::joule_per_square_centimeter;
 use uuid::Uuid;
@@ -17,7 +17,7 @@ use crate::{
     OPOSSUM_UI_LOGS,
     api::get_ports_of_group,
     components::node_editor::{
-        accordion::{AccordionItem, NodeEditorPanel, open_accordion_section},
+        accordion::{AccordionItem, content_id_for_panel, open_accordion_section},
         inputs::input_components::{NodeConfigUnitInput, UnitHandling},
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
         optical_node_editor::port_config_editor::{
@@ -46,6 +46,15 @@ pub fn PortConfigEditor(
                     && previous != ports_info
                 {
                     open_accordion_section(NodeEditorPanel::PortConfig);
+                }
+                // Undo/redo just auto-selected this node for a port-config change - this resource
+                // loads independently of `OpticalNodeEditor`'s own, so it must clear the pending
+                // request itself once *its* data (not just the parent's) has actually loaded.
+                if *crate::PENDING_PANEL_OPEN.read()
+                    == Some((current_node_id, NodeEditorPanel::PortConfig))
+                {
+                    open_accordion_section(NodeEditorPanel::PortConfig);
+                    *crate::PENDING_PANEL_OPEN.write() = None;
                 }
                 previous_ports_sig.set(Some(ports_info.clone()));
                 Some(ports_info)
@@ -101,7 +110,7 @@ pub fn PortConfigEditor(
                 header: "Port Configuration",
                 header_id: "portConfigHeading",
                 parent_id: "accordionNodeConfig",
-                content_id: "portConfigCollapse",
+                content_id: content_id_for_panel(NodeEditorPanel::PortConfig),
                 level: 1,
 
             }

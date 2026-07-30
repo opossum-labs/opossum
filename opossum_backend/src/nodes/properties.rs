@@ -161,10 +161,71 @@ fn get_referenced_node_attr_from_state(
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::document::undo_document;
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
+    use opossum_core::{
+        core_optics::node_attr::HasNodeAttr,
+        nodes::Dummy,
+        types::api_types::{DocumentChange, NodeEditorPanel, UndoRedoResponse},
+    };
 
     fn create_test_state() -> Data<AppState> {
         Data::new(AppState::default())
+    }
+
+    /// Regression test: `DocumentChange::NodeDetailsChanged` for a property patch must carry the
+    /// node's `graph_id` and tag `panel: NodeEditorPanel::Properties`, so the GUI's
+    /// auto-select-and-open-panel feature can locate and reveal the right node/panel on undo/redo.
+    #[actix_web::test]
+    async fn test_patch_property_reports_graph_id_and_properties_panel() {
+        let app_state = create_test_state();
+        let (root_id, node_id) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let node_id = document.scenery_mut().add_node(Dummy::default()).unwrap();
+            document
+                .scenery_mut()
+                .with_node_attr_mut(node_id, |attr| {
+                    attr.create_property("test_prop", "test", Proptype::Bool(false))
+                })
+                .unwrap()
+                .unwrap();
+            (root_id, node_id)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(patch_property)
+                .service(undo_document),
+        )
+        .await;
+
+        let req = test::TestRequest::patch()
+            .uri(&format!("/{node_id}/properties/test_prop"))
+            .set_payload("Bool(true)")
+            .insert_header(("Content-Type", "application/ron"))
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: UndoRedoResponse = test::read_body_json(resp).await;
+        assert!(
+            matches!(
+                &body.changes[0],
+                DocumentChange::NodeDetailsChanged {
+                    graph_id,
+                    panel: NodeEditorPanel::Properties,
+                    ..
+                } if *graph_id == root_id
+            ),
+            "a property patch must report the node's graph_id and the Properties panel"
+        );
     }
 
     #[actix_web::test]

@@ -8,7 +8,8 @@ use opossum_core::{
     opm_document::OpmDocument,
     prelude::{PortType, Proptype},
     types::api_types::{
-        ConnectInfo, DocumentChange, NodeInfo, UpdateNodeRequest, UpdatePortRequest,
+        ConnectInfo, DocumentChange, NodeEditorPanel, NodeInfo, UpdateNodeRequest,
+        UpdatePortRequest,
     },
     utils::LockExt,
 };
@@ -227,6 +228,23 @@ pub(super) fn apply_patch_node(
     }))
 }
 
+/// Determines which node-editor sidebar panel (if any) `new`'s populated field(s) belong to, so
+/// undo/redo can auto-select the node and open that panel. `alignment`/`isometry` are mutually
+/// exclusive in every current caller (one field per patch), but if a caller ever set both, `alignment`
+/// wins as the more specific edit. A patch with only `gui_position` set (a canvas drag, e.g.
+/// `patch_positions`) belongs to no panel.
+const fn panel_for_update(new: &UpdateNodeRequest) -> Option<NodeEditorPanel> {
+    if new.alignment.is_some() {
+        Some(NodeEditorPanel::Alignment)
+    } else if new.isometry.is_some() {
+        Some(NodeEditorPanel::Positioning)
+    } else if new.name.is_some() || new.inverted.is_some() {
+        Some(NodeEditorPanel::General)
+    } else {
+        None
+    }
+}
+
 /// Describes the effect of a [`Command::PatchNode`] in the GUI-facing [`DocumentChange`] shape.
 pub(super) fn describe_patch_node(cmd: &PatchNode) -> Vec<DocumentChange> {
     let PatchNode {
@@ -241,6 +259,7 @@ pub(super) fn describe_patch_node(cmd: &PatchNode) -> Vec<DocumentChange> {
         name: new.name.clone(),
         inverted: new.inverted,
         gui_position: new.gui_position,
+        panel: panel_for_update(new),
     }]
 }
 
@@ -324,9 +343,19 @@ pub(super) fn apply_patch_port(
 }
 
 /// Describes the effect of a [`Command::PatchProperty`] or [`Command::PatchPort`] in the GUI-facing
-/// [`DocumentChange`] shape - both are reported the same way, as a details refresh for `uuid`.
-pub(super) fn describe_node_details_changed(uuid: &Uuid) -> Vec<DocumentChange> {
-    vec![DocumentChange::NodeDetailsChanged { uuid: *uuid }]
+/// [`DocumentChange`] shape - a details refresh for `uuid`, tagged with `graph_id` and which panel
+/// (`Properties` or `PortConfig` respectively) the caller knows it belongs to, so undo/redo can
+/// auto-select the node and open that panel if it isn't already displayed.
+pub(super) fn describe_node_details_changed(
+    graph_id: Uuid,
+    uuid: Uuid,
+    panel: NodeEditorPanel,
+) -> Vec<DocumentChange> {
+    vec![DocumentChange::NodeDetailsChanged {
+        uuid,
+        graph_id,
+        panel,
+    }]
 }
 
 /// Builds the [`NodeInfo`] DTO for a captured node, mirroring how every other handler in this crate

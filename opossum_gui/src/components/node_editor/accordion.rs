@@ -1,5 +1,6 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use dioxus::prelude::*;
+use opossum_core::types::api_types::NodeEditorPanel;
 
 #[component]
 pub fn AccordionItem(
@@ -49,21 +50,12 @@ pub fn ElementList(element_list: Vec<Element>) -> Element {
     }
 }
 
-/// Which of the node-editor sidebar's 5 accordion sections a value belongs to - used to auto-open the
-/// section whose value an undo/redo (or, harmlessly, a normal edit) just changed.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum NodeEditorPanel {
-    General,
-    PortConfig,
-    Properties,
-    Positioning,
-    Alignment,
-}
-
 /// The `content_id` each panel's `AccordionItem` was built with (see `general_editor.rs`,
 /// `port_config_editor/mod.rs`, `properties_editor/mod.rs`, `alignment_editor/mod.rs`'s
-/// `PositioningEditor`/`AlignmentEditor`).
-const fn content_id_for_panel(panel: NodeEditorPanel) -> &'static str {
+/// `PositioningEditor`/`AlignmentEditor`) - the *only* place these 5 strings are written down; every
+/// `AccordionItem`'s own `content_id` prop is built from this function too, so the two can never
+/// drift apart.
+pub const fn content_id_for_panel(panel: NodeEditorPanel) -> &'static str {
     match panel {
         NodeEditorPanel::General => "generalCollapse",
         NodeEditorPanel::PortConfig => "portConfigCollapse",

@@ -624,7 +624,12 @@ mod test {
     use super::*;
     use crate::document::undo_document;
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
-    use opossum_core::{millimeter, nodes::Dummy, utils::geom_transformation::Isometry};
+    use opossum_core::{
+        millimeter,
+        nodes::Dummy,
+        types::api_types::{DocumentChange, NodeEditorPanel, UndoRedoResponse},
+        utils::geom_transformation::Isometry,
+    };
 
     /// Regression test for the bug where undoing an alignment change didn't restore the old value.
     /// `UpdateNodeRequest::alignment` used to be a single `Option`, which can express "set to X" but
@@ -706,6 +711,135 @@ mod test {
                 .unwrap(),
             None,
             "undo must clear the alignment back to unset, not leave it at iso_a"
+        );
+    }
+
+    /// Regression test for `panel_for_update`'s panel-attribution priority, which drives the GUI's
+    /// auto-select-and-open-panel feature on undo/redo: `DocumentChange::NodePatched.panel` must name
+    /// the correct node-editor sidebar panel (or `None`) for every field combination `PATCH
+    /// /api/nodes/{uuid}` can send.
+    #[actix_web::test]
+    async fn test_patch_node_reports_correct_panel() {
+        let app_state = Data::new(AppState::default());
+        let node_id = {
+            let mut document = app_state.document.lock();
+            document.scenery_mut().add_node(Dummy::default()).unwrap()
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(patch_node)
+                .service(undo_document),
+        )
+        .await;
+
+        macro_rules! patch_and_undo {
+            ($request:expr) => {{
+                let req = test::TestRequest::patch()
+                    .uri(&format!("/{node_id}"))
+                    .set_json(&$request)
+                    .to_request();
+                assert_eq!(
+                    app.call(req).await.unwrap().status(),
+                    StatusCode::NO_CONTENT
+                );
+                let req = test::TestRequest::post().uri("/undo").to_request();
+                let resp = app.call(req).await.unwrap();
+                assert_eq!(resp.status(), StatusCode::OK);
+                let body: UndoRedoResponse = test::read_body_json(resp).await;
+                body
+            }};
+        }
+
+        let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
+
+        let body = patch_and_undo!(UpdateNodeRequest {
+            name: Some("renamed".to_string()),
+            ..Default::default()
+        });
+        assert!(
+            matches!(
+                &body.changes[0],
+                DocumentChange::NodePatched {
+                    panel: Some(NodeEditorPanel::General),
+                    ..
+                }
+            ),
+            "a name-only patch must report the General panel"
+        );
+
+        let body = patch_and_undo!(UpdateNodeRequest {
+            inverted: Some(true),
+            ..Default::default()
+        });
+        assert!(
+            matches!(
+                &body.changes[0],
+                DocumentChange::NodePatched {
+                    panel: Some(NodeEditorPanel::General),
+                    ..
+                }
+            ),
+            "an inverted-only patch must report the General panel"
+        );
+
+        let body = patch_and_undo!(UpdateNodeRequest {
+            isometry: Some(Some(iso)),
+            ..Default::default()
+        });
+        assert!(
+            matches!(
+                &body.changes[0],
+                DocumentChange::NodePatched {
+                    panel: Some(NodeEditorPanel::Positioning),
+                    ..
+                }
+            ),
+            "an isometry-only patch must report the Positioning panel"
+        );
+
+        let body = patch_and_undo!(UpdateNodeRequest {
+            alignment: Some(Some(iso)),
+            ..Default::default()
+        });
+        assert!(
+            matches!(
+                &body.changes[0],
+                DocumentChange::NodePatched {
+                    panel: Some(NodeEditorPanel::Alignment),
+                    ..
+                }
+            ),
+            "an alignment-only patch must report the Alignment panel"
+        );
+
+        let body = patch_and_undo!(UpdateNodeRequest {
+            isometry: Some(Some(iso)),
+            alignment: Some(Some(iso)),
+            ..Default::default()
+        });
+        assert!(
+            matches!(
+                &body.changes[0],
+                DocumentChange::NodePatched {
+                    panel: Some(NodeEditorPanel::Alignment),
+                    ..
+                }
+            ),
+            "when both isometry and alignment are set, alignment must win the tie-break"
+        );
+
+        let body = patch_and_undo!(UpdateNodeRequest {
+            gui_position: Some(Some((1.0, 2.0))),
+            ..Default::default()
+        });
+        assert!(
+            matches!(
+                &body.changes[0],
+                DocumentChange::NodePatched { panel: None, .. }
+            ),
+            "a gui_position-only patch (a canvas drag) must report no panel"
         );
     }
 

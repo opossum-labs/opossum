@@ -10,6 +10,8 @@ use api::http_client::HTTPClient;
 use app_config::AppConfig;
 use components::{context_menu::cx_menu::CxMenu, logger::Logs};
 use dioxus::signals::{GlobalSignal, Signal};
+use opossum_core::types::api_types::NodeEditorPanel;
+use uuid::Uuid;
 
 pub use components::app::App;
 
@@ -21,6 +23,11 @@ static CONTEXT_MENU: GlobalSignal<Option<CxMenu>> = Signal::global(|| None::<CxM
 /// so it refetches even when the selected node's identity hasn't changed (which Dioxus's equality-dedup'd
 /// memos would otherwise treat as "nothing to do").
 static NODE_DETAILS_REFRESH: GlobalSignal<usize> = Signal::global(|| 0);
+/// Set when `apply_document_changes` decides an undo/redo affected a node other than the one(s)
+/// currently selected in the active tab - the node it just switched to and the panel to open once
+/// its editor has loaded. Consumed (cleared) by whichever `OpticalNodeEditor`/`PortConfigEditor`
+/// instance matches the uuid.
+static PENDING_PANEL_OPEN: GlobalSignal<Option<(Uuid, NodeEditorPanel)>> = Signal::global(|| None);
 /// `(can_undo, can_redo)` availability, mirrored from the backend's undo/redo stacks. Every edit path
 /// (canvas coroutine, node editor, viewport gestures) writes this so the Edit menu's Undo/Redo entries
 /// reflect reality; the backend is the source of truth on undo/redo. A global (rather than a

@@ -4,7 +4,7 @@ mod grating_alignment;
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
-        accordion::{AccordionItem, ElementList},
+        accordion::{AccordionItem, ElementList, content_id_for_panel},
         hooks::use_synced_signal,
         inputs::input_components::{
             LabeledSelect, NodeConfigUnitInput, RowedElements, UnitHandling,
@@ -19,7 +19,7 @@ use dioxus::prelude::*;
 use opossum_core::{
     degree, meter,
     prelude::{Isometry, Properties},
-    types::api_types::NodeInfo,
+    types::api_types::{NodeEditorPanel, NodeInfo},
     utils::geom_transformation::{RotationAxis, TranslationAxis},
 };
 use strum::IntoEnumIterator;
@@ -57,7 +57,7 @@ pub fn AlignmentEditor(
             header: "Alignment",
             header_id: "alignmentHeading",
             parent_id: "accordionNodeConfig",
-            content_id: "alignmentCollapse",
+            content_id: content_id_for_panel(NodeEditorPanel::Alignment),
             level: 1,
         }
     }
@@ -181,7 +181,7 @@ pub fn PositioningEditor(
             header: "Position",
             header_id: "positionHeading",
             parent_id: "accordionNodeConfig",
-            content_id: "positionCollapse",
+            content_id: content_id_for_panel(NodeEditorPanel::Positioning),
             level: 1,
         }
     }

@@ -12,7 +12,7 @@ use std::collections::HashSet;
 
 use opossum_core::{
     opm_document::OpmDocument,
-    types::api_types::{AnalyzerItemDto, DocumentChange},
+    types::api_types::{AnalyzerItemDto, DocumentChange, NodeEditorPanel},
 };
 use uuid::Uuid;
 
@@ -144,10 +144,24 @@ impl Command {
             Self::AddNode(cmd) => node_commands::describe_add_node(cmd)?,
             Self::RemoveNode(cmd) => node_commands::describe_remove_node(cmd)?,
             Self::PatchNode(cmd) => node_commands::describe_patch_node(cmd),
-            Self::PatchProperty(PatchProperty { uuid, .. })
-            | Self::PatchPort(PatchPort { uuid, .. }) => {
-                node_commands::describe_node_details_changed(uuid)
-            }
+            Self::PatchProperty(PatchProperty {
+                uuid,
+                parent_group_id,
+                ..
+            }) => node_commands::describe_node_details_changed(
+                *parent_group_id,
+                *uuid,
+                NodeEditorPanel::Properties,
+            ),
+            Self::PatchPort(PatchPort {
+                uuid,
+                parent_group_id,
+                ..
+            }) => node_commands::describe_node_details_changed(
+                *parent_group_id,
+                *uuid,
+                NodeEditorPanel::PortConfig,
+            ),
             Self::AddEdge(cmd) => edge_commands::describe_add_edge(cmd),
             Self::RemoveEdge(cmd) => edge_commands::describe_remove_edge(cmd),
             Self::UpdateEdgeDistance(cmd) => edge_commands::describe_update_edge_distance(cmd),

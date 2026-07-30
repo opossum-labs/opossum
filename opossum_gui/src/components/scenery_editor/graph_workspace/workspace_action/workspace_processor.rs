@@ -15,15 +15,16 @@ use opossum_core::{
     prelude::{AnalyzerType, PortType},
     types::api_types::{
         AnalyzerItemDto, ConnectInfo, CutResult, DeleteNodeResponse, DocumentChange,
-        NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo, NodePortsResponse, PasteNodesResponse,
-        PortMappingsResponse, PositionUpdate, UndoRedoResponse, UpdateConnectionRequest, Viewport,
+        NewAnalyzerInfo, NewNode, NewRefNode, NodeEditorPanel, NodeInfo, NodePortsResponse,
+        PasteNodesResponse, PortMappingsResponse, PositionUpdate, UndoRedoResponse,
+        UpdateConnectionRequest, Viewport,
     },
 };
 use serde_json::Value;
 use uuid::Uuid;
 
 use crate::{
-    NODE_DETAILS_REFRESH, OPOSSUM_UI_LOGS,
+    NODE_DETAILS_REFRESH, OPOSSUM_UI_LOGS, PENDING_PANEL_OPEN,
     api::{self, delete_document, eval_action_run},
     components::scenery_editor::{
         DragStatus, NodeType,
@@ -529,6 +530,10 @@ async fn apply_document_changes(
     workspace: ReadStore<GraphsWorkspaceState>,
     ws_handler: WorkSpaceSignalHandlers,
 ) {
+    // Collected while applying the changes below, then resolved once at the end - see the
+    // auto-select-and-open-panel handling after the loop.
+    let mut panel_requests: Vec<(Uuid, Uuid, NodeEditorPanel)> = Vec::new();
+
     for change in changes {
         match change {
             DocumentChange::NodeAdded { graph_id, node } => {
@@ -543,6 +548,7 @@ async fn apply_document_changes(
                 name,
                 inverted,
                 gui_position,
+                panel,
             } => {
                 if let Some(name) = name {
                     // Mirror the fan-out a normal rename does: propagate to every node referencing it.
@@ -575,8 +581,19 @@ async fn apply_document_changes(
                 // Fields not mirrored into GraphStore (isometry, alignment, ...) are only shown in the
                 // properties panel, which re-fetches on its own via this counter - see its use_resource.
                 *NODE_DETAILS_REFRESH.write() += 1;
+                if let Some(panel) = panel {
+                    panel_requests.push((graph_id, uuid, panel));
+                }
             }
-            DocumentChange::NodeDetailsChanged { .. } | DocumentChange::AnalyzerChanged { .. } => {
+            DocumentChange::NodeDetailsChanged {
+                uuid,
+                graph_id,
+                panel,
+            } => {
+                *NODE_DETAILS_REFRESH.write() += 1;
+                panel_requests.push((graph_id, uuid, panel));
+            }
+            DocumentChange::AnalyzerChanged { .. } => {
                 *NODE_DETAILS_REFRESH.write() += 1;
             }
             DocumentChange::AnalyzerMoved { id, gui_position } => {
@@ -657,6 +674,38 @@ async fn apply_document_changes(
                 }
             }
         }
+    }
+
+    // If none of the nodes touched above is the sidebar's exact current single selection, the
+    // affected node isn't visible right now - auto-select the first such one (switching tabs first,
+    // opening the tab if it isn't already) and ask its editor to open the changed panel once loaded.
+    let already_showing = |graph_id: Uuid, uuid: Uuid| {
+        graph_id == *workspace.active_tab().read()
+            && workspace.tabs().get(graph_id).is_some_and(|g| {
+                let selected = g.graph_store().read().get_selected_nodes(graph_id);
+                selected.len() == 1 && selected[0].node_id == uuid
+            })
+    };
+    if let Some((graph_id, uuid, panel)) = panel_requests
+        .into_iter()
+        .find(|(g, u, _)| !already_showing(*g, *u))
+    {
+        if *workspace.active_tab().read() != graph_id {
+            if workspace.tabs().contains_key(&graph_id) {
+                ws_handler.workspace.set_active_tab(graph_id);
+            } else if let Ok(group_info) = api::get_node_info(graph_id).await {
+                process_open_group_tab(
+                    graph_id,
+                    group_info.name,
+                    ws_handler,
+                    root_graph_id.into(),
+                    workspace,
+                )
+                .await;
+            }
+        }
+        ws_handler.nodes.set_node_active(graph_id, uuid, true, 0);
+        *PENDING_PANEL_OPEN.write() = Some((uuid, panel));
     }
 }
 
