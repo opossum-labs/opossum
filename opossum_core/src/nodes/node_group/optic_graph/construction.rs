@@ -130,7 +130,6 @@ impl OpticGraph {
             let src_port = edge_ref.weight().src_port();
             let target_port = edge_ref.weight().target_port();
 
-            // Avoid allocating String by using iter().any() check
             let src_valid = {
                 let src_guard = src_node_ref.optical_ref.lock_opm()?;
                 src_guard
