@@ -10,6 +10,7 @@ pub(super) use alignment_editor::{
 
 use crate::components::{
     node_editor::{
+        accordion::{NodeEditorPanel, open_accordion_section},
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
         optical_node_editor::{
             alignment_editor::{AlignmentEditor, PositioningEditor},
@@ -49,6 +50,9 @@ pub fn OpticalNodeEditor(
     let mut resource_future: Resource<(Option<NodeInfo>, Option<Properties>)> =
         use_resource(move || async move {
             let node_id = active_node.read().node_id;
+            let previous = node_info_sig.peek().clone();
+            let previous_properties = node_properties_sig.peek().clone();
+
             let node_info = match api::get_node_info(node_id).await {
                 Ok(node_info) => {
                     readonly.set(node_info.node_type == "reference");
@@ -70,6 +74,29 @@ pub fn OpticalNodeEditor(
                     None
                 }
             };
+
+            // Only meaningful when this is a re-fetch of the *same* node (an undo/redo, or the
+            // user's own edit just saved) - switching to view a different node must never force a
+            // panel open.
+            if previous.uuid == node_id
+                && let (Some(new_info), Some(new_props)) = (&node_info, &properties)
+            {
+                let panel = if previous.alignment != new_info.alignment {
+                    Some(NodeEditorPanel::Alignment)
+                } else if previous.isometry != new_info.isometry {
+                    Some(NodeEditorPanel::Positioning)
+                } else if previous_properties != *new_props {
+                    Some(NodeEditorPanel::Properties)
+                } else if previous.name != new_info.name || previous.inverted != new_info.inverted {
+                    Some(NodeEditorPanel::General)
+                } else {
+                    None
+                };
+                if let Some(panel) = panel {
+                    open_accordion_section(panel);
+                }
+            }
+
             (node_info, properties)
         });
 

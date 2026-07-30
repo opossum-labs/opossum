@@ -387,7 +387,7 @@ pub struct PositionUpdate {
 // ============================================================================
 
 /// Response payload containing port configurations (Aperture, Coating, LIDT)
-#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, ToSchema)]
 pub struct NodePortsResponse {
     /// The input ports of the node (accounts for node inversion)
     pub inputs: BTreeMap<String, PortConfig>,

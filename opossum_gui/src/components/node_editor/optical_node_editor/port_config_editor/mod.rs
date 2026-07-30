@@ -8,7 +8,7 @@ use opossum_core::{
     core_optics::optic_ports::PortConfig,
     nodes::fluence_detector::Fluence,
     prelude::{Aperture, PortType},
-    types::api_types::{NodeInfo, UpdatePortRequest},
+    types::api_types::{NodeInfo, NodePortsResponse, UpdatePortRequest},
 };
 use uom::si::radiant_exposure::joule_per_square_centimeter;
 use uuid::Uuid;
@@ -17,7 +17,7 @@ use crate::{
     OPOSSUM_UI_LOGS,
     api::get_ports_of_group,
     components::node_editor::{
-        accordion::AccordionItem,
+        accordion::{AccordionItem, NodeEditorPanel, open_accordion_section},
         inputs::input_components::{NodeConfigUnitInput, UnitHandling},
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
         optical_node_editor::port_config_editor::{
@@ -35,11 +35,21 @@ pub fn PortConfigEditor(
 ) -> Element {
     let current_node_id = *node_id.read();
     let mut editor_inputs = Vec::new();
+    let mut previous_ports_sig = use_signal(|| None::<NodePortsResponse>);
 
     let ports_resource = use_resource(move || async move {
         crate::NODE_DETAILS_REFRESH();
+        let previous = previous_ports_sig.peek().clone();
         match get_ports_of_group(current_node_id).await {
-            Ok(ports_info) => Some(ports_info),
+            Ok(ports_info) => {
+                if let Some(previous) = previous
+                    && previous != ports_info
+                {
+                    open_accordion_section(NodeEditorPanel::PortConfig);
+                }
+                previous_ports_sig.set(Some(ports_info.clone()));
+                Some(ports_info)
+            }
             Err(err_str) => {
                 OPOSSUM_UI_LOGS.write().add_log(&err_str);
                 None
