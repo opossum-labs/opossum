@@ -168,13 +168,15 @@ impl Command {
             Self::AddPortMap(AddPortMap {
                 group_id,
                 parent_group_id,
+                is_origin,
                 ..
             })
             | Self::RemovePortMap(RemovePortMap {
                 group_id,
                 parent_group_id,
+                is_origin,
                 ..
-            }) => port_map_commands::describe(group_id, parent_group_id),
+            }) => port_map_commands::describe(group_id, parent_group_id, *is_origin),
             Self::AddAnalyzer(cmd) => analyzer_commands::describe_add_analyzer(cmd),
             Self::RemoveAnalyzer(cmd) => analyzer_commands::describe_remove_analyzer(&cmd.id),
             Self::PatchAnalyzer(PatchAnalyzer { id, .. }) => {
@@ -233,7 +235,7 @@ fn dedup_against_full_refreshes(changes: Vec<DocumentChange>) -> Vec<DocumentCha
     let refreshed: HashSet<Uuid> = changes
         .iter()
         .filter_map(|change| match change {
-            DocumentChange::GraphNeedsRefresh { graph_id } => Some(*graph_id),
+            DocumentChange::GraphNeedsRefresh { graph_id, .. } => Some(*graph_id),
             _ => None,
         })
         .collect();
@@ -242,7 +244,7 @@ fn dedup_against_full_refreshes(changes: Vec<DocumentChange>) -> Vec<DocumentCha
     changes
         .into_iter()
         .filter(|change| match change {
-            DocumentChange::GraphNeedsRefresh { graph_id } => seen_refresh.insert(*graph_id),
+            DocumentChange::GraphNeedsRefresh { graph_id, .. } => seen_refresh.insert(*graph_id),
             DocumentChange::NodeAdded { graph_id, .. }
             | DocumentChange::NodeRemoved { graph_id, .. }
             | DocumentChange::NodePatched { graph_id, .. }

@@ -852,7 +852,7 @@ mod test {
         assert!(
             body.changes.iter().any(|c| matches!(
                 c,
-                opossum_core::types::api_types::DocumentChange::GraphNeedsRefresh { graph_id }
+                opossum_core::types::api_types::DocumentChange::GraphNeedsRefresh { graph_id, .. }
                     if *graph_id == root_id
             )),
             "expected a GraphNeedsRefresh targeting the parent (root) scenery, got: {:?}",
@@ -861,7 +861,7 @@ mod test {
         assert!(
             body.changes.iter().any(|c| matches!(
                 c,
-                opossum_core::types::api_types::DocumentChange::GraphNeedsRefresh { graph_id }
+                opossum_core::types::api_types::DocumentChange::GraphNeedsRefresh { graph_id, .. }
                     if *graph_id == group_id
             )),
             "expected a GraphNeedsRefresh targeting the group's own tab too (mapped_ports lives there), got: {:?}",
@@ -926,7 +926,7 @@ mod test {
         let refresh_count = body
             .changes
             .iter()
-            .filter(|c| matches!(c, DocumentChange::GraphNeedsRefresh { graph_id } if *graph_id == root_id))
+            .filter(|c| matches!(c, DocumentChange::GraphNeedsRefresh { graph_id, .. } if *graph_id == root_id))
             .count();
         assert_eq!(
             refresh_count, 1,

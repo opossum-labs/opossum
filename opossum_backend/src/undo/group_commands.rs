@@ -182,7 +182,13 @@ pub(super) fn describe_move_nodes(cmd: &MoveNodes) -> Vec<DocumentChange> {
     graph_ids.dedup();
     graph_ids
         .into_iter()
-        .map(|graph_id| DocumentChange::GraphNeedsRefresh { graph_id })
+        .map(|graph_id| DocumentChange::GraphNeedsRefresh {
+            graph_id,
+            // Move-nodes doesn't (yet) distinguish an origin among the groups it touches - the GUI
+            // falls back to its own heuristic for this response shape. See `port_map_commands::describe`
+            // for the shape that does carry this.
+            is_origin: false,
+        })
         .collect()
 }
 
@@ -332,7 +338,11 @@ pub(super) fn describe_group_structure_change(
     let mut changes: Vec<DocumentChange> = graph_ids
         .into_iter()
         .filter(|graph_id| dissolved_group != Some(*graph_id))
-        .map(|graph_id| DocumentChange::GraphNeedsRefresh { graph_id })
+        .map(|graph_id| DocumentChange::GraphNeedsRefresh {
+            graph_id,
+            // Same as `describe_move_nodes` - no origin distinguished among these yet.
+            is_origin: false,
+        })
         .collect();
     if let Some(graph_id) = dissolved_group {
         changes.push(DocumentChange::GraphClosed { graph_id });
@@ -352,7 +362,7 @@ mod test {
         changes
             .iter()
             .filter_map(|c| match c {
-                DocumentChange::GraphNeedsRefresh { graph_id } => Some(*graph_id),
+                DocumentChange::GraphNeedsRefresh { graph_id, .. } => Some(*graph_id),
                 _ => None,
             })
             .collect()

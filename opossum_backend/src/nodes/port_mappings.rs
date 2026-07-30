@@ -107,6 +107,9 @@ pub async fn post_port_mapping(
             external_port_name: pmap_inf.external_port_name.clone(),
             port_type: pmap_inf.port_type,
         },
+        // A freshly-added mapping can't have anything chained onto it yet (mapping requires the
+        // port not already be connected) - this is always its own origin.
+        is_origin: true,
     }));
 
     let response = PortNamesResponse { inputs, outputs };
@@ -491,6 +494,116 @@ mod test {
         assert!(
             body.disconnected_connections.is_empty(),
             "nothing was ever connected to G2's own export, so nothing should be disconnected"
+        );
+    }
+
+    /// Regression test for the bug where the GUI had no reliable way to tell which tab of a
+    /// multi-level port-map cascade to jump back to on undo/redo: it fell back to a client-side
+    /// "remember the last auto-jumped tab" heuristic, which broke as soon as the user visited
+    /// other tabs in between. Fixed by tagging the cascade's true origin (`G1`, the group whose
+    /// own mapping entry was directly removed) with `is_origin: true` on its `GraphNeedsRefresh`
+    /// entry, carried in the undo/redo response itself. Same `root { G2 { G1 { L } } }` fixture as
+    /// [`test_remove_port_map_cascades_through_nested_groups`]. Asserts undo reports exactly one
+    /// `is_origin: true` entry, for `G1` - then, crucially, that redo reports the *same* `G1` as
+    /// the origin too, despite `Command::Batch::apply` reversing its sub-commands' order between
+    /// the two directions (the actual bug: order was the only signal available before this fix).
+    #[actix_web::test]
+    async fn test_remove_port_map_cascade_undo_redo_report_same_origin() {
+        use crate::document::{redo_document, undo_document};
+        use opossum_core::{
+            nodes::{Dummy, NodeGroup},
+            types::api_types::{DocumentChange, UndoRedoResponse},
+        };
+
+        fn origin_graph_id(changes: &[DocumentChange]) -> Uuid {
+            let origins: Vec<Uuid> = changes
+                .iter()
+                .filter_map(|c| match c {
+                    DocumentChange::GraphNeedsRefresh {
+                        graph_id,
+                        is_origin: true,
+                    } => Some(*graph_id),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(
+                origins.len(),
+                1,
+                "exactly one GraphNeedsRefresh entry must be marked as the cascade's origin, got {changes:?}"
+            );
+            origins[0]
+        }
+
+        let app_state = create_test_state();
+        let (g1_id, g2_id) = {
+            let mut document = app_state.document.lock();
+            let scenery = document.scenery_mut();
+
+            let mut g1 = NodeGroup::new("G1");
+            let lens = g1.add_node(Dummy::default()).unwrap();
+            g1.map_output_port(lens, "output_1", "g1_ext_out").unwrap();
+
+            let mut g2 = NodeGroup::new("G2");
+            let g1_id = g2.add_node(g1).unwrap();
+            g2.map_output_port(g1_id, "g1_ext_out", "g2_ext_out")
+                .unwrap();
+
+            let g2_id = scenery.add_node(g2).unwrap();
+
+            (g1_id, g2_id)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(remove_port_map)
+                .service(undo_document)
+                .service(redo_document),
+        )
+        .await;
+
+        let req = test::TestRequest::delete()
+            .uri(&format!(
+                "/{g1_id}/port_mappings?external_port_name=g1_ext_out&port_type=Output"
+            ))
+            .to_request();
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
+
+        let undo_req = test::TestRequest::post().uri("/undo").to_request();
+        let undo_resp = app.call(undo_req).await.unwrap();
+        assert_eq!(undo_resp.status(), StatusCode::OK);
+        let undo_body: UndoRedoResponse = test::read_body_json(undo_resp).await;
+        assert_eq!(
+            origin_graph_id(&undo_body.changes),
+            g1_id,
+            "undo must mark G1 (whose own mapping entry was directly removed) as the origin, not G2"
+        );
+
+        let redo_req = test::TestRequest::post().uri("/redo").to_request();
+        let redo_resp = app.call(redo_req).await.unwrap();
+        assert_eq!(redo_resp.status(), StatusCode::OK);
+        let redo_body: UndoRedoResponse = test::read_body_json(redo_resp).await;
+        assert_eq!(
+            origin_graph_id(&redo_body.changes),
+            g1_id,
+            "redo must still mark G1 as the origin - Command::Batch reversing sub-command order \
+             between undo and redo must not flip which graph_id is tagged is_origin"
+        );
+
+        // g2_id is only ever the re-exposing ancestor, never the origin, in either direction.
+        assert!(
+            undo_body
+                .changes
+                .iter()
+                .chain(&redo_body.changes)
+                .all(|c| !matches!(
+                    c,
+                    DocumentChange::GraphNeedsRefresh {
+                        graph_id,
+                        is_origin: true,
+                    } if *graph_id == g2_id
+                )),
+            "G2 must never be reported as the cascade's origin"
         );
     }
 }

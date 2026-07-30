@@ -730,7 +730,15 @@ pub enum DocumentChange {
     AnalyzerMoved { id: Uuid, gui_position: (f64, f64) },
     /// One tab's nodes/edges/port-maps should be re-fetched from scratch (see the type's own doc
     /// comment for which operations use this).
-    GraphNeedsRefresh { graph_id: Uuid },
+    GraphNeedsRefresh {
+        graph_id: Uuid,
+        /// Whether `graph_id` is the exact tab where the change directly happened (e.g. the group
+        /// whose own port-map entry was removed), as opposed to an ancestor that only needs a
+        /// refresh because it re-exposes that entry further out. Lets the GUI pick the right tab to
+        /// jump to out of several refreshed at once, regardless of which order they're listed in
+        /// (which flips between undo and redo - see `Command::Batch`'s apply/reverse behavior).
+        is_origin: bool,
+    },
     /// The group `graph_id` no longer exists (e.g. undoing a convert-to-group dissolves it), so its
     /// tab should be closed if open. Distinct from a node removal in the *parent* view - the parent
     /// is refreshed separately; this closes the dissolved group's own tab.
