@@ -492,10 +492,12 @@ pub struct MoveNodesResponse {
     /// destination group; includes the source group (or a higher ancestor) only when a pre-existing
     /// mapping was rerouted there.
     pub port_map_groups_changed: Vec<Uuid>,
-    /// `(group_id, node_id)` pairs whose port-map entry was removed with no replacement under the same
-    /// external name - lets the GUI prune exactly that entry, since a purely additive refresh wouldn't
-    /// otherwise notice a key that's simply gone.
-    pub removed_port_mappings: Vec<(Uuid, Uuid)>,
+    /// `(group_id, internal_node_id, external_port_name, port_type)` per port-map entry removed with no
+    /// replacement under the same external name - same shape as
+    /// [`DeleteNodeResponse::removed_port_mappings`], so the GUI can prune exactly that entry with the
+    /// same precise handling, since a purely additive refresh wouldn't otherwise notice a key that's
+    /// simply gone.
+    pub removed_port_mappings: Vec<(Uuid, Uuid, String, PortType)>,
 }
 
 /// Response payload after converting nodes into a new subgroup.
@@ -518,11 +520,11 @@ pub struct ConvertToGroupResponse {
     /// the new group; includes the source group too whenever a pre-existing mapping of a converted
     /// node was rerouted through the new group.
     pub port_map_groups_changed: Vec<Uuid>,
-    /// `(group_id, node_id)` pairs whose port-map entry was removed with no replacement under the same
-    /// external name. Always empty for this endpoint today (the equivalent of a move's "collapse"
-    /// case, which converting into a brand-new, always-empty group can never trigger) - kept for
-    /// parity with `MoveNodesResponse` so the GUI can share one code path.
-    pub removed_port_mappings: Vec<(Uuid, Uuid)>,
+    /// `(group_id, internal_node_id, external_port_name, port_type)` per port-map entry removed with no
+    /// replacement under the same external name. Always empty for this endpoint today (the equivalent
+    /// of a move's "collapse" case, which converting into a brand-new, always-empty group can never
+    /// trigger) - kept for parity with `MoveNodesResponse` so the GUI can share one code path.
+    pub removed_port_mappings: Vec<(Uuid, Uuid, String, PortType)>,
 }
 
 /// The "cut" half of a cut-paste (see [`PasteNodesResponse::cut_result`]), reporting everything

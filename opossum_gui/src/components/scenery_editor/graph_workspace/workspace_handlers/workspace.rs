@@ -28,7 +28,7 @@ pub struct WorkspaceHandlers {
     clear_workspace: EventHandler<()>,
     set_active_tab: EventHandler<Uuid>,
     add_port_map: EventHandler<((Uuid, Uuid), (String, String))>,
-    remove_port_maps_for_node: EventHandler<(Uuid, Uuid)>,
+    remove_port_map_entry: EventHandler<(Uuid, String)>,
     set_drag_status: EventHandler<DragStatus>,
     set_drop_in_group: EventHandler<Option<(Uuid, usize)>>,
     set_selection_box: EventHandler<Option<Rect<f64>>>,
@@ -50,7 +50,7 @@ impl WorkspaceHandlers {
             clear_workspace: clear_workspace_handler(workspace),
             set_active_tab: set_active_tab_handler(workspace),
             add_port_map: add_port_map_handler(workspace),
-            remove_port_maps_for_node: remove_port_maps_for_node_handler(workspace),
+            remove_port_map_entry: remove_port_map_entry_handler(workspace),
             set_drag_status: set_drag_status_handler(workspace),
             set_drop_in_group: set_drop_in_group_handler(workspace),
             set_selection_box: set_selection_box_handler(workspace),
@@ -125,8 +125,9 @@ impl WorkspaceHandlers {
             (group_port_name, mapped_node_port_name),
         ));
     }
-    pub fn remove_port_maps_for_node(&self, group_id: Uuid, node_id: Uuid) {
-        self.remove_port_maps_for_node.call((group_id, node_id));
+    pub fn remove_port_map_entry(&self, group_id: Uuid, external_port_name: String) {
+        self.remove_port_map_entry
+            .call((group_id, external_port_name));
     }
 }
 
@@ -270,15 +271,15 @@ fn set_drag_status_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandl
     })
 }
 
-fn remove_port_maps_for_node_handler(
+fn remove_port_map_entry_handler(
     workspace: Store<GraphsWorkspaceState>,
-) -> EventHandler<(Uuid, Uuid)> {
-    EventHandler::new(move |(group_id, node_id): (Uuid, Uuid)| {
+) -> EventHandler<(Uuid, String)> {
+    EventHandler::new(move |(group_id, external_port_name): (Uuid, String)| {
         if let Some(graph_store) = workspace.tabs().get(group_id).map(|g| g.graph_store()) {
             graph_store
                 .mapped_ports()
                 .write()
-                .remove_all_from_uuid(node_id);
+                .remove_key(&external_port_name);
         }
     })
 }

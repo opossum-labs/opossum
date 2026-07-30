@@ -489,11 +489,11 @@ pub struct PreservedConnections {
     pub new_connections: Vec<(Uuid, ConnectInfo)>,
     /// Groups whose port-map/exposed-port display changed and need a GUI refresh.
     pub port_map_groups_changed: Vec<Uuid>,
-    /// `(group_id, node_id)` pairs whose port-map entry was removed with no replacement under the same
-    /// external name (the "collapse" case - reconnecting directly made the mapping unnecessary) - lets
-    /// the GUI prune exactly this entry from its own cached port-map list, since a purely additive
-    /// refresh wouldn't otherwise notice a key that's simply gone.
-    pub removed_port_mappings: Vec<(Uuid, Uuid)>,
+    /// `(group_id, internal_node_id, external_port_name, port_type)` per port-map entry removed with no
+    /// replacement under the same external name (the "collapse" case - reconnecting directly made the
+    /// mapping unnecessary) - lets the GUI prune exactly this entry from its own cached port-map list,
+    /// since a purely additive refresh wouldn't otherwise notice a key that's simply gone.
+    pub removed_port_mappings: Vec<(Uuid, Uuid, String, PortType)>,
 }
 
 /// One connection or mapping that was torn down by [`disconnect_moved_node_connections`] and still needs
@@ -934,7 +934,7 @@ struct EdgeReconnect {
 struct EdgeReconnectOutcome {
     new_connection: Option<(Uuid, ConnectInfo)>,
     port_map_groups_changed: Vec<Uuid>,
-    removed_port_mapping: Option<(Uuid, Uuid)>,
+    removed_port_mapping: Option<(Uuid, Uuid, String, PortType)>,
 }
 
 /// Re-establishes one torn-down edge: either a direct reconnect inside `to_group_id` (the connection's
@@ -980,12 +980,21 @@ fn reconnect_edge(
             &target_port,
             distance,
         );
-        let (port_map_groups_changed, removed_port_mapping) = if from_group_external_name.is_some()
-        {
-            (vec![from_group_id], Some((from_group_id, moved_node_id)))
-        } else {
-            (vec![], None)
-        };
+        let (port_map_groups_changed, removed_port_mapping) =
+            from_group_external_name.as_ref().map_or_else(
+                || (vec![], None),
+                |external_name| {
+                    (
+                        vec![from_group_id],
+                        Some((
+                            from_group_id,
+                            moved_node_id,
+                            external_name.clone(),
+                            port_type,
+                        )),
+                    )
+                },
+            );
         Ok(EdgeReconnectOutcome {
             new_connection: Some((to_group_id, new_info)),
             port_map_groups_changed,

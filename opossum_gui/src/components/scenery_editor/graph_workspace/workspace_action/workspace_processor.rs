@@ -766,12 +766,12 @@ async fn process_delete_nodes(
                 ws_handler
                     .nodes
                     .remove_nodes(response.deleted_nodes, graph_id);
-                for (group_id, node_id, external_port_name, port_type) in
+                for (group_id, _node_id, external_port_name, port_type) in
                     response.removed_port_mappings
                 {
                     ws_handler
                         .workspace
-                        .remove_port_maps_for_node(group_id, node_id);
+                        .remove_port_map_entry(group_id, external_port_name.clone());
                     ws_handler
                         .nodes
                         .remove_group_port(external_port_name, group_id, port_type);
@@ -919,10 +919,10 @@ async fn process_paste_nodes(
                 // group's own port handles by the same precise diff rather than a full refetch - that
                 // extra round trip used to be what visually cleared every mapping in the group instead
                 // of just the cut node's.
-                for (group_id, node_id, external_port_name, port_type) in removed_port_mappings {
+                for (group_id, _node_id, external_port_name, port_type) in removed_port_mappings {
                     ws_handler
                         .workspace
-                        .remove_port_maps_for_node(group_id, node_id);
+                        .remove_port_map_entry(group_id, external_port_name.clone());
                     ws_handler
                         .nodes
                         .remove_group_port(external_port_name, group_id, port_type);
@@ -1171,12 +1171,12 @@ async fn process_remove_port_map(
                 // what's reported for each level: prune the internal "mapped" bookkeeping and
                 // shrink that group's own displayed port handle, same pattern already used for a
                 // deleted node's port mapping (`process_delete_node`).
-                for (level_group_id, node_id, external_port_name, level_port_type) in
+                for (level_group_id, _node_id, external_port_name, level_port_type) in
                     response.removed_port_mappings
                 {
                     ws_handler
                         .workspace
-                        .remove_port_maps_for_node(level_group_id, node_id);
+                        .remove_port_map_entry(level_group_id, external_port_name.clone());
                     ws_handler.nodes.remove_group_port(
                         external_port_name,
                         level_group_id,
@@ -1280,10 +1280,12 @@ async fn process_drop_nodes_into_group(
             for (group_id, edge) in response.removed_connections {
                 ws_handler.edges.delete_edge(edge, group_id);
             }
-            for (group_id, node_id) in response.removed_port_mappings {
+            for (group_id, _node_id, external_port_name, _port_type) in
+                response.removed_port_mappings
+            {
                 ws_handler
                     .workspace
-                    .remove_port_maps_for_node(group_id, node_id);
+                    .remove_port_map_entry(group_id, external_port_name);
             }
             // The destination group (and any other group whose port map changed) may never have
             // been opened before - make sure its tab exists before writing into it below.
@@ -1396,10 +1398,12 @@ async fn process_convert_nodes_to_group(
                 for (group_id, edge) in response.removed_connections {
                     ws_handler.edges.delete_edge(edge, group_id);
                 }
-                for (group_id, node_id) in response.removed_port_mappings {
+                for (group_id, _node_id, external_port_name, _port_type) in
+                    response.removed_port_mappings
+                {
                     ws_handler
                         .workspace
-                        .remove_port_maps_for_node(group_id, node_id);
+                        .remove_port_map_entry(group_id, external_port_name);
                 }
 
                 // The new group's own tab may never be opened - seed it (same as
