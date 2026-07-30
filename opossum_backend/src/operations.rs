@@ -262,6 +262,31 @@ async fn post_paste_nodes(
     // connection that nothing later restores (a nested `AddNode` always passes an empty
     // `connections` list, so redo can't reconnect what this already tore down).
     if let Some(infos) = grouped_node_infos.get(&paste_group_id) {
+        // A freshly pasted node's only connections are to other nodes pasted in the same gesture
+        // (`insert_copied_nodes` only ever recreates connections between copied nodes) - so every
+        // connection touching a top-level pasted node is "mutual" in `capture_and_split_mutual_
+        // connections`'s sense. Restore each one once via a *leading* `RemoveEdge`, positioned before
+        // the `RemoveNode`s below: on the first undo this disconnects the pair while both nodes still
+        // exist, and thanks to `Command::Batch` reversing its inverses, the resulting redo batch adds
+        // both nodes back before restoring the edge - never the other way around, which would try to
+        // reconnect to a node redo hasn't re-added yet.
+        let top_level_ids: HashSet<Uuid> = infos.iter().map(NodeInfo::uuid).collect();
+        let mut seen_mutual = HashSet::new();
+        for info in infos {
+            let (_own, mutual) = capture_and_split_mutual_connections(
+                document.scenery(),
+                paste_group_id,
+                info.uuid(),
+                &top_level_ids,
+                &mut seen_mutual,
+            );
+            for c in mutual {
+                removals.push(Command::RemoveEdge(EdgeSnapshot {
+                    group_id: paste_group_id,
+                    connect_info: c,
+                }));
+            }
+        }
         for info in infos {
             if let Ok((node_ref, _)) = document.scenery().node_recursive(info.uuid()) {
                 removals.push(Command::RemoveNode(NodeSnapshot {
@@ -321,6 +346,41 @@ struct CutAccumulators<'a> {
     mutual_connections: &'a mut Vec<(Uuid, ConnectInfo)>,
     cascades: &'a mut Vec<PortMapCascadeRemoval>,
     retarget_patches: &'a mut Vec<Command>,
+}
+
+/// Captures `node_id`'s connections in `parent_group_id`, splitting off any whose *other* endpoint is
+/// also in `sibling_set` as "mutual" - deduped via `seen_mutual` (keyed by
+/// `(src_uuid, src_port, target_uuid, target_port)`) so a connection reachable from both of its
+/// endpoints is only reported once. Own (non-mutual) connections are meant for the node's own
+/// `AddNode`/`RemoveNode` snapshot; mutual ones must instead go through a separate `AddEdge`/`RemoveEdge`
+/// command placed outside the sibling nodes' own commands in the same batch - `Command::Batch` applies
+/// (and reverses, see its `apply` impl) its commands in a fixed order, so a connection folded into one
+/// sibling's own snapshot could be replayed before its other endpoint exists again.
+fn capture_and_split_mutual_connections(
+    scenery: &NodeGroup,
+    parent_group_id: Uuid,
+    node_id: Uuid,
+    sibling_set: &HashSet<Uuid>,
+    seen_mutual: &mut HashSet<(Uuid, String, Uuid, String)>,
+) -> (Vec<ConnectInfo>, Vec<ConnectInfo>) {
+    let all_connections =
+        capture_node_connections(scenery, parent_group_id, node_id).unwrap_or_default();
+    let (mutual, own): (Vec<_>, Vec<_>) = all_connections.into_iter().partition(|c| {
+        sibling_set.contains(&c.src_uuid()) && sibling_set.contains(&c.target_uuid())
+    });
+    let mutual = mutual
+        .into_iter()
+        .filter(|c| {
+            let key = (
+                c.src_uuid(),
+                c.src_port().to_string(),
+                c.target_uuid(),
+                c.target_port().to_string(),
+            );
+            seen_mutual.insert(key)
+        })
+        .collect();
+    (own, mutual)
 }
 
 /// Prepares one node of the cut for deletion: retargets any reference node pointing at it to its
@@ -395,22 +455,15 @@ fn prepare_cut_node(
     // restoring them via each node's own `AddNode.connections` field would try to reconnect to
     // a node that may not have been re-added yet (undo batches apply in order) - so pull them
     // out and restore them once, as standalone `AddEdge`s, after every `AddNode` has run.
-    let all_connections =
-        capture_node_connections(scenery, parent_group_id, id).unwrap_or_default();
-    let (mutual, own): (Vec<_>, Vec<_>) = all_connections.into_iter().partition(|c| {
-        ctx.nodes_to_delete_set.contains(&c.src_uuid())
-            && ctx.nodes_to_delete_set.contains(&c.target_uuid())
-    });
+    let (own, mutual) = capture_and_split_mutual_connections(
+        scenery,
+        parent_group_id,
+        id,
+        ctx.nodes_to_delete_set,
+        acc.seen_mutual,
+    );
     for c in mutual {
-        let key = (
-            c.src_uuid(),
-            c.src_port().to_string(),
-            c.target_uuid(),
-            c.target_port().to_string(),
-        );
-        if acc.seen_mutual.insert(key) {
-            acc.mutual_connections.push((parent_group_id, c));
-        }
+        acc.mutual_connections.push((parent_group_id, c));
     }
 
     acc.cascades
@@ -1743,6 +1796,127 @@ mod test {
             connections.len(),
             1,
             "the pasted group's internal A -> B connection must survive undo+redo"
+        );
+    }
+
+    /// Regression test for the bug where redoing a paste of two mutually-connected flat (non-grouped)
+    /// sibling nodes lost the connection between them. Root cause: `post_paste_nodes` built each
+    /// top-level pasted node's `Command::RemoveNode` with an empty `connections` field, so undo's
+    /// resulting `AddNode` (the command `Command::Batch` reverses onto the redo stack) never carried
+    /// the pasted pair's connection - `apply_remove_node` only forwards whatever `connections` its
+    /// `RemoveNode` snapshot already had. Builds `G { A -> B }`, copies A and B individually (not `G`,
+    /// which would hide the bug behind the group's own `OpticRef`-embedded internal edge - see
+    /// `test_undo_redo_paste_group_preserves_internal_connection` above), pastes them (not cut, to
+    /// isolate this from `perform_cut`'s own already-correct mutual-connection handling) into the root
+    /// scenery, and asserts a single undo succeeds and a following redo restores both pasted nodes
+    /// *and* the connection between them.
+    #[actix_web::test]
+    async fn test_undo_redo_paste_mutually_connected_nodes_preserves_connection() {
+        use opossum_core::nodes::{Dummy, NodeGroup};
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, group_id, node_a, node_b) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let scenery = document.scenery_mut();
+
+            let mut group = NodeGroup::new("inner group");
+            let node_a = group.add_node(Dummy::default()).unwrap();
+            let node_b = group.add_node(Dummy::default()).unwrap();
+            group
+                .connect_nodes(node_a, "output_1", node_b, "input_1", meter!(0.1))
+                .unwrap();
+            let group_id = scenery.add_node(group).unwrap();
+
+            (root_id, group_id, node_a, node_b)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_copy_nodes)
+                .service(post_paste_nodes)
+                .service(undo_document)
+                .service(redo_document),
+        )
+        .await;
+
+        let mut nodes_to_copy = HashSet::new();
+        nodes_to_copy.insert(node_a);
+        nodes_to_copy.insert(node_b);
+        let req = test::TestRequest::post()
+            .uri("/copy_nodes")
+            .set_json(&nodes_to_copy)
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        // Paste (not cut) both A and B as two flat siblings connected to each other, directly into
+        // the root scenery.
+        let req = test::TestRequest::post()
+            .uri("/paste_nodes")
+            .set_json(&(root_id, (500.0, 500.0), false))
+            .to_request();
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
+
+        let pasted_ids: Vec<Uuid> = {
+            let document = app_state.document.lock();
+            document
+                .scenery()
+                .with_group_node(root_id, |g| {
+                    g.nodes()
+                        .iter()
+                        .filter_map(|n| n.uuid().ok())
+                        .filter(|id| *id != group_id)
+                        .collect::<Vec<_>>()
+                })
+                .unwrap()
+        };
+        assert_eq!(pasted_ids.len(), 2, "both A and B must have been pasted");
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::OK,
+            "undoing the paste must not error"
+        );
+        {
+            let document = app_state.document.lock();
+            for id in &pasted_ids {
+                assert!(
+                    document.scenery().node_recursive(*id).is_err(),
+                    "the pasted duplicate must be gone after undo"
+                );
+            }
+        }
+
+        let req = test::TestRequest::post().uri("/redo").to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::OK,
+            "redo must not error"
+        );
+
+        let document = app_state.document.lock();
+        for id in &pasted_ids {
+            assert!(
+                document.scenery().node_recursive(*id).is_ok(),
+                "the pasted duplicate must be restored by redo"
+            );
+        }
+        let connections = document
+            .scenery()
+            .with_group_node(root_id, NodeGroup::connections)
+            .unwrap();
+        let pasted_connection_count = connections
+            .iter()
+            .filter(|c| pasted_ids.contains(&c.src_id) && pasted_ids.contains(&c.target_id))
+            .count();
+        assert_eq!(
+            pasted_connection_count, 1,
+            "the connection between the two redo-restored pasted nodes must survive redo"
         );
     }
 
