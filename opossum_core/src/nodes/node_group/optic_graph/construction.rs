@@ -69,6 +69,93 @@ impl OpticGraph {
         }
         Ok(self.g.add_node(node))
     }
+    /// Recursively cleans up connections (edges) and port mappings that refer to
+    /// ports that no longer exist on their target or source nodes.
+    fn cleanup_orphan_connections_and_mappings(&mut self) -> OpmResult<()> {
+        // 1. Recursively clean up sub-groups first so their `ports()` are up-to-date
+        for node_ref in self.nodes() {
+            let mut node = node_ref.optical_ref.lock_opm()?;
+            if let Some(group) = node.as_any_mut().downcast_mut::<NodeGroup>() {
+                group.graph.cleanup_orphan_connections_and_mappings()?;
+            }
+        }
+
+        // 2. Clean up input port mappings pointing to invalid ports or missing nodes
+        let mut input_mappings_to_remove = Vec::new();
+        for (ext_name, (target_id, target_port)) in &self.input_port_map {
+            if let Ok(target_ref) = self.node(*target_id) {
+                let valid_ports = target_ref
+                    .optical_ref
+                    .lock_opm()?
+                    .ports()
+                    .names(&PortType::Input);
+                if !valid_ports.contains(target_port) {
+                    input_mappings_to_remove.push(ext_name.clone());
+                }
+            } else {
+                input_mappings_to_remove.push(ext_name.clone());
+            }
+        }
+        for key in input_mappings_to_remove {
+            self.input_port_map.remove_key(&key);
+        }
+
+        // 3. Clean up output port mappings pointing to invalid ports or missing nodes
+        let mut output_mappings_to_remove = Vec::new();
+        for (ext_name, (src_id, src_port)) in &self.output_port_map {
+            if let Ok(src_ref) = self.node(*src_id) {
+                let valid_ports = src_ref
+                    .optical_ref
+                    .lock_opm()?
+                    .ports()
+                    .names(&PortType::Output);
+                if !valid_ports.contains(src_port) {
+                    output_mappings_to_remove.push(ext_name.clone());
+                }
+            } else {
+                output_mappings_to_remove.push(ext_name.clone());
+            }
+        }
+        for key in output_mappings_to_remove {
+            self.output_port_map.remove_key(&key);
+        }
+
+        // 4. Clean up edges in this graph where source or target port is no longer valid
+        let mut edges_to_remove = Vec::new();
+        for edge_ref in self.g.edge_references() {
+            let src_node_ref = &self.g[edge_ref.source()];
+            let target_node_ref = &self.g[edge_ref.target()];
+
+            let src_port = edge_ref.weight().src_port();
+            let target_port = edge_ref.weight().target_port();
+
+            let src_valid = {
+                let src_guard = src_node_ref.optical_ref.lock_opm()?;
+                src_guard
+                    .ports()
+                    .names(&PortType::Output)
+                    .contains(&src_port.to_string())
+            };
+
+            let target_valid = {
+                let target_guard = target_node_ref.optical_ref.lock_opm()?;
+                target_guard
+                    .ports()
+                    .names(&PortType::Input)
+                    .contains(&target_port.to_string())
+            };
+
+            if !src_valid || !target_valid {
+                edges_to_remove.push(edge_ref.id());
+            }
+        }
+
+        for edge_idx in edges_to_remove {
+            self.g.remove_edge(edge_idx);
+        }
+
+        Ok(())
+    }
     /// Delete a node from this [`OpticGraph`].
     ///
     /// Deletes a node with the given [`Uuid`] from the graph. All edges connected to this node will be removed as well.
@@ -95,15 +182,11 @@ impl OpticGraph {
         let mut processed_uuids = HashSet::new();
 
         while let Some(current_id_to_check) = deletion_queue.pop() {
-            // If we have already processed this UUID, skip it.
             if !processed_uuids.insert(current_id_to_check) {
                 continue;
             }
-            // This inner loop finds all nodes that are or reference the current_id_to_check
             while let Some(node_idx) = self.find_first_node_with_uuid(current_id_to_check) {
-                // We have to get the uuid of the node, which could be the (initially) given uuid or the uuid of a reference node
                 let actual_node_id = self.node_by_idx(node_idx)?.uuid()?;
-                // collect all node ids of nodes that are contained in a group
                 if let Ok(node_ref) = self.node_by_idx(node_idx) {
                     let node = node_ref.optical_ref.lock_opm()?;
                     if let Some(group) = node.as_any().downcast_ref::<NodeGroup>()
@@ -116,19 +199,16 @@ impl OpticGraph {
                     }
                 }
                 self.g.remove_node(node_idx);
-                // Remove possibly no longer valid port mappings
                 self.input_port_map.remove_all_from_uuid(actual_node_id);
                 self.output_port_map.remove_all_from_uuid(actual_node_id);
 
                 if !nodes_deleted.contains(&actual_node_id) {
                     nodes_deleted.push(actual_node_id);
                 }
-                // Add the UUID of the node we just deleted to the queue.
-                // This ensures we will now search for any nodes that referenced *it*.
                 deletion_queue.push(actual_node_id);
             }
         }
-        // now check if subnodes exist and delete recusively
+
         for node_ref in self.nodes() {
             let mut node = node_ref.optical_ref.lock_opm()?;
             if let Some(group) = node.as_any_mut().downcast_mut::<NodeGroup>()
@@ -142,9 +222,13 @@ impl OpticGraph {
                 "node with given uuid does not exist".into(),
             ));
         }
-        // Remove duplicates that might occur from the subgroup recursion
+
         nodes_deleted.sort();
         nodes_deleted.dedup();
+
+        // Perform cascading cleanup of orphaned connections and port mappings
+        self.cleanup_orphan_connections_and_mappings()?;
+
         Ok(nodes_deleted)
     }
     /// Return the first [`NodeId`] with the given [`Uuid`] in this [`OpticGraph`].
