@@ -66,6 +66,8 @@ The following analyzers are implemented:
     second reflection at another optical surface. Likewise, values of 3 or 4 consider rays that undergo three or four reflections,
     respectively. Higher values therefore include additional reflection paths that may occur within the optical system. This is
     particularly important for high-energy laser systems, where even a small reflected fraction of the laser energy can correspond
-    to several joules and may affect optical components and the overall system.
+    to several joules and may affect optical components and the overall system.If the `Max bounces` parameter is set to zero, no reflections are considered. However, this mode can still be useful because it allows analyzing the fluence of the primary beam (the main laser beam) on all optical surfaces and, for example, ensures that they all remain within safe limits.
+
 
     Additionally, it provides a `Fluence Estimator` option, which allows selecting the fluence estimator used for the analysis.
+   For further details on the available fluence estimators and their differences,see the [Fluence Estimators](../concepts/fluence.md) section.
