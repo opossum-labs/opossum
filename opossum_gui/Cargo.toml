@@ -43,7 +43,7 @@ regex = "1"
 webbrowser = "1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio = { version = "1", features = ["process"] }
+tokio = { version = "1", features = ["process", "time"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { version = "1", default-features = false }

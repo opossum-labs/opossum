@@ -29,6 +29,12 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
     let editor_status = graph_state.editor_state();
     let workspace = use_context::<ReadStore<GraphsWorkspaceState>>();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
+    // Debounce state for the undo-recording POST (see the send site below): the viewport at the start of
+    // the current scroll burst, the latest viewport, and a generation counter so only the newest wheel
+    // tick's task actually sends.
+    let mut gesture_start = use_signal(|| None::<Viewport>);
+    let mut latest = use_signal(|| None::<Viewport>);
+    let mut debounce_gen = use_signal(|| 0u64);
 
     move |wheel_event| {
         let current_graph_zoom = *editor_status.zoom().read();
@@ -49,8 +55,6 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
 
         let graph_id = *workspace.active_tab().read();
 
-        // Each wheel tick posts its own before/after; the backend coalesces a whole scroll burst into a
-        // single undo step (see `post_viewport_change`).
         let before = Viewport {
             graph_id,
             zoom: current_graph_zoom,
@@ -80,9 +84,31 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
 
         // A zoom is undoable, so enable Undo / grey out Redo like any other edit.
         *crate::UNDO_REDO_STATUS.write() = (true, false);
+
+        // Record this as an undo step, but debounce the backend POST: a scroll burst is dozens of ticks, so
+        // instead of posting each one we cache the burst's start/end and send a single request once ~120ms
+        // pass with no further tick. The local SetZoom/SetShift above are applied every tick, so the view
+        // stays smooth in the meantime.
+        if gesture_start.peek().is_none() {
+            gesture_start.set(Some(before));
+        }
+        latest.set(Some(after));
+        let generation = *debounce_gen.peek() + 1;
+        debounce_gen.set(generation);
         spawn(async move {
-            // coalesce=true: consecutive scroll-zoom ticks collapse into one undo step.
-            let _ = api::post_viewport_change(before, after, true, false).await;
+            tokio::time::sleep(std::time::Duration::from_millis(120)).await;
+            // Only the newest tick's task flushes; a later tick bumps the generation, superseding earlier
+            // tasks, so those just return.
+            if *debounce_gen.peek() != generation {
+                return;
+            }
+            let start = gesture_start.write().take();
+            let end = latest.write().take();
+            if let (Some(start), Some(end)) = (start, end) {
+                // coalesce=true so consecutive scroll bursts still combine into one undo step (see
+                // `post_viewport_change`); the burst itself is now a single request.
+                let _ = api::post_viewport_change(start, end, true, false).await;
+            }
         });
     }
 }
