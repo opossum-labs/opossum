@@ -12,7 +12,8 @@ use opossum_core::{
     nodes::{NodeReference, create_node_ref},
     prelude::{AnalyzerType, OpmDocument, Proptype},
     types::api_types::{
-        DeleteNodeResponse, ErrorResponse, NewNode, NewRefNode, NodeInfo, UpdateNodeRequest,
+        ConnectInfo, DeleteNodeResponse, ErrorResponse, NewNode, NewRefNode, NodeInfo,
+        UpdateNodeRequest,
     },
     utils::LockExt,
 };
@@ -26,7 +27,9 @@ use crate::{
         capture_node_connections, disconnect_exposed_port_cascades_for_node,
         parent_group_id_or_self, split_cascades_for_response,
     },
-    undo::{Command, NodeSnapshot, PatchAnalyzer, PatchNode, capture_old_node_request},
+    undo::{
+        CascadedNode, Command, NodeSnapshot, PatchAnalyzer, PatchNode, capture_old_node_request,
+    },
 };
 
 /// Get all nodes of a group node
@@ -408,6 +411,16 @@ fn push_delete_inverse(data: &AppState, inverse: Vec<Command>) {
     }
 }
 
+/// Whether two [`ConnectInfo`]s describe the same edge - same endpoints and ports, ignoring distance and
+/// the reference flag. Used to de-duplicate connections captured from both of two co-deleted nodes so the
+/// shared edge isn't restored twice on undo.
+fn same_edge(a: &ConnectInfo, b: &ConnectInfo) -> bool {
+    a.src_uuid() == b.src_uuid()
+        && a.src_port() == b.src_port()
+        && a.target_uuid() == b.target_uuid()
+        && a.target_port() == b.target_port()
+}
+
 /// Deletes `uuid` from `document` and returns `(inverse, response)`: the commands that undo the
 /// deletion (in application order - `AddNode` first, so the node exists before its ports are
 /// re-mapped or its analyzer mappings restored) and the [`DeleteNodeResponse`] describing what was
@@ -424,13 +437,13 @@ fn delete_node_capturing(
     // Capture the target node and, since deleting it cascades to any reference nodes pointing at it
     // (see `NodeGroup::delete_node`), every one of those too - each as a live `OpticRef` handle plus
     // its own parent group, so undo can restore the whole cascade exactly as it was.
-    let (target_ref, parent_group_id, cascaded) = {
+    let (target_ref, parent_group_id, referring_cascade) = {
         let scenery = document.scenery();
         let (target_ref, parent_group_id) = scenery.node_recursive(uuid)?;
         let referring = scenery
             .graph()
             .find_all_nodes_referring_to_uuid(uuid, scenery.node_attr().uuid())?;
-        let mut cascaded = Vec::new();
+        let mut referring_cascade = Vec::new();
         for ref_ids in referring.values() {
             for ref_id in ref_ids {
                 // `find_all_nodes_referring_to_uuid` reports the queried node itself as one of its own
@@ -441,11 +454,11 @@ fn delete_node_capturing(
                     continue;
                 }
                 if let Ok((r, p)) = scenery.node_recursive(*ref_id) {
-                    cascaded.push((p, r));
+                    referring_cascade.push((p, r));
                 }
             }
         }
-        (target_ref, parent_group_id, cascaded)
+        (target_ref, parent_group_id, referring_cascade)
     };
 
     // Captured before deletion, since `delete_node` silently drops the node's incident edges in its
@@ -453,14 +466,37 @@ fn delete_node_capturing(
     let connections =
         capture_node_connections(document.scenery(), parent_group_id, uuid).unwrap_or_default();
 
+    // The same is true for every cascaded reference node: deleting the target cascades it away and drops
+    // its own incident edges too. Capture each one's connections in its own parent group before any
+    // deletion, de-duplicated against the target's edges and each other so an edge shared by two
+    // co-deleted nodes in the same group isn't restored twice on undo (see `apply_add_node`).
+    let mut seen_edges: Vec<ConnectInfo> = connections.clone();
+    let mut cascaded: Vec<CascadedNode> = Vec::with_capacity(referring_cascade.len());
+    for (member_parent, member_ref) in referring_cascade {
+        let member_conns = member_ref.uuid().ok().map_or_else(Vec::new, |member_uuid| {
+            capture_node_connections(document.scenery(), member_parent, member_uuid)
+                .unwrap_or_default()
+        });
+        let deduped: Vec<ConnectInfo> = member_conns
+            .into_iter()
+            .filter(|conn| !seen_edges.iter().any(|s| same_edge(s, conn)))
+            .collect();
+        seen_edges.extend(deduped.iter().cloned());
+        cascaded.push(CascadedNode {
+            parent_group_id: member_parent,
+            node: member_ref,
+            connections: deduped,
+        });
+    }
+
     let scenery = document.scenery_mut();
     let mut removed_port_cascades =
         disconnect_exposed_port_cascades_for_node(scenery, parent_group_id, uuid)?;
-    for (member_parent, member_ref) in &cascaded {
-        if let Ok(member_uuid) = member_ref.uuid() {
+    for member in &cascaded {
+        if let Ok(member_uuid) = member.node.uuid() {
             removed_port_cascades.extend(disconnect_exposed_port_cascades_for_node(
                 scenery,
-                *member_parent,
+                member.parent_group_id,
                 member_uuid,
             )?);
         }
@@ -473,9 +509,9 @@ fn delete_node_capturing(
 
     // Only claim cascaded nodes that `delete_node` actually removed, in case its cascade rules ever
     // diverge from what `find_all_nodes_referring_to_uuid` predicted.
-    let cascaded: Vec<(Uuid, OpticRef)> = cascaded
+    let cascaded: Vec<CascadedNode> = cascaded
         .into_iter()
-        .filter(|(_, r)| r.uuid().is_ok_and(|id| deleted_nodes.contains(&id)))
+        .filter(|c| c.node.uuid().is_ok_and(|id| deleted_nodes.contains(&id)))
         .collect();
     let (disconnected_connections, removed_port_mappings) =
         split_cascades_for_response(&removed_port_cascades);
@@ -1545,6 +1581,81 @@ mod test {
                 .node_recursive(ref_uuid)
                 .is_ok(),
             "redo must restore the reference node under the same uuid"
+        );
+    }
+
+    /// Regression test for the bug where deleting a node cascade-deleted the reference nodes pointing at
+    /// it but dropped *their* own incident edges: `delete_node_capturing` captured connections only for
+    /// the target, so a delete->undo round-trip restored the reference node disconnected. Builds target
+    /// `T`, sibling `S`, and a reference `R -> T` wired `R.output_1 -> S.input_1`; deletes `T` (which
+    /// cascades `R` away, dropping the edge); undoes; and asserts both `R` and its `R -> S` edge return.
+    #[actix_web::test]
+    async fn test_undo_delete_restores_cascaded_reference_nodes_connections() {
+        use opossum_core::nodes::{Dummy, NodeGroup, NodeReference};
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, target_t, sibling_s, ref_r) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let scenery = document.scenery_mut();
+            let target_t = scenery.add_node(Dummy::default()).unwrap();
+            let sibling_s = scenery.add_node(Dummy::default()).unwrap();
+            let target_ref = scenery.node_recursive(target_t).unwrap().0;
+            let ref_r = scenery
+                .add_node(NodeReference::from_node(&target_ref).unwrap())
+                .unwrap();
+            // The reference node's own edge to a sibling in its group - exactly what used to be lost.
+            scenery
+                .connect_nodes(ref_r, "output_1", sibling_s, "input_1", millimeter!(100.0))
+                .unwrap();
+            (root_id, target_t, sibling_s, ref_r)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(delete_node)
+                .service(undo_document),
+        )
+        .await;
+
+        // Delete the target; this cascades the reference node away and drops its R -> S edge.
+        let req = test::TestRequest::delete()
+            .uri(&format!("/{target_t}"))
+            .to_request();
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
+        assert!(
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .node_recursive(ref_r)
+                .is_err(),
+            "the reference node must be cascaded away by deleting its target"
+        );
+
+        // Undo must restore the reference node *and* its own connection.
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
+
+        let document = app_state.document.lock();
+        assert!(
+            document.scenery().node_recursive(target_t).is_ok(),
+            "undo must restore the deleted target node"
+        );
+        assert!(
+            document.scenery().node_recursive(ref_r).is_ok(),
+            "undo must restore the cascaded reference node"
+        );
+        let connections = document
+            .scenery()
+            .with_group_node(root_id, NodeGroup::connections)
+            .unwrap();
+        assert!(
+            connections
+                .iter()
+                .any(|c| c.src_id == ref_r && c.target_id == sibling_s),
+            "the reference node's own R -> S edge must be restored on undo, got {connections:?}"
         );
     }
 

@@ -15,8 +15,8 @@ use super::Command;
 use crate::{
     error::BackEndErrorResponse,
     helper_functions::{
-        connect_from_info, disconnect_moved_node_connections, reconnect_moved_node_connections,
-        split_sort_connections_from_document,
+        connect_from_info, delete_nodes_cascade_aware, disconnect_moved_node_connections,
+        reconnect_moved_node_connections, split_sort_connections_from_document,
     },
 };
 
@@ -145,9 +145,10 @@ pub(super) fn apply_move_nodes(
         .filter_map(|id| document.scenery().node_recursive(*id).ok().map(|(r, _)| r))
         .collect();
 
-    for id in &node_ids {
-        document.scenery_mut().delete_node(*id)?;
-    }
+    // Cascade-aware, matching the forward `post_move_nodes` path: if the moved set contains a node and a
+    // reference pointing at it, deleting the node cascades the reference away, so a plain per-id delete
+    // loop would then error on the already-gone reference.
+    delete_nodes_cascade_aware(document.scenery_mut(), &node_ids)?;
     for node_ref in &node_refs {
         document
             .scenery_mut()

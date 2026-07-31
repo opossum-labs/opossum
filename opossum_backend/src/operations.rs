@@ -6,9 +6,10 @@ use crate::{
     helper_functions::{
         PendingReconnect, PortMapCascadeRemoval, capture_node_connections,
         collect_group_connections, collect_node_refs_and_pos, connect_from_info,
-        create_new_group_node_info, disconnect_exposed_port_cascades_for_node,
-        disconnect_moved_node_connections, is_reference_target, parent_group_id_or_self,
-        reconnect_moved_node_connections, split_cascades_for_response, split_sort_connections,
+        create_new_group_node_info, delete_nodes_cascade_aware,
+        disconnect_exposed_port_cascades_for_node, disconnect_moved_node_connections,
+        is_reference_target, parent_group_id_or_self, reconnect_moved_node_connections,
+        split_cascades_for_response, split_sort_connections,
     },
     undo::{
         Command, EdgeSnapshot, GroupConversion, MoveNodes, NodeSnapshot, PatchProperty,
@@ -1262,7 +1263,7 @@ pub async fn post_move_nodes(
     let req = request.into_inner();
     let from_group_id = req.source_group_id;
     let drop_group_id = req.target_group_id;
-    let mut nodes_to_drop = req.nodes_to_move;
+    let nodes_to_drop = req.nodes_to_move;
     let original_node_ids = nodes_to_drop.clone();
 
     // Collect data
@@ -1287,13 +1288,9 @@ pub async fn post_move_nodes(
         &original_node_ids,
     )?;
 
-    // Delete nodes_to_drop from original scenery
-    while let Some(node) = nodes_to_drop.pop() {
-        let deleted = scenery.delete_node(node)?;
-        for del_id in &deleted {
-            nodes_to_drop.retain(|id| id != del_id);
-        }
-    }
+    // Delete the moved nodes from the original scenery, cascade-aware (a moved reference to a moved node
+    // would otherwise be double-deleted - see the helper). Shared with the `apply_move_nodes` undo path.
+    delete_nodes_cascade_aware(scenery, &original_node_ids)?;
 
     // Add nodes_to_drop to group
     for node_ref in &node_refs {
@@ -2638,6 +2635,104 @@ mod test {
             "the second undo must not error"
         );
         assert_pristine_state(&app_state);
+    }
+
+    /// Regression test for the bug where undoing/redoing a move whose selection contained a node *and* a
+    /// reference to it errored with "node ... does not exist". The forward `post_move_nodes` deletes the
+    /// moved nodes cascade-aware, but `apply_move_nodes` (the undo/redo path) used a plain per-id loop:
+    /// deleting the node cascaded the reference away, then deleting the (now-gone) reference failed. Moves
+    /// `{A, reference-to-A}` (both in the source group) into another group and asserts undo *and* redo
+    /// both succeed and relocate both nodes.
+    #[actix_web::test]
+    async fn test_move_nodes_undo_redo_handles_internal_reference_cascade() {
+        use opossum_core::nodes::{Dummy, NodeGroup, NodeReference};
+
+        let app_state = Data::new(AppState::default());
+        let (from_group_id, to_group_id, node_a, ref_r) = {
+            let mut document = app_state.document.lock();
+            let scenery = document.scenery_mut();
+
+            let mut from_group = NodeGroup::new("from group");
+            let node_a = from_group.add_node(Dummy::default()).unwrap();
+            let node_a_ref = from_group.node_recursive(node_a).unwrap().0;
+            let ref_r = from_group
+                .add_node(NodeReference::from_node(&node_a_ref).unwrap())
+                .unwrap();
+            let to_group_id = from_group.add_node(NodeGroup::new("to group")).unwrap();
+            let from_group_id = scenery.add_node(from_group).unwrap();
+            (from_group_id, to_group_id, node_a, ref_r)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_move_nodes)
+                .service(undo_document)
+                .service(redo_document),
+        )
+        .await;
+
+        // Forward move of {A, reference-to-A} together (the forward path is already cascade-aware).
+        let req = test::TestRequest::post()
+            .uri("/move_nodes")
+            .set_json(&MoveNodesRequest {
+                source_group_id: from_group_id,
+                target_group_id: to_group_id,
+                nodes_to_move: vec![node_a, ref_r],
+            })
+            .to_request();
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
+
+        // The regression: undo must not error on the internal cascade (delete A cascades R, then R must
+        // not be deleted again), and must relocate both nodes back to the source group.
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::OK,
+            "undo of a move containing a node and a reference to it must not error"
+        );
+        {
+            let document = app_state.document.lock();
+            assert!(
+                document
+                    .scenery()
+                    .node_recursive(node_a)
+                    .is_ok_and(|(_, p)| p == from_group_id),
+                "node A must be back in the source group after undo"
+            );
+            assert!(
+                document
+                    .scenery()
+                    .node_recursive(ref_r)
+                    .is_ok_and(|(_, p)| p == from_group_id),
+                "the reference must be back in the source group after undo"
+            );
+        }
+
+        // Redo must likewise not error and re-relocate both nodes to the target group.
+        let req = test::TestRequest::post().uri("/redo").to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::OK,
+            "redo of the same move must not error either"
+        );
+        {
+            let document = app_state.document.lock();
+            assert!(
+                document
+                    .scenery()
+                    .node_recursive(node_a)
+                    .is_ok_and(|(_, p)| p == to_group_id),
+                "node A must be in the target group again after redo"
+            );
+            assert!(
+                document
+                    .scenery()
+                    .node_recursive(ref_r)
+                    .is_ok_and(|(_, p)| p == to_group_id),
+                "the reference must be in the target group again after redo"
+            );
+        }
     }
 
     /// Regression test for the bug where converting nodes that already have an external port

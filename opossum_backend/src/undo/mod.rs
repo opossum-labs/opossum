@@ -31,7 +31,7 @@ pub use edge_commands::{EdgeSnapshot, UpdateEdgeDistance};
 pub use global_conf_commands::PatchGlobalConf;
 pub use group_commands::{GroupConversion, MoveNodes, ReroutedMapping};
 pub use node_commands::{
-    NodeSnapshot, PatchNode, PatchPort, PatchProperty, capture_old_node_request,
+    CascadedNode, NodeSnapshot, PatchNode, PatchPort, PatchProperty, capture_old_node_request,
 };
 pub use port_map_commands::{AddPortMap, RemovePortMap};
 pub use viewport_commands::SetViewport;

@@ -133,6 +133,29 @@ pub fn capture_node_connections(
         .collect())
 }
 
+/// Deletes every node in `node_ids` from `scenery`, cascade-aware.
+///
+/// Deleting a node cascades away any reference node pointing at it ([`NodeGroup::delete_node`]). When the
+/// set being deleted *itself* contains such a reference (e.g. a moved selection holding both a node and a
+/// reference to it), a later plain `delete_node` on the already-cascaded id would fail with "node does not
+/// exist". Each call's returned set of removed uuids is therefore used to drop those ids from the pending
+/// list before they're deleted again. Shared by the forward move (`post_move_nodes`) and its undo/redo
+/// (`apply_move_nodes`), so both handle an internal cascade identically.
+///
+/// # Errors
+///
+/// Returns an error if a `delete_node` call fails for a reason other than the node already being gone.
+pub fn delete_nodes_cascade_aware(scenery: &mut NodeGroup, node_ids: &[Uuid]) -> OpmResult<()> {
+    let mut remaining: Vec<Uuid> = node_ids.to_vec();
+    while let Some(node) = remaining.pop() {
+        let deleted = scenery.delete_node(node)?;
+        for del_id in &deleted {
+            remaining.retain(|id| id != del_id);
+        }
+    }
+    Ok(())
+}
+
 /// Returns `uuid`'s parent group id, or `uuid` itself if it names the scenery root - which has no
 /// real parent to report, matching the same self-as-parent sentinel `remove_port_map_cascade` uses
 /// for the same reason.
