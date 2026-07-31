@@ -1123,7 +1123,7 @@ pub async fn post_convert_nodes_to_group(
     // Unpack data from the request body
     let req = request.into_inner();
     let group_id = req.group_id;
-    let mut nodes_to_convert = req.nodes_to_convert;
+    let nodes_to_convert = req.nodes_to_convert;
     let original_node_ids = nodes_to_convert.clone();
 
     // Collect data
@@ -1173,13 +1173,8 @@ pub async fn post_convert_nodes_to_group(
     // `pending` by value.
     let rerouted_from_pending = extract_rerouted_pending(&pending);
 
-    // Delete the converted nodes from group_id
-    while let Some(node) = nodes_to_convert.pop() {
-        let deleted = scenery.delete_node(node)?;
-        for del_id in &deleted {
-            nodes_to_convert.retain(|id| id != del_id);
-        }
-    }
+    // Delete the converted nodes from group_id, cascade-aware (shared with the move path).
+    delete_nodes_cascade_aware(scenery, &original_node_ids)?;
 
     // Add them into the new group and reconnect their purely-internal wiring
     for node_ref in &node_refs {

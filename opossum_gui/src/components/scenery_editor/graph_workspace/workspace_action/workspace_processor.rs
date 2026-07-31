@@ -418,14 +418,12 @@ pub fn use_workspace_processor(
                         eval_action_run(
                             api::undo_document().await,
                             Some(move |r: UndoRedoResponse| {
-                                *crate::UNDO_REDO_STATUS.write() = (r.can_undo, r.can_redo);
-                                workspace_handlers.workspace.set_needs_saving(true);
-                                spawn(apply_document_changes(
-                                    r.changes,
+                                handle_undo_redo_response(
+                                    r,
                                     root_graph_id,
                                     workspace,
                                     workspace_handlers,
-                                ));
+                                );
                             }),
                         );
                     }
@@ -433,14 +431,12 @@ pub fn use_workspace_processor(
                         eval_action_run(
                             api::redo_document().await,
                             Some(move |r: UndoRedoResponse| {
-                                *crate::UNDO_REDO_STATUS.write() = (r.can_undo, r.can_redo);
-                                workspace_handlers.workspace.set_needs_saving(true);
-                                spawn(apply_document_changes(
-                                    r.changes,
+                                handle_undo_redo_response(
+                                    r,
                                     root_graph_id,
                                     workspace,
                                     workspace_handlers,
-                                ));
+                                );
                             }),
                         );
                     }
@@ -513,6 +509,25 @@ const fn is_document_edit_action(action: &GraphsWorkspaceAction) -> bool {
             | GraphsWorkspaceAction::RemovePortMap { .. }
             | GraphsWorkspaceAction::SyncNodePositions { .. }
     )
+}
+
+/// Handles an undo/redo endpoint response: reflects the resulting Undo/Redo availability, marks the
+/// document unsaved, and replays the returned changes onto the canvas. Shared by the `Undo` and `Redo`
+/// action arms, which differ only in which endpoint they call.
+fn handle_undo_redo_response(
+    r: UndoRedoResponse,
+    root_graph_id: Memo<Uuid>,
+    workspace: ReadStore<GraphsWorkspaceState>,
+    ws_handler: WorkSpaceSignalHandlers,
+) {
+    *crate::UNDO_REDO_STATUS.write() = (r.can_undo, r.can_redo);
+    ws_handler.workspace.set_needs_saving(true);
+    spawn(apply_document_changes(
+        r.changes,
+        root_graph_id,
+        workspace,
+        ws_handler,
+    ));
 }
 
 /// Applies the `DocumentChange`s returned by an undo/redo, by replaying each one through the exact
