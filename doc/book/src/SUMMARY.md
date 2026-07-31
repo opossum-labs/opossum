@@ -5,6 +5,7 @@
   - [Introduction](./concepts/intro.md)
   - [Modeling optical systems](./concepts/optical_graph.md)
   - [Position distributions](./concepts/position_distributions.md)
+  - [Energy distributions](./concepts/energy_distributions.md)
   - [Fluence calculcations](./concepts/fluence.md)
   - [Project background](./concepts/background.md)
     - [Goals](./concepts/background/goals.md)
