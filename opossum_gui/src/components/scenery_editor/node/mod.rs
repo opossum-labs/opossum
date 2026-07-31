@@ -92,6 +92,7 @@ pub struct NodeElement {
     z_index: usize,
     ports: Ports,
     inverted: bool,
+    node_index: usize
 }
 
 impl NodeElement {
@@ -103,6 +104,7 @@ impl NodeElement {
         pos: Point2D<f64>,
         ports: Ports,
         inverted: bool,
+        node_index: usize // this is a unique id for testing with playwright
     ) -> Self {
         Self {
             name,
@@ -112,7 +114,18 @@ impl NodeElement {
             z_index: 0,
             ports,
             inverted,
+            node_index
         }
+    }
+    /// Returns the unique sequential node index assigned upon creation.
+    #[must_use]
+    pub const fn node_index(&self) -> usize {
+        self.node_index
+    }
+    /// Generates the deterministic test identifier string for Playwright selectors (e.g., "node-1", "node-2").
+    #[must_use]
+    pub fn test_id(&self) -> String {
+        format!("node-{}", self.node_index)
     }
     #[must_use]
     pub const fn input_ports(&self) -> &Vec<String> {
@@ -239,6 +252,7 @@ impl From<&NodeInfo> for NodeElement {
             position,
             Ports::new(node_info.input_ports(), node_info.output_ports()),
             node_info.inverted(),
+            0
         )
     }
 }
@@ -257,6 +271,7 @@ impl From<&AnalyzerItemDto> for NodeElement {
             position,
             Ports::default(),
             false,
+            0
         )
     }
 }

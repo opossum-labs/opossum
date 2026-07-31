@@ -11,9 +11,13 @@ export default defineConfig({
 
   // Directory containing E2E test files
   testDir: './tests',
-  
+
   // Maximum execution time for a single test (30 seconds)
   timeout: 30 * 1000,
+
+  // Force tests to execute sequentially to prevent race conditions on the single backend instance
+  workers: 1,
+  fullyParallel: false,
 
   use: {
     // Base URL matching the explicit IP and port 8085 of the web server
