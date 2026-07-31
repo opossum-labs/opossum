@@ -940,16 +940,7 @@ async fn process_delete_nodes(
                 ws_handler
                     .nodes
                     .remove_nodes(response.deleted_nodes, graph_id);
-                for (group_id, _node_id, external_port_name, port_type) in
-                    response.removed_port_mappings
-                {
-                    ws_handler
-                        .workspace
-                        .remove_port_map_entry(group_id, external_port_name.clone());
-                    ws_handler
-                        .nodes
-                        .remove_group_port(external_port_name, group_id, port_type);
-                }
+                prune_removed_port_mappings(ws_handler, response.removed_port_mappings);
                 for (group_id, edge) in response.disconnected_connections {
                     ws_handler.edges.delete_edge(edge, group_id);
                 }
@@ -964,6 +955,24 @@ async fn process_delete_nodes(
                 ws_handler.nodes.remove_nodes(vec![deleted_id], graph_id);
             }),
         );
+    }
+}
+
+/// Prunes each entry a backend response reported as a removed port mapping (shape
+/// `(group_id, node_id, external_port_name, port_type)`) from both the workspace's port-map list and the
+/// group node's displayed port handles. Shared by the delete, cut, and remove-port-map handlers, whose
+/// response DTOs deliberately carry the same tuple shape for exactly this reuse.
+fn prune_removed_port_mappings(
+    ws_handler: WorkSpaceSignalHandlers,
+    removed_port_mappings: Vec<(Uuid, Uuid, String, PortType)>,
+) {
+    for (group_id, _node_id, external_port_name, port_type) in removed_port_mappings {
+        ws_handler
+            .workspace
+            .remove_port_map_entry(group_id, external_port_name.clone());
+        ws_handler
+            .nodes
+            .remove_group_port(external_port_name, group_id, port_type);
     }
 }
 
@@ -1094,14 +1103,7 @@ async fn process_paste_nodes(
                 // group's own port handles by the same precise diff rather than a full refetch - that
                 // extra round trip used to be what visually cleared every mapping in the group instead
                 // of just the cut node's.
-                for (group_id, _node_id, external_port_name, port_type) in removed_port_mappings {
-                    ws_handler
-                        .workspace
-                        .remove_port_map_entry(group_id, external_port_name.clone());
-                    ws_handler
-                        .nodes
-                        .remove_group_port(external_port_name, group_id, port_type);
-                }
+                prune_removed_port_mappings(ws_handler, removed_port_mappings);
                 // Any external connection that depended on one of those now-gone mappings is also
                 // already correctly disconnected server-side - the GUI's own edge list needs the same
                 // explicit removal.
@@ -1346,18 +1348,7 @@ async fn process_remove_port_map(
                 // what's reported for each level: prune the internal "mapped" bookkeeping and
                 // shrink that group's own displayed port handle, same pattern already used for a
                 // deleted node's port mapping (`process_delete_node`).
-                for (level_group_id, _node_id, external_port_name, level_port_type) in
-                    response.removed_port_mappings
-                {
-                    ws_handler
-                        .workspace
-                        .remove_port_map_entry(level_group_id, external_port_name.clone());
-                    ws_handler.nodes.remove_group_port(
-                        external_port_name,
-                        level_group_id,
-                        level_port_type,
-                    );
-                }
+                prune_removed_port_mappings(ws_handler, response.removed_port_mappings);
                 for (owning_group_id, edge) in response.disconnected_connections {
                     ws_handler.edges.delete_edge(edge, owning_group_id);
                 }
