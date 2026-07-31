@@ -12,7 +12,7 @@ use std::collections::HashSet;
 
 use opossum_core::{
     opm_document::OpmDocument,
-    types::api_types::{AnalyzerItemDto, DocumentChange, NodeEditorPanel},
+    types::api_types::{AnalyzerItemDto, DocumentChange, JumpTarget, NodeEditorPanel},
 };
 use uuid::Uuid;
 
@@ -166,6 +166,101 @@ impl Command {
         }
     }
 
+    /// Where the GUI should focus after applying this command's undo/redo (see [`JumpTarget`]): the tab,
+    /// the node to select if the change is about one, and the node-editor panel to open if it belongs to
+    /// one. Computed once here from the command, so the GUI needn't reconstruct it from the individual
+    /// `DocumentChange`s. `root_id` is the scenery root uuid, used for analyzers (which live at the root).
+    #[must_use]
+    pub fn jump_target(&self, root_id: Uuid) -> Option<JumpTarget> {
+        match self {
+            Self::PatchNode(PatchNode {
+                uuid,
+                parent_group_id,
+                new,
+                ..
+            }) => Some(JumpTarget {
+                graph_id: *parent_group_id,
+                node: Some(*uuid),
+                panel: node_commands::panel_for_update(new),
+            }),
+            Self::PatchProperty(PatchProperty {
+                uuid,
+                parent_group_id,
+                ..
+            }) => Some(JumpTarget {
+                graph_id: *parent_group_id,
+                node: Some(*uuid),
+                panel: Some(NodeEditorPanel::Properties),
+            }),
+            Self::PatchPort(PatchPort {
+                uuid,
+                parent_group_id,
+                ..
+            }) => Some(JumpTarget {
+                graph_id: *parent_group_id,
+                node: Some(*uuid),
+                panel: Some(NodeEditorPanel::PortConfig),
+            }),
+            Self::AddNode(cmd) | Self::RemoveNode(cmd) => Some(JumpTarget {
+                graph_id: cmd.parent_group_id,
+                node: Some(cmd.node.uuid().ok()?),
+                panel: None,
+            }),
+            Self::AddEdge(cmd) | Self::RemoveEdge(cmd) => Some(JumpTarget {
+                graph_id: cmd.group_id,
+                node: None,
+                panel: None,
+            }),
+            Self::UpdateEdgeDistance(cmd) => Some(JumpTarget {
+                graph_id: cmd.group_id,
+                node: None,
+                panel: None,
+            }),
+            Self::AddPortMap(cmd) => Some(JumpTarget {
+                graph_id: cmd.group_id,
+                node: None,
+                panel: None,
+            }),
+            Self::RemovePortMap(cmd) => Some(JumpTarget {
+                graph_id: cmd.group_id,
+                node: None,
+                panel: None,
+            }),
+            Self::AddAnalyzer(cmd) | Self::RemoveAnalyzer(cmd) => Some(JumpTarget {
+                graph_id: root_id,
+                node: Some(cmd.id),
+                panel: None,
+            }),
+            Self::PatchAnalyzer(cmd) => Some(JumpTarget {
+                graph_id: root_id,
+                node: Some(cmd.id),
+                panel: None,
+            }),
+            Self::RepositionAnalyzer(cmd) => Some(JumpTarget {
+                graph_id: root_id,
+                node: Some(cmd.id),
+                panel: None,
+            }),
+            Self::MoveNodes(cmd) => Some(JumpTarget {
+                graph_id: cmd.request.target_group_id,
+                node: None,
+                panel: None,
+            }),
+            Self::InsertGroup(cmd) | Self::ExtractGroup(cmd) => Some(JumpTarget {
+                graph_id: cmd.parent_group_id,
+                node: None,
+                panel: None,
+            }),
+            Self::PatchGlobalConf(_) => None,
+            Self::SetViewport(cmd) => Some(JumpTarget {
+                graph_id: cmd.to.graph_id,
+                node: None,
+                panel: None,
+            }),
+            Self::Batch(commands) => batch_jump_target(commands, root_id),
+        }
+    }
+
     /// Describes the effect of applying this command, in the GUI-facing [`DocumentChange`] shape.
     ///
     /// Call this *before* consuming the command via [`Self::apply`] (or on a clone) - it describes
@@ -261,6 +356,20 @@ impl Command {
     }
 }
 
+/// The [`JumpTarget`] for a [`Command::Batch`]: the sub-command target with the highest focus priority (a
+/// node-editor panel beats a node selection beats a bare tab), with ties broken by a stable key so undo and
+/// redo agree - a batch reverses its sub-commands between the two directions, so a position-based "first"
+/// would otherwise pick a different target each way.
+fn batch_jump_target(commands: &[Command], root_id: Uuid) -> Option<JumpTarget> {
+    commands
+        .iter()
+        .filter_map(|command| command.jump_target(root_id))
+        .max_by_key(|target| {
+            let priority = 2 * u8::from(target.panel.is_some()) + u8::from(target.node.is_some());
+            (priority, std::cmp::Reverse((target.graph_id, target.node)))
+        })
+}
+
 /// A `GraphNeedsRefresh { graph_id }` re-fetches everything in that tab (nodes, edges, port maps), so
 /// any other change in the same batch that also targets `graph_id` would be double-applied once the
 /// refresh has already picked it up - most visibly for list-valued state like `GraphStore.edges`, where
@@ -340,6 +449,121 @@ mod test {
         assert!(
             Command::Batch(vec![]).needs_rollback(),
             "a batch chains several fallible sub-steps, so it needs rollback"
+        );
+    }
+
+    /// The backend names the undo/redo focus target authoritatively (tab, node, panel) so the GUI doesn't
+    /// reconstruct it. Pins the mapping for the field-patch commands (the panel cases) and an edge (tab
+    /// only), which is the exact behavior the port-config-undo bug hinged on.
+    #[test]
+    fn jump_target_names_the_panel_node_and_tab() {
+        use opossum_core::{
+            prelude::PortType,
+            types::api_types::{ConnectInfo, NodeEditorPanel, UpdatePortRequest},
+        };
+
+        let root = Uuid::new_v4();
+        let graph = Uuid::new_v4();
+        let node = Uuid::new_v4();
+
+        // A port-config change opens Port Config on its node/tab - identically for aperture, coating, LIDT.
+        let port = Command::PatchPort(PatchPort {
+            uuid: node,
+            parent_group_id: graph,
+            port_type: PortType::Input,
+            port_name: "input_1".to_string(),
+            old: UpdatePortRequest::default(),
+            new: UpdatePortRequest::default(),
+        })
+        .jump_target(root)
+        .unwrap();
+        assert_eq!(port.graph_id, graph);
+        assert_eq!(port.node, Some(node));
+        assert_eq!(port.panel, Some(NodeEditorPanel::PortConfig));
+
+        // A name change belongs to General.
+        let name = Command::PatchNode(PatchNode {
+            uuid: node,
+            parent_group_id: graph,
+            old: UpdateNodeRequest::default(),
+            new: UpdateNodeRequest {
+                name: Some("x".to_string()),
+                ..Default::default()
+            },
+        })
+        .jump_target(root)
+        .unwrap();
+        assert_eq!(name.panel, Some(NodeEditorPanel::General));
+
+        // A gui_position-only patch (a canvas drag) selects the node but opens no panel.
+        let pos = Command::PatchNode(PatchNode {
+            uuid: node,
+            parent_group_id: graph,
+            old: UpdateNodeRequest::default(),
+            new: UpdateNodeRequest {
+                gui_position: Some(Some((1.0, 2.0))),
+                ..Default::default()
+            },
+        })
+        .jump_target(root)
+        .unwrap();
+        assert_eq!(pos.node, Some(node));
+        assert_eq!(pos.panel, None);
+
+        // An edge change names the tab but no node/panel.
+        let edge = Command::AddEdge(EdgeSnapshot {
+            group_id: graph,
+            connect_info: ConnectInfo::new(
+                Uuid::new_v4(),
+                "output_1".to_string(),
+                Uuid::new_v4(),
+                "input_1".to_string(),
+                0.1,
+                false,
+            ),
+        })
+        .jump_target(root)
+        .unwrap();
+        assert_eq!(edge.graph_id, graph);
+        assert_eq!(edge.node, None);
+        assert_eq!(edge.panel, None);
+    }
+
+    /// A `Batch`'s focus is its highest-priority sub-command (a node selection beats a bare edge tab), so a
+    /// paste (add node + reconnect edges) focuses the pasted node.
+    #[test]
+    fn batch_jump_target_prefers_the_node_over_the_edge() {
+        use opossum_core::{nodes::create_node_ref, types::api_types::ConnectInfo};
+
+        let root = Uuid::new_v4();
+        let graph = Uuid::new_v4();
+        let node_ref = create_node_ref("dummy").unwrap();
+        let node_id = node_ref.uuid().unwrap();
+        let jump = Command::Batch(vec![
+            Command::AddNode(NodeSnapshot {
+                parent_group_id: graph,
+                node: node_ref,
+                cascaded: Vec::new(),
+                connections: Vec::new(),
+            }),
+            Command::AddEdge(EdgeSnapshot {
+                group_id: graph,
+                connect_info: ConnectInfo::new(
+                    Uuid::new_v4(),
+                    "output_1".to_string(),
+                    Uuid::new_v4(),
+                    "input_1".to_string(),
+                    0.1,
+                    false,
+                ),
+            }),
+        ])
+        .jump_target(root)
+        .unwrap();
+        assert_eq!(
+            jump.node,
+            Some(node_id),
+            "the batch should focus the added node, not the edge's tab"
         );
     }
 }

@@ -19,8 +19,8 @@ use opossum_core::{
     core_optics::{SceneryResources, node_attr::HasNodeAttr},
     opm_document::OpmDocument,
     types::api_types::{
-        DocumentChange, ErrorResponse, LoadDocumentResponse, PositionUpdate, UndoRedoResponse,
-        UpdateNodeRequest, ViewportChangeRequest,
+        DocumentChange, ErrorResponse, JumpTarget, LoadDocumentResponse, PositionUpdate,
+        UndoRedoResponse, UpdateNodeRequest, ViewportChangeRequest,
     },
 };
 use std::{path::PathBuf, str::FromStr};
@@ -160,10 +160,11 @@ pub async fn undo_document(
     // pushed back onto the undo stack rather than silently dropped - the document is left untouched by
     // `with_rollback` on failure, so the still-valid command can be undone again later.
     match apply_history_step(&data, command.clone()) {
-        Ok((changes, inverse)) => {
+        Ok((changes, jump, inverse)) => {
             data.redo_stack.lock().push_back(inverse);
             Ok(Json(UndoRedoResponse {
                 changes,
+                jump,
                 can_undo: !data.undo_stack.lock().is_empty(),
                 can_redo: true,
             }))
@@ -175,9 +176,10 @@ pub async fn undo_document(
     }
 }
 
-/// Runs one undo or redo step: describes `command` for the GUI, then applies it under a rollback guard,
-/// returning `(changes, inverse)`. Callers pass a clone and keep the original, so on error they can push
-/// the still-valid command back onto its source stack (see [`undo_document`]/[`redo_document`]).
+/// Runs one undo or redo step: describes `command` for the GUI and computes its [`JumpTarget`], then
+/// applies it under a rollback guard, returning `(changes, jump, inverse)`. Callers pass a clone and keep
+/// the original, so on error they can push the still-valid command back onto its source stack (see
+/// [`undo_document`]/[`redo_document`]).
 ///
 /// # Errors
 ///
@@ -186,9 +188,11 @@ pub async fn undo_document(
 fn apply_history_step(
     data: &AppState,
     command: Command,
-) -> Result<(Vec<DocumentChange>, Command), BackEndErrorResponse> {
+) -> Result<(Vec<DocumentChange>, Option<JumpTarget>, Command), BackEndErrorResponse> {
     let changes = command.describe()?;
     let mut document = data.document.lock();
+    // Where the GUI should focus after this step - computed from the command, not reconstructed by the GUI.
+    let jump = command.jump_target(document.scenery().node_attr().uuid());
     // `with_rollback` snapshots the whole document as a transient safety net against a multi-step `apply`
     // failing partway and leaving it torn. Atomic commands can't partial-fail, so skip the snapshot for
     // them - most importantly for the very frequent `SetViewport` camera undos, which don't touch the
@@ -200,7 +204,7 @@ fn apply_history_step(
         command.apply(&mut document)?
     };
     drop(document);
-    Ok((changes, inverse))
+    Ok((changes, jump, inverse))
 }
 
 /// Redo the last undone document edit.
@@ -222,10 +226,11 @@ pub async fn redo_document(
     };
     // Symmetric to `undo_document`: on failure, push the popped entry back onto the redo stack.
     match apply_history_step(&data, command.clone()) {
-        Ok((changes, inverse)) => {
+        Ok((changes, jump, inverse)) => {
             data.undo_stack.lock().push_back(inverse);
             Ok(Json(UndoRedoResponse {
                 changes,
+                jump,
                 can_undo: true,
                 can_redo: !data.redo_stack.lock().is_empty(),
             }))

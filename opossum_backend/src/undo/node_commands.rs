@@ -275,7 +275,7 @@ pub(super) fn apply_patch_node(
 /// exclusive in every current caller (one field per patch), but if a caller ever set both, `alignment`
 /// wins as the more specific edit. A patch with only `gui_position` set (a canvas drag, e.g.
 /// `patch_positions`) belongs to no panel.
-const fn panel_for_update(new: &UpdateNodeRequest) -> Option<NodeEditorPanel> {
+pub(super) const fn panel_for_update(new: &UpdateNodeRequest) -> Option<NodeEditorPanel> {
     if new.alignment.is_some() {
         Some(NodeEditorPanel::Alignment)
     } else if new.isometry.is_some() {

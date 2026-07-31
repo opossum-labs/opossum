@@ -769,6 +769,11 @@ async fn apply_document_changes(
         .or_else(|| panel_requests.first().copied());
     let jumped = if let Some((graph_id, uuid, panel)) = chosen_node {
         *LAST_AUTO_SELECTED_NODE.write() = Some((graph_id, uuid));
+        // Ask the node editor to open the changed panel whether or not we have to jump: undoing a detail
+        // change (port config, properties, ...) while the node is *already* selected must still open its
+        // panel. The editors only act on this global signal (and clear it once they've opened), so it must
+        // be set in both branches - not just when jumping to a not-yet-displayed node.
+        *PENDING_PANEL_OPEN.write() = Some((uuid, panel));
         let already_showing = *workspace.active_tab().read() == graph_id
             && workspace.tabs().get(graph_id).is_some_and(|g| {
                 let selected = g.graph_store().read().get_selected_nodes(graph_id);
@@ -779,7 +784,6 @@ async fn apply_document_changes(
         } else {
             ensure_tab_active(graph_id, ws_handler, root_graph_id, workspace).await;
             ws_handler.nodes.set_node_active(graph_id, uuid, true, 0);
-            *PENDING_PANEL_OPEN.write() = Some((uuid, panel));
             true
         }
     } else {

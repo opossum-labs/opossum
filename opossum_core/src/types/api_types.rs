@@ -668,6 +668,21 @@ pub enum NodeEditorPanel {
     Alignment,
 }
 
+/// Where the GUI should focus after an undo/redo, computed once by the backend from the command it
+/// reversed. Lets the GUI switch tab -> select node -> open panel directly, instead of reconstructing the
+/// target from the individual [`DocumentChange`]s (which is order-sensitive and unreliable).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize, ToSchema)]
+pub struct JumpTarget {
+    /// The tab (graph) the change lives in - always known.
+    pub graph_id: Uuid,
+    /// The node to select, if the change is about a specific one (`None` for an edge, a structural
+    /// change, or a global-config change).
+    pub node: Option<Uuid>,
+    /// The node-editor panel to open, if the change belongs to one (`None` for a canvas-only or
+    /// structural change).
+    pub panel: Option<NodeEditorPanel>,
+}
+
 /// One user-visible effect of an undo/redo step.
 ///
 /// Shaped so the GUI can react to it the same way it reacts to the corresponding normal
@@ -792,6 +807,9 @@ pub struct ViewportChangeRequest {
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct UndoRedoResponse {
     pub changes: Vec<DocumentChange>,
+    /// Where the GUI should focus after applying `changes` (see [`JumpTarget`]); `None` when the step has
+    /// no meaningful focus (e.g. a global-config change).
+    pub jump: Option<JumpTarget>,
     pub can_undo: bool,
     pub can_redo: bool,
 }
