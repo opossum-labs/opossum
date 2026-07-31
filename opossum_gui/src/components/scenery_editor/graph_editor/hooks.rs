@@ -48,17 +48,9 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
         let new_shift_y = mouse_on_graph_y.mul_add(-new_graph_zoom, mouse_pos.y);
 
         let graph_id = *workspace.active_tab().read();
-        workspace_processor.send(GraphsWorkspaceAction::SetZoom {
-            graph_id,
-            zoom: new_graph_zoom,
-        });
-        workspace_processor.send(GraphsWorkspaceAction::SetShift {
-            graph_id,
-            shift: Point2D::new(new_shift_x, new_shift_y),
-        });
 
-        // Record this zoom tick as an undo step. Each wheel tick posts its own before/after; the backend
-        // coalesces a whole scroll burst into a single undo step (see `post_viewport_change`).
+        // Each wheel tick posts its own before/after; the backend coalesces a whole scroll burst into a
+        // single undo step (see `post_viewport_change`).
         let before = Viewport {
             graph_id,
             zoom: current_graph_zoom,
@@ -69,6 +61,23 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
             zoom: new_graph_zoom,
             shift: (new_shift_x, new_shift_y),
         };
+        // At the MIN/MAX zoom clamp the tick doesn't move the camera (before == after). The backend would
+        // discard it anyway, so skip the no-op SetZoom/SetShift and - crucially - the optimistic
+        // Undo-enable below, which would otherwise light up the Undo button for a no-op (and clicking it
+        // 409s on an empty stack). Mirrors `push_viewport_change`'s own before==after guard.
+        if before == after {
+            return;
+        }
+
+        workspace_processor.send(GraphsWorkspaceAction::SetZoom {
+            graph_id,
+            zoom: new_graph_zoom,
+        });
+        workspace_processor.send(GraphsWorkspaceAction::SetShift {
+            graph_id,
+            shift: Point2D::new(new_shift_x, new_shift_y),
+        });
+
         // A zoom is undoable, so enable Undo / grey out Redo like any other edit.
         *crate::UNDO_REDO_STATUS.write() = (true, false);
         spawn(async move {
