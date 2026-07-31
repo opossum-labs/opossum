@@ -603,6 +603,13 @@ async fn apply_document_changes(
                 if let Some(panel) = panel {
                     panel_requests.push((graph_id, uuid, panel));
                 }
+                // A patch is a real document mutation, so register its tab as a structural-change
+                // candidate (like NodeAdded/NodeRemoved). Undoing a position-only patch from another tab
+                // has panel == None and thus no panel_requests entry - without this it would have no jump
+                // target and appear to do nothing. Panel-carrying patches still get the more specific
+                // panel jump above; the post-loop `if !jumped` guard prevents a double-jump.
+                structural_change_graph_ids.push(graph_id);
+                primary_structural_graph_id.get_or_insert(graph_id);
             }
             DocumentChange::NodeDetailsChanged {
                 uuid,
@@ -618,11 +625,14 @@ async fn apply_document_changes(
             DocumentChange::AnalyzerMoved { id, gui_position } => {
                 // Analyzers live at the root scenery; move the analyzer's canvas node back on
                 // undo/redo (a details refresh alone wouldn't touch its position).
+                let root_id = *root_graph_id.read();
                 let mut positions = HashMap::new();
                 positions.insert(id, Point2D::new(gui_position.0, gui_position.1));
-                ws_handler
-                    .nodes
-                    .update_node_positions(positions, *root_graph_id.read());
+                ws_handler.nodes.update_node_positions(positions, root_id);
+                // Register the root tab so undoing an analyzer move from another tab switches back to it
+                // (same reasoning as the NodePatched arm above).
+                structural_change_graph_ids.push(root_id);
+                primary_structural_graph_id.get_or_insert(root_id);
             }
             DocumentChange::EdgeAdded {
                 graph_id,
