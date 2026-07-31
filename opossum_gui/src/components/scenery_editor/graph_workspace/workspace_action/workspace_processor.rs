@@ -967,6 +967,26 @@ async fn process_delete_nodes(
     }
 }
 
+/// Populates a group's external port-map entries in the workspace from a backend `PortMappingsResponse`
+/// (input and output mappings are added the same way). Shared by `refresh_group_ports` and
+/// `process_fill_graph_of_group`.
+fn apply_port_mappings(
+    ws_handler: WorkSpaceSignalHandlers,
+    group_id: Uuid,
+    response: &PortMappingsResponse,
+) {
+    for (group_port_name, (mapped_node_id, mapped_node_port_name)) in
+        response.inputs.iter().chain(response.outputs.iter())
+    {
+        ws_handler.workspace.add_port_map(
+            group_id,
+            group_port_name.clone(),
+            mapped_node_port_name.clone(),
+            *mapped_node_id,
+        );
+    }
+}
+
 /// Refreshes a single group's external port-map list and its displayed port-name handles from the
 /// backend's current state. Used both for a group that was just pasted into (its content is new to the
 /// GUI) and for a group that nodes were just cut *out of* (its port maps/handles may have shrunk and need
@@ -974,27 +994,8 @@ async fn process_delete_nodes(
 async fn refresh_group_ports(ws_handler: WorkSpaceSignalHandlers, group_id: Uuid) {
     eval_action_run(
         api::get_port_maps_of_group(group_id).await,
-        Some(move |port_mappings_response: PortMappingsResponse| {
-            for (group_port_name, (mapped_node_id, mapped_node_port_name)) in
-                &port_mappings_response.inputs
-            {
-                ws_handler.workspace.add_port_map(
-                    group_id,
-                    group_port_name.clone(),
-                    mapped_node_port_name.clone(),
-                    *mapped_node_id,
-                );
-            }
-            for (group_port_name, (mapped_node_id, mapped_node_port_name)) in
-                &port_mappings_response.outputs
-            {
-                ws_handler.workspace.add_port_map(
-                    group_id,
-                    group_port_name.clone(),
-                    mapped_node_port_name.clone(),
-                    *mapped_node_id,
-                );
-            }
+        Some(move |response: PortMappingsResponse| {
+            apply_port_mappings(ws_handler, group_id, &response);
         }),
     );
     eval_action_run(
@@ -1649,28 +1650,8 @@ async fn process_fill_graph_of_group(
 
     eval_action_run(
         api::get_port_maps_of_group(group_id).await,
-        Some(move |port_mappings_response: PortMappingsResponse| {
-            // ... (Dein existierender Code für Port-Mappings)
-            for (group_port_name, (mapped_node_id, mapped_node_port_name)) in
-                &port_mappings_response.inputs
-            {
-                ws_handler.workspace.add_port_map(
-                    group_id,
-                    group_port_name.clone(),
-                    mapped_node_port_name.clone(),
-                    *mapped_node_id,
-                );
-            }
-            for (group_port_name, (mapped_node_id, mapped_node_port_name)) in
-                &port_mappings_response.outputs
-            {
-                ws_handler.workspace.add_port_map(
-                    group_id,
-                    group_port_name.clone(),
-                    mapped_node_port_name.clone(),
-                    *mapped_node_id,
-                );
-            }
+        Some(move |response: PortMappingsResponse| {
+            apply_port_mappings(ws_handler, group_id, &response);
         }),
     );
 
