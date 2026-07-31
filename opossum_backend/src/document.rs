@@ -324,10 +324,10 @@ async fn patch_positions(
     }
 
     let mut document = data.document.lock();
-    // Rolled back as a whole on failure: a later update failing after earlier ones already mutated
-    // the document must not leave a partial batch behind - the GUI only applies changes on a
-    // successful response.
-    let mut inverses = with_rollback(&mut document, |d| apply_position_updates(d, updates))?;
+    // `apply_position_updates` restores the document itself on a partial failure (by replaying the atomic
+    // inverses it already collects), so no whole-document snapshot is needed here - the GUI only applies
+    // changes on a successful response.
+    let mut inverses = apply_position_updates(&mut document, updates)?;
     inverses.reverse();
     data.push_undo(Command::Batch(inverses));
     drop(document);
@@ -335,57 +335,88 @@ async fn patch_positions(
     Ok(HttpResponse::NoContent().finish())
 }
 
-/// Applies each position update to `document` in order, returning the list of inverse commands (one
-/// per update, in application order) - or the first error encountered, with `document` left partially
-/// mutated by whichever updates ran before it (the caller is expected to restore from a backup).
+/// Applies each position update to `document` in order, returning the inverse commands (one per update, in
+/// application order). On the first failure it restores `document` by replaying the inverses of the updates
+/// already applied, in reverse - so a partially-applied batch never leaks, without a whole-document
+/// snapshot. This inverse-unwind is a valid substitute for a snapshot *here specifically* because every
+/// sub-update is an atomic [`Command::PatchNode`]/[`Command::RepositionAnalyzer`] field-set whose inverse,
+/// applied to a node/analyzer that still exists, cannot itself fail.
+///
+/// # Errors
+///
+/// Returns the first update's error, with `document` restored to its pre-call state.
 fn apply_position_updates(
     document: &mut OpmDocument,
     updates: Vec<PositionUpdate>,
 ) -> Result<Vec<Command>, BackEndErrorResponse> {
     let mut inverses = Vec::with_capacity(updates.len());
     for update in updates {
-        let inverse = if update.is_optical {
-            let new = UpdateNodeRequest {
-                gui_position: Some(Some(update.gui_position)),
-                ..Default::default()
-            };
-            let old = document
-                .scenery()
-                .with_node_attr(update.uuid, |node_attr| {
-                    capture_old_node_request(node_attr, &new)
-                })?;
-            let parent_group_id = parent_group_id_or_self(document.scenery(), update.uuid)?;
-            Command::PatchNode(PatchNode {
-                uuid: update.uuid,
-                parent_group_id,
-                old,
-                new,
-            })
-            .apply(document)?
-        } else {
-            let old_pos = document
-                .analyzer_mut(update.uuid)
-                .ok_or_else(|| {
-                    BackEndErrorResponse::new(404, "Opossum", "UUID not found in analyzers")
-                })?
-                .gui_position()
-                .map_or((0., 0.), |p| (p.x, p.y));
-            Command::RepositionAnalyzer(RepositionAnalyzer {
-                id: update.uuid,
-                old_pos,
-                new_pos: update.gui_position,
-            })
-            .apply(document)?
-        };
-        inverses.push(inverse);
+        match apply_one_position_update(document, &update) {
+            Ok(inverse) => inverses.push(inverse),
+            Err(err) => {
+                // Restore by replaying the applied inverses in reverse. Each is an atomic field-set on an
+                // existing node/analyzer, so apply cannot fail; discard the re-inverse it returns.
+                for inverse in inverses.into_iter().rev() {
+                    let _ = inverse.apply(document);
+                }
+                return Err(err);
+            }
+        }
     }
     Ok(inverses)
 }
 
+/// Applies a single position update, returning the [`Command`] that inverts it: optical nodes go through
+/// [`Command::PatchNode`] (capturing the old `gui_position`), analyzers through
+/// [`Command::RepositionAnalyzer`].
+///
+/// # Errors
+///
+/// Returns an error if `update.uuid` doesn't resolve to a node (optical) or an analyzer.
+fn apply_one_position_update(
+    document: &mut OpmDocument,
+    update: &PositionUpdate,
+) -> Result<Command, BackEndErrorResponse> {
+    if update.is_optical {
+        let new = UpdateNodeRequest {
+            gui_position: Some(Some(update.gui_position)),
+            ..Default::default()
+        };
+        let old = document
+            .scenery()
+            .with_node_attr(update.uuid, |node_attr| {
+                capture_old_node_request(node_attr, &new)
+            })?;
+        let parent_group_id = parent_group_id_or_self(document.scenery(), update.uuid)?;
+        Command::PatchNode(PatchNode {
+            uuid: update.uuid,
+            parent_group_id,
+            old,
+            new,
+        })
+        .apply(document)
+    } else {
+        let old_pos = document
+            .analyzer_mut(update.uuid)
+            .ok_or_else(|| {
+                BackEndErrorResponse::new(404, "Opossum", "UUID not found in analyzers")
+            })?
+            .gui_position()
+            .map_or((0., 0.), |p| (p.x, p.y));
+        Command::RepositionAnalyzer(RepositionAnalyzer {
+            id: update.uuid,
+            old_pos,
+            new_pos: update.gui_position,
+        })
+        .apply(document)
+    }
+}
+
 /// Runs `mutate` against `document`, restoring `document` to exactly its pre-call state if it
-/// fails - so a bug in a multi-step mutation (e.g. a [`Command::Batch`] applied by undo/redo, or a
-/// position-update batch that fails partway through) can never leave the live document silently
-/// torn.
+/// fails - so a bug in a multi-step mutation (e.g. a [`Command::Batch`] applied by undo/redo) can never
+/// leave the live document silently torn. Used for commands whose `apply` mutates in several fallible
+/// steps without collecting its own inverses; the position batch instead self-unwinds (see
+/// [`apply_position_updates`]).
 ///
 /// # Errors
 ///
@@ -671,6 +702,73 @@ mod test {
         let body: UndoRedoResponse = test::read_body_json(resp).await;
         assert!(!body.can_undo);
         assert_eq!(body.changes.len(), 2);
+    }
+
+    /// Regression test for the inverse-unwind that replaced the whole-document snapshot in
+    /// `patch_positions`: a batch whose later update is unresolvable must restore the document (undoing
+    /// the updates already applied) and push no undo entry - the GUI only applies changes on success.
+    /// Moves node A, then targets a nonexistent uuid so the batch fails after A already moved, and asserts
+    /// A is back at its original position and the undo stack is empty.
+    #[actix_web::test]
+    async fn test_patch_positions_rolls_back_on_partial_failure() {
+        use opossum_core::{nodes::Dummy, types::api_types::PositionUpdate};
+        use uuid::Uuid;
+
+        let app_state = Data::new(AppState::default());
+        let node_a = {
+            let mut document = app_state.document.lock();
+            document.scenery_mut().add_node(Dummy::default()).unwrap()
+        };
+        let original = app_state
+            .document
+            .lock()
+            .scenery()
+            .with_node_attr(node_a, |attr| attr.gui_position().map(|p| (p.x, p.y)))
+            .unwrap();
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(patch_positions),
+        )
+        .await;
+
+        let updates = vec![
+            PositionUpdate {
+                uuid: node_a,
+                is_optical: true,
+                gui_position: (10.0, 20.0),
+            },
+            PositionUpdate {
+                uuid: Uuid::new_v4(),
+                is_optical: true,
+                gui_position: (30.0, 40.0),
+            },
+        ];
+        let req = test::TestRequest::patch()
+            .uri("/positions")
+            .set_json(&updates)
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert!(
+            !resp.status().is_success(),
+            "a batch with an unresolvable update must fail"
+        );
+
+        let after = app_state
+            .document
+            .lock()
+            .scenery()
+            .with_node_attr(node_a, |attr| attr.gui_position().map(|p| (p.x, p.y)))
+            .unwrap();
+        assert_eq!(
+            after, original,
+            "the already-applied first update must be unwound when the batch fails"
+        );
+        assert!(
+            app_state.undo_stack.lock().is_empty(),
+            "a failed position batch must push no undo entry"
+        );
     }
 
     /// Regression test for the bug where undoing a group conversion of *connected* nodes silently
