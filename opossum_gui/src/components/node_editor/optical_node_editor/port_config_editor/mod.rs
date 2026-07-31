@@ -35,15 +35,21 @@ pub fn PortConfigEditor(
 ) -> Element {
     let current_node_id = *node_id.read();
     let mut editor_inputs = Vec::new();
-    let mut previous_ports_sig = use_signal(|| None::<NodePortsResponse>);
+    // Keyed by node id so the "ports changed" comparison below only fires for the *same* node - see there.
+    let mut previous_ports_sig = use_signal(|| None::<(Uuid, NodePortsResponse)>);
 
     let ports_resource = use_resource(move || async move {
         crate::NODE_DETAILS_REFRESH();
         let previous = previous_ports_sig.peek().clone();
         match get_ports_of_group(current_node_id).await {
             Ok(ports_info) => {
-                if let Some(previous) = previous
-                    && previous != ports_info
+                // Only treat this as a port change worth surfacing (an undo/redo of a port-config edit)
+                // when the previously-stored ports belong to the node we're still inspecting. Without the
+                // id check, an ordinary switch to a different node with a different port shape would
+                // wrongly force the Port Configuration accordion open.
+                if let Some((prev_id, prev_ports)) = previous
+                    && prev_id == current_node_id
+                    && prev_ports != ports_info
                 {
                     open_accordion_section(NodeEditorPanel::PortConfig);
                 }
@@ -56,7 +62,7 @@ pub fn PortConfigEditor(
                     open_accordion_section(NodeEditorPanel::PortConfig);
                     *crate::PENDING_PANEL_OPEN.write() = None;
                 }
-                previous_ports_sig.set(Some(ports_info.clone()));
+                previous_ports_sig.set(Some((current_node_id, ports_info.clone())));
                 Some(ports_info)
             }
             Err(err_str) => {
