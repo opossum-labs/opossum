@@ -19,8 +19,8 @@ use opossum_core::{
     core_optics::{SceneryResources, node_attr::HasNodeAttr},
     opm_document::OpmDocument,
     types::api_types::{
-        ErrorResponse, LoadDocumentResponse, PositionUpdate, UndoRedoResponse, UpdateNodeRequest,
-        ViewportChangeRequest,
+        DocumentChange, ErrorResponse, LoadDocumentResponse, PositionUpdate, UndoRedoResponse,
+        UpdateNodeRequest, ViewportChangeRequest,
     },
 };
 use std::{path::PathBuf, str::FromStr};
@@ -156,17 +156,42 @@ pub async fn undo_document(
     let Some(command) = data.undo_stack.lock().pop_back() else {
         return Err(BackEndErrorResponse::new(409, "Opossum", "Nothing to undo"));
     };
+    // Run against a clone (keeping `command`), so if `describe`/`apply` fails the popped entry can be
+    // pushed back onto the undo stack rather than silently dropped - the document is left untouched by
+    // `with_rollback` on failure, so the still-valid command can be undone again later.
+    match apply_history_step(&data, command.clone()) {
+        Ok((changes, inverse)) => {
+            data.redo_stack.lock().push_back(inverse);
+            Ok(Json(UndoRedoResponse {
+                changes,
+                can_undo: !data.undo_stack.lock().is_empty(),
+                can_redo: true,
+            }))
+        }
+        Err(err) => {
+            data.undo_stack.lock().push_back(command);
+            Err(err)
+        }
+    }
+}
+
+/// Runs one undo or redo step: describes `command` for the GUI, then applies it under a rollback guard,
+/// returning `(changes, inverse)`. Callers pass a clone and keep the original, so on error they can push
+/// the still-valid command back onto its source stack (see [`undo_document`]/[`redo_document`]).
+///
+/// # Errors
+///
+/// Returns `describe`'s or `apply`'s error; on an `apply` failure `with_rollback` has already restored
+/// the document to its pre-call state.
+fn apply_history_step(
+    data: &AppState,
+    command: Command,
+) -> Result<(Vec<DocumentChange>, Command), BackEndErrorResponse> {
     let changes = command.describe()?;
     let mut document = data.document.lock();
     let inverse = with_rollback(&mut document, |d| command.apply(d))?;
     drop(document);
-    data.redo_stack.lock().push_back(inverse);
-
-    Ok(Json(UndoRedoResponse {
-        changes,
-        can_undo: !data.undo_stack.lock().is_empty(),
-        can_redo: true,
-    }))
+    Ok((changes, inverse))
 }
 
 /// Redo the last undone document edit.
@@ -186,17 +211,21 @@ pub async fn redo_document(
     let Some(command) = data.redo_stack.lock().pop_back() else {
         return Err(BackEndErrorResponse::new(409, "Opossum", "Nothing to redo"));
     };
-    let changes = command.describe()?;
-    let mut document = data.document.lock();
-    let inverse = with_rollback(&mut document, |d| command.apply(d))?;
-    drop(document);
-    data.undo_stack.lock().push_back(inverse);
-
-    Ok(Json(UndoRedoResponse {
-        changes,
-        can_undo: true,
-        can_redo: !data.redo_stack.lock().is_empty(),
-    }))
+    // Symmetric to `undo_document`: on failure, push the popped entry back onto the redo stack.
+    match apply_history_step(&data, command.clone()) {
+        Ok((changes, inverse)) => {
+            data.undo_stack.lock().push_back(inverse);
+            Ok(Json(UndoRedoResponse {
+                changes,
+                can_undo: true,
+                can_redo: !data.redo_stack.lock().is_empty(),
+            }))
+        }
+        Err(err) => {
+            data.redo_stack.lock().push_back(command);
+            Err(err)
+        }
+    }
 }
 
 /// Record a canvas viewport change (pan/zoom of a tab) as its own undo step.
@@ -795,6 +824,95 @@ mod test {
             before, after,
             "a failed undo must leave the document exactly as it was, including undoing the first \
              sub-command's already-applied effect"
+        );
+        // The history entry must survive the failure - popped, but pushed back rather than dropped, so
+        // the edit can still be undone later instead of vanishing.
+        assert_eq!(
+            app_state.undo_stack.lock().len(),
+            1,
+            "a failed undo must keep its command on the undo stack, not silently drop it"
+        );
+        assert!(
+            app_state.redo_stack.lock().is_empty(),
+            "a failed undo must not push anything onto the redo stack"
+        );
+    }
+
+    /// Companion to `test_failed_undo_rolls_back_partial_mutation` for the redo path: a redo whose
+    /// command fails partway must roll the document back *and* keep its entry on the redo stack rather
+    /// than dropping it. Pushes a crafted failing `Batch` straight onto the redo stack, redoes, and
+    /// asserts the redo errored, the document is unchanged, and the entry is still there.
+    #[actix_web::test]
+    async fn test_failed_redo_restores_command_to_redo_stack() {
+        use crate::undo::{Command, EdgeSnapshot};
+        use opossum_core::{nodes::Dummy, types::api_types::ConnectInfo};
+        use uuid::Uuid;
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, node_x, node_y) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let scenery = document.scenery_mut();
+            let node_x = scenery.add_node(Dummy::default()).unwrap();
+            let node_y = scenery.add_node(Dummy::default()).unwrap();
+            (root_id, node_x, node_y)
+        };
+
+        let before = app_state.document.lock().to_opm_file_string().unwrap();
+
+        // Same shape as the undo test: step 1 succeeds, step 2 is guaranteed to fail. Pushed straight
+        // onto the redo stack (a successful undo is what would normally put it there).
+        app_state.redo_stack.lock().push_back(Command::Batch(vec![
+            Command::AddEdge(EdgeSnapshot {
+                group_id: root_id,
+                connect_info: ConnectInfo::new(
+                    node_x,
+                    "output_1".to_string(),
+                    node_y,
+                    "input_1".to_string(),
+                    0.1,
+                    false,
+                ),
+            }),
+            Command::RemoveEdge(EdgeSnapshot {
+                group_id: root_id,
+                connect_info: ConnectInfo::new(
+                    Uuid::new_v4(),
+                    "output_1".to_string(),
+                    Uuid::new_v4(),
+                    "input_1".to_string(),
+                    0.1,
+                    false,
+                ),
+            }),
+        ]));
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(redo_document),
+        )
+        .await;
+        let req = test::TestRequest::post().uri("/redo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert!(
+            !resp.status().is_success(),
+            "the crafted second step must fail"
+        );
+
+        let after = app_state.document.lock().to_opm_file_string().unwrap();
+        assert_eq!(
+            before, after,
+            "a failed redo must leave the document exactly as it was"
+        );
+        assert_eq!(
+            app_state.redo_stack.lock().len(),
+            1,
+            "a failed redo must keep its command on the redo stack, not silently drop it"
+        );
+        assert!(
+            app_state.undo_stack.lock().is_empty(),
+            "a failed redo must not push anything onto the undo stack"
         );
     }
 
