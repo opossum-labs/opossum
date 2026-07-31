@@ -129,6 +129,43 @@ impl Command {
         }
     }
 
+    /// Whether applying this command needs the transient whole-document rollback backup taken by the
+    /// undo/redo handlers (see [`crate::document`]'s `apply_history_step`).
+    ///
+    /// `true` only for commands whose `apply` performs several fallible sub-steps and so could leave the
+    /// document partially mutated if one fails partway: a [`Self::Batch`], a node insert/remove that also
+    /// cascades and reconnects edges, a move, a group conversion, or a port-map cascade. Atomic
+    /// single-mutation commands - a field patch, a single edge, an analyzer op, or a camera move (which
+    /// doesn't touch the document at all) - either succeed or fail before mutating anything, so they don't
+    /// need the (whole-document-serialize) safety net. The match is exhaustive rather than a wildcard, so
+    /// a newly added variant must be classified deliberately instead of silently defaulting either way.
+    pub const fn needs_rollback(&self) -> bool {
+        match self {
+            // Atomic: a single set/insert/remove/camera-move that can't leave a partial mutation behind.
+            Self::PatchNode(_)
+            | Self::PatchProperty(_)
+            | Self::PatchPort(_)
+            | Self::AddEdge(_)
+            | Self::RemoveEdge(_)
+            | Self::UpdateEdgeDistance(_)
+            | Self::AddAnalyzer(_)
+            | Self::RemoveAnalyzer(_)
+            | Self::PatchAnalyzer(_)
+            | Self::RepositionAnalyzer(_)
+            | Self::PatchGlobalConf(_)
+            | Self::SetViewport(_) => false,
+            // Multi-step: several fallible sub-steps, so a mid-apply failure could tear the document.
+            Self::AddNode(_)
+            | Self::RemoveNode(_)
+            | Self::AddPortMap(_)
+            | Self::RemovePortMap(_)
+            | Self::MoveNodes(_)
+            | Self::InsertGroup(_)
+            | Self::ExtractGroup(_)
+            | Self::Batch(_) => true,
+        }
+    }
+
     /// Describes the effect of applying this command, in the GUI-facing [`DocumentChange`] shape.
     ///
     /// Call this *before* consuming the command via [`Self::apply`] (or on a clone) - it describes
@@ -260,4 +297,49 @@ fn dedup_against_full_refreshes(changes: Vec<DocumentChange>) -> Vec<DocumentCha
             | DocumentChange::ViewportChanged { .. } => true,
         })
         .collect()
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use opossum_core::types::api_types::{UpdateNodeRequest, Viewport};
+    use uuid::Uuid;
+
+    /// The rollback backup is a whole-document serialize, so it must be taken only where a multi-step
+    /// `apply` could tear the document partway through, and skipped for atomic commands - above all the
+    /// very frequent `SetViewport` camera undos. Pins the classification so a change can't silently
+    /// regress it (the exhaustive match also forces any new variant to be classified deliberately).
+    #[test]
+    fn needs_rollback_classifies_atomic_and_multistep_commands() {
+        let viewport = |zoom| Viewport {
+            graph_id: Uuid::new_v4(),
+            zoom,
+            shift: (0.0, 0.0),
+        };
+        // Atomic: no whole-document backup needed.
+        assert!(
+            !Command::SetViewport(SetViewport {
+                from: viewport(1.0),
+                to: viewport(2.0),
+                coalescing: false,
+            })
+            .needs_rollback(),
+            "a camera move never touches the document, so it needs no rollback"
+        );
+        assert!(
+            !Command::PatchNode(PatchNode {
+                uuid: Uuid::new_v4(),
+                parent_group_id: Uuid::new_v4(),
+                old: UpdateNodeRequest::default(),
+                new: UpdateNodeRequest::default(),
+            })
+            .needs_rollback(),
+            "a single-field patch can't leave a partial mutation"
+        );
+        // Multi-step: backup needed.
+        assert!(
+            Command::Batch(vec![]).needs_rollback(),
+            "a batch chains several fallible sub-steps, so it needs rollback"
+        );
+    }
 }

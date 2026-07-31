@@ -189,7 +189,16 @@ fn apply_history_step(
 ) -> Result<(Vec<DocumentChange>, Command), BackEndErrorResponse> {
     let changes = command.describe()?;
     let mut document = data.document.lock();
-    let inverse = with_rollback(&mut document, |d| command.apply(d))?;
+    // `with_rollback` snapshots the whole document as a transient safety net against a multi-step `apply`
+    // failing partway and leaving it torn. Atomic commands can't partial-fail, so skip the snapshot for
+    // them - most importantly for the very frequent `SetViewport` camera undos, which don't touch the
+    // document at all. This is a per-operation backup, distinct from the per-entry stored snapshot the
+    // lightweight-command design deliberately avoids (see `MAX_UNDO_DEPTH` in `app_state.rs`).
+    let inverse = if command.needs_rollback() {
+        with_rollback(&mut document, |d| command.apply(d))?
+    } else {
+        command.apply(&mut document)?
+    };
     drop(document);
     Ok((changes, inverse))
 }
