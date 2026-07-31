@@ -133,6 +133,27 @@ pub fn capture_node_connections(
         .collect())
 }
 
+/// Maps `node_id`'s internal port `internal_name` to `external_name` on `g`'s external port map,
+/// dispatching on `port_type`. Collapses the `match port_type { Input => map_input_port, Output =>
+/// map_output_port }` split that every runtime-`port_type` mapping call would otherwise repeat.
+///
+/// # Errors
+///
+/// Returns an error under the same conditions as [`NodeGroup::map_input_port`] /
+/// [`NodeGroup::map_output_port`].
+pub fn map_port(
+    g: &mut NodeGroup,
+    port_type: PortType,
+    node_id: Uuid,
+    internal_name: &str,
+    external_name: &str,
+) -> OpmResult<()> {
+    match port_type {
+        PortType::Input => g.map_input_port(node_id, internal_name, external_name),
+        PortType::Output => g.map_output_port(node_id, internal_name, external_name),
+    }
+}
+
 /// Deletes every node in `node_ids` from `scenery`, cascade-aware.
 ///
 /// Deleting a node cascades away any reference node pointing at it ([`NodeGroup::delete_node`]). When the
@@ -631,23 +652,12 @@ fn reroute_pre_existing_mapping(
     let to_group_port_map =
         scenery.with_group_node(to_group_id, |g| g.graph().port_map(&port_type).clone())?;
     let new_name = generate_unique_external_name(&to_group_port_map, moved_port);
-    match port_type {
-        PortType::Input => scenery.with_group_node_mut(to_group_id, |g| {
-            g.map_input_port(moved_node_id, moved_port, &new_name)
-        })??,
-        PortType::Output => scenery.with_group_node_mut(to_group_id, |g| {
-            g.map_output_port(moved_node_id, moved_port, &new_name)
-        })??,
-    }
-
-    match port_type {
-        PortType::Input => scenery.with_group_node_mut(from_group_id, |g| {
-            g.map_input_port(to_group_id, &new_name, external_name)
-        })??,
-        PortType::Output => scenery.with_group_node_mut(from_group_id, |g| {
-            g.map_output_port(to_group_id, &new_name, external_name)
-        })??,
-    }
+    scenery.with_group_node_mut(to_group_id, |g| {
+        map_port(g, port_type, moved_node_id, moved_port, &new_name)
+    })??;
+    scenery.with_group_node_mut(from_group_id, |g| {
+        map_port(g, port_type, to_group_id, &new_name, external_name)
+    })??;
     Ok(())
 }
 
@@ -1042,14 +1052,9 @@ fn reconnect_edge(
         let to_group_port_map =
             scenery.with_group_node(to_group_id, |g| g.graph().port_map(&port_type).clone())?;
         let new_name = generate_unique_external_name(&to_group_port_map, &moved_port);
-        match port_type {
-            PortType::Input => scenery.with_group_node_mut(to_group_id, |g| {
-                g.map_input_port(moved_node_id, &moved_port, &new_name)
-            })??,
-            PortType::Output => scenery.with_group_node_mut(to_group_id, |g| {
-                g.map_output_port(moved_node_id, &moved_port, &new_name)
-            })??,
-        }
+        scenery.with_group_node_mut(to_group_id, |g| {
+            map_port(g, port_type, moved_node_id, &moved_port, &new_name)
+        })??;
 
         let (src_id, src_port, target_id, target_port) = match port_type {
             PortType::Input => (other_node_id, other_port, to_group_id, new_name),
@@ -1114,14 +1119,15 @@ pub fn reconnect_moved_node_connections(
                 grandparent_id,
                 outer_name,
             } => {
-                match port_type {
-                    PortType::Input => scenery.with_group_node_mut(grandparent_id, |g| {
-                        g.map_input_port(moved_node_id, &internal_port_name, &outer_name)
-                    })??,
-                    PortType::Output => scenery.with_group_node_mut(grandparent_id, |g| {
-                        g.map_output_port(moved_node_id, &internal_port_name, &outer_name)
-                    })??,
-                }
+                scenery.with_group_node_mut(grandparent_id, |g| {
+                    map_port(
+                        g,
+                        port_type,
+                        moved_node_id,
+                        &internal_port_name,
+                        &outer_name,
+                    )
+                })??;
                 result.port_map_groups_changed.push(grandparent_id);
             }
             PendingReconnect::MappingReroute {

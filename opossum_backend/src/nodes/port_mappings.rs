@@ -15,7 +15,7 @@ use uuid::Uuid;
 use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
-    helper_functions::remove_port_map_cascade,
+    helper_functions::{map_port, remove_port_map_cascade},
     undo::{Command, RemovePortMap},
 };
 
@@ -79,18 +79,13 @@ pub async fn post_port_mapping(
             .lock()
             .scenery_mut()
             .with_group_node_mut(group_id, |g| {
-                match pmap_inf.port_type {
-                    PortType::Input => g.map_input_port(
-                        pmap_inf.internal_node_id,
-                        &pmap_inf.internal_port_name,
-                        &pmap_inf.external_port_name,
-                    ),
-                    PortType::Output => g.map_output_port(
-                        pmap_inf.internal_node_id,
-                        &pmap_inf.internal_port_name,
-                        &pmap_inf.external_port_name,
-                    ),
-                }?;
+                map_port(
+                    g,
+                    pmap_inf.port_type,
+                    pmap_inf.internal_node_id,
+                    &pmap_inf.internal_port_name,
+                    &pmap_inf.external_port_name,
+                )?;
 
                 let ports = g.ports();
                 let inputs: Vec<String> = ports.ports(&PortType::Input).keys().cloned().collect();

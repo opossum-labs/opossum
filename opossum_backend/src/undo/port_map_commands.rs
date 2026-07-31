@@ -2,7 +2,6 @@
 //! [`Command::RemovePortMap`].
 use opossum_core::{
     opm_document::OpmDocument,
-    prelude::PortType,
     types::api_types::{AddPortMappingRequest, DocumentChange, RemovePortMapQuery},
 };
 use uuid::Uuid;
@@ -10,7 +9,7 @@ use uuid::Uuid;
 use super::{Command, EdgeSnapshot};
 use crate::{
     error::BackEndErrorResponse,
-    helper_functions::{PortMapCascadeRemoval, RemovedPortMapLevel},
+    helper_functions::{PortMapCascadeRemoval, RemovedPortMapLevel, map_port},
 };
 
 /// Exposes an internal node's port as an external port on `group_id`. `parent_group_id` (`group_id`'s own
@@ -100,20 +99,15 @@ pub(super) fn apply_add_port_map(
         request,
         is_origin,
     } = cmd;
-    document
-        .scenery_mut()
-        .with_group_node_mut(group_id, |g| match request.port_type {
-            PortType::Input => g.map_input_port(
-                request.internal_node_id,
-                &request.internal_port_name,
-                &request.external_port_name,
-            ),
-            PortType::Output => g.map_output_port(
-                request.internal_node_id,
-                &request.internal_port_name,
-                &request.external_port_name,
-            ),
-        })??;
+    document.scenery_mut().with_group_node_mut(group_id, |g| {
+        map_port(
+            g,
+            request.port_type,
+            request.internal_node_id,
+            &request.internal_port_name,
+            &request.external_port_name,
+        )
+    })??;
     Ok(Command::RemovePortMap(RemovePortMap {
         group_id,
         parent_group_id,

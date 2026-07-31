@@ -15,7 +15,7 @@ use super::Command;
 use crate::{
     error::BackEndErrorResponse,
     helper_functions::{
-        connect_from_info, delete_nodes_cascade_aware, disconnect_moved_node_connections,
+        connect_from_info, delete_nodes_cascade_aware, disconnect_moved_node_connections, map_port,
         reconnect_moved_node_connections, split_sort_connections_from_document,
     },
 };
@@ -231,13 +231,14 @@ pub(super) fn apply_insert_group(
     for m in &rerouted_mappings {
         document
             .scenery_mut()
-            .with_group_node_mut(parent_group_id, |g| match m.port_type {
-                PortType::Input => {
-                    g.map_input_port(group_id, &m.group_internal_name, &m.external_name)
-                }
-                PortType::Output => {
-                    g.map_output_port(group_id, &m.group_internal_name, &m.external_name)
-                }
+            .with_group_node_mut(parent_group_id, |g| {
+                map_port(
+                    g,
+                    m.port_type,
+                    group_id,
+                    &m.group_internal_name,
+                    &m.external_name,
+                )
             })??;
     }
     Ok(Command::ExtractGroup(GroupConversion {
@@ -301,11 +302,14 @@ pub(super) fn apply_extract_group(
     for m in &rerouted_mappings {
         document
             .scenery_mut()
-            .with_group_node_mut(parent_group_id, |g| match m.port_type {
-                PortType::Input => g.map_input_port(m.member_id, &m.member_port, &m.external_name),
-                PortType::Output => {
-                    g.map_output_port(m.member_id, &m.member_port, &m.external_name)
-                }
+            .with_group_node_mut(parent_group_id, |g| {
+                map_port(
+                    g,
+                    m.port_type,
+                    m.member_id,
+                    &m.member_port,
+                    &m.external_name,
+                )
             })??;
     }
     Ok(Command::InsertGroup(GroupConversion {
