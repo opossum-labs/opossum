@@ -14,18 +14,16 @@ use futures_util::StreamExt;
 use opossum_core::{
     prelude::{AnalyzerType, PortType},
     types::api_types::{
-        AnalyzerItemDto, ConnectInfo, CutResult, DeleteNodeResponse, DocumentChange,
-        NewAnalyzerInfo, NewNode, NewRefNode, NodeEditorPanel, NodeInfo, NodePortsResponse,
-        PasteNodesResponse, PortMappingsResponse, PositionUpdate, UndoRedoResponse,
-        UpdateConnectionRequest, Viewport,
+        AnalyzerItemDto, ConnectInfo, CutResult, DeleteNodeResponse, DocumentChange, JumpTarget,
+        NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo, NodePortsResponse, PasteNodesResponse,
+        PortMappingsResponse, PositionUpdate, UndoRedoResponse, UpdateConnectionRequest, Viewport,
     },
 };
 use serde_json::Value;
 use uuid::Uuid;
 
 use crate::{
-    LAST_AUTO_JUMPED_GRAPH, LAST_AUTO_SELECTED_NODE, NODE_DETAILS_REFRESH, OPOSSUM_UI_LOGS,
-    PENDING_PANEL_OPEN,
+    NODE_DETAILS_REFRESH, OPOSSUM_UI_LOGS, PENDING_PANEL_OPEN,
     api::{self, delete_document, eval_action_run},
     components::scenery_editor::{
         DragStatus, NodeType,
@@ -524,6 +522,7 @@ fn handle_undo_redo_response(
     ws_handler.workspace.set_needs_saving(true);
     spawn(apply_document_changes(
         r.changes,
+        r.jump,
         root_graph_id,
         workspace,
         ws_handler,
@@ -542,39 +541,18 @@ fn handle_undo_redo_response(
 #[allow(clippy::too_many_lines)]
 async fn apply_document_changes(
     changes: Vec<DocumentChange>,
+    jump: Option<JumpTarget>,
     root_graph_id: Memo<Uuid>,
     workspace: ReadStore<GraphsWorkspaceState>,
     ws_handler: WorkSpaceSignalHandlers,
 ) {
-    // Collected while applying the changes below, then resolved once at the end - see the
-    // auto-select-and-open-panel handling after the loop.
-    let mut panel_requests: Vec<(Uuid, Uuid, NodeEditorPanel)> = Vec::new();
-    // Same idea for changes that don't have a specific node/panel to select but still mutated the
-    // document, not just the GUI (node/edge/analyzer existence, connection distance, or a
-    // GraphNeedsRefresh-reported structural/port-map cascade) - see the tab-jump handling after the
-    // loop. Used only as the fallback path's candidate pool - see `primary_structural_graph_id`.
-    let mut structural_change_graph_ids: Vec<Uuid> = Vec::new();
-    // The one graph_id this batch's own data unambiguously names as "where the change actually
-    // happened", if any - set (first match wins) from either an inherently single-tab change
-    // (NodeAdded/NodeRemoved/EdgeAdded/EdgeRemoved/EdgeUpdated/AnalyzerAdded/AnalyzerRemoved, which
-    // never have cascade ambiguity to begin with) or a `GraphNeedsRefresh { is_origin: true }` (the
-    // backend-tagged origin of a port-map cascade - see `port_map_commands::describe`). Preferred
-    // over the `LAST_AUTO_JUMPED_GRAPH` heuristic below whenever it's available, since it's carried
-    // in the response itself rather than guessed client-side - see the tab-jump handling after the
-    // loop.
-    let mut primary_structural_graph_id: Option<Uuid> = None;
-
     for change in changes {
         match change {
             DocumentChange::NodeAdded { graph_id, node } => {
                 ws_handler.nodes.add_optical_node(*node, graph_id);
-                structural_change_graph_ids.push(graph_id);
-                primary_structural_graph_id.get_or_insert(graph_id);
             }
             DocumentChange::NodeRemoved { graph_id, uuid } => {
                 ws_handler.nodes.remove_nodes(vec![uuid], graph_id);
-                structural_change_graph_ids.push(graph_id);
-                primary_structural_graph_id.get_or_insert(graph_id);
             }
             DocumentChange::NodePatched {
                 graph_id,
@@ -582,7 +560,7 @@ async fn apply_document_changes(
                 name,
                 inverted,
                 gui_position,
-                panel,
+                ..
             } => {
                 if let Some(name) = name {
                     // Mirror the fan-out a normal rename does: propagate to every node referencing it.
@@ -615,24 +593,9 @@ async fn apply_document_changes(
                 // Fields not mirrored into GraphStore (isometry, alignment, ...) are only shown in the
                 // properties panel, which re-fetches on its own via this counter - see its use_resource.
                 *NODE_DETAILS_REFRESH.write() += 1;
-                if let Some(panel) = panel {
-                    panel_requests.push((graph_id, uuid, panel));
-                }
-                // A patch is a real document mutation, so register its tab as a structural-change
-                // candidate (like NodeAdded/NodeRemoved). Undoing a position-only patch from another tab
-                // has panel == None and thus no panel_requests entry - without this it would have no jump
-                // target and appear to do nothing. Panel-carrying patches still get the more specific
-                // panel jump above; the post-loop `if !jumped` guard prevents a double-jump.
-                structural_change_graph_ids.push(graph_id);
-                primary_structural_graph_id.get_or_insert(graph_id);
             }
-            DocumentChange::NodeDetailsChanged {
-                uuid,
-                graph_id,
-                panel,
-            } => {
+            DocumentChange::NodeDetailsChanged { .. } => {
                 *NODE_DETAILS_REFRESH.write() += 1;
-                panel_requests.push((graph_id, uuid, panel));
             }
             DocumentChange::AnalyzerChanged { .. } => {
                 *NODE_DETAILS_REFRESH.write() += 1;
@@ -640,54 +603,41 @@ async fn apply_document_changes(
             DocumentChange::AnalyzerMoved { id, gui_position } => {
                 // Analyzers live at the root scenery; move the analyzer's canvas node back on
                 // undo/redo (a details refresh alone wouldn't touch its position).
-                let root_id = *root_graph_id.read();
                 let mut positions = HashMap::new();
                 positions.insert(id, Point2D::new(gui_position.0, gui_position.1));
-                ws_handler.nodes.update_node_positions(positions, root_id);
-                // Register the root tab so undoing an analyzer move from another tab switches back to it
-                // (same reasoning as the NodePatched arm above).
-                structural_change_graph_ids.push(root_id);
-                primary_structural_graph_id.get_or_insert(root_id);
+                ws_handler
+                    .nodes
+                    .update_node_positions(positions, *root_graph_id.read());
             }
             DocumentChange::EdgeAdded {
                 graph_id,
                 connect_info,
             } => {
                 ws_handler.edges.add_edge(connect_info, graph_id);
-                structural_change_graph_ids.push(graph_id);
-                primary_structural_graph_id.get_or_insert(graph_id);
             }
             DocumentChange::EdgeRemoved {
                 graph_id,
                 connect_info,
             } => {
                 ws_handler.edges.delete_edge(connect_info, graph_id);
-                structural_change_graph_ids.push(graph_id);
-                primary_structural_graph_id.get_or_insert(graph_id);
             }
             DocumentChange::EdgeUpdated {
                 graph_id,
                 connect_info,
             } => {
                 ws_handler.edges.update_edge(connect_info, graph_id);
-                structural_change_graph_ids.push(graph_id);
-                primary_structural_graph_id.get_or_insert(graph_id);
             }
             DocumentChange::AnalyzerAdded { analyzer } => {
-                let root_id = *root_graph_id.read();
                 ws_handler.nodes.add_analyzer_node(
                     NewAnalyzerInfo::from(analyzer.info.clone()),
                     analyzer.id,
-                    root_id,
+                    *root_graph_id.read(),
                 );
-                structural_change_graph_ids.push(root_id);
-                primary_structural_graph_id.get_or_insert(root_id);
             }
             DocumentChange::AnalyzerRemoved { id } => {
-                let root_id = *root_graph_id.read();
-                ws_handler.nodes.remove_nodes(vec![id], root_id);
-                structural_change_graph_ids.push(root_id);
-                primary_structural_graph_id.get_or_insert(root_id);
+                ws_handler
+                    .nodes
+                    .remove_nodes(vec![id], *root_graph_id.read());
             }
             DocumentChange::GraphClosed { graph_id } => {
                 // The group was dissolved (e.g. undo of convert-to-group); close its tab if open so
@@ -695,19 +645,11 @@ async fn apply_document_changes(
                 // switches away to the root tab if this was the active one.
                 ws_handler.workspace.remove_tabs(vec![graph_id]);
             }
-            DocumentChange::GraphNeedsRefresh {
-                graph_id,
-                is_origin,
-            } => {
+            DocumentChange::GraphNeedsRefresh { graph_id, .. } => {
+                // A structural/port-map cascade is reported this way: re-fetch the whole tab. Where the
+                // view lands is decided by the `jump` target below, not here.
                 if workspace.tabs().contains_key(&graph_id) {
                     ws_handler.nodes.clear_graph_store(graph_id);
-                    // This re-sync itself never jumps the view by itself, even for an already-open
-                    // tab - but its graph_id still feeds into the structural-change tab-jump decision
-                    // below, so the overall undo/redo *does* switch there if it isn't already active
-                    // (a port-map/structural cascade is a real document mutation, same as an
-                    // add/remove - and it can be the *only* signal for a given tab, since
-                    // `dedup_against_full_refreshes` drops any `NodeAdded`/`NodeRemoved`/... for a
-                    // graph_id a `GraphNeedsRefresh` in the same batch already covers).
                     process_fill_graph_of_group(
                         root_graph_id.into(),
                         graph_id,
@@ -718,25 +660,15 @@ async fn apply_document_changes(
                     )
                     .await;
                 }
-                structural_change_graph_ids.push(graph_id);
-                // `is_origin` is the backend's own answer to "which of a multi-level port-map
-                // cascade's refreshed tabs is the one whose own entry was directly removed" - see
-                // `port_map_commands::describe`. Reliable regardless of undo/redo direction, unlike
-                // the list order (`Command::Batch::apply` reverses sub-command order between the
-                // two - see `undo/mod.rs`).
-                if is_origin {
-                    primary_structural_graph_id.get_or_insert(graph_id);
-                }
             }
             DocumentChange::ViewportChanged {
                 graph_id,
                 zoom,
                 shift,
             } => {
-                // Undo/redo of a camera move: switch to that tab (so the user sees it) and restore its
-                // pan/zoom. Purely a view change - no document/canvas mutation here.
+                // Undo/redo of a camera move: restore the tab's pan/zoom (the `jump` target below
+                // switches to it). Purely a view change - no document/canvas mutation here.
                 if workspace.tabs().contains_key(&graph_id) {
-                    ws_handler.workspace.set_active_tab(graph_id);
                     ws_handler.view.set_zoom(graph_id, zoom);
                     ws_handler
                         .view
@@ -746,66 +678,37 @@ async fn apply_document_changes(
         }
     }
 
-    // Picking which of possibly several affected (graph_id, uuid) pairs to select is order-sensitive
-    // in a way plain "first reported entry" gets wrong: a `Command::Batch` reverses its sub-commands'
-    // order between undo and redo (`Command::Batch::apply`, `undo/mod.rs`), so a multi-tab cascade
-    // (e.g. a port-map removal chained through several groups) lists the *same* tabs in opposite order
-    // depending on direction - naively always taking the first entry would then pick a *different* tab
-    // on redo than undo just jumped to. Preferring `LAST_AUTO_SELECTED_NODE` when it's still one of
-    // this response's entries keeps redo consistent with a preceding undo (and vice versa); falling
-    // back to the first entry otherwise keeps a *fresh* undo/redo picking the innermost/most-specific
-    // one, same as before (`port_map_commands::describe`'s cascade order lists innermost first).
-    // Note this is *not* simply "is the active tab already a member of the set": a cascade's outer
-    // levels (e.g. root, showing only the group's box) are just as much "members" as the inner one
-    // where the real content lives - jumping must still happen even if the active tab happens to be
-    // one of the less-specific outer members.
-    let chosen_node = (*LAST_AUTO_SELECTED_NODE.read())
-        .and_then(|last| {
-            panel_requests
-                .iter()
-                .find(|(g, u, _)| (*g, *u) == last)
-                .copied()
-        })
-        .or_else(|| panel_requests.first().copied());
-    let jumped = if let Some((graph_id, uuid, panel)) = chosen_node {
-        *LAST_AUTO_SELECTED_NODE.write() = Some((graph_id, uuid));
-        // Ask the node editor to open the changed panel whether or not we have to jump: undoing a detail
-        // change (port config, properties, ...) while the node is *already* selected must still open its
-        // panel. The editors only act on this global signal (and clear it once they've opened), so it must
-        // be set in both branches - not just when jumping to a not-yet-displayed node.
-        *PENDING_PANEL_OPEN.write() = Some((uuid, panel));
-        let already_showing = *workspace.active_tab().read() == graph_id
-            && workspace.tabs().get(graph_id).is_some_and(|g| {
-                let selected = g.graph_store().read().get_selected_nodes(graph_id);
-                selected.len() == 1 && selected[0].node_id == uuid
-            });
-        if already_showing {
-            false
-        } else {
-            ensure_tab_active(graph_id, ws_handler, root_graph_id, workspace).await;
-            ws_handler.nodes.set_node_active(graph_id, uuid, true, 0);
-            true
-        }
-    } else {
-        false
-    };
-    // Same idea for the structural (no specific node to select) tab-jump - only if the panel-select
-    // above didn't already jump somewhere more specific. Prefer `primary_structural_graph_id`
-    // whenever this batch's own data named one directly - reliable regardless of undo/redo
-    // direction, since it comes from the response itself rather than being reconstructed
-    // client-side. Only fall back to the `LAST_AUTO_JUMPED_GRAPH`-preferred-else-first heuristic
-    // when nothing in this batch tags an origin at all (currently `describe_move_nodes`/
-    // `describe_group_structure_change`, which don't distinguish one yet).
-    if !jumped {
-        let chosen_graph = primary_structural_graph_id.or_else(|| {
-            (*LAST_AUTO_JUMPED_GRAPH.read())
-                .filter(|last| structural_change_graph_ids.contains(last))
-                .or_else(|| structural_change_graph_ids.first().copied())
-        });
-        if let Some(graph_id) = chosen_graph {
-            *LAST_AUTO_JUMPED_GRAPH.write() = Some(graph_id);
-            if *workspace.active_tab().read() != graph_id {
-                ensure_tab_active(graph_id, ws_handler, root_graph_id, workspace).await;
+    // Focus the change the backend named (see `Command::jump_target`): switch to its tab, select the node
+    // if the change was about one, and ask the node editor to open its panel if it belongs to one.
+    // Authoritative and direction-consistent - no client-side reconstruction from the change list.
+    if let Some(JumpTarget {
+        graph_id,
+        node,
+        panel,
+    }) = jump
+    {
+        ensure_tab_active(graph_id, ws_handler, root_graph_id, workspace).await;
+        if let Some(node) = node {
+            // The tab is loaded now, so read the node's kind for the selection bookkeeping (analyzers are
+            // not optical); default to optical if it isn't in the store yet.
+            let is_optical = workspace
+                .tabs()
+                .get(graph_id)
+                .and_then(|g| {
+                    g.graph_store()
+                        .nodes()
+                        .read()
+                        .get(&node)
+                        .map(|element| element.is_optical_node())
+                })
+                .unwrap_or(true);
+            ws_handler
+                .nodes
+                .set_node_active(graph_id, node, is_optical, 0);
+            // Held until the node's editor loads and opens the panel, then cleared by it - see
+            // `OpticalNodeEditor`/`PortConfigEditor`.
+            if let Some(panel) = panel {
+                *PENDING_PANEL_OPEN.write() = Some((node, panel));
             }
         }
     }

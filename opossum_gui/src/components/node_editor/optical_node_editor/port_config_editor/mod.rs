@@ -4,7 +4,11 @@ mod coating_editor;
 
 use dioxus::prelude::*;
 use opossum_core::{
-    coatings::CoatingType, core_optics::optic_ports::PortConfig, nodes::fluence_detector::Fluence, prelude::{Aperture, PortType}, types::api_types::{NodeEditorPanel, NodeInfo, NodePortsResponse, UpdatePortRequest},
+    coatings::CoatingType,
+    core_optics::optic_ports::PortConfig,
+    nodes::fluence_detector::Fluence,
+    prelude::{Aperture, PortType},
+    types::api_types::{NodeEditorPanel, NodeInfo, UpdatePortRequest},
 };
 use uom::si::radiant_exposure::joule_per_square_centimeter;
 use uuid::Uuid;
@@ -34,62 +38,27 @@ pub fn PortConfigEditor(
     let current_node_id = *node_id.read();
     let mut editor_inputs = Vec::new();
 
-    let mut previous_ports_sig = use_signal(|| None::<NodePortsResponse>);
-
-    // let ports_resource = use_resource(move || async move {
-    //     crate::NODE_DETAILS_REFRESH();
-    //     let previous = previous_ports_sig.peek().clone();
-    //     match get_ports_of_group(current_node_id).await {
-    //         Ok(ports_info) => {
-    //             if let Some(previous) = previous
-    //                 && previous != ports_info
-    //             {
-    //                 open_accordion_section(NodeEditorPanel::PortConfig);
-    //             }
-    //             previous_ports_sig.set(Some(ports_info.clone()));
-    //             Some(ports_info)
-    //         }
-    //         Err(err_str) => {
-    //             OPOSSUM_UI_LOGS.write().add_log(&err_str);
-    //             None
-    //         }
-    //     }
-    // });
-
     let ports_resource = use_resource(move || async move {
         crate::NODE_DETAILS_REFRESH();
-        let previous = previous_ports_sig.peek().clone();
-
         match get_ports_of_group(current_node_id).await {
             Ok(ports_info) => {
-                if let Some(previous) = previous
-                    && previous != ports_info && *crate::PENDING_PANEL_OPEN.read() == Some((current_node_id, NodeEditorPanel::PortConfig))
+                // Undo/redo asked to open the Port Config panel for this node (`PENDING_PANEL_OPEN`, set by
+                // `apply_document_changes` from the backend's `JumpTarget`). This resource loads
+                // independently of `OpticalNodeEditor`'s own, so it opens the section - and expands each
+                // port's own sub-accordion, so the reverted aperture/coating/LIDT isn't hidden behind a
+                // collapsed "Port: <name>" row - then clears the request once *its* data has loaded (the
+                // accordion DOM doesn't exist until then). Inverting a node is a General-tab change, so this
+                // is never `PortConfig` for an invert - which is why a live invert doesn't open this section.
+                if *crate::PENDING_PANEL_OPEN.read()
+                    == Some((current_node_id, NodeEditorPanel::PortConfig))
                 {
                     open_accordion_section(NodeEditorPanel::PortConfig);
+                    for port_name in ports_info.inputs.keys().chain(ports_info.outputs.keys()) {
+                        open_accordion_content(&format!("singlePortCollapse{port_name}"));
+                    }
                     *crate::PENDING_PANEL_OPEN.write() = None;
                 }
-                previous_ports_sig.set(Some(ports_info.clone()));
                 Some(ports_info)
-                // Undo/redo asked to open the Port Config panel for this node (`PENDING_PANEL_OPEN`, set
-                // whether or not undo/redo had to jump here - see `apply_document_changes`). This resource
-                // loads independently of `OpticalNodeEditor`'s own, so it opens the section and clears the
-                // request itself once *its* data has actually loaded (the accordion DOM doesn't exist until
-                // then). Inverting a node is a General-tab change, so it never sets this to `PortConfig` -
-                // which is why a live invert no longer force-opens this section.
-                // if *crate::PENDING_PANEL_OPEN.read()
-                //     == Some((current_node_id, NodeEditorPanel::PortConfig))
-                // {
-                //     open_accordion_section(NodeEditorPanel::PortConfig);
-                //     // The undo response doesn't say *which* port changed, so also expand every port's own
-                //     // sub-accordion - otherwise the reverted aperture/coating/LIDT stays hidden behind a
-                //     // collapsed "Port: <name>" row and the undo looks like it did nothing. Each port is its
-                //     // own accordion (see `SinglePortConfigEditor`), so opening them all is independent.
-                //     for port_name in ports_info.inputs.keys().chain(ports_info.outputs.keys()) {
-                //         open_accordion_content(&format!("singlePortCollapse{port_name}"));
-                //     }
-                //     *crate::PENDING_PANEL_OPEN.write() = None;
-                // }
-                // Some(ports_info)
             }
             Err(err_str) => {
                 OPOSSUM_UI_LOGS.write().add_log(&err_str);

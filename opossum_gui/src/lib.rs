@@ -23,24 +23,12 @@ static CONTEXT_MENU: GlobalSignal<Option<CxMenu>> = Signal::global(|| None::<CxM
 /// so it refetches even when the selected node's identity hasn't changed (which Dioxus's equality-dedup'd
 /// memos would otherwise treat as "nothing to do").
 static NODE_DETAILS_REFRESH: GlobalSignal<usize> = Signal::global(|| 0);
-/// Set when `apply_document_changes` decides an undo/redo affected a node other than the one(s)
-/// currently selected in the active tab - the node it just switched to and the panel to open once
-/// its editor has loaded. Consumed (cleared) by whichever `OpticalNodeEditor`/`PortConfigEditor`
-/// instance matches the uuid.
+/// Set from the backend's authoritative `JumpTarget` when an undo/redo focuses a node: the node it
+/// selected and the panel to open once that node's editor has loaded. Consumed (cleared) by whichever
+/// `OpticalNodeEditor`/`PortConfigEditor` instance matches the uuid. `apply_document_changes` sets it
+/// whether or not it had to switch nodes, so an undo of a detail on the already-selected node still opens
+/// its panel.
 static PENDING_PANEL_OPEN: GlobalSignal<Option<(Uuid, NodeEditorPanel)>> = Signal::global(|| None);
-/// The `(graph_id, node_id)` an undo/redo last auto-selected, if any - preferred again by the next
-/// call if it's still a member of that call's own affected set, so e.g. a redo right after an undo
-/// stays put instead of jumping to a *different* member of the same reported set purely because
-/// `Command::Batch` reverses a multi-tab cascade's order between undo and redo. Ignored (falls back to
-/// picking the first-reported entry) whenever it isn't relevant to the current response.
-static LAST_AUTO_SELECTED_NODE: GlobalSignal<Option<(Uuid, Uuid)>> = Signal::global(|| None);
-/// Same idea as `LAST_AUTO_SELECTED_NODE`, for the structural (no specific node to select) tab-jump -
-/// but only ever consulted as a fallback, for response shapes that don't (yet) tag a reliable origin
-/// `graph_id` at the source (`describe_move_nodes`/`describe_group_structure_change`). Whenever a
-/// `DocumentChange` entry *does* carry that information (an unambiguous single-tab change, or a
-/// `GraphNeedsRefresh` with `is_origin: true`), `apply_document_changes` uses it directly instead of
-/// this heuristic - see its `primary_structural_graph_id` local.
-static LAST_AUTO_JUMPED_GRAPH: GlobalSignal<Option<Uuid>> = Signal::global(|| None);
 /// `(can_undo, can_redo)` availability, mirrored from the backend's undo/redo stacks. Every edit path
 /// (canvas coroutine, node editor, viewport gestures) writes this so the Edit menu's Undo/Redo entries
 /// reflect reality; the backend is the source of truth on undo/redo. A global (rather than a
