@@ -93,20 +93,34 @@ pub async fn patch_port(
     let new = update.into_inner();
     let mut document = data.document.lock();
 
-    let old = document.scenery().with_node_attr(uuid, |node_attr| {
-        let port_map = node_attr.raw_ports().ports(&port_type);
+    // `GET /ports` (and hence the GUI) reports an inverted node's ports through the inversion-aware
+    // `OpticNode::ports()`, which swaps Input/Output. The `port_type` sent back here is therefore in
+    // that *logical* space, but `raw_ports()` stores the *physical* ports (its own `inverted` flag is
+    // never set - see `OpticNode::ports`/`NodeAttr::set_inverted`). Translate the logical direction to
+    // the physical one via `NodeAttr::inverted()` and store the physical `port_type` in the command, so
+    // the lookup here and every later undo/redo resolve against the correct raw port map.
+    let (physical_type, old) = document.scenery().with_node_attr(uuid, |node_attr| {
+        let physical_type = if node_attr.inverted() {
+            port_type.opposite()
+        } else {
+            port_type
+        };
+        let port_map = node_attr.raw_ports().ports(&physical_type);
         port_map.get(&port_name).map_or_else(
             || {
                 Err(OpossumError::Other(format!(
-                    "{port_type} port '{port_name}' not found"
+                    "{physical_type} port '{port_name}' not found"
                 )))
             },
             |port| {
-                Ok(UpdatePortRequest {
-                    aperture: new.aperture.is_some().then(|| port.aperture.clone()),
-                    coating: new.coating.is_some().then_some(port.coating),
-                    lidt: new.lidt.is_some().then_some(port.lidt),
-                })
+                Ok((
+                    physical_type,
+                    UpdatePortRequest {
+                        aperture: new.aperture.is_some().then(|| port.aperture.clone()),
+                        coating: new.coating.is_some().then_some(port.coating),
+                        lidt: new.lidt.is_some().then_some(port.lidt),
+                    },
+                ))
             },
         )
     })??;
@@ -115,7 +129,7 @@ pub async fn patch_port(
     let inverse = Command::PatchPort(PatchPort {
         uuid,
         parent_group_id,
-        port_type,
+        port_type: physical_type,
         port_name,
         old,
         new,
@@ -184,13 +198,100 @@ mod test {
         assert!(
             matches!(
                 &body.changes[0],
-                DocumentChange::NodeDetailsChanged {
-                    graph_id,
-                    panel: NodeEditorPanel::PortConfig,
-                    ..
-                } if *graph_id == root_id
+                DocumentChange::NodeDetailsChanged { graph_id, .. } if *graph_id == root_id
             ),
-            "a port patch must report the node's graph_id and the PortConfig panel"
+            "a port patch must report a details refresh on the node's graph_id"
+        );
+        assert_eq!(
+            body.jump.expect("an undo must carry a jump target").panel,
+            Some(NodeEditorPanel::PortConfig),
+            "a port patch must jump to the PortConfig panel"
+        );
+    }
+
+    /// Regression test for the bug where editing the port config of an *inverted* node silently
+    /// failed: `GET /ports` reports an inverted node's ports through the inversion-aware
+    /// `OpticNode::ports()` (Input/Output swapped), so the GUI round-trips the swapped `port_type`
+    /// back here - but `patch_port` resolved it against `raw_ports()`, whose own `inverted` flag is
+    /// never set, so the swapped name wasn't in the expected physical map and the PATCH 400'd. No
+    /// undo entry was pushed and the edit was lost. `patch_port` now translates the logical
+    /// direction to the physical one via `NodeAttr::inverted()`. Inverts a `Dummy` (so its physical
+    /// `output_1` shows up under *inputs*), patches `Input/output_1`, and asserts the edit lands on
+    /// the physical output port and is undoable to the PortConfig panel.
+    #[actix_web::test]
+    async fn test_patch_port_on_inverted_node_targets_physical_port() {
+        use opossum_core::core_optics::PortType;
+
+        let app_state = create_test_state();
+        let node_id = {
+            let mut document = app_state.document.lock();
+            let node_id = document.scenery_mut().add_node(Dummy::default()).unwrap();
+            // Invert the node: its physical `output_1` is now shown (and edited) as a logical input.
+            document
+                .scenery_mut()
+                .with_node_attr_mut(node_id, |a| a.set_inverted(true))
+                .unwrap();
+            node_id
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(patch_port)
+                .service(undo_document),
+        )
+        .await;
+
+        // The GUI edits the physical `output_1` under the (inverted) Input direction.
+        let update_req = UpdatePortRequest {
+            aperture: None,
+            coating: Some(CoatingType::Fresnel),
+            lidt: None,
+        };
+        let req = test::TestRequest::patch()
+            .uri(&format!("/{node_id}/ports/Input/output_1"))
+            .set_json(&update_req)
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT,
+            "patching an inverted node's port must succeed, not 400 on a raw-port lookup miss"
+        );
+
+        // The change must land on the *physical* output port, not be lost.
+        let physical_coating = |state: &Data<AppState>| {
+            state
+                .document
+                .lock()
+                .scenery()
+                .with_node_attr(node_id, |a| {
+                    a.raw_ports()
+                        .ports_raw(&PortType::Output)
+                        .get("output_1")
+                        .map(|p| p.coating)
+                })
+                .unwrap()
+        };
+        assert_eq!(
+            physical_coating(&app_state),
+            Some(CoatingType::Fresnel),
+            "the coating edit must apply to the physical output port"
+        );
+
+        // One undo reverts it and jumps to the Port Config panel (the symptom the user reported).
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: UndoRedoResponse = test::read_body_json(resp).await;
+        assert_eq!(
+            body.jump.expect("an undo must carry a jump target").panel,
+            Some(NodeEditorPanel::PortConfig),
+            "undoing an inverted node's port edit must jump to the PortConfig panel"
+        );
+        assert_eq!(
+            physical_coating(&app_state),
+            Some(CoatingType::default()),
+            "undo must restore the physical output port's original coating"
         );
     }
 

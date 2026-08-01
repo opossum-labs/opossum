@@ -663,7 +663,7 @@ mod test {
     use opossum_core::{
         millimeter,
         nodes::Dummy,
-        types::api_types::{DocumentChange, NodeEditorPanel, UndoRedoResponse},
+        types::api_types::{NodeEditorPanel, UndoRedoResponse},
         utils::geom_transformation::Isometry,
     };
 
@@ -790,64 +790,47 @@ mod test {
 
         let iso = Isometry::new_along_z(millimeter!(10.0)).unwrap();
 
+        let jump_panel =
+            |body: UndoRedoResponse| body.jump.expect("an undo must carry a jump target").panel;
+
         let body = patch_and_undo!(UpdateNodeRequest {
             name: Some("renamed".to_string()),
             ..Default::default()
         });
-        assert!(
-            matches!(
-                &body.changes[0],
-                DocumentChange::NodePatched {
-                    panel: Some(NodeEditorPanel::General),
-                    ..
-                }
-            ),
-            "a name-only patch must report the General panel"
+        assert_eq!(
+            jump_panel(body),
+            Some(NodeEditorPanel::General),
+            "a name-only patch must jump to the General panel"
         );
 
         let body = patch_and_undo!(UpdateNodeRequest {
             inverted: Some(true),
             ..Default::default()
         });
-        assert!(
-            matches!(
-                &body.changes[0],
-                DocumentChange::NodePatched {
-                    panel: Some(NodeEditorPanel::General),
-                    ..
-                }
-            ),
-            "an inverted-only patch must report the General panel"
+        assert_eq!(
+            jump_panel(body),
+            Some(NodeEditorPanel::General),
+            "an inverted-only patch must jump to the General panel"
         );
 
         let body = patch_and_undo!(UpdateNodeRequest {
             isometry: Some(Some(iso)),
             ..Default::default()
         });
-        assert!(
-            matches!(
-                &body.changes[0],
-                DocumentChange::NodePatched {
-                    panel: Some(NodeEditorPanel::Positioning),
-                    ..
-                }
-            ),
-            "an isometry-only patch must report the Positioning panel"
+        assert_eq!(
+            jump_panel(body),
+            Some(NodeEditorPanel::Positioning),
+            "an isometry-only patch must jump to the Positioning panel"
         );
 
         let body = patch_and_undo!(UpdateNodeRequest {
             alignment: Some(Some(iso)),
             ..Default::default()
         });
-        assert!(
-            matches!(
-                &body.changes[0],
-                DocumentChange::NodePatched {
-                    panel: Some(NodeEditorPanel::Alignment),
-                    ..
-                }
-            ),
-            "an alignment-only patch must report the Alignment panel"
+        assert_eq!(
+            jump_panel(body),
+            Some(NodeEditorPanel::Alignment),
+            "an alignment-only patch must jump to the Alignment panel"
         );
 
         let body = patch_and_undo!(UpdateNodeRequest {
@@ -855,14 +838,9 @@ mod test {
             alignment: Some(Some(iso)),
             ..Default::default()
         });
-        assert!(
-            matches!(
-                &body.changes[0],
-                DocumentChange::NodePatched {
-                    panel: Some(NodeEditorPanel::Alignment),
-                    ..
-                }
-            ),
+        assert_eq!(
+            jump_panel(body),
+            Some(NodeEditorPanel::Alignment),
             "when both isometry and alignment are set, alignment must win the tie-break"
         );
 
@@ -870,12 +848,10 @@ mod test {
             gui_position: Some(Some((1.0, 2.0))),
             ..Default::default()
         });
-        assert!(
-            matches!(
-                &body.changes[0],
-                DocumentChange::NodePatched { panel: None, .. }
-            ),
-            "a gui_position-only patch (a canvas drag) must report no panel"
+        assert_eq!(
+            jump_panel(body),
+            None,
+            "a gui_position-only patch (a canvas drag) must jump with no panel"
         );
     }
 

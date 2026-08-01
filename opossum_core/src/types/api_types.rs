@@ -669,8 +669,10 @@ pub enum NodeEditorPanel {
 }
 
 /// Where the GUI should focus after an undo/redo, computed once by the backend from the command it
-/// reversed. Lets the GUI switch tab -> select node -> open panel directly, instead of reconstructing the
-/// target from the individual [`DocumentChange`]s (which is order-sensitive and unreliable).
+/// reversed.
+///
+/// Lets the GUI switch tab -> select node -> open panel directly, instead of reconstructing the target
+/// from the individual [`DocumentChange`]s (which is order-sensitive and unreliable).
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize, ToSchema)]
 pub struct JumpTarget {
     /// The tab (graph) the change lives in - always known.
@@ -708,17 +710,10 @@ pub enum DocumentChange {
         name: Option<String>,
         inverted: Option<bool>,
         gui_position: Option<Option<(f64, f64)>>,
-        /// Which node-editor panel `name`/`inverted`/`isometry`/`alignment` belongs to, if any - `None`
-        /// when only `gui_position` changed (a canvas drag), which no sidebar panel shows.
-        panel: Option<NodeEditorPanel>,
     },
     /// A custom property or port config changed. Not mirrored anywhere in the GUI's canvas state - if
     /// `uuid` is the currently selected node, the properties panel should simply re-fetch it.
-    NodeDetailsChanged {
-        uuid: Uuid,
-        graph_id: Uuid,
-        panel: NodeEditorPanel,
-    },
+    NodeDetailsChanged { uuid: Uuid, graph_id: Uuid },
     /// Mirrors `POST /api/nodes/{uuid}/connections`.
     EdgeAdded {
         graph_id: Uuid,
@@ -745,15 +740,7 @@ pub enum DocumentChange {
     AnalyzerMoved { id: Uuid, gui_position: (f64, f64) },
     /// One tab's nodes/edges/port-maps should be re-fetched from scratch (see the type's own doc
     /// comment for which operations use this).
-    GraphNeedsRefresh {
-        graph_id: Uuid,
-        /// Whether `graph_id` is the exact tab where the change directly happened (e.g. the group
-        /// whose own port-map entry was removed), as opposed to an ancestor that only needs a
-        /// refresh because it re-exposes that entry further out. Lets the GUI pick the right tab to
-        /// jump to out of several refreshed at once, regardless of which order they're listed in
-        /// (which flips between undo and redo - see `Command::Batch`'s apply/reverse behavior).
-        is_origin: bool,
-    },
+    GraphNeedsRefresh { graph_id: Uuid },
     /// The group `graph_id` no longer exists (e.g. undoing a convert-to-group dissolves it), so its
     /// tab should be closed if open. Distinct from a node removal in the *parent* view - the parent
     /// is refreshed separately; this closes the dissolved group's own tab.

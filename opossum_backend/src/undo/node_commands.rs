@@ -301,7 +301,6 @@ pub(super) fn describe_patch_node(cmd: &PatchNode) -> Vec<DocumentChange> {
         name: new.name.clone(),
         inverted: new.inverted,
         gui_position: new.gui_position,
-        panel: panel_for_update(new),
     }]
 }
 
@@ -385,19 +384,10 @@ pub(super) fn apply_patch_port(
 }
 
 /// Describes the effect of a [`Command::PatchProperty`] or [`Command::PatchPort`] in the GUI-facing
-/// [`DocumentChange`] shape - a details refresh for `uuid`, tagged with `graph_id` and which panel
-/// (`Properties` or `PortConfig` respectively) the caller knows it belongs to, so undo/redo can
-/// auto-select the node and open that panel if it isn't already displayed.
-pub(super) fn describe_node_details_changed(
-    graph_id: Uuid,
-    uuid: Uuid,
-    panel: NodeEditorPanel,
-) -> Vec<DocumentChange> {
-    vec![DocumentChange::NodeDetailsChanged {
-        uuid,
-        graph_id,
-        panel,
-    }]
+/// [`DocumentChange`] shape - a details refresh for `uuid`, tagged with `graph_id`. Which panel to open is
+/// carried separately by the step's [`crate::undo::Command::jump_target`], not per-change.
+pub(super) fn describe_node_details_changed(graph_id: Uuid, uuid: Uuid) -> Vec<DocumentChange> {
+    vec![DocumentChange::NodeDetailsChanged { uuid, graph_id }]
 }
 
 /// Builds the [`NodeInfo`] DTO for a captured node, mirroring how every other handler in this crate

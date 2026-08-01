@@ -21,19 +21,12 @@ pub struct AddPortMap {
     pub group_id: Uuid,
     pub parent_group_id: Uuid,
     pub request: AddPortMappingRequest,
-    /// Whether `group_id` is the exact group whose own mapping entry this restores directly (as
-    /// opposed to a further-out level re-exposing it) - see [`Command::from(&PortMapCascadeRemoval)`]
-    /// for how this is determined. Threaded through to the `DocumentChange` this command's `describe()`
-    /// produces, so undo/redo can tell the GUI which of a multi-level cascade's tabs is worth jumping
-    /// to.
-    pub is_origin: bool,
 }
 
 impl From<&RemovedPortMapLevel> for AddPortMap {
     /// Builds the mapping-restoring command for one level torn down by
     /// [`crate::helper_functions::remove_port_map_cascade`]. Takes a reference since callers
-    /// still need the levels afterward (e.g. to build a response). Defaults `is_origin` to `false` -
-    /// the only caller, [`Command::from(&PortMapCascadeRemoval)`], overrides it for the innermost level.
+    /// still need the levels afterward (e.g. to build a response).
     fn from(level: &RemovedPortMapLevel) -> Self {
         Self {
             group_id: level.group_id,
@@ -44,7 +37,6 @@ impl From<&RemovedPortMapLevel> for AddPortMap {
                 external_port_name: level.external_port_name.clone(),
                 port_type: level.port_type,
             },
-            is_origin: false,
         }
     }
 }
@@ -58,10 +50,8 @@ impl From<&PortMapCascadeRemoval> for Command {
     fn from(cascade: &PortMapCascadeRemoval) -> Self {
         let mut inverse =
             Vec::with_capacity(cascade.levels.len() + cascade.disconnected_connections.len());
-        for (i, level) in cascade.levels.iter().enumerate() {
-            let mut add_port_map: AddPortMap = level.into();
-            add_port_map.is_origin = i == 0;
-            inverse.push(Self::AddPortMap(add_port_map));
+        for level in &cascade.levels {
+            inverse.push(Self::AddPortMap(level.into()));
         }
         for (owning_group_id, connect_info) in &cascade.disconnected_connections {
             inverse.push(Self::AddEdge(EdgeSnapshot {
@@ -79,8 +69,6 @@ pub struct RemovePortMap {
     pub group_id: Uuid,
     pub parent_group_id: Uuid,
     pub query: RemovePortMapQuery,
-    /// See [`AddPortMap::is_origin`] - preserved from whichever `AddPortMap` this is the inverse of.
-    pub is_origin: bool,
 }
 
 /// Exposes an internal node's port as an external port on `cmd.group_id`, returning the
@@ -97,7 +85,6 @@ pub(super) fn apply_add_port_map(
         group_id,
         parent_group_id,
         request,
-        is_origin,
     } = cmd;
     document.scenery_mut().with_group_node_mut(group_id, |g| {
         map_port(
@@ -115,7 +102,6 @@ pub(super) fn apply_add_port_map(
             external_port_name: request.external_port_name,
             port_type: request.port_type,
         },
-        is_origin,
     }))
 }
 
@@ -145,7 +131,6 @@ pub(super) fn apply_remove_port_map(
         group_id,
         parent_group_id,
         query,
-        is_origin: _, // always re-derived fresh below via `Command::from(&cascade)`
     } = cmd;
     let RemovePortMapQuery {
         external_port_name,
@@ -183,22 +168,15 @@ pub(super) fn apply_remove_port_map(
 /// Describes the effect of a [`Command::AddPortMap`] or [`Command::RemovePortMap`] in the GUI-facing
 /// [`DocumentChange`] shape. A port-map change touches two tabs, like `MoveNodes` touches two: the
 /// group's own tab (where `mapped_ports` drives the "mapped" symbol on the internal node's port) and its
-/// parent's tab (where the group's own exposed-port list is rendered on its node box). `is_origin`
-/// (see [`AddPortMap::is_origin`]) is passed through onto `group_id`'s own entry only - `parent_group_id`
-/// never represents the origin, it only ever shows the group's box.
-pub(super) fn describe(
-    group_id: &Uuid,
-    parent_group_id: &Uuid,
-    is_origin: bool,
-) -> Vec<DocumentChange> {
+/// parent's tab (where the group's own exposed-port list is rendered on its node box). Which tab to jump to
+/// is decided by the step's [`crate::undo::Command::jump_target`], not per-refresh.
+pub(super) fn describe(group_id: &Uuid, parent_group_id: &Uuid) -> Vec<DocumentChange> {
     vec![
         DocumentChange::GraphNeedsRefresh {
             graph_id: *group_id,
-            is_origin,
         },
         DocumentChange::GraphNeedsRefresh {
             graph_id: *parent_group_id,
-            is_origin: false,
         },
     ]
 }

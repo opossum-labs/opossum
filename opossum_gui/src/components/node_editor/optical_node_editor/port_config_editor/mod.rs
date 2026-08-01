@@ -41,30 +41,37 @@ pub fn PortConfigEditor(
     let ports_resource = use_resource(move || async move {
         crate::NODE_DETAILS_REFRESH();
         match get_ports_of_group(current_node_id).await {
-            Ok(ports_info) => {
-                // Undo/redo asked to open the Port Config panel for this node (`PENDING_PANEL_OPEN`, set by
-                // `apply_document_changes` from the backend's `JumpTarget`). This resource loads
-                // independently of `OpticalNodeEditor`'s own, so it opens the section - and expands each
-                // port's own sub-accordion, so the reverted aperture/coating/LIDT isn't hidden behind a
-                // collapsed "Port: <name>" row - then clears the request once *its* data has loaded (the
-                // accordion DOM doesn't exist until then). Inverting a node is a General-tab change, so this
-                // is never `PortConfig` for an invert - which is why a live invert doesn't open this section.
-                if *crate::PENDING_PANEL_OPEN.read()
-                    == Some((current_node_id, NodeEditorPanel::PortConfig))
-                {
-                    open_accordion_section(NodeEditorPanel::PortConfig);
-                    for port_name in ports_info.inputs.keys().chain(ports_info.outputs.keys()) {
-                        open_accordion_content(&format!("singlePortCollapse{port_name}"));
-                    }
-                    *crate::PENDING_PANEL_OPEN.write() = None;
-                }
-                Some(ports_info)
-            }
+            Ok(ports_info) => Some(ports_info),
             Err(err_str) => {
                 OPOSSUM_UI_LOGS.write().add_log(&err_str);
                 None
             }
         }
+    });
+
+    // Open the Port Config panel when undo/redo asked for it (`PENDING_PANEL_OPEN`, set by
+    // `apply_document_changes` from the backend's `JumpTarget`). This runs as an effect - not inside the
+    // resource - so it fires *after* this node's ports have rendered: unlike the always-present General /
+    // Properties sections, the "Port Configuration" accordion's DOM only exists once the ports resource
+    // resolves, so opening it any earlier is a silent no-op. Reading the resource with `.read()` (not
+    // `.read_unchecked()`) subscribes the effect, so it re-runs the moment the ports resolve - which is
+    // what makes this reliable across a preceding re-fetch (e.g. an invert that swapped the port set).
+    // Also expands each port's own sub-accordion so the reverted value isn't hidden behind a collapsed row.
+    use_effect(move || {
+        let Some((uuid, panel)) = *crate::PENDING_PANEL_OPEN.read() else {
+            return;
+        };
+        if panel != NodeEditorPanel::PortConfig || uuid != current_node_id {
+            return;
+        }
+        let Some(Some(ports_info)) = ports_resource.read().clone() else {
+            return;
+        };
+        open_accordion_section(NodeEditorPanel::PortConfig);
+        for port_name in ports_info.inputs.keys().chain(ports_info.outputs.keys()) {
+            open_accordion_content(&format!("singlePortCollapse{port_name}"));
+        }
+        *crate::PENDING_PANEL_OPEN.write() = None;
     });
 
     let handle_port_update = move |(p_name, p_type, req): (String, PortType, UpdatePortRequest)| {

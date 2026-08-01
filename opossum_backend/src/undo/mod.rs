@@ -280,35 +280,25 @@ impl Command {
                 uuid,
                 parent_group_id,
                 ..
-            }) => node_commands::describe_node_details_changed(
-                *parent_group_id,
-                *uuid,
-                NodeEditorPanel::Properties,
-            ),
-            Self::PatchPort(PatchPort {
+            })
+            | Self::PatchPort(PatchPort {
                 uuid,
                 parent_group_id,
                 ..
-            }) => node_commands::describe_node_details_changed(
-                *parent_group_id,
-                *uuid,
-                NodeEditorPanel::PortConfig,
-            ),
+            }) => node_commands::describe_node_details_changed(*parent_group_id, *uuid),
             Self::AddEdge(cmd) => edge_commands::describe_add_edge(cmd),
             Self::RemoveEdge(cmd) => edge_commands::describe_remove_edge(cmd),
             Self::UpdateEdgeDistance(cmd) => edge_commands::describe_update_edge_distance(cmd),
             Self::AddPortMap(AddPortMap {
                 group_id,
                 parent_group_id,
-                is_origin,
                 ..
             })
             | Self::RemovePortMap(RemovePortMap {
                 group_id,
                 parent_group_id,
-                is_origin,
                 ..
-            }) => port_map_commands::describe(group_id, parent_group_id, *is_origin),
+            }) => port_map_commands::describe(group_id, parent_group_id),
             Self::AddAnalyzer(cmd) => analyzer_commands::describe_add_analyzer(cmd),
             Self::RemoveAnalyzer(cmd) => analyzer_commands::describe_remove_analyzer(&cmd.id),
             Self::PatchAnalyzer(PatchAnalyzer { id, .. }) => {
@@ -361,13 +351,47 @@ impl Command {
 /// redo agree - a batch reverses its sub-commands between the two directions, so a position-based "first"
 /// would otherwise pick a different target each way.
 fn batch_jump_target(commands: &[Command], root_id: Uuid) -> Option<JumpTarget> {
-    commands
+    let best = commands
         .iter()
         .filter_map(|command| command.jump_target(root_id))
         .max_by_key(|target| {
             let priority = 2 * u8::from(target.panel.is_some()) + u8::from(target.node.is_some());
             (priority, std::cmp::Reverse((target.graph_id, target.node)))
+        })?;
+    // A batch that focuses a specific node or panel (a paste, or a node deletion - even one that
+    // cascaded port maps away) jumps to that node. Only a purely-structural batch consults the port-map
+    // cascade origin, so undo/redo of a port-map removal lands on the group the user actually acted on.
+    if best.node.is_some() || best.panel.is_some() {
+        return Some(best);
+    }
+    if let Some(graph_id) = port_map_cascade_origin(commands) {
+        return Some(JumpTarget {
+            graph_id,
+            node: None,
+            panel: None,
+        });
+    }
+    Some(best)
+}
+
+/// For a port-map cascade [`Command::Batch`] (a `RemovePortMap` tears down its own level plus every
+/// ancestor that re-exposes it), the group whose *own* mapping was directly added/removed - the group the
+/// user acted on. That's the innermost level: the one port-map command's `group_id` that isn't any level's
+/// `parent_group_id`. Order-invariant, so undo and redo agree. `None` if the batch has no port-map commands.
+fn port_map_cascade_origin(commands: &[Command]) -> Option<Uuid> {
+    let levels: Vec<(Uuid, Uuid)> = commands
+        .iter()
+        .filter_map(|command| match command {
+            Command::AddPortMap(m) => Some((m.group_id, m.parent_group_id)),
+            Command::RemovePortMap(m) => Some((m.group_id, m.parent_group_id)),
+            _ => None,
         })
+        .collect();
+    let parents: HashSet<Uuid> = levels.iter().map(|(_, parent)| *parent).collect();
+    levels
+        .iter()
+        .map(|(group_id, _)| *group_id)
+        .find(|group_id| !parents.contains(group_id))
 }
 
 /// A `GraphNeedsRefresh { graph_id }` re-fetches everything in that tab (nodes, edges, port maps), so

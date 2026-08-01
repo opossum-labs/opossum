@@ -218,13 +218,14 @@ mod test {
         assert!(
             matches!(
                 &body.changes[0],
-                DocumentChange::NodeDetailsChanged {
-                    graph_id,
-                    panel: NodeEditorPanel::Properties,
-                    ..
-                } if *graph_id == root_id
+                DocumentChange::NodeDetailsChanged { graph_id, .. } if *graph_id == root_id
             ),
-            "a property patch must report the node's graph_id and the Properties panel"
+            "a property patch must report a details refresh on the node's graph_id"
+        );
+        assert_eq!(
+            body.jump.expect("an undo must carry a jump target").panel,
+            Some(NodeEditorPanel::Properties),
+            "a property patch must jump to the Properties panel"
         );
     }
 
