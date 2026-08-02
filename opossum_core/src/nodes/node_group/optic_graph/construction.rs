@@ -147,6 +147,35 @@ impl OpticGraph {
         nodes_deleted.dedup();
         Ok(nodes_deleted)
     }
+    /// Remove a single node from this [`OpticGraph`] **without** cascading to reference nodes.
+    ///
+    /// Unlike [`delete_node`](Self::delete_node), this removes *only* the node whose own [`Uuid`] is
+    /// exactly `node_id` (matched via [`node_idx_by_uuid`](Self::node_idx_by_uuid), which does *not* match
+    /// reference nodes), together with its incident edges and any port-map entries mapping it. It is meant
+    /// for *relocations* (group / move / convert), where the node keeps its uuid and is immediately re-added
+    /// elsewhere: a [`NodeReference`](crate::nodes::NodeReference) pointing at it must survive and keep
+    /// resolving, whereas the cascade in [`delete_node`](Self::delete_node) would wrongly sweep it away.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - the graph is set as `inverted`.
+    /// - no node with exactly `node_id` exists in this graph.
+    pub fn remove_node_no_cascade(&mut self, node_id: Uuid) -> OpmResult<()> {
+        if self.is_inverted() {
+            return Err(OpossumError::OpticGroup(
+                "cannot delete nodes if group is set as inverted".into(),
+            ));
+        }
+        let node_idx = self.node_idx_by_uuid(node_id).ok_or_else(|| {
+            OpossumError::OpticScenery("node with given uuid does not exist".into())
+        })?;
+        self.g.remove_node(node_idx);
+        // Drop any port mapping that exposed one of this node's ports - same cleanup `delete_node` does.
+        self.input_port_map.remove_all_from_uuid(node_id);
+        self.output_port_map.remove_all_from_uuid(node_id);
+        Ok(())
+    }
     /// Return the first [`NodeId`] with the given [`Uuid`] in this [`OpticGraph`].
     ///
     /// This also includes reference nodes referring to the given [`Uuid`]. This function returns

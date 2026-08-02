@@ -11,6 +11,7 @@
 use std::collections::HashSet;
 
 use opossum_core::{
+    analyzers::AnalyzerType,
     opm_document::OpmDocument,
     types::api_types::{AnalyzerItemDto, DocumentChange, JumpTarget, NodeEditorPanel},
 };
@@ -171,6 +172,8 @@ impl Command {
     /// one. Computed once here from the command, so the GUI needn't reconstruct it from the individual
     /// `DocumentChange`s. `root_id` is the scenery root uuid, used for analyzers (which live at the root).
     #[must_use]
+    // One arm per command variant, each a small `JumpTarget` literal - long but flat and uniform.
+    #[allow(clippy::too_many_lines)]
     pub fn jump_target(&self, root_id: Uuid) -> Option<JumpTarget> {
         match self {
             Self::PatchNode(PatchNode {
@@ -182,6 +185,7 @@ impl Command {
                 graph_id: *parent_group_id,
                 node: Some(*uuid),
                 panel: node_commands::panel_for_update(new),
+                source_port: None,
             }),
             Self::PatchProperty(PatchProperty {
                 uuid,
@@ -191,6 +195,7 @@ impl Command {
                 graph_id: *parent_group_id,
                 node: Some(*uuid),
                 panel: Some(NodeEditorPanel::Properties),
+                source_port: None,
             }),
             Self::PatchPort(PatchPort {
                 uuid,
@@ -200,62 +205,80 @@ impl Command {
                 graph_id: *parent_group_id,
                 node: Some(*uuid),
                 panel: Some(NodeEditorPanel::PortConfig),
+                source_port: None,
             }),
             Self::AddNode(cmd) | Self::RemoveNode(cmd) => Some(JumpTarget {
                 graph_id: cmd.parent_group_id,
                 node: Some(cmd.node.uuid().ok()?),
                 panel: None,
+                source_port: None,
             }),
             Self::AddEdge(cmd) | Self::RemoveEdge(cmd) => Some(JumpTarget {
                 graph_id: cmd.group_id,
                 node: None,
                 panel: None,
+                source_port: None,
             }),
             Self::UpdateEdgeDistance(cmd) => Some(JumpTarget {
                 graph_id: cmd.group_id,
                 node: None,
                 panel: None,
+                source_port: None,
             }),
             Self::AddPortMap(cmd) => Some(JumpTarget {
                 graph_id: cmd.group_id,
                 node: None,
                 panel: None,
+                source_port: None,
             }),
             Self::RemovePortMap(cmd) => Some(JumpTarget {
                 graph_id: cmd.group_id,
                 node: None,
                 panel: None,
+                source_port: None,
             }),
             Self::AddAnalyzer(cmd) | Self::RemoveAnalyzer(cmd) => Some(JumpTarget {
                 graph_id: root_id,
                 node: Some(cmd.id),
                 panel: None,
+                source_port: None,
             }),
             Self::PatchAnalyzer(cmd) => Some(JumpTarget {
                 graph_id: root_id,
                 node: Some(cmd.id),
                 panel: None,
+                // Focus the exact source-port card whose mapping this patch changed, so undo/redo of an
+                // analyzer source change opens and scrolls to it (see `changed_source_port`). `None` when
+                // the change wasn't a source mapping (e.g. the analyzer type itself changed).
+                source_port: changed_source_port(&cmd.old, &cmd.new),
             }),
             Self::RepositionAnalyzer(cmd) => Some(JumpTarget {
                 graph_id: root_id,
                 node: Some(cmd.id),
                 panel: None,
+                source_port: None,
             }),
             Self::MoveNodes(cmd) => Some(JumpTarget {
-                graph_id: cmd.request.target_group_id,
+                // The outer/drag-origin tab, identical for undo and redo - see `MoveNodes::focus_group_id`.
+                // Using `target_group_id` here would flip between the two directions and yank the view into
+                // the group on redo.
+                graph_id: cmd.focus_group_id,
                 node: None,
                 panel: None,
+                source_port: None,
             }),
             Self::InsertGroup(cmd) | Self::ExtractGroup(cmd) => Some(JumpTarget {
                 graph_id: cmd.parent_group_id,
                 node: None,
                 panel: None,
+                source_port: None,
             }),
             Self::PatchGlobalConf(_) => None,
             Self::SetViewport(cmd) => Some(JumpTarget {
                 graph_id: cmd.to.graph_id,
                 node: None,
                 panel: None,
+                source_port: None,
             }),
             Self::Batch(commands) => batch_jump_target(commands, root_id),
         }
@@ -355,13 +378,19 @@ fn batch_jump_target(commands: &[Command], root_id: Uuid) -> Option<JumpTarget> 
         .iter()
         .filter_map(|command| command.jump_target(root_id))
         .max_by_key(|target| {
-            let priority = 2 * u8::from(target.panel.is_some()) + u8::from(target.node.is_some());
+            // A specific sub-location (a node-editor panel, or an analyzer source-port card) outranks a
+            // bare node selection, which outranks a bare tab. So a source-port deletion's batch (a re-added
+            // source node + the analyzer source-mapping restore) focuses the analyzer's source card, not
+            // the re-added canvas node.
+            let has_detail = target.panel.is_some() || target.source_port.is_some();
+            let priority = 2 * u8::from(has_detail) + u8::from(target.node.is_some());
             (priority, std::cmp::Reverse((target.graph_id, target.node)))
         })?;
-    // A batch that focuses a specific node or panel (a paste, or a node deletion - even one that
-    // cascaded port maps away) jumps to that node. Only a purely-structural batch consults the port-map
-    // cascade origin, so undo/redo of a port-map removal lands on the group the user actually acted on.
-    if best.node.is_some() || best.panel.is_some() {
+    // A batch that focuses a specific node, panel, or source card (a paste, a node deletion - even one that
+    // cascaded port maps away, or a source-port deletion) jumps to it. Only a purely-structural batch
+    // consults the port-map cascade origin, so undo/redo of a port-map removal lands on the group the user
+    // actually acted on.
+    if best.node.is_some() || best.panel.is_some() || best.source_port.is_some() {
         return Some(best);
     }
     if let Some(graph_id) = port_map_cascade_origin(commands) {
@@ -369,9 +398,24 @@ fn batch_jump_target(commands: &[Command], root_id: Uuid) -> Option<JumpTarget> 
             graph_id,
             node: None,
             panel: None,
+            source_port: None,
         });
     }
     Some(best)
+}
+
+/// The source-port uuid whose analyzer mapping changed between `old` and `new` (added, removed, or a
+/// changed builder), if the two are the same analyzer variant and exactly a source mapping changed.
+///
+/// Returns `None` when the analyzer *type* changed wholesale (no single source to focus). Used by
+/// [`Command::jump_target`] to point an analyzer undo/redo at the exact source-port card that moved.
+fn changed_source_port(old: &AnalyzerType, new: &AnalyzerType) -> Option<Uuid> {
+    match (old, new) {
+        (AnalyzerType::Energy(o), AnalyzerType::Energy(n)) => o.first_differing_source(n),
+        (AnalyzerType::RayTrace(o), AnalyzerType::RayTrace(n)) => o.first_differing_source(n),
+        (AnalyzerType::GhostFocus(o), AnalyzerType::GhostFocus(n)) => o.first_differing_source(n),
+        _ => None,
+    }
 }
 
 /// For a port-map cascade [`Command::Batch`] (a `RemovePortMap` tears down its own level plus every
@@ -379,19 +423,29 @@ fn batch_jump_target(commands: &[Command], root_id: Uuid) -> Option<JumpTarget> 
 /// user acted on. That's the innermost level: the one port-map command's `group_id` that isn't any level's
 /// `parent_group_id`. Order-invariant, so undo and redo agree. `None` if the batch has no port-map commands.
 fn port_map_cascade_origin(commands: &[Command]) -> Option<Uuid> {
-    let levels: Vec<(Uuid, Uuid)> = commands
-        .iter()
-        .filter_map(|command| match command {
-            Command::AddPortMap(m) => Some((m.group_id, m.parent_group_id)),
-            Command::RemovePortMap(m) => Some((m.group_id, m.parent_group_id)),
-            _ => None,
-        })
-        .collect();
+    let mut levels: Vec<(Uuid, Uuid)> = Vec::new();
+    collect_port_map_levels(commands, &mut levels);
     let parents: HashSet<Uuid> = levels.iter().map(|(_, parent)| *parent).collect();
     levels
         .iter()
         .map(|(group_id, _)| *group_id)
         .find(|group_id| !parents.contains(group_id))
+}
+
+/// Collects every port-map level `(group_id, parent_group_id)` from `commands`, descending into nested
+/// [`Command::Batch`]es. A port-map removal that has been redone and then undone nests its single-level
+/// `AddPortMap` inside a per-command `Batch` (`apply_remove_port_map` always returns a `Batch`, even for one
+/// level), so a top-level-only scan would find nothing and lose the cascade's origin - making the jump drift
+/// on the second undo. Recursing keeps the origin the same regardless of how the batch got nested.
+fn collect_port_map_levels(commands: &[Command], out: &mut Vec<(Uuid, Uuid)>) {
+    for command in commands {
+        match command {
+            Command::AddPortMap(m) => out.push((m.group_id, m.parent_group_id)),
+            Command::RemovePortMap(m) => out.push((m.group_id, m.parent_group_id)),
+            Command::Batch(sub) => collect_port_map_levels(sub, out),
+            _ => {}
+        }
+    }
 }
 
 /// A `GraphNeedsRefresh { graph_id }` re-fetches everything in that tab (nodes, edges, port maps), so
@@ -588,6 +642,66 @@ mod test {
             jump.node,
             Some(node_id),
             "the batch should focus the added node, not the edge's tab"
+        );
+    }
+
+    /// The analyzer editor has no `NodeEditorPanel`, so an undo/redo of an analyzer source-mapping change is
+    /// pointed at the exact source-port card via `JumpTarget::source_port`. Pins that a `PatchAnalyzer`
+    /// whose source map changed names the analyzer node and the changed source, and that in a batch (a
+    /// source-port node delete: re-add the node + restore the analyzer mapping) that source card outranks
+    /// the bare re-added node.
+    #[test]
+    fn jump_target_names_the_changed_analyzer_source() {
+        use opossum_core::{
+            analyzers::energy::EnergyConfig,
+            nodes::create_node_ref,
+            prelude::{AnalyzerType, EnergyDataBuilder},
+        };
+
+        let root = Uuid::new_v4();
+        let analyzer = Uuid::new_v4();
+        let source = Uuid::new_v4();
+        let mut with_source = EnergyConfig::default();
+        with_source.map_source(source, EnergyDataBuilder::default());
+
+        // A source-mapping change (here the source was removed; undo would restore it) focuses the analyzer
+        // node and that exact source-port card, at the root tab where analyzers live.
+        let patch = Command::PatchAnalyzer(PatchAnalyzer {
+            id: analyzer,
+            old: AnalyzerType::Energy(with_source),
+            new: AnalyzerType::Energy(EnergyConfig::default()),
+        });
+        let jump = patch.clone().jump_target(root).unwrap();
+        assert_eq!(jump.graph_id, root, "analyzers live at the root scenery");
+        assert_eq!(jump.node, Some(analyzer));
+        assert_eq!(
+            jump.source_port,
+            Some(source),
+            "the jump must name the source-port card whose mapping changed"
+        );
+
+        // In a batch, the analyzer's source card wins over the re-added canvas source node.
+        let source_node = create_node_ref("dummy").unwrap();
+        let batch = Command::Batch(vec![
+            Command::AddNode(NodeSnapshot {
+                parent_group_id: root,
+                node: source_node,
+                cascaded: Vec::new(),
+                connections: Vec::new(),
+            }),
+            patch,
+        ])
+        .jump_target(root)
+        .unwrap();
+        assert_eq!(
+            batch.node,
+            Some(analyzer),
+            "the batch should focus the analyzer, not the re-added source node"
+        );
+        assert_eq!(
+            batch.source_port,
+            Some(source),
+            "the batch should focus the analyzer's changed source card"
         );
     }
 }

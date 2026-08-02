@@ -568,4 +568,87 @@ mod test {
             "redo must focus the same G1 despite Command::Batch reversing its sub-commands' order"
         );
     }
+
+    /// Regression test for the jump drifting one level up on the *second* undo of a nested port-map
+    /// cascade with a live connection. `apply_remove_port_map` always returns a `Batch` (even for its one
+    /// level), so after a redo the next undo command nests its `AddPortMap`s inside per-command `Batch`es;
+    /// `port_map_cascade_origin` only scanned top-level commands, found none, and `batch_jump_target` fell
+    /// back to an arbitrary tab. It now recurses into nested `Batch`es. Builds `root { G2 { G1 { lens } },
+    /// detector }` with a live connection `G2.g2_ext_out -> detector`, deletes G1's own mapping, and asserts
+    /// undo, redo, AND a second undo all focus G1 (the group whose own mapping was removed).
+    #[actix_web::test]
+    async fn test_remove_port_map_cascade_second_undo_stays_on_origin() {
+        use crate::document::{redo_document, undo_document};
+        use opossum_core::{
+            meter,
+            nodes::{Dummy, NodeGroup},
+            types::api_types::UndoRedoResponse,
+        };
+
+        let app_state = create_test_state();
+        let g1_id = {
+            let mut document = app_state.document.lock();
+            let scenery = document.scenery_mut();
+
+            let mut g1 = NodeGroup::new("G1");
+            let lens = g1.add_node(Dummy::default()).unwrap();
+            g1.map_output_port(lens, "output_1", "g1_ext_out").unwrap();
+
+            let mut g2 = NodeGroup::new("G2");
+            let g1_id = g2.add_node(g1).unwrap();
+            g2.map_output_port(g1_id, "g1_ext_out", "g2_ext_out")
+                .unwrap();
+
+            let g2_id = scenery.add_node(g2).unwrap();
+
+            // A live connection at root through the whole chain (the user's connected-nodes case), so the
+            // cascade also disconnects an edge - the shape that produced the nested batches on undo#2.
+            let detector = scenery.add_node(Dummy::default()).unwrap();
+            scenery
+                .connect_nodes(g2_id, "g2_ext_out", detector, "input_1", meter!(0.1))
+                .unwrap();
+
+            g1_id
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(remove_port_map)
+                .service(undo_document)
+                .service(redo_document),
+        )
+        .await;
+
+        let del_req = test::TestRequest::delete()
+            .uri(&format!(
+                "/{g1_id}/port_mappings?external_port_name=g1_ext_out&port_type=Output"
+            ))
+            .to_request();
+        assert_eq!(app.call(del_req).await.unwrap().status(), StatusCode::OK);
+
+        // undo, redo, undo again - each must focus the innermost origin G1, never drifting.
+        let jump_graph_id = |body: UndoRedoResponse| {
+            body.jump
+                .expect("an undo/redo of a port-map cascade must carry a jump target")
+                .graph_id
+        };
+        for (uri, label) in [
+            ("/undo", "undo"),
+            ("/redo", "redo"),
+            ("/undo", "second undo"),
+        ] {
+            let resp = app
+                .call(test::TestRequest::post().uri(uri).to_request())
+                .await
+                .unwrap();
+            assert_eq!(resp.status(), StatusCode::OK, "{label} must succeed");
+            let body: UndoRedoResponse = test::read_body_json(resp).await;
+            assert_eq!(
+                jump_graph_id(body),
+                g1_id,
+                "{label} must focus the innermost origin G1, not drift a level up"
+            );
+        }
+    }
 }

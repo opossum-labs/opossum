@@ -176,6 +176,18 @@ impl NodeGroup {
         self.graph.delete_node(node_id)
     }
 
+    /// Remove a single node from the graph **without** cascading to reference nodes.
+    ///
+    /// Forwards to [`OpticGraph::remove_node_no_cascade`]; see there for why relocations
+    /// (group / move / convert) use this instead of [`delete_node`](Self::delete_node).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the group is inverted, or no node with exactly `node_id` exists in the graph.
+    pub fn remove_node_no_cascade(&mut self, node_id: Uuid) -> OpmResult<()> {
+        self.graph.remove_node_no_cascade(node_id)
+    }
+
     /// Recursively collects the UUIDs of all nodes contained in this graph,
     /// including nodes inside nested group nodes.
     ///

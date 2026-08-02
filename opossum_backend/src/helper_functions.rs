@@ -154,25 +154,28 @@ pub fn map_port(
     }
 }
 
-/// Deletes every node in `node_ids` from `scenery`, cascade-aware.
+/// Removes every node in `node_ids` from `source_group_id` **without** cascading to reference nodes.
 ///
-/// Deleting a node cascades away any reference node pointing at it ([`NodeGroup::delete_node`]). When the
-/// set being deleted *itself* contains such a reference (e.g. a moved selection holding both a node and a
-/// reference to it), a later plain `delete_node` on the already-cascaded id would fail with "node does not
-/// exist". Each call's returned set of removed uuids is therefore used to drop those ids from the pending
-/// list before they're deleted again. Shared by the forward move (`post_move_nodes`) and its undo/redo
-/// (`apply_move_nodes`), so both handle an internal cascade identically.
+/// A group / move / convert *relocates* its nodes: each keeps its uuid and is immediately re-added
+/// elsewhere. So - unlike a real delete - a [`NodeReference`](opossum_core::prelude::NodeReference)
+/// pointing at a moved node must survive and keep resolving to it in its new location. This removes only
+/// the named nodes (direct members of `source_group_id`) via [`NodeGroup::remove_node_no_cascade`], leaving
+/// any referrer (inside or outside the moved set) untouched; the reference's `Weak` keeps pointing at the
+/// same still-alive `Arc`. It also handles the moved set containing a node *and* a reference to it (both
+/// are removed independently and re-added), which the previous cascade-plus-dedup logic existed to work
+/// around. Shared by the forward convert / move (`post_convert_nodes_to_group` / `post_move_nodes`) and
+/// their undo/redo (`apply_move_nodes`, `apply_insert_group`, `apply_extract_group`).
 ///
 /// # Errors
 ///
-/// Returns an error if a `delete_node` call fails for a reason other than the node already being gone.
-pub fn delete_nodes_cascade_aware(scenery: &mut NodeGroup, node_ids: &[Uuid]) -> OpmResult<()> {
-    let mut remaining: Vec<Uuid> = node_ids.to_vec();
-    while let Some(node) = remaining.pop() {
-        let deleted = scenery.delete_node(node)?;
-        for del_id in &deleted {
-            remaining.retain(|id| id != del_id);
-        }
+/// Returns an error if `source_group_id` doesn't resolve to a group, or an id isn't a member of it.
+pub fn remove_relocated_nodes(
+    scenery: &mut NodeGroup,
+    source_group_id: Uuid,
+    node_ids: &[Uuid],
+) -> OpmResult<()> {
+    for id in node_ids {
+        scenery.with_group_node_mut(source_group_id, |g| g.remove_node_no_cascade(*id))??;
     }
     Ok(())
 }
@@ -190,6 +193,48 @@ pub fn parent_group_id_or_self(scenery: &NodeGroup, uuid: Uuid) -> OpmResult<Uui
     } else {
         Ok(scenery.node_recursive(uuid)?.1)
     }
+}
+
+/// The chain of group ids from `uuid` up to (and including) the scenery root: `[uuid, parent, ..., root]`.
+///
+/// # Errors
+///
+/// Returns an error if `uuid` (or an ancestor of it) doesn't resolve to a node in `scenery`.
+fn ancestor_chain(scenery: &NodeGroup, uuid: Uuid) -> OpmResult<Vec<Uuid>> {
+    let root = scenery.node_attr().uuid();
+    let mut chain = vec![uuid];
+    let mut current = uuid;
+    while current != root {
+        let parent = parent_group_id_or_self(scenery, current)?;
+        if parent == current {
+            break; // root's self-sentinel (or a node with no distinct parent) - stop.
+        }
+        chain.push(parent);
+        current = parent;
+    }
+    Ok(chain)
+}
+
+/// The lowest common ancestor group of `a` and `b` in `scenery`'s tree.
+///
+/// This is the tab a move between the two groups was initiated from: an into-group move's outer parent, an
+/// out-of-group move's outer parent, or two siblings' shared parent. Used as a move's *direction-stable*
+/// focus tab - the change is visible there whichever way the move runs, so undo/redo can stay put instead
+/// of being pulled into the group (unlike `MoveNodesRequest::target_group_id`, which flips between undo and
+/// redo). Falls back to the scenery root if the two chains share nothing (they always share the root).
+///
+/// # Errors
+///
+/// Returns an error if either id (or an ancestor) doesn't resolve to a node in `scenery`.
+pub fn lowest_common_ancestor_group(scenery: &NodeGroup, a: Uuid, b: Uuid) -> OpmResult<Uuid> {
+    let a_chain = ancestor_chain(scenery, a)?;
+    let b_chain = ancestor_chain(scenery, b)?;
+    // `a_chain` runs from `a` up to the root; the first of its ids that also appears in `b_chain` is the
+    // deepest ancestor the two share.
+    Ok(a_chain
+        .into_iter()
+        .find(|id| b_chain.contains(id))
+        .unwrap_or_else(|| scenery.node_attr().uuid()))
 }
 
 /// Before `node_id` (living in `parent_group_id`) is deleted, tears down every port-map chain that

@@ -15,8 +15,9 @@ use super::Command;
 use crate::{
     error::BackEndErrorResponse,
     helper_functions::{
-        connect_from_info, delete_nodes_cascade_aware, disconnect_moved_node_connections, map_port,
-        reconnect_moved_node_connections, split_sort_connections_from_document,
+        connect_from_info, disconnect_moved_node_connections, map_port,
+        reconnect_moved_node_connections, remove_relocated_nodes,
+        split_sort_connections_from_document,
     },
 };
 
@@ -57,6 +58,12 @@ pub struct MoveNodes {
     pub request: MoveNodesRequest,
     /// Groups beyond source/target whose port map a reroute touched.
     pub affected_groups: Vec<Uuid>,
+    /// The tab an undo/redo of this move should focus: the drag's *outer* context (the lowest common
+    /// ancestor of source and target). The change is visible there whichever direction the move runs, so
+    /// the view stays put instead of being pulled into the group. Unlike `request.target_group_id` (which
+    /// flips between a move and its reverse), this is identical for both directions, so it is carried
+    /// through `apply` unchanged. See `Command::jump_target`.
+    pub focus_group_id: Uuid,
 }
 
 /// A captured group/flat-members pair, ready to be converted in either direction.
@@ -112,6 +119,7 @@ pub(super) fn apply_move_nodes(
     let MoveNodes {
         request,
         affected_groups,
+        focus_group_id,
     } = cmd;
     let MoveNodesRequest {
         source_group_id: from_group_id,
@@ -145,10 +153,10 @@ pub(super) fn apply_move_nodes(
         .filter_map(|id| document.scenery().node_recursive(*id).ok().map(|(r, _)| r))
         .collect();
 
-    // Cascade-aware, matching the forward `post_move_nodes` path: if the moved set contains a node and a
-    // reference pointing at it, deleting the node cascades the reference away, so a plain per-id delete
-    // loop would then error on the already-gone reference.
-    delete_nodes_cascade_aware(document.scenery_mut(), &node_ids)?;
+    // Remove the moved nodes without cascading references, matching the forward `post_move_nodes` path: a
+    // move is a relocation, so an external reference to a moved node must survive (and a reference *inside*
+    // the moved set is simply removed and re-added like any other member).
+    remove_relocated_nodes(document.scenery_mut(), from_group_id, &node_ids)?;
     for node_ref in &node_refs {
         document
             .scenery_mut()
@@ -162,7 +170,8 @@ pub(super) fn apply_move_nodes(
 
     reconnect_moved_node_connections(document.scenery_mut(), from_group_id, to_group_id, pending)?;
 
-    // `affected_groups` is the same set for this move and its reverse, so carry it through unchanged.
+    // `affected_groups` and `focus_group_id` are the same for this move and its reverse, so carry them
+    // through unchanged - that stable focus is what keeps undo and redo landing on the same outer tab.
     Ok(Command::MoveNodes(MoveNodes {
         request: MoveNodesRequest {
             source_group_id: to_group_id,
@@ -170,6 +179,7 @@ pub(super) fn apply_move_nodes(
             nodes_to_move: node_ids,
         },
         affected_groups,
+        focus_group_id,
     }))
 }
 
@@ -207,9 +217,9 @@ pub(super) fn apply_insert_group(
         rerouted_mappings,
         affected_groups,
     } = cmd;
-    for member_id in &member_ids {
-        document.scenery_mut().delete_node(*member_id)?;
-    }
+    // Remove the flat members without cascading references: re-forming the group is a relocation, so an
+    // external reference to a member must survive and follow it into the re-created group.
+    remove_relocated_nodes(document.scenery_mut(), parent_group_id, &member_ids)?;
     let group_id = group.uuid()?;
     document
         .scenery_mut()
@@ -268,7 +278,11 @@ pub(super) fn apply_extract_group(
         affected_groups,
     } = cmd;
     let group_id = group.uuid()?;
-    document.scenery_mut().delete_node(group_id)?;
+    // Remove the group node without cascading references: dissolving it is a relocation of its members
+    // back out to the parent, so an external reference to a member must survive. This still strips the
+    // parent's own port-map entry pointing at the group (see `remove_node_no_cascade`), which the
+    // `rerouted_mappings` re-point below relies on.
+    remove_relocated_nodes(document.scenery_mut(), parent_group_id, &[group_id])?;
     for member_id in &member_ids {
         let member_ref = {
             let node = group.optical_ref.lock_opm()?;
@@ -378,6 +392,7 @@ mod test {
                 nodes_to_move: vec![Uuid::new_v4()],
             },
             affected_groups: vec![third],
+            focus_group_id: source,
         };
         let refreshed = refreshed_graph_ids(&describe_move_nodes(&cmd));
         assert!(refreshed.contains(&source), "source tab must be refreshed");

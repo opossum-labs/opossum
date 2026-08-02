@@ -683,6 +683,10 @@ pub struct JumpTarget {
     /// The node-editor panel to open, if the change belongs to one (`None` for a canvas-only or
     /// structural change).
     pub panel: Option<NodeEditorPanel>,
+    /// The analyzer source-port card to open and scroll to, if the change was to an analyzer's source
+    /// mapping (`None` otherwise). The analyzer editor has no [`NodeEditorPanel`] of its own, so this
+    /// addresses the specific per-source card (keyed by the source port's uuid) directly.
+    pub source_port: Option<Uuid>,
 }
 
 /// One user-visible effect of an undo/redo step.

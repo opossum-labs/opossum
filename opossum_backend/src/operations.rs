@@ -6,9 +6,9 @@ use crate::{
     helper_functions::{
         PendingReconnect, PortMapCascadeRemoval, capture_node_connections,
         collect_group_connections, collect_node_refs_and_pos, connect_from_info,
-        create_new_group_node_info, delete_nodes_cascade_aware,
-        disconnect_exposed_port_cascades_for_node, disconnect_moved_node_connections,
-        is_reference_target, parent_group_id_or_self, reconnect_moved_node_connections,
+        create_new_group_node_info, disconnect_exposed_port_cascades_for_node,
+        disconnect_moved_node_connections, is_reference_target, lowest_common_ancestor_group,
+        parent_group_id_or_self, reconnect_moved_node_connections, remove_relocated_nodes,
         split_cascades_for_response, split_sort_connections,
     },
     undo::{
@@ -1173,8 +1173,10 @@ pub async fn post_convert_nodes_to_group(
     // `pending` by value.
     let rerouted_from_pending = extract_rerouted_pending(&pending);
 
-    // Delete the converted nodes from group_id, cascade-aware (shared with the move path).
-    delete_nodes_cascade_aware(scenery, &original_node_ids)?;
+    // Remove the converted nodes from group_id without cascading references (a convert is a relocation -
+    // an external reference to a converted node must survive and follow it into the new group; shared with
+    // the move path).
+    remove_relocated_nodes(scenery, group_id, &original_node_ids)?;
 
     // Add them into the new group and reconnect their purely-internal wiring
     for node_ref in &node_refs {
@@ -1283,9 +1285,10 @@ pub async fn post_move_nodes(
         &original_node_ids,
     )?;
 
-    // Delete the moved nodes from the original scenery, cascade-aware (a moved reference to a moved node
-    // would otherwise be double-deleted - see the helper). Shared with the `apply_move_nodes` undo path.
-    delete_nodes_cascade_aware(scenery, &original_node_ids)?;
+    // Remove the moved nodes from the source group without cascading references (a move is a relocation -
+    // an external reference to a moved node must survive and keep resolving to it; this also handles a
+    // reference *inside* the moved set). Shared with the `apply_move_nodes` undo path.
+    remove_relocated_nodes(scenery, from_group_id, &original_node_ids)?;
 
     // Add nodes_to_drop to group
     for node_ref in &node_refs {
@@ -1305,6 +1308,11 @@ pub async fn post_move_nodes(
     port_map_groups_changed.sort();
     port_map_groups_changed.dedup();
 
+    // The tab undo/redo should focus: the drag's outer context (the lowest common ancestor of source and
+    // target), so the view stays there instead of being pulled into the group - the change is visible in
+    // the outer tab either direction. Same value for the move and its reverse (see `MoveNodes`).
+    let focus_group_id = lowest_common_ancestor_group(scenery, from_group_id, drop_group_id)?;
+
     // Carry the touched-group set into the undo command so undo/redo refreshes every affected tab, not
     // just source and target.
     data.push_undo(Command::MoveNodes(MoveNodes {
@@ -1314,6 +1322,7 @@ pub async fn post_move_nodes(
             nodes_to_move: original_node_ids,
         },
         affected_groups: port_map_groups_changed.clone(),
+        focus_group_id,
     }));
 
     drop(document);
@@ -2728,6 +2737,186 @@ mod test {
                 "the reference must be in the target group again after redo"
             );
         }
+    }
+
+    /// Regression test for the bug where converting nodes to a group *deleted* an external reference node
+    /// pointing at one of them. Grouping is a relocation - the grouped node keeps its uuid and the
+    /// reference's `Weak` stays valid - but the removal step used the cascading `delete_node`, which swept
+    /// the referrer away (and nothing captured it for undo, so undo couldn't restore it either). Builds
+    /// `root { A, B, ref -> A }`, converts `{A, B}` into a new group, and asserts the reference survives
+    /// *and still resolves to A* (its mirrored ports are non-empty) across the convert, its undo, and its
+    /// redo.
+    #[actix_web::test]
+    async fn test_convert_nodes_to_group_keeps_external_reference_alive() {
+        use opossum_core::nodes::{Dummy, NodeReference};
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, node_a, node_b, ref_r) = {
+            let mut document = app_state.document.lock();
+            let scenery = document.scenery_mut();
+            let root_id = scenery.node_attr().uuid();
+            let node_a = scenery.add_node(Dummy::default()).unwrap();
+            let node_b = scenery.add_node(Dummy::default()).unwrap();
+            let node_a_ref = scenery.node_recursive(node_a).unwrap().0;
+            let ref_r = scenery
+                .add_node(NodeReference::from_node(&node_a_ref).unwrap())
+                .unwrap();
+            (root_id, node_a, node_b, ref_r)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_convert_nodes_to_group)
+                .service(undo_document)
+                .service(redo_document),
+        )
+        .await;
+
+        // The reference must still exist at the root and still resolve to A - a live `NodeReference` mirrors
+        // its target's ports, so a Dummy target gives it a non-empty output port set; a dropped reference
+        // would be gone entirely.
+        let assert_reference_resolves = |app_state: &Data<AppState>| {
+            let document = app_state.document.lock();
+            let (ref_node, parent) = document
+                .scenery()
+                .node_recursive(ref_r)
+                .expect("the reference node must still exist");
+            assert_eq!(parent, root_id, "the reference must stay at the root");
+            let ports = ref_node.optical_ref.lock_opm().unwrap().ports();
+            assert!(
+                !ports.names(&PortType::Output).is_empty(),
+                "the reference must still resolve to A (non-empty mirrored ports)"
+            );
+        };
+
+        let req = test::TestRequest::post()
+            .uri("/convert_to_group")
+            .set_json(&ConvertToGroupRequest {
+                group_id: root_id,
+                nodes_to_convert: vec![node_a, node_b],
+            })
+            .to_request();
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
+        assert_reference_resolves(&app_state);
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::OK,
+            "undo must not error"
+        );
+        assert_reference_resolves(&app_state);
+
+        let req = test::TestRequest::post().uri("/redo").to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::OK,
+            "redo must not error"
+        );
+        assert_reference_resolves(&app_state);
+    }
+
+    /// `lowest_common_ancestor_group` must return the outer/drag-origin tab for every move topology, so a
+    /// move's jump target is direction-stable. Builds `root { G1 { A, G2 }, G3 }` and checks: an into-group
+    /// move (`G1` <-> `G2`) resolves to the outer `G1`; a move between differently-nested branches
+    /// (`G2` <-> `G3`) resolves to their shared root; and a move out of the root resolves to the root.
+    #[actix_web::test]
+    async fn test_lowest_common_ancestor_group_picks_the_outer_tab() {
+        use opossum_core::nodes::{Dummy, NodeGroup};
+
+        let app_state = Data::new(AppState::default());
+        let mut document = app_state.document.lock();
+        let scenery = document.scenery_mut();
+        let root_id = scenery.node_attr().uuid();
+        let mut g1 = NodeGroup::new("G1");
+        let _a = g1.add_node(Dummy::default()).unwrap();
+        let g2_id = g1.add_node(NodeGroup::new("G2")).unwrap();
+        let g1_id = scenery.add_node(g1).unwrap();
+        let g3_id = scenery.add_node(NodeGroup::new("G3")).unwrap();
+
+        // Into-group and out-of-group both land on the outer group G1 (which contains G2).
+        assert_eq!(
+            lowest_common_ancestor_group(scenery, g1_id, g2_id).unwrap(),
+            g1_id
+        );
+        assert_eq!(
+            lowest_common_ancestor_group(scenery, g2_id, g1_id).unwrap(),
+            g1_id
+        );
+        // G2 (under G1) and G3 (under root) share only the root.
+        assert_eq!(
+            lowest_common_ancestor_group(scenery, g2_id, g3_id).unwrap(),
+            root_id
+        );
+        // A move that starts at the root stays at the root.
+        assert_eq!(
+            lowest_common_ancestor_group(scenery, root_id, g1_id).unwrap(),
+            root_id
+        );
+    }
+
+    /// Regression test for the bug where undo then redo of a move-into-group jumped *into* the group on
+    /// redo. `MoveNodes::jump_target` used `target_group_id` - the destination of whichever direction is
+    /// applied - which is the outer group on undo but the inner group on redo. It now uses a
+    /// direction-stable `focus_group_id` (the lowest common ancestor). Moves a node from the root into a
+    /// child group and asserts the pushed undo command *and* the re-inverted redo command report the same
+    /// jump-target tab, equal to the outer root.
+    #[actix_web::test]
+    async fn test_move_into_group_undo_redo_focus_the_same_outer_tab() {
+        use opossum_core::nodes::{Dummy, NodeGroup};
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, node_a, inner_group_id) = {
+            let mut document = app_state.document.lock();
+            let scenery = document.scenery_mut();
+            let root_id = scenery.node_attr().uuid();
+            let node_a = scenery.add_node(Dummy::default()).unwrap();
+            let inner_group_id = scenery.add_node(NodeGroup::new("inner")).unwrap();
+            (root_id, node_a, inner_group_id)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_move_nodes)
+                .service(undo_document)
+                .service(redo_document),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/move_nodes")
+            .set_json(&MoveNodesRequest {
+                source_group_id: root_id,
+                target_group_id: inner_group_id,
+                nodes_to_move: vec![node_a],
+            })
+            .to_request();
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
+
+        // The pushed undo command (stacks are push_back/pop_back, so the top is `back`) must focus the
+        // outer root tab, not the inner group.
+        let undo_jump = {
+            let stack = app_state.undo_stack.lock();
+            stack.back().unwrap().jump_target(root_id).unwrap()
+        };
+        assert_eq!(
+            undo_jump.graph_id, root_id,
+            "undo of a move-into-group must focus the outer tab"
+        );
+
+        // Undo, then the re-inverted redo command must focus the *same* outer tab - not the inner group.
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
+        let redo_jump = {
+            let stack = app_state.redo_stack.lock();
+            stack.back().unwrap().jump_target(root_id).unwrap()
+        };
+        assert_eq!(
+            redo_jump.graph_id, root_id,
+            "redo of the same move must focus the same outer tab, not jump into the group"
+        );
     }
 
     /// Regression test for the bug where converting nodes that already have an external port

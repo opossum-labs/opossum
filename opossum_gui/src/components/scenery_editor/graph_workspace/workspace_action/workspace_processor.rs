@@ -23,7 +23,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use crate::{
-    NODE_DETAILS_REFRESH, OPOSSUM_UI_LOGS, PENDING_PANEL_OPEN,
+    NODE_DETAILS_REFRESH, OPOSSUM_UI_LOGS, PENDING_PANEL_OPEN, PENDING_SOURCE_CARD_OPEN,
     api::{self, delete_document, eval_action_run},
     components::scenery_editor::{
         DragStatus, NodeType,
@@ -685,6 +685,7 @@ async fn apply_document_changes(
         graph_id,
         node,
         panel,
+        source_port,
     }) = jump
     {
         ensure_tab_active(graph_id, ws_handler, root_graph_id, workspace).await;
@@ -709,6 +710,12 @@ async fn apply_document_changes(
             // `OpticalNodeEditor`/`PortConfigEditor`.
             if let Some(panel) = panel {
                 *PENDING_PANEL_OPEN.write() = Some((node, panel));
+            }
+            // An analyzer source-mapping change has no `NodeEditorPanel` - address the specific source-port
+            // card instead. Held until the matching card in the analyzer editor expands+scrolls to itself
+            // and clears it - see the analyzer source editors.
+            if let Some(source_port) = source_port {
+                *PENDING_SOURCE_CARD_OPEN.write() = Some((node, source_port));
             }
         }
     }

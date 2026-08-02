@@ -29,6 +29,12 @@ static NODE_DETAILS_REFRESH: GlobalSignal<usize> = Signal::global(|| 0);
 /// whether or not it had to switch nodes, so an undo of a detail on the already-selected node still opens
 /// its panel.
 static PENDING_PANEL_OPEN: GlobalSignal<Option<(Uuid, NodeEditorPanel)>> = Signal::global(|| None);
+/// Set from the backend's authoritative `JumpTarget` when an undo/redo touches an analyzer's source
+/// mapping: `(analyzer_id, source_port_uuid)`. The analyzer editor has no `NodeEditorPanel`, so this
+/// addresses the specific per-source card directly. Consumed (cleared) by whichever source-port card
+/// matches both ids, which expands and scrolls itself into view. Set whether or not the analyzer had to be
+/// selected, so an undo while the analyzer is already shown still opens the changed card.
+static PENDING_SOURCE_CARD_OPEN: GlobalSignal<Option<(Uuid, Uuid)>> = Signal::global(|| None);
 /// `(can_undo, can_redo)` availability, mirrored from the backend's undo/redo stacks. Every edit path
 /// (canvas coroutine, node editor, viewport gestures) writes this so the Edit menu's Undo/Redo entries
 /// reflect reality; the backend is the source of truth on undo/redo. A global (rather than a

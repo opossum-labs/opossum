@@ -133,6 +133,12 @@ impl OpmDocument {
             );
         }
         document.scenery.after_deserialization_hook()?;
+        // Resolve every reference against the now fully-built scenery, once at the root. A reference nested
+        // in a group can point at a node in an ancestor or sibling branch that didn't exist yet during
+        // per-group deserialization (see `OpticGraph::resolve_all_references`); this can't live in
+        // `after_deserialization_hook`, which also runs per-node bottom-up during parse (before the whole
+        // tree exists) via `OpticRef`'s deserializer.
+        document.scenery.graph().resolve_all_references()?;
         document
             .scenery
             .graph_mut()
@@ -405,6 +411,47 @@ mod test {
         assert!(
             OpmDocument::from_file(&PathBuf::from("./files_for_testing/opm/opticscenery.opm"))
                 .is_ok()
+        );
+    }
+    /// Regression test for a reference whose target lives one level *up* (in an ancestor group) failing to
+    /// reload: `root { A, G { ref -> A } }`. Reference resolution used to run per-group during
+    /// deserialization, which builds inner groups before outer ones - so `G`'s reference couldn't see `A`
+    /// (in the not-yet-built root) and the load errored with "reference node found, which does not reference
+    /// anything". It is now deferred to a whole-scenery pass run after the full tree exists. Round-trips the
+    /// document through its `.opm` string and asserts it reloads with the reference resolving to A.
+    #[test]
+    fn reference_into_ancestor_round_trips() {
+        use crate::{
+            nodes::{Dummy, NodeReference},
+            utils::LockExt,
+        };
+
+        let mut document = OpmDocument::default();
+        let r_id = {
+            let scenery = document.scenery_mut();
+            let a_id = scenery.add_node(Dummy::default()).unwrap();
+            let a_ref = scenery.node_recursive(a_id).unwrap().0;
+            let mut g = NodeGroup::new("G");
+            let r_id = g
+                .add_node(NodeReference::from_node(&a_ref).unwrap())
+                .unwrap();
+            scenery.add_node(g).unwrap();
+            r_id
+        };
+
+        let serialized = document.to_opm_file_string().unwrap();
+        // Before the fix this errored: G's reference to A (a level up) couldn't resolve mid-deserialization.
+        let reloaded = OpmDocument::from_string(&serialized)
+            .expect("a reference pointing at an ancestor node must reload");
+
+        let (reference, _) = reloaded
+            .scenery()
+            .node_recursive(r_id)
+            .expect("the reference must still exist after reload");
+        let ports = reference.optical_ref.lock_opm().unwrap().ports();
+        assert!(
+            !ports.names(&PortType::Output).is_empty(),
+            "the reloaded reference must resolve to A (non-empty mirrored ports)"
         );
     }
     #[test]
