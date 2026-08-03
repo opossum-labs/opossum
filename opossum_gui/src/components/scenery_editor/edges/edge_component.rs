@@ -55,12 +55,13 @@ pub fn EdgeComponent(edge: ReadStore<EdgeElement>) -> Element {
     );
     let targets_reference = edge.targets_reference();
 
-    // Construct persistent, deterministic test ID using the monotonic edge index
+    // Construct persistent, deterministic test IDs for path and input field separately
     let edge_test_id = format!("edge-{}", edge.edge_index());
+    let edge_input_test_id = format!("edge-input-{}", edge.edge_index());
 
     rsx! {
         path {
-            // Persistent test ID for Playwright assertions
+            // Test ID for targeting the SVG connection line specifically
             "data-testid": "{edge_test_id}",
             d: new_path,
             tabindex: 0,
@@ -88,6 +89,8 @@ pub fn EdgeComponent(edge: ReadStore<EdgeElement>) -> Element {
             width: EDGE_DISTANCE_FIELD_WIDTH,
             height: EDGE_DISTANCE_FIELD_HEIGHT,
             div {
+                // Test ID for targeting the distance input field box specifically
+                "data-testid": "{edge_input_test_id}",
                 hidden: targets_reference,
                 pointer_events: "auto",
                 class: "input-with-unit",
