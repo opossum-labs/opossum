@@ -262,6 +262,118 @@ pub fn relocate_nodes_in_document(
     })
 }
 
+/// Everything a cut relocation ([`relocate_nodes_dropping_links`]) tore down, so the caller can both
+/// report it to the GUI and build the undo step that restores it.
+pub struct CutRelocationOutcome {
+    /// Every direct connection in `from_group_id`'s graph that touched a moved node (deduped), paired with
+    /// `from_group_id`. Dropped when the nodes are removed; reported to the GUI and restored on undo (one
+    /// [`Command::AddEdge`](crate::undo::Command::AddEdge) each).
+    pub removed_connections: Vec<(Uuid, ConnectInfo)>,
+    /// The outward port-map chains torn down - flattened for the GUI response via
+    /// [`split_cascades_for_response`] and turned into the undo restore via
+    /// `Command::from(&PortMapCascadeRemoval)`.
+    pub cascades: Vec<PortMapCascadeRemoval>,
+    /// Groups whose port maps changed (every cascade level's group plus `from_group_id`), so the GUI
+    /// re-fetches their exposed ports.
+    pub port_map_groups_changed: Vec<Uuid>,
+}
+
+/// Relocates `node_ids` from `from_group_id` to `to_group_id` **preserving each node's uuid**, but -
+/// unlike [`relocate_nodes_in_document`] - **cascade-deletes** every connection and port mapping the
+/// nodes carried instead of rerouting them. This is the cut operation's relocation: a cut node keeps its
+/// identity (so a [`NodeReference`](opossum_core::prelude::NodeReference) pointing at it stays valid) but
+/// arrives at `to_group_id` completely bare, exactly as the old duplicate-based cut left the pasted copy
+/// after `delete_node`ing the original.
+///
+/// Reuses the same teardown pieces as the plain node-delete endpoint: [`capture_node_connections`]
+/// snapshots each node's direct edges (for the GUI + undo) before they're dropped;
+/// [`disconnect_exposed_port_cascades_for_node`] tears down every outward-exposed port-map chain
+/// (removing `from_group_id`'s own entry, any re-exporting ancestor's, and the terminal connection);
+/// [`remove_relocated_nodes`] then removes the nodes without cascading references (dropping their
+/// remaining edges and own port-map entries), and each same [`OpticRef`] is re-added to `to_group_id`.
+/// Because it never calls the `disconnect_moved_node_connections` / `reconnect_moved_node_connections`
+/// reroute machinery, none of its boundary/mapping special cases can fire.
+///
+/// # Arguments
+///
+/// * `document` - the already-locked live document.
+/// * `from_group_id` - the group the nodes currently live in.
+/// * `to_group_id` - the group to move them into.
+/// * `node_ids` - the nodes to relocate.
+///
+/// # Returns
+///
+/// A [`CutRelocationOutcome`] with the torn-down connections, port-map cascades, and the set of groups
+/// whose port maps changed.
+///
+/// # Errors
+///
+/// Returns an error if either group id doesn't resolve, a moved node's uuid can't be found, or a
+/// cascade / connection capture step fails.
+pub fn relocate_nodes_dropping_links(
+    document: &mut OpmDocument,
+    from_group_id: Uuid,
+    to_group_id: Uuid,
+    node_ids: &[Uuid],
+) -> OpmResult<CutRelocationOutcome> {
+    // Snapshot every direct connection touching a moved node before it's dropped. A connection between two
+    // co-cut nodes is captured from both ends, so dedup by its endpoint key - it must be reported/restored
+    // exactly once.
+    let mut removed_connections = Vec::new();
+    let mut seen: HashSet<(Uuid, String, Uuid, String)> = HashSet::new();
+    for id in node_ids {
+        for c in capture_node_connections(document.scenery(), from_group_id, *id)? {
+            let key = (
+                c.src_uuid(),
+                c.src_port().to_string(),
+                c.target_uuid(),
+                c.target_port().to_string(),
+            );
+            if seen.insert(key) {
+                removed_connections.push((from_group_id, c));
+            }
+        }
+    }
+
+    // Cascade-tear-down each node's outward-exposed port-map chains (removes `from_group_id`'s own entry,
+    // walks through any re-exporting ancestor, and disconnects the terminal edge).
+    let mut cascades = Vec::new();
+    for id in node_ids {
+        cascades.extend(disconnect_exposed_port_cascades_for_node(
+            document.scenery_mut(),
+            from_group_id,
+            *id,
+        )?);
+    }
+
+    // Relocate the now-bare nodes: same live `OpticRef`s (uuid preserved, references survive), removed
+    // without cascading, re-added to the destination with no connections carried across.
+    let node_refs: Vec<OpticRef> = node_ids
+        .iter()
+        .filter_map(|id| document.scenery().node_recursive(*id).ok().map(|(r, _)| r))
+        .collect();
+    remove_relocated_nodes(document.scenery_mut(), from_group_id, node_ids)?;
+    for node_ref in &node_refs {
+        document
+            .scenery_mut()
+            .with_group_node_mut(to_group_id, |g| g.add_node_ref(node_ref.clone()))??;
+    }
+
+    let mut port_map_groups_changed: Vec<Uuid> = cascades
+        .iter()
+        .flat_map(|c| c.levels.iter().map(|l| l.group_id))
+        .collect();
+    port_map_groups_changed.push(from_group_id);
+    port_map_groups_changed.sort();
+    port_map_groups_changed.dedup();
+
+    Ok(CutRelocationOutcome {
+        removed_connections,
+        cascades,
+        port_map_groups_changed,
+    })
+}
+
 /// Returns `uuid`'s parent group id, or `uuid` itself if it names the scenery root - which has no
 /// real parent to report, matching the same self-as-parent sentinel `remove_port_map_cascade` uses
 /// for the same reason.

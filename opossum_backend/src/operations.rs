@@ -7,7 +7,8 @@ use crate::{
     helper_functions::{
         capture_node_connections, collect_group_connections, collect_node_refs_and_pos,
         create_new_group_node_info, is_reference_target, lowest_common_ancestor_group,
-        parent_group_id_or_self, relocate_nodes_in_document, split_sort_connections,
+        parent_group_id_or_self, relocate_nodes_dropping_links, relocate_nodes_in_document,
+        split_cascades_for_response, split_sort_connections,
     },
     undo::{Command, EdgeSnapshot, GroupConversion, MoveNodes, NodeSnapshot, ReroutedMapping},
 };
@@ -303,16 +304,22 @@ async fn post_paste_nodes(
     }))
 }
 
-/// Cut the copy cache into a group as a UUID-preserving *move*.
+/// Cut the copy cache into a group as a UUID-preserving *move* that **cascade-deletes** the cut nodes'
+/// links.
 ///
 /// A cut relocates the *same* nodes rather than duplicating them (as [`post_paste_nodes`] does): each keeps
-/// its uuid, so every reference, port map and connection pointing at it stays valid with no remapping, and
-/// nothing is cascade-deleted. A cut node already in `target_group_id` is only repositioned (the common
-/// "cut and paste in the same scenery" case); a node from another group is relocated into `target_group_id`
-/// via the shared move machinery ([`relocate_nodes_in_document`]). Analyzers can only ever be repositioned
-/// at the scenery root. The whole gesture is pushed as a single undo step (one [`Command::Batch`] of the
-/// relocations' inverse [`Command::MoveNodes`] plus the reposition inverses), so undo/redo revert it in one
-/// go - and because no uuid ever changes, redo can never hit the reference-cascade that a duplicate cut did.
+/// its uuid, so a [`NodeReference`] pointing at it stays valid with no remapping (this is why the cut is a
+/// move and not a copy - it's the fix for the undo/redo-of-references bug the old duplicate cut had). But
+/// the node arrives at `target_group_id` **bare**: every connection and port mapping it carried is
+/// cascade-deleted ([`relocate_nodes_dropping_links`]), exactly as the old duplicate cut left the pasted
+/// copy after `delete_node`ing the original - rather than being rerouted across the group boundary the way
+/// a drag-and-drop move ([`relocate_nodes_in_document`]) preserves them. A cut node already in
+/// `target_group_id` is only repositioned (the common "cut and paste in the same scenery" case), keeping
+/// its links. Analyzers can only ever be repositioned at the scenery root. The whole gesture is one undo
+/// step ([`Command::Batch`]): the relocations' inverse [`Command::MoveNodes`] (move the nodes back) first,
+/// then the link restores ([`Command::AddEdge`] / [`Command::AddPortMap`], which reference the nodes back
+/// in their source group), then the reposition inverses - so undo/redo revert it in one go, and because no
+/// uuid ever changes, redo can never hit the reference-cascade that a duplicate cut did.
 ///
 /// # Errors
 ///
@@ -371,8 +378,8 @@ async fn post_cut_nodes(
     // the GUI, and collect one inverse `MoveNodes` per source group for the undo batch. Sorted source order
     // keeps the pushed batch deterministic (`HashMap` iteration order isn't stable).
     let mut move_inverses = Vec::<Command>::new();
+    let mut restore_commands = Vec::<Command>::new();
     let mut relocated_pairs = Vec::<(Uuid, Uuid)>::new();
-    let mut new_connections = Vec::<(Uuid, ConnectInfo)>::new();
     let mut removed_connections = Vec::<(Uuid, ConnectInfo)>::new();
     let mut port_map_groups_changed = Vec::<Uuid>::new();
     let mut removed_port_mappings = Vec::<(Uuid, Uuid, String, PortType)>::new();
@@ -382,14 +389,30 @@ async fn post_cut_nodes(
         let Some(ids) = relocations.remove(&source) else {
             continue;
         };
-        let outcome = relocate_nodes_in_document(&mut document, source, target_group_id, &ids)?;
-        new_connections.extend(outcome.preserved.new_connections);
+        // A cut relocates each node preserving its uuid but cascade-deletes the connections and port
+        // mappings it carried (rather than rerouting them, as a drag-and-drop move does).
+        let outcome = relocate_nodes_dropping_links(&mut document, source, target_group_id, &ids)?;
+        let (cascade_connections, cascade_port_mappings) =
+            split_cascades_for_response(&outcome.cascades);
+
+        // Undo restores the torn-down links, but only once the nodes are back in `source` (see the undo
+        // batch assembly below): re-add every direct edge, then replay each port-map cascade (one
+        // innermost-first `AddPortMap` chain + terminal `AddEdge` per cascade).
+        restore_commands.extend(outcome.removed_connections.iter().map(|(group_id, c)| {
+            Command::AddEdge(EdgeSnapshot {
+                group_id: *group_id,
+                connect_info: c.clone(),
+            })
+        }));
+        restore_commands.extend(outcome.cascades.iter().map(Command::from));
+
         removed_connections.extend(outcome.removed_connections);
-        removed_port_mappings.extend(outcome.preserved.removed_port_mappings);
+        removed_connections.extend(cascade_connections);
+        removed_port_mappings.extend(cascade_port_mappings);
 
         let focus_group_id =
             lowest_common_ancestor_group(document.scenery(), source, target_group_id)?;
-        let mut affected = outcome.preserved.port_map_groups_changed;
+        let mut affected = outcome.port_map_groups_changed;
         affected.push(target_group_id);
         affected.sort();
         affected.dedup();
@@ -462,8 +485,13 @@ async fn post_cut_nodes(
         }
     }
 
-    // One undo step for the whole gesture: relocate-back moves, then reposition-back patches.
+    // One undo step for the whole gesture, ordered so each step's prerequisites already exist when it
+    // runs (`Command::Batch` applies in order): first the relocate-back moves (every cut node returns to
+    // its source group), then the link restores (`AddEdge` / `AddPortMap`, which reference those nodes in
+    // their source group), then the reposition-back patches. Redo replays the reversed order - links torn
+    // down again before the nodes move back out.
     let mut undo_batch = move_inverses;
+    undo_batch.append(&mut restore_commands);
     undo_batch.append(&mut position_inverses);
     if !undo_batch.is_empty() {
         data.push_undo(Command::Batch(undo_batch));
@@ -473,7 +501,8 @@ async fn post_cut_nodes(
     Ok(Json(CutNodesResponse {
         relocated_nodes,
         repositioned,
-        new_connections,
+        // A cut cascade-deletes links rather than rerouting them, so nothing is newly connected.
+        new_connections: Vec::new(),
         removed_connections,
         port_map_groups_changed,
         removed_port_mappings,
@@ -1184,7 +1213,7 @@ mod test {
     use super::*;
     use crate::document::{redo_document, undo_document};
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
-    use opossum_core::{meter, nodes::Dummy};
+    use opossum_core::meter;
 
     /// Regression test for the redo bug this branch's original cut mechanism had: create a node and a
     /// reference to it, cut+paste the node in the *same* scenery, undo, then redo. The old duplicate-based
@@ -1425,6 +1454,201 @@ mod test {
             Proptype::Uuid(node_a),
             "the reference must still resolve to A's unchanged uuid after the cross-group redo"
         );
+    }
+
+    /// Regression test for the cut-of-a-connected-node bug: build `A -> G(B -> C) -> D` (the middle two
+    /// grouped, so `G` exposes `B.input_1` as `g_in` and `C.output_1` as `g_out`, with `A -> G.g_in` and
+    /// `G.g_out -> D`), plus a `NodeReference -> B`. Cutting `B` out of `G` into the root used to route
+    /// through the move-preserve machinery, which 400'd ("source node with given id does not exist") on
+    /// this nested case and left the graph half-mutated - `B` moved out but `G`'s `g_in` mapping and the
+    /// `A -> G` edge dangling, so the stale mapping could no longer be deleted. The fix makes a cut
+    /// cascade-delete the node's links (keeping its uuid, so the reference survives): after the cut `B`
+    /// lives bare at the root, `G`'s `g_in` mapping and the `A -> G` edge are gone, and a single
+    /// undo/redo round-trips the whole teardown.
+    #[actix_web::test]
+    async fn test_cut_connected_node_out_of_group_cascade_deletes_links() {
+        use opossum_core::{
+            meter,
+            nodes::{Dummy, NodeGroup},
+            prelude::PortType,
+        };
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, group_id, node_a, node_b, node_c, ref_id) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let scenery = document.scenery_mut();
+
+            let node_a = scenery.add_node(Dummy::default()).unwrap();
+            let node_d = scenery.add_node(Dummy::default()).unwrap();
+
+            let mut group = NodeGroup::new("inner group");
+            let node_b = group.add_node(Dummy::default()).unwrap();
+            let node_c = group.add_node(Dummy::default()).unwrap();
+            group
+                .connect_nodes(node_b, "output_1", node_c, "input_1", meter!(0.1))
+                .unwrap();
+            group.map_input_port(node_b, "input_1", "g_in").unwrap();
+            group.map_output_port(node_c, "output_1", "g_out").unwrap();
+            let group_id = scenery.add_node(group).unwrap();
+
+            scenery
+                .connect_nodes(node_a, "output_1", group_id, "g_in", meter!(0.1))
+                .unwrap();
+            scenery
+                .connect_nodes(group_id, "g_out", node_d, "input_1", meter!(0.1))
+                .unwrap();
+
+            // A reference at the root pointing at the nested B - it must survive the uuid-preserving cut.
+            let node_b_ref = scenery.node_recursive(node_b).unwrap().0;
+            let node_reference = NodeReference::from_node(&node_b_ref).unwrap();
+            let ref_id = scenery.add_node(node_reference).unwrap();
+
+            (root_id, group_id, node_a, node_b, node_c, ref_id)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_copy_nodes)
+                .service(post_cut_nodes)
+                .service(undo_document)
+                .service(redo_document),
+        )
+        .await;
+
+        let mut nodes_to_copy = HashSet::new();
+        nodes_to_copy.insert(node_b);
+        let req = test::TestRequest::post()
+            .uri("/copy_nodes")
+            .set_json(&nodes_to_copy)
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        // Cut B out of the group into the root. Before the fix this 400'd; it must now succeed.
+        let req = test::TestRequest::post()
+            .uri("/cut_nodes")
+            .set_json(&(root_id, (500.0, 500.0)))
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::OK,
+            "cutting a connected node out of a nested group must not error"
+        );
+
+        let parent_of = |id: Uuid| {
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .node_recursive(id)
+                .unwrap()
+                .1
+        };
+        let g_in_maps_b = |app_state: &Data<AppState>| {
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .with_group_node(group_id, |g| {
+                    !g.graph()
+                        .port_map(&PortType::Input)
+                        .assigned_ports_for_node(node_b)
+                        .is_empty()
+                })
+                .unwrap()
+        };
+        let a_to_g_edge = |app_state: &Data<AppState>| {
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .graph()
+                .connections()
+                .iter()
+                .any(|c| c.src_id == node_a && c.target_id == group_id)
+        };
+        let b_to_c_edge = |app_state: &Data<AppState>| {
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .with_group_node(group_id, NodeGroup::connections)
+                .unwrap()
+                .iter()
+                .any(|c| c.src_id == node_b && c.target_id == node_c)
+        };
+
+        // After the cut: B is bare at the root, and G's exposing mapping + the A -> G edge + the B -> C
+        // edge are all cascade-deleted (the graph is consistent - the "can't delete the mapping" symptom
+        // is gone).
+        assert_eq!(parent_of(node_b), root_id, "B must have moved to the root");
+        assert!(
+            !g_in_maps_b(&app_state),
+            "G's g_in mapping for B must be cascade-deleted"
+        );
+        assert!(
+            !a_to_g_edge(&app_state),
+            "the A -> G edge that consumed g_in must be cascade-deleted"
+        );
+        assert!(!b_to_c_edge(&app_state), "the B -> C edge must be dropped");
+        let ref_target = app_state
+            .document
+            .lock()
+            .scenery()
+            .with_node_attr(ref_id, |attr| {
+                attr.properties().get("reference id").cloned()
+            })
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            ref_target,
+            Proptype::Uuid(node_b),
+            "the reference must still resolve to B's unchanged uuid"
+        );
+
+        // Undo restores everything: B back in G, with B -> C, the g_in mapping, and the A -> G edge.
+        assert_eq!(
+            app.call(test::TestRequest::post().uri("/undo").to_request())
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK
+        );
+        assert_eq!(parent_of(node_b), group_id, "undo must put B back in G");
+        assert!(b_to_c_edge(&app_state), "undo must restore B -> C");
+        assert!(
+            g_in_maps_b(&app_state),
+            "undo must restore G's g_in mapping"
+        );
+        assert!(a_to_g_edge(&app_state), "undo must restore the A -> G edge");
+
+        // Redo cascade-deletes the links again and moves B back out.
+        assert_eq!(
+            app.call(test::TestRequest::post().uri("/redo").to_request())
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK,
+            "redo of the cascade-deleting cut must succeed"
+        );
+        assert_eq!(
+            parent_of(node_b),
+            root_id,
+            "redo must move B back to the root"
+        );
+        assert!(
+            !g_in_maps_b(&app_state),
+            "redo must remove G's g_in mapping again"
+        );
+        assert!(
+            !a_to_g_edge(&app_state),
+            "redo must remove the A -> G edge again"
+        );
+        assert!(!b_to_c_edge(&app_state), "redo must drop B -> C again");
     }
 
     /// Regression test for the bug where pasting a *group* whose members are internally connected

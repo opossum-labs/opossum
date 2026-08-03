@@ -558,10 +558,12 @@ pub struct RelocatedNode {
 /// a reposition to the paste location.
 ///
 /// Unlike a duplicate [`PasteNodesResponse`], no new nodes are created and no originals are deleted: the
-/// *same* nodes are relocated and/or repositioned, so every reference, port map and connection keyed on
-/// their uuids stays valid with no remapping. Nodes that were already in the target group are only
-/// repositioned (the common "cut and paste in the same scenery" case); nodes from another group are
-/// relocated into it, reusing the same reroute machinery as [`MoveNodesResponse`].
+/// *same* nodes are relocated and/or repositioned, so a reference keyed on a cut node's uuid stays valid
+/// with no remapping. A cut node, however, arrives **bare**: unlike a drag-and-drop move (which reroutes
+/// links across the boundary, see [`MoveNodesResponse`]), a cut **cascade-deletes** every connection and
+/// port mapping it carried, so `removed_connections` / `removed_port_mappings` describe that teardown and
+/// `new_connections` is always empty. Nodes that were already in the target group are only repositioned
+/// (the common "cut and paste in the same scenery" case) and keep their links.
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct CutNodesResponse {
     /// Nodes moved to a different group (same uuid), each with its updated `NodeInfo` for the target tab.
@@ -570,17 +572,18 @@ pub struct CutNodesResponse {
     /// can only ever be repositioned at the scenery root) - the GUI updates each element's position in
     /// place. Relocated nodes are *not* listed here; their position rides along in `relocated_nodes`.
     pub repositioned: Vec<PositionUpdate>,
-    /// Connections newly created as a move side effect (a boundary reroute), paired with their group -
-    /// same shape as [`MoveNodesResponse::new_connections`].
+    /// Always empty for a cut (it cascade-deletes rather than rerouting, so nothing is newly connected);
+    /// kept for shape-compatibility with [`MoveNodesResponse::new_connections`].
     pub new_connections: Vec<(Uuid, ConnectInfo)>,
-    /// Connections torn down as a move side effect, paired with their group - same shape as
+    /// Connections cascade-deleted from the cut nodes (their direct edges plus any terminal edge a
+    /// torn-down port-map chain consumed), paired with their group - same shape/handling as
     /// [`MoveNodesResponse::removed_connections`].
     pub removed_connections: Vec<(Uuid, ConnectInfo)>,
     /// Groups whose port-map/exposed-port display changed and need a GUI refresh - same shape as
     /// [`MoveNodesResponse::port_map_groups_changed`].
     pub port_map_groups_changed: Vec<Uuid>,
-    /// `(group_id, internal_node_id, external_port_name, port_type)` per port-map entry removed with no
-    /// replacement - same shape/handling as [`MoveNodesResponse::removed_port_mappings`].
+    /// `(group_id, internal_node_id, external_port_name, port_type)` per port-map entry cascade-deleted
+    /// from a cut node - same shape/handling as [`MoveNodesResponse::removed_port_mappings`].
     pub removed_port_mappings: Vec<(Uuid, Uuid, String, PortType)>,
 }
 
