@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { dragElementByOffset } from './helpers/editor_actions';
+import { dragElementByOffset, connectElements } from './helpers/editor_actions';
 
 test.describe('Basic node handling', () => {
 
@@ -39,7 +39,7 @@ test.describe('Basic node handling', () => {
   });
 
   test('should drag a new node to a new position by mouse', async ({ page }) => {
-   const editMenu = page.getByRole('button', { name: 'Edit' });
+    const editMenu = page.getByRole('button', { name: 'Edit' });
     await expect(editMenu).toBeVisible();
     await editMenu.click();
     const addNodeOption = page.getByRole('button', { name: 'Add Node' });
@@ -66,5 +66,46 @@ test.describe('Basic node handling', () => {
       expect(updatedBox.x).toBeGreaterThan(initialBox.x + 150);
       expect(updatedBox.y).toBeGreaterThan(initialBox.y + 50);
     }
+  });
+
+  test('should add two nodes and connect them by mouse', async ({ page }) => {
+    // Create first node
+    const editMenu = page.getByRole('button', { name: 'Edit' });
+    await expect(editMenu).toBeVisible();
+    await editMenu.click();
+    const addNodeOption = page.getByRole('button', { name: 'Add Node' });
+    await expect(addNodeOption).toBeVisible();
+    await addNodeOption.click();
+    const dummyOption = page.getByRole('button', { name: 'Dummy' });
+    await expect(dummyOption).toBeVisible();
+    await dummyOption.click();
+    const node_0 = page.getByTestId('node-0');
+    await expect(node_0).toBeVisible();
+    // Drag first node
+    await dragElementByOffset(page, node_0, -300, 0);
+
+    // Create second node
+    await editMenu.click();
+    await expect(addNodeOption).toBeVisible();
+    await addNodeOption.click();
+    await expect(dummyOption).toBeVisible();
+    await dummyOption.click();
+    const node_1 = page.getByTestId('node-1');
+    await expect(node_1).toBeVisible();
+
+    // 1. Target output port 'out' specifically inside 'node-0'
+    const sourcePort = node_0.getByTestId('port-output-output_1');
+    await expect(sourcePort).toBeVisible();
+
+    // 2. Target input port 'in' specifically inside 'node-1'
+    const targetPort = node_1.getByTestId('port-input-input_1');
+    await expect(sourcePort).toBeVisible();
+
+    // 3. Perform drag & drop sequence using the helper function
+    await connectElements(page, sourcePort, targetPort);
+
+    // 4. Assert that the persistent edge-0 is generated and visible on canvas
+    const createdEdge = page.getByTestId('edge-0');
+    await expect(createdEdge).toBeVisible();
   });
 });
