@@ -1,5 +1,6 @@
 use dioxus::html::geometry::euclid::default::Point2D;
 pub mod edge_component;
+pub mod edge_element;
 pub mod edges_component;
 
 pub fn define_bezier_path(start: Point2D<f64>, end: Point2D<f64>, bezier_offset: f64) -> String {

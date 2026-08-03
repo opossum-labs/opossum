@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    /* Target ECMAScript version for generated JavaScript code */
+    "target": "ES2022",
+
+    /* Use modern ES Modules */
+    "module": "ESNext",
+
+    /* Modern module resolution strategy (replaces deprecated node10 algorithm) */
+    "moduleResolution": "bundler",
+
+    /* Enable interoperability between CommonJS and ES Modules */
+    "esModuleInterop": true,
+
+    /* Allow default imports from modules with no default export */
+    "allowSyntheticDefaultImports": true,
+
+    /* Enable strict type-checking options */
+    "strict": true,
+
+    /* Explicitly include type definitions for Node.js and Playwright */
+    "types": ["node", "@playwright/test"]
+  },
+
+  /* Specify files and directories to be processed by TypeScript */
+  "include": [
+    "playwright.config.ts",
+    "tests/**/*.ts"
+  ]
+}

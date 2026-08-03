@@ -5,7 +5,7 @@ use crate::components::{
     scenery_editor::{
         GraphState, GraphsWorkspaceAction,
         constants::{EDGE_BEZIER_OFFSET, EDGE_DISTANCE_FIELD_HEIGHT, EDGE_DISTANCE_FIELD_WIDTH},
-        edges::define_bezier_path,
+        edges::{define_bezier_path, edge_element::EdgeElement},
         graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt},
     },
 };
@@ -13,16 +13,13 @@ use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::{prelude::*, types::api_types::ConnectInfo};
 
 #[component]
-pub fn EdgeComponent(edge: ReadStore<ConnectInfo>) -> Element {
+pub fn EdgeComponent(edge: ReadStore<EdgeElement>) -> Element {
     let edge = edge();
     let graph_state = use_context::<ReadStore<GraphState>>();
     let graph_store = graph_state.graph_store();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let graph_id = graph_state.graph_info().read().id;
-    // Memoize the start and end positions. This will only re-read the node
-    // positions and re-calculate when the `edge` prop itself changes.
-    // Dioxus's signal system will ensure this only triggers a re-render if
-    // the underlying node data that `abs_port_position` depends on has changed.
+
     let start_position = use_memo({
         let edge = edge.clone();
         move || {
@@ -58,17 +55,24 @@ pub fn EdgeComponent(edge: ReadStore<ConnectInfo>) -> Element {
     );
     let targets_reference = edge.targets_reference();
 
+    // Construct persistent, deterministic test IDs for path and input field separately
+    let edge_test_id = format!("edge-{}", edge.edge_index());
+    let edge_input_test_id = format!("edge-input-{}", edge.edge_index());
+
     rsx! {
         path {
+            // Test ID for targeting the SVG connection line specifically
+            "data-testid": "{edge_test_id}",
             d: new_path,
             tabindex: 0,
             pointer_events: "auto",
             onkeydown: {
+                let connect_info: ConnectInfo = edge.info().clone();
                 move |event: Event<KeyboardData>| {
                     if event.data().key() == Key::Delete {
                         workspace_processor
                             .send(GraphsWorkspaceAction::DeleteEdge {
-                                connection: edge.clone(),
+                                connection: connect_info.clone(),
                                 graph_id,
                             });
                     }
@@ -85,6 +89,8 @@ pub fn EdgeComponent(edge: ReadStore<ConnectInfo>) -> Element {
             width: EDGE_DISTANCE_FIELD_WIDTH,
             height: EDGE_DISTANCE_FIELD_HEIGHT,
             div {
+                // Test ID for targeting the distance input field box specifically
+                "data-testid": "{edge_input_test_id}",
                 hidden: targets_reference,
                 pointer_events: "auto",
                 class: "input-with-unit",
@@ -107,14 +113,13 @@ pub fn EdgeComponent(edge: ReadStore<ConnectInfo>) -> Element {
                     readonly: edge.targets_reference(),
                     unit_config: UnitHandling::new("m", true),
                     onchange: {
-                        let edge = edge.clone();
+                        let connect_info: ConnectInfo = edge.info().clone();
                         move |new_distance: f64| {
-                            let mut edge = edge.clone();
-
-                            edge.set_distance(new_distance);
+                            let mut updated_info = connect_info.clone();
+                            updated_info.set_distance(new_distance);
                             workspace_processor
                                 .send(GraphsWorkspaceAction::UpdateEdge {
-                                    connection: edge,
+                                    connection: updated_info,
                                     graph_id,
                                 });
                         }
@@ -123,7 +128,6 @@ pub fn EdgeComponent(edge: ReadStore<ConnectInfo>) -> Element {
                     input_class: "edge_distance_input".to_string(),
                 }
             }
-
         }
     }
 }

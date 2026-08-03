@@ -599,18 +599,21 @@ async fn process_optimize_layout(
         };
 
         let store = graph.graph_store();
-        (store.nodes().read().clone(), store.edges().read().clone())
+        let raw_edges = store.edges().read().clone();
+
+        // Extract inner ConnectInfo instances from EdgeElements for layout calculation
+        let connect_infos: Vec<ConnectInfo> = raw_edges.iter().map(|e| e.info().clone()).collect();
+
+        (store.nodes().read().clone(), connect_infos)
     };
 
     // --- CALCULATION PHASE: Determine new positions (Pure) ---
-    // Note: ensure optimize_layout is imported from graph_workspace::workspace_state
     let new_positions = optimize_layout(&nodes, &edges);
 
     // --- ASYNC PHASE: Sync with backend ---
     let mut sync_failed = false;
 
     for (node_id, pos) in &new_positions {
-        // Determine the type of the node to call the correct API endpoint
         let is_optical = nodes
             .get(node_id)
             .is_none_or(|node| matches!(node.node_type(), NodeType::Optical(_)));
@@ -630,7 +633,6 @@ async fn process_optimize_layout(
     }
 
     // --- WRITE PHASE: Update UI state if successful ---
-    // If you want partial updates even on errors, remove the `!sync_failed` check.
     if sync_failed {
         OPOSSUM_UI_LOGS
             .write()
