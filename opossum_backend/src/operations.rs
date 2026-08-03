@@ -5,11 +5,9 @@ use crate::{
     document::apply_position_updates,
     error::BackEndErrorResponse,
     helper_functions::{
-        PendingReconnect, capture_node_connections, collect_group_connections,
-        collect_node_refs_and_pos, connect_from_info, create_new_group_node_info,
-        disconnect_moved_node_connections, is_reference_target, lowest_common_ancestor_group,
-        parent_group_id_or_self, reconnect_moved_node_connections, relocate_nodes_in_document,
-        remove_relocated_nodes, split_sort_connections,
+        capture_node_connections, collect_group_connections, collect_node_refs_and_pos,
+        create_new_group_node_info, is_reference_target, lowest_common_ancestor_group,
+        parent_group_id_or_self, relocate_nodes_in_document, split_sort_connections,
     },
     undo::{Command, EdgeSnapshot, GroupConversion, MoveNodes, NodeSnapshot, ReroutedMapping},
 };
@@ -924,75 +922,54 @@ fn get_shifted_pos_of_ref(
     Ok(new_pos)
 }
 
-/// Picks out `pending`'s rerouted-mapping entries (whether their consumer was a live edge or, since
-/// nothing outward consumed the export, preserved anyway because the new group is `group_id`'s own
-/// child) - `(external_name, member_id, member_port, port_type)` per entry, needed to restore them
-/// across undo/redo since [`reconnect_moved_node_connections`] consumes `pending` by value.
-fn extract_rerouted_pending(pending: &[PendingReconnect]) -> Vec<(String, Uuid, String, PortType)> {
-    pending
-        .iter()
-        .filter_map(|p| match p {
-            PendingReconnect::Edge {
-                from_group_external_name: Some(name),
-                moved_node_id,
-                moved_port,
-                port_type,
-                ..
-            } => Some((name.clone(), *moved_node_id, moved_port.clone(), *port_type)),
-            PendingReconnect::MappingReroute {
-                external_name,
-                moved_node_id,
-                internal_port_name,
-                port_type,
-            } => Some((
-                external_name.clone(),
-                *moved_node_id,
-                internal_port_name.clone(),
-                *port_type,
-            )),
-            PendingReconnect::Edge {
-                from_group_external_name: None,
-                ..
-            }
-            | PendingReconnect::MappingCollapse { .. } => None,
-        })
-        .collect()
-}
-
-/// Resolves, for each rerouted pre-existing mapping captured by [`extract_rerouted_pending`], the new
-/// group's own external name for the same port - callable only once
-/// [`reconnect_moved_node_connections`] has actually created it - so undo/redo can restore/reapply
-/// this mapping later without re-deriving it.
+/// Reconstructs the pre-existing external mappings that [`post_convert_nodes_to_group`] rerouted through
+/// the freshly created `new_group_id`, reading them straight back out of the resulting document state so
+/// the `ExtractGroup` undo command can restore them - no intermediate `pending` value required.
+///
+/// Because `new_group_id` is created **empty** and nothing else touches it during the conversion, every
+/// entry in `group_id`'s own port map that points at `new_group_id` is - by construction - exactly one of
+/// these reroutes: `group_id.external_name -> (new_group_id, group_internal_name)` on the parent, with
+/// `new_group_id.group_internal_name -> (member_id, member_port)` on the group's own side. Boundary-sibling
+/// edges never produce such an entry (they become a live connection in `group_id`, not a port-map entry
+/// pointing into `new_group_id`), so this enumeration captures the reroutes and only the reroutes.
 ///
 /// # Errors
 ///
-/// Returns an error if `new_group_id` doesn't resolve, or a rerouted mapping's external name can't be
-/// found on it (it should always exist by this point).
-fn resolve_rerouted_mappings(
+/// Returns an error if `group_id`/`new_group_id` don't resolve, or a `group_id`-side entry points at a
+/// `new_group_id` external name with no matching internal mapping (impossible by the invariant above).
+fn reconstruct_rerouted_mappings(
     scenery: &NodeGroup,
+    group_id: Uuid,
     new_group_id: Uuid,
-    rerouted_from_pending: Vec<(String, Uuid, String, PortType)>,
 ) -> OpmResult<Vec<ReroutedMapping>> {
     let mut rerouted_mappings = Vec::new();
-    for (external_name, member_id, member_port, port_type) in rerouted_from_pending {
-        let group_internal_name = scenery
-            .with_group_node(new_group_id, |g| {
-                g.graph()
-                    .port_map(&port_type)
-                    .external_port_of_mapped_port(member_id, &member_port)
-            })?
-            .ok_or_else(|| {
-                OpossumError::Other(
-                    "rerouted mapping vanished before it could be captured for undo".into(),
-                )
-            })?;
-        rerouted_mappings.push(ReroutedMapping {
-            external_name,
-            port_type,
-            member_id,
-            member_port,
-            group_internal_name,
-        });
+    for port_type in [PortType::Input, PortType::Output] {
+        let exposed = scenery.with_group_node(group_id, |g| {
+            g.graph()
+                .port_map(&port_type)
+                .assigned_ports_for_node(new_group_id)
+        })?;
+        for (external_name, group_internal_name) in exposed {
+            let (member_id, member_port) = scenery
+                .with_group_node(new_group_id, |g| {
+                    g.graph()
+                        .port_map(&port_type)
+                        .get(&group_internal_name)
+                        .cloned()
+                })?
+                .ok_or_else(|| {
+                    OpossumError::Other(
+                        "rerouted mapping's group-internal name has no matching member port".into(),
+                    )
+                })?;
+            rerouted_mappings.push(ReroutedMapping {
+                external_name,
+                port_type,
+                member_id,
+                member_port,
+                group_internal_name,
+            });
+        }
     }
     Ok(rerouted_mappings)
 }
@@ -1004,18 +981,18 @@ fn resolve_rerouted_mappings(
 /// group and wrapped into a newly created group node.
 ///
 /// Conceptually this is "create a brand-new empty child group inside `group_id`, then move the
-/// selected nodes into it" - so it's implemented as exactly that, reusing the same
-/// `disconnect_moved_node_connections`/`reconnect_moved_node_connections` pair `post_move_nodes`
-/// already uses unmodified. That reuse is also what fixes a node's pre-existing external port
-/// mapping on `group_id` (no live edge at this level - whatever ultimately consumes it, a live
-/// edge or nothing, may be found arbitrarily far further out, e.g. when this endpoint is called
-/// again on a group produced by an earlier call to it - see `find_pre_existing_mapping_consumer`)
-/// being silently lost: the old two-step build-then-insert approach
-/// never inspected `group_id`'s own port map at all, so a mapped node's export vanished the moment
-/// it was deleted from `group_id`, with nothing to recreate it on the new group. The "collapse"
-/// case those two functions also handle (the connection's other endpoint already lives in the
-/// destination) is structurally unreachable here - the new group is always empty at creation - so
-/// every pre-existing mapping on `group_id` is unconditionally a "reroute."
+/// selected nodes into it" - so it's implemented as exactly that, delegating the move to the shared
+/// `relocate_nodes_in_document` (the same core `post_move_nodes` uses). That reuse is also what fixes
+/// a node's pre-existing external port mapping on `group_id` (no live edge at this level - whatever
+/// ultimately consumes it, a live edge or nothing, may be found arbitrarily far further out, e.g. when
+/// this endpoint is called again on a group produced by an earlier call to it - see
+/// `find_pre_existing_mapping_consumer`) being silently lost: the old two-step build-then-insert
+/// approach never inspected `group_id`'s own port map at all, so a mapped node's export vanished the
+/// moment it was deleted from `group_id`, with nothing to recreate it on the new group. The "collapse"
+/// case the relocation also handles (the connection's other endpoint already lives in the destination)
+/// is structurally unreachable here - the new group is always empty at creation - so every pre-existing
+/// mapping on `group_id` is unconditionally a "reroute," recovered afterward from the resulting state by
+/// `reconstruct_rerouted_mappings` for undo.
 #[utoipa::path(
     tag = "operations",
     request_body(
@@ -1039,84 +1016,59 @@ pub async fn post_convert_nodes_to_group(
     let nodes_to_convert = req.nodes_to_convert;
     let original_node_ids = nodes_to_convert.clone();
 
-    // Collect data
-    let (node_refs, pos) = collect_node_refs_and_pos(&data, &nodes_to_convert);
-    let all_connections = collect_group_connections(&data, group_id)?;
-    let split = split_sort_connections(&data, &all_connections, &nodes_to_convert);
+    // Only the new group's top-left position is needed here; the relocation below collects the node
+    // refs it moves itself.
+    let (_, pos) = collect_node_refs_and_pos(&data, &nodes_to_convert);
 
     // Undoing this conversion means extracting the new group's members back into `group_id` - see
     // `Command::ExtractGroup`'s docs for why capturing the group's own `OpticRef` is enough (its
     // internal members/connections are untouched, whether or not it's currently attached), and why it
     // separately needs `restore_connections` (every connection that touched a converted node before
     // grouping, in original member-uuid terms) rather than `external_connections` (which only makes
-    // sense once the group itself exists again). Computed before `split.input`/`split.output` are
-    // consumed below - `split.inside` stays valid afterward via partial move, same as `post_move_nodes`.
+    // sense once the group itself exists again). Captured from the pre-move state, before the
+    // relocation below rewires anything.
+    let all_connections = collect_group_connections(&data, group_id)?;
+    let split = split_sort_connections(&data, &all_connections, &nodes_to_convert);
     let restore_connections: Vec<ConnectInfo> = split
         .inside
-        .iter()
-        .chain(split.input.iter())
-        .chain(split.output.iter())
-        .cloned()
+        .into_iter()
+        .chain(split.input)
+        .chain(split.output)
         .collect();
-    let boundary_connections: Vec<ConnectInfo> =
-        split.input.into_iter().chain(split.output).collect();
 
     let mut document = data.document.lock();
-    let scenery = document.scenery_mut();
 
-    // Create the destination empty and attached first, before touching `group_id`'s port map or
-    // deleting anything - this is what makes the reroute machinery below able to see (and
-    // preserve) a pre-existing mapping on `group_id`, which requires a real destination to reroute
-    // into.
-    let new_group_id =
-        scenery.with_group_node_mut(group_id, |g| g.add_node(NodeGroup::new("new group")))??;
+    // Create the destination empty and attached first, before the move touches `group_id`'s port map -
+    // this is what lets the relocation see (and preserve, by rerouting) a pre-existing mapping on
+    // `group_id`, which requires a real destination to reroute into.
+    let new_group_id = document
+        .scenery_mut()
+        .with_group_node_mut(group_id, |g| g.add_node(NodeGroup::new("new group")))??;
 
-    // Tear down anything that would otherwise be lost by the move - before the nodes are actually
-    // deleted from `group_id`, since this needs to inspect what's currently mapped/connected there.
-    let (pending, removed_connections) = disconnect_moved_node_connections(
-        scenery,
-        group_id,
-        new_group_id,
-        &boundary_connections,
-        &original_node_ids,
-    )?;
+    // Convert-to-group *is* a move: relocate the selected nodes out of `group_id` into the freshly
+    // created child, reusing the exact same machinery as `post_move_nodes` (boundary edges rerouted,
+    // pre-existing external mappings preserved, references followed).
+    let outcome =
+        relocate_nodes_in_document(&mut document, group_id, new_group_id, &original_node_ids)?;
 
-    // `pending`'s rerouted-mapping entries are what this fix is about - extract what's needed to
-    // restore them across undo/redo now, since `reconnect_moved_node_connections` below consumes
-    // `pending` by value.
-    let rerouted_from_pending = extract_rerouted_pending(&pending);
-
-    // Remove the converted nodes from group_id without cascading references (a convert is a relocation -
-    // an external reference to a converted node must survive and follow it into the new group; shared with
-    // the move path).
-    remove_relocated_nodes(scenery, group_id, &original_node_ids)?;
-
-    // Add them into the new group and reconnect their purely-internal wiring
-    for node_ref in &node_refs {
-        scenery.with_group_node_mut(new_group_id, |g| g.add_node_ref(node_ref.clone()))??;
-    }
-    for conn in &split.inside {
-        scenery.with_group_node_mut(new_group_id, |g| connect_from_info(g, conn))??;
-    }
-
-    let preserved = reconnect_moved_node_connections(scenery, group_id, new_group_id, pending)?;
-
-    // Now that the reconnect step above has created them, resolve each rerouted mapping's new
-    // group-side external name so undo/redo can restore/reapply it later without re-deriving it.
+    // The undo command needs each pre-existing mapping the move rerouted through the new group. Since the
+    // new group was just created empty, they're exactly `group_id`'s port-map entries now pointing at it -
+    // read them back out of the resulting state instead of threading them out of the move itself.
     let rerouted_mappings =
-        resolve_rerouted_mappings(scenery, new_group_id, rerouted_from_pending)?;
+        reconstruct_rerouted_mappings(document.scenery(), group_id, new_group_id)?;
 
-    let mut port_map_groups_changed = preserved.port_map_groups_changed;
+    let mut port_map_groups_changed = outcome.preserved.port_map_groups_changed;
     port_map_groups_changed.push(new_group_id);
     port_map_groups_changed.sort();
     port_map_groups_changed.dedup();
 
-    let group_ref = scenery.node_recursive(new_group_id)?.0;
+    let group_ref = document.scenery().node_recursive(new_group_id)?.0;
     data.push_undo(Command::ExtractGroup(GroupConversion {
         parent_group_id: group_id,
         group: group_ref,
         member_ids: original_node_ids,
-        external_connections: preserved
+        external_connections: outcome
+            .preserved
             .new_connections
             .iter()
             .map(|(_, c)| c.clone())
@@ -1134,10 +1086,10 @@ pub async fn post_convert_nodes_to_group(
 
     Ok(Json(ConvertToGroupResponse {
         new_group: new_group_node_info,
-        new_connections: preserved.new_connections,
-        removed_connections,
+        new_connections: outcome.preserved.new_connections,
+        removed_connections: outcome.removed_connections,
         port_map_groups_changed,
-        removed_port_mappings: preserved.removed_port_mappings,
+        removed_port_mappings: outcome.preserved.removed_port_mappings,
     }))
 }
 
