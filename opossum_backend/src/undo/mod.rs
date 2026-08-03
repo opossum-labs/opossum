@@ -207,42 +207,18 @@ impl Command {
                 panel: Some(NodeEditorPanel::PortConfig),
                 source_port: None,
             }),
-            Self::AddNode(cmd) | Self::RemoveNode(cmd) => Some(JumpTarget {
-                graph_id: cmd.parent_group_id,
-                node: Some(cmd.node.uuid().ok()?),
-                panel: None,
-                source_port: None,
-            }),
-            Self::AddEdge(cmd) | Self::RemoveEdge(cmd) => Some(JumpTarget {
-                graph_id: cmd.group_id,
-                node: None,
-                panel: None,
-                source_port: None,
-            }),
-            Self::UpdateEdgeDistance(cmd) => Some(JumpTarget {
-                graph_id: cmd.group_id,
-                node: None,
-                panel: None,
-                source_port: None,
-            }),
-            Self::AddPortMap(cmd) => Some(JumpTarget {
-                graph_id: cmd.group_id,
-                node: None,
-                panel: None,
-                source_port: None,
-            }),
-            Self::RemovePortMap(cmd) => Some(JumpTarget {
-                graph_id: cmd.group_id,
-                node: None,
-                panel: None,
-                source_port: None,
-            }),
-            Self::AddAnalyzer(cmd) | Self::RemoveAnalyzer(cmd) => Some(JumpTarget {
-                graph_id: root_id,
-                node: Some(cmd.id),
-                panel: None,
-                source_port: None,
-            }),
+            Self::AddNode(cmd) | Self::RemoveNode(cmd) => Some(
+                JumpTarget::new_from_graph_and_node_id(cmd.parent_group_id, cmd.node.uuid().ok()?),
+            ),
+            Self::AddEdge(cmd) | Self::RemoveEdge(cmd) => {
+                Some(JumpTarget::new_from_graph_id(cmd.group_id))
+            }
+            Self::UpdateEdgeDistance(cmd) => Some(JumpTarget::new_from_graph_id(cmd.group_id)),
+            Self::AddPortMap(cmd) => Some(JumpTarget::new_from_graph_id(cmd.group_id)),
+            Self::RemovePortMap(cmd) => Some(JumpTarget::new_from_graph_id(cmd.group_id)),
+            Self::AddAnalyzer(cmd) | Self::RemoveAnalyzer(cmd) => {
+                Some(JumpTarget::new_from_graph_and_node_id(root_id, cmd.id))
+            }
             Self::PatchAnalyzer(cmd) => Some(JumpTarget {
                 graph_id: root_id,
                 node: Some(cmd.id),
@@ -252,34 +228,15 @@ impl Command {
                 // the change wasn't a source mapping (e.g. the analyzer type itself changed).
                 source_port: changed_source_port(&cmd.old, &cmd.new),
             }),
-            Self::RepositionAnalyzer(cmd) => Some(JumpTarget {
-                graph_id: root_id,
-                node: Some(cmd.id),
-                panel: None,
-                source_port: None,
-            }),
-            Self::MoveNodes(cmd) => Some(JumpTarget {
-                // The outer/drag-origin tab, identical for undo and redo - see `MoveNodes::focus_group_id`.
-                // Using `target_group_id` here would flip between the two directions and yank the view into
-                // the group on redo.
-                graph_id: cmd.focus_group_id,
-                node: None,
-                panel: None,
-                source_port: None,
-            }),
-            Self::InsertGroup(cmd) | Self::ExtractGroup(cmd) => Some(JumpTarget {
-                graph_id: cmd.parent_group_id,
-                node: None,
-                panel: None,
-                source_port: None,
-            }),
+            Self::RepositionAnalyzer(cmd) => {
+                Some(JumpTarget::new_from_graph_and_node_id(root_id, cmd.id))
+            }
+            Self::MoveNodes(cmd) => Some(JumpTarget::new_from_graph_id(cmd.focus_group_id)),
+            Self::InsertGroup(cmd) | Self::ExtractGroup(cmd) => {
+                Some(JumpTarget::new_from_graph_id(cmd.parent_group_id))
+            }
             Self::PatchGlobalConf(_) => None,
-            Self::SetViewport(cmd) => Some(JumpTarget {
-                graph_id: cmd.to.graph_id,
-                node: None,
-                panel: None,
-                source_port: None,
-            }),
+            Self::SetViewport(cmd) => Some(JumpTarget::new_from_graph_id(cmd.to.graph_id)),
             Self::Batch(commands) => batch_jump_target(commands, root_id),
         }
     }
@@ -394,12 +351,7 @@ fn batch_jump_target(commands: &[Command], root_id: Uuid) -> Option<JumpTarget> 
         return Some(best);
     }
     if let Some(graph_id) = port_map_cascade_origin(commands) {
-        return Some(JumpTarget {
-            graph_id,
-            node: None,
-            panel: None,
-            source_port: None,
-        });
+        return Some(JumpTarget::new_from_graph_id(graph_id));
     }
     Some(best)
 }

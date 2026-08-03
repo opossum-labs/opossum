@@ -505,7 +505,7 @@ mod test {
         };
 
         let app_state = create_test_state();
-        let (g1_id, g2_id) = {
+        let (g1_id, _) = {
             let mut document = app_state.document.lock();
             let scenery = document.scenery_mut();
 

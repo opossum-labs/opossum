@@ -689,6 +689,25 @@ pub struct JumpTarget {
     pub source_port: Option<Uuid>,
 }
 
+impl JumpTarget{
+    pub fn new_from_graph_id(graph_id: Uuid) -> Self{
+        Self{
+            graph_id,
+            node: None,
+            panel: None,
+            source_port:None
+        }
+    }
+    pub fn new_from_graph_and_node_id(graph_id: Uuid, node_id:Uuid) -> Self{
+        Self{
+            graph_id,
+            node: Some(node_id),
+            panel: None,
+            source_port:None
+        }
+    }
+}
+
 /// One user-visible effect of an undo/redo step.
 ///
 /// Shaped so the GUI can react to it the same way it reacts to the corresponding normal
