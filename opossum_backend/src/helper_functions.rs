@@ -180,6 +180,88 @@ pub fn remove_relocated_nodes(
     Ok(())
 }
 
+/// Everything a single-group relocation ([`relocate_nodes_in_document`]) changed: the GUI-facing
+/// connection side effects plus what was re-established to keep links alive across the move. Mirrors the
+/// fields of [`MoveNodesResponse`](opossum_core::types::api_types::MoveNodesResponse), which every caller
+/// ultimately reports (directly, or reused by the cut operation).
+pub struct RelocationOutcome {
+    /// Connections torn down as a side effect of the move, paired with the group each lived in - always
+    /// alongside a matching `preserved.new_connections` entry that restores the same logical link.
+    pub removed_connections: Vec<(Uuid, ConnectInfo)>,
+    /// Connections/mappings re-established to keep links alive across the move (see [`PreservedConnections`]).
+    pub preserved: PreservedConnections,
+}
+
+/// Relocates `node_ids` from `from_group_id` to `to_group_id` in an already-locked document, **preserving
+/// each node's uuid** (a move, not a copy). Boundary connections and pre-existing port mappings are
+/// rerouted rather than lost, references to a moved node survive (non-cascading removal via
+/// [`remove_relocated_nodes`]), and connections purely between the moved nodes are re-established in the
+/// destination. The moved nodes are the same live [`OpticRef`]s, so their whole internal subtree (for a
+/// group) travels along and every reference/port-map/connection keyed on their uuids stays valid with no
+/// remapping.
+///
+/// This is the shared core of the forward move (`post_move_nodes`), its undo/redo (`apply_move_nodes`),
+/// and the cut operation - all three relocate a set of nodes between two groups in exactly this way.
+///
+/// # Errors
+///
+/// Returns an error if either group id doesn't resolve, or a moved node's uuid can't be found.
+pub fn relocate_nodes_in_document(
+    document: &mut OpmDocument,
+    from_group_id: Uuid,
+    to_group_id: Uuid,
+    node_ids: &[Uuid],
+) -> OpmResult<RelocationOutcome> {
+    let connections = document
+        .scenery()
+        .with_group_node(from_group_id, NodeGroup::connections)?;
+    let split = split_sort_connections_from_document(document, &connections, node_ids);
+    let boundary_connections: Vec<ConnectInfo> =
+        split.input.into_iter().chain(split.output).collect();
+
+    // Tear down anything the move would otherwise lose, before the nodes are removed from `from_group_id`
+    // (this inspects what's currently mapped/connected there). What's captured here can only be
+    // re-established once the nodes actually exist in `to_group_id`, so that happens further down.
+    let (pending, removed_connections) = disconnect_moved_node_connections(
+        document.scenery_mut(),
+        from_group_id,
+        to_group_id,
+        &boundary_connections,
+        node_ids,
+    )?;
+
+    let node_refs: Vec<OpticRef> = node_ids
+        .iter()
+        .filter_map(|id| document.scenery().node_recursive(*id).ok().map(|(r, _)| r))
+        .collect();
+
+    // Remove without cascading references (a move is a relocation - an external reference to a moved node
+    // must survive; a reference inside the moved set is simply removed and re-added like any other member).
+    remove_relocated_nodes(document.scenery_mut(), from_group_id, node_ids)?;
+    for node_ref in &node_refs {
+        document
+            .scenery_mut()
+            .with_group_node_mut(to_group_id, |g| g.add_node_ref(node_ref.clone()))??;
+    }
+    for conn in &split.inside {
+        document
+            .scenery_mut()
+            .with_group_node_mut(to_group_id, |g| connect_from_info(g, conn))??;
+    }
+
+    let preserved = reconnect_moved_node_connections(
+        document.scenery_mut(),
+        from_group_id,
+        to_group_id,
+        pending,
+    )?;
+
+    Ok(RelocationOutcome {
+        removed_connections,
+        preserved,
+    })
+}
+
 /// Returns `uuid`'s parent group id, or `uuid` itself if it names the scenery root - which has no
 /// real parent to report, matching the same self-as-parent sentinel `remove_port_map_cascade` uses
 /// for the same reason.

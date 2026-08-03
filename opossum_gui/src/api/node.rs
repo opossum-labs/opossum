@@ -3,10 +3,10 @@ use opossum_core::{
     prelude::*,
     types::api_types::{
         AddPortMappingRequest, ConnectInfo, ConvertToGroupRequest, ConvertToGroupResponse,
-        DeleteNodeResponse, MoveNodesRequest, MoveNodesResponse, NewNode, NewRefNode, NodeInfo,
-        NodePortsResponse, NodePropertiesResponse, PasteNodesResponse, PortMappingsResponse,
-        PortNamesResponse, RemovePortMapResponse, UpdateConnectionRequest, UpdateNodeRequest,
-        UpdatePortRequest,
+        CutNodesResponse, DeleteNodeResponse, MoveNodesRequest, MoveNodesResponse, NewNode,
+        NewRefNode, NodeInfo, NodePortsResponse, NodePropertiesResponse, PasteNodesResponse,
+        PortMappingsResponse, PortNamesResponse, RemovePortMapResponse, UpdateConnectionRequest,
+        UpdateNodeRequest, UpdatePortRequest,
     },
 };
 use std::collections::{HashMap, HashSet};
@@ -95,11 +95,8 @@ pub async fn post_copy_nodes(nodes: HashSet<Uuid>) -> Result<String, String> {
         .await
 }
 
-/// Pastes the currently copied nodes into `group_id` at `pos`. If `cut` is set, the copied nodes'
-/// originals are deleted as part of the same request, so the backend can push a single undo step that
-/// reverts both the paste and the delete together - see the backend's `post_paste_nodes` doc comment.
-/// The response's `cut_result` field mirrors what the removed `post_cut_nodes` used to return (the
-/// deleted node ids and their former parent graph ids), present only when `cut` was set.
+/// Duplicates the currently copied nodes into `group_id` at `pos`, minting a fresh uuid for each copy.
+/// Moving nodes without duplicating them (a cut) is a separate call - see [`post_cut_nodes`].
 ///
 /// # Errors
 ///
@@ -108,12 +105,29 @@ pub async fn post_copy_nodes(nodes: HashSet<Uuid>) -> Result<String, String> {
 pub async fn post_paste_nodes(
     group_id: Uuid,
     pos: Point2D<f64>,
-    cut: bool,
 ) -> Result<PasteNodesResponse, String> {
     HTTP_API_CLIENT()
-        .post::<(Uuid, (f64, f64), bool), PasteNodesResponse>(
+        .post::<(Uuid, (f64, f64)), PasteNodesResponse>(
             "/api/operations/paste_nodes",
-            (group_id, (pos.x, pos.y), cut),
+            (group_id, (pos.x, pos.y)),
+        )
+        .await
+}
+
+/// Cut the currently copied nodes into `group_id` at `pos` - a UUID-preserving *move* rather than a
+/// duplicate. Each node keeps its uuid, so references, port maps and connections pointing at it stay
+/// valid; a node already in `group_id` is only repositioned, one from another group is relocated into it.
+/// The whole gesture is a single undo step. See the backend's `post_cut_nodes` doc comment.
+///
+/// # Errors
+///
+/// This function will return an error if the request fails (e.g. the target group does not exist) or the
+/// response cannot be deserialized into a [`CutNodesResponse`].
+pub async fn post_cut_nodes(group_id: Uuid, pos: Point2D<f64>) -> Result<CutNodesResponse, String> {
+    HTTP_API_CLIENT()
+        .post::<(Uuid, (f64, f64)), CutNodesResponse>(
+            "/api/operations/cut_nodes",
+            (group_id, (pos.x, pos.y)),
         )
         .await
 }

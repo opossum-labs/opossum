@@ -14,9 +14,10 @@ use futures_util::StreamExt;
 use opossum_core::{
     prelude::{AnalyzerType, PortType},
     types::api_types::{
-        AnalyzerItemDto, ConnectInfo, CutResult, DeleteNodeResponse, DocumentChange, JumpTarget,
-        NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo, NodePortsResponse, PasteNodesResponse,
-        PortMappingsResponse, PositionUpdate, UndoRedoResponse, UpdateConnectionRequest, Viewport,
+        AnalyzerItemDto, ConnectInfo, CutNodesResponse, DeleteNodeResponse, DocumentChange,
+        JumpTarget, NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo, NodePortsResponse,
+        PasteNodesResponse, PortMappingsResponse, PositionUpdate, RelocatedNode, UndoRedoResponse,
+        UpdateConnectionRequest, Viewport,
     },
 };
 use serde_json::Value;
@@ -189,16 +190,28 @@ pub fn use_workspace_processor(
                         workspace_handlers.workspace.set_nodes_cut(true);
                     }
                     GraphsWorkspaceAction::PasteNode { pos, graph_id } => {
-                        let nodes_cut = *workspace.nodes_cut().read();
-                        process_paste_nodes(
-                            pos,
-                            workspace_handlers,
-                            graph_id,
-                            nodes_cut,
-                            root_graph_id,
-                            workspace,
-                        )
-                        .await;
+                        // A cut+paste is a UUID-preserving *move* (nodes keep their uuid, references stay
+                        // valid); a plain paste duplicates. They now take entirely different backend paths
+                        // and response shapes, so branch here rather than via a flag.
+                        if *workspace.nodes_cut().read() {
+                            process_cut_nodes(
+                                pos,
+                                workspace_handlers,
+                                graph_id,
+                                root_graph_id,
+                                workspace,
+                            )
+                            .await;
+                        } else {
+                            process_paste_nodes(
+                                pos,
+                                workspace_handlers,
+                                graph_id,
+                                root_graph_id,
+                                workspace,
+                            )
+                            .await;
+                        }
                     }
                     GraphsWorkspaceAction::SyncNodePositions { moves } => {
                         let updates = moves
@@ -937,16 +950,14 @@ async fn process_paste_nodes(
     pos: Point2D<f64>,
     ws_handler: WorkSpaceSignalHandlers,
     graph_id: Uuid,
-    cut_nodes: bool,
     root_scenery_id: Memo<Uuid>,
     workspace: ReadStore<GraphsWorkspaceState>,
 ) {
-    match api::post_paste_nodes(graph_id, pos, cut_nodes).await {
+    match api::post_paste_nodes(graph_id, pos).await {
         Ok(PasteNodesResponse {
             pasted_nodes,
             pasted_analyzers,
             pasted_connections,
-            cut_result,
         }) => {
             let mut pasted_groups = Vec::<Uuid>::new();
             for (graph_id, n) in &pasted_nodes {
@@ -996,40 +1007,128 @@ async fn process_paste_nodes(
                     ws_handler.edges.add_edge(edge.clone(), *graph_id);
                 }
             }
+        }
+        Err(e) => {
+            OPOSSUM_UI_LOGS
+                .write()
+                .add_log(&format!("Error while pasting node/s: {e}"));
+        }
+    }
+}
 
-            if let Some(CutResult {
-                deleted_nodes,
-                cut_from_group_ids,
-                disconnected_connections,
-                removed_port_mappings,
-            }) = cut_result
-            {
-                // A multi-select cut can span more than one parent group - apply the removal
-                // against each (a no-op for any group a given node doesn't actually belong to).
-                for group_id in &cut_from_group_ids {
-                    ws_handler
-                        .nodes
-                        .remove_nodes(deleted_nodes.clone(), *group_id);
+/// Applies a UUID-preserving cut+paste (a *move*, not a duplicate - see [`api::post_cut_nodes`]).
+///
+/// Unlike [`process_paste_nodes`], nothing new is created and nothing is deleted: cut nodes keep their
+/// uuids. Nodes that stayed in the target group are repositioned in place (the common "cut and paste in the
+/// same scenery" case); nodes cut out of another group are relocated - removed from their source tab and
+/// re-shown in the target tab via a background refill, exactly as a drag-drop move does
+/// (`process_drop_nodes_into_group`). References to any cut node keep resolving with no GUI action needed,
+/// since no uuid changed.
+async fn process_cut_nodes(
+    pos: Point2D<f64>,
+    ws_handler: WorkSpaceSignalHandlers,
+    graph_id: Uuid,
+    root_scenery_id: Memo<Uuid>,
+    workspace: ReadStore<GraphsWorkspaceState>,
+) {
+    match api::post_cut_nodes(graph_id, pos).await {
+        Ok(CutNodesResponse {
+            relocated_nodes,
+            repositioned,
+            new_connections,
+            removed_connections,
+            port_map_groups_changed,
+            removed_port_mappings,
+        }) => {
+            let root_id = *root_scenery_id.read();
+
+            // Nodes/analyzers that stayed put: update their positions in place (optical nodes live in the
+            // target tab, analyzers at the root), so the common same-tab paste needs no full tab refill.
+            let mut optical_positions = HashMap::new();
+            let mut analyzer_positions = HashMap::new();
+            for update in &repositioned {
+                let point = Point2D::new(update.gui_position.0, update.gui_position.1);
+                if update.is_optical {
+                    optical_positions.insert(update.uuid, point);
+                } else {
+                    analyzer_positions.insert(update.uuid, point);
                 }
-                // Only the cut node(s)' own mapping entries are gone - prune exactly those from the
-                // GUI's cached port-map list rather than clearing the whole group (which would also drop
-                // still-valid mappings of any other, untouched node in the same group). Shrink the
-                // group's own port handles by the same precise diff rather than a full refetch - that
-                // extra round trip used to be what visually cleared every mapping in the group instead
-                // of just the cut node's.
-                prune_removed_port_mappings(ws_handler, removed_port_mappings);
-                // Any external connection that depended on one of those now-gone mappings is also
-                // already correctly disconnected server-side - the GUI's own edge list needs the same
-                // explicit removal.
-                for (group_id, edge) in disconnected_connections {
-                    ws_handler.edges.delete_edge(edge, group_id);
+            }
+            if !optical_positions.is_empty() {
+                ws_handler
+                    .nodes
+                    .update_node_positions(optical_positions, graph_id);
+            }
+            if !analyzer_positions.is_empty() {
+                ws_handler
+                    .nodes
+                    .update_node_positions(analyzer_positions, root_id);
+            }
+
+            // Move side effects (only ever non-empty for a cross-group relocation): edges rerouted and any
+            // port-map entry removed with no replacement - reflect exactly what the backend reports.
+            for (group_id, edge) in new_connections {
+                ws_handler.edges.add_edge(edge, group_id);
+            }
+            for (group_id, edge) in removed_connections {
+                ws_handler.edges.delete_edge(edge, group_id);
+            }
+            prune_removed_port_mappings(ws_handler, removed_port_mappings);
+
+            // Relocations: drop each moved node from its source tab; the target and source tabs are then
+            // refilled from the now-authoritative backend state so the moved nodes reappear in the target
+            // at their shifted positions (and any relocated group box shows its correct ports).
+            let source_groups: HashSet<Uuid> = relocated_nodes
+                .iter()
+                .map(|r: &RelocatedNode| r.from_group_id)
+                .collect();
+            for relocated in &relocated_nodes {
+                ws_handler
+                    .nodes
+                    .remove_nodes(vec![relocated.node.uuid()], relocated.from_group_id);
+            }
+
+            if !relocated_nodes.is_empty() {
+                for group_id in port_map_groups_changed
+                    .iter()
+                    .copied()
+                    .chain(std::iter::once(graph_id))
+                {
+                    ensure_group_tab_exists(group_id, ws_handler, workspace).await;
+                }
+                for group_id in port_map_groups_changed {
+                    refresh_group_ports(ws_handler, group_id).await;
+                }
+
+                // Refill the target tab (adds the relocated nodes) and each source tab it left, if open.
+                process_fill_graph_of_group(
+                    root_scenery_id.into(),
+                    graph_id,
+                    ws_handler,
+                    false,
+                    false,
+                    workspace,
+                )
+                .await;
+                for group_id in source_groups {
+                    if workspace.tabs().contains_key(&group_id) {
+                        process_fill_graph_of_group(
+                            root_scenery_id.into(),
+                            group_id,
+                            ws_handler,
+                            false,
+                            false,
+                            workspace,
+                        )
+                        .await;
+                    }
                 }
             }
         }
         Err(e) => {
             OPOSSUM_UI_LOGS
                 .write()
-                .add_log(&format!("Error while pasting node/s: {e}"));
+                .add_log(&format!("Error while cutting node/s: {e}"));
         }
     }
 }

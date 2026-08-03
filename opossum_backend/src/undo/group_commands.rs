@@ -15,9 +15,7 @@ use super::Command;
 use crate::{
     error::BackEndErrorResponse,
     helper_functions::{
-        connect_from_info, disconnect_moved_node_connections, map_port,
-        reconnect_moved_node_connections, remove_relocated_nodes,
-        split_sort_connections_from_document,
+        connect_from_info, map_port, relocate_nodes_in_document, remove_relocated_nodes,
     },
 };
 
@@ -127,48 +125,12 @@ pub(super) fn apply_move_nodes(
         nodes_to_move: node_ids,
     } = request;
 
-    // Re-derived fresh from the live document on every call (not carried in the command), so this stays
-    // correct across arbitrary undo/redo cycles - each call only captures what's actually still there to
-    // lose at the moment it runs.
-    let connections = document
-        .scenery()
-        .with_group_node(from_group_id, NodeGroup::connections)?;
-    let split = split_sort_connections_from_document(document, &connections, &node_ids);
-    let boundary_connections: Vec<ConnectInfo> =
-        split.input.into_iter().chain(split.output).collect();
-
-    // Tear down anything that would otherwise be lost by the move, before the nodes are actually deleted
-    // from `from_group_id`. What's captured here can only be re-established once the nodes actually exist
-    // in `to_group_id` (see `disconnect_moved_node_connections`'s own docs), so that happens further down.
-    let (pending, _removed_connections) = disconnect_moved_node_connections(
-        document.scenery_mut(),
-        from_group_id,
-        to_group_id,
-        &boundary_connections,
-        &node_ids,
-    )?;
-
-    let node_refs: Vec<OpticRef> = node_ids
-        .iter()
-        .filter_map(|id| document.scenery().node_recursive(*id).ok().map(|(r, _)| r))
-        .collect();
-
-    // Remove the moved nodes without cascading references, matching the forward `post_move_nodes` path: a
-    // move is a relocation, so an external reference to a moved node must survive (and a reference *inside*
-    // the moved set is simply removed and re-added like any other member).
-    remove_relocated_nodes(document.scenery_mut(), from_group_id, &node_ids)?;
-    for node_ref in &node_refs {
-        document
-            .scenery_mut()
-            .with_group_node_mut(to_group_id, |g| g.add_node_ref(node_ref.clone()))??;
-    }
-    for conn in &split.inside {
-        document
-            .scenery_mut()
-            .with_group_node_mut(to_group_id, |g| connect_from_info(g, conn))??;
-    }
-
-    reconnect_moved_node_connections(document.scenery_mut(), from_group_id, to_group_id, pending)?;
+    // A relocation preserving each node's uuid, re-derived fresh from the live document on every call (not
+    // carried in the command) so it stays correct across arbitrary undo/redo cycles - each call only
+    // captures what's actually still there to lose at the moment it runs. The forward `post_move_nodes`
+    // reports the connection side effects to the GUI; here (undo/redo) the affected tabs are refreshed
+    // wholesale via `describe_move_nodes`, so the returned outcome isn't needed.
+    relocate_nodes_in_document(document, from_group_id, to_group_id, &node_ids)?;
 
     // `affected_groups` and `focus_group_id` are the same for this move and its reverse, so carry them
     // through unchanged - that stable focus is what keeps undo and redo landing on the same outer tab.

@@ -2,19 +2,16 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     app_state::{AppState, NodeCacheItem},
+    document::apply_position_updates,
     error::BackEndErrorResponse,
     helper_functions::{
-        PendingReconnect, PortMapCascadeRemoval, capture_node_connections,
-        collect_group_connections, collect_node_refs_and_pos, connect_from_info,
-        create_new_group_node_info, disconnect_exposed_port_cascades_for_node,
+        PendingReconnect, capture_node_connections, collect_group_connections,
+        collect_node_refs_and_pos, connect_from_info, create_new_group_node_info,
         disconnect_moved_node_connections, is_reference_target, lowest_common_ancestor_group,
-        parent_group_id_or_self, reconnect_moved_node_connections, remove_relocated_nodes,
-        split_cascades_for_response, split_sort_connections,
+        parent_group_id_or_self, reconnect_moved_node_connections, relocate_nodes_in_document,
+        remove_relocated_nodes, split_sort_connections,
     },
-    undo::{
-        Command, EdgeSnapshot, GroupConversion, MoveNodes, NodeSnapshot, PatchProperty,
-        ReroutedMapping,
-    },
+    undo::{Command, EdgeSnapshot, GroupConversion, MoveNodes, NodeSnapshot, ReroutedMapping},
 };
 use actix_web::{
     post,
@@ -25,11 +22,12 @@ use opossum_core::{
     core_optics::{NodeAttrExt, OpticRef, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
     nodes::{ConnectionInfo, NodeGroup, NodeReference, create_node_ref},
-    opm_document::{AnalyzerInfo, OpmDocument},
+    opm_document::AnalyzerInfo,
     prelude::{OpticNode, PortMap, PortType, Proptype},
     types::api_types::{
-        AnalyzerItemDto, ConnectInfo, ConvertToGroupRequest, ConvertToGroupResponse, CutResult,
-        ErrorResponse, MoveNodesRequest, MoveNodesResponse, NodeInfo, PasteNodesResponse,
+        AnalyzerItemDto, ConnectInfo, ConvertToGroupRequest, ConvertToGroupResponse,
+        CutNodesResponse, ErrorResponse, MoveNodesRequest, MoveNodesResponse, NodeInfo,
+        PasteNodesResponse, PositionUpdate, RelocatedNode,
     },
     utils::LockExt,
 };
@@ -93,7 +91,6 @@ async fn post_copy_nodes(
 struct PastedNodes {
     grouped_node_infos: HashMap<Uuid, Vec<NodeInfo>>,
     grouped_connect_info: HashMap<Uuid, Vec<ConnectInfo>>,
-    node_id_link: HashMap<Uuid, Uuid>,
 }
 
 /// Copies `copied_optical_nodes` into `paste_group_id` (recursively, preserving group structure),
@@ -179,19 +176,17 @@ fn insert_copied_nodes(
     Ok(PastedNodes {
         grouped_node_infos,
         grouped_connect_info,
-        node_id_link,
     })
 }
 
 /// Paste copied nodes
 ///
-/// This function sends already copied nodes to the frontend. If `cut` is set, the nodes/analyzers
-/// currently in the copy cache are also deleted from wherever they came from, as part of the *same* undo
-/// step as the paste - so a single undo reverts both the paste and the delete together, matching what
-/// feels like one "move" gesture to the user, rather than requiring two separate undos.
+/// This function duplicates the nodes/analyzers currently in the copy cache into the target group,
+/// minting a fresh uuid for each copy. Moving nodes without duplicating them (a "cut") is a separate
+/// operation - see [`post_cut_nodes`].
 #[utoipa::path(tag = "operations",
-    request_body(content = (Uuid, (f64, f64), bool),
-        description = "Uuid of the group node to be pasted in, the position at which the node should be pasted, and whether this paste is also a cut (delete the copied nodes' originals)",
+    request_body(content = (Uuid, (f64, f64)),
+        description = "Uuid of the group node to be pasted in, and the position at which the node should be pasted",
         content_type = "application/json",
     ),
     responses(
@@ -203,9 +198,9 @@ fn insert_copied_nodes(
 #[post("/paste_nodes")]
 async fn post_paste_nodes(
     data: web::Data<AppState>,
-    node_paste_info: web::Json<(Uuid, (f64, f64), bool)>,
+    node_paste_info: web::Json<(Uuid, (f64, f64))>,
 ) -> Result<Json<PasteNodesResponse>, BackEndErrorResponse> {
-    let (paste_group_id, node_pos, cut) = node_paste_info.into_inner();
+    let (paste_group_id, node_pos) = node_paste_info.into_inner();
     let paste_in_scenery = data.document.lock().scenery().node_attr().uuid() == paste_group_id;
 
     let copied_nodes = data.node_copy_cache.lock();
@@ -237,7 +232,6 @@ async fn post_paste_nodes(
     let PastedNodes {
         grouped_node_infos,
         grouped_connect_info,
-        node_id_link,
     } = insert_copied_nodes(
         document.scenery_mut(),
         paste_group_id,
@@ -247,9 +241,6 @@ async fn post_paste_nodes(
 
     // One paste = one undo step: removing every pasted node/analyzer undoes the whole paste at once.
     let mut removals = Vec::new();
-    // Reference-retarget undo steps, kept separate and prepended to the very front of `removals` at the
-    // end - see the comment where these are pushed (in the `cut` block below) for why the ordering matters.
-    let mut retarget_patches: Vec<Command> = Vec::new();
     // Only the *top-level* pasted roots need their own `RemoveNode` - a group's own `OpticRef`
     // already carries its entire internal subtree (nodes and internal edges) as one live object,
     // so removing it via a single `RemoveNode` already correctly captures/restores everything
@@ -303,24 +294,6 @@ async fn post_paste_nodes(
         removals.push(Command::RemoveAnalyzer(analyzer.clone()));
     }
 
-    // If this paste is also a "cut", delete the nodes/analyzers still in the copy cache (the
-    // originals this paste was copied from) and extend the SAME `removals` batch, so one undo reverts
-    // both the paste and the delete as a single step.
-    let cut_result = if cut {
-        Some(perform_cut(
-            &data,
-            &mut document,
-            paste_group_id,
-            &node_id_link,
-            &mut removals,
-            &mut retarget_patches,
-        )?)
-    } else {
-        None
-    };
-
-    retarget_patches.append(&mut removals);
-    let removals = retarget_patches;
     if !removals.is_empty() {
         data.push_undo(Command::Batch(removals));
     }
@@ -329,24 +302,184 @@ async fn post_paste_nodes(
         pasted_nodes: grouped_node_infos,
         pasted_analyzers: analyzers,
         pasted_connections: grouped_connect_info,
-        cut_result,
     }))
 }
 
-/// Read-only context [`prepare_cut_node`] needs, unchanged across every node in the cut.
-struct CutNodeContext<'a> {
-    root_uuid: Uuid,
-    node_id_link: &'a HashMap<Uuid, Uuid>,
-    nodes_to_delete_set: &'a HashSet<Uuid>,
-}
+/// Cut the copy cache into a group as a UUID-preserving *move*.
+///
+/// A cut relocates the *same* nodes rather than duplicating them (as [`post_paste_nodes`] does): each keeps
+/// its uuid, so every reference, port map and connection pointing at it stays valid with no remapping, and
+/// nothing is cascade-deleted. A cut node already in `target_group_id` is only repositioned (the common
+/// "cut and paste in the same scenery" case); a node from another group is relocated into `target_group_id`
+/// via the shared move machinery ([`relocate_nodes_in_document`]). Analyzers can only ever be repositioned
+/// at the scenery root. The whole gesture is pushed as a single undo step (one [`Command::Batch`] of the
+/// relocations' inverse [`Command::MoveNodes`] plus the reposition inverses), so undo/redo revert it in one
+/// go - and because no uuid ever changes, redo can never hit the reference-cascade that a duplicate cut did.
+///
+/// # Errors
+///
+/// Returns an error if the copy cache position can't be read, `target_group_id` doesn't resolve, or a
+/// relocation/reposition step fails (e.g. an attempt to move a group into its own descendant, which leaves
+/// the destination unreachable once the group is detached from its source).
+#[utoipa::path(tag = "operations",
+    request_body(content = (Uuid, (f64, f64)),
+        description = "Uuid of the group node to cut into, and the position at which the nodes should be placed",
+        content_type = "application/json",
+    ),
+    responses(
+        (status = OK, body = CutNodesResponse, description = "Nodes successfully cut (moved) into the group", content_type = "application/json"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type = "application/json")
+    )
+)]
+#[allow(clippy::significant_drop_tightening)]
+#[post("/cut_nodes")]
+async fn post_cut_nodes(
+    data: web::Data<AppState>,
+    body: web::Json<(Uuid, (f64, f64))>,
+) -> Result<Json<CutNodesResponse>, BackEndErrorResponse> {
+    let (target_group_id, pos) = body.into_inner();
 
-/// The accumulators [`prepare_cut_node`] appends to as a side effect - shared across every node being
-/// cut, so held by `&mut` rather than returned and merged by the caller.
-struct CutAccumulators<'a> {
-    seen_mutual: &'a mut HashSet<(Uuid, String, Uuid, String)>,
-    mutual_connections: &'a mut Vec<(Uuid, ConnectInfo)>,
-    cascades: &'a mut Vec<PortMapCascadeRemoval>,
-    retarget_patches: &'a mut Vec<Command>,
+    // Drain the copy cache (a cut is one-shot). Compute the paste shift from the cached nodes' current
+    // top-left corner before draining them out.
+    let mut cache = data.node_copy_cache.lock();
+    let min_pos = upper_left_corner_of_nodes(&cache)?;
+    let shift = Point2::new(pos.0 - min_pos.x, pos.1 - min_pos.y);
+    let mut optical_ids = Vec::<Uuid>::new();
+    let mut analyzer_ids = Vec::<Uuid>::new();
+    for item in cache.drain(..) {
+        match item {
+            NodeCacheItem::Optical(optic_ref) => optical_ids.push(optic_ref.uuid()?),
+            NodeCacheItem::Analyzer(dto) => analyzer_ids.push(dto.id),
+        }
+    }
+    drop(cache);
+
+    let mut document = data.document.lock();
+    let scenery_root = document.scenery().node_attr().uuid();
+
+    // Resolve each optical node's current parent group (skipping any that vanished since it was copied),
+    // then split into "already in the target group" (reposition only) and "elsewhere" (relocate, keyed by
+    // source group).
+    let mut relocations = HashMap::<Uuid, Vec<Uuid>>::new();
+    for id in &optical_ids {
+        if let Ok((_, parent)) = document.scenery().node_recursive(*id)
+            && parent != target_group_id
+        {
+            relocations.entry(parent).or_default().push(*id);
+        }
+    }
+
+    // Relocate every out-of-group set into the target, preserving uuids. Aggregate the move side effects for
+    // the GUI, and collect one inverse `MoveNodes` per source group for the undo batch. Sorted source order
+    // keeps the pushed batch deterministic (`HashMap` iteration order isn't stable).
+    let mut move_inverses = Vec::<Command>::new();
+    let mut relocated_pairs = Vec::<(Uuid, Uuid)>::new();
+    let mut new_connections = Vec::<(Uuid, ConnectInfo)>::new();
+    let mut removed_connections = Vec::<(Uuid, ConnectInfo)>::new();
+    let mut port_map_groups_changed = Vec::<Uuid>::new();
+    let mut removed_port_mappings = Vec::<(Uuid, Uuid, String, PortType)>::new();
+    let mut sources: Vec<Uuid> = relocations.keys().copied().collect();
+    sources.sort();
+    for source in sources {
+        let Some(ids) = relocations.remove(&source) else {
+            continue;
+        };
+        let outcome = relocate_nodes_in_document(&mut document, source, target_group_id, &ids)?;
+        new_connections.extend(outcome.preserved.new_connections);
+        removed_connections.extend(outcome.removed_connections);
+        removed_port_mappings.extend(outcome.preserved.removed_port_mappings);
+
+        let focus_group_id =
+            lowest_common_ancestor_group(document.scenery(), source, target_group_id)?;
+        let mut affected = outcome.preserved.port_map_groups_changed;
+        affected.push(target_group_id);
+        affected.sort();
+        affected.dedup();
+        port_map_groups_changed.extend(affected.iter().copied());
+        move_inverses.push(Command::MoveNodes(MoveNodes {
+            request: MoveNodesRequest {
+                source_group_id: target_group_id,
+                target_group_id: source,
+                nodes_to_move: ids.clone(),
+            },
+            affected_groups: affected,
+            focus_group_id,
+        }));
+        for id in ids {
+            relocated_pairs.push((id, source));
+        }
+    }
+    port_map_groups_changed.sort();
+    port_map_groups_changed.dedup();
+    let relocated_set: HashSet<Uuid> = relocated_pairs.iter().map(|(id, _)| *id).collect();
+
+    // Reposition every cut node (relocated or same-group) - and every cut analyzer when pasting into the
+    // root - to its shifted position. `PositionUpdate`s carry *absolute* positions, so add the shift to each
+    // node's current position (a relocation preserves `gui_position`, so it's still the original).
+    let mut position_updates = Vec::<PositionUpdate>::new();
+    for id in &optical_ids {
+        if let Ok(maybe_pos) = document.scenery().with_node_attr(*id, |a| a.gui_position()) {
+            let (cx, cy) = maybe_pos.map_or((0.0, 0.0), |p| (p.x, p.y));
+            position_updates.push(PositionUpdate {
+                uuid: *id,
+                is_optical: true,
+                gui_position: (cx + shift.x, cy + shift.y),
+            });
+        }
+    }
+    if target_group_id == scenery_root {
+        for id in &analyzer_ids {
+            if let Ok(info) = document.analyzer(*id) {
+                let (cx, cy) = info.gui_position().map_or((0.0, 0.0), |p| (p.x, p.y));
+                position_updates.push(PositionUpdate {
+                    uuid: *id,
+                    is_optical: false,
+                    gui_position: (cx + shift.x, cy + shift.y),
+                });
+            }
+        }
+    }
+    // The GUI applies relocated nodes' new positions via `relocated_nodes` (baked into their `NodeInfo`),
+    // so only the nodes/analyzers that stayed put need a standalone reposition entry in the response.
+    let repositioned: Vec<PositionUpdate> = position_updates
+        .iter()
+        .filter(|u| !relocated_set.contains(&u.uuid))
+        .cloned()
+        .collect();
+    let mut position_inverses = apply_position_updates(&mut document, position_updates)?;
+
+    // Now that positions are final, capture each relocated node's `NodeInfo` for the target tab.
+    let mut relocated_nodes = Vec::<RelocatedNode>::new();
+    for (id, from_group_id) in relocated_pairs {
+        if let Ok((node_ref, _)) = document.scenery().node_recursive(id) {
+            let info = {
+                let node = node_ref.optical_ref.lock_opm()?;
+                NodeInfo::from_analyzable(&*node, None)
+            };
+            relocated_nodes.push(RelocatedNode {
+                from_group_id,
+                to_group_id: target_group_id,
+                node: info,
+            });
+        }
+    }
+
+    // One undo step for the whole gesture: relocate-back moves, then reposition-back patches.
+    let mut undo_batch = move_inverses;
+    undo_batch.append(&mut position_inverses);
+    if !undo_batch.is_empty() {
+        data.push_undo(Command::Batch(undo_batch));
+    }
+
+    drop(document);
+    Ok(Json(CutNodesResponse {
+        relocated_nodes,
+        repositioned,
+        new_connections,
+        removed_connections,
+        port_map_groups_changed,
+        removed_port_mappings,
+    }))
 }
 
 /// Captures `node_id`'s connections in `parent_group_id`, splitting off any whose *other* endpoint is
@@ -382,226 +515,6 @@ fn capture_and_split_mutual_connections(
         })
         .collect();
     (own, mutual)
-}
-
-/// Prepares one node of the cut for deletion: retargets any reference node pointing at it to its
-/// pasted duplicate (see [`perform_cut`]'s own docs), pulls out its connections to other
-/// simultaneously-cut nodes into `acc.mutual_connections` (so they're restored once as standalone
-/// edges rather than per-node), and tears down any port-map cascades it exposed outward. Returns the
-/// `(parent_group_id, node, own_connections)` triple for the caller to actually delete and later
-/// restore via `Command::AddNode`, or `None` if `id` no longer resolves (already removed by an earlier
-/// cascade in this same cut). One iteration of [`perform_cut`]'s main loop.
-///
-/// # Errors
-///
-/// Returns an error if a port-map cascade teardown fails.
-fn prepare_cut_node(
-    scenery: &mut NodeGroup,
-    id: Uuid,
-    ctx: &CutNodeContext<'_>,
-    acc: &mut CutAccumulators<'_>,
-) -> OpmResult<Option<(Uuid, OpticRef, Vec<ConnectInfo>)>> {
-    let Ok((node, parent_group_id)) = scenery.node_recursive(id) else {
-        return Ok(None);
-    };
-
-    // Retarget any reference node pointing at this node to the pasted copy's fresh uuid, before
-    // the original is deleted - a cut+paste is conceptually a move, not a deletion, so a
-    // reference to the cut node should keep resolving to it in its new location, not be
-    // cascade-deleted the way an actual delete legitimately cascades. Retargeting first means
-    // `NodeGroup::delete_node`'s own cascade search (which looks for nodes still referencing
-    // `id`) simply won't find this reference anymore, so it's left untouched.
-    if let Some(new_id) = ctx.node_id_link.get(&id).copied()
-        && let Ok(referring) = scenery
-            .graph()
-            .find_all_nodes_referring_to_uuid(id, ctx.root_uuid)
-    {
-        for ref_ids in referring.values() {
-            for ref_id in ref_ids {
-                // `find_all_nodes_referring_to_uuid` reports the queried node itself as one of
-                // its own "referrers" - skip that self-match, only genuine reference nodes
-                // pointing at `id` should be retargeted.
-                if *ref_id == id {
-                    continue;
-                }
-                let Ok((_, ref_parent_id)) = scenery.node_recursive(*ref_id) else {
-                    continue;
-                };
-                if scenery
-                    .with_node_attr_mut(*ref_id, |attr| {
-                        attr.set_property("reference id", Proptype::Uuid(new_id))
-                    })
-                    .is_ok()
-                {
-                    // Undoing this retarget means pointing the reference back at the original.
-                    // Pushed into `retarget_patches`, not `removals` directly - it must run
-                    // *before* the pasted duplicate's own `RemoveNode` (already in `removals`) is
-                    // applied, or the reference (still pointing at the duplicate at that point)
-                    // gets swept away by `NodeGroup::delete_node`'s own cascade first, and this
-                    // retarget-back then fails, targeting an already-deleted node.
-                    acc.retarget_patches
-                        .push(Command::PatchProperty(PatchProperty {
-                            uuid: *ref_id,
-                            parent_group_id: ref_parent_id,
-                            prop_name: "reference id".to_string(),
-                            old: Proptype::Uuid(new_id),
-                            new: Proptype::Uuid(id),
-                        }));
-                }
-            }
-        }
-    }
-
-    // Connections to another node also being cut in this same gesture need special handling:
-    // restoring them via each node's own `AddNode.connections` field would try to reconnect to
-    // a node that may not have been re-added yet (undo batches apply in order) - so pull them
-    // out and restore them once, as standalone `AddEdge`s, after every `AddNode` has run.
-    let (own, mutual) = capture_and_split_mutual_connections(
-        scenery,
-        parent_group_id,
-        id,
-        ctx.nodes_to_delete_set,
-        acc.seen_mutual,
-    );
-    for c in mutual {
-        acc.mutual_connections.push((parent_group_id, c));
-    }
-
-    acc.cascades
-        .extend(disconnect_exposed_port_cascades_for_node(
-            scenery,
-            parent_group_id,
-            id,
-        )?);
-
-    Ok(Some((parent_group_id, node, own)))
-}
-
-/// Deletes the originals of a cut+paste (the nodes/analyzers still in the copy cache) after the
-/// paste half has already inserted their duplicates, and returns the [`CutResult`] reported to the
-/// GUI. The inverse commands are pushed onto the paste's own `removals` batch, so a single undo
-/// reverts both the paste and the delete together.
-///
-/// Reference nodes pointing at a cut node are retargeted to its pasted duplicate instead of being
-/// cascade-deleted (a cut+paste is conceptually a move, not a deletion); their inverse patches go
-/// into `retarget_patches`, which the caller prepends to the very front of the undo batch - on
-/// undo they must apply *before* the duplicate's own `RemoveNode`, or the reference (still
-/// pointing at the duplicate at that point) would be swept away by the delete cascade first.
-///
-/// # Errors
-///
-/// Returns an error if a cached node's uuid cannot be read, or if deleting one of the originals
-/// (or an analyzer) from the document fails.
-fn perform_cut(
-    data: &AppState,
-    document: &mut OpmDocument,
-    paste_group_id: Uuid,
-    node_id_link: &HashMap<Uuid, Uuid>,
-    removals: &mut Vec<Command>,
-    retarget_patches: &mut Vec<Command>,
-) -> Result<CutResult, BackEndErrorResponse> {
-    let mut nodes_to_delete = vec![];
-    let mut analyzers_to_delete = vec![];
-    let mut node_cache = data.node_copy_cache.lock();
-    while let Some(cache) = node_cache.pop() {
-        match cache {
-            NodeCacheItem::Optical(optic_ref) => nodes_to_delete.push(optic_ref.uuid()?),
-            NodeCacheItem::Analyzer(analyzer_dto) => {
-                analyzers_to_delete.push(analyzer_dto.id);
-            }
-        }
-    }
-    drop(node_cache);
-
-    let scenery_id = document.scenery().node_attr().uuid();
-    // Every distinct immediate parent group among the cut nodes needs its ports refreshed -
-    // a multi-select cut can span more than one group, so picking just one (e.g. the first)
-    // would silently skip refreshing the others.
-    let mut cut_from_group_ids: HashSet<Uuid> = nodes_to_delete
-        .iter()
-        .filter_map(|id| document.scenery().node_recursive(*id).ok())
-        .map(|(_, parent_id)| parent_id)
-        .collect();
-    if !analyzers_to_delete.is_empty() {
-        cut_from_group_ids.insert(scenery_id);
-    }
-    if cut_from_group_ids.is_empty() {
-        cut_from_group_ids.insert(scenery_id);
-    }
-    let cut_from_group_ids: Vec<Uuid> = cut_from_group_ids.into_iter().collect();
-
-    let mut deleted_nodes = vec![];
-    if scenery_id == paste_group_id {
-        for analyzer_id in &analyzers_to_delete {
-            if let Ok(info) = document.analyzer(*analyzer_id) {
-                // Undoing this deletion means adding the analyzer back.
-                removals.push(Command::AddAnalyzer(AnalyzerItemDto {
-                    id: *analyzer_id,
-                    info,
-                }));
-            }
-            deleted_nodes.push(*analyzer_id);
-            document.remove_analyzer(*analyzer_id)?;
-        }
-    }
-
-    let scenery = document.scenery_mut();
-    let root_uuid = scenery.node_attr().uuid();
-    let nodes_to_delete_set: HashSet<Uuid> = nodes_to_delete.iter().copied().collect();
-    let mut captured_nodes: Vec<(Uuid, OpticRef, Vec<ConnectInfo>)> = Vec::new();
-    let mut mutual_connections: Vec<(Uuid, ConnectInfo)> = Vec::new();
-    let mut seen_mutual: HashSet<(Uuid, String, Uuid, String)> = HashSet::new();
-    let mut cascades = Vec::new();
-    let ctx = CutNodeContext {
-        root_uuid,
-        node_id_link,
-        nodes_to_delete_set: &nodes_to_delete_set,
-    };
-    let mut acc = CutAccumulators {
-        seen_mutual: &mut seen_mutual,
-        mutual_connections: &mut mutual_connections,
-        cascades: &mut cascades,
-        retarget_patches,
-    };
-    for id in &nodes_to_delete {
-        if let Some(captured) = prepare_cut_node(scenery, *id, &ctx, &mut acc)? {
-            captured_nodes.push(captured);
-        }
-    }
-
-    for node in &nodes_to_delete {
-        deleted_nodes.extend(scenery.delete_node(*node)?);
-    }
-
-    for (parent_group_id, node, connections) in captured_nodes {
-        // Undoing this deletion means adding the node back, reconnected.
-        removals.push(Command::AddNode(NodeSnapshot {
-            parent_group_id,
-            node,
-            cascaded: Vec::new(),
-            connections,
-        }));
-    }
-
-    for (group_id, connect_info) in mutual_connections {
-        removals.push(Command::AddEdge(EdgeSnapshot {
-            group_id,
-            connect_info,
-        }));
-    }
-
-    let (disconnected_connections, removed_port_mappings) = split_cascades_for_response(&cascades);
-
-    // Undoing this deletion also means restoring the port-map chains it tore down (one restore
-    // command per cascade: AddPortMap per level innermost-first, then the terminal AddEdge).
-    removals.extend(cascades.iter().map(Command::from));
-
-    Ok(CutResult {
-        deleted_nodes,
-        cut_from_group_ids,
-        disconnected_connections,
-        removed_port_mappings,
-    })
 }
 
 fn upper_left_corner_of_nodes(
@@ -1260,50 +1173,20 @@ pub async fn post_move_nodes(
     let req = request.into_inner();
     let from_group_id = req.source_group_id;
     let drop_group_id = req.target_group_id;
-    let nodes_to_drop = req.nodes_to_move;
-    let original_node_ids = nodes_to_drop.clone();
-
-    // Collect data
-    let (node_refs, _) = collect_node_refs_and_pos(&data, &nodes_to_drop);
-    let all_connections = collect_group_connections(&data, from_group_id)?;
-    let split = split_sort_connections(&data, &all_connections, &nodes_to_drop);
-    let boundary_connections: Vec<ConnectInfo> =
-        split.input.into_iter().chain(split.output).collect();
+    let original_node_ids = req.nodes_to_move;
 
     let mut document = data.document.lock();
-    let scenery: &mut opossum_core::prelude::NodeGroup = document.scenery_mut();
 
-    // Tear down anything that would otherwise be lost by the move - before the nodes are actually
-    // deleted from `from_group_id`, since this needs to inspect what's currently mapped/connected there.
-    // What's captured here can only be re-established once the nodes actually exist in `drop_group_id`
-    // (see `disconnect_moved_node_connections`'s own docs), so that part happens further down.
-    let (pending, removed_connections) = disconnect_moved_node_connections(
-        scenery,
+    // Relocate the nodes into the drop group, preserving each node's uuid - the shared core also driven by
+    // the cut operation and by move undo/redo (`apply_move_nodes`).
+    let outcome = relocate_nodes_in_document(
+        &mut document,
         from_group_id,
         drop_group_id,
-        &boundary_connections,
         &original_node_ids,
     )?;
 
-    // Remove the moved nodes from the source group without cascading references (a move is a relocation -
-    // an external reference to a moved node must survive and keep resolving to it; this also handles a
-    // reference *inside* the moved set). Shared with the `apply_move_nodes` undo path.
-    remove_relocated_nodes(scenery, from_group_id, &original_node_ids)?;
-
-    // Add nodes_to_drop to group
-    for node_ref in &node_refs {
-        scenery.with_group_node_mut(drop_group_id, |g| g.add_node_ref(node_ref.clone()))??;
-    }
-
-    // Connect nodes if there are any
-    for conn in &split.inside {
-        scenery.with_group_node_mut(drop_group_id, |g| connect_from_info(g, conn))??;
-    }
-
-    let preserved =
-        reconnect_moved_node_connections(scenery, from_group_id, drop_group_id, pending)?;
-
-    let mut port_map_groups_changed = preserved.port_map_groups_changed;
+    let mut port_map_groups_changed = outcome.preserved.port_map_groups_changed;
     port_map_groups_changed.push(drop_group_id);
     port_map_groups_changed.sort();
     port_map_groups_changed.dedup();
@@ -1311,7 +1194,8 @@ pub async fn post_move_nodes(
     // The tab undo/redo should focus: the drag's outer context (the lowest common ancestor of source and
     // target), so the view stays there instead of being pulled into the group - the change is visible in
     // the outer tab either direction. Same value for the move and its reverse (see `MoveNodes`).
-    let focus_group_id = lowest_common_ancestor_group(scenery, from_group_id, drop_group_id)?;
+    let focus_group_id =
+        lowest_common_ancestor_group(document.scenery(), from_group_id, drop_group_id)?;
 
     // Carry the touched-group set into the undo command so undo/redo refreshes every affected tab, not
     // just source and target.
@@ -1327,16 +1211,17 @@ pub async fn post_move_nodes(
 
     drop(document);
     Ok(Json(MoveNodesResponse {
-        new_connections: preserved.new_connections,
-        removed_connections,
+        new_connections: outcome.preserved.new_connections,
+        removed_connections: outcome.removed_connections,
         port_map_groups_changed,
-        removed_port_mappings: preserved.removed_port_mappings,
+        removed_port_mappings: outcome.preserved.removed_port_mappings,
     }))
 }
 
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(post_copy_nodes);
     cfg.service(post_paste_nodes);
+    cfg.service(post_cut_nodes);
 
     cfg.service(post_convert_nodes_to_group);
     cfg.service(post_move_nodes);
@@ -1349,144 +1234,40 @@ mod test {
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
     use opossum_core::{meter, nodes::Dummy};
 
-    /// Regression test for the bug where "cutting" a connected node (copy + paste elsewhere + delete
-    /// the original, as one user gesture) took two separate undo steps to fully revert: a single undo
-    /// only restored the original node, leaving both its lost connection and the pasted duplicate
-    /// behind. Builds `node_a -> node_b`, copies+cuts `node_a` to a new position in the same graph, then
-    /// asserts a *single* undo removes the pasted duplicate, restores the original `node_a`, and
-    /// restores its connection to `node_b`.
+    /// Regression test for the redo bug this branch's original cut mechanism had: create a node and a
+    /// reference to it, cut+paste the node in the *same* scenery, undo, then redo. The old duplicate-based
+    /// cut minted a new uuid for the pasted copy and retargeted the reference at it; on redo it deleted the
+    /// original, whose reference-cascade swept the reference node away *before* the retarget step ran, so
+    /// redo failed with "node with given uuid does not exist". The UUID-preserving cut makes a same-group
+    /// cut a pure reposition - no relocation, no deletion, no cascade - so the node keeps its uuid, the
+    /// reference stays valid without ever being touched, and undo *and* redo both succeed.
     #[actix_web::test]
-    async fn test_undo_cut_paste_restores_node_connection_and_removes_duplicate() {
+    async fn test_cut_paste_node_with_reference_undo_redo_same_group() {
+        use opossum_core::nodes::Dummy;
+
         let app_state = Data::new(AppState::default());
-        let (root_id, node_a, node_b) = {
+        let (root_id, node_a, ref_id) = {
             let mut document = app_state.document.lock();
             let root_id = document.scenery().node_attr().uuid();
             let scenery = document.scenery_mut();
             let node_a = scenery.add_node(Dummy::default()).unwrap();
-            let node_b = scenery.add_node(Dummy::default()).unwrap();
-            scenery
-                .connect_nodes(node_a, "output_1", node_b, "input_1", meter!(0.1))
-                .unwrap();
-            (root_id, node_a, node_b)
+            let node_a_ref = scenery.node_recursive(node_a).unwrap().0;
+            let node_reference = NodeReference::from_node(&node_a_ref).unwrap();
+            let ref_id = scenery.add_node(node_reference).unwrap();
+            (root_id, node_a, ref_id)
         };
 
         let app = test::init_service(
             App::new()
                 .app_data(app_state.clone())
                 .service(post_copy_nodes)
-                .service(post_paste_nodes)
-                .service(undo_document),
+                .service(post_cut_nodes)
+                .service(undo_document)
+                .service(redo_document),
         )
         .await;
 
-        let mut nodes_to_copy = HashSet::new();
-        nodes_to_copy.insert(node_a);
-        let req = test::TestRequest::post()
-            .uri("/copy_nodes")
-            .set_json(&nodes_to_copy)
-            .to_request();
-        let resp = app.call(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
-
-        let req = test::TestRequest::post()
-            .uri("/paste_nodes")
-            .set_json(&(root_id, (500.0, 500.0), true))
-            .to_request();
-        let resp = app.call(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::OK);
-
-        let pasted_node_a = {
-            let document = app_state.document.lock();
-            assert!(
-                document.scenery().node_recursive(node_a).is_err(),
-                "the original node_a must be gone right after the cut"
-            );
-            // The pasted duplicate is whatever new node exists in root_id besides node_b.
-            document
-                .scenery()
-                .with_group_node(root_id, |g| {
-                    g.nodes()
-                        .iter()
-                        .filter_map(|n| n.uuid().ok())
-                        .find(|id| *id != node_b)
-                })
-                .unwrap()
-                .expect("a pasted duplicate node must exist")
-        };
-
-        let req = test::TestRequest::post().uri("/undo").to_request();
-        let resp = app.call(req).await.unwrap();
-        assert_eq!(
-            resp.status(),
-            StatusCode::OK,
-            "a single undo of the cut+paste must not error"
-        );
-
-        let document = app_state.document.lock();
-        assert!(
-            document.scenery().node_recursive(node_a).is_ok(),
-            "the original node_a must be restored"
-        );
-        assert!(
-            document.scenery().node_recursive(pasted_node_a).is_err(),
-            "the pasted duplicate must be removed by the same single undo"
-        );
-        let connections = document
-            .scenery()
-            .with_group_node(root_id, opossum_core::nodes::NodeGroup::connections)
-            .unwrap();
-        assert_eq!(connections.len(), 1, "the connection must be restored");
-        assert!(
-            connections
-                .iter()
-                .any(|c| c.src_id == node_a && c.target_id == node_b),
-            "the restored connection must point at the original node_a and node_b"
-        );
-    }
-
-    /// Regression test for the cut+paste version of the dangling-external-connection bug: cutting a node
-    /// whose port is externally mapped on its parent group must disconnect the external connection that
-    /// used that mapping (a separate edge one level up, in the mapping group's own parent graph) - not
-    /// just leave it dangling once the mapping it depended on disappears. Builds group `G` containing node
-    /// `A`, maps `A`'s input to `G`'s external port `ext_in_1`, connects sibling `S` (in the root, `G`'s
-    /// parent) to `G:ext_in_1`, cuts `A` out of `G` and pastes it into the root, and asserts the `S -> G`
-    /// connection is gone right after the cut. One undo must restore `A`, its port mapping, and the
-    /// `S -> G` connection together with the rest of the cut+paste undo.
-    #[actix_web::test]
-    async fn test_undo_cut_mapped_node_restores_port_map_and_external_connection() {
-        use opossum_core::{
-            nodes::{Dummy, NodeGroup},
-            prelude::PortType,
-        };
-
-        let app_state = Data::new(AppState::default());
-        let (root_id, group_id, node_a, sibling_s) = {
-            let mut document = app_state.document.lock();
-            let root_id = document.scenery().node_attr().uuid();
-            let scenery = document.scenery_mut();
-
-            let mut group = NodeGroup::new("inner group");
-            let node_a = group.add_node(Dummy::default()).unwrap();
-            group.map_input_port(node_a, "input_1", "ext_in_1").unwrap();
-            let group_id = scenery.add_node(group).unwrap();
-
-            let sibling_s = scenery.add_node(Dummy::default()).unwrap();
-            scenery
-                .connect_nodes(sibling_s, "output_1", group_id, "ext_in_1", meter!(0.1))
-                .unwrap();
-
-            (root_id, group_id, node_a, sibling_s)
-        };
-
-        let app = test::init_service(
-            App::new()
-                .app_data(app_state.clone())
-                .service(post_copy_nodes)
-                .service(post_paste_nodes)
-                .service(undo_document),
-        )
-        .await;
-
+        // Copy A, then cut it into the same (root) scenery at a new position.
         let mut nodes_to_copy = HashSet::new();
         nodes_to_copy.insert(node_a);
         let req = test::TestRequest::post()
@@ -1498,139 +1279,113 @@ mod test {
             StatusCode::NO_CONTENT
         );
 
-        // Cut A out of G, pasting it into the root scenery.
         let req = test::TestRequest::post()
-            .uri("/paste_nodes")
-            .set_json(&(root_id, (500.0, 500.0), true))
+            .uri("/cut_nodes")
+            .set_json(&(root_id, (500.0, 500.0)))
             .to_request();
-        let resp = app.call(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::OK);
-        let response: PasteNodesResponse = test::read_body_json(resp).await;
-        let CutResult {
-            cut_from_group_ids,
-            disconnected_connections: disconnected,
-            removed_port_mappings,
-            ..
-        } = response.cut_result.expect("this paste was a cut");
-        assert!(
-            disconnected
-                .iter()
-                .any(|(group_id_, c)| *group_id_ == root_id
-                    && c.src_uuid() == sibling_s
-                    && c.target_uuid() == group_id),
-            "the response must report the disconnected S -> G connection"
-        );
-        assert_eq!(
-            cut_from_group_ids,
-            vec![group_id],
-            "the cut node's own immediate parent group must be reported for refresh"
-        );
-        assert_eq!(
-            removed_port_mappings,
-            vec![(group_id, node_a, "ext_in_1".to_string(), PortType::Input)],
-            "the removed mapping's external name and port type must be reported so the GUI can \
-             shrink the group's port handles without a re-fetch"
-        );
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
 
         {
             let document = app_state.document.lock();
-            assert!(document.scenery().node_recursive(node_a).is_err());
-            let connections = document
-                .scenery()
-                .with_group_node(root_id, NodeGroup::connections)
-                .unwrap();
             assert!(
-                !connections
-                    .iter()
-                    .any(|c| c.src_id == sibling_s && c.target_id == group_id),
-                "the dangling S -> G connection must be gone right after the cut"
+                document.scenery().node_recursive(node_a).is_ok(),
+                "the cut node must keep its original uuid (a move, not a duplicate)"
+            );
+            let node_count = document
+                .scenery()
+                .with_group_node(root_id, |g| g.nodes().len())
+                .unwrap();
+            assert_eq!(
+                node_count, 2,
+                "a cut must not create a duplicate node - only A and its reference remain"
+            );
+            let ref_target = document
+                .scenery()
+                .with_node_attr(ref_id, |attr| {
+                    attr.properties().get("reference id").cloned()
+                })
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                ref_target,
+                Proptype::Uuid(node_a),
+                "the reference still points at A's unchanged uuid after the cut"
             );
         }
 
-        let req = test::TestRequest::post().uri("/undo").to_request();
+        // Undo, then redo - the redo is what used to fail with a 400.
         assert_eq!(
-            app.call(req).await.unwrap().status(),
+            app.call(test::TestRequest::post().uri("/undo").to_request())
+                .await
+                .unwrap()
+                .status(),
             StatusCode::OK,
-            "a single undo of the cut+paste must not error"
+            "undo of the cut must succeed"
+        );
+        assert_eq!(
+            app.call(test::TestRequest::post().uri("/redo").to_request())
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK,
+            "redo of the cut must succeed (regression: used to be 400 'node with given uuid does not exist')"
         );
 
         let document = app_state.document.lock();
         assert!(
             document.scenery().node_recursive(node_a).is_ok(),
-            "the original node A must be restored"
+            "A must still exist under its original uuid after redo"
         );
-        let restored_mapping = document
+        assert!(
+            document.scenery().node_recursive(ref_id).is_ok(),
+            "the reference node must survive undo+redo"
+        );
+        let ref_target = document
             .scenery()
-            .with_group_node(group_id, |g| {
-                g.graph()
-                    .port_map(&PortType::Input)
-                    .get("ext_in_1")
-                    .cloned()
+            .with_node_attr(ref_id, |attr| {
+                attr.properties().get("reference id").cloned()
             })
+            .unwrap()
             .unwrap();
         assert_eq!(
-            restored_mapping,
-            Some((node_a, "input_1".to_string())),
-            "the port mapping must be restored"
-        );
-        let connections = document
-            .scenery()
-            .with_group_node(root_id, NodeGroup::connections)
-            .unwrap();
-        assert!(
-            connections.iter().any(|c| c.src_id == sibling_s
-                && c.target_id == group_id
-                && c.target_port == "ext_in_1"),
-            "the S -> G external connection must be restored"
+            ref_target,
+            Proptype::Uuid(node_a),
+            "the reference must still resolve to A's unchanged uuid after redo"
         );
     }
 
-    /// Regression test for the bug where cutting one of *two* independently mapped nodes out of the
-    /// same group visually cleared both port mappings in the GUI. The GUI symptom traced back to a
-    /// `refresh_group_ports(cut_from_group_id)` round trip layered on top of the already-precise
-    /// `removed_port_mappings` diff; `cut_from_group_id` also picked an arbitrary single group via
-    /// `nodes_to_delete.first()`, which is wrong whenever a multi-select cut spans more than one
-    /// group. Builds group `G { A, B }`, each mapped to its own external port and wired to its own
-    /// outside sibling, cuts only `A`, and asserts the response reports exactly `A`'s mapping as
-    /// removed (never `B`'s) and exactly `G` as the (single) group needing a port-handle refresh.
+    /// Companion to the same-group case: cutting a node *out of a group* into the root is a real
+    /// relocation (not just a reposition), yet still preserves the node's uuid. A reference to the moved
+    /// node - here living in the root, one level up - must keep resolving to it in its new location across
+    /// the cut and across undo/redo, never dangling or being cascade-deleted.
     #[actix_web::test]
-    async fn test_cut_one_of_two_mapped_nodes_only_reports_that_nodes_mapping_removed() {
-        use opossum_core::{
-            meter,
-            nodes::{Dummy, NodeGroup},
-            prelude::PortType,
-        };
+    async fn test_cut_paste_node_with_reference_undo_redo_cross_group() {
+        use opossum_core::nodes::{Dummy, NodeGroup};
 
         let app_state = Data::new(AppState::default());
-        let (root_id, group_id, node_a, node_b) = {
+        let (root_id, group_id, node_a, ref_id) = {
             let mut document = app_state.document.lock();
             let root_id = document.scenery().node_attr().uuid();
             let scenery = document.scenery_mut();
 
             let mut group = NodeGroup::new("inner group");
             let node_a = group.add_node(Dummy::default()).unwrap();
-            let node_b = group.add_node(Dummy::default()).unwrap();
-            group.map_input_port(node_a, "input_1", "ext_in_a").unwrap();
-            group.map_input_port(node_b, "input_1", "ext_in_b").unwrap();
             let group_id = scenery.add_node(group).unwrap();
 
-            let sibling_a = scenery.add_node(Dummy::default()).unwrap();
-            let sibling_b = scenery.add_node(Dummy::default()).unwrap();
-            scenery
-                .connect_nodes(sibling_a, "output_1", group_id, "ext_in_a", meter!(0.1))
-                .unwrap();
-            scenery
-                .connect_nodes(sibling_b, "output_1", group_id, "ext_in_b", meter!(0.1))
-                .unwrap();
+            let node_a_ref = scenery.node_recursive(node_a).unwrap().0;
+            let node_reference = NodeReference::from_node(&node_a_ref).unwrap();
+            let ref_id = scenery.add_node(node_reference).unwrap();
 
-            (root_id, group_id, node_a, node_b)
+            (root_id, group_id, node_a, ref_id)
         };
 
         let app = test::init_service(
             App::new()
                 .app_data(app_state.clone())
                 .service(post_copy_nodes)
-                .service(post_paste_nodes),
+                .service(post_cut_nodes)
+                .service(undo_document)
+                .service(redo_document),
         )
         .await;
 
@@ -1645,45 +1400,78 @@ mod test {
             StatusCode::NO_CONTENT
         );
 
+        // Cut A out of the group and into the root scenery.
         let req = test::TestRequest::post()
-            .uri("/paste_nodes")
-            .set_json(&(root_id, (500.0, 500.0), true))
+            .uri("/cut_nodes")
+            .set_json(&(root_id, (500.0, 500.0)))
             .to_request();
-        let resp = app.call(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
 
-        let response: PasteNodesResponse = test::read_body_json(resp).await;
-        let CutResult {
-            cut_from_group_ids,
-            removed_port_mappings,
-            ..
-        } = response.cut_result.expect("this paste was a cut");
+        let node_a_in = |group: Uuid| {
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .with_group_node(group, |g| {
+                    g.nodes()
+                        .iter()
+                        .filter_map(|n| n.uuid().ok())
+                        .any(|id| id == node_a)
+                })
+                .unwrap()
+        };
 
-        assert_eq!(
-            cut_from_group_ids,
-            vec![group_id],
-            "only G, A's own parent, needs its port handles refreshed"
+        assert!(
+            node_a_in(root_id),
+            "A must have moved into the root under its original uuid"
         );
+        assert!(!node_a_in(group_id), "A must no longer be in the group");
+        assert!(
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .node_recursive(ref_id)
+                .is_ok(),
+            "the reference node must survive the cross-group cut"
+        );
+
+        // Undo puts A back in the group; redo moves it out again - both must succeed.
         assert_eq!(
-            removed_port_mappings,
-            vec![(group_id, node_a, "ext_in_a".to_string(), PortType::Input)],
-            "only A's mapping was removed - B's must not be reported as removed"
+            app.call(test::TestRequest::post().uri("/undo").to_request())
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK
+        );
+        assert!(node_a_in(group_id), "undo must move A back into the group");
+        assert!(!node_a_in(root_id), "undo must remove A from the root");
+
+        assert_eq!(
+            app.call(test::TestRequest::post().uri("/redo").to_request())
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK,
+            "redo of the cross-group cut must succeed"
+        );
+        assert!(
+            node_a_in(root_id),
+            "redo must move A back out into the root"
         );
 
         let document = app_state.document.lock();
-        let mapping_b = document
+        let ref_target = document
             .scenery()
-            .with_group_node(group_id, |g| {
-                g.graph()
-                    .port_map(&PortType::Input)
-                    .get("ext_in_b")
-                    .cloned()
+            .with_node_attr(ref_id, |attr| {
+                attr.properties().get("reference id").cloned()
             })
+            .unwrap()
             .unwrap();
         assert_eq!(
-            mapping_b,
-            Some((node_b, "input_1".to_string())),
-            "B's own mapping must be untouched by cutting A"
+            ref_target,
+            Proptype::Uuid(node_a),
+            "the reference must still resolve to A's unchanged uuid after the cross-group redo"
         );
     }
 
@@ -1747,7 +1535,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/paste_nodes")
-            .set_json(&(root_id, (500.0, 500.0), false))
+            .set_json(&(root_id, (500.0, 500.0)))
             .to_request();
         assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
 
@@ -1858,7 +1646,7 @@ mod test {
         // the root scenery.
         let req = test::TestRequest::post()
             .uri("/paste_nodes")
-            .set_json(&(root_id, (500.0, 500.0), false))
+            .set_json(&(root_id, (500.0, 500.0)))
             .to_request();
         assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
 
@@ -1985,7 +1773,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/paste_nodes")
-            .set_json(&(root_id, (500.0, 500.0), false))
+            .set_json(&(root_id, (500.0, 500.0)))
             .to_request();
         let resp = app.call(req).await.unwrap();
         assert_eq!(
@@ -2025,378 +1813,6 @@ mod test {
         assert!(
             output_names.contains(&"g1_ext_out".to_string()),
             "the pasted G1's external output port must be restored"
-        );
-    }
-
-    /// Regression test for the bug where undoing a cut of two *mutually connected* nodes failed with a
-    /// "node does not exist" error: each node's own `AddNode.connections` field independently captured
-    /// the same `A -> B` edge, and restoring `A` first tried to reconnect to `B` before `B`'s own
-    /// `AddNode` had run (undo batches apply in order). Builds `G { A, B }` with `A -> B` internal, cuts
-    /// both together in one gesture, and asserts a *single* undo succeeds and restores both nodes plus
-    /// their connection.
-    #[actix_web::test]
-    async fn test_undo_cut_mutually_connected_nodes_does_not_error() {
-        use opossum_core::nodes::{Dummy, NodeGroup};
-
-        let app_state = Data::new(AppState::default());
-        let (root_id, group_id, node_a, node_b) = {
-            let mut document = app_state.document.lock();
-            let root_id = document.scenery().node_attr().uuid();
-            let scenery = document.scenery_mut();
-
-            let mut group = NodeGroup::new("inner group");
-            let node_a = group.add_node(Dummy::default()).unwrap();
-            let node_b = group.add_node(Dummy::default()).unwrap();
-            group
-                .connect_nodes(node_a, "output_1", node_b, "input_1", meter!(0.1))
-                .unwrap();
-            let group_id = scenery.add_node(group).unwrap();
-
-            (root_id, group_id, node_a, node_b)
-        };
-
-        let app = test::init_service(
-            App::new()
-                .app_data(app_state.clone())
-                .service(post_copy_nodes)
-                .service(post_paste_nodes)
-                .service(undo_document),
-        )
-        .await;
-
-        let mut nodes_to_copy = HashSet::new();
-        nodes_to_copy.insert(node_a);
-        nodes_to_copy.insert(node_b);
-        let req = test::TestRequest::post()
-            .uri("/copy_nodes")
-            .set_json(&nodes_to_copy)
-            .to_request();
-        assert_eq!(
-            app.call(req).await.unwrap().status(),
-            StatusCode::NO_CONTENT
-        );
-
-        // Cut both A and B out of G together, pasting into the root scenery.
-        let req = test::TestRequest::post()
-            .uri("/paste_nodes")
-            .set_json(&(root_id, (500.0, 500.0), true))
-            .to_request();
-        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
-
-        let req = test::TestRequest::post().uri("/undo").to_request();
-        let resp = app.call(req).await.unwrap();
-        assert_eq!(
-            resp.status(),
-            StatusCode::OK,
-            "a single undo must not error, even though A and B were mutually connected"
-        );
-
-        let document = app_state.document.lock();
-        assert!(document.scenery().node_recursive(node_a).is_ok());
-        assert!(document.scenery().node_recursive(node_b).is_ok());
-        let connections = document
-            .scenery()
-            .with_group_node(group_id, opossum_core::nodes::NodeGroup::connections)
-            .unwrap();
-        assert!(
-            connections
-                .iter()
-                .any(|c| c.src_id == node_a && c.target_id == node_b),
-            "the A -> B connection must be restored"
-        );
-    }
-
-    /// Regression test for the bug where cutting a node some reference node elsewhere points at
-    /// permanently lost that reference on undo, because cutting was treated like an actual delete
-    /// (cascade-delete the reference, restore it on undo). A cut+paste is conceptually a move, not a
-    /// deletion: the reference should stay alive throughout, retargeted at the pasted copy's fresh uuid,
-    /// and only retargeted back on undo - never destroyed. (An actual delete still legitimately takes its
-    /// references down with it - see `test_undo_delete_group_node_restores_external_connection` and
-    /// friends in `nodes/core.rs`, unaffected by this change.) Builds node `A` inside group `G` (mapped to
-    /// `G`'s external port `ext_in_1`, connected to sibling `S`), plus reference node `R` (in root)
-    /// referring to `A`; cuts `A` via copy+paste(cut=true); asserts `R` is still present right after the
-    /// cut and now points at the pasted copy, while the `S -> G` connection is gone (port-map disconnect
-    /// behavior unchanged); one undo restores `A`'s original uuid, the mapping, `S -> G`, and retargets
-    /// `R` back to `A`.
-    #[actix_web::test]
-    async fn test_undo_cut_node_retargets_reference_instead_of_deleting_it() {
-        use opossum_core::{
-            meter,
-            nodes::{Dummy, NodeGroup, NodeReference},
-            prelude::{PortType, Proptype},
-        };
-
-        let app_state = Data::new(AppState::default());
-        let (root_id, group_id, node_a, sibling_s, ref_id) = {
-            let mut document = app_state.document.lock();
-            let root_id = document.scenery().node_attr().uuid();
-            let scenery = document.scenery_mut();
-
-            let mut group = NodeGroup::new("inner group");
-            let node_a = group.add_node(Dummy::default()).unwrap();
-            group.map_input_port(node_a, "input_1", "ext_in_1").unwrap();
-            let group_id = scenery.add_node(group).unwrap();
-
-            let sibling_s = scenery.add_node(Dummy::default()).unwrap();
-            scenery
-                .connect_nodes(sibling_s, "output_1", group_id, "ext_in_1", meter!(0.1))
-                .unwrap();
-
-            let node_a_ref = scenery.node_recursive(node_a).unwrap().0;
-            let node_reference = NodeReference::from_node(&node_a_ref).unwrap();
-            let ref_id = scenery.add_node(node_reference).unwrap();
-
-            (root_id, group_id, node_a, sibling_s, ref_id)
-        };
-
-        let app = test::init_service(
-            App::new()
-                .app_data(app_state.clone())
-                .service(post_copy_nodes)
-                .service(post_paste_nodes)
-                .service(undo_document),
-        )
-        .await;
-
-        let mut nodes_to_copy = HashSet::new();
-        nodes_to_copy.insert(node_a);
-        let req = test::TestRequest::post()
-            .uri("/copy_nodes")
-            .set_json(&nodes_to_copy)
-            .to_request();
-        assert_eq!(
-            app.call(req).await.unwrap().status(),
-            StatusCode::NO_CONTENT
-        );
-
-        let req = test::TestRequest::post()
-            .uri("/paste_nodes")
-            .set_json(&(root_id, (500.0, 500.0), true))
-            .to_request();
-        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
-
-        let pasted_node_a = {
-            let document = app_state.document.lock();
-            assert!(
-                document.scenery().node_recursive(node_a).is_err(),
-                "the original node A must be gone right after the cut"
-            );
-            assert!(
-                document.scenery().node_recursive(ref_id).is_ok(),
-                "the reference node must survive the cut - a cut is a move, not a delete"
-            );
-            let pasted_node_a = document
-                .scenery()
-                .with_group_node(root_id, |g| {
-                    g.nodes()
-                        .iter()
-                        .filter_map(|n| n.uuid().ok())
-                        .find(|id| *id != sibling_s && *id != ref_id && *id != group_id)
-                })
-                .unwrap()
-                .expect("a pasted copy of A must exist");
-            let ref_target = document
-                .scenery()
-                .with_node_attr(ref_id, |attr| {
-                    attr.properties().get("reference id").cloned()
-                })
-                .unwrap()
-                .unwrap();
-            assert_eq!(
-                ref_target,
-                Proptype::Uuid(pasted_node_a),
-                "the reference must be retargeted at the pasted copy right after the cut"
-            );
-            let connections = document
-                .scenery()
-                .with_group_node(root_id, NodeGroup::connections)
-                .unwrap();
-            assert!(
-                !connections
-                    .iter()
-                    .any(|c| c.src_id == sibling_s && c.target_id == group_id),
-                "the dangling S -> G connection must be gone right after the cut"
-            );
-            pasted_node_a
-        };
-
-        let req = test::TestRequest::post().uri("/undo").to_request();
-        assert_eq!(
-            app.call(req).await.unwrap().status(),
-            StatusCode::OK,
-            "a single undo of the cut+paste must not error"
-        );
-
-        let document = app_state.document.lock();
-        assert!(
-            document.scenery().node_recursive(node_a).is_ok(),
-            "node A must be restored under its original uuid"
-        );
-        assert!(
-            document.scenery().node_recursive(pasted_node_a).is_err(),
-            "the pasted duplicate must be removed by the same single undo"
-        );
-        assert!(
-            document.scenery().node_recursive(ref_id).is_ok(),
-            "the reference node must still be present"
-        );
-        let ref_target = document
-            .scenery()
-            .with_node_attr(ref_id, |attr| {
-                attr.properties().get("reference id").cloned()
-            })
-            .unwrap()
-            .unwrap();
-        assert_eq!(
-            ref_target,
-            Proptype::Uuid(node_a),
-            "undo must retarget the reference back at A's original uuid"
-        );
-        let restored_mapping = document
-            .scenery()
-            .with_group_node(group_id, |g| {
-                g.graph()
-                    .port_map(&PortType::Input)
-                    .get("ext_in_1")
-                    .cloned()
-            })
-            .unwrap();
-        assert_eq!(restored_mapping, Some((node_a, "input_1".to_string())));
-        let connections = document
-            .scenery()
-            .with_group_node(root_id, NodeGroup::connections)
-            .unwrap();
-        assert!(
-            connections.iter().any(|c| c.src_id == sibling_s
-                && c.target_id == group_id
-                && c.target_port == "ext_in_1"),
-            "the S -> G external connection must be restored"
-        );
-    }
-
-    /// Regression test probing whether a *second* cut+paste of an already-once-retargeted node (i.e.
-    /// cutting the pasted copy itself, not the original) still works cleanly - since the retarget loop
-    /// depends on `find_all_nodes_referring_to_uuid`/`node_id_link`, repeating the cycle exercises whether
-    /// any state from the first retarget (e.g. the reference's already-updated "reference id") trips up
-    /// the second one. Builds node `A` (in root) and reference `R` pointing at it; cuts `A` (pasting a
-    /// copy `A'`), asserts that succeeds and `R` now points at `A'`; then cuts `A'` itself (pasting `A''`),
-    /// asserting that *also* succeeds with no error and `R` now points at `A''`.
-    #[actix_web::test]
-    async fn test_cut_paste_twice_retargets_reference_each_time() {
-        use opossum_core::{
-            nodes::{Dummy, NodeReference},
-            prelude::Proptype,
-        };
-
-        let app_state = Data::new(AppState::default());
-        let (root_id, node_a, ref_id) = {
-            let mut document = app_state.document.lock();
-            let root_id = document.scenery().node_attr().uuid();
-            let scenery = document.scenery_mut();
-
-            let node_a = scenery.add_node(Dummy::default()).unwrap();
-            let node_a_ref = scenery.node_recursive(node_a).unwrap().0;
-            let node_reference = NodeReference::from_node(&node_a_ref).unwrap();
-            let ref_id = scenery.add_node(node_reference).unwrap();
-
-            (root_id, node_a, ref_id)
-        };
-
-        let app = test::init_service(
-            App::new()
-                .app_data(app_state.clone())
-                .service(post_copy_nodes)
-                .service(post_paste_nodes),
-        )
-        .await;
-
-        let mut nodes_to_copy = HashSet::new();
-        nodes_to_copy.insert(node_a);
-        let req = test::TestRequest::post()
-            .uri("/copy_nodes")
-            .set_json(&nodes_to_copy)
-            .to_request();
-        assert_eq!(
-            app.call(req).await.unwrap().status(),
-            StatusCode::NO_CONTENT
-        );
-
-        let req = test::TestRequest::post()
-            .uri("/paste_nodes")
-            .set_json(&(root_id, (300.0, 300.0), true))
-            .to_request();
-        let resp = app.call(req).await.unwrap();
-        assert_eq!(
-            resp.status(),
-            StatusCode::OK,
-            "the first cut+paste must not error"
-        );
-
-        let node_a_prime = {
-            let document = app_state.document.lock();
-            let ref_target = document
-                .scenery()
-                .with_node_attr(ref_id, |attr| {
-                    attr.properties().get("reference id").cloned()
-                })
-                .unwrap()
-                .unwrap();
-            let Proptype::Uuid(target) = ref_target else {
-                panic!("reference id property must be a Uuid")
-            };
-            assert_ne!(
-                target, node_a,
-                "after the first cut, the reference must point at the pasted copy, not the original"
-            );
-            target
-        };
-
-        let mut nodes_to_copy = HashSet::new();
-        nodes_to_copy.insert(node_a_prime);
-        let req = test::TestRequest::post()
-            .uri("/copy_nodes")
-            .set_json(&nodes_to_copy)
-            .to_request();
-        assert_eq!(
-            app.call(req).await.unwrap().status(),
-            StatusCode::NO_CONTENT
-        );
-
-        let req = test::TestRequest::post()
-            .uri("/paste_nodes")
-            .set_json(&(root_id, (600.0, 600.0), true))
-            .to_request();
-        let resp = app.call(req).await.unwrap();
-        if resp.status() != StatusCode::OK {
-            let body = test::read_body(resp).await;
-            panic!(
-                "the second cut+paste must not error: {}",
-                String::from_utf8_lossy(&body)
-            );
-        }
-
-        let document = app_state.document.lock();
-        assert!(
-            document.scenery().node_recursive(ref_id).is_ok(),
-            "the reference node must survive both cuts"
-        );
-        let ref_target = document
-            .scenery()
-            .with_node_attr(ref_id, |attr| {
-                attr.properties().get("reference id").cloned()
-            })
-            .unwrap()
-            .unwrap();
-        let Proptype::Uuid(target) = ref_target else {
-            panic!("reference id property must be a Uuid")
-        };
-        assert_ne!(
-            target, node_a_prime,
-            "after the second cut, the reference must point at the newly pasted copy"
-        );
-        assert!(
-            document.scenery().node_recursive(target).is_ok(),
-            "the reference must resolve to a node that actually exists"
         );
     }
 

@@ -527,28 +527,7 @@ pub struct ConvertToGroupResponse {
     pub removed_port_mappings: Vec<(Uuid, Uuid, String, PortType)>,
 }
 
-/// The "cut" half of a cut-paste (see [`PasteNodesResponse::cut_result`]), reporting everything
-/// that deleting the cut originals changed.
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-pub struct CutResult {
-    /// UUIDs of every original actually deleted: the cut nodes and analyzers themselves, plus any
-    /// reference node deleted alongside them by the cascade.
-    pub deleted_nodes: Vec<Uuid>,
-    /// The immediate parent group of every cut node (plus the scenery root when analyzers were
-    /// cut) - a multi-select cut can span several groups, and each one's node list and exposed
-    /// ports need a GUI refresh.
-    pub cut_from_group_ids: Vec<Uuid>,
-    /// Connections disconnected as a side effect, paired with the group they lived in - same shape
-    /// as [`DeleteNodeResponse::disconnected_connections`].
-    pub disconnected_connections: Vec<(Uuid, ConnectInfo)>,
-    /// `(group_id, node_id, external_port_name, port_type)` per port mapping removed as a side
-    /// effect - same shape as [`DeleteNodeResponse::removed_port_mappings`], so the GUI can reuse
-    /// that exact handling.
-    pub removed_port_mappings: Vec<(Uuid, Uuid, String, PortType)>,
-}
-
-/// Response payload after pasting the copy cache into a group - optionally cutting the originals
-/// in the same request, so paste and delete revert together as a single undo step.
+/// Response payload after duplicating the copy cache into a group.
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct PasteNodesResponse {
     /// Freshly created optical nodes, keyed by the group each was inserted into - the paste
@@ -559,8 +538,50 @@ pub struct PasteNodesResponse {
     pub pasted_analyzers: Vec<AnalyzerItemDto>,
     /// Re-created connections between pasted nodes, keyed by the group each lives in.
     pub pasted_connections: HashMap<Uuid, Vec<ConnectInfo>>,
-    /// Present only when the request had `cut` set: what deleting the cut originals changed.
-    pub cut_result: Option<CutResult>,
+}
+
+/// A node relocated to a *different* group by a cut+paste move.
+///
+/// Its uuid is unchanged; the GUI removes it from `from_group_id`'s tab and adds `node` (carrying its
+/// updated position) to `to_group_id`'s tab.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct RelocatedNode {
+    /// The group the node was cut out of.
+    pub from_group_id: Uuid,
+    /// The group the node was pasted into.
+    pub to_group_id: Uuid,
+    /// The relocated node, with its new (shifted) `gui_position` already applied.
+    pub node: NodeInfo,
+}
+
+/// Response payload after a UUID-preserving cut+paste - a *move* of the copy cache into a target group plus
+/// a reposition to the paste location.
+///
+/// Unlike a duplicate [`PasteNodesResponse`], no new nodes are created and no originals are deleted: the
+/// *same* nodes are relocated and/or repositioned, so every reference, port map and connection keyed on
+/// their uuids stays valid with no remapping. Nodes that were already in the target group are only
+/// repositioned (the common "cut and paste in the same scenery" case); nodes from another group are
+/// relocated into it, reusing the same reroute machinery as [`MoveNodesResponse`].
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct CutNodesResponse {
+    /// Nodes moved to a different group (same uuid), each with its updated `NodeInfo` for the target tab.
+    pub relocated_nodes: Vec<RelocatedNode>,
+    /// New GUI positions for cut nodes/analyzers that stayed in their group (and every cut analyzer, which
+    /// can only ever be repositioned at the scenery root) - the GUI updates each element's position in
+    /// place. Relocated nodes are *not* listed here; their position rides along in `relocated_nodes`.
+    pub repositioned: Vec<PositionUpdate>,
+    /// Connections newly created as a move side effect (a boundary reroute), paired with their group -
+    /// same shape as [`MoveNodesResponse::new_connections`].
+    pub new_connections: Vec<(Uuid, ConnectInfo)>,
+    /// Connections torn down as a move side effect, paired with their group - same shape as
+    /// [`MoveNodesResponse::removed_connections`].
+    pub removed_connections: Vec<(Uuid, ConnectInfo)>,
+    /// Groups whose port-map/exposed-port display changed and need a GUI refresh - same shape as
+    /// [`MoveNodesResponse::port_map_groups_changed`].
+    pub port_map_groups_changed: Vec<Uuid>,
+    /// `(group_id, internal_node_id, external_port_name, port_type)` per port-map entry removed with no
+    /// replacement - same shape/handling as [`MoveNodesResponse::removed_port_mappings`].
+    pub removed_port_mappings: Vec<(Uuid, Uuid, String, PortType)>,
 }
 
 // ============================================================================
@@ -689,21 +710,21 @@ pub struct JumpTarget {
     pub source_port: Option<Uuid>,
 }
 
-impl JumpTarget{
-    pub fn new_from_graph_id(graph_id: Uuid) -> Self{
-        Self{
+impl JumpTarget {
+    pub fn new_from_graph_id(graph_id: Uuid) -> Self {
+        Self {
             graph_id,
             node: None,
             panel: None,
-            source_port:None
+            source_port: None,
         }
     }
-    pub fn new_from_graph_and_node_id(graph_id: Uuid, node_id:Uuid) -> Self{
-        Self{
+    pub fn new_from_graph_and_node_id(graph_id: Uuid, node_id: Uuid) -> Self {
+        Self {
             graph_id,
             node: Some(node_id),
             panel: None,
-            source_port:None
+            source_port: None,
         }
     }
 }

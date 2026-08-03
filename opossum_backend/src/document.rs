@@ -350,7 +350,7 @@ async fn patch_positions(
 /// # Errors
 ///
 /// Returns the first update's error, with `document` restored to its pre-call state.
-fn apply_position_updates(
+pub(crate) fn apply_position_updates(
     document: &mut OpmDocument,
     updates: Vec<PositionUpdate>,
 ) -> Result<Vec<Command>, BackEndErrorResponse> {
