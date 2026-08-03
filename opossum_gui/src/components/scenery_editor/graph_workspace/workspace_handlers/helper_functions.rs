@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
 use dioxus::{prelude::*, stores::hashmap::GetWrite};
-use opossum_core::types::api_types::ConnectInfo;
 use uuid::Uuid;
 
 use crate::components::scenery_editor::{
     EditorState, GraphState, GraphStore, GraphsWorkspaceStateStoreExt,
+    edges::edge_element::EdgeElement,
     graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceState},
 };
 
@@ -61,6 +61,7 @@ pub(super) fn with_tab<F>(
         workspace.needs_saving().set(true);
     }
 }
+
 pub(super) fn for_each_tab<F>(workspace: Store<GraphsWorkspaceState>, mark_dirty: bool, mut f: F)
 where
     F: FnMut(
@@ -116,9 +117,9 @@ pub(super) fn with_edges<F>(
 ) where
     F: FnOnce(
         &mut Store<
-            Vec<ConnectInfo>,
+            Vec<EdgeElement>,
             MappedMutSignal<
-                Vec<ConnectInfo>,
+                Vec<EdgeElement>,
                 MappedMutSignal<
                     GraphStore,
                     GetWrite<

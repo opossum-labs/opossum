@@ -10,11 +10,13 @@ use crate::components::scenery_editor::{
 };
 use dioxus::prelude::*;
 use opossum_core::prelude::*;
+
 #[derive(Clone, Eq, PartialEq, Default, Debug)]
 pub struct Ports {
     input_ports: Vec<String>,
     output_ports: Vec<String>,
 }
+
 impl Ports {
     #[must_use]
     pub const fn new(input_ports: Vec<String>, output_ports: Vec<String>) -> Self {
@@ -91,8 +93,19 @@ pub fn NodePort(
         port_type,
     );
 
+    // Format port type string ("input" or "output") for E2E selector construction
+    let port_type_str = match port_type {
+        PortType::Input => "input",
+        PortType::Output => "output",
+    };
+
+    // Construct deterministic test ID string (e.g., "port-output-out", "port-input-in")
+    let port_test_id = format!("port-{port_type_str}-{port_name}");
+
     rsx! {
         div {
+            // Assign deterministic test ID for Playwright targeting
+            "data-testid": "{port_test_id}",
             class: "port {port_class}",
             title: "{port_name}",
             style: format!(

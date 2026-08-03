@@ -1153,11 +1153,15 @@ async fn process_optimize_layout(
         };
 
         let store = graph.graph_store();
-        (store.nodes().read().clone(), store.edges().read().clone())
+        let raw_edges = store.edges().read().clone();
+
+        // Extract inner ConnectInfo instances from EdgeElements for layout calculation
+        let connect_infos: Vec<ConnectInfo> = raw_edges.iter().map(|e| e.info().clone()).collect();
+
+        (store.nodes().read().clone(), connect_infos)
     };
 
     // --- CALCULATION PHASE: Determine new positions (Pure) ---
-    // Note: ensure optimize_layout is imported from graph_workspace::workspace_state
     let new_positions = optimize_layout(&nodes, &edges);
 
     // --- ASYNC PHASE: sync with backend, batched into a single undo step ---

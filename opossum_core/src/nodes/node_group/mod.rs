@@ -1216,6 +1216,85 @@ mod test {
         let mut scenery = NodeGroup::default();
         assert!(scenery.get_optic_surface_mut("input_1").is_none())
     }
+    #[test]
+    fn delete_mapped_node_cleans_up_outer_connections() -> OpmResult<()> {
+        // 1. Create top-level (outer) group and internal (inner) group
+        let mut outer_group = NodeGroup::new("outer_group");
+        let mut inner_group = NodeGroup::new("inner_group");
+
+        // 2. Add an optical node inside the inner group
+        let n_inside = inner_group.add_node(Dummy::new("inside_node"))?;
+
+        // 3. Map the output port of the inside node to an external port of inner_group
+        inner_group.map_output_port(n_inside, "output_1", "ext_out")?;
+
+        // 4. Add the inner group and an additional external node to the outer group
+        let inner_id = outer_group.add_node(inner_group)?;
+        let n_outside = outer_group.add_node(Dummy::new("outside_node"))?;
+
+        // 5. Connect inner_group's mapped output port to the external node's input port
+        outer_group.connect_nodes(inner_id, "ext_out", n_outside, "input_1", Length::zero())?;
+
+        // Verify that the connection exists in outer_group before deletion
+        assert_eq!(
+            outer_group.connections().len(),
+            1,
+            "Outer group should have exactly 1 connection before node deletion"
+        );
+
+        // 6. Delete the inside node from the outer group
+        let deleted_nodes = outer_group.delete_node(n_inside)?;
+
+        // 7. Assertions:
+        // Verify that n_inside was returned in the list of deleted node UUIDs
+        assert!(
+            deleted_nodes.contains(&n_inside),
+            "Deleted node list should contain n_inside"
+        );
+
+        // Verify that the connection in outer_group was cleaned up because the mapped port no longer exists
+        assert_eq!(
+            outer_group.connections().len(),
+            0,
+            "Outer group connections should be cleaned up after deleting a mapped node inside a subgroup"
+        );
+
+        Ok(())
+    }
+    #[test]
+    fn delete_mapped_node_cleans_up_nested_outer_connections() -> OpmResult<()> {
+        // 1. Setup a 3-level hierarchy: top_group -> mid_group -> inner_group
+        let mut top_group = NodeGroup::new("top_group");
+        let mut mid_group = NodeGroup::new("mid_group");
+        let mut inner_group = NodeGroup::new("inner_group");
+
+        // 2. Add node inside inner_group
+        let n_inside = inner_group.add_node(Dummy::new("inside_node"))?;
+        inner_group.map_output_port(n_inside, "output_1", "ext_inner")?;
+
+        // 3. Map inner_group's output port to mid_group
+        let inner_id = mid_group.add_node(inner_group)?;
+        mid_group.map_output_port(inner_id, "ext_inner", "ext_mid")?;
+
+        // 4. Map mid_group's output port to top_group and connect to an outside node
+        let mid_id = top_group.add_node(mid_group)?;
+        let n_outside = top_group.add_node(Dummy::new("outside_node"))?;
+        top_group.connect_nodes(mid_id, "ext_mid", n_outside, "input_1", Length::zero())?;
+
+        assert_eq!(top_group.connections().len(), 1);
+
+        // 5. Delete the innermost node from the top-level group
+        top_group.delete_node(n_inside)?;
+
+        // 6. Assertions: connections at top_group level must be cleaned up
+        assert_eq!(
+            top_group.connections().len(),
+            0,
+            "Cascading cleanup failed to remove top-level connection"
+        );
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]

@@ -185,8 +185,16 @@ pub fn LabeledFileInput(
                                 dialog = dialog.add_filter("File Type", &[ext]);
                             }
                             if let Some(handle) = dialog.pick_file().await {
-                                let path = handle.path().to_string_lossy().to_string();
-                                let safe_path = path.replace('\\', "\\\\").replace('\'', "\\'");
+                                // Extract full file path on desktop targets
+                                #[cfg(not(target_arch = "wasm32"))]
+                                let selected_path = handle.path().to_string_lossy().to_string();
+
+                                // Extract file name on web targets due to browser sandbox restrictions
+                                #[cfg(target_arch = "wasm32")]
+                                let selected_path = handle.file_name();
+
+                                // Escape special characters for JS string injection
+                                let safe_path = selected_path.replace('\\', "\\\\").replace('\'', "\\'");
                                 let js = format!(
                                     r#"let el=document.getElementById('{target_id}');if (el) {{let nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;nativeInputValueSetter.call(el, '{safe_path}');el.dispatchEvent(new Event('input', {{ bubbles: true }}));el.dispatchEvent(new Event('change', {{ bubbles: true }}));}}"#,
                                 );
@@ -558,7 +566,7 @@ pub fn LabeledSelect(
                 disabled: readonly,
                 "aria-label": label,
                 onchange: move |e| onchange.call(e),
-                for (is_selected, option) in options {
+                for (is_selected , option) in options {
                     option { selected: is_selected, value: option, {option.clone()} }
                 }
             }

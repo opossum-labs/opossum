@@ -120,7 +120,7 @@ pub fn App() -> Element {
     let mut model_file_path: Signal<Option<PathBuf>> = use_signal(|| None);
     let mut model_modified_sig: Signal<bool> = use_signal(|| false);
 
-    // status for "Unsaved Changes" dialog
+    // Status for "Unsaved Changes" dialog
     let mut pending_action = use_signal(|| Option::<PendingAction>::None);
     let mut show_alert = use_signal(|| false);
     let mut show_settings = use_signal(|| false);
@@ -160,14 +160,14 @@ pub fn App() -> Element {
         AppCommand::Quit => {
             // Save config file (even if not changed for automatic migration of file format)
             if let Err(e) = APP_CONFIG.read().to_file() {
-                eprintln!("Fehler beim Speichern der AppConfig beim Beenden: {e}");
+                eprintln!("Error saving AppConfig on exit: {e}");
             }
             #[cfg(not(target_arch = "wasm32"))]
             {
                 #[cfg(not(debug_assertions))]
                 {
                     backend_handle.kill();
-                    println!("Stopping app...")
+                    println!("Stopping app...");
                 }
                 window_for_quit.close();
             }
@@ -196,16 +196,7 @@ pub fn App() -> Element {
         AppCommand::Simulate => {
             #[cfg(not(target_arch = "wasm32"))]
             {
-                // if project_directory.read().is_some() {
-                //     run_simulation.set(true);
-                // } else {
-                //     spawn(async move {
-                //         if let Some(folder) = select_folder_path().await {
-                //             project_directory.set(Some(folder));
                 run_simulation.set(true);
-                //         }
-                //     });
-                // }
             }
         }
     };
@@ -422,29 +413,38 @@ pub fn App() -> Element {
         SettingsDialog { show: show_settings }
     }
 
-    // #[cfg(target_arch = "wasm32")]
-    // rsx! {
-    //     div {
-    //         class: "app-container",
-    //         tabindex: 0,
-    //         onkeydown: move |e| {
-    //             if let Some(action) = get_action_from_event(&e) {
-    //                 process_command(AppCommand::from(action));
-    //             }
-    //         },
-    //         CommonAppLayout {
-    //             cxt_command,
-    //             on_menu_action: process_command,
-    //             project_directory,
-    //             model_file_path,
-    //             model_modified,
-    //             node_editor_command,
-    //             show_alert,
-    //             on_alert_confirm,
-    //             on_alert_cancel,
-    //         }
-    //     }
-    // }
+    #[cfg(target_arch = "wasm32")]
+    rsx! {
+        div {
+            class: "app-container",
+            tabindex: 0,
+            onkeydown: move |e| {
+                if let Some(action) = get_action_from_event(&e) {
+                    process_command(AppCommand::from(action));
+                }
+            },
+            CommonAppLayout {
+                cxt_command_handler: EventHandler::new(move |cxt_cmd_opt: Option<CxtCommand>| {
+                    cxt_command.set(cxt_cmd_opt);
+                }),
+                on_menu_action: process_command_for_menu,
+                model_file_path,
+                model_file_path_handler: EventHandler::new(move |path_opt: Option<PathBuf>| {
+                    model_file_path.set(path_opt);
+                }),
+                model_modified_sig,
+                model_modified_handler: EventHandler::new(move |is_modified: bool| {
+                    model_modified_sig.set(is_modified);
+                }),
+                node_editor_command,
+                node_editor_command_handler,
+                show_alert,
+                on_alert_confirm,
+                on_alert_cancel,
+            }
+        }
+        SettingsDialog { show: show_settings }
+    }
 }
 
 #[component]
@@ -486,6 +486,7 @@ fn CommonAppLayout(
     };
 
     rsx! {
+        document::Title { "OPOSSUM" }
         ContextMenu { cxt_command_handler }
         div {
             class: "container-fluid text-bg-dark",

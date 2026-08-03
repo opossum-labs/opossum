@@ -1,6 +1,7 @@
 use crate::components::scenery_editor::{
     NodeElement, NodeType, SelectedNode,
     constants::{NODE_WIDTH, SUGIYAMA_VERT_PATH_FACTOR, SUGIYAMA_VERTEX_SPACING},
+    edges::edge_element::EdgeElement,
     graph_workspace::EditorState,
     ports::ports_component::Ports,
 };
@@ -65,13 +66,46 @@ pub struct NodeSelection {
 #[derive(Clone, PartialEq, Store, Default)]
 pub struct GraphStore {
     nodes: HashMap<Uuid, NodeElement>,
-    edges: Vec<ConnectInfo>,
+    edges: Vec<EdgeElement>,
     node_selection: NodeSelection,
     mapped_ports: PortMap,
+    next_node_index: usize, // unique node ID for playwright tests
+    next_edge_index: usize, // unique edge ID for playwright tests
 }
 
 #[store(pub)]
 impl<Lens> Store<GraphStore, Lens> {
+    /// Generates the next sequential node index and increments the internal counter.
+    fn fetch_next_node_index(&mut self) -> usize {
+        let current_index = *self.next_node_index().read();
+        *self.next_node_index().write() += 1;
+        current_index
+    }
+
+    /// Generates the next sequential edge index and increments the internal counter.
+    fn fetch_next_edge_index(&mut self) -> usize {
+        let current_index = *self.next_edge_index().read();
+        *self.next_edge_index().write() += 1;
+        current_index
+    }
+
+    /// Appends a new `EdgeElement` with a monotonic index to the store.
+    fn add_edge(&mut self, connect_info: ConnectInfo) {
+        let index = self.fetch_next_edge_index();
+        self.edges()
+            .write()
+            .push(EdgeElement::new(connect_info, index));
+    }
+
+    /// Removes an edge matching source and target UUIDs and ports.
+    fn remove_edge(&mut self, connect_info: &ConnectInfo) {
+        self.edges().write().retain(|e| {
+            !(e.src_uuid() == connect_info.src_uuid()
+                && e.src_port() == connect_info.src_port()
+                && e.target_uuid() == connect_info.target_uuid()
+                && e.target_port() == connect_info.target_port())
+        });
+    }
     fn shift_node_position(&mut self, node_id: Uuid, shift: Point2D<f64>) {
         if let Some(mut node) = self.nodes().get(node_id) {
             node.write().shift_position(shift);
@@ -178,6 +212,7 @@ impl<Lens> Store<GraphStore, Lens> {
     /// # Returns:
     /// A `NodeElement` representing the newly added reference node.
     fn add_new_reference_node(&mut self, ref_node_info: &NodeInfo) -> NodeElement {
+        let node_index = self.fetch_next_node_index();
         let gui_position = ref_node_info.gui_position().unwrap_or((100.0, 100.0));
         let ports = Ports::new(ref_node_info.input_ports(), ref_node_info.output_ports());
         let mut node_element = NodeElement::new(
@@ -187,6 +222,7 @@ impl<Lens> Store<GraphStore, Lens> {
             Point2D::new(gui_position.0, gui_position.1),
             ports,
             ref_node_info.inverted(),
+            node_index,
         );
         let id = ref_node_info.uuid();
         let nr_of_nodes = self.nodes().len();
@@ -216,6 +252,7 @@ impl<Lens> Store<GraphStore, Lens> {
     /// # Arguments:
     /// * `node_info`: The `NodeInfo` containing the type and position of the new node.
     fn add_new_optical_node(&mut self, node_info: &NodeInfo) {
+        let node_index = self.fetch_next_node_index();
         let gui_position = node_info.gui_position().unwrap_or((100.0, 100.0));
         let node_element = NodeElement::new(
             node_info.name().to_string(),
@@ -224,6 +261,7 @@ impl<Lens> Store<GraphStore, Lens> {
             Point2D::new(gui_position.0, gui_position.1),
             Ports::new(node_info.input_ports(), node_info.output_ports()),
             node_info.inverted(),
+            node_index,
         );
         self.nodes().insert(node_info.uuid(), node_element.clone());
         self.set_node_active(node_info.uuid(), node_element.z_index(), true);
@@ -235,6 +273,7 @@ impl<Lens> Store<GraphStore, Lens> {
     /// * `new_analyzer`: The `NewAnalyzerInfo` containing the type and position of the new analyzer.
     /// * `analyzer_id`: The unique identifier for the new analyzer.
     fn add_new_analyzer(&mut self, new_analyzer: NewAnalyzerInfo, analyzer_id: Uuid) {
+        let node_index = self.fetch_next_node_index();
         let (x, y) = new_analyzer.gui_position;
         let mut node_element = NodeElement::new(
             format!("{}", new_analyzer.analyzer_type),
@@ -243,6 +282,7 @@ impl<Lens> Store<GraphStore, Lens> {
             Point2D::new(x, y),
             Ports::default(),
             false,
+            node_index,
         );
         let nr_of_nodes = self.nodes().len();
         node_element.set_z_index(nr_of_nodes + 1);
