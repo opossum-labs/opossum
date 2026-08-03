@@ -475,6 +475,10 @@ pub struct DeleteNodeResponse {
     /// (instead of clearing and refetching a whole group's mappings, which would also drop still-valid
     /// mappings of other, untouched nodes) and shrink the group's own displayed port handles precisely.
     pub removed_port_mappings: Vec<(Uuid, Uuid, String, PortType)>,
+    /// UUIDs of the analyzers deleted as part of the same selection. Analyzers live at document level
+    /// (not in the scenery graph), so they're reported separately from `deleted_nodes`. Empty for a
+    /// pure-node delete (e.g. the single-node `delete_node` endpoint).
+    pub deleted_analyzers: Vec<Uuid>,
 }
 
 /// Response payload after moving nodes into a different group, reporting any connections rerouted (not

@@ -253,13 +253,6 @@ impl<Lens> Store<GraphStore, Lens> {
 
 impl GraphStore {
     #[must_use]
-    pub fn get_node_type(&self, node_id: Uuid) -> Option<NodeType> {
-        self.nodes
-            .get(&node_id)
-            .map(NodeElement::node_type)
-            .cloned()
-    }
-    #[must_use]
     pub fn selected_nodes(&self) -> HashMap<Uuid, bool> {
         self.node_selection.all_nodes.read().clone()
     }

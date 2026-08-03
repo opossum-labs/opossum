@@ -149,8 +149,10 @@ pub async fn post_add_ref_node(
         .post::<NewRefNode, NodeInfo>(&format!("/api/nodes/{group_id}/references"), new_ref_info)
         .await
 }
-/// Delete one or more nodes together in one request, so the backend records a single undo step for
-/// the whole selection (see the backend's `delete_nodes`). Returns the merged [`DeleteNodeResponse`].
+/// Delete a whole selection - optical nodes and/or analyzers - together in one request, so the backend
+/// records a single undo step for the whole selection (see the backend's `delete_nodes`, which
+/// classifies each id itself). Returns the merged [`DeleteNodeResponse`], with any deleted analyzers
+/// reported in its `deleted_analyzers` field.
 ///
 /// # Errors
 ///

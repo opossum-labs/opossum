@@ -317,9 +317,9 @@ pub enum GraphsWorkspaceAction {
         moves: Vec<(Uuid, bool, Point2D<f64>)>,
     },
 
-    /// Deletes one or more selected nodes together as a single undo step (see the backend's
-    /// `delete_nodes`). Optical nodes go through the batch endpoint; any analyzers in the selection
-    /// are still deleted individually. A single-node delete is just a one-element selection.
+    /// Deletes a whole selection - optical nodes and analyzers alike - together as a single undo step
+    /// (see the backend's `delete_nodes`, which classifies each id and folds every removal into one
+    /// undo entry). A single-node delete is just a one-element selection.
     DeleteNodes {
         /// The IDs of the selected nodes to delete.
         node_ids: Vec<Uuid>,

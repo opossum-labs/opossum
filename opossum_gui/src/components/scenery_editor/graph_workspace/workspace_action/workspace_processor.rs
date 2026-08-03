@@ -233,8 +233,7 @@ pub fn use_workspace_processor(
                         process_add_edge(new_edge, workspace_handlers, graph_id).await;
                     }
                     GraphsWorkspaceAction::DeleteNodes { node_ids, graph_id } => {
-                        process_delete_nodes(node_ids, workspace, workspace_handlers, graph_id)
-                            .await;
+                        process_delete_nodes(node_ids, workspace_handlers, graph_id).await;
                     }
                     GraphsWorkspaceAction::OpenGroupTab {
                         group_id,
@@ -836,53 +835,29 @@ async fn process_add_edge(
     );
 }
 
-/// Deletes a whole multi-node selection. Optical nodes are removed together via the batch endpoint
-/// (`api::delete_nodes`), so one undo restores the whole group; any analyzers in the selection are
-/// still deleted individually (they live at document level and are rarely multi-selected with nodes).
+/// Deletes a whole multi-node selection - optical nodes and analyzers alike - in one request via the
+/// batch endpoint (`api::delete_nodes`), so a single undo restores the entire selection at once. The
+/// backend classifies each id itself, deleting optical nodes from the scenery graph and analyzers from
+/// the document, and folds every removal into one undo step.
 async fn process_delete_nodes(
     node_ids: Vec<Uuid>,
-    workspace: ReadStore<GraphsWorkspaceState>,
     ws_handler: WorkSpaceSignalHandlers,
     graph_id: Uuid,
 ) {
-    let Some(graph) = workspace.tabs().get(graph_id) else {
-        OPOSSUM_UI_LOGS.write().add_log(&format!(
-            "No graph with id '{}' found",
-            graph_id.as_simple()
-        ));
-        return;
-    };
-    let (optical, analyzers): (Vec<Uuid>, Vec<Uuid>) = {
-        let graph_store = graph.graph_store();
-        let store = graph_store.read();
-        node_ids
-            .into_iter()
-            .partition(|id| matches!(store.get_node_type(*id), Some(NodeType::Optical(_))))
-    };
-
-    if !optical.is_empty() {
-        eval_action_run(
-            api::delete_nodes(optical).await,
-            Some(move |response: DeleteNodeResponse| {
-                ws_handler
-                    .nodes
-                    .remove_nodes(response.deleted_nodes, graph_id);
-                prune_removed_port_mappings(ws_handler, response.removed_port_mappings);
-                for (group_id, edge) in response.disconnected_connections {
-                    ws_handler.edges.delete_edge(edge, group_id);
-                }
-            }),
-        );
-    }
-
-    for analyzer_id in analyzers {
-        eval_action_run(
-            api::delete_analyzer(analyzer_id).await,
-            Some(move |deleted_id| {
-                ws_handler.nodes.remove_nodes(vec![deleted_id], graph_id);
-            }),
-        );
-    }
+    eval_action_run(
+        api::delete_nodes(node_ids).await,
+        Some(move |response: DeleteNodeResponse| {
+            // Analyzers are drawn as pseudo-nodes and live in the same canvas node store as optical
+            // nodes, so both reported lists funnel into one `remove_nodes` call.
+            let mut removed = response.deleted_nodes;
+            removed.extend(response.deleted_analyzers);
+            ws_handler.nodes.remove_nodes(removed, graph_id);
+            prune_removed_port_mappings(ws_handler, response.removed_port_mappings);
+            for (group_id, edge) in response.disconnected_connections {
+                ws_handler.edges.delete_edge(edge, group_id);
+            }
+        }),
+    );
 }
 
 /// Prunes each entry a backend response reported as a removed port mapping (shape

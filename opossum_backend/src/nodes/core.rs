@@ -12,8 +12,8 @@ use opossum_core::{
     nodes::{NodeReference, create_node_ref},
     prelude::{AnalyzerType, OpmDocument, Proptype},
     types::api_types::{
-        ConnectInfo, DeleteNodeResponse, ErrorResponse, NewNode, NewRefNode, NodeInfo,
-        UpdateNodeRequest,
+        AnalyzerItemDto, ConnectInfo, DeleteNodeResponse, ErrorResponse, NewNode, NewRefNode,
+        NodeInfo, UpdateNodeRequest,
     },
     utils::LockExt,
 };
@@ -344,15 +344,19 @@ async fn delete_node(
     Ok(web::Json(response))
 }
 
-/// Delete several nodes in one step
+/// Delete a whole selection (nodes and/or analyzers) in one step
 ///
-/// Deletes every node in the request body (each cascading to its reference nodes and tearing down its
-/// exposed-port chains, exactly like [`delete_node`]), pushing a *single* undo entry so one undo
-/// restores the whole selection - unlike issuing one `DELETE /{uuid}` per node, which would be one
-/// undo step each. A uuid already removed by a prior node's cascade is skipped. Returns the merged
-/// [`DeleteNodeResponse`] across all deletions.
+/// Deletes every id in the request body - the selection may freely mix scenery nodes and analyzers -
+/// pushing a *single* undo entry so one undo restores the whole selection, unlike issuing one
+/// `DELETE /{uuid}` per item (which would be one undo step each, so a mixed selection would take
+/// several undos). Each id is classified against the live document: a scenery node is deleted like
+/// [`delete_node`] (cascading to its reference nodes and tearing down its exposed-port chains); an
+/// analyzer (which lives at document level, not in the scenery graph) is removed via
+/// [`OpmDocument::remove_analyzer`]. A uuid already removed by a prior node's cascade - or that names
+/// neither a node nor an analyzer - is skipped. Returns the merged [`DeleteNodeResponse`], with
+/// deleted analyzers reported separately in `deleted_analyzers`.
 #[utoipa::path(tag = "node",
-    request_body(content = Vec<Uuid>, description = "UUIDs of the nodes to delete together"),
+    request_body(content = Vec<Uuid>, description = "UUIDs of the nodes and/or analyzers to delete together"),
     responses(
         (status = OK, body = DeleteNodeResponse, description = "Merged deletion result", content_type="application/json"),
         (status = BAD_REQUEST, body = ErrorResponse, description = "A UUID could not be deleted", content_type="application/json")
@@ -366,35 +370,47 @@ async fn delete_nodes(
     let uuids = body.into_inner();
     let mut document = data.document.lock();
 
-    let mut inverse: Vec<Command> = Vec::new();
+    // Node inverses and analyzer inverses are collected separately so the final batch restores every
+    // node *before* any analyzer on undo (an analyzer may reference a node's source port), regardless
+    // of the order ids arrived in.
+    let mut node_inverse: Vec<Command> = Vec::new();
+    let mut analyzer_inverse: Vec<Command> = Vec::new();
     let mut merged = DeleteNodeResponse {
         deleted_nodes: Vec::new(),
         disconnected_connections: Vec::new(),
         removed_port_mappings: Vec::new(),
+        deleted_analyzers: Vec::new(),
     };
     for uuid in uuids {
-        // A node earlier in the selection may have cascade-deleted this one (a reference node); its
-        // restoration is already captured in that node's own `AddNode.cascaded`, so just skip it.
-        if document.scenery().node_recursive(uuid).is_err() {
-            continue;
-        }
-        let (node_inverse, response) = delete_node_capturing(&mut document, uuid)?;
-        // Prepend each node's inverse so the batch ends up in reverse deletion order: on undo a node's
-        // captured connections only reference nodes that were still alive when it was deleted (i.e.
-        // deleted later, or not at all), so restoring later-deleted nodes first guarantees every
-        // reconnect target already exists.
-        let mut combined = node_inverse;
-        combined.append(&mut inverse);
-        inverse = combined;
+        if document.scenery().node_recursive(uuid).is_ok() {
+            let (per_node_inverse, response) = delete_node_capturing(&mut document, uuid)?;
+            // Prepend each node's inverse so the node block ends up in reverse deletion order: on undo a
+            // node's captured connections only reference nodes that were still alive when it was deleted
+            // (i.e. deleted later, or not at all), so restoring later-deleted nodes first guarantees
+            // every reconnect target already exists.
+            let mut combined = per_node_inverse;
+            combined.append(&mut node_inverse);
+            node_inverse = combined;
 
-        merged.deleted_nodes.extend(response.deleted_nodes);
-        merged
-            .disconnected_connections
-            .extend(response.disconnected_connections);
-        merged
-            .removed_port_mappings
-            .extend(response.removed_port_mappings);
+            merged.deleted_nodes.extend(response.deleted_nodes);
+            merged
+                .disconnected_connections
+                .extend(response.disconnected_connections);
+            merged
+                .removed_port_mappings
+                .extend(response.removed_port_mappings);
+        } else if let Ok(info) = document.analyzer(uuid) {
+            document.remove_analyzer(uuid)?;
+            analyzer_inverse.push(Command::AddAnalyzer(AnalyzerItemDto { id: uuid, info }));
+            merged.deleted_analyzers.push(uuid);
+        }
+        // Otherwise the id was already removed by a prior node's cascade (its restoration is captured in
+        // that node's own `AddNode.cascaded`), or names neither a node nor an analyzer - skip it.
     }
+    // Nodes first, analyzers last: on undo the batch applies in order, restoring every node before any
+    // analyzer that might reference one of them.
+    let mut inverse = node_inverse;
+    inverse.append(&mut analyzer_inverse);
     drop(document);
 
     push_delete_inverse(&data, inverse);
@@ -534,6 +550,9 @@ fn delete_node_capturing(
             deleted_nodes,
             disconnected_connections,
             removed_port_mappings,
+            // `delete_node_capturing` only ever removes scenery nodes; analyzers are handled by the
+            // batch `delete_nodes` endpoint directly, so a single node's response never carries any.
+            deleted_analyzers: Vec::new(),
         },
     ))
 }
@@ -1240,6 +1259,75 @@ mod test {
                 .iter()
                 .any(|c| c.src_id == node_b && c.target_id == node_c),
             "the connection between the two deleted nodes must be restored too"
+        );
+    }
+
+    /// Regression test for the mixed-selection undo bug: selecting a normal node *and* an analyzer and
+    /// deleting them in one gesture used to batch the node but delete the analyzer through its own
+    /// single endpoint, so it became a *second* undo step (undone first, before the node). `POST
+    /// /delete` now deletes the whole mixed selection as a single undo step: one undo must restore
+    /// both the node and the analyzer at once.
+    #[actix_web::test]
+    async fn test_delete_mixed_node_and_analyzer_is_one_undo_step() {
+        use opossum_core::{
+            nodes::Dummy,
+            prelude::{AnalyzerType, EnergyConfig},
+        };
+
+        let app_state = Data::new(AppState::default());
+        let (node_id, analyzer_id) = {
+            let mut document = app_state.document.lock();
+            let node_id = document.scenery_mut().add_node(Dummy::default()).unwrap();
+            let analyzer_id = document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()));
+            (node_id, analyzer_id)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(delete_nodes)
+                .service(undo_document),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/delete")
+            .set_json(&vec![node_id, analyzer_id])
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let response: DeleteNodeResponse = test::read_body_json(resp).await;
+        assert!(
+            response.deleted_nodes.contains(&node_id),
+            "the node must be reported deleted, got {:?}",
+            response.deleted_nodes
+        );
+        assert!(
+            response.deleted_analyzers.contains(&analyzer_id),
+            "the analyzer must be reported deleted, got {:?}",
+            response.deleted_analyzers
+        );
+        assert_eq!(
+            app_state.undo_stack.lock().len(),
+            1,
+            "deleting a mixed node+analyzer selection must be a single undo step, not one per item"
+        );
+
+        // One undo restores both the node and the analyzer.
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::OK,
+            "a single undo must restore the whole mixed selection"
+        );
+        let document = app_state.document.lock();
+        assert!(
+            document.scenery().node_recursive(node_id).is_ok(),
+            "the node must be restored by one undo"
+        );
+        assert!(
+            document.analyzer(analyzer_id).is_ok(),
+            "the analyzer must be restored by the same undo"
         );
     }
 
