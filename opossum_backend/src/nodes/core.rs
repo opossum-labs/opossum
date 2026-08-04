@@ -6,18 +6,17 @@ use actix_web::{
 };
 use nalgebra::Point2;
 use opossum_core::{
-    core_optics::{OpticRef, node_attr::HasNodeAttr},
+    core_optics::node_attr::HasNodeAttr,
     error::OpossumError,
     light::lightdata::{energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder},
     nodes::{NodeReference, create_node_ref},
-    prelude::{AnalyzerType, OpmDocument, Proptype},
+    prelude::{AnalyzerType, OpmDocument},
     types::api_types::{
         AnalyzerItemDto, ConnectInfo, DeleteNodeResponse, ErrorResponse, NewNode, NewRefNode,
         NodeInfo, UpdateNodeRequest,
     },
     utils::LockExt,
 };
-use parking_lot::MutexGuard;
 use uuid::Uuid;
 
 use crate::{
@@ -25,7 +24,8 @@ use crate::{
     error::BackEndErrorResponse,
     helper_functions::{
         capture_node_connections, disconnect_exposed_port_cascades_for_node,
-        parent_group_id_or_self, ron_or_json_response, split_cascades_for_response,
+        parent_group_id_or_self, resolve_reference_chain, ron_or_json_response,
+        split_cascades_for_response,
     },
     undo::{
         CascadedNode, Command, NodeSnapshot, PatchAnalyzer, PatchNode, capture_old_node_request,
@@ -590,8 +590,7 @@ async fn post_reference(
     let ref_node_info = ref_node_info.into_inner();
 
     let mut document = data.document.lock();
-    let referring_node =
-        get_nested_referenced_node_from_state(ref_node_info.referring_node(), &document)?;
+    let (referring_node, _) = resolve_reference_chain(&document, ref_node_info.referring_node())?;
     let mut node_reference = NodeReference::from_node(&referring_node)?;
 
     node_reference
@@ -1930,28 +1929,6 @@ mod test {
             "after delete+undo there must be exactly one source port, got {sources:?}"
         );
         assert_eq!(sources[0].uuid, src_uuid);
-    }
-}
-
-fn get_nested_referenced_node_from_state(
-    uuid: Uuid,
-    document: &MutexGuard<'_, OpmDocument>,
-) -> Result<OpticRef, BackEndErrorResponse> {
-    let optic_ref = document.scenery().node_recursive(uuid)?.0;
-    let node_attr = optic_ref.optical_ref.lock_opm()?.node_attr().clone();
-    if node_attr.node_type() == "reference" {
-        let ref_node_props = node_attr.properties();
-        if let Ok(Proptype::Uuid(ref_uuid)) = ref_node_props.get("reference id") {
-            get_nested_referenced_node_from_state(*ref_uuid, document)
-        } else {
-            Err(BackEndErrorResponse::new(
-                400,
-                "Opossum",
-                "'reference id' property not found",
-            ))
-        }
-    } else {
-        Ok(optic_ref)
     }
 }
 

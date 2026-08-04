@@ -12,7 +12,7 @@ use opossum_core::{
     meter,
     nodes::{ConnectionInfo, NodeGroup},
     opm_document::{AnalyzerInfo, OpmDocument},
-    prelude::{PortMap, PortType},
+    prelude::{PortMap, PortType, Proptype},
     types::api_types::{ConnectInfo, NodeInfo},
     utils::LockExt,
 };
@@ -107,6 +107,36 @@ pub fn is_reference_target(scenery: &NodeGroup, node_id: Uuid) -> bool {
             attr.properties().get("reference id").is_ok()
         })
         .unwrap_or(false)
+}
+
+/// Recursively resolves a "reference" node to the actual node it (transitively) points at, following
+/// each `"reference id"` property hop until a non-reference node is reached. Returns the resolved
+/// [`OpticRef`] and whether `uuid` itself named a reference node (`false` if `uuid` was already the
+/// non-reference target).
+///
+/// # Errors
+///
+/// Returns an error if `uuid` doesn't resolve to a node, or a reference node along the chain is
+/// missing its `"reference id"` property.
+pub fn resolve_reference_chain(
+    document: &OpmDocument,
+    uuid: Uuid,
+) -> Result<(OpticRef, bool), BackEndErrorResponse> {
+    let optic_ref = document.scenery().node_recursive(uuid)?.0;
+    let node_attr = optic_ref.optical_ref.lock_opm()?.node_attr().clone();
+    if node_attr.node_type() == "reference" {
+        let Ok(Proptype::Uuid(ref_uuid)) = node_attr.properties().get("reference id") else {
+            return Err(BackEndErrorResponse::new(
+                400,
+                "Opossum",
+                "'reference id' property not found",
+            ));
+        };
+        let (resolved, _) = resolve_reference_chain(document, *ref_uuid)?;
+        Ok((resolved, true))
+    } else {
+        Ok((optic_ref, false))
+    }
 }
 
 /// Captures every connection touching `node_id` within `parent_group_id`'s graph, as `ConnectInfo`s.

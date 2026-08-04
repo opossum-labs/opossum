@@ -1,17 +1,15 @@
 use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
-    helper_functions::{parent_group_id_or_self, ron_or_json_response},
+    helper_functions::{parent_group_id_or_self, resolve_reference_chain, ron_or_json_response},
     undo::{Command, PatchProperty},
 };
 use actix_web::{HttpRequest, HttpResponse, get, patch, web};
 use opossum_core::{
-    core_optics::NodeAttr,
-    prelude::{OpmDocument, Proptype},
+    prelude::Proptype,
     types::api_types::{ErrorResponse, NodePropertiesResponse},
     utils::LockExt,
 };
-use parking_lot::MutexGuard;
 use uuid::Uuid;
 
 /// Get all custom properties of an optical node
@@ -40,7 +38,8 @@ pub async fn get_properties(
     let uuid = path.into_inner();
     let document = data.document.lock();
 
-    let (node_attr, is_reference) = get_referenced_node_attr_from_state(false, uuid, &document)?;
+    let (optic_ref, is_reference) = resolve_reference_chain(&document, uuid)?;
+    let node_attr = optic_ref.optical_ref.lock_opm()?.node_attr().clone();
 
     let response_data = NodePropertiesResponse {
         properties: node_attr.properties().clone(),
@@ -105,39 +104,6 @@ pub async fn patch_property(
     drop(document);
 
     Ok(HttpResponse::NoContent().finish())
-}
-
-// --- Helper Functions ---
-
-fn get_referenced_node_attr_from_state(
-    mut is_reference: bool,
-    uuid: Uuid,
-    document: &MutexGuard<'_, OpmDocument>,
-) -> Result<(NodeAttr, bool), BackEndErrorResponse> {
-    let node_attr = document
-        .scenery()
-        .node_recursive(uuid)?
-        .0
-        .optical_ref
-        .lock_opm()?
-        .node_attr()
-        .clone();
-
-    if node_attr.node_type() == "reference" {
-        is_reference = true;
-        let ref_node_props = node_attr.properties();
-        if let Ok(Proptype::Uuid(ref_uuid)) = ref_node_props.get("reference id") {
-            get_referenced_node_attr_from_state(is_reference, *ref_uuid, document)
-        } else {
-            Err(BackEndErrorResponse::new(
-                400,
-                "Opossum",
-                "'reference id' property not found on reference node",
-            ))
-        }
-    } else {
-        Ok((node_attr, is_reference))
-    }
 }
 
 #[cfg(test)]
