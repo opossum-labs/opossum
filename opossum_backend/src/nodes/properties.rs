@@ -1,7 +1,9 @@
 use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
-    helper_functions::{parent_group_id_or_self, resolve_reference_chain, ron_or_json_response},
+    helper_functions::{
+        apply_and_push_undo, parent_group_id_or_self, resolve_reference_chain, ron_or_json_response,
+    },
     undo::{Command, PatchProperty},
 };
 use actix_web::{HttpRequest, HttpResponse, get, patch, web};
@@ -86,24 +88,20 @@ pub async fn patch_property(
         )
     })?;
 
-    let mut document = data.document.lock();
+    let document = data.document.lock();
     let old_value = document.scenery().with_node_attr(uuid, |node_attr| {
         node_attr.properties().get(&prop_name).cloned()
     })??;
     let parent_group_id = parent_group_id_or_self(document.scenery(), uuid)?;
 
-    let inverse = Command::PatchProperty(PatchProperty {
+    let command = Command::PatchProperty(PatchProperty {
         uuid,
         parent_group_id,
         prop_name,
         old: old_value,
         new: new_value,
-    })
-    .apply(&mut document)?;
-    data.push_undo(inverse);
-    drop(document);
-
-    Ok(HttpResponse::NoContent().finish())
+    });
+    apply_and_push_undo(&data, document, command, true)
 }
 
 #[cfg(test)]

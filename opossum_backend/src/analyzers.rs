@@ -18,7 +18,7 @@ use uuid::Uuid;
 use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
-    helper_functions::{Ron, analyzer_mut_or_404, ron_or_json_response},
+    helper_functions::{Ron, analyzer_mut_or_404, apply_and_push_undo, ron_or_json_response},
     undo::{Command, PatchAnalyzer, RepositionAnalyzer},
 };
 
@@ -222,12 +222,8 @@ pub async fn patch_analyzer(
         .analyzer_type()
         .clone();
 
-    let inverse =
-        Command::PatchAnalyzer(PatchAnalyzer { id: uuid, old, new }).apply(&mut document)?;
-    data.push_undo(inverse);
-    drop(document);
-
-    Ok(HttpResponse::NoContent().finish())
+    let command = Command::PatchAnalyzer(PatchAnalyzer { id: uuid, old, new });
+    apply_and_push_undo(&data, document, command, true)
 }
 
 /// Update the GUI position of an analyzer
@@ -262,16 +258,12 @@ pub async fn put_analyzer_gui_position(
         .gui_position()
         .map_or((0., 0.), |p| (p.x, p.y));
 
-    let inverse = Command::RepositionAnalyzer(RepositionAnalyzer {
+    let command = Command::RepositionAnalyzer(RepositionAnalyzer {
         id: uuid,
         old_pos,
         new_pos,
-    })
-    .apply(&mut document)?;
-    data.push_undo(inverse);
-    drop(document);
-
-    Ok(HttpResponse::NoContent().finish())
+    });
+    apply_and_push_undo(&data, document, command, true)
 }
 
 /// Get all available `SourcePort` nodes (UUID and Name) in the entire document recursively

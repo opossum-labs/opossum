@@ -1,7 +1,7 @@
 use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
-    helper_functions::parent_group_id_or_self,
+    helper_functions::{apply_and_push_undo, parent_group_id_or_self},
     undo::{Command, PatchPort},
 };
 use actix_web::{HttpResponse, get, patch, web};
@@ -91,7 +91,7 @@ pub async fn patch_port(
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let (uuid, port_type, port_name) = path.into_inner();
     let new = update.into_inner();
-    let mut document = data.document.lock();
+    let document = data.document.lock();
 
     // `GET /ports` (and hence the GUI) reports an inverted node's ports through the inversion-aware
     // `OpticNode::ports()`, which swaps Input/Output. The `port_type` sent back here is therefore in
@@ -126,19 +126,15 @@ pub async fn patch_port(
     })??;
     let parent_group_id = parent_group_id_or_self(document.scenery(), uuid)?;
 
-    let inverse = Command::PatchPort(PatchPort {
+    let command = Command::PatchPort(PatchPort {
         uuid,
         parent_group_id,
         port_type: physical_type,
         port_name,
         old,
         new,
-    })
-    .apply(&mut document)?;
-    data.push_undo(inverse);
-    drop(document);
-
-    Ok(HttpResponse::NoContent().finish()) // <-- REST-konformer Abschluss
+    });
+    apply_and_push_undo(&data, document, command, true)
 }
 
 #[cfg(test)]

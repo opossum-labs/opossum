@@ -23,7 +23,7 @@ use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
     helper_functions::{
-        capture_node_connections, disconnect_exposed_port_cascades_for_node,
+        apply_and_push_undo, capture_node_connections, disconnect_exposed_port_cascades_for_node,
         parent_group_id_or_self, resolve_reference_chain, ron_or_json_response,
         split_cascades_for_response,
     },
@@ -224,7 +224,7 @@ async fn patch_node(
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let uuid = path.into_inner();
     let new = update.into_inner();
-    let mut document = data.document.lock();
+    let document = data.document.lock();
 
     let old = document
         .scenery()
@@ -285,13 +285,7 @@ async fn patch_node(
     // this can never collapse to `None`.
     let command =
         Command::from_vec(commands).expect("commands always has at least the node's own PatchNode");
-    let inverse = command.apply(&mut document)?;
-    if !is_root {
-        data.push_undo(inverse);
-    }
-    drop(document);
-
-    Ok(HttpResponse::NoContent().finish())
+    apply_and_push_undo(&data, document, command, !is_root)
 }
 
 /// Delete a node

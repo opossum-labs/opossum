@@ -16,10 +16,11 @@ use opossum_core::{
     types::api_types::{ConnectInfo, NodeInfo},
     utils::LockExt,
 };
+use parking_lot::MutexGuard;
 use serde::{Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
-use crate::{app_state::AppState, error::BackEndErrorResponse};
+use crate::{app_state::AppState, error::BackEndErrorResponse, undo::Command};
 
 type CascadeRemovalResult = (
     Vec<(Uuid, ConnectInfo)>,
@@ -197,6 +198,28 @@ pub fn analyzer_mut_or_404(
     document
         .analyzer_mut(id)
         .ok_or_else(BackEndErrorResponse::analyzer_not_found)
+}
+
+/// Applies `command` to `document`, pushes its inverse onto the undo stack (unless `record_undo` is
+/// `false` - used only for edits that are deliberately excluded from history, e.g. patching the
+/// scenery root), then drops `document`'s lock and returns the standard `204 No Content` response
+/// shared by every field-patch endpoint.
+///
+/// # Errors
+///
+/// Returns an error if `command.apply` fails.
+pub fn apply_and_push_undo(
+    data: &AppState,
+    mut document: MutexGuard<'_, OpmDocument>,
+    command: Command,
+    record_undo: bool,
+) -> Result<HttpResponse, BackEndErrorResponse> {
+    let inverse = command.apply(&mut document)?;
+    if record_undo {
+        data.push_undo(inverse);
+    }
+    drop(document);
+    Ok(HttpResponse::NoContent().finish())
 }
 
 /// Removes every node in `node_ids` from `source_group_id` **without** cascading to reference nodes.
