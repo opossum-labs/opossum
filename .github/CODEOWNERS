@@ -9,16 +9,16 @@
 # Spezifische Pfade & Sub-Crates
 # ==============================================================================
 # Spezifischere Regeln überschreiben weiter oben stehende globale Regeln.
-/opossum_core/        @core-developer
-/opossum_gui/         @gui-developer
-/opossum_backend/     @backend-developer
-/opossum_cli/         @dein-github-username
+# /opossum_core/        @core-developer
+# /opossum_gui/         @gui-developer
+# /opossum_backend/     @backend-developer
+# /opossum_cli/         @dein-github-username
 
 # ==============================================================================
 # Sensible Konfigurationen & CI/CD
 # ==============================================================================
 # Änderungen an GitHub Actions oder zentralen Abhängigkeiten erfordern
 # zwingend die Freigabe des Lead-Entwicklers.
-/.github/             @lead-developer
-Cargo.toml            @lead-developer
-Cargo.lock            @lead-developer
+# /.github/             @lead-developer
+# Cargo.toml            @lead-developer
+# Cargo.lock            @lead-developer
