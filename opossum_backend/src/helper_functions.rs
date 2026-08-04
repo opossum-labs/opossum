@@ -11,7 +11,7 @@ use opossum_core::{
     error::{OpmResult, OpossumError},
     meter,
     nodes::{ConnectionInfo, NodeGroup},
-    opm_document::OpmDocument,
+    opm_document::{AnalyzerInfo, OpmDocument},
     prelude::{PortMap, PortType},
     types::api_types::{ConnectInfo, NodeInfo},
     utils::LockExt,
@@ -152,6 +152,21 @@ pub fn map_port(
         PortType::Input => g.map_input_port(node_id, internal_name, external_name),
         PortType::Output => g.map_output_port(node_id, internal_name, external_name),
     }
+}
+
+/// Looks up the analyzer with the given `id` in `document`, mutably.
+///
+/// # Errors
+///
+/// Returns a 404 ([`BackEndErrorResponse::analyzer_not_found`]) if `id` doesn't resolve to an
+/// analyzer.
+pub fn analyzer_mut_or_404(
+    document: &mut OpmDocument,
+    id: Uuid,
+) -> Result<&mut AnalyzerInfo, BackEndErrorResponse> {
+    document
+        .analyzer_mut(id)
+        .ok_or_else(BackEndErrorResponse::analyzer_not_found)
 }
 
 /// Removes every node in `node_ids` from `source_group_id` **without** cascading to reference nodes.

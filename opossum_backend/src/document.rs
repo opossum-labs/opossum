@@ -2,7 +2,7 @@
 use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
-    helper_functions::parent_group_id_or_self,
+    helper_functions::{analyzer_mut_or_404, parent_group_id_or_self},
     sse_logger::SENDER,
     undo::{
         Command, PatchGlobalConf, PatchNode, RepositionAnalyzer, SetViewport,
@@ -401,11 +401,7 @@ fn apply_one_position_update(
         })
         .apply(document)
     } else {
-        let old_pos = document
-            .analyzer_mut(update.uuid)
-            .ok_or_else(|| {
-                BackEndErrorResponse::new(404, "Opossum", "UUID not found in analyzers")
-            })?
+        let old_pos = analyzer_mut_or_404(document, update.uuid)?
             .gui_position()
             .map_or((0., 0.), |p| (p.x, p.y));
         Command::RepositionAnalyzer(RepositionAnalyzer {

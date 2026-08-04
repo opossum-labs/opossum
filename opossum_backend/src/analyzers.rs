@@ -18,7 +18,7 @@ use uuid::Uuid;
 use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
-    helper_functions::{Ron, ron_or_json_response},
+    helper_functions::{Ron, analyzer_mut_or_404, ron_or_json_response},
     undo::{Command, PatchAnalyzer, RepositionAnalyzer},
 };
 
@@ -97,7 +97,7 @@ fn get_node_analyzer_attr_from_state(
     let analyzer_info = document
         .analyzers()
         .get(&uuid)
-        .ok_or_else(|| BackEndErrorResponse::new(404, "Opossum", "UUID not found in analyzers"))?
+        .ok_or_else(BackEndErrorResponse::analyzer_not_found)?
         .clone();
     Ok(analyzer_info)
 }
@@ -218,9 +218,7 @@ pub async fn patch_analyzer(
     let new = body.into_inner();
     let mut document = data.document.lock();
 
-    let old = document
-        .analyzer_mut(uuid)
-        .ok_or_else(|| BackEndErrorResponse::new(404, "Opossum", "UUID not found in analyzers"))?
+    let old = analyzer_mut_or_404(&mut document, uuid)?
         .analyzer_type()
         .clone();
 
@@ -260,9 +258,7 @@ pub async fn put_analyzer_gui_position(
     let new_pos = gui_position.into_inner();
     let mut document = data.document.lock();
 
-    let old_pos = document
-        .analyzer_mut(uuid)
-        .ok_or_else(|| BackEndErrorResponse::new(404, "Opossum", "UUID not found in analyzers"))?
+    let old_pos = analyzer_mut_or_404(&mut document, uuid)?
         .gui_position()
         .map_or((0., 0.), |p| (p.x, p.y));
 

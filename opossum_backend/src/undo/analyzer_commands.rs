@@ -9,7 +9,7 @@ use opossum_core::{
 use uuid::Uuid;
 
 use super::Command;
-use crate::error::BackEndErrorResponse;
+use crate::{error::BackEndErrorResponse, helper_functions::analyzer_mut_or_404};
 
 /// Replaces an analyzer's config.
 #[derive(Clone)]
@@ -58,9 +58,7 @@ pub(super) fn apply_patch_analyzer(
     cmd: PatchAnalyzer,
 ) -> Result<Command, BackEndErrorResponse> {
     let PatchAnalyzer { id, old, new } = cmd;
-    let analyzer_info = document
-        .analyzer_mut(id)
-        .ok_or_else(|| BackEndErrorResponse::new(404, "Opossum", "UUID not found in analyzers"))?;
+    let analyzer_info = analyzer_mut_or_404(document, id)?;
     analyzer_info.set_analyzer_type(&new);
     Ok(Command::PatchAnalyzer(PatchAnalyzer {
         id,
@@ -84,9 +82,7 @@ pub(super) fn apply_reposition_analyzer(
         old_pos,
         new_pos,
     } = cmd;
-    let analyzer_info = document
-        .analyzer_mut(id)
-        .ok_or_else(|| BackEndErrorResponse::new(404, "Opossum", "UUID not found in analyzers"))?;
+    let analyzer_info = analyzer_mut_or_404(document, id)?;
     analyzer_info.set_gui_position(Some(Point2::new(new_pos.0, new_pos.1)));
     Ok(Command::RepositionAnalyzer(RepositionAnalyzer {
         id,
