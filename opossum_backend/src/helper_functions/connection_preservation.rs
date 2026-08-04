@@ -223,7 +223,8 @@ fn reroute_pre_existing_mapping(
 
 /// The pending reconnects captured by [`disconnect_moved_node_connections`], paired with the connections
 /// it tore down outright (each `(group_id, ConnectInfo)`) so the caller can report both to the GUI.
-pub(super) type DisconnectedMovedNodeConnections = (Vec<PendingReconnect>, Vec<(Uuid, ConnectInfo)>);
+pub(super) type DisconnectedMovedNodeConnections =
+    (Vec<PendingReconnect>, Vec<(Uuid, ConnectInfo)>);
 
 /// Disconnects one boundary connection (a direct edge to a sibling staying behind in `from_group_id`)
 /// and builds the [`PendingReconnect::Edge`] that re-establishes it once the moved node lands in

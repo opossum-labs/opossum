@@ -1,8 +1,5 @@
 use opossum_core::{
-    core_optics::OpticRef,
-    error::OpmResult,
-    nodes::NodeGroup,
-    opm_document::OpmDocument,
+    core_optics::OpticRef, error::OpmResult, nodes::NodeGroup, opm_document::OpmDocument,
     types::api_types::ConnectInfo,
 };
 use uuid::Uuid;
