@@ -1040,8 +1040,9 @@ async fn process_cut_nodes(
                     .update_node_positions(analyzer_positions, root_id);
             }
 
-            // Move side effects (only ever non-empty for a cross-group relocation): edges rerouted and any
-            // port-map entry removed with no replacement - reflect exactly what the backend reports.
+            // Cut side effects (severed links to nodes left out of the cut, plus any port-map entry
+            // removed with no replacement) - reflect exactly what the backend reports. Can be non-empty
+            // even without a relocation: a same-group cut still severs links to uncut siblings.
             for (group_id, edge) in new_connections {
                 ws_handler.edges.add_edge(edge, group_id);
             }
@@ -1063,7 +1064,10 @@ async fn process_cut_nodes(
                     .remove_nodes(vec![relocated.node.uuid()], relocated.from_group_id);
             }
 
-            if !relocated_nodes.is_empty() {
+            // A same-group cut can sever one of its own nodes' exposed port-map chains without any node
+            // relocating, so this refresh is gated on `port_map_groups_changed` alone, independent of
+            // whether a relocation happened below.
+            if !port_map_groups_changed.is_empty() {
                 for group_id in port_map_groups_changed
                     .iter()
                     .copied()
@@ -1074,7 +1078,9 @@ async fn process_cut_nodes(
                 for group_id in port_map_groups_changed {
                     refresh_group_ports(ws_handler, group_id).await;
                 }
+            }
 
+            if !relocated_nodes.is_empty() {
                 // Refill the target tab (adds the relocated nodes) and each source tab it left, if open.
                 process_fill_graph_of_group(
                     root_scenery_id.into(),

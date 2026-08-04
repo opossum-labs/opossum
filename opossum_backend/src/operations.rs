@@ -7,8 +7,9 @@ use crate::{
     helper_functions::{
         capture_node_connections, collect_group_connections, collect_node_refs_and_pos,
         create_new_group_node_info, is_reference_target, lowest_common_ancestor_group,
-        parent_group_id_or_self, relocate_nodes_dropping_links, relocate_nodes_in_document,
-        split_cascades_for_response, split_sort_connections,
+        parent_group_id_or_self, relocate_nodes_in_document,
+        relocate_nodes_severing_external_links, sever_external_links, split_cascades_for_response,
+        split_sort_connections,
     },
     undo::{Command, EdgeSnapshot, GroupConversion, MoveNodes, NodeSnapshot, ReroutedMapping},
 };
@@ -304,21 +305,23 @@ async fn post_paste_nodes(
     }))
 }
 
-/// Cut the copy cache into a group as a UUID-preserving *move* that **cascade-deletes** the cut nodes'
-/// links.
+/// Cut the copy cache into a group as a UUID-preserving *move* that severs the cut nodes' links to
+/// anything left behind, while keeping links between two nodes that were cut together.
 ///
 /// A cut relocates the *same* nodes rather than duplicating them (as [`post_paste_nodes`] does): each keeps
 /// its uuid, so a [`NodeReference`] pointing at it stays valid with no remapping (this is why the cut is a
-/// move and not a copy - it's the fix for the undo/redo-of-references bug the old duplicate cut had). But
-/// the node arrives at `target_group_id` **bare**: every connection and port mapping it carried is
-/// cascade-deleted ([`relocate_nodes_dropping_links`]), exactly as the old duplicate cut left the pasted
-/// copy after `delete_node`ing the original - rather than being rerouted across the group boundary the way
-/// a drag-and-drop move ([`relocate_nodes_in_document`]) preserves them. A cut node already in
-/// `target_group_id` is only repositioned (the common "cut and paste in the same scenery" case), keeping
-/// its links. Analyzers can only ever be repositioned at the scenery root. The whole gesture is one undo
-/// step ([`Command::Batch`]): the relocations' inverse [`Command::MoveNodes`] (move the nodes back) first,
-/// then the link restores ([`Command::AddEdge`] / [`Command::AddPortMap`], which reference the nodes back
-/// in their source group), then the reposition inverses - so undo/redo revert it in one go, and because no
+/// move and not a copy - it's the fix for the undo/redo-of-references bug the old duplicate cut had). Every
+/// connection and port mapping a cut node had to a node *not* in the cut - whether that node lives in the
+/// same group or a different one - is severed ([`sever_external_links`]/
+/// [`relocate_nodes_severing_external_links`]), exactly as the old duplicate cut left the pasted copy after
+/// `delete_node`ing the original; connections between two co-cut nodes are preserved instead, unlike a
+/// drag-and-drop move ([`relocate_nodes_in_document`]), which reroutes rather than severs boundary
+/// connections. A cut node already in `target_group_id` is only repositioned, not relocated (the common
+/// "cut and paste in the same scenery" case), but still has its external links severed the same way.
+/// Analyzers can only ever be repositioned at the scenery root. The whole gesture is one undo step
+/// ([`Command::Batch`]): the relocations' inverse [`Command::MoveNodes`] (move the nodes back) first, then
+/// the link restores ([`Command::AddEdge`] / [`Command::AddPortMap`], which reference the nodes back in
+/// their source group), then the reposition inverses - so undo/redo revert it in one go, and because no
 /// uuid ever changes, redo can never hit the reference-cascade that a duplicate cut did.
 ///
 /// # Errors
@@ -363,35 +366,58 @@ async fn post_cut_nodes(
     let scenery_root = document.scenery().node_attr().uuid();
 
     // Resolve each optical node's current parent group (skipping any that vanished since it was copied),
-    // then split into "already in the target group" (reposition only) and "elsewhere" (relocate, keyed by
-    // source group).
-    let mut relocations = HashMap::<Uuid, Vec<Uuid>>::new();
+    // keyed by that group regardless of whether it's the paste target - severing a cut node's links to
+    // anything left behind applies uniformly whether or not the node ends up relocating.
+    let mut groups_by_parent = HashMap::<Uuid, Vec<Uuid>>::new();
     for id in &optical_ids {
-        if let Ok((_, parent)) = document.scenery().node_recursive(*id)
-            && parent != target_group_id
-        {
-            relocations.entry(parent).or_default().push(*id);
+        if let Ok((_, parent)) = document.scenery().node_recursive(*id) {
+            groups_by_parent.entry(parent).or_default().push(*id);
         }
     }
 
-    // Relocate every out-of-group set into the target, preserving uuids. Aggregate the move side effects for
-    // the GUI, and collect one inverse `MoveNodes` per source group for the undo batch. Sorted source order
-    // keeps the pushed batch deterministic (`HashMap` iteration order isn't stable).
+    // Sever each source group's cut nodes from anything left behind, and relocate every out-of-group set
+    // into the target, preserving uuids. Aggregate the side effects for the GUI, and collect one inverse
+    // `MoveNodes` per relocated source group for the undo batch. Sorted source order keeps the pushed
+    // batch deterministic (`HashMap` iteration order isn't stable).
     let mut move_inverses = Vec::<Command>::new();
     let mut restore_commands = Vec::<Command>::new();
     let mut relocated_pairs = Vec::<(Uuid, Uuid)>::new();
     let mut removed_connections = Vec::<(Uuid, ConnectInfo)>::new();
     let mut port_map_groups_changed = Vec::<Uuid>::new();
     let mut removed_port_mappings = Vec::<(Uuid, Uuid, String, PortType)>::new();
-    let mut sources: Vec<Uuid> = relocations.keys().copied().collect();
+    let mut sources: Vec<Uuid> = groups_by_parent.keys().copied().collect();
     sources.sort();
     for source in sources {
-        let Some(ids) = relocations.remove(&source) else {
+        let Some(ids) = groups_by_parent.remove(&source) else {
             continue;
         };
-        // A cut relocates each node preserving its uuid but cascade-deletes the connections and port
-        // mappings it carried (rather than rerouting them, as a drag-and-drop move does).
-        let outcome = relocate_nodes_dropping_links(&mut document, source, target_group_id, &ids)?;
+        if source == target_group_id {
+            // Already in the target group: no relocation, just sever links to nodes outside the cut set
+            // (including any port-map chain the node itself exposes) - the common "cut and paste in the
+            // same scenery" case, minus the bug of keeping links to uncut siblings.
+            let outcome = sever_external_links(&mut document, source, &ids)?;
+            let (cascade_connections, cascade_port_mappings) =
+                split_cascades_for_response(&outcome.cascades);
+
+            restore_commands.extend(outcome.removed_connections.iter().map(|(group_id, c)| {
+                Command::AddEdge(EdgeSnapshot {
+                    group_id: *group_id,
+                    connect_info: c.clone(),
+                })
+            }));
+            restore_commands.extend(outcome.cascades.iter().map(Command::from));
+
+            removed_connections.extend(outcome.removed_connections);
+            removed_connections.extend(cascade_connections);
+            removed_port_mappings.extend(cascade_port_mappings);
+            port_map_groups_changed.extend(outcome.port_map_groups_changed);
+            continue;
+        }
+        // A cut relocates each node preserving its uuid, severing the connections and port mappings it
+        // carried to anything left behind (rather than rerouting them, as a drag-and-drop move does), but
+        // keeping links to other nodes cut in the same gesture.
+        let outcome =
+            relocate_nodes_severing_external_links(&mut document, source, target_group_id, &ids)?;
         let (cascade_connections, cascade_port_mappings) =
             split_cascades_for_response(&outcome.cascades);
 
@@ -501,7 +527,9 @@ async fn post_cut_nodes(
     Ok(Json(CutNodesResponse {
         relocated_nodes,
         repositioned,
-        // A cut cascade-deletes links rather than rerouting them, so nothing is newly connected.
+        // A cut severs boundary links rather than rerouting them, and any internal link it preserves
+        // already existed - either untouched (same-group) or recreated silently and picked up by the
+        // relocated tab's full refill (cross-group) - so nothing needs reporting as newly connected here.
         new_connections: Vec::new(),
         removed_connections,
         port_map_groups_changed,
@@ -1649,6 +1677,327 @@ mod test {
             "redo must remove the A -> G edge again"
         );
         assert!(!b_to_c_edge(&app_state), "redo must drop B -> C again");
+    }
+
+    /// Regression test for the same-group half of the cut/paste link-handling bug: cutting a node that
+    /// has a connection to a sibling *not* included in the cut must sever that link, even though the
+    /// node is pasted straight back into the same group it came from. Before the fix, a same-group cut
+    /// ran no connection-severing logic at all (the node was filtered out of the relocation map purely
+    /// because its parent already equals the paste target) and kept every link regardless of whether the
+    /// other endpoint was cut too.
+    #[actix_web::test]
+    async fn test_cut_node_severs_link_to_uncut_sibling_same_group() {
+        use opossum_core::nodes::Dummy;
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, node_a, node_b) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let scenery = document.scenery_mut();
+            let node_a = scenery.add_node(Dummy::default()).unwrap();
+            let node_b = scenery.add_node(Dummy::default()).unwrap();
+            scenery
+                .connect_nodes(node_a, "output_1", node_b, "input_1", meter!(0.1))
+                .unwrap();
+            (root_id, node_a, node_b)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_copy_nodes)
+                .service(post_cut_nodes)
+                .service(undo_document)
+                .service(redo_document),
+        )
+        .await;
+
+        let a_to_b_edge = |app_state: &Data<AppState>| {
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .graph()
+                .connections()
+                .iter()
+                .any(|c| c.src_id == node_a && c.target_id == node_b)
+        };
+        assert!(
+            a_to_b_edge(&app_state),
+            "sanity: A -> B must exist before the cut"
+        );
+
+        // Cut only A, paste it back into the root at a new position - B stays behind, uncut.
+        let mut nodes_to_copy = HashSet::new();
+        nodes_to_copy.insert(node_a);
+        let req = test::TestRequest::post()
+            .uri("/copy_nodes")
+            .set_json(&nodes_to_copy)
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        let req = test::TestRequest::post()
+            .uri("/cut_nodes")
+            .set_json(&(root_id, (500.0, 500.0)))
+            .to_request();
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
+
+        assert!(
+            !a_to_b_edge(&app_state),
+            "A -> B must be severed - B was not part of the cut, even though A lands back in the same group"
+        );
+
+        // Undo restores the severed link.
+        assert_eq!(
+            app.call(test::TestRequest::post().uri("/undo").to_request())
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK,
+            "undo of the same-group cut must succeed"
+        );
+        assert!(a_to_b_edge(&app_state), "undo must restore A -> B");
+
+        // Redo severs it again.
+        assert_eq!(
+            app.call(test::TestRequest::post().uri("/redo").to_request())
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK,
+            "redo of the same-group cut must succeed"
+        );
+        assert!(!a_to_b_edge(&app_state), "redo must sever A -> B again");
+    }
+
+    /// Regression test for the cross-group half of the cut/paste link-handling bug: cutting *two*
+    /// connected nodes together out of a group must keep the connection between them, even though both
+    /// leave their group. Before the fix, a cross-group cut cascade-deleted every connection touching
+    /// either moved node via a blanket "any edge with this endpoint" capture, with no concept of "the
+    /// other endpoint was cut too" - so the link between two co-cut nodes was dropped exactly like a
+    /// link to an uncut sibling.
+    #[actix_web::test]
+    async fn test_cut_two_connected_nodes_preserves_link_cross_group() {
+        use opossum_core::nodes::{Dummy, NodeGroup};
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, group_id, node_b, node_c) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let scenery = document.scenery_mut();
+
+            let mut group = NodeGroup::new("inner group");
+            let node_b = group.add_node(Dummy::default()).unwrap();
+            let node_c = group.add_node(Dummy::default()).unwrap();
+            group
+                .connect_nodes(node_b, "output_1", node_c, "input_1", meter!(0.1))
+                .unwrap();
+            let group_id = scenery.add_node(group).unwrap();
+
+            (root_id, group_id, node_b, node_c)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_copy_nodes)
+                .service(post_cut_nodes)
+                .service(undo_document)
+                .service(redo_document),
+        )
+        .await;
+
+        // Cut both B and C together, out of the group into the root.
+        let mut nodes_to_copy = HashSet::new();
+        nodes_to_copy.insert(node_b);
+        nodes_to_copy.insert(node_c);
+        let req = test::TestRequest::post()
+            .uri("/copy_nodes")
+            .set_json(&nodes_to_copy)
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        let req = test::TestRequest::post()
+            .uri("/cut_nodes")
+            .set_json(&(root_id, (500.0, 500.0)))
+            .to_request();
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
+
+        let b_to_c_edge_at_root = |app_state: &Data<AppState>| {
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .graph()
+                .connections()
+                .iter()
+                .any(|c| c.src_id == node_b && c.target_id == node_c)
+        };
+        assert!(
+            b_to_c_edge_at_root(&app_state),
+            "B -> C must survive the move - both nodes were cut together"
+        );
+
+        // Undo moves B and C back into the group, still connected.
+        assert_eq!(
+            app.call(test::TestRequest::post().uri("/undo").to_request())
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK,
+            "undo of the cross-group cut must succeed"
+        );
+        let b_to_c_edge_in_group = |app_state: &Data<AppState>| {
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .with_group_node(group_id, NodeGroup::connections)
+                .unwrap()
+                .iter()
+                .any(|c| c.src_id == node_b && c.target_id == node_c)
+        };
+        assert!(
+            b_to_c_edge_in_group(&app_state),
+            "undo must restore B -> C inside the group"
+        );
+
+        // Redo moves them back out, still connected.
+        assert_eq!(
+            app.call(test::TestRequest::post().uri("/redo").to_request())
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK,
+            "redo of the cross-group cut must succeed"
+        );
+        assert!(
+            b_to_c_edge_at_root(&app_state),
+            "redo must restore B -> C at the root"
+        );
+    }
+
+    /// Regression test for the same-group cut missing its own port-map cascade: a node whose port is
+    /// exposed via its own group's external port map (consumed by a connection one level up) must have
+    /// that mapping - and the connection consuming it - severed by a cut, even when the node is pasted
+    /// straight back into the same group. Before the fix, the same-group branch never called any
+    /// cascade-teardown logic at all.
+    #[actix_web::test]
+    async fn test_cut_node_severs_own_exposed_port_mapping_same_group() {
+        use opossum_core::{nodes::Dummy, prelude::PortType};
+
+        let app_state = Data::new(AppState::default());
+        let (group_id, node_a, node_b) = {
+            let mut document = app_state.document.lock();
+            let scenery = document.scenery_mut();
+
+            let node_a = scenery.add_node(Dummy::default()).unwrap();
+
+            let mut group = NodeGroup::new("inner group");
+            let node_b = group.add_node(Dummy::default()).unwrap();
+            group.map_input_port(node_b, "input_1", "g_in").unwrap();
+            let group_id = scenery.add_node(group).unwrap();
+
+            scenery
+                .connect_nodes(node_a, "output_1", group_id, "g_in", meter!(0.1))
+                .unwrap();
+
+            (group_id, node_a, node_b)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_copy_nodes)
+                .service(post_cut_nodes)
+                .service(undo_document)
+                .service(redo_document),
+        )
+        .await;
+
+        let g_in_maps_b = |app_state: &Data<AppState>| {
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .with_group_node(group_id, |g| {
+                    !g.graph()
+                        .port_map(&PortType::Input)
+                        .assigned_ports_for_node(node_b)
+                        .is_empty()
+                })
+                .unwrap()
+        };
+        let a_to_g_edge = |app_state: &Data<AppState>| {
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .graph()
+                .connections()
+                .iter()
+                .any(|c| c.src_id == node_a && c.target_id == group_id)
+        };
+        assert!(
+            g_in_maps_b(&app_state),
+            "sanity: g_in must map B before the cut"
+        );
+        assert!(
+            a_to_g_edge(&app_state),
+            "sanity: A -> G must exist before the cut"
+        );
+
+        // Cut B and paste it back into the same group G.
+        let mut nodes_to_copy = HashSet::new();
+        nodes_to_copy.insert(node_b);
+        let req = test::TestRequest::post()
+            .uri("/copy_nodes")
+            .set_json(&nodes_to_copy)
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        let req = test::TestRequest::post()
+            .uri("/cut_nodes")
+            .set_json(&(group_id, (50.0, 50.0)))
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::OK,
+            "cutting B back into its own group must not error"
+        );
+
+        assert!(
+            !g_in_maps_b(&app_state),
+            "G's g_in mapping for B must be cascade-deleted by the same-group cut"
+        );
+        assert!(
+            !a_to_g_edge(&app_state),
+            "the A -> G edge that consumed g_in must be cascade-deleted too"
+        );
+
+        // Undo restores the mapping and the edge it fed.
+        assert_eq!(
+            app.call(test::TestRequest::post().uri("/undo").to_request())
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK,
+            "undo of the same-group cascade cut must succeed"
+        );
+        assert!(
+            g_in_maps_b(&app_state),
+            "undo must restore G's g_in mapping"
+        );
+        assert!(a_to_g_edge(&app_state), "undo must restore the A -> G edge");
     }
 
     /// Regression test for the bug where pasting a *group* whose members are internally connected
