@@ -922,7 +922,7 @@ pub enum PendingReconnect {
 /// Builds a [`ConnectInfo`] from raw connection endpoints, enriching it with whether the target
 /// node is a reference node (see [`is_reference_target`]) - the flag the GUI uses to style
 /// reference edges differently.
-fn build_connect_info(
+pub fn build_connect_info(
     scenery: &NodeGroup,
     src_id: Uuid,
     src_port: &str,

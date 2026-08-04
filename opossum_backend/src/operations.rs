@@ -5,8 +5,8 @@ use crate::{
     document::apply_position_updates,
     error::BackEndErrorResponse,
     helper_functions::{
-        capture_node_connections, collect_group_connections, collect_node_refs_and_pos,
-        create_new_group_node_info, is_reference_target, lowest_common_ancestor_group,
+        build_connect_info, capture_node_connections, collect_group_connections,
+        collect_node_refs_and_pos, create_new_group_node_info, lowest_common_ancestor_group,
         parent_group_id_or_self, relocate_nodes_in_document,
         relocate_nodes_severing_external_links, sever_external_links, split_cascades_for_response,
         split_sort_connections,
@@ -844,14 +844,21 @@ fn set_copied_connections(
         let enriched: Vec<_> = conns
             .iter()
             .map(|c| {
-                let is_reference = is_reference_target(scenery, c.target_id);
-                (c, is_reference)
+                let info = build_connect_info(
+                    scenery,
+                    c.src_id,
+                    &c.src_port,
+                    c.target_id,
+                    &c.target_port,
+                    c.distance.value,
+                );
+                (c, info)
             })
             .collect();
 
         scenery
             .with_group_node_mut(group_id, |group| -> Result<(), BackEndErrorResponse> {
-                for (c, is_reference) in enriched {
+                for (c, info) in enriched {
                     group.connect_nodes(
                         c.src_id,
                         &c.src_port,
@@ -860,14 +867,7 @@ fn set_copied_connections(
                         c.distance,
                     )?;
 
-                    result.push(ConnectInfo::new(
-                        c.src_id,
-                        c.src_port.clone(),
-                        c.target_id,
-                        c.target_port.clone(),
-                        c.distance.value,
-                        is_reference,
-                    ));
+                    result.push(info);
                 }
                 Ok(())
             })
