@@ -179,6 +179,21 @@ fn insert_copied_nodes(
     })
 }
 
+/// Splits `items` into its optical and analyzer members, preserving relative order within each.
+fn partition_cache(
+    items: impl IntoIterator<Item = NodeCacheItem>,
+) -> (Vec<OpticRef>, Vec<AnalyzerItemDto>) {
+    let mut optical = Vec::new();
+    let mut analyzer = Vec::new();
+    for item in items {
+        match item {
+            NodeCacheItem::Optical(o) => optical.push(o),
+            NodeCacheItem::Analyzer(a) => analyzer.push(a),
+        }
+    }
+    (optical, analyzer)
+}
+
 /// Paste copied nodes
 ///
 /// This function duplicates the nodes/analyzers currently in the copy cache into the target group,
@@ -208,17 +223,8 @@ async fn post_paste_nodes(
     drop(copied_nodes);
     let shift = Point2::new(node_pos.0 - min_pos.x, node_pos.1 - min_pos.y);
 
-    let mut copied_optical_nodes = Vec::<OpticRef>::new();
-    let mut copied_analyzer_nodes = Vec::<AnalyzerItemDto>::new();
-
-    for cache in data.node_copy_cache.lock().iter() {
-        match cache {
-            NodeCacheItem::Optical(optic_ref) => copied_optical_nodes.push(optic_ref.clone()),
-            NodeCacheItem::Analyzer(analyzer_dto) => {
-                copied_analyzer_nodes.push(analyzer_dto.clone());
-            }
-        }
-    }
+    let (copied_optical_nodes, copied_analyzer_nodes) =
+        partition_cache(data.node_copy_cache.lock().iter().cloned());
 
     let mut analyzers = Vec::new();
     if paste_in_scenery {
