@@ -11,7 +11,7 @@ use opossum_core::{
 };
 use uuid::Uuid;
 
-use super::Command;
+use super::{Command, refresh_changes};
 use crate::{
     error::BackEndErrorResponse,
     helper_functions::{
@@ -149,14 +149,11 @@ pub(super) fn apply_move_nodes(
 /// `GraphNeedsRefresh` for source, target, and every extra group a reroute touched (`affected_groups`),
 /// deduplicated.
 pub(super) fn describe_move_nodes(cmd: &MoveNodes) -> Vec<DocumentChange> {
-    let mut graph_ids = vec![cmd.request.source_group_id, cmd.request.target_group_id];
-    graph_ids.extend(cmd.affected_groups.iter().copied());
-    graph_ids.sort();
-    graph_ids.dedup();
-    graph_ids
-        .into_iter()
-        .map(|graph_id| DocumentChange::GraphNeedsRefresh { graph_id })
-        .collect()
+    refresh_changes(
+        [cmd.request.source_group_id, cmd.request.target_group_id]
+            .into_iter()
+            .chain(cmd.affected_groups.iter().copied()),
+    )
 }
 
 /// Removes `member_ids` from `parent_group_id`'s flat graph and inserts the previously captured `group`
@@ -306,15 +303,10 @@ pub(super) fn describe_group_structure_change(
     affected_groups: &[Uuid],
     dissolved_group: Option<Uuid>,
 ) -> Vec<DocumentChange> {
-    let mut graph_ids = vec![*parent_group_id];
-    graph_ids.extend(affected_groups.iter().copied());
-    graph_ids.sort();
-    graph_ids.dedup();
-    let mut changes: Vec<DocumentChange> = graph_ids
-        .into_iter()
-        .filter(|graph_id| dissolved_group != Some(*graph_id))
-        .map(|graph_id| DocumentChange::GraphNeedsRefresh { graph_id })
-        .collect();
+    let ids = std::iter::once(*parent_group_id)
+        .chain(affected_groups.iter().copied())
+        .filter(|graph_id| dissolved_group != Some(*graph_id));
+    let mut changes = refresh_changes(ids);
     if let Some(graph_id) = dissolved_group {
         changes.push(DocumentChange::GraphClosed { graph_id });
     }

@@ -450,6 +450,16 @@ fn dedup_against_full_refreshes(changes: Vec<DocumentChange>) -> Vec<DocumentCha
         .collect()
 }
 
+/// Builds a `GraphNeedsRefresh` for each id in `ids`, deduplicated.
+fn refresh_changes(ids: impl IntoIterator<Item = Uuid>) -> Vec<DocumentChange> {
+    let mut ids: Vec<Uuid> = ids.into_iter().collect();
+    ids.sort();
+    ids.dedup();
+    ids.into_iter()
+        .map(|graph_id| DocumentChange::GraphNeedsRefresh { graph_id })
+        .collect()
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

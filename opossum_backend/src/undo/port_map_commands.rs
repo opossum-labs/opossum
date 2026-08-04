@@ -6,7 +6,7 @@ use opossum_core::{
 };
 use uuid::Uuid;
 
-use super::{Command, EdgeSnapshot};
+use super::{Command, EdgeSnapshot, refresh_changes};
 use crate::{
     error::BackEndErrorResponse,
     helper_functions::{PortMapCascadeRemoval, RemovedPortMapLevel, map_port},
@@ -171,12 +171,5 @@ pub(super) fn apply_remove_port_map(
 /// parent's tab (where the group's own exposed-port list is rendered on its node box). Which tab to jump to
 /// is decided by the step's [`crate::undo::Command::jump_target`], not per-refresh.
 pub(super) fn describe(group_id: &Uuid, parent_group_id: &Uuid) -> Vec<DocumentChange> {
-    vec![
-        DocumentChange::GraphNeedsRefresh {
-            graph_id: *group_id,
-        },
-        DocumentChange::GraphNeedsRefresh {
-            graph_id: *parent_group_id,
-        },
-    ]
+    refresh_changes([*group_id, *parent_group_id])
 }
