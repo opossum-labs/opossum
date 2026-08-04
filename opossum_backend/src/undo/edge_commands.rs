@@ -1,10 +1,6 @@
-//! `apply`/`describe` bodies for the connection-editing [`Command`] variants: [`Command::AddEdge`],
+//! `apply` bodies for the connection-editing [`Command`] variants: [`Command::AddEdge`],
 //! [`Command::RemoveEdge`], [`Command::UpdateEdgeDistance`].
-use opossum_core::{
-    meter,
-    opm_document::OpmDocument,
-    types::api_types::{ConnectInfo, DocumentChange},
-};
+use opossum_core::{meter, opm_document::OpmDocument, types::api_types::ConnectInfo};
 use uuid::Uuid;
 
 use super::Command;
@@ -99,28 +95,4 @@ pub(super) fn apply_update_edge_distance(
         old: new,
         new: old,
     }))
-}
-
-/// Describes the effect of a [`Command::AddEdge`] in the GUI-facing [`DocumentChange`] shape.
-pub(super) fn describe_add_edge(cmd: &EdgeSnapshot) -> Vec<DocumentChange> {
-    vec![DocumentChange::EdgeAdded {
-        graph_id: cmd.group_id,
-        connect_info: cmd.connect_info.clone(),
-    }]
-}
-
-/// Describes the effect of a [`Command::RemoveEdge`] in the GUI-facing [`DocumentChange`] shape.
-pub(super) fn describe_remove_edge(cmd: &EdgeSnapshot) -> Vec<DocumentChange> {
-    vec![DocumentChange::EdgeRemoved {
-        graph_id: cmd.group_id,
-        connect_info: cmd.connect_info.clone(),
-    }]
-}
-
-/// Describes the effect of a [`Command::UpdateEdgeDistance`] in the GUI-facing [`DocumentChange`] shape.
-pub(super) fn describe_update_edge_distance(cmd: &UpdateEdgeDistance) -> Vec<DocumentChange> {
-    vec![DocumentChange::EdgeUpdated {
-        graph_id: cmd.group_id,
-        connect_info: cmd.new.clone(),
-    }]
 }

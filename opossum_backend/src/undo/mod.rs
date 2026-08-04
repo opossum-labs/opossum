@@ -278,9 +278,18 @@ impl Command {
                 parent_group_id,
                 ..
             }) => node_commands::describe_node_details_changed(*parent_group_id, *uuid),
-            Self::AddEdge(cmd) => edge_commands::describe_add_edge(cmd),
-            Self::RemoveEdge(cmd) => edge_commands::describe_remove_edge(cmd),
-            Self::UpdateEdgeDistance(cmd) => edge_commands::describe_update_edge_distance(cmd),
+            Self::AddEdge(cmd) => vec![DocumentChange::EdgeAdded {
+                graph_id: cmd.group_id,
+                connect_info: cmd.connect_info.clone(),
+            }],
+            Self::RemoveEdge(cmd) => vec![DocumentChange::EdgeRemoved {
+                graph_id: cmd.group_id,
+                connect_info: cmd.connect_info.clone(),
+            }],
+            Self::UpdateEdgeDistance(cmd) => vec![DocumentChange::EdgeUpdated {
+                graph_id: cmd.group_id,
+                connect_info: cmd.new.clone(),
+            }],
             Self::AddPortMap(AddPortMap {
                 group_id,
                 parent_group_id,
@@ -291,12 +300,19 @@ impl Command {
                 parent_group_id,
                 ..
             }) => port_map_commands::describe(group_id, parent_group_id),
-            Self::AddAnalyzer(cmd) => analyzer_commands::describe_add_analyzer(cmd),
-            Self::RemoveAnalyzer(cmd) => analyzer_commands::describe_remove_analyzer(&cmd.id),
+            Self::AddAnalyzer(cmd) => vec![DocumentChange::AnalyzerAdded {
+                analyzer: cmd.clone(),
+            }],
+            Self::RemoveAnalyzer(cmd) => vec![DocumentChange::AnalyzerRemoved { id: cmd.id }],
             Self::PatchAnalyzer(PatchAnalyzer { id, .. }) => {
-                analyzer_commands::describe_analyzer_changed(id)
+                vec![DocumentChange::AnalyzerChanged { id: *id }]
             }
-            Self::RepositionAnalyzer(cmd) => analyzer_commands::describe_reposition_analyzer(cmd),
+            // Reports the position `apply` will set (`new_pos`), so the GUI moves the analyzer on the
+            // canvas rather than only refreshing the details panel.
+            Self::RepositionAnalyzer(cmd) => vec![DocumentChange::AnalyzerMoved {
+                id: cmd.id,
+                gui_position: cmd.new_pos,
+            }],
             Self::MoveNodes(cmd) => group_commands::describe_move_nodes(cmd),
             Self::InsertGroup(GroupConversion {
                 parent_group_id,
@@ -325,7 +341,11 @@ impl Command {
                     group.uuid().ok(),
                 )
             }
-            Self::PatchGlobalConf(_) => global_conf_commands::describe_patch_global_conf(),
+            // The global config has no canvas element the GUI mirrors incrementally, so this reports
+            // no `DocumentChange` for now - the document is still correctly reverted by `apply`, and a
+            // future global-config editor can add a matching change variant when there's something to
+            // refresh.
+            Self::PatchGlobalConf(_) => Vec::new(),
             Self::SetViewport(cmd) => viewport_commands::describe_set_viewport(cmd),
             Self::Batch(commands) => {
                 let mut changes = Vec::new();

@@ -1,7 +1,5 @@
-//! `apply`/`describe` body for the document-level [`Command::PatchGlobalConf`] variant.
-use opossum_core::{
-    core_optics::SceneryResources, opm_document::OpmDocument, types::api_types::DocumentChange,
-};
+//! `apply` body for the document-level [`Command::PatchGlobalConf`] variant.
+use opossum_core::{core_optics::SceneryResources, opm_document::OpmDocument};
 
 use super::Command;
 
@@ -30,13 +28,4 @@ pub(super) fn apply_patch_global_conf(document: &mut OpmDocument, cmd: PatchGlob
     let PatchGlobalConf { old, new } = cmd;
     document.set_global_conf(new.clone());
     Command::PatchGlobalConf(PatchGlobalConf { old: new, new: old })
-}
-
-/// Describes the effect of a [`Command::PatchGlobalConf`] in the GUI-facing [`DocumentChange`] shape.
-///
-/// The global config has no canvas element the GUI mirrors incrementally, so this reports no
-/// `DocumentChange` for now - the document is still correctly reverted by `apply`, and a future
-/// global-config editor can add a matching change variant when there's something to refresh.
-pub(super) const fn describe_patch_global_conf() -> Vec<DocumentChange> {
-    Vec::new()
 }

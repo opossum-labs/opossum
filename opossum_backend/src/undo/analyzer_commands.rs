@@ -1,10 +1,8 @@
-//! `apply`/`describe` bodies for the analyzer-editing [`Command`] variants: [`Command::AddAnalyzer`],
+//! `apply` bodies for the analyzer-editing [`Command`] variants: [`Command::AddAnalyzer`],
 //! [`Command::RemoveAnalyzer`], [`Command::PatchAnalyzer`], [`Command::RepositionAnalyzer`].
 use nalgebra::Point2;
 use opossum_core::{
-    opm_document::OpmDocument,
-    prelude::AnalyzerType,
-    types::api_types::{AnalyzerItemDto, DocumentChange},
+    opm_document::OpmDocument, prelude::AnalyzerType, types::api_types::AnalyzerItemDto,
 };
 use uuid::Uuid;
 
@@ -89,32 +87,4 @@ pub(super) fn apply_reposition_analyzer(
         old_pos: new_pos,
         new_pos: old_pos,
     }))
-}
-
-/// Describes the effect of a [`Command::AddAnalyzer`] in the GUI-facing [`DocumentChange`] shape.
-pub(super) fn describe_add_analyzer(analyzer: &AnalyzerItemDto) -> Vec<DocumentChange> {
-    vec![DocumentChange::AnalyzerAdded {
-        analyzer: analyzer.clone(),
-    }]
-}
-
-/// Describes the effect of a [`Command::RemoveAnalyzer`] in the GUI-facing [`DocumentChange`] shape.
-pub(super) fn describe_remove_analyzer(id: &Uuid) -> Vec<DocumentChange> {
-    vec![DocumentChange::AnalyzerRemoved { id: *id }]
-}
-
-/// Describes the effect of a [`Command::PatchAnalyzer`] in the GUI-facing [`DocumentChange`] shape,
-/// as a details refresh for `id`.
-pub(super) fn describe_analyzer_changed(id: &Uuid) -> Vec<DocumentChange> {
-    vec![DocumentChange::AnalyzerChanged { id: *id }]
-}
-
-/// Describes the effect of a [`Command::RepositionAnalyzer`] in the GUI-facing [`DocumentChange`]
-/// shape. Reports the position `apply` will set (`new_pos`), so the GUI moves the analyzer on the
-/// canvas rather than only refreshing the details panel.
-pub(super) fn describe_reposition_analyzer(cmd: &RepositionAnalyzer) -> Vec<DocumentChange> {
-    vec![DocumentChange::AnalyzerMoved {
-        id: cmd.id,
-        gui_position: cmd.new_pos,
-    }]
 }
