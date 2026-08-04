@@ -6,7 +6,7 @@ use actix_web::{
 };
 use nalgebra::Point2;
 use opossum_core::{
-    core_optics::node_attr::HasNodeAttr,
+    core_optics::{OpticRef, node_attr::HasNodeAttr},
     error::OpossumError,
     light::lightdata::{energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder},
     nodes::{NodeReference, create_node_ref},
@@ -23,9 +23,9 @@ use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
     helper_functions::{
-        apply_and_push_undo, capture_node_connections, disconnect_exposed_port_cascades_for_node,
-        parent_group_id_or_self, resolve_reference_chain, ron_or_json_response,
-        split_cascades_for_response,
+        PortMapCascadeRemoval, apply_and_push_undo, capture_node_connections,
+        disconnect_exposed_port_cascades_for_node, parent_group_id_or_self,
+        resolve_reference_chain, ron_or_json_response, split_cascades_for_response,
     },
     undo::{
         CascadedNode, Command, NodeSnapshot, PatchAnalyzer, PatchNode, capture_old_node_request,
@@ -202,6 +202,58 @@ async fn get_node(
     ron_or_json_response(&req, &node_info)
 }
 
+/// Propagates a name change on `uuid` to every reference node pointing at it, returning one
+/// `Command::PatchNode` per reference. References store their own name copy (`ref (name)`, see
+/// [`NodeReference`]), so without this the model (and saved `.opm`) would keep stale reference names
+/// after a rename. Returns an empty `Vec` if `new` doesn't set a name, or `uuid` is the scenery root
+/// (which has no references).
+///
+/// # Errors
+///
+/// Returns an error if resolving the scenery root, the set of referring nodes, or any individual
+/// reference node's old value/parent group fails.
+fn propagate_rename_to_references(
+    document: &OpmDocument,
+    uuid: Uuid,
+    is_root: bool,
+    new: &UpdateNodeRequest,
+) -> Result<Vec<Command>, BackEndErrorResponse> {
+    let mut commands = Vec::new();
+    let Some(name) = &new.name else {
+        return Ok(commands);
+    };
+    if is_root {
+        return Ok(commands);
+    }
+    let ref_name = format!("ref ({name})");
+    let root_uuid = document.scenery().node_attr().uuid();
+    let referring = document
+        .scenery()
+        .graph()
+        .find_all_nodes_referring_to_uuid(uuid, root_uuid)?;
+    for ref_id in referring.values().flatten() {
+        // `find_all_nodes_referring_to_uuid` reports the queried node as its own referrer - skip it.
+        if *ref_id == uuid {
+            continue;
+        }
+        let ref_new = UpdateNodeRequest {
+            name: Some(ref_name.clone()),
+            ..Default::default()
+        };
+        let ref_old = document.scenery().with_node_attr(*ref_id, |node_attr| {
+            capture_old_node_request(node_attr, &ref_new)
+        })?;
+        let ref_parent = parent_group_id_or_self(document.scenery(), *ref_id)?;
+        commands.push(Command::PatchNode(PatchNode {
+            uuid: *ref_id,
+            parent_group_id: ref_parent,
+            old: ref_old,
+            new: ref_new,
+        }));
+    }
+    Ok(commands)
+}
+
 /// Update optical node properties
 ///
 /// Modifies the standard properties (name, inversion, isometries, GUI position) of an optical node
@@ -243,42 +295,11 @@ async fn patch_node(
         old,
         new: new.clone(),
     })];
-
-    // A rename propagates to every reference node pointing at `uuid` - they store their own name copy
-    // (`ref (name)`, see `NodeReference`), so without this the model (and saved `.opm`) keeps stale
-    // reference names. Capturing them as extra `PatchNode`s in the same batch makes the whole rename a
+    // Capturing reference renames as extra `PatchNode`s in the same batch makes the whole rename a
     // single undo step (previously the GUI fanned out one PATCH per reference = one undo step each).
-    // Skipped for the root, which has no references.
-    if let Some(name) = &new.name
-        && !is_root
-    {
-        let ref_name = format!("ref ({name})");
-        let root_uuid = document.scenery().node_attr().uuid();
-        let referring = document
-            .scenery()
-            .graph()
-            .find_all_nodes_referring_to_uuid(uuid, root_uuid)?;
-        for ref_id in referring.values().flatten() {
-            // `find_all_nodes_referring_to_uuid` reports the queried node as its own referrer - skip it.
-            if *ref_id == uuid {
-                continue;
-            }
-            let ref_new = UpdateNodeRequest {
-                name: Some(ref_name.clone()),
-                ..Default::default()
-            };
-            let ref_old = document.scenery().with_node_attr(*ref_id, |node_attr| {
-                capture_old_node_request(node_attr, &ref_new)
-            })?;
-            let ref_parent = parent_group_id_or_self(document.scenery(), *ref_id)?;
-            commands.push(Command::PatchNode(PatchNode {
-                uuid: *ref_id,
-                parent_group_id: ref_parent,
-                old: ref_old,
-                new: ref_new,
-            }));
-        }
-    }
+    commands.extend(propagate_rename_to_references(
+        &document, uuid, is_root, &new,
+    )?);
 
     // A single command stays a single command (no needless Batch wrapper); a rename with references
     // becomes one Batch = one undo step. `commands` always has at least the node's own PatchNode, so
@@ -402,55 +423,67 @@ fn same_edge(a: &ConnectInfo, b: &ConnectInfo) -> bool {
         && a.target_port() == b.target_port()
 }
 
-/// Deletes `uuid` from `document` and returns `(inverse, response)`: the commands that undo the
-/// deletion (in application order - `AddNode` first, so the node exists before its ports are
-/// re-mapped or its analyzer mappings restored) and the [`DeleteNodeResponse`] describing what was
-/// torn down. Does not push anything onto the undo stack - the caller decides whether this is its own
-/// undo step ([`delete_node`]) or part of a batch ([`delete_nodes`]).
+/// [`capture_cascade`]'s result: `uuid`'s own live `OpticRef` handle and parent group, plus every
+/// reference node cascading with it, each as its own `(parent_group_id, OpticRef)` pair.
+struct CapturedCascade {
+    target_ref: OpticRef,
+    parent_group_id: Uuid,
+    referring_cascade: Vec<(Uuid, OpticRef)>,
+}
+
+/// Resolves `uuid`'s live `OpticRef` handle and parent group, plus every reference node that points at
+/// it - since deleting `uuid` cascades those away too (see `NodeGroup::delete_node`), they must be
+/// captured up front (each as its own `(parent_group_id, OpticRef)` pair) so undo can restore the whole
+/// cascade exactly as it was.
 ///
 /// # Errors
 ///
-/// Returns an error if `uuid` doesn't resolve to a node, or a cascade/removal step fails.
-fn delete_node_capturing(
-    document: &mut OpmDocument,
+/// Returns an error if `uuid` doesn't resolve to a node.
+fn capture_cascade(
+    document: &OpmDocument,
     uuid: Uuid,
-) -> Result<(Vec<Command>, DeleteNodeResponse), BackEndErrorResponse> {
-    // Capture the target node and, since deleting it cascades to any reference nodes pointing at it
-    // (see `NodeGroup::delete_node`), every one of those too - each as a live `OpticRef` handle plus
-    // its own parent group, so undo can restore the whole cascade exactly as it was.
-    let (target_ref, parent_group_id, referring_cascade) = {
-        let scenery = document.scenery();
-        let (target_ref, parent_group_id) = scenery.node_recursive(uuid)?;
-        let referring = scenery
-            .graph()
-            .find_all_nodes_referring_to_uuid(uuid, scenery.node_attr().uuid())?;
-        let mut referring_cascade = Vec::new();
-        for ref_ids in referring.values() {
-            for ref_id in ref_ids {
-                // `find_all_nodes_referring_to_uuid` reports the queried node itself as one of its own
-                // "referrers" - skip that self-match (same as the cut path in `operations.rs`), or the
-                // target node ends up in `cascaded` too and undo re-adds it twice (a duplicate uuid in
-                // the scenery, which crashes the analyzer editor's keyed source-port list).
-                if *ref_id == uuid {
-                    continue;
-                }
-                if let Ok((r, p)) = scenery.node_recursive(*ref_id) {
-                    referring_cascade.push((p, r));
-                }
+) -> Result<CapturedCascade, BackEndErrorResponse> {
+    let scenery = document.scenery();
+    let (target_ref, parent_group_id) = scenery.node_recursive(uuid)?;
+    let referring = scenery
+        .graph()
+        .find_all_nodes_referring_to_uuid(uuid, scenery.node_attr().uuid())?;
+    let mut referring_cascade = Vec::new();
+    for ref_ids in referring.values() {
+        for ref_id in ref_ids {
+            // `find_all_nodes_referring_to_uuid` reports the queried node itself as one of its own
+            // "referrers" - skip that self-match (same as the cut path in `operations.rs`), or the
+            // target node ends up in `cascaded` too and undo re-adds it twice (a duplicate uuid in
+            // the scenery, which crashes the analyzer editor's keyed source-port list).
+            if *ref_id == uuid {
+                continue;
+            }
+            if let Ok((r, p)) = scenery.node_recursive(*ref_id) {
+                referring_cascade.push((p, r));
             }
         }
-        (target_ref, parent_group_id, referring_cascade)
-    };
+    }
+    Ok(CapturedCascade {
+        target_ref,
+        parent_group_id,
+        referring_cascade,
+    })
+}
 
-    // Captured before deletion, since `delete_node` silently drops the node's incident edges in its
-    // parent graph - without this, undo would restore the node but leave it disconnected (bug 4).
+/// Captures `uuid`'s own connections in `parent_group_id`, plus each cascaded reference node's own
+/// connections in its own parent group - both captured before any deletion, since `delete_node`
+/// silently drops a node's incident edges as it's removed (bug 4). A cascaded member's connections are
+/// de-duplicated against the target's and each other's, so an edge shared by two co-deleted nodes in the
+/// same group isn't restored twice on undo (see `apply_add_node`).
+fn capture_cascade_connections(
+    document: &OpmDocument,
+    parent_group_id: Uuid,
+    uuid: Uuid,
+    referring_cascade: Vec<(Uuid, OpticRef)>,
+) -> (Vec<ConnectInfo>, Vec<CascadedNode>) {
     let connections =
         capture_node_connections(document.scenery(), parent_group_id, uuid).unwrap_or_default();
 
-    // The same is true for every cascaded reference node: deleting the target cascades it away and drops
-    // its own incident edges too. Capture each one's connections in its own parent group before any
-    // deletion, de-duplicated against the target's edges and each other so an edge shared by two
-    // co-deleted nodes in the same group isn't restored twice on undo (see `apply_add_node`).
     let mut seen_edges: Vec<ConnectInfo> = connections.clone();
     let mut cascaded: Vec<CascadedNode> = Vec::with_capacity(referring_cascade.len());
     for (member_parent, member_ref) in referring_cascade {
@@ -469,11 +502,27 @@ fn delete_node_capturing(
             connections: deduped,
         });
     }
+    (connections, cascaded)
+}
 
+/// Tears down `uuid`'s and every cascaded member's exposed-port cascades (any chain of port mappings
+/// that exposed one of their ports further out), then deletes `uuid` itself (cascading to its reference
+/// nodes, per `NodeGroup::delete_node`). Returns the removed port cascades (for the undo inverse and
+/// response) and the uuids `delete_node` actually removed.
+///
+/// # Errors
+///
+/// Returns an error if a port-cascade teardown step fails, or `delete_node` itself fails.
+fn teardown_port_cascades_and_delete(
+    document: &mut OpmDocument,
+    parent_group_id: Uuid,
+    uuid: Uuid,
+    cascaded: &[CascadedNode],
+) -> Result<(Vec<PortMapCascadeRemoval>, Vec<Uuid>), BackEndErrorResponse> {
     let scenery = document.scenery_mut();
     let mut removed_port_cascades =
         disconnect_exposed_port_cascades_for_node(scenery, parent_group_id, uuid)?;
-    for member in &cascaded {
+    for member in cascaded {
         if let Ok(member_uuid) = member.node.uuid() {
             removed_port_cascades.extend(disconnect_exposed_port_cascades_for_node(
                 scenery,
@@ -483,23 +532,34 @@ fn delete_node_capturing(
         }
     }
     let deleted_nodes = scenery.delete_node(uuid)?;
+    Ok((removed_port_cascades, deleted_nodes))
+}
 
-    // Deleting a source-port node strips its mapping from every analyzer - capture the inverse commands
-    // that restore those mappings, so undo isn't a silent data loss (see the helper).
+/// Assembles `delete_node_capturing`'s return value: the undo inverse (`AddNode` first, so the node
+/// exists before its ports are re-mapped, then one restore command per removed port cascade, then the
+/// analyzer-mapping restores) and the [`DeleteNodeResponse`] describing what was torn down. Also prunes
+/// every deleted node's source-port mapping from each analyzer (folding the restore into the same
+/// inverse, so undo isn't a silent data loss), and narrows `cascaded` down to only the reference nodes
+/// `delete_node` actually removed, in case its cascade rules ever diverge from what [`capture_cascade`]
+/// predicted.
+fn build_delete_inverse(
+    document: &mut OpmDocument,
+    parent_group_id: Uuid,
+    target_ref: OpticRef,
+    connections: Vec<ConnectInfo>,
+    cascaded: Vec<CascadedNode>,
+    deleted_nodes: Vec<Uuid>,
+    removed_port_cascades: &[PortMapCascadeRemoval],
+) -> (Vec<Command>, DeleteNodeResponse) {
     let analyzer_inverses = prune_analyzer_source_mappings(document, &deleted_nodes);
 
-    // Only claim cascaded nodes that `delete_node` actually removed, in case its cascade rules ever
-    // diverge from what `find_all_nodes_referring_to_uuid` predicted.
     let cascaded: Vec<CascadedNode> = cascaded
         .into_iter()
         .filter(|c| c.node.uuid().is_ok_and(|id| deleted_nodes.contains(&id)))
         .collect();
     let (disconnected_connections, removed_port_mappings) =
-        split_cascades_for_response(&removed_port_cascades);
+        split_cascades_for_response(removed_port_cascades);
 
-    // AddNode first (the node must exist before its ports can be re-mapped), then one restore command
-    // per cascade (each an inner batch: AddPortMap per level innermost-first, then the AddEdge that
-    // reconnects the terminal external connection), then the analyzer-mapping restores.
     let mut inverse = vec![Command::AddNode(NodeSnapshot {
         parent_group_id,
         node: target_ref,
@@ -509,7 +569,7 @@ fn delete_node_capturing(
     inverse.extend(removed_port_cascades.iter().map(Command::from));
     inverse.extend(analyzer_inverses);
 
-    Ok((
+    (
         inverse,
         DeleteNodeResponse {
             deleted_nodes,
@@ -519,6 +579,42 @@ fn delete_node_capturing(
             // batch `delete_nodes` endpoint directly, so a single node's response never carries any.
             deleted_analyzers: Vec::new(),
         },
+    )
+}
+
+/// Deletes `uuid` from `document` and returns `(inverse, response)`: the commands that undo the
+/// deletion (in application order - `AddNode` first, so the node exists before its ports are
+/// re-mapped or its analyzer mappings restored) and the [`DeleteNodeResponse`] describing what was
+/// torn down. Does not push anything onto the undo stack - the caller decides whether this is its own
+/// undo step ([`delete_node`]) or part of a batch ([`delete_nodes`]).
+///
+/// # Errors
+///
+/// Returns an error if `uuid` doesn't resolve to a node, or a cascade/removal step fails.
+fn delete_node_capturing(
+    document: &mut OpmDocument,
+    uuid: Uuid,
+) -> Result<(Vec<Command>, DeleteNodeResponse), BackEndErrorResponse> {
+    let CapturedCascade {
+        target_ref,
+        parent_group_id,
+        referring_cascade,
+    } = capture_cascade(document, uuid)?;
+
+    let (connections, cascaded) =
+        capture_cascade_connections(document, parent_group_id, uuid, referring_cascade);
+
+    let (removed_port_cascades, deleted_nodes) =
+        teardown_port_cascades_and_delete(document, parent_group_id, uuid, &cascaded)?;
+
+    Ok(build_delete_inverse(
+        document,
+        parent_group_id,
+        target_ref,
+        connections,
+        cascaded,
+        deleted_nodes,
+        &removed_port_cascades,
     ))
 }
 
