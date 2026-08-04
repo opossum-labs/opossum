@@ -564,6 +564,126 @@ mod test {
         Ok(())
     }
     #[test]
+    fn test_skip_unknown_node_type_during_deserialization() -> OpmResult<()> {
+        // Raw RON model data with a valid dummy node, an unknown node type, and a second valid dummy node
+        let ron_data = r#"#![enable(unwrap_variant_newtypes)]
+(
+    opm_file_version: "0",
+    scenery: {
+        "node_type": "group",
+        "name": "test",
+        "uuid": "84d4007c-514e-44ca-8b63-bfa86bee265f",
+        "graph": (
+            nodes: [
+                {
+                    "node_type": "dummy",
+                    "name": "valid_dummy_1",
+                    "uuid": "26e56527-c7f9-4e9c-9cda-0e0fa96e39bd",
+                },
+                {
+                    "node_type": "unknown_future_node",
+                    "name": "invalid_node",
+                    "uuid": "c52398ba-1742-4d86-82e1-8e75874d91ba",
+                },
+                {
+                    "node_type": "dummy",
+                    "name": "valid_dummy_2",
+                    "uuid": "54e2d453-9632-4b9d-b9c7-48491526f198",
+                },
+            ],
+            edges: [],
+        ),
+    },
+    global: (
+        ambient_refr_index: Const(
+            refractive_index: 1.0,
+        ),
+    ),
+)"#;
+
+        // Setup testing logger to catch emitted warnings
+        testing_logger::setup();
+
+        // Parse document from string
+        let doc = OpmDocument::from_string(ron_data)?;
+
+        // Ensure the unknown node was skipped and only 2 valid nodes remain
+        assert_eq!(
+            doc.scenery().nodes().len(),
+            2,
+            "Document graph should contain exactly 2 valid nodes after skipping the unknown node"
+        );
+
+        // Verify the exact warning string logged by OpticRef::deserialize
+        check_logs(
+            log::Level::Warn,
+            vec![
+                "Unknown node type 'unknown_future_node'. Skipping node: Opossum Error:Other:cannot create node type <unknown_future_node>",
+            ],
+        );
+
+        Ok(())
+    }
+    #[test]
+    fn test_skip_invalid_edge_connection() -> OpmResult<()> {
+        // Raw RON model data with one valid node and an edge pointing to a non-existent target UUID
+        let ron_data = r#"#![enable(unwrap_variant_newtypes)]
+(
+    opm_file_version: "0",
+    scenery: {
+        "node_type": "group",
+        "name": "test",
+        "uuid": "0e0e825e-5f4c-4e0a-b6ce-6c25b608f4aa",
+        "graph": (
+            nodes: [
+                {
+                    "node_type": "dummy",
+                    "name": "dummy_1",
+                    "uuid": "ecb719a2-2e21-44d0-b0b9-1e4a813e964e",
+                },
+            ],
+            edges: [
+                (
+                    src_id: "ecb719a2-2e21-44d0-b0b9-1e4a813e964e",
+                    src_port: "output_1",
+                    target_id: "00000000-0000-0000-0000-000000000000",
+                    target_port: "input_1",
+                    distance: 0.0,
+                ),
+            ],
+        ),
+    },
+    global: (
+        ambient_refr_index: Const(
+            refractive_index: 1.0,
+        ),
+    ),
+)"#;
+
+        // Initialize testing logger to capture warnings during graph reconstruction
+        testing_logger::setup();
+
+        // Deserialization should succeed despite the broken connection
+        let doc = OpmDocument::from_string(ron_data)?;
+
+        // Verify that the valid node was loaded correctly
+        assert_eq!(
+            doc.scenery().nodes().len(),
+            1,
+            "The valid node should be present in the graph"
+        );
+
+        // Verify that the broken edge warning was recorded in the log with the exact error string
+        check_logs(
+            log::Level::Warn,
+            vec![
+                "Skipping invalid node connection from 'ecb719a2-2e21-44d0-b0b9-1e4a813e964e' (output_1) to '00000000-0000-0000-0000-000000000000' (input_1): OpticScenery:target node with given id does not exist",
+            ],
+        );
+
+        Ok(())
+    }
+    #[test]
     fn create_dot_file_test() -> OpmResult<()> {
         let document =
             OpmDocument::from_file(&Path::new("./files_for_testing/opm/opticscenery.opm"))?;

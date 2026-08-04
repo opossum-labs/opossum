@@ -1,5 +1,6 @@
 #![warn(missing_docs)]
 //! Module for storing references to optical nodes.
+use log::warn;
 use serde::{
     Deserialize, Serialize,
     de::{self},
@@ -120,7 +121,15 @@ impl<'de> Deserialize<'de> for OpticRef {
         let intermediate = OpticRefIntermediate::deserialize(deserializer)?;
 
         let node_type = intermediate.attributes.node_type();
-        let node_ref = create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
+        let node_ref = match create_node_ref(node_type) {
+            Ok(node) => node,
+            Err(e) => {
+                // Log warning when encountering an unknown node type
+                warn!("Unknown node type '{node_type}'. Skipping node: {e}");
+                return Err(de::Error::custom(e.to_string()));
+            }
+        };
+
         node_ref
             .optical_ref
             .lock_opm()
@@ -129,8 +138,6 @@ impl<'de> Deserialize<'de> for OpticRef {
             .map_err(|e| de::Error::custom(e.to_string()))?;
 
         // If the node is a group node, set its graph.
-        // The 'intermediate.graph' will always contain a valid OpticGraph
-        // (either deserialized from the source or a default one).
         if let Some(group_node) = node_ref
             .optical_ref
             .lock_opm()
