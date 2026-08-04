@@ -7,7 +7,7 @@ use crate::{
     helper_functions::{
         build_connect_info, capture_node_connections, collect_group_connections,
         collect_node_refs_and_pos, create_new_group_node_info, lowest_common_ancestor_group,
-        parent_group_id_or_self, relocate_nodes_in_document,
+        map_port, parent_group_id_or_self, relocate_nodes_in_document,
         relocate_nodes_severing_external_links, sever_external_links, split_cascades_for_response,
         split_sort_connections,
     },
@@ -622,43 +622,31 @@ fn reconfigure_ports(
     node_id_link: &HashMap<Uuid, Uuid>,
     grouped_node_infos: &mut HashMap<Uuid, Vec<NodeInfo>>,
 ) -> Result<(), BackEndErrorResponse> {
-    // output port maps
-    for (old_group_id, _, _) in grouped_node_refs {
-        let Some(output_port_map) = output_port_maps.get(old_group_id) else {
-            continue;
+    // output port maps, then input port maps
+    for port_type in [PortType::Output, PortType::Input] {
+        let port_maps = match port_type {
+            PortType::Output => output_port_maps,
+            PortType::Input => input_port_maps,
         };
-        for (external_port_name, (input_node, internal_port_name)) in output_port_map {
-            if let (Some(new_group_id), Some(new_mapped_node_id)) =
-                (node_id_link.get(old_group_id), node_id_link.get(input_node))
-            {
-                scenery.with_group_node_mut(*new_group_id, |new_group| {
-                    new_group.map_output_port(
-                        *new_mapped_node_id,
-                        internal_port_name,
-                        external_port_name,
-                    )?;
-                    Ok::<(), BackEndErrorResponse>(())
-                })??;
-            }
-        }
-    }
-    // input port maps
-    for (old_group_id, _, _) in grouped_node_refs {
-        let Some(input_port_map) = input_port_maps.get(old_group_id) else {
-            continue;
-        };
-        for (external_port_name, (input_node, internal_port_name)) in input_port_map {
-            if let (Some(new_group_id), Some(new_mapped_node_id)) =
-                (node_id_link.get(old_group_id), node_id_link.get(input_node))
-            {
-                scenery.with_group_node_mut(*new_group_id, |new_group| {
-                    new_group.map_input_port(
-                        *new_mapped_node_id,
-                        internal_port_name,
-                        external_port_name,
-                    )?;
-                    Ok::<(), BackEndErrorResponse>(())
-                })??;
+        for (old_group_id, _, _) in grouped_node_refs {
+            let Some(port_map) = port_maps.get(old_group_id) else {
+                continue;
+            };
+            for (external_port_name, (input_node, internal_port_name)) in port_map {
+                if let (Some(new_group_id), Some(new_mapped_node_id)) =
+                    (node_id_link.get(old_group_id), node_id_link.get(input_node))
+                {
+                    scenery.with_group_node_mut(*new_group_id, |new_group| {
+                        map_port(
+                            new_group,
+                            port_type,
+                            *new_mapped_node_id,
+                            internal_port_name,
+                            external_port_name,
+                        )?;
+                        Ok::<(), BackEndErrorResponse>(())
+                    })??;
+                }
             }
         }
     }
