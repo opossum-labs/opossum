@@ -86,6 +86,18 @@ pub enum Command {
 }
 
 impl Command {
+    /// Collapses a list of commands into a single undo/redo step: `None` if `commands` is empty, the
+    /// command itself if there's exactly one (no needless `Batch` wrapper), otherwise a
+    /// [`Command::Batch`].
+    #[must_use]
+    pub fn from_vec(mut commands: Vec<Self>) -> Option<Self> {
+        match commands.len() {
+            0 => None,
+            1 => commands.pop(),
+            _ => Some(Self::Batch(commands)),
+        }
+    }
+
     /// Applies this command to `document` and returns the command that undoes it.
     ///
     /// # Errors

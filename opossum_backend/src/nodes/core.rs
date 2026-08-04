@@ -159,14 +159,10 @@ async fn post_children(
         cascaded: Vec::new(),
         connections: Vec::new(),
     });
-    if analyzer_inverses.is_empty() {
-        data.push_undo(remove_node);
-    } else {
-        // One add = one undo step: removing the node and restoring every analyzer it touched.
-        let mut batch = vec![remove_node];
-        batch.extend(analyzer_inverses);
-        data.push_undo(Command::Batch(batch));
-    }
+    // One add = one undo step: removing the node and restoring every analyzer it touched.
+    let mut batch = vec![remove_node];
+    batch.extend(analyzer_inverses);
+    data.push_undo(Command::from_vec(batch).expect("batch always has at least remove_node"));
 
     let node = new_node_ref.optical_ref.lock_opm()?;
     let node_info = NodeInfo::from_analyzable(&*node, None);
@@ -285,12 +281,10 @@ async fn patch_node(
     }
 
     // A single command stays a single command (no needless Batch wrapper); a rename with references
-    // becomes one Batch = one undo step.
-    let command = if commands.len() == 1 {
-        commands.pop().unwrap()
-    } else {
-        Command::Batch(commands)
-    };
+    // becomes one Batch = one undo step. `commands` always has at least the node's own PatchNode, so
+    // this can never collapse to `None`.
+    let command =
+        Command::from_vec(commands).expect("commands always has at least the node's own PatchNode");
     let inverse = command.apply(&mut document)?;
     if !is_root {
         data.push_undo(inverse);
@@ -399,10 +393,8 @@ async fn delete_nodes(
 /// Pushes the inverse commands captured by [`delete_node_capturing`] as one undo entry: nothing if
 /// empty, the single command directly if there is exactly one, otherwise a [`Command::Batch`].
 fn push_delete_inverse(data: &AppState, inverse: Vec<Command>) {
-    match inverse.len() {
-        0 => {}
-        1 => data.push_undo(inverse.into_iter().next().unwrap()),
-        _ => data.push_undo(Command::Batch(inverse)),
+    if let Some(command) = Command::from_vec(inverse) {
+        data.push_undo(command);
     }
 }
 
