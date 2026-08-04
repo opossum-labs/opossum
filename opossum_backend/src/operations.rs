@@ -325,6 +325,222 @@ async fn post_paste_nodes(
     }))
 }
 
+/// Resolves each of `optical_ids`' current parent group in `document`, keyed by that group regardless
+/// of whether it's the cut's target group - severing a cut node's links to anything left behind applies
+/// uniformly whether or not the node ends up relocating. An id that's vanished since it was copied is
+/// silently skipped.
+fn group_cut_nodes_by_parent(
+    document: &OpmDocument,
+    optical_ids: &[Uuid],
+) -> HashMap<Uuid, Vec<Uuid>> {
+    let mut groups_by_parent = HashMap::<Uuid, Vec<Uuid>>::new();
+    for id in optical_ids {
+        if let Ok((_, parent)) = document.scenery().node_recursive(*id) {
+            groups_by_parent.entry(parent).or_default().push(*id);
+        }
+    }
+    groups_by_parent
+}
+
+/// Aggregated side effects of [`sever_or_relocate_sources`], across every source group a cut touched.
+struct SeverOrRelocateOutcome {
+    /// One inverse [`Command::MoveNodes`] per relocated (cross-group) source, moving those nodes back.
+    move_inverses: Vec<Command>,
+    /// [`Command::AddEdge`]/port-map-cascade inverses restoring every torn-down link.
+    restore_commands: Vec<Command>,
+    /// `(node_id, source_group_id)` for every node that was relocated (i.e. wasn't already in the
+    /// target group).
+    relocated_pairs: Vec<(Uuid, Uuid)>,
+    removed_connections: Vec<(Uuid, ConnectInfo)>,
+    port_map_groups_changed: Vec<Uuid>,
+    removed_port_mappings: Vec<(Uuid, Uuid, String, PortType)>,
+}
+
+/// Sorts `groups_by_parent`'s keys for determinism (`HashMap` iteration order isn't stable), then for
+/// each source group: if it's already `target_group_id`, severs its cut nodes' links to anything left
+/// behind in place ([`sever_external_links`]); otherwise relocates them into `target_group_id`,
+/// severing external links the same way ([`relocate_nodes_severing_external_links`]). Aggregates the
+/// GUI-facing side effects and one inverse `MoveNodes` per relocated source group.
+///
+/// # Errors
+///
+/// Returns an error if a sever/relocate step fails (e.g. an attempt to move a group into its own
+/// descendant, which leaves the destination unreachable once the group is detached from its source).
+fn sever_or_relocate_sources(
+    document: &mut OpmDocument,
+    target_group_id: Uuid,
+    mut groups_by_parent: HashMap<Uuid, Vec<Uuid>>,
+) -> Result<SeverOrRelocateOutcome, BackEndErrorResponse> {
+    let mut move_inverses = Vec::<Command>::new();
+    let mut restore_commands = Vec::<Command>::new();
+    let mut relocated_pairs = Vec::<(Uuid, Uuid)>::new();
+    let mut removed_connections = Vec::<(Uuid, ConnectInfo)>::new();
+    let mut port_map_groups_changed = Vec::<Uuid>::new();
+    let mut removed_port_mappings = Vec::<(Uuid, Uuid, String, PortType)>::new();
+    let mut sources: Vec<Uuid> = groups_by_parent.keys().copied().collect();
+    sources.sort();
+    for source in sources {
+        let Some(ids) = groups_by_parent.remove(&source) else {
+            continue;
+        };
+        if source == target_group_id {
+            // Already in the target group: no relocation, just sever links to nodes outside the cut set
+            // (including any port-map chain the node itself exposes) - the common "cut and paste in the
+            // same scenery" case, minus the bug of keeping links to uncut siblings.
+            let outcome = sever_external_links(document, source, &ids)?;
+            let (cascade_connections, cascade_port_mappings) =
+                split_cascades_for_response(&outcome.cascades);
+
+            restore_commands.extend(outcome.removed_connections.iter().map(|(group_id, c)| {
+                Command::AddEdge(EdgeSnapshot {
+                    group_id: *group_id,
+                    connect_info: c.clone(),
+                })
+            }));
+            restore_commands.extend(outcome.cascades.iter().map(Command::from));
+
+            removed_connections.extend(outcome.removed_connections);
+            removed_connections.extend(cascade_connections);
+            removed_port_mappings.extend(cascade_port_mappings);
+            port_map_groups_changed.extend(outcome.port_map_groups_changed);
+            continue;
+        }
+        // A cut relocates each node preserving its uuid, severing the connections and port mappings it
+        // carried to anything left behind (rather than rerouting them, as a drag-and-drop move does), but
+        // keeping links to other nodes cut in the same gesture.
+        let outcome =
+            relocate_nodes_severing_external_links(document, source, target_group_id, &ids)?;
+        let (cascade_connections, cascade_port_mappings) =
+            split_cascades_for_response(&outcome.cascades);
+
+        // Undo restores the torn-down links, but only once the nodes are back in `source` (see the undo
+        // batch assembly in `post_cut_nodes`): re-add every direct edge, then replay each port-map
+        // cascade (one innermost-first `AddPortMap` chain + terminal `AddEdge` per cascade).
+        restore_commands.extend(outcome.removed_connections.iter().map(|(group_id, c)| {
+            Command::AddEdge(EdgeSnapshot {
+                group_id: *group_id,
+                connect_info: c.clone(),
+            })
+        }));
+        restore_commands.extend(outcome.cascades.iter().map(Command::from));
+
+        removed_connections.extend(outcome.removed_connections);
+        removed_connections.extend(cascade_connections);
+        removed_port_mappings.extend(cascade_port_mappings);
+
+        let focus_group_id =
+            lowest_common_ancestor_group(document.scenery(), source, target_group_id)?;
+        let mut affected = outcome.port_map_groups_changed;
+        affected.push(target_group_id);
+        affected.sort();
+        affected.dedup();
+        port_map_groups_changed.extend(affected.iter().copied());
+        move_inverses.push(Command::MoveNodes(MoveNodes {
+            request: MoveNodesRequest {
+                source_group_id: target_group_id,
+                target_group_id: source,
+                nodes_to_move: ids.clone(),
+            },
+            affected_groups: affected,
+            focus_group_id,
+        }));
+        for id in ids {
+            relocated_pairs.push((id, source));
+        }
+    }
+    port_map_groups_changed.sort();
+    port_map_groups_changed.dedup();
+
+    Ok(SeverOrRelocateOutcome {
+        move_inverses,
+        restore_commands,
+        relocated_pairs,
+        removed_connections,
+        port_map_groups_changed,
+        removed_port_mappings,
+    })
+}
+
+/// Repositions every cut node (relocated or same-group) - and every cut analyzer, when cutting into the
+/// scenery root - to its shifted position. `PositionUpdate`s carry *absolute* positions, so `shift` is
+/// added to each node's current position (a relocation preserves `gui_position`, so it's still the
+/// original). Returns the reposition inverses (for the undo batch) and the subset of updates the GUI
+/// must apply itself - `relocated_nodes` already carries the new position for anything that also moved
+/// groups, via `relocated_set`.
+///
+/// # Errors
+///
+/// Returns an error if applying a position update fails.
+fn reposition_cut_nodes(
+    document: &mut OpmDocument,
+    target_group_id: Uuid,
+    scenery_root: Uuid,
+    optical_ids: &[Uuid],
+    analyzer_ids: &[Uuid],
+    shift: Point2<f64>,
+    relocated_set: &HashSet<Uuid>,
+) -> Result<(Vec<PositionUpdate>, Vec<Command>), BackEndErrorResponse> {
+    let mut position_updates = Vec::<PositionUpdate>::new();
+    for id in optical_ids {
+        if let Ok(maybe_pos) = document.scenery().with_node_attr(*id, |a| a.gui_position()) {
+            let (cx, cy) = maybe_pos.map_or((0.0, 0.0), |p| (p.x, p.y));
+            position_updates.push(PositionUpdate {
+                uuid: *id,
+                is_optical: true,
+                gui_position: (cx + shift.x, cy + shift.y),
+            });
+        }
+    }
+    if target_group_id == scenery_root {
+        for id in analyzer_ids {
+            if let Ok(info) = document.analyzer(*id) {
+                let (cx, cy) = info.gui_position().map_or((0.0, 0.0), |p| (p.x, p.y));
+                position_updates.push(PositionUpdate {
+                    uuid: *id,
+                    is_optical: false,
+                    gui_position: (cx + shift.x, cy + shift.y),
+                });
+            }
+        }
+    }
+    // The GUI applies relocated nodes' new positions via `relocated_nodes` (baked into their `NodeInfo`),
+    // so only the nodes/analyzers that stayed put need a standalone reposition entry in the response.
+    let repositioned: Vec<PositionUpdate> = position_updates
+        .iter()
+        .filter(|u| !relocated_set.contains(&u.uuid))
+        .cloned()
+        .collect();
+    let position_inverses = apply_position_updates(document, position_updates)?;
+    Ok((repositioned, position_inverses))
+}
+
+/// Captures each relocated node's final `NodeInfo` (post-reposition) for the target tab.
+///
+/// # Errors
+///
+/// Returns an error if locking a relocated node's optical ref fails.
+fn build_relocated_node_infos(
+    document: &OpmDocument,
+    target_group_id: Uuid,
+    relocated_pairs: Vec<(Uuid, Uuid)>,
+) -> Result<Vec<RelocatedNode>, BackEndErrorResponse> {
+    let mut relocated_nodes = Vec::<RelocatedNode>::new();
+    for (id, from_group_id) in relocated_pairs {
+        if let Ok((node_ref, _)) = document.scenery().node_recursive(id) {
+            let info = {
+                let node = node_ref.optical_ref.lock_opm()?;
+                NodeInfo::from_analyzable(&*node, None)
+            };
+            relocated_nodes.push(RelocatedNode {
+                from_group_id,
+                to_group_id: target_group_id,
+                node: info,
+            });
+        }
+    }
+    Ok(relocated_nodes)
+}
+
 /// Cut the copy cache into a group as a UUID-preserving *move* that severs the cut nodes' links to
 /// anything left behind, while keeping links between two nodes that were cut together.
 ///
@@ -385,151 +601,30 @@ async fn post_cut_nodes(
     let mut document = data.document.lock();
     let scenery_root = document.scenery().node_attr().uuid();
 
-    // Resolve each optical node's current parent group (skipping any that vanished since it was copied),
-    // keyed by that group regardless of whether it's the paste target - severing a cut node's links to
-    // anything left behind applies uniformly whether or not the node ends up relocating.
-    let mut groups_by_parent = HashMap::<Uuid, Vec<Uuid>>::new();
-    for id in &optical_ids {
-        if let Ok((_, parent)) = document.scenery().node_recursive(*id) {
-            groups_by_parent.entry(parent).or_default().push(*id);
-        }
-    }
+    let groups_by_parent = group_cut_nodes_by_parent(&document, &optical_ids);
 
-    // Sever each source group's cut nodes from anything left behind, and relocate every out-of-group set
-    // into the target, preserving uuids. Aggregate the side effects for the GUI, and collect one inverse
-    // `MoveNodes` per relocated source group for the undo batch. Sorted source order keeps the pushed
-    // batch deterministic (`HashMap` iteration order isn't stable).
-    let mut move_inverses = Vec::<Command>::new();
-    let mut restore_commands = Vec::<Command>::new();
-    let mut relocated_pairs = Vec::<(Uuid, Uuid)>::new();
-    let mut removed_connections = Vec::<(Uuid, ConnectInfo)>::new();
-    let mut port_map_groups_changed = Vec::<Uuid>::new();
-    let mut removed_port_mappings = Vec::<(Uuid, Uuid, String, PortType)>::new();
-    let mut sources: Vec<Uuid> = groups_by_parent.keys().copied().collect();
-    sources.sort();
-    for source in sources {
-        let Some(ids) = groups_by_parent.remove(&source) else {
-            continue;
-        };
-        if source == target_group_id {
-            // Already in the target group: no relocation, just sever links to nodes outside the cut set
-            // (including any port-map chain the node itself exposes) - the common "cut and paste in the
-            // same scenery" case, minus the bug of keeping links to uncut siblings.
-            let outcome = sever_external_links(&mut document, source, &ids)?;
-            let (cascade_connections, cascade_port_mappings) =
-                split_cascades_for_response(&outcome.cascades);
-
-            restore_commands.extend(outcome.removed_connections.iter().map(|(group_id, c)| {
-                Command::AddEdge(EdgeSnapshot {
-                    group_id: *group_id,
-                    connect_info: c.clone(),
-                })
-            }));
-            restore_commands.extend(outcome.cascades.iter().map(Command::from));
-
-            removed_connections.extend(outcome.removed_connections);
-            removed_connections.extend(cascade_connections);
-            removed_port_mappings.extend(cascade_port_mappings);
-            port_map_groups_changed.extend(outcome.port_map_groups_changed);
-            continue;
-        }
-        // A cut relocates each node preserving its uuid, severing the connections and port mappings it
-        // carried to anything left behind (rather than rerouting them, as a drag-and-drop move does), but
-        // keeping links to other nodes cut in the same gesture.
-        let outcome =
-            relocate_nodes_severing_external_links(&mut document, source, target_group_id, &ids)?;
-        let (cascade_connections, cascade_port_mappings) =
-            split_cascades_for_response(&outcome.cascades);
-
-        // Undo restores the torn-down links, but only once the nodes are back in `source` (see the undo
-        // batch assembly below): re-add every direct edge, then replay each port-map cascade (one
-        // innermost-first `AddPortMap` chain + terminal `AddEdge` per cascade).
-        restore_commands.extend(outcome.removed_connections.iter().map(|(group_id, c)| {
-            Command::AddEdge(EdgeSnapshot {
-                group_id: *group_id,
-                connect_info: c.clone(),
-            })
-        }));
-        restore_commands.extend(outcome.cascades.iter().map(Command::from));
-
-        removed_connections.extend(outcome.removed_connections);
-        removed_connections.extend(cascade_connections);
-        removed_port_mappings.extend(cascade_port_mappings);
-
-        let focus_group_id =
-            lowest_common_ancestor_group(document.scenery(), source, target_group_id)?;
-        let mut affected = outcome.port_map_groups_changed;
-        affected.push(target_group_id);
-        affected.sort();
-        affected.dedup();
-        port_map_groups_changed.extend(affected.iter().copied());
-        move_inverses.push(Command::MoveNodes(MoveNodes {
-            request: MoveNodesRequest {
-                source_group_id: target_group_id,
-                target_group_id: source,
-                nodes_to_move: ids.clone(),
-            },
-            affected_groups: affected,
-            focus_group_id,
-        }));
-        for id in ids {
-            relocated_pairs.push((id, source));
-        }
-    }
-    port_map_groups_changed.sort();
-    port_map_groups_changed.dedup();
+    let SeverOrRelocateOutcome {
+        move_inverses,
+        mut restore_commands,
+        relocated_pairs,
+        removed_connections,
+        port_map_groups_changed,
+        removed_port_mappings,
+    } = sever_or_relocate_sources(&mut document, target_group_id, groups_by_parent)?;
     let relocated_set: HashSet<Uuid> = relocated_pairs.iter().map(|(id, _)| *id).collect();
 
-    // Reposition every cut node (relocated or same-group) - and every cut analyzer when pasting into the
-    // root - to its shifted position. `PositionUpdate`s carry *absolute* positions, so add the shift to each
-    // node's current position (a relocation preserves `gui_position`, so it's still the original).
-    let mut position_updates = Vec::<PositionUpdate>::new();
-    for id in &optical_ids {
-        if let Ok(maybe_pos) = document.scenery().with_node_attr(*id, |a| a.gui_position()) {
-            let (cx, cy) = maybe_pos.map_or((0.0, 0.0), |p| (p.x, p.y));
-            position_updates.push(PositionUpdate {
-                uuid: *id,
-                is_optical: true,
-                gui_position: (cx + shift.x, cy + shift.y),
-            });
-        }
-    }
-    if target_group_id == scenery_root {
-        for id in &analyzer_ids {
-            if let Ok(info) = document.analyzer(*id) {
-                let (cx, cy) = info.gui_position().map_or((0.0, 0.0), |p| (p.x, p.y));
-                position_updates.push(PositionUpdate {
-                    uuid: *id,
-                    is_optical: false,
-                    gui_position: (cx + shift.x, cy + shift.y),
-                });
-            }
-        }
-    }
-    // The GUI applies relocated nodes' new positions via `relocated_nodes` (baked into their `NodeInfo`),
-    // so only the nodes/analyzers that stayed put need a standalone reposition entry in the response.
-    let repositioned: Vec<PositionUpdate> = position_updates
-        .iter()
-        .filter(|u| !relocated_set.contains(&u.uuid))
-        .cloned()
-        .collect();
-    let mut position_inverses = apply_position_updates(&mut document, position_updates)?;
+    let (repositioned, mut position_inverses) = reposition_cut_nodes(
+        &mut document,
+        target_group_id,
+        scenery_root,
+        &optical_ids,
+        &analyzer_ids,
+        shift,
+        &relocated_set,
+    )?;
 
     // Now that positions are final, capture each relocated node's `NodeInfo` for the target tab.
-    let mut relocated_nodes = Vec::<RelocatedNode>::new();
-    for (id, from_group_id) in relocated_pairs {
-        if let Ok((node_ref, _)) = document.scenery().node_recursive(id) {
-            let info = {
-                let node = node_ref.optical_ref.lock_opm()?;
-                NodeInfo::from_analyzable(&*node, None)
-            };
-            relocated_nodes.push(RelocatedNode {
-                from_group_id,
-                to_group_id: target_group_id,
-                node: info,
-            });
-        }
-    }
+    let relocated_nodes = build_relocated_node_infos(&document, target_group_id, relocated_pairs)?;
 
     // One undo step for the whole gesture, ordered so each step's prerequisites already exist when it
     // runs (`Command::Batch` applies in order): first the relocate-back moves (every cut node returns to
