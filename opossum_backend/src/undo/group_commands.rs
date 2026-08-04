@@ -15,7 +15,7 @@ use super::{Command, refresh_changes};
 use crate::{
     error::BackEndErrorResponse,
     helper_functions::{
-        connect_from_info, map_port, relocate_nodes_in_document, remove_relocated_nodes,
+        map_port, reconnect_all, relocate_nodes_in_document, remove_relocated_nodes,
     },
 };
 
@@ -183,11 +183,7 @@ pub(super) fn apply_insert_group(
     document
         .scenery_mut()
         .with_group_node_mut(parent_group_id, |g| g.add_node_ref(group.clone()))??;
-    for conn in &external_connections {
-        document
-            .scenery_mut()
-            .with_group_node_mut(parent_group_id, |g| connect_from_info(g, conn))??;
-    }
+    reconnect_all(document, parent_group_id, &external_connections)?;
     // Re-point `parent_group_id`'s own mapping at the group's own already-correct internal
     // mapping for the same port - the group's internal structure never changes across
     // detach/reattach cycles, so `group_internal_name` is still valid.
@@ -258,11 +254,7 @@ pub(super) fn apply_extract_group(
     }
     // `restore_connections` (not `external_connections`) - see the type's doc comment: `external_connections`
     // references the group's own uuid, which no longer exists once `delete_node` above has run.
-    for conn in &restore_connections {
-        document
-            .scenery_mut()
-            .with_group_node_mut(parent_group_id, |g| connect_from_info(g, conn))??;
-    }
+    reconnect_all(document, parent_group_id, &restore_connections)?;
     // Re-point `parent_group_id`'s own mapping directly at the member's own port - the old entry
     // pointing at the (now-deleted) group is already gone, stripped by this function's own
     // `delete_node(group_id)` call above.

@@ -16,7 +16,7 @@ use opossum_core::{
 use uuid::Uuid;
 
 use super::Command;
-use crate::{error::BackEndErrorResponse, helper_functions::connect_from_info};
+use crate::{error::BackEndErrorResponse, helper_functions::reconnect_all};
 
 /// A reference node that must be inserted/removed alongside the node it points at (via
 /// `NodeGroup::delete_node`'s cascade), carrying its own parent group and its own wiring.
@@ -114,17 +114,9 @@ pub(super) fn apply_add_node(
     // Every node (target + cascaded refs) exists now, so reconnect all their wiring: the target's own
     // connections in `parent_group_id`, then each cascaded reference node's own connections in its own
     // parent group (dropped by `delete_node` when it cascaded the ref away - see `CascadedNode`).
-    for conn in &connections {
-        document
-            .scenery_mut()
-            .with_group_node_mut(parent_group_id, |g| connect_from_info(g, conn))??;
-    }
+    reconnect_all(document, parent_group_id, &connections)?;
     for member in &cascaded {
-        for conn in &member.connections {
-            document
-                .scenery_mut()
-                .with_group_node_mut(member.parent_group_id, |g| connect_from_info(g, conn))??;
-        }
+        reconnect_all(document, member.parent_group_id, &member.connections)?;
     }
     Ok(Command::RemoveNode(NodeSnapshot {
         parent_group_id,

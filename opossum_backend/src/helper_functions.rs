@@ -1620,6 +1620,26 @@ pub fn connect_from_info(group: &mut NodeGroup, conn: &ConnectInfo) -> OpmResult
     )
 }
 
+/// Reconnects every [`ConnectInfo`] in `connections` inside `group_id`'s graph, via
+/// [`connect_from_info`].
+///
+/// # Errors
+///
+/// Returns an error if `group_id` doesn't resolve to a group, or a connection can't be re-created
+/// (e.g. a referenced node/port no longer exists).
+pub fn reconnect_all(
+    document: &mut OpmDocument,
+    group_id: Uuid,
+    connections: &[ConnectInfo],
+) -> Result<(), BackEndErrorResponse> {
+    for conn in connections {
+        document
+            .scenery_mut()
+            .with_group_node_mut(group_id, |g| connect_from_info(g, conn))??;
+    }
+    Ok(())
+}
+
 /// Create a [`NodeInfo`] representation for a newly created group node.
 ///
 /// # Arguments
