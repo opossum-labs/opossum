@@ -22,7 +22,7 @@ use opossum_core::{
     core_optics::{NodeAttrExt, OpticRef, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
     nodes::{ConnectionInfo, NodeGroup, NodeReference, create_node_ref},
-    opm_document::AnalyzerInfo,
+    opm_document::{AnalyzerInfo, OpmDocument},
     prelude::{OpticNode, PortMap, PortType, Proptype},
     types::api_types::{
         AnalyzerItemDto, ConnectInfo, ConvertToGroupRequest, ConvertToGroupResponse,
@@ -194,6 +194,71 @@ fn partition_cache(
     (optical, analyzer)
 }
 
+/// Builds the "undo the whole paste" batch for [`post_paste_nodes`]: one `RemoveNode` per *top-level*
+/// pasted node, one `RemoveAnalyzer` per pasted analyzer, plus a leading `RemoveEdge` for every mutual
+/// connection between two top-level pasted nodes.
+///
+/// Only the *top-level* pasted roots need their own `RemoveNode` - a group's own `OpticRef` already
+/// carries its entire internal subtree (nodes and internal edges) as one live object, so removing it via
+/// a single `RemoveNode` already correctly captures/restores everything inside it. Giving a nested
+/// descendant (an entry under any *other* key of `grouped_node_infos` - a freshly-created nested group's
+/// own uuid) its own separate `RemoveNode` too is not just redundant but harmful: `Command::Batch`
+/// applies its commands in `Vec` order, itself derived from this map's non-deterministic iteration
+/// order, so a nested entry can end up targeting a uuid its own ancestor's `RemoveNode` already cascaded
+/// away (surfacing as "node with given uuid does not exist" on undo), or mutate the group's live
+/// internal graph directly *before* the group's own command runs, silently severing an internal
+/// connection that nothing later restores (a nested `AddNode` always passes an empty `connections` list,
+/// so redo can't reconnect what this already tore down).
+///
+/// A freshly pasted node's only connections are to other nodes pasted in the same gesture
+/// (`insert_copied_nodes` only ever recreates connections between copied nodes) - so every connection
+/// touching a top-level pasted node is "mutual" in `capture_and_split_mutual_connections`'s sense.
+/// Restore each one once via a *leading* `RemoveEdge`, positioned before the `RemoveNode`s: on the first
+/// undo this disconnects the pair while both nodes still exist, and thanks to `Command::Batch` reversing
+/// its inverses, the resulting redo batch adds both nodes back before restoring the edge - never the
+/// other way around, which would try to reconnect to a node redo hasn't re-added yet.
+fn build_paste_undo_batch(
+    document: &OpmDocument,
+    paste_group_id: Uuid,
+    grouped_node_infos: &HashMap<Uuid, Vec<NodeInfo>>,
+    analyzers: &[AnalyzerItemDto],
+) -> Vec<Command> {
+    let mut removals = Vec::new();
+    if let Some(infos) = grouped_node_infos.get(&paste_group_id) {
+        let top_level_ids: HashSet<Uuid> = infos.iter().map(NodeInfo::uuid).collect();
+        let mut seen_mutual = HashSet::new();
+        for info in infos {
+            let (_own, mutual) = capture_and_split_mutual_connections(
+                document.scenery(),
+                paste_group_id,
+                info.uuid(),
+                &top_level_ids,
+                &mut seen_mutual,
+            );
+            for c in mutual {
+                removals.push(Command::RemoveEdge(EdgeSnapshot {
+                    group_id: paste_group_id,
+                    connect_info: c,
+                }));
+            }
+        }
+        for info in infos {
+            if let Ok((node_ref, _)) = document.scenery().node_recursive(info.uuid()) {
+                removals.push(Command::RemoveNode(NodeSnapshot {
+                    parent_group_id: paste_group_id,
+                    node: node_ref,
+                    cascaded: Vec::new(),
+                    connections: Vec::new(),
+                }));
+            }
+        }
+    }
+    for analyzer in analyzers {
+        removals.push(Command::RemoveAnalyzer(analyzer.clone()));
+    }
+    removals
+}
+
 /// Paste copied nodes
 ///
 /// This function duplicates the nodes/analyzers currently in the copy cache into the target group,
@@ -246,60 +311,9 @@ async fn post_paste_nodes(
     )?;
 
     // One paste = one undo step: removing every pasted node/analyzer undoes the whole paste at once.
-    let mut removals = Vec::new();
-    // Only the *top-level* pasted roots need their own `RemoveNode` - a group's own `OpticRef`
-    // already carries its entire internal subtree (nodes and internal edges) as one live object,
-    // so removing it via a single `RemoveNode` already correctly captures/restores everything
-    // inside it. Giving a nested descendant (an entry under any *other* key of
-    // `grouped_node_infos` - a freshly-created nested group's own uuid) its own separate
-    // `RemoveNode` too is not just redundant but harmful: `Command::Batch` applies its commands in
-    // `Vec` order, itself derived from this map's non-deterministic iteration order, so a nested
-    // entry can end up targeting a uuid its own ancestor's `RemoveNode` already cascaded away
-    // (surfacing as "node with given uuid does not exist" on undo), or mutate the group's live
-    // internal graph directly *before* the group's own command runs, silently severing an internal
-    // connection that nothing later restores (a nested `AddNode` always passes an empty
-    // `connections` list, so redo can't reconnect what this already tore down).
-    if let Some(infos) = grouped_node_infos.get(&paste_group_id) {
-        // A freshly pasted node's only connections are to other nodes pasted in the same gesture
-        // (`insert_copied_nodes` only ever recreates connections between copied nodes) - so every
-        // connection touching a top-level pasted node is "mutual" in `capture_and_split_mutual_
-        // connections`'s sense. Restore each one once via a *leading* `RemoveEdge`, positioned before
-        // the `RemoveNode`s below: on the first undo this disconnects the pair while both nodes still
-        // exist, and thanks to `Command::Batch` reversing its inverses, the resulting redo batch adds
-        // both nodes back before restoring the edge - never the other way around, which would try to
-        // reconnect to a node redo hasn't re-added yet.
-        let top_level_ids: HashSet<Uuid> = infos.iter().map(NodeInfo::uuid).collect();
-        let mut seen_mutual = HashSet::new();
-        for info in infos {
-            let (_own, mutual) = capture_and_split_mutual_connections(
-                document.scenery(),
-                paste_group_id,
-                info.uuid(),
-                &top_level_ids,
-                &mut seen_mutual,
-            );
-            for c in mutual {
-                removals.push(Command::RemoveEdge(EdgeSnapshot {
-                    group_id: paste_group_id,
-                    connect_info: c,
-                }));
-            }
-        }
-        for info in infos {
-            if let Ok((node_ref, _)) = document.scenery().node_recursive(info.uuid()) {
-                removals.push(Command::RemoveNode(NodeSnapshot {
-                    parent_group_id: paste_group_id,
-                    node: node_ref,
-                    cascaded: Vec::new(),
-                    connections: Vec::new(),
-                }));
-            }
-        }
-    }
-    for analyzer in &analyzers {
-        removals.push(Command::RemoveAnalyzer(analyzer.clone()));
-    }
-
+    // See `build_paste_undo_batch` for why only top-level pasted roots get their own `RemoveNode`.
+    let removals =
+        build_paste_undo_batch(&document, paste_group_id, &grouped_node_infos, &analyzers);
     if !removals.is_empty() {
         data.push_undo(Command::Batch(removals));
     }
