@@ -6,12 +6,36 @@ use crate::{
     properties::Proptype,
     utils::LockExt,
 };
+use log::warn;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+/// Custom deserialization helper to skip unknown/invalid nodes in a sequence gracefully.
+fn deserialize_nodes_lossy<'de, D>(deserializer: D) -> Result<Vec<OpticRef>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum NodeEntry {
+        Valid(OpticRef),
+        Unknown(serde::de::IgnoredAny),
+    }
+
+    let entries = Vec::<NodeEntry>::deserialize(deserializer)?;
+    let mut valid_nodes = Vec::with_capacity(entries.len());
+    for entry in entries {
+        if let NodeEntry::Valid(node) = entry {
+            valid_nodes.push(node);
+        }
+    }
+    Ok(valid_nodes)
+}
 
 // This is the simplified serializable version of an OpticGraph.
 #[derive(Serialize, Deserialize)]
 pub struct SerializableGraph {
+    #[serde(deserialize_with = "deserialize_nodes_lossy")]
     nodes: Vec<OpticRef>,
     edges: Vec<ConnectionInfo>,
     #[serde(default, skip_serializing_if = "PortMap::is_empty")]
@@ -46,13 +70,19 @@ impl TryFrom<SerializableGraph> for OpticGraph {
             assign_reference_to_ref_node(node_ref, &g, false)?;
         }
         for edge in &temp_graph.edges {
-            g.connect_nodes(
+            // Log a warning and skip connection if node UUIDs or ports are invalid
+            if let Err(e) = g.connect_nodes(
                 edge.src_id,
                 &edge.src_port,
                 edge.target_id,
                 &edge.target_port,
                 edge.distance,
-            )?;
+            ) {
+                warn!(
+                    "Skipping invalid node connection from '{}' ({}) to '{}' ({}): {e}",
+                    edge.src_id, edge.src_port, edge.target_id, edge.target_port
+                );
+            }
         }
         g.input_port_map = temp_graph.input_map;
         g.output_port_map = temp_graph.output_map;
