@@ -1,8 +1,8 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use dioxus::{document::eval, prelude::*};
 use dioxus_free_icons::{
-    Icon,
     icons::fa_solid_icons::{FaAngleRight, FaBars, FaWindowMaximize},
+    Icon,
 };
 use opossum_core::prelude::*;
 use std::path::PathBuf;
@@ -13,7 +13,7 @@ use crate::components::{
         file_path_display::FilePathDisplay,
         help::about::About,
     },
-    short_cuts::{SHORTCUTS, ShortCutAction},
+    short_cuts::{ShortCutAction, SHORTCUTS},
 };
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -101,12 +101,21 @@ pub fn MenuBar(
                                 short_cut_action: ShortCutAction::Settings,
                                 on_click: move |_| on_menu_action.call(AppCommand::Settings),
                             }
-                            li {
-                                hr { class: "dropdown-divider" }
-                            }
-                            MenuListItemShortCut {
-                                short_cut_action: ShortCutAction::Quit,
-                                on_click: move |_| on_menu_action.call(AppCommand::Quit),
+                            // Render divider and Quit item only for non-wasm32 targets
+                            {
+                                if cfg!(not(target_arch = "wasm32")) {
+                                    rsx! {
+                                        li {
+                                            hr { class: "dropdown-divider" }
+                                        }
+                                        MenuListItemShortCut {
+                                            short_cut_action: ShortCutAction::Quit,
+                                            on_click: move |_| on_menu_action.call(AppCommand::Quit),
+                                        }
+                                    }
+                                } else {
+                                    rsx! {}
+                                }
                             }
                         }
                     }
@@ -129,7 +138,7 @@ pub fn MenuBar(
                                     "Add Node"
                                     Icon { height: 10, icon: FaAngleRight }
                                 }
-                                ul { class: "dropdown-menu  custom-scroll",
+                                ul { class: "dropdown-menu custom-scroll",
                                     NodesMenu {
                                         on_node_selected: move |node_name| {
                                             on_menu_action.call(AppCommand::AddNode(node_name));
