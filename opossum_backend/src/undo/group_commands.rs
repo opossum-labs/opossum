@@ -156,6 +156,26 @@ pub(super) fn describe_move_nodes(cmd: &MoveNodes) -> Vec<DocumentChange> {
     )
 }
 
+/// Re-points `parent_group_id`'s own external mapping for each of `mappings` at a new internal
+/// target, chosen per-mapping by `target` (`apply_insert_group` re-points at the group's own internal
+/// port; `apply_extract_group` re-points directly at the member's own port).
+fn reroute_mappings(
+    document: &mut OpmDocument,
+    parent_group_id: Uuid,
+    mappings: &[ReroutedMapping],
+    target: impl Fn(&ReroutedMapping) -> (Uuid, &str),
+) -> Result<(), BackEndErrorResponse> {
+    for m in mappings {
+        let (target_id, target_port) = target(m);
+        document
+            .scenery_mut()
+            .with_group_node_mut(parent_group_id, |g| {
+                map_port(g, m.port_type, target_id, target_port, &m.external_name)
+            })??;
+    }
+    Ok(())
+}
+
 /// Removes `member_ids` from `parent_group_id`'s flat graph and inserts the previously captured `group`
 /// node in their place, reconnecting `external_connections` to its exposed ports. Returns the
 /// [`Command::ExtractGroup`] that undoes it.
@@ -187,19 +207,9 @@ pub(super) fn apply_insert_group(
     // Re-point `parent_group_id`'s own mapping at the group's own already-correct internal
     // mapping for the same port - the group's internal structure never changes across
     // detach/reattach cycles, so `group_internal_name` is still valid.
-    for m in &rerouted_mappings {
-        document
-            .scenery_mut()
-            .with_group_node_mut(parent_group_id, |g| {
-                map_port(
-                    g,
-                    m.port_type,
-                    group_id,
-                    &m.group_internal_name,
-                    &m.external_name,
-                )
-            })??;
-    }
+    reroute_mappings(document, parent_group_id, &rerouted_mappings, |m| {
+        (group_id, m.group_internal_name.as_str())
+    })?;
     Ok(Command::ExtractGroup(GroupConversion {
         parent_group_id,
         group,
@@ -258,19 +268,9 @@ pub(super) fn apply_extract_group(
     // Re-point `parent_group_id`'s own mapping directly at the member's own port - the old entry
     // pointing at the (now-deleted) group is already gone, stripped by this function's own
     // `delete_node(group_id)` call above.
-    for m in &rerouted_mappings {
-        document
-            .scenery_mut()
-            .with_group_node_mut(parent_group_id, |g| {
-                map_port(
-                    g,
-                    m.port_type,
-                    m.member_id,
-                    &m.member_port,
-                    &m.external_name,
-                )
-            })??;
-    }
+    reroute_mappings(document, parent_group_id, &rerouted_mappings, |m| {
+        (m.member_id, m.member_port.as_str())
+    })?;
     Ok(Command::InsertGroup(GroupConversion {
         parent_group_id,
         group,
