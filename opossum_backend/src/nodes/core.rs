@@ -25,7 +25,7 @@ use crate::{
     error::BackEndErrorResponse,
     helper_functions::{
         capture_node_connections, disconnect_exposed_port_cascades_for_node,
-        parent_group_id_or_self, split_cascades_for_response,
+        parent_group_id_or_self, ron_or_json_response, split_cascades_for_response,
     },
     undo::{
         CascadedNode, Command, NodeSnapshot, PatchAnalyzer, PatchNode, capture_old_node_request,
@@ -203,28 +203,7 @@ async fn get_node(
     let node_info = NodeInfo::from_analyzable(&*node, None);
     drop(node);
     drop(document);
-    // Content Negotiation
-    let wants_ron = req
-        .headers()
-        .get(actix_web::http::header::ACCEPT)
-        .and_then(|h| h.to_str().ok())
-        .is_some_and(|s| s.contains("application/ron"));
-
-    if wants_ron {
-        // Serialize to RON using pretty formatting
-        let body =
-            ron::ser::to_string_pretty(&node_info, ron::ser::PrettyConfig::new().new_line("\n"))
-                .map_err(|e| {
-                    BackEndErrorResponse::new(500, "Serialization Error", &e.to_string())
-                })?;
-
-        Ok(HttpResponse::Ok()
-            .content_type("application/ron")
-            .body(body))
-    } else {
-        // Fallback to JSON
-        Ok(HttpResponse::Ok().json(node_info))
-    }
+    ron_or_json_response(&req, &node_info)
 }
 
 /// Update optical node properties

@@ -1,7 +1,7 @@
 use std::{collections::HashSet, pin::Pin};
 
 use actix_web::{
-    FromRequest, HttpRequest,
+    FromRequest, HttpRequest, HttpResponse,
     dev::Payload,
     web::{self},
 };
@@ -16,7 +16,7 @@ use opossum_core::{
     types::api_types::{ConnectInfo, NodeInfo},
     utils::LockExt,
 };
-use serde::de::DeserializeOwned;
+use serde::{Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
 use crate::{app_state::AppState, error::BackEndErrorResponse};
@@ -1680,5 +1680,35 @@ where
 
             Ok(Self(data))
         })
+    }
+}
+
+/// Serializes `value` as the response body, honoring content negotiation between RON and JSON.
+///
+/// If `req`'s `Accept` header contains `application/ron`, `value` is serialized to RON (using
+/// pretty formatting), since RON can represent `NaN`/`Inf` values that JSON cannot. Otherwise the
+/// response falls back to JSON.
+///
+/// # Errors
+///
+/// Returns an error if RON serialization fails.
+pub fn ron_or_json_response<T: Serialize>(
+    req: &HttpRequest,
+    value: &T,
+) -> Result<HttpResponse, BackEndErrorResponse> {
+    let wants_ron = req
+        .headers()
+        .get(actix_web::http::header::ACCEPT)
+        .and_then(|h| h.to_str().ok())
+        .is_some_and(|s| s.contains("application/ron"));
+
+    if wants_ron {
+        let body = ron::ser::to_string_pretty(value, ron::ser::PrettyConfig::new().new_line("\n"))
+            .map_err(|e| BackEndErrorResponse::new(500, "Serialization Error", &e.to_string()))?;
+        Ok(HttpResponse::Ok()
+            .content_type("application/ron")
+            .body(body))
+    } else {
+        Ok(HttpResponse::Ok().json(value))
     }
 }

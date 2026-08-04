@@ -1,7 +1,7 @@
 use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
-    helper_functions::parent_group_id_or_self,
+    helper_functions::{parent_group_id_or_self, ron_or_json_response},
     undo::{Command, PatchProperty},
 };
 use actix_web::{HttpRequest, HttpResponse, get, patch, web};
@@ -47,25 +47,7 @@ pub async fn get_properties(
         is_reference,
     };
 
-    // Content Negotiation
-    let wants_ron = req
-        .headers()
-        .get(actix_web::http::header::ACCEPT)
-        .and_then(|h| h.to_str().ok())
-        .is_some_and(|s| s.contains("application/ron"));
-
-    if wants_ron {
-        let body = ron::ser::to_string_pretty(
-            &response_data,
-            ron::ser::PrettyConfig::new().new_line("\n"),
-        )
-        .map_err(|e| BackEndErrorResponse::new(500, "Serialization Error", &e.to_string()))?;
-        Ok(HttpResponse::Ok()
-            .content_type("application/ron")
-            .body(body))
-    } else {
-        Ok(HttpResponse::Ok().json(response_data))
-    }
+    ron_or_json_response(&req, &response_data)
 }
 
 /// Update a specific property of an optical node

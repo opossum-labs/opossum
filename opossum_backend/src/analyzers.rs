@@ -18,7 +18,7 @@ use uuid::Uuid;
 use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
-    helper_functions::Ron,
+    helper_functions::{Ron, ron_or_json_response},
     undo::{Command, PatchAnalyzer, RepositionAnalyzer},
 };
 
@@ -77,25 +77,7 @@ pub async fn get_analyzer(
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let uuid = path.into_inner();
     let analyzer_info = get_node_analyzer_attr_from_state(uuid, &data)?;
-    let wants_ron = req
-        .headers()
-        .get(actix_web::http::header::ACCEPT)
-        .and_then(|h| h.to_str().ok())
-        .is_some_and(|s| s.contains("application/ron"));
-
-    if wants_ron {
-        let body = ron::ser::to_string_pretty(
-            &analyzer_info,
-            ron::ser::PrettyConfig::new().new_line("\n"),
-        )
-        .map_err(|e| OpossumError::Other(format!("RON Serialization Error: {e}")))?;
-
-        Ok(HttpResponse::Ok()
-            .content_type("application/ron")
-            .body(body))
-    } else {
-        Ok(HttpResponse::Ok().json(analyzer_info))
-    }
+    ron_or_json_response(&req, &analyzer_info)
 }
 
 fn get_node_analyzer_attr_from_state(
