@@ -6,12 +6,36 @@ use crate::{
     properties::Proptype,
     utils::LockExt,
 };
+use log::warn;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+/// Custom deserialization helper to skip unknown/invalid nodes in a sequence gracefully.
+fn deserialize_nodes_lossy<'de, D>(deserializer: D) -> Result<Vec<OpticRef>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum NodeEntry {
+        Valid(OpticRef),
+        Unknown(serde::de::IgnoredAny),
+    }
+
+    let entries = Vec::<NodeEntry>::deserialize(deserializer)?;
+    let mut valid_nodes = Vec::with_capacity(entries.len());
+    for entry in entries {
+        if let NodeEntry::Valid(node) = entry {
+            valid_nodes.push(node);
+        }
+    }
+    Ok(valid_nodes)
+}
 
 // This is the simplified serializable version of an OpticGraph.
 #[derive(Serialize, Deserialize)]
 pub struct SerializableGraph {
+    #[serde(deserialize_with = "deserialize_nodes_lossy")]
     nodes: Vec<OpticRef>,
     edges: Vec<ConnectionInfo>,
     #[serde(default, skip_serializing_if = "PortMap::is_empty")]
@@ -39,16 +63,24 @@ impl TryFrom<SerializableGraph> for OpticGraph {
             g.g.add_node(node.clone());
         }
         for node_ref in &temp_graph.nodes {
-            assign_reference_to_ref_node(node_ref, &g)?;
+            if let Err(e) = assign_reference_to_ref_node(node_ref, &g) {
+                warn!("Could not assign node reference during graph construction: {e}");
+            }
         }
         for edge in &temp_graph.edges {
-            g.connect_nodes(
+            // Log a warning and skip connection if node UUIDs or ports are invalid
+            if let Err(e) = g.connect_nodes(
                 edge.src_id,
                 &edge.src_port,
                 edge.target_id,
                 &edge.target_port,
                 edge.distance,
-            )?;
+            ) {
+                warn!(
+                    "Skipping invalid node connection from '{}' ({}) to '{}' ({}): {e}",
+                    edge.src_id, edge.src_port, edge.target_id, edge.target_port
+                );
+            }
         }
         g.input_port_map = temp_graph.input_map;
         g.output_port_map = temp_graph.output_map;
@@ -63,17 +95,18 @@ fn assign_reference_to_ref_node(node_ref: &OpticRef, graph: &OpticGraph) -> OpmR
         .as_any_mut()
         .downcast_mut::<NodeReference>()
     {
-        // if Ok, the node was indeed a reference node
         let node_props = ref_node.properties().clone();
         let uuid = if let Proptype::Uuid(uuid) = node_props.get("reference id").unwrap() {
             *uuid
         } else {
             Uuid::nil()
         };
+        // Skip assignment with a warning instead of returning an Error
         let Ok(reference_node) = graph.node(uuid) else {
-            return Err(OpossumError::Other(
-                "reference node found, which does not reference anything".into(),
-            ));
+            warn!(
+                "NodeReference targets non-existent or skipped UUID '{uuid}'. Skipping reference assignment."
+            );
+            return Ok(());
         };
         let ref_name = format!("ref ({})", reference_node.optical_ref.lock_opm()?.name());
         ref_node.assign_reference(&reference_node)?;

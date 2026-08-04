@@ -1,8 +1,8 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use dioxus::{document::eval, prelude::*};
 use dioxus_free_icons::{
-    icons::fa_solid_icons::{FaAngleRight, FaBars, FaWindowMaximize},
     Icon,
+    icons::fa_solid_icons::{FaAngleRight, FaBars, FaWindowMaximize},
 };
 use opossum_core::prelude::*;
 use std::path::PathBuf;
@@ -13,7 +13,7 @@ use crate::components::{
         file_path_display::FilePathDisplay,
         help::about::About,
     },
-    short_cuts::{ShortCutAction, SHORTCUTS},
+    short_cuts::{SHORTCUTS, ShortCutAction},
 };
 
 #[cfg(not(target_arch = "wasm32"))]
