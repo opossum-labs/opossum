@@ -15,7 +15,7 @@ use utoipa_actix_web::service_config::ServiceConfig;
 // build a minimal test `App` via the fully-qualified `crate::operations::post_convert_nodes_to_group`
 // path, which resolves only through this re-export (`convert_to_group` itself stays a private module).
 #[allow(unused_imports)]
-pub(crate) use convert_to_group::post_convert_nodes_to_group;
+pub use convert_to_group::post_convert_nodes_to_group;
 
 use crate::{app_state::NodeCacheItem, error::BackEndErrorResponse};
 

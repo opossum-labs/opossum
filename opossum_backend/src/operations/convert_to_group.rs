@@ -104,7 +104,7 @@ fn reconstruct_rerouted_mappings(
     )
 )]
 #[post("/convert_to_group")]
-pub(crate) async fn post_convert_nodes_to_group(
+pub async fn post_convert_nodes_to_group(
     data: web::Data<AppState>,
     request: web::Json<ConvertToGroupRequest>,
 ) -> Result<Json<ConvertToGroupResponse>, BackEndErrorResponse> {

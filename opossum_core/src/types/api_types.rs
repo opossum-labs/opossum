@@ -718,7 +718,8 @@ pub struct JumpTarget {
 }
 
 impl JumpTarget {
-    pub fn new_from_graph_id(graph_id: Uuid) -> Self {
+    #[must_use]
+    pub const fn new_from_graph_id(graph_id: Uuid) -> Self {
         Self {
             graph_id,
             node: None,
@@ -726,7 +727,8 @@ impl JumpTarget {
             source_port: None,
         }
     }
-    pub fn new_from_graph_and_node_id(graph_id: Uuid, node_id: Uuid) -> Self {
+    #[must_use]
+    pub const fn new_from_graph_and_node_id(graph_id: Uuid, node_id: Uuid) -> Self {
         Self {
             graph_id,
             node: Some(node_id),

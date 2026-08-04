@@ -70,7 +70,7 @@ pub fn split_sort_connections(
 /// Same classification as [`split_sort_connections`], but taking an already-locked `&OpmDocument`
 /// directly instead of `&web::Data<AppState>` - for callers (like undo/redo command application) that
 /// only have a document reference, not the full app state, and shouldn't re-lock it.
-pub(crate) fn split_sort_connections_from_document(
+pub fn split_sort_connections_from_document(
     document: &OpmDocument,
     connections: &[ConnectionInfo],
     nodes: &[Uuid],
@@ -128,7 +128,7 @@ pub struct ConnectionSplit {
 /// # Errors
 ///
 /// This function will return an error if the connection cannot be created.
-pub(crate) fn connect_from_info(group: &mut NodeGroup, conn: &ConnectInfo) -> OpmResult<()> {
+pub fn connect_from_info(group: &mut NodeGroup, conn: &ConnectInfo) -> OpmResult<()> {
     group.connect_nodes(
         conn.src_uuid(),
         conn.src_port(),

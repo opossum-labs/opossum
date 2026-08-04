@@ -186,7 +186,10 @@ fn reposition_cut_nodes(
 ) -> Result<(Vec<PositionUpdate>, Vec<Command>), BackEndErrorResponse> {
     let mut position_updates = Vec::<PositionUpdate>::new();
     for id in optical_ids {
-        if let Ok(maybe_pos) = document.scenery().with_node_attr(*id, |a| a.gui_position()) {
+        if let Ok(maybe_pos) = document
+            .scenery()
+            .with_node_attr(*id, opossum_core::core_optics::NodeAttr::gui_position)
+        {
             let (cx, cy) = maybe_pos.map_or((0.0, 0.0), |p| (p.x, p.y));
             position_updates.push(PositionUpdate {
                 uuid: *id,

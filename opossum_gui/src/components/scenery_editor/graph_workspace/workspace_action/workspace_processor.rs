@@ -606,10 +606,7 @@ async fn apply_document_changes(
                 // properties panel, which re-fetches on its own via this counter - see its use_resource.
                 *NODE_DETAILS_REFRESH.write() += 1;
             }
-            DocumentChange::NodeDetailsChanged { .. } => {
-                *NODE_DETAILS_REFRESH.write() += 1;
-            }
-            DocumentChange::AnalyzerChanged { .. } => {
+            DocumentChange::NodeDetailsChanged { .. } | DocumentChange::AnalyzerChanged { .. } => {
                 *NODE_DETAILS_REFRESH.write() += 1;
             }
             DocumentChange::AnalyzerMoved { id, gui_position } => {
@@ -704,17 +701,16 @@ async fn apply_document_changes(
         if let Some(node) = node {
             // The tab is loaded now, so read the node's kind for the selection bookkeeping (analyzers are
             // not optical); default to optical if it isn't in the store yet.
-            let is_optical = workspace
-                .tabs()
-                .get(graph_id)
-                .and_then(|g| {
-                    g.graph_store()
-                        .nodes()
-                        .read()
-                        .get(&node)
-                        .map(|element| element.is_optical_node())
-                })
-                .unwrap_or(true);
+            let is_optical =
+                workspace
+                    .tabs()
+                    .get(graph_id)
+                    .and_then(|g| {
+                        g.graph_store().nodes().read().get(&node).map(
+                            crate::components::scenery_editor::node::NodeElement::is_optical_node,
+                        )
+                    })
+                    .unwrap_or(true);
             ws_handler
                 .nodes
                 .set_node_active(graph_id, node, is_optical, 0);

@@ -35,7 +35,7 @@ use crate::{
     )
 )]
 #[post("/move_nodes")]
-pub(crate) async fn post_move_nodes(
+pub async fn post_move_nodes(
     data: web::Data<AppState>,
     request: web::Json<MoveNodesRequest>,
 ) -> Result<Json<MoveNodesResponse>, BackEndErrorResponse> {
