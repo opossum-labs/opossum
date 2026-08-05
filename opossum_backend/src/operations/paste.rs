@@ -23,7 +23,7 @@ use crate::{
     helper_functions::{
         build_connect_info, capture_node_connections, map_port, parent_group_id_or_self,
     },
-    undo::{Command, EdgeSnapshot, NodeSnapshot},
+    undo::{CascadedNode, Command, EdgeSnapshot, NodeSnapshot},
 };
 
 /// The pasted-in node/connection info [`insert_copied_nodes`] hands back to [`post_paste_nodes`].
@@ -168,6 +168,54 @@ fn capture_and_split_mutual_connections(
     (own, mutual)
 }
 
+/// Finds, among `top_level_ids`, which ones are `NodeReference`s pointing at *another* member of
+/// `top_level_ids`, and returns them grouped by their target's uuid as [`CascadedNode`]s.
+///
+/// Mirrors `nodes/core.rs`'s `capture_cascade`: `NodeGroup::delete_node` cascades a target's removal to
+/// every reference node anywhere in the document that points at it (recursively, across nested groups -
+/// see `OpticGraph::delete_node`'s doc comment), so a reference pasted alongside its own target must not
+/// also get its own independent `RemoveNode` in the same batch - by the time that ran, the target's own
+/// `RemoveNode` may already have cascaded the reference away, 400ing with "node with given uuid does not
+/// exist" (order-dependent on `grouped_node_infos`' iteration order, so it doesn't always reproduce).
+/// Folding it into the target's own `NodeSnapshot.cascaded` instead makes the target's `RemoveNode`/
+/// `AddNode` pair remove/restore both together, order-independently. Only *top-level* siblings are
+/// considered - a reference nested inside a pasted group pointing at a top-level sibling is a rarer,
+/// differently-shaped edge case (silent data loss via shared-`Arc` semantics, not a 400) that this pass
+/// doesn't cover.
+fn cascaded_references(
+    document: &OpmDocument,
+    paste_group_id: Uuid,
+    top_level_ids: &HashSet<Uuid>,
+) -> HashMap<Uuid, Vec<CascadedNode>> {
+    let mut by_target = HashMap::<Uuid, Vec<CascadedNode>>::new();
+    let root_id = document.scenery().node_attr().uuid();
+    for target_id in top_level_ids {
+        let Ok(referring) = document
+            .scenery()
+            .graph()
+            .find_all_nodes_referring_to_uuid(*target_id, root_id)
+        else {
+            continue;
+        };
+        for ref_id in referring.values().flatten() {
+            if ref_id == target_id || !top_level_ids.contains(ref_id) {
+                continue;
+            }
+            if let Ok((node, _)) = document.scenery().node_recursive(*ref_id) {
+                by_target.entry(*target_id).or_default().push(CascadedNode {
+                    parent_group_id: paste_group_id,
+                    node,
+                    // A top-level pasted node's own wiring is already fully captured by the
+                    // mutual-`RemoveEdge`/`AddEdge` mechanism above, so it must not be captured
+                    // again here too.
+                    connections: Vec::new(),
+                });
+            }
+        }
+    }
+    by_target
+}
+
 /// Builds the "undo the whole paste" batch for [`post_paste_nodes`]: one `RemoveNode` per *top-level*
 /// pasted node, one `RemoveAnalyzer` per pasted analyzer, plus a leading `RemoveEdge` for every mutual
 /// connection between two top-level pasted nodes.
@@ -182,7 +230,9 @@ fn capture_and_split_mutual_connections(
 /// away (surfacing as "node with given uuid does not exist" on undo), or mutate the group's live
 /// internal graph directly *before* the group's own command runs, silently severing an internal
 /// connection that nothing later restores (a nested `AddNode` always passes an empty `connections` list,
-/// so redo can't reconnect what this already tore down).
+/// so redo can't reconnect what this already tore down). The same is true of a top-level pasted
+/// `NodeReference` targeting another top-level pasted node - see [`cascaded_references`] - so those are
+/// folded into their target's own `RemoveNode` instead of getting one of their own.
 ///
 /// A freshly pasted node's only connections are to other nodes pasted in the same gesture
 /// (`insert_copied_nodes` only ever recreates connections between copied nodes) - so every connection
@@ -216,12 +266,21 @@ fn build_paste_undo_batch(
                 }));
             }
         }
+        let mut cascaded = cascaded_references(document, paste_group_id, &top_level_ids);
+        let folded_ids: HashSet<Uuid> = cascaded
+            .values()
+            .flatten()
+            .filter_map(|c| c.node.uuid().ok())
+            .collect();
         for info in infos {
+            if folded_ids.contains(&info.uuid()) {
+                continue;
+            }
             if let Ok((node_ref, _)) = document.scenery().node_recursive(info.uuid()) {
                 removals.push(Command::RemoveNode(NodeSnapshot {
                     parent_group_id: paste_group_id,
                     node: node_ref,
-                    cascaded: Vec::new(),
+                    cascaded: cascaded.remove(&info.uuid()).unwrap_or_default(),
                     connections: Vec::new(),
                 }));
             }
@@ -909,6 +968,153 @@ mod test {
         assert_eq!(
             pasted_connection_count, 1,
             "the connection between the two redo-restored pasted nodes must survive redo"
+        );
+    }
+
+    /// Regression test for the bug where copying a node *and* a reference to it together, pasting them,
+    /// then undoing 400'd with "node with given uuid does not exist". Root cause: `build_paste_undo_batch`
+    /// gave both the pasted node and the pasted reference their own independent top-level `RemoveNode`;
+    /// removing the node cascades (via `NodeGroup::delete_node`) to also delete the reference pointing at
+    /// it, so the reference's own separate `RemoveNode` then found nothing to delete. Builds `A` and
+    /// `R = NodeReference::from_node(&A)` as flat top-level nodes, copies and pastes both together, and
+    /// asserts undo succeeds (removing both pasted duplicates) and a following redo restores both, with
+    /// the pasted reference resolving to the pasted node's uuid (not the original `A`'s).
+    #[actix_web::test]
+    async fn test_undo_redo_paste_node_with_reference_same_group() {
+        use opossum_core::nodes::Dummy;
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, node_a) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let scenery = document.scenery_mut();
+            let node_a = scenery.add_node(Dummy::default()).unwrap();
+            let node_a_ref = scenery.node_recursive(node_a).unwrap().0;
+            let node_reference = NodeReference::from_node(&node_a_ref).unwrap();
+            scenery.add_node(node_reference).unwrap();
+            (root_id, node_a)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_copy_nodes)
+                .service(post_paste_nodes)
+                .service(undo_document)
+                .service(redo_document),
+        )
+        .await;
+
+        let mut nodes_to_copy = HashSet::new();
+        nodes_to_copy.insert(node_a);
+        nodes_to_copy.insert(
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .with_group_node(root_id, |g| {
+                    g.nodes()
+                        .iter()
+                        .filter_map(|n| n.uuid().ok())
+                        .find(|id| *id != node_a)
+                })
+                .unwrap()
+                .expect("the reference node must exist"),
+        );
+        let req = test::TestRequest::post()
+            .uri("/copy_nodes")
+            .set_json(&nodes_to_copy)
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        let req = test::TestRequest::post()
+            .uri("/paste_nodes")
+            .set_json(&(root_id, (500.0, 500.0)))
+            .to_request();
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
+
+        let pasted_ids: Vec<Uuid> = {
+            let document = app_state.document.lock();
+            document
+                .scenery()
+                .with_group_node(root_id, |g| {
+                    g.nodes()
+                        .iter()
+                        .filter_map(|n| n.uuid().ok())
+                        .filter(|id| !nodes_to_copy.contains(id))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap()
+        };
+        assert_eq!(
+            pasted_ids.len(),
+            2,
+            "both the pasted node and its pasted reference must exist"
+        );
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::OK,
+            "undoing the paste of a node with a reference to it must not error"
+        );
+        {
+            let document = app_state.document.lock();
+            for id in &pasted_ids {
+                assert!(
+                    document.scenery().node_recursive(*id).is_err(),
+                    "the pasted duplicate must be gone after undo"
+                );
+            }
+        }
+
+        let req = test::TestRequest::post().uri("/redo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK, "redo must not error");
+
+        let document = app_state.document.lock();
+        for id in &pasted_ids {
+            assert!(
+                document.scenery().node_recursive(*id).is_ok(),
+                "the pasted duplicate must be restored by redo"
+            );
+        }
+        // Identify which of the two pasted nodes is the reference by its node type, then assert its
+        // "reference id" points at the *other* pasted node, not at the original `A`.
+        let (pasted_ref_id, pasted_target_id) = {
+            let mut ref_id = None;
+            let mut target_id = None;
+            for id in &pasted_ids {
+                let node_type = document
+                    .scenery()
+                    .with_node_attr(*id, |attr| attr.node_type().to_string())
+                    .unwrap();
+                if node_type == "reference" {
+                    ref_id = Some(*id);
+                } else {
+                    target_id = Some(*id);
+                }
+            }
+            (
+                ref_id.expect("a pasted reference node must exist"),
+                target_id.expect("a pasted target node must exist"),
+            )
+        };
+        let ref_target = document
+            .scenery()
+            .with_node_attr(pasted_ref_id, |attr| {
+                attr.properties().get("reference id").cloned()
+            })
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            ref_target,
+            Proptype::Uuid(pasted_target_id),
+            "the pasted reference must resolve to the pasted node's uuid, not the original A's"
         );
     }
 
