@@ -240,22 +240,27 @@ impl NewRefNode {
 #[derive(Debug, Default, Serialize, Deserialize, ToSchema, Clone)]
 pub struct UpdateNodeRequest {
     /// The new name of the node
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = "Lens 1")]
     pub name: Option<String>,
 
     /// The new inverted status of the node
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = true)]
     pub inverted: Option<bool>,
 
     /// The new base isometry (position and rotation in 3D space)
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<Object>)]
     pub isometry: Option<Option<Isometry>>, // Option<Option> allows explicitly setting null!
 
     /// The new alignment isometry (local decenter and tilt)
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<Object>)]
     pub alignment: Option<Option<Isometry>>, // Option<Option> allows explicitly setting null!
 
     /// The GUI position on the 2D canvas
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = json!([100.5, 200.0]))]
     pub gui_position: Option<Option<(f64, f64)>>,
 }
@@ -399,10 +404,15 @@ pub struct NodePortsResponse {
 #[derive(Debug, Default, Serialize, Deserialize, ToSchema, Clone, PartialEq)]
 pub struct UpdatePortRequest {
     /// The new aperture of the port
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub aperture: Option<Aperture>,
+
     /// The new coating of the port
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub coating: Option<CoatingType>,
+
     /// The new Laser Induced Damage Threshold
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<f64>)]
     pub lidt: Option<ValidatedLidt>,
 }
@@ -616,10 +626,12 @@ pub struct AnalyzerItemDto {
 #[derive(Debug, Default, Serialize, Deserialize, ToSchema, Clone)]
 pub struct UpdateAnalyzerInfo {
     // The new Analyzertype including its configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<Object>)]
     pub analyzer_type: Option<AnalyzerType>,
 
     // The new position of the analyzer
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(example = json!([0.0, 0.0]))]
     pub gui_position: Option<Option<(f64, f64)>>,
 }

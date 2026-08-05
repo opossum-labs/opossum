@@ -37,7 +37,8 @@ pub enum GraphsWorkspaceAction {
         /// The ID of the node to remove.
         node_id: Uuid,
     },
-
+    /// Resynchronizes frontend state with backend state.
+    Refresh,
     /// Adds a node to the current selection.
     AddToNodeSelection {
         /// The ID of the graph.

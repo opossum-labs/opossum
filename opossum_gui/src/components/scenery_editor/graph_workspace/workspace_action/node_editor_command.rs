@@ -14,6 +14,7 @@ pub enum NodeEditorCommand {
     AddAnalyzer(AnalyzerType),
     LoadFile(PathBuf),
     SaveFile(PathBuf),
+    Refresh,
     AutoLayout,
     CenterGraph,
     ZoomToFit,
@@ -149,6 +150,9 @@ pub fn node_editor_command(
             }
             NodeEditorCommand::SaveFile(path) => {
                 workspace_processor.send(GraphsWorkspaceAction::SaveToFile(path));
+            }
+            NodeEditorCommand::Refresh => {
+                workspace_processor.send(GraphsWorkspaceAction::Refresh);
             }
             NodeEditorCommand::ConvertToGroup { nodes, graph_id } => {
                 workspace_processor.send(GraphsWorkspaceAction::ConvertToGroup { nodes, graph_id });
