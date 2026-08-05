@@ -88,6 +88,9 @@ pub fn use_workspace_processor(
                         // The backend clears its undo/redo history on every reset; mirror that here.
                         *crate::UNDO_REDO_STATUS.write() = (false, false);
                     }
+                    GraphsWorkspaceAction::Refresh => {
+                        process_refresh(workspace, root_graph_id, workspace_handlers).await;
+                    }
                     GraphsWorkspaceAction::AddRootSceneryTab { name } => {
                         process_add_root_scenery_tab(workspace, workspace_handlers, name).await;
                     }
@@ -1783,7 +1786,50 @@ async fn process_add_root_scenery_tab(
         }
     }
 }
+async fn process_refresh(
+    workspace: ReadStore<GraphsWorkspaceState>,
+    root_scenery_id: Memo<Uuid>,
+    ws_handler: WorkSpaceSignalHandlers,
+) {
+    match api::get_document_root_uuid().await {
+        Ok(id) => {
+            // Save and restore canvas config before adding elements
+            let saved_editor_area = *workspace.editor_area().read();
+            ws_handler.workspace.clear_workspace();
+            ws_handler.workspace.set_root_scenery_id(id);
+            ws_handler.workspace.set_editor_area(saved_editor_area);
 
+            if let Ok(hierarchy) = api::get_group_hierarchy(id).await {
+                let name = hierarchy
+                    .last()
+                    .map_or_else(|| "Root Scenery".to_string(), |(_, n)| n.clone());
+                ws_handler.workspace.add_new_group_tab(GraphInfo {
+                    name,
+                    id,
+                    hierarchy,
+                });
+            }
+            process_get_editor_area(workspace, ws_handler).await;
+            process_fill_graph_of_group(
+                root_scenery_id.into(),
+                id,
+                ws_handler,
+                false,
+                true, // should_center
+                workspace,
+            )
+            .await;
+
+            ws_handler.workspace.set_needs_saving(false);
+            *crate::UNDO_REDO_STATUS.write() = (false, false);
+        }
+        Err(err_str) => {
+            OPOSSUM_UI_LOGS
+                .write()
+                .add_log(&format!("Failed to refresh from backend: {err_str}"));
+        }
+    }
+}
 async fn process_rename_root_scenery(
     ws_handler: WorkSpaceSignalHandlers,
     name: String,

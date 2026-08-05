@@ -83,8 +83,8 @@ fn build_shortcut_listener_js(shortcuts: &[&Shortcut]) -> String {
 const combos=[__COMBOS__];
 document.addEventListener('keydown', function(e){
     const ctrl = e.ctrlKey || e.metaKey;          // treat Ctrl and Cmd as the same modifier
-    if(!ctrl && !e.altKey) return;                 // only modifier combos can be one of our shortcuts
     const key = (e.key || '').toUpperCase();
+    if(!ctrl && !e.altKey && !key.startsWith('F')) return; // allow modifier combos and F-keys
     for(const c of combos){
         if(c.ctrl===ctrl && c.shift===e.shiftKey && c.alt===e.altKey && c.key===key){
             e.preventDefault();                    // suppress the browser default for our combos only
@@ -153,6 +153,9 @@ pub fn App() -> Element {
                     node_editor_command_handler.call(Some(NodeEditorCommand::SaveFile(path)));
                 }
             });
+        }
+        AppCommand::Refresh => {
+            node_editor_command_handler.call(Some(NodeEditorCommand::Refresh));
         }
         AppCommand::Settings => {
             show_settings.set(true);
@@ -312,9 +315,7 @@ pub fn App() -> Element {
 
     #[cfg(not(target_arch = "wasm32"))]
     rsx! {
-        div {
-            class: "app-container",
-            tabindex: 0,
+        div { class: "app-container", tabindex: 0,
             // Keyboard shortcuts are handled by the document-level listener installed above, not here -
             // an element `onkeydown` only fires while focus is inside it, which breaks after a panel
             // re-render drops focus to `<body>`.

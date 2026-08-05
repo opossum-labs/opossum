@@ -28,6 +28,7 @@ pub enum AppCommand {
     OpenTrigger, // start `Open` dialog
     Save,
     SaveAs,
+    Refresh,
     AddNode(String),
     AddAnalyzer(AnalyzerType),
     AutoLayout,
@@ -98,6 +99,10 @@ pub fn MenuBar(
                             MenuListItemShortCut {
                                 short_cut_action: ShortCutAction::SaveAs,
                                 on_click: move |_| on_menu_action.call(AppCommand::SaveAs),
+                            }
+                            MenuListItemShortCut {
+                                short_cut_action: ShortCutAction::Refresh,
+                                on_click: move |_| on_menu_action.call(AppCommand::Refresh),
                             }
                             MenuListItemShortCut {
                                 short_cut_action: ShortCutAction::Settings,
