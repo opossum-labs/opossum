@@ -17,6 +17,7 @@ pub enum ShortCutAction {
     SaveAs,
     Open,
     New,
+    Refresh,
     Undo,
     Redo,
     Simulate,
@@ -34,6 +35,7 @@ impl fmt::Display for ShortCutAction {
             Self::SaveAs => "Save As...",
             Self::Open => "Open Project",
             Self::New => "New Project",
+            Self::Refresh => "Refresh",
             Self::Undo => "Undo",
             Self::Redo => "Redo",
             Self::Simulate => "Start Simulation",
@@ -54,6 +56,7 @@ impl From<ShortCutAction> for AppCommand {
             ShortCutAction::SaveAs => Self::SaveAs,
             ShortCutAction::Open => Self::OpenTrigger,
             ShortCutAction::New => Self::NewProject,
+            ShortCutAction::Refresh => Self::Refresh,
             ShortCutAction::Undo => Self::Undo,
             ShortCutAction::Redo => Self::Redo,
             ShortCutAction::Simulate => Self::Simulate,
@@ -80,6 +83,10 @@ pub static SHORTCUTS: LazyLock<HashMap<ShortCutAction, Shortcut>> = LazyLock::ne
     m.insert(
         ShortCutAction::New,
         Shortcut::new(true, false, false, "N", ShortCutAction::New),
+    );
+    m.insert(
+        ShortCutAction::Refresh,
+        Shortcut::new(false, false, false, "F5", ShortCutAction::Refresh),
     );
     m.insert(
         ShortCutAction::Undo,
