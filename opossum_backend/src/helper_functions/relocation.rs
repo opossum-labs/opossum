@@ -9,6 +9,7 @@ use super::{
     connection_preservation::{
         PreservedConnections, disconnect_moved_node_connections, reconnect_moved_node_connections,
     },
+    graph_lookup::validate_relocated_references,
     port_map_cascade::{PortMapCascadeRemoval, disconnect_exposed_port_cascades_for_node},
 };
 
@@ -63,13 +64,17 @@ pub struct RelocationOutcome {
 ///
 /// # Errors
 ///
-/// Returns an error if either group id doesn't resolve, or a moved node's uuid can't be found.
+/// Returns an error if either group id doesn't resolve, a moved node's uuid can't be found, or the move
+/// would place a `NodeReference` inside its own target group (or a group nested within it) - see
+/// [`validate_relocated_references`].
 pub fn relocate_nodes_in_document(
     document: &mut OpmDocument,
     from_group_id: Uuid,
     to_group_id: Uuid,
     node_ids: &[Uuid],
 ) -> OpmResult<RelocationOutcome> {
+    validate_relocated_references(document.scenery(), node_ids, to_group_id)?;
+
     let connections = document
         .scenery()
         .with_group_node(from_group_id, NodeGroup::connections)?;
@@ -260,14 +265,18 @@ pub struct CutRelocationOutcome {
 ///
 /// # Errors
 ///
-/// Returns an error if either group id doesn't resolve, a moved node's uuid can't be found, or a
-/// severing / connection step fails.
+/// Returns an error if either group id doesn't resolve, a moved node's uuid can't be found, a
+/// severing / connection step fails, or the relocation would place a `NodeReference` inside its own
+/// target group (or a group nested within it) - see
+/// [`validate_relocated_references`].
 pub fn relocate_nodes_severing_external_links(
     document: &mut OpmDocument,
     from_group_id: Uuid,
     to_group_id: Uuid,
     node_ids: &[Uuid],
 ) -> OpmResult<CutRelocationOutcome> {
+    validate_relocated_references(document.scenery(), node_ids, to_group_id)?;
+
     let SeveredLinksOutcome {
         removed_connections,
         cascades,

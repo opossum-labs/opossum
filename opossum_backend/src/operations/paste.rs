@@ -22,6 +22,7 @@ use crate::{
     error::BackEndErrorResponse,
     helper_functions::{
         build_connect_info, capture_node_connections, map_port, parent_group_id_or_self,
+        validate_relocated_references,
     },
     undo::{CascadedNode, Command, EdgeSnapshot, NodeSnapshot},
 };
@@ -297,6 +298,11 @@ fn build_paste_undo_batch(
 /// This function duplicates the nodes/analyzers currently in the copy cache into the target group,
 /// minting a fresh uuid for each copy. Moving nodes without duplicating them (a "cut") is a separate
 /// operation - see [`post_cut_nodes`](super::cut::post_cut_nodes).
+///
+/// Rejected (before anything is inserted, so the copy cache is left intact for a retry elsewhere) if a
+/// copied `NodeReference` - uncopied targets aren't duplicated, so it would still resolve to the same live
+/// target - would end up nested inside its own target group, or a group nested within it; see
+/// [`validate_relocated_references`].
 #[utoipa::path(tag = "operations",
     request_body(content = (Uuid, (f64, f64)),
         description = "Uuid of the group node to be pasted in, and the position at which the node should be pasted",
@@ -333,6 +339,12 @@ pub(super) async fn post_paste_nodes(
     }
 
     let mut document = data.document.lock();
+    let root_ids: Vec<Uuid> = copied_optical_nodes
+        .iter()
+        .filter_map(|r| r.uuid().ok())
+        .collect();
+    validate_relocated_references(document.scenery(), &root_ids, paste_group_id)?;
+
     let PastedNodes {
         grouped_node_infos,
         grouped_connect_info,
@@ -1222,6 +1234,167 @@ mod test {
         assert!(
             output_names.contains(&"g1_ext_out".to_string()),
             "the pasted G1's external output port must be restored"
+        );
+    }
+
+    /// Regression test for the bug where nothing stopped a reference to a group from being pasted into
+    /// that very group - which deadlocks the analyzer (analyzing a group holds its `Mutex` for the
+    /// duration of its own recursive descent, so a reference resolving back to an already-locked ancestor
+    /// self-deadlocks). Copies `R = ref(G)` alone (leaving `G` uncopied, so the paste would still resolve
+    /// to the same live `G`) and asserts pasting it into `G` is rejected, with nothing inserted.
+    #[actix_web::test]
+    async fn test_paste_reference_into_own_target_is_rejected() {
+        use opossum_core::nodes::NodeGroup;
+
+        let app_state = Data::new(AppState::default());
+        let (g_id, ref_id) = {
+            let mut document = app_state.document.lock();
+            let scenery = document.scenery_mut();
+            let g_id = scenery.add_node(NodeGroup::new("G")).unwrap();
+            let g_ref = scenery.node(g_id).unwrap();
+            let node_reference = NodeReference::from_node(&g_ref).unwrap();
+            let ref_id = scenery.add_node(node_reference).unwrap();
+            (g_id, ref_id)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_copy_nodes)
+                .service(post_paste_nodes),
+        )
+        .await;
+
+        let mut nodes_to_copy = HashSet::new();
+        nodes_to_copy.insert(ref_id);
+        let req = test::TestRequest::post()
+            .uri("/copy_nodes")
+            .set_json(&nodes_to_copy)
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        let req = test::TestRequest::post()
+            .uri("/paste_nodes")
+            .set_json(&(g_id, (0.0, 0.0)))
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::BAD_REQUEST,
+            "pasting a reference into its own target group must be rejected"
+        );
+        assert_eq!(
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .with_group_node(g_id, NodeGroup::nr_of_nodes)
+                .unwrap(),
+            0,
+            "nothing must have been inserted into the target group"
+        );
+    }
+
+    /// Same hazard, one level deeper: `G1` contains `G2`; a reference to `G1` sitting at the root must
+    /// also be rejected when pasted into `G2`, since `G2` lives inside `G1`'s own subtree too.
+    #[actix_web::test]
+    async fn test_paste_reference_into_nested_descendant_of_target_is_rejected() {
+        use opossum_core::nodes::{Dummy, NodeGroup};
+
+        let app_state = Data::new(AppState::default());
+        let (g2_id, ref_id) = {
+            let mut document = app_state.document.lock();
+            let scenery = document.scenery_mut();
+            let mut g2 = NodeGroup::new("G2");
+            g2.add_node(Dummy::default()).unwrap();
+            let mut g1 = NodeGroup::new("G1");
+            let g2_id = g1.add_node(g2).unwrap();
+            let g1_id = scenery.add_node(g1).unwrap();
+            let g1_ref = scenery.node(g1_id).unwrap();
+            let node_reference = NodeReference::from_node(&g1_ref).unwrap();
+            let ref_id = scenery.add_node(node_reference).unwrap();
+            (g2_id, ref_id)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_copy_nodes)
+                .service(post_paste_nodes),
+        )
+        .await;
+
+        let mut nodes_to_copy = HashSet::new();
+        nodes_to_copy.insert(ref_id);
+        let req = test::TestRequest::post()
+            .uri("/copy_nodes")
+            .set_json(&nodes_to_copy)
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        let req = test::TestRequest::post()
+            .uri("/paste_nodes")
+            .set_json(&(g2_id, (0.0, 0.0)))
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::BAD_REQUEST,
+            "pasting a reference into a nested descendant of its target must be rejected"
+        );
+    }
+
+    /// A reference and its own target copied and pasted together, as siblings, into an unrelated
+    /// destination group must still succeed - they keep the same (valid) relative structure either way,
+    /// unlike the two rejected cases above.
+    #[actix_web::test]
+    async fn test_paste_reference_and_target_together_as_siblings_is_allowed() {
+        use opossum_core::nodes::NodeGroup;
+
+        let app_state = Data::new(AppState::default());
+        let (g_id, ref_id, dest_id) = {
+            let mut document = app_state.document.lock();
+            let scenery = document.scenery_mut();
+            let g_id = scenery.add_node(NodeGroup::new("G")).unwrap();
+            let g_ref = scenery.node(g_id).unwrap();
+            let node_reference = NodeReference::from_node(&g_ref).unwrap();
+            let ref_id = scenery.add_node(node_reference).unwrap();
+            let dest_id = scenery.add_node(NodeGroup::new("dest")).unwrap();
+            (g_id, ref_id, dest_id)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_copy_nodes)
+                .service(post_paste_nodes),
+        )
+        .await;
+
+        let mut nodes_to_copy = HashSet::new();
+        nodes_to_copy.insert(g_id);
+        nodes_to_copy.insert(ref_id);
+        let req = test::TestRequest::post()
+            .uri("/copy_nodes")
+            .set_json(&nodes_to_copy)
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        let req = test::TestRequest::post()
+            .uri("/paste_nodes")
+            .set_json(&(dest_id, (0.0, 0.0)))
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::OK,
+            "pasting a reference together with its own target as siblings must still be allowed"
         );
     }
 }

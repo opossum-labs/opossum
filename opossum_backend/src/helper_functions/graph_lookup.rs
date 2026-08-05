@@ -2,13 +2,14 @@ use actix_web::web::{self};
 use nalgebra::Point2;
 use opossum_core::{
     core_optics::{NodeAttrExt, OpticRef, node_attr::HasNodeAttr},
-    error::OpmResult,
+    error::{OpmResult, OpossumError},
     nodes::{ConnectionInfo, NodeGroup},
     opm_document::OpmDocument,
     prelude::{PortType, Proptype},
     types::api_types::{ConnectInfo, NodeInfo},
     utils::LockExt,
 };
+use std::collections::HashSet;
 use uuid::Uuid;
 
 use crate::{app_state::AppState, error::BackEndErrorResponse};
@@ -228,6 +229,96 @@ pub fn lowest_common_ancestor_group(scenery: &NodeGroup, a: Uuid, b: Uuid) -> Op
         .unwrap_or_else(|| scenery.node_attr().uuid()))
 }
 
+/// Returns whether `candidate_ancestor` is `node_id` itself, or one of `node_id`'s ancestor groups (i.e.
+/// `node_id` is nested inside `candidate_ancestor` at any depth).
+///
+/// # Errors
+///
+/// Returns an error if `node_id` (or an ancestor of it) doesn't resolve to a node in `scenery`.
+fn is_ancestor_or_self(
+    scenery: &NodeGroup,
+    candidate_ancestor: Uuid,
+    node_id: Uuid,
+) -> OpmResult<bool> {
+    Ok(ancestor_chain(scenery, node_id)?.contains(&candidate_ancestor))
+}
+
+/// Returns an error if placing/keeping a reference to `target_id` inside `destination_group_id` would nest
+/// the reference inside its own target group, or a group nested within it.
+///
+/// Analyzing a [`NodeGroup`] holds that group's `Mutex` for the entire duration of its recursive descent
+/// into its members. A [`NodeReference`](opossum_core::nodes::NodeReference) nested anywhere inside its
+/// own target's subtree would, when analysis reaches it, try to lock that same already-held `Mutex` again
+/// on the same thread - a guaranteed self-deadlock. This guards against creating that configuration via
+/// direct reference creation, drag-and-drop move, cut, or paste.
+///
+/// # Errors
+///
+/// Returns an error if `target_id` is `destination_group_id` itself, or an ancestor of it. Also returns an
+/// error if `destination_group_id` (or an ancestor of it) doesn't resolve to a node in `scenery`.
+pub fn check_reference_target_not_nested(
+    scenery: &NodeGroup,
+    target_id: Uuid,
+    destination_group_id: Uuid,
+) -> OpmResult<()> {
+    if is_ancestor_or_self(scenery, target_id, destination_group_id)? {
+        return Err(OpossumError::OpticGroup(format!(
+            "cannot place a reference to <{target_id}> inside its own target group or a group nested within it"
+        )));
+    }
+    Ok(())
+}
+
+/// Returns an error if relocating/pasting `root_ids` - and everything nested inside any of them - into
+/// `destination_group_id` would place a `NodeReference` inside its own target group (see
+/// [`check_reference_target_not_nested`]).
+///
+/// A reference whose target is itself part of the expanded `root_ids` set (reference and target being
+/// relocated/pasted together) is skipped: they move together as a rigid unit, so their relative structure -
+/// and thus this check's outcome - can't change as a result of this particular relocation. An id that
+/// doesn't currently resolve in `scenery` is silently skipped, mirroring the existing tolerance for stale
+/// ids elsewhere in the relocation/paste machinery.
+///
+/// # Errors
+///
+/// Returns an error if a reference among `root_ids` (or nested within one of them) targets
+/// `destination_group_id` itself or a group nested within it.
+pub fn validate_relocated_references(
+    scenery: &NodeGroup,
+    root_ids: &[Uuid],
+    destination_group_id: Uuid,
+) -> OpmResult<()> {
+    let mut relocating_ids: Vec<Uuid> = root_ids.to_vec();
+    for id in root_ids {
+        let Ok((optic_ref, _)) = scenery.node_recursive(*id) else {
+            continue;
+        };
+        let Ok(node) = optic_ref.optical_ref.lock_opm() else {
+            continue;
+        };
+        if let Some(group) = node.as_any().downcast_ref::<NodeGroup>() {
+            relocating_ids.extend(group.collect_all_contained_node_ids_recursive()?);
+        }
+    }
+    let relocating_set: HashSet<Uuid> = relocating_ids.iter().copied().collect();
+
+    for id in &relocating_ids {
+        let target_id_opt = scenery
+            .with_node_attr(*id, |attr| match attr.properties().get("reference id") {
+                Ok(Proptype::Uuid(target)) => Some(*target),
+                _ => None,
+            })
+            .ok()
+            .flatten();
+        if let Some(target_id) = target_id_opt
+            && !relocating_set.contains(&target_id)
+        {
+            check_reference_target_not_nested(scenery, target_id, destination_group_id)?;
+        }
+    }
+    Ok(())
+}
+
 /// Create a [`NodeInfo`] representation for a newly created group node.
 ///
 /// # Arguments
@@ -258,4 +349,118 @@ pub fn create_new_group_node_info(
         &*new_group_node,
         Some(Some((pos.x, pos.y))),
     ))
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use opossum_core::nodes::{Dummy, NodeReference};
+
+    /// Builds `root -> g1 -> g2`, returning `(root, g1_id, g2_id)`.
+    fn nested_groups() -> (NodeGroup, Uuid, Uuid) {
+        let mut root = NodeGroup::new("root");
+        let mut g2 = NodeGroup::new("g2");
+        g2.add_node(Dummy::default()).unwrap();
+        let mut g1 = NodeGroup::new("g1");
+        let g2_id = g1.add_node(g2).unwrap();
+        let g1_id = root.add_node(g1).unwrap();
+        (root, g1_id, g2_id)
+    }
+
+    #[test]
+    fn is_ancestor_or_self_true_for_self() {
+        let (root, g1_id, _) = nested_groups();
+        assert!(is_ancestor_or_self(&root, g1_id, g1_id).unwrap());
+    }
+
+    #[test]
+    fn is_ancestor_or_self_true_for_direct_parent() {
+        let (root, g1_id, g2_id) = nested_groups();
+        assert!(is_ancestor_or_self(&root, g1_id, g2_id).unwrap());
+    }
+
+    #[test]
+    fn is_ancestor_or_self_true_for_root_grandparent() {
+        let (root, _, g2_id) = nested_groups();
+        let root_id = root.node_attr().uuid();
+        assert!(is_ancestor_or_self(&root, root_id, g2_id).unwrap());
+    }
+
+    #[test]
+    fn is_ancestor_or_self_false_for_unrelated_group() {
+        let (mut root, _, g2_id) = nested_groups();
+        let other_id = root.add_node(NodeGroup::new("other")).unwrap();
+        assert!(!is_ancestor_or_self(&root, other_id, g2_id).unwrap());
+    }
+
+    #[test]
+    fn check_reference_target_not_nested_rejects_self_placement() {
+        let (root, g1_id, _) = nested_groups();
+        assert!(check_reference_target_not_nested(&root, g1_id, g1_id).is_err());
+    }
+
+    #[test]
+    fn check_reference_target_not_nested_rejects_nested_descendant() {
+        let (root, g1_id, g2_id) = nested_groups();
+        assert!(check_reference_target_not_nested(&root, g1_id, g2_id).is_err());
+    }
+
+    #[test]
+    fn check_reference_target_not_nested_allows_unrelated_group() {
+        let (mut root, g1_id, _) = nested_groups();
+        let other_id = root.add_node(NodeGroup::new("other")).unwrap();
+        assert!(check_reference_target_not_nested(&root, g1_id, other_id).is_ok());
+    }
+
+    #[test]
+    fn validate_relocated_references_rejects_reference_into_own_target() {
+        let mut root = NodeGroup::new("root");
+        let g1_id = root.add_node(NodeGroup::new("g1")).unwrap();
+        let g1_ref = root.node(g1_id).unwrap();
+        let node_reference = NodeReference::from_node(&g1_ref).unwrap();
+        let ref_id = root.add_node(node_reference).unwrap();
+
+        assert!(validate_relocated_references(&root, &[ref_id], g1_id).is_err());
+    }
+
+    #[test]
+    fn validate_relocated_references_rejects_reference_nested_in_moved_group() {
+        // root -> T, root -> H { ref(T) }: moving H into T would nest ref(T) inside its own target.
+        let mut root = NodeGroup::new("root");
+        let t_id = root.add_node(NodeGroup::new("T")).unwrap();
+        let t_ref = root.node(t_id).unwrap();
+        let node_reference = NodeReference::from_node(&t_ref).unwrap();
+
+        let mut h = NodeGroup::new("H");
+        h.add_node(node_reference).unwrap();
+        let h_id = root.add_node(h).unwrap();
+
+        assert!(validate_relocated_references(&root, &[h_id], t_id).is_err());
+    }
+
+    #[test]
+    fn validate_relocated_references_allows_sibling_reference() {
+        let mut root = NodeGroup::new("root");
+        let a_id = root.add_node(Dummy::default()).unwrap();
+        let a_ref = root.node(a_id).unwrap();
+        let node_reference = NodeReference::from_node(&a_ref).unwrap();
+        let ref_id = root.add_node(node_reference).unwrap();
+        let other_id = root.add_node(NodeGroup::new("other")).unwrap();
+
+        assert!(validate_relocated_references(&root, &[ref_id], other_id).is_ok());
+    }
+
+    #[test]
+    fn validate_relocated_references_skips_co_relocated_target() {
+        // Moving a reference and its own target together, as siblings, into an unrelated destination
+        // must still be allowed - they keep the same (valid) relative structure either way.
+        let mut root = NodeGroup::new("root");
+        let g1_id = root.add_node(NodeGroup::new("g1")).unwrap();
+        let g1_ref = root.node(g1_id).unwrap();
+        let node_reference = NodeReference::from_node(&g1_ref).unwrap();
+        let ref_id = root.add_node(node_reference).unwrap();
+        let dest_id = root.add_node(NodeGroup::new("dest")).unwrap();
+
+        assert!(validate_relocated_references(&root, &[g1_id, ref_id], dest_id).is_ok());
+    }
 }
