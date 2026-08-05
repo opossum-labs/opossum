@@ -15,8 +15,9 @@ use dioxus::{
     html::geometry::euclid::default::{Point2D, Rect, Size2D},
     prelude::*,
 };
-use std::{collections::HashSet, path::PathBuf, time::Instant};
+use std::{collections::HashSet, path::PathBuf};
 use uuid::Uuid;
+use web_time::Instant;
 
 #[component]
 pub fn GraphViewEditor(

@@ -416,14 +416,7 @@ pub fn App() -> Element {
 
     #[cfg(target_arch = "wasm32")]
     rsx! {
-        div {
-            class: "app-container",
-            tabindex: 0,
-            onkeydown: move |e| {
-                if let Some(action) = get_action_from_event(&e) {
-                    process_command(AppCommand::from(action));
-                }
-            },
+        div { class: "app-container", tabindex: 0,
             CommonAppLayout {
                 cxt_command_handler: EventHandler::new(move |cxt_cmd_opt: Option<CxtCommand>| {
                     cxt_command.set(cxt_cmd_opt);
