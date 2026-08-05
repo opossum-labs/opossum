@@ -10,6 +10,7 @@ pub(super) use alignment_editor::{
 
 use crate::components::{
     node_editor::{
+        accordion::open_accordion_section,
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
         optical_node_editor::{
             alignment_editor::{AlignmentEditor, PositioningEditor},
@@ -22,7 +23,10 @@ use crate::components::{
 };
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
-use opossum_core::{prelude::Properties, types::api_types::NodeInfo};
+use opossum_core::{
+    prelude::Properties,
+    types::api_types::{NodeEditorPanel, NodeInfo},
+};
 
 #[component]
 pub fn OpticalNodeEditor(
@@ -30,7 +34,6 @@ pub fn OpticalNodeEditor(
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let node_id = use_memo(move || active_node.read().node_id);
-
     let mut node_info_sig = use_signal(NodeInfo::default);
     let mut node_properties_sig = use_signal(Properties::default);
     let mut readonly = use_signal(|| false);
@@ -47,7 +50,7 @@ pub fn OpticalNodeEditor(
         }
     });
 
-    let resource_future: Resource<(Option<NodeInfo>, Option<Properties>)> =
+    let mut resource_future: Resource<(Option<NodeInfo>, Option<Properties>)> =
         use_resource(move || async move {
             let node_id = active_node.read().node_id;
             let node_info = match api::get_node_info(node_id).await {
@@ -71,8 +74,39 @@ pub fn OpticalNodeEditor(
                     None
                 }
             };
+
             (node_info, properties)
         });
+
+    use_effect(move || {
+        crate::NODE_DETAILS_REFRESH();
+        resource_future.restart();
+    });
+
+    // Undo/redo just auto-selected this node because it (or its tab) wasn't already displayed - open
+    // the panel it changed once this node's data has actually loaded (the accordion DOM for a freshly
+    // selected node doesn't exist until then). Reading `resource_future` here (not just the pending
+    // signal) means this effect naturally re-runs once the fetch resolves, instead of needing to poll.
+    use_effect(move || {
+        let Some((uuid, panel)) = *crate::PENDING_PANEL_OPEN.read() else {
+            return;
+        };
+        if uuid != *node_id.read() {
+            return;
+        }
+        let Some((Some(node_info), Some(_))) = &*resource_future.read_unchecked() else {
+            return;
+        };
+        if node_info.uuid != uuid {
+            return; // stale in-flight fetch for a previous node
+        }
+        // PortConfig has its own, separately-loaded resource in `PortConfigEditor` - it clears the
+        // pending signal itself once *its* data has loaded, to avoid the same missing-DOM race here.
+        if panel != NodeEditorPanel::PortConfig {
+            open_accordion_section(panel);
+            *crate::PENDING_PANEL_OPEN.write() = None;
+        }
+    });
 
     if let Some((Some(node_info), Some(_))) = &*resource_future.read_unchecked()
         && node_info.uuid == node_info_sig.read().uuid

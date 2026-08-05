@@ -1,6 +1,6 @@
 mod connections;
 mod core;
-mod port_mappings;
+pub mod port_mappings;
 mod ports;
 mod properties;
 
@@ -15,6 +15,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(core::get_node);
     cfg.service(core::patch_node);
     cfg.service(core::delete_node);
+    cfg.service(core::delete_nodes);
     cfg.service(core::post_reference);
     cfg.service(core::get_node_hierarchy);
     cfg.service(core::get_reference_nodes);

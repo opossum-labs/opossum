@@ -234,6 +234,11 @@ impl NodeAttr {
     pub const fn set_alignment(&mut self, isometry: Isometry) {
         self.alignment = Some(isometry);
     }
+    /// Sets the local alignment isometry option of this [`NodeAttr`], allowing it to be cleared back to
+    /// unset (unlike [`Self::set_alignment`], which can only ever set a concrete value).
+    pub const fn set_alignment_option(&mut self, alignment_opt: Option<Isometry>) {
+        self.alignment = alignment_opt;
+    }
     /// Returns a reference to the global config (if any) of this [`NodeAttr`].
     #[must_use]
     pub const fn global_conf(&self) -> &Option<Arc<Mutex<SceneryResources>>> {

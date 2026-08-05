@@ -1,4 +1,5 @@
 use crate::components::node_editor::{
+    hooks::use_synced_signal,
     inputs::{input_components::LabeledSelect, select_options_from_enum_iterator},
     node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::on_save_proptype_handler,
@@ -19,7 +20,7 @@ pub fn FluenceEstimatorEditor(
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    let fluence_estimator_sig = use_signal(|| fluence_estimator);
+    let fluence_estimator_sig = use_synced_signal(fluence_estimator);
     let on_save = on_save_proptype_handler(
         fluence_estimator_sig,
         property_key.clone(),

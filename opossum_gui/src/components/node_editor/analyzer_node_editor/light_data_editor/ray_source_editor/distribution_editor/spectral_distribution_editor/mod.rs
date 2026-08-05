@@ -4,6 +4,7 @@ mod laser_lines_editor;
 
 use crate::components::node_editor::{
     accordion::AccordionItem,
+    hooks::use_synced_signal,
     inputs::{
         IntoInputData,
         input_components::{LabeledSelect, RowedInputs},
@@ -49,7 +50,7 @@ pub fn SpectralDistributionEditor(
     on_save: EventHandler<RayDataSource>,
     readonly: bool,
 ) -> Element {
-    let mut spect_dist_type_sig = use_signal(|| spect_dist_type.clone());
+    let mut spect_dist_type_sig = use_synced_signal(spect_dist_type);
 
     let on_spect_dist_save = EventHandler::new(move |new_spect_dist_type: SpecDistType| {
         spect_dist_type_sig.set(new_spect_dist_type);

@@ -63,6 +63,16 @@ impl GhostFocusConfig {
     pub const fn source_map(&self) -> &HashMap<Uuid, RayDataBuilder> {
         &self.source_map
     }
+    /// The first source UUID whose mapping differs from `other`'s (added, removed, or changed value), if
+    /// any. Used to focus the exact source-port card an undo/redo of a source-mapping change touched.
+    #[must_use]
+    pub fn first_differing_source(&self, other: &Self) -> Option<Uuid> {
+        self.source_map
+            .keys()
+            .chain(other.source_map.keys())
+            .copied()
+            .find(|uuid| self.source_map.get(uuid) != other.source_map.get(uuid))
+    }
 }
 impl Default for GhostFocusConfig {
     fn default() -> Self {

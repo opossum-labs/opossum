@@ -4,9 +4,12 @@ use strum::{EnumIter, IntoEnumIterator};
 
 use crate::{
     OPOSSUM_UI_LOGS,
-    components::node_editor::inputs::{
-        InputData, InputParam, IntoInputData, IntoInputDataStrings, input_components::RowedInputs,
-        select_options_from_enum_iterator,
+    components::node_editor::{
+        hooks::use_synced_signal,
+        inputs::{
+            InputData, InputParam, IntoInputData, IntoInputDataStrings,
+            input_components::RowedInputs, select_options_from_enum_iterator,
+        },
     },
 };
 
@@ -16,7 +19,7 @@ pub fn EdgeFilterEditor(
     on_spectral_filter_change: EventHandler<SpectralFilterBuilder>,
     readonly: bool,
 ) -> Element {
-    let mut edge_filter_sig = use_signal(|| edge_filter.clone());
+    let mut edge_filter_sig = use_synced_signal(edge_filter);
 
     let on_edge_filter_change = EventHandler::new(move |new_edge_filter: EdgeFilter| {
         if new_edge_filter != *edge_filter_sig.read() {

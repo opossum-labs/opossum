@@ -9,9 +9,9 @@ use std::path::PathBuf;
 
 use crate::components::{
     menu_bar::{
-        edit::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},
         file_path_display::FilePathDisplay,
         help::about::About,
+        node_menu::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},
     },
     short_cuts::{SHORTCUTS, ShortCutAction},
 };
@@ -33,6 +33,8 @@ pub enum AppCommand {
     AutoLayout,
     CenterGraph,
     ZoomToFit,
+    Undo,
+    Redo,
     Quit,
     Simulate,
     Settings,
@@ -124,11 +126,34 @@ pub fn MenuBar(
                         a {
                             "data-mdb-dropdown-init": "",
                             "data-mdb-toggle": "dropdown",
-                            "data-mdb-auto-close": "outside",
                             class: "nav-link dropdown-toggle link-secondary hidden-arrow",
                             id: "navbarDropdownEditMenuLink",
                             role: "button",
                             "Edit"
+                        }
+                        ul { class: "dropdown-menu",
+                            MenuListItemShortCut {
+                                short_cut_action: ShortCutAction::Undo,
+                                disabled: !crate::UNDO_REDO_STATUS().0,
+                                on_click: move |_| on_menu_action.call(AppCommand::Undo),
+                            }
+                            MenuListItemShortCut {
+                                short_cut_action: ShortCutAction::Redo,
+                                disabled: !crate::UNDO_REDO_STATUS().1,
+                                on_click: move |_| on_menu_action.call(AppCommand::Redo),
+                            }
+                        }
+                    }
+                    // --- Node Menu ---
+                    li { class: "nav-item dropdown",
+                        a {
+                            "data-mdb-dropdown-init": "",
+                            "data-mdb-toggle": "dropdown",
+                            "data-mdb-auto-close": "outside",
+                            class: "nav-link dropdown-toggle link-secondary hidden-arrow",
+                            id: "navbarDropdownNodeMenuLink",
+                            role: "button",
+                            "Node"
                         }
                         ul { class: "dropdown-menu",
                             li { class: "dropdown-submenu",
@@ -142,7 +167,7 @@ pub fn MenuBar(
                                     NodesMenu {
                                         on_node_selected: move |node_name| {
                                             on_menu_action.call(AppCommand::AddNode(node_name));
-                                            hide_dropdown("navbarDropdownEditMenuLink");
+                                            hide_dropdown("navbarDropdownNodeMenuLink");
                                         },
                                     }
                                 }
@@ -161,7 +186,7 @@ pub fn MenuBar(
                                                 AnalyzersMenu {
                                                     on_analyzer_selected: move |analyzer_type| {
                                                         on_menu_action.call(AppCommand::AddAnalyzer(analyzer_type));
-                                                        hide_dropdown("navbarDropdownEditMenuLink");
+                                                        hide_dropdown("navbarDropdownNodeMenuLink");
                                                     },
                                                 }
                                             }
@@ -280,6 +305,7 @@ fn hide_dropdown(id: &str) {
 fn MenuListItemShortCut(
     short_cut_action: ShortCutAction,
     on_click: EventHandler<MouseEvent>,
+    #[props(default)] disabled: bool,
 ) -> Element {
     let short_cut_display = SHORTCUTS
         .get(&short_cut_action)
@@ -287,9 +313,14 @@ fn MenuListItemShortCut(
     rsx! {
         li {
             a {
-                class: "dropdown-item d-flex justify-content-between align-items-center",
+                class: if disabled { "dropdown-item d-flex justify-content-between align-items-center disabled pe-none text-muted" } else { "dropdown-item d-flex justify-content-between align-items-center" },
                 role: "button",
-                onclick: move |evt| on_click.call(evt),
+                "aria-disabled": disabled,
+                onclick: move |evt| {
+                    if !disabled {
+                        on_click.call(evt);
+                    }
+                },
                 {format!("{short_cut_action}")}
                 span { class: "text-muted ms-4", {short_cut_display} }
             }

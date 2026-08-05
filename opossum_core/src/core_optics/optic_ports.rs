@@ -104,6 +104,26 @@ pub enum PortType {
     Output,
 }
 
+impl PortType {
+    /// Returns the opposite port direction (`Input` ↔ `Output`).
+    ///
+    /// Used to map a node's *logical* (inverted) port direction - the view returned by
+    /// [`OpticNode::ports`](crate::core_optics::OpticNode::ports) and shown in the GUI - back to its
+    /// *physical* stored direction, so writes resolve against the correct raw port map on an inverted
+    /// node.
+    ///
+    /// # Returns
+    ///
+    /// [`PortType::Output`] for [`PortType::Input`] and vice versa.
+    #[must_use]
+    pub const fn opposite(self) -> Self {
+        match self {
+            Self::Input => Self::Output,
+            Self::Output => Self::Input,
+        }
+    }
+}
+
 impl Display for PortType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

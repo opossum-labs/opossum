@@ -1,14 +1,14 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::{
     node_editor::{
-        accordion::AccordionItem,
+        accordion::{AccordionItem, content_id_for_panel},
         inputs::input_components::{FlushableTextInput, LabeledCheckboxInput, LabeledInput},
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
     },
     scenery_editor::SelectedNode,
 };
 use dioxus::prelude::*;
-use opossum_core::types::api_types::NodeInfo;
+use opossum_core::types::api_types::{NodeEditorPanel, NodeInfo};
 
 #[component]
 pub fn GeneralEditor(
@@ -67,7 +67,7 @@ pub fn GeneralEditor(
             header: "General",
             header_id: "generalHeading",
             parent_id: "accordionNodeConfig",
-            content_id: "generalCollapse",
+            content_id: content_id_for_panel(NodeEditorPanel::General),
             level: 1,
         }
     }

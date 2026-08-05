@@ -12,6 +12,7 @@ use strum::EnumIter;
 
 use crate::components::node_editor::{
     accordion::ElementList,
+    hooks::use_synced_signal,
     inputs::{
         InputParam, IntoInputData, IntoInputDataStrings,
         input_components::{InputParamLabeledInput, LabeledSelect},
@@ -47,7 +48,7 @@ pub fn SpectralFilterTypeEditor<T: From<SpectralFilterBuilder> + PartialEq + Clo
     on_spectral_filter_change: EventHandler<T>,
     readonly: bool,
 ) -> Element {
-    let mut spectral_filter_builder_sig = use_signal(|| spectral_filter_builder.clone());
+    let mut spectral_filter_builder_sig = use_synced_signal(spectral_filter_builder);
 
     let on_spectral_filter_change = EventHandler::new(move |new_builder: SpectralFilterBuilder| {
         if new_builder != *spectral_filter_builder_sig.read() {

@@ -18,7 +18,7 @@ mod vec2_editor;
 mod vec3_editor;
 
 use crate::components::node_editor::{
-    accordion::AccordionItem,
+    accordion::{AccordionItem, content_id_for_panel},
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
     optical_node_editor::properties_editor::{
         angle_editor::AngleEditor, bool_editor::BoolEditor, curvature_editor::CurvatureEditor,
@@ -33,7 +33,7 @@ use crate::components::node_editor::{
 use dioxus::prelude::*;
 use opossum_core::{
     prelude::{Properties, Property, Proptype},
-    types::api_types::NodeInfo,
+    types::api_types::{NodeEditorPanel, NodeInfo},
 };
 use uuid::Uuid;
 
@@ -64,7 +64,7 @@ pub fn PropertiesEditor(
             header: "Properties",
             header_id: "propertyHeading",
             parent_id: "accordionNodeConfig",
-            content_id: "propertyCollapse",
+            content_id: content_id_for_panel(NodeEditorPanel::Properties),
             level: 1,
         }
     }

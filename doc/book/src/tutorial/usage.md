@@ -38,7 +38,11 @@ In this tutorial, we will model a simple Kepler telescope consisting of a source
 
 ### Adding an Optical Node and Using the Canvas
 
-Use the `Edit` menu to add either an optical node or an analyzer node. Let's start by selecting an optical node: a `Source` node, which represents the starting point of our optical system.
+<!-- TODO: the screenshots in this section still show the pre-split menu bar (File Edit Layout Help)
+     without the "Node" menu added when Add Node/Add Analyzer were split out of Edit. Recapture them
+     next time the tutorial images are updated. -->
+
+Use the `Node` menu to add either an optical node or an analyzer node. Let's start by selecting an optical node: a `Source` node, which represents the starting point of our optical system.
 
 Once selected, the source node appears on the canvas. You can move the node by simply clicking and dragging it. Next, add two `Lens` nodes and place them on the canvas as well.
 
@@ -82,7 +86,7 @@ Finally, select the `Source` node to configure the spectral properties. Navigate
 
 ### Adding an Analyzer
 
-Although the optical setup is complete, we must define the analysis method. Select `Add Analyzer` from the `Edit` menu and choose **RayTracing**. As implied, this node performs the ray tracing calculations. We will keep the default settings for this tutorial.
+Although the optical setup is complete, we must define the analysis method. Select `Add Analyzer` from the `Node` menu and choose **RayTracing**. As implied, this node performs the ray tracing calculations. We will keep the default settings for this tutorial.
 
 ![sixth step](../images/opossum_gui_first_steps_6.PNG)
 
@@ -96,6 +100,19 @@ Detector nodes are typically "transparent"—they have no thickness and do not a
 For now, connect the detectors and set a distance of **50 mm** between the last lens and the spot diagram, so we can see the light propagate slightly beyond the second lens.
 
 ![seventh step](../images/opossum_gui_first_steps_7.PNG)
+
+# Undo and Redo
+
+Almost every editing action in the GUI can be undone and redone:
+
+- Press `Ctrl + Z` to undo and `Ctrl + Y` to redo, or use the corresponding entries in the `Edit` menu. The menu entries are grayed out while there is nothing to undo or redo.
+- All model edits are covered: adding, deleting, moving, renaming and reconfiguring nodes and analyzers, connecting and disconnecting ports, changing connection distances, cut/copy/paste, group operations (creating groups, converting a selection to a group, dragging nodes into a group) and port mappings.
+- Composite actions count as a single step: pasting several nodes, cutting a selection, or dragging a multi-node selection is reverted by one undo.
+- Camera movements (panning, zooming, centering, zoom-to-fit) are undo steps of their own, so undoing a model edit never moves the camera and undoing a camera move never changes the model. A continuous scroll-zoom burst or consecutive, sperate scroll-zooms are combined into a single step.
+- The history holds the last 100 steps and is cleared when a file is loaded or a new document is created. Undo and redo count as modifications, so the document is marked as unsaved afterwards.
+- The reflective grating's Littrow alignment aids (reference wavelength, incident/diffracted mode) are entry helpers, not stored with the model, so they are not undoable — only the resulting alignment is.
+- The RayTrace analyzer's spectral-distribution laser-line list and the Energy analyzer's laser-line list work the same way: the wavelength/intensity (or wavelength/energy) fields for the line currently being entered are not sent to the backend until "Add laser line" is pressed, so only adding or deleting a line is undoable, not the individual field edits leading up to it.
+- The stacked-aperture editor (in a port's aperture configuration) follows the same pattern: the shape/type fields for the aperture currently being composed are not sent to the backend until "Add Aperture to Stack" or "Update Aperture in Stack" is pressed. Each add, update, or delete of one aperture in the stack is its own undo step, but the field edits leading up to it are not individually undoable.
 
 # Groups
 

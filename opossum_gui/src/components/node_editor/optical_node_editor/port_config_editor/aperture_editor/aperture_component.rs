@@ -9,6 +9,7 @@ use opossum_core::{
 
 use crate::components::node_editor::{
     accordion::AccordionItem,
+    hooks::use_synced_signal,
     inputs::{
         InputData, IntoInputData,
         input_components::{LabeledSelect, RowedInputs},
@@ -31,10 +32,13 @@ pub fn ApertureEditor(
     on_change: EventHandler<Aperture>,
     readonly: bool,
 ) -> Element {
-    let mut aperture_sig = use_signal(|| aperture.clone());
+    let mut aperture_sig = use_synced_signal(aperture);
 
-    // Fallback to Isometry::identity() if the option is None
-    let alignment_sig = use_memo(move || aperture.isometry().copied().unwrap_or_default());
+    // Derive from the synced `aperture_sig` (not the raw `aperture` prop) so the rotation/translation
+    // inputs re-pull after an undo/redo refetch - a memo over the plain prop only computes once on
+    // mount, which made the aperture isometry look non-undoable. Fallback to identity if `None`.
+    let alignment_sig =
+        use_memo(move || aperture_sig.read().isometry().copied().unwrap_or_default());
 
     let on_alignment_change = EventHandler::new(move |alignment: Isometry| {
         let current_iso = aperture_sig.read().isometry().copied().unwrap_or_default();

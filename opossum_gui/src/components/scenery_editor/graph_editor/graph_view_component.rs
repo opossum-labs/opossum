@@ -119,6 +119,10 @@ pub fn GraphViewEditor(
         workspace_processor.send(GraphsWorkspaceAction::CenterGraph {
             graph_id,
             save_changes: false,
+            // Programmatic mount-time centering (new project / file load / first tab open) is not
+            // a user gesture - it must not create an undo step or enable the Undo button on a
+            // fresh document.
+            record_undo: false,
         });
     });
 

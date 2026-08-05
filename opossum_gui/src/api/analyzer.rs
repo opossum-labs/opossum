@@ -1,7 +1,6 @@
 //! Scenery api calls
 
 use crate::HTTP_API_CLIENT;
-use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_core::{
     opm_document::AnalyzerInfo,
     prelude::AnalyzerType,
@@ -34,18 +33,6 @@ pub async fn get_analyzers() -> Result<Vec<AnalyzerItemDto>, String> {
         .get::<Vec<AnalyzerItemDto>>("/api/analyzers")
         .await
 }
-/// Send request to delete an analyzer with the given id.
-///
-/// # Errors
-///
-/// This function will return an error if
-/// - the Analyzer with the given id was not found.
-pub async fn delete_analyzer(id: Uuid) -> Result<Uuid, String> {
-    HTTP_API_CLIENT()
-        .delete_no_content(&format!("/api/analyzers/{id}"))
-        .await
-        .map(|()| id)
-}
 /// Update the analyzer configuration of an analyzer node.
 /// This function sends a POST request to the server to update the analyzer type
 /// associated with a specific node identified by its UUID. The server endpoint is:
@@ -70,18 +57,6 @@ pub async fn update_analyzer_config_ron(
 ) -> Result<(), String> {
     HTTP_API_CLIENT()
         .patch_ron::<AnalyzerType>(&format!("/api/analyzers/{node_id}"), analyzer_type)
-        .await
-}
-pub async fn update_analyzer_position(
-    node_id: Uuid,
-    gui_position: Point2D<f64>,
-) -> Result<(), String> {
-    let position = (gui_position.x, gui_position.y);
-    HTTP_API_CLIENT()
-        .put_receive_no_content::<(f64, f64)>(
-            &format!("/api/analyzers/{node_id}/gui_position"),
-            position,
-        )
         .await
 }
 /// Get the information about an analyzer node.

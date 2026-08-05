@@ -25,7 +25,7 @@ pub struct FormContext {
 pub fn FlushableTextInput(
     id: String,
     label: String,
-    value: ReadSignal<String>,
+    value: String,
     on_save: EventHandler<String>,
     #[props(default = String::new())] container_class: String,
     #[props(default = String::new())] input_class: String,
@@ -38,13 +38,20 @@ pub fn FlushableTextInput(
 ) -> Element {
     let mut form_ctx = use_context::<FormContext>();
 
-    let mut local_value = use_signal(|| value.read().clone());
+    let mut local_value = use_signal(|| value.clone());
     let mut is_locally_dirty = use_signal(|| false);
+    // Tracks the prop's own last-seen value, separately from `local_value` (what's displayed) - this
+    // is what lets us tell "the prop changed to something new" (pull it in) apart from "the prop just
+    // hasn't caught up with a save we made a moment ago" (don't stomp our own optimistic update while
+    // waiting for that round-trip).
+    let mut last_prop_value = use_signal(|| value.clone());
 
-    use_effect(use_reactive!(|value| {
-        local_value.set(value.read().clone());
-        is_locally_dirty.set(false);
-    }));
+    if *last_prop_value.peek() != value {
+        last_prop_value.set(value.clone());
+        if !*is_locally_dirty.peek() {
+            local_value.set(value);
+        }
+    }
 
     let mut perform_save = move || {
         if *is_locally_dirty.peek() {

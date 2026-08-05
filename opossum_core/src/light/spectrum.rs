@@ -440,13 +440,10 @@ impl Spectrum {
     #[must_use]
     pub fn get_value(&self, wavelength: &Length) -> Option<f64> {
         let wvl_in_micrometer = wavelength.get::<micrometer>();
-        if let Some(last) = self.data.last() {
-            #[allow(clippy::float_cmp)]
-            if wvl_in_micrometer == last.0 {
-                return Some(last.1);
-            }
-        } else {
-            return None;
+        let last = self.data.last()?;
+        #[allow(clippy::float_cmp)]
+        if wvl_in_micrometer == last.0 {
+            return Some(last.1);
         }
 
         let spectrum_range = self.range();

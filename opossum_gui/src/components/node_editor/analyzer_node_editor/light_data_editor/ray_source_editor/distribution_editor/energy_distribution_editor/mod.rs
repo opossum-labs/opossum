@@ -4,6 +4,7 @@ mod uniform_editor;
 
 use crate::components::node_editor::{
     accordion::AccordionItem,
+    hooks::use_synced_signal,
     inputs::{
         InputData, IntoInputData,
         input_components::{LabeledSelect, RowedInputs},
@@ -38,7 +39,7 @@ pub fn EnergyDistributionEditor(
     on_save: EventHandler<RayDataSource>,
     readonly: bool,
 ) -> Element {
-    let mut energy_dist_type_sig = use_signal(|| energy_dist_type);
+    let mut energy_dist_type_sig = use_synced_signal(energy_dist_type);
 
     let on_energy_dist_save = EventHandler::new(move |new_energy_dist_type: EnergyDistType| {
         energy_dist_type_sig.set(new_energy_dist_type);

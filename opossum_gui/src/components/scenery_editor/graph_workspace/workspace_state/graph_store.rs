@@ -40,18 +40,10 @@ impl GraphState {
 }
 
 impl GraphInfo {
-    pub fn get_parent_id(&self) -> Option<Uuid> {
-        let parent_hierarchy_pos = self.hierarchy.len() - 2;
-        if parent_hierarchy_pos > 0 {
-            Some(self.hierarchy[parent_hierarchy_pos].0)
-        } else {
-            None
-        }
-    }
     pub fn get_parent(&self) -> Option<(Uuid, String)> {
-        let parent_hierarchy_pos = self.hierarchy.len() - 2;
-        if parent_hierarchy_pos > 0 {
-            Some(self.hierarchy[parent_hierarchy_pos].clone())
+        let hierarchy_len = self.hierarchy.len();
+        if hierarchy_len > 2 {
+            Some(self.hierarchy[hierarchy_len - 2].clone())
         } else {
             None
         }
@@ -97,8 +89,28 @@ impl<Lens> Store<GraphStore, Lens> {
         current_index
     }
 
-    /// Appends a new `EdgeElement` with a monotonic index to the store.
+    /// Inserts a new edge, or - if one with the same `(src_uuid, src_port, target_uuid,
+    /// target_port)` identity already exists - updates it in place instead of duplicating it.
+    /// A full-tab refill (e.g. the GUI's `process_fill_graph_of_group`, which re-fetches a
+    /// group's entire connection list) can legitimately re-report a connection that's already
+    /// present locally; unlike the `HashMap`-backed node store, `edges` is a plain `Vec` with no
+    /// dedup-by-construction, so a blind push there would leave two `EdgeElement`s sharing the
+    /// same key `edges_component.rs` renders edges by - which Dioxus's keyed-list diff rejects
+    /// as a duplicate key (panic: "keyed siblings must each have a unique key").
     fn add_edge(&mut self, connect_info: ConnectInfo) {
+        let mut edges_store = self.edges();
+        let mut edges = edges_store.write();
+        if let Some(existing) = edges.iter_mut().find(|e| {
+            e.src_uuid() == connect_info.src_uuid()
+                && e.src_port() == connect_info.src_port()
+                && e.target_uuid() == connect_info.target_uuid()
+                && e.target_port() == connect_info.target_port()
+        }) {
+            let index = existing.edge_index();
+            *existing = EdgeElement::new(connect_info, index);
+            return;
+        }
+        drop(edges);
         let index = self.fetch_next_edge_index();
         self.edges()
             .write()
@@ -300,13 +312,6 @@ impl<Lens> Store<GraphStore, Lens> {
 }
 
 impl GraphStore {
-    #[must_use]
-    pub fn get_node_type(&self, node_id: Uuid) -> Option<NodeType> {
-        self.nodes
-            .get(&node_id)
-            .map(NodeElement::node_type)
-            .cloned()
-    }
     #[must_use]
     pub fn selected_nodes(&self) -> HashMap<Uuid, bool> {
         self.node_selection.all_nodes.read().clone()

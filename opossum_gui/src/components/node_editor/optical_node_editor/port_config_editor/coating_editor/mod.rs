@@ -10,6 +10,7 @@ use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::{
         accordion::ElementList,
+        hooks::use_synced_signal,
         inputs::{
             input_components::{LabeledSelect, NodeConfigUnitInput, UnitHandling},
             select_options_from_enum_iterator,
@@ -23,7 +24,7 @@ pub fn CoatingEditor(
     on_change: EventHandler<CoatingType>,
     readonly: bool,
 ) -> Element {
-    let mut coating_type_sig = use_signal(|| *coating_type.read());
+    let mut coating_type_sig = use_synced_signal(*coating_type.read());
     let on_coating_changed = move |ct: CoatingType| {
         coating_type_sig.set(ct);
         on_change.call(ct);

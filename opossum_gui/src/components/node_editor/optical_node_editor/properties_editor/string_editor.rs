@@ -1,5 +1,6 @@
 use crate::components::node_editor::{
-    inputs::input_components::FlushableTextInput, node_config_editor::NodeChangeEvent,
+    hooks::use_synced_signal, inputs::input_components::FlushableTextInput,
+    node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::on_save_proptype_handler,
 };
 use dioxus::prelude::*;
@@ -14,7 +15,7 @@ pub fn StringEditor(
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    let string_sig = use_signal(|| s);
+    let string_sig = use_synced_signal(s);
     let on_save =
         on_save_proptype_handler(string_sig, property_key.clone(), on_change, node_id.into());
 

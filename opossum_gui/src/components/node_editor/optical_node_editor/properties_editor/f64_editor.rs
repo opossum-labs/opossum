@@ -1,5 +1,6 @@
 use crate::components::node_editor::{
-    inputs::input_components::NodeConfigPlainF64Input, node_config_editor::NodeChangeEvent,
+    hooks::use_synced_signal, inputs::input_components::NodeConfigPlainF64Input,
+    node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::on_save_proptype_handler,
 };
 use approx::relative_ne;
@@ -15,7 +16,7 @@ pub fn F64Editor(
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    let float64_sig = use_signal(|| float64);
+    let float64_sig = use_synced_signal(float64);
     let on_save =
         on_save_proptype_handler(float64_sig, property_key.clone(), on_change, node_id.into());
 

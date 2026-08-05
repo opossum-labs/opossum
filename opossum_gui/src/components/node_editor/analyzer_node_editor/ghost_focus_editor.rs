@@ -125,13 +125,15 @@ fn SourcePortCard(
     let mut is_collapsed = use_signal(|| true);
     let port_uuid = port.uuid;
     let port_name = port.name;
+    // Undo/redo of this source's mapping expands and scrolls to this card - see `use_source_card_focus`.
+    super::use_source_card_focus(analyzer_id, port_uuid, is_collapsed);
 
     let existing_source = ghost_focus_config
         .get_source(&port_uuid)
         .map_or_else(RayDataSource::default, |builder| builder.source().clone());
 
     rsx! {
-        div { class: "card bg-dark border-secondary mb-2",
+        div { class: "card bg-dark border-secondary mb-2", id: "sourceCard{port_uuid}",
             div {
                 class: "card-header bg-secondary py-1 px-2 text-light d-flex justify-content-between align-items-center noselect",
                 style: "cursor: pointer;",
