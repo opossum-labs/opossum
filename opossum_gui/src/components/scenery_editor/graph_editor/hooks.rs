@@ -1,7 +1,8 @@
 use std::{
     collections::{HashMap, HashSet},
-    time::{Duration, Instant},
+    time::Duration,
 };
+use web_time::Instant;
 
 use crate::{
     CONTEXT_MENU, api,
@@ -96,7 +97,17 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
         let generation = *debounce_gen.peek() + 1;
         debounce_gen.set(generation);
         spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(120)).await;
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                // Native platform (Desktop): use tokio
+                tokio::time::sleep(std::time::Duration::from_millis(120)).await;
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                // Web platform (WASM): use gloo_timers
+                gloo_timers::future::sleep(std::time::Duration::from_millis(120)).await;
+            }
+
             // Only the newest tick's task flushes; a later tick bumps the generation, superseding earlier
             // tasks, so those just return.
             if *debounce_gen.peek() != generation {
