@@ -41,15 +41,18 @@ rust-sugiyama = "0.4"
 dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1", default-features = false }
 regex = "1"
 webbrowser = "1.2.3"
+
+# Add gloo-timers to handle asynchronous delays in WASM
+gloo-timers = { version = "0.4", features = ["futures"] }
+# Zeitmessung (Instant/SystemTime) plattformunabhängig machen
+web-time = "1.1"
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", features = ["process", "time"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { version = "1", default-features = false }
 web-sys = "0.3"
-
-[build-dependencies]
-winres = "0.1"
 
 # [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # plotly = { version = "0.13.5", features = ["kaleido"] }
