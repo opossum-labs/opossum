@@ -24,8 +24,9 @@ use crate::{
     error::BackEndErrorResponse,
     helper_functions::{
         PortMapCascadeRemoval, apply_and_push_undo, capture_node_connections,
-        disconnect_exposed_port_cascades_for_node, parent_group_id_or_self,
-        resolve_reference_chain, ron_or_json_response, split_cascades_for_response,
+        check_reference_target_not_nested, disconnect_exposed_port_cascades_for_node,
+        parent_group_id_or_self, resolve_reference_chain, ron_or_json_response,
+        split_cascades_for_response,
     },
     undo::{
         CascadedNode, Command, NodeSnapshot, PatchAnalyzer, PatchNode, capture_old_node_request,
@@ -681,6 +682,7 @@ async fn post_reference(
 
     let mut document = data.document.lock();
     let (referring_node, _) = resolve_reference_chain(&document, ref_node_info.referring_node())?;
+    check_reference_target_not_nested(document.scenery(), referring_node.uuid()?, group_uuid)?;
     let mut node_reference = NodeReference::from_node(&referring_node)?;
 
     node_reference
@@ -1705,6 +1707,115 @@ mod test {
                 .node_recursive(ref_uuid)
                 .is_ok(),
             "redo must restore the reference node under the same uuid"
+        );
+    }
+
+    /// Regression test for the bug where creating a reference directly inside its own target group froze
+    /// the analyzer: analyzing a group holds its `Mutex` for the duration of its own recursive descent
+    /// into its members, so a `NodeReference` resolving back to an already-locked ancestor group
+    /// self-deadlocks. Asserts `post_reference` now rejects placing a reference to `G` inside `G` itself.
+    #[actix_web::test]
+    async fn test_post_reference_rejects_reference_into_own_target() {
+        use opossum_core::nodes::NodeGroup;
+
+        let app_state = Data::new(AppState::default());
+        let group_id = {
+            let mut document = app_state.document.lock();
+            document
+                .scenery_mut()
+                .add_node(NodeGroup::new("G"))
+                .unwrap()
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_reference),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri(&format!("/{group_id}/references"))
+            .set_json(&NewRefNode::new(group_id, (0.0, 0.0)))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::BAD_REQUEST,
+            "creating a reference to a group inside that very group must be rejected"
+        );
+    }
+
+    /// Same hazard, one level deeper: `G1` contains `G2`; a reference to `G1` must also be rejected when
+    /// placed inside `G2`, since `G2` lives inside `G1`'s own subtree too.
+    #[actix_web::test]
+    async fn test_post_reference_rejects_reference_into_nested_descendant_of_target() {
+        use opossum_core::nodes::NodeGroup;
+
+        let app_state = Data::new(AppState::default());
+        let (g1_id, g2_id) = {
+            let mut document = app_state.document.lock();
+            let scenery = document.scenery_mut();
+            let mut g2 = NodeGroup::new("G2");
+            g2.add_node(Dummy::default()).unwrap();
+            let mut g1 = NodeGroup::new("G1");
+            let g2_id = g1.add_node(g2).unwrap();
+            let g1_id = scenery.add_node(g1).unwrap();
+            (g1_id, g2_id)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_reference),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri(&format!("/{g2_id}/references"))
+            .set_json(&NewRefNode::new(g1_id, (0.0, 0.0)))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::BAD_REQUEST,
+            "creating a reference to G1 inside G1's own nested descendant G2 must be rejected"
+        );
+    }
+
+    /// A reference to a group placed as a *sibling* (not nested inside it) must still succeed - this is
+    /// the sanctioned resonator/double-pass pattern (see `NodeReference`'s own doc comment), not the
+    /// hazardous nested case the two tests above guard against.
+    #[actix_web::test]
+    async fn test_post_reference_allows_reference_to_unrelated_group() {
+        use opossum_core::nodes::NodeGroup;
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, g1_id) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let mut g1 = NodeGroup::new("G1");
+            g1.add_node(Dummy::default()).unwrap();
+            let g1_id = document.scenery_mut().add_node(g1).unwrap();
+            (root_id, g1_id)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_reference),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri(&format!("/{root_id}/references"))
+            .set_json(&NewRefNode::new(g1_id, (0.0, 0.0)))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::CREATED,
+            "a reference to a group placed as its sibling must still be allowed"
         );
     }
 

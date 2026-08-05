@@ -527,4 +527,142 @@ mod test {
             "redo of the same move must focus the same outer tab, not jump into the group"
         );
     }
+
+    /// Regression test for the bug where nothing stopped a reference to a group from being moved into
+    /// that very group - which deadlocks the analyzer (analyzing a group holds its `Mutex` for the
+    /// duration of its own recursive descent, so a reference resolving back to an already-locked ancestor
+    /// self-deadlocks). Builds `G` and a sibling `R = ref(G)` at the root, then asserts moving `R` into
+    /// `G` is rejected and `R` stays put.
+    #[actix_web::test]
+    async fn test_move_reference_into_own_target_is_rejected() {
+        use opossum_core::nodes::{NodeGroup, NodeReference};
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, g_id, ref_id) = {
+            let mut document = app_state.document.lock();
+            let scenery = document.scenery_mut();
+            let root_id = scenery.node_attr().uuid();
+            let g_id = scenery.add_node(NodeGroup::new("G")).unwrap();
+            let g_ref = scenery.node(g_id).unwrap();
+            let node_reference = NodeReference::from_node(&g_ref).unwrap();
+            let ref_id = scenery.add_node(node_reference).unwrap();
+            (root_id, g_id, ref_id)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_move_nodes),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/move_nodes")
+            .set_json(&MoveNodesRequest {
+                source_group_id: root_id,
+                target_group_id: g_id,
+                nodes_to_move: vec![ref_id],
+            })
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::BAD_REQUEST,
+            "moving a reference into its own target group must be rejected"
+        );
+        assert!(
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .node_recursive(ref_id)
+                .is_ok_and(|(_, parent)| parent == root_id),
+            "the rejected reference must remain at its original location"
+        );
+    }
+
+    /// Same hazard, one level deeper: `G1` contains `G2`; a reference to `G1` sitting at the root must
+    /// also be rejected when moved into `G2`, since `G2` lives inside `G1`'s own subtree too.
+    #[actix_web::test]
+    async fn test_move_reference_into_nested_descendant_of_target_is_rejected() {
+        use opossum_core::nodes::{Dummy, NodeGroup, NodeReference};
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, g2_id, ref_id) = {
+            let mut document = app_state.document.lock();
+            let scenery = document.scenery_mut();
+            let root_id = scenery.node_attr().uuid();
+            let mut g2 = NodeGroup::new("G2");
+            g2.add_node(Dummy::default()).unwrap();
+            let mut g1 = NodeGroup::new("G1");
+            let g2_id = g1.add_node(g2).unwrap();
+            let g1_id = scenery.add_node(g1).unwrap();
+            let g1_ref = scenery.node(g1_id).unwrap();
+            let node_reference = NodeReference::from_node(&g1_ref).unwrap();
+            let ref_id = scenery.add_node(node_reference).unwrap();
+            (root_id, g2_id, ref_id)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_move_nodes),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/move_nodes")
+            .set_json(&MoveNodesRequest {
+                source_group_id: root_id,
+                target_group_id: g2_id,
+                nodes_to_move: vec![ref_id],
+            })
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::BAD_REQUEST,
+            "moving a reference into a nested descendant of its target must be rejected"
+        );
+    }
+
+    /// A reference and its own target moved together, as siblings, into an unrelated destination group
+    /// must still succeed - they keep the same (valid) relative structure either way, unlike the two
+    /// rejected cases above.
+    #[actix_web::test]
+    async fn test_move_reference_and_target_together_as_siblings_is_allowed() {
+        use opossum_core::nodes::{NodeGroup, NodeReference};
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, g_id, ref_id, dest_id) = {
+            let mut document = app_state.document.lock();
+            let scenery = document.scenery_mut();
+            let root_id = scenery.node_attr().uuid();
+            let g_id = scenery.add_node(NodeGroup::new("G")).unwrap();
+            let g_ref = scenery.node(g_id).unwrap();
+            let node_reference = NodeReference::from_node(&g_ref).unwrap();
+            let ref_id = scenery.add_node(node_reference).unwrap();
+            let dest_id = scenery.add_node(NodeGroup::new("dest")).unwrap();
+            (root_id, g_id, ref_id, dest_id)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_move_nodes),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/move_nodes")
+            .set_json(&MoveNodesRequest {
+                source_group_id: root_id,
+                target_group_id: dest_id,
+                nodes_to_move: vec![g_id, ref_id],
+            })
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::OK,
+            "moving a reference together with its own target as siblings must still be allowed"
+        );
+    }
 }
