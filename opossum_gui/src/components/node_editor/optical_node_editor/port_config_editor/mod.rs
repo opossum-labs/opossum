@@ -56,7 +56,8 @@ pub fn PortConfigEditor(
     // resolves, so opening it any earlier is a silent no-op. Reading the resource with `.read()` (not
     // `.read_unchecked()`) subscribes the effect, so it re-runs the moment the ports resolve - which is
     // what makes this reliable across a preceding re-fetch (e.g. an invert that swapped the port set).
-    // Also expands each port's own sub-accordion so the reverted value isn't hidden behind a collapsed row.
+    // Also expands each port's own sub-accordion, plus its nested Aperture Configuration accordion, so
+    // the reverted value isn't hidden behind a collapsed row.
     use_effect(move || {
         let Some((uuid, panel)) = *crate::PENDING_PANEL_OPEN.read() else {
             return;
@@ -70,6 +71,7 @@ pub fn PortConfigEditor(
         open_accordion_section(NodeEditorPanel::PortConfig);
         for port_name in ports_info.inputs.keys().chain(ports_info.outputs.keys()) {
             open_accordion_content(&format!("singlePortCollapse{port_name}"));
+            open_accordion_content(&format!("apertureConfigCollapse{port_name}"));
         }
         *crate::PENDING_PANEL_OPEN.write() = None;
     });
@@ -174,6 +176,7 @@ pub fn SinglePortConfigEditor(
         }
         ApertureEditor {
             node_id,
+            port_name: port_name.clone(),
             aperture: port_config.aperture,
             on_change: move |aperture: Aperture| {
                 let update_port_request = UpdatePortRequest {

@@ -28,6 +28,7 @@ use uuid::Uuid;
 #[component]
 pub fn ApertureEditor(
     node_id: Memo<Uuid>,
+    port_name: String,
     aperture: Aperture,
     on_change: EventHandler<Aperture>,
     readonly: bool,
@@ -158,13 +159,13 @@ pub fn ApertureEditor(
     rsx! {
         div {
             class: "accordion accordion-borderless bg-dark noselect",
-            id: "accordionApertureConfig",
+            id: "accordionApertureConfig{port_name}",
             AccordionItem {
                 elements: aperture_inputs,
                 header: "Aperture Configuration",
-                header_id: "apertureConfigHeading",
-                parent_id: "accordionApertureConfig",
-                content_id: "apertureConfigCollapse",
+                header_id: "apertureConfigHeading{port_name}",
+                parent_id: "accordionApertureConfig{port_name}",
+                content_id: "apertureConfigCollapse{port_name}",
                 level: 2,
             }
         }
