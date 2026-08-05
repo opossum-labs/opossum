@@ -867,6 +867,7 @@ fn prune_removed_port_mappings(
     ws_handler: WorkSpaceSignalHandlers,
     removed_port_mappings: Vec<(Uuid, Uuid, String, PortType)>,
 ) {
+    let mut changed_groups = HashSet::new();
     for (group_id, _node_id, external_port_name, port_type) in removed_port_mappings {
         ws_handler
             .workspace
@@ -874,6 +875,15 @@ fn prune_removed_port_mappings(
         ws_handler
             .nodes
             .remove_group_port(external_port_name, group_id, port_type);
+        changed_groups.insert(group_id);
+    }
+    // This function is also called from a sync `eval_action_run` callback (`process_delete_nodes`),
+    // so it can't simply `.await` the reference fan-out itself - spawn it instead, same as the two
+    // other fire-and-forget refreshes below in this file.
+    for group_id in changed_groups {
+        spawn(async move {
+            refresh_reference_ports(ws_handler, group_id).await;
+        });
     }
 }
 
@@ -918,6 +928,35 @@ async fn refresh_group_ports(ws_handler: WorkSpaceSignalHandlers, group_id: Uuid
                 .update_group_ports(input_ports, output_ports, group_id);
         }),
     );
+    refresh_reference_ports(ws_handler, group_id).await;
+}
+
+/// A `NodeReference` elsewhere in the workspace mirrors its target's ports live on the backend (through
+/// its own inversion, if any), but the GUI only snapshots them once, at reference-creation or tab-open
+/// time. Re-fetch and patch every open tab's cached reference to `group_id` the same way a group's own
+/// box is patched above - reusing the same discovery (`GET /{uuid}/references`) the rename fan-out
+/// already relies on (`node_config_editor.rs`). Fetches each reference's ports through its *own* uuid
+/// (not `group_id`'s) so a reference's own inversion state is respected.
+async fn refresh_reference_ports(ws_handler: WorkSpaceSignalHandlers, group_id: Uuid) {
+    let Ok(node_refs_grouped) = api::get_node_references(group_id).await else {
+        return;
+    };
+    for ref_id in node_refs_grouped
+        .into_values()
+        .flatten()
+        .filter(|id| *id != group_id)
+    {
+        eval_action_run(
+            api::get_ports_of_group(ref_id).await,
+            Some(move |ports_config: NodePortsResponse| {
+                let input_ports = ports_config.inputs.into_keys().collect();
+                let output_ports = ports_config.outputs.into_keys().collect();
+                ws_handler
+                    .nodes
+                    .update_group_ports(input_ports, output_ports, ref_id);
+            }),
+        );
+    }
 }
 
 async fn process_paste_nodes(
@@ -1388,6 +1427,7 @@ async fn process_add_port_map(
             ws_handler
                 .nodes
                 .update_group_ports(response.inputs, response.outputs, group_id);
+            refresh_reference_ports(ws_handler, group_id).await;
         }
         Err(err_str) => {
             OPOSSUM_UI_LOGS.write().add_log(&err_str);
