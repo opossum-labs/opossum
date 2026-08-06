@@ -1,5 +1,3 @@
-use crate::OPOSSUM_UI_LOGS;
-use crate::api;
 use crate::components::node_editor::{
     analyzer_node_editor::light_data_editor::ray_source_editor::RaySourceEditor,
     inputs::{
@@ -23,19 +21,8 @@ pub fn GhostFocusEditor(
     node_id: Uuid,
     ghost_focus_config: GhostFocusConfig,
     on_change: EventHandler<NodeChangeEvent>,
+    available_sources: Vec<SourcePortDto>,
 ) -> Element {
-    let mut available_sources = use_signal(Vec::<SourcePortDto>::new);
-
-    use_future(move || async move {
-        if let Ok(sources) = api::get_available_sources().await {
-            available_sources.set(sources);
-        } else {
-            OPOSSUM_UI_LOGS
-                .write()
-                .add_log("Failed to fetch available source ports from backend.");
-        }
-    });
-
     let on_save_max_bounces = {
         let config = ghost_focus_config.clone();
         move |val: String| {
@@ -65,7 +52,7 @@ pub fn GhostFocusEditor(
         }
     };
 
-    let sources_list = available_sources.read().clone();
+    let sources_list = available_sources;
 
     rsx! {
         div { class: "ghost-focus-fields",

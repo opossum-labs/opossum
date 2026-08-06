@@ -78,14 +78,31 @@ pub fn AnalyzerNodeEditor(
         }
     });
 
+    // Scenery-wide list of "source port" nodes, shared by the Energy/RayTrace/GhostFocus editors to
+    // decide which source cards to render. Fetched here (not per-editor) so it refreshes on the same
+    // `NODE_DETAILS_REFRESH` trigger as the analyzer config below - a source port's creation/deletion
+    // (including via undo/redo) bumps that signal, which previously only refreshed card *values*, not
+    // *membership*, leaving a deleted source's card stuck on screen.
+    let mut available_sources_future = use_resource(move || async move {
+        match api::get_available_sources().await {
+            Ok(sources) => sources,
+            Err(err_str) => {
+                OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                Vec::new()
+            }
+        }
+    });
+
     use_effect(move || {
         crate::NODE_DETAILS_REFRESH();
         resource_future.restart();
+        available_sources_future.restart();
     });
 
     match &*resource_future.read_unchecked() {
         Some(Some((loaded_id, analyzer_info))) => {
             let loaded_id_val = *loaded_id;
+            let available_sources = available_sources_future.read().clone().unwrap_or_default();
             rsx! {
                 div {
                     class: "analyzer-node-editor-container p-1",
@@ -103,17 +120,32 @@ pub fn AnalyzerNodeEditor(
                             match analyzer_info.analyzer_type().clone() {
                                 AnalyzerType::Energy(energy_config) => {
                                     rsx! {
-                                        EnergyEditor { node_id: loaded_id_val, energy_config, on_change }
+                                        EnergyEditor {
+                                            node_id: loaded_id_val,
+                                            energy_config,
+                                            on_change,
+                                            available_sources,
+                                        }
                                     }
                                 }
                                 AnalyzerType::RayTrace(ray_trace_config) => {
                                     rsx! {
-                                        RayTraceEditor { node_id: loaded_id_val, ray_trace_config, on_change }
+                                        RayTraceEditor {
+                                            node_id: loaded_id_val,
+                                            ray_trace_config,
+                                            on_change,
+                                            available_sources,
+                                        }
                                     }
                                 }
                                 AnalyzerType::GhostFocus(ghost_focus_config) => {
                                     rsx! {
-                                        GhostFocusEditor { node_id: loaded_id_val, ghost_focus_config, on_change }
+                                        GhostFocusEditor {
+                                            node_id: loaded_id_val,
+                                            ghost_focus_config,
+                                            on_change,
+                                            available_sources,
+                                        }
                                     }
                                 }
                             }
