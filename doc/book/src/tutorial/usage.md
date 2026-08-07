@@ -38,7 +38,7 @@ In this tutorial, we will model a simple Kepler telescope consisting of a source
 
 ### Adding an Optical Node and Using the Canvas
 
-Use the `Edit` menu to add either an optical node or an analyzer node. Let's start by selecting an optical node: a `Source_port` node, which represents the starting point of our optical system.
+Use the `Edit` menu to add either an optical node or an analyzer node. Let's start by selecting an optical node: a `Sourceport` node, which represents the starting point of our optical system.
 
 Once selected, the source port node appears on the canvas. You can move the node by simply clicking and dragging it. Next, add two `Lens` nodes and place them on the canvas as well.
 
@@ -50,7 +50,7 @@ The canvas itself is virtually infinite. You can pan the viewport by clicking an
 
 ### Connecting Nodes
 
-To form an optical network, the nodes must be connected. Click on an output port (the light green square on the right side of a node) and drag a line to the input port of another node. Connect them in this order: `Source_port -> Lens -> Lens`. Your screen should look similar to this:
+To form an optical network, the nodes must be connected. Click on an output port (the light green square on the right side of a node) and drag a line to the input port of another node. Connect them in this order: `Sourceport -> Lens -> Lens`. Your screen should look similar to this:
 
 ![third step](../images/opossum_gui_first_steps_3.PNG)
 Each node port can only be connected to exactly one other port, i.e., a single source cannot be connected to multiple inputs simultaneously. 
@@ -78,7 +78,7 @@ Set the **Center Thickness** to **3 mm**, the **Front Radius** to **60 mm**, and
 
 Repeat this step for the second lens: Set the **Center Thickness** to **3 mm**, the **Front Surface** to **Flat** (Plane), and the **Back Surface** to **-40 mm**.
 
-Finally, select the `Source_port` node to configure the spectral properties. Navigate to `Properties -> Light definition -> Spectral distribution`. Change the `Rays spectral distribution` from "Gaussian" to "Laser Lines". This generates a monochromatic source (defaulting to 1054 nm) instead of a broad spectrum.
+Finally, select the `Sourceport` node to configure the spectral properties. Navigate to `Properties -> Light definition -> Spectral distribution`. Change the `Rays spectral distribution` from "Gaussian" to "Laser Lines". This generates a monochromatic source (defaulting to 1054 nm) instead of a broad spectrum.
 
 ### Adding an Analyzer
 

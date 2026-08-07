@@ -18,9 +18,9 @@ Strictly speaking, there is no single, stringent definition of an optical axis�
 
 ### Component Placement
 
-Although relative positioning is key, every system needs a defined starting point. By default, the `Source_port` node is placed at the global coordinate origin `(0, 0, 0)`. All subsequent nodes are placed relative to this point.
+Although relative positioning is key, every system needs a defined starting point. By default, the `Sourceport` node is placed at the global coordinate origin `(0, 0, 0)`. All subsequent nodes are placed relative to this point.
 
-During the component alignment run, OPOSSUM traces a reference ray along the optical axis. By default, this starts at the center of the `Source_port` and propagates (usually along the Z-axis) by the distance specified in the connection to the next node.
+During the component alignment run, OPOSSUM traces a reference ray along the optical axis. By default, this starts at the center of the `Sourceport` and propagates (usually along the Z-axis) by the distance specified in the connection to the next node.
 
 Consider the following diagram:
 
@@ -40,7 +40,7 @@ The situation is as follows:
 1. The **Source port** is at `(0mm, 0mm, 0mm)`.
 2. The **Mirror** is placed at `(0mm, 0mm, 100mm)`.
 
-By default, a mirror node has an alignment of 0°. This means the light (and thus the optical axis) is reflected directly back towards the source port. If a lens is connected after the mirror with a distance of 100 mm, it is placed along this *reflected* optical axis. Consequently, the lens would land back at `(0mm, 0mm, 0mm)`, facing the opposite direction.
+By default, a mirror node has an alignment of 0°. This means the light (and thus the optical axis) is reflected directly back towards the source. If a lens is connected after the mirror with a distance of 100 mm, it is placed along this *reflected* optical axis. Consequently, the lens would land back at `(0mm, 0mm, 0mm)`, facing the opposite direction.
 
 To model a 90° beam deflection, the mirror must be rotated. This is done in the `Node Editor` panel under the `Alignment` section. For a 90° turn, set the **Roll Angle** (rotation around the X-axis) to **45°**.
 
@@ -68,7 +68,7 @@ Consider the following example:
 
 In this model:
 
-1. The `Source_port` is at the origin `(0, 0, 0)` by default.
+1. The `Sourceport` is at the origin `(0, 0, 0)` by default.
 2. The `Lens` has its `Position` property set to `absolute` with explicit coordinates `(0mm, 0mm, 200mm)`.
 
 **Behavior:**
@@ -109,7 +109,7 @@ Care must be taken when mixing absolute positioning with the optical axis logic.
 
 **The Scenario:**
 
-* The `Source_port` emits along the Z-axis.
+* The `Sourceport` emits along the Z-axis.
 * An absolute `Lens` is placed at `(0mm, 100mm, 100mm)`—offset by 100mm in the Y-direction.
 
 **The Consequence:**
