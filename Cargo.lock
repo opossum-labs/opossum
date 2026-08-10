@@ -5141,6 +5141,7 @@ name = "opossum_registry"
 version = "0.7.2"
 dependencies = [
  "opm_macros_lib",
+ "opossum_core",
  "ron",
  "serde",
  "uom",

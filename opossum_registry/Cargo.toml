@@ -10,6 +10,7 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
+opossum_core = { path = "../opossum_core" }
 opm_macros_lib = { workspace = true }
 ron.workspace = true
 serde.workspace = true
