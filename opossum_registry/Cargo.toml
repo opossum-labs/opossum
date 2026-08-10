@@ -14,5 +14,6 @@ opossum_core = { path = "../opossum_core" }
 opm_macros_lib = { workspace = true }
 ron.workspace = true
 serde.workspace = true
+tempfile.workspace = true
 uom.workspace = true
 uuid.workspace = true

@@ -5144,6 +5144,7 @@ dependencies = [
  "opossum_core",
  "ron",
  "serde",
+ "tempfile",
  "uom",
  "uuid",
 ]
