@@ -2,21 +2,24 @@
 pub mod test_helper {
     use crate::{
         analyzers::{
-            RayTraceConfig,
+            Analyzable, RayTraceConfig,
             energy::{AnalysisEnergy, EnergyConfig},
             raytrace::AnalysisRayTrace,
         },
         apertures::{ApertureShape, ApertureType, CircleShape},
-        core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, PortType},
+        core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, OpticRef, PortType},
         distributions::position::Hexapolar,
-        error::OpmResult,
+        error::{OpmResult, OpossumError},
+        gain::{ConstGain, GainModel},
         joule,
         light::{LightData, LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer,
         prelude::Aperture,
-        utils::{geom_transformation::Isometry, test_helper::test_helper::check_logs},
+        properties::Proptype,
+        utils::{LockExt, geom_transformation::Isometry, test_helper::test_helper::check_logs},
     };
     use nalgebra::Vector3;
+    use std::sync::{Arc, Mutex};
     use uom::si::{energy::joule, length::millimeter};
     pub fn test_inverted<T: Default + OpticNode>() -> OpmResult<()> {
         let mut node = T::default();
@@ -110,6 +113,157 @@ pub mod test_helper {
         check_logs(log::Level::Warn, vec![&msg]);
         Ok(())
     }
+    /// Name of the property that carries the amplification model of a node with a volume.
+    const AMP_CONFIG: &str = "amp config";
+
+    /// Read the [`GainModel`] out of a node's `amp config` property.
+    ///
+    /// # Arguments
+    ///
+    /// * `node` - the node to inspect.
+    ///
+    /// # Returns
+    ///
+    /// The configured [`GainModel`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node does not declare an `amp config` property or if that property holds a
+    /// different [`Proptype`].
+    pub fn amp_config_of<T: OpticNode>(node: &T) -> GainModel {
+        let Ok(Proptype::GainModel(model)) = node.node_attr().get_property(AMP_CONFIG) else {
+            panic!(
+                "node '{}' has no '{AMP_CONFIG}' property holding a gain model",
+                node.node_attr().node_type()
+            );
+        };
+        *model
+    }
+
+    /// Read the [`GainModel`] out of the `amp config` property of a (deserialized) node reference.
+    ///
+    /// The lock is taken and released within a single expression so that the guard is not held
+    /// while the value is inspected.
+    ///
+    /// # Arguments
+    ///
+    /// * `optic_ref` - reference to the node to inspect.
+    ///
+    /// # Returns
+    ///
+    /// The configured [`GainModel`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node cannot be locked, or if it has no `amp config` property
+    /// holding a gain model.
+    fn amp_config_of_ref(optic_ref: &OpticRef) -> OpmResult<GainModel> {
+        let property = optic_ref
+            .optical_ref
+            .lock_opm()?
+            .node_attr()
+            .get_property(AMP_CONFIG)
+            .cloned();
+        match property {
+            Ok(Proptype::GainModel(model)) => Ok(model),
+            _ => Err(OpossumError::Other(format!(
+                "'{AMP_CONFIG}' property is missing or holds an unexpected type"
+            ))),
+        }
+    }
+
+    /// Assert that a node with a volume declares an inactive `amp config` by default.
+    ///
+    /// Declaring the property unconditionally is what makes "turn this component into an
+    /// amplifier" an ordinary property change; defaulting to [`GainModel::None`] is what keeps
+    /// that declaration from altering any existing result.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the property is missing or does not default to [`GainModel::None`].
+    pub fn test_amp_config_default<T: Default + OpticNode>() {
+        let node = T::default();
+        assert_eq!(amp_config_of(&node), GainModel::None);
+        assert!(!amp_config_of(&node).is_active());
+    }
+
+    /// Assert that a non-default `amp config` survives a serialization round trip.
+    ///
+    /// The round trip goes through [`OpticRef`], which is the very path an `.opm` file takes: the
+    /// node type string is used to construct a fresh default node whose properties are then
+    /// patched with the ones found in the file.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node cannot be serialized or deserialized.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the gain model is not preserved by the round trip.
+    pub fn test_amp_config_serde_roundtrip<T: Default + Analyzable + 'static>() -> OpmResult<()> {
+        let mut node = T::default();
+        let model = GainModel::Const(ConstGain::new(3.0)?);
+        node.node_attr_mut()
+            .set_property(AMP_CONFIG, model.into())?;
+
+        let optic_ref = OpticRef::new(Arc::new(Mutex::new(node)), None);
+        let serialized =
+            ron::to_string(&optic_ref).map_err(|e| OpossumError::Other(e.to_string()))?;
+        let deserialized: OpticRef =
+            ron::from_str(&serialized).map_err(|e| OpossumError::Other(e.to_string()))?;
+
+        assert_eq!(
+            amp_config_of_ref(&deserialized)?,
+            model,
+            "gain model was not preserved by the round trip"
+        );
+        Ok(())
+    }
+
+    /// Assert that a file written before the `amp config` property existed still loads.
+    ///
+    /// Such a file simply has no entry for the property. Because `set_node_attr` merges the
+    /// properties of the file into those of a freshly constructed default node, the default has to
+    /// survive — otherwise every existing `.opm` file would break.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node cannot be serialized or deserialized.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the property could not be removed from the serialized form (which would make the
+    /// test vacuous) or if the loaded node does not fall back to [`GainModel::None`].
+    pub fn test_amp_config_absent_in_file<T: Default + Analyzable + 'static>() -> OpmResult<()> {
+        let optic_ref = OpticRef::new(Arc::new(Mutex::new(T::default())), None);
+        let serialized =
+            ron::to_string(&optic_ref).map_err(|e| OpossumError::Other(e.to_string()))?;
+
+        // Emulate a file written before the property existed by dropping its entry again.
+        let entry_start = serialized
+            .find(&format!("\"{AMP_CONFIG}\""))
+            .expect("serialized node does not contain the amp config property");
+        let entry_end = serialized[entry_start..]
+            .find("),")
+            .map(|offset| entry_start + offset + 2)
+            .expect("could not determine the end of the amp config entry");
+        let without_property =
+            format!("{}{}", &serialized[..entry_start], &serialized[entry_end..]);
+        assert!(
+            !without_property.contains(AMP_CONFIG),
+            "amp config entry was not removed, the test would be vacuous"
+        );
+
+        let deserialized: OpticRef =
+            ron::from_str(&without_property).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert_eq!(
+            amp_config_of_ref(&deserialized)?,
+            GainModel::None,
+            "loading a file without the property must fall back to the default"
+        );
+        Ok(())
+    }
+
     /// Number of scalars captured per ray by [`ray_bundle_snapshot`].
     const SNAPSHOT_WIDTH: usize = 8;
 

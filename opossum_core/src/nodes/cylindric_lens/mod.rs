@@ -7,6 +7,7 @@ use crate::{
     analyzers::energy::AnalysisEnergy,
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType},
     error::{OpmResult, OpossumError},
+    gain::GainModel,
     geometry::{Cylinder, Plane, geo_surface::GeoSurfaceRef},
     meter, millimeter,
     nodes::NodeRegistration,
@@ -93,6 +94,13 @@ impl Default for CylindricLens {
                 "refractive index",
                 "refractive index of the lens material",
                 RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()).into(),
+            )
+            .unwrap();
+        node_attr
+            .create_property(
+                "amp config",
+                "amplification model of this component (None = passive)",
+                GainModel::default().into(),
             )
             .unwrap();
         let mut cyl_lens = Self { node_attr };
@@ -397,6 +405,18 @@ mod test {
         }
         Ok(())
     }
+    #[test]
+    fn amp_config_default() {
+        test_amp_config_default::<CylindricLens>();
+    }
+    #[test]
+    fn amp_config_serde_roundtrip() -> OpmResult<()> {
+        test_amp_config_serde_roundtrip::<CylindricLens>()
+    }
+    #[test]
+    fn amp_config_absent_in_file() -> OpmResult<()> {
+        test_amp_config_absent_in_file::<CylindricLens>()
+    }
     /// Reference values for the entry surface → volume → exit surface propagation.
     ///
     /// This pins the current behaviour down completely so that refactoring the two-surface
@@ -409,7 +429,7 @@ mod test {
             millimeter!(100.0),
             millimeter!(-100.0),
             millimeter!(10.0),
-            &RefrIndexConst::new(1.5)?,
+            RefrIndexConst::new(1.5)?,
         )?;
         node.set_isometry(Isometry::identity())?;
         let mut incoming_data = LightResult::default();

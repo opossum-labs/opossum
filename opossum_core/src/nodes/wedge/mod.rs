@@ -7,6 +7,7 @@ use crate::{
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType},
     degree,
     error::{OpmResult, OpossumError},
+    gain::GainModel,
     geometry::{Plane, geo_surface::GeoSurfaceRef},
     millimeter,
     nodes::NodeRegistration,
@@ -88,6 +89,13 @@ impl Default for Wedge {
                 //     numeric_is_finite(),
                 // ]),
                 Angle::zero().into(),
+            )
+            .unwrap();
+        node_attr
+            .create_property(
+                "amp config",
+                "amplification model of this component (None = passive)",
+                GainModel::default().into(),
             )
             .unwrap();
 
@@ -421,6 +429,18 @@ mod test {
         }
         Ok(())
     }
+    #[test]
+    fn amp_config_default() {
+        test_amp_config_default::<Wedge>();
+    }
+    #[test]
+    fn amp_config_serde_roundtrip() -> OpmResult<()> {
+        test_amp_config_serde_roundtrip::<Wedge>()
+    }
+    #[test]
+    fn amp_config_absent_in_file() -> OpmResult<()> {
+        test_amp_config_absent_in_file::<Wedge>()
+    }
     /// Reference values for the entry surface → volume → exit surface propagation.
     ///
     /// This pins the current behaviour down completely so that refactoring the two-surface
@@ -432,7 +452,7 @@ mod test {
             "regression",
             millimeter!(10.0),
             degree!(5.0),
-            &RefrIndexConst::new(1.5)?,
+            RefrIndexConst::new(1.5)?,
         )?;
         node.set_isometry(Isometry::identity())?;
         let mut incoming_data = LightResult::default();
