@@ -1,0 +1,18 @@
+[package]
+name = "opossum_registry"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+opossum_core = { path = "../opossum_core" }
+opm_macros_lib = { workspace = true }
+ron.workspace = true
+serde.workspace = true
+uom.workspace = true
+uuid.workspace = true
