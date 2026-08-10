@@ -140,19 +140,39 @@ pub fn App() -> Element {
             if let Some(path) = model_file_path.read().clone() {
                 node_editor_command_handler.call(Some(NodeEditorCommand::SaveFile(path)));
             } else {
+                #[cfg(not(target_arch = "wasm32"))]
                 spawn(async move {
                     if let Some(path) = select_save_path().await {
                         node_editor_command_handler.call(Some(NodeEditorCommand::SaveFile(path)));
                     }
                 });
+
+                #[cfg(target_arch = "wasm32")]
+                {
+                    let default_path = PathBuf::from("project.opm");
+                    node_editor_command_handler
+                        .call(Some(NodeEditorCommand::SaveFile(default_path)));
+                }
             }
         }
         AppCommand::SaveAs => {
+            #[cfg(not(target_arch = "wasm32"))]
             spawn(async move {
                 if let Some(path) = select_save_path().await {
                     node_editor_command_handler.call(Some(NodeEditorCommand::SaveFile(path)));
                 }
             });
+
+            #[cfg(target_arch = "wasm32")]
+            {
+                let current_filename = model_file_path
+                    .read()
+                    .as_ref()
+                    .cloned()
+                    .unwrap_or_else(|| PathBuf::from("project.opm"));
+                node_editor_command_handler
+                    .call(Some(NodeEditorCommand::SaveFile(current_filename)));
+            }
         }
         AppCommand::Refresh => {
             node_editor_command_handler.call(Some(NodeEditorCommand::Refresh));
