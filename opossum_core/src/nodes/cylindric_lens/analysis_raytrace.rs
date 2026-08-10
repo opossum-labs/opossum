@@ -1,7 +1,7 @@
 use super::CylindricLens;
 use crate::{
     analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
-    core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, PortType},
+    core_optics::{OpticNode, OpticNodeExt, PortType},
     error::{OpmResult, OpossumError},
     light::{LightData, LightResult},
 };
@@ -26,27 +26,7 @@ impl AnalysisRayTrace for CylindricLens {
 
         let (refri, _, _) = self.get_node_attributes_ray_trace(&self.node_attr)?;
         let mut rays_bundle = vec![rays];
-        let refraction_intended = true;
-
-        // 1. Eintrittsfläche
-        self.pass_through_surface_generic(
-            in_port,
-            Some(refri),
-            &mut rays_bundle,
-            config,
-            self.inverted(),
-            refraction_intended,
-        )?;
-
-        // 2. Austrittsfläche
-        self.pass_through_surface_generic(
-            out_port,
-            Some(self.ambient_idx()),
-            &mut rays_bundle,
-            config,
-            self.inverted(),
-            refraction_intended,
-        )?;
+        self.pass_through_volume_generic(in_port, out_port, refri, &mut rays_bundle, config)?;
 
         let light_result = LightResult::from([(
             out_port.into(),

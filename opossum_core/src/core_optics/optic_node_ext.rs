@@ -130,6 +130,37 @@ pub trait OpticNodeExt {
         backward: bool,
         refraction_intended: bool,
     ) -> OpmResult<()>;
+    /// Guides a ray bundle through the volume of a node: in through its entry surface, out through
+    /// its exit surface.
+    ///
+    /// This is the counterpart of [`OpticNodeExt::pass_through_surface_generic`] for the nodes that
+    /// enclose a volume of material (lens, wedge, cylindric lens, ...). All of them performed the
+    /// very same two-step sequence, which is collected here so that the step in between — the
+    /// propagation *inside* the medium — exists in exactly one place. Today nothing happens in
+    /// between and the behaviour is identical to calling the two surface passes directly; the
+    /// segmentation and the amplification of active media will be added here.
+    ///
+    /// # Parameters
+    ///
+    /// * `entry_surf_name`: name of the surface the rays enter through (typically `"input_1"`).
+    /// * `exit_surf_name`: name of the surface the rays leave through (typically `"output_1"`).
+    /// * `refri_inside`: refractive index of the medium enclosed by the two surfaces. Behind the
+    ///   exit surface the node's ambient index is used.
+    /// * `rays_bundle`: the ray bundle, modified in place.
+    /// * `strategy`: the analyzer-specific [`PropagationStrategy`].
+    ///
+    /// # Errors
+    ///
+    /// This function errors if one of the two surfaces cannot be found or if the geometric
+    /// propagation through either of them fails.
+    fn pass_through_volume_generic(
+        &mut self,
+        entry_surf_name: &str,
+        exit_surf_name: &str,
+        refri_inside: RefractiveIndexType,
+        rays_bundle: &mut Vec<Rays>,
+        strategy: &dyn PropagationStrategy,
+    ) -> OpmResult<()>;
     /// A unified helper function to analyze optical nodes that feature a single interacting surface.
     ///
     /// This function simplifies the implementation of the analysis traits (`Energy`, `RayTrace`, `GhostFocus`)
@@ -360,6 +391,37 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
             );
         }
         Ok(())
+    }
+
+    fn pass_through_volume_generic(
+        &mut self,
+        entry_surf_name: &str,
+        exit_surf_name: &str,
+        refri_inside: RefractiveIndexType,
+        rays_bundle: &mut Vec<Rays>,
+        strategy: &dyn PropagationStrategy,
+    ) -> OpmResult<()> {
+        let backward = self.inverted();
+        // The rays are meant to be refracted at both surfaces of the volume, not just traced to them.
+        let refraction_intended = true;
+        self.pass_through_surface_generic(
+            entry_surf_name,
+            Some(refri_inside),
+            rays_bundle,
+            strategy,
+            backward,
+            refraction_intended,
+        )?;
+        // Inside the medium nothing happens yet. This is where the segmentation of the inner path
+        // and the evaluation of an active medium's gain model will be inserted.
+        self.pass_through_surface_generic(
+            exit_surf_name,
+            Some(self.ambient_idx()),
+            rays_bundle,
+            strategy,
+            backward,
+            refraction_intended,
+        )
     }
 
     fn unified_analyze_single_surface_node(

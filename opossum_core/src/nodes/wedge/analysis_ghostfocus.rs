@@ -1,7 +1,7 @@
 use super::Wedge;
 use crate::{
     analyzers::{GhostFocusConfig, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace},
-    core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, PortType},
+    core_optics::{OpticNode, OpticNodeExt, PortType},
     error::OpmResult,
     light::{LightRays, Rays},
 };
@@ -23,25 +23,7 @@ impl AnalysisGhostFocus for Wedge {
 
         let (refri, _, _) = self.get_node_attributes_ray_trace(&self.node_attr)?;
 
-        let refraction_intended = true;
-        self.pass_through_surface_generic(
-            in_port,
-            Some(refri), // RefractiveIndex in Some() packen
-            &mut rays_bundle,
-            config, // config ist direkt unsere PropagationStrategy
-            self.inverted(),
-            refraction_intended,
-        )?;
-
-        // 2. Austrittsfläche
-        self.pass_through_surface_generic(
-            out_port,
-            Some(self.ambient_idx()), // Ambient-Index in Some() packen
-            &mut rays_bundle,
-            config, // config ist direkt unsere PropagationStrategy
-            self.inverted(),
-            refraction_intended,
-        )?;
+        self.pass_through_volume_generic(in_port, out_port, refri, &mut rays_bundle, config)?;
 
         let mut out_light_rays = LightRays::default();
         out_light_rays.insert(out_port.clone(), rays_bundle);
