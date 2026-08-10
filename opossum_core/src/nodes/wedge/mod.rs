@@ -421,4 +421,65 @@ mod test {
         }
         Ok(())
     }
+    /// Reference values for the entry surface → volume → exit surface propagation.
+    ///
+    /// This pins the current behaviour down completely so that refactoring the two-surface
+    /// sequence in `analysis_raytrace.rs` can be verified to be behaviour-neutral. The values are
+    /// recorded, not derived — physical correctness is covered by the other tests in this module.
+    #[test]
+    fn volume_propagation_regression() -> OpmResult<()> {
+        let mut node = Wedge::new(
+            "regression",
+            millimeter!(10.0),
+            degree!(5.0),
+            &RefrIndexConst::new(1.5)?,
+        )?;
+        node.set_isometry(Isometry::identity())?;
+        let mut incoming_data = LightResult::default();
+        incoming_data.insert(
+            "input_1".into(),
+            LightData::Geometric(volume_regression_rays()?),
+        );
+        let output =
+            AnalysisRayTrace::analyze(&mut node, incoming_data, &RayTraceConfig::default())?;
+        let Some(LightData::Geometric(rays)) = output.get("output_1") else {
+            panic!("expected geometric ray data at the output port");
+        };
+        assert_ray_bundle_snapshot(
+            &ray_bundle_snapshot(rays),
+            &[
+                [
+                    0.0,
+                    0.0,
+                    10.0,
+                    0.0,
+                    0.043_828_401_903,
+                    0.999_039_073_904,
+                    1.0,
+                    15.0,
+                ],
+                [
+                    5.0,
+                    0.0,
+                    10.0,
+                    0.0,
+                    0.043_828_401_903,
+                    0.999_039_073_904,
+                    1.0,
+                    15.0,
+                ],
+                [
+                    0.322_431_167_274,
+                    -3.355_137_665_452,
+                    9.706_463_489_704,
+                    0.049_690_399_500,
+                    0.143_782_885_757,
+                    0.988_360_939_111,
+                    1.0,
+                    14.599_804_663_813,
+                ],
+            ],
+        );
+        Ok(())
+    }
 }

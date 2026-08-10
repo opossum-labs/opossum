@@ -397,4 +397,57 @@ mod test {
         }
         Ok(())
     }
+    /// Reference values for the entry surface → volume → exit surface propagation.
+    ///
+    /// This pins the current behaviour down completely so that refactoring the two-surface
+    /// sequence in `analysis_raytrace.rs` can be verified to be behaviour-neutral. The values are
+    /// recorded, not derived — physical correctness is covered by the other tests in this module.
+    #[test]
+    fn volume_propagation_regression() -> OpmResult<()> {
+        let mut node = CylindricLens::new(
+            "regression",
+            millimeter!(100.0),
+            millimeter!(-100.0),
+            millimeter!(10.0),
+            &RefrIndexConst::new(1.5)?,
+        )?;
+        node.set_isometry(Isometry::identity())?;
+        let mut incoming_data = LightResult::default();
+        incoming_data.insert(
+            "input_1".into(),
+            LightData::Geometric(volume_regression_rays()?),
+        );
+        let output =
+            AnalysisRayTrace::analyze(&mut node, incoming_data, &RayTraceConfig::default())?;
+        let Some(LightData::Geometric(rays)) = output.get("output_1") else {
+            panic!("expected geometric ray data at the output port");
+        };
+        assert_ray_bundle_snapshot(
+            &ray_bundle_snapshot(rays),
+            &[
+                [0.0, 0.0, 10.0, 0.0, 0.0, 1.0, 1.0, 15.0],
+                [
+                    4.837_210_642_342,
+                    0.0,
+                    9.882_938_448_974,
+                    -0.049_284_003_372,
+                    0.0,
+                    0.998_784_805_157,
+                    1.0,
+                    14.763_905_268_675,
+                ],
+                [
+                    0.332_163_594_108,
+                    -3.335_672_811_784,
+                    9.999_448_335_212,
+                    0.048_022_965_087,
+                    0.099_380_799_000,
+                    0.993_889_959_510,
+                    1.0,
+                    15.040_492_615_548,
+                ],
+            ],
+        );
+        Ok(())
+    }
 }
