@@ -18,6 +18,7 @@ pub mod coatings;
 pub mod core_optics;
 pub mod distributions;
 pub mod error;
+pub mod gain;
 pub mod generic_validators;
 mod kde;
 pub mod light;
