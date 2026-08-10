@@ -1780,9 +1780,7 @@ async fn process_save_root_scenery_to_file(
     if let Some(f_stem) = path.file_stem()
         && let Some(fname) = f_stem.to_str()
     {
-        // Only rename the root scenery when its name actually differs from the file's - the rename
-        // is pure bookkeeping (`patch_node` deliberately records no undo step for root patches),
-        // so skipping the no-op case just avoids a pointless request.
+        // Check if the root scenery needs to be renamed to match the target file name
         let current_root_name = workspace
             .tabs()
             .get(root_id)
@@ -1790,15 +1788,31 @@ async fn process_save_root_scenery_to_file(
         if current_root_name.as_deref() != Some(fname) {
             process_rename_root_scenery(ws_handler, fname.to_string(), root_id, false).await;
         }
+
+        // Fetch document content from backend API and delegate saving to platform abstraction
         eval_action_run(
             api::get_document().await,
-            Some(move |opm_string| {
-                if let Err(err_str) = fs::write(&path, opm_string) {
-                    OPOSSUM_UI_LOGS.write().add_log(&err_str.to_string());
-                } else {
-                    set_file_path_handler.call(Some(path));
-                    ws_handler.workspace.set_needs_saving(false);
-                }
+            // Explicitly annotate 'opm_string: String' to prevent Rust type inference from defaulting to 'str'
+            Some(move |opm_string: String| {
+                spawn(async move {
+                    // Call cross-platform helper (writes to disk on Desktop, triggers download/file-picker on WASM)
+                    match crate::components::menu_bar::project_helper::save_opm_data(
+                        &path,
+                        &opm_string,
+                    )
+                    .await
+                    {
+                        Ok(()) => {
+                            // Update file path signal and reset unsaved changes flag
+                            set_file_path_handler.call(Some(path));
+                            ws_handler.workspace.set_needs_saving(false);
+                        }
+                        Err(err_str) => {
+                            // Log any I/O or save operation failure to the UI log
+                            OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                        }
+                    }
+                });
             }),
         );
     }
