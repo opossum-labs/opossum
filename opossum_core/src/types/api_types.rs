@@ -715,8 +715,11 @@ pub struct AmplifierDto {
     #[schema(example = "lens")]
     pub node_type: String,
     /// The group the node lives in. The overview panel needs it to open the right tab when the user
-    /// asks to be taken to the node.
+    /// asks to be taken to the node, and to offer filtering by subsystem.
     pub group_id: Uuid,
+    /// Display name of that group (the document's own name for the root scenery).
+    #[schema(example = "Frontend")]
+    pub group_name: String,
     /// Display name of the node's active amplification model.
     #[schema(example = "Const")]
     pub amp_model: String,

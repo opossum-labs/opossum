@@ -3,10 +3,12 @@ use crate::{
 };
 use actix_web::{HttpResponse, get, web};
 use opossum_core::{
-    core_optics::{NodeAttr, node_attr::HasNodeAttr},
+    core_optics::{NodeAttr, NodeAttrExt, node_attr::HasNodeAttr},
     gain::active_amp_model,
     types::api_types::{AmplifierDto, ErrorResponse},
 };
+use std::collections::HashMap;
+use uuid::Uuid;
 
 /// Get every amplifying node of the whole document
 ///
@@ -43,15 +45,28 @@ pub async fn get_amplifiers(
         &mut collected,
     );
 
+    // Resolve each *distinct* group once rather than per amplifier - a subsystem typically holds
+    // several of them.
+    let mut group_names: HashMap<Uuid, String> = HashMap::new();
+    for node in &collected {
+        group_names.entry(node.group_id).or_insert_with(|| {
+            scenery
+                .with_group_node(node.group_id, |group| group.name().to_string())
+                .unwrap_or_default()
+        });
+    }
+
     let amplifiers: Vec<AmplifierDto> = collected
         .into_iter()
         .map(|node| {
             let (name, node_type, amp_model) = node.value;
+            let group_name = group_names.get(&node.group_id).cloned().unwrap_or_default();
             AmplifierDto {
                 uuid: node.uuid,
                 name,
                 node_type,
                 group_id: node.group_id,
+                group_name,
                 amp_model,
             }
         })
@@ -120,6 +135,10 @@ mod test {
         assert_eq!(
             wedge.group_id, group_id,
             "an amplifier inside a group must be reported with that group's id, not the root's"
+        );
+        assert_eq!(
+            wedge.group_name, "subgroup",
+            "the group's display name is what the overview's subsystem filter offers"
         );
     }
 

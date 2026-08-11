@@ -332,7 +332,7 @@ body {
 }
 
 .sidebar-view-button.active {
-    border-left-color: rgb(199, 199, 199);
+    border-left-color: rgb(255, 214, 130);
 }
 
 .sidebar-view {
@@ -361,6 +361,80 @@ body {
 }
 
 
+
+/* "All" / "By group" switch of the amplifier overview. Styled from scratch rather than through
+   MDB's button classes: MDB's stylesheet is linked after this one, so it would win any specificity
+   tie, and its inactive outline variant is close to unreadable on this dark panel. */
+.amp-filter {
+    display: flex;
+    width: 100%;
+    margin-bottom: 8px;
+}
+
+.amp-filter-btn {
+    flex: 1 1 0;
+    padding: 3px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    color: rgb(205, 205, 205);
+    background-color: rgb(58, 58, 58);
+    border: 1px solid rgb(95, 95, 95);
+}
+
+.amp-filter-btn:first-child {
+    border-radius: 4px 0 0 4px;
+}
+
+.amp-filter-btn:last-child {
+    border-radius: 0 4px 4px 0;
+    border-left: none;
+}
+
+.amp-filter-btn:hover {
+    color: #ffffff;
+    background-color: rgb(78, 78, 78);
+}
+
+.amp-filter-btn.active {
+    color: #ffffff;
+    background-color: rgb(105, 105, 105);
+}
+
+/* Group picker of the amplifier overview. Same reasoning as the switch above - own classes instead
+   of MDB's `.form-select`, whose colours would otherwise win. The `option` rule matters separately:
+   the dropdown list is painted by the platform and falls back to system colours (dark grey on dark)
+   unless it is told what to use. */
+.amp-group-select {
+    width: 100%;
+    margin-bottom: 8px;
+    padding: 3px 6px;
+    font-size: 12px;
+    color: rgb(235, 235, 235);
+    background-color: rgb(58, 58, 58);
+    border: 1px solid rgb(95, 95, 95);
+    border-radius: 4px;
+}
+
+.amp-group-select option {
+    color: rgb(235, 235, 235);
+    background-color: rgb(58, 58, 58);
+}
+
+/* Shown when the document holds no amplifier at all - an explanation, so it has to stay readable
+   rather than fade into the panel like a caption. */
+.amp-empty {
+    font-size: 12px;
+    font-style: italic;
+    color: rgb(180, 180, 180);
+}
+
+/* Node type and group name under an amplifier's name. Bootstrap's `.text-muted` is too dark to read
+   on the card's background, and overriding it would need `!important` because that utility carries
+   one itself. */
+.amp-card-sub {
+    font-size: 12px;
+    color: rgb(180, 180, 180);
+}
 
 .amp-overview-card {
     cursor: pointer;
@@ -594,44 +668,6 @@ body {
     margin-bottom: -1px;
     transition: 100ms;
     z-index: 1;
-}
-
-/* This is a desktop application, not a document: dragging across a menu label, a tab or an icon
-   should do nothing, not leave a blue selection behind. Selection is therefore off by default and
-   switched back on only where text really is meant to be selected - see `.selectable` below. */
-body {
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
-}
-
-/* Images must not be draggable either - otherwise a node icon can be torn out of the canvas and
-   dropped as a picture. */
-img {
-    -webkit-user-drag: none;
-    user-select: none;
-}
-
-/* Anything the user types into stays selectable; a direct rule beats the inherited `none` above. */
-input,
-textarea,
-select,
-[contenteditable="true"] {
-    -webkit-user-select: text;
-    -moz-user-select: text;
-    -ms-user-select: text;
-    user-select: text;
-}
-
-/* Opt a region back in - put this on a container whose text should be selectable and copyable. */
-.selectable,
-.selectable * {
-    -webkit-user-select: text;
-    -moz-user-select: text;
-    -ms-user-select: text;
-    user-select: text;
 }
 
 .noselect {

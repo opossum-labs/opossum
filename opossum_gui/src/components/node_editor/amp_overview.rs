@@ -4,6 +4,7 @@ use crate::{
 };
 use dioxus::prelude::*;
 use opossum_core::types::api_types::AmplifierDto;
+use uuid::Uuid;
 
 /// Document-wide list of every amplifying node, as the sidebar's second view.
 ///
@@ -28,33 +29,109 @@ pub fn AmpOverview() -> Element {
     });
 
     let amplifiers = amplifiers.read_unchecked().clone().unwrap_or_default();
+    let mut by_group = use_signal(|| false);
+    let mut selected_group = use_signal(|| None::<Uuid>);
+
+    // A large laser system is built from subsystems whose amplifiers repeat, so the interesting
+    // question is often "what amplifies inside *this* subsystem". Only groups that actually hold an
+    // amplifier are offered - anything else would be a dead entry.
+    let groups = groups_of(&amplifiers);
+    // The selection can go stale when the document changes underneath it (the group was deleted, or
+    // its last amplifier turned passive), so fall back to the first group that is still there.
+    let active_group = selected_group()
+        .filter(|id| groups.iter().any(|(group_id, _)| group_id == id))
+        .or_else(|| groups.first().map(|(group_id, _)| *group_id));
+
+    let shown: Vec<AmplifierDto> = if by_group() {
+        amplifiers
+            .iter()
+            .filter(|amplifier| Some(amplifier.group_id) == active_group)
+            .cloned()
+            .collect()
+    } else {
+        amplifiers.clone()
+    };
 
     rsx! {
-        div { class: "noselect",
+        div {
             h6 { "Amplifiers" }
             if amplifiers.is_empty() {
-                div { class: "text-muted small fst-italic",
+                div { class: "amp-empty",
                     "No amplifying components. Right-click a lens, wedge or cylindric lens on the canvas and choose \"As amplifier\"."
                 }
-            }
-            for amplifier in amplifiers {
-                AmplifierCard { key: "{amplifier.uuid}", amplifier }
+            } else {
+                // Deliberately not MDB's `.btn`/`.btn-outline-*`: that stylesheet is loaded after
+                // this project's own, so its palette would win any specificity tie - and its
+                // inactive outline colour is barely legible on this dark panel.
+                div { class: "amp-filter",
+                    button {
+                        r#type: "button",
+                        class: if by_group() { "amp-filter-btn" } else { "amp-filter-btn active" },
+                        onclick: move |_| by_group.set(false),
+                        "All"
+                    }
+                    button {
+                        r#type: "button",
+                        class: if by_group() { "amp-filter-btn active" } else { "amp-filter-btn" },
+                        onclick: move |_| by_group.set(true),
+                        "By group"
+                    }
+                }
+                if by_group() {
+                    select {
+                        class: "amp-group-select",
+                        value: active_group.map(|id| id.to_string()).unwrap_or_default(),
+                        onchange: move |e| {
+                            selected_group.set(Uuid::parse_str(&e.value()).ok());
+                        },
+                        for (group_id , group_name) in groups {
+                            option { key: "{group_id}", value: "{group_id}", "{group_name}" }
+                        }
+                    }
+                }
+                for amplifier in shown {
+                    AmplifierCard {
+                        key: "{amplifier.uuid}",
+                        amplifier,
+                        show_group: !by_group(),
+                    }
+                }
             }
         }
     }
 }
 
+/// The distinct groups the given amplifiers live in, as `(uuid, name)` sorted by name.
+///
+/// Derived from the amplifier list rather than fetched separately, which is what makes "only groups
+/// that contain an amplifier" true by construction.
+fn groups_of(amplifiers: &[AmplifierDto]) -> Vec<(Uuid, String)> {
+    let mut groups: Vec<(Uuid, String)> = Vec::new();
+    for amplifier in amplifiers {
+        if !groups.iter().any(|(id, _)| *id == amplifier.group_id) {
+            groups.push((amplifier.group_id, amplifier.group_name.clone()));
+        }
+    }
+    groups.sort_by(|(_, a), (_, b)| a.cmp(b));
+    groups
+}
+
 /// One entry of the overview. Clicking it reveals the node on the canvas - the parameters themselves
 /// are edited in the properties view, so this card deliberately holds no inputs and therefore needs
 /// no dirty tracking of its own.
+///
+/// `show_group` names the containing group on the card. It is on while the whole document is listed,
+/// where "which subsystem is this in?" is the open question, and off once the list is already
+/// filtered to a single group, where the answer would be on every card.
 #[component]
-fn AmplifierCard(amplifier: AmplifierDto) -> Element {
+fn AmplifierCard(amplifier: AmplifierDto, show_group: bool) -> Element {
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let AmplifierDto {
         uuid,
         name,
         node_type,
         group_id,
+        group_name,
         amp_model,
     } = amplifier;
 
@@ -72,7 +149,12 @@ fn AmplifierCard(amplifier: AmplifierDto) -> Element {
                     span { class: "fw-bold small", "{name}" }
                     span { class: "badge bg-warning text-dark", "{amp_model}" }
                 }
-                div { class: "text-muted small", "{node_type}" }
+                div { class: "amp-card-sub",
+                    "{node_type}"
+                    if show_group {
+                        span { " · {group_name}" }
+                    }
+                }
             }
         }
     }
