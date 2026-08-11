@@ -69,11 +69,11 @@ pub struct Material {
     pub optical: OpticalProperties,
 
     /// Optional thermal properties block.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thermal: Option<ThermalProperties>,
 
     /// Optional mechanical properties block.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mechanical: Option<MechanicalProperties>,
 }
 
