@@ -5,7 +5,7 @@ use crate::{
     analyzers::energy::AnalysisEnergy,
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType},
     error::{OpmResult, OpossumError},
-    gain::GainModel,
+    gain::{AMP_CONFIG, GainModel},
     geometry::{Plane, Sphere, geo_surface::GeoSurfaceRef},
     meter, millimeter,
     nodes::NodeRegistration,
@@ -95,7 +95,7 @@ impl Default for Lens {
             .unwrap();
         node_attr
             .create_property(
-                "amp config",
+                AMP_CONFIG,
                 "amplification model of this component (None = passive)",
                 GainModel::default().into(),
             )

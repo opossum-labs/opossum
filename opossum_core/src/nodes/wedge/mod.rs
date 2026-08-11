@@ -7,7 +7,7 @@ use crate::{
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType},
     degree,
     error::{OpmResult, OpossumError},
-    gain::GainModel,
+    gain::{AMP_CONFIG, GainModel},
     geometry::{Plane, geo_surface::GeoSurfaceRef},
     millimeter,
     nodes::NodeRegistration,
@@ -93,7 +93,7 @@ impl Default for Wedge {
             .unwrap();
         node_attr
             .create_property(
-                "amp config",
+                AMP_CONFIG,
                 "amplification model of this component (None = passive)",
                 GainModel::default().into(),
             )

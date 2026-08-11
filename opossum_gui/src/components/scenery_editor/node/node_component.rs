@@ -20,7 +20,7 @@ use crate::components::{
 use dioxus::html::geometry::euclid::default::Point2D;
 use dioxus::html::input_data::MouseButton;
 use dioxus::prelude::*;
-use opossum_core::types::api_types::NewRefNode;
+use opossum_core::{gain::AMP_CONFIG_NODE_TYPES, types::api_types::NewRefNode};
 use uuid::Uuid;
 
 #[component]
@@ -42,6 +42,12 @@ pub fn Node(
     let active_optical_node_ids = graph_store().selected_optical_nodes();
     let node_id = node.id();
     let is_optical_node = node.is_optical_node();
+    // Only components with a physical volume can amplify - they are the ones carrying the
+    // `amp config` property (see `AMP_CONFIG_NODE_TYPES`).
+    let supports_amp_config = matches!(
+        node.node_type(),
+        NodeType::Optical(node_type) if AMP_CONFIG_NODE_TYPES.contains(&node_type.as_str())
+    );
     let is_active = if active_node_ids.contains(&node.id()) {
         "active-node"
     } else {
@@ -157,19 +163,26 @@ pub fn Node(
                         if active_optical_node_ids.len() <= 1 {
                             // Show reference option only if 0 or 1 optical nodes are selected
                             cx_menu
-                                .entries
-                                .push((
+                                .add_entry((
                                     "Create reference".to_owned(),
                                     CxtCommand::AddRefNode(new_ref_node),
                                 ));
                         } else {
                             cx_menu
-                                .entries
-                                .push((
+                                .add_entry((
                                     "Group optical nodes".to_owned(),
                                     CxtCommand::ConvertToGroup {
                                         nodes: active_optical_node_ids.iter().copied().collect(),
                                         graph_id,
+                                    },
+                                ));
+                        }
+                        if supports_amp_config {
+                            cx_menu
+                                .add_entry((
+                                    "As amplifier".to_owned(),
+                                    CxtCommand::MakeAmplifier {
+                                        node_id,
                                     },
                                 ));
                         }

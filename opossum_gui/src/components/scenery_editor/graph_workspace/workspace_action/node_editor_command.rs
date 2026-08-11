@@ -38,6 +38,10 @@ pub enum NodeEditorCommand {
         group_port_name: String,
         port_type: PortType,
     },
+    /// Turn a node with a volume into an amplifier (see [`crate::components::context_menu::cx_menu::CxtCommand::MakeAmplifier`]).
+    MakeAmplifier {
+        node_id: Uuid,
+    },
     Undo,
     Redo,
 }
@@ -182,6 +186,9 @@ pub fn node_editor_command(
                     group_port_name,
                     port_type,
                 });
+            }
+            NodeEditorCommand::MakeAmplifier { node_id } => {
+                workspace_processor.send(GraphsWorkspaceAction::MakeAmplifier { node_id });
             }
             NodeEditorCommand::JumpToMappedPort {
                 mapped_node_id,

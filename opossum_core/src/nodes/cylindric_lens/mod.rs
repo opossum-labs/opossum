@@ -7,7 +7,7 @@ use crate::{
     analyzers::energy::AnalysisEnergy,
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType},
     error::{OpmResult, OpossumError},
-    gain::GainModel,
+    gain::{AMP_CONFIG, GainModel},
     geometry::{Cylinder, Plane, geo_surface::GeoSurfaceRef},
     meter, millimeter,
     nodes::NodeRegistration,
@@ -98,7 +98,7 @@ impl Default for CylindricLens {
             .unwrap();
         node_attr
             .create_property(
-                "amp config",
+                AMP_CONFIG,
                 "amplification model of this component (None = passive)",
                 GainModel::default().into(),
             )

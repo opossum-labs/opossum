@@ -27,6 +27,12 @@ pub enum CxtCommand {
         mapped_node_id: Uuid,
         parent: (Uuid, String),
     },
+    /// Turn a node with a volume into an amplifier by giving its `amp config` property an active
+    /// gain model. Only offered for the node types in
+    /// [`opossum_core::gain::AMP_CONFIG_NODE_TYPES`].
+    MakeAmplifier {
+        node_id: Uuid,
+    },
 }
 
 #[derive(Clone, PartialEq, Debug)]

@@ -12,7 +12,8 @@ use dioxus::{
 };
 use futures_util::StreamExt;
 use opossum_core::{
-    prelude::{AnalyzerType, PortType},
+    gain::{AMP_CONFIG, ConstGain, GainModel},
+    prelude::{AnalyzerType, PortType, Proptype},
     types::api_types::{
         AnalyzerItemDto, ConnectInfo, CutNodesResponse, DeleteNodeResponse, DocumentChange,
         JumpTarget, NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo, NodePortsResponse,
@@ -424,6 +425,9 @@ pub fn use_workspace_processor(
                         )
                         .await;
                     }
+                    GraphsWorkspaceAction::MakeAmplifier { node_id } => {
+                        process_make_amplifier(node_id, workspace_handlers).await;
+                    }
                     GraphsWorkspaceAction::GetEditorArea => {
                         process_get_editor_area(workspace, workspace_handlers).await;
                     }
@@ -521,7 +525,35 @@ const fn is_document_edit_action(action: &GraphsWorkspaceAction) -> bool {
             | GraphsWorkspaceAction::MapNodePort { .. }
             | GraphsWorkspaceAction::RemovePortMap { .. }
             | GraphsWorkspaceAction::SyncNodePositions { .. }
+            | GraphsWorkspaceAction::MakeAmplifier { .. }
     )
+}
+
+/// Turns a node with a volume into an amplifier by patching its `amp config` property to an active
+/// gain model. This goes through the same generic property endpoint the properties panel uses, so
+/// it is a plain property edit - undoable, and without touching the node's type or its connections.
+///
+/// The model is created at its neutral default (gain factor 1.0): switching a component to
+/// "amplifier" must not change any simulation result until the user has entered real parameters.
+///
+/// # Arguments
+///
+/// * `node_id` - the node to turn into an amplifier.
+/// * `ws_handler` - workspace signal handlers, used to mark the document as unsaved.
+async fn process_make_amplifier(node_id: Uuid, ws_handler: WorkSpaceSignalHandlers) {
+    let amp_config = (
+        AMP_CONFIG.to_owned(),
+        Proptype::GainModel(GainModel::Const(ConstGain::default())),
+    );
+    eval_action_run(
+        api::update_node_property(node_id, amp_config).await,
+        Some(move |()| {
+            ws_handler.workspace.set_needs_saving(true);
+            // The properties panel keeps its own fetched copy of the node's properties; without
+            // this bump it would still show the old `amp config` for an already selected node.
+            *NODE_DETAILS_REFRESH.write() += 1;
+        }),
+    );
 }
 
 /// Handles an undo/redo endpoint response: reflects the resulting Undo/Redo availability, marks the

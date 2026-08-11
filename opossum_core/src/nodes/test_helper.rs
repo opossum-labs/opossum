@@ -10,7 +10,7 @@ pub mod test_helper {
         core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, OpticRef, PortType},
         distributions::position::Hexapolar,
         error::{OpmResult, OpossumError},
-        gain::{ConstGain, GainModel},
+        gain::{AMP_CONFIG, ConstGain, GainModel},
         joule,
         light::{LightData, LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer,
@@ -113,9 +113,6 @@ pub mod test_helper {
         check_logs(log::Level::Warn, vec![&msg]);
         Ok(())
     }
-    /// Name of the property that carries the amplification model of a node with a volume.
-    const AMP_CONFIG: &str = "amp config";
-
     /// Read the [`GainModel`] out of a node's `amp config` property.
     ///
     /// # Arguments

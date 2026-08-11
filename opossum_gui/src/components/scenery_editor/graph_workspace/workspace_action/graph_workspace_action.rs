@@ -338,6 +338,13 @@ pub enum GraphsWorkspaceAction {
         to_graph_id: Uuid,
     },
 
+    /// Turns a node with a volume into an amplifier by patching its `amp config` property to an
+    /// active gain model. An ordinary property patch - the node type does not change.
+    MakeAmplifier {
+        /// The ID of the node to amplify with.
+        node_id: Uuid,
+    },
+
     /// Undoes the last checkpointed document edit.
     Undo,
     /// Redoes the last undone document edit.

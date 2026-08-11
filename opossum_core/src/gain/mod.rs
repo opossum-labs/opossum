@@ -25,6 +25,20 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum::EnumIter;
 
+/// Name of the property that carries the [`GainModel`] of a node with a volume.
+///
+/// Every node listed in [`AMP_CONFIG_NODE_TYPES`] declares this property unconditionally, so
+/// turning a component into an amplifier is an ordinary property patch on this key.
+pub const AMP_CONFIG: &str = "amp config";
+
+/// Node types that declare the [`AMP_CONFIG`] property, i.e. the components that have a physical
+/// volume in which amplification could take place.
+///
+/// This is the list a user interface needs in order to decide whether it may offer amplification
+/// for a node it only knows by its type name. It is kept in sync with the actual node declarations
+/// by the `amp_config_node_types_are_exhaustive` test below.
+pub const AMP_CONFIG_NODE_TYPES: &[&str] = &["cylindric lens", "lens", "wedge"];
+
 /// Parameters of a constant, path-length independent energy gain.
 ///
 /// This is the simplest conceivable amplifier: the energy of every ray is multiplied by the same
@@ -105,10 +119,37 @@ impl GainModel {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::properties::Proptype;
+    use crate::{
+        core_optics::OpticNode,
+        nodes::{create_node_ref, node_types},
+        properties::Proptype,
+        utils::LockExt,
+    };
     use approx::assert_relative_eq;
     use strum::IntoEnumIterator;
 
+    #[test]
+    fn amp_config_node_types_are_exhaustive() -> OpmResult<()> {
+        let mut declaring = Vec::new();
+        for (node_type, _) in node_types() {
+            let optic_ref = create_node_ref(node_type)?;
+            let declares_amp_config = optic_ref
+                .optical_ref
+                .lock_opm()?
+                .node_attr()
+                .get_property(AMP_CONFIG)
+                .is_ok();
+            if declares_amp_config {
+                declaring.push(node_type);
+            }
+        }
+        declaring.sort_unstable();
+        assert_eq!(
+            declaring, AMP_CONFIG_NODE_TYPES,
+            "AMP_CONFIG_NODE_TYPES does not match the node types actually declaring '{AMP_CONFIG}'"
+        );
+        Ok(())
+    }
     #[test]
     fn default_is_inactive() {
         assert_eq!(GainModel::default(), GainModel::None);
