@@ -596,6 +596,44 @@ body {
     z-index: 1;
 }
 
+/* This is a desktop application, not a document: dragging across a menu label, a tab or an icon
+   should do nothing, not leave a blue selection behind. Selection is therefore off by default and
+   switched back on only where text really is meant to be selected - see `.selectable` below. */
+body {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+/* Images must not be draggable either - otherwise a node icon can be torn out of the canvas and
+   dropped as a picture. */
+img {
+    -webkit-user-drag: none;
+    user-select: none;
+}
+
+/* Anything the user types into stays selectable; a direct rule beats the inherited `none` above. */
+input,
+textarea,
+select,
+[contenteditable="true"] {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
+}
+
+/* Opt a region back in - put this on a container whose text should be selectable and copyable. */
+.selectable,
+.selectable * {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
+}
+
 .noselect {
   -webkit-touch-callout: none; /* iOS Safari */
     -webkit-user-select: none; /* Safari */
