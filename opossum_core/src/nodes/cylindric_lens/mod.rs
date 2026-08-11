@@ -228,7 +228,7 @@ mod test {
         light::{LightData, LightResult, Rays},
         millimeter, nanometer,
         nodes::test_helper::test_helper::*,
-        properties::Proptype,
+        properties::{Proptype, proptype::AssetRef},
     };
     use approx::assert_relative_eq;
     use nalgebra::Vector3;
@@ -252,7 +252,9 @@ mod test {
             panic!()
         };
         assert_eq!(*ct, millimeter!(10.0));
-        let Ok(Proptype::Material(material)) = node.node_attr.get_property("material") else {
+        let Ok(Proptype::Material(AssetRef::Inline(material))) =
+            node.node_attr.get_property("material")
+        else {
             panic!()
         };
         assert_eq!((*material).get_refractive_index(Length::zero())?, 1.5);
@@ -306,7 +308,9 @@ mod test {
             panic!()
         };
         assert_eq!(*ct, millimeter!(11.0));
-        let Ok(Proptype::Material(material)) = node.node_attr.get_property("material") else {
+        let Ok(Proptype::Material(AssetRef::Inline(material))) =
+            node.node_attr.get_property("material")
+        else {
             panic!()
         };
         assert_eq!((*material).get_refractive_index(Length::zero())?, 2.0);

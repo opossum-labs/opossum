@@ -61,6 +61,16 @@ thread_local! {
     });
 }
 
+/// Wrapper for registry assets that can hold either the full inline data
+/// or a lightweight UUID reference for serialization.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum AssetRef<T> {
+    /// Full in-memory asset struct.
+    Inline(T),
+    /// Lightweight UUID reference.
+    Id(Uuid),
+}
+
 // #[non_exhaustive]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 /// The type of the [`Property`](crate::properties::Property).
@@ -133,7 +143,7 @@ pub enum Proptype {
     /// [`LightData`] build configuration
     LightDataBuilder(LightDataBuilder),
     /// An optical material property
-    Material(Material),
+    Material(AssetRef<Material>),
 }
 impl Proptype {
     /// Generate a html representation of a Proptype.
@@ -197,8 +207,11 @@ impl Proptype {
                 Self::Energy(value) => {
                     template_engine.render("simple", &format_quantity(joule, *value))
                 }
-                Self::Material(mat) => {
+                Self::Material(AssetRef::Inline(mat)) => {
                     template_engine.render("simple", &format!("{} (v{})", mat.name, mat.version))
+                }
+                Self::Material(AssetRef::Id(mat_id)) => {
+                    template_engine.render("simple", &format!("MaterialRef({mat_id})"))
                 }
                 _ => Err(tinytemplate::error::Error::GenericError {
                     msg: "proptype not supported".into(),
@@ -308,9 +321,10 @@ impl From<FilterTypeBuilder> for Proptype {
         Self::FilterTypeBuilder(val)
     }
 }
+
 impl From<Material> for Proptype {
     fn from(value: Material) -> Self {
-        Self::Material(value)
+        Self::Material(AssetRef::Inline(value))
     }
 }
 /// Generate a string suffix for an ordinal number

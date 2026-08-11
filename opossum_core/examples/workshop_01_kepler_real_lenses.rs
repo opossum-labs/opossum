@@ -13,8 +13,7 @@
 //! 7. Configure ray tracing
 //! 8. Run analysis and save output
 use opossum_core::{
-    core_optics::{NodeAttrExt, OpticNodeExt},
-    prelude::*,
+    core_optics::{NodeAttrExt, OpticNodeExt}, material::Material, prelude::*,
 };
 use std::{env, path::Path};
 
@@ -36,13 +35,15 @@ fn main() -> OpmResult<()> {
         7.52649555E-005,
         nanometer!(300.0)..nanometer!(2000.0),
     )?;
+    let mut material_hzf52: Material = refr_index_hzf52.into();
+    material_hzf52.name="HZF52".to_string();
     // Create the first spherical lens with real optical parameters.
     let mut lens1 = Lens::new(
         "75 mm lens",
         millimeter!(122.25),
         millimeter!(-122.25),
         millimeter!(10.0),
-        &refr_index_hzf52,
+        material_hzf52.clone(),
     )?;
     // Define a circular aperture.
     let aperture = Aperture::new_circle(millimeter!(25.0), ApertureType::Hole, None)?;
@@ -56,7 +57,7 @@ fn main() -> OpmResult<()> {
         millimeter!(100.0),
         millimeter!(-100.0),
         millimeter!(10.0),
-        &refr_index_hzf52,
+        material_hzf52,
     )?;
     // Add second lens to the scene.
     let i_pl2 = scenery.add_node(lens2)?;

@@ -192,7 +192,7 @@ mod test {
         light::{LightData, LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
         nanometer,
         nodes::test_helper::test_helper::*,
-        properties::Proptype,
+        properties::{Proptype, proptype::AssetRef},
     };
     use nalgebra::Vector3;
 
@@ -213,7 +213,7 @@ mod test {
         } else {
             assert!(false, "could not read angle.");
         }
-        if let Ok(Proptype::Material(p)) = node.properties().get("material") {
+        if let Ok(Proptype::Material(AssetRef::Inline(p))) = node.properties().get("material") {
             if let RefractiveIndexType::Const(val) = &p.refractive_index {
                 let idx = val.get_refractive_index(nanometer!(1000.0))?;
                 assert_eq!(idx, 1.5);
@@ -344,7 +344,7 @@ mod test {
         } else {
             assert!(false, "could not read angle.");
         }
-        if let Ok(Proptype::Material(p)) = n.properties().get("material") {
+        if let Ok(Proptype::Material(AssetRef::Inline(p))) = n.properties().get("material") {
             if let RefractiveIndexType::Const(val) = &p.refractive_index {
                 let idx = val.get_refractive_index(nanometer!(1000.0))?;
                 assert_eq!(idx, 1.0);

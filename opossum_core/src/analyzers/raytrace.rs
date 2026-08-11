@@ -12,7 +12,7 @@ use crate::{
     material::Material,
     nodes::NodeGroup,
     picojoule,
-    properties::Proptype,
+    properties::{Proptype, proptype::AssetRef},
     reporting::analysis_report::AnalysisReport,
 };
 use log::{info, warn};
@@ -236,7 +236,8 @@ pub trait AnalysisRayTrace: OpticNode {
         &self,
         node_attr: &NodeAttr,
     ) -> OpmResult<(Material, Length, Angle)> {
-        let Ok(Proptype::Material(material)) = node_attr.get_property("material") else {
+        let Ok(Proptype::Material(AssetRef::Inline(material))) = node_attr.get_property("material")
+        else {
             return Err(OpossumError::Analysis("cannot read material".into()));
         };
         let Ok(Proptype::Length(center_thickness)) = node_attr.get_property("center thickness")
