@@ -22,8 +22,9 @@ body {
     /* Bootstrap's .row puts a gutter (negative row margin + padding on every child) around its
        columns. The sidebar's view switcher has to sit flush against the window edge like VS Code's
        activity bar, so this row carries no gutter at all - both its children handle their own
-       inner spacing. */
-    --bs-gutter-x: 0;
+       inner spacing. The variable is MDB's `--mdb-gutter-x`, not upstream Bootstrap's
+       `--bs-gutter-x`; this project ships MDB. */
+    --mdb-gutter-x: 0;
     margin-left: 0;
     margin-right: 0;
 }
@@ -297,6 +298,10 @@ body {
     gap: 2px;
     padding: 4px 0px;
     border-right: 1px solid rgb(70, 70, 70);
+    /* Explicit rather than icon-derived: together with the 2px resize handle this is the collapsed
+       sidebar's width, which `COLLAPSED_SIDEBAR_WIDTH` in app.rs has to match. */
+    box-sizing: border-box;
+    width: 40px;
 }
 
 .sidebar-view-button {
@@ -306,8 +311,11 @@ body {
     color: rgb(150, 150, 150);
     font-size: 18pt;
     line-height: 1;
-    padding: 6px 5px;
+    padding: 6px 0;
     cursor: pointer;
+    /* Fill the bar's fixed width so the active marker spans the full button. */
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .sidebar-view-button:hover {

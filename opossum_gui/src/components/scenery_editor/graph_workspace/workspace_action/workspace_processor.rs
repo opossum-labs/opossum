@@ -28,7 +28,7 @@ use crate::{
     NODE_DETAILS_REFRESH, OPOSSUM_UI_LOGS, PENDING_PANEL_OPEN, PENDING_SOURCE_CARD_OPEN,
     api::{self, delete_document, eval_action_run},
     components::scenery_editor::{
-        DragStatus, NodeType,
+        DragStatus, NodeType, SidebarView,
         constants::{MIN_NODE_DISTANCE_RADIUS, NODE_PLACEMENT_MAX_ITERATIONS, NODE_WIDTH},
         graph_workspace::{
             EditorStateStoreExt, GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceState,
@@ -784,6 +784,11 @@ async fn apply_document_changes(
     {
         ensure_tab_active(graph_id, ws_handler, root_graph_id, workspace).await;
         if let Some(node) = node {
+            // The jump exists to show the user what was just undone/redone, so the sidebar has to be
+            // showing the node editor - a collapsed sidebar, or one left on the amplifier overview,
+            // would swallow the change entirely.
+            *crate::SIDEBAR_VIEW.write() = SidebarView::NodeProperties;
+            *crate::SIDEBAR_COLLAPSED.write() = false;
             // The tab is loaded now, so read the node's kind for the selection bookkeeping (analyzers are
             // not optical); default to optical if it isn't in the store yet.
             let is_optical =

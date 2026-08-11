@@ -14,6 +14,7 @@ use crate::components::{
         },
     },
 };
+use crate::{SIDEBAR_COLLAPSED, SIDEBAR_VIEW, SIDEBAR_WIDTH};
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use dioxus_primitives::tabs::{TabContent, TabList, TabTrigger, Tabs};
 use std::path::PathBuf;
@@ -28,7 +29,6 @@ pub fn GraphEditor(
     model_file_path: ReadSignal<Option<PathBuf>>,
     model_file_path_handler: EventHandler<Option<PathBuf>>,
     root_tab_open_handler: EventHandler<bool>,
-    sidebar_width: ReadSignal<f64>,
     sidebar_drag_handler: EventHandler<f64>,
 ) -> Element {
     let workspace = use_store(GraphsWorkspaceState::default);
@@ -115,8 +115,6 @@ pub fn GraphEditor(
                 g.graph_store().read().get_selected_nodes(active_tab())
             })
     });
-    // `None` = collapsed to the icon bar alone, VS-Code style.
-    let sidebar_view = use_signal(|| Some(SidebarView::NodeProperties));
     let onmouseleave_handler = use_drag_end(workspace.into(), None);
     let onkeydownhandler = use_on_key_down(
         current_mouse_in_editor_pos,
@@ -133,14 +131,20 @@ pub fn GraphEditor(
                 // Collapsed, the bar is only as wide as its icons; expanded, its width is whatever
                 // the user dragged it to. Either way it never grows or shrinks with the window -
                 // the graph editor next to it takes the remaining space.
-                style: sidebar_view().map_or_else(
-                    || "flex: 0 0 auto;".to_string(),
-                    |_| format!("flex: 0 0 {}px;", sidebar_width()),
-                ),
-                SidebarViewSwitcher { view: sidebar_view }
-                if let Some(view) = sidebar_view() {
+                //
+                // `width: auto` is load-bearing in the collapsed case: this div is a child of a
+                // Bootstrap `.row`, whose `.row > *` rule sets `width: 100%`. With a flex-basis of
+                // `auto` that width becomes the basis, so the collapsed bar would claim the entire
+                // row and wrap the graph editor out of sight.
+                style: if SIDEBAR_COLLAPSED() {
+                    "flex: 0 0 auto; width: auto;".to_string()
+                } else {
+                    format!("flex: 0 0 {}px; width: auto;", SIDEBAR_WIDTH())
+                },
+                SidebarViewSwitcher {}
+                if !SIDEBAR_COLLAPSED() {
                     div { class: "flex-grow-1 sidebar-view",
-                        match view {
+                        match SIDEBAR_VIEW() {
                             SidebarView::NodeProperties => rsx! {
                                 NodeConfigEditor {
                                     selected_nodes_memo,
@@ -154,12 +158,14 @@ pub fn GraphEditor(
                             },
                         }
                     }
-                    div {
-                        class: "width_resizer",
-                        onmousedown: move |e: MouseEvent| {
-                            sidebar_drag_handler.call(e.client_coordinates().x);
-                        },
-                    }
+                }
+                // Outside the collapsed check on purpose: a collapsed sidebar must still be
+                // draggable back out, exactly as it can be dragged shut.
+                div {
+                    class: "width_resizer",
+                    onmousedown: move |e: MouseEvent| {
+                        sidebar_drag_handler.call(e.client_coordinates().x);
+                    },
                 }
             }
             div {
@@ -264,22 +270,30 @@ impl SidebarView {
 ///
 /// Clicking the view that is already showing collapses the sidebar to this bar; clicking any other
 /// icon switches to it (and re-expands). The bar itself never disappears, so the panel can always be
-/// brought back.
+/// brought back. The collapsed state is shared with the resize drag, which collapses the sidebar
+/// once it is pulled past half the minimum width.
 #[component]
-fn SidebarViewSwitcher(view: Signal<Option<SidebarView>>) -> Element {
+fn SidebarViewSwitcher() -> Element {
     rsx! {
         div { class: "sidebar-view-switcher",
             for entry in [SidebarView::NodeProperties, SidebarView::AmpOverview] {
                 {
                     let (icon, title) = entry.icon_and_title();
-                    let is_open = view() == Some(entry);
+                    let is_open = SIDEBAR_VIEW() == entry && !SIDEBAR_COLLAPSED();
                     rsx! {
                         button {
                             key: "{title}",
                             r#type: "button",
                             title,
                             class: if is_open { "sidebar-view-button active" } else { "sidebar-view-button" },
-                            onclick: move |_| view.set(if is_open { None } else { Some(entry) }),
+                            onclick: move |_| {
+                                if is_open {
+                                    *SIDEBAR_COLLAPSED.write() = true;
+                                } else {
+                                    *SIDEBAR_VIEW.write() = entry;
+                                    *SIDEBAR_COLLAPSED.write() = false;
+                                }
+                            },
                             "{icon}"
                         }
                     }

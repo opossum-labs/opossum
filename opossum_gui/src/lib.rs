@@ -8,7 +8,7 @@ mod components;
 
 use api::http_client::HTTPClient;
 use app_config::AppConfig;
-use components::{context_menu::cx_menu::CxMenu, logger::Logs};
+use components::{context_menu::cx_menu::CxMenu, logger::Logs, scenery_editor::SidebarView};
 use dioxus::signals::{GlobalSignal, Signal};
 use opossum_core::types::api_types::NodeEditorPanel;
 use uuid::Uuid;
@@ -31,6 +31,17 @@ static NODE_DETAILS_REFRESH: GlobalSignal<usize> = Signal::global(|| 0);
 /// delete, paste, group or undo. [`NODE_DETAILS_REFRESH`] alone does not cover those: it is only
 /// raised for property-level edits.
 static AMP_LIST_REFRESH: GlobalSignal<usize> = Signal::global(|| 0);
+/// Which view the sidebar shows, whether it is collapsed to its icon bar, and how wide it is when
+/// expanded.
+///
+/// Global rather than local to the graph editor because four distant places drive the same piece of
+/// UI: the icon bar (click), the resize drag (which lives on the outermost container so it survives
+/// the pointer leaving the sidebar), and the workspace processor, which has to bring the node
+/// properties back into view when an undo/redo jumps to a node - otherwise that change would be
+/// applied silently while another view is showing.
+static SIDEBAR_VIEW: GlobalSignal<SidebarView> = Signal::global(|| SidebarView::NodeProperties);
+static SIDEBAR_COLLAPSED: GlobalSignal<bool> = Signal::global(|| false);
+static SIDEBAR_WIDTH: GlobalSignal<f64> = Signal::global(|| 280.0);
 /// Set from the backend's authoritative `JumpTarget` when an undo/redo focuses a node: the node it
 /// selected and the panel to open once that node's editor has loaded. Consumed (cleared) by whichever
 /// `OpticalNodeEditor`/`PortConfigEditor` instance matches the uuid. `apply_document_changes` sets it

@@ -21,7 +21,10 @@ use dioxus::prelude::*;
 use std::path::PathBuf;
 
 #[cfg(not(target_arch = "wasm32"))]
-use crate::{ProcessHandle, components::simulation::simulation_window::SimulationWindow};
+use crate::{
+    ProcessHandle, SIDEBAR_COLLAPSED, SIDEBAR_WIDTH,
+    components::simulation::simulation_window::SimulationWindow,
+};
 #[cfg(not(target_arch = "wasm32"))]
 use dioxus::desktop::{tao::window::ResizeDirection, use_window};
 
@@ -474,6 +477,10 @@ pub fn App() -> Element {
 
 /// Narrowest the node-config sidebar may be dragged before its inputs start to overlap.
 const MIN_SIDEBAR_WIDTH: f64 = 200.0;
+/// Width of the collapsed sidebar, i.e. its icon bar plus the resize handle. Pinned in CSS by
+/// `.sidebar-view-switcher`'s explicit `width`, and only used as the starting point of a resize drag
+/// that begins while the sidebar is collapsed - a few pixels off would merely shift that drag.
+const COLLAPSED_SIDEBAR_WIDTH: f64 = 42.0;
 
 #[component]
 fn CommonAppLayout(
@@ -496,10 +503,15 @@ fn CommonAppLayout(
     let mut last_y = use_signal(|| 0.0);
     // The sidebar is resized the same way as the log panel, and for the same reason from the same
     // place: the move/up listeners sit on the outermost container, so a drag survives the pointer
-    // leaving the element it started on.
-    let mut sidebar_width = use_signal(|| 280.0);
+    // leaving the element it started on - which matters here, because dragging far enough left
+    // collapses the sidebar and unmounts the very handle the drag started on.
     let mut dragging_sidebar = use_signal(|| false);
     let mut last_x = use_signal(|| 0.0);
+    // The width the pointer asks for, *unclamped*. Kept separately from `SIDEBAR_WIDTH` (which never
+    // drops below the minimum) so that dragging past the minimum keeps tracking the pointer instead
+    // of piling up at the clamp - only then can dragging back out restore the panel at the right
+    // moment.
+    let mut sidebar_drag_width = use_signal(|| 0.0);
 
     let on_mousemove = {
         move |evt: MouseEvent| {
@@ -510,10 +522,19 @@ fn CommonAppLayout(
                 last_y.set(evt.client_coordinates().y);
             }
             if *dragging_sidebar.read() {
-                let width_val = *sidebar_width.read();
                 let dx = evt.client_coordinates().x - *last_x.read();
-                sidebar_width.set((width_val + dx).max(MIN_SIDEBAR_WIDTH));
                 last_x.set(evt.client_coordinates().x);
+                let requested = (*sidebar_drag_width.read() + dx).max(0.0);
+                sidebar_drag_width.set(requested);
+                // Below half the minimum width the panel collapses exactly as if its icon had been
+                // clicked, and dragging back out past that point brings it straight back. Between
+                // the two the width simply sticks at the minimum.
+                if requested < MIN_SIDEBAR_WIDTH / 2.0 {
+                    *SIDEBAR_COLLAPSED.write() = true;
+                } else {
+                    *SIDEBAR_COLLAPSED.write() = false;
+                    *SIDEBAR_WIDTH.write() = requested.max(MIN_SIDEBAR_WIDTH);
+                }
             }
         }
     };
@@ -533,6 +554,14 @@ fn CommonAppLayout(
         move |evt: f64| {
             dragging_sidebar.set(true);
             last_x.set(evt);
+            // Start from the width the sidebar actually has on screen, so the panel follows the
+            // pointer from the first pixel - dragging a collapsed sidebar back out must not begin
+            // at its remembered expanded width.
+            sidebar_drag_width.set(if SIDEBAR_COLLAPSED() {
+                COLLAPSED_SIDEBAR_WIDTH
+            } else {
+                SIDEBAR_WIDTH()
+            });
         }
     };
 
@@ -561,7 +590,6 @@ fn CommonAppLayout(
                 model_file_path,
                 model_file_path_handler,
                 root_tab_open_handler,
-                sidebar_width,
                 sidebar_drag_handler: on_sidebar_mousedown,
             }
             Logger { drag_handler: on_mousedown, height }
