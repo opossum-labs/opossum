@@ -301,16 +301,14 @@ body {
     /* Explicit rather than icon-derived: together with the 2px resize handle this is the collapsed
        sidebar's width, which `COLLAPSED_SIDEBAR_WIDTH` in app.rs has to match. */
     box-sizing: border-box;
-    width: 40px;
+    width: 50px;
 }
 
 .sidebar-view-button {
     background: none;
     border: none;
     border-left: 3px solid transparent;
-    color: rgb(150, 150, 150);
-    font-size: 18pt;
-    line-height: 1;
+    line-height: 0;
     padding: 6px 0;
     cursor: pointer;
     /* Fill the bar's fixed width so the active marker spans the full button. */
@@ -318,13 +316,23 @@ body {
     box-sizing: border-box;
 }
 
-.sidebar-view-button:hover {
-    color: rgb(220, 220, 220);
+.sidebar-view-button img {
+    width: 40px;
+    height: 40px;
+    /* Inactive icons are dimmed rather than recoloured, so the artwork keeps its own colours. */
+    opacity: 0.4;
+}
+
+.sidebar-view-button:hover img {
+    opacity: 0.85;
+}
+
+.sidebar-view-button.active img {
+    opacity: 1;
 }
 
 .sidebar-view-button.active {
-    color: rgb(255, 214, 130);
-    border-left-color: rgb(255, 214, 130);
+    border-left-color: rgb(199, 199, 199);
 }
 
 .sidebar-view {

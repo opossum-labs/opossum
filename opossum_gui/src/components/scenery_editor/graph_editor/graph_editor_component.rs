@@ -1,4 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
+// The `asset!` macro expands to a type clippy flags as not volatile-compatible; every other module
+// using it carries the same allow (see `scenery_editor/node/mod.rs`).
+#![allow(clippy::volatile_composites)]
 use crate::components::{
     node_editor::{AmpOverview, NodeConfigEditor},
     scenery_editor::{
@@ -248,6 +251,9 @@ pub fn GraphEditor(
     }
 }
 
+const NODE_CONFIG_ICON: Asset = asset!("/assets/Node_config_icon.png");
+const AMPLIFIER_ICON: Asset = asset!("/assets/amplifier_menu_icon.png");
+
 /// Which of the sidebar's two views is showing.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SidebarView {
@@ -258,10 +264,10 @@ pub enum SidebarView {
 }
 impl SidebarView {
     /// Icon and tooltip of this view's button in the switcher bar.
-    const fn icon_and_title(self) -> (&'static str, &'static str) {
+    const fn icon_and_title(self) -> (Asset, &'static str) {
         match self {
-            Self::NodeProperties => ("⚙", "Node properties"),
-            Self::AmpOverview => ("⚡", "Amplifiers"),
+            Self::NodeProperties => (NODE_CONFIG_ICON, "Node properties"),
+            Self::AmpOverview => (AMPLIFIER_ICON, "Amplifiers"),
         }
     }
 }
@@ -294,7 +300,7 @@ fn SidebarViewSwitcher() -> Element {
                                     *SIDEBAR_COLLAPSED.write() = false;
                                 }
                             },
-                            "{icon}"
+                            img { src: icon, alt: title, draggable: false }
                         }
                     }
                 }
