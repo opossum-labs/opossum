@@ -146,11 +146,11 @@ impl OpmDocument {
                 for (prop_name, prop) in node.node_attr().properties() {
                     if let Proptype::Material(AssetRef::Inline(material)) = prop.prop() {
                         self.embedded_materials
-                            .insert(material.id, material.clone());
+                            .insert(material.id(), material.clone());
 
                         updates.push((
                             prop_name.clone(),
-                            Proptype::Material(AssetRef::Id(material.id)),
+                            Proptype::Material(AssetRef::Id(material.id())),
                         ));
                     }
                 }
@@ -543,7 +543,14 @@ mod test {
 
         let material_id = Uuid::new_v4();
         let const_refr = RefrIndexConst::new(1.5)?;
-        let material = Material::new(material_id, 1, "N-BK7 Shared", const_refr.into());
+        let material = Material::new(
+            material_id,
+            1,
+            "N-BK7 Shared",
+            None,
+            None,
+            const_refr.into(),
+        );
 
         let mut scenery = NodeGroup::default();
 
@@ -591,8 +598,8 @@ mod test {
 
             // Unpack the AssetRef::Inline to verify the material is correctly loaded into RAM
             if let Proptype::Material(AssetRef::Inline(mat)) = prop {
-                assert_eq!(mat.id, material_id);
-                assert_eq!(mat.name, "N-BK7 Shared");
+                assert_eq!(mat.id(), material_id);
+                assert_eq!(mat.name(), "N-BK7 Shared");
             } else {
                 panic!(
                     "Expected Proptype::Material(AssetRef::Inline) in node after deserialization resolution"

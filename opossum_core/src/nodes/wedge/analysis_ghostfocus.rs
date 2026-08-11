@@ -26,7 +26,7 @@ impl AnalysisGhostFocus for Wedge {
         let refraction_intended = true;
         self.pass_through_surface_generic(
             in_port,
-            Some(refri.refractive_index), // RefractiveIndex in Some() packen
+            Some(refri.optical.refractive_index), // RefractiveIndex in Some() packen
             &mut rays_bundle,
             config, // config ist direkt unsere PropagationStrategy
             self.inverted(),

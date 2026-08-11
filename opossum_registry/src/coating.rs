@@ -1,8 +1,8 @@
-use opossum_core::coatings::CoatingType;
+use opossum_core::{asset::AssetHeader, coatings::CoatingType};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::asset::{AssetHeader, RegisterableAsset};
+use crate::asset::RegisterableAsset;
 
 /// Represents an optical coating asset managed by `opossum_registry`.
 ///
@@ -47,7 +47,7 @@ impl RegisterableAsset for CoatingAsset {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::asset::CURRENT_SCHEMA_VERSION;
+    use opossum_core::asset::CURRENT_SCHEMA_VERSION;
     use opossum_core::coatings::CoatingConstantR;
     use uom::si::f64::Ratio;
     use uom::si::ratio::percent;

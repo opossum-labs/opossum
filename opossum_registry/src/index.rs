@@ -1,15 +1,14 @@
 use opossum_core::error::{OpmResult, OpossumError};
+use opossum_core::material::Material;
 use std::collections::HashMap;
 use std::fs;
 use std::marker::PhantomData;
-use uom::si::f64::Length;
-use uom::si::length::nanometer;
 use uuid::Uuid;
 
 use crate::asset::RegisterableAsset;
 use crate::coating::CoatingAsset;
 use crate::loader::AssetLoader;
-use crate::material::MaterialAsset;
+// use crate::material::MaterialAsset;
 
 /// Standard d-line wavelength (587.56 nm) used for nominal refractive index anchor (`n_d`).
 pub const WAVELENGTH_D_LINE_NM: f64 = 587.56;
@@ -76,21 +75,6 @@ pub trait IndexableAsset: RegisterableAsset {
 pub struct MaterialIndexData {
     /// Pre-computed nominal refractive index at d-line (587.56 nm), if applicable.
     pub nd: Option<f64>,
-}
-
-impl IndexableAsset for MaterialAsset {
-    type IndexData = MaterialIndexData;
-
-    fn create_index_data(&self) -> Self::IndexData {
-        let d_line_wvl = Length::new::<nanometer>(WAVELENGTH_D_LINE_NM);
-        let nd = self
-            .optical
-            .refractive_index
-            .get_refractive_index(d_line_wvl)
-            .ok();
-
-        MaterialIndexData { nd }
-    }
 }
 
 /// Type-specific index payload for `CoatingAssets`.
@@ -258,7 +242,7 @@ impl<T: IndexableAsset> AssetIndex<T> {
 // Type-Specific Index Queries
 // -----------------------------------------------------------------------------
 
-impl AssetIndex<MaterialAsset> {
+impl AssetIndex<Material> {
     /// Searches specifically for material assets whose nominal refractive index `nd` falls within `[min_n, max_n]`.
     #[must_use]
     pub fn search_by_nd_range(
@@ -268,7 +252,7 @@ impl AssetIndex<MaterialAsset> {
     ) -> Vec<&IndexEntry<MaterialIndexData>> {
         self.entries
             .values()
-            .filter(|entry| {
+            .filter(|entry: &&IndexEntry<MaterialIndexData>| {
                 entry
                     .specific
                     .nd
@@ -293,7 +277,7 @@ mod tests {
         // Create Material 1: n = 1.5168
         let id1 = Uuid::new_v4();
         let const_1_51 = RefractiveIndexType::Const(RefrIndexConst::new(1.5168)?);
-        let mat1 = MaterialAsset::new(
+        let mat1 = Material::new(
             id1,
             1,
             "N-BK7",
@@ -304,7 +288,7 @@ mod tests {
         loader.save_asset(&mat1)?;
 
         // Build Material Index
-        let mut index = AssetIndex::<MaterialAsset>::new();
+        let mut index = AssetIndex::<Material>::new();
         index.build_from_loader(&loader)?;
 
         assert_eq!(index.len(), 1);

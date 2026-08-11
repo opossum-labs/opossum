@@ -25,7 +25,7 @@ impl AnalysisGhostFocus for CylindricLens {
         // 1. Durch die Eintrittsfläche propagieren
         self.pass_through_surface_generic(
             in_port,
-            Some(refri.refractive_index), // Als Option übergeben
+            Some(refri.optical.refractive_index), // Als Option übergeben
             &mut rays_bundle,
             config, // config ist die PropagationStrategy
             self.inverted(),

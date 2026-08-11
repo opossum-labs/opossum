@@ -32,7 +32,7 @@ impl AnalysisRayTrace for Wedge {
         // 1. Eintrittsfläche
         self.pass_through_surface_generic(
             in_port,
-            Some(material.refractive_index),
+            Some(material.optical.refractive_index),
             &mut rays_bundle,
             config,
             self.inverted(),

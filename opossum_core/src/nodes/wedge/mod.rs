@@ -214,7 +214,7 @@ mod test {
             assert!(false, "could not read angle.");
         }
         if let Ok(Proptype::Material(AssetRef::Inline(p))) = node.properties().get("material") {
-            if let RefractiveIndexType::Const(val) = &p.refractive_index {
+            if let RefractiveIndexType::Const(val) = &p.optical.refractive_index {
                 let idx = val.get_refractive_index(nanometer!(1000.0))?;
                 assert_eq!(idx, 1.5);
             } else {
@@ -345,7 +345,7 @@ mod test {
             assert!(false, "could not read angle.");
         }
         if let Ok(Proptype::Material(AssetRef::Inline(p))) = n.properties().get("material") {
-            if let RefractiveIndexType::Const(val) = &p.refractive_index {
+            if let RefractiveIndexType::Const(val) = &p.optical.refractive_index {
                 let idx = val.get_refractive_index(nanometer!(1000.0))?;
                 assert_eq!(idx, 1.0);
             } else {

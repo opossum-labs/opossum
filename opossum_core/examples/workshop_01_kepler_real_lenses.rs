@@ -13,7 +13,9 @@
 //! 7. Configure ray tracing
 //! 8. Run analysis and save output
 use opossum_core::{
-    core_optics::{NodeAttrExt, OpticNodeExt}, material::Material, prelude::*,
+    core_optics::{NodeAttrExt, OpticNodeExt},
+    material::Material,
+    prelude::*,
 };
 use std::{env, path::Path};
 
@@ -36,7 +38,7 @@ fn main() -> OpmResult<()> {
         nanometer!(300.0)..nanometer!(2000.0),
     )?;
     let mut material_hzf52: Material = refr_index_hzf52.into();
-    material_hzf52.name="HZF52".to_string();
+    material_hzf52.header.name = "HZF52".to_string();
     // Create the first spherical lens with real optical parameters.
     let mut lens1 = Lens::new(
         "75 mm lens",

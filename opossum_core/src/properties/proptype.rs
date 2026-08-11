@@ -207,9 +207,8 @@ impl Proptype {
                 Self::Energy(value) => {
                     template_engine.render("simple", &format_quantity(joule, *value))
                 }
-                Self::Material(AssetRef::Inline(mat)) => {
-                    template_engine.render("simple", &format!("{} (v{})", mat.name, mat.version))
-                }
+                Self::Material(AssetRef::Inline(mat)) => template_engine
+                    .render("simple", &format!("{} (v{})", mat.name(), mat.version())),
                 Self::Material(AssetRef::Id(mat_id)) => {
                     template_engine.render("simple", &format!("MaterialRef({mat_id})"))
                 }

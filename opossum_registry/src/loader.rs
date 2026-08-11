@@ -239,8 +239,8 @@ impl AssetLoader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::material::MaterialAsset;
-    use opossum_core::refractive_index::RefractiveIndexType;
+    // use crate::material::MaterialAsset;
+    use opossum_core::{material::Material, refractive_index::RefractiveIndexType};
     use tempfile::TempDir;
 
     #[test]
@@ -249,7 +249,7 @@ mod tests {
         let loader = AssetLoader::new(temp_dir.path());
 
         let id = Uuid::new_v4();
-        let material = MaterialAsset::new(
+        let material = Material::new(
             id,
             1,
             "N-BK7",
@@ -261,7 +261,7 @@ mod tests {
         loader.save_asset(&material)?;
 
         // Test loading with explicit version Option: Some(1)
-        let loaded: MaterialAsset = loader.load(id, Some(1))?;
+        let loaded: Material = loader.load(id, Some(1))?;
         assert_eq!(loaded.name(), "N-BK7");
         assert_eq!(loaded.version(), 1);
 
@@ -276,7 +276,7 @@ mod tests {
         let id = Uuid::new_v4();
 
         // Save version 1
-        let mat_v1 = MaterialAsset::new(
+        let mat_v1 = Material::new(
             id,
             1,
             "N-BK7 v1",
@@ -287,7 +287,7 @@ mod tests {
         loader.save_asset(&mat_v1)?;
 
         // Save version 2
-        let mat_v2 = MaterialAsset::new(
+        let mat_v2 = Material::new(
             id,
             2,
             "N-BK7 v2",
@@ -298,7 +298,7 @@ mod tests {
         loader.save_asset(&mat_v2)?;
 
         // Test loading with None (should load latest, which is v2)
-        let latest: MaterialAsset = loader.load(id, None)?;
+        let latest: Material = loader.load(id, None)?;
         assert_eq!(latest.version(), 2);
         assert_eq!(latest.name(), "N-BK7 v2");
 
@@ -311,7 +311,7 @@ mod tests {
         let loader = AssetLoader::new(temp_dir.path());
         let id = Uuid::new_v4();
 
-        let result: OpmResult<MaterialAsset> = loader.load(id, Some(1));
+        let result: OpmResult<Material> = loader.load(id, Some(1));
         assert!(result.is_err());
     }
     #[test]
@@ -321,12 +321,12 @@ mod tests {
         let id = Uuid::new_v4();
 
         // Should return 1 when no versions exist yet
-        assert_eq!(loader.next_version_number::<MaterialAsset>(id), 1);
+        assert_eq!(loader.next_version_number::<Material>(id), 1);
 
         // Save v1 and check next version
-        let mat_v1 = MaterialAsset::new(id, 1, "Glass", None, None, RefractiveIndexType::default());
+        let mat_v1 = Material::new(id, 1, "Glass", None, None, RefractiveIndexType::default());
         loader.save_asset(&mat_v1)?;
-        assert_eq!(loader.next_version_number::<MaterialAsset>(id), 2);
+        assert_eq!(loader.next_version_number::<Material>(id), 2);
 
         Ok(())
     }
