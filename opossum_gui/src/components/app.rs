@@ -472,6 +472,9 @@ pub fn App() -> Element {
     }
 }
 
+/// Narrowest the node-config sidebar may be dragged before its inputs start to overlap.
+const MIN_SIDEBAR_WIDTH: f64 = 200.0;
+
 #[component]
 fn CommonAppLayout(
     cxt_command_handler: EventHandler<Option<CxtCommand>>,
@@ -491,6 +494,12 @@ fn CommonAppLayout(
     let mut height = use_signal(|| 100.0);
     let mut dragging = use_signal(|| false);
     let mut last_y = use_signal(|| 0.0);
+    // The sidebar is resized the same way as the log panel, and for the same reason from the same
+    // place: the move/up listeners sit on the outermost container, so a drag survives the pointer
+    // leaving the element it started on.
+    let mut sidebar_width = use_signal(|| 280.0);
+    let mut dragging_sidebar = use_signal(|| false);
+    let mut last_x = use_signal(|| 0.0);
 
     let on_mousemove = {
         move |evt: MouseEvent| {
@@ -500,13 +509,30 @@ fn CommonAppLayout(
                 height.set((height_val - dy).max(100.0));
                 last_y.set(evt.client_coordinates().y);
             }
+            if *dragging_sidebar.read() {
+                let width_val = *sidebar_width.read();
+                let dx = evt.client_coordinates().x - *last_x.read();
+                sidebar_width.set((width_val + dx).max(MIN_SIDEBAR_WIDTH));
+                last_x.set(evt.client_coordinates().x);
+            }
         }
     };
-    let on_mouseup = { move |_| dragging.set(false) };
+    let on_mouseup = {
+        move |_| {
+            dragging.set(false);
+            dragging_sidebar.set(false);
+        }
+    };
     let on_mousedown = {
         move |evt: f64| {
             dragging.set(true);
             last_y.set(evt);
+        }
+    };
+    let on_sidebar_mousedown = {
+        move |evt: f64| {
+            dragging_sidebar.set(true);
+            last_x.set(evt);
         }
     };
 
@@ -535,6 +561,8 @@ fn CommonAppLayout(
                 model_file_path,
                 model_file_path_handler,
                 root_tab_open_handler,
+                sidebar_width,
+                sidebar_drag_handler: on_sidebar_mousedown,
             }
             Logger { drag_handler: on_mousedown, height }
         }

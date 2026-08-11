@@ -28,6 +28,8 @@ pub fn GraphEditor(
     model_file_path: ReadSignal<Option<PathBuf>>,
     model_file_path_handler: EventHandler<Option<PathBuf>>,
     root_tab_open_handler: EventHandler<bool>,
+    sidebar_width: ReadSignal<f64>,
+    sidebar_drag_handler: EventHandler<f64>,
 ) -> Element {
     let workspace = use_store(GraphsWorkspaceState::default);
     use_context_provider(|| ReadStore::from(workspace));
@@ -113,7 +115,8 @@ pub fn GraphEditor(
                 g.graph_store().read().get_selected_nodes(active_tab())
             })
     });
-    let sidebar_view = use_signal(|| SidebarView::NodeProperties);
+    // `None` = collapsed to the icon bar alone, VS-Code style.
+    let sidebar_view = use_signal(|| Some(SidebarView::NodeProperties));
     let onmouseleave_handler = use_drag_end(workspace.into(), None);
     let onkeydownhandler = use_on_key_down(
         current_mouse_in_editor_pos,
@@ -125,20 +128,36 @@ pub fn GraphEditor(
 
     rsx! {
         div { class: "row main-content-row",
-            div { style: "min-width:280px;", class: "col-2 sidebar d-flex",
+            div {
+                class: "sidebar d-flex",
+                // Collapsed, the bar is only as wide as its icons; expanded, its width is whatever
+                // the user dragged it to. Either way it never grows or shrinks with the window -
+                // the graph editor next to it takes the remaining space.
+                style: sidebar_view().map_or_else(
+                    || "flex: 0 0 auto;".to_string(),
+                    |_| format!("flex: 0 0 {}px;", sidebar_width()),
+                ),
                 SidebarViewSwitcher { view: sidebar_view }
-                div { class: "flex-grow-1 sidebar-view",
-                    match sidebar_view() {
-                        SidebarView::NodeProperties => rsx! {
-                            NodeConfigEditor {
-                                selected_nodes_memo,
-                                model_modified_handler,
-                                workspace_processor,
-                                active_graph_id: active_tab,
-                            }
-                        },
-                        SidebarView::AmpOverview => rsx! {
-                            AmpOverview {}
+                if let Some(view) = sidebar_view() {
+                    div { class: "flex-grow-1 sidebar-view",
+                        match view {
+                            SidebarView::NodeProperties => rsx! {
+                                NodeConfigEditor {
+                                    selected_nodes_memo,
+                                    model_modified_handler,
+                                    workspace_processor,
+                                    active_graph_id: active_tab,
+                                }
+                            },
+                            SidebarView::AmpOverview => rsx! {
+                                AmpOverview {}
+                            },
+                        }
+                    }
+                    div {
+                        class: "width_resizer",
+                        onmousedown: move |e: MouseEvent| {
+                            sidebar_drag_handler.call(e.client_coordinates().x);
                         },
                     }
                 }
@@ -242,20 +261,25 @@ impl SidebarView {
 }
 
 /// Narrow vertical bar that switches the sidebar between its views, VS-Code style.
+///
+/// Clicking the view that is already showing collapses the sidebar to this bar; clicking any other
+/// icon switches to it (and re-expands). The bar itself never disappears, so the panel can always be
+/// brought back.
 #[component]
-fn SidebarViewSwitcher(view: Signal<SidebarView>) -> Element {
+fn SidebarViewSwitcher(view: Signal<Option<SidebarView>>) -> Element {
     rsx! {
         div { class: "sidebar-view-switcher",
             for entry in [SidebarView::NodeProperties, SidebarView::AmpOverview] {
                 {
                     let (icon, title) = entry.icon_and_title();
+                    let is_open = view() == Some(entry);
                     rsx! {
                         button {
                             key: "{title}",
                             r#type: "button",
                             title,
-                            class: if view() == entry { "sidebar-view-button active" } else { "sidebar-view-button" },
-                            onclick: move |_| view.set(entry),
+                            class: if is_open { "sidebar-view-button active" } else { "sidebar-view-button" },
+                            onclick: move |_| view.set(if is_open { None } else { Some(entry) }),
                             "{icon}"
                         }
                     }

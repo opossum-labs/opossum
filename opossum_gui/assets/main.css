@@ -18,7 +18,14 @@ body {
     flex-grow: 1;
     /* This row will take all available space */
     display: flex;
-    /* Make this row a flex container */    
+    /* Make this row a flex container */
+    /* Bootstrap's .row puts a gutter (negative row margin + padding on every child) around its
+       columns. The sidebar's view switcher has to sit flush against the window edge like VS Code's
+       activity bar, so this row carries no gutter at all - both its children handle their own
+       inner spacing. */
+    --bs-gutter-x: 0;
+    margin-left: 0;
+    margin-right: 0;
 }
 
 .graph-view-container {
@@ -277,6 +284,10 @@ body {
     width: 45px;
 }
 
+.sidebar{
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
 /* Narrow vertical bar that switches the sidebar between node properties and the amplifier
    overview, VS-Code style. */
 .sidebar-view-switcher {
@@ -284,18 +295,18 @@ body {
     flex-direction: column;
     flex: 0 0 auto;
     gap: 2px;
-    padding: 4px 2px;
+    padding: 4px 0px;
     border-right: 1px solid rgb(70, 70, 70);
 }
 
 .sidebar-view-button {
     background: none;
     border: none;
-    border-left: 2px solid transparent;
+    border-left: 3px solid transparent;
     color: rgb(150, 150, 150);
-    font-size: 14pt;
+    font-size: 18pt;
     line-height: 1;
-    padding: 6px 4px;
+    padding: 6px 5px;
     cursor: pointer;
 }
 
@@ -311,8 +322,29 @@ body {
 .sidebar-view {
     /* The switcher bar must stay visible while a long list scrolls. */
     overflow-y: auto;
+    /* The row no longer supplies a gutter, so the view brings its own inner spacing. */
+    padding: 0 8px;
     min-width: 0;
 }
+
+/* Right edge of the sidebar, dragged to resize it - the vertical counterpart of the log panel's
+   `.height_resizer`, and driven by the same listeners on the outermost container. */
+.width_resizer {
+    flex: 0 0 auto;
+    width: 2px;
+    cursor: ew-resize;
+    background-color: gray;
+}
+
+.width_resizer:hover {
+    width: 3px;
+    margin-right: -1px;
+    background-color: rgb(169, 169, 169);
+    transition: 100ms;
+    z-index: 1;
+}
+
+
 
 .amp-overview-card {
     cursor: pointer;
@@ -541,9 +573,11 @@ body {
 }
 .height_resizer:hover{
     width: 100%;
-    height: 4px;
-    background-color: rgb(128, 128, 128);
+    height: 3px;
+    background-color: rgb(169, 169, 169);
     margin-bottom: -1px;
+    transition: 100ms;
+    z-index: 1;
 }
 
 .noselect {
