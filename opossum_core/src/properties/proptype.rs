@@ -7,12 +7,15 @@ use crate::{
     apertures::ApertureShape,
     core_optics::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
     error::{OpmResult, OpossumError},
-    light::Spectrum,
-    light::lightdata::{
-        LightData,
-        light_data_builder::LightDataBuilder,
-        ray_data_source::{CollimatedSrc, ImageSrc, PointSrc, RayDataSource},
+    light::{
+        Spectrum,
+        lightdata::{
+            LightData,
+            light_data_builder::LightDataBuilder,
+            ray_data_source::{CollimatedSrc, ImageSrc, PointSrc, RayDataSource},
+        },
     },
+    material::Material,
     nodes::{
         Metertype, SpectrometerType, SplittingConfigBuilder, WaveFrontMap,
         fluence_detector::{Fluence, fluence_data::FluenceData},
@@ -129,6 +132,8 @@ pub enum Proptype {
     Vec2(Vector2<f64>),
     /// [`LightData`] build configuration
     LightDataBuilder(LightDataBuilder),
+    /// An optical material property
+    Material(Material),
 }
 impl Proptype {
     /// Generate a html representation of a Proptype.
@@ -191,6 +196,9 @@ impl Proptype {
                 }
                 Self::Energy(value) => {
                     template_engine.render("simple", &format_quantity(joule, *value))
+                }
+                Self::Material(mat) => {
+                    template_engine.render("simple", &format!("{} (v{})", mat.name, mat.version))
                 }
                 _ => Err(tinytemplate::error::Error::GenericError {
                     msg: "proptype not supported".into(),
@@ -300,7 +308,11 @@ impl From<FilterTypeBuilder> for Proptype {
         Self::FilterTypeBuilder(val)
     }
 }
-
+impl From<Material> for Proptype {
+    fn from(value: Material) -> Self {
+        Self::Material(value)
+    }
+}
 /// Generate a string suffix for an ordinal number
 #[must_use]
 pub fn count_str(i: usize) -> String {

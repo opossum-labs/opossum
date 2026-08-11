@@ -29,6 +29,7 @@ pub mod refractive_index;
 pub mod types;
 // pub mod render;
 pub mod geometry;
+pub mod material;
 pub mod reporting;
 pub mod utils;
 

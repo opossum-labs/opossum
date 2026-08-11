@@ -9,6 +9,7 @@ use crate::{
     analyzers::{Analyzer, AnalyzerRegistration, AnalyzerType},
     core_optics::{NodeAttrExt, OpticNode, SceneryResources},
     error::{OpmResult, OpossumError},
+    material::Material,
     nodes::NodeGroup,
     reporting::analysis_report::AnalysisReport,
     utils::{
@@ -79,6 +80,8 @@ pub struct OpmDocument {
     global_conf: Arc<Mutex<SceneryResources>>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     analyzers: IndexMap<Uuid, AnalyzerInfo>,
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    embedded_materials: IndexMap<Uuid, Material>,
 }
 impl Default for OpmDocument {
     fn default() -> Self {
@@ -87,6 +90,7 @@ impl Default for OpmDocument {
             scenery: NodeGroup::default(),
             global_conf: Arc::new(Mutex::new(SceneryResources::default())),
             analyzers: IndexMap::default(),
+            embedded_materials: IndexMap::default(),
         }
     }
 }
