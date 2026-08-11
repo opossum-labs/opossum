@@ -703,6 +703,25 @@ pub struct SourcePortDto {
     pub name: String,
 }
 
+/// One amplifying node of the document, for the amplifier overview panel.
+///
+/// Only nodes whose `amp config` is active appear as such an entry, so `amp_model` is a plain
+/// `String` rather than an `Option` - see [`crate::gain::active_amp_model`].
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema, Eq, PartialEq)]
+pub struct AmplifierDto {
+    pub uuid: Uuid,
+    #[schema(example = "Main amplifier")]
+    pub name: String,
+    #[schema(example = "lens")]
+    pub node_type: String,
+    /// The group the node lives in. The overview panel needs it to open the right tab when the user
+    /// asks to be taken to the node.
+    pub group_id: Uuid,
+    /// Display name of the node's active amplification model.
+    #[schema(example = "Const")]
+    pub amp_model: String,
+}
+
 // ============================================================================
 // UNDO / REDO
 // ============================================================================

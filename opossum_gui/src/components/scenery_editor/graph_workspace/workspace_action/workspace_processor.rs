@@ -70,6 +70,7 @@ pub fn use_workspace_processor(
                         .await;
                         // The backend clears its undo/redo history on every load; mirror that here.
                         *crate::UNDO_REDO_STATUS.write() = (false, false);
+                        *crate::AMP_LIST_REFRESH.write() += 1;
                     }
                     GraphsWorkspaceAction::SaveToFile(path) => {
                         process_save_root_scenery_to_file(
@@ -86,6 +87,7 @@ pub fn use_workspace_processor(
                             .await;
                         // The backend clears its undo/redo history on every reset; mirror that here.
                         *crate::UNDO_REDO_STATUS.write() = (false, false);
+                        *crate::AMP_LIST_REFRESH.write() += 1;
                     }
                     GraphsWorkspaceAction::Refresh => {
                         process_refresh(workspace, root_graph_id, workspace_handlers).await;
@@ -430,6 +432,13 @@ pub fn use_workspace_processor(
                     } => {
                         process_set_amp_config(node_id, graph_id, model, workspace_handlers).await;
                     }
+                    GraphsWorkspaceAction::RevealNode { node_id, graph_id } => {
+                        ensure_tab_active(graph_id, workspace_handlers, root_graph_id, workspace)
+                            .await;
+                        workspace_handlers
+                            .nodes
+                            .set_node_active(graph_id, node_id, true, 0);
+                    }
                     GraphsWorkspaceAction::GetEditorArea => {
                         process_get_editor_area(workspace, workspace_handlers).await;
                     }
@@ -465,6 +474,9 @@ pub fn use_workspace_processor(
                     // Undo and greys out Redo. (Viewport gestures and node-editor edits mark this at their
                     // own push points.)
                     *crate::UNDO_REDO_STATUS.write() = (true, false);
+                    // Any of these can add, remove or relocate an amplifier, so the always-visible
+                    // amplifier overview has to re-read its list - see `AMP_LIST_REFRESH`.
+                    *crate::AMP_LIST_REFRESH.write() += 1;
                 }
             }
         }

@@ -2,11 +2,11 @@ use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_core::{
     prelude::*,
     types::api_types::{
-        AddPortMappingRequest, ConnectInfo, ConvertToGroupRequest, ConvertToGroupResponse,
-        CutNodesResponse, DeleteNodeResponse, MoveNodesRequest, MoveNodesResponse, NewNode,
-        NewRefNode, NodeInfo, NodePortsResponse, NodePropertiesResponse, PasteNodesResponse,
-        PortMappingsResponse, PortNamesResponse, RemovePortMapResponse, UpdateConnectionRequest,
-        UpdateNodeRequest, UpdatePortRequest,
+        AddPortMappingRequest, AmplifierDto, ConnectInfo, ConvertToGroupRequest,
+        ConvertToGroupResponse, CutNodesResponse, DeleteNodeResponse, MoveNodesRequest,
+        MoveNodesResponse, NewNode, NewRefNode, NodeInfo, NodePortsResponse,
+        NodePropertiesResponse, PasteNodesResponse, PortMappingsResponse, PortNamesResponse,
+        RemovePortMapResponse, UpdateConnectionRequest, UpdateNodeRequest, UpdatePortRequest,
     },
 };
 use std::collections::{HashMap, HashSet};
@@ -172,6 +172,19 @@ pub async fn delete_nodes(ids: Vec<Uuid>) -> Result<DeleteNodeResponse, String> 
 pub async fn get_node_info(uuid: Uuid) -> Result<NodeInfo, String> {
     HTTP_API_CLIENT()
         .get_ron::<NodeInfo>(&format!("/api/nodes/{uuid}"))
+        .await
+}
+
+/// Get every amplifying node of the whole document, nested groups included.
+///
+/// Each entry carries the group the node lives in, so the overview panel can take the user there.
+///
+/// # Errors
+///
+/// This function will return an error if the request fails or the response cannot be deserialized.
+pub async fn get_amplifiers() -> Result<Vec<AmplifierDto>, String> {
+    HTTP_API_CLIENT()
+        .get::<Vec<AmplifierDto>>("/api/nodes/amplifiers")
         .await
 }
 

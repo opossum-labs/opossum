@@ -277,6 +277,51 @@ body {
     width: 45px;
 }
 
+/* Narrow vertical bar that switches the sidebar between node properties and the amplifier
+   overview, VS-Code style. */
+.sidebar-view-switcher {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 auto;
+    gap: 2px;
+    padding: 4px 2px;
+    border-right: 1px solid rgb(70, 70, 70);
+}
+
+.sidebar-view-button {
+    background: none;
+    border: none;
+    border-left: 2px solid transparent;
+    color: rgb(150, 150, 150);
+    font-size: 14pt;
+    line-height: 1;
+    padding: 6px 4px;
+    cursor: pointer;
+}
+
+.sidebar-view-button:hover {
+    color: rgb(220, 220, 220);
+}
+
+.sidebar-view-button.active {
+    color: rgb(255, 214, 130);
+    border-left-color: rgb(255, 214, 130);
+}
+
+.sidebar-view {
+    /* The switcher bar must stay visible while a long list scrolls. */
+    overflow-y: auto;
+    min-width: 0;
+}
+
+.amp-overview-card {
+    cursor: pointer;
+}
+
+.amp-overview-card:hover {
+    border-color: rgb(255, 214, 130) !important;
+}
+
 /* Status line below the body of an amplifying node. Its height must stay in sync with
    AMP_STATUS_HEIGHT, which is what the canvas geometry (bounding box, auto layout) uses. */
 .node-amp-status {

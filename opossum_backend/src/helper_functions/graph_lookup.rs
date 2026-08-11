@@ -1,7 +1,7 @@
 use actix_web::web::{self};
 use nalgebra::Point2;
 use opossum_core::{
-    core_optics::{NodeAttrExt, OpticRef, node_attr::HasNodeAttr},
+    core_optics::{NodeAttr, NodeAttrExt, OpticRef, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
     nodes::{ConnectionInfo, NodeGroup},
     opm_document::OpmDocument,
@@ -349,6 +349,74 @@ pub fn create_new_group_node_info(
         &*new_group_node,
         Some(Some((pos.x, pos.y))),
     ))
+}
+
+/// A node picked out of the document tree by [`collect_nodes_recursive`], together with the group it
+/// lives in.
+#[derive(Debug)]
+pub struct CollectedNode<T> {
+    /// UUID of the node itself.
+    pub uuid: Uuid,
+    /// UUID of the group the node is a direct child of. The recursion knows this anyway, and every
+    /// caller that wants to point a user at the node needs it to open the right tab.
+    pub group_id: Uuid,
+    /// Whatever the selector extracted from the node.
+    pub value: T,
+}
+
+/// Walk every node below `current_group` - nested subgroups included - and collect what `select`
+/// returns for it.
+///
+/// This is the one recursive document walk the backend uses to answer "which nodes of the whole
+/// document are X?". Callers differ only in the `select` closure, so questions like "all source
+/// ports" and "all amplifiers" do not each grow their own traversal.
+///
+/// A subtree that cannot be inspected (e.g. a node that fails to lock) is skipped silently rather
+/// than failing the whole walk - a partially readable document should still yield a usable list.
+///
+/// # Arguments
+///
+/// * `scenery` - the document's root group.
+/// * `current_group` - the group to descend into; pass the root's UUID to cover the whole document.
+/// * `select` - returns `Some(value)` for a node that belongs in the result, `None` otherwise.
+/// * `collected` - result accumulator, appended to in depth-first order.
+pub fn collect_nodes_recursive<T>(
+    scenery: &NodeGroup,
+    current_group: Uuid,
+    select: &impl Fn(&NodeAttr) -> Option<T>,
+    collected: &mut Vec<CollectedNode<T>>,
+) {
+    let children = scenery.with_group_node(current_group, |group| {
+        group
+            .nodes()
+            .iter()
+            .map(|node_ref| {
+                let node = node_ref.optical_ref.lock_opm()?;
+                let node_attr = node.node_attr();
+                // Extract everything the caller wants while the lock is held, then release it -
+                // the recursion below needs to lock nodes again.
+                let selected = (node_attr.uuid(), select(node_attr));
+                drop(node);
+                Ok(selected)
+            })
+            .collect::<Result<Vec<(Uuid, Option<T>)>, OpossumError>>()
+    });
+
+    let Ok(Ok(children)) = children else {
+        return;
+    };
+    for (child_uuid, selected) in children {
+        if let Some(value) = selected {
+            collected.push(CollectedNode {
+                uuid: child_uuid,
+                group_id: current_group,
+                value,
+            });
+        }
+        if scenery.with_group_node(child_uuid, |_| {}).is_ok() {
+            collect_nodes_recursive(scenery, child_uuid, select, collected);
+        }
+    }
 }
 
 #[cfg(test)]

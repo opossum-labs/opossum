@@ -23,6 +23,14 @@ static CONTEXT_MENU: GlobalSignal<Option<CxMenu>> = Signal::global(|| None::<CxM
 /// so it refetches even when the selected node's identity hasn't changed (which Dioxus's equality-dedup'd
 /// memos would otherwise treat as "nothing to do").
 static NODE_DETAILS_REFRESH: GlobalSignal<usize> = Signal::global(|| 0);
+/// Bumped whenever the document changed in a way that can alter the *set* of amplifying nodes -
+/// every document-mutating workspace action plus loading/clearing a document.
+///
+/// The amplifier overview panel is permanently visible once selected, so unlike the node-editor
+/// panels it is never remounted by a selection change and would otherwise show a stale list after a
+/// delete, paste, group or undo. [`NODE_DETAILS_REFRESH`] alone does not cover those: it is only
+/// raised for property-level edits.
+static AMP_LIST_REFRESH: GlobalSignal<usize> = Signal::global(|| 0);
 /// Set from the backend's authoritative `JumpTarget` when an undo/redo focuses a node: the node it
 /// selected and the panel to open once that node's editor has loaded. Consumed (cleared) by whichever
 /// `OpticalNodeEditor`/`PortConfigEditor` instance matches the uuid. `apply_document_changes` sets it

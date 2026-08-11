@@ -3,14 +3,12 @@ use actix_web::{
     web::{self},
 };
 use opossum_core::{
-    core_optics::node_attr::HasNodeAttr,
-    error::OpossumError,
+    core_optics::{NodeAttr, node_attr::HasNodeAttr},
     light::lightdata::{energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder},
     nodes::NodeGroup,
     opm_document::AnalyzerInfo,
     prelude::AnalyzerType,
     types::api_types::{AnalyzerItemDto, ErrorResponse, NewAnalyzerInfo, SourcePortDto},
-    utils::LockExt,
 };
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
@@ -18,50 +16,37 @@ use uuid::Uuid;
 use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
-    helper_functions::{Ron, analyzer_mut_or_404, apply_and_push_undo, ron_or_json_response},
+    helper_functions::{
+        Ron, analyzer_mut_or_404, apply_and_push_undo, collect_nodes_recursive,
+        ron_or_json_response,
+    },
     undo::{Command, PatchAnalyzer, RepositionAnalyzer},
 };
 
-/// Recursively collects every "source port" node under `current_group` (inclusive of nested
-/// subgroups) as `(uuid, name)` pairs. A subtree that can't be inspected (e.g. a node that fails to
-/// lock) is silently skipped rather than failing the whole walk.
-fn collect_source_ports(
-    scenery: &NodeGroup,
-    current_group: Uuid,
-    collected: &mut Vec<(Uuid, String)>,
-) {
-    let children_res = scenery.with_group_node(current_group, |g| {
-        g.nodes()
-            .iter()
-            .map(|n| {
-                let node = n.optical_ref.lock_opm()?;
-                let node_type = node.node_attr().node_type().to_string();
-                let node_uuid = node.node_attr().uuid();
-                let node_name = node.node_attr().name().to_string();
-                drop(node);
-                Ok((node_uuid, node_type, node_name))
-            })
-            .collect::<Result<Vec<(Uuid, String, String)>, OpossumError>>()
-    });
-
-    let Ok(Ok(nodes_data)) = children_res else {
-        return;
-    };
-    for (child_uuid, node_type, node_name) in nodes_data {
-        if node_type == "source port" {
-            collected.push((child_uuid, node_name));
-        } else if scenery.with_group_node(child_uuid, |_| {}).is_ok() {
-            collect_source_ports(scenery, child_uuid, collected);
-        }
-    }
+/// Collects every "source port" node of the whole document as `(uuid, name)` pairs, in depth-first
+/// order.
+fn collect_source_ports(scenery: &NodeGroup) -> Vec<(Uuid, String)> {
+    let mut collected = Vec::new();
+    collect_nodes_recursive(
+        scenery,
+        scenery.node_attr().uuid(),
+        &|node_attr: &NodeAttr| {
+            (node_attr.node_type() == "source port").then(|| node_attr.name().to_string())
+        },
+        &mut collected,
+    );
+    collected
+        .into_iter()
+        .map(|node| (node.uuid, node.value))
+        .collect()
 }
 
 /// Recursively collects the UUIDs of every "source port" node in `scenery`.
 fn get_all_source_port_uuids(scenery: &NodeGroup) -> Vec<Uuid> {
-    let mut collected = Vec::new();
-    let root_uuid = scenery.node_attr().uuid();
-    collect_source_ports(scenery, root_uuid, &mut collected);
-    collected.into_iter().map(|(uuid, _)| uuid).collect()
+    collect_source_ports(scenery)
+        .into_iter()
+        .map(|(uuid, _)| uuid)
+        .collect()
 }
 
 /// Get an analyzer by UUID
@@ -280,12 +265,9 @@ pub async fn get_available_sources(
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let document = data.document.lock();
     let scenery = document.scenery().clone();
-    let root_uuid = scenery.node_attr().uuid();
     drop(document);
 
-    let mut collected = Vec::new();
-    collect_source_ports(&scenery, root_uuid, &mut collected);
-    let collected_sources: Vec<SourcePortDto> = collected
+    let collected_sources: Vec<SourcePortDto> = collect_source_ports(&scenery)
         .into_iter()
         .map(|(uuid, name)| SourcePortDto { uuid, name })
         .collect();

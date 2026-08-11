@@ -350,6 +350,16 @@ pub enum GraphsWorkspaceAction {
         model: GainModel,
     },
 
+    /// Brings a node into view: makes its graph the active tab (opening it first if needed) and
+    /// selects it. Used by the amplifier overview to take the user to a listed node, which may sit
+    /// in a group whose tab isn't even open.
+    RevealNode {
+        /// The ID of the node to reveal.
+        node_id: Uuid,
+        /// The ID of the graph containing the node.
+        graph_id: Uuid,
+    },
+
     /// Undoes the last checkpointed document edit.
     Undo,
     /// Redoes the last undone document edit.

@@ -1,6 +1,6 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::{
-    node_editor::NodeConfigEditor,
+    node_editor::{AmpOverview, NodeConfigEditor},
     scenery_editor::{
         DragStatus, NodeEditorCommand, SelectedNode,
         graph_editor::{
@@ -113,6 +113,7 @@ pub fn GraphEditor(
                 g.graph_store().read().get_selected_nodes(active_tab())
             })
     });
+    let sidebar_view = use_signal(|| SidebarView::NodeProperties);
     let onmouseleave_handler = use_drag_end(workspace.into(), None);
     let onkeydownhandler = use_on_key_down(
         current_mouse_in_editor_pos,
@@ -124,12 +125,22 @@ pub fn GraphEditor(
 
     rsx! {
         div { class: "row main-content-row",
-            div { style: "min-width:280px;", class: "col-2 sidebar",
-                NodeConfigEditor {
-                    selected_nodes_memo,
-                    model_modified_handler,
-                    workspace_processor,
-                    active_graph_id: active_tab,
+            div { style: "min-width:280px;", class: "col-2 sidebar d-flex",
+                SidebarViewSwitcher { view: sidebar_view }
+                div { class: "flex-grow-1 sidebar-view",
+                    match sidebar_view() {
+                        SidebarView::NodeProperties => rsx! {
+                            NodeConfigEditor {
+                                selected_nodes_memo,
+                                model_modified_handler,
+                                workspace_processor,
+                                active_graph_id: active_tab,
+                            }
+                        },
+                        SidebarView::AmpOverview => rsx! {
+                            AmpOverview {}
+                        },
+                    }
                 }
             }
             div {
@@ -204,6 +215,48 @@ pub fn GraphEditor(
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Which of the sidebar's two views is showing.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum SidebarView {
+    /// The existing selection-bound node/analyzer configuration.
+    NodeProperties,
+    /// The document-wide list of amplifying nodes.
+    AmpOverview,
+}
+impl SidebarView {
+    /// Icon and tooltip of this view's button in the switcher bar.
+    const fn icon_and_title(self) -> (&'static str, &'static str) {
+        match self {
+            Self::NodeProperties => ("⚙", "Node properties"),
+            Self::AmpOverview => ("⚡", "Amplifiers"),
+        }
+    }
+}
+
+/// Narrow vertical bar that switches the sidebar between its views, VS-Code style.
+#[component]
+fn SidebarViewSwitcher(view: Signal<SidebarView>) -> Element {
+    rsx! {
+        div { class: "sidebar-view-switcher",
+            for entry in [SidebarView::NodeProperties, SidebarView::AmpOverview] {
+                {
+                    let (icon, title) = entry.icon_and_title();
+                    rsx! {
+                        button {
+                            key: "{title}",
+                            r#type: "button",
+                            title,
+                            class: if view() == entry { "sidebar-view-button active" } else { "sidebar-view-button" },
+                            onclick: move |_| view.set(entry),
+                            "{icon}"
                         }
                     }
                 }
