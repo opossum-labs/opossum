@@ -1397,4 +1397,90 @@ mod test {
             "pasting a reference together with its own target as siblings must still be allowed"
         );
     }
+
+    /// A copy must carry every property of its original - only the uuid is new. Pinned here for the
+    /// `amp config` property in particular: a duplicated amplifier that silently comes back passive
+    /// would change the modelled physics of the pasted subsystem without saying so.
+    #[actix_web::test]
+    async fn test_paste_preserves_amp_config() {
+        use opossum_core::{
+            gain::{ConstGain, GainModel, active_amp_model},
+            nodes::Lens,
+        };
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, lens_id) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let lens_id = document.scenery_mut().add_node(Lens::default()).unwrap();
+            document
+                .scenery_mut()
+                .with_node_attr_mut(lens_id, |attr| {
+                    attr.set_property(
+                        opossum_core::gain::AMP_CONFIG,
+                        GainModel::Const(ConstGain::new(3.0).unwrap()).into(),
+                    )
+                })
+                .unwrap()
+                .unwrap();
+            let ids = (root_id, lens_id);
+            drop(document);
+            ids
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_copy_nodes)
+                .service(post_paste_nodes),
+        )
+        .await;
+
+        let mut nodes_to_copy = HashSet::new();
+        nodes_to_copy.insert(lens_id);
+        let req = test::TestRequest::post()
+            .uri("/copy_nodes")
+            .set_json(&nodes_to_copy)
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        let req = test::TestRequest::post()
+            .uri("/paste_nodes")
+            .set_json(&(root_id, (500.0, 500.0)))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let pasted: PasteNodesResponse = test::read_body_json(resp).await;
+
+        let pasted_node = pasted
+            .pasted_nodes
+            .values()
+            .flatten()
+            .find(|info| info.uuid() != lens_id)
+            .expect("a pasted duplicate must exist");
+        assert_ne!(
+            pasted_node.uuid(),
+            lens_id,
+            "the copy must get a fresh uuid"
+        );
+        assert_eq!(
+            pasted_node.amp_model.as_deref(),
+            Some("Const"),
+            "the response must already report the copy as an amplifier"
+        );
+
+        let document = app_state.document.lock();
+        let amp_model = document
+            .scenery()
+            .with_node_attr(pasted_node.uuid(), active_amp_model)
+            .unwrap();
+        assert_eq!(
+            amp_model.as_deref(),
+            Some("Const"),
+            "the pasted node must keep the original's amp config"
+        );
+    }
 }

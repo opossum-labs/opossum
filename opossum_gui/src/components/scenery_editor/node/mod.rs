@@ -52,6 +52,9 @@ pub const DEFAULT_NODE_HEIGHT: f64 = HEADER_HEIGHT + MIN_NODE_BODY_HEIGHT;
 // Height of the status line shown below the body of an amplifying node. Nodes that do not amplify
 // have no such line and are unaffected.
 pub const AMP_STATUS_HEIGHT: f64 = 14.0;
+// Where a node lands if the backend sent no position for it. In practice every add/paste/reference
+// response carries one, so this is a safety net rather than a normal case.
+const DEFAULT_NEW_NODE_POS: Point2D<f64> = Point2D::new(100.0, 100.0);
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum NodeType {
@@ -255,6 +258,11 @@ impl NodeElement {
     pub const fn set_z_index(&mut self, z_index: usize) {
         self.z_index = z_index;
     }
+    /// Sets the node's sequential index, which serves as its Playwright test id. Assigned by the
+    /// graph store, since it is a property of the canvas rather than of the node itself.
+    pub const fn set_node_index(&mut self, node_index: usize) {
+        self.node_index = node_index;
+    }
     pub fn set_name(&mut self, name: String) {
         self.name = name;
     }
@@ -270,11 +278,16 @@ impl NodeElement {
     }
 }
 
+/// The single place that maps the backend's [`NodeInfo`] onto a canvas node, so a field added to the
+/// DTO cannot be picked up on one code path and silently dropped on another.
+///
+/// The node index (the Playwright test id) is not part of the DTO and is assigned by the graph store
+/// afterwards via [`NodeElement::set_node_index`].
 impl From<&NodeInfo> for NodeElement {
     fn from(node_info: &NodeInfo) -> Self {
         let position = node_info
             .gui_position()
-            .map_or_else(Point2D::zero, |(x, y)| Point2D::new(x, y));
+            .map_or(DEFAULT_NEW_NODE_POS, |(x, y)| Point2D::new(x, y));
         let mut node = Self::new(
             node_info.name().to_string(),
             NodeType::Optical(node_info.node_type().to_string()),
@@ -305,5 +318,45 @@ impl From<&AnalyzerItemDto> for NodeElement {
             false,
             0,
         )
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn amplifying_node_info() -> NodeInfo {
+        NodeInfo {
+            name: "amp lens".to_string(),
+            node_type: "lens".to_string(),
+            gui_position: Some((10.0, 20.0)),
+            amp_model: Some("Const".to_string()),
+            ..NodeInfo::default()
+        }
+    }
+
+    /// Regression test: pasting an amplifier used to produce a canvas node without its amplification
+    /// marker, because the paste path built its `NodeElement` field by field instead of going
+    /// through this conversion - so the then-new `amp_model` was simply not copied over.
+    #[test]
+    fn conversion_carries_the_amp_marker() {
+        let node = NodeElement::from(&amplifying_node_info());
+        assert_eq!(node.amp_model(), Some("Const"));
+        // An amplifying node is taller than a passive one - the status line has to be accounted for.
+        assert!(node.total_height() > HEADER_HEIGHT + node.node_body_height());
+    }
+
+    /// The fallback position only applies when the backend has no position of its own to report.
+    #[test]
+    fn conversion_prefers_the_backend_position() {
+        let node = NodeElement::from(&amplifying_node_info());
+        assert_eq!(node.pos(), Point2D::new(10.0, 20.0));
+
+        let without_position = NodeInfo {
+            gui_position: None,
+            ..amplifying_node_info()
+        };
+        let node = NodeElement::from(&without_position);
+        assert_eq!(node.pos(), DEFAULT_NEW_NODE_POS);
     }
 }

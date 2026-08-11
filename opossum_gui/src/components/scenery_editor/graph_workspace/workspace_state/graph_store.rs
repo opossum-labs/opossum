@@ -237,18 +237,8 @@ impl<Lens> Store<GraphStore, Lens> {
     /// # Returns:
     /// A `NodeElement` representing the newly added reference node.
     fn add_new_reference_node(&mut self, ref_node_info: &NodeInfo) -> NodeElement {
-        let node_index = self.fetch_next_node_index();
-        let gui_position = ref_node_info.gui_position().unwrap_or((100.0, 100.0));
-        let ports = Ports::new(ref_node_info.input_ports(), ref_node_info.output_ports());
-        let mut node_element = NodeElement::new(
-            ref_node_info.name().to_string(),
-            NodeType::Optical(ref_node_info.node_type().to_string()),
-            ref_node_info.uuid(),
-            Point2D::new(gui_position.0, gui_position.1),
-            ports,
-            ref_node_info.inverted(),
-            node_index,
-        );
+        let mut node_element = NodeElement::from(ref_node_info);
+        node_element.set_node_index(self.fetch_next_node_index());
         let id = ref_node_info.uuid();
         let nr_of_nodes = self.nodes().len();
         node_element.set_z_index(nr_of_nodes + 1);
@@ -277,17 +267,8 @@ impl<Lens> Store<GraphStore, Lens> {
     /// # Arguments:
     /// * `node_info`: The `NodeInfo` containing the type and position of the new node.
     fn add_new_optical_node(&mut self, node_info: &NodeInfo) {
-        let node_index = self.fetch_next_node_index();
-        let gui_position = node_info.gui_position().unwrap_or((100.0, 100.0));
-        let node_element = NodeElement::new(
-            node_info.name().to_string(),
-            NodeType::Optical(node_info.node_type().to_string()),
-            node_info.uuid(),
-            Point2D::new(gui_position.0, gui_position.1),
-            Ports::new(node_info.input_ports(), node_info.output_ports()),
-            node_info.inverted(),
-            node_index,
-        );
+        let mut node_element = NodeElement::from(node_info);
+        node_element.set_node_index(self.fetch_next_node_index());
         self.nodes().insert(node_info.uuid(), node_element.clone());
         self.set_node_active(node_info.uuid(), node_element.z_index(), true);
     }
