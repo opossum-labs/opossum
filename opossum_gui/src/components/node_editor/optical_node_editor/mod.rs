@@ -34,6 +34,7 @@ pub fn OpticalNodeEditor(
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let node_id = use_memo(move || active_node.read().node_id);
+    let graph_id = use_memo(move || active_node.read().graph_id);
     let mut node_info_sig = use_signal(NodeInfo::default);
     let mut node_properties_sig = use_signal(Properties::default);
     let mut readonly = use_signal(|| false);
@@ -132,6 +133,7 @@ pub fn OpticalNodeEditor(
                     }
                     PropertiesEditor {
                         node_id,
+                        graph_id,
                         node_properties_sig,
                         node_info_sig,
                         on_change: on_property_change,

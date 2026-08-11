@@ -6,6 +6,7 @@ mod curvature_editor;
 mod f64_editor;
 mod filter_type_editor;
 mod fluence_estimator_editor;
+mod gain_model_editor;
 mod i32_editor;
 mod isometry_option_editor;
 mod length_editor;
@@ -23,11 +24,12 @@ use crate::components::node_editor::{
     optical_node_editor::properties_editor::{
         angle_editor::AngleEditor, bool_editor::BoolEditor, curvature_editor::CurvatureEditor,
         f64_editor::F64Editor, filter_type_editor::FilterTypeEditor,
-        fluence_estimator_editor::FluenceEstimatorEditor, i32_editor::I32Editor,
-        isometry_option_editor::IsometryOptionEditor, length_editor::LengthEditor,
-        length_option_editor::LengthOptionEditor, linear_density_editor::LinearDensityEditor,
-        refractive_index_editor::RefractiveIndexEditor, splitter_type_editor::SplitterTypeEditor,
-        string_editor::StringEditor, vec2_editor::Vec2Editor, vec3_editor::Vec3Editor,
+        fluence_estimator_editor::FluenceEstimatorEditor, gain_model_editor::GainModelEditor,
+        i32_editor::I32Editor, isometry_option_editor::IsometryOptionEditor,
+        length_editor::LengthEditor, length_option_editor::LengthOptionEditor,
+        linear_density_editor::LinearDensityEditor, refractive_index_editor::RefractiveIndexEditor,
+        splitter_type_editor::SplitterTypeEditor, string_editor::StringEditor,
+        vec2_editor::Vec2Editor, vec3_editor::Vec3Editor,
     },
 };
 use dioxus::prelude::*;
@@ -40,6 +42,7 @@ use uuid::Uuid;
 #[component]
 pub fn PropertiesEditor(
     node_id: Memo<Uuid>,
+    graph_id: Memo<Uuid>,
     node_properties_sig: ReadSignal<Properties>,
     node_info_sig: ReadSignal<NodeInfo>,
     on_change: EventHandler<NodeChangeEvent>,
@@ -48,9 +51,14 @@ pub fn PropertiesEditor(
     let editor_inputs = if node_info_sig.read().uuid == *node_id.read() {
         let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
         for (property_key, property) in node_properties_sig.read().iter() {
-            if let Some(editor) =
-                get_editor(node_id, property, property_key.clone(), on_change, readonly)
-            {
+            if let Some(editor) = get_editor(
+                node_id,
+                graph_id,
+                property,
+                property_key.clone(),
+                on_change,
+                readonly,
+            ) {
                 editor_inputs.push(editor);
             }
         }
@@ -72,6 +80,7 @@ pub fn PropertiesEditor(
 
 fn get_editor(
     node_id: Memo<Uuid>,
+    graph_id: Memo<Uuid>,
     property: &Property,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
@@ -83,9 +92,14 @@ fn get_editor(
         return Some(editor);
     }
 
-    if let Some(editor) =
-        get_optical_editor(node_id, property, property_key.clone(), on_change, readonly)
-    {
+    if let Some(editor) = get_optical_editor(
+        node_id,
+        graph_id,
+        property,
+        property_key.clone(),
+        on_change,
+        readonly,
+    ) {
         return Some(editor);
     }
     get_geometric_editor(node_id, property, property_key, on_change, readonly)
@@ -157,8 +171,13 @@ fn get_primitive_editor(
     }
 }
 
+/// Editors for properties describing an optical behaviour.
+///
+/// Takes `graph_id` in addition to `node_id` because the amplification model is edited through a
+/// workspace action rather than the generic property path - see [`GainModelEditor`].
 fn get_optical_editor(
     node_id: Memo<Uuid>,
+    graph_id: Memo<Uuid>,
     property: &Property,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
@@ -208,6 +227,15 @@ fn get_optical_editor(
                 ref_ind_type,
                 property_key,
                 on_change,
+                readonly,
+            }
+        }),
+        Proptype::GainModel(gain_model) => Some(rsx! {
+            GainModelEditor {
+                node_id,
+                graph_id,
+                gain_model,
+                property_key,
                 readonly,
             }
         }),

@@ -89,17 +89,38 @@ impl ConstGain {
     ///
     /// Returns an [`OpossumError::Other`] if the given factor is not finite or negative.
     pub fn new(gain: f64) -> OpmResult<Self> {
-        if !gain.is_finite() || gain.is_sign_negative() {
-            return Err(OpossumError::Other(
-                "gain factor must be finite and non-negative".into(),
-            ));
-        }
-        Ok(Self { gain })
+        let mut const_gain = Self::default();
+        const_gain.set_gain(gain)?;
+        Ok(const_gain)
     }
     /// Return the energy gain factor.
     #[must_use]
     pub const fn gain(&self) -> f64 {
         self.gain
+    }
+    /// Set the energy gain factor.
+    ///
+    /// # Arguments
+    ///
+    /// * `gain` - energy gain factor. A value of 1.0 leaves the energy unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`OpossumError::Other`] if the given factor is not finite or negative. The
+    /// previous value is kept in that case.
+    pub fn set_gain(&mut self, gain: f64) -> OpmResult<()> {
+        if !gain.is_finite() || gain.is_sign_negative() {
+            return Err(OpossumError::Other(
+                "gain factor must be finite and non-negative".into(),
+            ));
+        }
+        self.gain = gain;
+        Ok(())
+    }
+}
+impl From<ConstGain> for GainModel {
+    fn from(value: ConstGain) -> Self {
+        Self::Const(value)
     }
 }
 
@@ -218,6 +239,15 @@ mod test {
         assert!(ConstGain::new(f64::NAN).is_err());
         assert!(ConstGain::new(f64::INFINITY).is_err());
         Ok(())
+    }
+    #[test]
+    fn const_gain_set_gain_keeps_old_value_on_rejection() {
+        let mut const_gain = ConstGain::default();
+        assert!(const_gain.set_gain(2.5).is_ok());
+        assert_relative_eq!(const_gain.gain(), 2.5);
+        // A rejected edit (e.g. a half-typed value in the GUI) must leave the gain untouched.
+        assert!(const_gain.set_gain(-1.0).is_err());
+        assert_relative_eq!(const_gain.gain(), 2.5);
     }
     #[test]
     fn fmt() {
