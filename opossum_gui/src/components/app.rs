@@ -329,10 +329,15 @@ pub fn App() -> Element {
                         parent: parent.clone(),
                     }));
                 }
-                CxtCommand::MakeAmplifier { node_id, graph_id } => {
-                    node_editor_command_handler.call(Some(NodeEditorCommand::MakeAmplifier {
+                CxtCommand::SetAmpConfig {
+                    node_id,
+                    graph_id,
+                    model,
+                } => {
+                    node_editor_command_handler.call(Some(NodeEditorCommand::SetAmpConfig {
                         node_id: *node_id,
                         graph_id: *graph_id,
+                        model: *model,
                     }));
                 }
             }

@@ -57,7 +57,7 @@ pub const AMP_CONFIG_NODE_TYPES: &[&str] = &["cylindric lens", "lens", "wedge"];
 #[must_use]
 pub fn active_amp_model(node_attr: &NodeAttr) -> Option<String> {
     match node_attr.get_property(AMP_CONFIG) {
-        Ok(Proptype::GainModel(model)) if model.is_active() => Some(model.to_string()),
+        Ok(Proptype::GainModel(model)) => model.active_name(),
         _ => None,
     }
 }
@@ -137,6 +137,15 @@ impl GainModel {
     pub const fn is_active(&self) -> bool {
         !matches!(self, Self::None)
     }
+    /// Return this model's display name, or `None` if it does not amplify.
+    ///
+    /// This is the shape a user interface wants: one value that answers "does it amplify" and
+    /// "what is it called" at once, so no caller has to pair [`Self::is_active`] with a separate
+    /// `to_string`.
+    #[must_use]
+    pub fn active_name(&self) -> Option<String> {
+        self.is_active().then(|| self.to_string())
+    }
 }
 
 #[cfg(test)]
@@ -189,6 +198,13 @@ mod test {
         assert_eq!(GainModel::default(), GainModel::None);
         assert!(!GainModel::default().is_active());
         assert!(GainModel::Const(ConstGain::default()).is_active());
+        assert_eq!(GainModel::None.active_name(), None);
+        assert_eq!(
+            GainModel::Const(ConstGain::default())
+                .active_name()
+                .as_deref(),
+            Some("Const")
+        );
     }
     #[test]
     fn const_gain_default_is_neutral() {

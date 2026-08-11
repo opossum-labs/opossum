@@ -1,7 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 
 use dioxus::prelude::*;
-use opossum_core::{prelude::*, types::api_types::NewRefNode};
+use opossum_core::{gain::GainModel, prelude::*, types::api_types::NewRefNode};
 use std::path::PathBuf;
 use uuid::Uuid;
 
@@ -38,10 +38,12 @@ pub enum NodeEditorCommand {
         group_port_name: String,
         port_type: PortType,
     },
-    /// Turn a node with a volume into an amplifier (see [`crate::components::context_menu::cx_menu::CxtCommand::MakeAmplifier`]).
-    MakeAmplifier {
+    /// Set a volume node's amplification model, in either direction (see
+    /// [`crate::components::context_menu::cx_menu::CxtCommand::SetAmpConfig`]).
+    SetAmpConfig {
         node_id: Uuid,
         graph_id: Uuid,
+        model: GainModel,
     },
     Undo,
     Redo,
@@ -188,9 +190,16 @@ pub fn node_editor_command(
                     port_type,
                 });
             }
-            NodeEditorCommand::MakeAmplifier { node_id, graph_id } => {
-                workspace_processor
-                    .send(GraphsWorkspaceAction::MakeAmplifier { node_id, graph_id });
+            NodeEditorCommand::SetAmpConfig {
+                node_id,
+                graph_id,
+                model,
+            } => {
+                workspace_processor.send(GraphsWorkspaceAction::SetAmpConfig {
+                    node_id,
+                    graph_id,
+                    model,
+                });
             }
             NodeEditorCommand::JumpToMappedPort {
                 mapped_node_id,

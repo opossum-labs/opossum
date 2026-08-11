@@ -1,7 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::{CONTEXT_MENU, components::context_menu::sub_menu_item::MenuItem};
 use dioxus::prelude::*;
-use opossum_core::{prelude::PortType, types::api_types::NewRefNode};
+use opossum_core::{gain::GainModel, prelude::PortType, types::api_types::NewRefNode};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -27,12 +27,13 @@ pub enum CxtCommand {
         mapped_node_id: Uuid,
         parent: (Uuid, String),
     },
-    /// Turn a node with a volume into an amplifier by giving its `amp config` property an active
-    /// gain model. Only offered for the node types in
-    /// [`opossum_core::gain::AMP_CONFIG_NODE_TYPES`].
-    MakeAmplifier {
+    /// Set the `amp config` property of a node with a volume, in either direction: an active model
+    /// turns it into an amplifier, [`GainModel::None`] turns it back into a passive component.
+    /// Only offered for the node types in [`opossum_core::gain::AMP_CONFIG_NODE_TYPES`].
+    SetAmpConfig {
         node_id: Uuid,
         graph_id: Uuid,
+        model: GainModel,
     },
 }
 

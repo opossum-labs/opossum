@@ -122,17 +122,35 @@ patchen" — eine atomare Operation, sauber für Undo.
 Dazu: Icon-Asset + Eintrag in `NodeType::icon()` (`scenery_editor/node/mod.rs:62-81`). Achtung auf
 die Casing-Konvention (Menü sentence case, POST lowercase, Vergleiche lowercase-mit-Leerzeichen).
 
-### V4 — „As amplifier" im Kontextmenü (GUI)
+### V4 — Amp-Umschaltung im Kontextmenü (GUI)
 
 Eintrag in `scenery_editor/node/node_component.rs:140-179`, **nur** für Volumen-Node-Typen
 (Lens / Wedge / CylindricLens / neuer Typ). Das heutige Entweder-Oder (`Create reference` XOR
 `Group optical nodes`) muss dafür zu einer Sammlung werden — `CxMenu::add_entry` existiert bereits
 (`components/context_menu/cx_menu.rs:52`).
 
+**Der Eintrag ist ein Umschalter, keine Einbahnstraße.** Ist die Node heute passiv, heißt er
+„As amplifier" und setzt ein aktives Modell; ist sie bereits ein Verstärker, heißt er
+„As passive optic" und setzt `GainModel::None` zurück. Ohne den Rückweg wäre eine versehentlich
+verstärkende Node nur noch über das Property-Panel (V6) oder gar nicht zu heilen. Welcher der
+beiden Beschriftungen gilt, entscheidet der Amp-Marker aus V5 — die Canvas kennt den Zustand
+dadurch bereits lokal und muss beim Rechtsklick nichts nachladen. V4 und V5 hängen an dieser
+Stelle also zusammen: der Umschalter setzt V5 voraus.
+
 Die Aktion ist ein Property-Patch über den vorhandenen Pfad (`api::update_node_property`,
 `api/node.rs:332`) — **kein neuer Endpunkt**. Plumbing ist formelhaft: je eine Variante plus Arm in
 `CxtCommand`, `app.rs:265`-Effekt, `NodeEditorCommand`, `node_editor_command.rs:128`,
-`GraphsWorkspaceAction`, `workspace_processor.rs:80`.
+`GraphsWorkspaceAction`, `workspace_processor.rs:80`. Die Variante trägt das zu setzende
+`GainModel`, damit beide Richtungen denselben Weg nehmen.
+
+**Undo/Redo muss den Amp-Zustand mit zurücknehmen.** Das ist der eigentliche Grund, warum die
+Amp-Config eine Property ist (Architekturentscheidung 1): `patch_property`
+(`opossum_backend/src/nodes/properties.rs`) legt bereits ein `Command::PatchProperty` mit `old`/`new`
+an, der Undo-Stack trägt den Zustandswechsel also gratis. Zu tun bleibt die **GUI-Seite**: das
+zugehörige `DocumentChange::NodeDetailsChanged` trägt bewusst keine Werte, der Amp-Marker auf der
+Canvas ist aber ab V5 Canvas-Zustand und veraltet damit beim Undo. Er muss in
+`apply_document_changes` gezielt für diese eine Node nachgelesen werden. Ein Backend-Regressionstest
+hält fest, dass ein Undo die `amp config` tatsächlich auf den vorherigen Wert zurückdreht.
 
 ### V5 — Amp-Status an der Node (GUI)
 
@@ -152,6 +170,12 @@ Zwei Dinge sind dafür nötig:
 Dies ist das erste node-typ-spezifische *Layout* im Code; es gibt kein Vorbild (bisher
 unterscheiden sich Node-Typen visuell nur durch Icon und Header-Klasse), aber die Kompositionsnaht
 existiert und das Risiko ist gering.
+
+Der Marker ist nicht nur Anzeige: er ist auch die Zustandsquelle für den Umschalter aus V4 und
+muss deshalb auf **allen** Wegen aktuell bleiben, auf denen sich die `amp config` ändert —
+Kontextmenü, Property-Panel (V6) und Undo/Redo. Beim direkten Patch ist der neue Wert bekannt und
+wird ohne Rückfrage gesetzt; beim Undo/Redo ist er es nicht und muss für die betroffene Node
+nachgelesen werden.
 
 ### V6 — Sidebar-Umschalter + globales Amp-Panel (GUI / Backend)
 
@@ -212,7 +236,9 @@ strukturelle Mutation** macht. Bis dahin bleibt `EndPumping` als Modellvariante 
 - Nach V1: `.opm`-Roundtrip in beide Richtungen (mit/ohne Property, Altdatei).
 - Nach V2: identische Ergebnisse der drei Volumen-Node-Typen gegen den Stand davor.
 - Nach V3–V6 jeweils manuell in der laufenden GUI prüfen (Wizard legt die richtige Geometrie an,
-  „as amplifier" erscheint nur bei Volumen-Nodes, Statuszeile ohne Kantenversatz, globales Panel
-  bleibt bei Add/Delete/Undo/Redo aktuell) — GUI-Tests existieren in diesem Crate praktisch nicht.
+  der Amp-Eintrag erscheint nur bei Volumen-Nodes und wechselt zwischen „As amplifier" und
+  „As passive optic", Statuszeile ohne Kantenversatz, Undo/Redo dreht Amp-Zustand *und* Statuszeile
+  zurück, globales Panel bleibt bei Add/Delete/Undo/Redo aktuell) — GUI-Tests existieren in diesem
+  Crate praktisch nicht.
 - Physikalisch muss nach der gesamten Vorbereitungsstufe **alles unverändert** sein: `amp config`
   steht überall auf `None`.

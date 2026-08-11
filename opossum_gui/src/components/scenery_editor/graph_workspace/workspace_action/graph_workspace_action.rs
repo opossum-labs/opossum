@@ -1,6 +1,7 @@
 use crate::components::scenery_editor::{DragStatus, edges::edges_component::EdgeCreation};
 use dioxus::html::geometry::euclid::default::{Point2D, Rect};
 use opossum_core::{
+    gain::GainModel,
     prelude::{AnalyzerType, PortType},
     types::api_types::{ConnectInfo, NewRefNode},
 };
@@ -338,13 +339,15 @@ pub enum GraphsWorkspaceAction {
         to_graph_id: Uuid,
     },
 
-    /// Turns a node with a volume into an amplifier by patching its `amp config` property to an
-    /// active gain model. An ordinary property patch - the node type does not change.
-    MakeAmplifier {
-        /// The ID of the node to amplify with.
+    /// Sets a volume node's `amp config` property, turning it into an amplifier or back into a
+    /// passive component. An ordinary property patch - the node type does not change.
+    SetAmpConfig {
+        /// The ID of the node whose amplification model is being set.
         node_id: Uuid,
         /// The ID of the graph containing the node.
         graph_id: Uuid,
+        /// The model to set. `GainModel::None` makes the node passive again.
+        model: GainModel,
     },
 
     /// Undoes the last checkpointed document edit.

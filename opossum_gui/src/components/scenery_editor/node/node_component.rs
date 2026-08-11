@@ -20,7 +20,10 @@ use crate::components::{
 use dioxus::html::geometry::euclid::default::Point2D;
 use dioxus::html::input_data::MouseButton;
 use dioxus::prelude::*;
-use opossum_core::{gain::AMP_CONFIG_NODE_TYPES, types::api_types::NewRefNode};
+use opossum_core::{
+    gain::{AMP_CONFIG_NODE_TYPES, ConstGain, GainModel},
+    types::api_types::NewRefNode,
+};
 use uuid::Uuid;
 
 #[component]
@@ -48,6 +51,9 @@ pub fn Node(
         node.node_type(),
         NodeType::Optical(node_type) if AMP_CONFIG_NODE_TYPES.contains(&node_type.as_str())
     );
+    // The amp entry is a toggle, so it needs the node's current state. That state is already on the
+    // canvas, so a right-click costs no request.
+    let is_amplifier = node.amp_model().is_some();
     let is_active = if active_node_ids.contains(&node.id()) {
         "active-node"
     } else {
@@ -178,10 +184,21 @@ pub fn Node(
                                 ));
                         }
                         if supports_amp_config {
+                            // Offer the way back, too: an accidentally amplifying node must be
+                            // curable from the same menu it was made an amplifier in.
+                            let (label, model) = if is_amplifier {
+                                ("As passive optic", GainModel::None)
+                            } else {
+                                ("As amplifier", GainModel::Const(ConstGain::default()))
+                            };
                             cx_menu
                                 .add_entry((
-                                    "As amplifier".to_owned(),
-                                    CxtCommand::MakeAmplifier { node_id, graph_id },
+                                    label.to_owned(),
+                                    CxtCommand::SetAmpConfig {
+                                        node_id,
+                                        graph_id,
+                                        model,
+                                    },
                                 ));
                         }
                         let mut ctx = CONTEXT_MENU.write();

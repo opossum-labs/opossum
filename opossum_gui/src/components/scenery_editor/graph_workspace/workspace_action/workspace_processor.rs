@@ -12,7 +12,7 @@ use dioxus::{
 };
 use futures_util::StreamExt;
 use opossum_core::{
-    gain::{AMP_CONFIG, ConstGain, GainModel},
+    gain::{AMP_CONFIG, GainModel},
     prelude::{AnalyzerType, PortType, Proptype},
     types::api_types::{
         AnalyzerItemDto, ConnectInfo, CutNodesResponse, DeleteNodeResponse, DocumentChange,
@@ -423,8 +423,12 @@ pub fn use_workspace_processor(
                         )
                         .await;
                     }
-                    GraphsWorkspaceAction::MakeAmplifier { node_id, graph_id } => {
-                        process_make_amplifier(node_id, graph_id, workspace_handlers).await;
+                    GraphsWorkspaceAction::SetAmpConfig {
+                        node_id,
+                        graph_id,
+                        model,
+                    } => {
+                        process_set_amp_config(node_id, graph_id, model, workspace_handlers).await;
                     }
                     GraphsWorkspaceAction::GetEditorArea => {
                         process_get_editor_area(workspace, workspace_handlers).await;
@@ -523,28 +527,28 @@ const fn is_document_edit_action(action: &GraphsWorkspaceAction) -> bool {
             | GraphsWorkspaceAction::MapNodePort { .. }
             | GraphsWorkspaceAction::RemovePortMap { .. }
             | GraphsWorkspaceAction::SyncNodePositions { .. }
-            | GraphsWorkspaceAction::MakeAmplifier { .. }
+            | GraphsWorkspaceAction::SetAmpConfig { .. }
     )
 }
 
-/// Turns a node with a volume into an amplifier by patching its `amp config` property to an active
-/// gain model. This goes through the same generic property endpoint the properties panel uses, so
-/// it is a plain property edit - undoable, and without touching the node's type or its connections.
+/// Sets a volume node's `amp config` property, in either direction: an active model turns the node
+/// into an amplifier, `GainModel::None` turns it back into a passive component.
 ///
-/// The model is created at its neutral default (gain factor 1.0): switching a component to
-/// "amplifier" must not change any simulation result until the user has entered real parameters.
+/// This goes through the same generic property endpoint the properties panel uses, so it is a plain
+/// property edit - undoable, and without touching the node's type or its connections.
 ///
 /// # Arguments
 ///
-/// * `node_id` - the node to turn into an amplifier.
+/// * `node_id` - the node whose amplification model is being set.
 /// * `graph_id` - the graph the node lives in, needed to update its canvas node.
+/// * `model` - the model to set.
 /// * `ws_handler` - workspace signal handlers, used to mark the document as unsaved.
-async fn process_make_amplifier(
+async fn process_set_amp_config(
     node_id: Uuid,
     graph_id: Uuid,
+    model: GainModel,
     ws_handler: WorkSpaceSignalHandlers,
 ) {
-    let model = GainModel::Const(ConstGain::default());
     let amp_config = (AMP_CONFIG.to_owned(), Proptype::GainModel(model));
     eval_action_run(
         api::update_node_property(node_id, amp_config).await,
@@ -554,7 +558,7 @@ async fn process_make_amplifier(
             // - unlike the undo/redo path, which cannot know what a details change contained.
             ws_handler
                 .nodes
-                .set_amp_model(node_id, Some(model.to_string()), graph_id);
+                .set_amp_model(node_id, model.active_name(), graph_id);
             // The properties panel keeps its own fetched copy of the node's properties; without
             // this bump it would still show the old `amp config` for an already selected node.
             *NODE_DETAILS_REFRESH.write() += 1;
