@@ -18,7 +18,9 @@
 //! later step.
 
 use crate::{
+    core_optics::NodeAttr,
     error::{OpmResult, OpossumError},
+    properties::Proptype,
     utils::default_from_name::DefaultFromName,
 };
 use serde::{Deserialize, Serialize};
@@ -38,6 +40,27 @@ pub const AMP_CONFIG: &str = "amp config";
 /// for a node it only knows by its type name. It is kept in sync with the actual node declarations
 /// by the `amp_config_node_types_are_exhaustive` test below.
 pub const AMP_CONFIG_NODE_TYPES: &[&str] = &["cylindric lens", "lens", "wedge"];
+
+/// Return the name of the active [`GainModel`] declared by `node_attr`, or `None` if the node does
+/// not amplify.
+///
+/// `None` covers both cases a user interface has to treat alike: a node without a volume, which
+/// never declares [`AMP_CONFIG`] at all, and a volume node whose model is [`GainModel::None`].
+///
+/// # Arguments
+///
+/// * `node_attr` - attributes of the node to inspect.
+///
+/// # Returns
+///
+/// The display name of the active model, or `None`.
+#[must_use]
+pub fn active_amp_model(node_attr: &NodeAttr) -> Option<String> {
+    match node_attr.get_property(AMP_CONFIG) {
+        Ok(Proptype::GainModel(model)) if model.is_active() => Some(model.to_string()),
+        _ => None,
+    }
+}
 
 /// Parameters of a constant, path-length independent energy gain.
 ///
@@ -120,9 +143,8 @@ impl GainModel {
 mod test {
     use super::*;
     use crate::{
-        core_optics::OpticNode,
-        nodes::{create_node_ref, node_types},
-        properties::Proptype,
+        core_optics::{NodeAttrExt, OpticNode, node_attr::HasNodeAttr},
+        nodes::{Dummy, Lens, create_node_ref, node_types},
         utils::LockExt,
     };
     use approx::assert_relative_eq;
@@ -148,6 +170,18 @@ mod test {
             declaring, AMP_CONFIG_NODE_TYPES,
             "AMP_CONFIG_NODE_TYPES does not match the node types actually declaring '{AMP_CONFIG}'"
         );
+        Ok(())
+    }
+    #[test]
+    fn active_amp_model_reports_only_active_models() -> OpmResult<()> {
+        // A node without a volume never declares the property at all.
+        assert_eq!(active_amp_model(Dummy::default().node_attr()), None);
+
+        let mut lens = Lens::default();
+        assert_eq!(active_amp_model(lens.node_attr()), None);
+        lens.node_attr_mut()
+            .set_property(AMP_CONFIG, GainModel::Const(ConstGain::new(3.0)?).into())?;
+        assert_eq!(active_amp_model(lens.node_attr()).as_deref(), Some("Const"));
         Ok(())
     }
     #[test]

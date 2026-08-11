@@ -1,7 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use std::collections::HashSet;
 
-use super::NodeElement;
+use super::{AMP_STATUS_HEIGHT, NodeElement};
 use crate::CONTEXT_MENU;
 use crate::components::scenery_editor::DragStatus;
 use crate::components::scenery_editor::graph_workspace::{
@@ -181,9 +181,7 @@ pub fn Node(
                             cx_menu
                                 .add_entry((
                                     "As amplifier".to_owned(),
-                                    CxtCommand::MakeAmplifier {
-                                        node_id,
-                                    },
+                                    CxtCommand::MakeAmplifier { node_id, graph_id },
                                 ));
                         }
                         let mut ctx = CONTEXT_MENU.write();
@@ -218,6 +216,16 @@ pub fn Node(
                         NodePorts { node: node.clone(), inverted: node.inverted() }
                     }
                 },
+                footer: node
+                    .amp_model()
+                    .map(|amp_model| rsx! {
+                        div {
+                            class: "node-amp-status",
+                            pointer_events: "none",
+                            style: format!("height: {AMP_STATUS_HEIGHT}px;"),
+                            "amp: {amp_model}"
+                        }
+                    }),
             }
         }
     }

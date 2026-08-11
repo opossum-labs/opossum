@@ -343,6 +343,8 @@ pub enum GraphsWorkspaceAction {
     MakeAmplifier {
         /// The ID of the node to amplify with.
         node_id: Uuid,
+        /// The ID of the graph containing the node.
+        graph_id: Uuid,
     },
 
     /// Undoes the last checkpointed document edit.

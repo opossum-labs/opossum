@@ -14,6 +14,7 @@ use crate::{
         NodeAttrExt,
         optic_ports::{PortConfig, ValidatedLidt},
     },
+    gain::active_amp_model,
     nodes::ConnectionInfo,
     opm_document::AnalyzerInfo,
     prelude::{AnalyzerType, Aperture, Isometry, PortMap, PortType, Properties},
@@ -125,6 +126,14 @@ pub struct NodeInfo {
     pub input_ports: Vec<String>,
     /// List of available output port names
     pub output_ports: Vec<String>,
+    /// Name of the node's active amplification model, or `None` if it does not amplify (either
+    /// because it has no volume at all or because its `amp config` is [`GainModel::None`]).
+    ///
+    /// This is a display marker, not the configuration itself: it lets a canvas show *that* a
+    /// component is an amplifier without fetching every node's properties. The parameters live in
+    /// the `amp config` property and are fetched only for the node being edited.
+    #[schema(example = "Const")]
+    pub amp_model: Option<String>,
 }
 
 impl NodeInfo {
@@ -143,6 +152,7 @@ impl NodeInfo {
             gui_position: gui_position.unwrap_or_else(|| node.gui_position().map(|p| (p.x, p.y))),
             isometry: node.isometry(),
             alignment: node.alignment(),
+            amp_model: active_amp_model(node.node_attr()),
         }
     }
 

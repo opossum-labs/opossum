@@ -29,9 +29,7 @@ use crate::{
     api::{self, delete_document, eval_action_run},
     components::scenery_editor::{
         DragStatus, NodeType,
-        constants::{
-            HEADER_HEIGHT, MIN_NODE_DISTANCE_RADIUS, NODE_PLACEMENT_MAX_ITERATIONS, NODE_WIDTH,
-        },
+        constants::{MIN_NODE_DISTANCE_RADIUS, NODE_PLACEMENT_MAX_ITERATIONS, NODE_WIDTH},
         graph_workspace::{
             EditorStateStoreExt, GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceState,
             GraphsWorkspaceStateStoreExt, GraphsWorkspaceStateStoreImplExt,
@@ -39,7 +37,7 @@ use crate::{
             workspace_action::GraphsWorkspaceAction,
             workspace_state::{GraphInfo, optimize_layout},
         },
-        node::MIN_NODE_BODY_HEIGHT,
+        node::DEFAULT_NODE_HEIGHT,
     },
 };
 #[allow(clippy::too_many_lines)]
@@ -425,8 +423,8 @@ pub fn use_workspace_processor(
                         )
                         .await;
                     }
-                    GraphsWorkspaceAction::MakeAmplifier { node_id } => {
-                        process_make_amplifier(node_id, workspace_handlers).await;
+                    GraphsWorkspaceAction::MakeAmplifier { node_id, graph_id } => {
+                        process_make_amplifier(node_id, graph_id, workspace_handlers).await;
                     }
                     GraphsWorkspaceAction::GetEditorArea => {
                         process_get_editor_area(workspace, workspace_handlers).await;
@@ -539,19 +537,49 @@ const fn is_document_edit_action(action: &GraphsWorkspaceAction) -> bool {
 /// # Arguments
 ///
 /// * `node_id` - the node to turn into an amplifier.
+/// * `graph_id` - the graph the node lives in, needed to update its canvas node.
 /// * `ws_handler` - workspace signal handlers, used to mark the document as unsaved.
-async fn process_make_amplifier(node_id: Uuid, ws_handler: WorkSpaceSignalHandlers) {
-    let amp_config = (
-        AMP_CONFIG.to_owned(),
-        Proptype::GainModel(GainModel::Const(ConstGain::default())),
-    );
+async fn process_make_amplifier(
+    node_id: Uuid,
+    graph_id: Uuid,
+    ws_handler: WorkSpaceSignalHandlers,
+) {
+    let model = GainModel::Const(ConstGain::default());
+    let amp_config = (AMP_CONFIG.to_owned(), Proptype::GainModel(model));
     eval_action_run(
         api::update_node_property(node_id, amp_config).await,
         Some(move |()| {
             ws_handler.workspace.set_needs_saving(true);
+            // The value that was just written is known here, so the canvas marker needs no refetch
+            // - unlike the undo/redo path, which cannot know what a details change contained.
+            ws_handler
+                .nodes
+                .set_amp_model(node_id, Some(model.to_string()), graph_id);
             // The properties panel keeps its own fetched copy of the node's properties; without
             // this bump it would still show the old `amp config` for an already selected node.
             *NODE_DETAILS_REFRESH.write() += 1;
+        }),
+    );
+}
+
+/// Re-reads `node_id`'s amplification marker from the backend and mirrors it onto the canvas.
+///
+/// Used where a node's properties are known to have changed but not *how* - notably undo/redo,
+/// whose `NodeDetailsChanged` deliberately carries no property values. One request for one node
+/// that actually changed, not one per node per render.
+///
+/// # Arguments
+///
+/// * `node_id` - the node whose marker should be refreshed.
+/// * `graph_id` - the graph the node lives in.
+/// * `ws_handler` - workspace signal handlers used to write the marker.
+async fn refresh_amp_marker(node_id: Uuid, graph_id: Uuid, ws_handler: WorkSpaceSignalHandlers) {
+    eval_action_run(
+        api::get_node_info(node_id).await,
+        Some(move |node_info: NodeInfo| {
+            ws_handler
+                .nodes
+                .set_amp_model(node_id, node_info.amp_model, graph_id);
         }),
     );
 }
@@ -641,7 +669,13 @@ async fn apply_document_changes(
                 // properties panel, which re-fetches on its own via this counter - see its use_resource.
                 *NODE_DETAILS_REFRESH.write() += 1;
             }
-            DocumentChange::NodeDetailsChanged { .. } | DocumentChange::AnalyzerChanged { .. } => {
+            DocumentChange::NodeDetailsChanged { uuid, graph_id } => {
+                // One property is mirrored on the canvas rather than only in the panel: the
+                // amplification marker. The change carries no values, so re-read just this node.
+                refresh_amp_marker(uuid, graph_id, ws_handler).await;
+                *NODE_DETAILS_REFRESH.write() += 1;
+            }
+            DocumentChange::AnalyzerChanged { .. } => {
                 *NODE_DETAILS_REFRESH.write() += 1;
             }
             DocumentChange::AnalyzerMoved { id, gui_position } => {
@@ -1352,7 +1386,7 @@ async fn process_add_optic_node(
         let center = workspace.get_view_port_center();
         let proposed_pos = (
             (center.x - shift.x - NODE_WIDTH / 2.) / zoom,
-            (center.y - shift.y - f64::midpoint(MIN_NODE_BODY_HEIGHT, HEADER_HEIGHT)) / zoom,
+            (center.y - shift.y - DEFAULT_NODE_HEIGHT / 2.0) / zoom,
         );
 
         let existing_positions: Vec<_> = graph_store

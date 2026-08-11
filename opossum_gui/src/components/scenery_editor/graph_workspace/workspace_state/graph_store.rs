@@ -199,6 +199,11 @@ impl<Lens> Store<GraphStore, Lens> {
             node.write().set_inverted(inverted);
         }
     }
+    fn set_amp_model_of_node(&mut self, node_id: Uuid, amp_model: Option<String>) {
+        if let Some(mut node) = self.nodes().get(node_id) {
+            node.write().set_amp_model(amp_model);
+        }
+    }
     fn renumber_z_levels(&mut self) {
         let mut node_elements: Vec<(Uuid, usize)> = self
             .nodes()

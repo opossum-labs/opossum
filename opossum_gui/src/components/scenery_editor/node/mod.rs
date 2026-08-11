@@ -45,6 +45,13 @@ pub const MIN_NODE_BODY_HEIGHT: f64 = NODE_WIDTH / GOLDEN_RATIO - HEADER_HEIGHT;
 // Nodes with only one port will be vertically centered
 // in the node body, so we need to add some padding
 pub const PORT_VER_PADDING: f64 = MIN_NODE_BODY_HEIGHT / 2.0;
+// Overall height of a node that has no more than two ports per side. Used where a node height is
+// needed before any concrete node exists (e.g. to center a node that is about to be created);
+// an existing node's own height is `NodeElement::total_height`.
+pub const DEFAULT_NODE_HEIGHT: f64 = HEADER_HEIGHT + MIN_NODE_BODY_HEIGHT;
+// Height of the status line shown below the body of an amplifying node. Nodes that do not amplify
+// have no such line and are unaffected.
+pub const AMP_STATUS_HEIGHT: f64 = 14.0;
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum NodeType {
@@ -93,6 +100,10 @@ pub struct NodeElement {
     ports: Ports,
     inverted: bool,
     node_index: usize,
+    /// Name of the node's active amplification model, or `None` if it does not amplify. Mirrors
+    /// `NodeInfo::amp_model` - a display marker only; the parameters are fetched by the properties
+    /// panel for the selected node alone.
+    amp_model: Option<String>,
 }
 
 impl NodeElement {
@@ -115,6 +126,7 @@ impl NodeElement {
             ports,
             inverted,
             node_index,
+            amp_model: None,
         }
     }
     /// Returns the unique sequential node index assigned upon creation.
@@ -157,7 +169,7 @@ impl NodeElement {
         let min_x = self.pos().x;
         let min_y = self.pos().y;
         let max_x = self.pos().x + NODE_WIDTH;
-        let max_y = self.pos().y + HEADER_HEIGHT + self.node_body_height();
+        let max_y = self.pos().y + self.total_height();
 
         Rect::new(
             Point2D::new(min_x, min_y),
@@ -210,6 +222,29 @@ impl NodeElement {
         );
         necessary_body_height.max(MIN_NODE_BODY_HEIGHT)
     }
+    /// Returns the overall height this node occupies on the canvas.
+    ///
+    /// This is the single place that knows what a node is made of vertically, so everything that
+    /// needs a node's extent - bounding box, selection box, auto-layout row heights, drop-in-group
+    /// hit testing - stays correct when a node type grows an additional part.
+    #[must_use]
+    pub fn total_height(&self) -> f64 {
+        let amp_status_height = if self.amp_model.is_some() {
+            AMP_STATUS_HEIGHT
+        } else {
+            0.0
+        };
+        HEADER_HEIGHT + self.node_body_height() + amp_status_height
+    }
+    /// Returns the name of the node's active amplification model, or `None` if it does not amplify.
+    #[must_use]
+    pub fn amp_model(&self) -> Option<&str> {
+        self.amp_model.as_deref()
+    }
+    /// Sets (or clears, with `None`) the node's amplification marker.
+    pub fn set_amp_model(&mut self, amp_model: Option<String>) {
+        self.amp_model = amp_model;
+    }
     #[must_use]
     pub const fn node_type(&self) -> &NodeType {
         &self.node_type
@@ -240,7 +275,7 @@ impl From<&NodeInfo> for NodeElement {
         let position = node_info
             .gui_position()
             .map_or_else(Point2D::zero, |(x, y)| Point2D::new(x, y));
-        Self::new(
+        let mut node = Self::new(
             node_info.name().to_string(),
             NodeType::Optical(node_info.node_type().to_string()),
             node_info.uuid(),
@@ -248,7 +283,9 @@ impl From<&NodeInfo> for NodeElement {
             Ports::new(node_info.input_ports(), node_info.output_ports()),
             node_info.inverted(),
             0,
-        )
+        );
+        node.set_amp_model(node_info.amp_model.clone());
+        node
     }
 }
 

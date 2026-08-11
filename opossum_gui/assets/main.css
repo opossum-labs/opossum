@@ -277,6 +277,21 @@ body {
     width: 45px;
 }
 
+/* Status line below the body of an amplifying node. Its height must stay in sync with
+   AMP_STATUS_HEIGHT, which is what the canvas geometry (bounding box, auto layout) uses. */
+.node-amp-status {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 7pt;
+    color: rgb(255, 214, 130);
+    background-color: rgba(90, 70, 30, 0.85);
+    border-radius: 0px 0px 4px 4px;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
 .node-header {
     position: relative;
     border-top: 0;

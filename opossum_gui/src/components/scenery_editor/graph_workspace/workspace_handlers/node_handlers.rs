@@ -20,6 +20,7 @@ pub struct NodeHandlers {
     remove_nodes: EventHandler<(Vec<Uuid>, Uuid)>,
     update_node_positions: EventHandler<(HashMap<Uuid, Point2D<f64>>, Uuid)>,
     invert_node: EventHandler<(Uuid, bool, Uuid)>,
+    set_amp_model: EventHandler<(Uuid, Option<String>, Uuid)>,
     set_node_name: EventHandler<(String, Uuid, Uuid, bool)>,
     add_group_nodes: EventHandler<(Uuid, Vec<NodeInfo>)>,
     add_group_analyzers: EventHandler<(Uuid, Vec<AnalyzerItemDto>)>,
@@ -42,6 +43,7 @@ impl NodeHandlers {
             remove_nodes: remove_nodes_handler(workspace),
             update_node_positions: update_node_positions_handler(workspace),
             invert_node: invert_node_handler(workspace),
+            set_amp_model: set_amp_model_handler(workspace),
             set_node_name: set_node_name_handler(workspace),
             add_group_nodes: add_group_nodes_handler(workspace),
             add_group_analyzers: add_group_analyzers_handler(workspace),
@@ -129,6 +131,12 @@ impl NodeHandlers {
 
     pub fn invert_node(&self, node_id: Uuid, inverted: bool, graph_id: Uuid) {
         self.invert_node.call((node_id, inverted, graph_id));
+    }
+
+    /// Updates the amplification marker the canvas shows for a node. `None` removes it, which also
+    /// shrinks the node back by the status line's height.
+    pub fn set_amp_model(&self, node_id: Uuid, amp_model: Option<String>, graph_id: Uuid) {
+        self.set_amp_model.call((node_id, amp_model, graph_id));
     }
 
     pub fn set_node_name(&self, name: String, node_id: Uuid, graph_id: Uuid, needs_saving: bool) {
@@ -284,6 +292,20 @@ fn invert_node_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandler<(
             store.set_node_inverted(node_id, inverted);
         });
     })
+}
+/// Mirrors a node's `amp config` into the canvas. Not marked dirty here: the property patch that
+/// caused it already marks the document unsaved (and on undo/redo the saved state is restored, so
+/// mirroring must not re-dirty it).
+fn set_amp_model_handler(
+    workspace: Store<GraphsWorkspaceState>,
+) -> EventHandler<(Uuid, Option<String>, Uuid)> {
+    EventHandler::new(
+        move |(node_id, amp_model, graph_id): (Uuid, Option<String>, Uuid)| {
+            with_graph_store(workspace, graph_id, false, |store| {
+                store.set_amp_model_of_node(node_id, amp_model.clone());
+            });
+        },
+    )
 }
 fn remove_nodes_handler(
     mut workspace: Store<GraphsWorkspaceState>,

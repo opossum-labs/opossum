@@ -32,6 +32,7 @@ pub enum CxtCommand {
     /// [`opossum_core::gain::AMP_CONFIG_NODE_TYPES`].
     MakeAmplifier {
         node_id: Uuid,
+        graph_id: Uuid,
     },
 }
 
