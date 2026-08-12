@@ -125,6 +125,17 @@ impl GeoSurface for Parabola {
         ))
     }
 
+    fn is_behind_do(&self, point: &Point3<Length>) -> bool {
+        // The local surface is x^2 + y^2 = 4*f*z, so its sag at (x, y) is (x^2 + y^2) / (4*f).
+        // This holds for both signs of the focal length: a negative one simply yields a negative
+        // sag, i.e. a surface curving towards -z.
+        let sag = point
+            .x
+            .value
+            .mul_add(point.x.value, point.y.value * point.y.value)
+            / (4. * self.focal_length.value);
+        point.z.value >= sag
+    }
     fn isometry(&self) -> &Isometry {
         &self.isometry
     }
@@ -157,6 +168,30 @@ mod test {
         assert!(Parabola::new(meter!(f64::NAN), Isometry::identity()).is_err());
         assert!(Parabola::new(meter!(f64::INFINITY), Isometry::identity()).is_err());
         assert!(Parabola::new(meter!(f64::NEG_INFINITY), Isometry::identity()).is_err());
+    }
+    #[test]
+    fn is_behind() -> OpmResult<()> {
+        // opening towards +z: the sag at x = 1 m is 1 / (4 * 1 m) = 0.25 m
+        let parabola = Parabola::new(meter!(1.0), Isometry::identity())?;
+        assert!(parabola.is_behind(&meter!(0.0, 0.0, 0.1)));
+        // a point exactly on the surface counts as behind it
+        assert!(parabola.is_behind(&meter!(0.0, 0.0, 0.0)));
+        assert!(!parabola.is_behind(&meter!(0.0, 0.0, -0.1)));
+        assert!(parabola.is_behind(&meter!(1.0, 0.0, 0.3)));
+        assert!(!parabola.is_behind(&meter!(1.0, 0.0, 0.2)));
+        assert!(parabola.is_behind(&meter!(0.0, 1.0, 0.3)));
+        assert!(!parabola.is_behind(&meter!(0.0, 1.0, 0.2)));
+        Ok(())
+    }
+    #[test]
+    fn is_behind_negative_focal_length() -> OpmResult<()> {
+        // opening towards -z: the sag at x = 1 m is now -0.25 m
+        let parabola = Parabola::new(meter!(-1.0), Isometry::identity())?;
+        assert!(parabola.is_behind(&meter!(0.0, 0.0, 0.1)));
+        assert!(!parabola.is_behind(&meter!(0.0, 0.0, -0.1)));
+        assert!(parabola.is_behind(&meter!(1.0, 0.0, -0.2)));
+        assert!(!parabola.is_behind(&meter!(1.0, 0.0, -0.3)));
+        Ok(())
     }
     #[test]
     fn intersect() -> OpmResult<()> {

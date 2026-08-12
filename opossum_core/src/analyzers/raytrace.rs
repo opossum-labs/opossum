@@ -232,7 +232,7 @@ pub trait AnalysisRayTrace: OpticNode {
     /// The whole material is handed out, not just its refractive index model: a caller that only
     /// refracts takes the index out of it, while later stages (thermal lensing, stress
     /// birefringence, gain) need the other material data from the very same object.
-    /// 
+    ///
     /// # Arguments
     ///
     /// * `node_attr` - attributes of the node to read the material from.

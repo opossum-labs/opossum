@@ -1,6 +1,10 @@
 use super::CylindricLens;
 use crate::{
-    analyzers::{GhostFocusConfig, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace}, core_optics::{OpticNodeExt, node_attr::HasNodeAttr}, error::{OpmResult, OpossumError}, light::{LightRays, Rays}, properties::{Proptype, proptype::AssetRef},
+    analyzers::{GhostFocusConfig, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace},
+    core_optics::{OpticNodeExt, node_attr::HasNodeAttr},
+    error::{OpmResult, OpossumError},
+    light::{LightRays, Rays},
+    properties::{Proptype, proptype::AssetRef},
 };
 
 impl AnalysisGhostFocus for CylindricLens {

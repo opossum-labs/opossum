@@ -75,6 +75,10 @@ impl GeoSurface for Plane {
             normal,
         ))
     }
+    fn is_behind_do(&self, point: &Point3<Length>) -> bool {
+        // The local surface is the xy plane at z = 0.
+        point.z >= Length::zero()
+    }
     fn set_isometry(&mut self, isometry: Isometry) {
         self.isometry = isometry;
     }
@@ -134,6 +138,30 @@ mod test {
         assert_eq!(t.x, millimeter!(0.0));
         assert_eq!(t.y, millimeter!(0.0));
         assert_eq!(t.z, millimeter!(1.0));
+        Ok(())
+    }
+    #[test]
+    fn is_behind() -> OpmResult<()> {
+        let s = Plane::new(Isometry::new_along_z(millimeter!(10.0))?);
+        assert!(s.is_behind(&millimeter!(0.0, 0.0, 10.1)));
+        // a point exactly on the surface counts as behind it
+        assert!(s.is_behind(&millimeter!(0.0, 0.0, 10.0)));
+        assert!(!s.is_behind(&millimeter!(0.0, 0.0, 9.9)));
+        // the plane is unbounded, so the transversal position does not matter
+        assert!(s.is_behind(&millimeter!(100.0, -50.0, 10.1)));
+        assert!(!s.is_behind(&millimeter!(100.0, -50.0, 9.9)));
+        Ok(())
+    }
+    #[test]
+    fn is_behind_tilted() -> OpmResult<()> {
+        // a plane tilted by 45 degrees around the y axis: its normal lies in the xz plane
+        let iso = Isometry::new(millimeter!(0.0, 0.0, 0.0), degree!(0.0, 45.0, 0.0))?;
+        let s = Plane::new(iso);
+        assert!(s.is_behind(&millimeter!(0.0, 0.0, 1.0)));
+        assert!(!s.is_behind(&millimeter!(0.0, 0.0, -1.0)));
+        // along the tilted surface itself the point stays on the surface
+        assert!(s.is_behind(&millimeter!(1.0, 0.0, 1.0)));
+        assert!(!s.is_behind(&millimeter!(-1.0, 0.0, 0.9)));
         Ok(())
     }
     #[test]

@@ -125,6 +125,18 @@ impl GeoSurface for Cylinder {
         ))
     }
 
+    fn is_behind_do(&self, point: &Point3<Length>) -> bool {
+        // The local origin lies on the cylinder axis which runs along y, so the surface is the
+        // circle of |radius| in the xz plane. For a convex surface (positive radius) the axis lies
+        // behind the surface, for a concave one (negative radius) in front of it. The comparison
+        // includes the surface itself in both cases.
+        let distance_from_axis = point.x.value.hypot(point.z.value);
+        if self.radius.is_sign_positive() {
+            distance_from_axis <= self.radius.value
+        } else {
+            distance_from_axis >= -self.radius.value
+        }
+    }
     fn set_isometry(&mut self, isometry: Isometry) {
         let anchor_isometry = Isometry::new(
             Point3::new(Length::zero(), Length::zero(), self.radius),
@@ -164,6 +176,32 @@ mod test {
         let s = Cylinder::new(millimeter!(2.0), iso)?;
         assert_eq!(s.radius, millimeter!(2.0));
         assert_eq!(s.get_pos(), millimeter!(0.0, 0.0, -1.0));
+        Ok(())
+    }
+    #[test]
+    fn is_behind() -> OpmResult<()> {
+        // cylinder axis at z = 10 mm, so the vertex of the convex surface lies at z = 9 mm
+        let iso = Isometry::new_along_z(millimeter!(10.0))?;
+        let s = Cylinder::new(millimeter!(1.0), iso)?;
+        assert!(s.is_behind(&millimeter!(0.0, 0.0, 9.5)));
+        // a point exactly on the surface counts as behind it
+        assert!(s.is_behind(&millimeter!(0.0, 0.0, 9.0)));
+        assert!(!s.is_behind(&millimeter!(0.0, 0.0, 8.5)));
+        // the surface is not curved along y, so the y position does not matter
+        assert!(s.is_behind(&millimeter!(0.0, 100.0, 9.5)));
+        assert!(!s.is_behind(&millimeter!(0.0, 100.0, 8.5)));
+        // the sag at x = 0.6 mm is 1 - sqrt(1 - 0.36) = 0.2 mm
+        assert!(s.is_behind(&millimeter!(0.6, 0.0, 9.3)));
+        assert!(!s.is_behind(&millimeter!(0.6, 0.0, 9.1)));
+        Ok(())
+    }
+    #[test]
+    fn is_behind_concave() -> OpmResult<()> {
+        // negative radius: the axis lies in front of the surface, whose vertex is at z = 11 mm
+        let iso = Isometry::new_along_z(millimeter!(10.0))?;
+        let s = Cylinder::new(millimeter!(-1.0), iso)?;
+        assert!(s.is_behind(&millimeter!(0.0, 0.0, 11.5)));
+        assert!(!s.is_behind(&millimeter!(0.0, 0.0, 10.5)));
         Ok(())
     }
     #[test]

@@ -44,6 +44,40 @@ pub trait GeoSurface: Send + Sync + Debug {
     ///
     /// This function returns `None` if the given ray does not intersect with the surface.
     fn calc_intersect_and_normal_do(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)>;
+    /// Return whether the given point lies behind this [`GeoSurface`].
+    ///
+    /// "Behind" refers to the half space on the positive z side of the surface in its own local
+    /// frame — the side a ray travelling along the local z axis reaches *after* passing the
+    /// surface. This is the half-space test a bounded body is built from: a point inside a body
+    /// lies behind the body's entrance surface but not behind its exit surface (see
+    /// [`Body`](super::body::Body)).
+    ///
+    /// # Arguments
+    ///
+    /// - `point`: the point to be tested, given in global coordinates.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the point lies behind the surface. Points exactly on the surface count as behind.
+    fn is_behind(&self, point: &Point3<Length>) -> bool {
+        let local_point = self.isometry().inverse_transform_point(point);
+        self.is_behind_do(&local_point)
+    }
+    /// This function must be implemented by all [`GeoSurface`]s for deciding on which side of the
+    /// surface a given point lies.
+    ///
+    /// **Note**: Do not call this function directly but rather `is_behind` which is a wrapper
+    /// handling all isometric transformations. The implemented function does not need to consider
+    /// any isometries.
+    ///
+    /// # Arguments
+    ///
+    /// - `point`: the point to be tested, already transformed into the local frame of the surface.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the point lies behind the surface. Points exactly on the surface count as behind.
+    fn is_behind_do(&self, point: &Point3<Length>) -> bool;
     /// Returns the [`Isometry`] of this [`GeoSurface`].
     fn isometry(&self) -> &Isometry;
     /// Set the [`Isometry`] of this [`GeoSurface`].

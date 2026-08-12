@@ -61,7 +61,7 @@ Fünf Schichten, jede mit genau einer Verantwortung. Die Trennlinie ist **Hardwa
 ```mermaid
 flowchart TD
     subgraph HW["Hardware — an der Node, im .opm, ändert sich nicht zwischen Läufen"]
-        BODY["<b>Body</b><br/>Scheibe · Rod · Slab<br/>contains() · Facetten · Weglänge"]
+        BODY["<b>Body</b><br/>Ein-/Austrittsfläche + Apertur<br/>contains() · Facetten · Weglänge"]
         MAT["<b>Material</b><br/>n(λ) + optional σ_e, σ_a, τ_f, N_dop<br/>deklariert seine Capabilities"]
     end
     TRAIT["<b>Volumetric</b> (Trait)<br/>OpticNode::as_volume() -> Option&lt;&dyn Volumetric&gt;<br/>Default None"]
@@ -156,23 +156,35 @@ nicht. Bewusst **ohne** Tracing gegen den Körper — der Zwei-Flächen-Durchgan
 damit die Verstärkung nicht von einem neuen Propagationsmodus blockiert wird.
 
 - **M2.1** `geometry/body/` (das leere Verzeichnis) füllen: `trait Body` mit `contains(point)`,
-  `facets() -> &[Facet]`, `bounding_box()`, `path_length_inside(ray)`. Analytische Impls `Disk`,
-  `Rod`, `Slab`. Der vorhandene `render::SDF` bleibt vorerst außen vor — er ist einheitenlos
-  (`Point3<f64>`), an `Color` gekoppelt und über Sphere-Tracing nur näherungsweise; `Body` ist so
-  geschnitten, dass ein SDF-Wrapper ihn später implementieren kann.
+  `facets() -> &[Facet]`, `bounding_box()`, `path_length_inside(ray)`. Dazu **genau eine** Impl
+  `SurfaceBoundedBody`: begrenzt durch Eintritts- und Austrittsfläche (die vorhandenen
+  `GeoSurface`-Typen `Plane`/`Sphere`/`Cylinder`/`Parabola`) plus die transversale Port-Apertur.
+  Damit sind Scheibe (zwei `Plane` + `BinaryCircle`), Slab (zwei `Plane` + `BinaryRectangle`), Rod
+  (dito mit großer Dicke), Linse und Wedge **derselbe** Körper mit anderen Parametern — keine
+  benannten `Disk`/`Rod`/`Slab`-Typen, die niemand liest.
+  Geschlossene Formeln bleiben es trotzdem: `path_length_inside` ist die Differenz der beiden
+  ohnehin schon berechneten `calc_intersect_and_normal`-Treffer, `contains` ein Vorzeichentest gegen
+  beide Flächen und die Apertur.
+  **Zwingend dazu:** `GeoSurface` (`geometry/geo_surface.rs:19-46`) kennt heute nur den
+  Strahlschnitt, keinen Seitentest. `contains()` braucht eine neue Methode „Punkt vor/hinter der
+  Fläche" — für `Plane`/`Sphere` je zwei Zeilen.
+  Der vorhandene `render::SDF` bleibt vorerst außen vor — er ist einheitenlos (`Point3<f64>`), an
+  `Color` gekoppelt und über Sphere-Tracing nur näherungsweise; `Body` ist so geschnitten, dass ein
+  SDF-Wrapper ihn später implementieren kann.
 - **M2.2** Die drei vorhandenen Volumen-Nodes leiten ihren `Body` aus ihren bestehenden
   Geometrie-Properties ab (Krümmungen + Mitteldicke + Port-Apertur) — **keine** neue Benutzereingabe,
   kein `.opm`-Bruch.
-- **M2.3** Neuer Node-Typ `BulkMedium` im bereits angelegten (leeren) `nodes/bulk_medium/`, dessen
-  primäre Property der `Body` ist — Scheibe/Rod/Slab, die es heute schlicht nicht gibt. Muster:
-  `Lens::update_surfaces()` verzweigt bereits genauso über eine Property (`nodes/lens/mod.rs:227`);
-  transversale Form über `ApertureShape::BinaryCircle`/`BinaryRectangle`.
+- **M2.3 entfällt.** Ein eigener Node-Typ `BulkMedium` ist nicht nötig: Scheibe, Rod und Slab lassen
+  sich aus Wedge bzw. Linse mit planaren Flächen, passender Mitteldicke und kreisförmiger oder
+  rechteckiger Apertur zusammensetzen. `nodes/bulk_medium/` bleibt vorerst leer; ein dedizierter
+  Node mit Formauswahl ist reiner Bedienkomfort und wird später ausgebaut, er blockiert die
+  Verstärkung nicht.
 
 **Explizites Nicht-Ziel dieser Stufe:** Mantelflächen-Tracing und Totalreflexion im Rod. Das ist ein
 neuer Propagationsmodus (eine Schleife *innerhalb* einer Node), den die heutige sequentielle
 Zwei-Flächen-Architektur nirgends kennt — größter Einzelposten, eigener Ausbau (siehe Ausblick).
 
-**Commits:** `Add bounded bodies as the domain of a volume node`, danach `Add a BulkMedium node`
+**Commit:** `Add bounded bodies as the domain of a volume node`
 
 ---
 
@@ -183,7 +195,7 @@ wäre er eine Abstraktion, die nichts liest.
 
 - **M3.1** `trait Volumetric: OpticNode` mit `body()`, `material()`, `entry_surface()`,
   `exit_surface()`. Accessor `fn as_volume(&self) -> Option<&dyn Volumetric> { None }` (plus `_mut`)
-  auf `OpticNode`; die vier Volumen-Node-Typen überschreiben mit `Some(self)`.
+  auf `OpticNode`; die drei Volumen-Node-Typen überschreiben mit `Some(self)`.
 - **M3.2** `pass_through_volume_generic` liest Ein-/Austrittsfläche und Index künftig über den Trait
   statt über Argumente — dieselbe Naht, aber generisch aufrufbar.
 - **M3.3** `AMP_CONFIG_NODE_TYPES` ersatzlos streichen. Die GUI-Liste entsteht zur Laufzeit aus der
@@ -254,6 +266,9 @@ umgedrehtem Vorzeichen benutzen können, ohne M5 umzubauen.
   Port-Änderung.
 - **Volumen-Tracing mit Mantelfläche und Totalreflexion.** Neuer Propagationsmodus; Voraussetzung für
   ASE und realistisches Rod-Pumpen.
+- **Dedizierter `BulkMedium`-Node** (`nodes/bulk_medium/`, heute leer). Reiner Bedienkomfort: eine
+  Formauswahl Scheibe/Rod/Slab statt „Wedge mit planaren Flächen und passender Apertur". Erst
+  sinnvoll, wenn `SurfaceBoundedBody` steht und sich zeigt, dass die Zusammensetzung von Hand stört.
 - **Spektroskopische Materialdaten** — siehe Crate-Frage.
 
 ---
@@ -298,11 +313,12 @@ Planungsschritt**, nicht Teil der Code-Commits. Inhaltlich unverändert gültig 
 und darf **nicht** auf den Sellmeier-Default zurückfallen (Regressionstest, der ohne den
 Migrationshook fehlschlägt). `volume_propagation_regression` in `nodes/lens/mod.rs` unverändert.
 
-**M2:** Unit-Tests für `contains()`/`path_length_inside()` gegen analytisch bekannte Werte für
-Scheibe, Rod und Slab. `BulkMedium` mit den generischen Helfern aus `nodes/test_helper.rs`
-(`test_inverted::<T>()`, `test_analyze_empty::<T>()`, `test_set_aperture::<T>(...)`).
+**M2:** Unit-Tests für `contains()`/`path_length_inside()` gegen analytisch bekannte Werte, gebaut
+aus den vorhandenen Nodes: Scheibe und Slab als Wedge mit planaren Flächen und kreisförmiger bzw.
+rechteckiger Apertur, gekrümmter Fall als Linse. Zusätzlich ein Test, dass `path_length_inside` mit
+der Weglänge übereinstimmt, die der bestehende Zwei-Flächen-Durchgang liefert.
 
-**M3:** Ein Test, der über `node_types()` iteriert und prüft, dass genau die vier Volumen-Typen
+**M3:** Ein Test, der über `node_types()` iteriert und prüft, dass genau die drei Volumen-Typen
 `as_volume().is_some()` liefern — der Ersatz für den heutigen `amp_config_node_types_are_exhaustive`.
 
 **M4:** Core-Test: ein Dokument mit zwei Szenarien liefert aus einem Analyzer zwei Reports mit

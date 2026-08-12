@@ -1,6 +1,6 @@
 //! various simple helper functions (e.g. number format conversion)
 
-use nalgebra::Point2;
+use nalgebra::{Point2, Point3};
 use num_traits::AsPrimitive;
 use uom::si::f64::Length;
 
@@ -68,6 +68,15 @@ pub fn distance_2d_point(point1: &Point2<Length>, point2: &Point2<Length>) -> Le
     (dx * dx + dy * dy).sqrt()
 }
 
+/// Calculates the 3D Euclidean distance between two nalgebra points.
+#[must_use]
+pub fn distance_3d_point(point1: &Point3<Length>, point2: &Point3<Length>) -> Length {
+    let dx = point1.x - point2.x;
+    let dy = point1.y - point2.y;
+    let dz = point1.z - point2.z;
+    (dx * dx + dy * dy + dz * dz).sqrt()
+}
+
 #[cfg(test)]
 mod test {
     use super::*; // Use super to import from the parent module
@@ -110,6 +119,27 @@ mod test {
         assert_abs_diff_eq!(
             distance_2d_point(&p1, &millimeter!(1.0, 1.0)).value,
             millimeter!(f64::sqrt(2.0)).value
+        );
+    }
+
+    #[test]
+    fn distance_3d() {
+        let p1 = millimeter!(0.0, 0.0, 0.0);
+        assert_eq!(
+            distance_3d_point(&p1, &millimeter!(0.0, 0.0, 0.0)),
+            millimeter!(0.0)
+        );
+        assert_eq!(
+            distance_3d_point(&p1, &millimeter!(0.0, 0.0, 1.0)),
+            millimeter!(1.0)
+        );
+        assert_eq!(
+            distance_3d_point(&p1, &millimeter!(0.0, 0.0, -1.0)),
+            millimeter!(1.0)
+        );
+        assert_abs_diff_eq!(
+            distance_3d_point(&p1, &millimeter!(1.0, 1.0, 1.0)).value,
+            millimeter!(f64::sqrt(3.0)).value
         );
     }
 }

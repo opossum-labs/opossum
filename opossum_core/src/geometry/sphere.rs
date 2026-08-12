@@ -133,6 +133,18 @@ impl GeoSurface for Sphere {
             normal,
         ))
     }
+    fn is_behind_do(&self, point: &Point3<Length>) -> bool {
+        // The local origin is the center of the sphere, so the surface is the ball of |radius|.
+        // For a convex surface (positive radius) the center of the sphere lies behind the surface,
+        // for a concave one (negative radius) in front of it. The comparison includes the surface
+        // itself in both cases.
+        let distance_from_center = point.coords.map(|c| c.value).norm();
+        if self.radius.is_sign_positive() {
+            distance_from_center <= self.radius.value
+        } else {
+            distance_from_center >= -self.radius.value
+        }
+    }
     fn set_isometry(&mut self, isometry: Isometry) {
         let anchor_isometry = Isometry::new(
             Point3::new(Length::zero(), Length::zero(), self.radius),
@@ -169,6 +181,32 @@ mod test {
     use super::*;
     use crate::{joule, millimeter, nanometer};
     use approx::assert_abs_diff_eq;
+
+    #[test]
+    fn is_behind_convex() -> OpmResult<()> {
+        // vertex at z = 0, center of curvature at z = +50 mm
+        let s = Sphere::new_at_position(millimeter!(50.0), millimeter!(0.0, 0.0, 0.0))?;
+        assert!(s.is_behind(&millimeter!(0.0, 0.0, 1.0)));
+        // a point exactly on the surface counts as behind it
+        assert!(s.is_behind(&millimeter!(0.0, 0.0, 0.0)));
+        assert!(!s.is_behind(&millimeter!(0.0, 0.0, -1.0)));
+        // the sag at x = 10 mm is 50 - sqrt(50^2 - 10^2) = 1.0102 mm
+        assert!(s.is_behind(&millimeter!(10.0, 0.0, 1.1)));
+        assert!(!s.is_behind(&millimeter!(10.0, 0.0, 0.9)));
+        Ok(())
+    }
+    #[test]
+    fn is_behind_concave() -> OpmResult<()> {
+        // vertex at z = 0, center of curvature at z = -50 mm
+        let s = Sphere::new_at_position(millimeter!(-50.0), millimeter!(0.0, 0.0, 0.0))?;
+        assert!(s.is_behind(&millimeter!(0.0, 0.0, 1.0)));
+        assert!(s.is_behind(&millimeter!(0.0, 0.0, 0.0)));
+        assert!(!s.is_behind(&millimeter!(0.0, 0.0, -1.0)));
+        // the sag at x = 10 mm now points towards -z
+        assert!(s.is_behind(&millimeter!(10.0, 0.0, -0.9)));
+        assert!(!s.is_behind(&millimeter!(10.0, 0.0, -1.1)));
+        Ok(())
+    }
 
     #[test]
     fn new() -> OpmResult<()> {
