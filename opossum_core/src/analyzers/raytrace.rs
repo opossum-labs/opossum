@@ -9,6 +9,7 @@ use crate::{
     degree,
     error::{OpmResult, OpossumError},
     light::{LightResult, Rays, lightdata::ray_data_builder::RayDataBuilder},
+    material::MATERIAL,
     nodes::NodeGroup,
     picojoule,
     properties::Proptype,
@@ -236,12 +237,10 @@ pub trait AnalysisRayTrace: OpticNode {
         &self,
         node_attr: &NodeAttr,
     ) -> OpmResult<(RefractiveIndexType, Length, Angle)> {
-        let Ok(Proptype::RefractiveIndex(index_model)) = node_attr.get_property("refractive index")
-        else {
-            return Err(OpossumError::Analysis(
-                "cannot read refractive index".into(),
-            ));
+        let Ok(Proptype::Material(material)) = node_attr.get_property(MATERIAL) else {
+            return Err(OpossumError::Analysis("cannot read material".into()));
         };
+        let index_model = material.refractive_index();
         let Ok(Proptype::Length(center_thickness)) = node_attr.get_property("center thickness")
         else {
             return Err(OpossumError::Analysis(

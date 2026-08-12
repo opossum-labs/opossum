@@ -23,6 +23,19 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum::EnumIter;
 
+/// Name of the property that carries the [`Material`] of a node with a volume.
+///
+/// Up to and including OPOSSUM 0.7.2 the same slot held a bare refractive index model under the
+/// name `refractive index`; see [`LEGACY_REFRACTIVE_INDEX`].
+pub const MATERIAL: &str = "material";
+
+/// Name the [`MATERIAL`] property had before it carried a whole [`Material`].
+///
+/// Kept so that `.opm` files written by an older OPOSSUM can be migrated on load — without that,
+/// [`Properties::update`](crate::properties::Properties::update) would silently drop the old key
+/// and the node would fall back to its default material.
+pub const LEGACY_REFRACTIVE_INDEX: &str = "refractive index";
+
 /// A physical quantity a [`Material`] can supply to a physics model.
 ///
 /// This is the vocabulary shared by the two sides of the material contract: a material declares

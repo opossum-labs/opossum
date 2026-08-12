@@ -8,12 +8,36 @@ pub use property::Property;
 pub use proptype::Proptype;
 
 use crate::error::{OpmResult, OpossumError};
+use crate::material::{LEGACY_REFRACTIVE_INDEX, MATERIAL, Material};
 use crate::properties::validator::Validator;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 use crate::reporting::html_report::HtmlProperty;
+
+/// Carry properties of older `.opm` files over to the name they have today.
+///
+/// A node created from an `.opm` file is built as a default node first and then updated with the
+/// deserialized properties. Since [`Properties::update`] silently ignores keys the default node
+/// does not know, a renamed property would leave the node on its default value — a data loss
+/// without any error message. This function closes that gap and is the one place where such
+/// renames are recorded.
+///
+/// # Arguments
+///
+/// * `props` - the freshly deserialized properties, modified in place.
+fn migrate_legacy_properties(props: &mut BTreeMap<String, Property>) {
+    // `refractive index` (a bare index model) became `material` (a `Material` wrapping it).
+    if let Some(legacy) = props.remove(LEGACY_REFRACTIVE_INDEX)
+        && !props.contains_key(MATERIAL)
+        && let Proptype::RefractiveIndex(index) = legacy.prop()
+        && let Ok(material) =
+            Property::new(Material::new(index.clone()).into(), String::new(), None)
+    {
+        props.insert(MATERIAL.to_string(), material);
+    }
+}
 
 /// A general set of (optical) properties.
 ///
@@ -34,10 +58,28 @@ use crate::reporting::html_report::HtmlProperty;
 /// # Ok(())
 /// # }
 /// ```
-#[derive(Default, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Default, Serialize, Debug, Clone, PartialEq)]
 #[serde(transparent)]
 pub struct Properties {
     props: BTreeMap<String, Property>,
+}
+impl<'de> Deserialize<'de> for Properties {
+    /// Deserialize [`Properties`] and migrate properties stored under an older name.
+    ///
+    /// This is the deserialization counterpart of the transparent `Serialize` derive: it reads the
+    /// same plain map, but runs [`migrate_legacy_properties`] on it before handing it out.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the underlying map of properties cannot be read.
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let mut props = BTreeMap::<String, Property>::deserialize(deserializer)?;
+        migrate_legacy_properties(&mut props);
+        Ok(Self { props })
+    }
 }
 impl Properties {
     /// Create a new property with the given name.
@@ -205,7 +247,10 @@ impl<'a> IntoIterator for &'a Properties {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::utils::test_helper::test_helper::check_logs;
+    use crate::{
+        refractive_index::{RefrIndexConst, RefractiveIndexType},
+        utils::test_helper::test_helper::check_logs,
+    };
     use assert_matches::assert_matches;
     use log::Level;
     #[test]
@@ -245,6 +290,50 @@ mod test {
         assert_eq!(props.is_empty(), true);
         props.create("my prop", "my description", 1.into())?;
         assert_eq!(props.is_empty(), false);
+        Ok(())
+    }
+    #[test]
+    fn deserialize_migrates_legacy_refractive_index() -> OpmResult<()> {
+        let props: Properties = ron::from_str(
+            r#"{"refractive index": RefractiveIndex(Const((refractive_index: 2.0)))}"#,
+        )
+        .map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert!(!props.contains(LEGACY_REFRACTIVE_INDEX));
+        let Proptype::Material(material) = props.get(MATERIAL)? else {
+            panic!("the legacy property was not migrated to a material")
+        };
+        assert_eq!(
+            *material.refractive_index(),
+            RefractiveIndexType::Const(RefrIndexConst::new(2.0)?)
+        );
+        Ok(())
+    }
+    #[test]
+    fn deserialize_keeps_an_existing_material() -> OpmResult<()> {
+        // Should both names ever show up side by side, the already migrated value wins.
+        let props: Properties = ron::from_str(
+            r#"{
+                "refractive index": RefractiveIndex(Const((refractive_index: 2.0))),
+                "material": Material((refractive_index: Const((refractive_index: 3.0)))),
+            }"#,
+        )
+        .map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert!(!props.contains(LEGACY_REFRACTIVE_INDEX));
+        let Proptype::Material(material) = props.get(MATERIAL)? else {
+            panic!("expected a material property")
+        };
+        assert_eq!(
+            *material.refractive_index(),
+            RefractiveIndexType::Const(RefrIndexConst::new(3.0)?)
+        );
+        Ok(())
+    }
+    #[test]
+    fn deserialize_leaves_other_properties_untouched() -> OpmResult<()> {
+        let props: Properties = ron::from_str(r#"{"my float": F64(3.14)}"#)
+            .map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert_eq!(props.nr_of_props(), 1);
+        assert_matches!(props.get("my float")?, &Proptype::F64(_));
         Ok(())
     }
     #[test]

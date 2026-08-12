@@ -368,12 +368,15 @@ mod test {
             ghostfocus::GhostFocusAnalyzer, raytrace::RayTracingAnalyzer,
         },
         core_optics::{Alignable, OpticNode, node_attr::HasNodeAttr},
-        degree, joule, millimeter, nanometer,
+        degree, joule,
+        material::MATERIAL,
+        millimeter, nanometer,
         nodes::round_collimated_ray_builder,
         prelude::*,
         refractive_index::RefrIndexConst,
         utils::test_helper::test_helper::check_logs,
     };
+    use approx::assert_relative_eq;
     use std::{
         path::PathBuf,
         sync::{Arc, Mutex},
@@ -677,6 +680,73 @@ mod test {
             ],
         );
 
+        Ok(())
+    }
+    /// Regression test for the `refractive index` -> `material` property rename.
+    ///
+    /// A node is rebuilt from its default and then updated with the properties read from the file.
+    /// Since `Properties::update` silently skips keys the default node does not know, an `.opm`
+    /// written before the rename would come back with the *default* material (n = 1.5) instead of
+    /// the index it was saved with — a data loss without any error message. Without the migration
+    /// hook in `Properties::deserialize` this test fails on the very first assertion.
+    #[test]
+    fn legacy_refractive_index_is_migrated_to_material() -> OpmResult<()> {
+        // An `.opm` as written by OPOSSUM <= 0.7.2: a lens with a bare `refractive index` property
+        // whose value (2.0) differs from the lens default (1.5).
+        let ron_data = r#"#![enable(unwrap_variant_newtypes)]
+(
+    opm_file_version: "0",
+    scenery: {
+        "node_type": "group",
+        "name": "test",
+        "uuid": "6f0d3b1c-3c1a-4c8e-9b3e-1f2a3b4c5d6e",
+        "graph": (
+            nodes: [
+                {
+                    "node_type": "lens",
+                    "name": "old lens",
+                    "uuid": "1a2b3c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d",
+                    "props": {
+                        "refractive index": RefractiveIndex(Const(refractive_index: 2.0)),
+                    },
+                },
+            ],
+            edges: [],
+        ),
+    },
+    global: (
+        ambient_refr_index: Const(
+            refractive_index: 1.0,
+        ),
+    ),
+)"#;
+        let lens_id = Uuid::parse_str("1a2b3c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d")
+            .map_err(|e| OpossumError::Other(e.to_string()))?;
+        let refractive_index_of = |document: &OpmDocument| -> OpmResult<f64> {
+            let (lens, _) = document.scenery().node_recursive(lens_id)?;
+            // The lock is released at the end of this statement, the material is owned from here on.
+            let property = lens
+                .optical_ref
+                .lock_opm()?
+                .node_attr()
+                .get_property(MATERIAL)
+                .cloned();
+            let Ok(Proptype::Material(material)) = property else {
+                return Err(OpossumError::Other("lens has no material property".into()));
+            };
+            material
+                .refractive_index()
+                .get_refractive_index(nanometer!(1000.0))
+        };
+
+        // The index of the pre-rename file must survive the load instead of falling back to the
+        // lens default of 1.5.
+        let document = OpmDocument::from_string(ron_data)?;
+        assert_relative_eq!(refractive_index_of(&document)?, 2.0);
+
+        // Saving and reloading writes the migrated property under its new name and keeps the value.
+        let reloaded = OpmDocument::from_string(&document.to_opm_file_string()?)?;
+        assert_relative_eq!(refractive_index_of(&reloaded)?, 2.0);
         Ok(())
     }
     #[test]

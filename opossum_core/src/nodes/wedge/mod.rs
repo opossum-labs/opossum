@@ -9,6 +9,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     gain::{AMP_CONFIG, GainModel},
     geometry::{Plane, geo_surface::GeoSurfaceRef},
+    material::{MATERIAL, Material},
     millimeter,
     nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
@@ -42,7 +43,7 @@ inventory::submit! {
 ///   - `name`
 ///   - `inverted`
 ///   - `center thickness`
-///   - `refractive index`
+///   - `material`
 ///   - `wedge`
 pub struct Wedge {
     node_attr: NodeAttr,
@@ -65,9 +66,12 @@ impl Default for Wedge {
             .unwrap();
         node_attr
             .create_property(
-                "refractive index",
-                "refractive index of the lens material",
-                RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()).into(),
+                MATERIAL,
+                "material the wedge is made of",
+                Material::new(RefractiveIndexType::Const(
+                    RefrIndexConst::new(1.5).unwrap(),
+                ))
+                .into(),
             )
             .unwrap();
         node_attr
@@ -126,7 +130,7 @@ impl Wedge {
 
         wedge
             .node_attr
-            .set_property("refractive index", refractive_index.into().into())?;
+            .set_property(MATERIAL, Material::from(refractive_index.into()).into())?;
         wedge.node_attr.set_property("wedge", wedge_angle.into())?;
         wedge.update_surfaces()?;
         Ok(wedge)
@@ -216,15 +220,15 @@ mod test {
         } else {
             assert!(false, "could not read angle.");
         }
-        if let Ok(Proptype::RefractiveIndex(p)) = node.properties().get("refractive index") {
-            if let RefractiveIndexType::Const(val) = &p {
+        if let Ok(Proptype::Material(p)) = node.properties().get(MATERIAL) {
+            if let RefractiveIndexType::Const(val) = p.refractive_index() {
                 let idx = val.get_refractive_index(nanometer!(1000.0))?;
                 assert_eq!(idx, 1.5);
             } else {
                 assert!(false, "could not read refractive index constant.");
             }
         } else {
-            assert!(false, "could not read refractive index.");
+            assert!(false, "could not read material.");
         }
         Ok(())
     }
@@ -347,15 +351,15 @@ mod test {
         } else {
             assert!(false, "could not read angle.");
         }
-        if let Ok(Proptype::RefractiveIndex(p)) = n.properties().get("refractive index") {
-            if let RefractiveIndexType::Const(val) = &p {
+        if let Ok(Proptype::Material(p)) = n.properties().get(MATERIAL) {
+            if let RefractiveIndexType::Const(val) = p.refractive_index() {
                 let idx = val.get_refractive_index(nanometer!(1000.0))?;
                 assert_eq!(idx, 1.0);
             } else {
                 assert!(false, "could not read refractive index constant.");
             }
         } else {
-            assert!(false, "could not read refractive index.");
+            assert!(false, "could not read material.");
         }
         Ok(())
     }

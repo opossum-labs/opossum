@@ -9,6 +9,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     gain::{AMP_CONFIG, GainModel},
     geometry::{Cylinder, Plane, geo_surface::GeoSurfaceRef},
+    material::{MATERIAL, Material},
     meter, millimeter,
     nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
@@ -49,7 +50,7 @@ inventory::submit! {
 ///   - `front curvature`
 ///   - `rear curvature`
 ///   - `center thickness`
-///   - `refractive index`
+///   - `material`
 pub struct CylindricLens {
     node_attr: NodeAttr,
 }
@@ -91,9 +92,12 @@ impl Default for CylindricLens {
             .unwrap();
         node_attr
             .create_property(
-                "refractive index",
-                "refractive index of the lens material",
-                RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()).into(),
+                MATERIAL,
+                "material the lens is made of",
+                Material::new(RefractiveIndexType::Const(
+                    RefrIndexConst::new(1.5).unwrap(),
+                ))
+                .into(),
             )
             .unwrap();
         node_attr
@@ -140,7 +144,7 @@ impl CylindricLens {
             .set_property("center thickness", center_thickness.into())?;
         cyl_lens
             .node_attr
-            .set_property("refractive index", refractive_index.into().into())?;
+            .set_property(MATERIAL, Material::from(refractive_index.into()).into())?;
         cyl_lens.update_surfaces()?;
         Ok(cyl_lens)
     }
@@ -257,11 +261,15 @@ mod test {
             panic!()
         };
         assert_eq!(*ct, millimeter!(10.0));
-        let Ok(Proptype::RefractiveIndex(index)) = node.node_attr.get_property("refractive index")
-        else {
+        let Ok(Proptype::Material(material)) = node.node_attr.get_property(MATERIAL) else {
             panic!()
         };
-        assert_eq!((*index).get_refractive_index(Length::zero())?, 1.5);
+        assert_eq!(
+            material
+                .refractive_index()
+                .get_refractive_index(Length::zero())?,
+            1.5
+        );
         Ok(())
     }
     #[test]
@@ -312,15 +320,13 @@ mod test {
             panic!()
         };
         assert_eq!(*ct, millimeter!(11.0));
-        let Ok(Proptype::RefractiveIndex(RefractiveIndexType::Const(ref_index_const))) =
-            node.node_attr.get_property("refractive index")
-        else {
+        let Ok(Proptype::Material(material)) = node.node_attr.get_property(MATERIAL) else {
             panic!()
         };
-        assert_eq!(
-            (*ref_index_const).get_refractive_index(Length::zero())?,
-            2.0
-        );
+        let RefractiveIndexType::Const(ref_index_const) = material.refractive_index() else {
+            panic!()
+        };
+        assert_eq!(ref_index_const.get_refractive_index(Length::zero())?, 2.0);
         Ok(())
     }
     #[test]
