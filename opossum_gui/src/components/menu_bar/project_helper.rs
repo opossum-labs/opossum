@@ -64,7 +64,7 @@ pub async fn select_folder_path() -> Option<PathBuf> {
     }
 }
 
-/// Abstracted method to save OPM content to disk or trigger a browser download 
+/// Abstracted method to save OPM content to disk or trigger a browser download
 /// based on the compilation target (Desktop vs. WASM).
 pub async fn save_opm_data(path: &Path, content: &str) -> Result<(), String> {
     #[cfg(not(target_arch = "wasm32"))]
@@ -146,7 +146,7 @@ pub async fn save_opm_data(path: &Path, content: &str) -> Result<(), String> {
         "#;
 
         let mut eval_handle = eval(script);
-        
+
         // Send the required data (filename and content) to the JavaScript context
         eval_handle
             .send(serde_json::json!({
