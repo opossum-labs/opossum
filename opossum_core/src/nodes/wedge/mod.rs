@@ -68,7 +68,7 @@ impl Default for Wedge {
             .create_property(
                 MATERIAL,
                 "material the wedge is made of",
-                Material::new(RefractiveIndexType::Const(
+                Material::RefractiveIndex(RefractiveIndexType::Const(
                     RefrIndexConst::new(1.5).unwrap(),
                 ))
                 .into(),

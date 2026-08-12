@@ -91,7 +91,7 @@ impl Default for Lens {
             .create_property(
                 MATERIAL,
                 "material the lens is made of",
-                Material::new(RefractiveIndexType::Const(
+                Material::RefractiveIndex(RefractiveIndexType::Const(
                     RefrIndexConst::new(1.5).unwrap(),
                 ))
                 .into(),

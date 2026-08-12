@@ -162,7 +162,11 @@ impl Proptype {
                 }
                 Self::Metertype(value) => template_engine.render("simple", &value.to_string()),
                 Self::GainModel(value) => template_engine.render("simple", &value.to_string()),
-                Self::Material(value) => template_engine.render("simple", &value.to_string()),
+                // A report reader wants the model that was used, not the way it was selected, so
+                // this renders the index model rather than the material's own display name.
+                Self::Material(value) => {
+                    template_engine.render("simple", &value.refractive_index().to_string())
+                }
                 Self::Spectrum(_)
                 | Self::HitMap(_)
                 | Self::RayPositionHistory(_)

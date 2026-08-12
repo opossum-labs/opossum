@@ -10,8 +10,8 @@ pub use proptype::Proptype;
 use crate::error::{OpmResult, OpossumError};
 use crate::material::{LEGACY_REFRACTIVE_INDEX, MATERIAL, Material};
 use crate::properties::validator::Validator;
+use indexmap::IndexMap;
 use serde::{Deserialize, Deserializer, Serialize};
-use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 use crate::reporting::html_report::HtmlProperty;
@@ -27,13 +27,16 @@ use crate::reporting::html_report::HtmlProperty;
 /// # Arguments
 ///
 /// * `props` - the freshly deserialized properties, modified in place.
-fn migrate_legacy_properties(props: &mut BTreeMap<String, Property>) {
+fn migrate_legacy_properties(props: &mut IndexMap<String, Property>) {
     // `refractive index` (a bare index model) became `material` (a `Material` wrapping it).
-    if let Some(legacy) = props.remove(LEGACY_REFRACTIVE_INDEX)
+    if let Some(legacy) = props.shift_remove(LEGACY_REFRACTIVE_INDEX)
         && !props.contains_key(MATERIAL)
         && let Proptype::RefractiveIndex(index) = legacy.prop()
-        && let Ok(material) =
-            Property::new(Material::new(index.clone()).into(), String::new(), None)
+        && let Ok(material) = Property::new(
+            Material::RefractiveIndex(index.clone()).into(),
+            String::new(),
+            None,
+        )
     {
         props.insert(MATERIAL.to_string(), material);
     }
@@ -43,6 +46,11 @@ fn migrate_legacy_properties(props: &mut BTreeMap<String, Property>) {
 ///
 /// The property system is used for storing node specific parameters (such as focal length, splitting ratio, filter curve, etc ...).
 /// Properties have to be created once before they can be set and used.
+///
+/// Properties keep the order in which they were created, because that is the order a node author
+/// chose and the order every listing shows them in (property editor, report, `.opm` file). Sorting
+/// them by name instead would tear apart what belongs together — a lens would list its front and
+/// rear curvature with unrelated properties in between.
 ///
 /// ## Example
 /// ```rust
@@ -61,7 +69,7 @@ fn migrate_legacy_properties(props: &mut BTreeMap<String, Property>) {
 #[derive(Default, Serialize, Debug, Clone, PartialEq)]
 #[serde(transparent)]
 pub struct Properties {
-    props: BTreeMap<String, Property>,
+    props: IndexMap<String, Property>,
 }
 impl<'de> Deserialize<'de> for Properties {
     /// Deserialize [`Properties`] and migrate properties stored under an older name.
@@ -76,7 +84,7 @@ impl<'de> Deserialize<'de> for Properties {
     where
         D: Deserializer<'de>,
     {
-        let mut props = BTreeMap::<String, Property>::deserialize(deserializer)?;
+        let mut props = IndexMap::<String, Property>::deserialize(deserializer)?;
         migrate_legacy_properties(&mut props);
         Ok(Self { props })
     }
@@ -164,8 +172,8 @@ impl Properties {
             .iter()
             .map(move |(s, p)| (format!("{node_report_id_str}_{s}"), p))
     }
-    /// Returns the iter of this [`Properties`].
-    pub fn iter(&self) -> std::collections::btree_map::Iter<'_, String, Property> {
+    /// Returns the iter of this [`Properties`], in the order the properties were created.
+    pub fn iter(&self) -> indexmap::map::Iter<'_, String, Property> {
         self.props.iter()
     }
     #[must_use]
@@ -238,7 +246,7 @@ impl Properties {
 }
 
 impl<'a> IntoIterator for &'a Properties {
-    type IntoIter = std::collections::btree_map::Iter<'a, String, Property>;
+    type IntoIter = indexmap::map::Iter<'a, String, Property>;
     type Item = (&'a std::string::String, &'a Property);
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
@@ -293,6 +301,24 @@ mod test {
         Ok(())
     }
     #[test]
+    fn iteration_follows_creation_order() -> OpmResult<()> {
+        // Every listing of a node's properties (editor, report, `.opm` file) iterates here, so the
+        // order a node author declares its properties in is the order the user sees. Sorting by
+        // name would put e.g. a lens' `material` between its `front curvature` and `rear curvature`.
+        let mut props = Properties::default();
+        props.create("front curvature", "", 1.0.into())?;
+        props.create("rear curvature", "", 2.0.into())?;
+        props.create("material", "", 3.0.into())?;
+        assert_eq!(
+            props
+                .iter()
+                .map(|(name, _)| name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["front curvature", "rear curvature", "material"]
+        );
+        Ok(())
+    }
+    #[test]
     fn deserialize_migrates_legacy_refractive_index() -> OpmResult<()> {
         let props: Properties = ron::from_str(
             r#"{"refractive index": RefractiveIndex(Const((refractive_index: 2.0)))}"#,
@@ -314,7 +340,7 @@ mod test {
         let props: Properties = ron::from_str(
             r#"{
                 "refractive index": RefractiveIndex(Const((refractive_index: 2.0))),
-                "material": Material((refractive_index: Const((refractive_index: 3.0)))),
+                "material": Material(RefractiveIndex(Const((refractive_index: 3.0)))),
             }"#,
         )
         .map_err(|e| OpossumError::Other(e.to_string()))?;

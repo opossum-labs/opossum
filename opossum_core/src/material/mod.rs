@@ -2,9 +2,11 @@
 //! The material an optical component with a volume is made of.
 //!
 //! A [`Material`] is the single place where everything a physics model needs to know about the
-//! *substance* inside a component lives. Today that is only the wavelength-dependent refractive
-//! index; spectroscopic data (emission/absorption cross sections, fluorescence lifetime, dopant
-//! density) are added as optional fields as soon as a model actually reads them.
+//! *substance* inside a component lives. Today it can only be defined the way it always was — by a
+//! hand-written refractive index model. Spectroscopic data (emission/absorption cross sections,
+//! fluorescence lifetime, dopant density) arrive as further *variants*: a named substance from a
+//! material library brings its own data along, instead of every material growing optional fields
+//! that are empty for most of them.
 //!
 //! # Why a material and not a bare refractive index
 //!
@@ -14,11 +16,14 @@
 //! so a model can be rejected with a comprehensible message instead of silently computing with a
 //! missing quantity.
 //!
-//! The concrete data are meant to come from a separate, generic material library later on. This
-//! module therefore only fixes the *interface* ([`Material`] and [`MaterialProperty`]); which
+//! The concrete substances are meant to come from a separate, generic material library later on.
+//! This module therefore only fixes the *interface* ([`Material`] and [`MaterialProperty`]); which
 //! substances exist and where their numbers come from is deliberately left open.
 
-use crate::{properties::Proptype, refractive_index::RefractiveIndexType};
+use crate::{
+    properties::Proptype, refractive_index::RefractiveIndexType,
+    utils::default_from_name::DefaultFromName,
+};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum::EnumIter;
@@ -57,31 +62,35 @@ impl Display for MaterialProperty {
 
 /// The material an optical component with a volume is made of.
 ///
-/// A [`Material`] always carries a refractive index model, which is why every component that has a
-/// material can be ray-traced. Everything beyond that is optional and has to be queried through
-/// [`Material::provides`] before it is used.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct Material {
-    refractive_index: RefractiveIndexType,
+/// The variants are the different *ways to define* a material, which is what a user picks first:
+/// either the substance is described by hand — today only by its refractive index — or, once a
+/// material library exists, it is a named substance that brings its own data along. Every variant
+/// can supply a refractive index, which is why every component with a material can be ray-traced;
+/// everything beyond that has to be queried through [`Material::provides`] before it is used.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnumIter)]
+#[non_exhaustive]
+pub enum Material {
+    /// A material described by nothing but a hand-written refractive index model n(λ).
+    ///
+    /// This is what OPOSSUM always had: enough to refract a ray, and nothing else.
+    RefractiveIndex(RefractiveIndexType),
+}
+impl Default for Material {
+    /// A material given by the default refractive index model.
+    fn default() -> Self {
+        Self::RefractiveIndex(RefractiveIndexType::default())
+    }
 }
 impl Material {
-    /// Create a new [`Material`] with the given refractive index model.
-    ///
-    /// # Arguments
-    ///
-    /// * `refractive_index` - the refractive index model n(λ) of the material.
-    ///
-    /// # Returns
-    ///
-    /// The new [`Material`].
-    #[must_use]
-    pub const fn new(refractive_index: RefractiveIndexType) -> Self {
-        Self { refractive_index }
-    }
     /// Return the refractive index model n(λ) of this [`Material`].
+    ///
+    /// Every way of defining a material has to be able to answer this, so this is an accessor and
+    /// not a [`MaterialProperty`] that could be missing.
     #[must_use]
     pub const fn refractive_index(&self) -> &RefractiveIndexType {
-        &self.refractive_index
+        match self {
+            Self::RefractiveIndex(refractive_index) => refractive_index,
+        }
     }
     /// Return the [`MaterialProperty`] values this [`Material`] can supply.
     ///
@@ -91,23 +100,27 @@ impl Material {
     ///
     /// # Returns
     ///
-    /// The properties this material carries. Currently always exactly the refractive index — the
-    /// list becomes value-dependent as soon as the first optional datum exists.
+    /// The properties this material carries. A hand-written index model carries exactly the
+    /// refractive index; a substance from a material library will carry more.
     #[must_use]
-    #[allow(clippy::unused_self)] // the set depends on which optional data a material carries
     pub const fn provides(&self) -> &'static [MaterialProperty] {
-        &[MaterialProperty::RefractiveIndex]
+        match self {
+            Self::RefractiveIndex(_) => &[MaterialProperty::RefractiveIndex],
+        }
     }
 }
 impl Display for Material {
-    /// Describe the material by its refractive index model, the only datum it carries so far.
+    /// Name the way this material is defined — this is what the selector in the GUI shows.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.refractive_index)
+        match self {
+            Self::RefractiveIndex(_) => write!(f, "Refractive index"),
+        }
     }
 }
+impl DefaultFromName for Material {}
 impl From<RefractiveIndexType> for Material {
     fn from(refractive_index: RefractiveIndexType) -> Self {
-        Self::new(refractive_index)
+        Self::RefractiveIndex(refractive_index)
     }
 }
 impl From<Material> for Proptype {
@@ -125,6 +138,7 @@ mod test {
         refractive_index::RefrIndexConst,
     };
     use approx::assert_relative_eq;
+    use strum::IntoEnumIterator;
 
     #[test]
     fn default_material_is_the_default_index_model() {
@@ -134,8 +148,9 @@ mod test {
         );
     }
     #[test]
-    fn new_keeps_the_given_index_model() -> OpmResult<()> {
-        let material = Material::new(RefractiveIndexType::Const(RefrIndexConst::new(1.5)?));
+    fn refractive_index_variant_keeps_its_index_model() -> OpmResult<()> {
+        let material =
+            Material::RefractiveIndex(RefractiveIndexType::Const(RefrIndexConst::new(1.5)?));
         assert_relative_eq!(
             material
                 .refractive_index()
@@ -143,6 +158,19 @@ mod test {
             1.5
         );
         Ok(())
+    }
+    #[test]
+    fn every_variant_is_reachable_by_name() {
+        // The GUI builds its material selector from the variant names, so each name must recreate
+        // its variant - otherwise a selectable entry would silently do nothing.
+        for variant in Material::iter() {
+            assert_eq!(
+                Material::default_from_name(&variant.to_string()),
+                Some(variant.clone()),
+                "variant {variant} cannot be recreated from its display name"
+            );
+        }
+        assert_eq!(Material::default_from_name("does not exist"), None);
     }
     #[test]
     fn provides_the_refractive_index() {
@@ -159,13 +187,16 @@ mod test {
         );
     }
     #[test]
-    fn fmt_shows_the_index_model() {
-        assert_eq!(format!("{}", Material::default()), "Sellmeier equation");
+    fn fmt_names_the_way_the_material_is_defined() {
+        assert_eq!(format!("{}", Material::default()), "Refractive index");
     }
     #[test]
     fn from_refractive_index_type() -> OpmResult<()> {
         let index = RefractiveIndexType::Const(RefrIndexConst::new(1.5)?);
-        assert_eq!(Material::from(index.clone()), Material::new(index));
+        assert_eq!(
+            Material::from(index.clone()),
+            Material::RefractiveIndex(index)
+        );
         Ok(())
     }
     #[test]
@@ -177,7 +208,8 @@ mod test {
     }
     #[test]
     fn serde_roundtrip() -> OpmResult<()> {
-        let material = Material::new(RefractiveIndexType::Const(RefrIndexConst::new(1.5)?));
+        let material =
+            Material::RefractiveIndex(RefractiveIndexType::Const(RefrIndexConst::new(1.5)?));
         let serialized =
             ron::to_string(&material).map_err(|e| OpossumError::Other(e.to_string()))?;
         let deserialized: Material =

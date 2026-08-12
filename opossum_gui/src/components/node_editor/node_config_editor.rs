@@ -93,12 +93,12 @@ pub fn NodeConfigEditor(
                 }
             },
             None => rsx! {
-                div { "No node selected" }
+                div { class: "noselect","No node selected" }
             },
         }
     } else if displayed_nodes.len() == 0 {
         rsx! {
-            div { "No node selected" }
+            div { class: "noselect","No node selected" }
         }
     } else {
         rsx! {

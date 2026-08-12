@@ -156,7 +156,7 @@ pub fn AnalyzerNodeEditor(
         }
         _ => {
             rsx! {
-                div { "No node selected" }
+                div { class: "noselect","No node selected" }
             }
         }
     }

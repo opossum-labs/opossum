@@ -189,6 +189,54 @@ pub mod test_helper {
         Ok(())
     }
 
+    /// Remove one property entry from a serialized node, key and value.
+    ///
+    /// Used to turn a freshly written node into what a file written before that property existed
+    /// looks like. The entry is cut out by scanning for the first comma that is not nested inside
+    /// the value (or for the end of the property map, if the entry is the last one), so it works no
+    /// matter where in the map the property sits. It assumes the value contains no string literal
+    /// with brackets or commas in it, which holds for every property this is used on.
+    ///
+    /// # Arguments
+    ///
+    /// * `serialized` - the serialized node.
+    /// * `property_name` - name of the property to remove.
+    ///
+    /// # Returns
+    ///
+    /// The serialized node without that property.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the serialized node does not contain the property at all, which would make the
+    /// calling test vacuous.
+    fn remove_property_entry(serialized: &str, property_name: &str) -> String {
+        let entry_start = serialized
+            .find(&format!("\"{property_name}\""))
+            .unwrap_or_else(|| {
+                panic!("serialized node does not contain the {property_name} property")
+            });
+        let mut depth = 0i32;
+        let mut entry_end = serialized.len();
+        for (offset, character) in serialized[entry_start..].char_indices() {
+            match character {
+                '(' | '[' | '{' => depth += 1,
+                ')' | ']' | '}' if depth == 0 => {
+                    // The end of the enclosing property map: this was the last entry.
+                    entry_end = entry_start + offset;
+                    break;
+                }
+                ')' | ']' | '}' => depth -= 1,
+                ',' if depth == 0 => {
+                    entry_end = entry_start + offset + 1;
+                    break;
+                }
+                _ => {}
+            }
+        }
+        format!("{}{}", &serialized[..entry_start], &serialized[entry_end..])
+    }
+
     /// Assert that a file written before the `amp config` property existed still loads.
     ///
     /// Such a file simply has no entry for the property. Because `set_node_attr` merges the
@@ -209,15 +257,7 @@ pub mod test_helper {
             ron::to_string(&optic_ref).map_err(|e| OpossumError::Other(e.to_string()))?;
 
         // Emulate a file written before the property existed by dropping its entry again.
-        let entry_start = serialized
-            .find(&format!("\"{AMP_CONFIG}\""))
-            .expect("serialized node does not contain the amp config property");
-        let entry_end = serialized[entry_start..]
-            .find("),")
-            .map(|offset| entry_start + offset + 2)
-            .expect("could not determine the end of the amp config entry");
-        let without_property =
-            format!("{}{}", &serialized[..entry_start], &serialized[entry_end..]);
+        let without_property = remove_property_entry(&serialized, AMP_CONFIG);
         assert!(
             !without_property.contains(AMP_CONFIG),
             "amp config entry was not removed, the test would be vacuous"

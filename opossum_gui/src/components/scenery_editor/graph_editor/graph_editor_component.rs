@@ -296,7 +296,7 @@ fn SidebarViewSwitcher() -> Element {
                             key: "{title}",
                             r#type: "button",
                             title,
-                            class: if is_open { "sidebar-view-button active" } else { "sidebar-view-button" },
+                            class: if is_open { "noselect sidebar-view-button active" } else { "noselect sidebar-view-button" },
                             onclick: move |_| {
                                 if is_open {
                                     *SIDEBAR_COLLAPSED.write() = true;

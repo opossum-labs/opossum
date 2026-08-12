@@ -22,33 +22,34 @@ use crate::components::node_editor::{
         input_components::{LabeledSelect, RowedInputs},
         select_options_from_enum_iterator,
     },
-    node_config_editor::NodeChangeEvent,
-    optical_node_editor::properties_editor::{
-        on_save_proptype_handler, refractive_index_editor::air_model_editor::AirParam,
-    },
+    optical_node_editor::properties_editor::refractive_index_editor::air_model_editor::AirParam,
 };
-use uuid::Uuid;
 
+/// The model selector plus the selected model's parameter rows for a refractive index n(λ).
+///
+/// This is the index editor itself, not a property editor: it does not know which property it edits
+/// and reports every change through `on_save` instead. That is what lets it be embedded in a
+/// [`MaterialEditor`](super::material_editor::MaterialEditor), which carries the index as one datum
+/// of a whole material rather than as a property of its own.
+///
+/// # Arguments
+///
+/// * `id` - DOM id of the model selector, used to tie its label to it.
+/// * `ref_ind_type` - the index model to show.
+/// * `on_save` - called with the new model whenever the selection or a parameter changes.
+/// * `readonly` - whether the inputs are shown read-only.
 #[component]
 pub fn RefractiveIndexEditor(
-    node_id: Memo<Uuid>,
+    id: String,
     ref_ind_type: RefractiveIndexType,
-    property_key: String,
-    on_change: EventHandler<NodeChangeEvent>,
+    on_save: EventHandler<RefractiveIndexType>,
     readonly: bool,
 ) -> Element {
     let ref_ind_type_sig = use_synced_signal(ref_ind_type);
 
-    let on_save = on_save_proptype_handler(
-        ref_ind_type_sig,
-        property_key.clone(),
-        on_change,
-        node_id.into(),
-    );
-
     rsx! {
         LabeledSelect {
-            id: format!("refractiveIndexProperty{property_key}").to_camel_case(),
+            id: id.to_camel_case(),
             label: "Refractive index definition",
             options: select_options_from_enum_iterator(&*ref_ind_type_sig.read(), None),
             readonly,
