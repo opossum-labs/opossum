@@ -9,11 +9,11 @@ use crate::{
     error::{OpmResult, OpossumError},
     gain::{AMP_CONFIG, GainModel},
     geometry::{Plane, geo_surface::GeoSurfaceRef},
-    material::{MATERIAL, Material},
+    material::Material,
     millimeter,
     nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
-    refractive_index::{RefrIndexConst, RefractiveIndexType},
+    refractive_index::RefrIndexConst,
     utils::geom_transformation::Isometry,
 };
 use nalgebra::Point3;
@@ -66,11 +66,14 @@ impl Default for Wedge {
             .unwrap();
         node_attr
             .create_property(
-                MATERIAL,
-                "material the wedge is made of",
-                Material::RefractiveIndex(RefractiveIndexType::Const(
-                    RefrIndexConst::new(1.5).unwrap(),
-                ))
+                "material",
+                "material of the wedge",
+                Material::new_draft(
+                    "lens material",
+                    None,
+                    None,
+                    RefrIndexConst::new(1.5).unwrap().into(),
+                )
                 .into(),
             )
             .unwrap();
@@ -120,7 +123,7 @@ impl Wedge {
         name: &str,
         center_thickness: Length,
         wedge_angle: Angle,
-        refractive_index: impl Into<RefractiveIndexType>,
+        material: impl Into<Material>,
     ) -> OpmResult<Self> {
         let mut wedge = Self::default();
         wedge.node_attr.set_name(name);
@@ -130,7 +133,7 @@ impl Wedge {
 
         wedge
             .node_attr
-            .set_property(MATERIAL, Material::from(refractive_index.into()).into())?;
+            .set_property("material", material.into().into())?;
         wedge.node_attr.set_property("wedge", wedge_angle.into())?;
         wedge.update_surfaces()?;
         Ok(wedge)
@@ -199,7 +202,8 @@ mod test {
         light::{LightData, LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
         nanometer,
         nodes::test_helper::test_helper::*,
-        properties::Proptype,
+        properties::{Proptype, proptype::AssetRef},
+        refractive_index::RefractiveIndexType,
     };
     use nalgebra::Vector3;
 
@@ -220,8 +224,8 @@ mod test {
         } else {
             assert!(false, "could not read angle.");
         }
-        if let Ok(Proptype::Material(p)) = node.properties().get(MATERIAL) {
-            if let RefractiveIndexType::Const(val) = p.refractive_index() {
+        if let Ok(Proptype::Material(AssetRef::Inline(p))) = node.properties().get("material") {
+            if let RefractiveIndexType::Const(val) = &p.optical.refractive_index {
                 let idx = val.get_refractive_index(nanometer!(1000.0))?;
                 assert_eq!(idx, 1.5);
             } else {
@@ -351,8 +355,8 @@ mod test {
         } else {
             assert!(false, "could not read angle.");
         }
-        if let Ok(Proptype::Material(p)) = n.properties().get(MATERIAL) {
-            if let RefractiveIndexType::Const(val) = p.refractive_index() {
+        if let Ok(Proptype::Material(AssetRef::Inline(p))) = n.properties().get("material") {
+            if let RefractiveIndexType::Const(val) = &p.optical.refractive_index {
                 let idx = val.get_refractive_index(nanometer!(1000.0))?;
                 assert_eq!(idx, 1.0);
             } else {

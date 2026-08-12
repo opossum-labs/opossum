@@ -8,11 +8,14 @@ use crate::{
     core_optics::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
     error::{OpmResult, OpossumError},
     gain::GainModel,
-    light::Spectrum,
-    light::lightdata::{
-        LightData,
-        light_data_builder::LightDataBuilder,
-        ray_data_source::{CollimatedSrc, ImageSrc, PointSrc, RayDataSource},
+    light::{
+        Spectrum,
+        lightdata::{
+            LightData,
+            light_data_builder::LightDataBuilder,
+            ray_data_source::{CollimatedSrc, ImageSrc, PointSrc, RayDataSource},
+        },
+    material::Material,
     },
     material::Material,
     nodes::{
@@ -58,6 +61,16 @@ thread_local! {
             .expect("Failed to add group template (thread-local)");
         tt
     });
+}
+
+/// Wrapper for registry assets that can hold either the full inline data
+/// or a lightweight UUID reference for serialization.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum AssetRef<T> {
+    /// Full in-memory asset struct.
+    Inline(T),
+    /// Lightweight UUID reference.
+    Id(Uuid),
 }
 
 // #[non_exhaustive]
@@ -131,10 +144,10 @@ pub enum Proptype {
     Vec2(Vector2<f64>),
     /// [`LightData`] build configuration
     LightDataBuilder(LightDataBuilder),
+    /// An optical material property
+    Material(AssetRef<Material>),
     /// the amplification model of a node with a volume, see [`GainModel`]
     GainModel(GainModel),
-    /// the substance a node with a volume is made of, see [`Material`]
-    Material(Material),
 }
 impl Proptype {
     /// Generate a html representation of a Proptype.
@@ -203,6 +216,11 @@ impl Proptype {
                 }
                 Self::Energy(value) => {
                     template_engine.render("simple", &format_quantity(joule, *value))
+                }
+                Self::Material(AssetRef::Inline(mat)) => template_engine
+                    .render("simple", &format!("{} (v{})", mat.name(), mat.version())),
+                Self::Material(AssetRef::Id(mat_id)) => {
+                    template_engine.render("simple", &format!("MaterialRef({mat_id})"))
                 }
                 _ => Err(tinytemplate::error::Error::GenericError {
                     msg: "proptype not supported".into(),
@@ -318,6 +336,11 @@ impl From<FilterTypeBuilder> for Proptype {
     }
 }
 
+impl From<Material> for Proptype {
+    fn from(value: Material) -> Self {
+        Self::Material(AssetRef::Inline(value))
+    }
+}
 /// Generate a string suffix for an ordinal number
 #[must_use]
 pub fn count_str(i: usize) -> String {

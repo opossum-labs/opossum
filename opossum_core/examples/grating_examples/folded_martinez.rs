@@ -23,7 +23,7 @@ pub fn folded_martinez(
             millimeter!(515.1),
             millimeter!(f64::INFINITY),
             millimeter!(2.1),
-            refr_index,
+            refr_index.into(),
         )?
         .with_decenter(centimeter!(0., 0., 0.))?,
     )?;

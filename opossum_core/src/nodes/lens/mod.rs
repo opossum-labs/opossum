@@ -7,12 +7,12 @@ use crate::{
     error::{OpmResult, OpossumError},
     gain::{AMP_CONFIG, GainModel},
     geometry::{Plane, Sphere, geo_surface::GeoSurfaceRef},
-    material::{MATERIAL, Material},
+    material::Material,
     meter, millimeter,
     nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
     radian,
-    refractive_index::{RefrIndexConst, RefractiveIndexType},
+    refractive_index::RefrIndexConst,
     utils::geom_transformation::Isometry,
 };
 use log::warn;
@@ -89,19 +89,15 @@ impl Default for Lens {
             .unwrap();
         node_attr
             .create_property(
-                MATERIAL,
-                "material the lens is made of",
-                Material::RefractiveIndex(RefractiveIndexType::Const(
-                    RefrIndexConst::new(1.5).unwrap(),
-                ))
+                "material",
+                "material of the lens",
+                Material::new_draft(
+                    "lens material",
+                    None,
+                    None,
+                    RefrIndexConst::new(1.5).unwrap().into(),
+                )
                 .into(),
-            )
-            .unwrap();
-        node_attr
-            .create_property(
-                AMP_CONFIG,
-                "amplification model of this component (None = passive)",
-                GainModel::default().into(),
             )
             .unwrap();
         let mut lens = Self { node_attr };
@@ -124,7 +120,7 @@ impl Lens {
         front_curvature: Length,
         rear_curvature: Length,
         center_thickness: Length,
-        refractive_index: impl Into<RefractiveIndexType>,
+        material: impl Into<Material>,
     ) -> OpmResult<Self> {
         let mut lens = Self::default();
         lens.node_attr.set_name(name);
@@ -135,7 +131,7 @@ impl Lens {
         lens.node_attr
             .set_property("center thickness", center_thickness.into())?;
         lens.node_attr
-            .set_property(MATERIAL, Material::from(refractive_index.into()).into())?;
+            .set_property("material", material.into().into())?;
         lens.update_surfaces()?;
         Ok(lens)
     }
@@ -323,8 +319,7 @@ mod test {
         light::{LightData, LightResult, Rays},
         millimeter, nanometer,
         nodes::test_helper::test_helper::*,
-        properties::Proptype,
-        refractive_index::RefractiveIndex,
+        properties::{Proptype, proptype::AssetRef},
     };
     use approx::assert_relative_eq;
     use core::f64;
@@ -350,15 +345,12 @@ mod test {
             panic!()
         };
         assert_eq!(*ct, millimeter!(10.0));
-        let Ok(Proptype::Material(material)) = node.node_attr.get_property(MATERIAL) else {
+        let Ok(Proptype::Material(AssetRef::Inline(material))) =
+            node.node_attr.get_property("material")
+        else {
             panic!()
         };
-        assert_eq!(
-            material
-                .refractive_index()
-                .get_refractive_index(Length::zero())?,
-            1.5
-        );
+        assert_eq!((*material).get_refractive_index(Length::zero())?, 1.5);
         Ok(())
     }
     #[test]
@@ -493,13 +485,12 @@ mod test {
             panic!()
         };
         assert_eq!(*ct, millimeter!(11.0));
-        let Ok(Proptype::Material(material)) = node.node_attr.get_property(MATERIAL) else {
+        let Ok(Proptype::Material(AssetRef::Inline(material))) =
+            node.node_attr.get_property("material")
+        else {
             panic!()
         };
-        let RefractiveIndexType::Const(ref_index_const) = material.refractive_index() else {
-            panic!()
-        };
-        assert_eq!(ref_index_const.get_refractive_index(Length::zero())?, 2.0);
+        assert_eq!((*material).get_refractive_index(Length::zero())?, 2.0);
         Ok(())
     }
     #[test]
