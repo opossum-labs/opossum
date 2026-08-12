@@ -20,9 +20,11 @@ pub struct AssetHeader {
     pub name: String,
 
     /// Optional manufacturer or vendor name (e.g., "Schott", "Thorlabs").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub manufacturer: Option<String>,
 
     /// Optional description or notes about the asset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 }
 

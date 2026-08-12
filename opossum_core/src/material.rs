@@ -63,6 +63,7 @@ pub struct MechanicalProperties {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Material {
     /// Shared metadata header (UUID, versioning, name, vendor).
+    #[serde(flatten)]
     pub header: AssetHeader,
 
     /// Primary optical properties.
