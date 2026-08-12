@@ -22,6 +22,7 @@ pub mod gain;
 pub mod generic_validators;
 mod kde;
 pub mod light;
+pub mod material;
 pub mod nodes;
 pub mod opm_document;
 pub mod prelude;

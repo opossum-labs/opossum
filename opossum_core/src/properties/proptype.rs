@@ -14,6 +14,7 @@ use crate::{
         light_data_builder::LightDataBuilder,
         ray_data_source::{CollimatedSrc, ImageSrc, PointSrc, RayDataSource},
     },
+    material::Material,
     nodes::{
         Metertype, SpectrometerType, SplittingConfigBuilder, WaveFrontMap,
         fluence_detector::{Fluence, fluence_data::FluenceData},
@@ -132,6 +133,8 @@ pub enum Proptype {
     LightDataBuilder(LightDataBuilder),
     /// the amplification model of a node with a volume, see [`GainModel`]
     GainModel(GainModel),
+    /// the substance a node with a volume is made of, see [`Material`]
+    Material(Material),
 }
 impl Proptype {
     /// Generate a html representation of a Proptype.
@@ -159,6 +162,7 @@ impl Proptype {
                 }
                 Self::Metertype(value) => template_engine.render("simple", &value.to_string()),
                 Self::GainModel(value) => template_engine.render("simple", &value.to_string()),
+                Self::Material(value) => template_engine.render("simple", &value.to_string()),
                 Self::Spectrum(_)
                 | Self::HitMap(_)
                 | Self::RayPositionHistory(_)
@@ -450,6 +454,10 @@ mod test {
                 0
             )?,
             "Const".to_string()
+        );
+        assert_eq!(
+            Proptype::Material(Material::default()).to_html("id", "property_name", 0)?,
+            "Sellmeier equation".to_string()
         );
         assert_eq!(
             Proptype::WaveFrontData(WaveFrontMap::default())
