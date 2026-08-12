@@ -10,7 +10,7 @@ pub fn Logger(drag_handler: EventHandler<f64>, height: ReadSignal<f64>) -> Eleme
     rsx! {
         div { class: "row footer",
             div {
-                class: "height_resizer",
+                class: "resizer height_resizer",
                 onmousedown: move |e: MouseEvent| {
                     drag_handler.call(e.client_coordinates().y);
                 },

@@ -2,6 +2,7 @@
 // The `asset!` macro expands to a type clippy flags as not volatile-compatible; every other module
 // using it carries the same allow (see `scenery_editor/node/mod.rs`).
 #![allow(clippy::volatile_composites)]
+use crate::components::app::SIDEBAR_SWITCHER_WIDTH;
 use crate::components::{
     node_editor::{AmpOverview, NodeConfigEditor},
     scenery_editor::{
@@ -165,7 +166,7 @@ pub fn GraphEditor(
                 // Outside the collapsed check on purpose: a collapsed sidebar must still be
                 // draggable back out, exactly as it can be dragged shut.
                 div {
-                    class: "width_resizer",
+                    class: "resizer width_resizer",
                     onmousedown: move |e: MouseEvent| {
                         sidebar_drag_handler.call(e.client_coordinates().x);
                     },
@@ -281,7 +282,11 @@ impl SidebarView {
 #[component]
 fn SidebarViewSwitcher() -> Element {
     rsx! {
-        div { class: "sidebar-view-switcher",
+        div {
+            class: "sidebar-view-switcher",
+            // Width comes from Rust because the resize drag has to know the collapsed sidebar's
+            // total width; see `COLLAPSED_SIDEBAR_WIDTH`.
+            style: "width: {SIDEBAR_SWITCHER_WIDTH}px;",
             for entry in [SidebarView::NodeProperties, SidebarView::AmpOverview] {
                 {
                     let (icon, title) = entry.icon_and_title();

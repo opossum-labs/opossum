@@ -455,18 +455,8 @@ mod test {
             RefrIndexConst::new(1.5)?,
         )?;
         node.set_isometry(Isometry::identity())?;
-        let mut incoming_data = LightResult::default();
-        incoming_data.insert(
-            "input_1".into(),
-            LightData::Geometric(volume_regression_rays()?),
-        );
-        let output =
-            AnalysisRayTrace::analyze(&mut node, incoming_data, &RayTraceConfig::default())?;
-        let Some(LightData::Geometric(rays)) = output.get("output_1") else {
-            panic!("expected geometric ray data at the output port");
-        };
-        assert_ray_bundle_snapshot(
-            &ray_bundle_snapshot(rays),
+        test_volume_propagation_regression(
+            &mut node,
             &[
                 [
                     0.0,
@@ -499,7 +489,6 @@ mod test {
                     14.599_804_663_813,
                 ],
             ],
-        );
-        Ok(())
+        )
     }
 }

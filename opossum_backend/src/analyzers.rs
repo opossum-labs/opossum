@@ -3,7 +3,7 @@ use actix_web::{
     web::{self},
 };
 use opossum_core::{
-    core_optics::{NodeAttr, node_attr::HasNodeAttr},
+    core_optics::NodeAttr,
     light::lightdata::{energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder},
     nodes::NodeGroup,
     opm_document::AnalyzerInfo,
@@ -17,8 +17,7 @@ use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
     helper_functions::{
-        Ron, analyzer_mut_or_404, apply_and_push_undo, collect_nodes_recursive,
-        ron_or_json_response,
+        Ron, analyzer_mut_or_404, apply_and_push_undo, collect_nodes, ron_or_json_response,
     },
     undo::{Command, PatchAnalyzer, RepositionAnalyzer},
 };
@@ -26,27 +25,12 @@ use crate::{
 /// Collects every "source port" node of the whole document as `(uuid, name)` pairs, in depth-first
 /// order.
 fn collect_source_ports(scenery: &NodeGroup) -> Vec<(Uuid, String)> {
-    let mut collected = Vec::new();
-    collect_nodes_recursive(
-        scenery,
-        scenery.node_attr().uuid(),
-        &|node_attr: &NodeAttr| {
-            (node_attr.node_type() == "source port").then(|| node_attr.name().to_string())
-        },
-        &mut collected,
-    );
-    collected
-        .into_iter()
-        .map(|node| (node.uuid, node.value))
-        .collect()
-}
-
-/// Recursively collects the UUIDs of every "source port" node in `scenery`.
-fn get_all_source_port_uuids(scenery: &NodeGroup) -> Vec<Uuid> {
-    collect_source_ports(scenery)
-        .into_iter()
-        .map(|(uuid, _)| uuid)
-        .collect()
+    collect_nodes(scenery, &|node_attr: &NodeAttr| {
+        (node_attr.node_type() == "source port").then(|| node_attr.name().to_string())
+    })
+    .into_iter()
+    .map(|node| (node.uuid, node.value))
+    .collect()
 }
 
 /// Get an analyzer by UUID
@@ -108,7 +92,10 @@ pub async fn post_analyzer(
     );
 
     // 2. Automatically populate default mappings for all currently existing source ports
-    let source_uuids = get_all_source_port_uuids(document.scenery());
+    let source_uuids: Vec<Uuid> = collect_source_ports(document.scenery())
+        .into_iter()
+        .map(|(uuid, _)| uuid)
+        .collect();
     if let Some(analyzer_info) = document.analyzer_mut(uuid) {
         let mut a_type = analyzer_info.analyzer_type().clone();
 
@@ -260,14 +247,14 @@ pub async fn put_analyzer_gui_position(
     )
 )]
 #[get("/available_sources")]
+// The document lock is deliberately held for the whole read-only walk, as in the other lookup
+// helpers - releasing it early would mean cloning the scenery for nothing.
+#[allow(clippy::significant_drop_tightening)]
 pub async fn get_available_sources(
     data: web::Data<AppState>,
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let document = data.document.lock();
-    let scenery = document.scenery().clone();
-    drop(document);
-
-    let collected_sources: Vec<SourcePortDto> = collect_source_ports(&scenery)
+    let collected_sources: Vec<SourcePortDto> = collect_source_ports(document.scenery())
         .into_iter()
         .map(|(uuid, name)| SourcePortDto { uuid, name })
         .collect();

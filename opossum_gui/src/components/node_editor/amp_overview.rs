@@ -1,6 +1,5 @@
 use crate::{
-    AMP_LIST_REFRESH, NODE_DETAILS_REFRESH, OPOSSUM_UI_LOGS, api,
-    components::scenery_editor::GraphsWorkspaceAction,
+    AMP_LIST_REFRESH, OPOSSUM_UI_LOGS, api, components::scenery_editor::GraphsWorkspaceAction,
 };
 use dioxus::prelude::*;
 use opossum_core::types::api_types::AmplifierDto;
@@ -14,11 +13,11 @@ use uuid::Uuid;
 #[component]
 pub fn AmpOverview() -> Element {
     let amplifiers = use_resource(move || async move {
-        // Both counters are read unconditionally so this refetches on any relevant change:
-        // `AMP_LIST_REFRESH` for document structure (delete, paste, group, undo, load),
-        // `NODE_DETAILS_REFRESH` for the per-node edits (amp config, rename).
+        // Every change that can alter this list bumps `AMP_LIST_REFRESH`: document structure
+        // (delete, paste, group, undo, load), setting an amp config, and renaming a node. The
+        // catch-all `NODE_DETAILS_REFRESH` is deliberately *not* read - it fires on every property
+        // edit of any node, which would refetch the whole list for e.g. a lens radius.
         AMP_LIST_REFRESH();
-        NODE_DETAILS_REFRESH();
         match api::get_amplifiers().await {
             Ok(amplifiers) => amplifiers,
             Err(err_str) => {
@@ -42,15 +41,11 @@ pub fn AmpOverview() -> Element {
         .filter(|id| groups.iter().any(|(group_id, _)| group_id == id))
         .or_else(|| groups.first().map(|(group_id, _)| *group_id));
 
-    let shown: Vec<AmplifierDto> = if by_group() {
-        amplifiers
-            .iter()
-            .filter(|amplifier| Some(amplifier.group_id) == active_group)
-            .cloned()
-            .collect()
-    } else {
-        amplifiers.clone()
-    };
+    let shown: Vec<AmplifierDto> = amplifiers
+        .iter()
+        .filter(|amplifier| !by_group() || Some(amplifier.group_id) == active_group)
+        .cloned()
+        .collect();
 
     rsx! {
         div {
@@ -64,17 +59,14 @@ pub fn AmpOverview() -> Element {
                 // this project's own, so its palette would win any specificity tie - and its
                 // inactive outline colour is barely legible on this dark panel.
                 div { class: "amp-filter",
-                    button {
-                        r#type: "button",
-                        class: if by_group() { "amp-filter-btn" } else { "amp-filter-btn active" },
-                        onclick: move |_| by_group.set(false),
-                        "All"
-                    }
-                    button {
-                        r#type: "button",
-                        class: if by_group() { "amp-filter-btn active" } else { "amp-filter-btn" },
-                        onclick: move |_| by_group.set(true),
-                        "By group"
+                    for (label , shows_one_group) in [("All", false), ("By group", true)] {
+                        button {
+                            key: "{label}",
+                            r#type: "button",
+                            class: if by_group() == shows_one_group { "amp-filter-btn active" } else { "amp-filter-btn" },
+                            onclick: move |_| by_group.set(shows_one_group),
+                            "{label}"
+                        }
                     }
                 }
                 if by_group() {

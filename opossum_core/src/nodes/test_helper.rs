@@ -7,7 +7,7 @@ pub mod test_helper {
             raytrace::AnalysisRayTrace,
         },
         apertures::{ApertureShape, ApertureType, CircleShape},
-        core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, OpticRef, PortType},
+        core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, OpticRef, PortType},
         distributions::position::Hexapolar,
         error::{OpmResult, OpossumError},
         gain::{AMP_CONFIG, ConstGain, GainModel},
@@ -115,9 +115,13 @@ pub mod test_helper {
     }
     /// Read the [`GainModel`] out of a node's `amp config` property.
     ///
+    /// [`GainModel`] is [`Copy`], so this works just as well on a node held behind a lock guard as
+    /// on an owned node - hence the single [`NodeAttr`] parameter instead of one accessor per
+    /// container.
+    ///
     /// # Arguments
     ///
-    /// * `node` - the node to inspect.
+    /// * `node_attr` - attributes of the node to inspect.
     ///
     /// # Returns
     ///
@@ -127,46 +131,14 @@ pub mod test_helper {
     ///
     /// Panics if the node does not declare an `amp config` property or if that property holds a
     /// different [`Proptype`].
-    pub fn amp_config_of<T: OpticNode>(node: &T) -> GainModel {
-        let Ok(Proptype::GainModel(model)) = node.node_attr().get_property(AMP_CONFIG) else {
+    pub fn amp_config_of(node_attr: &NodeAttr) -> GainModel {
+        let Ok(Proptype::GainModel(model)) = node_attr.get_property(AMP_CONFIG) else {
             panic!(
                 "node '{}' has no '{AMP_CONFIG}' property holding a gain model",
-                node.node_attr().node_type()
+                node_attr.node_type()
             );
         };
         *model
-    }
-
-    /// Read the [`GainModel`] out of the `amp config` property of a (deserialized) node reference.
-    ///
-    /// The lock is taken and released within a single expression so that the guard is not held
-    /// while the value is inspected.
-    ///
-    /// # Arguments
-    ///
-    /// * `optic_ref` - reference to the node to inspect.
-    ///
-    /// # Returns
-    ///
-    /// The configured [`GainModel`].
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the node cannot be locked, or if it has no `amp config` property
-    /// holding a gain model.
-    fn amp_config_of_ref(optic_ref: &OpticRef) -> OpmResult<GainModel> {
-        let property = optic_ref
-            .optical_ref
-            .lock_opm()?
-            .node_attr()
-            .get_property(AMP_CONFIG)
-            .cloned();
-        match property {
-            Ok(Proptype::GainModel(model)) => Ok(model),
-            _ => Err(OpossumError::Other(format!(
-                "'{AMP_CONFIG}' property is missing or holds an unexpected type"
-            ))),
-        }
     }
 
     /// Assert that a node with a volume declares an inactive `amp config` by default.
@@ -180,8 +152,8 @@ pub mod test_helper {
     /// Panics if the property is missing or does not default to [`GainModel::None`].
     pub fn test_amp_config_default<T: Default + OpticNode>() {
         let node = T::default();
-        assert_eq!(amp_config_of(&node), GainModel::None);
-        assert!(!amp_config_of(&node).is_active());
+        assert_eq!(amp_config_of(node.node_attr()), GainModel::None);
+        assert!(!amp_config_of(node.node_attr()).is_active());
     }
 
     /// Assert that a non-default `amp config` survives a serialization round trip.
@@ -210,7 +182,7 @@ pub mod test_helper {
             ron::from_str(&serialized).map_err(|e| OpossumError::Other(e.to_string()))?;
 
         assert_eq!(
-            amp_config_of_ref(&deserialized)?,
+            amp_config_of(deserialized.optical_ref.lock_opm()?.node_attr()),
             model,
             "gain model was not preserved by the round trip"
         );
@@ -254,7 +226,7 @@ pub mod test_helper {
         let deserialized: OpticRef =
             ron::from_str(&without_property).map_err(|e| OpossumError::Other(e.to_string()))?;
         assert_eq!(
-            amp_config_of_ref(&deserialized)?,
+            amp_config_of(deserialized.optical_ref.lock_opm()?.node_attr()),
             GainModel::None,
             "loading a file without the property must fall back to the default"
         );
@@ -297,6 +269,43 @@ pub mod test_helper {
             joule!(1.0),
         )?);
         Ok(rays)
+    }
+
+    /// Assert that a volume node propagates [`volume_regression_rays`] to the recorded reference.
+    ///
+    /// Every node that encloses a volume pins its entry surface → volume → exit surface behaviour
+    /// down with the same three rays; only the node and the expected numbers differ. Keeping the
+    /// scaffolding here means a change to the port names or to the ray bundle is made once instead
+    /// of once per node type.
+    ///
+    /// # Arguments
+    ///
+    /// * `node` - the volume node under test, already placed via `set_isometry`.
+    /// * `expected` - the recorded reference snapshot, see [`ray_bundle_snapshot`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the regression ray bundle cannot be built or if the analysis fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node yields no geometric ray data on its output port, or if any captured
+    /// value deviates from `expected`.
+    pub fn test_volume_propagation_regression<T: AnalysisRayTrace>(
+        node: &mut T,
+        expected: &[[f64; SNAPSHOT_WIDTH]],
+    ) -> OpmResult<()> {
+        let mut incoming_data = LightResult::default();
+        incoming_data.insert(
+            "input_1".into(),
+            LightData::Geometric(volume_regression_rays()?),
+        );
+        let output = AnalysisRayTrace::analyze(node, incoming_data, &RayTraceConfig::default())?;
+        let Some(LightData::Geometric(rays)) = output.get("output_1") else {
+            panic!("expected geometric ray data at the output port");
+        };
+        assert_ray_bundle_snapshot(&ray_bundle_snapshot(rays), expected);
+        Ok(())
     }
 
     /// Capture the full state of every ray in a bundle as plain numbers.

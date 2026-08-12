@@ -7,8 +7,9 @@ use crate::components::{
             input_components::{LabeledSelect, RowedInputs},
             select_options_from_enum_iterator,
         },
+        node_config_editor::NodeChangeEvent,
+        optical_node_editor::properties_editor::on_save_proptype_handler,
     },
-    scenery_editor::GraphsWorkspaceAction,
 };
 use dioxus::prelude::*;
 use inflector::Inflector;
@@ -22,37 +23,25 @@ use uuid::Uuid;
 /// Editor for a node's `amp config` property: a model selector plus the selected model's parameters.
 ///
 /// The dropdown-plus-parameter-rows composition is the one `RefractiveIndexEditor` uses - both edit
-/// an enum whose variants carry different parameter sets.
-///
-/// Unlike the other property editors this does **not** go through the generic
-/// `NodeChangeAction::Property` path but sends [`GraphsWorkspaceAction::SetAmpConfig`], the same
-/// action the canvas context menu sends. The amplification model is the one property that is also
-/// displayed on the canvas, and routing both editing paths through one handler keeps that mirroring
-/// in a single place instead of special-casing this property inside the generic one.
+/// an enum whose variants carry different parameter sets, and both save through the shared
+/// [`on_save_proptype_handler`]. That the amplification model is additionally mirrored onto the
+/// canvas is handled once in `OpticalNodeEditor`, so this editor stays an ordinary property editor.
 #[component]
 pub fn GainModelEditor(
     node_id: Memo<Uuid>,
-    graph_id: Memo<Uuid>,
     gain_model: GainModel,
     property_key: String,
     readonly: bool,
+    on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    let mut gain_model_sig = use_synced_signal(gain_model);
-    let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
+    let gain_model_sig = use_synced_signal(gain_model);
 
-    let on_save = EventHandler::new(move |model: GainModel| {
-        if model == *gain_model_sig.read() {
-            return;
-        }
-        // Show the new value right away; the refetch triggered by the patch confirms it a moment
-        // later, and without this the select would visibly snap back in between.
-        gain_model_sig.set(model);
-        workspace_processor.send(GraphsWorkspaceAction::SetAmpConfig {
-            node_id: *node_id.read(),
-            graph_id: *graph_id.read(),
-            model,
-        });
-    });
+    let on_save = on_save_proptype_handler(
+        gain_model_sig,
+        property_key.clone(),
+        on_change,
+        node_id.into(),
+    );
 
     rsx! {
         LabeledSelect {

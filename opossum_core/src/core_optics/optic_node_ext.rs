@@ -5,7 +5,7 @@ use crate::{
     core_optics::{NodeAttrExt, OpticNode, PortType, SceneryResources},
     error::{OpmResult, OpossumError},
     geometry::{Plane, geo_surface::GeoSurfaceRef},
-    light::{LightData, LightResult, Rays},
+    light::{LightData, LightRays, LightResult, Rays},
     nodes::fluence_detector::Fluence,
     refractive_index::RefractiveIndexType,
     utils::{LockExt, geom_transformation::Isometry},
@@ -161,6 +161,56 @@ pub trait OpticNodeExt {
         rays_bundle: &mut Vec<Rays>,
         strategy: &dyn PropagationStrategy,
     ) -> OpmResult<()>;
+    /// A unified helper function to analyze optical nodes that enclose a volume of material.
+    ///
+    /// This is the volume counterpart of [`OpticNodeExt::unified_analyze_single_surface_node`]: it
+    /// resolves the node's first input and output port, unwraps the incoming ray data, guides it
+    /// through the volume via [`OpticNodeExt::pass_through_volume_generic`] and packs the result
+    /// back onto the output port. All nodes with two surfaces enclosing a medium (lens, wedge,
+    /// cylindric lens, ...) share this body, so their `AnalysisRayTrace::analyze` reduces to reading
+    /// the medium's refractive index and delegating here.
+    ///
+    /// Unlike the single-surface helper this does **not** call `set_light_data`: volume nodes are
+    /// never detectors, and the hook would clone the whole ray bundle for nothing.
+    ///
+    /// # Parameters
+    ///
+    /// * `incoming_data`: the [`LightResult`] arriving at the node's input port.
+    /// * `refri_inside`: refractive index of the enclosed medium.
+    /// * `strategy`: the analyzer-specific [`PropagationStrategy`].
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the node has no input or output port, if the incoming data
+    /// is not geometric ray data, or if the propagation through either surface fails.
+    fn unified_analyze_volume_node(
+        &mut self,
+        incoming_data: LightResult,
+        refri_inside: RefractiveIndexType,
+        strategy: &dyn PropagationStrategy,
+    ) -> OpmResult<LightResult>;
+    /// The ghost focus variant of [`OpticNodeExt::unified_analyze_volume_node`].
+    ///
+    /// It is a separate function rather than a branch of the ray trace variant because the two
+    /// differ in how they treat an unconnected input port: ray tracing yields no output at all,
+    /// while a ghost focus analysis still reports the (then empty) bundle on the output port.
+    ///
+    /// # Parameters
+    ///
+    /// * `incoming_data`: the [`LightRays`] arriving at the node's input port.
+    /// * `refri_inside`: refractive index of the enclosed medium.
+    /// * `strategy`: the analyzer-specific [`PropagationStrategy`].
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the node has no input or output port, or if the
+    /// propagation through either surface fails.
+    fn unified_analyze_volume_node_ghost_focus(
+        &mut self,
+        incoming_data: LightRays,
+        refri_inside: RefractiveIndexType,
+        strategy: &dyn PropagationStrategy,
+    ) -> OpmResult<LightRays>;
     /// A unified helper function to analyze optical nodes that feature a single interacting surface.
     ///
     /// This function simplifies the implementation of the analysis traits (`Energy`, `RayTrace`, `GhostFocus`)
@@ -186,6 +236,41 @@ pub trait OpticNodeExt {
         optic_surf_name: &str,
         refri_after_surf: Option<RefractiveIndexType>,
     ) -> OpmResult<LightResult>;
+}
+
+/// Return the names of the first input and the first output port of `node`.
+///
+/// Every helper that guides light straight through a node needs this pair, and all of them treat a
+/// node without one of the two as a programming error rather than as "nothing to do".
+///
+/// # Arguments
+///
+/// * `node` - the node whose ports are looked up.
+///
+/// # Returns
+///
+/// The first input port name and the first output port name, in that order.
+///
+/// # Errors
+///
+/// This function returns an [`OpossumError::Analysis`] if the node has no input or no output port.
+fn first_io_port_names<T: ?Sized + OpticNode>(node: &T) -> OpmResult<(String, String)> {
+    let ports = node.ports();
+    let in_port = ports
+        .names(&PortType::Input)
+        .first()
+        .cloned()
+        .ok_or_else(|| {
+            OpossumError::Analysis(format!("No input port found on node '{}'", node.name()))
+        })?;
+    let out_port = ports
+        .names(&PortType::Output)
+        .first()
+        .cloned()
+        .ok_or_else(|| {
+            OpossumError::Analysis(format!("No output port found on node '{}'", node.name()))
+        })?;
+    Ok((in_port, out_port))
 }
 
 impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNodeExt for T {
@@ -424,6 +509,55 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         )
     }
 
+    fn unified_analyze_volume_node(
+        &mut self,
+        mut incoming_data: LightResult,
+        refri_inside: RefractiveIndexType,
+        strategy: &dyn PropagationStrategy,
+    ) -> OpmResult<LightResult> {
+        let (in_port_name, out_port_name) = first_io_port_names(self)?;
+        let Some(data) = incoming_data.remove(&in_port_name) else {
+            return Ok(LightResult::default());
+        };
+        let LightData::Geometric(rays) = data else {
+            return Err(OpossumError::Analysis(
+                "expected ray data at input port".into(),
+            ));
+        };
+        let mut rays_bundle = vec![rays];
+        self.pass_through_volume_generic(
+            &in_port_name,
+            &out_port_name,
+            refri_inside,
+            &mut rays_bundle,
+            strategy,
+        )?;
+        Ok(LightResult::from([(
+            out_port_name,
+            LightData::Geometric(rays_bundle.remove(0)),
+        )]))
+    }
+
+    fn unified_analyze_volume_node_ghost_focus(
+        &mut self,
+        incoming_data: LightRays,
+        refri_inside: RefractiveIndexType,
+        strategy: &dyn PropagationStrategy,
+    ) -> OpmResult<LightRays> {
+        let (in_port_name, out_port_name) = first_io_port_names(self)?;
+        let mut rays_bundle = incoming_data
+            .get(&in_port_name)
+            .map_or_else(Vec::<Rays>::new, Clone::clone);
+        self.pass_through_volume_generic(
+            &in_port_name,
+            &out_port_name,
+            refri_inside,
+            &mut rays_bundle,
+            strategy,
+        )?;
+        Ok(LightRays::from([(out_port_name, rays_bundle)]))
+    }
+
     fn unified_analyze_single_surface_node(
         &mut self,
         mut incoming_data: LightResult,
@@ -431,22 +565,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         optic_surf_name: &str,
         refri_after_surf: Option<RefractiveIndexType>,
     ) -> OpmResult<LightResult> {
-        let in_port_name = self
-            .ports()
-            .names(&PortType::Input)
-            .first()
-            .cloned()
-            .ok_or_else(|| {
-                OpossumError::Analysis(format!("No input port found on node '{}'", self.name()))
-            })?;
-        let out_port_name = self
-            .ports()
-            .names(&PortType::Output)
-            .first()
-            .cloned()
-            .ok_or_else(|| {
-                OpossumError::Analysis(format!("No output port found on node '{}'", self.name()))
-            })?;
+        let (in_port_name, out_port_name) = first_io_port_names(self)?;
         let Some(data) = incoming_data.remove(&in_port_name) else {
             return Ok(LightResult::default());
         };

@@ -298,10 +298,9 @@ body {
     gap: 2px;
     padding: 4px 0px;
     border-right: 1px solid rgb(70, 70, 70);
-    /* Explicit rather than icon-derived: together with the 2px resize handle this is the collapsed
-       sidebar's width, which `COLLAPSED_SIDEBAR_WIDTH` in app.rs has to match. */
+    /* The width is applied inline from `SIDEBAR_SWITCHER_WIDTH` in app.rs, because the resize drag
+       needs to know the collapsed sidebar's total width. */
     box-sizing: border-box;
-    width: 50px;
 }
 
 .sidebar-view-button {
@@ -345,19 +344,27 @@ body {
 
 /* Right edge of the sidebar, dragged to resize it - the vertical counterpart of the log panel's
    `.height_resizer`, and driven by the same listeners on the outermost container. */
+/* Shared look of both resize handles; only the axis differs, see `.width_resizer` /
+   `.height_resizer` below. The thickness is mirrored by `RESIZER_THICKNESS` in app.rs. */
+.resizer {
+    background-color: gray;
+}
+
+.resizer:hover {
+    background-color: rgb(169, 169, 169);
+    transition: 100ms;
+    z-index: 1;
+}
+
 .width_resizer {
     flex: 0 0 auto;
     width: 2px;
     cursor: ew-resize;
-    background-color: gray;
 }
 
 .width_resizer:hover {
     width: 3px;
     margin-right: -1px;
-    background-color: rgb(169, 169, 169);
-    transition: 100ms;
-    z-index: 1;
 }
 
 
@@ -655,19 +662,14 @@ body {
     background-color: rgba(197, 216, 255,1);
 }
 
-.height_resizer{
+.height_resizer {
     width: 100%;
     height: 2px;
-    cursor: ns-resize; 
-    background-color: gray;
+    cursor: ns-resize;
 }
-.height_resizer:hover{
-    width: 100%;
+.height_resizer:hover {
     height: 3px;
-    background-color: rgb(169, 169, 169);
     margin-bottom: -1px;
-    transition: 100ms;
-    z-index: 1;
 }
 
 .noselect {

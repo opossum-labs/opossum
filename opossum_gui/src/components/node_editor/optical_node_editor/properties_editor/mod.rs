@@ -42,7 +42,6 @@ use uuid::Uuid;
 #[component]
 pub fn PropertiesEditor(
     node_id: Memo<Uuid>,
-    graph_id: Memo<Uuid>,
     node_properties_sig: ReadSignal<Properties>,
     node_info_sig: ReadSignal<NodeInfo>,
     on_change: EventHandler<NodeChangeEvent>,
@@ -51,14 +50,9 @@ pub fn PropertiesEditor(
     let editor_inputs = if node_info_sig.read().uuid == *node_id.read() {
         let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
         for (property_key, property) in node_properties_sig.read().iter() {
-            if let Some(editor) = get_editor(
-                node_id,
-                graph_id,
-                property,
-                property_key.clone(),
-                on_change,
-                readonly,
-            ) {
+            if let Some(editor) =
+                get_editor(node_id, property, property_key.clone(), on_change, readonly)
+            {
                 editor_inputs.push(editor);
             }
         }
@@ -80,7 +74,6 @@ pub fn PropertiesEditor(
 
 fn get_editor(
     node_id: Memo<Uuid>,
-    graph_id: Memo<Uuid>,
     property: &Property,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
@@ -92,14 +85,9 @@ fn get_editor(
         return Some(editor);
     }
 
-    if let Some(editor) = get_optical_editor(
-        node_id,
-        graph_id,
-        property,
-        property_key.clone(),
-        on_change,
-        readonly,
-    ) {
+    if let Some(editor) =
+        get_optical_editor(node_id, property, property_key.clone(), on_change, readonly)
+    {
         return Some(editor);
     }
     get_geometric_editor(node_id, property, property_key, on_change, readonly)
@@ -172,12 +160,8 @@ fn get_primitive_editor(
 }
 
 /// Editors for properties describing an optical behaviour.
-///
-/// Takes `graph_id` in addition to `node_id` because the amplification model is edited through a
-/// workspace action rather than the generic property path - see [`GainModelEditor`].
 fn get_optical_editor(
     node_id: Memo<Uuid>,
-    graph_id: Memo<Uuid>,
     property: &Property,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
@@ -233,9 +217,9 @@ fn get_optical_editor(
         Proptype::GainModel(gain_model) => Some(rsx! {
             GainModelEditor {
                 node_id,
-                graph_id,
                 gain_model,
                 property_key,
+                on_change,
                 readonly,
             }
         }),

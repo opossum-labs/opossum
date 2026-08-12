@@ -351,7 +351,7 @@ pub fn create_new_group_node_info(
     ))
 }
 
-/// A node picked out of the document tree by [`collect_nodes_recursive`], together with the group it
+/// A node picked out of the document tree by [`collect_nodes`], together with the group it
 /// lives in.
 #[derive(Debug)]
 pub struct CollectedNode<T> {
@@ -364,8 +364,10 @@ pub struct CollectedNode<T> {
     pub value: T,
 }
 
-/// Walk every node below `current_group` - nested subgroups included - and collect what `select`
-/// returns for it.
+/// Node type of a [`NodeGroup`], i.e. the only node type the document walk descends into.
+const GROUP_NODE_TYPE: &str = "group";
+
+/// Walk the whole document - nested subgroups included - and collect what `select` returns.
 ///
 /// This is the one recursive document walk the backend uses to answer "which nodes of the whole
 /// document are X?". Callers differ only in the `select` closure, so questions like "all source
@@ -377,10 +379,29 @@ pub struct CollectedNode<T> {
 /// # Arguments
 ///
 /// * `scenery` - the document's root group.
-/// * `current_group` - the group to descend into; pass the root's UUID to cover the whole document.
+/// * `select` - returns `Some(value)` for a node that belongs in the result, `None` otherwise.
+///
+/// # Returns
+///
+/// One [`CollectedNode`] per selected node, in depth-first order.
+pub fn collect_nodes<T>(
+    scenery: &NodeGroup,
+    select: &impl Fn(&NodeAttr) -> Option<T>,
+) -> Vec<CollectedNode<T>> {
+    let mut collected = Vec::new();
+    collect_nodes_recursive(scenery, scenery.node_attr().uuid(), select, &mut collected);
+    collected
+}
+
+/// Recursive worker behind [`collect_nodes`], descending into `current_group`.
+///
+/// # Arguments
+///
+/// * `scenery` - the document's root group.
+/// * `current_group` - the group to descend into.
 /// * `select` - returns `Some(value)` for a node that belongs in the result, `None` otherwise.
 /// * `collected` - result accumulator, appended to in depth-first order.
-pub fn collect_nodes_recursive<T>(
+fn collect_nodes_recursive<T>(
     scenery: &NodeGroup,
     current_group: Uuid,
     select: &impl Fn(&NodeAttr) -> Option<T>,
@@ -393,19 +414,25 @@ pub fn collect_nodes_recursive<T>(
             .map(|node_ref| {
                 let node = node_ref.optical_ref.lock_opm()?;
                 let node_attr = node.node_attr();
-                // Extract everything the caller wants while the lock is held, then release it -
-                // the recursion below needs to lock nodes again.
-                let selected = (node_attr.uuid(), select(node_attr));
+                // Extract everything needed further down while the lock is held, then release it -
+                // the recursion below needs to lock nodes again. Whether the child is a group is
+                // read here too: asking `with_group_node` afterwards would re-walk the whole
+                // document from the root for every single child.
+                let selected = (
+                    node_attr.uuid(),
+                    node_attr.node_type() == GROUP_NODE_TYPE,
+                    select(node_attr),
+                );
                 drop(node);
                 Ok(selected)
             })
-            .collect::<Result<Vec<(Uuid, Option<T>)>, OpossumError>>()
+            .collect::<Result<Vec<(Uuid, bool, Option<T>)>, OpossumError>>()
     });
 
     let Ok(Ok(children)) = children else {
         return;
     };
-    for (child_uuid, selected) in children {
+    for (child_uuid, is_group, selected) in children {
         if let Some(value) = selected {
             collected.push(CollectedNode {
                 uuid: child_uuid,
@@ -413,7 +440,7 @@ pub fn collect_nodes_recursive<T>(
                 value,
             });
         }
-        if scenery.with_group_node(child_uuid, |_| {}).is_ok() {
+        if is_group {
             collect_nodes_recursive(scenery, child_uuid, select, collected);
         }
     }

@@ -130,6 +130,10 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
         move |mut rx: UnboundedReceiver<NodeChangeEvent>| async move {
             while let Some(event) = rx.next().await {
                 let uuid = event.node_id;
+                // The amplifier overview lists nodes by name, so a rename has to reach it. Every
+                // other way that list can change already bumps the counter in the workspace
+                // processor; taking the flag here keeps this out of the generic property path.
+                let is_rename = matches!(event.action, NodeChangeAction::Name(_));
 
                 let result: Result<(), String> = match event.action {
                     NodeChangeAction::Name(name) => match api::get_node_references(uuid).await {
@@ -205,6 +209,9 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                         // it only reflects the backend's truth after an undo/redo-triggered refetch,
                         // never after a normal direct edit.
                         *crate::NODE_DETAILS_REFRESH.write() += 1;
+                        if is_rename {
+                            *crate::AMP_LIST_REFRESH.write() += 1;
+                        }
                         // The edit pushed an undo entry on the backend; reflect that in the Edit menu.
                         *crate::UNDO_REDO_STATUS.write() = (true, false);
                     }

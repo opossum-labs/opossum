@@ -1,14 +1,10 @@
-use crate::{
-    app_state::AppState, error::BackEndErrorResponse, helper_functions::collect_nodes_recursive,
-};
+use crate::{app_state::AppState, error::BackEndErrorResponse, helper_functions::collect_nodes};
 use actix_web::{HttpResponse, get, web};
 use opossum_core::{
-    core_optics::{NodeAttr, NodeAttrExt, node_attr::HasNodeAttr},
+    core_optics::{NodeAttr, NodeAttrExt},
     gain::active_amp_model,
     types::api_types::{AmplifierDto, ErrorResponse},
 };
-use std::collections::HashMap;
-use uuid::Uuid;
 
 /// Get every amplifying node of the whole document
 ///
@@ -22,55 +18,39 @@ use uuid::Uuid;
     )
 )]
 #[get("/amplifiers")]
+// The document lock is deliberately held for the whole read-only walk, as in the other lookup
+// helpers - releasing it early would mean cloning the scenery for nothing.
+#[allow(clippy::significant_drop_tightening)]
 pub async fn get_amplifiers(
     data: web::Data<AppState>,
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let document = data.document.lock();
-    let scenery = document.scenery().clone();
-    drop(document);
+    let scenery = document.scenery();
 
-    let mut collected = Vec::new();
-    collect_nodes_recursive(
-        &scenery,
-        scenery.node_attr().uuid(),
-        &|node_attr: &NodeAttr| {
-            active_amp_model(node_attr).map(|amp_model| {
-                (
-                    node_attr.name().to_string(),
-                    node_attr.node_type().to_string(),
-                    amp_model,
-                )
-            })
-        },
-        &mut collected,
-    );
-
-    // Resolve each *distinct* group once rather than per amplifier - a subsystem typically holds
-    // several of them.
-    let mut group_names: HashMap<Uuid, String> = HashMap::new();
-    for node in &collected {
-        group_names.entry(node.group_id).or_insert_with(|| {
-            scenery
-                .with_group_node(node.group_id, |group| group.name().to_string())
-                .unwrap_or_default()
-        });
-    }
-
-    let amplifiers: Vec<AmplifierDto> = collected
-        .into_iter()
-        .map(|node| {
-            let (name, node_type, amp_model) = node.value;
-            let group_name = group_names.get(&node.group_id).cloned().unwrap_or_default();
-            AmplifierDto {
-                uuid: node.uuid,
-                name,
-                node_type,
-                group_id: node.group_id,
-                group_name,
+    let amplifiers: Vec<AmplifierDto> = collect_nodes(scenery, &|node_attr: &NodeAttr| {
+        active_amp_model(node_attr).map(|amp_model| {
+            (
+                node_attr.name().to_string(),
+                node_attr.node_type().to_string(),
                 amp_model,
-            }
+            )
         })
-        .collect();
+    })
+    .into_iter()
+    .map(|node| {
+        let (name, node_type, amp_model) = node.value;
+        AmplifierDto {
+            uuid: node.uuid,
+            name,
+            node_type,
+            group_id: node.group_id,
+            group_name: scenery
+                .with_group_node(node.group_id, |group| group.name().to_string())
+                .unwrap_or_default(),
+            amp_model,
+        }
+    })
+    .collect();
 
     Ok(HttpResponse::Ok().json(amplifiers))
 }
@@ -80,6 +60,7 @@ mod test {
     use super::*;
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
     use opossum_core::{
+        core_optics::node_attr::HasNodeAttr,
         gain::{AMP_CONFIG, ConstGain, GainModel},
         nodes::{Lens, NodeGroup, Wedge},
     };

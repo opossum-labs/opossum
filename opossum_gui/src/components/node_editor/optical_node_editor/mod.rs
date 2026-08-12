@@ -19,12 +19,13 @@ use crate::components::{
             properties_editor::PropertiesEditor,
         },
     },
-    scenery_editor::SelectedNode,
+    scenery_editor::{GraphsWorkspaceAction, SelectedNode},
 };
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use opossum_core::{
-    prelude::Properties,
+    gain::AMP_CONFIG,
+    prelude::{Properties, Proptype},
     types::api_types::{NodeEditorPanel, NodeInfo},
 };
 
@@ -39,16 +40,32 @@ pub fn OpticalNodeEditor(
     let mut node_properties_sig = use_signal(Properties::default);
     let mut readonly = use_signal(|| false);
 
+    let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let on_property_change = EventHandler::new(move |node_change: NodeChangeEvent| {
-        if let NodeChangeAction::Property(name, proptype) = &node_change.action {
-            if let Err(e) = node_properties_sig.write().set(name, proptype.clone()) {
-                OPOSSUM_UI_LOGS.write().add_log(&format!(
-                    "Error setting new property value of proptype '{name}': {e}"
-                ));
-            } else {
-                on_change.call(node_change);
-            }
+        let NodeChangeAction::Property(name, proptype) = node_change.action.clone() else {
+            return;
+        };
+        if let Err(e) = node_properties_sig.write().set(&name, proptype.clone()) {
+            OPOSSUM_UI_LOGS.write().add_log(&format!(
+                "Error setting new property value of proptype '{name}': {e}"
+            ));
+            return;
         }
+        // The amplification model is the one property that is also drawn on the canvas. It takes
+        // the same workspace action the context menu sends, which patches the property *and*
+        // mirrors the canvas marker - so the mirroring lives in one place instead of the editor
+        // needing to know about the canvas.
+        if name == AMP_CONFIG
+            && let Proptype::GainModel(model) = proptype
+        {
+            workspace_processor.send(GraphsWorkspaceAction::SetAmpConfig {
+                node_id: *node_id.read(),
+                graph_id: *graph_id.read(),
+                model,
+            });
+            return;
+        }
+        on_change.call(node_change);
     });
 
     let mut resource_future: Resource<(Option<NodeInfo>, Option<Properties>)> =
@@ -133,7 +150,6 @@ pub fn OpticalNodeEditor(
                     }
                     PropertiesEditor {
                         node_id,
-                        graph_id,
                         node_properties_sig,
                         node_info_sig,
                         on_change: on_property_change,

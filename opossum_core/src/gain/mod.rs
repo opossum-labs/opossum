@@ -19,10 +19,13 @@
 
 use crate::{
     core_optics::NodeAttr,
-    error::{OpmResult, OpossumError},
+    error::OpmResult,
+    generic_validators::{AllFinite, AllPositive, ValidateTrait},
     properties::Proptype,
     utils::default_from_name::DefaultFromName,
+    validated, validated_type,
 };
+use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum::EnumIter;
@@ -62,20 +65,48 @@ pub fn active_amp_model(node_attr: &NodeAttr) -> Option<String> {
     }
 }
 
+/// Deserialization shim for [`ConstGain`].
+///
+/// It lets a gain factor read from an `.opm` file run through the very same validation as one set
+/// through [`ConstGain::set_gain`], so a hand-edited file cannot smuggle in a negative or
+/// non-finite factor. Same pattern as [`RefrIndexConst`](crate::refractive_index::RefrIndexConst).
+#[derive(Deserialize)]
+struct NonValidatedConstGain {
+    gain: f64,
+}
+impl TryFrom<NonValidatedConstGain> for ConstGain {
+    type Error = String;
+    fn try_from(helper: NonValidatedConstGain) -> Result<Self, Self::Error> {
+        Self::new(helper.gain).map_err(|e| e.to_string())
+    }
+}
+
+/// A gain factor that is guaranteed to be finite and non-negative.
+type ValidatedGain = validated_type!(f64, AllFinite && AllPositive);
+impl Default for ValidatedGain {
+    /// A gain factor of 1.0, i.e. no amplification.
+    fn default() -> Self {
+        validated!(1.0, AllFinite && AllPositive).unwrap()
+    }
+}
+
 /// Parameters of a constant, path-length independent energy gain.
 ///
 /// This is the simplest conceivable amplifier: the energy of every ray is multiplied by the same
 /// factor, regardless of how far the ray actually travels inside the medium and regardless of how
 /// much energy has already been extracted. It is meant for chain layout and system overview, not
 /// for a physically faithful description of an amplifier.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, EnsureValidated)]
+#[serde(try_from = "NonValidatedConstGain")]
 pub struct ConstGain {
-    gain: f64,
+    gain: ValidatedGain,
 }
 impl Default for ConstGain {
     /// Create a neutral [`ConstGain`] with a gain factor of 1.0 (no amplification).
     fn default() -> Self {
-        Self { gain: 1.0 }
+        Self {
+            gain: ValidatedGain::default(),
+        }
     }
 }
 impl ConstGain {
@@ -96,7 +127,7 @@ impl ConstGain {
     /// Return the energy gain factor.
     #[must_use]
     pub const fn gain(&self) -> f64 {
-        self.gain
+        *self.gain.get()
     }
     /// Set the energy gain factor.
     ///
@@ -109,13 +140,7 @@ impl ConstGain {
     /// Returns an [`OpossumError::Other`] if the given factor is not finite or negative. The
     /// previous value is kept in that case.
     pub fn set_gain(&mut self, gain: f64) -> OpmResult<()> {
-        if !gain.is_finite() || gain.is_sign_negative() {
-            return Err(OpossumError::Other(
-                "gain factor must be finite and non-negative".into(),
-            ));
-        }
-        self.gain = gain;
-        Ok(())
+        self.gain.set(gain)
     }
 }
 impl From<ConstGain> for GainModel {
@@ -173,7 +198,8 @@ impl GainModel {
 mod test {
     use super::*;
     use crate::{
-        core_optics::{NodeAttrExt, OpticNode, node_attr::HasNodeAttr},
+        core_optics::node_attr::HasNodeAttr,
+        error::OpossumError,
         nodes::{Dummy, Lens, create_node_ref, node_types},
         utils::LockExt,
     };
