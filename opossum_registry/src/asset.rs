@@ -1,55 +1,15 @@
+use opossum_core::asset::AssetHeader;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
-/// Current schema version supported by this build of `opossum_registry`.
-pub const CURRENT_SCHEMA_VERSION: u32 = 1;
-
-/// Common metadata header shared by all registry assets (Materials, Components, Light Sources, etc.).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AssetHeader {
-    /// Format schema version for compatibility checks.
-    pub schema_version: u32,
-
-    /// Unique global identifier for the asset instance.
-    pub id: Uuid,
-
-    /// Data version of this asset (follows the append-only versioning strategy).
-    pub version: u32,
-
-    /// Human-readable display name (e.g., "N-BK7", "LA1951-A").
-    pub name: String,
-
-    /// Optional manufacturer or vendor name (e.g., "Schott", "Thorlabs").
-    pub manufacturer: Option<String>,
-
-    /// Optional description or notes about the asset.
-    pub description: Option<String>,
-}
-
-impl AssetHeader {
-    /// Creates a new `AssetHeader` instance with the current schema version.
-    pub fn new(
-        id: Uuid,
-        version: u32,
-        name: impl Into<String>,
-        manufacturer: Option<String>,
-        description: Option<String>,
-    ) -> Self {
-        Self {
-            schema_version: CURRENT_SCHEMA_VERSION,
-            id,
-            version,
-            name: name.into(),
-            manufacturer,
-            description,
-        }
-    }
-}
 
 /// Trait to be implemented by any type that can be stored and managed within `opossum_registry`.
 pub trait RegisterableAsset: Serialize + for<'de> Deserialize<'de> {
     /// Returns a reference to the asset's shared header.
     fn header(&self) -> &AssetHeader;
+
+    /// Returns a mutable reference to the asset's shared header.
+    /// This allows the registry to update the version number upon publishing.
+    fn header_mut(&mut self) -> &mut AssetHeader;
 
     /// Returns the relative subfolder name in the registry repository (e.g., "materials").
     fn relative_subfolder() -> &'static str;
@@ -82,6 +42,8 @@ pub trait RegisterableAsset: Serialize + for<'de> Deserialize<'de> {
 
 #[cfg(test)]
 mod tests {
+    use opossum_core::asset::CURRENT_SCHEMA_VERSION;
+
     use super::*;
 
     /// Mock asset struct used exclusively for unit testing the `RegisterableAsset` trait.
@@ -95,7 +57,9 @@ mod tests {
         fn header(&self) -> &AssetHeader {
             &self.header
         }
-
+        fn header_mut(&mut self) -> &mut AssetHeader {
+            &mut self.header
+        }
         fn relative_subfolder() -> &'static str {
             "mock_assets"
         }

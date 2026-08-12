@@ -1,15 +1,13 @@
 use opossum_core::error::{OpmResult, OpossumError};
+use opossum_core::material::Material;
 use std::collections::HashMap;
 use std::fs;
 use std::marker::PhantomData;
-use uom::si::f64::Length;
-use uom::si::length::nanometer;
 use uuid::Uuid;
 
 use crate::asset::RegisterableAsset;
 use crate::coating::CoatingAsset;
 use crate::loader::AssetLoader;
-use crate::material::MaterialAsset;
 
 /// Standard d-line wavelength (587.56 nm) used for nominal refractive index anchor (`n_d`).
 pub const WAVELENGTH_D_LINE_NM: f64 = 587.56;
@@ -78,21 +76,6 @@ pub struct MaterialIndexData {
     pub nd: Option<f64>,
 }
 
-impl IndexableAsset for MaterialAsset {
-    type IndexData = MaterialIndexData;
-
-    fn create_index_data(&self) -> Self::IndexData {
-        let d_line_wvl = Length::new::<nanometer>(WAVELENGTH_D_LINE_NM);
-        let nd = self
-            .optical
-            .refractive_index
-            .get_refractive_index(d_line_wvl)
-            .ok();
-
-        MaterialIndexData { nd }
-    }
-}
-
 /// Type-specific index payload for `CoatingAssets`.
 /// Currently empty, but prepared for future extensions (e.g., laser damage threshold).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -147,27 +130,29 @@ impl<T: IndexableAsset> AssetIndex<T> {
         name_query: Option<&str>,
         manufacturer_query: Option<&str>,
     ) -> Vec<&IndexEntry<T::IndexData>> {
+        // Allocate lowercase query strings only once before the loop
+        let mfg_query_lower = manufacturer_query.map(str::to_lowercase);
+        let name_query_lower = name_query.map(str::to_lowercase);
+
         self.entries
             .values()
             .filter(|entry| {
                 // Filter by manufacturer if requested
-                if let Some(mfg) = manufacturer_query {
-                    let mfg_lower = mfg.to_lowercase();
+                if let Some(mfg_lower) = &mfg_query_lower {
                     match &entry.common.manufacturer {
-                        Some(entry_mfg) if entry_mfg.to_lowercase().contains(&mfg_lower) => {}
+                        Some(entry_mfg) if entry_mfg.to_lowercase().contains(mfg_lower) => {}
                         _ => return false,
                     }
                 }
 
                 // Filter by name or description text query
-                if let Some(q) = name_query {
-                    let q_lower = q.to_lowercase();
-                    let name_matches = entry.common.name.to_lowercase().contains(&q_lower);
+                if let Some(q_lower) = &name_query_lower {
+                    let name_matches = entry.common.name.to_lowercase().contains(q_lower);
                     let desc_matches = entry
                         .common
                         .description
                         .as_ref()
-                        .is_some_and(|d| d.to_lowercase().contains(&q_lower));
+                        .is_some_and(|d| d.to_lowercase().contains(q_lower));
 
                     if !name_matches && !desc_matches {
                         return false;
@@ -258,7 +243,7 @@ impl<T: IndexableAsset> AssetIndex<T> {
 // Type-Specific Index Queries
 // -----------------------------------------------------------------------------
 
-impl AssetIndex<MaterialAsset> {
+impl AssetIndex<Material> {
     /// Searches specifically for material assets whose nominal refractive index `nd` falls within `[min_n, max_n]`.
     #[must_use]
     pub fn search_by_nd_range(
@@ -268,7 +253,7 @@ impl AssetIndex<MaterialAsset> {
     ) -> Vec<&IndexEntry<MaterialIndexData>> {
         self.entries
             .values()
-            .filter(|entry| {
+            .filter(|entry: &&IndexEntry<MaterialIndexData>| {
                 entry
                     .specific
                     .nd
@@ -282,7 +267,7 @@ impl AssetIndex<MaterialAsset> {
 mod tests {
     use super::*;
     use opossum_core::coatings::CoatingType;
-    use opossum_core::refractive_index::{RefrIndexConst, RefractiveIndexType};
+    use opossum_core::refractive_index::RefrIndexConst;
     use tempfile::TempDir;
 
     #[test]
@@ -291,28 +276,20 @@ mod tests {
         let loader = AssetLoader::new(temp_dir.path());
 
         // Create Material 1: n = 1.5168
-        let id1 = Uuid::new_v4();
-        let const_1_51 = RefractiveIndexType::Const(RefrIndexConst::new(1.5168)?);
-        let mat1 = MaterialAsset::new(
-            id1,
-            1,
-            "N-BK7",
-            Some("Schott".to_string()),
-            None,
-            const_1_51,
-        );
-        loader.save_asset(&mat1)?;
+        let const_1_51 = RefrIndexConst::new(1.5168)?.into();
+        let mut mat1 = Material::new_draft("N-BK7", Some("Schott".to_string()), None, const_1_51);
+        loader.publish(&mut mat1)?;
 
         // Build Material Index
-        let mut index = AssetIndex::<MaterialAsset>::new();
+        let mut index = AssetIndex::<Material>::new();
         index.build_from_loader(&loader)?;
 
         assert_eq!(index.len(), 1);
 
-        // search_by_nd_range is available on AssetIndex<MaterialAsset>
+        // search_by_nd_range is available on AssetIndex<Material>
         let bk7_matches = index.search_by_nd_range(1.50, 1.55);
         assert_eq!(bk7_matches.len(), 1);
-        assert_eq!(bk7_matches[0].common.id, id1);
+        assert_eq!(bk7_matches[0].common.id, mat1.id());
         assert_eq!(bk7_matches[0].specific.nd, Some(1.5168));
 
         Ok(())
@@ -323,28 +300,88 @@ mod tests {
         let temp_dir = TempDir::new().map_err(|e| OpossumError::Other(e.to_string()))?;
         let loader = AssetLoader::new(temp_dir.path());
 
-        // Create Coating
-        let id = Uuid::new_v4();
-        let coating = CoatingAsset::new(
-            id,
-            1,
+        // Create Coating draft
+        let mut coating = CoatingAsset::new_draft(
             "Ideal AR",
             Some("Thorlabs".to_string()),
-            None,
+            Some("Anti-reflection coating".to_string()),
             CoatingType::IdealAR,
         );
-        loader.save_asset(&coating)?;
+        let coating_id = coating.id();
+        loader.publish(&mut coating)?;
 
         // Build Coating Index using generic build_from_loader
         let mut index = AssetIndex::<CoatingAsset>::new();
         let count = index.build_from_loader(&loader)?;
 
         assert_eq!(count, 1);
-        let entry = index.get(&id).expect("Coating should be indexed");
+        let entry = index.get(&coating_id).expect("Coating should be indexed");
         assert_eq!(entry.common.name, "Ideal AR");
+        assert_eq!(entry.common.manufacturer.as_deref(), Some("Thorlabs"));
 
         // entry.specific is of type CoatingIndexData {}
         assert_eq!(entry.specific, CoatingIndexData {});
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_index_text_search() -> OpmResult<()> {
+        let temp_dir = TempDir::new().map_err(|e| OpossumError::Other(e.to_string()))?;
+        let loader = AssetLoader::new(temp_dir.path());
+
+        let mut mat1 = Material::new_draft(
+            "Fused Silica",
+            Some("Corning".to_string()),
+            Some("High purity synthetic glass".to_string()),
+            RefrIndexConst::new(1.458)?.into(),
+        );
+        loader.publish(&mut mat1)?;
+
+        let mut mat2 = Material::new_draft(
+            "N-BK7",
+            Some("Schott".to_string()),
+            Some("Crown glass".to_string()),
+            RefrIndexConst::new(1.5168)?.into(),
+        );
+        loader.publish(&mut mat2)?;
+
+        let mut index = AssetIndex::<Material>::new();
+        index.build_from_loader(&loader)?;
+
+        // Search by name query (case-insensitive)
+        let search_fused = index.search(Some("fused"), None);
+        assert_eq!(search_fused.len(), 1);
+        assert_eq!(search_fused[0].common.id, mat1.id());
+
+        // Search by manufacturer query
+        let search_schott = index.search(None, Some("schott"));
+        assert_eq!(search_schott.len(), 1);
+        assert_eq!(search_schott[0].common.id, mat2.id());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_index_filter_by_predicate() -> OpmResult<()> {
+        let temp_dir = TempDir::new().map_err(|e| OpossumError::Other(e.to_string()))?;
+        let loader = AssetLoader::new(temp_dir.path());
+
+        let mut mat = Material::new_draft(
+            "Special Glass",
+            None,
+            None,
+            RefrIndexConst::new(1.62)?.into(),
+        );
+        loader.publish(&mut mat)?;
+
+        let mut index = AssetIndex::<Material>::new();
+        index.build_from_loader(&loader)?;
+
+        // Dynamically load full asset and test custom predicate
+        let matches = index.filter_by(&loader, |m: &Material| m.name() == "Special Glass")?;
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].id(), mat.id());
 
         Ok(())
     }

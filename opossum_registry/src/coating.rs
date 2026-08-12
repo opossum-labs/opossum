@@ -1,8 +1,8 @@
-use opossum_core::coatings::CoatingType;
+use opossum_core::{asset::AssetHeader, coatings::CoatingType};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::asset::{AssetHeader, RegisterableAsset};
+use crate::asset::RegisterableAsset;
 
 /// Represents an optical coating asset managed by `opossum_registry`.
 ///
@@ -12,25 +12,36 @@ use crate::asset::{AssetHeader, RegisterableAsset};
 pub struct CoatingAsset {
     /// Shared metadata header (UUID, schema version, asset version, name, manufacturer).
     pub header: AssetHeader,
-
     /// Concrete optical coating model from `opossum_core`.
     pub coating: CoatingType,
 }
 
 impl CoatingAsset {
-    /// Creates a new `CoatingAsset` using the current schema version.
-    pub fn new(
-        id: Uuid,
-        version: u32,
+    /// Create a new [`CoatingAsset`]
+    ///
+    /// Creates a completely new material draft with a random UUID and version 0.
+    /// Version 0 indicates that this material is a local draft and has not yet been published to the registry.
+    #[must_use]
+    pub fn new_draft(
         name: impl Into<String>,
         manufacturer: Option<String>,
         description: Option<String>,
         coating: CoatingType,
     ) -> Self {
         Self {
-            header: AssetHeader::new(id, version, name, manufacturer, description),
+            header: AssetHeader::new(Uuid::new_v4(), 0, name, manufacturer, description),
             coating,
         }
+    }
+
+    /// Creates a new draft based on an existing coating (for updates).
+    /// Keeps the identical UUID to maintain identity, but resets the version to 0
+    /// so the registry loader knows it must assign the next available version number upon publishing.
+    #[must_use]
+    pub fn new_draft_from(&self) -> Self {
+        let mut draft = self.clone();
+        draft.header.version = 0; // Mark as unsaved draft
+        draft
     }
 }
 
@@ -38,7 +49,9 @@ impl RegisterableAsset for CoatingAsset {
     fn header(&self) -> &AssetHeader {
         &self.header
     }
-
+    fn header_mut(&mut self) -> &mut AssetHeader {
+        &mut self.header
+    }
     fn relative_subfolder() -> &'static str {
         "coatings"
     }
@@ -47,25 +60,20 @@ impl RegisterableAsset for CoatingAsset {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::asset::CURRENT_SCHEMA_VERSION;
+    use opossum_core::asset::CURRENT_SCHEMA_VERSION;
     use opossum_core::coatings::CoatingConstantR;
     use uom::si::f64::Ratio;
     use uom::si::ratio::percent;
 
     #[test]
     fn test_ideal_ar_coating_creation() {
-        let id = Uuid::new_v4();
-        let coating_asset = CoatingAsset::new(
-            id,
-            1,
+        let coating_asset = CoatingAsset::new_draft(
             "Ideal AR Coating",
             Some("Thorlabs".to_string()),
             Some("Perfect anti-reflective coating".to_string()),
             CoatingType::IdealAR,
         );
-
-        assert_eq!(coating_asset.id(), id);
-        assert_eq!(coating_asset.version(), 1);
+        assert_eq!(coating_asset.version(), 0);
         assert_eq!(coating_asset.name(), "Ideal AR Coating");
         assert_eq!(coating_asset.manufacturer(), Some("Thorlabs"));
         assert_eq!(coating_asset.coating, CoatingType::IdealAR);
@@ -74,14 +82,11 @@ mod tests {
 
     #[test]
     fn test_constant_r_coating_creation() {
-        let id = Uuid::new_v4();
         let reflectivity = Ratio::new::<percent>(50.0);
         let constant_r = CoatingConstantR::new(reflectivity)
             .expect("Failed to create constant reflectivity model");
 
-        let coating_asset = CoatingAsset::new(
-            id,
-            1,
+        let coating_asset = CoatingAsset::new_draft(
             "50/50 Beamsplitter Coating",
             Some("Edmund Optics".to_string()),
             None,
@@ -97,10 +102,7 @@ mod tests {
 
     #[test]
     fn test_fresnel_coating_creation() {
-        let id = Uuid::new_v4();
-        let coating_asset = CoatingAsset::new(
-            id,
-            1,
+        let coating_asset = CoatingAsset::new_draft(
             "Uncoated Surface (Fresnel)",
             None,
             None,
@@ -112,13 +114,10 @@ mod tests {
 
     #[test]
     fn test_coating_ron_serialization_roundtrip() {
-        let id = Uuid::nil();
         let reflectivity = Ratio::new::<percent>(99.5);
         let constant_r = CoatingConstantR::new(reflectivity).expect("Valid reflectivity");
 
-        let coating_asset = CoatingAsset::new(
-            id,
-            1,
+        let coating_asset = CoatingAsset::new_draft(
             "HR Mirror Coating",
             Some("CVI".to_string()),
             None,

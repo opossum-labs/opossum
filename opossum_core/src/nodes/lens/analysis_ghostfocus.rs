@@ -24,7 +24,7 @@ impl AnalysisGhostFocus for Lens {
         let refraction_intended = true;
         self.pass_through_surface_generic(
             in_port,
-            Some(refri),
+            Some(refri.optical.refractive_index),
             &mut rays_bundle,
             config,
             self.inverted(),

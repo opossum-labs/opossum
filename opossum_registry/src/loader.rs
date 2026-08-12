@@ -75,17 +75,16 @@ impl AssetLoader {
                 .map_err(|e| OpossumError::Other(format!("Failed to read directory entry: {e}")))?;
             let path = entry.path();
 
-            if path.is_file()
-                && let Some(file_name) = path.file_name().and_then(|s| s.to_str())
-            {
-                // Match pattern "v<NUMBER>.ron"
-                if file_name.starts_with('v')
-                    && std::path::Path::new(file_name)
-                        .extension()
-                        .is_some_and(|ext| ext.eq_ignore_ascii_case("ron"))
+            if path.is_file() {
+                // Safely extract the extension and the file stem (name without extension)
+                if let (Some(ext), Some(stem)) = (path.extension(), path.file_stem())
+                    && ext.eq_ignore_ascii_case("ron")
+                    && let Some(stem_str) = stem.to_str()
                 {
-                    let version_str = &file_name[1..file_name.len() - 4];
-                    if let Ok(version_num) = version_str.parse::<u32>() {
+                    // Check if it starts with 'v' and parse the remaining string
+                    if let Some(version_str) = stem_str.strip_prefix('v')
+                        && let Ok(version_num) = version_str.parse::<u32>()
+                    {
                         versions.push(version_num);
                     }
                 }
@@ -141,13 +140,20 @@ impl AssetLoader {
         })
     }
 
-    /// Saves an asset to disk using its current version from `AssetHeader`.
+    /// Publishes a material draft to the local registry.
     ///
-    /// Automatically creates any missing parent directories.
+    /// If the asset has version `0` (draft), it will automatically determine the next
+    /// available version number for its UUID, update the asset in-memory, and save it to disk.
     ///
     /// # Errors
-    /// Returns an [`OpossumError`] if serialization or file write operations fail.
-    pub fn save_asset<T: RegisterableAsset>(&self, asset: &T) -> OpmResult<PathBuf> {
+    /// Returns an [`OpossumError`] if directory creation, serialization, or writing fails.
+    pub fn publish<T: RegisterableAsset>(&self, asset: &mut T) -> OpmResult<PathBuf> {
+        // If it's a draft (version 0), assign the next proper version number
+        if asset.version() == 0 {
+            let next_version = self.next_version_number::<T>(asset.id());
+            asset.header_mut().version = next_version;
+        }
+
         let file_path = self.asset_file_path::<T>(asset.id(), asset.version());
         let dir_path = file_path.parent().ok_or_else(|| {
             OpossumError::Other(format!(
@@ -179,51 +185,6 @@ impl AssetLoader {
         Ok(file_path)
     }
 
-    /// Increments the asset's version number to `latest_version + 1` and saves it as a new file.
-    ///
-    /// This enforces the append-only versioning strategy.
-    ///
-    /// # Errors
-    /// Returns an [`OpossumError`] if writing or version resolution fails.
-    pub fn save_as_next_version<T: RegisterableAsset + Clone>(
-        &self,
-        asset: &mut T,
-    ) -> OpmResult<PathBuf> {
-        let next_version = self
-            .list_versions::<T>(asset.id())
-            .map_or(1, |versions| versions.last().map_or(1, |v| v + 1));
-
-        // Note: The AssetHeader version is updated via re-creation or direct mutation in the asset implementation.
-        // For trait compliance, we require the concrete asset to update its header version.
-        // Here we update the asset header version if possible, or save directly with next_version.
-        // As header is accessible via reference, concrete implementations can provide a mutable header or version setter.
-
-        // We write directly to the path computed with next_version:
-        let file_path = self.asset_file_path::<T>(asset.id(), next_version);
-        let dir_path = file_path.parent().ok_or_else(|| {
-            OpossumError::Other(format!("Invalid parent path for {}", file_path.display()))
-        })?;
-
-        fs::create_dir_all(dir_path).map_err(|e| {
-            OpossumError::Other(format!(
-                "Failed to create directory {}: {e}",
-                dir_path.display()
-            ))
-        })?;
-
-        let pretty_config = ron::ser::PrettyConfig::default();
-        let ron_str = ron::ser::to_string_pretty(asset, pretty_config)
-            .map_err(|e| OpossumError::Other(format!("Failed to serialize asset: {e}")))?;
-
-        fs::write(&file_path, ron_str).map_err(|e| {
-            OpossumError::Other(format!(
-                "Failed to write asset to {}: {e}",
-                file_path.display()
-            ))
-        })?;
-
-        Ok(file_path)
-    }
     /// Computes the next available version number for an asset UUID (`latest + 1`).
     ///
     /// Returns `1` if no prior versions exist.
@@ -239,8 +200,7 @@ impl AssetLoader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::material::MaterialAsset;
-    use opossum_core::refractive_index::RefractiveIndexType;
+    use opossum_core::{material::Material, refractive_index::RefractiveIndexType};
     use tempfile::TempDir;
 
     #[test]
@@ -248,20 +208,19 @@ mod tests {
         let temp_dir = TempDir::new().map_err(|e| OpossumError::Other(e.to_string()))?;
         let loader = AssetLoader::new(temp_dir.path());
 
-        let id = Uuid::new_v4();
-        let material = MaterialAsset::new(
-            id,
-            1,
+        // Create draft material
+        let mut material = Material::new_draft(
             "N-BK7",
             Some("Schott".to_string()),
             None,
             RefractiveIndexType::default(),
         );
 
-        loader.save_asset(&material)?;
+        // Publish to assign version 1 and write to disk
+        loader.publish(&mut material)?;
 
-        // Test loading with explicit version Option: Some(1)
-        let loaded: MaterialAsset = loader.load(id, Some(1))?;
+        // Test loading with explicit version Option: Some(1) using the actual material UUID
+        let loaded: Material = loader.load(material.id(), Some(1))?;
         assert_eq!(loaded.name(), "N-BK7");
         assert_eq!(loaded.version(), 1);
 
@@ -273,32 +232,22 @@ mod tests {
         let temp_dir = TempDir::new().map_err(|e| OpossumError::Other(e.to_string()))?;
         let loader = AssetLoader::new(temp_dir.path());
 
-        let id = Uuid::new_v4();
-
         // Save version 1
-        let mat_v1 = MaterialAsset::new(
-            id,
-            1,
+        let mut mat_v1 = Material::new_draft(
             "N-BK7 v1",
             Some("Schott".to_string()),
             None,
             RefractiveIndexType::default(),
         );
-        loader.save_asset(&mat_v1)?;
+        loader.publish(&mut mat_v1)?;
 
-        // Save version 2
-        let mat_v2 = MaterialAsset::new(
-            id,
-            2,
-            "N-BK7 v2",
-            Some("Schott".to_string()),
-            None,
-            RefractiveIndexType::default(),
-        );
-        loader.save_asset(&mat_v2)?;
+        // Save version 2 (derived draft from v1 retains the same UUID)
+        let mut mat_v2 = Material::new_draft_from(&mat_v1);
+        mat_v2.header.name = "N-BK7 v2".to_string(); // Update name for version 2
+        loader.publish(&mut mat_v2)?;
 
         // Test loading with None (should load latest, which is v2)
-        let latest: MaterialAsset = loader.load(id, None)?;
+        let latest: Material = loader.load(mat_v1.id(), None)?;
         assert_eq!(latest.version(), 2);
         assert_eq!(latest.name(), "N-BK7 v2");
 
@@ -311,22 +260,24 @@ mod tests {
         let loader = AssetLoader::new(temp_dir.path());
         let id = Uuid::new_v4();
 
-        let result: OpmResult<MaterialAsset> = loader.load(id, Some(1));
+        let result: OpmResult<Material> = loader.load(id, Some(1));
         assert!(result.is_err());
     }
+
     #[test]
     fn test_next_version_number_calculation() -> OpmResult<()> {
         let temp_dir = TempDir::new().map_err(|e| OpossumError::Other(e.to_string()))?;
         let loader = AssetLoader::new(temp_dir.path());
-        let id = Uuid::new_v4();
 
-        // Should return 1 when no versions exist yet
-        assert_eq!(loader.next_version_number::<MaterialAsset>(id), 1);
+        let mut mat_v1 = Material::new_draft("Glass", None, None, RefractiveIndexType::default());
+        let mat_id = mat_v1.id();
 
-        // Save v1 and check next version
-        let mat_v1 = MaterialAsset::new(id, 1, "Glass", None, None, RefractiveIndexType::default());
-        loader.save_asset(&mat_v1)?;
-        assert_eq!(loader.next_version_number::<MaterialAsset>(id), 2);
+        // Should return 1 when no versions exist for mat_id yet
+        assert_eq!(loader.next_version_number::<Material>(mat_id), 1);
+
+        // Publish v1 and verify that the next version calculation yields 2
+        loader.publish(&mut mat_v1)?;
+        assert_eq!(loader.next_version_number::<Material>(mat_id), 2);
 
         Ok(())
     }

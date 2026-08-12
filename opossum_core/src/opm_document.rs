@@ -9,7 +9,9 @@ use crate::{
     analyzers::{Analyzer, AnalyzerRegistration, AnalyzerType},
     core_optics::{NodeAttrExt, OpticNode, SceneryResources},
     error::{OpmResult, OpossumError},
+    material::Material,
     nodes::NodeGroup,
+    properties::{Proptype, proptype::AssetRef},
     reporting::analysis_report::AnalysisReport,
     utils::{
         LockExt,
@@ -79,6 +81,8 @@ pub struct OpmDocument {
     global_conf: Arc<Mutex<SceneryResources>>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     analyzers: IndexMap<Uuid, AnalyzerInfo>,
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    embedded_materials: IndexMap<Uuid, Material>,
 }
 impl Default for OpmDocument {
     fn default() -> Self {
@@ -87,6 +91,7 @@ impl Default for OpmDocument {
             scenery: NodeGroup::default(),
             global_conf: Arc::new(Mutex::new(SceneryResources::default())),
             analyzers: IndexMap::default(),
+            embedded_materials: IndexMap::default(),
         }
     }
 }
@@ -99,6 +104,63 @@ impl OpmDocument {
             scenery,
             ..Default::default()
         }
+    }
+    /// Replaces all `AssetRef::Id(Uuid)` properties in scene nodes with
+    /// the full `AssetRef::Inline(Material)` looked up from `embedded_materials`.
+    fn resolve_embedded_materials(&self) -> OpmResult<()> {
+        for node_ref in self.scenery.nodes() {
+            if let Ok(mut node) = node_ref.optical_ref.lock_opm() {
+                let mut updates = Vec::new();
+
+                for (prop_name, prop) in node.node_attr().properties() {
+                    if let Proptype::Material(AssetRef::Id(id)) = prop.prop() {
+                        let material = self.embedded_materials.get(id).ok_or_else(|| {
+                            OpossumError::OpmDocument(format!(
+                                "Embedded material with UUID {id} not found for property '{prop_name}' in node '{}'",
+                                node.node_attr().name()
+                            ))
+                        })?;
+
+                        updates.push((
+                            prop_name.clone(),
+                            Proptype::Material(AssetRef::Inline(material.clone())),
+                        ));
+                    }
+                }
+
+                for (prop_name, new_prop) in updates {
+                    node.node_attr_mut().set_property(&prop_name, new_prop)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Extracts full `Material` structs into `embedded_materials` and replaces
+    /// node properties with explicit `AssetRef::Id(Uuid)`.
+    fn prepare_materials_for_serialization(&mut self) -> OpmResult<()> {
+        for node_ref in self.scenery.nodes() {
+            if let Ok(mut node) = node_ref.optical_ref.lock_opm() {
+                let mut updates = Vec::new();
+
+                for (prop_name, prop) in node.node_attr().properties() {
+                    if let Proptype::Material(AssetRef::Inline(material)) = prop.prop() {
+                        self.embedded_materials
+                            .insert(material.id(), material.clone());
+
+                        updates.push((
+                            prop_name.clone(),
+                            Proptype::Material(AssetRef::Id(material.id())),
+                        ));
+                    }
+                }
+
+                for (prop_name, new_prop) in updates {
+                    node.node_attr_mut().set_property(&prop_name, new_prop)?;
+                }
+            }
+        }
+        Ok(())
     }
     /// Create a new [`OpmDocument`] from an `.opm` file at the given path.
     ///
@@ -139,20 +201,22 @@ impl OpmDocument {
         // `after_deserialization_hook`, which also runs per-node bottom-up during parse (before the whole
         // tree exists) via `OpticRef`'s deserializer.
         document.scenery.graph().resolve_all_references()?;
+
+        // Resolve embedded material references into full in-memory Material structs
+        document.resolve_embedded_materials()?;
+
         document
             .scenery
             .graph_mut()
             .update_global_config(&Some(document.global_conf.clone()));
         Ok(document)
     }
-    /// Save this [`OpmDocument`] to an `.opm` file with the given path
+    /// Saves this [`OpmDocument`] to an `.opm` file at the specified path.
+    ///
+    /// This is a read-only operation on `&self` and does not mutate the in-memory document state.
     ///
     /// # Errors
-    ///
-    /// This function will return an error if
-    ///   - the serialization of the document failed.
-    ///   - the file path cannot be created.
-    ///   - it cannot write into the file (e.g. no space).
+    /// Returns an [`OpossumError`] if file creation, writing, or serialization fails.
     pub fn save_to_file(&self, path: &Path) -> OpmResult<()> {
         let serialized = self.to_opm_file_string()?;
         let mut output = File::create(path).map_err(|e| {
@@ -171,16 +235,23 @@ impl OpmDocument {
         })?;
         Ok(())
     }
-    /// Returns the content of the `.opm` file from this [`OpmDocument`]
+    /// Generates the RON string content representation of this [`OpmDocument`].
+    ///
+    /// Internally clones the document to extract embedded materials and replace node
+    /// material properties with UUID references without mutating the original `self`.
     ///
     /// # Errors
-    ///
-    /// This function will return an error if the serialization of the internal structures fail.
+    /// Returns an [`OpossumError`] if serialization fails.
     pub fn to_opm_file_string(&self) -> OpmResult<String> {
+        // Create a temporary mutable clone for serialization preparation
+        let mut doc_to_serialize = self.clone();
+        doc_to_serialize.prepare_materials_for_serialization()?;
+
         let config = PrettyConfig::new()
             .extensions(Extensions::UNWRAP_VARIANT_NEWTYPES)
             .new_line("\n");
-        ron::ser::to_string_pretty(&self, config).map_err(|e| {
+
+        ron::ser::to_string_pretty(&doc_to_serialize, config).map_err(|e| {
             OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}"))
         })
     }
@@ -463,6 +534,72 @@ mod test {
         assert!(document.save_to_file(&path).is_ok());
         path.close()
             .map_err(|e| OpossumError::OpmDocument(format!("Error closing temp file: {e}")))?;
+        Ok(())
+    }
+    #[test]
+    fn test_material_referencing_serialization_roundtrip() -> OpmResult<()> {
+        // Note: Ensure AssetRef is imported in the test module:
+        // use crate::properties::proptype::AssetRef;
+
+        let material_id = Uuid::new_v4();
+        let const_refr = RefrIndexConst::new(1.5)?;
+        let material = Material::new_for_test(material_id, 1, "N-BK7 Shared", const_refr.into());
+
+        let mut scenery = NodeGroup::default();
+
+        // Create two lenses sharing the same material instance
+        let lens1 = Lens::new(
+            "Lens 1",
+            millimeter!(100.0),
+            millimeter!(-100.0),
+            millimeter!(10.0),
+            material.clone(),
+        )?;
+        let lens2 = Lens::new(
+            "Lens 2",
+            millimeter!(200.0),
+            millimeter!(-200.0),
+            millimeter!(12.0),
+            material,
+        )?;
+
+        scenery.add_node(lens1)?;
+        scenery.add_node(lens2)?;
+
+        let doc = OpmDocument::new(scenery);
+
+        // Serialize to RON string
+        let ron_str = doc.to_opm_file_string()?;
+
+        // Verify RON contains embedded_materials table with the single material
+        assert!(ron_str.contains("embedded_materials:"));
+        assert!(ron_str.contains("N-BK7 Shared"));
+
+        // Verify nodes in RON string use AssetRef::Id instead of duplicating full struct
+        assert!(ron_str.contains("Id("));
+
+        // Deserialize back from RON string
+        let reloaded_doc = OpmDocument::from_string(&ron_str)?;
+
+        // Verify that embedded_materials contains exactly 1 deduplicated entry
+        assert_eq!(reloaded_doc.embedded_materials.len(), 1);
+
+        // Verify that nodes have their full Material struct restored for calculation
+        for node_ref in reloaded_doc.scenery().nodes() {
+            let node = node_ref.optical_ref.lock_opm()?;
+            let prop = node.node_attr().get_property("material")?;
+
+            // Unpack the AssetRef::Inline to verify the material is correctly loaded into RAM
+            if let Proptype::Material(AssetRef::Inline(mat)) = prop {
+                assert_eq!(mat.id(), material_id);
+                assert_eq!(mat.name(), "N-BK7 Shared");
+            } else {
+                panic!(
+                    "Expected Proptype::Material(AssetRef::Inline) in node after deserialization resolution"
+                );
+            }
+        }
+
         Ok(())
     }
     #[test]
