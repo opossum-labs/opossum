@@ -7,7 +7,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     gain::{AMP_CONFIG, GainModel},
     geometry::{Cylinder, Plane, geo_surface::GeoSurfaceRef},
-    material::Material,
+    material::{MATERIAL, Material},
     meter, millimeter,
     nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
@@ -90,7 +90,7 @@ impl Default for CylindricLens {
             .unwrap();
         node_attr
             .create_property(
-                "material",
+                MATERIAL,
                 "material of the lens",
                 Material::new_draft(
                     "lens material",
@@ -99,6 +99,13 @@ impl Default for CylindricLens {
                     RefrIndexConst::new(1.5).unwrap().into(),
                 )
                 .into(),
+            )
+            .unwrap();
+        node_attr
+            .create_property(
+                AMP_CONFIG,
+                "amplification model of this component (None = passive)",
+                GainModel::default().into(),
             )
             .unwrap();
         let mut cyl_lens = Self { node_attr };
@@ -138,7 +145,7 @@ impl CylindricLens {
             .set_property("center thickness", center_thickness.into())?;
         cyl_lens
             .node_attr
-            .set_property("material", material.into().into())?;
+            .set_property(MATERIAL, material.into().into())?;
         cyl_lens.update_surfaces()?;
         Ok(cyl_lens)
     }
@@ -256,7 +263,7 @@ mod test {
         };
         assert_eq!(*ct, millimeter!(10.0));
         let Ok(Proptype::Material(AssetRef::Inline(material))) =
-            node.node_attr.get_property("material")
+            node.node_attr.get_property(MATERIAL)
         else {
             panic!()
         };
@@ -312,7 +319,7 @@ mod test {
         };
         assert_eq!(*ct, millimeter!(11.0));
         let Ok(Proptype::Material(AssetRef::Inline(material))) =
-            node.node_attr.get_property("material")
+            node.node_attr.get_property(MATERIAL)
         else {
             panic!()
         };

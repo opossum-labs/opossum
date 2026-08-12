@@ -36,6 +36,7 @@ use crate::components::node_editor::{
 use dioxus::prelude::*;
 use opossum_core::{
     prelude::{Properties, Property, Proptype},
+    properties::proptype::AssetRef,
     types::api_types::{NodeEditorPanel, NodeInfo},
 };
 use uuid::Uuid;
@@ -206,13 +207,21 @@ fn get_optical_editor(
             }
         }),
         Proptype::LightDataBuilder(_light_data_builder) => Some(rsx! { "no longer available" }),
-        Proptype::Material(material) => Some(rsx! {
+        // A document is hydrated on load, so a material reaching the editor is normally embedded.
+        // A bare id can only show up for a registry material this GUI cannot resolve yet - it is
+        // named rather than skipped, so the property never silently disappears from the panel.
+        Proptype::Material(AssetRef::Inline(material)) => Some(rsx! {
             MaterialEditor {
                 node_id,
                 material,
                 property_key,
                 on_change,
                 readonly,
+            }
+        }),
+        Proptype::Material(AssetRef::Id(material_id)) => Some(rsx! {
+            div { class: "accordion-content-wrapper-div",
+                "Material from registry ({material_id})"
             }
         }),
         Proptype::GainModel(gain_model) => Some(rsx! {

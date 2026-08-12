@@ -32,7 +32,6 @@ pub mod types;
 // pub mod render;
 pub mod asset;
 pub mod geometry;
-pub mod material;
 pub mod reporting;
 pub mod utils;
 

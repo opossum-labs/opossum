@@ -9,7 +9,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     gain::{AMP_CONFIG, GainModel},
     geometry::{Plane, geo_surface::GeoSurfaceRef},
-    material::Material,
+    material::{MATERIAL, Material},
     millimeter,
     nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
@@ -66,7 +66,7 @@ impl Default for Wedge {
             .unwrap();
         node_attr
             .create_property(
-                "material",
+                MATERIAL,
                 "material of the wedge",
                 Material::new_draft(
                     "lens material",
@@ -133,7 +133,7 @@ impl Wedge {
 
         wedge
             .node_attr
-            .set_property("material", material.into().into())?;
+            .set_property(MATERIAL, material.into().into())?;
         wedge.node_attr.set_property("wedge", wedge_angle.into())?;
         wedge.update_surfaces()?;
         Ok(wedge)
@@ -224,7 +224,7 @@ mod test {
         } else {
             assert!(false, "could not read angle.");
         }
-        if let Ok(Proptype::Material(AssetRef::Inline(p))) = node.properties().get("material") {
+        if let Ok(Proptype::Material(AssetRef::Inline(p))) = node.properties().get(MATERIAL) {
             if let RefractiveIndexType::Const(val) = &p.optical.refractive_index {
                 let idx = val.get_refractive_index(nanometer!(1000.0))?;
                 assert_eq!(idx, 1.5);
@@ -355,7 +355,7 @@ mod test {
         } else {
             assert!(false, "could not read angle.");
         }
-        if let Ok(Proptype::Material(AssetRef::Inline(p))) = n.properties().get("material") {
+        if let Ok(Proptype::Material(AssetRef::Inline(p))) = n.properties().get(MATERIAL) {
             if let RefractiveIndexType::Const(val) = &p.optical.refractive_index {
                 let idx = val.get_refractive_index(nanometer!(1000.0))?;
                 assert_eq!(idx, 1.0);

@@ -14,7 +14,7 @@ impl AnalysisGhostFocus for CylindricLens {
         _ray_collection: &mut Vec<Rays>,
         _bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
-        let (refri, _, _) = self.get_node_attributes_ray_trace(self.node_attr())?;
-        self.unified_analyze_volume_node_ghost_focus(incoming_data, refri, config)
+        let (material, _, _) = self.get_node_attributes_ray_trace(self.node_attr())?;
+        self.unified_analyze_volume_node_ghost_focus(incoming_data, &material, config)
     }
 }

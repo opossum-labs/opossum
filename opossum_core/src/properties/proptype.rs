@@ -15,7 +15,6 @@ use crate::{
             light_data_builder::LightDataBuilder,
             ray_data_source::{CollimatedSrc, ImageSrc, PointSrc, RayDataSource},
         },
-    material::Material,
     },
     material::Material,
     nodes::{
@@ -175,11 +174,6 @@ impl Proptype {
                 }
                 Self::Metertype(value) => template_engine.render("simple", &value.to_string()),
                 Self::GainModel(value) => template_engine.render("simple", &value.to_string()),
-                // A report reader wants the model that was used, not the way it was selected, so
-                // this renders the index model rather than the material's own display name.
-                Self::Material(value) => {
-                    template_engine.render("simple", &value.refractive_index().to_string())
-                }
                 Self::Spectrum(_)
                 | Self::HitMap(_)
                 | Self::RayPositionHistory(_)
@@ -482,9 +476,19 @@ mod test {
             )?,
             "Const".to_string()
         );
+        // An embedded material is named by its header, a referenced one only by its id.
         assert_eq!(
-            Proptype::Material(Material::default()).to_html("id", "property_name", 0)?,
-            "Sellmeier equation".to_string()
+            Proptype::from(Material::default()).to_html("id", "property_name", 0)?,
+            "Default Glass (v0)".to_string()
+        );
+        let material_id = Uuid::nil();
+        assert_eq!(
+            Proptype::Material(AssetRef::<Material>::Id(material_id)).to_html(
+                "id",
+                "property_name",
+                0
+            )?,
+            format!("MaterialRef({material_id})")
         );
         assert_eq!(
             Proptype::WaveFrontData(WaveFrontMap::default())

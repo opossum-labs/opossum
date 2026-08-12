@@ -9,7 +9,7 @@ use crate::{
     degree,
     error::{OpmResult, OpossumError},
     light::{LightResult, Rays, lightdata::ray_data_builder::RayDataBuilder},
-    material::Material,
+    material::{MATERIAL, Material},
     nodes::NodeGroup,
     picojoule,
     properties::{Proptype, proptype::AssetRef},
@@ -231,16 +231,19 @@ pub trait AnalysisRayTrace: OpticNode {
     /// Returns the necessary node attributes for ray tracing
     ///
     /// # Errors
-    /// This function errors if the node attributes: Isometry, Material or Center Thickness cannot be read,
+    /// This function errors if the node attributes: Isometry, Material or Center Thickness cannot be read.
+    ///
+    /// The whole [`Material`] is handed out, not just its refractive index model: a caller that
+    /// only refracts takes the index out of it, while later stages (thermal lensing, stress
+    /// birefringence, gain) need the other material data from the very same object.
     fn get_node_attributes_ray_trace(
         &self,
         node_attr: &NodeAttr,
     ) -> OpmResult<(Material, Length, Angle)> {
-        let Ok(Proptype::Material(AssetRef::Inline(material))) = node_attr.get_property("material")
+        let Ok(Proptype::Material(AssetRef::Inline(material))) = node_attr.get_property(MATERIAL)
         else {
             return Err(OpossumError::Analysis("cannot read material".into()));
         };
-        let index_model = material.refractive_index();
         let Ok(Proptype::Length(center_thickness)) = node_attr.get_property("center thickness")
         else {
             return Err(OpossumError::Analysis(

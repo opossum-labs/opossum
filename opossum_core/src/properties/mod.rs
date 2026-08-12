@@ -28,15 +28,12 @@ use crate::reporting::html_report::HtmlProperty;
 ///
 /// * `props` - the freshly deserialized properties, modified in place.
 fn migrate_legacy_properties(props: &mut IndexMap<String, Property>) {
-    // `refractive index` (a bare index model) became `material` (a `Material` wrapping it).
+    // `refractive index` (a bare index model) became `material` (a whole `Material` carrying it).
     if let Some(legacy) = props.shift_remove(LEGACY_REFRACTIVE_INDEX)
         && !props.contains_key(MATERIAL)
         && let Proptype::RefractiveIndex(index) = legacy.prop()
-        && let Ok(material) = Property::new(
-            Material::RefractiveIndex(index.clone()).into(),
-            String::new(),
-            None,
-        )
+        && let Ok(material) =
+            Property::new(Material::from(index.clone()).into(), String::new(), None)
     {
         props.insert(MATERIAL.to_string(), material);
     }
@@ -256,6 +253,7 @@ impl<'a> IntoIterator for &'a Properties {
 mod test {
     use super::*;
     use crate::{
+        properties::proptype::AssetRef,
         refractive_index::{RefrIndexConst, RefractiveIndexType},
         utils::test_helper::test_helper::check_logs,
     };
@@ -318,6 +316,17 @@ mod test {
         );
         Ok(())
     }
+    /// Read the refractive index model out of a migrated `material` property.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the property is missing or does not hold an embedded [`Material`].
+    fn migrated_index_model(props: &Properties) -> OpmResult<RefractiveIndexType> {
+        let Proptype::Material(AssetRef::Inline(material)) = props.get(MATERIAL)? else {
+            panic!("expected an embedded material property")
+        };
+        Ok(material.optical.refractive_index.clone())
+    }
     #[test]
     fn deserialize_migrates_legacy_refractive_index() -> OpmResult<()> {
         let props: Properties = ron::from_str(
@@ -325,31 +334,31 @@ mod test {
         )
         .map_err(|e| OpossumError::Other(e.to_string()))?;
         assert!(!props.contains(LEGACY_REFRACTIVE_INDEX));
-        let Proptype::Material(material) = props.get(MATERIAL)? else {
-            panic!("the legacy property was not migrated to a material")
-        };
         assert_eq!(
-            *material.refractive_index(),
+            migrated_index_model(&props)?,
             RefractiveIndexType::Const(RefrIndexConst::new(2.0)?)
         );
         Ok(())
     }
     #[test]
     fn deserialize_keeps_an_existing_material() -> OpmResult<()> {
-        // Should both names ever show up side by side, the already migrated value wins.
-        let props: Properties = ron::from_str(
-            r#"{
+        // Should both names ever show up side by side, the already migrated value wins. The
+        // material entry is generated rather than spelled out, so it cannot drift apart from the
+        // serialized shape of `Material` (which carries a whole asset header).
+        let material = ron::to_string(&Proptype::from(Material::from(RefractiveIndexType::Const(
+            RefrIndexConst::new(3.0)?,
+        ))))
+        .map_err(|e| OpossumError::Other(e.to_string()))?;
+        let props: Properties = ron::from_str(&format!(
+            r#"{{
                 "refractive index": RefractiveIndex(Const((refractive_index: 2.0))),
-                "material": Material(RefractiveIndex(Const((refractive_index: 3.0)))),
-            }"#,
-        )
+                "material": {material},
+            }}"#
+        ))
         .map_err(|e| OpossumError::Other(e.to_string()))?;
         assert!(!props.contains(LEGACY_REFRACTIVE_INDEX));
-        let Proptype::Material(material) = props.get(MATERIAL)? else {
-            panic!("expected a material property")
-        };
         assert_eq!(
-            *material.refractive_index(),
+            migrated_index_model(&props)?,
             RefractiveIndexType::Const(RefrIndexConst::new(3.0)?)
         );
         Ok(())

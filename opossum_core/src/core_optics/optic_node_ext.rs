@@ -6,6 +6,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     geometry::{Plane, geo_surface::GeoSurfaceRef},
     light::{LightData, LightRays, LightResult, Rays},
+    material::Material,
     nodes::fluence_detector::Fluence,
     refractive_index::RefractiveIndexType,
     utils::{LockExt, geom_transformation::Isometry},
@@ -144,8 +145,11 @@ pub trait OpticNodeExt {
     ///
     /// * `entry_surf_name`: name of the surface the rays enter through (typically `"input_1"`).
     /// * `exit_surf_name`: name of the surface the rays leave through (typically `"output_1"`).
-    /// * `refri_inside`: refractive index of the medium enclosed by the two surfaces. Behind the
-    ///   exit surface the node's ambient index is used.
+    /// * `material_inside`: the [`Material`] filling the volume enclosed by the two surfaces.
+    ///   Behind the exit surface the node's ambient index is used. The whole material is taken
+    ///   rather than just its refractive index because what happens *inside* the volume depends on
+    ///   more than refraction — absorption, thermal and stress data, and later the gain. The two
+    ///   surface passes themselves only ever need the index and are handed just that.
     /// * `rays_bundle`: the ray bundle, modified in place.
     /// * `strategy`: the analyzer-specific [`PropagationStrategy`].
     ///
@@ -157,7 +161,7 @@ pub trait OpticNodeExt {
         &mut self,
         entry_surf_name: &str,
         exit_surf_name: &str,
-        refri_inside: RefractiveIndexType,
+        material_inside: &Material,
         rays_bundle: &mut Vec<Rays>,
         strategy: &dyn PropagationStrategy,
     ) -> OpmResult<()>;
@@ -168,7 +172,7 @@ pub trait OpticNodeExt {
     /// through the volume via [`OpticNodeExt::pass_through_volume_generic`] and packs the result
     /// back onto the output port. All nodes with two surfaces enclosing a medium (lens, wedge,
     /// cylindric lens, ...) share this body, so their `AnalysisRayTrace::analyze` reduces to reading
-    /// the medium's refractive index and delegating here.
+    /// the medium's material and delegating here.
     ///
     /// Unlike the single-surface helper this does **not** call `set_light_data`: volume nodes are
     /// never detectors, and the hook would clone the whole ray bundle for nothing.
@@ -176,7 +180,7 @@ pub trait OpticNodeExt {
     /// # Parameters
     ///
     /// * `incoming_data`: the [`LightResult`] arriving at the node's input port.
-    /// * `refri_inside`: refractive index of the enclosed medium.
+    /// * `material_inside`: the [`Material`] filling the enclosed volume.
     /// * `strategy`: the analyzer-specific [`PropagationStrategy`].
     ///
     /// # Errors
@@ -187,7 +191,7 @@ pub trait OpticNodeExt {
     fn unified_analyze_volume_node(
         &mut self,
         incoming_data: LightResult,
-        refri_inside: RefractiveIndexType,
+        material_inside: &Material,
         strategy: &dyn PropagationStrategy,
     ) -> OpmResult<LightResult>;
     /// The ghost focus variant of [`OpticNodeExt::unified_analyze_volume_node`].
@@ -199,7 +203,7 @@ pub trait OpticNodeExt {
     /// # Parameters
     ///
     /// * `incoming_data`: the [`LightRays`] arriving at the node's input port.
-    /// * `refri_inside`: refractive index of the enclosed medium.
+    /// * `material_inside`: the [`Material`] filling the enclosed volume.
     /// * `strategy`: the analyzer-specific [`PropagationStrategy`].
     ///
     /// # Errors
@@ -209,7 +213,7 @@ pub trait OpticNodeExt {
     fn unified_analyze_volume_node_ghost_focus(
         &mut self,
         incoming_data: LightRays,
-        refri_inside: RefractiveIndexType,
+        material_inside: &Material,
         strategy: &dyn PropagationStrategy,
     ) -> OpmResult<LightRays>;
     /// A unified helper function to analyze optical nodes that feature a single interacting surface.
@@ -501,23 +505,25 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         &mut self,
         entry_surf_name: &str,
         exit_surf_name: &str,
-        refri_inside: RefractiveIndexType,
+        material_inside: &Material,
         rays_bundle: &mut Vec<Rays>,
         strategy: &dyn PropagationStrategy,
     ) -> OpmResult<()> {
         let backward = self.inverted();
         // The rays are meant to be refracted at both surfaces of the volume, not just traced to them.
         let refraction_intended = true;
+        // Refraction at a surface is governed by the index alone, so only that is handed down.
         self.pass_through_surface_generic(
             entry_surf_name,
-            Some(refri_inside),
+            Some(material_inside.refractive_index().clone()),
             rays_bundle,
             strategy,
             backward,
             refraction_intended,
         )?;
         // Inside the medium nothing happens yet. This is where the segmentation of the inner path
-        // and the evaluation of an active medium's gain model will be inserted.
+        // and the evaluation of an active medium's gain model will be inserted — the reason the
+        // whole `material_inside` is available here and not just its refractive index.
         self.pass_through_surface_generic(
             exit_surf_name,
             Some(self.ambient_idx()),
@@ -531,7 +537,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
     fn unified_analyze_volume_node(
         &mut self,
         mut incoming_data: LightResult,
-        refri_inside: RefractiveIndexType,
+        material_inside: &Material,
         strategy: &dyn PropagationStrategy,
     ) -> OpmResult<LightResult> {
         let (in_port_name, out_port_name) = single_io_port_names(self)?;
@@ -547,7 +553,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         self.pass_through_volume_generic(
             &in_port_name,
             &out_port_name,
-            refri_inside,
+            material_inside,
             &mut rays_bundle,
             strategy,
         )?;
@@ -560,7 +566,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
     fn unified_analyze_volume_node_ghost_focus(
         &mut self,
         incoming_data: LightRays,
-        refri_inside: RefractiveIndexType,
+        material_inside: &Material,
         strategy: &dyn PropagationStrategy,
     ) -> OpmResult<LightRays> {
         let (in_port_name, out_port_name) = single_io_port_names(self)?;
@@ -570,7 +576,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         self.pass_through_volume_generic(
             &in_port_name,
             &out_port_name,
-            refri_inside,
+            material_inside,
             &mut rays_bundle,
             strategy,
         )?;

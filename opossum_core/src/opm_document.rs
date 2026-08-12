@@ -868,12 +868,12 @@ mod test {
                 .node_attr()
                 .get_property(MATERIAL)
                 .cloned();
-            let Ok(Proptype::Material(material)) = property else {
-                return Err(OpossumError::Other("lens has no material property".into()));
+            let Ok(Proptype::Material(AssetRef::Inline(material))) = property else {
+                return Err(OpossumError::Other(
+                    "lens has no embedded material property".into(),
+                ));
             };
-            material
-                .refractive_index()
-                .get_refractive_index(nanometer!(1000.0))
+            material.get_refractive_index(nanometer!(1000.0))
         };
 
         // The index of the pre-rename file must survive the load instead of falling back to the
@@ -881,7 +881,8 @@ mod test {
         let document = OpmDocument::from_string(ron_data)?;
         assert_relative_eq!(refractive_index_of(&document)?, 2.0);
 
-        // Saving and reloading writes the migrated property under its new name and keeps the value.
+        // Saving moves the migrated material into `embedded_materials` and leaves an `AssetRef::Id`
+        // behind; loading hydrates it again. The value has to survive that detour as well.
         let reloaded = OpmDocument::from_string(&document.to_opm_file_string()?)?;
         assert_relative_eq!(refractive_index_of(&reloaded)?, 2.0);
         Ok(())

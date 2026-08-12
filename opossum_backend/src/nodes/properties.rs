@@ -114,6 +114,7 @@ mod test {
         gain::{ConstGain, GainModel, active_amp_model},
         material::{MATERIAL, Material},
         nodes::{Dummy, Lens},
+        properties::proptype::AssetRef,
         refractive_index::{RefrIndexConst, RefractiveIndexType},
         types::api_types::{DocumentChange, NodeEditorPanel, UndoRedoResponse},
     };
@@ -265,8 +266,8 @@ mod test {
                 .with_node_attr(node_id, |attr| attr.properties().get(MATERIAL).cloned())
                 .unwrap()
                 .unwrap();
-            let Proptype::Material(material) = property else {
-                panic!("a lens must carry a material property")
+            let Proptype::Material(AssetRef::Inline(material)) = property else {
+                panic!("a lens must carry an embedded material property")
             };
             material.refractive_index().clone()
         };
@@ -281,12 +282,7 @@ mod test {
 
         let req = test::TestRequest::patch()
             .uri(&format!("/{node_id}/properties/{MATERIAL}"))
-            .set_payload(
-                ron::to_string(&Proptype::Material(Material::RefractiveIndex(index_model(
-                    2.0,
-                ))))
-                .unwrap(),
-            )
+            .set_payload(ron::to_string(&Proptype::from(Material::from(index_model(2.0)))).unwrap())
             .insert_header(("Content-Type", "application/ron"))
             .to_request();
         assert_eq!(
