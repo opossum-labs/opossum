@@ -130,27 +130,29 @@ impl<T: IndexableAsset> AssetIndex<T> {
         name_query: Option<&str>,
         manufacturer_query: Option<&str>,
     ) -> Vec<&IndexEntry<T::IndexData>> {
+        // Allocate lowercase query strings only once before the loop
+        let mfg_query_lower = manufacturer_query.map(str::to_lowercase);
+        let name_query_lower = name_query.map(str::to_lowercase);
+
         self.entries
             .values()
             .filter(|entry| {
                 // Filter by manufacturer if requested
-                if let Some(mfg) = manufacturer_query {
-                    let mfg_lower = mfg.to_lowercase();
+                if let Some(mfg_lower) = &mfg_query_lower {
                     match &entry.common.manufacturer {
-                        Some(entry_mfg) if entry_mfg.to_lowercase().contains(&mfg_lower) => {}
+                        Some(entry_mfg) if entry_mfg.to_lowercase().contains(mfg_lower) => {}
                         _ => return false,
                     }
                 }
 
                 // Filter by name or description text query
-                if let Some(q) = name_query {
-                    let q_lower = q.to_lowercase();
-                    let name_matches = entry.common.name.to_lowercase().contains(&q_lower);
+                if let Some(q_lower) = &name_query_lower {
+                    let name_matches = entry.common.name.to_lowercase().contains(q_lower);
                     let desc_matches = entry
                         .common
                         .description
                         .as_ref()
-                        .is_some_and(|d| d.to_lowercase().contains(&q_lower));
+                        .is_some_and(|d| d.to_lowercase().contains(q_lower));
 
                     if !name_matches && !desc_matches {
                         return false;

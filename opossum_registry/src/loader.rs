@@ -75,18 +75,19 @@ impl AssetLoader {
                 .map_err(|e| OpossumError::Other(format!("Failed to read directory entry: {e}")))?;
             let path = entry.path();
 
-            if path.is_file()
-                && let Some(file_name) = path.file_name().and_then(|s| s.to_str())
-            {
-                // Match pattern "v<NUMBER>.ron"
-                if file_name.starts_with('v')
-                    && std::path::Path::new(file_name)
-                        .extension()
-                        .is_some_and(|ext| ext.eq_ignore_ascii_case("ron"))
-                {
-                    let version_str = &file_name[1..file_name.len() - 4];
-                    if let Ok(version_num) = version_str.parse::<u32>() {
-                        versions.push(version_num);
+            if path.is_file() {
+                // Safely extract the extension and the file stem (name without extension)
+                if let (Some(ext), Some(stem)) = (path.extension(), path.file_stem()) {
+                    if ext.eq_ignore_ascii_case("ron") {
+                        if let Some(stem_str) = stem.to_str() {
+                            // Check if it starts with 'v' and parse the remaining string
+                            if stem_str.starts_with('v') {
+                                let version_str = &stem_str[1..];
+                                if let Ok(version_num) = version_str.parse::<u32>() {
+                                    versions.push(version_num);
+                                }
+                            }
+                        }
                     }
                 }
             }
