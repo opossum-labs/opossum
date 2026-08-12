@@ -10,7 +10,9 @@ impl RegisterableAsset for Material {
     fn header(&self) -> &AssetHeader {
         &self.header
     }
-
+    fn header_mut(&mut self) -> &mut AssetHeader {
+        &mut self.header
+    }
     fn relative_subfolder() -> &'static str {
         "materials"
     }
@@ -30,25 +32,19 @@ impl IndexableAsset for Material {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use opossum_core::refractive_index::{RefrIndexConst, RefractiveIndexType};
-    use uuid::Uuid;
+    use opossum_core::refractive_index::RefrIndexConst;
 
     #[test]
     fn test_core_material_registry_integration() {
-        let id = Uuid::new_v4();
-        let const_refr = RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap());
+        let const_refr = RefrIndexConst::new(1.5).unwrap().into();
 
-        let material = Material::new(
-            id,
-            1,
+        let material = Material::new_draft(
             "N-BK7",
             Some("Schott".to_string()),
             Some("Standard Crown Glass".to_string()),
             const_refr,
         );
-
-        assert_eq!(material.id(), id);
-        assert_eq!(material.version(), 1);
+        assert_eq!(material.version(), 0);
         assert_eq!(material.name(), "N-BK7");
         assert_eq!(Material::relative_subfolder(), "materials");
     }

@@ -11,7 +11,7 @@ use crate::{
     nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
     radian,
-    refractive_index::{RefrIndexConst, RefractiveIndexType},
+    refractive_index::RefrIndexConst,
     utils::geom_transformation::Isometry,
 };
 use log::warn;
@@ -90,9 +90,11 @@ impl Default for Lens {
             .create_property(
                 "material",
                 "material of the lens",
-                Material::new_custom(
+                Material::new_draft(
                     "lens material",
-                    RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()),
+                    None,
+                    None,
+                    RefrIndexConst::new(1.5).unwrap().into(),
                 )
                 .into(),
             )

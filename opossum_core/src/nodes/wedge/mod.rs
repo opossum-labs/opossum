@@ -12,7 +12,7 @@ use crate::{
     millimeter,
     nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
-    refractive_index::{RefrIndexConst, RefractiveIndexType},
+    refractive_index::RefrIndexConst,
     utils::geom_transformation::Isometry,
 };
 use nalgebra::Point3;
@@ -67,9 +67,11 @@ impl Default for Wedge {
             .create_property(
                 "material",
                 "material of the wedge",
-                Material::new_custom(
+                Material::new_draft(
                     "lens material",
-                    RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()),
+                    None,
+                    None,
+                    RefrIndexConst::new(1.5).unwrap().into(),
                 )
                 .into(),
             )
@@ -193,6 +195,7 @@ mod test {
         nanometer,
         nodes::test_helper::test_helper::*,
         properties::{Proptype, proptype::AssetRef},
+        refractive_index::RefractiveIndexType,
     };
     use nalgebra::Vector3;
 

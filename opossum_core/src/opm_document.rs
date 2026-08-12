@@ -543,14 +543,7 @@ mod test {
 
         let material_id = Uuid::new_v4();
         let const_refr = RefrIndexConst::new(1.5)?;
-        let material = Material::new(
-            material_id,
-            1,
-            "N-BK7 Shared",
-            None,
-            None,
-            const_refr.into(),
-        );
+        let material = Material::new_for_test(material_id, 1, "N-BK7 Shared", const_refr.into());
 
         let mut scenery = NodeGroup::default();
 

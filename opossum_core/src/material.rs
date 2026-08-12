@@ -79,26 +79,49 @@ pub struct Material {
 }
 
 impl Material {
-    /// Creates a new `Material` instance with explicit ID, version, and metadata.
-    pub fn new(
-        id: Uuid,
-        version: u32,
+    /// Create a new [`Material`]
+    ///
+    /// Creates a completely new material draft with a random UUID and version 0.
+    /// Version 0 indicates that this material is a local draft and has not yet been published to the registry.
+    #[must_use]
+    pub fn new_draft(
         name: impl Into<String>,
         manufacturer: Option<String>,
         description: Option<String>,
         refractive_index: RefractiveIndexType,
     ) -> Self {
         Self {
-            header: AssetHeader::new(id, version, name, manufacturer, description),
+            header: AssetHeader::new(Uuid::new_v4(), 0, name, manufacturer, description),
             optical: OpticalProperties::new(refractive_index),
             thermal: None,
             mechanical: None,
         }
     }
 
-    /// Creates an ad-hoc local material with a newly generated UUID, version 0, and default metadata.
-    pub fn new_custom(name: impl Into<String>, refractive_index: RefractiveIndexType) -> Self {
-        Self::new(Uuid::new_v4(), 0, name, None, None, refractive_index)
+    /// Creates a new draft based on an existing material (for updates).
+    /// Keeps the identical UUID to maintain identity, but resets the version to 0
+    /// so the registry loader knows it must assign the next available version number upon publishing.
+    #[must_use]
+    pub fn new_draft_from(&self) -> Self {
+        let mut draft = self.clone();
+        draft.header.version = 0; // Mark as unsaved draft
+        draft
+    }
+
+    /// For testing purposes only: Creates a material with a specific UUID and version.
+    #[cfg(test)]
+    pub fn new_for_test(
+        id: Uuid,
+        version: u32,
+        name: impl Into<String>,
+        refractive_index: RefractiveIndexType,
+    ) -> Self {
+        Self {
+            header: AssetHeader::new(id, version, name, None, None),
+            optical: OpticalProperties::new(refractive_index),
+            thermal: None,
+            mechanical: None,
+        }
     }
 
     /// Returns the unique ID of the material.
@@ -132,9 +155,11 @@ impl Material {
 
 impl Default for Material {
     fn default() -> Self {
-        Self::new_custom(
+        Self::new_draft(
             "Default Glass",
-            RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()),
+            None,
+            None,
+            RefrIndexConst::new(1.5).unwrap().into(),
         )
     }
 }
@@ -143,13 +168,13 @@ impl Default for Material {
 
 impl From<RefractiveIndexType> for Material {
     fn from(refr: RefractiveIndexType) -> Self {
-        Self::new_custom("Custom Material", refr)
+        Self::new_draft("Custom Material", None, None, refr)
     }
 }
 
 impl From<&RefractiveIndexType> for Material {
     fn from(refr: &RefractiveIndexType) -> Self {
-        Self::new_custom("Custom Material", refr.clone())
+        Self::new_draft("Custom Material", None, None, refr.clone())
     }
 }
 
@@ -157,13 +182,13 @@ impl From<&RefractiveIndexType> for Material {
 
 impl From<RefrIndexConst> for Material {
     fn from(refr: RefrIndexConst) -> Self {
-        Self::new_custom("Custom Material", RefractiveIndexType::Const(refr))
+        Self::new_draft("Custom Material", None, None, refr.into())
     }
 }
 
 impl From<&RefrIndexConst> for Material {
     fn from(refr: &RefrIndexConst) -> Self {
-        Self::new_custom("Custom Material", RefractiveIndexType::Const(*refr))
+        Self::new_draft("Custom Material", None, None, (*refr).into())
     }
 }
 
@@ -171,55 +196,49 @@ impl From<&RefrIndexConst> for Material {
 
 impl From<RefrIndexSellmeier1> for Material {
     fn from(refr: RefrIndexSellmeier1) -> Self {
-        Self::new_custom("Custom Material", RefractiveIndexType::Sellmeier1(refr))
+        Self::new_draft("Custom Material", None, None, refr.into())
     }
 }
 
 impl From<&RefrIndexSellmeier1> for Material {
     fn from(refr: &RefrIndexSellmeier1) -> Self {
-        Self::new_custom(
-            "Custom Material",
-            RefractiveIndexType::Sellmeier1(refr.clone()),
-        )
+        Self::new_draft("Custom Material", None, None, refr.clone().into())
     }
 }
 
 impl From<RefrIndexSchott> for Material {
     fn from(refr: RefrIndexSchott) -> Self {
-        Self::new_custom("Custom Material", RefractiveIndexType::Schott(refr))
+        Self::new_draft("Custom Material", None, None, refr.into())
     }
 }
 
 impl From<&RefrIndexSchott> for Material {
     fn from(refr: &RefrIndexSchott) -> Self {
-        Self::new_custom("Custom Material", RefractiveIndexType::Schott(refr.clone()))
+        Self::new_draft("Custom Material", None, None, refr.clone().into())
     }
 }
 
 impl From<RefrIndexConrady> for Material {
     fn from(refr: RefrIndexConrady) -> Self {
-        Self::new_custom("Custom Material", RefractiveIndexType::Conrady(refr))
+        Self::new_draft("Custom Material", None, None, refr.into())
     }
 }
 
 impl From<&RefrIndexConrady> for Material {
     fn from(refr: &RefrIndexConrady) -> Self {
-        Self::new_custom(
-            "Custom Material",
-            RefractiveIndexType::Conrady(refr.clone()),
-        )
+        Self::new_draft("Custom Material", None, None, refr.clone().into())
     }
 }
 
 impl From<RefrIndexAir> for Material {
     fn from(refr: RefrIndexAir) -> Self {
-        Self::new_custom("Custom Material", RefractiveIndexType::Air(refr))
+        Self::new_draft("Custom Material", None, None, refr.into())
     }
 }
 
 impl From<&RefrIndexAir> for Material {
     fn from(refr: &RefrIndexAir) -> Self {
-        Self::new_custom("Custom Material", RefractiveIndexType::Air(refr.clone()))
+        Self::new_draft("Custom Material", None, None, refr.clone().into())
     }
 }
 
@@ -231,7 +250,7 @@ mod tests {
     #[test]
     fn test_custom_material_creation() -> OpmResult<()> {
         let const_refr = RefrIndexConst::new(1.5)?;
-        let material = Material::new_custom("Test Glass", const_refr.into());
+        let material = Material::new_draft("Test Glass", None, None, const_refr.into());
 
         assert_eq!(material.name(), "Test Glass");
         assert_eq!(material.version(), 0);

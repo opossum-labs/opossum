@@ -7,6 +7,10 @@ pub trait RegisterableAsset: Serialize + for<'de> Deserialize<'de> {
     /// Returns a reference to the asset's shared header.
     fn header(&self) -> &AssetHeader;
 
+    /// Returns a mutable reference to the asset's shared header.
+    /// This allows the registry to update the version number upon publishing.
+    fn header_mut(&mut self) -> &mut AssetHeader;
+
     /// Returns the relative subfolder name in the registry repository (e.g., "materials").
     fn relative_subfolder() -> &'static str;
 
@@ -53,7 +57,9 @@ mod tests {
         fn header(&self) -> &AssetHeader {
             &self.header
         }
-
+        fn header_mut(&mut self) -> &mut AssetHeader {
+            &mut self.header
+        }
         fn relative_subfolder() -> &'static str {
             "mock_assets"
         }
