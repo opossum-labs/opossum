@@ -6,7 +6,6 @@ use super::{Analyzer, AnalyzerType};
 use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
     core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, node_attr::HasNodeAttr},
-    degree,
     error::{OpmResult, OpossumError},
     light::{LightResult, Rays, lightdata::ray_data_builder::RayDataBuilder},
     material::{MATERIAL, Material},
@@ -27,7 +26,7 @@ inventory::submit! {
         |at| if let AnalyzerType::RayTrace(config) = at { Some(Box::new(RayTracingAnalyzer::new(config.clone()))) } else { None }
     )
 }
-use uom::si::f64::{Angle, Energy, Length};
+use uom::si::f64::Energy;
 
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 /// Configuration data for a rays tracing analysis.
@@ -228,34 +227,30 @@ pub trait AnalysisRayTrace: OpticNode {
             self.analyze(incoming_data, config)
         }
     }
-    /// Returns the necessary node attributes for ray tracing
+    /// Returns the [`Material`] a volume node is filled with.
+    ///
+    /// The whole material is handed out, not just its refractive index model: a caller that only
+    /// refracts takes the index out of it, while later stages (thermal lensing, stress
+    /// birefringence, gain) need the other material data from the very same object.
+    /// 
+    /// # Arguments
+    ///
+    /// * `node_attr` - attributes of the node to read the material from.
+    ///
+    /// # Returns
+    ///
+    /// A clone of the node's material.
     ///
     /// # Errors
-    /// This function errors if the node attributes: Isometry, Material or Center Thickness cannot be read.
     ///
-    /// The whole [`Material`] is handed out, not just its refractive index model: a caller that
-    /// only refracts takes the index out of it, while later stages (thermal lensing, stress
-    /// birefringence, gain) need the other material data from the very same object.
-    fn get_node_attributes_ray_trace(
-        &self,
-        node_attr: &NodeAttr,
-    ) -> OpmResult<(Material, Length, Angle)> {
+    /// This function errors if the node does not carry an embedded [`Material`] under the
+    /// [`MATERIAL`] property.
+    fn get_ray_trace_material(&self, node_attr: &NodeAttr) -> OpmResult<Material> {
         let Ok(Proptype::Material(AssetRef::Inline(material))) = node_attr.get_property(MATERIAL)
         else {
             return Err(OpossumError::Analysis("cannot read material".into()));
         };
-        let Ok(Proptype::Length(center_thickness)) = node_attr.get_property("center thickness")
-        else {
-            return Err(OpossumError::Analysis(
-                "cannot read center thickness".into(),
-            ));
-        };
-        let angle = if let Ok(Proptype::Angle(wedge)) = node_attr.get_property("wedge") {
-            *wedge
-        } else {
-            degree!(0.)
-        };
-        Ok((material.clone(), *center_thickness, angle))
+        Ok(material.clone())
     }
 }
 

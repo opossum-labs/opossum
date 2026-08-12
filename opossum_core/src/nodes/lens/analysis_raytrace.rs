@@ -12,7 +12,7 @@ impl AnalysisRayTrace for Lens {
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        let (material, _, _) = self.get_node_attributes_ray_trace(self.node_attr())?;
+        let material = self.get_ray_trace_material(self.node_attr())?;
         self.unified_analyze_volume_node(incoming_data, &material, config)
     }
 }

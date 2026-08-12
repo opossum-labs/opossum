@@ -14,7 +14,7 @@ impl AnalysisGhostFocus for Wedge {
         _ray_collection: &mut Vec<Rays>,
         _bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
-        let (material, _, _) = self.get_node_attributes_ray_trace(self.node_attr())?;
+        let material = self.get_ray_trace_material(self.node_attr())?;
         self.unified_analyze_volume_node_ghost_focus(incoming_data, &material, config)
     }
 }
