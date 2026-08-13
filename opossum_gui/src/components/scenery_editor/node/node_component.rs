@@ -21,7 +21,8 @@ use dioxus::html::geometry::euclid::default::Point2D;
 use dioxus::html::input_data::MouseButton;
 use dioxus::prelude::*;
 use opossum_core::{
-    gain::{AMP_CONFIG_NODE_TYPES, ConstGain, GainModel},
+    gain::{ConstGain, GainModel},
+    nodes::is_volume_node_type,
     types::api_types::NewRefNode,
 };
 use uuid::Uuid;
@@ -46,10 +47,11 @@ pub fn Node(
     let node_id = node.id();
     let is_optical_node = node.is_optical_node();
     // Only components with a physical volume can amplify - they are the ones carrying the
-    // `amp config` property (see `AMP_CONFIG_NODE_TYPES`).
+    // `amp config` property. The canvas knows a node by its type name, so it asks the core rather
+    // than keeping a list of its own.
     let supports_amp_config = matches!(
         node.node_type(),
-        NodeType::Optical(node_type) if AMP_CONFIG_NODE_TYPES.contains(&node_type.as_str())
+        NodeType::Optical(node_type) if is_volume_node_type(node_type)
     );
     // The amp entry is a toggle, so it needs the node's current state. That state is already on the
     // canvas, so a right-click costs no request.

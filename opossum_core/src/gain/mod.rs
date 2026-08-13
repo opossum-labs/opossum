@@ -32,17 +32,12 @@ use strum::EnumIter;
 
 /// Name of the property that carries the [`GainModel`] of a node with a volume.
 ///
-/// Every node listed in [`AMP_CONFIG_NODE_TYPES`] declares this property unconditionally, so
-/// turning a component into an amplifier is an ordinary property patch on this key.
+/// Every node that encloses a volume — those implementing
+/// [`Volumetric`](crate::core_optics::Volumetric) — declares this property unconditionally, so
+/// turning a component into an amplifier is an ordinary property patch on this key. A user
+/// interface that only knows a node by its type name can ask
+/// [`is_volume_node_type`](crate::nodes::is_volume_node_type) whether that is the case.
 pub const AMP_CONFIG: &str = "amp config";
-
-/// Node types that declare the [`AMP_CONFIG`] property, i.e. the components that have a physical
-/// volume in which amplification could take place.
-///
-/// This is the list a user interface needs in order to decide whether it may offer amplification
-/// for a node it only knows by its type name. It is kept in sync with the actual node declarations
-/// by the `amp_config_node_types_are_exhaustive` test below.
-pub const AMP_CONFIG_NODE_TYPES: &[&str] = &["cylindric lens", "lens", "wedge"];
 
 /// Return the name of the active [`GainModel`] declared by `node_attr`, or `None` if the node does
 /// not amplify.
@@ -200,37 +195,11 @@ mod test {
     use crate::{
         core_optics::node_attr::HasNodeAttr,
         error::OpossumError,
-        nodes::{Dummy, Lens, create_node_ref, node_types},
-        utils::LockExt,
+        nodes::{Dummy, Lens},
     };
     use approx::assert_relative_eq;
     use strum::IntoEnumIterator;
 
-    /// The hand-written list must name exactly the node types that have a volume.
-    ///
-    /// Which types those are is stated by the
-    /// [`Volumetric`](crate::core_optics::Volumetric) capability, and that the capability agrees
-    /// with the properties a volume node carries is checked where it is defined. This list is a
-    /// third copy of the same fact, kept only because a user interface knows a node by its type
-    /// name and has no node to ask — so it has to be pinned to the capability until it is replaced
-    /// by one derived at runtime.
-    #[test]
-    fn amp_config_node_types_are_exhaustive() -> OpmResult<()> {
-        let mut volume_node_types = Vec::new();
-        for (node_type, _) in node_types() {
-            let optic_ref = create_node_ref(node_type)?;
-            let node = optic_ref.optical_ref.lock_opm()?;
-            if node.as_volume().is_some() {
-                volume_node_types.push(node_type);
-            }
-        }
-        volume_node_types.sort_unstable();
-        assert_eq!(
-            volume_node_types, AMP_CONFIG_NODE_TYPES,
-            "AMP_CONFIG_NODE_TYPES does not match the node types that have a volume"
-        );
-        Ok(())
-    }
     #[test]
     fn active_amp_model_reports_only_active_models() -> OpmResult<()> {
         // A node without a volume never declares the property at all.

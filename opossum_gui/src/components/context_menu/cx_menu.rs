@@ -29,7 +29,8 @@ pub enum CxtCommand {
     },
     /// Set the `amp config` property of a node with a volume, in either direction: an active model
     /// turns it into an amplifier, [`GainModel::None`] turns it back into a passive component.
-    /// Only offered for the node types in [`opossum_core::gain::AMP_CONFIG_NODE_TYPES`].
+    /// Only offered for node types with a volume, i.e. those
+    /// [`opossum_core::nodes::is_volume_node_type`] accepts.
     SetAmpConfig {
         node_id: Uuid,
         graph_id: Uuid,
