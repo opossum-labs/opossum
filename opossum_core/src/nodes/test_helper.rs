@@ -441,16 +441,19 @@ pub mod test_helper {
         let body = node.volume_body()?;
         assert!(body.contains(&point_at(millimeter!(24.9)))?);
         assert!(!body.contains(&point_at(millimeter!(25.1)))?);
-        // a shape that does not state where the medium ends leaves the volume undefined. An open
-        // aperture is one of them: two curved surfaces may happen to close the volume on their own,
-        // but nothing guarantees that they do.
+        // A shape that does not state where the medium ends leaves the volume undefined and is
+        // rejected right where it is set, before it can reach a file. An open aperture is one of
+        // them: two curved surfaces may happen to close the volume on their own, but nothing
+        // guarantees that they do.
         for undefined_extent in [
             ApertureShape::Open,
             ApertureShape::Gaussian(GaussianShape::new((millimeter!(5.0), millimeter!(5.0)))?),
         ] {
-            node.node_attr_mut()
-                .set_property(CLEAR_APERTURE, undefined_extent.into())?;
-            assert!(node.volume_body().is_err());
+            assert!(
+                node.node_attr_mut()
+                    .set_property(CLEAR_APERTURE, undefined_extent.into())
+                    .is_err()
+            );
         }
         Ok(())
     }

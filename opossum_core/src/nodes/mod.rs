@@ -74,6 +74,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     gain::{AMP_CONFIG, GainModel},
     geometry::body::{CLEAR_APERTURE, default_clear_aperture},
+    properties::validator::Validator,
 };
 
 /// Declare the properties every node with a physical volume carries.
@@ -91,9 +92,10 @@ use crate::{
 ///
 /// This function returns an error if one of the properties is already declared.
 pub fn create_volume_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
-    node_attr.create_property(
+    node_attr.create_property_with_validator(
         CLEAR_APERTURE,
         "transversal extent of the medium",
+        Validator::ApertureDelimitsRegion,
         default_clear_aperture().into(),
     )?;
     node_attr.create_property(

@@ -46,11 +46,18 @@ pub trait GeoSurface: Send + Sync + Debug {
     fn calc_intersect_and_normal_do(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)>;
     /// Return whether the given point lies behind this [`GeoSurface`].
     ///
-    /// "Behind" refers to the half space on the positive z side of the surface in its own local
-    /// frame — the side a ray travelling along the local z axis reaches *after* passing the
-    /// surface. This is the half-space test a bounded body is built from: a point inside a body
-    /// lies behind the body's entrance surface but not behind its exit surface (see
+    /// "Behind" refers to the side a ray travelling along the local z axis reaches *after* passing
+    /// the surface. This is the test a bounded body is built from: a point inside a body lies
+    /// behind the body's entrance surface but not behind its exit surface (see
     /// [`Body`](super::body::Body)).
+    ///
+    /// **Note**: This is a strict half space only for the surfaces that are one, i.e.
+    /// [`Plane`](super::Plane) and [`Parabola`](super::Parabola). [`Sphere`](super::Sphere) and
+    /// [`Cylinder`](super::Cylinder) answer "inside the ball / cylinder of their radius", which
+    /// coincides with the half space near the vertex and departs from it towards the rim, where
+    /// the surface curves away and eventually closes on itself. Composing two of them into a body
+    /// is therefore exact as long as the body reaches less far transversally than its radii of
+    /// curvature — which is what a clear aperture normally guarantees.
     ///
     /// # Arguments
     ///
