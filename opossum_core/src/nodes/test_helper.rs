@@ -417,19 +417,17 @@ pub mod test_helper {
         )?;
         assert!(node.volume_body()?.contains(&point_at(millimeter!(24.9)))?);
         assert!(!node.volume_body()?.contains(&point_at(millimeter!(25.1)))?);
-        // an open clear aperture leaves the medium reaching as far as its surfaces do, which is
-        // well beyond the default extent but not necessarily forever: two curved surfaces close
-        // the volume on their own
-        node.node_attr_mut()
-            .set_property(CLEAR_APERTURE, ApertureShape::Open.into())?;
-        assert!(node.volume_body()?.contains(&point_at(millimeter!(20.0)))?);
-        // a shape without a hard edge cannot state where the medium ends
-        node.node_attr_mut().set_property(
-            CLEAR_APERTURE,
-            ApertureShape::Gaussian(GaussianShape::new((millimeter!(5.0), millimeter!(5.0)))?)
-                .into(),
-        )?;
-        assert!(node.volume_body().is_err());
+        // a shape that does not state where the medium ends leaves the volume undefined. An open
+        // aperture is one of them: two curved surfaces may happen to close the volume on their own,
+        // but nothing guarantees that they do.
+        for undefined_extent in [
+            ApertureShape::Open,
+            ApertureShape::Gaussian(GaussianShape::new((millimeter!(5.0), millimeter!(5.0)))?),
+        ] {
+            node.node_attr_mut()
+                .set_property(CLEAR_APERTURE, undefined_extent.into())?;
+            assert!(node.volume_body().is_err());
+        }
         Ok(())
     }
 

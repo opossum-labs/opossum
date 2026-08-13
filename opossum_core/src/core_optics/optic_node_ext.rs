@@ -14,6 +14,7 @@ use crate::{
     nodes::fluence_detector::Fluence,
     properties::Proptype,
     refractive_index::RefractiveIndexType,
+    types::validated_type_definitions::ValidatedCrossSection,
     utils::{LockExt, geom_transformation::Isometry},
 };
 use nalgebra::Vector3;
@@ -343,34 +344,27 @@ fn single_io_port_names<T: ?Sized + OpticNode>(node: &T) -> OpmResult<(String, S
 ///
 /// # Returns
 ///
-/// The cross section of the node's volume, or `None` if it is transversally unbounded — either
-/// because its clear aperture is open or because it does not declare one at all.
+/// The cross section of the node's volume.
 ///
 /// # Errors
 ///
-/// This function returns an error if the node's clear aperture is set to a shape without a hard
-/// edge, which cannot state where a medium ends.
-fn cross_section<T: ?Sized + OpticNode>(node: &T) -> OpmResult<Option<Aperture>> {
+/// This function returns an error if the node does not declare a clear aperture at all or if that
+/// clear aperture does not delimit a region, which leaves the extent of the medium undefined.
+fn cross_section<T: ?Sized + OpticNode>(node: &T) -> OpmResult<ValidatedCrossSection> {
     let Ok(Proptype::Aperture(clear_aperture)) = node.node_attr().get_property(CLEAR_APERTURE)
     else {
-        return Ok(None);
-    };
-    if clear_aperture.is_none() {
-        return Ok(None);
-    }
-    if !clear_aperture.is_binary() {
         return Err(OpossumError::Other(format!(
-            "the {CLEAR_APERTURE} of node '{}' is of shape '{clear_aperture}', which does not \
-             delimit a region - only a shape with a hard edge can state where a medium ends",
+            "node '{}' has no '{CLEAR_APERTURE}' property, so the extent of its volume is unknown",
             node.name()
         )));
-    }
-    Ok(Some(Aperture::new(
-        clear_aperture.clone(),
-        ApertureType::Hole,
-        None,
-        None,
-    )?))
+    };
+    let aperture = Aperture::new(clear_aperture.clone(), ApertureType::Hole, None, None)?;
+    ValidatedCrossSection::try_new(aperture).map_err(|e| {
+        OpossumError::Other(format!(
+            "the {CLEAR_APERTURE} of node '{}' cannot bound its volume: {e}",
+            node.name()
+        ))
+    })
 }
 
 impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNodeExt for T {
@@ -630,12 +624,12 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         };
         let entrance_surface = surface_by_name(&entrance_name)?;
         let exit_surface = surface_by_name(&exit_name)?;
-        SurfaceBoundedBody::new(
+        Ok(SurfaceBoundedBody::new(
             entrance_surface.geo_surface(),
             exit_surface.geo_surface(),
             cross_section(self)?,
             self.effective_node_iso().unwrap_or_else(Isometry::identity),
-        )
+        ))
     }
 
     fn unified_analyze_volume_node(

@@ -13,17 +13,19 @@
 //! the same body: a disk is two [`Plane`](crate::geometry::Plane)s with a circular cross section, a
 //! slab two planes with a rectangular one, a lens two [`Sphere`](crate::geometry::Sphere)s.
 //!
-//! The cross section is expressed as an [`Aperture`], but only those apertures that actually
-//! delimit a region qualify (see [`Aperture::is_geometric_bound`]) — an aperture is in general a
-//! transmission mask, and softening or inverting the transmission says nothing about where the
-//! material ends.
+//! The cross section is expressed as an [`Aperture`](crate::apertures::Aperture), but only those
+//! apertures that actually delimit a region qualify, which is what
+//! [`ValidatedCrossSection`] guarantees — an aperture is in general a transmission mask, and
+//! softening, inverting or omitting the transmission edge says nothing about where the material
+//! ends.
 
 use crate::{
-    apertures::{Aperture, ApertureShape, CircleShape},
-    error::{OpmResult, OpossumError},
+    apertures::{ApertureShape, CircleShape},
+    error::OpmResult,
     geometry::geo_surface::GeoSurfaceRef,
     light::Ray,
     millimeter,
+    types::validated_type_definitions::ValidatedCrossSection,
     utils::{LockExt, geom_transformation::Isometry, math_utils::distance_3d_point},
 };
 use nalgebra::Point3;
@@ -40,8 +42,9 @@ use uom::si::f64::Length;
 /// medium ends. The two are independent — putting a pinhole in front of a lens does not make the
 /// lens smaller.
 ///
-/// Set to [`ApertureShape::Open`] the component is transversally unbounded and reaches as far as
-/// its two surfaces do.
+/// Every volume node has one: a component of unstated size has no volume to speak of, and two
+/// curved surfaces only happen to close on their own if they are curved strongly enough. Shapes
+/// that leave the extent undefined — [`ApertureShape::Open`] among them — are therefore rejected.
 pub const CLEAR_APERTURE: &str = "clear aperture";
 
 /// The clear aperture a volume node starts out with if nothing is defined.
@@ -119,7 +122,7 @@ pub trait Body: Debug + Send + Sync {
 pub struct SurfaceBoundedBody {
     entrance: GeoSurfaceRef,
     exit: GeoSurfaceRef,
-    cross_section: Option<Aperture>,
+    cross_section: ValidatedCrossSection,
     isometry: Isometry,
 }
 
@@ -130,39 +133,22 @@ impl SurfaceBoundedBody {
     ///
     /// - `entrance`: the surface bounding the body towards -z
     /// - `exit`: the surface bounding the body towards +z
-    /// - `cross_section`: the transversal boundary of the body, or `None` for a body that extends
-    ///   as far as its two bounding surfaces do
+    /// - `cross_section`: the transversal boundary of the body
     /// - `isometry`: the frame the cross section is defined in, usually the isometry of the node
     ///   the body belongs to
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the given cross section does not delimit a region
-    /// geometrically, see [`Aperture::is_geometric_bound`]. An aperture that softens or inverts the
-    /// transmission describes a filter, not an outline, and would silently yield a body that
-    /// reaches everywhere or that has a hole in its material.
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         entrance: GeoSurfaceRef,
         exit: GeoSurfaceRef,
-        cross_section: Option<Aperture>,
+        cross_section: ValidatedCrossSection,
         isometry: Isometry,
-    ) -> OpmResult<Self> {
-        if let Some(aperture) = &cross_section
-            && !aperture.is_geometric_bound()
-        {
-            return Err(OpossumError::Other(format!(
-                "a {} aperture of shape '{}' cannot serve as the cross section of a body: it does \
-                 not delimit a region",
-                aperture.aperture_type(),
-                aperture.shape()
-            )));
-        }
-        Ok(Self {
+    ) -> Self {
+        Self {
             entrance,
             exit,
             cross_section,
             isometry,
-        })
+        }
     }
     /// Return whether the given point lies within the transversal cross section of this body.
     ///
@@ -172,14 +158,11 @@ impl SurfaceBoundedBody {
     ///
     /// # Returns
     ///
-    /// `true` if the point lies within the cross section, and always `true` for a body without
-    /// one.
+    /// `true` if the point lies within the cross section.
     fn is_within_cross_section(&self, point: &Point3<Length>) -> bool {
-        self.cross_section.as_ref().is_none_or(|cross_section| {
-            let local_point = self.isometry.inverse_transform_point(point);
-            // The cross section is a binary hole, so a transmission above zero means "inside".
-            cross_section.apodize(&local_point) > 0.0
-        })
+        let local_point = self.isometry.inverse_transform_point(point);
+        // The cross section is a binary hole, so a transmission above zero means "inside".
+        self.cross_section.get().apodize(&local_point) > 0.0
     }
     /// Intersect the given [`Ray`] with one of the bounding surfaces of this body.
     ///
@@ -271,7 +254,7 @@ impl Body for SurfaceBoundedBody {
 mod test {
     use super::*;
     use crate::{
-        apertures::ApertureType,
+        apertures::{Aperture, ApertureType},
         geometry::{Plane, Sphere},
         joule, millimeter, nanometer,
     };
@@ -279,16 +262,20 @@ mod test {
     use nalgebra::Vector3;
     use std::sync::{Arc, Mutex};
 
+    /// Create a circular cross section of the given radius.
+    fn circular_cross_section(radius: Length) -> OpmResult<ValidatedCrossSection> {
+        ValidatedCrossSection::try_new(Aperture::new_circle(radius, ApertureType::Hole, None)?)
+    }
     /// Create a disk of the given thickness and radius, with its entrance surface at z = 0.
     fn disk(thickness: Length, radius: Length) -> OpmResult<SurfaceBoundedBody> {
         let entrance = Plane::new(Isometry::identity());
         let exit = Plane::new(Isometry::new_along_z(thickness)?);
-        SurfaceBoundedBody::new(
+        Ok(SurfaceBoundedBody::new(
             GeoSurfaceRef(Arc::new(Mutex::new(entrance))),
             GeoSurfaceRef(Arc::new(Mutex::new(exit))),
-            Some(Aperture::new_circle(radius, ApertureType::Hole, None)?),
+            circular_cross_section(radius)?,
             Isometry::identity(),
-        )
+        ))
     }
     /// Create the two plane surfaces of a plate of the given thickness.
     fn plate_surfaces(thickness: Length) -> OpmResult<(GeoSurfaceRef, GeoSurfaceRef)> {
@@ -326,50 +313,45 @@ mod test {
         let body = SurfaceBoundedBody::new(
             entrance,
             exit,
-            Some(Aperture::new_rectangle(
+            ValidatedCrossSection::try_new(Aperture::new_rectangle(
                 millimeter!(20.0),
                 millimeter!(4.0),
                 ApertureType::Hole,
                 None,
                 None,
-            )?),
+            )?)?,
             Isometry::identity(),
-        )?;
+        );
         assert!(body.contains(&millimeter!(9.0, 1.9, 5.0))?);
         assert!(!body.contains(&millimeter!(11.0, 1.9, 5.0))?);
         assert!(!body.contains(&millimeter!(9.0, 2.1, 5.0))?);
         Ok(())
     }
     #[test]
-    fn contains_without_cross_section() -> OpmResult<()> {
-        // without a cross section the body reaches as far as its bounding surfaces do, which for
-        // two planes means transversally unbounded
-        let (entrance, exit) = plate_surfaces(millimeter!(10.0))?;
-        let body = SurfaceBoundedBody::new(entrance, exit, None, Isometry::identity())?;
-        assert!(body.contains(&millimeter!(0.0, 0.0, 5.0))?);
-        assert!(body.contains(&millimeter!(1000.0, -1000.0, 5.0))?);
-        assert!(!body.contains(&millimeter!(1000.0, -1000.0, 10.1))?);
-        Ok(())
-    }
-    #[test]
     fn cross_section_has_to_delimit_a_region() -> OpmResult<()> {
-        // A Gaussian aperture attenuates everywhere and would leave the body unbounded, an
-        // obstruction would punch a hole into its material. Both are rejected instead of being
-        // silently misread as an outline.
+        // A Gaussian aperture attenuates everywhere, an open one does not restrict anything at all
+        // and an obstruction is transparent outside its shape. None of them states where the
+        // material ends, so none of them can bound a body.
         let soft_edged = Aperture::new_gaussian(
             (millimeter!(5.0), millimeter!(5.0)),
             ApertureType::Hole,
             None,
             None,
         )?;
+        let unrestricted = Aperture::default();
         let inverted = Aperture::new_circle(millimeter!(5.0), ApertureType::Obstruction, None)?;
-        for cross_section in [soft_edged, inverted] {
-            let (entrance, exit) = plate_surfaces(millimeter!(10.0))?;
-            assert!(
-                SurfaceBoundedBody::new(entrance, exit, Some(cross_section), Isometry::identity())
-                    .is_err()
-            );
+        for aperture in [soft_edged, unrestricted, inverted] {
+            assert!(ValidatedCrossSection::try_new(aperture).is_err());
         }
+        // ... while a binary hole does
+        assert!(
+            ValidatedCrossSection::try_new(Aperture::new_circle(
+                millimeter!(5.0),
+                ApertureType::Hole,
+                None
+            )?)
+            .is_ok()
+        );
         Ok(())
     }
     #[test]
@@ -380,13 +362,9 @@ mod test {
         let body = SurfaceBoundedBody::new(
             GeoSurfaceRef(Arc::new(Mutex::new(entrance))),
             GeoSurfaceRef(Arc::new(Mutex::new(exit))),
-            Some(Aperture::new_circle(
-                millimeter!(10.0),
-                ApertureType::Hole,
-                None,
-            )?),
+            circular_cross_section(millimeter!(10.0))?,
             Isometry::identity(),
-        )?;
+        );
         assert!(body.contains(&millimeter!(0.0, 0.0, 5.0))?);
         assert!(!body.contains(&millimeter!(0.0, 0.0, -0.1))?);
         assert!(!body.contains(&millimeter!(0.0, 0.0, 10.1))?);

@@ -1,5 +1,6 @@
 use crate::error::OpmResult;
 use crate::{
+    apertures::{Aperture, GeometricBound},
     degree,
     generic_validators::{AllFinite, AllNormal, AllNotNan, AllPositive, Min3Entries},
 };
@@ -106,6 +107,25 @@ impl Default for ValidatedRadius {
     /// This is guaranteed to be valid.
     fn default() -> Self {
         Self::try_new(millimeter!(25.0)).unwrap()
+    }
+}
+
+/// A validated transversal boundary of a body.
+///
+/// The [`Aperture`] must delimit a region, i.e. be a binary shape acting as a hole — see
+/// [`Aperture::is_geometric_bound`]. Storing the boundary in this type is what keeps a body from
+/// being handed a transmission mask instead of an outline: a soft-edged, inverted or open aperture
+/// leaves it undefined where the medium ends, so it is rejected on construction rather than
+/// silently misread later on.
+pub type ValidatedCrossSection = validated_type!(Aperture, GeometricBound);
+
+impl ValidatedCrossSection {
+    /// Attempts to create a new [`ValidatedCrossSection`] instance.
+    ///
+    /// # Errors
+    /// Returns an error if the aperture does not delimit a region.
+    pub fn try_new(aperture: Aperture) -> OpmResult<Self> {
+        validated!(aperture, GeometricBound)
     }
 }
 

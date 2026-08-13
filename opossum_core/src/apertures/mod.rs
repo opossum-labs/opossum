@@ -31,7 +31,8 @@ mod stack;
 
 use crate::{
     degree,
-    error::OpmResult,
+    error::{OpmResult, OpossumError},
+    generic_validators::Validate,
     meter,
     prelude::Isometry,
     properties::Proptype,
@@ -325,6 +326,26 @@ impl Aperture {
     #[must_use]
     pub const fn is_none(&self) -> bool {
         self.shape.is_none()
+    }
+}
+
+/// Validator accepting only those [`Aperture`]s that delimit a region.
+///
+/// See [`Aperture::is_geometric_bound`] for what that rules out and why.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeometricBound;
+
+impl Validate<Aperture> for GeometricBound {
+    fn validate(&self, value: &Aperture) -> OpmResult<()> {
+        if value.is_geometric_bound() {
+            Ok(())
+        } else {
+            Err(OpossumError::Other(format!(
+                "a {} aperture of shape '{}' does not delimit a region",
+                value.aperture_type(),
+                value.shape()
+            )))
+        }
     }
 }
 
