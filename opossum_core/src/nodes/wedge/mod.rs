@@ -7,15 +7,10 @@ use crate::{
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType},
     degree,
     error::{OpmResult, OpossumError},
-    gain::{AMP_CONFIG, GainModel},
-    geometry::{
-        Plane,
-        body::{CLEAR_APERTURE, default_clear_aperture},
-        geo_surface::GeoSurfaceRef,
-    },
+    geometry::{Plane, geo_surface::GeoSurfaceRef},
     material::{MATERIAL, Material},
     millimeter,
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, create_volume_properties},
     properties::{Proptype, validator::Validator},
     refractive_index::RefrIndexConst,
     utils::geom_transformation::Isometry,
@@ -103,21 +98,7 @@ impl Default for Wedge {
                 Angle::zero().into(),
             )
             .unwrap();
-        node_attr
-            .create_property(
-                CLEAR_APERTURE,
-                "transversal extent of the medium (Open = as far as the surfaces reach)",
-                default_clear_aperture().into(),
-            )
-            .unwrap();
-        node_attr
-            .create_property(
-                AMP_CONFIG,
-                "amplification model of this component (None = passive)",
-                GainModel::default().into(),
-            )
-            .unwrap();
-
+        create_volume_properties(&mut node_attr).unwrap();
         let mut wedge = Self { node_attr };
         wedge.update_surfaces().unwrap();
         wedge
@@ -210,9 +191,7 @@ mod test {
             raytrace::AnalysisRayTrace,
         },
         core_optics::{NodeAttrExt, PortType},
-        degree,
-        geometry::body::Body,
-        joule,
+        degree, joule,
         light::{LightData, LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
         nanometer,
         nodes::test_helper::test_helper::*,
@@ -220,7 +199,7 @@ mod test {
         refractive_index::RefractiveIndexType,
     };
     use approx::assert_abs_diff_eq;
-    use nalgebra::{Point3, Vector3};
+    use nalgebra::Vector3;
 
     #[test]
     fn default() -> OpmResult<()> {
@@ -538,18 +517,8 @@ mod test {
             RefrIndexConst::new(1.5)?,
         )?;
         node.set_isometry(Isometry::identity())?;
-        let body = node.volume_body()?;
-        let path_length_at = |height: Length| -> OpmResult<Length> {
-            let ray = Ray::new_collimated(
-                Point3::new(millimeter!(0.0), height, millimeter!(0.0)),
-                nanometer!(1053.0),
-                joule!(1.0),
-            )?;
-            body.path_length_inside(&ray)?
-                .ok_or_else(|| OpossumError::Other("ray missed the wedge".into()))
-        };
-        let above = path_length_at(millimeter!(5.0))?;
-        let below = path_length_at(millimeter!(-5.0))?;
+        let above = path_length_through(&node, millimeter!(0.0, 5.0, 0.0))?;
+        let below = path_length_through(&node, millimeter!(0.0, -5.0, 0.0))?;
         assert!(
             (above - below).abs() > millimeter!(0.1),
             "a wedge of 5 degrees has to differ noticeably in thickness across 10 mm"

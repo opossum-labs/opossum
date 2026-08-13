@@ -381,11 +381,9 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         let Some(eff_node_iso) = self.effective_node_iso() else {
             return Err(OpossumError::Other("no effective node iso defined".into()));
         };
-        let Some(surf) = self.get_optic_surface(surf_name) else {
-            return Err(OpossumError::Other(format!(
-                "no surface with name {surf_name} defined"
-            )));
-        };
+        let surf = self.get_optic_surface(surf_name).ok_or_else(|| {
+            OpossumError::Other(format!("no surface with name {surf_name} defined"))
+        })?;
         Ok(eff_node_iso.append(surf.anchor_point_iso()))
     }
 

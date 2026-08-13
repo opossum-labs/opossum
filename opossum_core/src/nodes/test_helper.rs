@@ -352,16 +352,9 @@ pub mod test_helper {
         let mut node = T::default();
         node.set_isometry(Isometry::identity())?;
         let center_thickness = center_thickness_of(&node);
-        let axis_ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0))?;
-        let axis_path_length = |node: &T| -> OpmResult<Length> {
-            node.volume_body()?
-                .path_length_inside(&axis_ray)?
-                .ok_or_else(|| {
-                    OpossumError::Other("the optical axis does not pass through the volume".into())
-                })
-        };
+        let on_axis = millimeter!(0.0, 0.0, 0.0);
         assert_abs_diff_eq!(
-            axis_path_length(&node)?.value,
+            path_length_through(&node, on_axis)?.value,
             center_thickness.value,
             epsilon = 1e-12
         );
@@ -374,11 +367,40 @@ pub mod test_helper {
         // Inverting a node reverses the direction light travels through it, not the geometry.
         node.set_inverted(true)?;
         assert_abs_diff_eq!(
-            axis_path_length(&node)?.value,
+            path_length_through(&node, on_axis)?.value,
             center_thickness.value,
             epsilon = 1e-12
         );
         Ok(())
+    }
+
+    /// Trace a collimated ray from the given position through the volume of a node.
+    ///
+    /// # Arguments
+    ///
+    /// * `node` - the volume node to trace through.
+    /// * `position` - where the ray starts, in global coordinates.
+    ///
+    /// # Returns
+    ///
+    /// The geometrical path length of the ray inside the node's volume.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the body cannot be derived or if the ray does not pass through it.
+    pub fn path_length_through<T: OpticNode>(
+        node: &T,
+        position: Point3<Length>,
+    ) -> OpmResult<Length> {
+        let ray = Ray::new_collimated(position, nanometer!(1053.0), joule!(1.0))?;
+        node.volume_body()?
+            .path_length_inside(&ray)?
+            .ok_or_else(|| {
+                OpossumError::Other(format!(
+                    "a ray at {position:?} does not pass through the volume of node '{}'",
+                    node.name()
+                ))
+            })
     }
 
     /// Assert that the transversal extent of a volume node is its clear aperture, and nothing else.

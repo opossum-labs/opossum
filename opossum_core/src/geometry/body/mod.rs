@@ -60,9 +60,9 @@ pub const CLEAR_APERTURE: &str = "clear aperture";
 /// Panics if the hard-coded radius is rejected by [`CircleShape`], which cannot happen.
 #[must_use]
 pub fn default_clear_aperture() -> ApertureShape {
-    ApertureShape::BinaryCircle(
-        CircleShape::new(millimeter!(12.5)).expect("12.5 mm is a valid aperture radius"),
-    )
+    CircleShape::new(millimeter!(12.5))
+        .expect("12.5 mm is a valid aperture radius")
+        .into()
 }
 
 /// Trait for handling closed bodies.
@@ -199,54 +199,57 @@ impl Body for SurfaceBoundedBody {
         if !self.is_within_cross_section(point) {
             return Ok(false);
         }
-        let behind_entrance = self.entrance.0.lock_opm()?.is_behind(point);
-        let behind_exit = self.exit.0.lock_opm()?.is_behind(point);
-        Ok(behind_entrance && !behind_exit)
+        if !self.entrance.0.lock_opm()?.is_behind(point) {
+            return Ok(false);
+        }
+        Ok(!self.exit.0.lock_opm()?.is_behind(point))
     }
     fn path_length_inside(&self, ray: &Ray) -> OpmResult<Option<Length>> {
-        // Collect all points at which the ray can enter or leave the body: its own starting point
-        // if it already lies inside, and its hits on both bounding surfaces. Treating the starting
-        // point as a candidate of its own keeps the case of a ray starting *on* a bounding surface
-        // correct: such a ray hits that surface at zero distance, which must not be mistaken for
-        // the point where it leaves the body again.
+        // Every point at which the ray can enter or leave the body is a candidate: its own starting
+        // point if it already lies inside, and its hits on both bounding surfaces. Treating the
+        // starting point as a candidate of its own keeps the case of a ray starting *on* a bounding
+        // surface correct: such a ray hits that surface at zero distance, which must not be
+        // mistaken for the point where it leaves the body again.
         let ray_position = ray.position();
-        let mut boundary_points = Vec::with_capacity(3);
+        let direction = ray.direction();
+        let position_along_ray =
+            |point: &Point3<Length>| (point - ray_position).map(|c| c.value).dot(&direction);
+        let mut candidates = 0_usize;
+        let mut first: Option<(f64, Point3<Length>)> = None;
+        let mut last: Option<(f64, Point3<Length>)> = None;
+        let mut consider = |point: Point3<Length>| {
+            candidates += 1;
+            let position = position_along_ray(&point);
+            if first.is_none_or(|(first_position, _)| position < first_position) {
+                first = Some((position, point));
+            }
+            if last.is_none_or(|(last_position, _)| position > last_position) {
+                last = Some((position, point));
+            }
+        };
         if self.contains(&ray_position)? {
-            boundary_points.push(ray_position);
+            consider(ray_position);
         }
         for surface in [&self.entrance, &self.exit] {
             if let Some(point) = self.bounded_intersection(surface, ray)? {
-                boundary_points.push(point);
+                consider(point);
             }
         }
-        if boundary_points.len() < 2 {
+        let (Some((_, first_point)), Some((_, last_point))) = (first, last) else {
+            return Ok(None);
+        };
+        if candidates < 2 {
             // The ray either misses the body altogether or leaves it through its lateral boundary,
             // which is not part of the model.
             return Ok(None);
         }
-        // Sort the candidates along the ray in order to get the first and the last one.
-        let direction = ray.direction();
-        boundary_points.sort_by(|point_a, point_b| {
-            let position_along_ray =
-                |point: &Point3<Length>| (point - ray_position).map(|c| c.value).dot(&direction);
-            position_along_ray(point_a).total_cmp(&position_along_ray(point_b))
-        });
-        let (Some(first_point), Some(last_point)) =
-            (boundary_points.first(), boundary_points.last())
-        else {
-            return Ok(None);
-        };
         // Guard against bodies the ray leaves and re-enters, e.g. a strongly curved meniscus: the
         // section between the outermost two candidates is only fully inside if its center is.
-        let center_point = Point3::new(
-            (first_point.x + last_point.x) * 0.5,
-            (first_point.y + last_point.y) * 0.5,
-            (first_point.z + last_point.z) * 0.5,
-        );
+        let center_point = first_point + (last_point - first_point).map(|c| c * 0.5);
         if !self.contains(&center_point)? {
             return Ok(None);
         }
-        Ok(Some(distance_3d_point(first_point, last_point)))
+        Ok(Some(distance_3d_point(&first_point, &last_point)))
     }
 }
 
@@ -266,17 +269,6 @@ mod test {
     fn circular_cross_section(radius: Length) -> OpmResult<ValidatedCrossSection> {
         ValidatedCrossSection::try_new(Aperture::new_circle(radius, ApertureType::Hole, None)?)
     }
-    /// Create a disk of the given thickness and radius, with its entrance surface at z = 0.
-    fn disk(thickness: Length, radius: Length) -> OpmResult<SurfaceBoundedBody> {
-        let entrance = Plane::new(Isometry::identity());
-        let exit = Plane::new(Isometry::new_along_z(thickness)?);
-        Ok(SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Mutex::new(entrance))),
-            GeoSurfaceRef(Arc::new(Mutex::new(exit))),
-            circular_cross_section(radius)?,
-            Isometry::identity(),
-        ))
-    }
     /// Create the two plane surfaces of a plate of the given thickness.
     fn plate_surfaces(thickness: Length) -> OpmResult<(GeoSurfaceRef, GeoSurfaceRef)> {
         Ok((
@@ -286,9 +278,24 @@ mod test {
             )?)))),
         ))
     }
+    /// Create a disk of the given thickness and radius, with its entrance surface at z = 0.
+    fn disk(thickness: Length, radius: Length) -> OpmResult<SurfaceBoundedBody> {
+        let (entrance, exit) = plate_surfaces(thickness)?;
+        Ok(SurfaceBoundedBody::new(
+            entrance,
+            exit,
+            circular_cross_section(radius)?,
+            Isometry::identity(),
+        ))
+    }
     /// Create a ray at the given position, propagating along the given direction.
     fn test_ray(position: Point3<Length>, direction: Vector3<f64>) -> OpmResult<Ray> {
         Ray::new(position, direction, nanometer!(1053.0), joule!(1.0))
+    }
+    /// Trace the given ray through the given body and require it to pass through.
+    fn path_length(body: &SurfaceBoundedBody, ray: &Ray) -> OpmResult<Length> {
+        body.path_length_inside(ray)?
+            .ok_or_else(|| crate::error::OpossumError::Other("ray missed the body".into()))
     }
     #[test]
     fn contains_disk() -> OpmResult<()> {
@@ -378,9 +385,7 @@ mod test {
     fn path_length_on_axis() -> OpmResult<()> {
         let body = disk(millimeter!(10.0), millimeter!(5.0))?;
         let ray = test_ray(millimeter!(0.0, 0.0, -20.0), Vector3::z())?;
-        let path_length = body
-            .path_length_inside(&ray)?
-            .ok_or_else(|| crate::error::OpossumError::Other("ray missed the body".into()))?;
+        let path_length = path_length(&body, &ray)?;
         assert_abs_diff_eq!(path_length.value, millimeter!(10.0).value);
         Ok(())
     }
@@ -389,9 +394,7 @@ mod test {
         // a ray at 45 degrees travels sqrt(2) times the thickness through the disk
         let body = disk(millimeter!(10.0), millimeter!(20.0))?;
         let ray = test_ray(millimeter!(0.0, -5.0, -5.0), Vector3::new(0.0, 1.0, 1.0))?;
-        let path_length = body
-            .path_length_inside(&ray)?
-            .ok_or_else(|| crate::error::OpossumError::Other("ray missed the body".into()))?;
+        let path_length = path_length(&body, &ray)?;
         assert_abs_diff_eq!(
             path_length.value,
             millimeter!(10.0 * f64::sqrt(2.0)).value,
@@ -405,9 +408,7 @@ mod test {
         // zero distance. That hit must not be mistaken for the point where it leaves the body.
         let body = disk(millimeter!(10.0), millimeter!(5.0))?;
         let ray = test_ray(millimeter!(0.0, 0.0, 0.0), Vector3::z())?;
-        let path_length = body
-            .path_length_inside(&ray)?
-            .ok_or_else(|| crate::error::OpossumError::Other("ray missed the body".into()))?;
+        let path_length = path_length(&body, &ray)?;
         assert_abs_diff_eq!(path_length.value, millimeter!(10.0).value);
         Ok(())
     }
@@ -416,9 +417,7 @@ mod test {
         // the same for a ray entering the body backwards through its exit surface
         let body = disk(millimeter!(10.0), millimeter!(5.0))?;
         let ray = test_ray(millimeter!(0.0, 0.0, 10.0), -Vector3::z())?;
-        let path_length = body
-            .path_length_inside(&ray)?
-            .ok_or_else(|| crate::error::OpossumError::Other("ray missed the body".into()))?;
+        let path_length = path_length(&body, &ray)?;
         assert_abs_diff_eq!(path_length.value, millimeter!(10.0).value);
         Ok(())
     }
@@ -427,9 +426,7 @@ mod test {
         // a ray starting inside the body only travels the remaining distance to the exit surface
         let body = disk(millimeter!(10.0), millimeter!(5.0))?;
         let ray = test_ray(millimeter!(0.0, 0.0, 4.0), Vector3::z())?;
-        let path_length = body
-            .path_length_inside(&ray)?
-            .ok_or_else(|| crate::error::OpossumError::Other("ray missed the body".into()))?;
+        let path_length = path_length(&body, &ray)?;
         assert_abs_diff_eq!(path_length.value, millimeter!(6.0).value);
         Ok(())
     }
@@ -438,9 +435,7 @@ mod test {
         // a backwards propagating ray leaves the body through its entrance surface
         let body = disk(millimeter!(10.0), millimeter!(5.0))?;
         let ray = test_ray(millimeter!(0.0, 0.0, 4.0), -Vector3::z())?;
-        let path_length = body
-            .path_length_inside(&ray)?
-            .ok_or_else(|| crate::error::OpossumError::Other("ray missed the body".into()))?;
+        let path_length = path_length(&body, &ray)?;
         assert_abs_diff_eq!(path_length.value, millimeter!(4.0).value);
         Ok(())
     }

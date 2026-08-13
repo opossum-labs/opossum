@@ -1,7 +1,7 @@
 //! Cylindrical surface
 //!
 //! This module implements a cylindrical surface with a given radius of curvature and a given position / alignment in 3D space.
-use super::geo_surface::GeoSurface;
+use super::geo_surface::{GeoSurface, is_behind_curvature};
 use crate::{
     error::{OpmResult, OpossumError},
     light::Ray,
@@ -127,15 +127,8 @@ impl GeoSurface for Cylinder {
 
     fn is_behind_do(&self, point: &Point3<Length>) -> bool {
         // The local origin lies on the cylinder axis which runs along y, so the surface is the
-        // circle of |radius| in the xz plane. For a convex surface (positive radius) the axis lies
-        // behind the surface, for a concave one (negative radius) in front of it. The comparison
-        // includes the surface itself in both cases.
-        let distance_from_axis = point.x.value.hypot(point.z.value);
-        if self.radius.is_sign_positive() {
-            distance_from_axis <= self.radius.value
-        } else {
-            distance_from_axis >= -self.radius.value
-        }
+        // circle of |radius| in the xz plane.
+        is_behind_curvature(point.x.value.hypot(point.z.value), self.radius.value)
     }
     fn set_isometry(&mut self, isometry: Isometry) {
         let anchor_isometry = Isometry::new(

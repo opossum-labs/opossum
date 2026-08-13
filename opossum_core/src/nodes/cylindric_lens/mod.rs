@@ -5,15 +5,10 @@ use crate::{
     analyzers::energy::AnalysisEnergy,
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType},
     error::{OpmResult, OpossumError},
-    gain::{AMP_CONFIG, GainModel},
-    geometry::{
-        Cylinder, Plane,
-        body::{CLEAR_APERTURE, default_clear_aperture},
-        geo_surface::GeoSurfaceRef,
-    },
+    geometry::{Cylinder, Plane, geo_surface::GeoSurfaceRef},
     material::{MATERIAL, Material},
     meter, millimeter,
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, create_volume_properties},
     properties::{Proptype, validator::Validator},
     radian,
     refractive_index::RefrIndexConst,
@@ -106,20 +101,7 @@ impl Default for CylindricLens {
                 .into(),
             )
             .unwrap();
-        node_attr
-            .create_property(
-                CLEAR_APERTURE,
-                "transversal extent of the medium (Open = as far as the surfaces reach)",
-                default_clear_aperture().into(),
-            )
-            .unwrap();
-        node_attr
-            .create_property(
-                AMP_CONFIG,
-                "amplification model of this component (None = passive)",
-                GainModel::default().into(),
-            )
-            .unwrap();
+        create_volume_properties(&mut node_attr).unwrap();
         let mut cyl_lens = Self { node_attr };
         cyl_lens.update_surfaces().unwrap();
         cyl_lens
@@ -246,15 +228,14 @@ mod test {
         },
         core_optics::NodeAttrExt,
         distributions::position::Hexapolar,
-        geometry::body::Body,
         joule,
-        light::{LightData, LightResult, Ray, Rays},
+        light::{LightData, LightResult, Rays},
         millimeter, nanometer,
         nodes::test_helper::test_helper::*,
         properties::{Proptype, proptype::AssetRef},
     };
     use approx::assert_relative_eq;
-    use nalgebra::{Point3, Vector3};
+    use nalgebra::Vector3;
     use num::Zero;
     #[test]
     fn default() -> OpmResult<()> {
@@ -500,18 +481,12 @@ mod test {
             RefrIndexConst::new(1.5)?,
         )?;
         node.set_isometry(Isometry::identity())?;
-        let body = node.volume_body()?;
-        let path_length_at = |position: Point3<Length>| -> OpmResult<Length> {
-            let ray = Ray::new_collimated(position, nanometer!(1053.0), joule!(1.0))?;
-            body.path_length_inside(&ray)?
-                .ok_or_else(|| OpossumError::Other("ray missed the lens".into()))
-        };
         assert_relative_eq!(
-            path_length_at(millimeter!(0.0, 5.0, 0.0))?.value,
+            path_length_through(&node, millimeter!(0.0, 5.0, 0.0))?.value,
             center_thickness.value,
             epsilon = 1e-12
         );
-        assert!(path_length_at(millimeter!(5.0, 0.0, 0.0))? < center_thickness);
+        assert!(path_length_through(&node, millimeter!(5.0, 0.0, 0.0))? < center_thickness);
         Ok(())
     }
 }

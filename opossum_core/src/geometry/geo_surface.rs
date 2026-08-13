@@ -88,6 +88,30 @@ pub trait GeoSurface: Send + Sync + Debug {
     fn name(&self) -> &str;
 }
 
+/// Decide whether a point lies behind a curved surface, given its distance from the center of
+/// curvature.
+///
+/// Shared by the surfaces whose local frame is centered on their center of curvature
+/// ([`Sphere`](super::Sphere), [`Cylinder`](super::Cylinder)), which differ only in how that
+/// distance is measured. For a convex surface (positive radius) the center of curvature lies behind
+/// the surface, for a concave one (negative radius) in front of it.
+///
+/// # Arguments
+///
+/// - `distance_from_center`: distance of the point from the center of curvature, in meter
+/// - `radius`: the signed radius of curvature, in meter
+///
+/// # Returns
+///
+/// `true` if the point lies behind the surface. Points exactly on the surface count as behind.
+pub(super) const fn is_behind_curvature(distance_from_center: f64, radius: f64) -> bool {
+    if radius.is_sign_positive() {
+        distance_from_center <= radius
+    } else {
+        distance_from_center >= -radius
+    }
+}
+
 /// Reference for a [`GeoSurface`].
 ///
 /// This struct is necessary in order to implement a Default trait on a `Arc<Mutex<GeoSurface>>`.

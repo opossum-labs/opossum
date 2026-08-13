@@ -5,15 +5,10 @@ use crate::{
     analyzers::energy::AnalysisEnergy,
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType},
     error::{OpmResult, OpossumError},
-    gain::{AMP_CONFIG, GainModel},
-    geometry::{
-        Plane, Sphere,
-        body::{CLEAR_APERTURE, default_clear_aperture},
-        geo_surface::GeoSurfaceRef,
-    },
+    geometry::{Plane, Sphere, geo_surface::GeoSurfaceRef},
     material::{MATERIAL, Material},
     meter, millimeter,
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, create_volume_properties},
     properties::{Proptype, validator::Validator},
     radian,
     refractive_index::RefrIndexConst,
@@ -105,20 +100,7 @@ impl Default for Lens {
                 .into(),
             )
             .unwrap();
-        node_attr
-            .create_property(
-                CLEAR_APERTURE,
-                "transversal extent of the medium (Open = as far as the surfaces reach)",
-                default_clear_aperture().into(),
-            )
-            .unwrap();
-        node_attr
-            .create_property(
-                AMP_CONFIG,
-                "amplification model of this component (None = passive)",
-                GainModel::default().into(),
-            )
-            .unwrap();
+        create_volume_properties(&mut node_attr).unwrap();
         let mut lens = Self { node_attr };
         lens.update_surfaces().unwrap();
         lens
@@ -334,9 +316,8 @@ mod test {
         apertures::ApertureShape,
         core_optics::NodeAttrExt,
         distributions::position::Hexapolar,
-        geometry::body::Body,
         joule,
-        light::{LightData, LightResult, Ray, Rays},
+        light::{LightData, LightResult, Rays},
         millimeter, nanometer,
         nodes::test_helper::test_helper::*,
         properties::{Proptype, proptype::AssetRef},
@@ -674,11 +655,7 @@ mod test {
             RefrIndexConst::new(1.5)?,
         )?;
         node.set_isometry(Isometry::identity())?;
-        let ray = Ray::new_collimated(ray_position, nanometer!(1053.0), joule!(1.0))?;
-        let path_length = node
-            .volume_body()?
-            .path_length_inside(&ray)?
-            .ok_or_else(|| OpossumError::Other("ray missed the lens".into()))?;
+        let path_length = path_length_through(&node, ray_position)?;
         // Both surfaces recede by the same sag, so the volume is two sags thinner at that height.
         let sag = curvature - (curvature * curvature - ray_height * ray_height).sqrt();
         assert_relative_eq!(

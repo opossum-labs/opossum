@@ -1,7 +1,7 @@
 //! Spherical surface
 //!
 //! This module implements a spherical surface with a given radius of curvature.
-use super::geo_surface::GeoSurface;
+use super::geo_surface::{GeoSurface, is_behind_curvature};
 use crate::{
     error::{OpmResult, OpossumError},
     light::Ray,
@@ -135,15 +135,7 @@ impl GeoSurface for Sphere {
     }
     fn is_behind_do(&self, point: &Point3<Length>) -> bool {
         // The local origin is the center of the sphere, so the surface is the ball of |radius|.
-        // For a convex surface (positive radius) the center of the sphere lies behind the surface,
-        // for a concave one (negative radius) in front of it. The comparison includes the surface
-        // itself in both cases.
-        let distance_from_center = point.coords.map(|c| c.value).norm();
-        if self.radius.is_sign_positive() {
-            distance_from_center <= self.radius.value
-        } else {
-            distance_from_center >= -self.radius.value
-        }
+        is_behind_curvature(point.coords.map(|c| c.value).norm(), self.radius.value)
     }
     fn set_isometry(&mut self, isometry: Isometry) {
         let anchor_isometry = Isometry::new(

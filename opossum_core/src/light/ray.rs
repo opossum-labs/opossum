@@ -25,7 +25,7 @@ use crate::{
     meter,
     nodes::{FilterType, SplittingConfig, fluence_detector::Fluence},
     percent,
-    utils::{LockExt, geom_transformation::Isometry},
+    utils::{LockExt, geom_transformation::Isometry, math_utils::distance_3d_point},
 };
 
 ///Struct that contains all information about an optical ray
@@ -476,11 +476,10 @@ impl Ray {
             //new ratio of the perpendicular part to the full k vector
             let k_perp_norm_out = k0_n.mul_add(k0_n, -k_para_out.norm().powi(2)).sqrt();
 
-            let pos_in_m = self.pos.map(|c| c.value);
             let intersection_in_m = intersection_point.map(|c| c.value);
             //first add gemometrical path length
             self.path_length +=
-                self.refractive_index * meter!((pos_in_m - intersection_in_m).norm());
+                self.refractive_index * distance_3d_point(&self.pos, &intersection_point);
             //then add additional phase shift due to lateral displacement from the grating origin
             let dist_from_origin = s
                 .geo_surface()
@@ -564,10 +563,8 @@ impl Ray {
             let n = surface_normal;
             let dis = (mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0);
             let reflected_dir = s1 - 2.0 * (s1.dot(&n)) * n;
-            let pos_in_m = self.pos.map(|c| c.value);
-            let intersection_in_m = intersection_point.map(|c| c.value);
             self.path_length +=
-                self.refractive_index * meter!((pos_in_m - intersection_in_m).norm());
+                self.refractive_index * distance_3d_point(&self.pos, &intersection_point);
             self.pos_hist.push(self.pos);
             self.pos = intersection_point;
             // check, if total reflection
