@@ -423,8 +423,9 @@ pub mod test_helper {
         let mid_thickness = center_thickness_of(&node) * 0.5;
         let point_at = |radius: Length| Point3::new(radius, millimeter!(0.0), mid_thickness);
         // the default extent is a circle of 12.5 mm radius
-        assert!(node.volume_body()?.contains(&point_at(millimeter!(12.4)))?);
-        assert!(!node.volume_body()?.contains(&point_at(millimeter!(12.6)))?);
+        let body = node.volume_body()?;
+        assert!(body.contains(&point_at(millimeter!(12.4)))?);
+        assert!(!body.contains(&point_at(millimeter!(12.6)))?);
         // a port aperture masks the light, it does not resize the medium
         node.set_aperture(
             &PortType::Input,
@@ -437,8 +438,9 @@ pub mod test_helper {
             CLEAR_APERTURE,
             ApertureShape::BinaryCircle(CircleShape::new(millimeter!(25.0))?).into(),
         )?;
-        assert!(node.volume_body()?.contains(&point_at(millimeter!(24.9)))?);
-        assert!(!node.volume_body()?.contains(&point_at(millimeter!(25.1)))?);
+        let body = node.volume_body()?;
+        assert!(body.contains(&point_at(millimeter!(24.9)))?);
+        assert!(!body.contains(&point_at(millimeter!(25.1)))?);
         // a shape that does not state where the medium ends leaves the volume undefined. An open
         // aperture is one of them: two curved surfaces may happen to close the volume on their own,
         // but nothing guarantees that they do.

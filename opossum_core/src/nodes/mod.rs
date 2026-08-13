@@ -93,7 +93,7 @@ use crate::{
 pub fn create_volume_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
     node_attr.create_property(
         CLEAR_APERTURE,
-        "transversal extent of the medium (Open = as far as the surfaces reach)",
+        "transversal extent of the medium",
         default_clear_aperture().into(),
     )?;
     node_attr.create_property(

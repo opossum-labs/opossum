@@ -1,7 +1,7 @@
 use super::Wedge;
 use crate::{
     analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
-    core_optics::{OpticNodeExt, node_attr::HasNodeAttr},
+    core_optics::OpticNodeExt,
     error::OpmResult,
     light::LightResult,
 };
@@ -12,7 +12,7 @@ impl AnalysisRayTrace for Wedge {
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        let material = self.get_ray_trace_material(self.node_attr())?;
+        let material = self.get_ray_trace_material()?;
         self.unified_analyze_volume_node(incoming_data, &material, config)
     }
 }

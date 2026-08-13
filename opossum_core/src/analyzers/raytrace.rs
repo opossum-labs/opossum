@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use super::{Analyzer, AnalyzerType};
 use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
-    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, node_attr::HasNodeAttr},
+    core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
     light::{LightResult, Rays, lightdata::ray_data_builder::RayDataBuilder},
     material::{MATERIAL, Material},
@@ -233,10 +233,6 @@ pub trait AnalysisRayTrace: OpticNode {
     /// refracts takes the index out of it, while later stages (thermal lensing, stress
     /// birefringence, gain) need the other material data from the very same object.
     ///
-    /// # Arguments
-    ///
-    /// * `node_attr` - attributes of the node to read the material from.
-    ///
     /// # Returns
     ///
     /// A clone of the node's material.
@@ -245,8 +241,9 @@ pub trait AnalysisRayTrace: OpticNode {
     ///
     /// This function errors if the node does not carry an embedded [`Material`] under the
     /// [`MATERIAL`] property.
-    fn get_ray_trace_material(&self, node_attr: &NodeAttr) -> OpmResult<Material> {
-        let Ok(Proptype::Material(AssetRef::Inline(material))) = node_attr.get_property(MATERIAL)
+    fn get_ray_trace_material(&self) -> OpmResult<Material> {
+        let Ok(Proptype::Material(AssetRef::Inline(material))) =
+            self.node_attr().get_property(MATERIAL)
         else {
             return Err(OpossumError::Analysis("cannot read material".into()));
         };

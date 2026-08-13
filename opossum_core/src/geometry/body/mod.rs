@@ -214,6 +214,11 @@ impl Body for SurfaceBoundedBody {
         let direction = ray.direction();
         let position_along_ray =
             |point: &Point3<Length>| (point - ray_position).map(|c| c.value).dot(&direction);
+        // Only the outermost two candidates matter, so they are tracked directly instead of being
+        // collected and sorted. Their number is counted rather than derived from their positions:
+        // two candidates may well coincide — a ray starting on a bounding surface hits that surface
+        // at zero distance — and such a ray does travel a (zero) length inside the body, whereas a
+        // single candidate means it never entered.
         let mut candidates = 0_usize;
         let mut first: Option<(f64, Point3<Length>)> = None;
         let mut last: Option<(f64, Point3<Length>)> = None;
