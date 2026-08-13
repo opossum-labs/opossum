@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use crate::refractive_index::RefractiveIndex;
 use crate::{
     analyzers::energy::AnalysisEnergy,
-    core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType},
+    core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType, Volumetric},
     degree,
     error::{OpmResult, OpossumError},
     geometry::{Plane, geo_surface::GeoSurfaceRef},
@@ -133,7 +133,11 @@ impl Wedge {
     }
 }
 
+impl Volumetric for Wedge {}
 impl OpticNode for Wedge {
+    fn as_volume(&self) -> Option<&dyn Volumetric> {
+        Some(self)
+    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
 

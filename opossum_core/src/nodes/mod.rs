@@ -81,8 +81,9 @@ use crate::{
 ///
 /// These are the properties that follow from a component enclosing a medium rather than from its
 /// particular shape: how far that medium extends ([`CLEAR_APERTURE`]) and whether it amplifies
-/// ([`AMP_CONFIG`]). Declaring them from one place keeps the node types listed in
-/// [`AMP_CONFIG_NODE_TYPES`](crate::gain::AMP_CONFIG_NODE_TYPES) from drifting apart.
+/// ([`AMP_CONFIG`]). Declaring them from one place keeps them from drifting apart, and the node
+/// types that call this are exactly those implementing
+/// [`Volumetric`](crate::core_optics::Volumetric) — which is what the test in that module checks.
 ///
 /// # Arguments
 ///

@@ -1,7 +1,7 @@
 use super::Lens;
 use crate::{
     analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
-    core_optics::OpticNodeExt,
+    core_optics::Volumetric,
     error::OpmResult,
     light::LightResult,
 };

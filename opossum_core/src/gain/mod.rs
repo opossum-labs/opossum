@@ -200,42 +200,34 @@ mod test {
     use crate::{
         core_optics::node_attr::HasNodeAttr,
         error::OpossumError,
-        geometry::body::CLEAR_APERTURE,
         nodes::{Dummy, Lens, create_node_ref, node_types},
         utils::LockExt,
     };
     use approx::assert_relative_eq;
     use strum::IntoEnumIterator;
 
-    /// "Node with a volume" must mean the same thing wherever it is stated.
+    /// The hand-written list must name exactly the node types that have a volume.
     ///
-    /// Three places say it independently: this list, the nodes that declare the volume properties,
-    /// and the nodes whose analysis goes through `unified_analyze_volume_node`. The first two are
-    /// pinned to each other here; the third follows once `Volumetric` replaces the list altogether.
+    /// Which types those are is stated by the
+    /// [`Volumetric`](crate::core_optics::Volumetric) capability, and that the capability agrees
+    /// with the properties a volume node carries is checked where it is defined. This list is a
+    /// third copy of the same fact, kept only because a user interface knows a node by its type
+    /// name and has no node to ask — so it has to be pinned to the capability until it is replaced
+    /// by one derived at runtime.
     #[test]
     fn amp_config_node_types_are_exhaustive() -> OpmResult<()> {
-        let mut declaring_amp_config = Vec::new();
-        let mut declaring_clear_aperture = Vec::new();
+        let mut volume_node_types = Vec::new();
         for (node_type, _) in node_types() {
             let optic_ref = create_node_ref(node_type)?;
             let node = optic_ref.optical_ref.lock_opm()?;
-            if node.node_attr().get_property(AMP_CONFIG).is_ok() {
-                declaring_amp_config.push(node_type);
-            }
-            if node.node_attr().get_property(CLEAR_APERTURE).is_ok() {
-                declaring_clear_aperture.push(node_type);
+            if node.as_volume().is_some() {
+                volume_node_types.push(node_type);
             }
         }
-        declaring_amp_config.sort_unstable();
-        declaring_clear_aperture.sort_unstable();
+        volume_node_types.sort_unstable();
         assert_eq!(
-            declaring_amp_config, AMP_CONFIG_NODE_TYPES,
-            "AMP_CONFIG_NODE_TYPES does not match the node types actually declaring '{AMP_CONFIG}'"
-        );
-        assert_eq!(
-            declaring_clear_aperture, AMP_CONFIG_NODE_TYPES,
-            "a node with a volume declares both '{AMP_CONFIG}' and '{CLEAR_APERTURE}', but these \
-             node types declare only one of them"
+            volume_node_types, AMP_CONFIG_NODE_TYPES,
+            "AMP_CONFIG_NODE_TYPES does not match the node types that have a volume"
         );
         Ok(())
     }

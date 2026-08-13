@@ -7,7 +7,9 @@ pub mod test_helper {
             raytrace::AnalysisRayTrace,
         },
         apertures::{ApertureShape, ApertureType, CircleShape, GaussianShape},
-        core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, OpticRef, PortType},
+        core_optics::{
+            NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, OpticRef, PortType, Volumetric,
+        },
         distributions::position::Hexapolar,
         error::{OpmResult, OpossumError},
         gain::{AMP_CONFIG, ConstGain, GainModel},
@@ -348,7 +350,7 @@ pub mod test_helper {
     ///
     /// Panics if the node has no `center thickness` property, if the optical axis does not pass
     /// through the volume, or if the derived geometry does not match the property.
-    pub fn test_volume_body<T: Default + OpticNode>() -> OpmResult<()> {
+    pub fn test_volume_body<T: Default + Volumetric>() -> OpmResult<()> {
         let mut node = T::default();
         node.set_isometry(Isometry::identity())?;
         let center_thickness = center_thickness_of(&node);
@@ -388,7 +390,7 @@ pub mod test_helper {
     /// # Errors
     ///
     /// Returns an error if the body cannot be derived or if the ray does not pass through it.
-    pub fn path_length_through<T: OpticNode>(
+    pub fn path_length_through<T: Volumetric>(
         node: &T,
         position: Point3<Length>,
     ) -> OpmResult<Length> {
@@ -417,7 +419,7 @@ pub mod test_helper {
     ///
     /// Panics if the node has no `center thickness` property or if its extent does not follow the
     /// clear aperture.
-    pub fn test_clear_aperture<T: Default + OpticNode>() -> OpmResult<()> {
+    pub fn test_clear_aperture<T: Default + Volumetric>() -> OpmResult<()> {
         let mut node = T::default();
         node.set_isometry(Isometry::identity())?;
         let mid_thickness = center_thickness_of(&node) * 0.5;

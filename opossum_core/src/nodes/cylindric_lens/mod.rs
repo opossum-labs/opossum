@@ -3,7 +3,7 @@
 
 use crate::{
     analyzers::energy::AnalysisEnergy,
-    core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType},
+    core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType, Volumetric},
     error::{OpmResult, OpossumError},
     geometry::{Cylinder, Plane, geo_surface::GeoSurfaceRef},
     material::{MATERIAL, Material},
@@ -145,7 +145,11 @@ impl CylindricLens {
     }
 }
 
+impl Volumetric for CylindricLens {}
 impl OpticNode for CylindricLens {
+    fn as_volume(&self) -> Option<&dyn Volumetric> {
+        Some(self)
+    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
         let Ok(Proptype::Curvature(front_curvature)) =
