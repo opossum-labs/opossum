@@ -322,8 +322,9 @@ mod test {
         apertures::ApertureShape,
         core_optics::NodeAttrExt,
         distributions::position::Hexapolar,
+        geometry::body::Body,
         joule,
-        light::{LightData, LightResult, Rays},
+        light::{LightData, LightResult, Ray, Rays},
         millimeter, nanometer,
         nodes::test_helper::test_helper::*,
         properties::{Proptype, proptype::AssetRef},
@@ -633,6 +634,39 @@ mod test {
                 ],
             ],
         )
+    }
+    #[test]
+    fn volume_body() -> OpmResult<()> {
+        test_volume_body::<Lens>()
+    }
+    /// The body of a biconvex lens is thinner towards its rim by the sag of both surfaces.
+    #[test]
+    fn volume_body_thins_out_towards_the_rim() -> OpmResult<()> {
+        let curvature = millimeter!(100.0);
+        let center_thickness = millimeter!(10.0);
+        let ray_position = millimeter!(5.0, 0.0, 0.0);
+        let ray_height = ray_position.x;
+        let mut node = Lens::new(
+            "rim",
+            curvature,
+            -curvature,
+            center_thickness,
+            RefrIndexConst::new(1.5)?,
+        )?;
+        node.set_isometry(Isometry::identity())?;
+        let ray = Ray::new_collimated(ray_position, nanometer!(1053.0), joule!(1.0))?;
+        let path_length = node
+            .volume_body()?
+            .path_length_inside(&ray)?
+            .ok_or_else(|| OpossumError::Other("ray missed the lens".into()))?;
+        // Both surfaces recede by the same sag, so the volume is two sags thinner at that height.
+        let sag = curvature - (curvature * curvature - ray_height * ray_height).sqrt();
+        assert_relative_eq!(
+            path_length.value,
+            (center_thickness - 2.0 * sag).value,
+            epsilon = 1e-12
+        );
+        Ok(())
     }
     #[test]
     fn get_minimum_logical_aperture_radius_bi_convex() -> OpmResult<()> {

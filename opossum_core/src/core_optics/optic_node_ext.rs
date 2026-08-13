@@ -4,7 +4,7 @@ use crate::{
     coatings::CoatingType,
     core_optics::{NodeAttrExt, OpticNode, PortType, SceneryResources},
     error::{OpmResult, OpossumError},
-    geometry::{Plane, geo_surface::GeoSurfaceRef},
+    geometry::{Plane, body::SurfaceBoundedBody, geo_surface::GeoSurfaceRef},
     light::{LightData, LightRays, LightResult, Rays},
     material::Material,
     nodes::fluence_detector::Fluence,
@@ -165,6 +165,36 @@ pub trait OpticNodeExt {
         rays_bundle: &mut Vec<Rays>,
         strategy: &dyn PropagationStrategy,
     ) -> OpmResult<()>;
+    /// Return the volume enclosed by the two surfaces of this node as a [`Body`].
+    ///
+    /// This is the geometric counterpart of
+    /// [`OpticNodeExt::pass_through_volume_generic`]: that function guides rays *through* the
+    /// volume, this one describes the volume itself. It is derived entirely from what the node
+    /// already has — the two [`GeoSurface`](crate::geometry::geo_surface::GeoSurface)s built by
+    /// `update_surfaces()` from the node's curvature and thickness properties, plus the aperture of
+    /// its entrance port — so it needs no additional user input.
+    ///
+    /// The returned body refers to the surfaces the node holds at this moment. Changing the node's
+    /// placement or any of its geometry properties runs `update_surfaces()`, which installs fresh
+    /// surfaces, so the body has to be derived again afterwards.
+    ///
+    /// Both bounding surfaces are taken in their *physical* order, so an inverted node encloses the
+    /// same volume as an upright one: inverting a node reverses the direction light travels, not
+    /// the geometry it travels through.
+    ///
+    /// **Note**: The transversal extent of the body is the aperture of the entrance port. Without
+    /// one the body reaches as far as its bounding surfaces do, which for two flat surfaces means
+    /// transversally unbounded.
+    ///
+    /// # Returns
+    ///
+    /// The [`SurfaceBoundedBody`] enclosed by the node's entrance and exit surface.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the node does not have exactly one input and one output
+    /// port or if either of the two surfaces cannot be found.
+    fn volume_body(&self) -> OpmResult<SurfaceBoundedBody>;
     /// A unified helper function to analyze optical nodes that enclose a volume of material.
     ///
     /// This is the volume counterpart of [`OpticNodeExt::unified_analyze_single_surface_node`]: it
@@ -532,6 +562,33 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
             backward,
             refraction_intended,
         )
+    }
+
+    fn volume_body(&self) -> OpmResult<SurfaceBoundedBody> {
+        let (in_port_name, out_port_name) = single_io_port_names(self)?;
+        // `OpticNode::ports` hands out the *logical* ports, which are swapped on an inverted node.
+        // The body is a geometric object, so the physical order is restored here.
+        let (entrance_name, exit_name) = if self.inverted() {
+            (out_port_name, in_port_name)
+        } else {
+            (in_port_name, out_port_name)
+        };
+        let surface_by_name = |surf_name: &str| {
+            self.get_optic_surface(surf_name).ok_or_else(|| {
+                OpossumError::Other(format!(
+                    "no surface with name {surf_name} defined for node '{}'",
+                    self.name()
+                ))
+            })
+        };
+        let entrance_surface = surface_by_name(&entrance_name)?;
+        let exit_surface = surface_by_name(&exit_name)?;
+        Ok(SurfaceBoundedBody::new(
+            entrance_surface.geo_surface(),
+            exit_surface.geo_surface(),
+            entrance_surface.aperture().clone(),
+            self.effective_node_iso().unwrap_or_else(Isometry::identity),
+        ))
     }
 
     fn unified_analyze_volume_node(

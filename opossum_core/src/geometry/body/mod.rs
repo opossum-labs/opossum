@@ -71,9 +71,8 @@ pub trait Body: Debug + Send + Sync {
 ///
 /// A point is inside this body if it lies behind the entrance surface (see
 /// [`is_behind`](crate::geometry::geo_surface::GeoSurface::is_behind)), not behind the exit surface
-/// and within the aperture. Both bounding surfaces are held as
-/// [`GeoSurfaceRef`]s, so a body built from the surfaces of an optical node follows their
-/// realignment without having to be rebuilt.
+/// and within the aperture. Both bounding surfaces are held as [`GeoSurfaceRef`]s, i.e. the body
+/// shares them with whoever else holds them rather than copying their geometry.
 ///
 /// **Note**: The lateral boundary is the aperture alone — it is not a surface rays can interact
 /// with. A ray leaving the volume sideways is therefore reported as not passing through the body

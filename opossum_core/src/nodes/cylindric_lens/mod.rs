@@ -234,14 +234,15 @@ mod test {
         },
         core_optics::NodeAttrExt,
         distributions::position::Hexapolar,
+        geometry::body::Body,
         joule,
-        light::{LightData, LightResult, Rays},
+        light::{LightData, LightResult, Ray, Rays},
         millimeter, nanometer,
         nodes::test_helper::test_helper::*,
         properties::{Proptype, proptype::AssetRef},
     };
     use approx::assert_relative_eq;
-    use nalgebra::Vector3;
+    use nalgebra::{Point3, Vector3};
     use num::Zero;
     #[test]
     fn default() -> OpmResult<()> {
@@ -461,5 +462,36 @@ mod test {
                 ],
             ],
         )
+    }
+    #[test]
+    fn volume_body() -> OpmResult<()> {
+        test_volume_body::<CylindricLens>()
+    }
+    /// The cylindric lens is curved along x only, so its volume thins out towards the rim in that
+    /// direction while it keeps its full thickness along the cylinder axis.
+    #[test]
+    fn volume_body_thins_out_along_one_axis_only() -> OpmResult<()> {
+        let center_thickness = millimeter!(10.0);
+        let mut node = CylindricLens::new(
+            "one axis",
+            millimeter!(100.0),
+            millimeter!(-100.0),
+            center_thickness,
+            RefrIndexConst::new(1.5)?,
+        )?;
+        node.set_isometry(Isometry::identity())?;
+        let body = node.volume_body()?;
+        let path_length_at = |position: Point3<Length>| -> OpmResult<Length> {
+            let ray = Ray::new_collimated(position, nanometer!(1053.0), joule!(1.0))?;
+            body.path_length_inside(&ray)?
+                .ok_or_else(|| OpossumError::Other("ray missed the lens".into()))
+        };
+        assert_relative_eq!(
+            path_length_at(millimeter!(0.0, 5.0, 0.0))?.value,
+            center_thickness.value,
+            epsilon = 1e-12
+        );
+        assert!(path_length_at(millimeter!(5.0, 0.0, 0.0))? < center_thickness);
+        Ok(())
     }
 }

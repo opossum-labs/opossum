@@ -11,6 +11,7 @@ pub mod test_helper {
         distributions::position::Hexapolar,
         error::{OpmResult, OpossumError},
         gain::{AMP_CONFIG, ConstGain, GainModel},
+        geometry::body::Body,
         joule,
         light::{LightData, LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer,
@@ -18,9 +19,10 @@ pub mod test_helper {
         properties::Proptype,
         utils::{LockExt, geom_transformation::Isometry, test_helper::test_helper::check_logs},
     };
-    use nalgebra::Vector3;
+    use approx::assert_abs_diff_eq;
+    use nalgebra::{Point3, Vector3};
     use std::sync::{Arc, Mutex};
-    use uom::si::{energy::joule, length::millimeter};
+    use uom::si::{energy::joule, f64::Length, length::millimeter};
     pub fn test_inverted<T: Default + OpticNode>() -> OpmResult<()> {
         let mut node = T::default();
         node.set_inverted(true)?;
@@ -269,6 +271,76 @@ pub mod test_helper {
             amp_config_of(deserialized.optical_ref.lock_opm()?.node_attr()),
             GainModel::None,
             "loading a file without the property must fall back to the default"
+        );
+        Ok(())
+    }
+
+    /// Assert that the body of a volume node matches the geometry its properties describe.
+    ///
+    /// The body is not configured separately: it is derived from the very surfaces
+    /// `update_surfaces()` places from the node's curvature and thickness properties. What ties the
+    /// two together is the on-axis path length — it has to come out as exactly the node's center
+    /// thickness, the same distance the entry surface → exit surface pass covers.
+    ///
+    /// The optical axis starts exactly on the entrance surface, so this also exercises the case of
+    /// a ray originating on a bounding surface, which is how a refracted ray enters the volume.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node cannot be placed or if its body cannot be derived.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node has no `center thickness` property, if the optical axis does not pass
+    /// through the volume, or if the derived geometry does not match the property.
+    pub fn test_volume_body<T: Default + OpticNode>() -> OpmResult<()> {
+        let mut node = T::default();
+        node.set_isometry(Isometry::identity())?;
+        let Ok(Proptype::Length(center_thickness)) =
+            node.node_attr().get_property("center thickness")
+        else {
+            panic!(
+                "node '{}' has no 'center thickness' property",
+                node.node_attr().node_type()
+            );
+        };
+        let center_thickness = *center_thickness;
+        let axis_ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0))?;
+        let axis_path_length = |node: &T| -> OpmResult<Length> {
+            node.volume_body()?
+                .path_length_inside(&axis_ray)?
+                .ok_or_else(|| {
+                    OpossumError::Other("the optical axis does not pass through the volume".into())
+                })
+        };
+        assert_abs_diff_eq!(
+            axis_path_length(&node)?.value,
+            center_thickness.value,
+            epsilon = 1e-12
+        );
+        let body = node.volume_body()?;
+        let on_axis_point =
+            |z_position: Length| Point3::new(millimeter!(0.0), millimeter!(0.0), z_position);
+        assert!(body.contains(&on_axis_point(center_thickness * 0.5))?);
+        assert!(!body.contains(&on_axis_point(millimeter!(-1.0)))?);
+        assert!(!body.contains(&on_axis_point(center_thickness + millimeter!(1.0)))?);
+        // The transversal boundary is the aperture of the entrance port. Without one the body
+        // reaches as far as its bounding surfaces do.
+        let off_axis_point =
+            Point3::new(millimeter!(20.0), millimeter!(0.0), center_thickness * 0.5);
+        assert!(body.contains(&off_axis_point)?);
+        node.set_aperture(
+            &PortType::Input,
+            "input_1",
+            &Aperture::new_circle(millimeter!(5.0), ApertureType::Hole, None)?,
+        )?;
+        assert!(!node.volume_body()?.contains(&off_axis_point)?);
+        // Inverting a node reverses the direction light travels through it, not the geometry.
+        node.set_inverted(true)?;
+        assert_abs_diff_eq!(
+            axis_path_length(&node)?.value,
+            center_thickness.value,
+            epsilon = 1e-12
         );
         Ok(())
     }

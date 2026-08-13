@@ -198,14 +198,17 @@ mod test {
             raytrace::AnalysisRayTrace,
         },
         core_optics::{NodeAttrExt, PortType},
-        degree, joule,
+        degree,
+        geometry::body::Body,
+        joule,
         light::{LightData, LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
         nanometer,
         nodes::test_helper::test_helper::*,
         properties::{Proptype, proptype::AssetRef},
         refractive_index::RefractiveIndexType,
     };
-    use nalgebra::Vector3;
+    use approx::assert_abs_diff_eq;
+    use nalgebra::{Point3, Vector3};
 
     #[test]
     fn default() -> OpmResult<()> {
@@ -498,5 +501,44 @@ mod test {
                 ],
             ],
         )
+    }
+    #[test]
+    fn volume_body() -> OpmResult<()> {
+        test_volume_body::<Wedge>()
+    }
+    /// The wedge tilts its rear surface around the axis, so the volume thickens on one side of it
+    /// by as much as it thins on the other.
+    #[test]
+    fn volume_body_is_wedge_shaped() -> OpmResult<()> {
+        let center_thickness = millimeter!(10.0);
+        let mut node = Wedge::new(
+            "wedge shape",
+            center_thickness,
+            degree!(5.0),
+            RefrIndexConst::new(1.5)?,
+        )?;
+        node.set_isometry(Isometry::identity())?;
+        let body = node.volume_body()?;
+        let path_length_at = |height: Length| -> OpmResult<Length> {
+            let ray = Ray::new_collimated(
+                Point3::new(millimeter!(0.0), height, millimeter!(0.0)),
+                nanometer!(1053.0),
+                joule!(1.0),
+            )?;
+            body.path_length_inside(&ray)?
+                .ok_or_else(|| OpossumError::Other("ray missed the wedge".into()))
+        };
+        let above = path_length_at(millimeter!(5.0))?;
+        let below = path_length_at(millimeter!(-5.0))?;
+        assert!(
+            (above - below).abs() > millimeter!(0.1),
+            "a wedge of 5 degrees has to differ noticeably in thickness across 10 mm"
+        );
+        assert_abs_diff_eq!(
+            (above + below).value,
+            (2.0 * center_thickness).value,
+            epsilon = 1e-12
+        );
+        Ok(())
     }
 }
