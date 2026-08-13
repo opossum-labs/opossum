@@ -1,23 +1,18 @@
 // --- Common imports ---
 use crate::{
-    APP_CONFIG,
-    components::{
+    APP_CONFIG, components::{
         alert_dialog::{
             AlertDialogAction, AlertDialogActions, AlertDialogCancel, AlertDialogContent,
             AlertDialogDescription, AlertDialogRoot, AlertDialogTitle,
-        },
-        context_menu::cx_menu::{ContextMenu, CxtCommand},
-        logger::logger_component::Logger,
-        menu_bar::{
+        }, asset_editor::asset_header_editor::{AssetHeaderChangeEvent, AssetHeaderEditor}, context_menu::cx_menu::{ContextMenu, CxtCommand}, logger::logger_component::Logger, menu_bar::{
             menu_bar_component::{AppCommand, MenuBar},
             project_helper::{select_open_path, select_save_path},
-        },
-        scenery_editor::{GraphEditor, NodeEditorCommand},
-        settings_dialog::SettingsDialog,
-        short_cuts::{PendingAction, SHORTCUTS, Shortcut},
+        }, scenery_editor::{GraphEditor, NodeEditorCommand}, settings_dialog::SettingsDialog, short_cuts::{PendingAction, SHORTCUTS, Shortcut},
     },
 };
 use dioxus::prelude::*;
+use opossum_core::asset::AssetHeader;
+use uuid::Uuid;
 use std::path::PathBuf;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -499,6 +494,18 @@ fn CommonAppLayout(
         }
     };
 
+    // **** Testing only *****
+    let asset_header_state = use_signal(|| {
+        AssetHeader::new(
+            Uuid::new_v4(),
+            0, // Version 0 indicates a draft
+            "Test Glass",
+            None,
+            None,
+        )
+    });
+    // ****
+
     rsx! {
         document::Title { "OPOSSUM" }
         ContextMenu { cxt_command_handler }
@@ -526,6 +533,11 @@ fn CommonAppLayout(
                 root_tab_open_handler,
             }
             Logger { drag_handler: on_mousedown, height }
+            AssetHeaderEditor {
+                header: asset_header_state,
+                readonly: false,
+                on_change: move |e: AssetHeaderChangeEvent| { println!("Got event: {e:?}") },
+            }
         }
         AlertDialogRoot {
             open: show_alert(),

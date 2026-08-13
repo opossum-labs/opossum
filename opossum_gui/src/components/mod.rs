@@ -7,6 +7,7 @@ pub mod scenery_editor;
 pub mod settings_dialog;
 pub mod short_cuts;
 pub mod simulation;
+pub mod asset_editor;
 // pub mod plot;
 // pub mod render_3d;
 pub mod alert_dialog;
