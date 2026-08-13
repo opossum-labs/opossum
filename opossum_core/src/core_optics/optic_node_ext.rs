@@ -171,19 +171,24 @@ pub trait OpticNodeExt {
         rays_bundle: &mut Vec<Rays>,
         strategy: &dyn PropagationStrategy,
     ) -> OpmResult<()>;
-    /// Return the volume enclosed by the two surfaces of this node as a [`Body`].
+    /// Return the volume enclosed by the two surfaces of this node as a
+    /// [`Body`](crate::geometry::body::Body).
     ///
     /// This is the geometric counterpart of
     /// [`OpticNodeExt::pass_through_volume_generic`]: that function guides rays *through* the
     /// volume, this one describes the volume itself. It is derived entirely from what the node
     /// already has — the two [`GeoSurface`](crate::geometry::geo_surface::GeoSurface)s built by
     /// `update_surfaces()` from the node's curvature and thickness properties, and its
-    /// [`CLEAR_APERTURE`](crate::geometry::body::CLEAR_APERTURE) property as the transversal
-    /// extent.
+    /// [`CLEAR_APERTURE`] property as the transversal extent.
     ///
     /// The returned body refers to the surfaces the node holds at this moment. Changing the node's
     /// placement or any of its geometry properties runs `update_surfaces()`, which installs fresh
     /// surfaces, so the body has to be derived again afterwards.
+    ///
+    /// **Derive it once per node and keep it**, rather than per ray or per grid point: resolving
+    /// the node's ports copies its whole `OpticPorts` (see [`OpticNode::ports`]), which is a
+    /// handful of allocations, while the body itself only shares the surfaces it is handed. The
+    /// body is what belongs in the loop, not this call.
     ///
     /// Both bounding surfaces are taken in their *physical* order, so an inverted node encloses the
     /// same volume as an upright one: inverting a node reverses the direction light travels, not

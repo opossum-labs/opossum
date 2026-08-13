@@ -118,6 +118,13 @@ pub trait Body: Debug + Send + Sync {
 /// **Note**: The lateral boundary is the cross section alone — it is not a surface rays can
 /// interact with. A ray leaving the volume sideways is therefore reported as not passing through
 /// the body rather than being reflected on a barrel surface.
+///
+/// **On cost**: every query locks the mutex of each bounding surface it needs, so a query is a few
+/// lock/unlock pairs plus the geometry itself. That is deliberate — the surfaces are shared with
+/// the node they came from, which may realign them between queries. A caller sweeping a whole ray
+/// bundle or a discretisation grid can amortise this once a hot path exists, but it must not hold
+/// both guards at the same time: a node with a single surface hands out the same
+/// [`GeoSurfaceRef`] twice, and locking it twice would deadlock.
 #[derive(Debug, Clone)]
 pub struct SurfaceBoundedBody {
     entrance: GeoSurfaceRef,
