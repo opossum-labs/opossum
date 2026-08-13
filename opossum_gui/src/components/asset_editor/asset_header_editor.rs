@@ -1,6 +1,8 @@
 use dioxus::prelude::*;
 use opossum_core::asset::AssetHeader;
 
+use crate::components::node_editor::inputs::input_components::LabeledInput;
+
 /// Defines the specific field that was modified in the asset header.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AssetHeaderChangeAction {
@@ -37,7 +39,6 @@ pub struct AssetHeaderEditorProps {
 #[component]
 pub fn AssetHeaderEditor(props: AssetHeaderEditorProps) -> Element {
     let header = props.header.read();
-
     rsx! {
       div { class: "card mb-4",
         div { class: "card-header bg-light",
@@ -48,15 +49,11 @@ pub fn AssetHeaderEditor(props: AssetHeaderEditorProps) -> Element {
           // Row 1: Name and Manufacturer
           div { class: "row mb-3",
             div { class: "col-md-6",
-              label { class: "form-label fw-bold", "Name*" }
-              input {
-                class: "form-control",
-                r#type: "text",
-                placeholder: "e.g., N-BK7",
-                value: "{header.name}",
-                readonly: props.readonly,
-                // Emit event when the user inputs text
-                oninput: move |e| {
+              LabeledInput {
+                id: "name",
+                label: "Name*",
+                value: header.name.clone(),
+                onchange: move |e: Event<FormData>| {
                     props
                         .on_change
                         .call(AssetHeaderChangeEvent {
@@ -67,14 +64,12 @@ pub fn AssetHeaderEditor(props: AssetHeaderEditorProps) -> Element {
             }
 
             div { class: "col-md-6",
-              label { class: "form-label fw-bold", "Manufacturer" }
-              input {
-                class: "form-control",
-                r#type: "text",
-                placeholder: "e.g., Schott",
-                value: "{header.manufacturer.as_deref().unwrap_or_default()}",
-                readonly: props.readonly,
-                oninput: move |e| {
+
+              LabeledInput {
+                id: "manufacturer",
+                label: "Manufacturer",
+                value: header.manufacturer.clone().unwrap_or_default(),
+                onchange: move |e: Event<FormData>| {
                     let val = e.value();
                     let opt_val = if val.trim().is_empty() {
                         None
@@ -94,14 +89,11 @@ pub fn AssetHeaderEditor(props: AssetHeaderEditorProps) -> Element {
           // Row 2: Description
           div { class: "row mb-3",
             div { class: "col-12",
-              label { class: "form-label fw-bold", "Description" }
-              textarea {
-                class: "form-control",
-                rows: 3,
-                placeholder: "Additional notes...",
-                value: "{header.description.as_deref().unwrap_or_default()}",
-                readonly: props.readonly,
-                oninput: move |e| {
+              LabeledInput {
+                id: "description",
+                label: "Description",
+                value: header.description.clone().unwrap_or_default(),
+                onchange: move |e: Event<FormData>| {
                     let val = e.value();
                     let opt_val = if val.trim().is_empty() {
                         None

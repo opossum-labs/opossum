@@ -338,7 +338,7 @@ pub fn RowedElements(elements: Vec<Element>, num_per_row: usize) -> Element {
 pub fn LabeledInput(
     id: String,
     label: String,
-    value: String,
+    value: ReadSignal<String>,
     onchange: EventHandler<Event<FormData>>,
     #[props(default = "text")] r#type: &'static str,
     #[props(optional)] step: Option<&'static str>,
