@@ -6,12 +6,12 @@ pub mod test_helper {
             energy::{AnalysisEnergy, EnergyConfig},
             raytrace::AnalysisRayTrace,
         },
-        apertures::{ApertureShape, ApertureType, CircleShape},
+        apertures::{ApertureShape, ApertureType, CircleShape, GaussianShape},
         core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, OpticRef, PortType},
         distributions::position::Hexapolar,
         error::{OpmResult, OpossumError},
         gain::{AMP_CONFIG, ConstGain, GainModel},
-        geometry::body::Body,
+        geometry::body::{Body, CLEAR_APERTURE, default_clear_aperture},
         joule,
         light::{LightData, LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer,
@@ -254,25 +254,80 @@ pub mod test_helper {
     /// Panics if the property could not be removed from the serialized form (which would make the
     /// test vacuous) or if the loaded node does not fall back to [`GainModel::None`].
     pub fn test_amp_config_absent_in_file<T: Default + Analyzable + 'static>() -> OpmResult<()> {
-        let optic_ref = OpticRef::new(Arc::new(Mutex::new(T::default())), None);
-        let serialized =
-            ron::to_string(&optic_ref).map_err(|e| OpossumError::Other(e.to_string()))?;
-
-        // Emulate a file written before the property existed by dropping its entry again.
-        let without_property = remove_property_entry(&serialized, AMP_CONFIG);
-        assert!(
-            !without_property.contains(AMP_CONFIG),
-            "amp config entry was not removed, the test would be vacuous"
-        );
-
-        let deserialized: OpticRef =
-            ron::from_str(&without_property).map_err(|e| OpossumError::Other(e.to_string()))?;
+        let deserialized = load_without_property::<T>(AMP_CONFIG)?;
         assert_eq!(
             amp_config_of(deserialized.optical_ref.lock_opm()?.node_attr()),
             GainModel::None,
             "loading a file without the property must fall back to the default"
         );
         Ok(())
+    }
+
+    /// Assert that a file written before the `clear aperture` property existed still loads.
+    ///
+    /// The counterpart of [`test_amp_config_absent_in_file`] for the transversal extent: such a
+    /// file has to come out with the standard extent rather than with no property at all.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node cannot be serialized or deserialized.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the loaded node does not fall back to [`default_clear_aperture`].
+    pub fn test_clear_aperture_absent_in_file<T: Default + Analyzable + 'static>() -> OpmResult<()>
+    {
+        let deserialized = load_without_property::<T>(CLEAR_APERTURE)?;
+        let clear_aperture = {
+            let node = deserialized.optical_ref.lock_opm()?;
+            let Ok(Proptype::Aperture(shape)) = node.node_attr().get_property(CLEAR_APERTURE)
+            else {
+                panic!("the loaded node has no '{CLEAR_APERTURE}' property holding a shape");
+            };
+            shape.clone()
+        };
+        assert_eq!(
+            clear_aperture,
+            default_clear_aperture(),
+            "loading a file without the property must fall back to the default"
+        );
+        Ok(())
+    }
+
+    /// Serialize a default node, drop one property entry again and load the result.
+    ///
+    /// This emulates a file written before that property existed. Because `set_node_attr` merges
+    /// the properties of the file into those of a freshly constructed default node, the default has
+    /// to survive — otherwise every existing `.opm` file would break.
+    ///
+    /// # Arguments
+    ///
+    /// * `property_name` - name of the property to drop.
+    ///
+    /// # Returns
+    ///
+    /// The node loaded from the reduced serialization.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node cannot be serialized or deserialized.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the property could not be removed from the serialized form, which would make the
+    /// calling test vacuous.
+    fn load_without_property<T: Default + Analyzable + 'static>(
+        property_name: &str,
+    ) -> OpmResult<OpticRef> {
+        let optic_ref = OpticRef::new(Arc::new(Mutex::new(T::default())), None);
+        let serialized =
+            ron::to_string(&optic_ref).map_err(|e| OpossumError::Other(e.to_string()))?;
+        let without_property = remove_property_entry(&serialized, property_name);
+        assert!(
+            !without_property.contains(property_name),
+            "the {property_name} entry was not removed, the test would be vacuous"
+        );
+        ron::from_str(&without_property).map_err(|e| OpossumError::Other(e.to_string()))
     }
 
     /// Assert that the body of a volume node matches the geometry its properties describe.
@@ -296,15 +351,7 @@ pub mod test_helper {
     pub fn test_volume_body<T: Default + OpticNode>() -> OpmResult<()> {
         let mut node = T::default();
         node.set_isometry(Isometry::identity())?;
-        let Ok(Proptype::Length(center_thickness)) =
-            node.node_attr().get_property("center thickness")
-        else {
-            panic!(
-                "node '{}' has no 'center thickness' property",
-                node.node_attr().node_type()
-            );
-        };
-        let center_thickness = *center_thickness;
+        let center_thickness = center_thickness_of(&node);
         let axis_ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0))?;
         let axis_path_length = |node: &T| -> OpmResult<Length> {
             node.volume_body()?
@@ -324,17 +371,6 @@ pub mod test_helper {
         assert!(body.contains(&on_axis_point(center_thickness * 0.5))?);
         assert!(!body.contains(&on_axis_point(millimeter!(-1.0)))?);
         assert!(!body.contains(&on_axis_point(center_thickness + millimeter!(1.0)))?);
-        // The transversal boundary is the aperture of the entrance port. Without one the body
-        // reaches as far as its bounding surfaces do.
-        let off_axis_point =
-            Point3::new(millimeter!(20.0), millimeter!(0.0), center_thickness * 0.5);
-        assert!(body.contains(&off_axis_point)?);
-        node.set_aperture(
-            &PortType::Input,
-            "input_1",
-            &Aperture::new_circle(millimeter!(5.0), ApertureType::Hole, None)?,
-        )?;
-        assert!(!node.volume_body()?.contains(&off_axis_point)?);
         // Inverting a node reverses the direction light travels through it, not the geometry.
         node.set_inverted(true)?;
         assert_abs_diff_eq!(
@@ -343,6 +379,83 @@ pub mod test_helper {
             epsilon = 1e-12
         );
         Ok(())
+    }
+
+    /// Assert that the transversal extent of a volume node is its clear aperture, and nothing else.
+    ///
+    /// The clear aperture is what a supplier quotes as the size of the component, and a volume node
+    /// starts out with the 25 mm standard. A port [`Aperture`] must not influence it: masking the
+    /// light in front of a component does not make the component smaller.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node cannot be placed or if its body cannot be derived.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node has no `center thickness` property or if its extent does not follow the
+    /// clear aperture.
+    pub fn test_clear_aperture<T: Default + OpticNode>() -> OpmResult<()> {
+        let mut node = T::default();
+        node.set_isometry(Isometry::identity())?;
+        let mid_thickness = center_thickness_of(&node) * 0.5;
+        let point_at = |radius: Length| Point3::new(radius, millimeter!(0.0), mid_thickness);
+        // the default extent is a circle of 12.5 mm radius
+        assert!(node.volume_body()?.contains(&point_at(millimeter!(12.4)))?);
+        assert!(!node.volume_body()?.contains(&point_at(millimeter!(12.6)))?);
+        // a port aperture masks the light, it does not resize the medium
+        node.set_aperture(
+            &PortType::Input,
+            "input_1",
+            &Aperture::new_circle(millimeter!(1.0), ApertureType::Hole, None)?,
+        )?;
+        assert!(node.volume_body()?.contains(&point_at(millimeter!(12.4)))?);
+        // a wider clear aperture does
+        node.node_attr_mut().set_property(
+            CLEAR_APERTURE,
+            ApertureShape::BinaryCircle(CircleShape::new(millimeter!(25.0))?).into(),
+        )?;
+        assert!(node.volume_body()?.contains(&point_at(millimeter!(24.9)))?);
+        assert!(!node.volume_body()?.contains(&point_at(millimeter!(25.1)))?);
+        // an open clear aperture leaves the medium reaching as far as its surfaces do, which is
+        // well beyond the default extent but not necessarily forever: two curved surfaces close
+        // the volume on their own
+        node.node_attr_mut()
+            .set_property(CLEAR_APERTURE, ApertureShape::Open.into())?;
+        assert!(node.volume_body()?.contains(&point_at(millimeter!(20.0)))?);
+        // a shape without a hard edge cannot state where the medium ends
+        node.node_attr_mut().set_property(
+            CLEAR_APERTURE,
+            ApertureShape::Gaussian(GaussianShape::new((millimeter!(5.0), millimeter!(5.0)))?)
+                .into(),
+        )?;
+        assert!(node.volume_body().is_err());
+        Ok(())
+    }
+
+    /// Read the `center thickness` property of a volume node.
+    ///
+    /// # Arguments
+    ///
+    /// * `node` - the volume node to inspect.
+    ///
+    /// # Returns
+    ///
+    /// The center thickness of the node.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node does not declare a `center thickness` property.
+    fn center_thickness_of<T: OpticNode>(node: &T) -> Length {
+        let Ok(Proptype::Length(center_thickness)) =
+            node.node_attr().get_property("center thickness")
+        else {
+            panic!(
+                "node '{}' has no 'center thickness' property",
+                node.node_attr().node_type()
+            );
+        };
+        *center_thickness
     }
 
     /// Number of scalars captured per ray by [`ray_bundle_snapshot`].

@@ -1,13 +1,18 @@
 use crate::{
     analyzers::propagation_strategy::PropagationStrategy,
-    apertures::Aperture,
+    apertures::{Aperture, ApertureType},
     coatings::CoatingType,
     core_optics::{NodeAttrExt, OpticNode, PortType, SceneryResources},
     error::{OpmResult, OpossumError},
-    geometry::{Plane, body::SurfaceBoundedBody, geo_surface::GeoSurfaceRef},
+    geometry::{
+        Plane,
+        body::{CLEAR_APERTURE, SurfaceBoundedBody},
+        geo_surface::GeoSurfaceRef,
+    },
     light::{LightData, LightRays, LightResult, Rays},
     material::Material,
     nodes::fluence_detector::Fluence,
+    properties::Proptype,
     refractive_index::RefractiveIndexType,
     utils::{LockExt, geom_transformation::Isometry},
 };
@@ -171,8 +176,9 @@ pub trait OpticNodeExt {
     /// [`OpticNodeExt::pass_through_volume_generic`]: that function guides rays *through* the
     /// volume, this one describes the volume itself. It is derived entirely from what the node
     /// already has — the two [`GeoSurface`](crate::geometry::geo_surface::GeoSurface)s built by
-    /// `update_surfaces()` from the node's curvature and thickness properties, plus the aperture of
-    /// its entrance port — so it needs no additional user input.
+    /// `update_surfaces()` from the node's curvature and thickness properties, and its
+    /// [`CLEAR_APERTURE`](crate::geometry::body::CLEAR_APERTURE) property as the transversal
+    /// extent.
     ///
     /// The returned body refers to the surfaces the node holds at this moment. Changing the node's
     /// placement or any of its geometry properties runs `update_surfaces()`, which installs fresh
@@ -182,9 +188,8 @@ pub trait OpticNodeExt {
     /// same volume as an upright one: inverting a node reverses the direction light travels, not
     /// the geometry it travels through.
     ///
-    /// **Note**: The transversal extent of the body is the aperture of the entrance port. Without
-    /// one the body reaches as far as its bounding surfaces do, which for two flat surfaces means
-    /// transversally unbounded.
+    /// **Note**: The port [`Aperture`]s have no say in the extent of the body. They mask the light
+    /// passing a surface, which is independent of how far the medium behind it reaches.
     ///
     /// # Returns
     ///
@@ -324,6 +329,48 @@ fn single_io_port_names<T: ?Sized + OpticNode>(node: &T) -> OpmResult<(String, S
         single_port(&PortType::Input)?,
         single_port(&PortType::Output)?,
     ))
+}
+
+/// Determine the transversal boundary of a node's volume from its [`CLEAR_APERTURE`] property.
+///
+/// The port [`Aperture`]s are deliberately not consulted: an aperture states how much light a
+/// surface transmits where and may soften or invert that transmission, which says nothing about how
+/// far the material reaches. Masking a component down does not make it smaller.
+///
+/// # Arguments
+///
+/// * `node` - the node whose volume is to be bounded.
+///
+/// # Returns
+///
+/// The cross section of the node's volume, or `None` if it is transversally unbounded — either
+/// because its clear aperture is open or because it does not declare one at all.
+///
+/// # Errors
+///
+/// This function returns an error if the node's clear aperture is set to a shape without a hard
+/// edge, which cannot state where a medium ends.
+fn cross_section<T: ?Sized + OpticNode>(node: &T) -> OpmResult<Option<Aperture>> {
+    let Ok(Proptype::Aperture(clear_aperture)) = node.node_attr().get_property(CLEAR_APERTURE)
+    else {
+        return Ok(None);
+    };
+    if clear_aperture.is_none() {
+        return Ok(None);
+    }
+    if !clear_aperture.is_binary() {
+        return Err(OpossumError::Other(format!(
+            "the {CLEAR_APERTURE} of node '{}' is of shape '{clear_aperture}', which does not \
+             delimit a region - only a shape with a hard edge can state where a medium ends",
+            node.name()
+        )));
+    }
+    Ok(Some(Aperture::new(
+        clear_aperture.clone(),
+        ApertureType::Hole,
+        None,
+        None,
+    )?))
 }
 
 impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNodeExt for T {
@@ -583,12 +630,12 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         };
         let entrance_surface = surface_by_name(&entrance_name)?;
         let exit_surface = surface_by_name(&exit_name)?;
-        Ok(SurfaceBoundedBody::new(
+        SurfaceBoundedBody::new(
             entrance_surface.geo_surface(),
             exit_surface.geo_surface(),
-            entrance_surface.aperture().clone(),
+            cross_section(self)?,
             self.effective_node_iso().unwrap_or_else(Isometry::identity),
-        ))
+        )
     }
 
     fn unified_analyze_volume_node(

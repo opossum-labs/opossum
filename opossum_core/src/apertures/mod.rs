@@ -190,6 +190,22 @@ impl Aperture {
     pub const fn isometry(&self) -> Option<&Isometry> {
         self.isometry.as_ref()
     }
+    /// Return whether this [`Aperture`] delimits a region geometrically.
+    ///
+    /// An aperture describes how much light a surface transmits where, which is more general than
+    /// an outline: only a binary shape used as a [`ApertureType::Hole`] encloses a well-defined
+    /// region. A [`ApertureShape::Gaussian`] has no edge at all — it attenuates everywhere and
+    /// transmits nowhere completely — an [`ApertureType::Obstruction`] delimits the *complement* of
+    /// a region, and a [`ApertureShape::Stack`] may combine both. Anything that has to know where a
+    /// body ends, rather than how much light passes, has to ask this first.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the aperture can be read as the outline of a region.
+    #[must_use]
+    pub const fn is_geometric_bound(&self) -> bool {
+        matches!(self.a_type, ApertureType::Hole) && self.shape.is_binary()
+    }
     /// Set the shape of this [`Aperture`].
     pub fn set_shape(&mut self, shape: ApertureShape) {
         self.shape = shape;
@@ -353,6 +369,19 @@ impl ApertureShape {
     /// Check if the aperture is [`ApertureShape::Open`]
     pub const fn is_none(&self) -> bool {
         matches!(self, Self::Open)
+    }
+    /// Check whether this shape has a hard edge, i.e. transmits either fully or not at all.
+    ///
+    /// # Returns
+    ///
+    /// `true` for the binary shapes, `false` for [`ApertureShape::Open`],
+    /// [`ApertureShape::Gaussian`] and [`ApertureShape::Stack`].
+    #[must_use]
+    pub const fn is_binary(&self) -> bool {
+        matches!(
+            self,
+            Self::BinaryCircle(_) | Self::BinaryRectangle(_) | Self::BinaryPolygon(_)
+        )
     }
     /// Calculate the transmission factor of a given point on the [`Aperture`]. The value is in the range (0.0..=1.0)
     /// 0.0 is fully opaque, 1.0 fully transparent.

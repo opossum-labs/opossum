@@ -170,6 +170,7 @@ impl Properties {
             .map(move |(s, p)| (format!("{node_report_id_str}_{s}"), p))
     }
     /// Returns the iter of this [`Properties`], in the order the properties were created.
+    #[must_use]
     pub fn iter(&self) -> indexmap::map::Iter<'_, String, Property> {
         self.props.iter()
     }

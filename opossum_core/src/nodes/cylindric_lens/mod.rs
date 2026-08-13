@@ -6,7 +6,11 @@ use crate::{
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType},
     error::{OpmResult, OpossumError},
     gain::{AMP_CONFIG, GainModel},
-    geometry::{Cylinder, Plane, geo_surface::GeoSurfaceRef},
+    geometry::{
+        Cylinder, Plane,
+        body::{CLEAR_APERTURE, default_clear_aperture},
+        geo_surface::GeoSurfaceRef,
+    },
     material::{MATERIAL, Material},
     meter, millimeter,
     nodes::NodeRegistration,
@@ -49,6 +53,7 @@ inventory::submit! {
 ///   - `rear curvature`
 ///   - `center thickness`
 ///   - `material`
+///   - `clear aperture`
 pub struct CylindricLens {
     node_attr: NodeAttr,
 }
@@ -99,6 +104,13 @@ impl Default for CylindricLens {
                     RefrIndexConst::new(1.5).unwrap().into(),
                 )
                 .into(),
+            )
+            .unwrap();
+        node_attr
+            .create_property(
+                CLEAR_APERTURE,
+                "transversal extent of the medium (Open = as far as the surfaces reach)",
+                default_clear_aperture().into(),
             )
             .unwrap();
         node_attr
@@ -466,6 +478,14 @@ mod test {
     #[test]
     fn volume_body() -> OpmResult<()> {
         test_volume_body::<CylindricLens>()
+    }
+    #[test]
+    fn clear_aperture() -> OpmResult<()> {
+        test_clear_aperture::<CylindricLens>()
+    }
+    #[test]
+    fn clear_aperture_absent_in_file() -> OpmResult<()> {
+        test_clear_aperture_absent_in_file::<CylindricLens>()
     }
     /// The cylindric lens is curved along x only, so its volume thins out towards the rim in that
     /// direction while it keeps its full thickness along the cylinder axis.

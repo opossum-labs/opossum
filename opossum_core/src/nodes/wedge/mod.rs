@@ -8,7 +8,11 @@ use crate::{
     degree,
     error::{OpmResult, OpossumError},
     gain::{AMP_CONFIG, GainModel},
-    geometry::{Plane, geo_surface::GeoSurfaceRef},
+    geometry::{
+        Plane,
+        body::{CLEAR_APERTURE, default_clear_aperture},
+        geo_surface::GeoSurfaceRef,
+    },
     material::{MATERIAL, Material},
     millimeter,
     nodes::NodeRegistration,
@@ -45,6 +49,7 @@ inventory::submit! {
 ///   - `center thickness`
 ///   - `material`
 ///   - `wedge`
+///   - `clear aperture`
 pub struct Wedge {
     node_attr: NodeAttr,
 }
@@ -96,6 +101,13 @@ impl Default for Wedge {
                 //     numeric_is_finite(),
                 // ]),
                 Angle::zero().into(),
+            )
+            .unwrap();
+        node_attr
+            .create_property(
+                CLEAR_APERTURE,
+                "transversal extent of the medium (Open = as far as the surfaces reach)",
+                default_clear_aperture().into(),
             )
             .unwrap();
         node_attr
@@ -505,6 +517,14 @@ mod test {
     #[test]
     fn volume_body() -> OpmResult<()> {
         test_volume_body::<Wedge>()
+    }
+    #[test]
+    fn clear_aperture() -> OpmResult<()> {
+        test_clear_aperture::<Wedge>()
+    }
+    #[test]
+    fn clear_aperture_absent_in_file() -> OpmResult<()> {
+        test_clear_aperture_absent_in_file::<Wedge>()
     }
     /// The wedge tilts its rear surface around the axis, so the volume thickens on one side of it
     /// by as much as it thins on the other.

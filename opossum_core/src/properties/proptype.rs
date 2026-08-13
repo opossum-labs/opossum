@@ -211,6 +211,7 @@ impl Proptype {
                 Self::Energy(value) => {
                     template_engine.render("simple", &format_quantity(joule, *value))
                 }
+                Self::Aperture(shape) => template_engine.render("simple", &shape.to_string()),
                 Self::Material(AssetRef::Inline(mat)) => template_engine
                     .render("simple", &format!("{} (v{})", mat.name(), mat.version())),
                 Self::Material(AssetRef::Id(mat_id)) => {

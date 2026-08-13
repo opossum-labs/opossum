@@ -6,7 +6,11 @@ use crate::{
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType},
     error::{OpmResult, OpossumError},
     gain::{AMP_CONFIG, GainModel},
-    geometry::{Plane, Sphere, geo_surface::GeoSurfaceRef},
+    geometry::{
+        Plane, Sphere,
+        body::{CLEAR_APERTURE, default_clear_aperture},
+        geo_surface::GeoSurfaceRef,
+    },
     material::{MATERIAL, Material},
     meter, millimeter,
     nodes::NodeRegistration,
@@ -49,6 +53,7 @@ inventory::submit! {
 ///   - `rear curvature`
 ///   - `center thickness`
 ///   - `material`
+///   - `clear aperture`
 pub struct Lens {
     node_attr: NodeAttr,
 }
@@ -98,6 +103,13 @@ impl Default for Lens {
                     RefrIndexConst::new(1.5).unwrap().into(),
                 )
                 .into(),
+            )
+            .unwrap();
+        node_attr
+            .create_property(
+                CLEAR_APERTURE,
+                "transversal extent of the medium (Open = as far as the surfaces reach)",
+                default_clear_aperture().into(),
             )
             .unwrap();
         node_attr
@@ -638,6 +650,14 @@ mod test {
     #[test]
     fn volume_body() -> OpmResult<()> {
         test_volume_body::<Lens>()
+    }
+    #[test]
+    fn clear_aperture() -> OpmResult<()> {
+        test_clear_aperture::<Lens>()
+    }
+    #[test]
+    fn clear_aperture_absent_in_file() -> OpmResult<()> {
+        test_clear_aperture_absent_in_file::<Lens>()
     }
     /// The body of a biconvex lens is thinner towards its rim by the sag of both surfaces.
     #[test]
