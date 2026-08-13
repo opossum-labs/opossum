@@ -1,44 +1,32 @@
-mod air_model_editor;
-mod conrady_model_editor;
-mod const_model_editor;
-mod schott_model_editor;
-mod sellmeier1_model_editor;
-
-use conrady_model_editor::ConradyParam;
-use const_model_editor::ConstRefParam;
-use opossum_core::{
-    refractive_index::RefractiveIndexType, utils::default_from_name::DefaultFromName,
-};
-use schott_model_editor::SchottParam;
-use sellmeier1_model_editor::Sellmeier1Param;
+use opossum_core::refractive_index::RefractiveIndexType;
 
 use dioxus::prelude::*;
 use inflector::Inflector;
 
-use crate::components::node_editor::{
-    hooks::use_synced_signal,
-    inputs::{
-        InputData, IntoInputData,
-        input_components::{LabeledSelect, RowedInputs},
-        select_options_from_enum_iterator,
-    },
-    node_config_editor::NodeChangeEvent,
-    optical_node_editor::properties_editor::{
-        on_save_proptype_handler, refractive_index_editor::air_model_editor::AirParam,
+use crate::components::{
+    inputs::refractive_index_editor::RefractiveIndexEditor,
+    node_editor::{
+        hooks::use_synced_signal,
+        node_config_editor::NodeChangeEvent,
+        optical_node_editor::properties_editor::{
+            on_save_proptype_handler,
+        },
     },
 };
 use uuid::Uuid;
 
 #[component]
-pub fn RefractiveIndexEditor(
+pub fn RefractiveIndexPropertyEditor(
     node_id: Memo<Uuid>,
     ref_ind_type: RefractiveIndexType,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
+    // Synchronize the local state with external changes
     let ref_ind_type_sig = use_synced_signal(ref_ind_type);
 
+    // Create the OPOSSUM specific save handler
     let on_save = on_save_proptype_handler(
         ref_ind_type_sig,
         property_key.clone(),
@@ -46,47 +34,18 @@ pub fn RefractiveIndexEditor(
         node_id.into(),
     );
 
-    rsx! {
-        LabeledSelect {
-            id: format!("refractiveIndexProperty{property_key}").to_camel_case(),
-            label: "Refractive index definition",
-            options: select_options_from_enum_iterator(&*ref_ind_type_sig.read(), None),
-            readonly,
-            onchange: move |e: Event<FormData>| {
-                let val = e.value();
-                if let Some(ref_ind_type) = RefractiveIndexType::default_from_name(
-                    val.as_str(),
-                ) {
-                    on_save.call(ref_ind_type);
-                }
-            },
-        }
-        div { class: "accordion-content-wrapper-div border-start",
-            RowedInputs { inputs: get_refractive_index_input_data(ref_ind_type_sig.into(), on_save, readonly) }
-        }
-    }
-}
+    // Generate a unique base ID for HTML elements (matches previous implementation)
+    let dynamic_base_id = format!("refractiveIndexProperty{property_key}").to_camel_case();
 
-fn get_refractive_index_input_data(
-    ref_ind_type_sig: ReadSignal<RefractiveIndexType>,
-    on_save: EventHandler<RefractiveIndexType>,
-    readonly: bool,
-) -> Vec<InputData> {
-    match &*ref_ind_type_sig.read() {
-        RefractiveIndexType::Const(ref_ind) => {
-            ConstRefParam::to_input_data_vec(ref_ind, on_save, readonly)
-        }
-        RefractiveIndexType::Sellmeier1(ref_ind) => {
-            Sellmeier1Param::to_input_data_vec(ref_ind, on_save, readonly)
-        }
-        RefractiveIndexType::Schott(ref_ind) => {
-            SchottParam::to_input_data_vec(ref_ind, on_save, readonly)
-        }
-        RefractiveIndexType::Conrady(ref_ind) => {
-            ConradyParam::to_input_data_vec(ref_ind, on_save, readonly)
-        }
-        RefractiveIndexType::Air(ref_ind) => {
-            AirParam::to_input_data_vec(ref_ind, on_save, readonly)
+    rsx! {
+        // Instantiate the decoupled, generic editor
+        RefractiveIndexEditor {
+            ref_ind_type: ref_ind_type_sig,
+            on_change: move |new_type: RefractiveIndexType| {
+                on_save.call(new_type);
+            },
+            base_id: dynamic_base_id,
+            readonly,
         }
     }
 }
