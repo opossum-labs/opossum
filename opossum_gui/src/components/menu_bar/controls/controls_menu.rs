@@ -1,9 +1,13 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use dioxus::{desktop::use_window, prelude::*};
+use dioxus::prelude::*;
 use dioxus_free_icons::{
     Icon,
     icons::fa_solid_icons::{FaPowerOff, FaWindowMaximize, FaWindowMinimize, FaWindowRestore},
 };
+
+// Import desktop-specific window hook only when the desktop feature is active
+#[cfg(feature = "desktop")]
+use dioxus::desktop::use_window;
 
 #[cfg(feature = "desktop")]
 #[component]
@@ -52,8 +56,14 @@ pub fn ControlsMenu(
     }
 }
 
+// Fallback implementation when building without the desktop feature (e.g. --renderer native)
 #[cfg(not(feature = "desktop"))]
 #[component]
-fn ControlsMenu() -> Element {
+pub fn ControlsMenu(
+    #[allow(unused_variables)]
+    maximize_symbol: Signal<Result<VNode, RenderError>>,
+    #[allow(unused_variables)]
+    on_quit: EventHandler<()>,
+) -> Element {
     rsx! {}
 }

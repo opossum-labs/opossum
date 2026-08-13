@@ -76,6 +76,7 @@ pub fn MenuBar(
                     // --- File Menu ---
                     li { class: "nav-item dropdown",
                         a {
+                            href: "#",
                             "data-mdb-dropdown-init": "",
                             class: "nav-link dropdown-toggle link-secondary hidden-arrow",
                             id: "navbarDropdownFileMenuLink",
@@ -129,6 +130,7 @@ pub fn MenuBar(
                     // --- Edit Menu  ---
                     li { class: "nav-item dropdown",
                         a {
+                            href: "#",
                             "data-mdb-dropdown-init": "",
                             "data-mdb-toggle": "dropdown",
                             class: "nav-link dropdown-toggle link-secondary hidden-arrow",
@@ -152,6 +154,7 @@ pub fn MenuBar(
                     // --- Node Menu ---
                     li { class: "nav-item dropdown",
                         a {
+                            href: "#",
                             "data-mdb-dropdown-init": "",
                             "data-mdb-toggle": "dropdown",
                             "data-mdb-auto-close": "outside",
@@ -206,6 +209,7 @@ pub fn MenuBar(
                     // --- Layout Menu ---
                     li { class: "nav-item dropdown",
                         a {
+                            href: "#",
                             "data-mdb-dropdown-init": "",
                             "data-mdb-toggle": "dropdown",
                             class: "nav-link dropdown-toggle link-secondary hidden-arrow",
@@ -235,6 +239,7 @@ pub fn MenuBar(
                     // --- Help Menu  ---
                     li { class: "nav-item dropdown",
                         a {
+                            href: "#",
                             "data-mdb-dropdown-init": "",
                             "data-mdb-toggle": "dropdown",
                             class: "nav-link dropdown-toggle link-secondary hidden-arrow",
@@ -333,7 +338,7 @@ fn MenuListItemShortCut(
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(feature = "desktop")]
 #[component]
 fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Element {
     use dioxus::desktop::use_window;
@@ -375,8 +380,8 @@ fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Ele
     }
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(not(feature = "desktop"))]
 #[component]
-fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Element {
+fn ExpandOnClick(#[allow(unused_variables)] maximize_symbol: Signal<Result<VNode, RenderError>>) -> Element {
     rsx! {}
 }

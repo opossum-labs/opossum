@@ -22,21 +22,13 @@ use std::path::PathBuf;
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::{ProcessHandle, components::simulation::simulation_window::SimulationWindow};
-#[cfg(not(target_arch = "wasm32"))]
+
+// Desktop-specific imports (only available when using dioxus-desktop with tao/wry backend)
+#[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
 use dioxus::desktop::{tao::window::ResizeDirection, use_window};
 
 /// Registers the app's keyboard shortcuts on the `document`, so they fire no matter where DOM focus
 /// currently is, and routes each match through `process_command`.
-///
-/// Why not a plain element `onkeydown`: a DOM keydown only reaches an element handler while that
-/// element (or a descendant) holds focus. A properties-panel re-render can remove the focused input
-/// (e.g. undoing a dropdown variant change swaps out the sub-editor), which drops focus to `<body>` -
-/// outside any app element - so element-scoped shortcuts silently die until the user clicks back in.
-/// A `document`-level listener sidesteps that entirely.
-///
-/// The listener (see [`build_shortcut_listener_js`]) suppresses the browser default only for our own
-/// combos and posts the matched shortcut's index back over the `dioxus.send` channel; here we map that
-/// index to its [`ShortCutAction`] and dispatch it.
 fn use_global_shortcuts(process_command: impl FnMut(AppCommand) + Clone + 'static) {
     let shortcuts: Vec<&'static Shortcut> = SHORTCUTS.values().collect();
     use_future(move || {
@@ -57,13 +49,6 @@ fn use_global_shortcuts(process_command: impl FnMut(AppCommand) + Clone + 'stati
 }
 
 /// Builds the JS that installs the `document` keydown listener for [`use_global_shortcuts`].
-///
-/// Each shortcut is emitted as a small object `{i, ctrl, shift, alt, key}` where `i` is its index in
-/// `shortcuts` (so the JS never needs to know the actual action, only its number). On a keydown the
-/// listener ignores anything without a Ctrl/Cmd or Alt modifier, then looks for a combo whose modifiers
-/// and (case-insensitive) key all match; on a hit it calls `preventDefault` (so native handling like a
-/// text field's own Ctrl+Z is suppressed for our combos, while Ctrl+C/V/A stay native) and sends the
-/// index `i` back to Rust via `dioxus.send`.
 fn build_shortcut_listener_js(shortcuts: &[&Shortcut]) -> String {
     let combos = shortcuts
         .iter()
@@ -102,10 +87,13 @@ pub fn App() -> Element {
     #[cfg(not(target_arch = "wasm32"))]
     #[allow(unused_variables)]
     let backend_handle = use_context::<ProcessHandle>();
-    #[cfg(not(target_arch = "wasm32"))]
+
+    // Retrieve desktop window handle only when compiled with the "desktop" feature
+    #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
     let window = use_window();
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
     let window_for_quit = window.clone();
+
     #[cfg(not(target_arch = "wasm32"))]
     let mut run_simulation = use_signal(|| false);
 
@@ -192,6 +180,8 @@ pub fn App() -> Element {
                     backend_handle.kill();
                     println!("Stopping app...");
                 }
+                // Close the window only when the desktop feature is active
+                #[cfg(feature = "desktop")]
                 window_for_quit.close();
             }
         }
@@ -261,8 +251,7 @@ pub fn App() -> Element {
     };
     let process_command_for_menu = process_command.clone();
 
-    // Keyboard shortcuts are handled globally (on `document`, not a focusable element) so they keep
-    // working after a panel re-render drops DOM focus - see `use_global_shortcuts`.
+    // Keyboard shortcuts are handled globally on `document`
     use_global_shortcuts(process_command);
 
     let on_alert_confirm = move |_| {
@@ -333,12 +322,18 @@ pub fn App() -> Element {
         }
     });
 
+    // Evaluate conditional simulation element outside of rsx! to avoid macro attribute syntax errors
     #[cfg(not(target_arch = "wasm32"))]
-    rsx! {
+    let simulation_element = rsx! {
+        SimulationWindow { show_simulation: run_simulation, model_file_path }
+    };
+    #[cfg(target_arch = "wasm32")]
+    let simulation_element = rsx! {};
+
+    // 1. Desktop Frameless Window Layout with custom resize handles (only active with "desktop" feature)
+    #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
+    return rsx! {
         div { class: "app-container", tabindex: 0,
-            // Keyboard shortcuts are handled by the document-level listener installed above, not here -
-            // an element `onkeydown` only fires while focus is inside it, which breaks after a panel
-            // re-render drops focus to `<body>`.
             div {
                 class: "resize-handle-top",
                 onmousedown: {
@@ -430,12 +425,13 @@ pub fn App() -> Element {
                 on_alert_cancel,
             }
         }
-        SimulationWindow { show_simulation: run_simulation, model_file_path }
+        {simulation_element}
         SettingsDialog { show: show_settings }
-    }
+    };
 
-    #[cfg(target_arch = "wasm32")]
-    rsx! {
+    // 2. Native / Web Fallback Layout (Standard window frame without custom resize handles)
+    #[cfg(any(target_arch = "wasm32", not(feature = "desktop")))]
+    return rsx! {
         div { class: "app-container", tabindex: 0,
             CommonAppLayout {
                 cxt_command_handler: EventHandler::new(move |cxt_cmd_opt: Option<CxtCommand>| {
@@ -457,8 +453,9 @@ pub fn App() -> Element {
                 on_alert_cancel,
             }
         }
+        {simulation_element}
         SettingsDialog { show: show_settings }
-    }
+    };
 }
 
 #[component]

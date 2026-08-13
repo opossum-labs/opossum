@@ -44,24 +44,20 @@ webbrowser = "1.2.3"
 
 # Add gloo-timers to handle asynchronous delays in WASM
 gloo-timers = { version = "0.4", features = ["futures"] }
-# Zeitmessung (Instant/SystemTime) plattformunabhängig machen
+# Cross-platform time measuring
 web-time = "1.1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio = { version = "1", features = ["process", "time"] }
+# Added "macros" feature to make tokio::select! available
+tokio = { version = "1", features = ["process", "time", "macros"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { version = "1", default-features = false }
 web-sys = "0.3"
 
-# [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-# plotly = { version = "0.13.5", features = ["kaleido"] }
-# [target.'cfg(target_arch = "wasm32")'.dependencies]
-# plotly = { version = "0.13.5" }
-
 [features]
 default = ["desktop"]
 web = ["dioxus/web"]
 desktop = ["dioxus/desktop"]
+native = ["dioxus/native"]
 mobile = ["dioxus/mobile"]
-# server = ["dioxus/server"]

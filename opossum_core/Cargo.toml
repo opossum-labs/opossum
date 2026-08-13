@@ -46,7 +46,7 @@ petgraph = { version = "0.8", features = ["serde-1"] } # the graph library
 plotters = "0.3"
 libm = { version = "0.2" }
 embed-doc-image = "0.1" # allows for embedded images in the rust API doc
-image = "0.25"
+image = "=0.25.6"
 fastrand = "2.3"
 sobol = "1"
 colorous = "1"
