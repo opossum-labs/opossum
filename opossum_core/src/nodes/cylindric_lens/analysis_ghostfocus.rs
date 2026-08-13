@@ -1,6 +1,6 @@
 use super::CylindricLens;
 use crate::{
-    analyzers::{GhostFocusConfig, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace},
+    analyzers::{GhostFocusConfig, ghostfocus::AnalysisGhostFocus},
     core_optics::Volumetric,
     error::OpmResult,
     light::{LightRays, Rays},
@@ -14,7 +14,6 @@ impl AnalysisGhostFocus for CylindricLens {
         _ray_collection: &mut Vec<Rays>,
         _bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
-        let material = self.get_ray_trace_material()?;
-        self.unified_analyze_volume_node_ghost_focus(incoming_data, &material, config)
+        self.unified_analyze_volume_node_ghost_focus(incoming_data, config)
     }
 }

@@ -12,7 +12,6 @@ impl AnalysisRayTrace for CylindricLens {
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        let material = self.get_ray_trace_material()?;
-        self.unified_analyze_volume_node(incoming_data, &material, config)
+        self.unified_analyze_volume_node(incoming_data, config)
     }
 }

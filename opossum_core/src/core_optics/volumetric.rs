@@ -20,8 +20,8 @@ use crate::{
     error::{OpmResult, OpossumError},
     geometry::body::{CLEAR_APERTURE, SurfaceBoundedBody},
     light::{LightData, LightRays, LightResult, Rays},
-    material::Material,
-    properties::Proptype,
+    material::{MATERIAL, Material},
+    properties::{Proptype, proptype::AssetRef},
     types::validated_type_definitions::ValidatedCrossSection,
     utils::geom_transformation::Isometry,
 };
@@ -39,6 +39,32 @@ use crate::{
 /// are meaningful only where there is a volume, and now the compiler says so instead of a runtime
 /// error on a node that never had one.
 pub trait Volumetric: OpticNode {
+    /// Return the [`Material`] this node's volume is filled with.
+    ///
+    /// The whole material is handed out, not just its refractive index model: a caller that only
+    /// refracts takes the index out of it, while later stages (thermal lensing, stress
+    /// birefringence, gain) need the other material data from the very same object.
+    ///
+    /// What a component is made of belongs to the component, not to the analysis looking at it,
+    /// which is why this sits on the capability: every analysis entering the volume asks for the
+    /// same material, and none of them has to know which property carries it.
+    ///
+    /// # Returns
+    ///
+    /// A clone of the node's material.
+    ///
+    /// # Errors
+    ///
+    /// This function errors if the node does not carry an embedded [`Material`] under the
+    /// [`MATERIAL`] property.
+    fn material(&self) -> OpmResult<Material> {
+        let Ok(Proptype::Material(AssetRef::Inline(material))) =
+            self.node_attr().get_property(MATERIAL)
+        else {
+            return Err(OpossumError::Analysis("cannot read material".into()));
+        };
+        Ok(material.clone())
+    }
     /// Return the volume enclosed by the two surfaces of this node as a
     /// [`Body`](crate::geometry::body::Body).
     ///
@@ -113,26 +139,25 @@ pub trait Volumetric: OpticNode {
     ///
     /// * `entry_surf_name`: name of the surface the rays enter through (typically `"input_1"`).
     /// * `exit_surf_name`: name of the surface the rays leave through (typically `"output_1"`).
-    /// * `material_inside`: the [`Material`] filling the volume enclosed by the two surfaces.
-    ///   Behind the exit surface the node's ambient index is used. The whole material is taken
-    ///   rather than just its refractive index because what happens *inside* the volume depends on
-    ///   more than refraction — absorption, thermal and stress data, and later the gain. The two
-    ///   surface passes themselves only ever need the index and are handed just that.
     /// * `rays_bundle`: the ray bundle, modified in place.
     /// * `strategy`: the analyzer-specific [`PropagationStrategy`].
     ///
     /// # Errors
     ///
-    /// This function errors if one of the two surfaces cannot be found or if the geometric
-    /// propagation through either of them fails.
+    /// This function errors if the node's [`Material`] cannot be read, if one of the two surfaces
+    /// cannot be found or if the geometric propagation through either of them fails.
     fn pass_through_volume_generic(
         &mut self,
         entry_surf_name: &str,
         exit_surf_name: &str,
-        material_inside: &Material,
         rays_bundle: &mut Vec<Rays>,
         strategy: &dyn PropagationStrategy,
     ) -> OpmResult<()> {
+        // Behind the exit surface the node's ambient index applies, inside it the material's. The
+        // whole material is read rather than just its refractive index because what happens
+        // *inside* the volume depends on more than refraction — absorption, thermal and stress
+        // data, and later the gain.
+        let material_inside = self.material()?;
         let backward = self.inverted();
         // The rays are meant to be refracted at both surfaces of the volume, not just traced to them.
         let refraction_intended = true;
@@ -146,8 +171,7 @@ pub trait Volumetric: OpticNode {
             refraction_intended,
         )?;
         // Inside the medium nothing happens yet. This is where the segmentation of the inner path
-        // and the evaluation of an active medium's gain model will be inserted — the reason the
-        // whole `material_inside` is available here and not just its refractive index.
+        // and the evaluation of an active medium's gain model will be inserted.
         self.pass_through_surface_generic(
             exit_surf_name,
             Some(self.ambient_idx()),
@@ -172,18 +196,16 @@ pub trait Volumetric: OpticNode {
     /// # Parameters
     ///
     /// * `incoming_data`: the [`LightResult`] arriving at the node's input port.
-    /// * `material_inside`: the [`Material`] filling the enclosed volume.
     /// * `strategy`: the analyzer-specific [`PropagationStrategy`].
     ///
     /// # Errors
     ///
     /// This function returns an error if the node does not have exactly one input and one output
-    /// port, if the incoming data is not geometric ray data, or if the propagation through either
-    /// surface fails.
+    /// port, if the incoming data is not geometric ray data, or if the propagation through the
+    /// volume fails.
     fn unified_analyze_volume_node(
         &mut self,
         mut incoming_data: LightResult,
-        material_inside: &Material,
         strategy: &dyn PropagationStrategy,
     ) -> OpmResult<LightResult> {
         let (in_port_name, out_port_name) = single_io_port_names(self)?;
@@ -199,7 +221,6 @@ pub trait Volumetric: OpticNode {
         self.pass_through_volume_generic(
             &in_port_name,
             &out_port_name,
-            material_inside,
             &mut rays_bundle,
             strategy,
         )?;
@@ -217,17 +238,15 @@ pub trait Volumetric: OpticNode {
     /// # Parameters
     ///
     /// * `incoming_data`: the [`LightRays`] arriving at the node's input port.
-    /// * `material_inside`: the [`Material`] filling the enclosed volume.
     /// * `strategy`: the analyzer-specific [`PropagationStrategy`].
     ///
     /// # Errors
     ///
     /// This function returns an error if the node does not have exactly one input and one output
-    /// port, or if the propagation through either surface fails.
+    /// port, or if the propagation through the volume fails.
     fn unified_analyze_volume_node_ghost_focus(
         &mut self,
         incoming_data: LightRays,
-        material_inside: &Material,
         strategy: &dyn PropagationStrategy,
     ) -> OpmResult<LightRays> {
         let (in_port_name, out_port_name) = single_io_port_names(self)?;
@@ -237,7 +256,6 @@ pub trait Volumetric: OpticNode {
         self.pass_through_volume_generic(
             &in_port_name,
             &out_port_name,
-            material_inside,
             &mut rays_bundle,
             strategy,
         )?;

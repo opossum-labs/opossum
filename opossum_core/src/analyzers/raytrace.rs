@@ -8,10 +8,8 @@ use crate::{
     core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
     light::{LightResult, Rays, lightdata::ray_data_builder::RayDataBuilder},
-    material::{MATERIAL, Material},
     nodes::NodeGroup,
     picojoule,
-    properties::{Proptype, proptype::AssetRef},
     reporting::analysis_report::AnalysisReport,
 };
 use log::{info, warn};
@@ -226,28 +224,6 @@ pub trait AnalysisRayTrace: OpticNode {
         } else {
             self.analyze(incoming_data, config)
         }
-    }
-    /// Returns the [`Material`] a volume node is filled with.
-    ///
-    /// The whole material is handed out, not just its refractive index model: a caller that only
-    /// refracts takes the index out of it, while later stages (thermal lensing, stress
-    /// birefringence, gain) need the other material data from the very same object.
-    ///
-    /// # Returns
-    ///
-    /// A clone of the node's material.
-    ///
-    /// # Errors
-    ///
-    /// This function errors if the node does not carry an embedded [`Material`] under the
-    /// [`MATERIAL`] property.
-    fn get_ray_trace_material(&self) -> OpmResult<Material> {
-        let Ok(Proptype::Material(AssetRef::Inline(material))) =
-            self.node_attr().get_property(MATERIAL)
-        else {
-            return Err(OpossumError::Analysis("cannot read material".into()));
-        };
-        Ok(material.clone())
     }
 }
 
