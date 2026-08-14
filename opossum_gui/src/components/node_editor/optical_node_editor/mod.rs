@@ -33,6 +33,7 @@ pub fn OpticalNodeEditor(
     active_node: Memo<SelectedNode>,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
+    info!("🔄 Render: OpticalNodeEditor");
     let node_id = use_memo(move || active_node.read().node_id);
     let mut node_info_sig = use_signal(NodeInfo::default);
     let mut node_properties_sig = use_signal(Properties::default);
@@ -124,32 +125,32 @@ pub fn OpticalNodeEditor(
                         on_change,
                         readonly: readonly(),
                     }
-                    PortConfigEditor {
-                        node_id,
-                        node_info: node_info_sig,
-                        on_change,
-                        readonly: readonly(),
-                    }
-                    PropertiesEditor {
-                        node_id,
-                        node_properties_sig,
-                        node_info_sig,
-                        on_change: on_property_change,
-                        readonly: readonly(),
-                    }
-                    PositioningEditor {
-                        node_id,
-                        node_info: node_info_sig,
-                        on_change,
-                        readonly: readonly(),
-                    }
-                    AlignmentEditor {
-                        node_id,
-                        node_info: node_info_sig,
-                        on_change,
-                        node_properties_sig,
-                        readonly: readonly(),
-                    }
+                                // PortConfigEditor {
+                //     node_id,
+                //     node_info: node_info_sig,
+                //     on_change,
+                //     readonly: readonly(),
+                // }
+                // PropertiesEditor {
+                //     node_id,
+                //     node_properties_sig,
+                //     node_info_sig,
+                //     on_change: on_property_change,
+                //     readonly: readonly(),
+                // }
+                // PositioningEditor {
+                //     node_id,
+                //     node_info: node_info_sig,
+                //     on_change,
+                //     readonly: readonly(),
+                // }
+                // AlignmentEditor {
+                //     node_id,
+                //     node_info: node_info_sig,
+                //     on_change,
+                //     node_properties_sig,
+                //     readonly: readonly(),
+                // }
                 }
             }
         }

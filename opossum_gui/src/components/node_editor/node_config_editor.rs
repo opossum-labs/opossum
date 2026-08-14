@@ -42,6 +42,7 @@ pub fn NodeConfigEditor(
     workspace_processor: Coroutine<GraphsWorkspaceAction>,
     active_graph_id: ReadSignal<Uuid>,
 ) -> Element {
+    info!("🔄 Render: NodeConfigEditor");
     let save_manager = use_save_manager();
     let flush_trigger = save_manager.flush_trigger;
     let dirty_count = save_manager.dirty_count;
@@ -74,7 +75,7 @@ pub fn NodeConfigEditor(
     // Standard Processing
     use_node_config_processor(model_modified_handler);
     let node_config_processor = use_coroutine_handle::<NodeChangeEvent>();
-    let on_node_change = EventHandler::new(move |evt: NodeChangeEvent| {
+    let on_node_change = use_callback(move |evt: NodeChangeEvent| {
         node_config_processor.send(evt);
     });
 

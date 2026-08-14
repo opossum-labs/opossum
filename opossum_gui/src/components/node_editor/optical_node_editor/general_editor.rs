@@ -17,6 +17,7 @@ pub fn GeneralEditor(
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
+    info!("🔄 Render: GeneralEditor");
     let accordion_content = if node_info.read().uuid == active_node.read().node_id {
         let node_id = node_info.read().uuid;
         let node_type = node_info.read().node_type.clone();

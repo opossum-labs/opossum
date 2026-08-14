@@ -540,15 +540,15 @@ fn CommonAppLayout(
                 root_tab_open_handler,
             }
             Logger { drag_handler: on_mousedown, height }
-            MaterialEditor {
-                material: material_state,
-                readonly: false,
-                on_change: move |e: MaterialChangeEvent| {
-                    info!("Got event: {e:?}");
-                    e.action.apply(&mut material_state.write());
-                },
-                on_save: move |()| { info!("Material Editor: on_save") },
-            }
+                // MaterialEditor {
+        //     material: material_state,
+        //     readonly: false,
+        //     on_change: move |e: MaterialChangeEvent| {
+        //         info!("Got event: {e:?}");
+        //         e.action.apply(&mut material_state.write());
+        //     },
+        //     on_save: move |()| { info!("Material Editor: on_save") },
+        // }
         }
         AlertDialogRoot {
             open: show_alert(),
