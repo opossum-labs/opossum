@@ -835,6 +835,11 @@ pub enum DocumentChange {
     /// The analyzer moved on the canvas to `gui_position`. Emitted when undoing/redoing an analyzer
     /// reposition, so the GUI can move it back (a details refetch alone doesn't touch canvas state).
     AnalyzerMoved { id: Uuid, gui_position: (f64, f64) },
+    /// A pump scenario changed - it was renamed, or a node's gain model in it was set, or the
+    /// entries of deleted nodes were dropped from it. Anything showing that operating point (the
+    /// scenario editor, and the amplifier status of the nodes if it is the active one) should
+    /// re-fetch it.
+    PumpScenarioChanged { id: Uuid },
     /// One tab's nodes/edges/port-maps should be re-fetched from scratch (see the type's own doc
     /// comment for which operations use this).
     GraphNeedsRefresh { graph_id: Uuid },

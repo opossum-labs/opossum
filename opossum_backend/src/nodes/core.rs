@@ -8,6 +8,7 @@ use nalgebra::Point2;
 use opossum_core::{
     core_optics::{OpticRef, node_attr::HasNodeAttr},
     error::OpossumError,
+    gain::PumpScenario,
     light::lightdata::{energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder},
     nodes::{NodeReference, create_node_ref},
     prelude::{AnalyzerType, OpmDocument},
@@ -29,7 +30,8 @@ use crate::{
         split_cascades_for_response,
     },
     undo::{
-        CascadedNode, Command, NodeSnapshot, PatchAnalyzer, PatchNode, capture_old_node_request,
+        CascadedNode, Command, NodeSnapshot, PatchAnalyzer, PatchNode, PatchPumpScenario,
+        capture_old_node_request,
     },
 };
 
@@ -553,6 +555,7 @@ fn build_delete_inverse(
     removed_port_cascades: &[PortMapCascadeRemoval],
 ) -> (Vec<Command>, DeleteNodeResponse) {
     let analyzer_inverses = prune_analyzer_source_mappings(document, &deleted_nodes);
+    let scenario_inverses = prune_pump_scenario_entries(document);
 
     let cascaded: Vec<CascadedNode> = cascaded
         .into_iter()
@@ -569,6 +572,7 @@ fn build_delete_inverse(
     })];
     inverse.extend(removed_port_cascades.iter().map(Command::from));
     inverse.extend(analyzer_inverses);
+    inverse.extend(scenario_inverses);
 
     (
         inverse,
@@ -1036,6 +1040,68 @@ mod test {
     /// calling `scenery.delete_node`, unlike the copy/paste flow's `capture_node_connections` use (see
     /// `helper_functions.rs`). Not group-specific - any deleted node with parent-graph connections lost
     /// them on undo - but most visible for groups, which typically have more external wiring, so this
+    /// Deleting a node has to follow through into every pump scenario naming it, and undoing the
+    /// deletion has to bring its entry back. A scenario refers to nodes by uuid from outside the
+    /// model, so without this a deleted amplifier would linger in the operating point - and an undo
+    /// would silently drop the gain the user had configured.
+    #[actix_web::test]
+    async fn test_delete_node_prunes_pump_scenarios_and_undo_restores_them() {
+        use opossum_core::{
+            gain::{ConstGain, GainModel},
+            nodes::Lens,
+        };
+
+        let app_state = Data::new(AppState::default());
+        let gain = GainModel::Const(ConstGain::new(2.0).unwrap());
+        let (lens_id, scenario_id) = {
+            let mut document = app_state.document.lock();
+            let lens_id = document.scenery_mut().add_node(Lens::default()).unwrap();
+            let scenario_id = document.add_pump_scenario("full power");
+            document
+                .pump_scenario_mut(scenario_id)
+                .unwrap()
+                .set_gain_model(lens_id, gain);
+            (lens_id, scenario_id)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(delete_node)
+                .service(undo_document),
+        )
+        .await;
+
+        let req = test::TestRequest::delete()
+            .uri(&format!("/{lens_id}"))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            app_state
+                .document
+                .lock()
+                .pump_scenario(scenario_id)
+                .unwrap()
+                .gain_model(lens_id),
+            GainModel::None,
+            "the deleted node must be gone from the operating point"
+        );
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            app_state
+                .document
+                .lock()
+                .pump_scenario(scenario_id)
+                .unwrap()
+                .gain_model(lens_id),
+            gain,
+            "undoing the deletion must restore the node's entry in the operating point"
+        );
+    }
     /// mirrors `test_undo_group_conversion_restores_internal_and_boundary_connections` in
     /// `document.rs`: converts `{node_a, node_b}` into a group connected to `node_c`, deletes the group
     /// node, undoes the deletion, and asserts both the group and its external connection to `node_c` are
@@ -2131,6 +2197,47 @@ mod test {
         );
         assert_eq!(sources[0].uuid, src_uuid);
     }
+}
+
+/// Drops the entries of nodes that no longer exist from every [`PumpScenario`], returning the
+/// `PatchPumpScenario` inverse commands that restore each scenario that actually changed.
+///
+/// A pump scenario names its amplifying nodes by uuid and lives beside the model rather than inside
+/// it, so deleting a node has to be followed through here - otherwise the operating point keeps an
+/// entry that belongs to nothing, and the next analysis run would look for a component that is gone.
+/// Folding the inverses into the delete's undo batch is what keeps the deletion reversible.
+///
+/// Unlike the analyzer mappings this is not driven by the list of just-deleted uuids: the document
+/// prunes against its own model, which after a deletion means exactly those uuids - and heals any
+/// entry that an earlier code path might have left behind.
+///
+/// # Arguments
+///
+/// - `document`: the live document whose scenarios are pruned in place.
+///
+/// # Returns
+///
+/// One `Command::PatchPumpScenario` per scenario whose entries actually changed; empty if none did.
+fn prune_pump_scenario_entries(document: &mut OpmDocument) -> Vec<Command> {
+    let before: Vec<(Uuid, PumpScenario)> = document
+        .pump_scenarios()
+        .iter()
+        .map(|(id, scenario)| (*id, scenario.clone()))
+        .collect();
+    document.prune_pump_scenarios();
+    before
+        .into_iter()
+        .filter_map(|(id, old)| {
+            let pruned = document.pump_scenario(id)?;
+            (*pruned != old).then(|| {
+                Command::PatchPumpScenario(PatchPumpScenario {
+                    id,
+                    old: pruned.clone(),
+                    new: old,
+                })
+            })
+        })
+        .collect()
 }
 
 /// Removes the source mappings of every just-deleted node from all analyzers (deleting a `"source port"`

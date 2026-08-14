@@ -25,6 +25,7 @@ mod global_conf_commands;
 mod group_commands;
 mod node_commands;
 mod port_map_commands;
+mod pump_scenario_commands;
 mod viewport_commands;
 
 pub use analyzer_commands::{PatchAnalyzer, RepositionAnalyzer};
@@ -35,6 +36,7 @@ pub use node_commands::{
     CascadedNode, NodeSnapshot, PatchNode, PatchPort, PatchProperty, capture_old_node_request,
 };
 pub use port_map_commands::{AddPortMap, RemovePortMap};
+pub use pump_scenario_commands::PatchPumpScenario;
 pub use viewport_commands::SetViewport;
 
 /// A reversible document mutation. See the module docs for the overall design.
@@ -68,6 +70,8 @@ pub enum Command {
     PatchAnalyzer(PatchAnalyzer),
     /// See [`RepositionAnalyzer`].
     RepositionAnalyzer(RepositionAnalyzer),
+    /// See [`PatchPumpScenario`].
+    PatchPumpScenario(PatchPumpScenario),
     /// See [`MoveNodes`]. Moves nodes between two groups; `apply` swaps source/target to build its
     /// inverse and carries `affected_groups` through, so undo/redo can refresh every tab a reroute
     /// touched - not just source and target.
@@ -124,6 +128,9 @@ impl Command {
             Self::RepositionAnalyzer(cmd) => {
                 analyzer_commands::apply_reposition_analyzer(document, cmd)
             }
+            Self::PatchPumpScenario(cmd) => {
+                pump_scenario_commands::apply_patch_pump_scenario(document, cmd)
+            }
             Self::MoveNodes(cmd) => group_commands::apply_move_nodes(document, cmd),
             Self::InsertGroup(cmd) => group_commands::apply_insert_group(document, cmd),
             Self::ExtractGroup(cmd) => group_commands::apply_extract_group(document, cmd),
@@ -165,6 +172,7 @@ impl Command {
             | Self::RemoveAnalyzer(_)
             | Self::PatchAnalyzer(_)
             | Self::RepositionAnalyzer(_)
+            | Self::PatchPumpScenario(_)
             | Self::PatchGlobalConf(_)
             | Self::SetViewport(_) => false,
             // Multi-step: several fallible sub-steps, so a mid-apply failure could tear the document.
@@ -247,7 +255,9 @@ impl Command {
             Self::InsertGroup(cmd) | Self::ExtractGroup(cmd) => {
                 Some(JumpTarget::new_from_graph_id(cmd.parent_group_id))
             }
-            Self::PatchGlobalConf(_) => None,
+            // An operating point is not an object on the canvas: there is nothing to jump to and no
+            // node to select, so undoing a scenario edit leaves the view where the user left it.
+            Self::PatchPumpScenario(_) | Self::PatchGlobalConf(_) => None,
             Self::SetViewport(cmd) => Some(JumpTarget::new_from_graph_id(cmd.to.graph_id)),
             Self::Batch(commands) => batch_jump_target(commands, root_id),
         }
@@ -306,6 +316,9 @@ impl Command {
             Self::RemoveAnalyzer(cmd) => vec![DocumentChange::AnalyzerRemoved { id: cmd.id }],
             Self::PatchAnalyzer(PatchAnalyzer { id, .. }) => {
                 vec![DocumentChange::AnalyzerChanged { id: *id }]
+            }
+            Self::PatchPumpScenario(PatchPumpScenario { id, .. }) => {
+                vec![DocumentChange::PumpScenarioChanged { id: *id }]
             }
             // Reports the position `apply` will set (`new_pos`), so the GUI moves the analyzer on the
             // canvas rather than only refreshing the details panel.
@@ -464,6 +477,7 @@ fn dedup_against_full_refreshes(changes: Vec<DocumentChange>) -> Vec<DocumentCha
             | DocumentChange::AnalyzerRemoved { .. }
             | DocumentChange::AnalyzerChanged { .. }
             | DocumentChange::AnalyzerMoved { .. }
+            | DocumentChange::PumpScenarioChanged { .. }
             | DocumentChange::GraphClosed { .. }
             | DocumentChange::ViewportChanged { .. } => true,
         })

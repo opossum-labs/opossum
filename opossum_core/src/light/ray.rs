@@ -678,7 +678,7 @@ impl Ray {
                 "energy scaling factor must be finite and non-negative but is {factor}"
             )));
         }
-        self.e = self.e * factor;
+        self.e *= factor;
         Ok(())
     }
     /// Split a ray with the given energy splitting ratio.

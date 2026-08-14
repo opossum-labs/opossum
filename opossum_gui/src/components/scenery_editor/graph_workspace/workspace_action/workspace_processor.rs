@@ -694,6 +694,12 @@ async fn apply_document_changes(
             DocumentChange::AnalyzerChanged { .. } => {
                 *NODE_DETAILS_REFRESH.write() += 1;
             }
+            // An operating point changed. Nothing on the canvas is bound to it yet - the scenario
+            // editor and the scenario-driven amplifier status arrive with the GUI step of M4 - so
+            // for now this only nudges the details panel to re-read.
+            DocumentChange::PumpScenarioChanged { .. } => {
+                *NODE_DETAILS_REFRESH.write() += 1;
+            }
             DocumentChange::AnalyzerMoved { id, gui_position } => {
                 // Analyzers live at the root scenery; move the analyzer's canvas node back on
                 // undo/redo (a details refresh alone wouldn't touch its position).
