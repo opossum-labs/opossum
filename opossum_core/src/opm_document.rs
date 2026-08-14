@@ -552,20 +552,20 @@ impl OpmDocument {
                 continue;
             }
             for scenario_id in &analyzer_info.pump_scenarios {
-                let scenario_name = self
-                    .pump_scenarios
-                    .get(scenario_id)
-                    .map(PumpScenario::name)
-                    .ok_or_else(|| {
-                        OpossumError::OpmDocument(format!(
-                            "analysis #{analyzer_nr} refers to the pump scenario {scenario_id}, \
-                             which does not exist"
-                        ))
-                    })?;
+                let scenario = self.pump_scenarios.get(scenario_id).ok_or_else(|| {
+                    OpossumError::OpmDocument(format!(
+                        "analysis #{analyzer_nr} refers to the pump scenario {scenario_id}, \
+                         which does not exist"
+                    ))
+                })?;
+                // The operating point rides along in the analyzer's own configuration, which is
+                // what reaches the components during the run.
+                let mut analyzer_type = analyzer_info.analyzer_type.clone();
+                analyzer_type.set_pump_scenario(Some(scenario.clone()));
                 runs.push((
                     analyzer_nr,
-                    analyzer_info.analyzer_type.clone(),
-                    Some(scenario_name.to_string()),
+                    analyzer_type,
+                    Some(scenario.name().to_string()),
                 ));
             }
         }
@@ -814,6 +814,63 @@ mod test {
             message.contains(&missing_id.to_string()),
             "the error has to name the missing scenario, got: {message}"
         );
+        Ok(())
+    }
+    /// Read the energy an [`EnergyMeter`] recorded from an analysis report.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the report contains no energy reading at all.
+    fn metered_energy(report: &AnalysisReport) -> OpmResult<f64> {
+        report
+            .node_reports()
+            .iter()
+            .find_map(|node_report| match node_report.properties().get("Energy") {
+                Ok(Proptype::Energy(energy)) => Some(energy.value),
+                _ => None,
+            })
+            .ok_or_else(|| OpossumError::Other("no energy reading in the report".into()))
+    }
+    /// The whole point of scenarios: the same model, analyzed in two operating points, gives two
+    /// different results - here a lens amplifying twice as strongly in one of them.
+    #[test]
+    fn two_scenarios_give_two_different_results() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let lens = scenery.add_node(Lens::default())?;
+        let meter = scenery.add_node(EnergyMeter::default())?;
+        scenery.connect_nodes(source, "output_1", lens, "input_1", millimeter!(10.0))?;
+        scenery.connect_nodes(lens, "output_1", meter, "input_1", millimeter!(10.0))?;
+        let mut document = OpmDocument::new(scenery);
+        let mut config = EnergyConfig::default();
+        config.map_source(
+            source,
+            EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
+                vec![(nanometer!(1053.0), joule!(1.0))],
+                nanometer!(1.0),
+            )?),
+        );
+        let analyzer_id = document.add_analyzer(AnalyzerType::Energy(config));
+
+        let mut scenario_ids = Vec::new();
+        for (name, gain) in [("full power", 4.0), ("half power", 2.0)] {
+            let scenario_id = document.add_pump_scenario(name);
+            document
+                .pump_scenario_mut(scenario_id)
+                .expect("the scenario just added must be there")
+                .set_gain_model(lens, GainModel::Const(ConstGain::new(gain)?));
+            scenario_ids.push(scenario_id);
+        }
+        document
+            .analyzer_mut(analyzer_id)
+            .expect("the analyzer just added must be there")
+            .set_pump_scenarios(scenario_ids);
+
+        let reports = document.analyze()?;
+        assert_eq!(reports.len(), 2);
+        let full_power = metered_energy(&reports[0])?;
+        let half_power = metered_energy(&reports[1])?;
+        assert_relative_eq!(full_power / half_power, 2.0, epsilon = 1e-12);
         Ok(())
     }
     /// Deleting an operating point must not leave an analyzer pointing at it.

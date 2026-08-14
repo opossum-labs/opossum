@@ -1073,6 +1073,28 @@ impl Rays {
         }
         Ok(())
     }
+    /// Scale the energy of all `valid` [`Ray`]s of this bundle by a given factor.
+    ///
+    /// This is the bundle-wide counterpart of [`Ray::scale_energy`] and the way an active medium
+    /// amplifies a beam. Invalid rays are left alone, exactly as in
+    /// [`filter_energy`](Rays::filter_energy): they no longer take part in the propagation.
+    ///
+    /// # Arguments
+    ///
+    /// * `factor` - the factor every ray's energy is multiplied by. A factor of 1.0 leaves the
+    ///   bundle unchanged.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the given factor is not finite or negative.
+    pub fn scale_energy(&mut self, factor: f64) -> OpmResult<()> {
+        for ray in &mut self.ray_bundle {
+            if (*ray).valid() {
+                ray.scale_energy(factor)?;
+            }
+        }
+        Ok(())
+    }
     /// Invalidate all [`Ray`]s below a given energy threshold.
     ///
     /// Sets all rays with an energy (per ray) below the given threshold to the `invalid` state.

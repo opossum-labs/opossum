@@ -10,9 +10,10 @@ use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 
 use crate::{
-    core_optics::optic_surface::OpticSurface, error::OpmResult, light::Rays,
+    core_optics::optic_surface::OpticSurface, error::OpmResult, gain::GainModel, light::Rays,
     utils::default_from_name::DefaultFromName,
 };
+use uuid::Uuid;
 
 /// Strategy to use if a [`Ray`](crate::light::ray::Ray) misses a surface
 #[derive(Default, PartialEq, Eq, Debug, Clone, Copy, Serialize, Deserialize, EnumIter)]
@@ -39,6 +40,27 @@ impl Display for MissedSurfaceStrategy {
 pub trait PropagationStrategy {
     /// Determines how rays missing a surface should be handled.
     fn missed_surface_strategy(&self) -> MissedSurfaceStrategy;
+
+    /// The [`GainModel`] the node with the given [`Uuid`] runs with in this analysis.
+    ///
+    /// Whether a component amplifies is a property of the operating point being analyzed, not of the
+    /// component - so it is the analysis that has to be asked, not the node. This is the one way the
+    /// [`PumpScenario`](crate::gain::PumpScenario) of a run reaches the medium it applies to: the
+    /// strategy is the only analyzer-specific object handed all the way down into the propagation.
+    ///
+    /// The default is [`GainModel::None`], i.e. an analysis that knows no operating point leaves
+    /// every component passive.
+    ///
+    /// # Arguments
+    ///
+    /// * `node_id` - the node asking on its own behalf.
+    ///
+    /// # Returns
+    ///
+    /// How that node amplifies in this analysis.
+    fn gain_model(&self, _node_id: Uuid) -> GainModel {
+        GainModel::None
+    }
 
     /// Hook executed immediately after a ray bundle interacts with a surface.
     /// Allows the analyzer to perform specific tasks, like evaluating fluence

@@ -7,6 +7,7 @@ use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
     core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
+    gain::{GainModel, PumpScenario},
     light::{LightResult, Rays, lightdata::ray_data_builder::RayDataBuilder},
     nodes::NodeGroup,
     picojoule,
@@ -40,6 +41,11 @@ pub struct RayTraceConfig {
     max_number_of_refractions: usize,
     missed_surface_strategy: MissedSurfaceStrategy,
     source_map: HashMap<Uuid, RayDataBuilder>,
+    /// The operating point of the current run. Not part of the configuration a user edits and not
+    /// written to file: it is put in place for the duration of one analysis run by
+    /// [`OpmDocument::analyze`](crate::opm_document::OpmDocument::analyze).
+    #[serde(skip)]
+    pump_scenario: Option<PumpScenario>,
 }
 impl Default for RayTraceConfig {
     /// Create a default config for a ray tracing analysis with the following parameters:
@@ -55,6 +61,7 @@ impl Default for RayTraceConfig {
             max_number_of_refractions: 1000,
             missed_surface_strategy: MissedSurfaceStrategy::Stop,
             source_map: HashMap::new(),
+            pump_scenario: None,
         }
     }
 }
@@ -125,6 +132,14 @@ impl RayTraceConfig {
     pub fn remove_source(&mut self, uuid: &Uuid) -> Option<RayDataBuilder> {
         self.source_map.remove(uuid)
     }
+    /// Set the [`PumpScenario`] this analysis runs in.
+    ///
+    /// # Arguments
+    ///
+    /// * `pump_scenario` - the operating point, or `None` for a passive run.
+    pub fn set_pump_scenario(&mut self, pump_scenario: Option<PumpScenario>) {
+        self.pump_scenario = pump_scenario;
+    }
     /// Removes all source mappings whose UUIDs no longer exist in the given model.
     pub fn prune_source_map(&mut self, model: &NodeGroup) {
         self.source_map.retain(|uuid, _builder| model.exists(*uuid));
@@ -150,6 +165,11 @@ impl RayTraceConfig {
 impl PropagationStrategy for RayTraceConfig {
     fn missed_surface_strategy(&self) -> MissedSurfaceStrategy {
         *self.missed_surface_strategy()
+    }
+    fn gain_model(&self, node_id: Uuid) -> GainModel {
+        self.pump_scenario
+            .as_ref()
+            .map_or(GainModel::None, |scenario| scenario.gain_model(node_id))
     }
     fn on_after_apodization(&self, rays: &mut Rays) -> OpmResult<()> {
         rays.invalidate_by_threshold_energy(self.min_energy_per_ray())?;
@@ -272,7 +292,7 @@ mod test {
     fn config_debug() {
         assert_eq!(
             format!("{:?}", RayTraceConfig::default()),
-            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop, source_map: {} }"
+            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop, source_map: {}, pump_scenario: None }"
         );
     }
     #[test]

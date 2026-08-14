@@ -18,6 +18,7 @@ use crate::{
     apertures::{Aperture, ApertureType},
     core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, optic_node_ext::single_io_port_names},
     error::{OpmResult, OpossumError},
+    gain::GainModel,
     geometry::body::{CLEAR_APERTURE, SurfaceBoundedBody},
     light::{LightData, LightRays, LightResult, Rays},
     material::{MATERIAL, Material},
@@ -129,11 +130,11 @@ pub trait Volumetric: OpticNode {
     /// its exit surface.
     ///
     /// This is the counterpart of [`OpticNodeExt::pass_through_surface_generic`] for the nodes that
-    /// enclose a volume of material (lens, wedge, cylindric lens, ...). All of them performed the
-    /// very same two-step sequence, which is collected here so that the step in between — the
-    /// propagation *inside* the medium — exists in exactly one place. Today nothing happens in
-    /// between and the behaviour is identical to calling the two surface passes directly; the
-    /// segmentation and the amplification of active media will be added here.
+    /// enclose a volume of material (lens, wedge, cylindric lens, ...). All of them perform the very
+    /// same two-step sequence, which is collected here so that the step in between — what happens
+    /// *inside* the medium — exists in exactly one place. Today that step is the amplification of an
+    /// active medium ([`Volumetric::amplify_inside`]); the segmentation of the inner path follows
+    /// once a model needs it.
     ///
     /// # Parameters
     ///
@@ -170,8 +171,7 @@ pub trait Volumetric: OpticNode {
             backward,
             refraction_intended,
         )?;
-        // Inside the medium nothing happens yet. This is where the segmentation of the inner path
-        // and the evaluation of an active medium's gain model will be inserted.
+        self.amplify_inside(rays_bundle, strategy)?;
         self.pass_through_surface_generic(
             exit_surf_name,
             Some(self.ambient_idx()),
@@ -180,6 +180,75 @@ pub trait Volumetric: OpticNode {
             backward,
             refraction_intended,
         )
+    }
+    /// Amplify a ray bundle travelling inside this node's medium.
+    ///
+    /// This is the step *between* the two surface passes: the rays are inside the material here, so
+    /// this is where an active medium adds energy to them. Which model applies is not asked of the
+    /// node but of the analysis, because whether a component is pumped belongs to the operating
+    /// point being analyzed - see
+    /// [`PropagationStrategy::gain_model`](crate::analyzers::propagation_strategy::PropagationStrategy::gain_model).
+    ///
+    /// # Parameters
+    ///
+    /// * `rays_bundle`: the ray bundle inside the medium, modified in place.
+    /// * `strategy`: the analyzer-specific [`PropagationStrategy`], which knows the operating point.
+    ///
+    /// # Errors
+    ///
+    /// This function errors if the resulting ray energies would not be finite.
+    fn amplify_inside(
+        &mut self,
+        rays_bundle: &mut [Rays],
+        strategy: &dyn PropagationStrategy,
+    ) -> OpmResult<()> {
+        // Matched exhaustively on purpose: a model that cannot be evaluated from "the ray was in
+        // here" alone - anything saturating or path dependent - has to be handled here explicitly
+        // rather than falling into a catch-all arm that would silently do nothing.
+        match strategy.gain_model(self.node_attr().uuid()) {
+            GainModel::None => Ok(()),
+            GainModel::Const(const_gain) => {
+                // A constant gain is by definition independent of the path through the medium, so
+                // every ray of the bundle is multiplied by the same factor, once per pass.
+                for rays in rays_bundle.iter_mut() {
+                    rays.scale_energy(const_gain.gain())?;
+                }
+                Ok(())
+            }
+        }
+    }
+    /// Amplify the spectral energy passing through this node's medium.
+    ///
+    /// The energy counterpart of [`Volumetric::amplify_inside`]. An energy flow analysis knows no
+    /// rays and no path lengths, so it can only evaluate models that do not need them - which is
+    /// exactly what the match below states: a model that depends on the path a beam takes has to
+    /// decide here what an energy analysis is supposed to do with it, and until that decision is
+    /// made the code does not compile.
+    ///
+    /// # Parameters
+    ///
+    /// * `data`: the light data arriving at the node, modified in place.
+    /// * `strategy`: the analyzer-specific [`PropagationStrategy`], which knows the operating point.
+    ///
+    /// # Errors
+    ///
+    /// This function errors if the amplified spectrum cannot be scaled.
+    fn amplify_energy_data(
+        &self,
+        data: &mut LightData,
+        strategy: &dyn PropagationStrategy,
+    ) -> OpmResult<()> {
+        match strategy.gain_model(self.node_attr().uuid()) {
+            GainModel::None => Ok(()),
+            GainModel::Const(const_gain) => {
+                if let LightData::Energy(spectrum) = data {
+                    spectrum.scale_vertical(&const_gain.gain())?;
+                }
+                // Any other kind of light data does not belong to an energy analysis and is left
+                // untouched here rather than being reinterpreted.
+                Ok(())
+            }
+        }
     }
     /// A unified helper function to analyze optical nodes that enclose a volume of material.
     ///
@@ -302,11 +371,117 @@ fn cross_section<T: ?Sized + Volumetric>(node: &T) -> OpmResult<ValidatedCrossSe
 mod test {
     use super::*;
     use crate::{
-        gain::AMP_CONFIG,
-        nodes::{create_node_ref, node_types},
+        analyzers::{
+            RayTraceConfig, energy::AnalysisEnergy, energy::EnergyConfig,
+            raytrace::AnalysisRayTrace,
+        },
+        core_optics::node_attr::HasNodeAttr,
+        gain::{AMP_CONFIG, ConstGain, PumpScenario},
+        joule,
+        light::{Rays, spectrum_helper::create_he_ne_spec},
+        millimeter, nanometer,
+        nodes::{Lens, create_node_ref, node_types},
         utils::LockExt,
     };
+    use approx::assert_abs_diff_eq;
+    use uuid::Uuid;
 
+    /// A lens sitting at the origin, ready to be traced through.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the lens cannot be placed.
+    fn placed_lens() -> OpmResult<Lens> {
+        let mut lens = Lens::default();
+        lens.set_isometry(Isometry::identity())?;
+        Ok(lens)
+    }
+    /// An operating point in which the node with the given [`Uuid`] amplifies by a constant factor.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the gain factor is rejected.
+    fn scenario_with_gain(node_id: Uuid, gain: f64) -> OpmResult<PumpScenario> {
+        let mut scenario = PumpScenario::new("full power");
+        scenario.set_gain_model(node_id, GainModel::Const(ConstGain::new(gain)?));
+        Ok(scenario)
+    }
+    /// Trace a ray bundle through the given lens and return by how much its energy grew.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the analysis fails or does not yield ray data.
+    fn traced_energy_ratio(lens: &mut Lens, config: &RayTraceConfig) -> OpmResult<f64> {
+        let rays = Rays::new_uniform_collimated(
+            nanometer!(1053.0),
+            joule!(1.0),
+            &crate::distributions::position::Hexapolar::new(millimeter!(1.0), 1)?,
+        )?;
+        let energy_before = rays.total_energy();
+        let incoming = LightResult::from([("input_1".into(), LightData::Geometric(rays))]);
+        let outgoing = AnalysisRayTrace::analyze(lens, incoming, config)?;
+        let Some(LightData::Geometric(rays)) = outgoing.get("output_1") else {
+            return Err(OpossumError::Analysis(
+                "expected ray data at the output port".into(),
+            ));
+        };
+        Ok((rays.total_energy() / energy_before).value)
+    }
+    /// The point of the whole exercise: a component amplifies because the operating point says so.
+    #[test]
+    fn a_scenario_amplifies_the_rays_passing_the_medium() -> OpmResult<()> {
+        let mut lens = placed_lens()?;
+        let node_id = lens.node_attr().uuid();
+        // Without an operating point the very same lens is passive, so the two runs differ by
+        // nothing but the scenario.
+        assert_abs_diff_eq!(
+            traced_energy_ratio(&mut lens, &RayTraceConfig::default())?,
+            1.0,
+            epsilon = 1e-12
+        );
+        let mut config = RayTraceConfig::default();
+        config.set_pump_scenario(Some(scenario_with_gain(node_id, 2.5)?));
+        assert_abs_diff_eq!(
+            traced_energy_ratio(&mut lens, &config)?,
+            2.5,
+            epsilon = 1e-12
+        );
+        Ok(())
+    }
+    /// A scenario amplifies the nodes it names and nothing else.
+    #[test]
+    fn a_node_the_scenario_does_not_name_stays_passive() -> OpmResult<()> {
+        let mut lens = placed_lens()?;
+        let mut config = RayTraceConfig::default();
+        config.set_pump_scenario(Some(scenario_with_gain(Uuid::new_v4(), 2.5)?));
+        assert_abs_diff_eq!(
+            traced_energy_ratio(&mut lens, &config)?,
+            1.0,
+            epsilon = 1e-12
+        );
+        Ok(())
+    }
+    /// An energy flow analysis has to amplify too - a constant gain needs no ray to be evaluated,
+    /// and leaving it out would silently report an amplifier chain as passive.
+    #[test]
+    fn a_scenario_amplifies_the_energy_flow() -> OpmResult<()> {
+        let mut lens = placed_lens()?;
+        let mut config = EnergyConfig::default();
+        config.set_pump_scenario(Some(scenario_with_gain(lens.node_attr().uuid(), 2.5)?));
+        let spectrum = create_he_ne_spec(1.0)?;
+        let energy_before = spectrum.total_energy();
+        let incoming = LightResult::from([("input_1".into(), LightData::Energy(spectrum))]);
+        let outgoing = AnalysisEnergy::analyze(&mut lens, incoming, &config)?;
+        let Some(LightData::Energy(spectrum)) = outgoing.get("output_1") else {
+            panic!("expected energy data at the output port");
+        };
+        assert_abs_diff_eq!(
+            spectrum.total_energy() / energy_before,
+            2.5,
+            epsilon = 1e-12
+        );
+        Ok(())
+    }
     /// Only the nodes that really enclose a medium may present themselves as [`Volumetric`].
     ///
     /// "Node with a volume" is stated twice: by this capability and by the properties such a node

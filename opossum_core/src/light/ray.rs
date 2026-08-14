@@ -654,7 +654,31 @@ impl Ray {
                 }
             }
         };
-        self.e = self.e * transmission;
+        self.scale_energy(transmission.value)
+    }
+    /// Scale the energy of this [`Ray`] by a given factor.
+    ///
+    /// Unlike [`filter_energy`](Ray::filter_energy), which attenuates by a transmission and can
+    /// therefore only ever remove energy, this takes any non-negative factor: it is what an active
+    /// medium needs, where a ray leaves with more energy than it entered with.
+    ///
+    /// # Arguments
+    ///
+    /// * `factor` - the factor the ray's energy is multiplied by. A factor of 1.0 leaves it
+    ///   unchanged.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the given factor is not finite or negative. A negative
+    /// factor has no physical meaning - there is no such thing as negative energy in a beam - and is
+    /// rejected rather than silently producing one.
+    pub fn scale_energy(&mut self, factor: f64) -> OpmResult<()> {
+        if !factor.is_finite() || factor < 0.0 {
+            return Err(OpossumError::Other(format!(
+                "energy scaling factor must be finite and non-negative but is {factor}"
+            )));
+        }
+        self.e = self.e * factor;
         Ok(())
     }
     /// Split a ray with the given energy splitting ratio.
@@ -1318,6 +1342,28 @@ mod test {
         assert_abs_diff_eq!(ray.dir[0], test_reflect[0]);
         assert_abs_diff_eq!(ray.dir[1], test_reflect[1]);
         assert_abs_diff_eq!(ray.dir[2], test_reflect[2]);
+        Ok(())
+    }
+    #[test]
+    fn scale_energy() -> OpmResult<()> {
+        let mut ray =
+            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1054.0), joule!(1.0))?;
+        // an active medium hands back more energy than went in - which `filter_energy` cannot express
+        ray.scale_energy(2.5)?;
+        assert_eq!(ray.e, joule!(2.5));
+        ray.scale_energy(0.4)?;
+        assert_eq!(ray.e, joule!(1.0));
+        Ok(())
+    }
+    #[test]
+    fn scale_energy_rejects_impossible_factors() -> OpmResult<()> {
+        let mut ray =
+            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1054.0), joule!(1.0))?;
+        for factor in [-1.0, f64::NAN, f64::INFINITY] {
+            assert!(ray.scale_energy(factor).is_err());
+            // a rejected factor must leave the ray untouched rather than half-applied
+            assert_eq!(ray.e, joule!(1.0));
+        }
         Ok(())
     }
     #[test]
