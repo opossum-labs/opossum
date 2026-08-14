@@ -4997,7 +4997,7 @@ dependencies = [
 
 [[package]]
 name = "opm_macros_lib"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5018,7 +5018,7 @@ dependencies = [
 
 [[package]]
 name = "opossum_backend"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "actix-cors",
  "actix-web",
@@ -5043,7 +5043,7 @@ dependencies = [
 
 [[package]]
 name = "opossum_cli"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "clap 4.6.5",
  "env_logger",
@@ -5054,7 +5054,7 @@ dependencies = [
 
 [[package]]
 name = "opossum_core"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "approx",
  "assert_matches",
@@ -5101,7 +5101,7 @@ dependencies = [
 
 [[package]]
 name = "opossum_gui"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "Inflector",
  "approx",
