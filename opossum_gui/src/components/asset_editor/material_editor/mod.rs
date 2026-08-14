@@ -13,9 +13,9 @@ use optical_properties_editor::{
 /// Actions representing modifications to a Material.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MaterialChangeAction {
-    /// Modifications inside the AssetHeader (Name, Manufacturer, Description).
+    /// Modifications inside the `AssetHeader` (Name, Manufacturer, Description).
     Header(AssetHeaderChangeAction),
-    /// Modifications inside the OpticalProperties (Dispersion model, Absorption).
+    /// Modifications inside the `OpticalProperties` (Dispersion model, Absorption).
     Optical(OpticalPropertiesChangeAction),
 }
 impl MaterialChangeAction {

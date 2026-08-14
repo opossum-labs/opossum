@@ -14,7 +14,7 @@ pub enum OpticalPropertiesChangeAction {
 }
 impl OpticalPropertiesChangeAction {
     /// Applies the change action directly to the given `OpticalProperties`.
-    pub fn apply(self, optical: &mut opossum_core::material::OpticalProperties) {
+    pub const fn apply(self, optical: &mut opossum_core::material::OpticalProperties) {
         match self {
             Self::RefractiveIndex(new_model) => optical.refractive_index = new_model,
             Self::Absorption(abs) => optical.absorption = abs,

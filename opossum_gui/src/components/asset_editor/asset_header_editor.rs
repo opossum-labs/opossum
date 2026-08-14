@@ -4,7 +4,7 @@ use opossum_core::asset::AssetHeader;
 use crate::components::node_editor::inputs::input_components::LabeledInput;
 
 /// Defines the specific field that was modified in the asset header.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AssetHeaderChangeAction {
     /// The name of the asset changed.
     Name(String),
@@ -24,7 +24,7 @@ impl AssetHeaderChangeAction {
     }
 }
 /// Event emitted when the user changes a value in the `AssetHeaderEditor`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AssetHeaderChangeEvent {
     /// The specific action / field modification.
     pub action: AssetHeaderChangeAction,

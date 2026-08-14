@@ -547,7 +547,7 @@ fn CommonAppLayout(
                     info!("Got event: {e:?}");
                     e.action.apply(&mut material_state.write());
                 },
-                on_save: move |_| { info!("Material Editor: on_save") },
+                on_save: move |()| { info!("Material Editor: on_save") },
             }
         }
         AlertDialogRoot {

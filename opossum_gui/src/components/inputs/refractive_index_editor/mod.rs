@@ -39,6 +39,7 @@ pub fn RefractiveIndexEditor(
     readonly: bool,
 ) -> Element {
     info!("🔄 Render: RefractiveIndexEditor");
+
     // *** This is a hack to avoid crashes while using FlushedTextInput *****
     let flush_trigger = use_signal(|| 0usize);
     let dirty_count = use_signal(|| 0usize);
@@ -60,13 +61,25 @@ pub fn RefractiveIndexEditor(
         }
     });
 
-    // Create an internal event handler that updates the local state AND informs the parent.
-    let handle_internal_change = EventHandler::new(move |new_type: RefractiveIndexType| {
+    // 3. Stable Callback for propagating internal updates
+    let handle_internal_change = use_callback(move |new_type: RefractiveIndexType| {
         internal_state.set(new_type.clone());
         on_change.call(new_type);
     });
 
-    // Read the internal state strictly once per render
+    // 4. Stable Callback for LabeledSelect dropdown selection changes
+    let handle_select_change = use_callback(move |e: Event<FormData>| {
+        let val = e.value();
+        if let Some(new_ref_ind_type) = RefractiveIndexType::default_from_name(val.as_str()) {
+            handle_internal_change.call(new_ref_ind_type);
+        }
+    });
+
+    // 5. Memoize the dropdown options to prevent re-allocating when only coefficients change
+    let select_options =
+        use_memo(move || select_options_from_enum_iterator(&*internal_state.read(), None));
+
+    // Read the current state for input generation
     let current_type = internal_state.read();
 
     rsx! {
@@ -74,23 +87,13 @@ pub fn RefractiveIndexEditor(
             LabeledSelect {
                 id: format!("{}Select", base_id),
                 label: "Refractive Index Definition".to_string(),
-                options: select_options_from_enum_iterator(&*current_type, None),
+                options: select_options.read().clone(),
                 readonly,
-                onchange: move |e: Event<FormData>| {
-                    let val = e.value();
-                    if let Some(new_ref_ind_type) = RefractiveIndexType::default_from_name(
-                        val.as_str(),
-                    ) {
-                        handle_internal_change.call(new_ref_ind_type);
-                    }
-                },
+                onchange: handle_select_change,
             }
 
             div { class: "accordion-content-wrapper-div border-start mt-2 px-2",
-                RowedInputs {
-                    // Render the inputs based on the purely internal state
-                    inputs: get_refractive_index_input_data(&*current_type, handle_internal_change, readonly),
-                }
+                RowedInputs { inputs: get_refractive_index_input_data(&current_type, handle_internal_change, readonly) }
             }
         }
     }
