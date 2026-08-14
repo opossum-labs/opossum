@@ -440,7 +440,7 @@ mod test {
             epsilon = 1e-12
         );
         let mut config = RayTraceConfig::default();
-        config.set_pump_scenario(Some(scenario_with_gain(node_id, 2.5)?));
+        config.set_active_pump_scenario(Some(scenario_with_gain(node_id, 2.5)?));
         assert_abs_diff_eq!(
             traced_energy_ratio(&mut lens, &config)?,
             2.5,
@@ -453,7 +453,7 @@ mod test {
     fn a_node_the_scenario_does_not_name_stays_passive() -> OpmResult<()> {
         let mut lens = placed_lens()?;
         let mut config = RayTraceConfig::default();
-        config.set_pump_scenario(Some(scenario_with_gain(Uuid::new_v4(), 2.5)?));
+        config.set_active_pump_scenario(Some(scenario_with_gain(Uuid::new_v4(), 2.5)?));
         assert_abs_diff_eq!(
             traced_energy_ratio(&mut lens, &config)?,
             1.0,
@@ -467,7 +467,7 @@ mod test {
     fn a_scenario_amplifies_the_energy_flow() -> OpmResult<()> {
         let mut lens = placed_lens()?;
         let mut config = EnergyConfig::default();
-        config.set_pump_scenario(Some(scenario_with_gain(lens.node_attr().uuid(), 2.5)?));
+        config.set_active_pump_scenario(Some(scenario_with_gain(lens.node_attr().uuid(), 2.5)?));
         let spectrum = create_he_ne_spec(1.0)?;
         let energy_before = spectrum.total_energy();
         let incoming = LightResult::from([("input_1".into(), LightData::Energy(spectrum))]);

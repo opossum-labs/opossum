@@ -7,7 +7,7 @@ use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
     core_optics::{NodeAttrExt, OpticNode, node_attr::HasNodeAttr},
     error::OpmResult,
-    gain::{GainModel, PumpScenario},
+    gain::{ActiveScenario, GainModel, PumpScenario},
     light::LightResult,
     nodes::NodeGroup,
     prelude::EnergyDataBuilder,
@@ -28,20 +28,19 @@ inventory::submit! {
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct EnergyConfig {
     source_map: HashMap<Uuid, EnergyDataBuilder>,
-    /// The operating point of the current run. Not part of the configuration a user edits and not
-    /// written to file: it is put in place for the duration of one analysis run by
-    /// [`OpmDocument::analyze`](crate::opm_document::OpmDocument::analyze).
+    /// The operating point of the run currently being performed - see [`ActiveScenario`]. Not part
+    /// of the configuration a user edits and not written to file.
     #[serde(skip)]
-    pump_scenario: Option<PumpScenario>,
+    active_pump_scenario: ActiveScenario,
 }
 impl EnergyConfig {
-    /// Set the [`PumpScenario`] this analysis runs in.
+    /// Set the [`PumpScenario`] this analysis run is being performed in.
     ///
     /// # Arguments
     ///
     /// * `pump_scenario` - the operating point, or `None` for a passive run.
-    pub fn set_pump_scenario(&mut self, pump_scenario: Option<PumpScenario>) {
-        self.pump_scenario = pump_scenario;
+    pub fn set_active_pump_scenario(&mut self, pump_scenario: Option<PumpScenario>) {
+        self.active_pump_scenario.set(pump_scenario);
     }
     /// Maps an energy data builder to the `SourcePort` node with the given UUID
     ///
@@ -83,9 +82,7 @@ impl PropagationStrategy for EnergyConfig {
         MissedSurfaceStrategy::Stop
     }
     fn gain_model(&self, node_id: Uuid) -> GainModel {
-        self.pump_scenario
-            .as_ref()
-            .map_or(GainModel::None, |scenario| scenario.gain_model(node_id))
+        self.active_pump_scenario.gain_model(node_id)
     }
 }
 /// Analyzer for simulating a simple energy flow

@@ -3,7 +3,7 @@ use crate::{
     core_optics::hit_map::fluence_estimator::FluenceEstimator,
     core_optics::optic_surface::OpticSurface,
     error::OpmResult,
-    gain::{GainModel, PumpScenario},
+    gain::{ActiveScenario, GainModel, PumpScenario},
     light::{Rays, lightdata::ray_data_builder::RayDataBuilder},
     nodes::NodeGroup,
 };
@@ -17,11 +17,10 @@ pub struct GhostFocusConfig {
     max_bounces: usize,
     fluence_estimator: FluenceEstimator,
     source_map: HashMap<Uuid, RayDataBuilder>,
-    /// The operating point of the current run. Not part of the configuration a user edits and not
-    /// written to file: it is put in place for the duration of one analysis run by
-    /// [`OpmDocument::analyze`](crate::opm_document::OpmDocument::analyze).
+    /// The operating point of the run currently being performed - see [`ActiveScenario`]. Not part
+    /// of the configuration a user edits and not written to file.
     #[serde(skip)]
-    pump_scenario: Option<PumpScenario>,
+    active_pump_scenario: ActiveScenario,
 }
 
 impl GhostFocusConfig {
@@ -60,13 +59,13 @@ impl GhostFocusConfig {
     pub fn remove_source(&mut self, uuid: &Uuid) -> Option<RayDataBuilder> {
         self.source_map.remove(uuid)
     }
-    /// Set the [`PumpScenario`] this analysis runs in.
+    /// Set the [`PumpScenario`] this analysis run is being performed in.
     ///
     /// # Arguments
     ///
     /// * `pump_scenario` - the operating point, or `None` for a passive run.
-    pub fn set_pump_scenario(&mut self, pump_scenario: Option<PumpScenario>) {
-        self.pump_scenario = pump_scenario;
+    pub fn set_active_pump_scenario(&mut self, pump_scenario: Option<PumpScenario>) {
+        self.active_pump_scenario.set(pump_scenario);
     }
     /// Removes all source mappings whose UUIDs no longer exist in the given model.
     pub fn prune_source_map(&mut self, model: &NodeGroup) {
@@ -94,7 +93,7 @@ impl Default for GhostFocusConfig {
             max_bounces: 1,
             fluence_estimator: FluenceEstimator::Voronoi,
             source_map: HashMap::new(),
-            pump_scenario: None,
+            active_pump_scenario: ActiveScenario::default(),
         }
     }
 }
@@ -103,9 +102,7 @@ impl PropagationStrategy for GhostFocusConfig {
         MissedSurfaceStrategy::Ignore
     }
     fn gain_model(&self, node_id: Uuid) -> GainModel {
-        self.pump_scenario
-            .as_ref()
-            .map_or(GainModel::None, |scenario| scenario.gain_model(node_id))
+        self.active_pump_scenario.gain_model(node_id)
     }
     fn on_surface_interaction(
         &self,

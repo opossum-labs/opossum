@@ -561,7 +561,7 @@ impl OpmDocument {
                 // The operating point rides along in the analyzer's own configuration, which is
                 // what reaches the components during the run.
                 let mut analyzer_type = analyzer_info.analyzer_type.clone();
-                analyzer_type.set_pump_scenario(Some(scenario.clone()));
+                analyzer_type.set_active_pump_scenario(Some(scenario.clone()));
                 runs.push((
                     analyzer_nr,
                     analyzer_type,

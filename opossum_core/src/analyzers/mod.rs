@@ -81,20 +81,21 @@ impl AnalyzerType {
             .map(|reg| (reg.factory)())
             .collect()
     }
-    /// Set the [`PumpScenario`] the analysis is to be run in.
+    /// Set the [`PumpScenario`] the analysis run about to be performed happens in.
     ///
     /// Every kind of analysis has to be told the operating point, because every one of them can meet
-    /// an amplifying component. The scenario is run state rather than configuration: it is set on a
-    /// copy of the configuration for the duration of one run and never written to file.
+    /// an amplifying component. This is run state rather than configuration - see
+    /// [`ActiveScenario`](crate::gain::ActiveScenario): it is set on a copy of the configuration for
+    /// the duration of one run and never written to file.
     ///
     /// # Arguments
     ///
     /// * `pump_scenario` - the operating point, or `None` for a passive run.
-    pub fn set_pump_scenario(&mut self, pump_scenario: Option<PumpScenario>) {
+    pub fn set_active_pump_scenario(&mut self, pump_scenario: Option<PumpScenario>) {
         match self {
-            Self::Energy(config) => config.set_pump_scenario(pump_scenario),
-            Self::RayTrace(config) => config.set_pump_scenario(pump_scenario),
-            Self::GhostFocus(config) => config.set_pump_scenario(pump_scenario),
+            Self::Energy(config) => config.set_active_pump_scenario(pump_scenario),
+            Self::RayTrace(config) => config.set_active_pump_scenario(pump_scenario),
+            Self::GhostFocus(config) => config.set_active_pump_scenario(pump_scenario),
         }
     }
 }
@@ -131,7 +132,7 @@ mod test {
         let at = AnalyzerType::Energy(EnergyConfig::default());
         assert_eq!(
             format!("{:?}", at),
-            "Energy(EnergyConfig { source_map: {}, pump_scenario: None })"
+            "Energy(EnergyConfig { source_map: {}, active_pump_scenario: ActiveScenario(None) })"
         );
     }
 }

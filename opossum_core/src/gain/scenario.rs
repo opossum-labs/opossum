@@ -120,6 +120,57 @@ impl PumpScenario {
     }
 }
 
+/// The [`PumpScenario`] an analysis is *currently* being run in.
+///
+/// This is the slot an analyzer configuration carries so that the operating point reaches the
+/// components during a run: the configuration is the object handed all the way down into the
+/// propagation, so it is the only thing that can carry it there. Filled on a copy of the
+/// configuration by [`OpmDocument::analyze`](crate::opm_document::OpmDocument::analyze) and never
+/// written to a file.
+///
+/// It is a type of its own rather than a plain `Option<PumpScenario>` for one reason: an analyzer
+/// configuration is *what the user set up*, and two configurations describing the same set-up have
+/// to compare equal even if one of them happens to be in the middle of a run. Hence the
+/// [`PartialEq`] implementation below, which deliberately ignores the content. Without it a
+/// comparison of two configurations - the backend does exactly that to decide what an undo has to
+/// restore - could differ over run state that no user ever entered.
+#[derive(Debug, Clone, Default)]
+pub struct ActiveScenario(Option<PumpScenario>);
+
+impl PartialEq for ActiveScenario {
+    /// Two [`ActiveScenario`]s always compare equal: the operating point of a run is not part of
+    /// the identity of the configuration holding it.
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+
+impl ActiveScenario {
+    /// Set the operating point of the run about to be performed.
+    ///
+    /// # Arguments
+    ///
+    /// * `scenario` - the operating point, or `None` for a passive run.
+    pub fn set(&mut self, scenario: Option<PumpScenario>) {
+        self.0 = scenario;
+    }
+    /// Return the [`GainModel`] the node with the given [`Uuid`] runs with.
+    ///
+    /// # Arguments
+    ///
+    /// * `node_id` - the node to look up.
+    ///
+    /// # Returns
+    ///
+    /// The node's gain model, or [`GainModel::None`] if no operating point is set at all.
+    #[must_use]
+    pub fn gain_model(&self, node_id: Uuid) -> GainModel {
+        self.0
+            .as_ref()
+            .map_or(GainModel::None, |scenario| scenario.gain_model(node_id))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -177,6 +228,33 @@ mod test {
         assert_eq!(scenario.gain_model(lens_id), gain);
         assert_eq!(scenario.gain_model(deleted_id), GainModel::None);
         Ok(())
+    }
+    #[test]
+    fn an_unset_active_scenario_amplifies_nothing() {
+        assert_eq!(
+            ActiveScenario::default().gain_model(Uuid::new_v4()),
+            GainModel::None
+        );
+    }
+    #[test]
+    fn an_active_scenario_answers_for_its_nodes() -> OpmResult<()> {
+        let node_id = Uuid::new_v4();
+        let model = GainModel::Const(ConstGain::new(2.5)?);
+        let mut scenario = PumpScenario::new("full power");
+        scenario.set_gain_model(node_id, model);
+        let mut active = ActiveScenario::default();
+        active.set(Some(scenario));
+        assert_eq!(active.gain_model(node_id), model);
+        assert_eq!(active.gain_model(Uuid::new_v4()), GainModel::None);
+        Ok(())
+    }
+    /// What a run is doing right now is not part of what a user configured, so it must not make two
+    /// otherwise identical configurations differ - the backend compares them to drive undo.
+    #[test]
+    fn the_active_scenario_does_not_take_part_in_comparisons() {
+        let mut active = ActiveScenario::default();
+        active.set(Some(PumpScenario::new("full power")));
+        assert_eq!(active, ActiveScenario::default());
     }
     #[test]
     fn serde_roundtrip() -> OpmResult<()> {

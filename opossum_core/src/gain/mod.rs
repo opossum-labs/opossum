@@ -18,7 +18,7 @@
 //! later step.
 
 pub mod scenario;
-pub use scenario::PumpScenario;
+pub use scenario::{ActiveScenario, PumpScenario};
 
 use crate::{
     core_optics::NodeAttr,
