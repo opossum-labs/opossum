@@ -17,6 +17,9 @@
 //! The evaluation happens in the shared volume propagation of the hosting node and is added in a
 //! later step.
 
+pub mod scenario;
+pub use scenario::PumpScenario;
+
 use crate::{
     core_optics::NodeAttr,
     error::OpmResult,

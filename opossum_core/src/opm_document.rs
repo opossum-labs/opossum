@@ -9,6 +9,7 @@ use crate::{
     analyzers::{Analyzer, AnalyzerRegistration, AnalyzerType},
     core_optics::{NodeAttrExt, OpticNode, SceneryResources},
     error::{OpmResult, OpossumError},
+    gain::PumpScenario,
     material::Material,
     nodes::NodeGroup,
     properties::{Proptype, proptype::AssetRef},
@@ -82,6 +83,8 @@ pub struct OpmDocument {
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     analyzers: IndexMap<Uuid, AnalyzerInfo>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    pump_scenarios: IndexMap<Uuid, PumpScenario>,
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     embedded_materials: IndexMap<Uuid, Material>,
 }
 impl Default for OpmDocument {
@@ -91,6 +94,7 @@ impl Default for OpmDocument {
             scenery: NodeGroup::default(),
             global_conf: Arc::new(Mutex::new(SceneryResources::default())),
             analyzers: IndexMap::default(),
+            pump_scenarios: IndexMap::default(),
             embedded_materials: IndexMap::default(),
         }
     }
@@ -335,6 +339,82 @@ impl OpmDocument {
     pub fn insert_analyzer(&mut self, id: Uuid, info: AnalyzerInfo) {
         self.analyzers.insert(id, info);
     }
+    /// Return all [`PumpScenario`]s of this [`OpmDocument`].
+    ///
+    /// The scenarios are the operating points the model can be analyzed in. A document without any
+    /// is a purely passive model, which is what every document starts out as.
+    #[must_use]
+    pub const fn pump_scenarios(&self) -> &IndexMap<Uuid, PumpScenario> {
+        &self.pump_scenarios
+    }
+    /// Return the [`PumpScenario`] with the given [`Uuid`], if there is one.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - the scenario to look up.
+    #[must_use]
+    pub fn pump_scenario(&self, id: Uuid) -> Option<&PumpScenario> {
+        self.pump_scenarios.get(&id)
+    }
+    /// Return a mutable reference to the [`PumpScenario`] with the given [`Uuid`], if there is one.
+    ///
+    /// This is how a single node is added to or removed from a scenario, without touching the model.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - the scenario to modify.
+    pub fn pump_scenario_mut(&mut self, id: Uuid) -> Option<&mut PumpScenario> {
+        self.pump_scenarios.get_mut(&id)
+    }
+    /// Add a new, empty [`PumpScenario`] with the given name to this [`OpmDocument`].
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - the name of the new scenario.
+    ///
+    /// # Returns
+    ///
+    /// The [`Uuid`] the new scenario is addressed by.
+    pub fn add_pump_scenario(&mut self, name: &str) -> Uuid {
+        let id = Uuid::new_v4();
+        self.pump_scenarios.insert(id, PumpScenario::new(name));
+        id
+    }
+    /// Re-insert a [`PumpScenario`] under a given [`Uuid`].
+    ///
+    /// Unlike [`add_pump_scenario`](Self::add_pump_scenario) this does not mint a new id, which is
+    /// what restoring a removed scenario needs: anything else referring to that scenario keeps
+    /// resolving. Same role as [`insert_analyzer`](Self::insert_analyzer).
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - the identity the scenario is restored under.
+    /// * `scenario` - the scenario to insert.
+    pub fn insert_pump_scenario(&mut self, id: Uuid, scenario: PumpScenario) {
+        self.pump_scenarios.insert(id, scenario);
+    }
+    /// Remove the [`PumpScenario`] with the given [`Uuid`] from this [`OpmDocument`].
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - the scenario to remove.
+    ///
+    /// # Returns
+    ///
+    /// The removed scenario, or `None` if there was none with that id.
+    pub fn remove_pump_scenario(&mut self, id: Uuid) -> Option<PumpScenario> {
+        self.pump_scenarios.shift_remove(&id)
+    }
+    /// Drop the entries of deleted nodes from every [`PumpScenario`] of this [`OpmDocument`].
+    ///
+    /// Scenarios refer to nodes by [`Uuid`] and live beside the model rather than inside it, so
+    /// deleting a node leaves them holding an entry that belongs to nothing. Running this after a
+    /// deletion keeps the operating points consistent with the model they describe.
+    pub fn prune_pump_scenarios(&mut self) {
+        for scenario in self.pump_scenarios.values_mut() {
+            scenario.prune(&self.scenery);
+        }
+    }
     /// Returns a reference to the scenery of this [`OpmDocument`].
     #[must_use]
     pub const fn scenery(&self) -> &NodeGroup {
@@ -439,7 +519,9 @@ mod test {
             ghostfocus::GhostFocusAnalyzer, raytrace::RayTracingAnalyzer,
         },
         core_optics::{Alignable, OpticNode, node_attr::HasNodeAttr},
-        degree, joule,
+        degree,
+        gain::{ConstGain, GainModel},
+        joule,
         material::MATERIAL,
         millimeter, nanometer,
         nodes::round_collimated_ray_builder,
@@ -467,6 +549,91 @@ mod test {
         let document = OpmDocument::default();
         assert_eq!(document.opm_file_version, env!("OPM_FILE_VERSION"));
         assert!(document.analyzers.is_empty());
+        assert!(document.pump_scenarios.is_empty());
+    }
+    #[test]
+    fn pump_scenario_crud() {
+        let mut document = OpmDocument::default();
+        let id = document.add_pump_scenario("full power");
+        assert_eq!(document.pump_scenarios().len(), 1);
+        assert_eq!(
+            document.pump_scenario(id).map(PumpScenario::name),
+            Some("full power")
+        );
+        assert!(document.pump_scenario(Uuid::new_v4()).is_none());
+
+        document
+            .pump_scenario_mut(id)
+            .expect("the scenario just added must be there")
+            .set_name("half power");
+        assert_eq!(
+            document.pump_scenario(id).map(PumpScenario::name),
+            Some("half power")
+        );
+
+        let removed = document.remove_pump_scenario(id);
+        assert_eq!(removed.as_ref().map(PumpScenario::name), Some("half power"));
+        assert!(document.pump_scenarios().is_empty());
+        assert!(document.remove_pump_scenario(id).is_none());
+
+        // Restoring a scenario keeps its identity, so anything referring to it still resolves.
+        document.insert_pump_scenario(id, removed.expect("the scenario was removed above"));
+        assert_eq!(
+            document.pump_scenario(id).map(PumpScenario::name),
+            Some("half power")
+        );
+    }
+    #[test]
+    fn pruning_follows_deleted_nodes_in_every_scenario() -> OpmResult<()> {
+        let mut document = OpmDocument::default();
+        let lens_id = document.scenery_mut().add_node(Lens::default())?;
+        let deleted_id = document.scenery_mut().add_node(Lens::default())?;
+        let gain = GainModel::Const(ConstGain::new(2.0)?);
+        for name in ["full power", "half power"] {
+            let scenario_id = document.add_pump_scenario(name);
+            let scenario = document
+                .pump_scenario_mut(scenario_id)
+                .expect("the scenario just added must be there");
+            scenario.set_gain_model(lens_id, gain);
+            scenario.set_gain_model(deleted_id, gain);
+        }
+        document.scenery_mut().delete_node(deleted_id)?;
+        document.prune_pump_scenarios();
+
+        for scenario in document.pump_scenarios().values() {
+            assert_eq!(scenario.gain_model(lens_id), gain);
+            assert_eq!(scenario.gain_model(deleted_id), GainModel::None);
+        }
+        Ok(())
+    }
+    /// A document carries its operating points, so they have to survive the way to a file and back.
+    #[test]
+    fn pump_scenarios_survive_a_file_round_trip() -> OpmResult<()> {
+        let mut document = OpmDocument::default();
+        let lens_id = document.scenery_mut().add_node(Lens::default())?;
+        let scenario_id = document.add_pump_scenario("full power");
+        let gain = GainModel::Const(ConstGain::new(2.0)?);
+        document
+            .pump_scenario_mut(scenario_id)
+            .expect("the scenario just added must be there")
+            .set_gain_model(lens_id, gain);
+
+        let serialized = document.to_opm_file_string()?;
+        let reloaded = OpmDocument::from_string(&serialized)?;
+        assert_eq!(
+            reloaded
+                .pump_scenario(scenario_id)
+                .map(|scenario| scenario.gain_model(lens_id)),
+            Some(gain)
+        );
+        Ok(())
+    }
+    /// A passive document must not gain a `pump_scenarios` entry it never asked for.
+    #[test]
+    fn a_document_without_scenarios_writes_none() -> OpmResult<()> {
+        let document = OpmDocument::default();
+        assert!(!document.to_opm_file_string()?.contains("pump_scenarios"));
+        Ok(())
     }
 
     #[test]
