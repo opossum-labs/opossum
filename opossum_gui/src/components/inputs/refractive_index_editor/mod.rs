@@ -4,85 +4,105 @@ mod const_model_editor;
 mod schott_model_editor;
 mod sellmeier1_model_editor;
 
+use air_model_editor::AirParam;
 use conrady_model_editor::ConradyParam;
 use const_model_editor::ConstRefParam;
 use schott_model_editor::SchottParam;
 use sellmeier1_model_editor::Sellmeier1Param;
-use air_model_editor::AirParam;
 
 use dioxus::prelude::*;
 use opossum_core::{
-    refractive_index::RefractiveIndexType, 
-    utils::default_from_name::DefaultFromName,
+    refractive_index::RefractiveIndexType, utils::default_from_name::DefaultFromName,
 };
 
-// Assuming these input components exist in your shared UI library
 use crate::components::node_editor::inputs::{
     InputData, IntoInputData,
-    input_components::{LabeledSelect, RowedInputs},
+    input_components::{FormContext, LabeledSelect, RowedInputs},
     select_options_from_enum_iterator,
 };
 
-/// Properties for the generalized `RefractiveIndexEditor`.
-/// Follows the "Props down, Events up" pattern.
-#[derive(Props, Clone, PartialEq)]
-pub struct RefractiveIndexEditorProps {
-    /// Read-only signal containing the current refractive index model.
-    pub ref_ind_type: ReadSignal<RefractiveIndexType>,
-    
+/// A generic editor component for optical refractive index models.
+#[component]
+pub fn RefractiveIndexEditor(
+    /// Reactive start value (can be passed as a Signal or Memo).
+    value: ReadSignal<RefractiveIndexType>,
+
     /// Event handler triggered when the model type or any parameter changes.
-    pub on_change: EventHandler<RefractiveIndexType>,
+    on_change: EventHandler<RefractiveIndexType>,
 
     /// Base ID used for HTML element IDs to avoid conflicts.
     #[props(default = "refractiveIndex".to_string())]
-    pub base_id: String,
-    
+    base_id: String,
+
     /// If true, disables all input fields and dropdowns.
     #[props(default = false)]
-    pub readonly: bool,
-}
+    readonly: bool,
+) -> Element {
+    info!("🔄 Render: RefractiveIndexEditor");
+    // *** This is a hack to avoid crashes while using FlushedTextInput *****
+    let flush_trigger = use_signal(|| 0usize);
+    let dirty_count = use_signal(|| 0usize);
+    use_context_provider(|| FormContext {
+        flush_trigger,
+        dirty_count,
+    });
+    // **********************************************************************
 
-/// A generic editor component for optical refractive index models.
-#[component]
-pub fn RefractiveIndexEditor(props: RefractiveIndexEditorProps) -> Element {
-    // Read the current state from the signal
-    let current_type = props.ref_ind_type.read();
+    // 1. Internal State: This makes the component fully decoupled and snappy.
+    let mut internal_state = use_signal(|| value.read().clone());
+
+    // 2. Reactive Sync: If the parent loads a completely different material,
+    //    we sync the external value into our internal state.
+    use_effect(move || {
+        let ext_val = value.read();
+        if *ext_val != *internal_state.read() {
+            internal_state.set(ext_val.clone());
+        }
+    });
+
+    // Create an internal event handler that updates the local state AND informs the parent.
+    let handle_internal_change = EventHandler::new(move |new_type: RefractiveIndexType| {
+        internal_state.set(new_type.clone());
+        on_change.call(new_type);
+    });
+
+    // Read the internal state strictly once per render
+    let current_type = internal_state.read();
 
     rsx! {
-      div { class: "refractive-index-editor-container",
-        // Dropdown to select the model type (e.g., Const, Sellmeier, etc.)
-        LabeledSelect {
-          id: format!("{}Select", props.base_id),
-          label: "Refractive Index Definition",
-          // Generate dropdown options based on the enum variants
-          options: select_options_from_enum_iterator(&*current_type, None),
-          readonly: props.readonly,
-          onchange: move |e: Event<FormData>| {
-              let val = e.value();
-              // Instantiate the default variant based on the selection
-              if let Some(new_ref_ind_type) = RefractiveIndexType::default_from_name(
-                  val.as_str(),
-              ) {
-                  props.on_change.call(new_ref_ind_type);
-              }
-          },
-        }
+        div { class: "refractive-index-editor-container",
+            LabeledSelect {
+                id: format!("{}Select", base_id),
+                label: "Refractive Index Definition".to_string(),
+                options: select_options_from_enum_iterator(&*current_type, None),
+                readonly,
+                onchange: move |e: Event<FormData>| {
+                    let val = e.value();
+                    if let Some(new_ref_ind_type) = RefractiveIndexType::default_from_name(
+                        val.as_str(),
+                    ) {
+                        handle_internal_change.call(new_ref_ind_type);
+                    }
+                },
+            }
 
-        // Dynamic input fields based on the currently selected model
-        div { class: "accordion-content-wrapper-div border-start mt-2 px-2",
-          RowedInputs { inputs: get_refractive_index_input_data(props.ref_ind_type, props.on_change, props.readonly) }
+            div { class: "accordion-content-wrapper-div border-start mt-2 px-2",
+                RowedInputs {
+                    // Render the inputs based on the purely internal state
+                    inputs: get_refractive_index_input_data(&*current_type, handle_internal_change, readonly),
+                }
+            }
         }
-      }
     }
 }
 
-/// Helper function to delegate input generation to the specific model editors.
+/// Helper function evaluating the inputs purely based on the borrowed type.
 fn get_refractive_index_input_data(
-    ref_ind_type_sig: ReadSignal<RefractiveIndexType>,
+    current_type: &RefractiveIndexType,
     on_save: EventHandler<RefractiveIndexType>,
     readonly: bool,
 ) -> Vec<InputData> {
-    match &*ref_ind_type_sig.read() {
+    match current_type {
         RefractiveIndexType::Const(ref_ind) => {
             ConstRefParam::to_input_data_vec(ref_ind, on_save, readonly)
         }

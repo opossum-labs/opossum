@@ -1,1 +1,2 @@
-pub mod asset_header_editor;
+mod asset_header_editor;
+pub mod material_editor;

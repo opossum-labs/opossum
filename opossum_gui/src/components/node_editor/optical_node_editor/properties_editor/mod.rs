@@ -26,8 +26,9 @@ use crate::components::node_editor::{
         fluence_estimator_editor::FluenceEstimatorEditor, i32_editor::I32Editor,
         isometry_option_editor::IsometryOptionEditor, length_editor::LengthEditor,
         length_option_editor::LengthOptionEditor, linear_density_editor::LinearDensityEditor,
-        refractive_index_editor::RefractiveIndexPropertyEditor, splitter_type_editor::SplitterTypeEditor,
-        string_editor::StringEditor, vec2_editor::Vec2Editor, vec3_editor::Vec3Editor,
+        refractive_index_editor::RefractiveIndexPropertyEditor,
+        splitter_type_editor::SplitterTypeEditor, string_editor::StringEditor,
+        vec2_editor::Vec2Editor, vec3_editor::Vec3Editor,
     },
 };
 use dioxus::prelude::*;

@@ -6,21 +6,24 @@ use inflector::Inflector;
 use crate::components::{
     inputs::refractive_index_editor::RefractiveIndexEditor,
     node_editor::{
-        hooks::use_synced_signal,
-        node_config_editor::NodeChangeEvent,
-        optical_node_editor::properties_editor::{
-            on_save_proptype_handler,
-        },
+        hooks::use_synced_signal, node_config_editor::NodeChangeEvent,
+        optical_node_editor::properties_editor::on_save_proptype_handler,
     },
 };
 use uuid::Uuid;
 
 #[component]
 pub fn RefractiveIndexPropertyEditor(
+    /// id of the node element
     node_id: Memo<Uuid>,
+
     ref_ind_type: RefractiveIndexType,
+
+    /// name of the property
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
+    /// If true, disables all input fields and dropdowns.
+    #[props(default = false)]
     readonly: bool,
 ) -> Element {
     // Synchronize the local state with external changes
@@ -40,7 +43,7 @@ pub fn RefractiveIndexPropertyEditor(
     rsx! {
         // Instantiate the decoupled, generic editor
         RefractiveIndexEditor {
-            ref_ind_type: ref_ind_type_sig,
+            value: ref_ind_type_sig,
             on_change: move |new_type: RefractiveIndexType| {
                 on_save.call(new_type);
             },

@@ -13,7 +13,16 @@ pub enum AssetHeaderChangeAction {
     /// The description changed (None if the field was cleared).
     Description(Option<String>),
 }
-
+impl AssetHeaderChangeAction {
+    /// Applies the change action directly to the given `AssetHeader`.
+    pub fn apply(self, header: &mut opossum_core::asset::AssetHeader) {
+        match self {
+            Self::Name(name) => header.name = name,
+            Self::Manufacturer(mfg) => header.manufacturer = mfg,
+            Self::Description(desc) => header.description = desc,
+        }
+    }
+}
 /// Event emitted when the user changes a value in the `AssetHeaderEditor`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AssetHeaderChangeEvent {
@@ -38,6 +47,7 @@ pub struct AssetHeaderEditorProps {
 /// Follows the "props down, events up" pattern. Changes are emitted via `on_change`.
 #[component]
 pub fn AssetHeaderEditor(props: AssetHeaderEditorProps) -> Element {
+    info!("🔄 Render: AssetHeaderEditor");
     let header = props.header.read();
     rsx! {
       div { class: "card mb-4",

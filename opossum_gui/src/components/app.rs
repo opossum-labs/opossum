@@ -1,18 +1,25 @@
 // --- Common imports ---
 use crate::{
-    APP_CONFIG, components::{
+    APP_CONFIG,
+    components::{
         alert_dialog::{
             AlertDialogAction, AlertDialogActions, AlertDialogCancel, AlertDialogContent,
             AlertDialogDescription, AlertDialogRoot, AlertDialogTitle,
-        }, asset_editor::asset_header_editor::{AssetHeaderChangeEvent, AssetHeaderEditor}, context_menu::cx_menu::{ContextMenu, CxtCommand}, logger::logger_component::Logger, menu_bar::{
+        },
+        asset_editor::material_editor::{MaterialChangeEvent, MaterialEditor},
+        context_menu::cx_menu::{ContextMenu, CxtCommand},
+        logger::logger_component::Logger,
+        menu_bar::{
             menu_bar_component::{AppCommand, MenuBar},
             project_helper::{select_open_path, select_save_path},
-        }, scenery_editor::{GraphEditor, NodeEditorCommand}, settings_dialog::SettingsDialog, short_cuts::{PendingAction, SHORTCUTS, Shortcut},
+        },
+        scenery_editor::{GraphEditor, NodeEditorCommand},
+        settings_dialog::SettingsDialog,
+        short_cuts::{PendingAction, SHORTCUTS, Shortcut},
     },
 };
 use dioxus::prelude::*;
-use opossum_core::asset::AssetHeader;
-use uuid::Uuid;
+use opossum_core::{material::Material, refractive_index::RefrIndexSellmeier1};
 use std::path::PathBuf;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -470,6 +477,7 @@ fn CommonAppLayout(
     on_alert_confirm: EventHandler<MouseEvent>,
     on_alert_cancel: EventHandler<MouseEvent>,
 ) -> Element {
+    info!("🔄 Render: App::CommonAppLayout");
     let mut root_tab_open = use_signal(|| true);
     let root_tab_open_handler = EventHandler::<bool>::new(move |b| root_tab_open.set(b));
     let mut height = use_signal(|| 100.0);
@@ -495,13 +503,12 @@ fn CommonAppLayout(
     };
 
     // **** Testing only *****
-    let asset_header_state = use_signal(|| {
-        AssetHeader::new(
-            Uuid::new_v4(),
-            0, // Version 0 indicates a draft
-            "Test Glass",
-            None,
-            None,
+    let mut material_state = use_signal(|| {
+        Material::new_draft(
+            "N-BK7",
+            Some("Schott".to_string()),
+            Some("Standard crown glass".to_string()),
+            RefrIndexSellmeier1::default().into(),
         )
     });
     // ****
@@ -533,10 +540,14 @@ fn CommonAppLayout(
                 root_tab_open_handler,
             }
             Logger { drag_handler: on_mousedown, height }
-            AssetHeaderEditor {
-                header: asset_header_state,
+            MaterialEditor {
+                material: material_state,
                 readonly: false,
-                on_change: move |e: AssetHeaderChangeEvent| { println!("Got event: {e:?}") },
+                on_change: move |e: MaterialChangeEvent| {
+                    info!("Got event: {e:?}");
+                    e.action.apply(&mut material_state.write());
+                },
+                on_save: move |_| { info!("Material Editor: on_save") },
             }
         }
         AlertDialogRoot {
