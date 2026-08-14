@@ -1,6 +1,5 @@
 #![warn(missing_docs)]
 //! Module for storing references to optical nodes.
-use log::warn;
 use serde::{
     Deserialize, Serialize,
     de::{self},
@@ -121,14 +120,11 @@ impl<'de> Deserialize<'de> for OpticRef {
         let intermediate = OpticRefIntermediate::deserialize(deserializer)?;
 
         let node_type = intermediate.attributes.node_type();
-        let node_ref = match create_node_ref(node_type) {
-            Ok(node) => node,
-            Err(e) => {
-                // Log warning when encountering an unknown node type
-                warn!("Unknown node type '{node_type}'. Skipping node: {e}");
-                return Err(de::Error::custom(e.to_string()));
-            }
-        };
+        // Note: an unknown node type is not logged here. `OpticRef::deserialize` itself never skips a
+        // node - callers that tolerate a failing node (currently `deserialize_nodes_lossy` in
+        // `optic_graph/serialization.rs`) do the skipping and log accordingly, since only they know the
+        // node was skipped rather than the whole document failing to load.
+        let node_ref = create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
 
         node_ref
             .optical_ref

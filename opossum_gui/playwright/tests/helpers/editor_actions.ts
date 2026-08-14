@@ -102,12 +102,12 @@ export async function addNode(
   expectedIndex?: number
 ): Promise<Locator> {
   // 1. Open the Edit menu
-  const editMenu = page.getByRole('button', { name: 'Edit' });
+  const editMenu = page.getByRole('button', { name: 'Node', exact: true });
   await expect(editMenu).toBeVisible();
   await editMenu.click();
 
   // 2. Click the 'Add Node' menu item
-  const addNodeOption = page.getByRole('button', { name: 'Add Node' });
+  const addNodeOption = page.getByRole('button', { name: 'Add Node', exact: true });
   await expect(addNodeOption).toBeVisible();
   await addNodeOption.click();
 
