@@ -40,6 +40,8 @@ pub struct AnalyzerInfo {
     analyzer_type: AnalyzerType,
     #[serde(skip_serializing_if = "Option::is_none")]
     gui_position: Option<(f64, f64)>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pump_scenarios: Vec<Uuid>,
 }
 impl AnalyzerInfo {
     /// Creates a new [`AnalyzerInfo`].
@@ -49,7 +51,37 @@ impl AnalyzerInfo {
         Self {
             analyzer_type,
             gui_position: Some((gui_position.x, gui_position.y)),
+            pump_scenarios: Vec::new(),
         }
+    }
+    /// Returns the [`PumpScenario`]s this analyzer is run in.
+    ///
+    /// An analyzer referring to no scenario at all is run once on the passive model, which is what
+    /// every analyzer did before scenarios existed.
+    #[must_use]
+    pub fn pump_scenarios(&self) -> &[Uuid] {
+        &self.pump_scenarios
+    }
+    /// Sets the [`PumpScenario`]s this analyzer is run in.
+    ///
+    /// The analyzer produces one report per listed scenario, in the given order.
+    ///
+    /// # Arguments
+    ///
+    /// * `pump_scenarios` - the scenarios to run, or an empty list for a purely passive run.
+    pub fn set_pump_scenarios(&mut self, pump_scenarios: Vec<Uuid>) {
+        self.pump_scenarios = pump_scenarios;
+    }
+    /// Stops running this analyzer in the [`PumpScenario`] with the given [`Uuid`].
+    ///
+    /// Called when that scenario is deleted: an analyzer must not keep pointing at an operating
+    /// point that no longer exists.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - the scenario no longer to be run.
+    fn remove_pump_scenario(&mut self, id: Uuid) {
+        self.pump_scenarios.retain(|scenario_id| *scenario_id != id);
     }
     /// Returns the gui position of this [`AnalyzerInfo`].
     #[must_use]
@@ -292,6 +324,7 @@ impl OpmDocument {
         let analyzer_info = AnalyzerInfo {
             analyzer_type,
             gui_position: None,
+            pump_scenarios: Vec::new(),
         };
         self.analyzers.insert(id, analyzer_info);
         id
@@ -306,6 +339,7 @@ impl OpmDocument {
         let analyzer_info = AnalyzerInfo {
             analyzer_type,
             gui_position,
+            pump_scenarios: Vec::new(),
         };
         self.analyzers.insert(id, analyzer_info);
         id
@@ -395,6 +429,10 @@ impl OpmDocument {
     }
     /// Remove the [`PumpScenario`] with the given [`Uuid`] from this [`OpmDocument`].
     ///
+    /// Every analyzer running in that scenario stops doing so, since an operating point that no
+    /// longer exists cannot be analyzed. An analyzer left without any scenario runs on the passive
+    /// model again.
+    ///
     /// # Arguments
     ///
     /// * `id` - the scenario to remove.
@@ -403,7 +441,11 @@ impl OpmDocument {
     ///
     /// The removed scenario, or `None` if there was none with that id.
     pub fn remove_pump_scenario(&mut self, id: Uuid) -> Option<PumpScenario> {
-        self.pump_scenarios.shift_remove(&id)
+        let removed = self.pump_scenarios.shift_remove(&id)?;
+        for analyzer in self.analyzers.values_mut() {
+            analyzer.remove_pump_scenario(id);
+        }
+        Some(removed)
     }
     /// Drop the entries of deleted nodes from every [`PumpScenario`] of this [`OpmDocument`].
     ///
@@ -440,36 +482,94 @@ impl OpmDocument {
     /// Perform an analysis run of this [`OpmDocument`].
     ///
     /// This function will perform the analysis of the defined analyzers in the order they were added.
+    /// An analyzer that refers to [`PumpScenario`]s is run once per scenario, so it contributes one
+    /// report per operating point; one that refers to none is run once on the passive model.
     /// The results of the analysis will be returned as a vector of [`AnalysisReport`]s.
     ///
     /// # Errors
     ///
-    /// This function will return an error if the individual analyzers fail to perform the analysis.
+    /// This function will return an error if an analyzer refers to a [`PumpScenario`] that does not
+    /// exist, or if the individual analyzers fail to perform the analysis.
     pub fn analyze(&mut self) -> OpmResult<Vec<AnalysisReport>> {
         if self.analyzers.is_empty() {
             info!("No analyzer defined in document. Stopping here.");
             return Ok(vec![]);
         }
+        let runs = self.analysis_runs()?;
         let mut reports = vec![];
-        for ana in self.analyzers.iter().enumerate() {
-            let analyzer_type = &ana.1.1.analyzer_type;
+        for (analyzer_nr, analyzer_type, scenario_name) in runs {
             let analyzer_box = inventory::iter::<AnalyzerRegistration>
                 .into_iter()
-                .find_map(|reg| (reg.builder)(analyzer_type))
+                .find_map(|reg| (reg.builder)(&analyzer_type))
                 .ok_or_else(|| {
                     OpossumError::Other(format!(
                         "No analyzer implementation found for type: {analyzer_type:?}"
                     ))
                 })?;
             let analyzer: &dyn Analyzer = &*analyzer_box;
-            info!("Analysis #{}", ana.0);
+            match &scenario_name {
+                Some(name) => info!("Analysis #{analyzer_nr}, pump scenario '{name}'"),
+                None => info!("Analysis #{analyzer_nr}"),
+            }
             analyzer.analyze(&mut self.scenery)?;
-            info!("Generating report #{}", ana.0);
-            reports.push(analyzer.report(&self.scenery)?);
+            info!("Generating report #{analyzer_nr}");
+            let mut report = analyzer.report(&self.scenery)?;
+            if let Some(name) = &scenario_name {
+                // The operating point belongs on the report the same way the kind of analysis does:
+                // it is what distinguishes two otherwise identical reports of the same model.
+                report.set_analysis_type(&format!("{} - {name}", report.analysis_type()));
+            }
+            reports.push(report);
+            // Every run starts from the same state, so this has to happen between two scenarios of
+            // one analyzer just as much as between two analyzers.
             self.scenery.clear_edges();
             self.scenery.reset_data();
         }
         Ok(reports)
+    }
+    /// Expand the analyzers of this [`OpmDocument`] into the individual runs to be performed.
+    ///
+    /// An analyzer contributes one run per [`PumpScenario`] it refers to, or a single passive run if
+    /// it refers to none. Resolving the scenarios here rather than while analyzing means a reference
+    /// to a scenario that does not exist is reported *before* the first ray is traced, instead of
+    /// after a long analysis has already run.
+    ///
+    /// # Returns
+    ///
+    /// One entry per run: the number of the analyzer it belongs to, the analyzer to build, and the
+    /// name of the operating point it runs in (if any). The entries are owned, so the document is
+    /// free to be analyzed while the plan is walked.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if an analyzer refers to a [`PumpScenario`] that does not
+    /// exist in this document.
+    fn analysis_runs(&self) -> OpmResult<Vec<(usize, AnalyzerType, Option<String>)>> {
+        let mut runs = Vec::new();
+        for (analyzer_nr, (_, analyzer_info)) in self.analyzers.iter().enumerate() {
+            if analyzer_info.pump_scenarios.is_empty() {
+                runs.push((analyzer_nr, analyzer_info.analyzer_type.clone(), None));
+                continue;
+            }
+            for scenario_id in &analyzer_info.pump_scenarios {
+                let scenario_name = self
+                    .pump_scenarios
+                    .get(scenario_id)
+                    .map(PumpScenario::name)
+                    .ok_or_else(|| {
+                        OpossumError::OpmDocument(format!(
+                            "analysis #{analyzer_nr} refers to the pump scenario {scenario_id}, \
+                             which does not exist"
+                        ))
+                    })?;
+                runs.push((
+                    analyzer_nr,
+                    analyzer_info.analyzer_type.clone(),
+                    Some(scenario_name.to_string()),
+                ));
+            }
+        }
+        Ok(runs)
     }
     /// Returns a mutable reference to the analyzers of this [`OpmDocument`].
     pub const fn analyzers_mut(&mut self) -> &mut IndexMap<Uuid, AnalyzerInfo> {
@@ -633,6 +733,109 @@ mod test {
     fn a_document_without_scenarios_writes_none() -> OpmResult<()> {
         let document = OpmDocument::default();
         assert!(!document.to_opm_file_string()?.contains("pump_scenarios"));
+        Ok(())
+    }
+    /// A document that can be analyzed: one source feeding one energy meter, plus one analyzer.
+    ///
+    /// # Returns
+    ///
+    /// The document and the [`Uuid`] of its analyzer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the model cannot be assembled.
+    fn document_with_one_analyzer() -> OpmResult<(OpmDocument, Uuid)> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let meter = scenery.add_node(EnergyMeter::default())?;
+        scenery.connect_nodes(source, "output_1", meter, "input_1", millimeter!(10.0))?;
+        let mut document = OpmDocument::new(scenery);
+        let mut config = EnergyConfig::default();
+        config.map_source(
+            source,
+            EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
+                vec![(nanometer!(1053.0), joule!(1.0))],
+                nanometer!(1.0),
+            )?),
+        );
+        let analyzer_id = document.add_analyzer(AnalyzerType::Energy(config));
+        Ok((document, analyzer_id))
+    }
+    /// Analyze a document and return the analysis type of every report it produced.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the analysis fails.
+    fn analysis_types_of(document: &mut OpmDocument) -> OpmResult<Vec<String>> {
+        Ok(document
+            .analyze()?
+            .iter()
+            .map(|report| report.analysis_type().to_string())
+            .collect())
+    }
+    /// Without an operating point nothing changes: one analyzer, one report, same title as ever.
+    #[test]
+    fn an_analyzer_without_scenarios_is_run_once() -> OpmResult<()> {
+        let (mut document, _) = document_with_one_analyzer()?;
+        assert_eq!(analysis_types_of(&mut document)?, vec!["Energy Analysis"]);
+        Ok(())
+    }
+    /// The point of scenarios: one model, several operating points, one report each.
+    #[test]
+    fn an_analyzer_is_run_once_per_scenario() -> OpmResult<()> {
+        let (mut document, analyzer_id) = document_with_one_analyzer()?;
+        let full_power = document.add_pump_scenario("full power");
+        let half_power = document.add_pump_scenario("half power");
+        document
+            .analyzer_mut(analyzer_id)
+            .expect("the analyzer just added must be there")
+            .set_pump_scenarios(vec![full_power, half_power]);
+        assert_eq!(
+            analysis_types_of(&mut document)?,
+            vec![
+                "Energy Analysis - full power",
+                "Energy Analysis - half power"
+            ]
+        );
+        Ok(())
+    }
+    /// A scenario that is gone must not be mistaken for "no scenario": that would silently report a
+    /// passive run under the name of an operating point nobody defined.
+    #[test]
+    fn an_analyzer_pointing_at_a_missing_scenario_is_an_error() -> OpmResult<()> {
+        let (mut document, analyzer_id) = document_with_one_analyzer()?;
+        let missing_id = Uuid::new_v4();
+        document
+            .analyzer_mut(analyzer_id)
+            .expect("the analyzer just added must be there")
+            .set_pump_scenarios(vec![missing_id]);
+        let message = document.analyze().unwrap_err().to_string();
+        assert!(
+            message.contains(&missing_id.to_string()),
+            "the error has to name the missing scenario, got: {message}"
+        );
+        Ok(())
+    }
+    /// Deleting an operating point must not leave an analyzer pointing at it.
+    #[test]
+    fn removing_a_scenario_stops_the_analyzers_running_it() -> OpmResult<()> {
+        let (mut document, analyzer_id) = document_with_one_analyzer()?;
+        let full_power = document.add_pump_scenario("full power");
+        let half_power = document.add_pump_scenario("half power");
+        document
+            .analyzer_mut(analyzer_id)
+            .expect("the analyzer just added must be there")
+            .set_pump_scenarios(vec![full_power, half_power]);
+
+        assert!(document.remove_pump_scenario(full_power).is_some());
+        assert_eq!(
+            document.analyzer(analyzer_id)?.pump_scenarios(),
+            vec![half_power]
+        );
+        assert_eq!(
+            analysis_types_of(&mut document)?,
+            vec!["Energy Analysis - half power"]
+        );
         Ok(())
     }
 
