@@ -9,7 +9,7 @@ use crate::{
     analyzers::{Analyzer, AnalyzerRegistration, AnalyzerType},
     core_optics::{NodeAttrExt, OpticNode, SceneryResources},
     error::{OpmResult, OpossumError},
-    gain::PumpScenario,
+    gain::{GainModel, PumpScenario},
     material::Material,
     nodes::NodeGroup,
     properties::{Proptype, proptype::AssetRef},
@@ -24,6 +24,7 @@ use log::{info, warn};
 use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashSet,
     fs::{self, File},
     io::Write,
     path::Path,
@@ -116,6 +117,13 @@ pub struct OpmDocument {
     analyzers: IndexMap<Uuid, AnalyzerInfo>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pump_scenarios: IndexMap<Uuid, PumpScenario>,
+    /// Nodes marked as amplifier candidates, independent of any [`PumpScenario`].
+    ///
+    /// This is the hardware-side half of the hardware/operating point split: whether a node *is* an
+    /// amplifier does not depend on which (if any) scenario is active. How it amplifies in a
+    /// particular scenario is configured separately, in that scenario's own gain-model map.
+    #[serde(default, skip_serializing_if = "HashSet::is_empty")]
+    amplifier_nodes: HashSet<Uuid>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     embedded_materials: IndexMap<Uuid, Material>,
 }
@@ -127,6 +135,7 @@ impl Default for OpmDocument {
             global_conf: Arc::new(Mutex::new(SceneryResources::default())),
             analyzers: IndexMap::default(),
             pump_scenarios: IndexMap::default(),
+            amplifier_nodes: HashSet::default(),
             embedded_materials: IndexMap::default(),
         }
     }
@@ -457,6 +466,54 @@ impl OpmDocument {
             scenario.prune(&self.scenery);
         }
     }
+    /// Return the amplifier candidate set of this [`OpmDocument`].
+    ///
+    /// Membership in this set is what marks a node as an amplifier — a hardware fact that does not
+    /// depend on any [`PumpScenario`]. Only candidates can be configured with a [`GainModel`] in a
+    /// scenario at all.
+    #[must_use]
+    pub const fn amplifier_nodes(&self) -> &HashSet<Uuid> {
+        &self.amplifier_nodes
+    }
+    /// Return whether the node with the given [`Uuid`] is an amplifier candidate.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - the node to look up.
+    #[must_use]
+    pub fn is_amplifier_node(&self, id: Uuid) -> bool {
+        self.amplifier_nodes.contains(&id)
+    }
+    /// Mark or unmark the node with the given [`Uuid`] as an amplifier candidate.
+    ///
+    /// Unmarking a node also strips it from every [`PumpScenario`]'s gain-model map, so a node
+    /// cannot stay configured in an operating point while no longer being an amplifier at all — the
+    /// same "no silent configured-but-hidden state" rule [`remove_pump_scenario`](Self::remove_pump_scenario)
+    /// already follows for deleted scenarios.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - the node to mark or unmark.
+    /// * `is_amplifier` - whether the node is an amplifier candidate from now on.
+    pub fn set_is_amplifier_node(&mut self, id: Uuid, is_amplifier: bool) {
+        if is_amplifier {
+            self.amplifier_nodes.insert(id);
+        } else {
+            self.amplifier_nodes.remove(&id);
+            for scenario in self.pump_scenarios.values_mut() {
+                scenario.set_gain_model(id, GainModel::None);
+            }
+        }
+    }
+    /// Drop the entries of deleted nodes from the amplifier candidate set of this [`OpmDocument`].
+    ///
+    /// Candidates refer to nodes by [`Uuid`] and live beside the model rather than inside it, so
+    /// deleting a node leaves an entry behind that belongs to nothing. Running this after a deletion
+    /// keeps the candidate set consistent with the model it describes.
+    pub fn prune_amplifier_nodes(&mut self) {
+        let scenery = &self.scenery;
+        self.amplifier_nodes.retain(|id| scenery.exists(*id));
+    }
     /// Returns a reference to the scenery of this [`OpmDocument`].
     #[must_use]
     pub const fn scenery(&self) -> &NodeGroup {
@@ -733,6 +790,90 @@ mod test {
     fn a_document_without_scenarios_writes_none() -> OpmResult<()> {
         let document = OpmDocument::default();
         assert!(!document.to_opm_file_string()?.contains("pump_scenarios"));
+        Ok(())
+    }
+    #[test]
+    fn amplifier_node_candidacy_roundtrip() -> OpmResult<()> {
+        let mut document = OpmDocument::default();
+        let lens_id = document.scenery_mut().add_node(Lens::default())?;
+        assert!(!document.is_amplifier_node(lens_id));
+        assert!(document.amplifier_nodes().is_empty());
+
+        document.set_is_amplifier_node(lens_id, true);
+        assert!(document.is_amplifier_node(lens_id));
+        assert_eq!(document.amplifier_nodes(), &HashSet::from([lens_id]));
+
+        document.set_is_amplifier_node(lens_id, false);
+        assert!(!document.is_amplifier_node(lens_id));
+        assert!(document.amplifier_nodes().is_empty());
+        Ok(())
+    }
+    /// Unmarking a node as an amplifier candidate must not leave it configured in some scenario the
+    /// unmarking call did not happen to touch - otherwise a node could amplify in a scenario while
+    /// no longer counting as an amplifier at all.
+    #[test]
+    fn unmarking_a_candidate_wipes_its_gain_model_in_every_scenario() -> OpmResult<()> {
+        let mut document = OpmDocument::default();
+        let lens_id = document.scenery_mut().add_node(Lens::default())?;
+        document.set_is_amplifier_node(lens_id, true);
+        let gain = GainModel::Const(ConstGain::new(2.0)?);
+        let full_power = document.add_pump_scenario("full power");
+        let half_power = document.add_pump_scenario("half power");
+        document
+            .pump_scenario_mut(full_power)
+            .expect("the scenario just added must be there")
+            .set_gain_model(lens_id, gain);
+        document
+            .pump_scenario_mut(half_power)
+            .expect("the scenario just added must be there")
+            .set_gain_model(lens_id, gain);
+
+        document.set_is_amplifier_node(lens_id, false);
+
+        for scenario_id in [full_power, half_power] {
+            assert_eq!(
+                document
+                    .pump_scenario(scenario_id)
+                    .map(|scenario| scenario.gain_model(lens_id)),
+                Some(GainModel::None)
+            );
+        }
+        Ok(())
+    }
+    #[test]
+    fn prune_amplifier_nodes_drops_deleted_node_entries() -> OpmResult<()> {
+        let mut document = OpmDocument::default();
+        let lens_id = document.scenery_mut().add_node(Lens::default())?;
+        let deleted_id = document.scenery_mut().add_node(Lens::default())?;
+        document.set_is_amplifier_node(lens_id, true);
+        document.set_is_amplifier_node(deleted_id, true);
+        document.scenery_mut().delete_node(deleted_id)?;
+
+        document.prune_amplifier_nodes();
+
+        assert!(document.is_amplifier_node(lens_id));
+        assert!(!document.is_amplifier_node(deleted_id));
+        Ok(())
+    }
+    /// A document carries its amplifier candidates, so they have to survive the way to a file and
+    /// back.
+    #[test]
+    fn amplifier_nodes_survive_a_file_round_trip() -> OpmResult<()> {
+        let mut document = OpmDocument::default();
+        let lens_id = document.scenery_mut().add_node(Lens::default())?;
+        document.set_is_amplifier_node(lens_id, true);
+
+        let serialized = document.to_opm_file_string()?;
+        let reloaded = OpmDocument::from_string(&serialized)?;
+        assert!(reloaded.is_amplifier_node(lens_id));
+        Ok(())
+    }
+    /// A document without any candidates must not gain an `amplifier_nodes` entry it never asked
+    /// for, matching the same guarantee `pump_scenarios` already gives.
+    #[test]
+    fn a_document_without_amplifier_nodes_writes_none() -> OpmResult<()> {
+        let document = OpmDocument::default();
+        assert!(!document.to_opm_file_string()?.contains("amplifier_nodes"));
         Ok(())
     }
     /// A document that can be analyzed: one source feeding one energy meter, plus one analyzer.
