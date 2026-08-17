@@ -2261,6 +2261,7 @@ mod test {
 /// # Returns
 ///
 /// One `Command::PatchPumpScenario` per scenario whose entries actually changed; empty if none did.
+#[allow(clippy::needless_collect)]
 fn prune_pump_scenario_entries(document: &mut OpmDocument) -> Vec<Command> {
     let before: Vec<(Uuid, PumpScenario)> = document
         .pump_scenarios()

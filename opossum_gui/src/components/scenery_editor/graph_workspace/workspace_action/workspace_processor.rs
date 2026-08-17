@@ -41,6 +41,7 @@ use crate::{
     },
 };
 #[allow(clippy::too_many_lines)]
+#[allow(clippy::large_stack_frames)]
 pub fn use_workspace_processor(
     workspace: ReadStore<GraphsWorkspaceState>,
     root_graph_id: Memo<Uuid>,
