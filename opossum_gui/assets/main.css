@@ -451,6 +451,113 @@ body {
     border-color: rgb(255, 214, 130) !important;
 }
 
+/* Scenario editor: new-scenario row (name input + add button), same palette as the amp filter
+   buttons above so the two panels read as one family. */
+.scenario-new-row {
+    display: flex;
+    gap: 4px;
+    width: 100%;
+    margin-bottom: 8px;
+}
+
+.scenario-new-input {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 3px 6px;
+    font-size: 12px;
+    color: rgb(235, 235, 235);
+    background-color: rgb(58, 58, 58);
+    border: 1px solid rgb(90, 90, 90);
+    border-radius: 4px;
+}
+
+.scenario-new-btn {
+    padding: 3px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    color: rgb(205, 205, 205);
+    background-color: rgb(58, 58, 58);
+    border: 1px solid rgb(90, 90, 90);
+    border-radius: 4px;
+}
+
+.scenario-new-btn:hover:not(:disabled) {
+    color: #ffffff;
+    background-color: rgb(78, 78, 78);
+}
+
+.scenario-new-btn:disabled {
+    cursor: default;
+    opacity: 0.5;
+}
+
+/* One scenario card's header row: its (renamable) name plus the active/delete buttons. */
+.scenario-card.active {
+    border-color: rgb(255, 193, 7) !important;
+}
+
+.scenario-header {
+    gap: 4px;
+}
+
+.scenario-name-input {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 2px 4px;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgb(235, 235, 235);
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+}
+
+.scenario-name-input:hover,
+.scenario-name-input:focus {
+    background-color: rgb(58, 58, 58);
+    border-color: rgb(90, 90, 90);
+    outline: none;
+}
+
+.scenario-actions {
+    display: flex;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.scenario-active-btn,
+.scenario-delete-btn {
+    padding: 0 4px;
+    font-size: 13px;
+    line-height: 1.6;
+    cursor: pointer;
+    color: rgb(180, 180, 180);
+    background-color: transparent;
+    border: none;
+    border-radius: 4px;
+}
+
+.scenario-active-btn:hover,
+.scenario-delete-btn:hover {
+    color: #ffffff;
+    background-color: rgb(78, 78, 78);
+}
+
+.scenario-active-btn.active {
+    color: rgb(255, 193, 7);
+}
+
+/* Expand/collapse toggle for a scenario's amplifier list - reuses `.amp-card-sub`'s colour, just
+   made clickable. */
+.scenario-expand-toggle {
+    cursor: pointer;
+    margin-top: 2px;
+}
+
+.scenario-amplifier-list {
+    margin-top: 6px;
+}
+
 /* Status line below the body of an amplifying node. Its height must stay in sync with
    AMP_STATUS_HEIGHT, which is what the canvas geometry (bounding box, auto layout) uses. */
 .node-amp-status {

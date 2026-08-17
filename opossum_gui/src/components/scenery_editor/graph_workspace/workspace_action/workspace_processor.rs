@@ -60,6 +60,13 @@ pub fn use_workspace_processor(
                 let was_document_edit = is_document_edit_action(&action);
                 match action {
                     GraphsWorkspaceAction::LoadFromFile(path) => {
+                        // A freshly loaded document's scenario ids have nothing to do with whatever
+                        // was active before - the old selection would silently point at nothing, or
+                        // worse, at an unrelated scenario the new document happens to reuse the id
+                        // of. Cleared *before* loading, so the nodes about to be constructed (which
+                        // seed their own marker from this cache) never see the old document's data.
+                        *crate::ACTIVE_PUMP_SCENARIO.write() = None;
+                        crate::ACTIVE_SCENARIO_GAIN_MODELS.write().clear();
                         process_load_from_file(
                             workspace,
                             path,
@@ -71,6 +78,7 @@ pub fn use_workspace_processor(
                         // The backend clears its undo/redo history on every load; mirror that here.
                         *crate::UNDO_REDO_STATUS.write() = (false, false);
                         *crate::AMP_LIST_REFRESH.write() += 1;
+                        *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
                     }
                     GraphsWorkspaceAction::SaveToFile(path) => {
                         process_save_root_scenery_to_file(
@@ -83,11 +91,14 @@ pub fn use_workspace_processor(
                         .await;
                     }
                     GraphsWorkspaceAction::DeleteRootScenery => {
+                        *crate::ACTIVE_PUMP_SCENARIO.write() = None;
+                        crate::ACTIVE_SCENARIO_GAIN_MODELS.write().clear();
                         process_delete_root_scenery(workspace_handlers, set_file_path_handler)
                             .await;
                         // The backend clears its undo/redo history on every reset; mirror that here.
                         *crate::UNDO_REDO_STATUS.write() = (false, false);
                         *crate::AMP_LIST_REFRESH.write() += 1;
+                        *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
                     }
                     GraphsWorkspaceAction::Refresh => {
                         process_refresh(workspace, root_graph_id, workspace_handlers).await;
@@ -432,6 +443,25 @@ pub fn use_workspace_processor(
                     } => {
                         process_set_amp_config(node_id, graph_id, model, workspace_handlers).await;
                     }
+                    GraphsWorkspaceAction::SetActivePumpScenario(scenario_id) => {
+                        *crate::ACTIVE_PUMP_SCENARIO.write() = scenario_id;
+                        refresh_active_scenario_gain_models(workspace_handlers).await;
+                    }
+                    GraphsWorkspaceAction::SetScenarioGainModel {
+                        scenario_id,
+                        node_id,
+                        graph_id,
+                        model,
+                    } => {
+                        process_set_scenario_gain_model(
+                            scenario_id,
+                            node_id,
+                            graph_id,
+                            model,
+                            workspace_handlers,
+                        )
+                        .await;
+                    }
                     GraphsWorkspaceAction::RevealNode { node_id, graph_id } => {
                         ensure_tab_active(graph_id, workspace_handlers, root_graph_id, workspace)
                             .await;
@@ -477,6 +507,9 @@ pub fn use_workspace_processor(
                     // Any of these can add, remove or relocate an amplifier, so the always-visible
                     // amplifier overview has to re-read its list - see `AMP_LIST_REFRESH`.
                     *crate::AMP_LIST_REFRESH.write() += 1;
+                    // Same reasoning for the pump scenario editor: deleting a node the active
+                    // scenario named, for instance, changes what an already-expanded card shows.
+                    *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
                 }
             }
         }
@@ -540,6 +573,7 @@ const fn is_document_edit_action(action: &GraphsWorkspaceAction) -> bool {
             | GraphsWorkspaceAction::RemovePortMap { .. }
             | GraphsWorkspaceAction::SyncNodePositions { .. }
             | GraphsWorkspaceAction::SetAmpConfig { .. }
+            | GraphsWorkspaceAction::SetScenarioGainModel { .. }
     )
 }
 
@@ -549,15 +583,21 @@ const fn is_document_edit_action(action: &GraphsWorkspaceAction) -> bool {
 /// This goes through the same generic property endpoint the properties panel uses, so it is a plain
 /// property edit - undoable, and without touching the node's type or its connections.
 ///
+/// Legacy path, currently reachable only from the properties panel's own direct `amp config` edit
+/// (see [`GraphsWorkspaceAction::SetAmpConfig`]'s doc comment) - unlike that path's previous
+/// behaviour, this no longer mirrors a canvas marker: the canvas now shows the *active pump
+/// scenario*'s status (see [`process_set_scenario_gain_model`]), which a property patch on one node
+/// does not change.
+///
 /// # Arguments
 ///
 /// * `node_id` - the node whose amplification model is being set.
-/// * `graph_id` - the graph the node lives in, needed to update its canvas node.
+/// * `graph_id` - the graph the node lives in.
 /// * `model` - the model to set.
 /// * `ws_handler` - workspace signal handlers, used to mark the document as unsaved.
 async fn process_set_amp_config(
     node_id: Uuid,
-    graph_id: Uuid,
+    _graph_id: Uuid,
     model: GainModel,
     ws_handler: WorkSpaceSignalHandlers,
 ) {
@@ -566,11 +606,6 @@ async fn process_set_amp_config(
         api::update_node_property(node_id, amp_config).await,
         Some(move |()| {
             ws_handler.workspace.set_needs_saving(true);
-            // The value that was just written is known here, so the canvas marker needs no refetch
-            // - unlike the undo/redo path, which cannot know what a details change contained.
-            ws_handler
-                .nodes
-                .set_amp_model(node_id, model.active_name(), graph_id);
             // The properties panel keeps its own fetched copy of the node's properties; without
             // this bump it would still show the old `amp config` for an already selected node.
             *NODE_DETAILS_REFRESH.write() += 1;
@@ -578,24 +613,72 @@ async fn process_set_amp_config(
     );
 }
 
-/// Re-reads `node_id`'s amplification marker from the backend and mirrors it onto the canvas.
-///
-/// Used where a node's properties are known to have changed but not *how* - notably undo/redo,
-/// whose `NodeDetailsChanged` deliberately carries no property values. One request for one node
-/// that actually changed, not one per node per render.
+/// Sets the gain model a node runs with within one pump scenario - what the context menu's
+/// amplifier toggle sends. Mirrors the canvas marker only if `scenario_id` is the active scenario:
+/// a scenario a user isn't currently looking at has no canvas effect.
 ///
 /// # Arguments
 ///
-/// * `node_id` - the node whose marker should be refreshed.
-/// * `graph_id` - the graph the node lives in.
-/// * `ws_handler` - workspace signal handlers used to write the marker.
-async fn refresh_amp_marker(node_id: Uuid, graph_id: Uuid, ws_handler: WorkSpaceSignalHandlers) {
+/// * `scenario_id` - the scenario being edited.
+/// * `node_id` - the node whose gain model in that scenario is being set.
+/// * `graph_id` - the graph the node lives in, needed to update its canvas marker.
+/// * `model` - the model to set. `GainModel::None` takes the node out of the scenario again.
+/// * `ws_handler` - workspace signal handlers, used to mark the document as unsaved and mirror the
+///   canvas marker.
+async fn process_set_scenario_gain_model(
+    scenario_id: Uuid,
+    node_id: Uuid,
+    graph_id: Uuid,
+    model: GainModel,
+    ws_handler: WorkSpaceSignalHandlers,
+) {
     eval_action_run(
-        api::get_node_info(node_id).await,
-        Some(move |node_info: NodeInfo| {
-            ws_handler
-                .nodes
-                .set_amp_model(node_id, node_info.amp_model, graph_id);
+        api::put_pump_scenario_gain_model(scenario_id, node_id, model).await,
+        Some(move |()| {
+            ws_handler.workspace.set_needs_saving(true);
+            *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
+            if crate::ACTIVE_PUMP_SCENARIO() == Some(scenario_id) {
+                if model.is_active() {
+                    crate::ACTIVE_SCENARIO_GAIN_MODELS
+                        .write()
+                        .insert(node_id, model);
+                } else {
+                    crate::ACTIVE_SCENARIO_GAIN_MODELS.write().remove(&node_id);
+                }
+                // The value just written is known here, so the canvas marker needs no refetch -
+                // unlike an undo/redo of a scenario edit, which cannot know what changed.
+                ws_handler
+                    .nodes
+                    .set_amp_model(node_id, model.active_name(), graph_id);
+            }
+        }),
+    );
+}
+
+/// Re-fetches the active pump scenario's gain models and bulk-syncs every open tab's canvas
+/// markers to match - or clears both if no scenario is active.
+///
+/// Used whenever the active scenario itself changes, or an undo/redo touches its contents: unlike
+/// [`process_set_scenario_gain_model`] there is no single node whose new value is already known, so
+/// every currently rendered node has to be told apart from what actually changed.
+///
+/// # Arguments
+///
+/// * `ws_handler` - workspace signal handlers used to bulk-sync every open tab's markers.
+async fn refresh_active_scenario_gain_models(ws_handler: WorkSpaceSignalHandlers) {
+    let Some(scenario_id) = crate::ACTIVE_PUMP_SCENARIO() else {
+        crate::ACTIVE_SCENARIO_GAIN_MODELS.write().clear();
+        ws_handler.nodes.sync_amp_markers(HashMap::new());
+        return;
+    };
+    eval_action_run(
+        api::get_pump_scenario(scenario_id).await,
+        Some(move |scenario: opossum_core::gain::PumpScenario| {
+            let gain_models: HashMap<Uuid, GainModel> = scenario.amplifiers().collect();
+            crate::ACTIVE_SCENARIO_GAIN_MODELS
+                .write()
+                .clone_from(&gain_models);
+            ws_handler.nodes.sync_amp_markers(gain_models);
         }),
     );
 }
@@ -685,20 +768,33 @@ async fn apply_document_changes(
                 // properties panel, which re-fetches on its own via this counter - see its use_resource.
                 *NODE_DETAILS_REFRESH.write() += 1;
             }
-            DocumentChange::NodeDetailsChanged { uuid, graph_id } => {
-                // One property is mirrored on the canvas rather than only in the panel: the
-                // amplification marker. The change carries no values, so re-read just this node.
-                refresh_amp_marker(uuid, graph_id, ws_handler).await;
+            DocumentChange::NodeDetailsChanged { .. } | DocumentChange::AnalyzerChanged { .. } => {
                 *NODE_DETAILS_REFRESH.write() += 1;
             }
-            // A pump scenario was added, removed, or changed. Nothing on the canvas is bound to
-            // one yet - the scenario editor and the scenario-driven amplifier status arrive with
-            // the GUI step of M4 - so for now this, like a plain analyzer change, only nudges the
-            // details panel to re-read.
-            DocumentChange::AnalyzerChanged { .. }
-            | DocumentChange::PumpScenarioAdded { .. }
-            | DocumentChange::PumpScenarioRemoved { .. }
-            | DocumentChange::PumpScenarioChanged { .. } => {
+            DocumentChange::PumpScenarioAdded { .. } => {
+                *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
+                *NODE_DETAILS_REFRESH.write() += 1;
+            }
+            DocumentChange::PumpScenarioRemoved { id } => {
+                // The active scenario itself might just have been un-deleted-from-under (undo) or
+                // deleted (redo); either way its contents can no longer be trusted without a refetch,
+                // same as `PumpScenarioChanged` below - and if it's the *removed* one, there is no
+                // scenario to refetch, so every canvas marker simply clears.
+                if crate::ACTIVE_PUMP_SCENARIO() == Some(id) {
+                    *crate::ACTIVE_PUMP_SCENARIO.write() = None;
+                    refresh_active_scenario_gain_models(ws_handler).await;
+                }
+                *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
+                *NODE_DETAILS_REFRESH.write() += 1;
+            }
+            DocumentChange::PumpScenarioChanged { id } => {
+                // The change carries no values (same reasoning as `NodeDetailsChanged` used to), so
+                // if this is the scenario the canvas is currently showing, the only way to know
+                // what it now amplifies is to re-fetch it.
+                if crate::ACTIVE_PUMP_SCENARIO() == Some(id) {
+                    refresh_active_scenario_gain_models(ws_handler).await;
+                }
+                *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
                 *NODE_DETAILS_REFRESH.write() += 1;
             }
             DocumentChange::AnalyzerMoved { id, gui_position } => {

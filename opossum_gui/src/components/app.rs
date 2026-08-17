@@ -332,16 +332,20 @@ pub fn App() -> Element {
                         parent: parent.clone(),
                     }));
                 }
-                CxtCommand::SetAmpConfig {
+                CxtCommand::ToggleScenarioAmplifier {
                     node_id,
                     graph_id,
+                    scenario_id,
                     model,
                 } => {
-                    node_editor_command_handler.call(Some(NodeEditorCommand::SetAmpConfig {
-                        node_id: *node_id,
-                        graph_id: *graph_id,
-                        model: *model,
-                    }));
+                    node_editor_command_handler.call(Some(
+                        NodeEditorCommand::ToggleScenarioAmplifier {
+                            node_id: *node_id,
+                            graph_id: *graph_id,
+                            scenario_id: *scenario_id,
+                            model: *model,
+                        },
+                    ));
                 }
             }
         }

@@ -31,6 +31,31 @@ static NODE_DETAILS_REFRESH: GlobalSignal<usize> = Signal::global(|| 0);
 /// delete, paste, group or undo. [`NODE_DETAILS_REFRESH`] alone does not cover those: it is only
 /// raised for property-level edits.
 static AMP_LIST_REFRESH: GlobalSignal<usize> = Signal::global(|| 0);
+/// Bumped whenever the document's set of pump scenarios, or the contents of any one of them,
+/// changed - creating/renaming/deleting a scenario, setting a node's gain model in one, or an
+/// undo/redo touching any of that. Same role as [`AMP_LIST_REFRESH`], for the scenario editor panel.
+static PUMP_SCENARIO_LIST_REFRESH: GlobalSignal<usize> = Signal::global(|| 0);
+/// The pump scenario the canvas and the context menu currently reflect, if any.
+///
+/// This is a GUI-only choice, not part of the document: it is not saved to the `.opm` file and
+/// resets when a new document is loaded. A node can belong to several scenarios at once (the
+/// analyzer that runs them decides which), but the canvas can only ever show one amplifier status
+/// per node - this is the one it shows. `None` means "no scenario selected", under which every
+/// node is passive on the canvas regardless of what any scenario says.
+static ACTIVE_PUMP_SCENARIO: GlobalSignal<Option<Uuid>> = Signal::global(|| None);
+/// A local cache of the active pump scenario's gain models (empty if none is active), refreshed
+/// whenever [`ACTIVE_PUMP_SCENARIO`] changes or an undo/redo touches that scenario's contents.
+///
+/// Two things read this: bulk-syncing every currently rendered node's canvas marker in one pass
+/// (`GraphStore::sync_amp_markers`, reached through every open tab) whenever the cache itself is
+/// refreshed, and seeding a *freshly created* node's marker (a node just added, or a group tab
+/// opened for the first time) without a fetch of its own - the node's own id is simply looked up
+/// here synchronously. Neither purpose needs a live subscription to this signal from very many
+/// places, which is why it stays a plain cache rather than something every node component reads
+/// directly every render.
+static ACTIVE_SCENARIO_GAIN_MODELS: GlobalSignal<
+    std::collections::HashMap<Uuid, opossum_core::gain::GainModel>,
+> = Signal::global(std::collections::HashMap::new);
 /// Which view the sidebar shows, whether it is collapsed to its icon bar, and how wide it is when
 /// expanded.
 ///

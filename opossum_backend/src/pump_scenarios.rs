@@ -4,8 +4,11 @@
 //! [`Command::PatchPumpScenario`] for the parts that only ever replace the scenario wholesale
 //! (rename, set a node's gain model).
 use actix_web::{HttpRequest, HttpResponse, delete, get, post, put, web};
-use opossum_core::types::api_types::{
-    ErrorResponse, NewPumpScenario, PumpScenarioItemDto, SetScenarioGainModel,
+use opossum_core::{
+    core_optics::{NodeAttr, NodeAttrExt},
+    types::api_types::{
+        AmplifierDto, ErrorResponse, NewPumpScenario, PumpScenarioItemDto, SetScenarioGainModel,
+    },
 };
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
@@ -13,7 +16,9 @@ use uuid::Uuid;
 use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
-    helper_functions::{apply_and_push_undo, pump_scenario_mut_or_404, ron_or_json_response},
+    helper_functions::{
+        apply_and_push_undo, collect_nodes, pump_scenario_mut_or_404, ron_or_json_response,
+    },
     undo::{Command, PatchAnalyzerPumpScenarios, PatchPumpScenario},
 };
 
@@ -64,6 +69,66 @@ pub async fn get_pump_scenario(
         .cloned()
         .ok_or_else(BackEndErrorResponse::pump_scenario_not_found)?;
     ron_or_json_response(&req, &scenario)
+}
+
+/// Get every node the given pump scenario amplifies, with their names resolved
+///
+/// A [`PumpScenario`](opossum_core::gain::PumpScenario) only ever knows its amplifying nodes by
+/// uuid, so the scenario editor needs this rather than [`get_pump_scenario`] to display anything
+/// meaningful. Walks the whole document recursively (nested groups included), same as
+/// `/api/nodes/amplifiers` - just filtered by this one scenario's gain models instead of the
+/// legacy `amp config` property.
+#[utoipa::path(
+    tag = "pump_scenario",
+    params(("uuid" = Uuid, Path, description = "UUID of the pump scenario")),
+    responses(
+        (status = OK, description = "List of the nodes this scenario amplifies", body = Vec<AmplifierDto>),
+        (status = NOT_FOUND, body = ErrorResponse, description = "UUID not found", content_type = "application/json")
+    )
+)]
+#[get("/{uuid}/amplifiers")]
+// Same reasoning as `get_amplifiers`: the lock covers the whole read-only tree walk on purpose.
+#[allow(clippy::significant_drop_tightening)]
+pub async fn get_pump_scenario_amplifiers(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+) -> Result<HttpResponse, BackEndErrorResponse> {
+    let uuid = path.into_inner();
+    let document = data.document.lock();
+    let scenario = document
+        .pump_scenario(uuid)
+        .ok_or_else(BackEndErrorResponse::pump_scenario_not_found)?;
+    let scenery = document.scenery();
+
+    let amplifiers: Vec<AmplifierDto> = collect_nodes(scenery, &|node_attr: &NodeAttr| {
+        scenario
+            .gain_model(node_attr.uuid())
+            .active_name()
+            .map(|amp_model| {
+                (
+                    node_attr.name().to_string(),
+                    node_attr.node_type().to_string(),
+                    amp_model,
+                )
+            })
+    })
+    .into_iter()
+    .map(|node| {
+        let (name, node_type, amp_model) = node.value;
+        AmplifierDto {
+            uuid: node.uuid,
+            name,
+            node_type,
+            group_id: node.group_id,
+            group_name: scenery
+                .with_group_node(node.group_id, |group| group.name().to_string())
+                .unwrap_or_default(),
+            amp_model,
+        }
+    })
+    .collect();
+
+    Ok(HttpResponse::Ok().json(amplifiers))
 }
 
 /// Add a new, empty pump scenario to the model
@@ -219,6 +284,7 @@ pub async fn put_pump_scenario_gain_model(
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_pump_scenarios);
     cfg.service(get_pump_scenario);
+    cfg.service(get_pump_scenario_amplifiers);
     cfg.service(post_pump_scenario);
     cfg.service(delete_pump_scenario);
     cfg.service(put_pump_scenario_name);
@@ -250,6 +316,67 @@ mod test {
             )
             .await
         };
+    }
+
+    /// The list must resolve node names and report which group each amplifier sits in, and must
+    /// only list nodes this scenario actually amplifies - not merely every volume node, and not
+    /// nodes another scenario amplifies.
+    #[actix_web::test]
+    async fn amplifiers_lists_only_this_scenarios_amplifying_nodes_with_resolved_names() {
+        let app_state = Data::new(AppState::default());
+        let (lens_id, _passive_lens_id, other_scenario_lens_id) = {
+            let mut document = app_state.document.lock();
+            let lens_id = document.scenery_mut().add_node(Lens::default()).unwrap();
+            let passive_lens_id = document.scenery_mut().add_node(Lens::default()).unwrap();
+            let other_scenario_lens_id = document.scenery_mut().add_node(Lens::default()).unwrap();
+            (lens_id, passive_lens_id, other_scenario_lens_id)
+        };
+        let scenario_id = add_scenario(&app_state, "full power").await;
+        let other_scenario_id = add_scenario(&app_state, "half power").await;
+        {
+            let mut document = app_state.document.lock();
+            document
+                .pump_scenario_mut(scenario_id)
+                .unwrap()
+                .set_gain_model(lens_id, GainModel::Const(ConstGain::new(2.0).unwrap()));
+            document
+                .pump_scenario_mut(other_scenario_id)
+                .unwrap()
+                .set_gain_model(
+                    other_scenario_lens_id,
+                    GainModel::Const(ConstGain::new(3.0).unwrap()),
+                );
+        }
+        let app = test_app!(app_state);
+
+        let req = test::TestRequest::get()
+            .uri(&format!("/scenarios/{scenario_id}/amplifiers"))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let amplifiers: Vec<opossum_core::types::api_types::AmplifierDto> =
+            test::read_body_json(resp).await;
+
+        assert_eq!(
+            amplifiers.len(),
+            1,
+            "must list neither the passive lens nor the other scenario's amplifier: {amplifiers:?}"
+        );
+        assert_eq!(amplifiers[0].uuid, lens_id);
+        assert_eq!(amplifiers[0].name, "lens");
+        assert_eq!(amplifiers[0].node_type, "lens");
+        assert_eq!(amplifiers[0].amp_model, "Const");
+    }
+
+    #[actix_web::test]
+    async fn amplifiers_of_missing_scenario_is_404() {
+        let app_state = Data::new(AppState::default());
+        let app = test_app!(app_state);
+        let req = test::TestRequest::get()
+            .uri(&format!("/scenarios/{}/amplifiers", Uuid::new_v4()))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     }
 
     /// Adds a scenario with the given name to `data`'s document and returns its id.

@@ -51,10 +51,10 @@ pub fn OpticalNodeEditor(
             ));
             return;
         }
-        // The amplification model is the one property that is also drawn on the canvas. It takes
-        // the same workspace action the context menu sends, which patches the property *and*
-        // mirrors the canvas marker - so the mirroring lives in one place instead of the editor
-        // needing to know about the canvas.
+        // `amp config` is legacy (not reachable through any widget currently, and superseded by
+        // pump scenarios - see `opossum_core::gain`'s module doc) but still a real property, so
+        // editing it here still has to work as an ordinary property patch. It does *not* touch the
+        // canvas marker: that now mirrors the active pump scenario, not this property.
         if name == AMP_CONFIG
             && let Proptype::GainModel(model) = proptype
         {

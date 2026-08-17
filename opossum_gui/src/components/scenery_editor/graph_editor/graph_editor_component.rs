@@ -4,7 +4,7 @@
 #![allow(clippy::volatile_composites)]
 use crate::components::app::SIDEBAR_SWITCHER_WIDTH;
 use crate::components::{
-    node_editor::{AmpOverview, NodeConfigEditor},
+    node_editor::{NodeConfigEditor, PumpScenarioEditor},
     scenery_editor::{
         DragStatus, NodeEditorCommand, SelectedNode,
         graph_editor::{
@@ -157,8 +157,8 @@ pub fn GraphEditor(
                                     active_graph_id: active_tab,
                                 }
                             },
-                            SidebarView::AmpOverview => rsx! {
-                                AmpOverview {}
+                            SidebarView::PumpScenarios => rsx! {
+                                PumpScenarioEditor {}
                             },
                         }
                     }
@@ -260,15 +260,15 @@ const AMPLIFIER_ICON: Asset = asset!("/assets/amplifier_menu_icon.png");
 pub enum SidebarView {
     /// The existing selection-bound node/analyzer configuration.
     NodeProperties,
-    /// The document-wide list of amplifying nodes.
-    AmpOverview,
+    /// The document-wide editor for pump scenarios (operating points / amplifiers).
+    PumpScenarios,
 }
 impl SidebarView {
     /// Icon and tooltip of this view's button in the switcher bar.
     const fn icon_and_title(self) -> (Asset, &'static str) {
         match self {
             Self::NodeProperties => (NODE_CONFIG_ICON, "Node properties"),
-            Self::AmpOverview => (AMPLIFIER_ICON, "Amplifiers"),
+            Self::PumpScenarios => (AMPLIFIER_ICON, "Pump scenarios"),
         }
     }
 }
@@ -287,7 +287,7 @@ fn SidebarViewSwitcher() -> Element {
             // Width comes from Rust because the resize drag has to know the collapsed sidebar's
             // total width; see `COLLAPSED_SIDEBAR_WIDTH`.
             style: "width: {SIDEBAR_SWITCHER_WIDTH}px;",
-            for entry in [SidebarView::NodeProperties, SidebarView::AmpOverview] {
+            for entry in [SidebarView::NodeProperties, SidebarView::PumpScenarios] {
                 {
                     let (icon, title) = entry.icon_and_title();
                     let is_open = SIDEBAR_VIEW() == entry && !SIDEBAR_COLLAPSED();

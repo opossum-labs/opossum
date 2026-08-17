@@ -27,13 +27,13 @@ pub enum CxtCommand {
         mapped_node_id: Uuid,
         parent: (Uuid, String),
     },
-    /// Set the `amp config` property of a node with a volume, in either direction: an active model
-    /// turns it into an amplifier, [`GainModel::None`] turns it back into a passive component.
-    /// Only offered for node types with a volume, i.e. those
-    /// [`opossum_core::nodes::is_volume_node_type`] accepts.
-    SetAmpConfig {
+    /// Sets a node's gain model within the active pump scenario, in either direction - what the
+    /// context menu's "As amplifier"/"As passive optic" entry now sends. Only offered for volume
+    /// node types while a scenario is active (see [`crate::ACTIVE_PUMP_SCENARIO`]).
+    ToggleScenarioAmplifier {
         node_id: Uuid,
         graph_id: Uuid,
+        scenario_id: Uuid,
         model: GainModel,
     },
 }

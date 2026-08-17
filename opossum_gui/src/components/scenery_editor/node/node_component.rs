@@ -48,13 +48,18 @@ pub fn Node(
     let is_optical_node = node.is_optical_node();
     // Only components with a physical volume can amplify - they are the ones carrying the
     // `amp config` property. The canvas knows a node by its type name, so it asks the core rather
-    // than keeping a list of its own.
-    let supports_amp_config = matches!(
-        node.node_type(),
-        NodeType::Optical(node_type) if is_volume_node_type(node_type)
-    );
+    // than keeping a list of its own. Beyond that, toggling membership needs a scenario to toggle
+    // it *in* - with none active there is nowhere for the toggle to write, so the entry is simply
+    // not offered rather than writing to an implicit "current" scenario that doesn't exist.
+    let active_scenario = crate::ACTIVE_PUMP_SCENARIO();
+    let supports_amp_config = active_scenario.is_some()
+        && matches!(
+            node.node_type(),
+            NodeType::Optical(node_type) if is_volume_node_type(node_type)
+        );
     // The amp entry is a toggle, so it needs the node's current state. That state is already on the
-    // canvas, so a right-click costs no request.
+    // canvas (mirroring the active scenario, see `NodeElement::amp_model`), so a right-click costs
+    // no request.
     let is_amplifier = node.amp_model().is_some();
     let is_active = if active_node_ids.contains(&node.id()) {
         "active-node"
@@ -185,7 +190,9 @@ pub fn Node(
                                     },
                                 ));
                         }
-                        if supports_amp_config {
+                        if let Some(scenario_id) = active_scenario
+                            && supports_amp_config
+                        {
                             // Offer the way back, too: an accidentally amplifying node must be
                             // curable from the same menu it was made an amplifier in.
                             let (label, model) = if is_amplifier {
@@ -196,9 +203,10 @@ pub fn Node(
                             cx_menu
                                 .add_entry((
                                     label.to_owned(),
-                                    CxtCommand::SetAmpConfig {
+                                    CxtCommand::ToggleScenarioAmplifier {
                                         node_id,
                                         graph_id,
+                                        scenario_id,
                                         model,
                                     },
                                 ));

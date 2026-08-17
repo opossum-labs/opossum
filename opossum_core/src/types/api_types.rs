@@ -681,7 +681,7 @@ pub struct NewPumpScenario {
 }
 
 /// Data Transfer Object to send a pump scenario together with its id to the client.
-#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, ToSchema)]
 pub struct PumpScenarioItemDto {
     /// The unique identifier of the pump scenario.
     pub id: Uuid,

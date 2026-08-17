@@ -103,9 +103,10 @@ pub struct NodeElement {
     ports: Ports,
     inverted: bool,
     node_index: usize,
-    /// Name of the node's active amplification model, or `None` if it does not amplify. Mirrors
-    /// `NodeInfo::amp_model` - a display marker only; the parameters are fetched by the properties
-    /// panel for the selected node alone.
+    /// Name of the node's gain model in the *active pump scenario*, or `None` if it does not
+    /// amplify there. A display marker only - kept in sync by `set_amp_model`/`sync_amp_markers`
+    /// rather than fetched by this node itself; the parameters are edited through the scenario
+    /// editor, not here.
     amp_model: Option<String>,
 }
 
@@ -288,7 +289,7 @@ impl From<&NodeInfo> for NodeElement {
         let position = node_info
             .gui_position()
             .map_or(DEFAULT_NEW_NODE_POS, |(x, y)| Point2D::new(x, y));
-        let mut node = Self::new(
+        let node = Self::new(
             node_info.name().to_string(),
             NodeType::Optical(node_info.node_type().to_string()),
             node_info.uuid(),
@@ -297,7 +298,12 @@ impl From<&NodeInfo> for NodeElement {
             node_info.inverted(),
             0,
         );
-        node.set_amp_model(node_info.amp_model.clone());
+        // Not seeded from `node_info.amp_model` (the legacy `amp config` property marker,
+        // superseded by pump scenarios - see `crate::ACTIVE_SCENARIO_GAIN_MODELS`): this
+        // conversion has to stay usable outside a mounted app (it is unit-tested as plain
+        // conversion logic), so it cannot read a Dioxus global signal. Callers running inside the
+        // live app look the marker up themselves right after constructing the node - see
+        // `GraphStore::add_new_optical_node`/`add_new_reference_node`.
         node
     }
 }
@@ -335,15 +341,16 @@ mod test {
         }
     }
 
-    /// Regression test: pasting an amplifier used to produce a canvas node without its amplification
-    /// marker, because the paste path built its `NodeElement` field by field instead of going
-    /// through this conversion - so the then-new `amp_model` was simply not copied over.
+    /// `NodeInfo::amp_model` is the legacy `amp config` property marker; the canvas marker now
+    /// mirrors the *active pump scenario* instead (seeded separately by whichever live code
+    /// constructs the node - see `GraphStore::add_new_optical_node`), so this plain conversion
+    /// must leave it alone rather than carrying the property-based value over.
     #[test]
-    fn conversion_carries_the_amp_marker() {
+    fn conversion_ignores_the_legacy_amp_marker() {
         let node = NodeElement::from(&amplifying_node_info());
-        assert_eq!(node.amp_model(), Some("Const"));
-        // An amplifying node is taller than a passive one - the status line has to be accounted for.
-        assert!(node.total_height() > HEADER_HEIGHT + node.node_body_height());
+        assert_eq!(node.amp_model(), None);
+        // No amplifier marker means no status line, so the node must not be inflated by its height.
+        assert!(node.total_height() <= HEADER_HEIGHT + node.node_body_height());
     }
 
     /// The fallback position only applies when the backend has no position of its own to report.

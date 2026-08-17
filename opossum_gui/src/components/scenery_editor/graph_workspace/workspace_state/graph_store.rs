@@ -10,6 +10,7 @@ use dioxus::{
     prelude::*,
 };
 use opossum_core::{
+    gain::GainModel,
     prelude::{PortMap, PortType},
     types::api_types::{AnalyzerItemDto, ConnectInfo, NewAnalyzerInfo, NodeInfo},
     utils::to_f64,
@@ -17,6 +18,19 @@ use opossum_core::{
 use rust_sugiyama::{configure::Config, from_edges};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use uuid::Uuid;
+
+/// Looks up `node_id`'s gain model in the cached active pump scenario, for seeding a freshly
+/// constructed node's canvas marker (see [`crate::ACTIVE_SCENARIO_GAIN_MODELS`]).
+///
+/// A plain, unsubscribed read of the global signal - fine here because the caller is a one-shot
+/// node-construction path running inside the live app (not the plain-conversion `From<&NodeInfo>`,
+/// which stays testable outside a mounted app precisely by not doing this itself).
+fn active_scenario_amp_model(node_id: Uuid) -> Option<String> {
+    crate::ACTIVE_SCENARIO_GAIN_MODELS
+        .read()
+        .get(&node_id)
+        .and_then(opossum_core::gain::GainModel::active_name)
+}
 
 #[derive(Clone, PartialEq, Store, Default)]
 pub struct GraphState {
@@ -204,6 +218,20 @@ impl<Lens> Store<GraphStore, Lens> {
             node.write().set_amp_model(amp_model);
         }
     }
+    /// Sets every one of this tab's nodes' canvas amplifier marker from `gain_models`, in one pass.
+    ///
+    /// Used to bring a whole tab's markers in line with the active pump scenario at once - after
+    /// switching which scenario is active, or after an undo/redo changed the active one's contents -
+    /// rather than one request per node.
+    fn sync_amp_markers(&mut self, gain_models: &HashMap<Uuid, GainModel>) {
+        let node_ids: Vec<Uuid> = self.nodes().read().keys().copied().collect();
+        for node_id in node_ids {
+            if let Some(mut node) = self.nodes().get(node_id) {
+                let amp_model = gain_models.get(&node_id).and_then(GainModel::active_name);
+                node.write().set_amp_model(amp_model);
+            }
+        }
+    }
     fn renumber_z_levels(&mut self) {
         let mut node_elements: Vec<(Uuid, usize)> = self
             .nodes()
@@ -238,6 +266,7 @@ impl<Lens> Store<GraphStore, Lens> {
     /// A `NodeElement` representing the newly added reference node.
     fn add_new_reference_node(&mut self, ref_node_info: &NodeInfo) -> NodeElement {
         let mut node_element = NodeElement::from(ref_node_info);
+        node_element.set_amp_model(active_scenario_amp_model(ref_node_info.uuid()));
         node_element.set_node_index(self.fetch_next_node_index());
         let id = ref_node_info.uuid();
         let nr_of_nodes = self.nodes().len();
@@ -268,6 +297,7 @@ impl<Lens> Store<GraphStore, Lens> {
     /// * `node_info`: The `NodeInfo` containing the type and position of the new node.
     fn add_new_optical_node(&mut self, node_info: &NodeInfo) {
         let mut node_element = NodeElement::from(node_info);
+        node_element.set_amp_model(active_scenario_amp_model(node_info.uuid()));
         node_element.set_node_index(self.fetch_next_node_index());
         self.nodes().insert(node_info.uuid(), node_element.clone());
         self.set_node_active(node_info.uuid(), node_element.z_index(), true);

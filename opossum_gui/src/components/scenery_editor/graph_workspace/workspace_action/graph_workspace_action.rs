@@ -341,12 +341,37 @@ pub enum GraphsWorkspaceAction {
 
     /// Sets a volume node's `amp config` property, turning it into an amplifier or back into a
     /// passive component. An ordinary property patch - the node type does not change.
+    ///
+    /// Legacy path: kept for the properties panel's direct `amp config` edit (currently not
+    /// reachable through any widget), superseded for everything user-facing by
+    /// [`Self::SetScenarioGainModel`]. Does **not** touch the canvas marker (that now reflects the
+    /// active pump scenario, not this property).
     SetAmpConfig {
         /// The ID of the node whose amplification model is being set.
         node_id: Uuid,
         /// The ID of the graph containing the node.
         graph_id: Uuid,
         /// The model to set. `GainModel::None` makes the node passive again.
+        model: GainModel,
+    },
+
+    /// Sets which pump scenario the canvas and the context menu currently reflect - a GUI-only
+    /// choice (see [`crate::ACTIVE_PUMP_SCENARIO`]), not a document edit. Refetches and bulk-syncs
+    /// every open tab's amplifier markers to match.
+    SetActivePumpScenario(Option<Uuid>),
+
+    /// Sets the gain model a node runs with within one pump scenario - what the context menu's
+    /// amplifier toggle sends. Unlike [`Self::SetAmpConfig`] this does not touch any node property;
+    /// it patches the scenario, and mirrors the canvas marker only if `scenario_id` is the active
+    /// scenario.
+    SetScenarioGainModel {
+        /// The scenario being edited.
+        scenario_id: Uuid,
+        /// The node whose gain model in that scenario is being set.
+        node_id: Uuid,
+        /// The graph containing the node, needed to update its canvas marker.
+        graph_id: Uuid,
+        /// The model to set. `GainModel::None` takes the node out of the scenario again.
         model: GainModel,
     },
 

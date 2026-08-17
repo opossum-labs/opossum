@@ -38,11 +38,12 @@ pub enum NodeEditorCommand {
         group_port_name: String,
         port_type: PortType,
     },
-    /// Set a volume node's amplification model, in either direction (see
-    /// [`crate::components::context_menu::cx_menu::CxtCommand::SetAmpConfig`]).
-    SetAmpConfig {
+    /// Set a node's gain model within the active pump scenario, in either direction (see
+    /// [`crate::components::context_menu::cx_menu::CxtCommand::ToggleScenarioAmplifier`]).
+    ToggleScenarioAmplifier {
         node_id: Uuid,
         graph_id: Uuid,
+        scenario_id: Uuid,
         model: GainModel,
     },
     Undo,
@@ -190,12 +191,14 @@ pub fn node_editor_command(
                     port_type,
                 });
             }
-            NodeEditorCommand::SetAmpConfig {
+            NodeEditorCommand::ToggleScenarioAmplifier {
                 node_id,
                 graph_id,
+                scenario_id,
                 model,
             } => {
-                workspace_processor.send(GraphsWorkspaceAction::SetAmpConfig {
+                workspace_processor.send(GraphsWorkspaceAction::SetScenarioGainModel {
+                    scenario_id,
                     node_id,
                     graph_id,
                     model,
