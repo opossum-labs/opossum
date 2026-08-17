@@ -375,6 +375,20 @@ pub enum GraphsWorkspaceAction {
         model: GainModel,
     },
 
+    /// Marks or unmarks a node as an amplifier candidate - what the context menu's "As
+    /// amplifier"/"As passive optic" entry sends. A hardware fact, independent of any pump
+    /// scenario: unlike [`Self::SetScenarioGainModel`] this does not touch any scenario, and
+    /// unlike [`Self::SetAmpConfig`] it is not a node property either - it patches the
+    /// document-wide candidate set.
+    SetAmplifierCandidate {
+        /// The node being marked or unmarked.
+        node_id: Uuid,
+        /// The graph containing the node, needed to update its canvas marker.
+        graph_id: Uuid,
+        /// Whether the node is an amplifier candidate from now on.
+        is_amplifier: bool,
+    },
+
     /// Brings a node into view: makes its graph the active tab (opening it first if needed) and
     /// selects it. Used by the amplifier overview to take the user to a listed node, which may sit
     /// in a group whose tab isn't even open.

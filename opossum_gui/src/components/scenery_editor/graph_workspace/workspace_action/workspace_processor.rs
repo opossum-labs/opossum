@@ -471,6 +471,19 @@ pub fn use_workspace_processor(
                         )
                         .await;
                     }
+                    GraphsWorkspaceAction::SetAmplifierCandidate {
+                        node_id,
+                        graph_id,
+                        is_amplifier,
+                    } => {
+                        process_set_amplifier_candidate(
+                            node_id,
+                            graph_id,
+                            is_amplifier,
+                            workspace_handlers,
+                        )
+                        .await;
+                    }
                     GraphsWorkspaceAction::RevealNode { node_id, graph_id } => {
                         ensure_tab_active(graph_id, workspace_handlers, root_graph_id, workspace)
                             .await;
@@ -583,6 +596,7 @@ const fn is_document_edit_action(action: &GraphsWorkspaceAction) -> bool {
             | GraphsWorkspaceAction::SyncNodePositions { .. }
             | GraphsWorkspaceAction::SetAmpConfig { .. }
             | GraphsWorkspaceAction::SetScenarioGainModel { .. }
+            | GraphsWorkspaceAction::SetAmplifierCandidate { .. }
     )
 }
 
@@ -660,6 +674,47 @@ async fn process_set_scenario_gain_model(
                     .nodes
                     .set_amp_model(node_id, model.active_name(), graph_id);
             }
+        }),
+    );
+}
+
+/// Marks or unmarks a node as an amplifier candidate - what the context menu's "As amplifier"/"As
+/// passive optic" entry now sends. Independent of any pump scenario, unlike
+/// [`process_set_scenario_gain_model`].
+///
+/// # Arguments
+///
+/// * `node_id` - the node being marked or unmarked.
+/// * `graph_id` - the graph the node lives in, needed to update its canvas marker.
+/// * `is_amplifier` - whether the node is an amplifier candidate from now on.
+/// * `ws_handler` - workspace signal handlers, used to mark the document as unsaved and mirror the
+///   canvas marker.
+async fn process_set_amplifier_candidate(
+    node_id: Uuid,
+    graph_id: Uuid,
+    is_amplifier: bool,
+    ws_handler: WorkSpaceSignalHandlers,
+) {
+    eval_action_run(
+        api::put_node_is_amplifier(node_id, is_amplifier).await,
+        Some(move |()| {
+            ws_handler.workspace.set_needs_saving(true);
+            if is_amplifier {
+                crate::AMPLIFIER_CANDIDATES.write().insert(node_id);
+            } else {
+                crate::AMPLIFIER_CANDIDATES.write().remove(&node_id);
+            }
+            // The value just written is known here, so the canvas marker needs no refetch - unlike
+            // an undo/redo of a candidacy change, which cannot know what changed
+            // (`refresh_amplifier_candidates` handles that case instead).
+            ws_handler
+                .nodes
+                .set_amplifier_candidate(node_id, is_amplifier, graph_id);
+            // Unmarking a candidate configured in some scenario silently drops it from that
+            // scenario's row list on the backend - the editor has to re-fetch to notice, the same
+            // reasoning `process_set_scenario_gain_model` doesn't need since it never changes the
+            // candidate set itself.
+            *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
         }),
     );
 }

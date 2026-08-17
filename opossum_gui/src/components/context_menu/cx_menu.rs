@@ -1,7 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use crate::{CONTEXT_MENU, components::context_menu::sub_menu_item::MenuItem};
 use dioxus::prelude::*;
-use opossum_core::{gain::GainModel, prelude::PortType, types::api_types::NewRefNode};
+use opossum_core::{prelude::PortType, types::api_types::NewRefNode};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -27,14 +27,13 @@ pub enum CxtCommand {
         mapped_node_id: Uuid,
         parent: (Uuid, String),
     },
-    /// Sets a node's gain model within the active pump scenario, in either direction - what the
-    /// context menu's "As amplifier"/"As passive optic" entry now sends. Only offered for volume
-    /// node types while a scenario is active (see [`crate::ACTIVE_PUMP_SCENARIO`]).
-    ToggleScenarioAmplifier {
+    /// Marks or unmarks a node as an amplifier candidate - what the context menu's "As
+    /// amplifier"/"As passive optic" entry sends. A hardware fact, independent of any pump
+    /// scenario: offered for every volume node type regardless of whether one is active.
+    ToggleAmplifierCandidate {
         node_id: Uuid,
         graph_id: Uuid,
-        scenario_id: Uuid,
-        model: GainModel,
+        is_amplifier: bool,
     },
 }
 

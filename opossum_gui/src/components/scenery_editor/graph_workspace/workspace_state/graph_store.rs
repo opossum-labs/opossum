@@ -227,6 +227,11 @@ impl<Lens> Store<GraphStore, Lens> {
             node.write().set_amp_model(amp_model);
         }
     }
+    fn set_amplifier_candidate_of_node(&mut self, node_id: Uuid, is_amplifier: bool) {
+        if let Some(mut node) = self.nodes().get(node_id) {
+            node.write().set_amplifier_candidate(is_amplifier);
+        }
+    }
     /// Sets every one of this tab's nodes' canvas amplifier marker from `gain_models`, in one pass.
     ///
     /// Used to bring a whole tab's markers in line with the active pump scenario at once - after

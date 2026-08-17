@@ -23,6 +23,7 @@ pub struct NodeHandlers {
     invert_node: EventHandler<(Uuid, bool, Uuid)>,
     set_amp_model: EventHandler<(Uuid, Option<String>, Uuid)>,
     sync_amp_markers: EventHandler<HashMap<Uuid, GainModel>>,
+    set_amplifier_candidate: EventHandler<(Uuid, bool, Uuid)>,
     sync_amplifier_candidates: EventHandler<HashSet<Uuid>>,
     set_node_name: EventHandler<(String, Uuid, Uuid, bool)>,
     add_group_nodes: EventHandler<(Uuid, Vec<NodeInfo>)>,
@@ -48,6 +49,7 @@ impl NodeHandlers {
             invert_node: invert_node_handler(workspace),
             set_amp_model: set_amp_model_handler(workspace),
             sync_amp_markers: sync_amp_markers_handler(workspace),
+            set_amplifier_candidate: set_amplifier_candidate_handler(workspace),
             sync_amplifier_candidates: sync_amplifier_candidates_handler(workspace),
             set_node_name: set_node_name_handler(workspace),
             add_group_nodes: add_group_nodes_handler(workspace),
@@ -149,6 +151,12 @@ impl NodeHandlers {
     /// touched its contents, rather than one request per node.
     pub fn sync_amp_markers(&self, gain_models: HashMap<Uuid, GainModel>) {
         self.sync_amp_markers.call(gain_models);
+    }
+
+    /// Updates the amplifier-candidate flag the canvas shows for a node.
+    pub fn set_amplifier_candidate(&self, node_id: Uuid, is_amplifier: bool, graph_id: Uuid) {
+        self.set_amplifier_candidate
+            .call((node_id, is_amplifier, graph_id));
     }
 
     /// Brings every currently rendered node's amplifier-candidate flag (across every open tab) in
@@ -336,6 +344,19 @@ fn sync_amp_markers_handler(
             tab.graph_store().sync_amp_markers(&gain_models);
         });
     })
+}
+/// Mirrors a node's amplifier candidacy into the canvas. Not marked dirty here: the PUT that caused
+/// it already marks the document unsaved (same reasoning as `set_amp_model_handler`).
+fn set_amplifier_candidate_handler(
+    workspace: Store<GraphsWorkspaceState>,
+) -> EventHandler<(Uuid, bool, Uuid)> {
+    EventHandler::new(
+        move |(node_id, is_amplifier, graph_id): (Uuid, bool, Uuid)| {
+            with_graph_store(workspace, graph_id, false, |store| {
+                store.set_amplifier_candidate_of_node(node_id, is_amplifier);
+            });
+        },
+    )
 }
 /// Bulk-mirrors the amplifier-candidate set into every currently open tab's canvas, via
 /// [`GraphStore::sync_amplifier_candidates`](super::super::workspace_state::GraphStore).

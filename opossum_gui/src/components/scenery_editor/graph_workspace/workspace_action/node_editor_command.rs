@@ -1,7 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 
 use dioxus::prelude::*;
-use opossum_core::{gain::GainModel, prelude::*, types::api_types::NewRefNode};
+use opossum_core::{prelude::*, types::api_types::NewRefNode};
 use std::path::PathBuf;
 use uuid::Uuid;
 
@@ -38,13 +38,12 @@ pub enum NodeEditorCommand {
         group_port_name: String,
         port_type: PortType,
     },
-    /// Set a node's gain model within the active pump scenario, in either direction (see
-    /// [`crate::components::context_menu::cx_menu::CxtCommand::ToggleScenarioAmplifier`]).
-    ToggleScenarioAmplifier {
+    /// Mark or unmark a node as an amplifier candidate (see
+    /// [`crate::components::context_menu::cx_menu::CxtCommand::ToggleAmplifierCandidate`]).
+    ToggleAmplifierCandidate {
         node_id: Uuid,
         graph_id: Uuid,
-        scenario_id: Uuid,
-        model: GainModel,
+        is_amplifier: bool,
     },
     Undo,
     Redo,
@@ -191,17 +190,15 @@ pub fn node_editor_command(
                     port_type,
                 });
             }
-            NodeEditorCommand::ToggleScenarioAmplifier {
+            NodeEditorCommand::ToggleAmplifierCandidate {
                 node_id,
                 graph_id,
-                scenario_id,
-                model,
+                is_amplifier,
             } => {
-                workspace_processor.send(GraphsWorkspaceAction::SetScenarioGainModel {
-                    scenario_id,
+                workspace_processor.send(GraphsWorkspaceAction::SetAmplifierCandidate {
                     node_id,
                     graph_id,
-                    model,
+                    is_amplifier,
                 });
             }
             NodeEditorCommand::JumpToMappedPort {
