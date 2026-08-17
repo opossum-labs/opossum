@@ -19,13 +19,12 @@ use crate::components::{
             properties_editor::PropertiesEditor,
         },
     },
-    scenery_editor::{GraphsWorkspaceAction, SelectedNode},
+    scenery_editor::SelectedNode,
 };
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use opossum_core::{
-    gain::AMP_CONFIG,
-    prelude::{Properties, Proptype},
+    prelude::Properties,
     types::api_types::{NodeEditorPanel, NodeInfo},
 };
 
@@ -35,12 +34,10 @@ pub fn OpticalNodeEditor(
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
     let node_id = use_memo(move || active_node.read().node_id);
-    let graph_id = use_memo(move || active_node.read().graph_id);
     let mut node_info_sig = use_signal(NodeInfo::default);
     let mut node_properties_sig = use_signal(Properties::default);
     let mut readonly = use_signal(|| false);
 
-    let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let on_property_change = EventHandler::new(move |node_change: NodeChangeEvent| {
         let NodeChangeAction::Property(name, proptype) = node_change.action.clone() else {
             return;
@@ -49,20 +46,6 @@ pub fn OpticalNodeEditor(
             OPOSSUM_UI_LOGS.write().add_log(&format!(
                 "Error setting new property value of proptype '{name}': {e}"
             ));
-            return;
-        }
-        // `amp config` is legacy (not reachable through any widget currently, and superseded by
-        // pump scenarios - see `opossum_core::gain`'s module doc) but still a real property, so
-        // editing it here still has to work as an ordinary property patch. It does *not* touch the
-        // canvas marker: that now mirrors the active pump scenario, not this property.
-        if name == AMP_CONFIG
-            && let Proptype::GainModel(model) = proptype
-        {
-            workspace_processor.send(GraphsWorkspaceAction::SetAmpConfig {
-                node_id: *node_id.read(),
-                graph_id: *graph_id.read(),
-                model,
-            });
             return;
         }
         on_change.call(node_change);

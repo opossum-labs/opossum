@@ -17,11 +17,11 @@ const DEFINED_BY_REFRACTIVE_INDEX: &str = "Manual (refractive index)";
 /// Editor for a node's `material` property: a selector for *how* the material is defined plus the
 /// editor belonging to the chosen way.
 ///
-/// The dropdown-plus-parameters composition is the one `RefractiveIndexEditor` and
-/// `GainModelEditor` use. It is worth having here even while there is a single way to choose: the
-/// selector is the place a named substance from the material registry appears once the GUI can
-/// reach it, so the panel does not have to be restructured for that - a second entry simply shows
-/// up in the list and brings its own editor.
+/// The dropdown-plus-parameters composition is the one `RefractiveIndexEditor` uses. It is worth
+/// having here even while there is a single way to choose: the selector is the place a named
+/// substance from the material registry appears once the GUI can reach it, so the panel does not
+/// have to be restructured for that - a second entry simply shows up in the list and brings its own
+/// editor.
 ///
 /// # Arguments
 ///

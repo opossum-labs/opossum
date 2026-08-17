@@ -1,7 +1,7 @@
 //! Endpoints for the document-wide amplifier-candidate set (`OpmDocument::amplifier_nodes`) - the
 //! hardware-side half of the Hardware/Betriebspunkt split (see `opossum_core::gain::scenario`).
-//! Separate from the doomed property-based `nodes/amplifiers.rs`: candidacy here does not depend on
-//! any [`PumpScenario`], unlike that endpoint's legacy `amp config` property.
+//! Candidacy here does not depend on any [`PumpScenario`]; a node's actual gain model in one
+//! operating point is configured separately, per scenario, in `crate::pump_scenarios`.
 use std::collections::HashSet;
 
 use actix_web::{HttpResponse, get, put, web};

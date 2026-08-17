@@ -339,22 +339,6 @@ pub enum GraphsWorkspaceAction {
         to_graph_id: Uuid,
     },
 
-    /// Sets a volume node's `amp config` property, turning it into an amplifier or back into a
-    /// passive component. An ordinary property patch - the node type does not change.
-    ///
-    /// Legacy path: kept for the properties panel's direct `amp config` edit (currently not
-    /// reachable through any widget), superseded for everything user-facing by
-    /// [`Self::SetScenarioGainModel`]. Does **not** touch the canvas marker (that now reflects the
-    /// active pump scenario, not this property).
-    SetAmpConfig {
-        /// The ID of the node whose amplification model is being set.
-        node_id: Uuid,
-        /// The ID of the graph containing the node.
-        graph_id: Uuid,
-        /// The model to set. `GainModel::None` makes the node passive again.
-        model: GainModel,
-    },
-
     /// Sets which pump scenario the canvas and the context menu currently reflect - a GUI-only
     /// choice (see [`crate::ACTIVE_PUMP_SCENARIO`]), not a document edit. Refetches and bulk-syncs
     /// every open tab's amplifier markers to match.
@@ -369,9 +353,8 @@ pub enum GraphsWorkspaceAction {
     EnsureActivePumpScenario,
 
     /// Sets the gain model a node runs with within one pump scenario - what the context menu's
-    /// amplifier toggle sends. Unlike [`Self::SetAmpConfig`] this does not touch any node property;
-    /// it patches the scenario, and mirrors the canvas marker only if `scenario_id` is the active
-    /// scenario.
+    /// amplifier toggle sends. Patches the scenario (not any node property), and mirrors the canvas
+    /// marker only if `scenario_id` is the active scenario.
     SetScenarioGainModel {
         /// The scenario being edited.
         scenario_id: Uuid,
@@ -385,9 +368,8 @@ pub enum GraphsWorkspaceAction {
 
     /// Marks or unmarks a node as an amplifier candidate - what the context menu's "As
     /// amplifier"/"As passive optic" entry sends. A hardware fact, independent of any pump
-    /// scenario: unlike [`Self::SetScenarioGainModel`] this does not touch any scenario, and
-    /// unlike [`Self::SetAmpConfig`] it is not a node property either - it patches the
-    /// document-wide candidate set.
+    /// scenario: unlike [`Self::SetScenarioGainModel`] this does not touch any scenario or any
+    /// node property - it patches the document-wide candidate set.
     SetAmplifierCandidate {
         /// The node being marked or unmarked.
         node_id: Uuid,

@@ -72,20 +72,18 @@ use crate::{
     analyzers::Analyzable,
     core_optics::{NodeAttr, OpticRef},
     error::{OpmResult, OpossumError},
-    gain::{AMP_CONFIG, GainModel},
     geometry::body::{CLEAR_APERTURE, default_clear_aperture},
     properties::validator::Validator,
     utils::LockExt,
 };
 use std::{collections::HashSet, sync::LazyLock};
 
-/// Declare the properties every node with a physical volume carries.
+/// Declare the property every node with a physical volume carries: how far its medium extends
+/// transversally ([`CLEAR_APERTURE`]).
 ///
-/// These are the properties that follow from a component enclosing a medium rather than from its
-/// particular shape: how far that medium extends ([`CLEAR_APERTURE`]) and whether it amplifies
-/// ([`AMP_CONFIG`]). Declaring them from one place keeps them from drifting apart, and the node
-/// types that call this are exactly those implementing
-/// [`Volumetric`](crate::core_optics::Volumetric) — which is what the test in that module checks.
+/// Declaring it from one place keeps the node types that call this in sync with each other, and
+/// they are exactly those implementing [`Volumetric`](crate::core_optics::Volumetric) — which is
+/// what the test in that module checks.
 ///
 /// # Arguments
 ///
@@ -93,18 +91,13 @@ use std::{collections::HashSet, sync::LazyLock};
 ///
 /// # Errors
 ///
-/// This function returns an error if one of the properties is already declared.
+/// This function returns an error if the property is already declared.
 pub fn create_volume_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
     node_attr.create_property_with_validator(
         CLEAR_APERTURE,
         "transversal extent of the medium",
         Validator::ApertureDelimitsRegion,
         default_clear_aperture().into(),
-    )?;
-    node_attr.create_property(
-        AMP_CONFIG,
-        "amplification model of this component (None = passive)",
-        GainModel::default().into(),
     )
 }
 

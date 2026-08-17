@@ -12,8 +12,8 @@ use dioxus::{
 };
 use futures_util::StreamExt;
 use opossum_core::{
-    gain::{AMP_CONFIG, GainModel},
-    prelude::{AnalyzerType, PortType, Proptype},
+    gain::GainModel,
+    prelude::{AnalyzerType, PortType},
     types::api_types::{
         AnalyzerItemDto, ConnectInfo, CutNodesResponse, DeleteNodeResponse, DocumentChange,
         JumpTarget, NewAnalyzerInfo, NewNode, NewRefNode, NodeInfo, NodePortsResponse,
@@ -449,13 +449,6 @@ pub fn use_workspace_processor(
                         )
                         .await;
                     }
-                    GraphsWorkspaceAction::SetAmpConfig {
-                        node_id,
-                        graph_id,
-                        model,
-                    } => {
-                        process_set_amp_config(node_id, graph_id, model, workspace_handlers).await;
-                    }
                     GraphsWorkspaceAction::SetActivePumpScenario(scenario_id) => {
                         *crate::ACTIVE_PUMP_SCENARIO.write() = scenario_id;
                         refresh_active_scenario_gain_models(workspace_handlers).await;
@@ -601,46 +594,9 @@ const fn is_document_edit_action(action: &GraphsWorkspaceAction) -> bool {
             | GraphsWorkspaceAction::MapNodePort { .. }
             | GraphsWorkspaceAction::RemovePortMap { .. }
             | GraphsWorkspaceAction::SyncNodePositions { .. }
-            | GraphsWorkspaceAction::SetAmpConfig { .. }
             | GraphsWorkspaceAction::SetScenarioGainModel { .. }
             | GraphsWorkspaceAction::SetAmplifierCandidate { .. }
     )
-}
-
-/// Sets a volume node's `amp config` property, in either direction: an active model turns the node
-/// into an amplifier, `GainModel::None` turns it back into a passive component.
-///
-/// This goes through the same generic property endpoint the properties panel uses, so it is a plain
-/// property edit - undoable, and without touching the node's type or its connections.
-///
-/// Legacy path, currently reachable only from the properties panel's own direct `amp config` edit
-/// (see [`GraphsWorkspaceAction::SetAmpConfig`]'s doc comment) - unlike that path's previous
-/// behaviour, this no longer mirrors a canvas marker: the canvas now shows the *active pump
-/// scenario*'s status (see [`process_set_scenario_gain_model`]), which a property patch on one node
-/// does not change.
-///
-/// # Arguments
-///
-/// * `node_id` - the node whose amplification model is being set.
-/// * `graph_id` - the graph the node lives in.
-/// * `model` - the model to set.
-/// * `ws_handler` - workspace signal handlers, used to mark the document as unsaved.
-async fn process_set_amp_config(
-    node_id: Uuid,
-    _graph_id: Uuid,
-    model: GainModel,
-    ws_handler: WorkSpaceSignalHandlers,
-) {
-    let amp_config = (AMP_CONFIG.to_owned(), Proptype::GainModel(model));
-    eval_action_run(
-        api::update_node_property(node_id, amp_config).await,
-        Some(move |()| {
-            ws_handler.workspace.set_needs_saving(true);
-            // The properties panel keeps its own fetched copy of the node's properties; without
-            // this bump it would still show the old `amp config` for an already selected node.
-            *NODE_DETAILS_REFRESH.write() += 1;
-        }),
-    );
 }
 
 /// Sets the gain model a node runs with within one pump scenario - what the context menu's

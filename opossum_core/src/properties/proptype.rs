@@ -7,7 +7,6 @@ use crate::{
     apertures::ApertureShape,
     core_optics::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
     error::{OpmResult, OpossumError},
-    gain::GainModel,
     light::{
         Spectrum,
         lightdata::{
@@ -145,8 +144,6 @@ pub enum Proptype {
     LightDataBuilder(LightDataBuilder),
     /// An optical material property
     Material(AssetRef<Material>),
-    /// the amplification model of a node with a volume, see [`GainModel`]
-    GainModel(GainModel),
 }
 impl Proptype {
     /// Generate a html representation of a Proptype.
@@ -173,7 +170,6 @@ impl Proptype {
                     template_engine.render("simple", &value.to_string())
                 }
                 Self::Metertype(value) => template_engine.render("simple", &value.to_string()),
-                Self::GainModel(value) => template_engine.render("simple", &value.to_string()),
                 Self::Spectrum(_)
                 | Self::HitMap(_)
                 | Self::RayPositionHistory(_)
@@ -290,11 +286,6 @@ impl From<FluenceEstimator> for Proptype {
         Self::FluenceEstimator(val)
     }
 }
-impl From<GainModel> for Proptype {
-    fn from(val: GainModel) -> Self {
-        Self::GainModel(val)
-    }
-}
 impl From<Vector2<f64>> for Proptype {
     fn from(value: Vector2<f64>) -> Self {
         Self::Vec2(value)
@@ -389,7 +380,7 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{J_per_m2, gain::ConstGain, joule, meter, nanometer, properties::Properties};
+    use crate::{J_per_m2, joule, meter, nanometer, properties::Properties};
     use assert_matches::assert_matches;
     use uom::si::length::nanometer;
     #[test]
@@ -464,18 +455,6 @@ mod test {
                 0
             )?,
             "Ocean Optics HR2000".to_string()
-        );
-        assert_eq!(
-            Proptype::GainModel(GainModel::None).to_html("id", "property_name", 0)?,
-            "None".to_string()
-        );
-        assert_eq!(
-            Proptype::GainModel(GainModel::Const(ConstGain::default())).to_html(
-                "id",
-                "property_name",
-                0
-            )?,
-            "Const".to_string()
         );
         // An embedded material is named by its header, a referenced one only by its id.
         assert_eq!(

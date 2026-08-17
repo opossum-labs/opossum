@@ -107,11 +107,10 @@ pub async fn patch_property(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::document::{redo_document, undo_document};
+    use crate::document::undo_document;
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
     use opossum_core::{
         core_optics::node_attr::HasNodeAttr,
-        gain::{ConstGain, GainModel, active_amp_model},
         material::{MATERIAL, Material},
         nodes::{Dummy, Lens},
         properties::proptype::AssetRef,
@@ -176,69 +175,6 @@ mod test {
             body.jump.expect("an undo must carry a jump target").panel,
             Some(NodeEditorPanel::Properties),
             "a property patch must jump to the Properties panel"
-        );
-    }
-
-    /// Regression test: turning a component into an amplifier must be revertible.
-    ///
-    /// The whole point of carrying amplification as a property (rather than as a node type) is that
-    /// the existing property undo covers it. This pins that down for the `amp config` property in
-    /// particular: undo makes the node passive again, redo makes it an amplifier again.
-    #[actix_web::test]
-    async fn test_amp_config_patch_is_undoable() {
-        let app_state = create_test_state();
-        let node_id = {
-            let mut document = app_state.document.lock();
-            document.scenery_mut().add_node(Lens::default()).unwrap()
-        };
-        let amp_model_of_node = || {
-            app_state
-                .document
-                .lock()
-                .scenery()
-                .with_node_attr(node_id, active_amp_model)
-                .unwrap()
-        };
-        assert_eq!(amp_model_of_node(), None, "a fresh lens must be passive");
-
-        let app = test::init_service(
-            App::new()
-                .app_data(app_state.clone())
-                .service(patch_property)
-                .service(undo_document)
-                .service(redo_document),
-        )
-        .await;
-
-        let payload =
-            ron::to_string(&Proptype::GainModel(GainModel::Const(ConstGain::default()))).unwrap();
-        // The property name contains a space, which a URI must carry percent-encoded - the GUI's
-        // HTTP client does this encoding itself.
-        let req = test::TestRequest::patch()
-            .uri(&format!("/{node_id}/properties/amp%20config"))
-            .set_payload(payload)
-            .insert_header(("Content-Type", "application/ron"))
-            .to_request();
-        assert_eq!(
-            app.call(req).await.unwrap().status(),
-            StatusCode::NO_CONTENT
-        );
-        assert_eq!(amp_model_of_node().as_deref(), Some("Const"));
-
-        let req = test::TestRequest::post().uri("/undo").to_request();
-        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
-        assert_eq!(
-            amp_model_of_node(),
-            None,
-            "undo must turn the amplifier back into a passive component"
-        );
-
-        let req = test::TestRequest::post().uri("/redo").to_request();
-        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
-        assert_eq!(
-            amp_model_of_node().as_deref(),
-            Some("Const"),
-            "redo must restore the amplifier"
         );
     }
 

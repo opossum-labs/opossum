@@ -1,32 +1,22 @@
 #![warn(missing_docs)]
 //! Amplification models for active (gain) media.
 //!
-//! Amplification is not modelled as a dedicated node type. Instead, every node that has a physical
-//! volume (a lens, a wedge, a cylindric lens, ...) carries an `amp config` property holding a
-//! [`GainModel`]. A node whose model is [`GainModel::None`] behaves exactly like the passive
-//! component it is — which is why the property can be declared unconditionally without changing
-//! any existing simulation result.
+//! Amplification is not modelled as a dedicated node type. Instead, a document-wide
+//! [`PumpScenario`] maps the uuid of any node with a physical volume (a lens, a wedge, a cylindric
+//! lens, ...) to a [`GainModel`] — see
+//! [`PropagationStrategy::gain_model`](crate::analyzers::propagation_strategy::PropagationStrategy::gain_model).
+//! A node the active scenario does not name, or one mapped to [`GainModel::None`], behaves exactly
+//! like the passive component it is.
 //!
-//! Turning an existing component into an amplifier is therefore an ordinary property change, and
-//! each escalation stage of the gain modelling adds one further [`GainModel`] variant rather than
-//! a parallel set of node types.
-//!
-//! # Note on the current state
-//!
-//! This `amp config` property is the legacy carrier and is not yet evaluated: amplification is
-//! computed from a [`PumpScenario`] instead (see
-//! [`PropagationStrategy::gain_model`](crate::analyzers::propagation_strategy::PropagationStrategy::gain_model)),
-//! which is a document-wide operating point rather than a per-node property. The property is kept
-//! around until the scenario-based path fully replaces it.
+//! Each escalation stage of the gain modelling adds one further [`GainModel`] variant rather than a
+//! parallel set of node types.
 
 pub mod scenario;
 pub use scenario::{ActiveScenario, PumpScenario};
 
 use crate::{
-    core_optics::NodeAttr,
     error::OpmResult,
     generic_validators::{AllFinite, AllPositive, ValidateTrait},
-    properties::Proptype,
     utils::default_from_name::DefaultFromName,
     validated, validated_type,
 };
@@ -35,36 +25,6 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum::EnumIter;
 use utoipa::ToSchema;
-
-/// Name of the property that carries the [`GainModel`] of a node with a volume.
-///
-/// Every node that encloses a volume — those implementing
-/// [`Volumetric`](crate::core_optics::Volumetric) — declares this property unconditionally, so
-/// turning a component into an amplifier is an ordinary property patch on this key. A user
-/// interface that only knows a node by its type name can ask
-/// [`is_volume_node_type`](crate::nodes::is_volume_node_type) whether that is the case.
-pub const AMP_CONFIG: &str = "amp config";
-
-/// Return the name of the active [`GainModel`] declared by `node_attr`, or `None` if the node does
-/// not amplify.
-///
-/// `None` covers both cases a user interface has to treat alike: a node without a volume, which
-/// never declares [`AMP_CONFIG`] at all, and a volume node whose model is [`GainModel::None`].
-///
-/// # Arguments
-///
-/// * `node_attr` - attributes of the node to inspect.
-///
-/// # Returns
-///
-/// The display name of the active model, or `None`.
-#[must_use]
-pub fn active_amp_model(node_attr: &NodeAttr) -> Option<String> {
-    match node_attr.get_property(AMP_CONFIG) {
-        Ok(Proptype::GainModel(model)) => model.active_name(),
-        _ => None,
-    }
-}
 
 /// Deserialization shim for [`ConstGain`].
 ///
@@ -198,26 +158,10 @@ impl GainModel {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{
-        core_optics::node_attr::HasNodeAttr,
-        error::OpossumError,
-        nodes::{Dummy, Lens},
-    };
+    use crate::error::OpossumError;
     use approx::assert_relative_eq;
     use strum::IntoEnumIterator;
 
-    #[test]
-    fn active_amp_model_reports_only_active_models() -> OpmResult<()> {
-        // A node without a volume never declares the property at all.
-        assert_eq!(active_amp_model(Dummy::default().node_attr()), None);
-
-        let mut lens = Lens::default();
-        assert_eq!(active_amp_model(lens.node_attr()), None);
-        lens.node_attr_mut()
-            .set_property(AMP_CONFIG, GainModel::Const(ConstGain::new(3.0)?).into())?;
-        assert_eq!(active_amp_model(lens.node_attr()).as_deref(), Some("Const"));
-        Ok(())
-    }
     #[test]
     fn default_is_inactive() {
         assert_eq!(GainModel::default(), GainModel::None);
@@ -280,13 +224,6 @@ mod test {
                 "variant {variant} cannot be recreated from its display name"
             );
         }
-    }
-    #[test]
-    fn into_proptype() {
-        assert!(matches!(
-            GainModel::None.into(),
-            Proptype::GainModel(GainModel::None)
-        ));
     }
     #[test]
     fn serde_roundtrip() -> OpmResult<()> {

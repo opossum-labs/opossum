@@ -351,23 +351,21 @@ impl From<&AnalyzerItemDto> for NodeElement {
 mod test {
     use super::*;
 
-    fn amplifying_node_info() -> NodeInfo {
+    fn sample_node_info() -> NodeInfo {
         NodeInfo {
             name: "amp lens".to_string(),
             node_type: "lens".to_string(),
             gui_position: Some((10.0, 20.0)),
-            amp_model: Some("Const".to_string()),
             ..NodeInfo::default()
         }
     }
 
-    /// `NodeInfo::amp_model` is the legacy `amp config` property marker; the canvas marker now
-    /// mirrors the *active pump scenario* instead (seeded separately by whichever live code
-    /// constructs the node - see `GraphStore::add_new_optical_node`), so this plain conversion
-    /// must leave it alone rather than carrying the property-based value over.
+    /// A freshly converted node must default to no amp marker at all - the canvas marker is seeded
+    /// separately, from the *active pump scenario* (see `GraphStore::add_new_optical_node`), by
+    /// whichever live code constructs the node; this plain conversion never sets it.
     #[test]
-    fn conversion_ignores_the_legacy_amp_marker() {
-        let node = NodeElement::from(&amplifying_node_info());
+    fn conversion_defaults_to_no_amp_marker() {
+        let node = NodeElement::from(&sample_node_info());
         assert_eq!(node.amp_model(), None);
         // No amplifier marker means no status line, so the node must not be inflated by its height.
         assert!(node.total_height() <= HEADER_HEIGHT + node.node_body_height());
@@ -378,7 +376,7 @@ mod test {
     /// `crate::AMPLIFIER_CANDIDATES` (see `GraphStore::add_new_optical_node`).
     #[test]
     fn conversion_defaults_to_not_an_amplifier_candidate() {
-        let node = NodeElement::from(&amplifying_node_info());
+        let node = NodeElement::from(&sample_node_info());
         assert!(!node.is_amplifier_candidate());
     }
 
@@ -388,7 +386,7 @@ mod test {
     /// isn't a candidate at all gets no line.
     #[test]
     fn candidacy_alone_reserves_the_status_line_regardless_of_amp_model() {
-        let mut node = NodeElement::from(&amplifying_node_info());
+        let mut node = NodeElement::from(&sample_node_info());
         node.set_amplifier_candidate(true);
         assert_eq!(
             node.amp_model(),
@@ -409,7 +407,7 @@ mod test {
 
     #[test]
     fn amplifier_candidate_getter_and_setter_round_trip() {
-        let mut node = NodeElement::from(&amplifying_node_info());
+        let mut node = NodeElement::from(&sample_node_info());
         node.set_amplifier_candidate(true);
         assert!(node.is_amplifier_candidate());
         node.set_amplifier_candidate(false);
@@ -419,12 +417,12 @@ mod test {
     /// The fallback position only applies when the backend has no position of its own to report.
     #[test]
     fn conversion_prefers_the_backend_position() {
-        let node = NodeElement::from(&amplifying_node_info());
+        let node = NodeElement::from(&sample_node_info());
         assert_eq!(node.pos(), Point2D::new(10.0, 20.0));
 
         let without_position = NodeInfo {
             gui_position: None,
-            ..amplifying_node_info()
+            ..sample_node_info()
         };
         let node = NodeElement::from(&without_position);
         assert_eq!(node.pos(), DEFAULT_NEW_NODE_POS);

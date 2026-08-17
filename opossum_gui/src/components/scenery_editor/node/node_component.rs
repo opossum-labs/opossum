@@ -46,7 +46,7 @@ pub fn Node(
     // registers as. The canvas knows a node by its type name, so it asks the core rather than
     // keeping a list of its own. Whether a node *is* an amplifier is a hardware fact independent of
     // any pump scenario, so this no longer needs one to be active to offer the entry.
-    let supports_amp_config = matches!(
+    let is_volume_node = matches!(
         node.node_type(),
         NodeType::Optical(node_type) if is_volume_node_type(node_type)
     );
@@ -182,7 +182,7 @@ pub fn Node(
                                     },
                                 ));
                         }
-                        if supports_amp_config {
+                        if is_volume_node {
                             // Offer the way back, too: an accidentally marked node must be curable
                             // from the same menu it was marked an amplifier candidate in.
                             let (label, target_state) = if is_amplifier {

@@ -376,7 +376,7 @@ mod test {
             raytrace::AnalysisRayTrace,
         },
         core_optics::node_attr::HasNodeAttr,
-        gain::{AMP_CONFIG, ConstGain, PumpScenario},
+        gain::{ConstGain, PumpScenario},
         joule,
         light::{Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer,
@@ -484,24 +484,21 @@ mod test {
     }
     /// Only the nodes that really enclose a medium may present themselves as [`Volumetric`].
     ///
-    /// "Node with a volume" is stated twice: by this capability and by the properties such a node
-    /// carries — the transversal extent of its medium ([`CLEAR_APERTURE`]) and its amplification
-    /// model ([`AMP_CONFIG`]). Both have to mean the same set of node types, otherwise a node ends
-    /// up with a medium nobody can address or with a body whose extent is undefined.
+    /// "Node with a volume" is stated twice: by this capability and by the transversal extent of
+    /// its medium ([`CLEAR_APERTURE`]), a property such a node carries. Both have to mean the same
+    /// set of node types, otherwise a node ends up with a body whose extent is undefined.
     #[test]
     fn the_volume_capability_matches_the_volume_properties() -> OpmResult<()> {
         for (node_type, _) in node_types() {
             let optic_ref = create_node_ref(node_type)?;
             let node = optic_ref.optical_ref.lock_opm()?;
             let is_volumetric = node.as_volume().is_some();
-            for property_name in [CLEAR_APERTURE, AMP_CONFIG] {
-                assert_eq!(
-                    node.node_attr().get_property(property_name).is_ok(),
-                    is_volumetric,
-                    "node type '{node_type}' declares '{property_name}' or presents itself as \
-                     volumetric, but not both"
-                );
-            }
+            assert_eq!(
+                node.node_attr().get_property(CLEAR_APERTURE).is_ok(),
+                is_volumetric,
+                "node type '{node_type}' declares '{CLEAR_APERTURE}' or presents itself as \
+                 volumetric, but not both"
+            );
         }
         Ok(())
     }

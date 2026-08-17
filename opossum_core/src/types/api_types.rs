@@ -14,7 +14,7 @@ use crate::{
         NodeAttrExt,
         optic_ports::{PortConfig, ValidatedLidt},
     },
-    gain::{GainModel, PumpScenario, active_amp_model},
+    gain::{GainModel, PumpScenario},
     nodes::ConnectionInfo,
     opm_document::AnalyzerInfo,
     prelude::{AnalyzerType, Aperture, Isometry, PortMap, PortType, Properties},
@@ -126,14 +126,6 @@ pub struct NodeInfo {
     pub input_ports: Vec<String>,
     /// List of available output port names
     pub output_ports: Vec<String>,
-    /// Name of the node's active amplification model, or `None` if it does not amplify (either
-    /// because it has no volume at all or because its `amp config` is [`GainModel::None`]).
-    ///
-    /// This is a display marker, not the configuration itself: it lets a canvas show *that* a
-    /// component is an amplifier without fetching every node's properties. The parameters live in
-    /// the `amp config` property and are fetched only for the node being edited.
-    #[schema(example = "Const")]
-    pub amp_model: Option<String>,
 }
 
 impl NodeInfo {
@@ -152,7 +144,6 @@ impl NodeInfo {
             gui_position: gui_position.unwrap_or_else(|| node.gui_position().map(|p| (p.x, p.y))),
             isometry: node.isometry(),
             alignment: node.alignment(),
-            amp_model: active_amp_model(node.node_attr()),
         }
     }
 
@@ -734,36 +725,14 @@ pub struct SourcePortDto {
     pub name: String,
 }
 
-/// One amplifying node of the document, for the amplifier overview panel.
-///
-/// Only nodes whose `amp config` is active appear as such an entry, so `amp_model` is a plain
-/// `String` rather than an `Option` - see [`crate::gain::active_amp_model`].
-#[derive(Debug, Serialize, Deserialize, Clone, ToSchema, Eq, PartialEq)]
-pub struct AmplifierDto {
-    pub uuid: Uuid,
-    #[schema(example = "Main amplifier")]
-    pub name: String,
-    #[schema(example = "lens")]
-    pub node_type: String,
-    /// The group the node lives in. The overview panel needs it to open the right tab when the user
-    /// asks to be taken to the node, and to offer filtering by subsystem.
-    pub group_id: Uuid,
-    /// Display name of that group (the document's own name for the root scenery).
-    #[schema(example = "Frontend")]
-    pub group_name: String,
-    /// Display name of the node's active amplification model.
-    #[schema(example = "Const")]
-    pub amp_model: String,
-}
-
 /// One amplifier candidate of the document, together with its [`GainModel`] in one particular pump
 /// scenario, for the scenario editor.
 ///
-/// Unlike [`AmplifierDto`], every candidate appears here - configured in this scenario or not - not
-/// just the ones actively amplifying: an unconfigured candidate carries [`GainModel::None`], so the
-/// editor can render one row per candidate and let it be turned on or off, rather than only ever
-/// showing rows that are already active. `gain_model` is the structured value (not a display name)
-/// because the editor needs to show and edit it, in particular a `Const` gain's factor.
+/// Every candidate appears here - configured in this scenario or not - not just the ones actively
+/// amplifying: an unconfigured candidate carries [`GainModel::None`], so the editor can render one
+/// row per candidate and let it be turned on or off, rather than only ever showing rows that are
+/// already active. `gain_model` is the structured value (not a display name) because the editor
+/// needs to show and edit it, in particular a `Const` gain's factor.
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema, PartialEq)]
 pub struct ScenarioAmplifierDto {
     pub uuid: Uuid,

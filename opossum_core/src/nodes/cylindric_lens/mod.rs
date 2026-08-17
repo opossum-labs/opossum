@@ -406,18 +406,6 @@ mod test {
         }
         Ok(())
     }
-    #[test]
-    fn amp_config_default() {
-        test_amp_config_default::<CylindricLens>();
-    }
-    #[test]
-    fn amp_config_serde_roundtrip() -> OpmResult<()> {
-        test_amp_config_serde_roundtrip::<CylindricLens>()
-    }
-    #[test]
-    fn amp_config_absent_in_file() -> OpmResult<()> {
-        test_amp_config_absent_in_file::<CylindricLens>()
-    }
     /// Reference values for the entry surface → volume → exit surface propagation.
     ///
     /// This pins the current behaviour down completely so that refactoring the two-surface

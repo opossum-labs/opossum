@@ -320,9 +320,9 @@ fn invert_node_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandler<(
         });
     })
 }
-/// Mirrors a node's `amp config` into the canvas. Not marked dirty here: the property patch that
-/// caused it already marks the document unsaved (and on undo/redo the saved state is restored, so
-/// mirroring must not re-dirty it).
+/// Mirrors a node's gain model in the active pump scenario into the canvas. Not marked dirty here:
+/// the scenario patch that caused it already marks the document unsaved (and on undo/redo the saved
+/// state is restored, so mirroring must not re-dirty it).
 fn set_amp_model_handler(
     workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<(Uuid, Option<String>, Uuid)> {

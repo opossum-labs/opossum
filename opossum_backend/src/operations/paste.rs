@@ -1398,15 +1398,14 @@ mod test {
         );
     }
 
-    /// A copy must carry every property of its original - only the uuid is new. Pinned here for the
-    /// `amp config` property in particular: a duplicated amplifier that silently comes back passive
-    /// would change the modelled physics of the pasted subsystem without saying so.
+    /// A copy must carry every property of its original - only the uuid is new. A non-default
+    /// property that silently came back at its default would change the modelled physics of the
+    /// pasted subsystem without saying so.
     #[actix_web::test]
-    async fn test_paste_preserves_amp_config() {
-        use opossum_core::{
-            gain::{ConstGain, GainModel, active_amp_model},
-            nodes::Lens,
-        };
+    async fn test_paste_preserves_node_properties() {
+        use opossum_core::{nodes::Lens, properties::Proptype};
+
+        const TEST_PROP: &str = "test_prop";
 
         let app_state = Data::new(AppState::default());
         let (root_id, lens_id) = {
@@ -1416,10 +1415,7 @@ mod test {
             document
                 .scenery_mut()
                 .with_node_attr_mut(lens_id, |attr| {
-                    attr.set_property(
-                        opossum_core::gain::AMP_CONFIG,
-                        GainModel::Const(ConstGain::new(3.0).unwrap()).into(),
-                    )
+                    attr.create_property(TEST_PROP, "test", Proptype::Bool(true))
                 })
                 .unwrap()
                 .unwrap();
@@ -1466,21 +1462,18 @@ mod test {
             lens_id,
             "the copy must get a fresh uuid"
         );
-        assert_eq!(
-            pasted_node.amp_model.as_deref(),
-            Some("Const"),
-            "the response must already report the copy as an amplifier"
-        );
 
         let document = app_state.document.lock();
-        let amp_model = document
+        let property = document
             .scenery()
-            .with_node_attr(pasted_node.uuid(), active_amp_model)
+            .with_node_attr(pasted_node.uuid(), |attr| {
+                attr.get_property(TEST_PROP).cloned()
+            })
+            .unwrap()
             .unwrap();
-        assert_eq!(
-            amp_model.as_deref(),
-            Some("Const"),
-            "the pasted node must keep the original's amp config"
+        assert!(
+            matches!(property, Proptype::Bool(true)),
+            "the pasted node must keep the original's property value"
         );
     }
 }

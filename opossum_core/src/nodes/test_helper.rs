@@ -7,12 +7,9 @@ pub mod test_helper {
             raytrace::AnalysisRayTrace,
         },
         apertures::{ApertureShape, ApertureType, CircleShape, GaussianShape},
-        core_optics::{
-            NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, OpticRef, PortType, Volumetric,
-        },
+        core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, OpticRef, PortType, Volumetric},
         distributions::position::Hexapolar,
         error::{OpmResult, OpossumError},
-        gain::{AMP_CONFIG, ConstGain, GainModel},
         geometry::body::{Body, CLEAR_APERTURE, default_clear_aperture},
         joule,
         light::{LightData, LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
@@ -117,82 +114,6 @@ pub mod test_helper {
         check_logs(log::Level::Warn, vec![&msg]);
         Ok(())
     }
-    /// Read the [`GainModel`] out of a node's `amp config` property.
-    ///
-    /// [`GainModel`] is [`Copy`], so this works just as well on a node held behind a lock guard as
-    /// on an owned node - hence the single [`NodeAttr`] parameter instead of one accessor per
-    /// container.
-    ///
-    /// # Arguments
-    ///
-    /// * `node_attr` - attributes of the node to inspect.
-    ///
-    /// # Returns
-    ///
-    /// The configured [`GainModel`].
-    ///
-    /// # Panics
-    ///
-    /// Panics if the node does not declare an `amp config` property or if that property holds a
-    /// different [`Proptype`].
-    pub fn amp_config_of(node_attr: &NodeAttr) -> GainModel {
-        let Ok(Proptype::GainModel(model)) = node_attr.get_property(AMP_CONFIG) else {
-            panic!(
-                "node '{}' has no '{AMP_CONFIG}' property holding a gain model",
-                node_attr.node_type()
-            );
-        };
-        *model
-    }
-
-    /// Assert that a node with a volume declares an inactive `amp config` by default.
-    ///
-    /// Declaring the property unconditionally is what makes "turn this component into an
-    /// amplifier" an ordinary property change; defaulting to [`GainModel::None`] is what keeps
-    /// that declaration from altering any existing result.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the property is missing or does not default to [`GainModel::None`].
-    pub fn test_amp_config_default<T: Default + OpticNode>() {
-        let node = T::default();
-        assert_eq!(amp_config_of(node.node_attr()), GainModel::None);
-        assert!(!amp_config_of(node.node_attr()).is_active());
-    }
-
-    /// Assert that a non-default `amp config` survives a serialization round trip.
-    ///
-    /// The round trip goes through [`OpticRef`], which is the very path an `.opm` file takes: the
-    /// node type string is used to construct a fresh default node whose properties are then
-    /// patched with the ones found in the file.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the node cannot be serialized or deserialized.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the gain model is not preserved by the round trip.
-    pub fn test_amp_config_serde_roundtrip<T: Default + Analyzable + 'static>() -> OpmResult<()> {
-        let mut node = T::default();
-        let model = GainModel::Const(ConstGain::new(3.0)?);
-        node.node_attr_mut()
-            .set_property(AMP_CONFIG, model.into())?;
-
-        let optic_ref = OpticRef::new(Arc::new(Mutex::new(node)), None);
-        let serialized =
-            ron::to_string(&optic_ref).map_err(|e| OpossumError::Other(e.to_string()))?;
-        let deserialized: OpticRef =
-            ron::from_str(&serialized).map_err(|e| OpossumError::Other(e.to_string()))?;
-
-        assert_eq!(
-            amp_config_of(deserialized.optical_ref.lock_opm()?.node_attr()),
-            model,
-            "gain model was not preserved by the round trip"
-        );
-        Ok(())
-    }
-
     /// Remove one property entry from a serialized node, key and value.
     ///
     /// Used to turn a freshly written node into what a file written before that property existed
@@ -241,34 +162,11 @@ pub mod test_helper {
         format!("{}{}", &serialized[..entry_start], &serialized[entry_end..])
     }
 
-    /// Assert that a file written before the `amp config` property existed still loads.
+    /// Assert that a file written before the `clear aperture` property existed still loads.
     ///
     /// Such a file simply has no entry for the property. Because `set_node_attr` merges the
     /// properties of the file into those of a freshly constructed default node, the default has to
     /// survive — otherwise every existing `.opm` file would break.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the node cannot be serialized or deserialized.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the property could not be removed from the serialized form (which would make the
-    /// test vacuous) or if the loaded node does not fall back to [`GainModel::None`].
-    pub fn test_amp_config_absent_in_file<T: Default + Analyzable + 'static>() -> OpmResult<()> {
-        let deserialized = load_without_property::<T>(AMP_CONFIG)?;
-        assert_eq!(
-            amp_config_of(deserialized.optical_ref.lock_opm()?.node_attr()),
-            GainModel::None,
-            "loading a file without the property must fall back to the default"
-        );
-        Ok(())
-    }
-
-    /// Assert that a file written before the `clear aperture` property existed still loads.
-    ///
-    /// The counterpart of [`test_amp_config_absent_in_file`] for the transversal extent: such a
-    /// file has to come out with the standard extent rather than with no property at all.
     ///
     /// # Errors
     ///

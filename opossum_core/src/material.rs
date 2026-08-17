@@ -15,8 +15,9 @@ use crate::{
 
 /// Name of the property that carries the [`Material`] of a node with a volume.
 ///
-/// Same purpose as [`AMP_CONFIG`](crate::gain::AMP_CONFIG) for the amplification model: the node
-/// declarations and every reader refer to the property by this constant rather than by a literal.
+/// Same purpose as [`CLEAR_APERTURE`](crate::geometry::body::CLEAR_APERTURE) for the transversal
+/// extent: the node declarations and every reader refer to the property by this constant rather
+/// than by a literal.
 pub const MATERIAL: &str = "material";
 
 /// Name the [`MATERIAL`] property had before it carried a whole [`Material`].
