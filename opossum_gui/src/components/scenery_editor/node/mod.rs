@@ -239,7 +239,11 @@ impl NodeElement {
     /// hit testing - stays correct when a node type grows an additional part.
     #[must_use]
     pub fn total_height(&self) -> f64 {
-        let amp_status_height = if self.amp_model.is_some() {
+        // The status line is shown for every amplifier *candidate*, not only while it actively
+        // amplifies in the current scenario - so its presence must survive switching to "no active
+        // scenario" or to a scenario that leaves this node passive, not just disappear along with
+        // `amp_model`.
+        let amp_status_height = if self.is_amplifier_candidate {
             AMP_STATUS_HEIGHT
         } else {
             0.0
@@ -376,6 +380,31 @@ mod test {
     fn conversion_defaults_to_not_an_amplifier_candidate() {
         let node = NodeElement::from(&amplifying_node_info());
         assert!(!node.is_amplifier_candidate());
+    }
+
+    /// A node marked as a candidate must show the status line (and be inflated by its height) even
+    /// while it does not actively amplify - `None` in the active scenario, or no scenario active at
+    /// all - so candidacy stays visible while editing the node's other properties. Only a node that
+    /// isn't a candidate at all gets no line.
+    #[test]
+    fn candidacy_alone_reserves_the_status_line_regardless_of_amp_model() {
+        let mut node = NodeElement::from(&amplifying_node_info());
+        node.set_amplifier_candidate(true);
+        assert_eq!(
+            node.amp_model(),
+            None,
+            "candidacy must not fabricate an active amp model"
+        );
+        assert!(
+            node.total_height() > HEADER_HEIGHT + node.node_body_height(),
+            "a candidate must reserve the status line even while passive in the current scenario"
+        );
+
+        node.set_amplifier_candidate(false);
+        assert!(
+            node.total_height() <= HEADER_HEIGHT + node.node_body_height(),
+            "a non-candidate must show no status line"
+        );
     }
 
     #[test]

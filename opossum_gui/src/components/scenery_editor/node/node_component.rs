@@ -232,16 +232,21 @@ pub fn Node(
                         NodePorts { node: node.clone(), inverted: node.inverted() }
                     }
                 },
-                footer: node
-                    .amp_model()
-                    .map(|amp_model| rsx! {
+                // Shown for every amplifier candidate, not only while it actively amplifies in the
+                // current scenario - candidacy has to stay visible (as "None") so it's obvious this
+                // node is a potential amplifier while editing its other properties, even with no
+                // scenario active or with this scenario leaving it passive.
+                footer: node.is_amplifier_candidate().then(|| {
+                    let amp_model = node.amp_model().unwrap_or("None");
+                    rsx! {
                         div {
                             class: "node-amp-status",
                             pointer_events: "none",
                             style: format!("height: {AMP_STATUS_HEIGHT}px;"),
                             "amp: {amp_model}"
                         }
-                    }),
+                    }
+                }),
             }
         }
     }

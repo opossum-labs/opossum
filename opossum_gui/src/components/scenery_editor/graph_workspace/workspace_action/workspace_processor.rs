@@ -695,6 +695,12 @@ async fn process_set_amplifier_candidate(
     is_amplifier: bool,
     ws_handler: WorkSpaceSignalHandlers,
 ) {
+    if is_amplifier {
+        // Marking a candidate is otherwise a dead end with no scenario to configure it in - the
+        // scenario editor has nothing to expand and no row to show. A fresh document starts with no
+        // scenario at all, so this is the common case for the very first amplifier, not an edge case.
+        ensure_a_pump_scenario_exists().await;
+    }
     eval_action_run(
         api::put_node_is_amplifier(node_id, is_amplifier).await,
         Some(move |()| {
@@ -714,6 +720,32 @@ async fn process_set_amplifier_candidate(
             // scenario's row list on the backend - the editor has to re-fetch to notice, the same
             // reasoning `process_set_scenario_gain_model` doesn't need since it never changes the
             // candidate set itself.
+            *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
+        }),
+    );
+}
+
+/// Creates an empty pump scenario, named "Default", if the document doesn't have one yet.
+///
+/// Called before marking a node as an amplifier candidate: without this, doing so on a document
+/// with no scenario at all is a dead end - the scenario editor has nothing to expand and nowhere to
+/// offer the new candidate's row, so the gain model could never be set through the GUI. A separate
+/// undo step from the candidacy patch itself (two independent backend calls), which is an acceptable
+/// two-step undo for a one-time setup action.
+///
+/// Silently does nothing if fetching the current scenario list fails or it already has an entry -
+/// the failure case leaves the document exactly as `put_node_is_amplifier` would find it without this
+/// call, so it does not additionally block marking the candidate.
+async fn ensure_a_pump_scenario_exists() {
+    let Ok(scenarios) = api::get_pump_scenarios().await else {
+        return;
+    };
+    if !scenarios.is_empty() {
+        return;
+    }
+    eval_action_run(
+        api::post_pump_scenario("Default").await,
+        Some(move |_id: Uuid| {
             *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
         }),
     );
