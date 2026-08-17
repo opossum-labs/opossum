@@ -858,6 +858,13 @@ async fn apply_document_changes(
                     .await;
                 }
             }
+            DocumentChange::AmplifierNodesChanged => {
+                // Full handling (refreshing a document-wide candidate cache and every open tab's
+                // canvas markers) lands with the GUI candidate-cache plumbing. Until then, at least
+                // keep the scenario editor's row list in sync - a candidacy change can add or remove
+                // a row from every scenario, the same reasoning `PumpScenarioAdded` above follows.
+                *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
+            }
             DocumentChange::ViewportChanged {
                 graph_id,
                 zoom,

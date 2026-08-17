@@ -21,6 +21,7 @@ use uuid::Uuid;
 
 use crate::error::BackEndErrorResponse;
 
+mod amplifier_node_commands;
 mod analyzer_commands;
 mod edge_commands;
 mod global_conf_commands;
@@ -30,6 +31,7 @@ mod port_map_commands;
 mod pump_scenario_commands;
 mod viewport_commands;
 
+pub use amplifier_node_commands::PatchAmplifierNodes;
 pub use analyzer_commands::{PatchAnalyzer, RepositionAnalyzer};
 pub use edge_commands::{EdgeSnapshot, UpdateEdgeDistance};
 pub use global_conf_commands::PatchGlobalConf;
@@ -84,6 +86,8 @@ pub enum Command {
     PatchPumpScenario(PatchPumpScenario),
     /// See [`PatchAnalyzerPumpScenarios`].
     PatchAnalyzerPumpScenarios(PatchAnalyzerPumpScenarios),
+    /// See [`PatchAmplifierNodes`]. Replaces the whole document-wide amplifier-candidate set.
+    PatchAmplifierNodes(PatchAmplifierNodes),
     /// See [`MoveNodes`]. Moves nodes between two groups; `apply` swaps source/target to build its
     /// inverse and carries `affected_groups` through, so undo/redo can refresh every tab a reroute
     /// touched - not just source and target.
@@ -152,6 +156,9 @@ impl Command {
             Self::PatchAnalyzerPumpScenarios(cmd) => {
                 pump_scenario_commands::apply_patch_analyzer_pump_scenarios(document, cmd)
             }
+            Self::PatchAmplifierNodes(cmd) => Ok(
+                amplifier_node_commands::apply_patch_amplifier_nodes(document, cmd),
+            ),
             Self::MoveNodes(cmd) => group_commands::apply_move_nodes(document, cmd),
             Self::InsertGroup(cmd) => group_commands::apply_insert_group(document, cmd),
             Self::ExtractGroup(cmd) => group_commands::apply_extract_group(document, cmd),
@@ -197,6 +204,7 @@ impl Command {
             | Self::RemovePumpScenario(_)
             | Self::PatchPumpScenario(_)
             | Self::PatchAnalyzerPumpScenarios(_)
+            | Self::PatchAmplifierNodes(_)
             | Self::PatchGlobalConf(_)
             | Self::SetViewport(_) => false,
             // Multi-step: several fallible sub-steps, so a mid-apply failure could tear the document.
@@ -281,11 +289,14 @@ impl Command {
             }
             // An operating point (and which analyzer runs in it) is not an object on the canvas:
             // there is nothing to jump to and no node to select, so undoing a scenario edit leaves
-            // the view where the user left it.
+            // the view where the user left it. Same for the candidate set: it names nodes but isn't
+            // itself a canvas object, and it can name several at once, so there is no single node to
+            // focus.
             Self::AddPumpScenario(_)
             | Self::RemovePumpScenario(_)
             | Self::PatchPumpScenario(_)
             | Self::PatchAnalyzerPumpScenarios(_)
+            | Self::PatchAmplifierNodes(_)
             | Self::PatchGlobalConf(_) => None,
             Self::SetViewport(cmd) => Some(JumpTarget::new_from_graph_id(cmd.to.graph_id)),
             Self::Batch(commands) => batch_jump_target(commands, root_id),
@@ -359,6 +370,7 @@ impl Command {
             Self::PatchPumpScenario(PatchPumpScenario { id, .. }) => {
                 vec![DocumentChange::PumpScenarioChanged { id: *id }]
             }
+            Self::PatchAmplifierNodes(_) => vec![DocumentChange::AmplifierNodesChanged],
             // Reports the position `apply` will set (`new_pos`), so the GUI moves the analyzer on the
             // canvas rather than only refreshing the details panel.
             Self::RepositionAnalyzer(cmd) => vec![DocumentChange::AnalyzerMoved {
@@ -519,6 +531,7 @@ fn dedup_against_full_refreshes(changes: Vec<DocumentChange>) -> Vec<DocumentCha
             | DocumentChange::PumpScenarioAdded { .. }
             | DocumentChange::PumpScenarioRemoved { .. }
             | DocumentChange::PumpScenarioChanged { .. }
+            | DocumentChange::AmplifierNodesChanged
             | DocumentChange::GraphClosed { .. }
             | DocumentChange::ViewportChanged { .. } => true,
         })

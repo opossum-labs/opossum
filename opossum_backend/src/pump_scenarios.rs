@@ -7,7 +7,8 @@ use actix_web::{HttpRequest, HttpResponse, delete, get, post, put, web};
 use opossum_core::{
     core_optics::{NodeAttr, NodeAttrExt},
     types::api_types::{
-        AmplifierDto, ErrorResponse, NewPumpScenario, PumpScenarioItemDto, SetScenarioGainModel,
+        ErrorResponse, NewPumpScenario, PumpScenarioItemDto, ScenarioAmplifierDto,
+        SetScenarioGainModel,
     },
 };
 use utoipa_actix_web::service_config::ServiceConfig;
@@ -71,18 +72,19 @@ pub async fn get_pump_scenario(
     ron_or_json_response(&req, &scenario)
 }
 
-/// Get every node the given pump scenario amplifies, with their names resolved
+/// Get every amplifier candidate, with its gain model in the given pump scenario, names resolved
 ///
-/// A [`PumpScenario`](opossum_core::gain::PumpScenario) only ever knows its amplifying nodes by
-/// uuid, so the scenario editor needs this rather than [`get_pump_scenario`] to display anything
-/// meaningful. Walks the whole document recursively (nested groups included), same as
-/// `/api/nodes/amplifiers` - just filtered by this one scenario's gain models instead of the
-/// legacy `amp config` property.
+/// Lists every node in the document-wide amplifier-candidate set
+/// (`OpmDocument::amplifier_nodes`), not just the ones actively configured in this scenario - an
+/// unconfigured candidate is reported with [`GainModel::None`](opossum_core::gain::GainModel::None),
+/// so the scenario editor can render one row per candidate and let it be turned on or off, rather
+/// than only ever showing rows that already amplify. Walks the whole document recursively (nested
+/// groups included), same traversal as `/api/nodes/amplifier_candidates`.
 #[utoipa::path(
     tag = "pump_scenario",
     params(("uuid" = Uuid, Path, description = "UUID of the pump scenario")),
     responses(
-        (status = OK, description = "List of the nodes this scenario amplifies", body = Vec<AmplifierDto>),
+        (status = OK, description = "List of every amplifier candidate, with its gain model in this scenario", body = Vec<ScenarioAmplifierDto>),
         (status = NOT_FOUND, body = ErrorResponse, description = "UUID not found", content_type = "application/json")
     )
 )]
@@ -100,22 +102,19 @@ pub async fn get_pump_scenario_amplifiers(
         .ok_or_else(BackEndErrorResponse::pump_scenario_not_found)?;
     let scenery = document.scenery();
 
-    let amplifiers: Vec<AmplifierDto> = collect_nodes(scenery, &|node_attr: &NodeAttr| {
-        scenario
-            .gain_model(node_attr.uuid())
-            .active_name()
-            .map(|amp_model| {
-                (
-                    node_attr.name().to_string(),
-                    node_attr.node_type().to_string(),
-                    amp_model,
-                )
-            })
+    let amplifiers: Vec<ScenarioAmplifierDto> = collect_nodes(scenery, &|node_attr: &NodeAttr| {
+        document.is_amplifier_node(node_attr.uuid()).then(|| {
+            (
+                node_attr.name().to_string(),
+                node_attr.node_type().to_string(),
+                scenario.gain_model(node_attr.uuid()),
+            )
+        })
     })
     .into_iter()
     .map(|node| {
-        let (name, node_type, amp_model) = node.value;
-        AmplifierDto {
+        let (name, node_type, gain_model) = node.value;
+        ScenarioAmplifierDto {
             uuid: node.uuid,
             name,
             node_type,
@@ -123,7 +122,7 @@ pub async fn get_pump_scenario_amplifiers(
             group_name: scenery
                 .with_group_node(node.group_id, |group| group.name().to_string())
                 .unwrap_or_default(),
-            amp_model,
+            gain_model,
         }
     })
     .collect();
@@ -318,32 +317,39 @@ mod test {
         };
     }
 
-    /// The list must resolve node names and report which group each amplifier sits in, and must
-    /// only list nodes this scenario actually amplifies - not merely every volume node, and not
-    /// nodes another scenario amplifies.
+    /// The list must resolve node names, report which group each candidate sits in, and include
+    /// *every* candidate - configured in this scenario or not (with `GainModel::None` when not) -
+    /// while never listing a node that isn't a candidate at all, even if some other scenario
+    /// configured it.
     #[actix_web::test]
-    async fn amplifiers_lists_only_this_scenarios_amplifying_nodes_with_resolved_names() {
+    async fn amplifiers_lists_every_candidate_with_its_gain_model_in_this_scenario() {
         let app_state = Data::new(AppState::default());
-        let (lens_id, _passive_lens_id, other_scenario_lens_id) = {
+        let (configured_id, unconfigured_id, non_candidate_id) = {
             let mut document = app_state.document.lock();
-            let lens_id = document.scenery_mut().add_node(Lens::default()).unwrap();
-            let passive_lens_id = document.scenery_mut().add_node(Lens::default()).unwrap();
-            let other_scenario_lens_id = document.scenery_mut().add_node(Lens::default()).unwrap();
-            (lens_id, passive_lens_id, other_scenario_lens_id)
+            let configured_id = document.scenery_mut().add_node(Lens::default()).unwrap();
+            let unconfigured_id = document.scenery_mut().add_node(Lens::default()).unwrap();
+            let non_candidate_id = document.scenery_mut().add_node(Lens::default()).unwrap();
+            document.set_is_amplifier_node(configured_id, true);
+            document.set_is_amplifier_node(unconfigured_id, true);
+            (configured_id, unconfigured_id, non_candidate_id)
         };
         let scenario_id = add_scenario(&app_state, "full power").await;
         let other_scenario_id = add_scenario(&app_state, "half power").await;
+        let gain = GainModel::Const(ConstGain::new(2.0).unwrap());
         {
             let mut document = app_state.document.lock();
             document
                 .pump_scenario_mut(scenario_id)
                 .unwrap()
-                .set_gain_model(lens_id, GainModel::Const(ConstGain::new(2.0).unwrap()));
+                .set_gain_model(configured_id, gain);
+            // A different scenario configuring the non-candidate must not make it appear here -
+            // candidacy is document-wide, and shouldn't be possible after pruning anyway, but this
+            // pins the invariant down.
             document
                 .pump_scenario_mut(other_scenario_id)
                 .unwrap()
                 .set_gain_model(
-                    other_scenario_lens_id,
+                    non_candidate_id,
                     GainModel::Const(ConstGain::new(3.0).unwrap()),
                 );
         }
@@ -354,18 +360,33 @@ mod test {
             .to_request();
         let resp = app.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let amplifiers: Vec<opossum_core::types::api_types::AmplifierDto> =
-            test::read_body_json(resp).await;
+        let amplifiers: Vec<ScenarioAmplifierDto> = test::read_body_json(resp).await;
 
         assert_eq!(
             amplifiers.len(),
-            1,
-            "must list neither the passive lens nor the other scenario's amplifier: {amplifiers:?}"
+            2,
+            "must list exactly the two candidates, not the non-candidate: {amplifiers:?}"
         );
-        assert_eq!(amplifiers[0].uuid, lens_id);
-        assert_eq!(amplifiers[0].name, "lens");
-        assert_eq!(amplifiers[0].node_type, "lens");
-        assert_eq!(amplifiers[0].amp_model, "Const");
+        let configured = amplifiers
+            .iter()
+            .find(|a| a.uuid == configured_id)
+            .expect("the configured candidate must be listed");
+        assert_eq!(configured.name, "lens");
+        assert_eq!(configured.node_type, "lens");
+        assert_eq!(configured.gain_model, gain);
+        let unconfigured = amplifiers
+            .iter()
+            .find(|a| a.uuid == unconfigured_id)
+            .expect("the unconfigured candidate must be listed too");
+        assert_eq!(
+            unconfigured.gain_model,
+            GainModel::None,
+            "a candidate this scenario hasn't configured must report GainModel::None, not be absent"
+        );
+        assert!(
+            !amplifiers.iter().any(|a| a.uuid == non_candidate_id),
+            "a non-candidate must never appear, even if some other scenario configured it"
+        );
     }
 
     #[actix_web::test]

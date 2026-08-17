@@ -514,6 +514,20 @@ impl OpmDocument {
         let scenery = &self.scenery;
         self.amplifier_nodes.retain(|id| scenery.exists(*id));
     }
+    /// Replace the whole amplifier candidate set at once.
+    ///
+    /// Unlike [`set_is_amplifier_node`](Self::set_is_amplifier_node), this does not strip the
+    /// dropped nodes from any [`PumpScenario`] as a side effect - it is meant for restoring a
+    /// previously captured set wholesale (undo/redo), where the scenarios are restored to their own
+    /// previously captured state by separate commands in the same batch, not re-derived from this
+    /// call.
+    ///
+    /// # Arguments
+    ///
+    /// * `nodes` - the candidate set to install.
+    pub fn set_amplifier_nodes(&mut self, nodes: HashSet<Uuid>) {
+        self.amplifier_nodes = nodes;
+    }
     /// Returns a reference to the scenery of this [`OpmDocument`].
     #[must_use]
     pub const fn scenery(&self) -> &NodeGroup {
@@ -838,6 +852,34 @@ mod test {
                 Some(GainModel::None)
             );
         }
+        Ok(())
+    }
+    /// The whole-set replace is what undo/redo restores a previously captured candidate set with -
+    /// unlike `set_is_amplifier_node`, it must not touch any scenario as a side effect, since a
+    /// restore batch carries its own scenario-restoring commands separately.
+    #[test]
+    fn set_amplifier_nodes_replaces_the_whole_set_without_touching_scenarios() -> OpmResult<()> {
+        let mut document = OpmDocument::default();
+        let lens_id = document.scenery_mut().add_node(Lens::default())?;
+        let scenario_id = document.add_pump_scenario("full power");
+        let gain = GainModel::Const(ConstGain::new(2.0)?);
+        document
+            .pump_scenario_mut(scenario_id)
+            .expect("the scenario just added must be there")
+            .set_gain_model(lens_id, gain);
+
+        document.set_amplifier_nodes(HashSet::new());
+        assert!(document.amplifier_nodes().is_empty());
+        assert_eq!(
+            document
+                .pump_scenario(scenario_id)
+                .map(|scenario| scenario.gain_model(lens_id)),
+            Some(gain),
+            "a whole-set replace must not wipe any scenario's gain model"
+        );
+
+        document.set_amplifier_nodes(HashSet::from([lens_id]));
+        assert_eq!(document.amplifier_nodes(), &HashSet::from([lens_id]));
         Ok(())
     }
     #[test]

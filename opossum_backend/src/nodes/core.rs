@@ -30,8 +30,8 @@ use crate::{
         split_cascades_for_response,
     },
     undo::{
-        CascadedNode, Command, NodeSnapshot, PatchAnalyzer, PatchNode, PatchPumpScenario,
-        capture_old_node_request,
+        CascadedNode, Command, NodeSnapshot, PatchAmplifierNodes, PatchAnalyzer, PatchNode,
+        PatchPumpScenario, capture_old_node_request,
     },
 };
 
@@ -556,6 +556,7 @@ fn build_delete_inverse(
 ) -> (Vec<Command>, DeleteNodeResponse) {
     let analyzer_inverses = prune_analyzer_source_mappings(document, &deleted_nodes);
     let scenario_inverses = prune_pump_scenario_entries(document);
+    let amplifier_inverse = prune_amplifier_node_entries(document);
 
     let cascaded: Vec<CascadedNode> = cascaded
         .into_iter()
@@ -573,6 +574,7 @@ fn build_delete_inverse(
     inverse.extend(removed_port_cascades.iter().map(Command::from));
     inverse.extend(analyzer_inverses);
     inverse.extend(scenario_inverses);
+    inverse.extend(amplifier_inverse);
 
     (
         inverse,
@@ -1100,6 +1102,47 @@ mod test {
                 .gain_model(lens_id),
             gain,
             "undoing the deletion must restore the node's entry in the operating point"
+        );
+    }
+    /// Mirrors `test_delete_node_prunes_pump_scenarios_and_undo_restores_them` for the amplifier-
+    /// candidate set: deleting a candidate node must drop it from `amplifier_nodes`, and undoing the
+    /// deletion must restore its candidacy.
+    #[actix_web::test]
+    async fn test_delete_node_prunes_amplifier_candidacy_and_undo_restores_it() {
+        use opossum_core::nodes::Lens;
+
+        let app_state = Data::new(AppState::default());
+        let lens_id = {
+            let mut document = app_state.document.lock();
+            let lens_id = document.scenery_mut().add_node(Lens::default()).unwrap();
+            document.set_is_amplifier_node(lens_id, true);
+            lens_id
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(delete_node)
+                .service(undo_document),
+        )
+        .await;
+
+        let req = test::TestRequest::delete()
+            .uri(&format!("/{lens_id}"))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(
+            !app_state.document.lock().is_amplifier_node(lens_id),
+            "the deleted node must be gone from the candidate set"
+        );
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(
+            app_state.document.lock().is_amplifier_node(lens_id),
+            "undoing the deletion must restore the node's candidacy"
         );
     }
     /// mirrors `test_undo_group_conversion_restores_internal_and_boundary_connections` in
@@ -2238,6 +2281,33 @@ fn prune_pump_scenario_entries(document: &mut OpmDocument) -> Vec<Command> {
             })
         })
         .collect()
+}
+
+/// Drops the entries of nodes that no longer exist from the amplifier-candidate set, returning the
+/// `PatchAmplifierNodes` inverse command that restores it if it actually changed.
+///
+/// Mirrors [`prune_pump_scenario_entries`] exactly: the candidate set names nodes by uuid and lives
+/// beside the model rather than inside it, so deleting a node has to be followed through here too -
+/// folding the inverse into the delete's undo batch is what keeps the deletion reversible.
+///
+/// # Arguments
+///
+/// - `document`: the live document whose candidate set is pruned in place.
+///
+/// # Returns
+///
+/// A `Command::PatchAmplifierNodes` if the set actually changed; `None` if pruning found nothing to
+/// drop.
+fn prune_amplifier_node_entries(document: &mut OpmDocument) -> Option<Command> {
+    let before = document.amplifier_nodes().clone();
+    document.prune_amplifier_nodes();
+    let after = document.amplifier_nodes().clone();
+    (after != before).then(|| {
+        Command::PatchAmplifierNodes(PatchAmplifierNodes {
+            old: after,
+            new: before,
+        })
+    })
 }
 
 /// Removes the source mappings of every just-deleted node from all analyzers (deleting a `"source port"`

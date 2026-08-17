@@ -756,6 +756,32 @@ pub struct AmplifierDto {
     pub amp_model: String,
 }
 
+/// One amplifier candidate of the document, together with its [`GainModel`] in one particular pump
+/// scenario, for the scenario editor.
+///
+/// Unlike [`AmplifierDto`], every candidate appears here - configured in this scenario or not - not
+/// just the ones actively amplifying: an unconfigured candidate carries [`GainModel::None`], so the
+/// editor can render one row per candidate and let it be turned on or off, rather than only ever
+/// showing rows that are already active. `gain_model` is the structured value (not a display name)
+/// because the editor needs to show and edit it, in particular a `Const` gain's factor.
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema, PartialEq)]
+pub struct ScenarioAmplifierDto {
+    pub uuid: Uuid,
+    #[schema(example = "Main amplifier")]
+    pub name: String,
+    #[schema(example = "lens")]
+    pub node_type: String,
+    /// The group the node lives in. The editor needs it to open the right tab when the user asks to
+    /// be taken to the node, and to offer filtering by subsystem.
+    pub group_id: Uuid,
+    /// Display name of that group (the document's own name for the root scenery).
+    #[schema(example = "Frontend")]
+    pub group_name: String,
+    /// How this node amplifies in this scenario, or [`GainModel::None`] if it is a candidate that
+    /// this scenario simply hasn't configured.
+    pub gain_model: GainModel,
+}
+
 // ============================================================================
 // UNDO / REDO
 // ============================================================================
@@ -875,6 +901,11 @@ pub enum DocumentChange {
     /// scenario editor, and the amplifier status of the nodes if it is the active one) should
     /// re-fetch it.
     PumpScenarioChanged { id: Uuid },
+    /// The document-wide amplifier-candidate set changed - a node was marked or unmarked, or the
+    /// entries of a deleted node were dropped from it. There is only one such set, so no id is
+    /// carried; anything showing candidacy (the context-menu toggle's state, every scenario editor's
+    /// row list) should re-fetch it.
+    AmplifierNodesChanged,
     /// One tab's nodes/edges/port-maps should be re-fetched from scratch (see the type's own doc
     /// comment for which operations use this).
     GraphNeedsRefresh { graph_id: Uuid },
