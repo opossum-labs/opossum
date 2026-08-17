@@ -220,9 +220,7 @@ bestehenden `amp config`-Pfad ablöst.
 - **M4.2** `AnalyzerInfo` bekommt `pump_scenarios: Vec<Uuid>`; `OpmDocument::analyze()` bekommt eine
   innere Schleife und liefert einen benannten Report pro Szenario. `clear_edges()`/`reset_data()`
   müssen **zwischen den Szenarien** laufen, nicht nur zwischen Analyzern.
-- **M4.3** `MaterialProperty`-Capability-Check vor dem Trace, mit Node-, Modell- und Materialnamen im
-  Fehlertext.
-- **M4.4** **Ablösung des Altpfads:** `GainModel` wandert aus der Node-Property in die `PumpConfig`;
+- **M4.3** **Ablösung des Altpfads:** `GainModel` wandert aus der Node-Property in die `PumpConfig`;
   die Property `amp config` und `gain::AMP_CONFIG` entfallen. Backend: `/nodes/amplifiers`
   (`opossum_backend/src/nodes/amplifiers.rs`) wird zu einem Szenario-Endpunkt. GUI: das
   Übersichtspanel (`node_editor/amp_overview.rs`) wird zum **Szenario-Editor**, die Statuszeile zeigt
@@ -233,7 +231,7 @@ bestehenden `amp config`-Pfad ablöst.
 Falle aus [`00_vorbereitung.md`](00_vorbereitung.md) V6: `NODE_DETAILS_REFRESH` wird bei Add/Remove
 nicht erhöht.
 
-**Commits:** je einer für M4.1/M4.2, M4.3, M4.4-Core, M4.4-Backend, M4.4-GUI.
+**Commits:** je einer für M4.1/M4.2, M4.3-Core, M4.3-Backend, M4.3-GUI.
 
 ---
 
@@ -242,7 +240,7 @@ nicht erhöht.
 **Warum:** Der Punkt, an dem die Modularität steht oder fällt. Alles, was Inversion *erzeugt*,
 schreibt hinein; alles, was verstärkt, liest heraus. Erst danach beginnen die Physikstufen
 ([`02`](02_L0_small_signal_gain.md)–[`04`](04_L2_frantz_nodvik_spectral.md)) — jede ergänzt genau
-eine `GainModel`-Variante plus ihre `requires()`-Zeile.
+eine `GainModel`-Variante plus ihre `requires()`-Zeile, geprüft von M5.4.
 
 - **M5.1** `InversionField` über der `Body`-Domäne aus M2 (Diskretisierung entlang z + transversal).
 - **M5.2** Erste Produzenten in `PumpSource`: `ConstInversion` und analytische Profile
@@ -250,9 +248,19 @@ eine `GainModel`-Variante plus ihre `requires()`-Zeile.
 - **M5.3** Konsument: Auswertung in `pass_through_volume_generic`, gespeist über den
   Ray-Energie-Mutator aus [`00_fundament.md`](00_fundament.md) (`Ray.e` ist privat, `light/ray.rs:44`
   — nur `filter_energy()` existiert und verbietet Faktoren > 1).
+- **M5.4** `MaterialProperty`-Capability-Check vor dem Trace: eine Prüfung über alle (Node,
+  Szenario)-Paare, die `GainModel::requires()` gegen `Material::provides()` abgleicht und einen
+  `OpmResult`-Fehler mit Node-, Modell- und Materialnamen wirft, sobald eine Physikstufe (`02`–`04`)
+  mehr fordert, als das Material liefert. Unabhängig von M5.1–M5.3 (braucht keine Diskretisierung der
+  `Body`-Domäne), aber hier statt in M4 verortet, weil sie erst mit der ersten materialabhängigen
+  `GainModel`-Variante etwas zu prüfen hat — vorher (`GainModel::Const` braucht nichts vom Material)
+  wäre sie eine Prüfung ohne Inhalt.
 
 **Lackmustest der Modularität:** der [Pump-Solver](05_pump_solver.md) muss dieselbe Maschinerie mit
 umgedrehtem Vorzeichen benutzen können, ohne M5 umzubauen.
+
+**Commits:** M5.1–M5.3 zusammen als Einführung des `InversionField`; M5.4 separat, da unabhängig von
+der Diskretisierung und erst mit der ersten Physikstufe wirklich testbar.
 
 ---
 
@@ -322,15 +330,15 @@ der Weglänge übereinstimmt, die der bestehende Zwei-Flächen-Durchgang liefert
 `as_volume().is_some()` liefern — der Ersatz für den heutigen `amp_config_node_types_are_exhaustive`.
 
 **M4:** Core-Test: ein Dokument mit zwei Szenarien liefert aus einem Analyzer zwei Reports mit
-unterschiedlichem Ergebnis. Capability-Test: ein Modell, das σ_e fordert, auf einem Material ohne σ_e
-ergibt einen Fehler, der Node-, Modell- und Materialnamen enthält. Backend-Test: Undo eines
-Szenario-Patches dreht ihn zurück (Vorbild: der vorhandene Test in
-`opossum_backend/src/nodes/amplifiers.rs`).
+unterschiedlichem Ergebnis. Backend-Test: Undo eines Szenario-Patches dreht ihn zurück (Vorbild: der
+vorhandene Test in `opossum_backend/src/nodes/amplifiers.rs`).
 
 **M5:** Energiebilanz — die dem Feld entnommene Energie entspricht dem Zuwachs im Strahl.
-Verstärkung mit leerem Inversionsfeld ist ein reiner Durchgang.
+Verstärkung mit leerem Inversionsfeld ist ein reiner Durchgang. Capability-Test (M5.4): ein Modell,
+das σ_e fordert, auf einem Material ohne σ_e ergibt einen Fehler, der Node-, Modell- und
+Materialnamen enthält.
 
-**GUI (M1.3, M3.3, M4.4):** in der laufenden GUI prüfen (`cd opossum_gui && dx serve`, Backend
+**GUI (M1.3, M3.3, M4.3):** in der laufenden GUI prüfen (`cd opossum_gui && dx serve`, Backend
 parallel) — GUI-Tests existieren in diesem Crate praktisch nicht. Konkret: Material-Editor zeigt die
 bisherigen Index-Modelle unverändert; der Verstärker-Eintrag erscheint nur bei Volumen-Nodes;
 Szenario-Wechsel aktualisiert Statuszeilen ohne Kantenversatz; Undo/Redo dreht Szenario **und**
