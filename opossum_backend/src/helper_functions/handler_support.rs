@@ -1,5 +1,8 @@
 use actix_web::HttpResponse;
-use opossum_core::opm_document::{AnalyzerInfo, OpmDocument};
+use opossum_core::{
+    gain::PumpScenario,
+    opm_document::{AnalyzerInfo, OpmDocument},
+};
 use parking_lot::MutexGuard;
 use uuid::Uuid;
 
@@ -18,6 +21,21 @@ pub fn analyzer_mut_or_404(
     document
         .analyzer_mut(id)
         .ok_or_else(BackEndErrorResponse::analyzer_not_found)
+}
+
+/// Looks up the pump scenario with the given `id` in `document`, mutably.
+///
+/// # Errors
+///
+/// Returns a 404 ([`BackEndErrorResponse::pump_scenario_not_found`]) if `id` doesn't resolve to a
+/// pump scenario.
+pub fn pump_scenario_mut_or_404(
+    document: &mut OpmDocument,
+    id: Uuid,
+) -> Result<&mut PumpScenario, BackEndErrorResponse> {
+    document
+        .pump_scenario_mut(id)
+        .ok_or_else(BackEndErrorResponse::pump_scenario_not_found)
 }
 
 /// Applies `command` to `document`, pushes its inverse onto the undo stack (unless `record_undo` is

@@ -25,7 +25,7 @@ pub use graph_lookup::{
     lowest_common_ancestor_group, map_port, parent_group_id_or_self, resolve_reference_chain,
     validate_relocated_references,
 };
-pub use handler_support::{analyzer_mut_or_404, apply_and_push_undo};
+pub use handler_support::{analyzer_mut_or_404, apply_and_push_undo, pump_scenario_mut_or_404};
 pub use port_map_cascade::{
     PortMapCascadeRemoval, RemovedPortMapLevel, disconnect_exposed_port_cascades_for_node,
     remove_port_map_cascade, split_cascades_for_response,

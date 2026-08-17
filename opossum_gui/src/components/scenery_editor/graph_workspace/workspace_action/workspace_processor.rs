@@ -691,13 +691,14 @@ async fn apply_document_changes(
                 refresh_amp_marker(uuid, graph_id, ws_handler).await;
                 *NODE_DETAILS_REFRESH.write() += 1;
             }
-            DocumentChange::AnalyzerChanged { .. } => {
-                *NODE_DETAILS_REFRESH.write() += 1;
-            }
-            // An operating point changed. Nothing on the canvas is bound to it yet - the scenario
-            // editor and the scenario-driven amplifier status arrive with the GUI step of M4 - so
-            // for now this only nudges the details panel to re-read.
-            DocumentChange::PumpScenarioChanged { .. } => {
+            // A pump scenario was added, removed, or changed. Nothing on the canvas is bound to
+            // one yet - the scenario editor and the scenario-driven amplifier status arrive with
+            // the GUI step of M4 - so for now this, like a plain analyzer change, only nudges the
+            // details panel to re-read.
+            DocumentChange::AnalyzerChanged { .. }
+            | DocumentChange::PumpScenarioAdded { .. }
+            | DocumentChange::PumpScenarioRemoved { .. }
+            | DocumentChange::PumpScenarioChanged { .. } => {
                 *NODE_DETAILS_REFRESH.write() += 1;
             }
             DocumentChange::AnalyzerMoved { id, gui_position } => {

@@ -14,7 +14,7 @@ use crate::{
         NodeAttrExt,
         optic_ports::{PortConfig, ValidatedLidt},
     },
-    gain::active_amp_model,
+    gain::{GainModel, PumpScenario, active_amp_model},
     nodes::ConnectionInfo,
     opm_document::AnalyzerInfo,
     prelude::{AnalyzerType, Aperture, Isometry, PortMap, PortType, Properties},
@@ -669,6 +669,37 @@ impl NewAnalyzerInfo {
 }
 
 // ============================================================================
+// PUMP SCENARIOS
+// ============================================================================
+
+/// Request payload to create a new, empty pump scenario.
+#[derive(Debug, Serialize, Deserialize, ToSchema, Clone)]
+pub struct NewPumpScenario {
+    /// Display name of the new scenario.
+    #[schema(example = "Full power")]
+    pub name: String,
+}
+
+/// Data Transfer Object to send a pump scenario together with its id to the client.
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct PumpScenarioItemDto {
+    /// The unique identifier of the pump scenario.
+    pub id: Uuid,
+    /// The scenario itself: its name and the gain model of every node it amplifies.
+    pub scenario: PumpScenario,
+}
+
+/// Request payload to set the [`GainModel`] a node runs with within one pump scenario.
+///
+/// [`GainModel::None`] takes the node out of the scenario again - see
+/// [`PumpScenario::set_gain_model`].
+#[derive(Debug, Serialize, Deserialize, ToSchema, Clone, Copy)]
+pub struct SetScenarioGainModel {
+    pub node_id: Uuid,
+    pub gain_model: GainModel,
+}
+
+// ============================================================================
 // MACRO OPERATIONS
 // ============================================================================
 
@@ -835,6 +866,10 @@ pub enum DocumentChange {
     /// The analyzer moved on the canvas to `gui_position`. Emitted when undoing/redoing an analyzer
     /// reposition, so the GUI can move it back (a details refetch alone doesn't touch canvas state).
     AnalyzerMoved { id: Uuid, gui_position: (f64, f64) },
+    /// Mirrors `POST /api/pump_scenarios`.
+    PumpScenarioAdded { scenario: PumpScenarioItemDto },
+    /// Mirrors `DELETE /api/pump_scenarios/{uuid}`.
+    PumpScenarioRemoved { id: Uuid },
     /// A pump scenario changed - it was renamed, or a node's gain model in it was set, or the
     /// entries of deleted nodes were dropped from it. Anything showing that operating point (the
     /// scenario editor, and the amplifier status of the nodes if it is the active one) should

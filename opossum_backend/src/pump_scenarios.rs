@@ -1,0 +1,442 @@
+//! Endpoints for the document-wide list of [`PumpScenario`]s - the operating points a model can be
+//! analyzed in (see `opossum_core::gain::scenario` for the concept). Mirrors `analyzers.rs`'s
+//! structure: list/get/create/delete plus field-level patches, all going through
+//! [`Command::PatchPumpScenario`] for the parts that only ever replace the scenario wholesale
+//! (rename, set a node's gain model).
+use actix_web::{HttpRequest, HttpResponse, delete, get, post, put, web};
+use opossum_core::types::api_types::{
+    ErrorResponse, NewPumpScenario, PumpScenarioItemDto, SetScenarioGainModel,
+};
+use utoipa_actix_web::service_config::ServiceConfig;
+use uuid::Uuid;
+
+use crate::{
+    app_state::AppState,
+    error::BackEndErrorResponse,
+    helper_functions::{apply_and_push_undo, pump_scenario_mut_or_404, ron_or_json_response},
+    undo::{Command, PatchAnalyzerPumpScenarios, PatchPumpScenario},
+};
+
+/// Get a list of all pump scenarios of this model
+#[utoipa::path(
+    tag = "pump_scenario",
+    responses((status = OK, description = "List of pump scenarios", body = Vec<PumpScenarioItemDto>)),
+)]
+#[get("")]
+pub async fn get_pump_scenarios(data: web::Data<AppState>) -> HttpResponse {
+    let scenarios: Vec<PumpScenarioItemDto> = data
+        .document
+        .lock()
+        .pump_scenarios()
+        .iter()
+        .map(|(id, scenario)| PumpScenarioItemDto {
+            id: *id,
+            scenario: scenario.clone(),
+        })
+        .collect();
+    HttpResponse::Ok().json(scenarios)
+}
+
+/// Get a pump scenario by UUID
+///
+/// The format is determined by the `Accept` header (`application/ron` or `application/json`).
+/// Defaults to JSON.
+#[utoipa::path(
+    tag = "pump_scenario",
+    params(("uuid" = Uuid, Path, description = "UUID of the pump scenario")),
+    responses(
+        (status = OK, description = "Pump scenario successfully retrieved", content((PumpScenarioItemDto = "application/json"), (PumpScenarioItemDto = "application/ron"))),
+        (status = NOT_FOUND, body = ErrorResponse, description = "UUID not found", content_type = "application/json")
+    )
+)]
+#[get("/{uuid}")]
+#[allow(clippy::future_not_send)]
+pub async fn get_pump_scenario(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    req: HttpRequest,
+) -> Result<HttpResponse, BackEndErrorResponse> {
+    let uuid = path.into_inner();
+    let scenario = data
+        .document
+        .lock()
+        .pump_scenario(uuid)
+        .cloned()
+        .ok_or_else(BackEndErrorResponse::pump_scenario_not_found)?;
+    ron_or_json_response(&req, &scenario)
+}
+
+/// Add a new, empty pump scenario to the model
+#[utoipa::path(
+    tag = "pump_scenario",
+    request_body(content = NewPumpScenario, description = "name of the pump scenario to be created", content_type = "application/json", example = "{\"name\": \"Full power\"}"),
+    responses((status = CREATED, body = Uuid, description = "Pump scenario successfully created"))
+)]
+#[post("")]
+pub async fn post_pump_scenario(
+    data: web::Data<AppState>,
+    new_scenario: web::Json<NewPumpScenario>,
+) -> HttpResponse {
+    let mut document = data.document.lock();
+    let id = document.add_pump_scenario(&new_scenario.name);
+    // The scenario was just added, so it is always there to read back - this can't fail.
+    if let Some(scenario) = document.pump_scenario(id) {
+        data.push_undo(Command::RemovePumpScenario(PumpScenarioItemDto {
+            id,
+            scenario: scenario.clone(),
+        }));
+    }
+    drop(document);
+    HttpResponse::Created().json(id)
+}
+
+/// Delete a pump scenario
+///
+/// Also strips it from the selection of every analyzer that was running it - undoing the deletion
+/// restores both the scenario and every affected analyzer's selection in one step.
+#[utoipa::path(
+    tag = "pump_scenario",
+    params(("uuid" = Uuid, Path, description = "UUID of the pump scenario to delete")),
+    responses(
+        (status = NO_CONTENT, description = "Pump scenario deleted"),
+        (status = NOT_FOUND, body = ErrorResponse, description = "Pump scenario not found")
+    )
+)]
+#[delete("/{uuid}")]
+pub async fn delete_pump_scenario(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+) -> Result<HttpResponse, BackEndErrorResponse> {
+    let uuid = path.into_inner();
+    let mut document = data.document.lock();
+    let scenario = document
+        .pump_scenario(uuid)
+        .cloned()
+        .ok_or_else(BackEndErrorResponse::pump_scenario_not_found)?;
+
+    // Snapshot every analyzer's selection *before* removal, so the affected ones (those that had
+    // `uuid` in their selection) can be told apart from the unaffected ones afterward.
+    let selections_before: Vec<(Uuid, Vec<Uuid>)> = document
+        .analyzers()
+        .iter()
+        .map(|(id, info)| (*id, info.pump_scenarios().to_vec()))
+        .collect();
+
+    // `remove_pump_scenario` strips `uuid` from every analyzer's selection as a side effect - see
+    // its doc comment.
+    document.remove_pump_scenario(uuid);
+
+    let mut inverse = vec![Command::AddPumpScenario(PumpScenarioItemDto {
+        id: uuid,
+        scenario,
+    })];
+    for (analyzer_id, old_selection) in selections_before {
+        if !old_selection.contains(&uuid) {
+            continue;
+        }
+        let Ok(new_selection) = document
+            .analyzer(analyzer_id)
+            .map(|info| info.pump_scenarios().to_vec())
+        else {
+            continue;
+        };
+        inverse.push(Command::PatchAnalyzerPumpScenarios(
+            PatchAnalyzerPumpScenarios {
+                id: analyzer_id,
+                old: new_selection,
+                new: old_selection,
+            },
+        ));
+    }
+    drop(document);
+
+    data.push_undo(
+        Command::from_vec(inverse).expect("at least the AddPumpScenario entry is always present"),
+    );
+    Ok(HttpResponse::NoContent().finish())
+}
+
+/// Rename a pump scenario
+#[utoipa::path(
+    tag = "pump_scenario",
+    params(("uuid" = Uuid, Path, description = "UUID of the pump scenario")),
+    request_body(content = String, description = "new name", content_type = "application/json", example = "\"Half power\""),
+    responses(
+        (status = NO_CONTENT, description = "Pump scenario renamed"),
+        (status = NOT_FOUND, body = ErrorResponse, description = "UUID not found", content_type = "application/json")
+    )
+)]
+#[put("/{uuid}/name")]
+pub async fn put_pump_scenario_name(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    name: web::Json<String>,
+) -> Result<HttpResponse, BackEndErrorResponse> {
+    let uuid = path.into_inner();
+    let mut document = data.document.lock();
+
+    let old = pump_scenario_mut_or_404(&mut document, uuid)?.clone();
+    let mut new = old.clone();
+    new.set_name(&name);
+
+    let command = Command::PatchPumpScenario(PatchPumpScenario { id: uuid, old, new });
+    apply_and_push_undo(&data, document, command, true)
+}
+
+/// Set the gain model a node runs with within a pump scenario
+///
+/// Setting [`opossum_core::gain::GainModel::None`] takes the node out of the scenario again.
+#[utoipa::path(
+    tag = "pump_scenario",
+    params(("uuid" = Uuid, Path, description = "UUID of the pump scenario")),
+    request_body(content = SetScenarioGainModel, description = "node and gain model", content_type = "application/json"),
+    responses(
+        (status = NO_CONTENT, description = "Gain model set"),
+        (status = NOT_FOUND, body = ErrorResponse, description = "UUID not found", content_type = "application/json")
+    )
+)]
+#[put("/{uuid}/gain_model")]
+pub async fn put_pump_scenario_gain_model(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    body: web::Json<SetScenarioGainModel>,
+) -> Result<HttpResponse, BackEndErrorResponse> {
+    let uuid = path.into_inner();
+    let SetScenarioGainModel {
+        node_id,
+        gain_model,
+    } = body.into_inner();
+    let mut document = data.document.lock();
+
+    let old = pump_scenario_mut_or_404(&mut document, uuid)?.clone();
+    let mut new = old.clone();
+    new.set_gain_model(node_id, gain_model);
+
+    let command = Command::PatchPumpScenario(PatchPumpScenario { id: uuid, old, new });
+    apply_and_push_undo(&data, document, command, true)
+}
+
+pub fn config(cfg: &mut ServiceConfig<'_>) {
+    cfg.service(get_pump_scenarios);
+    cfg.service(get_pump_scenario);
+    cfg.service(post_pump_scenario);
+    cfg.service(delete_pump_scenario);
+    cfg.service(put_pump_scenario_name);
+    cfg.service(put_pump_scenario_gain_model);
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{app_state::AppState, document::undo_document};
+    use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
+    use opossum_core::{
+        gain::{ConstGain, GainModel},
+        nodes::Lens,
+    };
+    use utoipa_actix_web::scope;
+
+    /// Mounts the pump-scenario endpoints under `/scenarios` and `undo_document` under `/undo`,
+    /// exactly as `routes.rs` mounts them in production (just without the `/api` prefix) - the
+    /// list/create endpoints sit at the scope root, which `http::Uri` cannot represent as an empty
+    /// path, so they have to be tested behind a real scope rather than mounted bare.
+    macro_rules! test_app {
+        ($app_state:expr) => {
+            test::init_service(
+                App::new()
+                    .app_data($app_state.clone())
+                    .service(scope("/scenarios").configure(config))
+                    .service(undo_document),
+            )
+            .await
+        };
+    }
+
+    /// Adds a scenario with the given name to `data`'s document and returns its id.
+    #[allow(clippy::future_not_send)]
+    async fn add_scenario(data: &Data<AppState>, name: &str) -> Uuid {
+        let app = test_app!(data);
+        let req = test::TestRequest::post()
+            .uri("/scenarios")
+            .set_json(NewPumpScenario { name: name.into() })
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        test::read_body_json(resp).await
+    }
+
+    #[actix_web::test]
+    async fn create_list_and_get() {
+        let app_state = Data::new(AppState::default());
+        let id = add_scenario(&app_state, "full power").await;
+        let app = test_app!(app_state);
+
+        let req = test::TestRequest::get().uri("/scenarios").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let listed: Vec<PumpScenarioItemDto> = test::read_body_json(resp).await;
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].id, id);
+        assert_eq!(listed[0].scenario.name(), "full power");
+
+        let req = test::TestRequest::get()
+            .uri(&format!("/scenarios/{id}"))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let fetched: opossum_core::gain::PumpScenario = test::read_body_json(resp).await;
+        assert_eq!(fetched.name(), "full power");
+    }
+
+    #[actix_web::test]
+    async fn get_missing_scenario_is_404() {
+        let app_state = Data::new(AppState::default());
+        let app = test_app!(app_state);
+        let req = test::TestRequest::get()
+            .uri(&format!("/scenarios/{}", Uuid::new_v4()))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[actix_web::test]
+    async fn rename_and_undo_restores_old_name() {
+        let app_state = Data::new(AppState::default());
+        let id = add_scenario(&app_state, "full power").await;
+        let app = test_app!(app_state);
+
+        let req = test::TestRequest::put()
+            .uri(&format!("/scenarios/{id}/name"))
+            .set_json("half power")
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+        assert_eq!(
+            app_state.document.lock().pump_scenario(id).unwrap().name(),
+            "half power"
+        );
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            app_state.document.lock().pump_scenario(id).unwrap().name(),
+            "full power"
+        );
+    }
+
+    #[actix_web::test]
+    async fn set_gain_model_and_undo_removes_it_again() {
+        let app_state = Data::new(AppState::default());
+        let scenario_id = add_scenario(&app_state, "full power").await;
+        let node_id = {
+            let mut document = app_state.document.lock();
+            document.scenery_mut().add_node(Lens::default()).unwrap()
+        };
+        let app = test_app!(app_state);
+
+        let gain = GainModel::Const(ConstGain::new(2.5).unwrap());
+        let req = test::TestRequest::put()
+            .uri(&format!("/scenarios/{scenario_id}/gain_model"))
+            .set_json(SetScenarioGainModel {
+                node_id,
+                gain_model: gain,
+            })
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+        assert_eq!(
+            app_state
+                .document
+                .lock()
+                .pump_scenario(scenario_id)
+                .unwrap()
+                .gain_model(node_id),
+            gain
+        );
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            app_state
+                .document
+                .lock()
+                .pump_scenario(scenario_id)
+                .unwrap()
+                .gain_model(node_id),
+            GainModel::None
+        );
+    }
+
+    #[actix_web::test]
+    async fn delete_and_undo_restores_the_scenario() {
+        let app_state = Data::new(AppState::default());
+        let id = add_scenario(&app_state, "full power").await;
+        let app = test_app!(app_state);
+
+        let req = test::TestRequest::delete()
+            .uri(&format!("/scenarios/{id}"))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+        assert!(app_state.document.lock().pump_scenario(id).is_none());
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            app_state.document.lock().pump_scenario(id).unwrap().name(),
+            "full power"
+        );
+    }
+
+    /// Deleting a scenario an analyzer has selected must strip it from that selection too, and
+    /// undoing the deletion must restore both the scenario itself and the selection - in one step.
+    #[actix_web::test]
+    async fn delete_selected_scenario_restores_analyzer_selection_on_undo() {
+        let app_state = Data::new(AppState::default());
+        let scenario_id = add_scenario(&app_state, "full power").await;
+        let unrelated_id = add_scenario(&app_state, "cold").await;
+        let analyzer_id = {
+            let mut document = app_state.document.lock();
+            let id = document.add_analyzer(opossum_core::prelude::AnalyzerType::Energy(
+                opossum_core::prelude::EnergyConfig::default(),
+            ));
+            document
+                .analyzer_mut(id)
+                .unwrap()
+                .set_pump_scenarios(vec![scenario_id, unrelated_id]);
+            id
+        };
+        let app = test_app!(app_state);
+
+        let req = test::TestRequest::delete()
+            .uri(&format!("/scenarios/{scenario_id}"))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+        assert_eq!(
+            app_state
+                .document
+                .lock()
+                .analyzer(analyzer_id)
+                .unwrap()
+                .pump_scenarios(),
+            vec![unrelated_id],
+            "the deleted scenario must be gone from the analyzer's selection"
+        );
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let document = app_state.document.lock();
+        assert!(document.pump_scenario(scenario_id).is_some());
+        assert_eq!(
+            document.analyzer(analyzer_id).unwrap().pump_scenarios(),
+            vec![scenario_id, unrelated_id],
+            "undo must restore the analyzer's full selection, in its original order"
+        );
+        drop(document);
+    }
+}

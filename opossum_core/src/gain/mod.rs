@@ -13,9 +13,11 @@
 //!
 //! # Note on the current state
 //!
-//! The models defined here are carriers only: no amplification is applied during ray tracing yet.
-//! The evaluation happens in the shared volume propagation of the hosting node and is added in a
-//! later step.
+//! This `amp config` property is the legacy carrier and is not yet evaluated: amplification is
+//! computed from a [`PumpScenario`] instead (see
+//! [`PropagationStrategy::gain_model`](crate::analyzers::propagation_strategy::PropagationStrategy::gain_model)),
+//! which is a document-wide operating point rather than a per-node property. The property is kept
+//! around until the scenario-based path fully replaces it.
 
 pub mod scenario;
 pub use scenario::{ActiveScenario, PumpScenario};
@@ -32,6 +34,7 @@ use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum::EnumIter;
+use utoipa::ToSchema;
 
 /// Name of the property that carries the [`GainModel`] of a node with a volume.
 ///
@@ -94,7 +97,7 @@ impl Default for ValidatedGain {
 /// factor, regardless of how far the ray actually travels inside the medium and regardless of how
 /// much energy has already been extracted. It is meant for chain layout and system overview, not
 /// for a physically faithful description of an amplifier.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, EnsureValidated)]
+#[derive(Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnsureValidated)]
 #[serde(try_from = "NonValidatedConstGain")]
 pub struct ConstGain {
     gain: ValidatedGain,
@@ -151,7 +154,7 @@ impl From<ConstGain> for GainModel {
 ///
 /// Each escalation stage of the gain modelling adds one variant here. The hosting node does not
 /// change, only the value of its `amp config` property.
-#[derive(Default, Serialize, Deserialize, Debug, Clone, Copy, PartialEq, EnumIter)]
+#[derive(Default, Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnumIter)]
 #[non_exhaustive]
 pub enum GainModel {
     /// No amplification. The node behaves exactly like the passive component it is.

@@ -19,6 +19,7 @@
 use crate::{gain::GainModel, nodes::NodeGroup};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 /// A named operating point: the gain models of all amplifying nodes in one analysis run.
@@ -26,10 +27,14 @@ use uuid::Uuid;
 /// Only the amplifying nodes are held. Setting a node to [`GainModel::None`] removes it from the
 /// scenario rather than storing an inactive entry, so "is in the map" and "amplifies" cannot
 /// disagree.
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, ToSchema)]
 pub struct PumpScenario {
     name: String,
+    /// Keyed by node uuid; opaque in the API schema like every other uuid-keyed map in this crate
+    /// (e.g. `EnergyConfig::source_map`) - `utoipa` schemas key JSON objects by string, so a real
+    /// schema here would document a shape the wire format doesn't have.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    #[schema(value_type = Object)]
     gain_models: HashMap<Uuid, GainModel>,
 }
 

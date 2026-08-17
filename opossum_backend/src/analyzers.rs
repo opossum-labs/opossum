@@ -19,7 +19,7 @@ use crate::{
     helper_functions::{
         Ron, analyzer_mut_or_404, apply_and_push_undo, collect_nodes, ron_or_json_response,
     },
-    undo::{Command, PatchAnalyzer, RepositionAnalyzer},
+    undo::{Command, PatchAnalyzer, PatchAnalyzerPumpScenarios, RepositionAnalyzer},
 };
 
 /// Collects every "source port" node of the whole document as `(uuid, name)` pairs, in depth-first
@@ -238,6 +238,48 @@ pub async fn put_analyzer_gui_position(
     apply_and_push_undo(&data, document, command, true)
 }
 
+/// Set which pump scenarios an analyzer runs in
+///
+/// An analyzer produces one report per listed scenario, in the given order; an empty list is a
+/// single passive run, which is what every analyzer did before scenarios existed.
+#[utoipa::path(
+    tag = "analyzer",
+    params(("uuid" = Uuid, Path, description = "UUID of the analyzer")),
+    request_body(content = Vec<Uuid>, description = "pump scenario UUIDs to run, in order", content_type = "application/json"),
+    responses(
+        (status = NO_CONTENT, description = "Pump scenario selection successfully updated"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "Analyzer UUID not found, or a listed pump scenario does not exist", content_type="application/json")
+    )
+)]
+#[put("/{uuid}/pump_scenarios")]
+pub async fn put_analyzer_pump_scenarios(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    body: web::Json<Vec<Uuid>>,
+) -> Result<HttpResponse, BackEndErrorResponse> {
+    let uuid = path.into_inner();
+    let new = body.into_inner();
+    let mut document = data.document.lock();
+
+    if let Some(missing) = new
+        .iter()
+        .find(|scenario_id| document.pump_scenario(**scenario_id).is_none())
+    {
+        return Err(BackEndErrorResponse::new(
+            400,
+            "Opossum",
+            &format!("pump scenario {missing} does not exist"),
+        ));
+    }
+
+    let old = analyzer_mut_or_404(&mut document, uuid)?
+        .pump_scenarios()
+        .to_vec();
+    let command =
+        Command::PatchAnalyzerPumpScenarios(PatchAnalyzerPumpScenarios { id: uuid, old, new });
+    apply_and_push_undo(&data, document, command, true)
+}
+
 /// Get all available `SourcePort` nodes (UUID and Name) in the entire document recursively
 #[utoipa::path(
     tag = "analyzer",
@@ -270,4 +312,96 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(patch_analyzer);
     cfg.service(delete_analyzer);
     cfg.service(put_analyzer_gui_position);
+    cfg.service(put_analyzer_pump_scenarios);
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{app_state::AppState, document::undo_document};
+    use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
+    use opossum_core::prelude::EnergyConfig;
+
+    #[actix_web::test]
+    async fn set_pump_scenario_selection_and_undo() {
+        let app_state = Data::new(AppState::default());
+        let (analyzer_id, scenario_id) = {
+            let mut document = app_state.document.lock();
+            let analyzer_id = document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()));
+            let scenario_id = document.add_pump_scenario("full power");
+            (analyzer_id, scenario_id)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(put_analyzer_pump_scenarios)
+                .service(undo_document),
+        )
+        .await;
+
+        let req = test::TestRequest::put()
+            .uri(&format!("/{analyzer_id}/pump_scenarios"))
+            .set_json(vec![scenario_id])
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+        assert_eq!(
+            app_state
+                .document
+                .lock()
+                .analyzer(analyzer_id)
+                .unwrap()
+                .pump_scenarios(),
+            vec![scenario_id]
+        );
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(
+            app_state
+                .document
+                .lock()
+                .analyzer(analyzer_id)
+                .unwrap()
+                .pump_scenarios()
+                .is_empty()
+        );
+    }
+
+    /// A selection naming a scenario that doesn't exist must be rejected outright - letting it
+    /// through would only fail much later, at analysis time, with a less specific error.
+    #[actix_web::test]
+    async fn set_pump_scenario_selection_rejects_unknown_scenario() {
+        let app_state = Data::new(AppState::default());
+        let analyzer_id = {
+            let mut document = app_state.document.lock();
+            document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()))
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(put_analyzer_pump_scenarios),
+        )
+        .await;
+
+        let req = test::TestRequest::put()
+            .uri(&format!("/{analyzer_id}/pump_scenarios"))
+            .set_json(vec![Uuid::new_v4()])
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        assert!(
+            app_state
+                .document
+                .lock()
+                .analyzer(analyzer_id)
+                .unwrap()
+                .pump_scenarios()
+                .is_empty(),
+            "a rejected selection must not be partially applied"
+        );
+    }
 }

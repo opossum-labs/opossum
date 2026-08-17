@@ -48,6 +48,7 @@ pub fn start() -> Server {
             (name = "node", description = "Endpoints for handling optical nodes, properties, and ports."),
             (name = "document", description = "Endpoints for managing the overall OPM model and global config."),
             (name = "analyzer", description = "Endpoints for managing simulation analyzers."),
+            (name = "pump_scenario", description = "Endpoints for managing pump scenarios (amplifier operating points)."),
             (name = "operations", description = "Complex macro-operations (e.g., copy, paste, grouping)."),
         ),
     )]
