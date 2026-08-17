@@ -1,3 +1,5 @@
+// File: src/components/node_editor/optical_node_editor/alignment_editor/mod.rs
+
 #![allow(clippy::derive_partial_eq_without_eq)]
 
 mod grating_alignment;
@@ -15,7 +17,6 @@ use crate::{
 };
 use approx::relative_ne;
 use dioxus::prelude::*;
-// use grating_alignment::GratingAlignmentInputs;
 use opossum_core::{
     degree, meter,
     prelude::{Isometry, Properties},
@@ -32,20 +33,23 @@ use uuid::Uuid;
 #[component]
 pub fn AlignmentEditor(
     node_id: Memo<Uuid>,
-    node_info: ReadSignal<NodeInfo>,
+    alignment: Memo<Isometry>,
+    node_type: Memo<String>,
     node_properties_sig: ReadSignal<Properties>,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    let accordion_content = if node_info.read().uuid == *node_id.read() {
+    info!("🔄 Render: AlignmentEditor");
+    let current_node_id = *node_id.read();
+    let accordion_content = if current_node_id != Uuid::nil() {
         vec![rsx! {
             AlignmentInputs {
                 node_id,
-                alignment: node_info.read().alignment.unwrap_or_default(),
-                node_type: node_info.read().node_type.clone(),
+                alignment: *alignment.read(),
+                node_type: node_type.read().clone(),
                 on_change,
                 node_properties_sig,
-                readonly
+                readonly,
             }
         }]
     } else {
@@ -158,18 +162,20 @@ pub fn on_new_rotation(
 #[component]
 pub fn PositioningEditor(
     node_id: Memo<Uuid>,
-    node_info: ReadSignal<NodeInfo>,
+    position_opt: Memo<Option<Isometry>>,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    let accordion_content = if node_info.read().uuid == *node_id.read() {
-        let position_opt = node_info.read().isometry;
+    info!("🔄 Render: PositioningEditor");
+    let current_node_id = *node_id.read();
+    let accordion_content = if current_node_id != Uuid::nil() {
+        let current_position = *position_opt.read();
         vec![rsx! {
-            PositioningInputs{
-                position_opt,
+            PositioningInputs {
+                position_opt: current_position,
                 on_change,
                 node_id,
-                readonly
+                readonly,
             }
         }]
     } else {
@@ -217,7 +223,7 @@ pub fn PositioningInputs(
     });
 
     let mut element_list = vec![rsx! {
-    LabeledSelect {
+        LabeledSelect {
             id: "nodePositioningSelector",
             label: "Position Strategy",
             options: vec![
@@ -228,8 +234,7 @@ pub fn PositioningInputs(
             onchange: move |e: Event<FormData>| {
                 if e.data.value() == "Relative" {
                     on_save.call(None);
-                }
-                else{
+                } else {
                     on_save.call(Some(*last_absolute_position.read()));
                 }
             },

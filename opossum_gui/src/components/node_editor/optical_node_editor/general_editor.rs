@@ -9,52 +9,66 @@ use crate::components::{
 };
 use dioxus::prelude::*;
 use opossum_core::types::api_types::{NodeEditorPanel, NodeInfo};
+use uuid::Uuid;
 
 #[component]
 pub fn GeneralEditor(
-    node_info: ReadSignal<NodeInfo>,
+    node_id: Memo<Uuid>,
+    name: Memo<String>,
+    node_type: Memo<String>,
+    inverted: Memo<bool>,
     active_node: Memo<SelectedNode>,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
     info!("🔄 Render: GeneralEditor");
-    let accordion_content = if node_info.read().uuid == active_node.read().node_id {
-        let node_id = node_info.read().uuid;
-        let node_type = node_info.read().node_type.clone();
-        let name = node_info.read().name.clone();
-        let inverted = node_info.read().inverted;
+    let current_node_id = *node_id.read();
+    let is_active = current_node_id == active_node.read().node_id && current_node_id != Uuid::nil();
+
+    // Stable callback for renaming nodes
+    let on_name_save = use_callback(move |new_name: String| {
+        on_change.call(NodeChangeEvent {
+            node_id: *node_id.peek(),
+            action: NodeChangeAction::Name(new_name),
+        });
+    });
+
+    // Stable callback for toggling node inversion
+    let on_inverted_change = use_callback(move |new_state: bool| {
+        on_change.call(NodeChangeEvent {
+            node_id: *node_id.peek(),
+            action: NodeChangeAction::Inverted {
+                inverted: new_state,
+                graph_id: active_node.peek().graph_id,
+            },
+        });
+    });
+
+    let accordion_content = if is_active {
         vec![
             rsx! {
-                NodeTypeInput { node_type: node_type, label: "Node Type" }
+                NodeTypeInput {
+                    node_type: node_type.read().clone(),
+                    label: "Node Type",
+                }
             },
             rsx! {
                 FlushableTextInput {
-                    id: format!("nodeName_{}", node_id),
+                    id: format!("nodeName_{current_node_id}"),
                     label: "Node Name".to_string(),
-                    value: name,
+                    value: name.read().clone(),
                     container_class: "form-floating border-start".to_string(),
                     input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
                     label_class: "form-label text-secondary".to_string(),
                     readonly,
-                    on_save: move |new_name: String| {
-                        on_change.call(NodeChangeEvent {
-                            node_id,
-                            action: NodeChangeAction::Name(new_name),
-                        });
-                    },
+                    on_save: on_name_save,
                 }
             },
             rsx! {
-                // no readonly here even for a reference!
                 NodeInvertedInput {
-                    value: inverted,
+                    value: *inverted.read(),
                     label: "Invert Node",
-                    on_valid_change: move |new_state: bool| {
-                        on_change.call(NodeChangeEvent {
-                            node_id,
-                            action: NodeChangeAction::Inverted{inverted: new_state, graph_id: active_node.read().graph_id},
-                        });
-                    }
+                    on_valid_change: on_inverted_change,
                 }
             },
         ]
@@ -77,13 +91,13 @@ pub fn GeneralEditor(
 #[component]
 pub fn NodeInvertedInput(
     value: bool,
-    label: String,
+    label: &'static str,
     on_valid_change: EventHandler<bool>,
 ) -> Element {
     rsx! {
         LabeledCheckboxInput {
             id: "inputNodeInverted".to_string(),
-            label,
+            label: label.to_string(),
             value: format!("{}", value),
             onchange: move |e: Event<FormData>| {
                 if let Ok(new_val) = e.data.parsed::<bool>() {

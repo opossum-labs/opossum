@@ -39,6 +39,13 @@ pub fn OpticalNodeEditor(
     let mut node_properties_sig = use_signal(Properties::default);
     let mut readonly = use_signal(|| false);
 
+    // Fine-grained selector memos to decouple sub-editor renders
+    let memo_node_name = use_memo(move || node_info_sig.read().name.clone());
+    let memo_node_type = use_memo(move || node_info_sig.read().node_type.clone());
+    let memo_node_inverted = use_memo(move || node_info_sig.read().inverted);
+    let memo_node_alignment = use_memo(move || node_info_sig.read().alignment.unwrap_or_default());
+    let memo_node_isometry = use_memo(move || node_info_sig.read().isometry);
+
     let on_property_change = EventHandler::new(move |node_change: NodeChangeEvent| {
         if let NodeChangeAction::Property(name, proptype) = &node_change.action {
             if let Err(e) = node_properties_sig.write().set(name, proptype.clone()) {
@@ -51,23 +58,35 @@ pub fn OpticalNodeEditor(
         }
     });
 
-    let mut resource_future: Resource<(Option<NodeInfo>, Option<Properties>)> =
+    let resource_future: Resource<(Option<NodeInfo>, Option<Properties>)> =
         use_resource(move || async move {
-            let node_id = active_node.read().node_id;
-            let node_info = match api::get_node_info(node_id).await {
-                Ok(node_info) => {
-                    readonly.set(node_info.node_type == "reference");
-                    node_info_sig.set(node_info.clone());
-                    Some(node_info)
+            // Reactively subscribe to external details refresh events
+            crate::NODE_DETAILS_REFRESH();
+
+            let current_node_id = active_node.read().node_id;
+
+            let node_info = match api::get_node_info(current_node_id).await {
+                Ok(new_info) => {
+                    let is_ref = new_info.node_type == "reference";
+                    if *readonly.peek() != is_ref {
+                        readonly.set(is_ref);
+                    }
+                    if *node_info_sig.peek() != new_info {
+                        node_info_sig.set(new_info.clone());
+                    }
+                    Some(new_info)
                 }
                 Err(err_str) => {
                     OPOSSUM_UI_LOGS.write().add_log(&err_str);
                     None
                 }
             };
-            let properties = match api::get_node_properties(node_id).await {
+
+            let properties = match api::get_node_properties(current_node_id).await {
                 Ok(properties_res) => {
-                    node_properties_sig.set(properties_res.properties.clone());
+                    if *node_properties_sig.peek() != properties_res.properties {
+                        node_properties_sig.set(properties_res.properties.clone());
+                    }
                     Some(properties_res.properties)
                 }
                 Err(err_str) => {
@@ -79,15 +98,7 @@ pub fn OpticalNodeEditor(
             (node_info, properties)
         });
 
-    use_effect(move || {
-        crate::NODE_DETAILS_REFRESH();
-        resource_future.restart();
-    });
-
-    // Undo/redo just auto-selected this node because it (or its tab) wasn't already displayed - open
-    // the panel it changed once this node's data has actually loaded (the accordion DOM for a freshly
-    // selected node doesn't exist until then). Reading `resource_future` here (not just the pending
-    // signal) means this effect naturally re-runs once the fetch resolves, instead of needing to poll.
+    // Handle accordion opening on undo/redo
     use_effect(move || {
         let Some((uuid, panel)) = *crate::PENDING_PANEL_OPEN.read() else {
             return;
@@ -99,10 +110,8 @@ pub fn OpticalNodeEditor(
             return;
         };
         if node_info.uuid != uuid {
-            return; // stale in-flight fetch for a previous node
+            return; // Stale in-flight fetch for a previous node
         }
-        // PortConfig has its own, separately-loaded resource in `PortConfigEditor` - it clears the
-        // pending signal itself once *its* data has loaded, to avoid the same missing-DOM race here.
         if panel != NodeEditorPanel::PortConfig {
             open_accordion_section(panel);
             *crate::PENDING_PANEL_OPEN.write() = None;
@@ -119,36 +128,40 @@ pub fn OpticalNodeEditor(
                     class: "accordion accordion-borderless bg-dark noselect",
                     id: "accordionNodeConfig",
 
-                    GeneralEditor {
-                        node_info: node_info_sig,
-                        active_node,
+                    // GeneralEditor {
+                    //     node_id,
+                    //     name: memo_node_name,
+                    //     node_type: memo_node_type,
+                    //     inverted: memo_node_inverted,
+                    //     active_node,
+                    //     on_change,
+                    //     readonly: readonly(),
+                    // }
+                    // PortConfigEditor {
+                    //     node_id,
+                    //     node_info: node_info_sig,
+                    //     on_change,
+                    //     readonly: readonly(),
+                    // }
+                    // PropertiesEditor {
+                    //     node_id,
+                    //     node_properties_sig,
+                    //     node_info_sig,
+                    //     on_change: on_property_change,
+                    //     readonly: readonly(),
+                    // }
+                    PositioningEditor {
+                        node_id,
+                        position_opt: memo_node_isometry,
                         on_change,
                         readonly: readonly(),
                     }
-                                // PortConfigEditor {
+                                // AlignmentEditor {
                 //     node_id,
-                //     node_info: node_info_sig,
-                //     on_change,
-                //     readonly: readonly(),
-                // }
-                // PropertiesEditor {
-                //     node_id,
+                //     alignment: memo_node_alignment,
+                //     node_type: memo_node_type,
                 //     node_properties_sig,
-                //     node_info_sig,
-                //     on_change: on_property_change,
-                //     readonly: readonly(),
-                // }
-                // PositioningEditor {
-                //     node_id,
-                //     node_info: node_info_sig,
                 //     on_change,
-                //     readonly: readonly(),
-                // }
-                // AlignmentEditor {
-                //     node_id,
-                //     node_info: node_info_sig,
-                //     on_change,
-                //     node_properties_sig,
                 //     readonly: readonly(),
                 // }
                 }

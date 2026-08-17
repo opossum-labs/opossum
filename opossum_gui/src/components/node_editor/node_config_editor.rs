@@ -52,8 +52,20 @@ pub fn NodeConfigEditor(
         dirty_count,
     });
 
-    #[allow(clippy::redundant_closure)]
-    let mut displayed_nodes = use_signal(|| selected_nodes_memo());
+    // Stores the last confirmed selection while the form is clean
+    let mut last_clean_selection = use_signal(&*selected_nodes_memo);
+
+    // Synchronously derive displayed nodes during render to prevent double-render cycles
+    let displayed_nodes = use_memo(move || {
+        let is_dirty = *dirty_count.read() > 0;
+        if is_dirty {
+            // Keep existing selection locked while editing
+            last_clean_selection.read().clone()
+        } else {
+            // Always reflect the latest selection immediately
+            selected_nodes_memo()
+        }
+    });
 
     let memo_active_node_id = use_memo(move || {
         displayed_nodes()
@@ -67,8 +79,11 @@ pub fn NodeConfigEditor(
     });
 
     use_effect(move || {
-        if *dirty_count.read() == 0 {
-            displayed_nodes.set(selected_nodes_memo());
+        let current_selection = selected_nodes_memo();
+        if *dirty_count.read() == 0
+            && last_clean_selection.peek().as_slice() != current_selection.as_slice()
+        {
+            last_clean_selection.set(current_selection);
         }
     });
 
