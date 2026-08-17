@@ -443,12 +443,15 @@ body {
     color: rgb(180, 180, 180);
 }
 
-.amp-overview-card {
-    cursor: pointer;
-}
-
 .amp-overview-card:hover {
     border-color: rgb(255, 214, 130) !important;
+}
+
+/* Only the name and the subtext of a scenario's amplifier-candidate row reveal the node on the
+   canvas now - the gain switch and factor input beside/below them need their own normal cursor,
+   so the whole card is no longer uniformly clickable the way the old amp-overview card was. */
+.amp-row-reveal {
+    cursor: pointer;
 }
 
 /* Scenario editor: new-scenario row (name input + add button), same palette as the amp filter
@@ -556,6 +559,42 @@ body {
 
 .scenario-amplifier-list {
     margin-top: 6px;
+}
+
+/* None/Const switch for one candidate's gain model within a scenario - same "own classes instead of
+   MDB" reasoning as `.amp-filter-btn`/`.scenario-active-btn` above, same amber "active" accent as
+   `.scenario-active-btn.active`/`.scenario-card.active`. */
+.amp-gain-switch {
+    padding: 2px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    color: rgb(205, 205, 205);
+    background-color: rgb(58, 58, 58);
+    border: 1px solid rgb(95, 95, 95);
+    border-radius: 4px;
+}
+
+.amp-gain-switch:hover {
+    color: #ffffff;
+    background-color: rgb(78, 78, 78);
+}
+
+.amp-gain-switch.active {
+    color: rgb(20, 20, 20);
+    background-color: rgb(255, 193, 7);
+    border-color: rgb(255, 193, 7);
+}
+
+/* Gain-factor input, shown under a candidate's row only while its switch is Const. */
+.amp-gain-input {
+    width: 100%;
+    margin-top: 4px;
+    padding: 2px 6px;
+    font-size: 12px;
+    color: rgb(235, 235, 235);
+    background-color: rgb(58, 58, 58);
+    border: 1px solid rgb(90, 90, 90);
+    border-radius: 4px;
 }
 
 /* Status line below the body of an amplifying node. Its height must stay in sync with
