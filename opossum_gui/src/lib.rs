@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     process::Child,
     sync::{Arc, Mutex},
 };
@@ -56,6 +57,16 @@ static ACTIVE_PUMP_SCENARIO: GlobalSignal<Option<Uuid>> = Signal::global(|| None
 static ACTIVE_SCENARIO_GAIN_MODELS: GlobalSignal<
     std::collections::HashMap<Uuid, opossum_core::gain::GainModel>,
 > = Signal::global(std::collections::HashMap::new);
+/// The document-wide amplifier-candidate set (`OpmDocument::amplifier_nodes`) - which nodes are
+/// hardware-marked as amplifiers, independent of any pump scenario.
+///
+/// Unlike [`ACTIVE_SCENARIO_GAIN_MODELS`] this is not a GUI-only choice: it is real document data,
+/// so loading a document refetches it (it does not simply reset to empty) and it is refreshed on
+/// `DocumentChange::AmplifierNodesChanged` (a candidacy toggle, or an undo/redo touching one).
+/// Read the same two ways `ACTIVE_SCENARIO_GAIN_MODELS` is: bulk-syncing every currently rendered
+/// node's canvas flag in one pass (`GraphStore::sync_amplifier_candidates`) whenever the cache is
+/// refreshed, and seeding a freshly created node's flag synchronously right after construction.
+static AMPLIFIER_CANDIDATES: GlobalSignal<HashSet<Uuid>> = Signal::global(HashSet::new);
 /// Which view the sidebar shows, whether it is collapsed to its icon bar, and how wide it is when
 /// expanded.
 ///

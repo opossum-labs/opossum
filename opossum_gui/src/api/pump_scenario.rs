@@ -3,7 +3,9 @@
 use crate::HTTP_API_CLIENT;
 use opossum_core::{
     gain::{GainModel, PumpScenario},
-    types::api_types::{AmplifierDto, NewPumpScenario, PumpScenarioItemDto, SetScenarioGainModel},
+    types::api_types::{
+        NewPumpScenario, PumpScenarioItemDto, ScenarioAmplifierDto, SetScenarioGainModel,
+    },
 };
 use uuid::Uuid;
 
@@ -30,15 +32,17 @@ pub async fn get_pump_scenario(uuid: Uuid) -> Result<PumpScenario, String> {
         .await
 }
 
-/// Get every node the given pump scenario amplifies, with names resolved.
+/// Get every amplifier candidate, with its gain model in the given pump scenario and names
+/// resolved. Every candidate appears here - configured in this scenario or not - not just the ones
+/// actively amplifying; see the endpoint's own doc comment.
 ///
 /// # Errors
 ///
 /// This function will return an error if the request fails, the UUID is not found, or the
 /// response cannot be deserialized.
-pub async fn get_pump_scenario_amplifiers(uuid: Uuid) -> Result<Vec<AmplifierDto>, String> {
+pub async fn get_pump_scenario_amplifiers(uuid: Uuid) -> Result<Vec<ScenarioAmplifierDto>, String> {
     HTTP_API_CLIENT()
-        .get::<Vec<AmplifierDto>>(&format!("/api/pump_scenarios/{uuid}/amplifiers"))
+        .get::<Vec<ScenarioAmplifierDto>>(&format!("/api/pump_scenarios/{uuid}/amplifiers"))
         .await
 }
 

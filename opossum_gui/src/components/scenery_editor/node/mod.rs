@@ -108,6 +108,11 @@ pub struct NodeElement {
     /// rather than fetched by this node itself; the parameters are edited through the scenario
     /// editor, not here.
     amp_model: Option<String>,
+    /// Whether this node is a member of the document-wide amplifier-candidate set - a hardware
+    /// fact, independent of the *active pump scenario* `amp_model` reflects. A display marker only,
+    /// kept in sync by `set_amplifier_candidate`/`sync_amplifier_candidates`; candidacy itself is
+    /// edited through the context menu's "As amplifier" toggle.
+    is_amplifier_candidate: bool,
 }
 
 impl NodeElement {
@@ -131,6 +136,7 @@ impl NodeElement {
             inverted,
             node_index,
             amp_model: None,
+            is_amplifier_candidate: false,
         }
     }
     /// Returns the unique sequential node index assigned upon creation.
@@ -249,6 +255,15 @@ impl NodeElement {
     pub fn set_amp_model(&mut self, amp_model: Option<String>) {
         self.amp_model = amp_model;
     }
+    /// Returns whether this node is a member of the document-wide amplifier-candidate set.
+    #[must_use]
+    pub const fn is_amplifier_candidate(&self) -> bool {
+        self.is_amplifier_candidate
+    }
+    /// Sets whether this node is a member of the document-wide amplifier-candidate set.
+    pub const fn set_amplifier_candidate(&mut self, is_amplifier_candidate: bool) {
+        self.is_amplifier_candidate = is_amplifier_candidate;
+    }
     #[must_use]
     pub const fn node_type(&self) -> &NodeType {
         &self.node_type
@@ -299,10 +314,11 @@ impl From<&NodeInfo> for NodeElement {
             0,
         );
         // Not seeded from `node_info.amp_model` (the legacy `amp config` property marker,
-        // superseded by pump scenarios - see `crate::ACTIVE_SCENARIO_GAIN_MODELS`): this
-        // conversion has to stay usable outside a mounted app (it is unit-tested as plain
-        // conversion logic), so it cannot read a Dioxus global signal. Callers running inside the
-        // live app look the marker up themselves right after constructing the node - see
+        // superseded by pump scenarios - see `crate::ACTIVE_SCENARIO_GAIN_MODELS`), and likewise
+        // `is_amplifier_candidate` is left at its default `false` here too: this conversion has to
+        // stay usable outside a mounted app (it is unit-tested as plain conversion logic), so it
+        // cannot read a Dioxus global signal. Callers running inside the live app look both markers
+        // up themselves right after constructing the node - see
         // `GraphStore::add_new_optical_node`/`add_new_reference_node`.
         node
     }
@@ -351,6 +367,24 @@ mod test {
         assert_eq!(node.amp_model(), None);
         // No amplifier marker means no status line, so the node must not be inflated by its height.
         assert!(node.total_height() <= HEADER_HEIGHT + node.node_body_height());
+    }
+
+    /// Candidacy is document-wide data, not carried on `NodeInfo` at all - a freshly converted node
+    /// must default to "not a candidate" until whichever live code constructs it seeds the flag from
+    /// `crate::AMPLIFIER_CANDIDATES` (see `GraphStore::add_new_optical_node`).
+    #[test]
+    fn conversion_defaults_to_not_an_amplifier_candidate() {
+        let node = NodeElement::from(&amplifying_node_info());
+        assert!(!node.is_amplifier_candidate());
+    }
+
+    #[test]
+    fn amplifier_candidate_getter_and_setter_round_trip() {
+        let mut node = NodeElement::from(&amplifying_node_info());
+        node.set_amplifier_candidate(true);
+        assert!(node.is_amplifier_candidate());
+        node.set_amplifier_candidate(false);
+        assert!(!node.is_amplifier_candidate());
     }
 
     /// The fallback position only applies when the backend has no position of its own to report.

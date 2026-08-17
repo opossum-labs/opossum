@@ -32,6 +32,15 @@ fn active_scenario_amp_model(node_id: Uuid) -> Option<String> {
         .and_then(opossum_core::gain::GainModel::active_name)
 }
 
+/// Looks up whether `node_id` is a member of the cached amplifier-candidate set, for seeding a
+/// freshly constructed node's canvas flag (see [`crate::AMPLIFIER_CANDIDATES`]).
+///
+/// Same reasoning as [`active_scenario_amp_model`]: a plain, unsubscribed read, fine here because
+/// the caller is a one-shot node-construction path running inside the live app.
+fn is_amplifier_candidate(node_id: Uuid) -> bool {
+    crate::AMPLIFIER_CANDIDATES.read().contains(&node_id)
+}
+
 #[derive(Clone, PartialEq, Store, Default)]
 pub struct GraphState {
     graph_store: GraphStore,
@@ -232,6 +241,20 @@ impl<Lens> Store<GraphStore, Lens> {
             }
         }
     }
+    /// Sets every one of this tab's nodes' amplifier-candidate flag from `candidates`, in one pass.
+    ///
+    /// Mirrors [`Self::sync_amp_markers`] exactly - used to bring a whole tab's flags in line with
+    /// the document-wide candidate set at once (after a candidacy toggle or an undo/redo touching
+    /// one), rather than one request per node.
+    fn sync_amplifier_candidates(&mut self, candidates: &HashSet<Uuid>) {
+        let node_ids: Vec<Uuid> = self.nodes().read().keys().copied().collect();
+        for node_id in node_ids {
+            if let Some(mut node) = self.nodes().get(node_id) {
+                node.write()
+                    .set_amplifier_candidate(candidates.contains(&node_id));
+            }
+        }
+    }
     fn renumber_z_levels(&mut self) {
         let mut node_elements: Vec<(Uuid, usize)> = self
             .nodes()
@@ -267,6 +290,7 @@ impl<Lens> Store<GraphStore, Lens> {
     fn add_new_reference_node(&mut self, ref_node_info: &NodeInfo) -> NodeElement {
         let mut node_element = NodeElement::from(ref_node_info);
         node_element.set_amp_model(active_scenario_amp_model(ref_node_info.uuid()));
+        node_element.set_amplifier_candidate(is_amplifier_candidate(ref_node_info.uuid()));
         node_element.set_node_index(self.fetch_next_node_index());
         let id = ref_node_info.uuid();
         let nr_of_nodes = self.nodes().len();
@@ -298,6 +322,7 @@ impl<Lens> Store<GraphStore, Lens> {
     fn add_new_optical_node(&mut self, node_info: &NodeInfo) {
         let mut node_element = NodeElement::from(node_info);
         node_element.set_amp_model(active_scenario_amp_model(node_info.uuid()));
+        node_element.set_amplifier_candidate(is_amplifier_candidate(node_info.uuid()));
         node_element.set_node_index(self.fetch_next_node_index());
         self.nodes().insert(node_info.uuid(), node_element.clone());
         self.set_node_active(node_info.uuid(), node_element.z_index(), true);

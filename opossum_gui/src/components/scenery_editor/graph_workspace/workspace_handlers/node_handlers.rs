@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::components::scenery_editor::graph_workspace::{
     GraphStateStoreExt, GraphStore, GraphStoreStoreExt, GraphStoreStoreImplExt,
@@ -23,6 +23,7 @@ pub struct NodeHandlers {
     invert_node: EventHandler<(Uuid, bool, Uuid)>,
     set_amp_model: EventHandler<(Uuid, Option<String>, Uuid)>,
     sync_amp_markers: EventHandler<HashMap<Uuid, GainModel>>,
+    sync_amplifier_candidates: EventHandler<HashSet<Uuid>>,
     set_node_name: EventHandler<(String, Uuid, Uuid, bool)>,
     add_group_nodes: EventHandler<(Uuid, Vec<NodeInfo>)>,
     add_group_analyzers: EventHandler<(Uuid, Vec<AnalyzerItemDto>)>,
@@ -47,6 +48,7 @@ impl NodeHandlers {
             invert_node: invert_node_handler(workspace),
             set_amp_model: set_amp_model_handler(workspace),
             sync_amp_markers: sync_amp_markers_handler(workspace),
+            sync_amplifier_candidates: sync_amplifier_candidates_handler(workspace),
             set_node_name: set_node_name_handler(workspace),
             add_group_nodes: add_group_nodes_handler(workspace),
             add_group_analyzers: add_group_analyzers_handler(workspace),
@@ -147,6 +149,13 @@ impl NodeHandlers {
     /// touched its contents, rather than one request per node.
     pub fn sync_amp_markers(&self, gain_models: HashMap<Uuid, GainModel>) {
         self.sync_amp_markers.call(gain_models);
+    }
+
+    /// Brings every currently rendered node's amplifier-candidate flag (across every open tab) in
+    /// line with `candidates` in one pass - used after a candidacy toggle, or after an undo/redo
+    /// touched the candidate set, rather than one request per node.
+    pub fn sync_amplifier_candidates(&self, candidates: HashSet<Uuid>) {
+        self.sync_amplifier_candidates.call(candidates);
     }
 
     pub fn set_node_name(&self, name: String, node_id: Uuid, graph_id: Uuid, needs_saving: bool) {
@@ -325,6 +334,17 @@ fn sync_amp_markers_handler(
     EventHandler::new(move |gain_models: HashMap<Uuid, GainModel>| {
         for_each_tab(workspace, false, |tab| {
             tab.graph_store().sync_amp_markers(&gain_models);
+        });
+    })
+}
+/// Bulk-mirrors the amplifier-candidate set into every currently open tab's canvas, via
+/// [`GraphStore::sync_amplifier_candidates`](super::super::workspace_state::GraphStore).
+fn sync_amplifier_candidates_handler(
+    workspace: Store<GraphsWorkspaceState>,
+) -> EventHandler<HashSet<Uuid>> {
+    EventHandler::new(move |candidates: HashSet<Uuid>| {
+        for_each_tab(workspace, false, |tab| {
+            tab.graph_store().sync_amplifier_candidates(&candidates);
         });
     })
 }

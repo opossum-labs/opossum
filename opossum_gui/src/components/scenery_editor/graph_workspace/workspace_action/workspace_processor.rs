@@ -68,6 +68,11 @@ pub fn use_workspace_processor(
                         // seed their own marker from this cache) never see the old document's data.
                         *crate::ACTIVE_PUMP_SCENARIO.write() = None;
                         crate::ACTIVE_SCENARIO_GAIN_MODELS.write().clear();
+                        // Unlike the two above, the candidate set is real document data rather than
+                        // a GUI-only choice - cleared here only to avoid showing stale candidates
+                        // during the load, then re-fetched for real inside `process_load_from_file`
+                        // once the new document exists, before any node is constructed from it.
+                        crate::AMPLIFIER_CANDIDATES.write().clear();
                         process_load_from_file(
                             workspace,
                             path,
@@ -94,6 +99,9 @@ pub fn use_workspace_processor(
                     GraphsWorkspaceAction::DeleteRootScenery => {
                         *crate::ACTIVE_PUMP_SCENARIO.write() = None;
                         crate::ACTIVE_SCENARIO_GAIN_MODELS.write().clear();
+                        // A reset document is genuinely empty (`OpmDocument::default()`), so clearing
+                        // is exact here, unlike the load path which has to re-fetch afterward.
+                        crate::AMPLIFIER_CANDIDATES.write().clear();
                         process_delete_root_scenery(workspace_handlers, set_file_path_handler)
                             .await;
                         // The backend clears its undo/redo history on every reset; mirror that here.
@@ -684,6 +692,28 @@ async fn refresh_active_scenario_gain_models(ws_handler: WorkSpaceSignalHandlers
     );
 }
 
+/// Re-fetches the document-wide amplifier-candidate set and bulk-syncs every open tab's canvas
+/// flags to match.
+///
+/// Used whenever the candidate set itself changed - a candidacy toggle, or an undo/redo touching
+/// `DocumentChange::AmplifierNodesChanged`: unlike the direct toggle handler there is no single node
+/// whose new state is already known, so every currently rendered node has to be told apart from
+/// what actually changed. Mirrors [`refresh_active_scenario_gain_models`].
+///
+/// # Arguments
+///
+/// * `ws_handler` - workspace signal handlers used to bulk-sync every open tab's flags.
+async fn refresh_amplifier_candidates(ws_handler: WorkSpaceSignalHandlers) {
+    eval_action_run(
+        api::get_amplifier_candidates().await,
+        Some(move |candidates: Vec<Uuid>| {
+            let candidates: HashSet<Uuid> = candidates.into_iter().collect();
+            crate::AMPLIFIER_CANDIDATES.write().clone_from(&candidates);
+            ws_handler.nodes.sync_amplifier_candidates(candidates);
+        }),
+    );
+}
+
 /// Handles an undo/redo endpoint response: reflects the resulting Undo/Redo availability, marks the
 /// document unsaved, and replays the returned changes onto the canvas. Shared by the `Undo` and `Redo`
 /// action arms, which differ only in which endpoint they call.
@@ -860,10 +890,9 @@ async fn apply_document_changes(
                 }
             }
             DocumentChange::AmplifierNodesChanged => {
-                // Full handling (refreshing a document-wide candidate cache and every open tab's
-                // canvas markers) lands with the GUI candidate-cache plumbing. Until then, at least
-                // keep the scenario editor's row list in sync - a candidacy change can add or remove
-                // a row from every scenario, the same reasoning `PumpScenarioAdded` above follows.
+                refresh_amplifier_candidates(ws_handler).await;
+                // A candidacy change can add or remove a row from every scenario's editor, the same
+                // reasoning `PumpScenarioAdded` above follows.
                 *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
             }
             DocumentChange::ViewportChanged {
@@ -1936,6 +1965,16 @@ async fn process_load_from_file(
         Ok(response) => {
             process_add_root_scenery_tab(workspace, ws_handler, response.name).await;
             set_file_path_handler.call(Some(path));
+
+            // Populate the real candidate set from the just-loaded document *before* any node is
+            // constructed below - freshly constructed nodes seed their canvas flag from this cache
+            // synchronously, so it must already hold the loaded document's data by then.
+            eval_action_run(
+                api::get_amplifier_candidates().await,
+                Some(|candidates: Vec<Uuid>| {
+                    *crate::AMPLIFIER_CANDIDATES.write() = candidates.into_iter().collect();
+                }),
+            );
 
             let scenery_id = *scenery_id_sig.read();
 

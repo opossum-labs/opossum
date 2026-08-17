@@ -3,7 +3,7 @@ use crate::{
     components::scenery_editor::GraphsWorkspaceAction,
 };
 use dioxus::prelude::*;
-use opossum_core::{gain::PumpScenario, types::api_types::AmplifierDto};
+use opossum_core::{gain::PumpScenario, types::api_types::ScenarioAmplifierDto};
 use uuid::Uuid;
 
 /// Document-wide editor for pump scenarios - the operating points a model can be analyzed in.
@@ -258,19 +258,23 @@ fn ScenarioAmplifiers(scenario_id: Uuid) -> Element {
     }
 }
 
-/// One amplifying node of an expanded scenario. Clicking it reveals the node on the canvas, same as
-/// the previous overview's cards - editing the gain model itself still happens in the node's own
-/// properties panel (`amp config`), which is where the eventual gain-model editor for this scenario
-/// belongs too (see the architecture doc's note on the properties editor's `_ => None` arm).
+/// One amplifier candidate of an expanded scenario. Clicking it reveals the node on the canvas.
+///
+/// Shows the raw [`GainModel`](opossum_core::gain::GainModel) name for now (`None` for a candidate
+/// this scenario hasn't configured) - the on/off switch and the `Const` gain-factor input land with
+/// the scenario-editor rewrite around this reshaped endpoint.
 #[component]
-fn ScenarioAmplifierRow(amplifier: AmplifierDto, on_reveal: EventHandler<(Uuid, Uuid)>) -> Element {
-    let AmplifierDto {
+fn ScenarioAmplifierRow(
+    amplifier: ScenarioAmplifierDto,
+    on_reveal: EventHandler<(Uuid, Uuid)>,
+) -> Element {
+    let ScenarioAmplifierDto {
         uuid,
         name,
         node_type,
         group_id,
         group_name,
-        amp_model,
+        gain_model,
     } = amplifier;
 
     rsx! {
@@ -280,7 +284,7 @@ fn ScenarioAmplifierRow(amplifier: AmplifierDto, on_reveal: EventHandler<(Uuid, 
             div { class: "card-body p-2 text-light",
                 div { class: "d-flex justify-content-between align-items-center",
                     span { class: "fw-bold small", "{name}" }
-                    span { class: "badge bg-warning text-dark", "{amp_model}" }
+                    span { class: "badge bg-warning text-dark", "{gain_model}" }
                 }
                 div { class: "amp-card-sub", "{node_type} · {group_name}" }
             }
