@@ -360,6 +360,14 @@ pub enum GraphsWorkspaceAction {
     /// every open tab's amplifier markers to match.
     SetActivePumpScenario(Option<Uuid>),
 
+    /// Corrects the active pump scenario if it is unset or no longer exists, by activating the
+    /// first scenario the document actually has. "No scenario active" is only a legitimate state
+    /// when the document has none at all - otherwise the canvas would show `None` for a node that
+    /// may well be configured as `Const` in every scenario, which reads as "this node doesn't
+    /// amplify" even though it does. Sent after anything that can add or remove a scenario (create,
+    /// delete, undo/redo of either, loading a document).
+    EnsureActivePumpScenario,
+
     /// Sets the gain model a node runs with within one pump scenario - what the context menu's
     /// amplifier toggle sends. Unlike [`Self::SetAmpConfig`] this does not touch any node property;
     /// it patches the scenario, and mirrors the canvas marker only if `scenario_id` is the active

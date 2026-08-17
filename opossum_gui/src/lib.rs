@@ -36,13 +36,17 @@ static AMP_LIST_REFRESH: GlobalSignal<usize> = Signal::global(|| 0);
 /// changed - creating/renaming/deleting a scenario, setting a node's gain model in one, or an
 /// undo/redo touching any of that. Same role as [`AMP_LIST_REFRESH`], for the scenario editor panel.
 static PUMP_SCENARIO_LIST_REFRESH: GlobalSignal<usize> = Signal::global(|| 0);
-/// The pump scenario the canvas and the context menu currently reflect, if any.
+/// The pump scenario the canvas amplifier status line currently reflects.
 ///
-/// This is a GUI-only choice, not part of the document: it is not saved to the `.opm` file and
-/// resets when a new document is loaded. A node can belong to several scenarios at once (the
-/// analyzer that runs them decides which), but the canvas can only ever show one amplifier status
-/// per node - this is the one it shows. `None` means "no scenario selected", under which every
-/// node is passive on the canvas regardless of what any scenario says.
+/// This is a GUI-only choice, not part of the document: it is not saved to the `.opm` file. A node
+/// can belong to several scenarios at once (the analyzer that runs them decides which), but the
+/// canvas can only ever show one status per node - this is the scenario it shows. `None` is only a
+/// legitimate value while the document has no scenario at all - whenever at least one exists,
+/// exactly one is always active, enforced by
+/// [`GraphsWorkspaceAction::EnsureActivePumpScenario`](crate::components::scenery_editor::GraphsWorkspaceAction::EnsureActivePumpScenario)
+/// (sent after loading a document and after every scenario create/delete). Without that invariant a
+/// node configured as `Const` in every scenario could show "None" on the canvas simply because
+/// nothing happened to be selected - which reads as "this node doesn't amplify" even though it does.
 static ACTIVE_PUMP_SCENARIO: GlobalSignal<Option<Uuid>> = Signal::global(|| None);
 /// A local cache of the active pump scenario's gain models (empty if none is active), refreshed
 /// whenever [`ACTIVE_PUMP_SCENARIO`] changes or an undo/redo touches that scenario's contents.

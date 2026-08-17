@@ -494,9 +494,17 @@ body {
     opacity: 0.5;
 }
 
-/* One scenario card's header row: its (renamable) name plus the active/delete buttons. */
+/* One scenario card's header row: its (renamable) name plus the delete button. Clicking the card
+   anywhere (not a dedicated button) makes it active - shown as a lightened background rather than an
+   icon or a border color, since a whole clickable card with a loud border reads more like a button
+   than a card. `!important` for the same reason as elsewhere in this file: MDB's `.bg-dark` is linked
+   after this stylesheet and would otherwise win the tie. */
+.scenario-card {
+    cursor: pointer;
+}
+
 .scenario-card.active {
-    border-color: rgb(255, 193, 7) !important;
+    background-color: rgb(56, 56, 56) !important;
 }
 
 .scenario-header {
@@ -528,7 +536,6 @@ body {
     flex-shrink: 0;
 }
 
-.scenario-active-btn,
 .scenario-delete-btn {
     padding: 0 4px;
     font-size: 13px;
@@ -540,14 +547,21 @@ body {
     border-radius: 4px;
 }
 
-.scenario-active-btn:hover,
 .scenario-delete-btn:hover {
     color: #ffffff;
     background-color: rgb(78, 78, 78);
 }
 
-.scenario-active-btn.active {
-    color: rgb(255, 193, 7);
+/* The document's only scenario, while a node is still marked as an amplifier candidate - see
+   `ScenarioCard`'s `delete_blocked`. */
+.scenario-delete-btn:disabled {
+    cursor: default;
+    opacity: 0.4;
+}
+
+.scenario-delete-btn:disabled:hover {
+    color: rgb(180, 180, 180);
+    background-color: transparent;
 }
 
 /* Expand/collapse toggle for a scenario's amplifier list - reuses `.amp-card-sub`'s colour, just

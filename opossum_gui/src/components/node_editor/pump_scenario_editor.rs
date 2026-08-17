@@ -16,11 +16,15 @@ use uuid::Uuid;
 /// this is not bound to the current selection - it answers "what operating points does this model
 /// have, and what does each of them amplify?", including nodes in groups whose tab isn't open.
 ///
-/// Exactly one scenario can be **active** at a time (a GUI-only choice, see [`ACTIVE_PUMP_SCENARIO`]):
-/// that is the one the canvas status line and the context menu's amplifier toggle reflect, since a
-/// node can only ever show one status on the canvas even though it may belong to several scenarios.
+/// Exactly one scenario is **active** whenever the document has at least one (a GUI-only choice, see
+/// [`ACTIVE_PUMP_SCENARIO`]): that is the one the canvas status line and the context menu's
+/// amplifier toggle reflect, since a node can only ever show one status on the canvas even though it
+/// may belong to several scenarios. "No scenario active" only ever happens with zero scenarios in
+/// the document - [`GraphsWorkspaceAction::EnsureActivePumpScenario`] is what keeps that invariant,
+/// sent here after every create/delete this panel performs.
 #[component]
 pub fn PumpScenarioEditor() -> Element {
+    let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let mut scenarios_resource = use_resource(move || async move {
         // Every change that can alter the list or a scenario's contents bumps this - document
         // structure (delete, paste, undo, load) as well as scenario/gain-model edits made from
@@ -41,15 +45,6 @@ pub fn PumpScenarioEditor() -> Element {
         .clone()
         .unwrap_or_default();
 
-    // The active selection can go stale when the document changes underneath it (the active
-    // scenario was deleted from under the user) - fall back to "none" rather than pointing at
-    // nothing.
-    if let Some(active_id) = ACTIVE_PUMP_SCENARIO()
-        && !scenarios.iter().any(|s| s.id == active_id)
-    {
-        *ACTIVE_PUMP_SCENARIO.write() = None;
-    }
-
     let mut new_scenario_name = use_signal(String::new);
     let mut expanded = use_signal(|| None::<Uuid>);
 
@@ -64,6 +59,9 @@ pub fn PumpScenarioEditor() -> Element {
                 Some(move |_id: Uuid| {
                     new_scenario_name.set(String::new());
                     scenarios_resource.restart();
+                    // Activates it right away if it's the document's first scenario - otherwise a
+                    // no-op, since a previously active scenario is still perfectly valid.
+                    workspace_processor.send(GraphsWorkspaceAction::EnsureActivePumpScenario);
                 }),
             );
         });
@@ -98,16 +96,24 @@ pub fn PumpScenarioEditor() -> Element {
                     "No pump scenarios yet. Add one above, then right-click a lens, wedge or cylindric lens on the canvas and choose \"As amplifier\" to add it."
                 }
             } else {
-                for scenario in scenarios {
-                    ScenarioCard {
-                        key: "{scenario.id}",
-                        scenario_id: scenario.id,
-                        scenario: scenario.scenario,
-                        is_expanded: expanded() == Some(scenario.id),
-                        on_toggle_expanded: move |id| {
-                            expanded.set(if expanded() == Some(id) { None } else { Some(id) });
-                        },
-                        on_changed: move |()| scenarios_resource.restart(),
+                {
+                    // The last scenario is not deletable while any node is still marked as an
+                    // amplifier candidate - see `ScenarioCard`'s doc comment.
+                    let is_only_scenario = scenarios.len() == 1;
+                    rsx! {
+                        for scenario in scenarios {
+                            ScenarioCard {
+                                key: "{scenario.id}",
+                                scenario_id: scenario.id,
+                                scenario: scenario.scenario,
+                                is_expanded: expanded() == Some(scenario.id),
+                                is_only_scenario,
+                                on_toggle_expanded: move |id| {
+                                    expanded.set(if expanded() == Some(id) { None } else { Some(id) });
+                                },
+                                on_changed: move |()| scenarios_resource.restart(),
+                            }
+                        }
                     }
                 }
             }
@@ -115,13 +121,17 @@ pub fn PumpScenarioEditor() -> Element {
     }
 }
 
-/// One scenario: name (renamable), active/delete controls, and - when expanded - the nodes it
-/// amplifies.
+/// One scenario: name (renamable), a delete control, and - when expanded - the nodes it amplifies.
+/// Clicking the card at all (not a dedicated button) makes it the active scenario, shown via a
+/// lightened background rather than an icon - see `activate` below.
 #[component]
 fn ScenarioCard(
     scenario_id: Uuid,
     scenario: PumpScenario,
     is_expanded: bool,
+    /// Whether this is the only scenario the document has - passed down rather than re-derived here
+    /// so every card agrees on the same scenario list `PumpScenarioEditor` already fetched.
+    is_only_scenario: bool,
     on_toggle_expanded: EventHandler<Uuid>,
     on_changed: EventHandler<()>,
 ) -> Element {
@@ -132,8 +142,25 @@ fn ScenarioCard(
     // The last name confirmed by the backend - `Signal` is `Copy`, which is what lets `save_name`
     // below be used from both `onblur` and `onkeydown` (a plain closure capturing an owned `String`
     // could only ever be moved into one of them).
-    let mut original_name = use_signal(move || saved_name);
+    let mut original_name = use_signal(|| saved_name.clone());
+    // Resync when the backend's name changes from outside this card's own save - an undo/redo, or a
+    // rename made elsewhere. `PUMP_SCENARIO_LIST_REFRESH` is what re-fetches `scenario` and re-runs
+    // this component with the new prop; without this comparison, `use_signal`'s init closures only
+    // ever run once (this component instance persists across that refetch, keyed by `scenario_id`),
+    // so the input would keep showing whatever text was here before the change took effect even
+    // though the document already reverted - which is exactly what made an undo/redo of a rename
+    // look like it did nothing.
+    if *original_name.peek() != saved_name {
+        original_name.set(saved_name.clone());
+        name_input.set(saved_name);
+    }
     let is_active = ACTIVE_PUMP_SCENARIO() == Some(id);
+    // Deleting the document's only scenario while a node is still marked as an amplifier candidate
+    // would recreate exactly the dead end `ensure_a_pump_scenario_exists` exists to avoid: a
+    // candidate with nowhere to configure its gain model. Blocked here rather than left to the
+    // backend, which has nothing that would reject it - the candidate set and the scenario list are
+    // independent on that side.
+    let delete_blocked = is_only_scenario && !crate::AMPLIFIER_CANDIDATES.read().is_empty();
 
     let mut save_name = move || {
         let new_name = name_input.peek().trim().to_string();
@@ -154,8 +181,20 @@ fn ScenarioCard(
         });
     };
 
+    // Clicking anywhere on the card (the name, the amplifiers toggle, the body) makes it the active
+    // scenario - there's no separate "activate" control to reach for. A no-op once it already is.
+    // The delete button opts out via `stop_propagation`, so removing a scenario never activates it
+    // first just because the click passed through the card on its way there.
+    let activate = move || {
+        if !is_active {
+            workspace_processor.send(GraphsWorkspaceAction::SetActivePumpScenario(Some(id)));
+        }
+    };
+
     rsx! {
-        div { class: if is_active { "card bg-dark border-warning mb-2 scenario-card active" } else { "card bg-dark border-secondary mb-2 scenario-card" },
+        div {
+            class: if is_active { "card bg-dark border-secondary mb-2 scenario-card active" } else { "card bg-dark border-secondary mb-2 scenario-card" },
+            onclick: move |_| activate(),
             div { class: "card-body p-2 text-light",
                 div { class: "d-flex justify-content-between align-items-center scenario-header",
                     input {
@@ -173,32 +212,24 @@ fn ScenarioCard(
                     div { class: "scenario-actions",
                         button {
                             r#type: "button",
-                            title: if is_active { "This is the active scenario - shown on the canvas" } else { "Make this the active scenario" },
-                            class: if is_active { "scenario-active-btn active" } else { "scenario-active-btn" },
-                            onclick: move |_| {
-                                let new_active = if is_active { None } else { Some(id) };
-                                workspace_processor
-                                    .send(GraphsWorkspaceAction::SetActivePumpScenario(new_active));
-                            },
-                            if is_active { "\u{2605}" } else { "\u{2606}" }
-                        }
-                        button {
-                            r#type: "button",
-                            title: "Delete this scenario",
+                            title: if delete_blocked { "Can't delete the last scenario while a node is still marked as an amplifier - unmark it first" } else { "Delete this scenario" },
                             class: "scenario-delete-btn",
-                            onclick: move |_| {
+                            disabled: delete_blocked,
+                            onclick: move |event: Event<MouseData>| {
+                                event.stop_propagation();
+                                if delete_blocked {
+                                    return;
+                                }
                                 spawn(async move {
                                     api::eval_action_run(
                                         api::delete_pump_scenario(id).await,
                                         Some(move |()| {
-                                            // Routed through the action (rather than clearing
-                                            // `ACTIVE_PUMP_SCENARIO` directly) so the canvas markers
-                                            // of every open tab get bulk-cleared too, not just the
-                                            // global - see `SetActivePumpScenario`'s handling.
-                                            if is_active {
-                                                workspace_processor
-                                                    .send(GraphsWorkspaceAction::SetActivePumpScenario(None));
-                                            }
+                                            // If this was the active scenario, activates another
+                                            // remaining one instead of leaving the selection empty -
+                                            // see `EnsureActivePumpScenario`'s doc comment. A no-op if
+                                            // some other scenario was already active.
+                                            workspace_processor
+                                                .send(GraphsWorkspaceAction::EnsureActivePumpScenario);
                                             *PUMP_SCENARIO_LIST_REFRESH.write() += 1;
                                             on_changed.call(());
                                         }),

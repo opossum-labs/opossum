@@ -81,6 +81,10 @@ pub fn use_workspace_processor(
                             set_file_path_handler,
                         )
                         .await;
+                        // The just-loaded document may well have scenarios of its own even though
+                        // the GUI-only active selection was just cleared above - activate the first
+                        // one rather than leaving the canvas showing no scenario's status at all.
+                        ensure_a_scenario_is_active(workspace_handlers).await;
                         // The backend clears its undo/redo history on every load; mirror that here.
                         *crate::UNDO_REDO_STATUS.write() = (false, false);
                         *crate::AMP_LIST_REFRESH.write() += 1;
@@ -456,6 +460,9 @@ pub fn use_workspace_processor(
                         *crate::ACTIVE_PUMP_SCENARIO.write() = scenario_id;
                         refresh_active_scenario_gain_models(workspace_handlers).await;
                     }
+                    GraphsWorkspaceAction::EnsureActivePumpScenario => {
+                        ensure_a_scenario_is_active(workspace_handlers).await;
+                    }
                     GraphsWorkspaceAction::SetScenarioGainModel {
                         scenario_id,
                         node_id,
@@ -699,7 +706,7 @@ async fn process_set_amplifier_candidate(
         // Marking a candidate is otherwise a dead end with no scenario to configure it in - the
         // scenario editor has nothing to expand and no row to show. A fresh document starts with no
         // scenario at all, so this is the common case for the very first amplifier, not an edge case.
-        ensure_a_pump_scenario_exists().await;
+        ensure_a_pump_scenario_exists(ws_handler).await;
     }
     eval_action_run(
         api::put_node_is_amplifier(node_id, is_amplifier).await,
@@ -736,19 +743,50 @@ async fn process_set_amplifier_candidate(
 /// Silently does nothing if fetching the current scenario list fails or it already has an entry -
 /// the failure case leaves the document exactly as `put_node_is_amplifier` would find it without this
 /// call, so it does not additionally block marking the candidate.
-async fn ensure_a_pump_scenario_exists() {
+async fn ensure_a_pump_scenario_exists(ws_handler: WorkSpaceSignalHandlers) {
     let Ok(scenarios) = api::get_pump_scenarios().await else {
         return;
     };
-    if !scenarios.is_empty() {
+    if scenarios.is_empty() {
+        eval_action_run(
+            api::post_pump_scenario("Default").await,
+            Some(move |_id: Uuid| {
+                *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
+            }),
+        );
+    }
+    // Newly created here, or already there beforehand - either way make sure a scenario ends up
+    // active (see `EnsureActivePumpScenario`'s doc comment). Marking a node as a candidate is what
+    // motivated creating the scenario in the first place, so leaving it unselected would still show
+    // "None" on the canvas until the user happens to click it - a no-op if some scenario was already
+    // correctly active.
+    ensure_a_scenario_is_active(ws_handler).await;
+}
+
+/// Corrects the active pump scenario if it is unset or no longer resolves to one the document has,
+/// by activating the first scenario the document actually has - or clearing the selection if it has
+/// none at all, which is the only case "no active scenario" is a legitimate state in.
+///
+/// "No active scenario" while scenarios exist would otherwise make the canvas show `None` for a node
+/// that may well be configured as `Const` in every one of them, reading as "this node doesn't
+/// amplify" even though it does - see [`GraphsWorkspaceAction::EnsureActivePumpScenario`]'s doc
+/// comment. Sent after anything that can add or remove a scenario.
+///
+/// # Arguments
+///
+/// * `ws_handler` - workspace signal handlers used to bulk-sync every open tab's markers, via
+///   [`refresh_active_scenario_gain_models`].
+async fn ensure_a_scenario_is_active(ws_handler: WorkSpaceSignalHandlers) {
+    let Ok(scenarios) = api::get_pump_scenarios().await else {
+        return;
+    };
+    let is_valid = crate::ACTIVE_PUMP_SCENARIO()
+        .is_some_and(|active_id| scenarios.iter().any(|scenario| scenario.id == active_id));
+    if is_valid {
         return;
     }
-    eval_action_run(
-        api::post_pump_scenario("Default").await,
-        Some(move |_id: Uuid| {
-            *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
-        }),
-    );
+    *crate::ACTIVE_PUMP_SCENARIO.write() = scenarios.first().map(|scenario| scenario.id);
+    refresh_active_scenario_gain_models(ws_handler).await;
 }
 
 /// Re-fetches the active pump scenario's gain models and bulk-syncs every open tab's canvas
@@ -890,18 +928,18 @@ async fn apply_document_changes(
                 *NODE_DETAILS_REFRESH.write() += 1;
             }
             DocumentChange::PumpScenarioAdded { .. } => {
+                // Undoing a delete-all or redoing a create can bring the document from zero
+                // scenarios to one - activate it rather than leaving the selection at `None`.
+                ensure_a_scenario_is_active(ws_handler).await;
                 *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
                 *NODE_DETAILS_REFRESH.write() += 1;
             }
-            DocumentChange::PumpScenarioRemoved { id } => {
+            DocumentChange::PumpScenarioRemoved { .. } => {
                 // The active scenario itself might just have been un-deleted-from-under (undo) or
-                // deleted (redo); either way its contents can no longer be trusted without a refetch,
-                // same as `PumpScenarioChanged` below - and if it's the *removed* one, there is no
-                // scenario to refetch, so every canvas marker simply clears.
-                if crate::ACTIVE_PUMP_SCENARIO() == Some(id) {
-                    *crate::ACTIVE_PUMP_SCENARIO.write() = None;
-                    refresh_active_scenario_gain_models(ws_handler).await;
-                }
+                // deleted (redo) - either way, its contents can no longer be trusted without a
+                // refetch, and if it was the *removed* one, another scenario (if any remain) takes
+                // over as active rather than leaving the selection at `None`.
+                ensure_a_scenario_is_active(ws_handler).await;
                 *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
                 *NODE_DETAILS_REFRESH.write() += 1;
             }
