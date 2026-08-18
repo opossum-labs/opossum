@@ -11,7 +11,9 @@
 //! Each escalation stage of the gain modelling adds one further [`GainModel`] variant rather than a
 //! parallel set of node types.
 
+pub mod inversion_field;
 pub mod scenario;
+pub use inversion_field::InversionField;
 pub use scenario::{ActiveScenario, PumpScenario};
 
 use crate::{

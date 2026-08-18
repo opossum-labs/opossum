@@ -522,6 +522,30 @@ macro_rules! num_per_mm {
     };
 }
 
+///macro to create a volumetric density in 1 per cubic meter
+#[macro_export]
+macro_rules! num_per_m3 {
+    ($( $x:expr_2021 ),*) =>{
+        {
+        use uom::si::{f64::VolumetricNumberDensity, volumetric_number_density::per_cubic_meter};
+        $crate::uom_unit_creator![per_cubic_meter, VolumetricNumberDensity, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a volumetric density in 1 per cubic centimeter
+#[macro_export]
+macro_rules! num_per_cm3 {
+    ($( $x:expr_2021 ),*) =>{
+        {
+        use uom::si::{
+            f64::VolumetricNumberDensity, volumetric_number_density::per_cubic_centimeter,
+        };
+        $crate::uom_unit_creator![per_cubic_centimeter, VolumetricNumberDensity, $( $x ),*]
+        }
+    };
+}
+
 ///macro to create a pressure in hectopascal
 #[macro_export]
 macro_rules! hectopascal {

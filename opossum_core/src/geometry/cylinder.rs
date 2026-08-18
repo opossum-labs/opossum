@@ -1,14 +1,14 @@
 //! Cylindrical surface
 //!
 //! This module implements a cylindrical surface with a given radius of curvature and a given position / alignment in 3D space.
-use super::geo_surface::{GeoSurface, is_behind_curvature};
+use super::geo_surface::{GeoSurface, curved_local_z, is_behind_curvature};
 use crate::{
     error::{OpmResult, OpossumError},
     light::Ray,
     meter, radian,
     utils::geom_transformation::Isometry,
 };
-use nalgebra::{Point3, Vector3};
+use nalgebra::{Point2, Point3, Vector3};
 use num::Zero;
 use roots::{Roots, find_roots_quadratic};
 use uom::si::f64::Length;
@@ -125,6 +125,11 @@ impl GeoSurface for Cylinder {
         ))
     }
 
+    fn local_z_at(&self, transversal_position: &Point2<Length>) -> Option<Length> {
+        // The cylinder axis runs along y, so the surface is straight in that direction and reaches
+        // arbitrarily far along it — only the x offset bends it.
+        curved_local_z(transversal_position.x.value.abs(), self.radius.value).map(|z| meter!(z))
+    }
     fn is_behind_do(&self, point: &Point3<Length>) -> bool {
         // The local origin lies on the cylinder axis which runs along y, so the surface is the
         // circle of |radius| in the xz plane.

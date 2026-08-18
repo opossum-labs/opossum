@@ -1,14 +1,14 @@
 //! Spherical surface
 //!
 //! This module implements a spherical surface with a given radius of curvature.
-use super::geo_surface::{GeoSurface, is_behind_curvature};
+use super::geo_surface::{GeoSurface, curved_local_z, is_behind_curvature};
 use crate::{
     error::{OpmResult, OpossumError},
     light::Ray,
     meter, radian,
     utils::geom_transformation::Isometry,
 };
-use nalgebra::{Point3, Vector3};
+use nalgebra::{Point2, Point3, Vector3};
 use num::Zero;
 use roots::{Roots, find_roots_quadratic};
 use uom::si::f64::Length;
@@ -132,6 +132,15 @@ impl GeoSurface for Sphere {
             ),
             normal,
         ))
+    }
+    fn local_z_at(&self, transversal_position: &Point2<Length>) -> Option<Length> {
+        // The local origin is the center of the sphere, which curves in every transversal
+        // direction alike, so only the distance from its axis matters.
+        let distance_from_axis = transversal_position
+            .x
+            .value
+            .hypot(transversal_position.y.value);
+        curved_local_z(distance_from_axis, self.radius.value).map(|z| meter!(z))
     }
     fn is_behind_do(&self, point: &Point3<Length>) -> bool {
         // The local origin is the center of the sphere, so the surface is the ball of |radius|.

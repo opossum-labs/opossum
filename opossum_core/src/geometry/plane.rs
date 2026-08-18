@@ -3,7 +3,7 @@
 //! An infinitely large and perfectly flat 2D surface
 use super::geo_surface::GeoSurface;
 use crate::{light::Ray, meter, utils::geom_transformation::Isometry};
-use nalgebra::{Point3, Vector3};
+use nalgebra::{Point2, Point3, Vector3};
 use num::Zero;
 use uom::si::f64::Length;
 
@@ -74,6 +74,11 @@ impl GeoSurface for Plane {
             ),
             normal,
         ))
+    }
+    fn local_z_at(&self, _transversal_position: &Point2<Length>) -> Option<Length> {
+        // The local surface *is* the xy plane, so it lies at z = 0 everywhere and reaches
+        // arbitrarily far out.
+        Some(Length::zero())
     }
     fn is_behind_do(&self, point: &Point3<Length>) -> bool {
         // The local surface is the xy plane at z = 0.

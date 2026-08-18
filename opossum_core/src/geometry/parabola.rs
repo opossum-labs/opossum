@@ -7,7 +7,7 @@ use crate::{
     meter,
     utils::geom_transformation::Isometry,
 };
-use nalgebra::{Point3, Vector3, vector};
+use nalgebra::{Point2, Point3, Vector3, vector};
 use roots::{Roots, find_roots_quadratic};
 use uom::si::f64::Length;
 
@@ -125,16 +125,17 @@ impl GeoSurface for Parabola {
         ))
     }
 
+    fn local_z_at(&self, transversal_position: &Point2<Length>) -> Option<Length> {
+        // The local surface is x^2 + y^2 = 4*f*z with its vertex in the origin, so its sag at
+        // (x, y) is (x^2 + y^2) / (4*f) and it lies above the whole transversal plane. This holds
+        // for both signs of the focal length: a negative one simply yields a negative sag, i.e. a
+        // surface curving towards -z.
+        let (x, y) = (transversal_position.x.value, transversal_position.y.value);
+        Some(meter!(x.mul_add(x, y * y) / (4. * self.focal_length.value)))
+    }
     fn is_behind_do(&self, point: &Point3<Length>) -> bool {
-        // The local surface is x^2 + y^2 = 4*f*z, so its sag at (x, y) is (x^2 + y^2) / (4*f).
-        // This holds for both signs of the focal length: a negative one simply yields a negative
-        // sag, i.e. a surface curving towards -z.
-        let sag = point
-            .x
-            .value
-            .mul_add(point.x.value, point.y.value * point.y.value)
-            / (4. * self.focal_length.value);
-        point.z.value >= sag
+        self.local_z_at(&Point2::new(point.x, point.y))
+            .is_some_and(|sag| point.z >= sag)
     }
     fn isometry(&self) -> &Isometry {
         &self.isometry

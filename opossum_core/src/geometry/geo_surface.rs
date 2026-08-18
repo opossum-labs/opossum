@@ -5,7 +5,7 @@
 
 use super::Plane;
 use crate::{light::Ray, utils::geom_transformation::Isometry};
-use nalgebra::{Point3, Vector3};
+use nalgebra::{Point2, Point3, Vector3};
 use std::{
     fmt::Debug,
     sync::{Arc, Mutex},
@@ -85,6 +85,32 @@ pub trait GeoSurface: Send + Sync + Debug {
     ///
     /// `true` if the point lies behind the surface. Points exactly on the surface count as behind.
     fn is_behind_do(&self, point: &Point3<Length>) -> bool;
+    /// Return the longitudinal position of this [`GeoSurface`] above a given transversal position,
+    /// in the surface's own local frame.
+    ///
+    /// Every surface modelled here is a profile over its local xy plane: exactly one point of it
+    /// lies above each transversal position it reaches. This states where that point is, which is
+    /// what a bounded region built from such surfaces needs in order to know how far it extends
+    /// along the optical axis — see [`Body::bounding_box`](super::body::Body::bounding_box).
+    ///
+    /// The origin yields the surface's **anchor point**, i.e. its vertex: the point its placement
+    /// refers to, and the point the sag of a curved surface is measured from. Note that this is not
+    /// generally the origin of the local frame — [`Sphere`](super::Sphere) and
+    /// [`Cylinder`](super::Cylinder) are centered on their center of curvature, so their vertex sits
+    /// one radius away from it.
+    ///
+    /// # Arguments
+    ///
+    /// - `transversal_position`: the position in the local xy plane to look above, given in the
+    ///   local frame of this surface.
+    ///
+    /// # Returns
+    ///
+    /// The local z coordinate of the surface above the given position, or `None` if the surface does
+    /// not reach that far out. Only the curved surfaces of finite extent can answer `None`: a
+    /// [`Sphere`](super::Sphere) or [`Cylinder`](super::Cylinder) ends where its radius of curvature
+    /// does.
+    fn local_z_at(&self, transversal_position: &Point2<Length>) -> Option<Length>;
     /// Returns the [`Isometry`] of this [`GeoSurface`].
     fn isometry(&self) -> &Isometry;
     /// Set the [`Isometry`] of this [`GeoSurface`].
@@ -117,6 +143,28 @@ pub(super) const fn is_behind_curvature(distance_from_center: f64, radius: f64) 
     } else {
         distance_from_center >= -radius
     }
+}
+
+/// Determine the local z position of a curved surface above a given transversal distance from its
+/// axis.
+///
+/// Shared by the surfaces whose local frame is centered on their center of curvature
+/// ([`Sphere`](super::Sphere), [`Cylinder`](super::Cylinder)) — the same pair, and for the same
+/// reason, as [`is_behind_curvature`]: they differ only in how that distance is measured. The
+/// vertex, at distance zero, therefore lies at `-radius` for either sign of the curvature.
+///
+/// # Arguments
+///
+/// - `distance_from_axis`: transversal distance of the position from the surface's axis, in meter
+/// - `radius`: the signed radius of curvature, in meter
+///
+/// # Returns
+///
+/// The local z coordinate of the surface, in meter, or `None` beyond the radius of curvature: there
+/// the surface has already curved back on itself and no longer lies above the transversal plane.
+pub(super) fn curved_local_z(distance_from_axis: f64, radius: f64) -> Option<f64> {
+    let half_chord_squared = radius.mul_add(radius, -(distance_from_axis * distance_from_axis));
+    (half_chord_squared >= 0.0).then(|| -radius.signum() * half_chord_squared.sqrt())
 }
 
 /// Reference for a [`GeoSurface`].
