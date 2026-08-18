@@ -2,13 +2,13 @@
 //! analyzed in (see `opossum_core::gain::scenario` for the concept). Mirrors `analyzers.rs`'s
 //! structure: list/get/create/delete plus field-level patches, all going through
 //! [`Command::PatchPumpScenario`] for the parts that only ever replace the scenario wholesale
-//! (rename, set a node's gain model).
+//! (rename, set a node's gain model or pump source).
 use actix_web::{HttpRequest, HttpResponse, delete, get, post, put, web};
 use opossum_core::{
     core_optics::{NodeAttr, NodeAttrExt},
     types::api_types::{
         ErrorResponse, NewPumpScenario, PumpScenarioItemDto, ScenarioAmplifierDto,
-        SetScenarioGainModel,
+        SetScenarioGainModel, SetScenarioPumpSource,
     },
 };
 use utoipa_actix_web::service_config::ServiceConfig;
@@ -72,14 +72,15 @@ pub async fn get_pump_scenario(
     ron_or_json_response(&req, &scenario)
 }
 
-/// Get every amplifier candidate, with its gain model in the given pump scenario, names resolved
+/// Get every amplifier candidate, with what it does in the given pump scenario, names resolved
 ///
 /// Lists every node in the document-wide amplifier-candidate set
 /// (`OpmDocument::amplifier_nodes`), not just the ones actively configured in this scenario - an
-/// unconfigured candidate is reported with [`GainModel::None`](opossum_core::gain::GainModel::None),
-/// so the scenario editor can render one row per candidate and let it be turned on or off, rather
-/// than only ever showing rows that already amplify. Walks the whole document recursively (nested
-/// groups included), same traversal as `/api/nodes/amplifier_candidates`.
+/// unconfigured candidate is reported with the default
+/// [`PumpConfig`](opossum_core::gain::PumpConfig), which neither pumps nor amplifies, so the
+/// scenario editor can render one row per candidate and let it be turned on or off, rather than only
+/// ever showing rows that already amplify. Walks the whole document recursively (nested groups
+/// included), same traversal as `/api/nodes/amplifier_candidates`.
 #[utoipa::path(
     tag = "pump_scenario",
     params(("uuid" = Uuid, Path, description = "UUID of the pump scenario")),
@@ -107,13 +108,13 @@ pub async fn get_pump_scenario_amplifiers(
             (
                 node_attr.name().to_string(),
                 node_attr.node_type().to_string(),
-                scenario.gain_model(node_attr.uuid()),
+                scenario.config(node_attr.uuid()),
             )
         })
     })
     .into_iter()
     .map(|node| {
-        let (name, node_type, gain_model) = node.value;
+        let (name, node_type, config) = node.value;
         ScenarioAmplifierDto {
             uuid: node.uuid,
             name,
@@ -122,7 +123,7 @@ pub async fn get_pump_scenario_amplifiers(
             group_name: scenery
                 .with_group_node(node.group_id, |group| group.name().to_string())
                 .unwrap_or_default(),
-            gain_model,
+            config,
         }
     })
     .collect();
@@ -280,6 +281,39 @@ pub async fn put_pump_scenario_gain_model(
     apply_and_push_undo(&data, document, command, true)
 }
 
+/// Set how a node's medium is pumped within a pump scenario
+///
+/// The counterpart of [`put_pump_scenario_gain_model`] for the other half of the node's
+/// [`PumpConfig`](opossum_core::gain::PumpConfig): setting
+/// [`opossum_core::gain::PumpSource::None`] leaves the medium unpumped, and takes the node out of
+/// the scenario if it does not amplify either.
+#[utoipa::path(
+    tag = "pump_scenario",
+    params(("uuid" = Uuid, Path, description = "UUID of the pump scenario")),
+    request_body(content = SetScenarioPumpSource, description = "node and pump source", content_type = "application/json"),
+    responses(
+        (status = NO_CONTENT, description = "Pump source set"),
+        (status = NOT_FOUND, body = ErrorResponse, description = "UUID not found", content_type = "application/json")
+    )
+)]
+#[put("/{uuid}/pump_source")]
+pub async fn put_pump_scenario_pump_source(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    body: web::Json<SetScenarioPumpSource>,
+) -> Result<HttpResponse, BackEndErrorResponse> {
+    let uuid = path.into_inner();
+    let SetScenarioPumpSource { node_id, pump } = body.into_inner();
+    let mut document = data.document.lock();
+
+    let old = pump_scenario_mut_or_404(&mut document, uuid)?.clone();
+    let mut new = old.clone();
+    new.set_pump_source(node_id, pump);
+
+    let command = Command::PatchPumpScenario(PatchPumpScenario { id: uuid, old, new });
+    apply_and_push_undo(&data, document, command, true)
+}
+
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_pump_scenarios);
     cfg.service(get_pump_scenario);
@@ -288,6 +322,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(delete_pump_scenario);
     cfg.service(put_pump_scenario_name);
     cfg.service(put_pump_scenario_gain_model);
+    cfg.service(put_pump_scenario_pump_source);
 }
 
 #[cfg(test)]
@@ -296,7 +331,7 @@ mod test {
     use crate::{app_state::AppState, document::undo_document};
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
     use opossum_core::{
-        gain::{ConstGain, GainModel},
+        gain::{ConstGain, ConstInversion, GainModel, PumpSource},
         nodes::Lens,
     };
     use utoipa_actix_web::scope;
@@ -318,11 +353,11 @@ mod test {
     }
 
     /// The list must resolve node names, report which group each candidate sits in, and include
-    /// *every* candidate - configured in this scenario or not (with `GainModel::None` when not) -
-    /// while never listing a node that isn't a candidate at all, even if some other scenario
+    /// *every* candidate - configured in this scenario or not (with the default `PumpConfig` when
+    /// not) - while never listing a node that isn't a candidate at all, even if some other scenario
     /// configured it.
     #[actix_web::test]
-    async fn amplifiers_lists_every_candidate_with_its_gain_model_in_this_scenario() {
+    async fn amplifiers_lists_every_candidate_with_its_config_in_this_scenario() {
         let app_state = Data::new(AppState::default());
         let (configured_id, unconfigured_id, non_candidate_id) = {
             let mut document = app_state.document.lock();
@@ -373,13 +408,13 @@ mod test {
             .expect("the configured candidate must be listed");
         assert_eq!(configured.name, "lens");
         assert_eq!(configured.node_type, "lens");
-        assert_eq!(configured.gain_model, gain);
+        assert_eq!(configured.config.gain_model(), gain);
         let unconfigured = amplifiers
             .iter()
             .find(|a| a.uuid == unconfigured_id)
             .expect("the unconfigured candidate must be listed too");
         assert_eq!(
-            unconfigured.gain_model,
+            unconfigured.config.gain_model(),
             GainModel::None,
             "a candidate this scenario hasn't configured must report GainModel::None, not be absent"
         );
@@ -515,6 +550,92 @@ mod test {
                 .gain_model(node_id),
             GainModel::None
         );
+    }
+
+    #[actix_web::test]
+    async fn set_pump_source_and_undo_removes_it_again() {
+        let app_state = Data::new(AppState::default());
+        let scenario_id = add_scenario(&app_state, "full power").await;
+        let node_id = {
+            let mut document = app_state.document.lock();
+            document.scenery_mut().add_node(Lens::default()).unwrap()
+        };
+        let app = test_app!(app_state);
+
+        let pump = PumpSource::Const(
+            ConstInversion::new(opossum_core::reciprocal_centimeter!(0.5)).unwrap(),
+        );
+        let req = test::TestRequest::put()
+            .uri(&format!("/scenarios/{scenario_id}/pump_source"))
+            .set_json(SetScenarioPumpSource { node_id, pump })
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+        assert_eq!(
+            app_state
+                .document
+                .lock()
+                .pump_scenario(scenario_id)
+                .unwrap()
+                .pump_source(node_id),
+            pump
+        );
+
+        // The existing `PatchPumpScenario` command replaces the whole scenario, so it covers the
+        // pump half without a command of its own - asserted rather than assumed.
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            app_state
+                .document
+                .lock()
+                .pump_scenario(scenario_id)
+                .unwrap()
+                .pump_source(node_id),
+            PumpSource::None
+        );
+    }
+
+    /// Switching the extraction model off must not throw away the pumping that was set up next to
+    /// it - the two halves are edited through separate endpoints and must not overwrite each other.
+    #[actix_web::test]
+    async fn the_two_halves_are_set_independently() {
+        let app_state = Data::new(AppState::default());
+        let scenario_id = add_scenario(&app_state, "full power").await;
+        let node_id = {
+            let mut document = app_state.document.lock();
+            document.scenery_mut().add_node(Lens::default()).unwrap()
+        };
+        let app = test_app!(app_state);
+
+        let pump = PumpSource::Const(
+            ConstInversion::new(opossum_core::reciprocal_centimeter!(0.5)).unwrap(),
+        );
+        let req = test::TestRequest::put()
+            .uri(&format!("/scenarios/{scenario_id}/pump_source"))
+            .set_json(SetScenarioPumpSource { node_id, pump })
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+        let req = test::TestRequest::put()
+            .uri(&format!("/scenarios/{scenario_id}/gain_model"))
+            .set_json(SetScenarioGainModel {
+                node_id,
+                gain_model: GainModel::None,
+            })
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        let document = app_state.document.lock();
+        let scenario = document.pump_scenario(scenario_id).unwrap();
+        assert_eq!(scenario.pump_source(node_id), pump);
+        assert_eq!(scenario.amplifiers().count(), 1);
     }
 
     #[actix_web::test]

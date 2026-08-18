@@ -380,8 +380,10 @@ fn ScenarioAmplifierRow(
         node_type,
         group_id,
         group_name,
-        gain_model,
+        config,
     } = amplifier;
+    // Only the extraction half is edited here so far; the pump source gets its own sub-editor.
+    let gain_model = config.gain_model();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     let is_active = gain_model.is_active();
 

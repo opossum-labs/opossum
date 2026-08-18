@@ -19,7 +19,7 @@ pub use pump_source::{
     AnalyticPump, BeerLambertProfile, ConstInversion, LongitudinalProfile, PumpDirection,
     PumpSource, TransversalProfile,
 };
-pub use scenario::{ActiveScenario, PumpScenario};
+pub use scenario::{ActiveScenario, PumpConfig, PumpScenario};
 
 use crate::{
     error::OpmResult,

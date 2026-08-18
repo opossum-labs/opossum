@@ -347,10 +347,9 @@ fn propagate_amplifier_state(
             continue;
         };
         for (old_id, new_id) in node_id_link {
-            let model = before.gain_model(*old_id);
-            if model.is_active() {
-                scenario.set_gain_model(*new_id, model);
-            }
+            // The whole configuration travels, not just the gain model: a pasted node that was
+            // pumped has to arrive pumped, and `set_config` drops an entry that does nothing anyway.
+            scenario.set_config(*new_id, before.config(*old_id));
         }
         if *scenario != before {
             inverses.push(Command::PatchPumpScenario(PatchPumpScenario {
@@ -1563,22 +1562,23 @@ mod test {
     #[actix_web::test]
     async fn test_paste_preserves_amplifier_state() {
         use opossum_core::{
-            gain::{ConstGain, GainModel},
+            gain::{ConstGain, ConstInversion, GainModel, PumpConfig, PumpSource},
             nodes::Lens,
+            reciprocal_centimeter,
         };
 
         let app_state = Data::new(AppState::default());
         let gain = GainModel::Const(ConstGain::new(2.5).unwrap());
+        let pump = PumpSource::Const(ConstInversion::new(reciprocal_centimeter!(0.5)).unwrap());
         let (root_id, lens_id, scenario_id) = {
             let mut document = app_state.document.lock();
             let root_id = document.scenery().node_attr().uuid();
             let lens_id = document.scenery_mut().add_node(Lens::default()).unwrap();
             document.set_is_amplifier_node(lens_id, true);
             let scenario_id = document.add_pump_scenario("full power");
-            document
-                .pump_scenario_mut(scenario_id)
-                .unwrap()
-                .set_gain_model(lens_id, gain);
+            let scenario = document.pump_scenario_mut(scenario_id).unwrap();
+            scenario.set_gain_model(lens_id, gain);
+            scenario.set_pump_source(lens_id, pump);
             let ids = (root_id, lens_id, scenario_id);
             drop(document);
             ids
@@ -1630,9 +1630,10 @@ mod test {
                 document
                     .pump_scenario(scenario_id)
                     .unwrap()
-                    .gain_model(pasted_id),
-                gain,
-                "the copy must carry the original's gain model into the same scenario"
+                    .config(pasted_id),
+                PumpConfig::new(gain, pump),
+                "the copy must carry the original's whole configuration - pumping included - into \
+                 the same scenario"
             );
         }
 
@@ -1648,8 +1649,8 @@ mod test {
             document
                 .pump_scenario(scenario_id)
                 .unwrap()
-                .gain_model(pasted_id),
-            GainModel::None,
+                .config(pasted_id),
+            PumpConfig::default(),
             "undo must remove the copy's scenario entry along with the node itself"
         );
         assert!(
@@ -1657,12 +1658,9 @@ mod test {
             "undo must not disturb the original's candidacy"
         );
         assert_eq!(
-            document
-                .pump_scenario(scenario_id)
-                .unwrap()
-                .gain_model(lens_id),
-            gain,
-            "undo must not disturb the original's gain model"
+            document.pump_scenario(scenario_id).unwrap().config(lens_id),
+            PumpConfig::new(gain, pump),
+            "undo must not disturb the original's configuration"
         );
     }
 }

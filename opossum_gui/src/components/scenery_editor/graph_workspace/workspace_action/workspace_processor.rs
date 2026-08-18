@@ -764,7 +764,12 @@ async fn refresh_active_scenario_gain_models(ws_handler: WorkSpaceSignalHandlers
     eval_action_run(
         api::get_pump_scenario(scenario_id).await,
         Some(move |scenario: opossum_core::gain::PumpScenario| {
-            let gain_models: HashMap<Uuid, GainModel> = scenario.amplifiers().collect();
+            // The canvas marker only ever asks whether a node amplifies, so the pump half of each
+            // configuration is dropped here rather than cached alongside it.
+            let gain_models: HashMap<Uuid, GainModel> = scenario
+                .amplifiers()
+                .map(|(node_id, config)| (node_id, config.gain_model()))
+                .collect();
             crate::ACTIVE_SCENARIO_GAIN_MODELS
                 .write()
                 .clone_from(&gain_models);

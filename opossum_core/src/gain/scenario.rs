@@ -16,17 +16,82 @@
 //! that no scenario mentions is passive, which is why a document without scenarios computes exactly
 //! what it always did.
 
-use crate::{gain::GainModel, nodes::NodeGroup};
+use crate::{
+    gain::{GainModel, PumpSource},
+    nodes::NodeGroup,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-/// A named operating point: the gain models of all amplifying nodes in one analysis run.
+/// What one node does in one operating point: how it is pumped, and how it amplifies.
 ///
-/// Only the amplifying nodes are held. Setting a node to [`GainModel::None`] removes it from the
-/// scenario rather than storing an inactive entry, so "is in the map" and "amplifies" cannot
-/// disagree.
+/// The two halves are deliberately independent. A [`PumpSource`] fills the medium with inversion, a
+/// [`GainModel`] decides what a beam passing through makes of it, and which pair is chosen is the
+/// whole point of an operating point — the same pumping can be evaluated with a cruder or a finer
+/// extraction model, and the same model can be run at several pump levels, without editing either.
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize, ToSchema)]
+pub struct PumpConfig {
+    #[serde(default)]
+    gain_model: GainModel,
+    #[serde(default)]
+    pump: PumpSource,
+}
+
+impl PumpConfig {
+    /// Create a new [`PumpConfig`].
+    ///
+    /// # Arguments
+    ///
+    /// * `gain_model` - how the node amplifies.
+    /// * `pump` - how its medium is pumped.
+    #[must_use]
+    pub const fn new(gain_model: GainModel, pump: PumpSource) -> Self {
+        Self { gain_model, pump }
+    }
+    /// Return how the node amplifies.
+    #[must_use]
+    pub const fn gain_model(&self) -> GainModel {
+        self.gain_model
+    }
+    /// Return how the node's medium is pumped.
+    #[must_use]
+    pub const fn pump(&self) -> PumpSource {
+        self.pump
+    }
+    /// Set how the node amplifies.
+    ///
+    /// # Arguments
+    ///
+    /// * `gain_model` - the new gain model.
+    pub const fn set_gain_model(&mut self, gain_model: GainModel) {
+        self.gain_model = gain_model;
+    }
+    /// Set how the node's medium is pumped.
+    ///
+    /// # Arguments
+    ///
+    /// * `pump` - the new pump source.
+    pub const fn set_pump(&mut self, pump: PumpSource) {
+        self.pump = pump;
+    }
+    /// Return whether this configuration does anything at all.
+    ///
+    /// Either half is enough: a node that is pumped but has no extraction model yet still differs
+    /// from one nobody configured, and it must not silently vanish from the operating point while
+    /// its pumping is being set up.
+    #[must_use]
+    pub const fn is_active(&self) -> bool {
+        self.gain_model.is_active() || self.pump.is_active()
+    }
+}
+
+/// A named operating point: what every configured node does in one analysis run.
+///
+/// Only the nodes that do something are held. A configuration that neither pumps nor amplifies is
+/// removed from the scenario rather than stored as an inactive entry, so "is in the map" and "takes
+/// part in this operating point" cannot disagree.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, ToSchema)]
 pub struct PumpScenario {
     name: String,
@@ -35,7 +100,7 @@ pub struct PumpScenario {
     /// schema here would document a shape the wire format doesn't have.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     #[schema(value_type = Object)]
-    gain_models: HashMap<Uuid, GainModel>,
+    configs: HashMap<Uuid, PumpConfig>,
 }
 
 impl PumpScenario {
@@ -50,7 +115,7 @@ impl PumpScenario {
     pub fn new(name: &str) -> Self {
         Self {
             name: name.to_string(),
-            gain_models: HashMap::new(),
+            configs: HashMap::new(),
         }
     }
     /// Return the name of this [`PumpScenario`].
@@ -81,34 +146,93 @@ impl PumpScenario {
     /// The node's gain model in this scenario.
     #[must_use]
     pub fn gain_model(&self, node_id: Uuid) -> GainModel {
-        self.gain_models
-            .get(&node_id)
-            .copied()
-            .unwrap_or(GainModel::None)
+        self.config(node_id).gain_model()
+    }
+    /// Return how the medium of the node with the given [`Uuid`] is pumped in this scenario.
+    ///
+    /// # Arguments
+    ///
+    /// * `node_id` - the node to look up.
+    ///
+    /// # Returns
+    ///
+    /// The node's pump source, or [`PumpSource::None`] if this scenario does not pump it.
+    #[must_use]
+    pub fn pump_source(&self, node_id: Uuid) -> PumpSource {
+        self.config(node_id).pump()
+    }
+    /// Return the whole [`PumpConfig`] of the node with the given [`Uuid`] in this scenario.
+    ///
+    /// # Arguments
+    ///
+    /// * `node_id` - the node to look up.
+    ///
+    /// # Returns
+    ///
+    /// The node's configuration. A node this scenario does not mention answers the default one,
+    /// which neither pumps nor amplifies — so a caller always gets something it can use directly.
+    #[must_use]
+    pub fn config(&self, node_id: Uuid) -> PumpConfig {
+        self.configs.get(&node_id).copied().unwrap_or_default()
     }
     /// Set the [`GainModel`] of the node with the given [`Uuid`] in this scenario.
-    ///
-    /// Setting [`GainModel::None`] takes the node out of the scenario again, which is the same
-    /// thing: a node that does not amplify in this operating point.
     ///
     /// # Arguments
     ///
     /// * `node_id` - the node to configure.
     /// * `model` - how it amplifies, or [`GainModel::None`] to make it passive.
     pub fn set_gain_model(&mut self, node_id: Uuid, model: GainModel) {
-        if model.is_active() {
-            self.gain_models.insert(node_id, model);
+        self.update(node_id, |config| config.set_gain_model(model));
+    }
+    /// Set the [`PumpSource`] of the node with the given [`Uuid`] in this scenario.
+    ///
+    /// # Arguments
+    ///
+    /// * `node_id` - the node to configure.
+    /// * `pump` - how its medium is pumped, or [`PumpSource::None`] to leave it unpumped.
+    pub fn set_pump_source(&mut self, node_id: Uuid, pump: PumpSource) {
+        self.update(node_id, |config| config.set_pump(pump));
+    }
+    /// Set the whole [`PumpConfig`] of the node with the given [`Uuid`] in this scenario.
+    ///
+    /// For carrying a node's configuration over as a whole — a copy of it appearing under a fresh
+    /// uuid, say. A configuration that does nothing takes the node out of the scenario, exactly as
+    /// setting either half to inactive would.
+    ///
+    /// # Arguments
+    ///
+    /// * `node_id` - the node to configure.
+    /// * `config` - what it does in this operating point.
+    pub fn set_config(&mut self, node_id: Uuid, config: PumpConfig) {
+        self.update(node_id, |current| *current = config);
+    }
+    /// Change one node's [`PumpConfig`] and drop it again if nothing is left of it.
+    ///
+    /// The single place the "inactive means absent" rule lives, so setting a gain model and setting
+    /// a pump source cannot come to different conclusions about when an entry stops belonging to
+    /// the scenario. Note that it takes *both* halves to be inactive: switching a pumped node's
+    /// extraction model off must not throw its pumping away with it.
+    ///
+    /// # Arguments
+    ///
+    /// * `node_id` - the node to configure.
+    /// * `change` - what to change about its configuration.
+    fn update(&mut self, node_id: Uuid, change: impl FnOnce(&mut PumpConfig)) {
+        let mut config = self.config(node_id);
+        change(&mut config);
+        if config.is_active() {
+            self.configs.insert(node_id, config);
         } else {
-            self.gain_models.remove(&node_id);
+            self.configs.remove(&node_id);
         }
     }
-    /// Return all nodes that amplify in this scenario, together with their [`GainModel`].
+    /// Return all nodes taking part in this scenario, together with their [`PumpConfig`].
     ///
     /// # Returns
     ///
-    /// An iterator over the amplifying nodes in unspecified order.
-    pub fn amplifiers(&self) -> impl Iterator<Item = (Uuid, GainModel)> + '_ {
-        self.gain_models.iter().map(|(id, model)| (*id, *model))
+    /// An iterator over the configured nodes in unspecified order.
+    pub fn amplifiers(&self) -> impl Iterator<Item = (Uuid, PumpConfig)> + '_ {
+        self.configs.iter().map(|(id, config)| (*id, *config))
     }
     /// Remove all entries whose nodes no longer exist in the given model.
     ///
@@ -121,7 +245,7 @@ impl PumpScenario {
     ///
     /// * `model` - the model the remaining entries have to exist in.
     pub fn prune(&mut self, model: &NodeGroup) {
-        self.gain_models.retain(|node_id, _| model.exists(*node_id));
+        self.configs.retain(|node_id, _| model.exists(*node_id));
     }
 }
 
@@ -181,8 +305,9 @@ mod test {
     use super::*;
     use crate::{
         error::OpmResult,
-        gain::ConstGain,
+        gain::{ConstGain, ConstInversion},
         nodes::{Dummy, Lens},
+        reciprocal_centimeter,
     };
 
     #[test]
@@ -201,7 +326,7 @@ mod test {
         assert_eq!(scenario.gain_model(node_id), model);
         assert_eq!(
             scenario.amplifiers().collect::<Vec<_>>(),
-            vec![(node_id, model)]
+            vec![(node_id, PumpConfig::new(model, PumpSource::None))]
         );
         Ok(())
     }
@@ -216,6 +341,55 @@ mod test {
         assert_eq!(scenario.gain_model(node_id), GainModel::None);
         assert_eq!(scenario.amplifiers().count(), 0);
         Ok(())
+    }
+    #[test]
+    fn pumping_and_amplifying_are_configured_independently() -> OpmResult<()> {
+        let mut scenario = PumpScenario::new("full power");
+        let node_id = Uuid::new_v4();
+        let pump = PumpSource::Const(ConstInversion::new(reciprocal_centimeter!(0.5))?);
+        let model = GainModel::Const(ConstGain::new(2.5)?);
+
+        // Setting one half must leave the other alone, in either order ...
+        scenario.set_pump_source(node_id, pump);
+        assert_eq!(scenario.pump_source(node_id), pump);
+        assert_eq!(scenario.gain_model(node_id), GainModel::None);
+        scenario.set_gain_model(node_id, model);
+        assert_eq!(scenario.pump_source(node_id), pump);
+        assert_eq!(scenario.gain_model(node_id), model);
+        // ... and the node is listed once, with both.
+        assert_eq!(
+            scenario.amplifiers().collect::<Vec<_>>(),
+            vec![(node_id, PumpConfig::new(model, pump))]
+        );
+        Ok(())
+    }
+    #[test]
+    fn a_node_stays_in_the_scenario_while_either_half_does_something() -> OpmResult<()> {
+        // Switching the extraction model off while the medium is still pumped must not throw the
+        // pumping away with it - that would silently undo work the user did on the other half.
+        let mut scenario = PumpScenario::new("full power");
+        let node_id = Uuid::new_v4();
+        let pump = PumpSource::Const(ConstInversion::new(reciprocal_centimeter!(0.5))?);
+        scenario.set_pump_source(node_id, pump);
+        scenario.set_gain_model(node_id, GainModel::Const(ConstGain::new(2.5)?));
+
+        scenario.set_gain_model(node_id, GainModel::None);
+        assert_eq!(scenario.pump_source(node_id), pump);
+        assert_eq!(scenario.amplifiers().count(), 1);
+
+        // Only once nothing is left of it does the node leave the operating point.
+        scenario.set_pump_source(node_id, PumpSource::None);
+        assert_eq!(scenario.config(node_id), PumpConfig::default());
+        assert_eq!(scenario.amplifiers().count(), 0);
+        Ok(())
+    }
+    #[test]
+    fn an_unconfigured_node_is_neither_pumped_nor_amplifying() {
+        let scenario = PumpScenario::new("cold");
+        let config = scenario.config(Uuid::new_v4());
+        assert_eq!(config.gain_model(), GainModel::None);
+        assert_eq!(config.pump(), PumpSource::None);
+        assert!(!config.is_active());
     }
     #[test]
     fn prune_drops_entries_of_deleted_nodes() -> OpmResult<()> {

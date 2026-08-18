@@ -14,7 +14,7 @@ use crate::{
         NodeAttrExt,
         optic_ports::{PortConfig, ValidatedLidt},
     },
-    gain::{GainModel, PumpScenario},
+    gain::{GainModel, PumpConfig, PumpScenario, PumpSource},
     nodes::ConnectionInfo,
     opm_document::AnalyzerInfo,
     prelude::{AnalyzerType, Aperture, Isometry, PortMap, PortType, Properties},
@@ -676,18 +676,30 @@ pub struct NewPumpScenario {
 pub struct PumpScenarioItemDto {
     /// The unique identifier of the pump scenario.
     pub id: Uuid,
-    /// The scenario itself: its name and the gain model of every node it amplifies.
+    /// The scenario itself: its name and what every node it configures does.
     pub scenario: PumpScenario,
 }
 
 /// Request payload to set the [`GainModel`] a node runs with within one pump scenario.
 ///
-/// [`GainModel::None`] takes the node out of the scenario again - see
-/// [`PumpScenario::set_gain_model`].
+/// [`GainModel::None`] takes the node out of the scenario again unless its medium is still pumped -
+/// see [`PumpScenario::set_gain_model`].
 #[derive(Debug, Serialize, Deserialize, ToSchema, Clone, Copy)]
 pub struct SetScenarioGainModel {
     pub node_id: Uuid,
     pub gain_model: GainModel,
+}
+
+/// Request payload to set the [`PumpSource`] a node's medium is pumped with within one pump
+/// scenario.
+///
+/// The counterpart of [`SetScenarioGainModel`] for the other half of a
+/// [`PumpConfig`]: [`PumpSource::None`] takes the node out of the scenario again unless it still
+/// amplifies - see [`PumpScenario::set_pump_source`].
+#[derive(Debug, Serialize, Deserialize, ToSchema, Clone, Copy)]
+pub struct SetScenarioPumpSource {
+    pub node_id: Uuid,
+    pub pump: PumpSource,
 }
 
 // ============================================================================
@@ -746,9 +758,9 @@ pub struct ScenarioAmplifierDto {
     /// Display name of that group (the document's own name for the root scenery).
     #[schema(example = "Frontend")]
     pub group_name: String,
-    /// How this node amplifies in this scenario, or [`GainModel::None`] if it is a candidate that
-    /// this scenario simply hasn't configured.
-    pub gain_model: GainModel,
+    /// What this node does in this scenario — how it is pumped and how it amplifies. A candidate
+    /// this scenario simply hasn't configured carries the default, which does neither.
+    pub config: PumpConfig,
 }
 
 // ============================================================================
