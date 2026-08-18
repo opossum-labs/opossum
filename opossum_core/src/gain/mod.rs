@@ -15,7 +15,10 @@ pub mod inversion_field;
 pub mod pump_source;
 pub mod scenario;
 pub use inversion_field::InversionField;
-pub use pump_source::{ConstInversion, PumpSource};
+pub use pump_source::{
+    AnalyticPump, BeerLambertProfile, ConstInversion, LongitudinalProfile, PumpDirection,
+    PumpSource, TransversalProfile,
+};
 pub use scenario::{ActiveScenario, PumpScenario};
 
 use crate::{

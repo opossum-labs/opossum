@@ -34,10 +34,40 @@ use uom::si::{
 };
 use utoipa::ToSchema;
 
+/// Deserialization shim for [`SuperGaussianShape`].
+///
+/// It lets a shape read from a file run through the very same validation as one built through
+/// [`SuperGaussianShape::new`]. Without it there would be none at all: the validated types the
+/// fields are held in are `#[serde(transparent)]`, so deserializing straight into them wraps
+/// whatever the file says without ever looking at it, and a standard deviation of zero would then
+/// divide by zero on the first evaluation.
+#[derive(Deserialize)]
+struct NonValidatedSuperGaussianShape {
+    mu_xy: Point2<Length>,
+    sigma_xy: Point2<Length>,
+    power: f64,
+    theta: Angle,
+    rectangular: bool,
+}
+impl TryFrom<NonValidatedSuperGaussianShape> for SuperGaussianShape {
+    type Error = String;
+    fn try_from(helper: NonValidatedSuperGaussianShape) -> Result<Self, Self::Error> {
+        Self::new(
+            helper.mu_xy,
+            helper.sigma_xy,
+            helper.power,
+            helper.theta,
+            helper.rectangular,
+        )
+        .map_err(|e| e.to_string())
+    }
+}
+
 /// The shape of a generalized 2D super-Gaussian, without an amplitude.
 ///
 /// See the [module documentation](self) for why this is a type of its own.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, ToSchema, EnsureValidated)]
+#[serde(try_from = "NonValidatedSuperGaussianShape")]
 pub struct SuperGaussianShape {
     /// center of the distribution, i.e. where its peak sits
     #[schema(value_type = Object)]
@@ -307,6 +337,26 @@ mod test {
             )
             .is_ok()
         );
+    }
+    #[test]
+    fn a_shape_read_from_a_file_is_validated_too() -> OpmResult<()> {
+        let shape = SuperGaussianShape::default();
+        let serialized =
+            ron::to_string(&shape).map_err(|e| crate::error::OpossumError::Other(e.to_string()))?;
+        let deserialized: SuperGaussianShape = ron::from_str(&serialized)
+            .map_err(|e| crate::error::OpossumError::Other(e.to_string()))?;
+        assert_eq!(shape, deserialized);
+        // A hand-edited width of zero would divide by zero on the first evaluation, so it has to be
+        // refused on the way in rather than on the way out. The accepted form stands next to it so
+        // that the rejection is known to come from the value and not from a shape `ron` could not
+        // read at all - the two differ in nothing else.
+        let readable =
+            "(mu_xy:(0.0,0.0),sigma_xy:(0.005,0.005),power:1.0,theta:0.0,rectangular:false)";
+        let zero_width =
+            "(mu_xy:(0.0,0.0),sigma_xy:(0.0,0.005),power:1.0,theta:0.0,rectangular:false)";
+        assert!(ron::from_str::<SuperGaussianShape>(readable).is_ok());
+        assert!(ron::from_str::<SuperGaussianShape>(zero_width).is_err());
+        Ok(())
     }
     #[test]
     fn the_default_is_a_round_millimetre_scale_gaussian() {
