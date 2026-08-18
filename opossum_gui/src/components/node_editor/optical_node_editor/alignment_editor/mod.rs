@@ -18,7 +18,7 @@ use dioxus::prelude::*;
 use opossum_core::{
     degree, meter,
     prelude::{Isometry, Properties},
-    types::api_types::{NodeEditorPanel, NodeInfo},
+    types::api_types::NodeEditorPanel,
     utils::geom_transformation::{RotationAxis, TranslationAxis},
 };
 use strum::IntoEnumIterator;
@@ -30,29 +30,31 @@ use uuid::Uuid;
 
 #[component]
 pub fn AlignmentEditor(
-    node_id: Memo<Uuid>,
-    alignment: Memo<Isometry>,
-    node_type: Memo<String>,
-    node_properties_sig: ReadSignal<Properties>,
+    node_id: ReadSignal<Uuid>,
+    alignment: ReadSignal<Isometry>,
+    node_type: ReadSignal<String>,
+    node_properties: ReadSignal<Properties>,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
     info!("🔄 Render: AlignmentEditor");
     let current_node_id = *node_id.read();
+
     let accordion_content = if current_node_id != Uuid::nil() {
         vec![rsx! {
             AlignmentInputs {
                 node_id,
-                alignment: *alignment.read(),
-                node_type: node_type.read().clone(),
+                alignment,
+                node_type,
                 on_change,
-                node_properties_sig,
+                node_properties,
                 readonly,
             }
         }]
     } else {
         vec![]
     };
+
     rsx! {
         AccordionItem {
             elements: accordion_content,
@@ -67,15 +69,16 @@ pub fn AlignmentEditor(
 
 #[component]
 pub fn AlignmentInputs(
-    node_id: Memo<Uuid>,
-    alignment: Isometry,
-    node_type: String,
-    node_properties_sig: ReadSignal<Properties>,
+    node_id: ReadSignal<Uuid>,
+    alignment: ReadSignal<Isometry>, // Now receives a ReadSignal instead of raw Isometry
+    node_type: ReadSignal<String>,   // Now receives a ReadSignal instead of raw String
+    node_properties: ReadSignal<Properties>,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    let mut alignment_sig = use_synced_signal(alignment);
-    
+    // Sync the signal only when the external alignment prop value actually changes
+    let mut alignment_sig = use_synced_signal(*alignment.read());
+
     // Stable save callback for alignment changes
     let on_save = use_callback(move |new_iso: Isometry| {
         on_change.call(NodeChangeEvent {
@@ -102,28 +105,31 @@ pub fn AlignmentInputs(
     });
 
     // Stable callback replacing the global on_new_translation helper
-    let on_translation_change = use_callback(move |(new_trans, axis): (Length, TranslationAxis)| {
-        let current_iso = *alignment_sig.peek();
-        let old_trans = current_iso.translation_of_axis(axis);
-        if relative_ne!(old_trans.value, new_trans.value, epsilon = 0.0) {
-            let mut new_iso = current_iso;
-            if new_iso.set_translation_of_axis(axis, new_trans).is_ok() {
-                on_save(new_iso);
-            } else {
-                OPOSSUM_UI_LOGS
-                    .write()
-                    .add_log(&format!("Failed to set alignment for axis {axis}!"));
+    let on_translation_change =
+        use_callback(move |(new_trans, axis): (Length, TranslationAxis)| {
+            let current_iso = *alignment_sig.peek();
+            let old_trans = current_iso.translation_of_axis(axis);
+            if relative_ne!(old_trans.value, new_trans.value, epsilon = 0.0) {
+                let mut new_iso = current_iso;
+                if new_iso.set_translation_of_axis(axis, new_trans).is_ok() {
+                    on_save(new_iso);
+                } else {
+                    OPOSSUM_UI_LOGS
+                        .write()
+                        .add_log(&format!("Failed to set alignment for axis {axis}!"));
+                }
             }
-        }
-    });
+        });
 
-    if node_type == "reflective grating" {
-        // Create an EventHandler wrapper solely for GratingAlignmentInputs (which expects an EventHandler)
+    let current_node_type = node_type.read().clone();
+
+    if current_node_type == "reflective grating" {
+        // Create an EventHandler wrapper solely for GratingAlignmentInputs
         let on_save_handler = EventHandler::new(move |iso| on_save(iso));
         rsx! {
             GratingAlignmentInputs {
                 alignment_sig_outside: alignment_sig,
-                node_properties_sig,
+                node_properties,
                 on_save: on_save_handler,
                 node_id,
                 readonly,
@@ -151,18 +157,18 @@ pub fn AlignmentInputs(
 
 #[component]
 pub fn PositioningEditor(
-    node_id: Memo<Uuid>,
-    position_opt: Memo<Option<Isometry>>,
+    node_id: ReadSignal<Uuid>,
+    position_opt: ReadSignal<Option<Isometry>>,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
     info!("🔄 Render: PositioningEditor");
     let current_node_id = *node_id.read();
+
     let accordion_content = if current_node_id != Uuid::nil() {
-        let current_position = *position_opt.read();
         vec![rsx! {
             PositioningInputs {
-                position_opt: current_position,
+                position_opt,
                 on_change,
                 node_id,
                 readonly,
@@ -171,6 +177,7 @@ pub fn PositioningEditor(
     } else {
         vec![]
     };
+
     rsx! {
         AccordionItem {
             elements: accordion_content,
@@ -185,22 +192,23 @@ pub fn PositioningEditor(
 
 #[component]
 pub fn PositioningInputs(
-    position_opt: Option<Isometry>,
+    position_opt: ReadSignal<Option<Isometry>>, // Now receives a Memo instead of raw Option<Isometry>
     on_change: EventHandler<NodeChangeEvent>,
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     readonly: bool,
 ) -> Element {
     info!("🔄 Render: PositioningInputs");
 
-    let mut position_opt_sig = use_synced_signal(position_opt);
+    // Sync the signal using the unwrapped value from the memo
+    let mut position_opt_sig = use_synced_signal(*position_opt.read());
     let position_memo = use_memo(move || position_opt_sig.read().unwrap_or_default());
-    let mut last_absolute_position = use_signal(|| position_opt.unwrap_or_default());
+    let mut last_absolute_position = use_signal(|| position_opt.peek().unwrap_or_default());
 
     use_effect(move || {
-        if let Some(abs_pos) = *position_opt_sig.read() {
-            if *last_absolute_position.peek() != abs_pos {
-                last_absolute_position.set(abs_pos);
-            }
+        if let Some(abs_pos) = *position_opt_sig.read()
+            && *last_absolute_position.peek() != abs_pos
+        {
+            last_absolute_position.set(abs_pos);
         }
     });
 
@@ -218,7 +226,7 @@ pub fn PositioningInputs(
         });
     });
 
-    // Stable strategy change callback - FIX FOR PANIC: Uses peek() to avoid active borrow locks!
+    // Stable strategy change callback - Uses peek() to avoid active borrow locks
     let on_strategy_change = use_callback(move |e: Event<FormData>| {
         if e.data.value() == "Relative" {
             on_save(None);
@@ -228,7 +236,7 @@ pub fn PositioningInputs(
         }
     });
 
-    // Stable rotation callback (replaces dynamic on_new_rotation helper)
+    // Stable rotation callback
     let on_rotation_change = use_callback(move |(new_rot, axis): (Angle, RotationAxis)| {
         let current_iso = position_opt_sig.peek().unwrap_or_default();
         let old_angle = current_iso.rotation_of_axis(axis);
@@ -244,21 +252,22 @@ pub fn PositioningInputs(
         }
     });
 
-    // Stable translation callback (replaces dynamic on_new_translation helper)
-    let on_translation_change = use_callback(move |(new_trans, axis): (Length, TranslationAxis)| {
-        let current_iso = position_opt_sig.peek().unwrap_or_default();
-        let old_trans = current_iso.translation_of_axis(axis);
-        if relative_ne!(old_trans.value, new_trans.value, epsilon = 0.0) {
-            let mut new_iso = current_iso;
-            if new_iso.set_translation_of_axis(axis, new_trans).is_ok() {
-                on_save(Some(new_iso));
-            } else {
-                OPOSSUM_UI_LOGS
-                    .write()
-                    .add_log(&format!("Failed to set position translation for axis {axis}!"));
+    // Stable translation callback
+    let on_translation_change =
+        use_callback(move |(new_trans, axis): (Length, TranslationAxis)| {
+            let current_iso = position_opt_sig.peek().unwrap_or_default();
+            let old_trans = current_iso.translation_of_axis(axis);
+            if relative_ne!(old_trans.value, new_trans.value, epsilon = 0.0) {
+                let mut new_iso = current_iso;
+                if new_iso.set_translation_of_axis(axis, new_trans).is_ok() {
+                    on_save(Some(new_iso));
+                } else {
+                    OPOSSUM_UI_LOGS.write().add_log(&format!(
+                        "Failed to set position translation for axis {axis}!"
+                    ));
+                }
             }
-        }
-    });
+        });
 
     // Memoize the options so LabeledSelect props remain strictly identical
     let strategy_options = use_memo(move || {
@@ -307,7 +316,7 @@ pub fn TranslationAlignmentInputs(
     alignment: ReadSignal<Isometry>,
     axes_skip: Option<Vec<TranslationAxis>>,
     on_new_translation: EventHandler<(Length, TranslationAxis)>,
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     readonly: bool,
 ) -> Element {
     let id_add_on = "inputNodeAlignmentTrans";
@@ -322,6 +331,7 @@ pub fn TranslationAlignmentInputs(
         }
         trans_input_vec.push(rsx! {
             TranslationInput {
+                key: "{trans_axis}",
                 alignment,
                 axis: trans_axis,
                 id: format!("{id_add_on}{}{}", trans_axis, node_id.read().as_simple().to_string()),
@@ -351,7 +361,9 @@ pub fn TranslationInput(
             translation.value
         }
     });
-
+    let on_change_callback = use_callback(move |new_trans: f64| {
+        on_new_translation.call((meter!(new_trans), axis));
+    });
     rsx! {
         NodeConfigUnitInput {
             id,
@@ -359,9 +371,7 @@ pub fn TranslationInput(
             value: value_memo,
             unit_config: UnitHandling::new("m", true),
             readonly,
-            onchange: move |new_trans: f64| {
-                on_new_translation.call((meter!(new_trans), axis));
-            },
+            onchange: on_change_callback,
         }
     }
 }
@@ -371,7 +381,7 @@ pub fn RotationAlignmentInputs(
     alignment: ReadSignal<Isometry>,
     axes_skip: Option<Vec<RotationAxis>>,
     on_new_rotation: EventHandler<(Angle, RotationAxis)>,
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     readonly: bool,
 ) -> Element {
     let id_add_on = "inputNodeAlignmentRot";
@@ -384,8 +394,10 @@ pub fn RotationAlignmentInputs(
         {
             continue;
         }
+
         rot_input_vec.push(rsx! {
             RotationInput {
+                key: "{rot_axis}",
                 alignment,
                 axis: rot_axis,
                 id: format!("{id_add_on}{}{}", rot_axis, node_id.read().as_simple().to_string()),
@@ -415,6 +427,9 @@ pub fn RotationInput(
             angle.get::<degree>()
         }
     });
+    let on_change_callback = use_callback(move |new_rot: f64| {
+        on_new_rotation.call((degree!(new_rot), axis));
+    });
 
     rsx! {
         NodeConfigUnitInput {
@@ -423,16 +438,14 @@ pub fn RotationInput(
             value: value_memo,
             unit_config: UnitHandling::new("°", true),
             readonly,
-            onchange: move |new_rot: f64| {
-                on_new_rotation.call((degree!(new_rot), axis));
-            },
+            onchange: on_change_callback,
         }
     }
 }
 
 // -------------------------------------------------------------------------------------------------
-// LEGACY GLOBAL HELPERS: Preserved solely so we do not break any imports in parent modules like 
-// `optical_node_editor/mod.rs` which may still be trying to `pub(super) use` them. They are no 
+// LEGACY GLOBAL HELPERS: Preserved solely so we do not break any imports in parent modules like
+// `optical_node_editor/mod.rs` which may still be trying to `pub(super) use` them. They are no
 // longer actively called in the render paths inside this file to ensure proper memoization.
 // -------------------------------------------------------------------------------------------------
 

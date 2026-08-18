@@ -30,7 +30,7 @@ use crate::{
 
 #[component]
 pub fn PortConfigEditor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     node_info: ReadSignal<NodeInfo>,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
@@ -134,7 +134,7 @@ pub fn PortConfigEditor(
 }
 #[component]
 pub fn SinglePortConfigEditor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     port_name: String,
     port_config: PortConfig,
     on_change: EventHandler<UpdatePortRequest>,

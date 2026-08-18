@@ -9,15 +9,14 @@ use uuid::Uuid;
 
 #[component]
 pub fn I32Editor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     int32: i32,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
     let int32_sig = use_synced_signal(int32);
-    let on_save =
-        on_save_proptype_handler(int32_sig, property_key.clone(), on_change, node_id.into());
+    let on_save = on_save_proptype_handler(int32_sig, property_key.clone(), on_change, node_id);
 
     rsx! {
         FlushableTextInput {

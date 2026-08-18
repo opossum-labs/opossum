@@ -10,15 +10,14 @@ use uuid::Uuid;
 
 #[component]
 pub fn F64Editor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     float64: f64,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
     let float64_sig = use_synced_signal(float64);
-    let on_save =
-        on_save_proptype_handler(float64_sig, property_key.clone(), on_change, node_id.into());
+    let on_save = on_save_proptype_handler(float64_sig, property_key.clone(), on_change, node_id);
 
     rsx! {
         NodeConfigPlainF64Input {
