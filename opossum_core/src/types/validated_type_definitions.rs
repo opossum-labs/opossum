@@ -84,6 +84,33 @@ impl Default for ValidatedAngle1D {
     }
 }
 
+/// A validated super-Gaussian power.
+///
+/// The exponent shaping the flanks of a generalized Gaussian: 1 is an ordinary Gaussian, larger
+/// values are super-Gaussians approaching a flat top. It must be:
+/// - normal (not NaN, infinite, zero or subnormal)
+/// - strictly positive
+pub type ValidatedGaussianPower = validated_type!(f64, AllNormal && AllPositive);
+
+impl ValidatedGaussianPower {
+    /// Attempts to create a new [`ValidatedGaussianPower`] instance.
+    ///
+    /// # Errors
+    /// Returns an error if the power is not a normal, strictly positive number.
+    pub fn try_new(power: f64) -> OpmResult<Self> {
+        validated!(power, AllNormal && AllPositive)
+    }
+}
+
+impl Default for ValidatedGaussianPower {
+    /// Returns the power of an ordinary Gaussian.
+    ///
+    /// This is guaranteed to be valid.
+    fn default() -> Self {
+        Self::try_new(1.0).unwrap()
+    }
+}
+
 /// A validated radius value.
 ///
 /// The value must be:
