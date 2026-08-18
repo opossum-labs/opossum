@@ -1,7 +1,10 @@
 pub mod optical_properties_editor;
 
 use dioxus::prelude::*;
+use dioxus_primitives::alert_dialog::{AlertDialogActions, AlertDialogCancel, AlertDialogDescription, AlertDialogTitle};
 use opossum_core::material::Material;
+
+use crate::components::{alert_dialog::AlertDialog, scroll_area::ScrollArea};
 
 use super::asset_header_editor::{
     AssetHeaderChangeAction, AssetHeaderChangeEvent, AssetHeaderEditor,
@@ -38,6 +41,8 @@ pub struct MaterialChangeEvent {
 /// The main editor component for optical materials.
 #[component]
 pub fn MaterialEditor(
+    /// Controls if modal dialog should be displayed
+    open: Signal<bool>,
     /// Read-only signal containing the complete material data.
     material: ReadSignal<Material>,
 
@@ -76,6 +81,27 @@ pub fn MaterialEditor(
     });
 
     rsx! {
+      AlertDialog { open: open(), on_open_change: move |v| open.set(v),
+        AlertDialogTitle { "Material Editor" }
+        AlertDialogDescription {
+          ScrollArea { height: "50em",
+            AssetHeaderEditor {
+              header: header_memo,
+              readonly,
+              on_change: handle_header_change,
+            }
+            OpticalPropertiesEditor {
+              optical: optical_memo,
+              base_id: format!("{}_optical", base_id),
+              readonly,
+              on_change: handle_optical_change,
+            }
+          }
+        }
+        AlertDialogActions {
+          AlertDialogCancel { "Cancel" }
+        }
+      }
       div { class: "material-editor-container", id: "{base_id}",
 
         // Header Bar with status indicator
@@ -107,21 +133,21 @@ pub fn MaterialEditor(
             }
           }
         }
+      
+      // // 1. General Metadata Section (AssetHeader)
+      // AssetHeaderEditor {
+      //   header: header_memo,
+      //   readonly,
+      //   on_change: handle_header_change,
+      // }
 
-        // 1. General Metadata Section (AssetHeader)
-        AssetHeaderEditor {
-          header: header_memo,
-          readonly,
-          on_change: handle_header_change,
-        }
-
-        // 2. Optical Properties Section
-        OpticalPropertiesEditor {
-          optical: optical_memo,
-          base_id: format!("{}_optical", base_id),
-          readonly,
-          on_change: handle_optical_change,
-        }
+      // 2. Optical Properties Section
+      // OpticalPropertiesEditor {
+      //   optical: optical_memo,
+      //   base_id: format!("{}_optical", base_id),
+      //   readonly,
+      //   on_change: handle_optical_change,
+      // }
       }
     }
 }

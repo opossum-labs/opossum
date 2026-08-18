@@ -3,8 +3,8 @@ use crate::{
     APP_CONFIG,
     components::{
         alert_dialog::{
-            AlertDialogAction, AlertDialogActions, AlertDialogCancel, AlertDialogContent,
-            AlertDialogDescription, AlertDialogRoot, AlertDialogTitle,
+            AlertDialog, AlertDialogAction, AlertDialogActions, AlertDialogCancel,
+            AlertDialogDescription, AlertDialogTitle,
         },
         asset_editor::material_editor::{MaterialChangeEvent, MaterialEditor},
         context_menu::cx_menu::{ContextMenu, CxtCommand},
@@ -19,6 +19,7 @@ use crate::{
     },
 };
 use dioxus::prelude::*;
+use dioxus_primitives::alert_dialog::AlertDialogContent;
 use opossum_core::{material::Material, refractive_index::RefrIndexSellmeier1};
 use std::path::PathBuf;
 
@@ -478,6 +479,7 @@ fn CommonAppLayout(
     on_alert_cancel: EventHandler<MouseEvent>,
 ) -> Element {
     info!("🔄 Render: App::CommonAppLayout");
+    let mut open_materialeditor = use_signal(|| true);
     let mut root_tab_open = use_signal(|| true);
     let root_tab_open_handler = EventHandler::<bool>::new(move |b| root_tab_open.set(b));
     let mut height = use_signal(|| 100.0);
@@ -540,17 +542,18 @@ fn CommonAppLayout(
                 root_tab_open_handler,
             }
             Logger { drag_handler: on_mousedown, height }
-                // MaterialEditor {
-        //     material: material_state,
-        //     readonly: false,
-        //     on_change: move |e: MaterialChangeEvent| {
-        //         info!("Got event: {e:?}");
-        //         e.action.apply(&mut material_state.write());
-        //     },
-        //     on_save: move |()| { info!("Material Editor: on_save") },
-        // }
+            MaterialEditor {
+                open: open_materialeditor,
+                material: material_state,
+                readonly: false,
+                on_change: move |e: MaterialChangeEvent| {
+                    info!("Got event: {e:?}");
+                    e.action.apply(&mut material_state.write());
+                },
+                on_save: move |()| { info!("Material Editor: on_save") },
+            }
         }
-        AlertDialogRoot {
+        AlertDialog {
             open: show_alert(),
             on_open_change: move |v: bool| show_alert.set(v),
             AlertDialogContent {
