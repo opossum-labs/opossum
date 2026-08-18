@@ -1,10 +1,12 @@
 pub mod optical_properties_editor;
 
 use dioxus::prelude::*;
-use dioxus_primitives::alert_dialog::{AlertDialogActions, AlertDialogCancel, AlertDialogDescription, AlertDialogTitle};
+use dioxus_primitives::alert_dialog::{
+    AlertDialogActions, AlertDialogCancel, AlertDialogDescription, AlertDialogTitle,
+};
 use opossum_core::material::Material;
 
-use crate::components::{alert_dialog::AlertDialog, scroll_area::ScrollArea};
+use crate::components::primitives::{alert_dialog::AlertDialog, scroll_area::ScrollArea};
 
 use super::asset_header_editor::{
     AssetHeaderChangeAction, AssetHeaderChangeEvent, AssetHeaderEditor,
@@ -133,7 +135,7 @@ pub fn MaterialEditor(
             }
           }
         }
-      
+
       // // 1. General Metadata Section (AssetHeader)
       // AssetHeaderEditor {
       //   header: header_memo,

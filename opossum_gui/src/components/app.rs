@@ -2,16 +2,16 @@
 use crate::{
     APP_CONFIG,
     components::{
-        alert_dialog::{
-            AlertDialog, AlertDialogAction, AlertDialogActions, AlertDialogCancel,
-            AlertDialogDescription, AlertDialogTitle,
-        },
         asset_editor::material_editor::{MaterialChangeEvent, MaterialEditor},
         context_menu::cx_menu::{ContextMenu, CxtCommand},
         logger::logger_component::Logger,
         menu_bar::{
             menu_bar_component::{AppCommand, MenuBar},
             project_helper::{select_open_path, select_save_path},
+        },
+        primitives::alert_dialog::{
+            AlertDialog, AlertDialogAction, AlertDialogActions, AlertDialogCancel,
+            AlertDialogDescription, AlertDialogTitle,
         },
         scenery_editor::{GraphEditor, NodeEditorCommand},
         settings_dialog::SettingsDialog,

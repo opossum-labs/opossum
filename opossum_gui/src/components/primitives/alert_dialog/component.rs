@@ -4,7 +4,7 @@ use dioxus_primitives::alert_dialog::{
     AlertDialogDescriptionProps, AlertDialogRootProps, AlertDialogTitleProps,
 };
 
-#[css_module("/src/components/alert_dialog/style.css")]
+#[css_module("/src/components/primitives/alert_dialog/style.css")]
 struct Styles;
 
 #[component]
