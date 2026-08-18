@@ -25,7 +25,7 @@
 //! Where a node stands is the node's own business, kept in its
 //! [`isometry`](crate::core_optics::NodeAttr::isometry) and its alignment, and a copy of it in a
 //! field that outlives a single pass would silently go stale the moment the node is moved. Instead
-//! everything here — the mask, the ranges, the populations — stays valid under any placement, and
+//! everything here — the mask, the bounds, the populations — stays valid under any placement, and
 //! [`InversionField::cell_at`] takes its point already expressed in the optic's frame.
 //!
 //! The grid is built **once**, in [`InversionField::from_body`]: that is where all the geometry is
@@ -34,7 +34,7 @@
 
 use crate::{
     error::{OpmResult, OpossumError},
-    geometry::body::Body,
+    geometry::body::{Body, BoundingBox},
     num_per_m3,
     utils::math_utils::{to_f64, try_f64_to_usize},
 };
@@ -54,12 +54,8 @@ pub struct InversionField {
     slices: Vec<DMatrix<VolumetricNumberDensity>>,
     /// which cells of each plane lie within the body
     inside: Vec<DMatrix<bool>>,
-    /// extent the grid spans along the optic's x axis
-    x_range: Range<Length>,
-    /// extent the grid spans along the optic's y axis
-    y_range: Range<Length>,
-    /// extent the grid spans along the optic's z axis, i.e. along its optical axis
-    z_range: Range<Length>,
+    /// the extent the grid spans, in the optic's frame — the body's own bounding box
+    bounds: BoundingBox,
 }
 
 impl InversionField {
@@ -121,10 +117,22 @@ impl InversionField {
         Ok(Self {
             slices,
             inside,
-            x_range,
-            y_range,
-            z_range,
+            bounds,
         })
+    }
+    /// Return the extent this [`InversionField`] spans.
+    ///
+    /// This is the body's own [`bounding_box`](Body::bounding_box), kept as the grid was laid out
+    /// over it, and it is stated in the optic's frame like everything else here. Anything evaluating
+    /// a profile over the medium needs it: a distribution that decays from a face of the body has to
+    /// know where that face is.
+    ///
+    /// # Returns
+    ///
+    /// The box the grid covers.
+    #[must_use]
+    pub const fn bounds(&self) -> BoundingBox {
+        self.bounds
     }
     /// Return the number of cells of this [`InversionField`] along its x, y and z axis.
     ///
@@ -148,8 +156,8 @@ impl InversionField {
     #[must_use]
     pub fn cell_volume(&self) -> Volume {
         let (nx, ny, nz) = self.dimensions();
-        extent(&self.x_range) / to_f64(nx) * extent(&self.y_range) / to_f64(ny)
-            * extent(&self.z_range)
+        extent(&self.bounds.x_range()) / to_f64(nx) * extent(&self.bounds.y_range()) / to_f64(ny)
+            * extent(&self.bounds.z_range())
             / to_f64(nz)
     }
     /// Return whether the given cell holds medium at all.
@@ -249,9 +257,38 @@ impl InversionField {
             (index < count).then_some(index)
         };
         Some((
-            index(local_point.x, &self.x_range, nx)?,
-            index(local_point.y, &self.y_range, ny)?,
-            index(local_point.z, &self.z_range, nz)?,
+            index(local_point.x, &self.bounds.x_range(), nx)?,
+            index(local_point.y, &self.bounds.y_range(), ny)?,
+            index(local_point.z, &self.bounds.z_range(), nz)?,
+        ))
+    }
+    /// Return the center of the given cell.
+    ///
+    /// The exact inverse of [`InversionField::cell_at`], and the direction anything writing into the
+    /// field needs: a pump profile is a function of position, so it has to be told where the cell it
+    /// is about to fill actually sits. The center is what the cell was masked by in
+    /// [`InversionField::from_body`], so a profile samples the medium exactly where the mask did.
+    ///
+    /// # Arguments
+    ///
+    /// - `cell`: the cell to locate
+    ///
+    /// # Returns
+    ///
+    /// The center of the cell **in the frame of the optic** the medium belongs to — the same frame
+    /// [`InversionField::cell_at`] expects its point in — or `None` if the cell is not part of the
+    /// grid.
+    #[must_use]
+    pub fn cell_center(&self, cell: CellIndex) -> Option<Point3<Length>> {
+        let (nx, ny, nz) = self.dimensions();
+        let (i, j, k) = cell;
+        if i >= nx || j >= ny || k >= nz {
+            return None;
+        }
+        Some(Point3::new(
+            cell_center(&self.bounds.x_range(), nx, i),
+            cell_center(&self.bounds.y_range(), ny, j),
+            cell_center(&self.bounds.z_range(), nz, k),
         ))
     }
 }
@@ -359,19 +396,24 @@ mod test {
         Ok(())
     }
     #[test]
+    fn the_grid_spans_the_bounding_box_of_the_body() -> OpmResult<()> {
+        // The field keeps the box it was laid out over, so a profile can ask where a face of the
+        // medium is without going back to the body it came from.
+        let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
+        let field = InversionField::from_body(&body, (4, 4, 4))?;
+        assert_eq!(field.bounds(), body.bounding_box()?);
+        Ok(())
+    }
+    #[test]
     fn every_cell_center_maps_back_to_its_own_cell() -> OpmResult<()> {
         let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
         let dimensions = (7, 5, 3);
-        let (nx, ny, nz) = dimensions;
         let field = InversionField::from_body(&body, dimensions)?;
-        let bounds = body.bounding_box()?;
-        for (i, j, k) in all_cells(dimensions) {
-            let center = Point3::new(
-                cell_center(&bounds.x_range(), nx, i),
-                cell_center(&bounds.y_range(), ny, j),
-                cell_center(&bounds.z_range(), nz, k),
-            );
-            assert_eq!(field.cell_at(&center), Some((i, j, k)));
+        for cell in all_cells(dimensions) {
+            let center = field
+                .cell_center(cell)
+                .ok_or_else(|| OpossumError::Other(format!("cell {cell:?} has no center")))?;
+            assert_eq!(field.cell_at(&center), Some(cell));
         }
         // Beyond the grid there is no cell, on either side and on every axis. The upper boundary
         // belongs to no cell either, the same way a body does not claim its exit surface.
@@ -379,6 +421,28 @@ mod test {
         assert_eq!(field.cell_at(&millimeter!(0.0, 0.0, 10.0)), None);
         assert_eq!(field.cell_at(&millimeter!(5.1, 0.0, 5.0)), None);
         assert_eq!(field.cell_at(&millimeter!(0.0, -5.1, 5.0)), None);
+        Ok(())
+    }
+    #[test]
+    fn a_cell_center_sits_where_the_grid_puts_it() -> OpmResult<()> {
+        // The disk spans -5..5 mm transversally and 0..10 mm in z, so with four cells per axis the
+        // first cell is centered an eighth of the way in on each of them.
+        let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
+        let field = InversionField::from_body(&body, (4, 4, 4))?;
+        let center = field
+            .cell_center((0, 0, 0))
+            .ok_or_else(|| OpossumError::Other("the first cell has no center".into()))?;
+        for (found, expected) in [
+            (center.x, millimeter!(-3.75)),
+            (center.y, millimeter!(-3.75)),
+            (center.z, millimeter!(1.25)),
+        ] {
+            assert_abs_diff_eq!(found.value, expected.value, epsilon = 1e-15);
+        }
+        // Cells outside the grid have no center, on every axis.
+        for cell in [(4, 0, 0), (0, 4, 0), (0, 0, 4)] {
+            assert_eq!(field.cell_center(cell), None);
+        }
         Ok(())
     }
     #[test]
