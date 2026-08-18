@@ -1328,6 +1328,14 @@ async fn process_paste_nodes(
                     ws_handler.edges.add_edge(edge.clone(), *graph_id);
                 }
             }
+
+            // A copy of an amplifier is itself an amplifier candidate, possibly already configured
+            // in the active scenario (see `propagate_amplifier_state` on the backend). Neither the
+            // document-wide candidate cache nor the active scenario's gain-model cache knows that yet
+            // - both are re-fetched here and bulk-synced onto every open tab's canvas, the same way
+            // any other action that can change either does.
+            refresh_amplifier_candidates(ws_handler).await;
+            refresh_active_scenario_gain_models(ws_handler).await;
         }
         Err(e) => {
             OPOSSUM_UI_LOGS
