@@ -124,6 +124,31 @@ macro_rules! zeptometer {
     }};
 }
 
+///macro to create an area in square meter
+#[macro_export]
+macro_rules! square_meter {
+    ($( $x:expr_2021 ),*) =>{
+        {
+        use uom::si::{area::square_meter, f64::Area};
+        $crate::uom_unit_creator![square_meter, Area, $( $x ),*]
+        }
+    };
+}
+
+///macro to create an area in square centimeter
+///
+///The unit optical cross sections are quoted in: an emission cross section is of the order of
+///1e-20 cm².
+#[macro_export]
+macro_rules! square_centimeter {
+    ($( $x:expr_2021 ),*) =>{
+        {
+        use uom::si::{area::square_centimeter, f64::Area};
+        $crate::uom_unit_creator![square_centimeter, Area, $( $x ),*]
+        }
+    };
+}
+
 ///macro to create an energy in Terajoule
 #[macro_export]
 macro_rules! terajoule {
@@ -546,6 +571,37 @@ macro_rules! num_per_cm3 {
     };
 }
 
+///macro to create a reciprocal length in 1 per meter
+///
+///Note that this is *not* the same quantity as the `num_per_*` macros above, which build a
+///[`LinearNumberDensity`](uom::si::f64::LinearNumberDensity) — a count spread along a line, such as
+///the groove density of a grating. A [`ReciprocalLength`](uom::si::f64::ReciprocalLength) counts
+///nothing; it is the per-length rate at which something grows or decays along a path, which is what
+///a gain or an absorption coefficient is.
+#[macro_export]
+macro_rules! reciprocal_meter {
+    ($( $x:expr_2021 ),*) =>{
+        {
+        use uom::si::{f64::ReciprocalLength, reciprocal_length::reciprocal_meter};
+        $crate::uom_unit_creator![reciprocal_meter, ReciprocalLength, $( $x ),*]
+        }
+    };
+}
+
+///macro to create a reciprocal length in 1 per centimeter
+///
+///The unit gain and absorption coefficients are usually quoted in. See [`reciprocal_meter`] for how
+///this differs from the `num_per_*` macros.
+#[macro_export]
+macro_rules! reciprocal_centimeter {
+    ($( $x:expr_2021 ),*) =>{
+        {
+        use uom::si::{f64::ReciprocalLength, reciprocal_length::reciprocal_centimeter};
+        $crate::uom_unit_creator![reciprocal_centimeter, ReciprocalLength, $( $x ),*]
+        }
+    };
+}
+
 ///macro to create a pressure in hectopascal
 #[macro_export]
 macro_rules! hectopascal {
@@ -594,7 +650,14 @@ macro_rules! percent {
 mod test {
     use approx::assert_relative_eq;
     use nalgebra::{Point2, Point3};
-    use uom::si::{angle::radian, f64::Length, length::meter};
+    use uom::si::{
+        angle::radian,
+        area::square_meter,
+        f64::{Length, VolumetricNumberDensity},
+        length::meter,
+        reciprocal_length::reciprocal_meter,
+        volumetric_number_density::per_cubic_centimeter,
+    };
 
     #[test]
     fn milliradian_test() {
@@ -605,6 +668,34 @@ mod test {
     fn microradian_test() {
         let rad = microradian!(3.);
         assert_relative_eq!(rad.get::<radian>(), 3e-6);
+    }
+    #[test]
+    fn square_meter_test() {
+        assert_relative_eq!(square_meter!(3.).get::<square_meter>(), 3.);
+        // an area is quadratic in the length prefix, so a square centimeter is 1e-4 m^2 - the very
+        // reason these go through a macro rather than a hand-written factor
+        assert_relative_eq!(square_centimeter!(3.).get::<square_meter>(), 3e-4);
+        // a cross section of the order an emission cross section really has
+        assert_relative_eq!(square_centimeter!(2e-20).get::<square_meter>(), 2e-24);
+    }
+    #[test]
+    fn reciprocal_meter_test() {
+        assert_relative_eq!(reciprocal_meter!(3.).get::<reciprocal_meter>(), 3.);
+        // 3 per centimeter is 300 per meter, i.e. the prefix inverts along with the length
+        assert_relative_eq!(reciprocal_centimeter!(3.).get::<reciprocal_meter>(), 300.);
+    }
+    /// A gain coefficient divided by a cross section is a volumetric number density - the
+    /// conversion a pump source performs, and the reason both quantities are built here.
+    ///
+    /// The `.into()` is not noise: `uom` tags number densities with a kind of their own
+    /// (`ConstituentConcentrationKind`) so that they cannot be mixed up with the other quantities of
+    /// dimension 1/length^3, and a plain division lands in the untagged one. The conversion is
+    /// exact, but it has to be asked for.
+    #[test]
+    fn a_reciprocal_length_over_an_area_is_a_volumetric_density() {
+        let density: VolumetricNumberDensity =
+            (reciprocal_centimeter!(0.5) / square_centimeter!(2e-20)).into();
+        assert_relative_eq!(density.get::<per_cubic_centimeter>(), 2.5e19);
     }
     #[test]
     fn uom_unit_creator() {
