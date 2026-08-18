@@ -8,12 +8,15 @@
 //! medium reads out of it. Neither side has to know the other, and the field survives between
 //! passes, which is what makes a multi-pass amplifier more than a repeated single pass.
 //!
-//! **What a cell holds** is the absolute population density of the upper laser level, as a
-//! [`VolumetricNumberDensity`]. A relative inversion would be the more convenient number to hand a
+//! **What a cell holds** is the absolute inversion density, as a [`VolumetricNumberDensity`]: the
+//! population of the upper laser level over that of the lower one, which for the ideal four level
+//! system stored here is the upper level alone. The value is **signed** — a negative one describes a
+//! medium that absorbs rather than amplifies, which is the same physics with the inversion turned
+//! around, not a separate case. A relative inversion would be the more convenient number to hand a
 //! gain formula, but it is a ratio to a dopant density that
 //! [`Material`](crate::material::Material) does not carry today — an absolute density needs nothing
-//! but itself and can be converted once the material data exists. One level is stored, which is the
-//! ideal four level system; further levels are further fields, not a different type.
+//! but itself and can be converted once the material data exists. One level is stored; further
+//! levels are further fields, not a different type.
 //!
 //! **The grid** is Cartesian and lives entirely in the optic's own frame, so it follows the
 //! component when that is moved or tilted instead of sampling it on a staircase. Round edges do get
@@ -50,7 +53,7 @@ pub type CellIndex = (usize, usize, usize);
 /// See the [module documentation](self) for what a cell holds and which frame the grid lives in.
 #[derive(Debug, Clone, PartialEq)]
 pub struct InversionField {
-    /// population density of the upper laser level: one transversal plane per longitudinal step
+    /// inversion density: one transversal plane per longitudinal step
     slices: Vec<DMatrix<VolumetricNumberDensity>>,
     /// which cells of each plane lie within the body
     inside: Vec<DMatrix<bool>>,
@@ -182,7 +185,7 @@ impl InversionField {
             .copied()
             .unwrap_or(false)
     }
-    /// Return the upper laser level population density stored in the given cell.
+    /// Return the inversion density stored in the given cell.
     ///
     /// # Arguments
     ///
@@ -198,7 +201,7 @@ impl InversionField {
         let (i, j, k) = cell;
         self.slices.get(k)?.get((j, i)).copied()
     }
-    /// Write the upper laser level population density of the given cell.
+    /// Write the inversion density of the given cell.
     ///
     /// # Arguments
     ///
@@ -293,6 +296,23 @@ impl InversionField {
     }
 }
 
+/// Iterate over every cell of a grid of the given size.
+///
+/// This takes the dimensions rather than the field itself on purpose: a producer walks the cells
+/// *while writing into them*, and an iterator borrowing the field would rule that out.
+///
+/// # Arguments
+///
+/// - `dimensions`: the size of the grid, as reported by [`InversionField::dimensions`]
+///
+/// # Returns
+///
+/// Every cell index of that grid, once.
+pub fn cells(dimensions: CellIndex) -> impl Iterator<Item = CellIndex> {
+    let (nx, ny, nz) = dimensions;
+    (0..nx).flat_map(move |i| (0..ny).flat_map(move |j| (0..nz).map(move |k| (i, j, k))))
+}
+
 /// Return how far the given range reaches.
 ///
 /// # Arguments
@@ -360,14 +380,9 @@ mod test {
             placement,
         ))
     }
-    /// Iterate over every cell of a field of the given size.
-    fn all_cells(dimensions: CellIndex) -> impl Iterator<Item = CellIndex> {
-        let (nx, ny, nz) = dimensions;
-        (0..nx).flat_map(move |i| (0..ny).flat_map(move |j| (0..nz).map(move |k| (i, j, k))))
-    }
     /// Return the volume of all cells of the given field that hold medium.
     fn covered_volume(field: &InversionField) -> Volume {
-        let covered = all_cells(field.dimensions())
+        let covered = cells(field.dimensions())
             .filter(|cell| field.is_inside(*cell))
             .count();
         field.cell_volume() * to_f64(covered)
@@ -409,7 +424,7 @@ mod test {
         let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
         let dimensions = (7, 5, 3);
         let field = InversionField::from_body(&body, dimensions)?;
-        for cell in all_cells(dimensions) {
+        for cell in cells(dimensions) {
             let center = field
                 .cell_center(cell)
                 .ok_or_else(|| OpossumError::Other(format!("cell {cell:?} has no center")))?;
@@ -506,7 +521,7 @@ mod test {
             &disk(millimeter!(10.0), millimeter!(5.0), placement)?,
             dimensions,
         )?;
-        for cell in all_cells(dimensions) {
+        for cell in cells(dimensions) {
             assert_eq!(
                 upright.is_inside(cell),
                 placed.is_inside(cell),
@@ -524,7 +539,7 @@ mod test {
         let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
         let mut field = InversionField::from_body(&body, (4, 4, 2))?;
         // A fresh field is unpumped everywhere.
-        assert!(all_cells((4, 4, 2)).all(|cell| field.population(cell) == Some(num_per_m3!(0.0))));
+        assert!(cells((4, 4, 2)).all(|cell| field.population(cell) == Some(num_per_m3!(0.0))));
         let population = num_per_cm3!(1.0e19);
         field.set_population((1, 2, 1), population)?;
         assert_eq!(field.population((1, 2, 1)), Some(population));
