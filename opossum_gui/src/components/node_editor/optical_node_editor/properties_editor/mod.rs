@@ -2,6 +2,7 @@
 
 mod angle_editor;
 mod bool_editor;
+mod clear_aperture_editor;
 mod curvature_editor;
 mod f64_editor;
 mod filter_type_editor;
@@ -22,7 +23,8 @@ use crate::components::node_editor::{
     accordion::{AccordionItem, content_id_for_panel},
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
     optical_node_editor::properties_editor::{
-        angle_editor::AngleEditor, bool_editor::BoolEditor, curvature_editor::CurvatureEditor,
+        angle_editor::AngleEditor, bool_editor::BoolEditor,
+        clear_aperture_editor::ClearApertureEditor, curvature_editor::CurvatureEditor,
         f64_editor::F64Editor, filter_type_editor::FilterTypeEditor,
         fluence_estimator_editor::FluenceEstimatorEditor, i32_editor::I32Editor,
         isometry_option_editor::IsometryOptionEditor, length_editor::LengthEditor,
@@ -274,6 +276,17 @@ fn get_geometric_editor(
             AngleEditor {
                 node_id,
                 angle,
+                property_key,
+                on_change,
+                readonly,
+            }
+        }),
+        // The clear aperture is the transversal extent of a volume node's medium, i.e. a geometric
+        // size - unlike a port aperture, which masks the light passing a surface.
+        Proptype::Aperture(aperture) => Some(rsx! {
+            ClearApertureEditor {
+                node_id,
+                aperture,
                 property_key,
                 on_change,
                 readonly,
