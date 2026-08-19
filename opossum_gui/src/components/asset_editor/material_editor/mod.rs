@@ -85,7 +85,7 @@ pub fn MaterialEditor(
         max_width: "50rem".to_string(),
         AlertDialogTitle { "Material Editor" }
         AlertDialogDescription {
-          ScrollArea { height: "50em",
+          ScrollArea { height: "45em",
             AssetHeaderEditor {
               header: header_memo,
               readonly,

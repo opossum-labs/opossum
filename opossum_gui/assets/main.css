@@ -1,10 +1,6 @@
-/* :root {
-    --color-primary: #3b82f6;
-    --primary-color-2: #414141;
-} */
 html[data-theme="dark"] {
-  --dark: ; /* initial; */
-  --light: initial;
+  --dark: initial;
+  --light: ;
 }
 
 html[data-theme="light"] {
@@ -24,8 +20,8 @@ html[data-theme="light"] [class~="dxc-system"] {
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --dark: ; /* initial; */
-    --light: initial ;
+    --dark: initial;
+    --light: ;
   }
 }
 
