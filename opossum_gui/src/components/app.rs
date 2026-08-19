@@ -2,10 +2,9 @@
 use crate::{
     APP_CONFIG,
     components::{
-        asset_editor::material_editor::{MaterialChangeEvent, MaterialEditor},
         context_menu::cx_menu::{ContextMenu, CxtCommand},
         logger::logger_component::Logger,
-        material_catalog::{MaterialCatalog, MaterialCatalogEvent},
+        material_catalog::MaterialCatalog,
         menu_bar::{
             menu_bar_component::{AppCommand, MenuBar},
             project_helper::{select_open_path, select_save_path},
@@ -21,7 +20,6 @@ use crate::{
 };
 use dioxus::prelude::*;
 use dioxus_primitives::alert_dialog::AlertDialogContent;
-use opossum_core::{material::Material, refractive_index::RefrIndexSellmeier1};
 use opossum_registry::AssetLoader;
 use std::path::PathBuf;
 
@@ -114,6 +112,10 @@ pub fn App() -> Element {
     #[cfg(not(target_arch = "wasm32"))]
     let mut run_simulation = use_signal(|| false);
 
+    let loader = use_signal(|| {
+        let registry_path = PathBuf::from("./target/test_registry");
+        AssetLoader::new(registry_path)
+    });
     let mut node_editor_command: Signal<Option<NodeEditorCommand>> = use_signal(|| None);
     let node_editor_command_handler =
         EventHandler::new(move |node_editor_command_opt: Option<NodeEditorCommand>| {
@@ -129,6 +131,7 @@ pub fn App() -> Element {
     let mut pending_action = use_signal(|| Option::<PendingAction>::None);
     let mut show_alert = use_signal(|| false);
     let mut show_settings = use_signal(|| false);
+    let mut show_material_catalog = use_signal(|| false);
 
     let mut execute_immediate = move |cmd: AppCommand| match cmd {
         AppCommand::NewProject => {
@@ -226,6 +229,9 @@ pub fn App() -> Element {
             {
                 run_simulation.set(true);
             }
+        }
+        AppCommand::OpenMaterialCatalog => {
+            show_material_catalog.set(true);
         }
     };
 
@@ -437,6 +443,7 @@ pub fn App() -> Element {
         }
         SimulationWindow { show_simulation: run_simulation, model_file_path }
         SettingsDialog { show: show_settings }
+        MaterialCatalog { open: show_material_catalog, loader }
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -482,80 +489,13 @@ fn CommonAppLayout(
 ) -> Element {
     info!("🔄 Render: App::CommonAppLayout");
 
-    // 1. Editor Dialog Control & Refresh Trigger
-    let mut open_materialeditor = use_signal(|| false);
-    let mut catalog_refresh_trigger = use_signal(|| 0usize);
-
-    // 2. Shared AssetLoader instance (adjust path to your preferred registry location)
-    let loader_sig = use_signal(|| {
-        let registry_path = PathBuf::from("./target/test_registry");
-        AssetLoader::new(registry_path)
-    });
-
-    // 3. Current active material draft state
-    let mut material_state = use_signal(|| {
-        Material::new_draft(
-            "N-BK7",
-            Some("Schott".to_string()),
-            Some("Standard crown glass".to_string()),
-            RefrIndexSellmeier1::default().into(),
-        )
-    });
-
-    // 4. Handle property modifications in the editor
-    let on_material_changed = use_callback(move |e: MaterialChangeEvent| {
-        info!("Material property modified: {e:?}");
-        e.action.apply(&mut material_state.write());
-    });
-
     // 5. Handle catalog actions (Edit existing vs Create new)
-    let on_catalog_action = use_callback(move |event: MaterialCatalogEvent| {
-        match event {
-            MaterialCatalogEvent::Edit(id) => {
-                info!("Loading material {id} for editing...");
-                let loader = loader_sig.read();
-                match loader.load::<Material>(id, None) {
-                    Ok(loaded_material) => {
-                        // Create an editable draft from the published material
-                        material_state.set(loaded_material.new_draft_from());
-                        open_materialeditor.set(true);
-                    }
-                    Err(err) => {
-                        log::error!("Failed to load material from registry: {err}");
-                    }
-                }
-            }
-            MaterialCatalogEvent::CreateNew => {
-                info!("Opening editor for a new material draft...");
-                // Initialize fresh draft with default values
-                material_state.set(Material::new_draft(
-                    "New Material",
-                    None,
-                    None,
-                    RefrIndexSellmeier1::default().into(),
-                ));
-                open_materialeditor.set(true);
-            }
-        }
-    });
-
-    // 6. Handle Publish/Save from the MaterialEditor
-    let on_material_save = use_callback(move |()| {
-        info!("Publishing material draft to registry...");
-        let loader = loader_sig.read();
-
-        // Dereference the WriteLock guard to pass `&mut Material` instead of `&mut WriteLock`
-        match loader.publish(&mut *material_state.write()) {
-            Ok(saved_path) => {
-                info!("Successfully saved material to {:?}", saved_path);
-                // Trigger index reload in the catalog
-                catalog_refresh_trigger += 1;
-            }
-            Err(e) => {
-                log::error!("Failed to save material to registry: {e}");
-            }
-        }
-    });
+    // let on_catalog_action = use_callback(move |event: MaterialCatalogEvent| {
+    //     match event {
+    //         MaterialCatalogEvent::MaterialAdded => {},
+    //         MaterialCatalogEvent::MaterialDeleted => {}
+    //     }
+    // });
 
     // --- GUI Layout Drag Logic ---
     let mut root_tab_open = use_signal(|| true);
@@ -605,24 +545,6 @@ fn CommonAppLayout(
                 root_tab_open_handler,
             }
             Logger { drag_handler: on_mousedown, height }
-
-            // Material Catalog Component in the main view
-            div { class: "p-3",
-                MaterialCatalog {
-                    loader: loader_sig,
-                    refresh_trigger: catalog_refresh_trigger,
-                    on_action: on_catalog_action,
-                }
-            }
-
-            // Material Editor Modal Dialog
-            MaterialEditor {
-                open: open_materialeditor,
-                material: material_state,
-                readonly: false,
-                on_change: on_material_changed,
-                on_save: on_material_save,
-            }
         }
         AlertDialog {
             open: show_alert(),
