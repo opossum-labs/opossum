@@ -2,7 +2,9 @@ use dioxus::prelude::*;
 use opossum_core::{material::OpticalProperties, refractive_index::RefractiveIndexType};
 
 // Adjust import path according to your module layout
-use crate::components::inputs::RefractiveIndexEditor;
+use crate::components::{
+    inputs::RefractiveIndexEditor, primitives::card::{Card, CardContent, CardHeader, CardTitle},
+};
 
 /// Actions representing modifications in optical properties.
 #[derive(Debug, Clone, PartialEq)]
@@ -65,12 +67,11 @@ pub fn OpticalPropertiesEditor(
     });
 
     rsx! {
-      div { class: "card mb-4",
-        div { class: "card-header bg-light",
-          h5 { class: "mb-0", "Optical Properties" }
+      Card {
+        CardHeader {
+          CardTitle { "Optical properties" }
         }
-        div { class: "card-body",
-
+        CardContent {
           // Section 1: Embedded Refractive Index Editor
           div { class: "mb-4",
             h6 { class: "fw-bold text-secondary mb-2", "Dispersion & Refractive Index" }
@@ -82,7 +83,6 @@ pub fn OpticalPropertiesEditor(
             }
           }
           hr {}
-
           // Section 2: Absorption Coefficient
           div { class: "row",
             div { class: "col-md-6",

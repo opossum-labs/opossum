@@ -1,12 +1,8 @@
 pub mod optical_properties_editor;
 
 use dioxus::prelude::*;
-use dioxus_primitives::alert_dialog::{
-    AlertDialogActions, AlertDialogCancel, AlertDialogDescription, AlertDialogTitle,
-};
 use opossum_core::material::Material;
-
-use crate::components::primitives::{alert_dialog::AlertDialog, scroll_area::ScrollArea};
+use crate::components::primitives::{alert_dialog::{AlertDialog, AlertDialogAction, AlertDialogActions, AlertDialogCancel, AlertDialogDescription, AlertDialogTitle}, scroll_area::ScrollArea};
 
 use super::asset_header_editor::{
     AssetHeaderChangeAction, AssetHeaderChangeEvent, AssetHeaderEditor,
@@ -83,7 +79,10 @@ pub fn MaterialEditor(
     });
 
     rsx! {
-      AlertDialog { open: open(), on_open_change: move |v| open.set(v),
+      AlertDialog {
+        open: open(),
+        on_open_change: move |v| open.set(v),
+        max_width: "50rem".to_string(),
         AlertDialogTitle { "Material Editor" }
         AlertDialogDescription {
           ScrollArea { height: "50em",
@@ -102,6 +101,7 @@ pub fn MaterialEditor(
         }
         AlertDialogActions {
           AlertDialogCancel { "Cancel" }
+          AlertDialogAction { on_click: move |_| {}, "Ok" }
         }
       }
       div { class: "material-editor-container", id: "{base_id}",
@@ -135,7 +135,7 @@ pub fn MaterialEditor(
             }
           }
         }
-
+      
       // // 1. General Metadata Section (AssetHeader)
       // AssetHeaderEditor {
       //   header: header_memo,
