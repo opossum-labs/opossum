@@ -1,8 +1,16 @@
+use crate::components::primitives::{
+    alert_dialog::{
+        AlertDialog, AlertDialogAction, AlertDialogActions, AlertDialogCancel,
+        AlertDialogDescription, AlertDialogTitle,
+    },
+    card::{Card, CardAction, CardContent, CardHeader, CardTitle},
+};
 use dioxus::prelude::*;
+use dioxus_primitives::alert_dialog::AlertDialogContent;
 use opossum_core::{material::Material, refractive_index::RefrIndexSellmeier1};
 use opossum_registry::{
-    AssetIndex, AssetLoader,
     index::{IndexEntry, MaterialIndexData},
+    AssetIndex, AssetLoader,
 };
 use uuid::Uuid;
 
@@ -13,7 +21,6 @@ pub fn seed_catalog_if_empty(loader: &AssetLoader) {
         if count == 0 {
             log::info!("Registry is empty. Seeding initial N-BK7 catalog material...");
 
-            // Create default N-BK7 draft with standard Sellmeier 1 coefficients
             let mut nbk7 = Material::new_draft(
                 "N-BK7",
                 Some("Schott".to_string()),
@@ -21,12 +28,20 @@ pub fn seed_catalog_if_empty(loader: &AssetLoader) {
                 RefrIndexSellmeier1::default().into(),
             );
 
-            // Publish as version 1 to disk
             if let Err(e) = loader.publish(&mut nbk7) {
                 log::error!("Failed to seed initial N-BK7 material: {}", e);
             }
         }
     }
+}
+
+/// Metadata of an asset queued for deletion confirmation.
+#[derive(Debug, Clone, PartialEq)]
+struct DeleteTarget {
+    id: Uuid,
+    name: String,
+    latest_version: u32,
+    total_versions_count: usize,
 }
 
 /// Events emitted by the catalog component.
@@ -43,7 +58,7 @@ pub enum MaterialCatalogEvent {
 pub struct MaterialCatalogProps {
     /// Shared signal referencing the asset loader for disk access.
     pub loader: Signal<AssetLoader>,
-    /// Reactive trigger to force a re-index from disk (e.g. after saving).
+    /// Reactive trigger to force a re-index from disk (e.g., after saving).
     #[props(default)]
     pub refresh_trigger: Signal<usize>,
     /// Handler for catalog actions (Edit, Create).
@@ -62,7 +77,11 @@ pub fn MaterialCatalog(props: MaterialCatalogProps) -> Element {
         idx
     });
 
-    // 2. Watch refresh trigger to rebuild index when external changes occur
+    // 2. Separate states for dialog visibility and the target to delete
+    let mut show_delete_dialog = use_signal(|| false);
+    let mut pending_delete = use_signal(|| Option::<DeleteTarget>::None);
+
+    // 3. Watch refresh trigger to rebuild index when external changes occur
     use_effect(move || {
         let _ = props.refresh_trigger.read();
         let loader = props.loader.read();
@@ -70,18 +89,17 @@ pub fn MaterialCatalog(props: MaterialCatalogProps) -> Element {
         let _ = idx.build_from_loader(&loader);
     });
 
-    // 3. Local search & filter states
+    // 4. Local search & filter states
     let mut search_text = use_signal(String::new);
     let mut min_nd = use_signal(|| Option::<f64>::None);
     let mut max_nd = use_signal(|| Option::<f64>::None);
 
-    // 4. Derived State: Filtered entries
+    // 5. Derived State: Filtered entries
     let filtered_entries = use_memo(move || {
         let text_query = search_text.read();
         let idx = index_sig.read();
         let trimmed_query = text_query.trim();
 
-        // 1. Perform text search across Name, Manufacturer, and Description
         let mut results: Vec<IndexEntry<MaterialIndexData>> = if trimmed_query.is_empty() {
             idx.all_entries().into_iter().cloned().collect()
         } else {
@@ -91,7 +109,6 @@ pub fn MaterialCatalog(props: MaterialCatalogProps) -> Element {
                 .collect()
         };
 
-        // 2. Apply refractive index (nd) filters if set
         if let Some(min) = *min_nd.read() {
             results.retain(|e| e.specific.nd.is_some_and(|nd| nd >= min));
         }
@@ -102,18 +119,46 @@ pub fn MaterialCatalog(props: MaterialCatalogProps) -> Element {
         results
     });
 
+    // Helper to perform the deletion and rebuild RAM index
+    let mut execute_delete = move |target: DeleteTarget| {
+        let loader = props.loader.read();
+        match loader.delete_latest_version::<Material>(target.id) {
+            Ok(Some(new_latest)) => {
+                log::info!(
+                    "Deleted version v{} of '{}'. Rolled back to v{}.",
+                    target.latest_version,
+                    target.name,
+                    new_latest
+                );
+            }
+            Ok(None) => {
+                log::info!(
+                    "Deleted final version of '{}'. Material removed from registry.",
+                    target.name
+                );
+            }
+            Err(e) => {
+                log::error!("Failed to delete material version: {e}");
+            }
+        }
+        // Refresh RAM index immediately after disk operation
+        let _ = index_sig.write().build_from_loader(&loader);
+    };
+
     rsx! {
-      div { class: "card h-100",
-        div { class: "card-header bg-dark text-white d-flex justify-content-between align-items-center",
-          h5 { class: "mb-0", "Material Catalog" }
-          button {
-            class: "btn btn-sm btn-success",
-            r#type: "button",
-            onclick: move |_| props.on_action.call(MaterialCatalogEvent::CreateNew),
-            "➕ New Material"
+      Card {
+        CardHeader {
+          CardTitle { "Material Catalog" }
+          CardAction {
+            button {
+              class: "btn btn-sm btn-success",
+              r#type: "button",
+              onclick: move |_| props.on_action.call(MaterialCatalogEvent::CreateNew),
+              "➕ New Material"
+            }
           }
         }
-        div { class: "card-body overflow-auto",
+        CardContent {
           // Filter controls
           div { class: "row mb-4 align-items-end",
             div { class: "col-md-4",
@@ -188,13 +233,31 @@ pub fn MaterialCatalog(props: MaterialCatalogProps) -> Element {
                     }
                     td { class: "text-end",
                       button {
-                        class: "btn btn-sm btn-outline-primary",
+                        class: "btn btn-sm btn-outline-primary me-1",
                         r#type: "button",
                         onclick: {
                             let id = entry.common.id;
                             move |_| props.on_action.call(MaterialCatalogEvent::Edit(id))
                         },
                         "Edit"
+                      }
+                      button {
+                        class: "btn btn-sm btn-outline-danger",
+                        r#type: "button",
+                        title: "Delete latest version",
+                        onclick: {
+                            let target = DeleteTarget {
+                                id: entry.common.id,
+                                name: entry.common.name.clone(),
+                                latest_version: entry.common.latest_version,
+                                total_versions_count: entry.common.available_versions.len(),
+                            };
+                            move |_| {
+                                pending_delete.set(Some(target.clone()));
+                                show_delete_dialog.set(true);
+                            }
+                        },
+                        "🗑"
                       }
                     }
                   }
@@ -209,6 +272,50 @@ pub fn MaterialCatalog(props: MaterialCatalogProps) -> Element {
                   }
                 }
               }
+            }
+          }
+        }
+      }
+
+      // Deletion Confirmation Dialog
+      AlertDialog {
+        open: show_delete_dialog(),
+        on_open_change: move |open: bool| {
+            show_delete_dialog.set(open);
+        },
+        AlertDialogContent {
+          AlertDialogTitle { "Delete Material Version" }
+          AlertDialogDescription {
+            if let Some(target) = pending_delete.read().as_ref() {
+              if target.total_versions_count <= 1 {
+                p { class: "text-danger fw-bold mb-1",
+                  "⚠️ Warning: This is the only version of '{target.name}'."
+                }
+                p { class: "mb-0",
+                  "Deleting version v{target.latest_version} will permanently remove the entire material from the catalog. Are you sure you want to proceed?"
+                }
+              } else {
+                p { class: "mb-0",
+                  "Are you sure you want to delete the latest version (v{target.latest_version}) of '{target.name}'? The material will revert to v{target.latest_version - 1}."
+                }
+              }
+            }
+          }
+          AlertDialogActions {
+            AlertDialogCancel {
+              on_click: move |_| {
+                  show_delete_dialog.set(false);
+              },
+              "Cancel"
+            }
+            AlertDialogAction {
+              on_click: move |_| {
+                  if let Some(target) = pending_delete.read().clone() {
+                      execute_delete(target);
+                  }
+                  show_delete_dialog.set(false);
+              },
+              "Delete Version"
             }
           }
         }

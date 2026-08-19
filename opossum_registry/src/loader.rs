@@ -195,6 +195,50 @@ impl AssetLoader {
             .and_then(|versions| versions.last().copied())
             .map_or(1, |latest| latest + 1)
     }
+    /// Deletes the latest version of an asset from disk.
+    /// 
+    /// **Use this function with care!** Deleting an asset version (or an asset completely) can break snychronization. Use
+    /// this function only if an asset has not yet been pushed to a public repository.
+    ///
+    /// - If multiple versions exist (e.g., `v1` and `v2`), it removes `v2.ron` and returns `Ok(Some(1))`.
+    /// - If only a single version exists (e.g., `v1`), it removes `v1.ron` and deletes the entire asset folder, returning `Ok(None)`.
+    ///
+    /// # Errors
+    /// Returns an [`OpossumError`] if reading directory contents or deleting files fails.
+    pub fn delete_latest_version<T: RegisterableAsset>(&self, id: Uuid) -> OpmResult<Option<u32>> {
+        let versions = self.list_versions::<T>(id)?;
+        let latest_version = *versions
+            .last()
+            .ok_or_else(|| OpossumError::Other(format!("No versions found for UUID {id}")))?;
+
+        // 1. Remove the latest version file
+        let file_path = self.asset_file_path::<T>(id, latest_version);
+        if file_path.exists() {
+            fs::remove_file(&file_path).map_err(|e| {
+                OpossumError::Other(format!(
+                    "Failed to delete version file {}: {e}",
+                    file_path.display()
+                ))
+            })?;
+        }
+
+        // 2. If this was the only version, clean up the asset folder completely
+        if versions.len() <= 1 {
+            let dir_path = self.asset_directory::<T>(id);
+            if dir_path.exists() {
+                fs::remove_dir_all(&dir_path).map_err(|e| {
+                    OpossumError::Other(format!(
+                        "Failed to remove empty asset directory {}: {e}",
+                        dir_path.display()
+                    ))
+                })?;
+            }
+            Ok(None)
+        } else {
+            // Return the new active latest version (the one immediately preceding)
+            Ok(Some(versions[versions.len() - 2]))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -278,6 +322,33 @@ mod tests {
         // Publish v1 and verify that the next version calculation yields 2
         loader.publish(&mut mat_v1)?;
         assert_eq!(loader.next_version_number::<Material>(mat_id), 2);
+
+        Ok(())
+    }
+    #[test]
+    fn test_delete_latest_version_stepwise_and_full_removal() -> OpmResult<()> {
+        let temp_dir = TempDir::new().map_err(|e| OpossumError::Other(e.to_string()))?;
+        let loader = AssetLoader::new(temp_dir.path());
+
+        // 1. Publish Version 1
+        let mut mat_v1 = Material::new_draft("Glass", None, None, RefractiveIndexType::default());
+        let id = mat_v1.id();
+        loader.publish(&mut mat_v1)?;
+
+        // 2. Publish Version 2
+        let mut mat_v2 = mat_v1.new_draft_from();
+        loader.publish(&mut mat_v2)?;
+        assert_eq!(loader.list_versions::<Material>(id)?, vec![1, 2]);
+
+        // 3. Delete latest version (v2) -> should revert to v1
+        let remaining_latest = loader.delete_latest_version::<Material>(id)?;
+        assert_eq!(remaining_latest, Some(1));
+        assert_eq!(loader.list_versions::<Material>(id)?, vec![1]);
+
+        // 4. Delete final version (v1) -> folder should be removed completely
+        let remaining_latest = loader.delete_latest_version::<Material>(id)?;
+        assert_eq!(remaining_latest, None);
+        assert!(!loader.asset_directory::<Material>(id).exists());
 
         Ok(())
     }
