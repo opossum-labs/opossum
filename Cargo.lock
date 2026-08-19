@@ -5118,6 +5118,7 @@ dependencies = [
  "nalgebra",
  "num",
  "opossum_core",
+ "opossum_registry",
  "regex",
  "reqwest 0.13.4",
  "rfd",

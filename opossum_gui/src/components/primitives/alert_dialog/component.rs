@@ -16,15 +16,15 @@ pub struct AlertDialogProps {
     pub default_open: bool,
     pub open: bool,
     pub on_open_change: EventHandler<bool>,
-    
+
     /// Pass-through for standard HTML attributes
     #[props(extends = GlobalAttributes)]
     pub attributes: Vec<Attribute>,
-    
+
     /// Optional override for the maximum width (e.g. "60rem", "800px")
     #[props(default)]
     pub max_width: Option<String>,
-    
+
     pub children: Element,
 }
 

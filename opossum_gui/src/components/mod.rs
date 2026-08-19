@@ -11,4 +11,5 @@ pub mod short_cuts;
 pub mod simulation;
 // pub mod plot;
 // pub mod render_3d;
+pub mod material_catalog;
 pub mod primitives;

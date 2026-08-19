@@ -163,7 +163,29 @@ impl<T: IndexableAsset> AssetIndex<T> {
             })
             .collect()
     }
+    #[must_use]
+    pub fn search_text(&self, query: &str) -> Vec<&IndexEntry<T::IndexData>> {
+        let q_lower = query.to_lowercase();
 
+        self.entries
+            .values()
+            .filter(|entry| {
+                let name_matches = entry.common.name.to_lowercase().contains(&q_lower);
+                let mfg_matches = entry
+                    .common
+                    .manufacturer
+                    .as_ref()
+                    .is_some_and(|m| m.to_lowercase().contains(&q_lower));
+                let desc_matches = entry
+                    .common
+                    .description
+                    .as_ref()
+                    .is_some_and(|d| d.to_lowercase().contains(&q_lower));
+
+                name_matches || mfg_matches || desc_matches
+            })
+            .collect()
+    }
     /// Performs a dynamic evaluation search by loading full assets and applying a custom predicate function.
     ///
     /// # Errors

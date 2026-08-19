@@ -3,7 +3,8 @@ use opossum_core::{material::OpticalProperties, refractive_index::RefractiveInde
 
 // Adjust import path according to your module layout
 use crate::components::{
-    inputs::RefractiveIndexEditor, primitives::card::{Card, CardContent, CardHeader, CardTitle},
+    inputs::RefractiveIndexEditor,
+    primitives::card::{Card, CardContent, CardHeader, CardTitle},
 };
 
 /// Actions representing modifications in optical properties.

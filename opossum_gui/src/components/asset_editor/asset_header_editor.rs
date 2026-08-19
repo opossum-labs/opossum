@@ -2,7 +2,8 @@ use dioxus::prelude::*;
 use opossum_core::asset::AssetHeader;
 
 use crate::components::{
-    node_editor::inputs::input_components::LabeledInput, primitives::card::{Card, CardContent, CardFooter, CardHeader, CardTitle},
+    node_editor::inputs::input_components::LabeledInput,
+    primitives::card::{Card, CardContent, CardFooter, CardHeader, CardTitle},
 };
 
 /// Defines the specific field that was modified in the asset header.
