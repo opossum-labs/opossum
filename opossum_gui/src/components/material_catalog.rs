@@ -11,7 +11,8 @@ use crate::components::{
 };
 use dioxus::prelude::*;
 use dioxus_free_icons::{
-    Icon, icons::fa_solid_icons::{FaArrowsRotate, FaPencil, FaPlus, FaTrash},
+    Icon,
+    icons::fa_solid_icons::{FaArrowsRotate, FaPencil, FaPlus, FaTrash},
 };
 use dioxus_primitives::alert_dialog::AlertDialogContent;
 use opossum_core::{material::Material, refractive_index::RefrIndexSellmeier1};
@@ -20,27 +21,6 @@ use opossum_registry::{
     index::{IndexEntry, MaterialIndexData},
 };
 use uuid::Uuid;
-
-/// Automatically seeds standard optical materials (like N-BK7) if the registry is empty.
-pub fn seed_catalog_if_empty(loader: &AssetLoader) {
-    let mut index = AssetIndex::<Material>::new();
-    if let Ok(count) = index.build_from_loader(loader) {
-        if count == 0 {
-            log::info!("Registry is empty. Seeding initial N-BK7 catalog material...");
-
-            let mut nbk7 = Material::new_draft(
-                "N-BK7",
-                Some("Schott".to_string()),
-                Some("Primary crown glass for optical lenses and prisms".to_string()),
-                RefrIndexSellmeier1::default().into(),
-            );
-
-            if let Err(e) = loader.publish(&mut nbk7) {
-                log::error!("Failed to seed initial N-BK7 material: {}", e);
-            }
-        }
-    }
-}
 
 /// Metadata of an asset queued for deletion confirmation.
 #[derive(Debug, Clone, PartialEq)]
@@ -72,8 +52,6 @@ pub fn MaterialCatalog(
     let mut open_materialeditor = use_signal(|| false);
     let mut material_state = use_signal(|| Material::default());
     let mut index_sig = use_signal(|| {
-        seed_catalog_if_empty(&loader.read());
-
         let mut idx = AssetIndex::<Material>::new();
         let _ = idx.build_from_loader(&loader.read());
         idx

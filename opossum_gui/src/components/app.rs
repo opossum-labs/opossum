@@ -112,9 +112,29 @@ pub fn App() -> Element {
     #[cfg(not(target_arch = "wasm32"))]
     let mut run_simulation = use_signal(|| false);
 
-    let loader = use_signal(|| {
-        let registry_path = PathBuf::from("./target/test_registry");
+    // Initialize AssetLoader with the path from AppConfig
+    let mut loader = use_signal(|| {
+        let registry_path = APP_CONFIG
+            .read()
+            .catalog_dir()
+            .cloned()
+            .unwrap_or_else(|| PathBuf::from("./catalogs"));
+
+        // Ensure the directory exists
+        if !registry_path.exists() {
+            let _ = std::fs::create_dir_all(&registry_path);
+        }
+
         AssetLoader::new(registry_path)
+    });
+    // Reactive update: re-instantiate AssetLoader when catalog_dir changes in APP_CONFIG
+    use_effect(move || {
+        if let Some(catalog_path) = APP_CONFIG.read().catalog_dir() {
+            if !catalog_path.exists() {
+                let _ = std::fs::create_dir_all(catalog_path);
+            }
+            *loader.write() = AssetLoader::new(catalog_path.clone());
+        }
     });
     let mut node_editor_command: Signal<Option<NodeEditorCommand>> = use_signal(|| None);
     let node_editor_command_handler =
@@ -442,7 +462,7 @@ pub fn App() -> Element {
             }
         }
         SimulationWindow { show_simulation: run_simulation, model_file_path }
-        SettingsDialog { show: show_settings }
+        SettingsDialog { open: show_settings }
         MaterialCatalog { open: show_material_catalog, loader }
     }
 

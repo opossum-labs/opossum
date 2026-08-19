@@ -13,8 +13,10 @@ use std::{
 use uom::si::f64::Length;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(default)]
 pub struct AppConfig {
     report_dir: Option<PathBuf>,
+    catalog_dir: Option<PathBuf>,
     default_wavelength: Length,
 }
 
@@ -22,8 +24,14 @@ impl Default for AppConfig {
     fn default() -> Self {
         let report_base_dir = UserDirs::new()
             .and_then(|user_dirs| user_dirs.document_dir().map(|p| p.join("opossum_reports")));
+
+        // Default catalog directory in the local config directory: <project dir>/catalogs
+        let catalog_base_dir = ProjectDirs::from("org", "Opossumlabs", "Opossum")
+            .map(|project_dirs| project_dirs.data_local_dir().join("catalogs"));
+
         Self {
             report_dir: report_base_dir,
+            catalog_dir: catalog_base_dir,
             default_wavelength: nanometer!(1053.0),
         }
     }
@@ -47,10 +55,9 @@ impl AppConfig {
             Err(OpossumError::Other("config file not found".into()))
         }
     }
+
     pub fn to_file(&self) -> OpmResult<()> {
-        let config = PrettyConfig::new()
-            // .extensions(Extensions::UNWRAP_VARIANT_NEWTYPES)
-            .new_line("\n");
+        let config = PrettyConfig::new().new_line("\n");
         let serialized = ron::ser::to_string_pretty(&self, config).map_err(|e| {
             OpossumError::OpticScenery(format!("serialization of config failed: {e}"))
         })?;
@@ -59,7 +66,7 @@ impl AppConfig {
                 "could not determine config file name".into(),
             ));
         };
-        // create parent dirs if not present
+        // Create parent directories if not present
         if let Some(parent) = config_file.parent() {
             fs::create_dir_all(parent).ok();
         }
@@ -79,9 +86,11 @@ impl AppConfig {
         })?;
         Ok(())
     }
+
     pub const fn report_dir(&self) -> Option<&PathBuf> {
         self.report_dir.as_ref()
     }
+
     pub fn set_report_dir(&mut self, report_dir: &Path) -> OpmResult<()> {
         if !report_dir.is_dir() {
             return Err(OpossumError::Other(format!(
@@ -92,6 +101,22 @@ impl AppConfig {
         self.report_dir = Some(report_dir.to_path_buf());
         Ok(())
     }
+
+    pub const fn catalog_dir(&self) -> Option<&PathBuf> {
+        self.catalog_dir.as_ref()
+    }
+
+    pub fn set_catalog_dir(&mut self, catalog_dir: &Path) -> OpmResult<()> {
+        if !catalog_dir.is_dir() {
+            return Err(OpossumError::Other(format!(
+                "error setting catalog directory: {}",
+                catalog_dir.to_path_buf().display()
+            )));
+        }
+        self.catalog_dir = Some(catalog_dir.to_path_buf());
+        Ok(())
+    }
+
     fn config_file() -> Option<PathBuf> {
         ProjectDirs::from("org", "Opossumlabs", "Opossum")
             .map(|project_dirs| project_dirs.config_local_dir().join("config.ron"))
