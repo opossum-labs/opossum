@@ -479,7 +479,7 @@ fn CommonAppLayout(
     on_alert_cancel: EventHandler<MouseEvent>,
 ) -> Element {
     info!("🔄 Render: App::CommonAppLayout");
-    let mut open_materialeditor = use_signal(|| true);
+    let open_materialeditor = use_signal(|| true);
     let mut root_tab_open = use_signal(|| true);
     let root_tab_open_handler = EventHandler::<bool>::new(move |b| root_tab_open.set(b));
     let mut height = use_signal(|| 100.0);
@@ -513,6 +513,10 @@ fn CommonAppLayout(
             RefrIndexSellmeier1::default().into(),
         )
     });
+    let on_material_changed=use_callback(move |e: MaterialChangeEvent| {
+                    info!("Got event: {e:?}");
+                    e.action.apply(&mut material_state.write());
+                });
     // ****
 
     rsx! {
@@ -546,10 +550,7 @@ fn CommonAppLayout(
                 open: open_materialeditor,
                 material: material_state,
                 readonly: false,
-                on_change: move |e: MaterialChangeEvent| {
-                    info!("Got event: {e:?}");
-                    e.action.apply(&mut material_state.write());
-                },
+                on_change: on_material_changed,
                 on_save: move |()| { info!("Material Editor: on_save") },
             }
         }

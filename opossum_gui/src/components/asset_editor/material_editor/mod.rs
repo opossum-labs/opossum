@@ -1,8 +1,14 @@
 pub mod optical_properties_editor;
 
+use crate::components::primitives::{
+    alert_dialog::{
+        AlertDialog, AlertDialogAction, AlertDialogActions, AlertDialogCancel,
+        AlertDialogDescription, AlertDialogTitle,
+    },
+    scroll_area::ScrollArea,
+};
 use dioxus::prelude::*;
 use opossum_core::material::Material;
-use crate::components::primitives::{alert_dialog::{AlertDialog, AlertDialogAction, AlertDialogActions, AlertDialogCancel, AlertDialogDescription, AlertDialogTitle}, scroll_area::ScrollArea};
 
 use super::asset_header_editor::{
     AssetHeaderChangeAction, AssetHeaderChangeEvent, AssetHeaderEditor,
@@ -85,6 +91,42 @@ pub fn MaterialEditor(
         max_width: "50rem".to_string(),
         AlertDialogTitle { "Material Editor" }
         AlertDialogDescription {
+          div { class: "material-editor-container", id: "{base_id}",
+
+            // Header Bar with status indicator
+            div { class: "d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom",
+              div {
+                h4 { class: "mb-0",
+                  "{material.read().name()}"
+                  if is_draft {
+                    span { class: "badge bg-warning text-dark ms-2",
+                      "Draft (v0)"
+                    }
+                  } else {
+                    span { class: "badge bg-success ms-2",
+                      "Published (v{current_version})"
+                    }
+                  }
+                }
+              }
+
+              // Save / Publish button
+              if let Some(save_handler) = on_save {
+                if !readonly {
+                  button {
+                    class: "btn btn-primary d-flex align-items-center",
+                    r#type: "button",
+                    onclick: move |_| save_handler.call(()),
+                    if is_draft {
+                      "Publish to Registry"
+                    } else {
+                      "Publish New Version"
+                    }
+                  }
+                }
+              }
+            }
+          }
           ScrollArea { height: "45em",
             AssetHeaderEditor {
               header: header_memo,
@@ -104,52 +146,6 @@ pub fn MaterialEditor(
           AlertDialogAction { on_click: move |_| {}, "Ok" }
         }
       }
-      div { class: "material-editor-container", id: "{base_id}",
 
-        // Header Bar with status indicator
-        div { class: "d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom",
-          div {
-            h4 { class: "mb-0",
-              "{material.read().name()}"
-              if is_draft {
-                span { class: "badge bg-warning text-dark ms-2", "Draft (v0)" }
-              } else {
-                span { class: "badge bg-success ms-2", "Published (v{current_version})" }
-              }
-            }
-          }
-
-          // Save / Publish button
-          if let Some(save_handler) = on_save {
-            if !readonly {
-              button {
-                class: "btn btn-primary d-flex align-items-center",
-                r#type: "button",
-                onclick: move |_| save_handler.call(()),
-                if is_draft {
-                  "Publish to Registry"
-                } else {
-                  "Publish New Version"
-                }
-              }
-            }
-          }
-        }
-      
-      // // 1. General Metadata Section (AssetHeader)
-      // AssetHeaderEditor {
-      //   header: header_memo,
-      //   readonly,
-      //   on_change: handle_header_change,
-      // }
-
-      // 2. Optical Properties Section
-      // OpticalPropertiesEditor {
-      //   optical: optical_memo,
-      //   base_id: format!("{}_optical", base_id),
-      //   readonly,
-      //   on_change: handle_optical_change,
-      // }
-      }
     }
 }
