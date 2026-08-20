@@ -101,6 +101,9 @@ fn GeneralSettingsTab(mut temp_config: Signal<crate::AppConfig>) -> Element {
         |p| p.to_string_lossy().into_owned(),
     );
 
+    let current_remote_url = temp_config.read().catalog_remote_url().to_string();
+    let sync_on_startup = temp_config.read().sync_catalog_on_startup();
+
     rsx! {
       div { class: "d-flex flex-column gap-3",
         h4 { class: "mb-3", "General Settings" }
@@ -160,6 +163,39 @@ fn GeneralSettingsTab(mut temp_config: Signal<crate::AppConfig>) -> Element {
               },
               "Browse..."
             }
+          }
+        }
+
+        // Catalog Remote Git URL Setting
+        div { class: "form-group",
+          label { class: "form-label text-muted small", "Catalog Git Remote URL" }
+          input {
+            r#type: "text",
+            class: "form-control bg-dark text-white border-secondary",
+            style: "font-family: monospace; font-size: 13px;",
+            value: "{current_remote_url}",
+            placeholder: "https://github.com/opossum-labs/opossum_catalog.git",
+            oninput: move |evt| {
+                temp_config.write().set_catalog_remote_url(evt.value());
+            },
+          }
+        }
+
+        // Sync on Startup Toggle Switch
+        div { class: "form-check form-switch pt-1",
+          input {
+            r#type: "checkbox",
+            class: "form-check-input",
+            id: "syncCatalogOnStartupSwitch",
+            checked: sync_on_startup,
+            onchange: move |evt| {
+                temp_config.write().set_sync_catalog_on_startup(evt.checked());
+            },
+          }
+          label {
+            class: "form-check-label text-muted small user-select-none",
+            r#for: "syncCatalogOnStartupSwitch",
+            "Automatically check and update catalog repository on startup"
           }
         }
       }

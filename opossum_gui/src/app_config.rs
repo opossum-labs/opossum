@@ -12,11 +12,16 @@ use std::{
 };
 use uom::si::f64::Length;
 
+/// Default Git repository URL for syncing catalog data.
+pub const DEFAULT_CATALOG_REMOTE_URL: &str = "https://github.com/opossum-labs/opossum_catalog.git";
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct AppConfig {
     report_dir: Option<PathBuf>,
     catalog_dir: Option<PathBuf>,
+    catalog_remote_url: String,
+    sync_catalog_on_startup: bool,
     default_wavelength: Length,
 }
 
@@ -32,6 +37,8 @@ impl Default for AppConfig {
         Self {
             report_dir: report_base_dir,
             catalog_dir: catalog_base_dir,
+            catalog_remote_url: DEFAULT_CATALOG_REMOTE_URL.to_string(),
+            sync_catalog_on_startup: false,
             default_wavelength: nanometer!(1053.0),
         }
     }
@@ -115,6 +122,26 @@ impl AppConfig {
         }
         self.catalog_dir = Some(catalog_dir.to_path_buf());
         Ok(())
+    }
+
+    /// Returns the remote Git repository URL for catalog synchronization.
+    pub fn catalog_remote_url(&self) -> &str {
+        &self.catalog_remote_url
+    }
+
+    /// Sets the remote Git repository URL.
+    pub fn set_catalog_remote_url(&mut self, url: impl Into<String>) {
+        self.catalog_remote_url = url.into().trim().to_string();
+    }
+
+    /// Returns whether the catalog should be checked and updated on application startup.
+    pub const fn sync_catalog_on_startup(&self) -> bool {
+        self.sync_catalog_on_startup
+    }
+
+    /// Sets whether the catalog should be checked and updated on application startup.
+    pub fn set_sync_catalog_on_startup(&mut self, sync: bool) {
+        self.sync_catalog_on_startup = sync;
     }
 
     fn config_file() -> Option<PathBuf> {
