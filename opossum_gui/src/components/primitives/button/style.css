@@ -203,6 +203,26 @@
   text-decoration: underline;
 }
 
+.dx-button[data-style="success"] {
+  background-color: var(--light, var(--secondary-success-color))
+    var(--dark, color-mix(in oklab, var(--secondary-success-color) 90%, transparent));
+  color: var(--contrast-error-color);
+}
+
+.dx-button[data-style="success"]:not(:disabled):hover {
+  background-color: color-mix(
+    in oklab,
+    var(--secondary-success-color) 70%,
+    transparent
+  );
+}
+
+.dx-button[data-style="success"]:focus-visible {
+  box-shadow: 0 0 0 3px
+    var(--light, color-mix(in oklab, var(--secondary-success-color) 20%, transparent))
+    var(--dark, color-mix(in oklab, var(--secondary-success-color) 40%, transparent));
+}
+
 .dx-button:focus-visible {
   border-color: var(--focused-border-color);
   box-shadow: 0 0 0 3px

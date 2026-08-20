@@ -15,6 +15,7 @@ pub enum ButtonVariant {
     Outline,
     Ghost,
     Link,
+    Success
 }
 
 impl ButtonVariant {
@@ -26,6 +27,7 @@ impl ButtonVariant {
             ButtonVariant::Outline => "outline",
             ButtonVariant::Ghost => "ghost",
             ButtonVariant::Link => "link",
+            ButtonVariant::Success => "success",
         }
     }
 }

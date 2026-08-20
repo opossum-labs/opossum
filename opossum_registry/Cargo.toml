@@ -18,4 +18,9 @@ tempfile.workspace = true
 uom.workspace = true
 uuid.workspace = true
 
-git2 = "0.21.0"
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+gix = { version = "0.86", features = [
+    "blocking-http-transport-reqwest",
+    "worktree-mutation",
+    "revision"
+] }

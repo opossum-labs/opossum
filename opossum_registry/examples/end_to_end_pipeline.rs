@@ -1,4 +1,3 @@
-use git2::IndexAddOption;
 use std::path::Path;
 use tempfile::TempDir;
 
@@ -17,38 +16,107 @@ use opossum_core::{
 // Imports from opossum_registry
 use opossum_registry::{AssetIndex, AssetLoader, sync::RegistrySync};
 
+/// Recursively traverses a directory, writes blobs for all files, and constructs Git tree objects.
+///
+/// Ignores the `.git` directory and canonicalizes entry sorting according to Git specifications.
+fn write_tree_recursive(repo: &gix::Repository, dir: &Path) -> gix::ObjectId {
+    let mut entries = Vec::new();
+    let dir_entries: Vec<_> = std::fs::read_dir(dir)
+        .expect("Failed to read directory")
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_name() != ".git")
+        .collect();
+
+    for entry in dir_entries {
+        let path = entry.path();
+        let file_name = entry.file_name().to_string_lossy().to_string();
+
+        if path.is_dir() {
+            // Recurse into subdirectories
+            let subtree_id = write_tree_recursive(repo, &path);
+            entries.push(gix::objs::tree::Entry {
+                mode: gix::objs::tree::EntryKind::Tree.into(),
+                filename: file_name.into(),
+                oid: subtree_id,
+            });
+        } else if path.is_file() {
+            // Read file content and write blob object into the Object Database (ODB)
+            let data = std::fs::read(&path).expect("Failed to read file");
+            let blob_id = repo.write_blob(&data).expect("Failed to write blob").detach();
+            entries.push(gix::objs::tree::Entry {
+                mode: gix::objs::tree::EntryKind::Blob.into(),
+                filename: file_name.into(),
+                oid: blob_id,
+            });
+        }
+    }
+
+    // Git canonical sort order: directory names are sorted as if ending with '/'
+    entries.sort_by(|a, b| {
+        let a_name = if a.mode == gix::objs::tree::EntryKind::Tree.into() {
+            format!("{}/", a.filename)
+        } else {
+            a.filename.to_string()
+        };
+        let b_name = if b.mode == gix::objs::tree::EntryKind::Tree.into() {
+            format!("{}/", b.filename)
+        } else {
+            b.filename.to_string()
+        };
+        a_name.cmp(&b_name)
+    });
+
+    let tree = gix::objs::Tree { entries };
+    repo.write_object(&tree).expect("Failed to write tree").detach()
+}
+
 /// Helper function to simulate a remote Git repository on the local filesystem.
-/// Initializes the repo with a basic README.
+/// Initializes the repository with a basic README on the `main` branch.
 fn setup_dummy_remote(repo_path: &Path) {
-    let repo = git2::Repository::init(repo_path).expect("Failed to init remote dummy repo");
+    let repo = gix::init(repo_path).expect("Failed to init remote dummy repo");
     let file_path = repo_path.join("README.md");
-    std::fs::write(&file_path, "# OPOSSUM Remote Registry\n").unwrap();
+    std::fs::write(&file_path, "# OPOSSUM Remote Registry\n").expect("Failed to write README.md");
 
-    let mut index = repo.index().unwrap();
-    index.add_path(Path::new("README.md")).unwrap();
-    let oid = index.write_tree().unwrap();
-    let signature = git2::Signature::now("OPOSSUM Maintainer", "admin@opossum.local").unwrap();
-    let tree = repo.find_tree(oid).unwrap();
+    let tree_oid = write_tree_recursive(&repo, repo_path);
 
-    // Commit directly to the `main` branch
-    repo.commit(
-        Some("refs/heads/main"),
-        &signature,
-        &signature,
+    let commit = gix::objs::Commit {
+        tree: tree_oid,
+        parents: Default::default(),
+        author: gix::actor::Signature {
+            name: "OPOSSUM Maintainer".into(),
+            email: "admin@opossum.local".into(),
+            time: gix::date::Time::now_local_or_utc(),
+        },
+        committer: gix::actor::Signature {
+            name: "OPOSSUM Maintainer".into(),
+            email: "admin@opossum.local".into(),
+            time: gix::date::Time::now_local_or_utc(),
+        },
+        encoding: None,
+        message: "Initial commit: Registry creation".into(),
+        extra_headers: Vec::new(),
+    };
+
+    let commit_id = repo.write_object(&commit).expect("Failed to write initial commit").detach();
+
+    // Create refs/heads/main pointing to initial commit
+    repo.reference(
+        "refs/heads/main",
+        commit_id,
+        gix::refs::transaction::PreviousValue::Any,
         "Initial commit: Registry creation",
-        &tree,
-        &[],
     )
-    .unwrap();
+    .expect("Failed to create main branch reference");
 
-    // Ensure HEAD points to the newly created main branch, not the system default (e.g., master)
-    repo.set_head("refs/heads/main").unwrap();
+    // Ensure HEAD points symbolically to the main branch
+    std::fs::write(repo.git_dir().join("HEAD"), "ref: refs/heads/main\n")
+        .expect("Failed to point HEAD to main");
 }
 
 /// Helper function to simulate a community update on the remote repository.
-/// Creates a new material ("F2"), adds it to the index, and commits it.
+/// Creates a new material ("F2"), adds it to the tree, and commits it on `main`.
 fn simulate_remote_catalog_update(repo_path: &Path) {
-    let repo = git2::Repository::open(repo_path).expect("Failed to open remote repo");
+    let repo = gix::open(repo_path).expect("Failed to open remote repo");
     let loader = AssetLoader::new(repo_path);
 
     // Create new material on the "server"
@@ -63,31 +131,46 @@ fn simulate_remote_catalog_update(repo_path: &Path) {
         .publish(&mut f2_mat)
         .expect("Failed to publish F2 remotely");
 
-    // Commit the generated .ron files explicitly via the "materials" folder pathspec
-    let mut index = repo.index().unwrap();
-    index
-        .add_all(["materials"].iter(), IndexAddOption::DEFAULT, None)
-        .unwrap();
-    let oid = index.write_tree().unwrap();
-    let signature = git2::Signature::now("OPOSSUM Maintainer", "admin@opossum.local").unwrap();
-    let tree = repo.find_tree(oid).unwrap();
+    // Build the updated tree containing the newly published material files
+    let tree_oid = write_tree_recursive(&repo, repo_path);
 
-    // Safely get the parent commit directly from the main branch instead of relying on HEAD
-    let parent_commit = repo
+    // Find parent commit on refs/heads/main
+    let parent_ref = repo
         .find_reference("refs/heads/main")
-        .unwrap()
-        .peel_to_commit()
-        .unwrap();
+        .expect("Failed to find main reference");
+    let parent_commit_id = parent_ref
+        .into_fully_peeled_id()
+        .expect("Failed to peel main ref to commit")
+        .detach();
 
-    repo.commit(
-        Some("refs/heads/main"),
-        &signature,
-        &signature,
+    let commit = gix::objs::Commit {
+        tree: tree_oid,
+        parents: vec![parent_commit_id].into(),
+        author: gix::actor::Signature {
+            name: "OPOSSUM Maintainer".into(),
+            email: "admin@opossum.local".into(),
+            time: gix::date::Time::now_local_or_utc(),
+        },
+        committer: gix::actor::Signature {
+            name: "OPOSSUM Maintainer".into(),
+            email: "admin@opossum.local".into(),
+            time: gix::date::Time::now_local_or_utc(),
+        },
+        encoding: None,
+        message: "Add F2 material to catalog".into(),
+        extra_headers: Vec::new(),
+    };
+
+    let commit_id = repo.write_object(&commit).expect("Failed to write catalog commit").detach();
+
+    // Fast-forward refs/heads/main to new commit
+    repo.reference(
+        "refs/heads/main",
+        commit_id,
+        gix::refs::transaction::PreviousValue::MustExistAndMatch(parent_commit_id.into()),
         "Add F2 material to catalog",
-        &tree,
-        &[&parent_commit],
     )
-    .unwrap();
+    .expect("Failed to update main branch reference");
 }
 
 fn main() -> OpmResult<()> {

@@ -59,7 +59,7 @@ html[data-theme="light"] [class~="dxc-system"] {
   /* Highlight colors */
   --focused-border-color: var(--dark, #2b7fff) var(--light, #2b7fff);
   --primary-success-color: var(--dark, #02271c) var(--light, #ecfdf5);
-  --secondary-success-color: var(--dark, #b6fae3) var(--light, #10b981);
+  --secondary-success-color: var(--dark, #14a44d) var(--light, #10b981);
   --primary-warning-color: var(--dark, #342203) var(--light, #fffbeb);
   --secondary-warning-color: var(--dark, #feeac7) var(--light, #f59e0b);
   --primary-error-color: var(--dark, #a22e2e) var(--light, #dc2626);

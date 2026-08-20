@@ -489,7 +489,7 @@ pub fn App() -> Element {
                 on_alert_cancel,
             }
         }
-        SettingsDialog { show: show_settings }
+        SettingsDialog { open: show_settings }
     }
 }
 
@@ -508,15 +508,6 @@ fn CommonAppLayout(
     on_alert_cancel: EventHandler<MouseEvent>,
 ) -> Element {
     info!("🔄 Render: App::CommonAppLayout");
-
-    // 5. Handle catalog actions (Edit existing vs Create new)
-    // let on_catalog_action = use_callback(move |event: MaterialCatalogEvent| {
-    //     match event {
-    //         MaterialCatalogEvent::MaterialAdded => {},
-    //         MaterialCatalogEvent::MaterialDeleted => {}
-    //     }
-    // });
-
     // --- GUI Layout Drag Logic ---
     let mut root_tab_open = use_signal(|| true);
     let root_tab_open_handler = EventHandler::<bool>::new(move |b| root_tab_open.set(b));

@@ -172,7 +172,9 @@ pub fn MaterialCatalog(
             CardHeader {
               CardTitle { "Material Catalog" }
               CardAction {
-                Button { onclick: on_create_new,
+                Button {
+                  variant: ButtonVariant::Success,
+                  onclick: on_create_new,
                   Icon { icon: FaPlus }
                   "New Material"
                 }
