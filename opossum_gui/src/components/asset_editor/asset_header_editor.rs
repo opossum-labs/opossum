@@ -33,6 +33,16 @@ pub struct AssetHeaderChangeEvent {
     pub action: AssetHeaderChangeAction,
 }
 
+/// Helper function to convert an empty string to None, or return the trimmed string.
+fn parse_optional_string(val: &str) -> Option<String> {
+    let trimmed = val.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
 /// Properties for the `AssetHeaderEditor` component.
 #[derive(Props, Clone, PartialEq)]
 pub struct AssetHeaderEditorProps {
@@ -82,12 +92,7 @@ pub fn AssetHeaderEditor(props: AssetHeaderEditorProps) -> Element {
                 label: "Manufacturer",
                 value: header.manufacturer.clone().unwrap_or_default(),
                 onchange: move |e: Event<FormData>| {
-                    let val = e.value();
-                    let opt_val = if val.trim().is_empty() {
-                        None
-                    } else {
-                        Some(val.trim().to_string())
-                    };
+                    let opt_val = parse_optional_string(&e.value());
                     props
                         .on_change
                         .call(AssetHeaderChangeEvent {
@@ -106,12 +111,7 @@ pub fn AssetHeaderEditor(props: AssetHeaderEditorProps) -> Element {
                 label: "Description",
                 value: header.description.clone().unwrap_or_default(),
                 onchange: move |e: Event<FormData>| {
-                    let val = e.value();
-                    let opt_val = if val.trim().is_empty() {
-                        None
-                    } else {
-                        Some(val.trim().to_string())
-                    };
+                    let opt_val = parse_optional_string(&e.value());
                     props
                         .on_change
                         .call(AssetHeaderChangeEvent {

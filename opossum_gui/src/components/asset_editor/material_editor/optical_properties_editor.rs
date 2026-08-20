@@ -15,6 +15,7 @@ pub enum OpticalPropertiesChangeAction {
     /// The absorption coefficient changed (None if cleared).
     Absorption(Option<f64>),
 }
+
 impl OpticalPropertiesChangeAction {
     /// Applies the change action directly to the given `OpticalProperties`.
     pub const fn apply(self, optical: &mut opossum_core::material::OpticalProperties) {
@@ -24,11 +25,25 @@ impl OpticalPropertiesChangeAction {
         }
     }
 }
+
 /// Event emitted when any optical property is modified by the user.
 #[derive(Debug, Clone, PartialEq)]
 pub struct OpticalPropertiesChangeEvent {
     /// The specific modification action.
     pub action: OpticalPropertiesChangeAction,
+}
+
+/// Helper function to parse an optional floating-point number from a string.
+/// Returns `Some(None)` if the input is empty (representing a cleared field).
+/// Returns `Some(Some(value))` if the input was successfully parsed into an f64.
+/// Returns `None` if the parsing fails (e.g., due to invalid characters).
+fn parse_optional_f64(val: &str) -> Option<Option<f64>> {
+    let trimmed = val.trim();
+    if trimmed.is_empty() {
+        Some(None)
+    } else {
+        trimmed.parse::<f64>().ok().map(Some)
+    }
 }
 
 /// Editor component for optical material properties.
@@ -51,6 +66,7 @@ pub fn OpticalPropertiesEditor(
     readonly: bool,
 ) -> Element {
     info!("🔄 Render: OpticalPropertiesEditor");
+    
     // Derive a memoized read-signal for the refractive index model
     let ref_ind_memo = use_memo(move || optical.read().refractive_index.clone());
 
@@ -102,14 +118,8 @@ pub fn OpticalPropertiesEditor(
                 value: "{absorption_str}",
                 readonly,
                 oninput: move |e: Event<FormData>| {
-                    let val_str = e.value();
-                    let parsed = if val_str.trim().is_empty() {
-                        Some(None)
-                    } else {
-                        val_str.trim().parse::<f64>().ok().map(Some)
-                    };
-
-                    if let Some(opt_absorption) = parsed {
+                    // Delegate parsing to the new helper function
+                    if let Some(opt_absorption) = parse_optional_f64(&e.value()) {
                         on_change
                             .call(OpticalPropertiesChangeEvent {
                                 action: OpticalPropertiesChangeAction::Absorption(opt_absorption),

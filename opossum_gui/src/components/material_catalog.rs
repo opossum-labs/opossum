@@ -83,13 +83,7 @@ pub fn MaterialCatalog(
         if let Some(max) = *max_nd.read() {
             results.retain(|e| e.specific.nd.is_some_and(|nd| nd <= max));
         }
-
-        results.sort_by(|a, b| {
-            a.common
-                .name
-                .to_lowercase()
-                .cmp(&b.common.name.to_lowercase())
-        });
+        results.sort_by_cached_key(|e| e.common.name.to_lowercase());
 
         results
     });
@@ -138,7 +132,7 @@ pub fn MaterialCatalog(
         }
         open_materialeditor.set(true);
     });
-    let mut execute_delete = move |target: DeleteTarget| {
+    let execute_delete = use_callback(move |target: DeleteTarget| {
         match loader.read().delete_latest_version::<Material>(target.id) {
             Ok(Some(new_latest)) => {
                 log::info!(
@@ -161,7 +155,7 @@ pub fn MaterialCatalog(
             }
         }
         let _ = index_sig.write().build_from_loader(&loader.read());
-    };
+    });
     rsx! {
       AlertDialog {
         open: open(),
