@@ -7,6 +7,7 @@ use crate::components::{
         },
         button::{Button, ButtonVariant},
         card::{Card, CardAction, CardContent, CardHeader, CardTitle},
+        scroll_area::ScrollArea,
     },
 };
 use dioxus::prelude::*;
@@ -34,10 +35,28 @@ struct DeleteTarget {
 /// Events emitted by the catalog component.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MaterialCatalogEvent {
-    /// A new material (or new version of an existing one) has been published
+    /// A new material (or new version of an existing one) has been published.
     MaterialAdded,
-    /// A material has been deleted
+    /// A material version has been deleted.
     MaterialDeleted,
+}
+
+/// Helper function to truncate long descriptions and append an ellipsis.
+fn truncate_description(desc: Option<&str>, max_chars: usize) -> String {
+    match desc {
+        Some(text) => {
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                "-".to_string()
+            } else if trimmed.chars().count() > max_chars {
+                let truncated: String = trimmed.chars().take(max_chars).collect();
+                format!("{truncated}...")
+            } else {
+                trimmed.to_string()
+            }
+        }
+        None => "-".to_string(),
+    }
 }
 
 #[component]
@@ -45,7 +64,7 @@ pub fn MaterialCatalog(
     open: Signal<bool>,
     /// Shared signal referencing the asset loader for disk access.
     loader: ReadSignal<AssetLoader>,
-    /// Handler for catalog actions (Edit, Create).
+    /// Handler for catalog actions (Edit, Create, Delete).
     #[props(default)]
     on_action: EventHandler<MaterialCatalogEvent>,
 ) -> Element {
@@ -63,6 +82,7 @@ pub fn MaterialCatalog(
     let mut min_nd = use_signal(|| Option::<f64>::None);
     let mut max_nd = use_signal(|| Option::<f64>::None);
 
+    // Memoized search and filter computation with cached key sorting
     let filtered_entries = use_memo(move || {
         let text_query = search_text.read();
         let idx = index_sig.read();
@@ -83,22 +103,26 @@ pub fn MaterialCatalog(
         if let Some(max) = *max_nd.read() {
             results.retain(|e| e.specific.nd.is_some_and(|nd| nd <= max));
         }
-        results.sort_by_cached_key(|e| e.common.name.to_lowercase());
+
+        // Cache lowercase keys during sorting to avoid repeated heap allocations
+        results.sort_by_cached_key(|entry| entry.common.name.to_lowercase());
 
         results
     });
+
+    // Callback: Material draft modification in the editor
     let on_material_changed = use_callback(move |e: MaterialChangeEvent| {
         info!("Material property modified: {e:?}");
         e.action.apply(&mut material_state.write());
     });
+
+    // Callback: Persisting a draft to disk
     let on_material_save = use_callback(move |()| {
         info!("Publishing material draft to registry...");
 
-        // Dereference the WriteLock guard to pass `&mut Material` instead of `&mut WriteLock`
         match loader.read().publish(&mut *material_state.write()) {
             Ok(saved_path) => {
                 info!("Successfully saved material to {:?}", saved_path);
-                // Trigger index reload in the catalog
                 let _ = index_sig.write().build_from_loader(&loader.read());
                 on_action.call(MaterialCatalogEvent::MaterialAdded);
             }
@@ -107,9 +131,10 @@ pub fn MaterialCatalog(
             }
         }
     });
+
+    // Callback: Starting a new draft
     let on_create_new = use_callback(move |_| {
         info!("Opening editor for a new material draft...");
-        // Initialize fresh draft with default values
         material_state.set(Material::new_draft(
             "New Material",
             None,
@@ -118,11 +143,12 @@ pub fn MaterialCatalog(
         ));
         open_materialeditor.set(true);
     });
-    let on_edit_material = use_callback(move |id| {
+
+    // Callback: Loading an existing material into the editor
+    let on_edit_material = use_callback(move |id: Uuid| {
         info!("Loading material {id} for editing...");
         match loader.read().load::<Material>(id, None) {
             Ok(loaded_material) => {
-                // Create an editable draft from the published material
                 material_state.set(loaded_material.new_draft_from());
                 open_materialeditor.set(true);
             }
@@ -130,9 +156,16 @@ pub fn MaterialCatalog(
                 log::error!("Failed to load material from registry: {err}");
             }
         }
-        open_materialeditor.set(true);
     });
-    let execute_delete = use_callback(move |target: DeleteTarget| {
+
+    // Callback: Rebuilding the material asset index
+    let handle_refresh_index = use_callback(move |_| {
+        info!("Refreshing material index from disk...");
+        let _ = index_sig.write().build_from_loader(&loader.read());
+    });
+
+    // Callback: Executing version deletion against the asset loader
+    let handle_execute_delete = use_callback(move |target: DeleteTarget| {
         match loader.read().delete_latest_version::<Material>(target.id) {
             Ok(Some(new_latest)) => {
                 log::info!(
@@ -156,11 +189,26 @@ pub fn MaterialCatalog(
         }
         let _ = index_sig.write().build_from_loader(&loader.read());
     });
+
+    // Callback: Confirming deletion from the modal dialog
+    let handle_confirm_delete = use_callback(move |_| {
+        if let Some(target) = pending_delete.read().clone() {
+            handle_execute_delete.call(target);
+        }
+        show_delete_dialog.set(false);
+    });
+
+    // Callback: Cancelling deletion
+    let handle_cancel_delete = use_callback(move |_| {
+        show_delete_dialog.set(false);
+    });
+
     rsx! {
+      // Main Catalog Dialog
       AlertDialog {
         open: open(),
         on_open_change: move |v: bool| open.set(v),
-        max_width: "55rem".to_string(),
+        max_width: "60rem".to_string(),
         AlertDialogDescription {
           Card {
             CardHeader {
@@ -175,7 +223,7 @@ pub fn MaterialCatalog(
               }
             }
             CardContent {
-              // Filter controls
+              // Filter & Search Toolbar
               div { class: "row mb-4 align-items-end",
                 div { class: "col-md-4",
                   label { class: "form-label fw-bold small",
@@ -191,7 +239,11 @@ pub fn MaterialCatalog(
                 }
                 div { class: "col-md-3",
                   label { class: "form-label fw-bold small",
-                    "Min Refractive Index (nd)"
+                    "Min "
+                    span {
+                      "n"
+                      sub { "d" }
+                    }
                   }
                   input {
                     class: "form-control form-control-sm",
@@ -202,7 +254,11 @@ pub fn MaterialCatalog(
                 }
                 div { class: "col-md-3",
                   label { class: "form-label fw-bold small",
-                    "Max Refractive Index (nd)"
+                    "Max "
+                    span {
+                      "n"
+                      sub { "d" }
+                    }
                   }
                   input {
                     class: "form-control form-control-sm",
@@ -214,81 +270,94 @@ pub fn MaterialCatalog(
                 div { class: "col-md-2 text-end",
                   Button {
                     title: "Refresh index",
-                    onclick: move |_| {
-                        let _ = index_sig.write().build_from_loader(&loader.read());
-                    },
+                    onclick: handle_refresh_index,
                     Icon { icon: FaArrowsRotate }
                     "Refresh"
                   }
                 }
               }
 
-              // Results Table
-              div { class: "table-responsive",
-                table { class: "table table-hover table-sm align-middle",
-                  thead { class: "table-light",
-                    tr {
-                      th { "Name" }
-                      th { "Manufacturer" }
-                      th { "Refractive Index (nd)" }
-                      th { "Latest Version" }
-                      th { class: "text-end", "Actions" }
+              // Scrollable Container for the Results Table
+              ScrollArea { height: "25rem",
+                div { class: "table-responsive",
+                  table { class: "table table-hover table-sm align-middle mb-0",
+                    thead { class: "table-light sticky-top",
+                      tr {
+                        th { "Name" }
+                        th { "Manufacturer" }
+                        th { "Description" }
+                        th {
+                          "Refractive Index ("
+                          span {
+                            "n"
+                            sub { "d" }
+                          }
+                          ")"
+                        }
+                        th { "Latest Version" }
+                        th { class: "text-end", "Actions" }
+                      }
                     }
-                  }
-                  tbody {
-                    for entry in filtered_entries.read().iter() {
-                      tr { key: "{entry.common.id}",
-                        td { class: "fw-bold", "{entry.common.name}" }
-                        td {
-                          "{entry.common.manufacturer.as_deref().unwrap_or(\"-\")}"
-                        }
-                        td {
-                          if let Some(nd) = entry.specific.nd {
-                            "{nd:.4}"
-                          } else {
-                            "-"
+                    tbody {
+                      for entry in filtered_entries.read().iter() {
+                        tr { key: "{entry.common.id}",
+                          td { class: "fw-bold", "{entry.common.name}" }
+                          td {
+                            "{entry.common.manufacturer.as_deref().unwrap_or(\"-\")}"
                           }
-                        }
-                        td {
-                          span { class: "badge bg-secondary",
-                            "v{entry.common.latest_version}"
+                          td {
+                            title: "{entry.common.description.as_deref().unwrap_or_default()}",
+                            class: "text-muted small",
+                            "{truncate_description(entry.common.description.as_deref(), 35)}"
                           }
-                        }
-                        td { class: "text-end",
-                          Button {
-                            title: "Add new version of the material",
-                            onclick: {
-                                let id = entry.common.id;
-                                move |_evt| on_edit_material.call(id)
-                            },
-                            Icon { icon: FaPencil }
+                          td {
+                            if let Some(nd) = entry.specific.nd {
+                              "{nd:.4}"
+                            } else {
+                              "-"
+                            }
                           }
-                          Button {
-                            title: "Delete latest version",
-                            variant: ButtonVariant::Destructive,
-                            onclick: {
-                                let target = DeleteTarget {
-                                    id: entry.common.id,
-                                    name: entry.common.name.clone(),
-                                    latest_version: entry.common.latest_version,
-                                    total_versions_count: entry.common.available_versions.len(),
-                                };
-                                move |_| {
-                                    pending_delete.set(Some(target.clone()));
-                                    show_delete_dialog.set(true);
-                                }
-                            },
-                            Icon { icon: FaTrash }
+                          td {
+                            span { class: "badge bg-secondary",
+                              "v{entry.common.latest_version}"
+                            }
+                          }
+                          td { class: "text-end",
+                            Button {
+                              title: "Add new version of the material",
+                              onclick: {
+                                  let id = entry.common.id;
+                                  move |_| on_edit_material.call(id)
+                              },
+                              Icon { icon: FaPencil }
+                            }
+                            Button {
+                              title: "Delete latest version",
+                              variant: ButtonVariant::Destructive,
+                              onclick: {
+                                  let target = DeleteTarget {
+                                      id: entry.common.id,
+                                      name: entry.common.name.clone(),
+                                      latest_version: entry.common.latest_version,
+                                      total_versions_count: entry.common.available_versions.len(),
+                                  };
+                                  move |_| {
+                                      pending_delete.set(Some(target.clone()));
+                                      show_delete_dialog.set(true);
+                                  }
+                              },
+                              Icon { icon: FaTrash }
+                            }
                           }
                         }
                       }
-                    }
-                    if filtered_entries.read().is_empty() {
-                      tr {
-                        td {
-                          colspan: 5,
-                          class: "text-center text-muted py-4",
-                          "No materials found matching the current filters."
+                      if filtered_entries.read().is_empty() {
+                        tr {
+                          td {
+                            colspan: 6,
+                            class: "text-center text-muted py-4",
+                            "No materials found matching the current filters."
+                          }
                         }
                       }
                     }
@@ -302,6 +371,8 @@ pub fn MaterialCatalog(
           AlertDialogAction { "Close" }
         }
       }
+
+      // Material Editor Dialog
       MaterialEditor {
         open: open_materialeditor,
         material: material_state,
@@ -309,6 +380,7 @@ pub fn MaterialCatalog(
         on_change: on_material_changed,
         on_save: on_material_save,
       }
+
       // Deletion Confirmation Dialog
       AlertDialog {
         open: show_delete_dialog(),
@@ -334,21 +406,8 @@ pub fn MaterialCatalog(
             }
           }
           AlertDialogActions {
-            AlertDialogCancel {
-              on_click: move |_| {
-                  show_delete_dialog.set(false);
-              },
-              "Cancel"
-            }
-            AlertDialogAction {
-              on_click: move |_| {
-                  if let Some(target) = pending_delete.read().clone() {
-                      execute_delete(target);
-                  }
-                  show_delete_dialog.set(false);
-              },
-              "Delete Version"
-            }
+            AlertDialogCancel { on_click: handle_cancel_delete, "Cancel" }
+            AlertDialogAction { on_click: handle_confirm_delete, "Delete Version" }
           }
         }
       }

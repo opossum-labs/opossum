@@ -112,7 +112,7 @@ impl AppConfig {
 
     /// Sets the default wavelength.
     pub fn set_default_wavelength(&mut self, wavelength: Length) {
-        self.default_wavelength.set(wavelength);
+        let _ = self.default_wavelength.set(wavelength);
     }
 
     pub const fn report_dir(&self) -> Option<&PathBuf> {

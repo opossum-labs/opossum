@@ -76,11 +76,18 @@ pub fn OpticalPropertiesEditor(
         .absorption
         .map_or_else(String::new, |val| format!("{val}"));
 
-    // Stable callback for refractive index changes
     let handle_ref_ind_change = use_callback(move |new_model: RefractiveIndexType| {
         on_change.call(OpticalPropertiesChangeEvent {
             action: OpticalPropertiesChangeAction::RefractiveIndex(new_model),
         });
+    });
+
+    let handle_absorption_change = use_callback(move |e: Event<FormData>| {
+        if let Some(opt_absorption) = parse_optional_f64(&e.value()) {
+            on_change.call(OpticalPropertiesChangeEvent {
+                action: OpticalPropertiesChangeAction::Absorption(opt_absorption),
+            });
+        }
     });
 
     rsx! {
@@ -117,15 +124,7 @@ pub fn OpticalPropertiesEditor(
                 placeholder: "e.g., 0.001 (optional)",
                 value: "{absorption_str}",
                 readonly,
-                oninput: move |e: Event<FormData>| {
-                    // Delegate parsing to the new helper function
-                    if let Some(opt_absorption) = parse_optional_f64(&e.value()) {
-                        on_change
-                            .call(OpticalPropertiesChangeEvent {
-                                action: OpticalPropertiesChangeAction::Absorption(opt_absorption),
-                            });
-                    }
-                },
+                oninput: handle_absorption_change,
               }
               div { class: "form-text text-muted small",
                 "Leave empty if linear absorption is neglected."
