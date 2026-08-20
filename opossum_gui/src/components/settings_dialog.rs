@@ -1,10 +1,14 @@
 use crate::APP_CONFIG;
 use crate::components::menu_bar::project_helper::select_folder_path;
+use crate::components::node_editor::inputs::input_components::{
+    FormContext, NodeConfigUnitInput, UnitHandling,
+};
 use crate::components::primitives::alert_dialog::{
     AlertDialog, AlertDialogAction, AlertDialogActions, AlertDialogCancel, AlertDialogDescription,
     AlertDialogTitle,
 };
 use dioxus::prelude::*;
+use opossum_core::meter;
 
 #[component]
 pub fn SettingsDialog(open: Signal<bool>) -> Element {
@@ -64,7 +68,7 @@ pub fn SettingsDialog(open: Signal<bool>) -> Element {
                     GeneralSettingsTab { temp_config }
                   },
                   1 => rsx! {
-                    PhysicsSettingsTab {}
+                    PhysicsSettingsTab { temp_config }
                   },
                   _ => rsx! {
                     div { class: "text-danger", "Unknown category" }
@@ -203,11 +207,36 @@ fn GeneralSettingsTab(mut temp_config: Signal<crate::AppConfig>) -> Element {
 }
 
 #[component]
-fn PhysicsSettingsTab() -> Element {
+fn PhysicsSettingsTab(mut temp_config: Signal<crate::AppConfig>) -> Element {
+
+    // *** This is a hack to avoid crashes while using FlushedTextInput *****
+    let flush_trigger = use_signal(|| 0usize);
+    let dirty_count = use_signal(|| 0usize);
+    use_context_provider(|| FormContext {
+        flush_trigger,
+        dirty_count,
+    });
+    // **********************************************************************
+
+    
+    let current_wavelength = temp_config.read().default_wavelength();
+
     rsx! {
       div { class: "d-flex flex-column gap-3",
         h4 { class: "mb-3", "Default Model Parameters" }
-        p { class: "text-muted small", "Find future physics options here." }
+
+        div { class: "form-group",
+          NodeConfigUnitInput {
+            id: "defaultWavelengthSetting",
+            label: "Default Wavelength".to_string(),
+            value: current_wavelength.value,
+            unit_config: UnitHandling::new("m", true),
+            readonly: false,
+            onchange: move |new_length: f64| {
+                temp_config.write().set_default_wavelength(meter!(new_length));
+            },
+          }
+        }
       }
     }
 }

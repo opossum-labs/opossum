@@ -13,6 +13,7 @@ readme = "README.md"
 
 [dependencies]
 opossum_core = { workspace = true }
+opm_macros_lib = { workspace = true }
 opossum_registry = { workspace = true }
 
 approx.workspace = true

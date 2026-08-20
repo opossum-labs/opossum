@@ -6159,6 +6159,7 @@ dependencies = [
  "log",
  "nalgebra",
  "num",
+ "opm_macros_lib",
  "opossum_core",
  "opossum_registry",
  "regex",

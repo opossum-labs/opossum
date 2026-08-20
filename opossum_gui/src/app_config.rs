@@ -1,7 +1,9 @@
 use directories::{ProjectDirs, UserDirs};
+use opm_macros_lib::EnsureValidated;
 use opossum_core::{
     error::{OpmResult, OpossumError},
-    nanometer,
+    generic_validators::{AllFinite, AllNotZero, AllPositive, ValidateTrait},
+    nanometer, validated, validated_type,
 };
 use ron::ser::PrettyConfig;
 use serde::{Deserialize, Serialize};
@@ -15,14 +17,19 @@ use uom::si::f64::Length;
 /// Default Git repository URL for syncing catalog data.
 pub const DEFAULT_CATALOG_REMOTE_URL: &str = "https://github.com/opossum-labs/opossum_catalog.git";
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, EnsureValidated)]
 #[serde(default)]
 pub struct AppConfig {
+    #[validate(skip)]
     report_dir: Option<PathBuf>,
+    #[validate(skip)]
     catalog_dir: Option<PathBuf>,
+    #[validate(skip)]
     catalog_remote_url: String,
+    #[validate(skip)]
     sync_catalog_on_startup: bool,
-    default_wavelength: Length,
+
+    default_wavelength: validated_type!(Length, AllPositive && AllFinite && AllNotZero),
 }
 
 impl Default for AppConfig {
@@ -39,7 +46,11 @@ impl Default for AppConfig {
             catalog_dir: catalog_base_dir,
             catalog_remote_url: DEFAULT_CATALOG_REMOTE_URL.to_string(),
             sync_catalog_on_startup: false,
-            default_wavelength: nanometer!(1053.0),
+            default_wavelength: validated!(
+                nanometer!(1053.0),
+                AllPositive && AllFinite && AllNotZero
+            )
+            .unwrap(),
         }
     }
 }
@@ -92,6 +103,16 @@ impl AppConfig {
             ))
         })?;
         Ok(())
+    }
+
+    /// Returns the default wavelength.
+    pub const fn default_wavelength(&self) -> Length {
+        *self.default_wavelength.get()
+    }
+
+    /// Sets the default wavelength.
+    pub fn set_default_wavelength(&mut self, wavelength: Length) {
+        self.default_wavelength.set(wavelength);
     }
 
     pub const fn report_dir(&self) -> Option<&PathBuf> {
