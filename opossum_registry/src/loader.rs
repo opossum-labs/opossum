@@ -196,7 +196,7 @@ impl AssetLoader {
             .map_or(1, |latest| latest + 1)
     }
     /// Deletes the latest version of an asset from disk.
-    /// 
+    ///
     /// **Use this function with care!** Deleting an asset version (or an asset completely) can break snychronization. Use
     /// this function only if an asset has not yet been pushed to a public repository.
     ///

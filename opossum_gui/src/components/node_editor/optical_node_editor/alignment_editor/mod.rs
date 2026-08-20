@@ -40,7 +40,9 @@ pub fn AlignmentEditor(
     info!("🔄 Render: AlignmentEditor");
     let current_node_id = *node_id.read();
 
-    let accordion_content = if current_node_id != Uuid::nil() {
+    let accordion_content = if current_node_id == Uuid::nil() {
+        vec![]
+    } else {
         vec![rsx! {
             AlignmentInputs {
                 node_id,
@@ -51,8 +53,6 @@ pub fn AlignmentEditor(
                 readonly,
             }
         }]
-    } else {
-        vec![]
     };
 
     rsx! {
@@ -165,7 +165,9 @@ pub fn PositioningEditor(
     info!("🔄 Render: PositioningEditor");
     let current_node_id = *node_id.read();
 
-    let accordion_content = if current_node_id != Uuid::nil() {
+    let accordion_content = if current_node_id == Uuid::nil() {
+        vec![]
+    } else {
         vec![rsx! {
             PositioningInputs {
                 position_opt,
@@ -174,8 +176,6 @@ pub fn PositioningEditor(
                 readonly,
             }
         }]
-    } else {
-        vec![]
     };
 
     rsx! {

@@ -5139,7 +5139,7 @@ dependencies = [
 
 [[package]]
 name = "opossum_registry"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "git2",
  "opm_macros_lib",

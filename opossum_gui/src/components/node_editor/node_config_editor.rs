@@ -82,16 +82,14 @@ pub fn NodeConfigEditor(
     let memo_node_id = use_memo(move || {
         displayed_nodes()
             .first()
-            .map(|n| n.node_id)
-            .unwrap_or_else(Uuid::nil)
+            .map_or_else(Uuid::nil, |n| n.node_id)
     });
 
     // Extract only the graph_id.
     let memo_graph_id = use_memo(move || {
         displayed_nodes()
             .first()
-            .map(|n| n.graph_id)
-            .unwrap_or_else(Uuid::nil)
+            .map_or_else(Uuid::nil, |n| n.graph_id)
     });
 
     // Extract the node_type.

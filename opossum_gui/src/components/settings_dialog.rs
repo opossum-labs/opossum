@@ -121,10 +121,10 @@ fn GeneralSettingsTab(mut temp_config: Signal<crate::AppConfig>) -> Element {
               r#type: "button",
               onclick: move |_| {
                   spawn(async move {
-                      if let Some(folder) = select_folder_path().await {
-                          if let Err(e) = temp_config.write().set_report_dir(&folder) {
-                              eprintln!("Error setting report directory: {e}");
-                          }
+                      if let Some(folder) = select_folder_path().await
+                          && let Err(e) = temp_config.write().set_report_dir(&folder)
+                      {
+                          eprintln!("Error setting report directory: {e}");
                       }
                   });
               },
@@ -151,10 +151,10 @@ fn GeneralSettingsTab(mut temp_config: Signal<crate::AppConfig>) -> Element {
               r#type: "button",
               onclick: move |_| {
                   spawn(async move {
-                      if let Some(folder) = select_folder_path().await {
-                          if let Err(e) = temp_config.write().set_catalog_dir(&folder) {
-                              eprintln!("Error setting catalog directory: {e}");
-                          }
+                      if let Some(folder) = select_folder_path().await
+                          && let Err(e) = temp_config.write().set_catalog_dir(&folder)
+                      {
+                          eprintln!("Error setting catalog directory: {e}");
                       }
                   });
               },

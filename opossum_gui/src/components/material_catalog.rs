@@ -32,7 +32,7 @@ struct DeleteTarget {
 }
 
 /// Events emitted by the catalog component.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MaterialCatalogEvent {
     /// A new material (or new version of an existing one) has been published
     MaterialAdded,
@@ -50,7 +50,7 @@ pub fn MaterialCatalog(
     on_action: EventHandler<MaterialCatalogEvent>,
 ) -> Element {
     let mut open_materialeditor = use_signal(|| false);
-    let mut material_state = use_signal(|| Material::default());
+    let mut material_state = use_signal(Material::default);
     let mut index_sig = use_signal(|| {
         let mut idx = AssetIndex::<Material>::new();
         let _ = idx.build_from_loader(&loader.read());
