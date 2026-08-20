@@ -37,6 +37,7 @@ pub struct OpticalPropertiesChangeEvent {
 /// Returns `Some(None)` if the input is empty (representing a cleared field).
 /// Returns `Some(Some(value))` if the input was successfully parsed into an f64.
 /// Returns `None` if the parsing fails (e.g., due to invalid characters).
+#[allow(clippy::option_option)]
 fn parse_optional_f64(val: &str) -> Option<Option<f64>> {
     let trimmed = val.trim();
     if trimmed.is_empty() {
@@ -66,7 +67,7 @@ pub fn OpticalPropertiesEditor(
     readonly: bool,
 ) -> Element {
     info!("🔄 Render: OpticalPropertiesEditor");
-    
+
     // Derive a memoized read-signal for the refractive index model
     let ref_ind_memo = use_memo(move || optical.read().refractive_index.clone());
 
@@ -91,47 +92,47 @@ pub fn OpticalPropertiesEditor(
     });
 
     rsx! {
-      Card {
-        CardHeader {
-          CardTitle { "Optical properties" }
-        }
-        CardContent {
-          // Section 1: Embedded Refractive Index Editor
-          div { class: "mb-4",
-            h6 { class: "fw-bold text-secondary mb-2", "Dispersion & Refractive Index" }
-            RefractiveIndexEditor {
-              value: ref_ind_memo,
-              base_id: format!("{}_ref_ind", base_id),
-              readonly,
-              on_change: handle_ref_ind_change,
+        Card {
+            CardHeader {
+                CardTitle { "Optical properties" }
             }
-          }
-          hr {}
-          // Section 2: Absorption Coefficient
-          div { class: "row",
-            div { class: "col-md-6",
-              label {
-                class: "form-label fw-bold",
-                r#for: format!("{}_absorption", base_id),
-                "Absorption Coefficient (1/m)"
-              }
-              input {
-                id: format!("{}_absorption", base_id),
-                class: "form-control",
-                r#type: "number",
-                step: "any",
-                min: "0",
-                placeholder: "e.g., 0.001 (optional)",
-                value: "{absorption_str}",
-                readonly,
-                oninput: handle_absorption_change,
-              }
-              div { class: "form-text text-muted small",
-                "Leave empty if linear absorption is neglected."
-              }
+            CardContent {
+                // Section 1: Embedded Refractive Index Editor
+                div { class: "mb-4",
+                    h6 { class: "fw-bold text-secondary mb-2", "Dispersion & Refractive Index" }
+                    RefractiveIndexEditor {
+                        value: ref_ind_memo,
+                        base_id: format!("{}_ref_ind", base_id),
+                        readonly,
+                        on_change: handle_ref_ind_change,
+                    }
+                }
+                hr {}
+                // Section 2: Absorption Coefficient
+                div { class: "row",
+                    div { class: "col-md-6",
+                        label {
+                            class: "form-label fw-bold",
+                            r#for: format!("{}_absorption", base_id),
+                            "Absorption Coefficient (1/m)"
+                        }
+                        input {
+                            id: format!("{}_absorption", base_id),
+                            class: "form-control",
+                            r#type: "number",
+                            step: "any",
+                            min: "0",
+                            placeholder: "e.g., 0.001 (optional)",
+                            value: "{absorption_str}",
+                            readonly,
+                            oninput: handle_absorption_change,
+                        }
+                        div { class: "form-text text-muted small",
+                            "Leave empty if linear absorption is neglected."
+                        }
+                    }
+                }
             }
-          }
         }
-      }
     }
 }

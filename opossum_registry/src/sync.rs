@@ -86,9 +86,9 @@ impl RegistrySync {
         // 1. Find remote 'origin' or the default configured remote
         let remote = match repo.find_default_remote(Direction::Fetch) {
             Some(Ok(r)) => r,
-            _ => repo.find_remote("origin").map_err(|e| {
-                OpossumError::Other(format!("Failed to find remote 'origin': {e}"))
-            })?,
+            _ => repo
+                .find_remote("origin")
+                .map_err(|e| OpossumError::Other(format!("Failed to find remote 'origin': {e}")))?,
         };
 
         // 2. Connect and fetch remote refs and objects
@@ -97,7 +97,7 @@ impl RegistrySync {
             .map_err(|e| OpossumError::Other(format!("Failed to connect to remote: {e}")))?;
 
         let _outcome = connection
-            .prepare_fetch(Discard, Default::default())
+            .prepare_fetch(Discard, gix::remote::ref_map::Options::default())
             .map_err(|e| OpossumError::Other(format!("Failed to prepare fetch: {e}")))?
             .receive(Discard, &should_interrupt)
             .map_err(|e| OpossumError::Other(format!("Failed to receive remote pack: {e}")))?;
@@ -106,16 +106,18 @@ impl RegistrySync {
         let local_ref_name = format!("refs/heads/{DEFAULT_BRANCH}");
         let remote_ref_name = format!("refs/remotes/origin/{DEFAULT_BRANCH}");
 
-        let local_ref = repo
-            .find_reference(&local_ref_name)
-            .map_err(|e| OpossumError::Other(format!("Local branch '{DEFAULT_BRANCH}' not found: {e}")))?;
+        let local_ref = repo.find_reference(&local_ref_name).map_err(|e| {
+            OpossumError::Other(format!("Local branch '{DEFAULT_BRANCH}' not found: {e}"))
+        })?;
         let local_commit_id = local_ref
             .into_fully_peeled_id()
             .map_err(|e| OpossumError::Other(format!("Failed to resolve local commit ID: {e}")))?;
 
-        let remote_ref = repo
-            .find_reference(&remote_ref_name)
-            .map_err(|e| OpossumError::Other(format!("Remote tracking ref '{remote_ref_name}' not found: {e}")))?;
+        let remote_ref = repo.find_reference(&remote_ref_name).map_err(|e| {
+            OpossumError::Other(format!(
+                "Remote tracking ref '{remote_ref_name}' not found: {e}"
+            ))
+        })?;
         let remote_commit_id = remote_ref
             .into_fully_peeled_id()
             .map_err(|e| OpossumError::Other(format!("Failed to resolve remote commit ID: {e}")))?;
@@ -128,9 +130,7 @@ impl RegistrySync {
         // 4. Verify fast-forward compatibility (local commit must be an ancestor of remote commit)
         let is_fast_forward = repo
             .merge_base(local_commit_id, remote_commit_id)
-            .map(|base| base == local_commit_id)
-            .unwrap_or(false);
-
+            .is_ok_and(|base| base == local_commit_id);
         if !is_fast_forward {
             return Err(OpossumError::Other(
                 "Local branch has diverged from remote. Automated merge aborted to protect local changes.".to_string(),
@@ -141,15 +141,19 @@ impl RegistrySync {
         repo.reference(
             local_ref_name.as_str(),
             remote_commit_id.detach(),
-            gix::refs::transaction::PreviousValue::MustExistAndMatch(local_commit_id.detach().into()),
+            gix::refs::transaction::PreviousValue::MustExistAndMatch(
+                local_commit_id.detach().into(),
+            ),
             "registry: fast-forward update",
         )
-        .map_err(|e| OpossumError::Other(format!("Failed to update local branch reference: {e}")))?;
+        .map_err(|e| {
+            OpossumError::Other(format!("Failed to update local branch reference: {e}"))
+        })?;
 
         // 6. Check out new index and files into working directory
-        let worktree = repo
-            .worktree()
-            .ok_or_else(|| OpossumError::Other("Cannot checkout files in a bare repository".into()))?;
+        let worktree = repo.worktree().ok_or_else(|| {
+            OpossumError::Other("Cannot checkout files in a bare repository".into())
+        })?;
         let worktree_dir = worktree.base();
 
         let tree_id = remote_commit_id
@@ -173,16 +177,18 @@ impl RegistrySync {
             &mut index,
             worktree_dir,
             repo.objects.clone(),
-            &mut Discard,
-            &mut Discard,
+            &Discard,
+            &Discard,
             &should_interrupt,
             opts,
         )
-        .map_err(|e| OpossumError::Other(format!("Failed to checkout updated working tree: {e}")))?;
+        .map_err(|e| {
+            OpossumError::Other(format!("Failed to checkout updated working tree: {e}"))
+        })?;
 
         // 7. Persist the updated index file to disk
         index
-            .write(Default::default())
+            .write(gix::index::write::Options::default())
             .map_err(|e| OpossumError::Other(format!("Failed to write index file: {e}")))?;
 
         Ok(())

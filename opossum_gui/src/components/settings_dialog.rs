@@ -208,7 +208,6 @@ fn GeneralSettingsTab(mut temp_config: Signal<crate::AppConfig>) -> Element {
 
 #[component]
 fn PhysicsSettingsTab(mut temp_config: Signal<crate::AppConfig>) -> Element {
-
     // *** This is a hack to avoid crashes while using FlushedTextInput *****
     let flush_trigger = use_signal(|| 0usize);
     let dirty_count = use_signal(|| 0usize);
@@ -218,7 +217,6 @@ fn PhysicsSettingsTab(mut temp_config: Signal<crate::AppConfig>) -> Element {
     });
     // **********************************************************************
 
-    
     let current_wavelength = temp_config.read().default_wavelength();
 
     rsx! {

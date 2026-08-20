@@ -9,12 +9,7 @@ pub fn Card(
     children: Element,
 ) -> Element {
     rsx! {
-        div {
-            class: Styles::dx_card,
-            "data-slot": "card",
-            ..attributes,
-            {children}
-        }
+        div { class: Styles::dx_card, "data-slot": "card", ..attributes, {children} }
     }
 }
 

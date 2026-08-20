@@ -43,8 +43,9 @@ pub enum MaterialCatalogEvent {
 
 /// Helper function to truncate long descriptions and append an ellipsis.
 fn truncate_description(desc: Option<&str>, max_chars: usize) -> String {
-    match desc {
-        Some(text) => {
+    desc.map_or_else(
+        || "-".to_string(),
+        |text| {
             let trimmed = text.trim();
             if trimmed.is_empty() {
                 "-".to_string()
@@ -54,9 +55,8 @@ fn truncate_description(desc: Option<&str>, max_chars: usize) -> String {
             } else {
                 trimmed.to_string()
             }
-        }
-        None => "-".to_string(),
-    }
+        },
+    )
 }
 
 #[component]

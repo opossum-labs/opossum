@@ -161,7 +161,7 @@ impl AppConfig {
     }
 
     /// Sets whether the catalog should be checked and updated on application startup.
-    pub fn set_sync_catalog_on_startup(&mut self, sync: bool) {
+    pub const fn set_sync_catalog_on_startup(&mut self, sync: bool) {
         self.sync_catalog_on_startup = sync;
     }
 

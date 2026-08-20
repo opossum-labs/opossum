@@ -42,7 +42,10 @@ fn write_tree_recursive(repo: &gix::Repository, dir: &Path) -> gix::ObjectId {
         } else if path.is_file() {
             // Read file content and write blob object into the Object Database (ODB)
             let data = std::fs::read(&path).expect("Failed to read file");
-            let blob_id = repo.write_blob(&data).expect("Failed to write blob").detach();
+            let blob_id = repo
+                .write_blob(&data)
+                .expect("Failed to write blob")
+                .detach();
             entries.push(gix::objs::tree::Entry {
                 mode: gix::objs::tree::EntryKind::Blob.into(),
                 filename: file_name.into(),
@@ -67,7 +70,9 @@ fn write_tree_recursive(repo: &gix::Repository, dir: &Path) -> gix::ObjectId {
     });
 
     let tree = gix::objs::Tree { entries };
-    repo.write_object(&tree).expect("Failed to write tree").detach()
+    repo.write_object(&tree)
+        .expect("Failed to write tree")
+        .detach()
 }
 
 /// Helper function to simulate a remote Git repository on the local filesystem.
@@ -97,7 +102,10 @@ fn setup_dummy_remote(repo_path: &Path) {
         extra_headers: Vec::new(),
     };
 
-    let commit_id = repo.write_object(&commit).expect("Failed to write initial commit").detach();
+    let commit_id = repo
+        .write_object(&commit)
+        .expect("Failed to write initial commit")
+        .detach();
 
     // Create refs/heads/main pointing to initial commit
     repo.reference(
@@ -161,7 +169,10 @@ fn simulate_remote_catalog_update(repo_path: &Path) {
         extra_headers: Vec::new(),
     };
 
-    let commit_id = repo.write_object(&commit).expect("Failed to write catalog commit").detach();
+    let commit_id = repo
+        .write_object(&commit)
+        .expect("Failed to write catalog commit")
+        .detach();
 
     // Fast-forward refs/heads/main to new commit
     repo.reference(

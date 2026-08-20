@@ -6,6 +6,7 @@ use dioxus_primitives::merge_attributes;
 struct Styles;
 
 #[derive(Copy, Clone, PartialEq, Default)]
+#[allow(dead_code)]
 #[non_exhaustive]
 pub enum ButtonVariant {
     #[default]
@@ -15,24 +16,25 @@ pub enum ButtonVariant {
     Outline,
     Ghost,
     Link,
-    Success
+    Success,
 }
 
 impl ButtonVariant {
-    pub fn class(&self) -> &'static str {
+    pub const fn class(self) -> &'static str {
         match self {
-            ButtonVariant::Primary => "primary",
-            ButtonVariant::Secondary => "secondary",
-            ButtonVariant::Destructive => "destructive",
-            ButtonVariant::Outline => "outline",
-            ButtonVariant::Ghost => "ghost",
-            ButtonVariant::Link => "link",
-            ButtonVariant::Success => "success",
+            Self::Primary => "primary",
+            Self::Secondary => "secondary",
+            Self::Destructive => "destructive",
+            Self::Outline => "outline",
+            Self::Ghost => "ghost",
+            Self::Link => "link",
+            Self::Success => "success",
         }
     }
 }
 
 #[derive(Copy, Clone, PartialEq, Default)]
+#[allow(dead_code)]
 #[non_exhaustive]
 pub enum ButtonSize {
     Xs,
@@ -47,16 +49,16 @@ pub enum ButtonSize {
 }
 
 impl ButtonSize {
-    pub fn class(&self) -> &'static str {
+    pub const fn class(self) -> &'static str {
         match self {
-            ButtonSize::Xs => "xs",
-            ButtonSize::Sm => "sm",
-            ButtonSize::Default => "default",
-            ButtonSize::Lg => "lg",
-            ButtonSize::Icon => "icon",
-            ButtonSize::IconXs => "icon-xs",
-            ButtonSize::IconSm => "icon-sm",
-            ButtonSize::IconLg => "icon-lg",
+            Self::Xs => "xs",
+            Self::Sm => "sm",
+            Self::Default => "default",
+            Self::Lg => "lg",
+            Self::Icon => "icon",
+            Self::IconXs => "icon-xs",
+            Self::IconSm => "icon-sm",
+            Self::IconLg => "icon-lg",
         }
     }
 }

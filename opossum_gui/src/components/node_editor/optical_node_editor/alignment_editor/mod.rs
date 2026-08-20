@@ -125,6 +125,7 @@ pub fn AlignmentInputs(
 
     if current_node_type == "reflective grating" {
         // Create an EventHandler wrapper solely for GratingAlignmentInputs
+        #[allow(clippy::redundant_closure)] // false positive by linter
         let on_save_handler = EventHandler::new(move |iso| on_save(iso));
         rsx! {
             GratingAlignmentInputs {

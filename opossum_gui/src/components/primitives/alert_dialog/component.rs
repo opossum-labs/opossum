@@ -3,11 +3,10 @@ use dioxus_primitives::alert_dialog::{
     self, AlertDialogActionProps, AlertDialogActionsProps, AlertDialogCancelProps,
     AlertDialogDescriptionProps, AlertDialogTitleProps,
 };
-
 #[css_module("/src/components/primitives/alert_dialog/style.css")]
 struct Styles;
 
-/// Custom properties for our AlertDialog wrapper to allow layout overrides
+/// Custom properties for our `AlertDialog` wrapper to allow layout overrides
 #[derive(Props, Clone, PartialEq)]
 pub struct AlertDialogProps {
     #[props(default)]
@@ -31,10 +30,9 @@ pub struct AlertDialogProps {
 #[component]
 pub fn AlertDialog(props: AlertDialogProps) -> Element {
     // Dynamically build an inline CSS string if max_width is provided
-    let width_style = match props.max_width {
-        Some(width) => format!("--dx-dialog-max-width: {};", width),
-        None => String::new(),
-    };
+    let width_style = props.max_width.map_or_else(String::new, |width| {
+        format!("--dx-dialog-max-width: {width};")
+    });
     rsx! {
         alert_dialog::AlertDialogRoot {
             class: Styles::dx_alert_dialog_backdrop,
