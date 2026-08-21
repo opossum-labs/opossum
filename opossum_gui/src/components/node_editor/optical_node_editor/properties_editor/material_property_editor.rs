@@ -10,7 +10,7 @@ use dioxus_free_icons::{
     icons::fa_solid_icons::{FaBook, FaCloudArrowUp, FaLinkSlash, FaPencil},
 };
 use opossum_core::{material::Material, properties::proptype::AssetRef};
-use opossum_registry::AssetLoader;
+use opossum_registry::AssetRegistry;
 use uuid::Uuid;
 
 /// Component for viewing, editing, and assigning optical materials to a node.
@@ -28,7 +28,7 @@ pub fn MaterialPropertyEditor(
     readonly: bool,
 ) -> Element {
     // Access global asset loader from Dioxus context
-    let loader: Signal<AssetLoader> = use_context::<Signal<AssetLoader>>();
+    let mut registry = use_context::<Signal<AssetRegistry<Material>>>();
 
     // Extract current material properties
     let current_material = material_ref.unwrap_inline().clone();
@@ -89,14 +89,9 @@ pub fn MaterialPropertyEditor(
                 "Publishing AdHoc material '{}' to registry...",
                 current_material.name()
             );
-            match loader.read().publish(&mut current_material) {
-                Ok(saved_path) => {
-                    info!("AdHoc material successfully published to {:?}", saved_path);
-                    emit_material_change(current_material.clone());
-                }
-                Err(err) => {
-                    log::error!("Failed to publish AdHoc material to catalog: {err}");
-                }
+            match registry.write().publish(&mut current_material) {
+                Ok(_) => emit_material_change(current_material.clone()),
+                Err(err) => log::error!("Failed to publish: {err}"),
             }
         })
     };

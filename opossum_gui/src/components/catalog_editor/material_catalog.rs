@@ -13,12 +13,12 @@ use crate::components::{
 use dioxus::prelude::*;
 use dioxus_free_icons::{
     Icon,
-    icons::fa_solid_icons::{FaArrowsRotate, FaCheck, FaPencil, FaPlus, FaTrash},
+    icons::fa_solid_icons::{FaCheck, FaPencil, FaPlus, FaTrash},
 };
 use dioxus_primitives::alert_dialog::AlertDialogContent;
 use opossum_core::{material::Material, refractive_index::RefrIndexSellmeier1};
 use opossum_registry::{
-    AssetIndex, AssetLoader,
+    AssetRegistry,
     index::{IndexEntry, MaterialIndexData},
 };
 use uuid::Uuid;
@@ -61,49 +61,48 @@ fn truncate_description(desc: Option<&str>, max_chars: usize) -> String {
 
 #[component]
 pub fn MaterialCatalog(
-    /// Controls whether the catalog dialog is open.
+    /// Controls whether the catalog modal dialog is visible.
     open: Signal<bool>,
-    /// Optional handler for selecting a material from the catalog (enables Selection Mode).
+    /// Optional handler for selecting a material (activates Selector Mode).
     #[props(default)]
     on_select: Option<EventHandler<Material>>,
-    /// Handler for catalog actions (Edit, Create, Delete).
+    /// Handler for catalog mutation events (Edit, Create, Delete).
     #[props(default)]
     on_action: EventHandler<MaterialCatalogEvent>,
 ) -> Element {
-    // Retrieve the shared AssetLoader directly from the Dioxus context
-    let loader: Signal<AssetLoader> = use_context::<Signal<AssetLoader>>();
+    // Shared registry facade accessed directly via Dioxus context
+    let mut registry = use_context::<Signal<AssetRegistry<Material>>>();
 
     let is_select_mode = on_select.is_some();
 
+    // Local UI states
     let mut open_materialeditor = use_signal(|| false);
     let mut material_state = use_signal(Material::default);
-    let mut index_sig = use_signal(|| {
-        let mut idx = AssetIndex::<Material>::new();
-        let _ = idx.build_from_loader(&loader.read());
-        idx
-    });
     let mut show_delete_dialog = use_signal(|| false);
     let mut pending_delete = use_signal(|| Option::<DeleteTarget>::None);
 
+    // Search and filter inputs
     let mut search_text = use_signal(String::new);
     let mut min_nd = use_signal(|| Option::<f64>::None);
     let mut max_nd = use_signal(|| Option::<f64>::None);
 
-    // Memoized search and filter computation with cached key sorting
+    // Reactive filter pipeline reading from the in-memory registry index
     let filtered_entries = use_memo(move || {
         let text_query = search_text.read();
-        let idx = index_sig.read();
+        let reg = registry.read();
         let trimmed_query = text_query.trim();
 
+        // 1. Filter entries via registry index
         let mut results: Vec<IndexEntry<MaterialIndexData>> = if trimmed_query.is_empty() {
-            idx.all_entries().into_iter().cloned().collect()
+            reg.all_entries().into_iter().cloned().collect()
         } else {
-            idx.search_text(trimmed_query)
+            reg.search_text(trimmed_query)
                 .into_iter()
                 .cloned()
                 .collect()
         };
 
+        // 2. Apply refractive index (n_d) bounds
         if let Some(min) = *min_nd.read() {
             results.retain(|e| e.specific.nd.is_some_and(|nd| nd >= min));
         }
@@ -111,33 +110,30 @@ pub fn MaterialCatalog(
             results.retain(|e| e.specific.nd.is_some_and(|nd| nd <= max));
         }
 
-        // Cache lowercase keys during sorting to avoid repeated heap allocations
+        // 3. Sort entries alphabetically by name (case-insensitive)
         results.sort_by_cached_key(|entry| entry.common.name.to_lowercase());
-
         results
     });
 
-    // Callback: Material draft modification in the editor
+    // Callback: Handle inline edits from MaterialEditor
     let on_material_changed = use_callback(move |e: MaterialChangeEvent| {
         e.action.apply(&mut material_state.write());
     });
 
-    // Callback: Persisting a draft to disk
-    let on_material_save =
-        use_callback(
-            move |()| match loader.read().publish(&mut *material_state.write()) {
-                Ok(saved_path) => {
-                    info!("Successfully saved material to {:?}", saved_path);
-                    let _ = index_sig.write().build_from_loader(&loader.read());
-                    on_action.call(MaterialCatalogEvent::MaterialAdded);
-                }
-                Err(e) => {
-                    log::error!("Failed to save material to registry: {e}");
-                }
-            },
-        );
+    // Callback: Publish draft to disk (automatically synchronizes in-memory index)
+    let on_material_save = use_callback(move |()| {
+        match registry.write().publish(&mut *material_state.write()) {
+            Ok(saved_path) => {
+                info!("Successfully published material to {:?}", saved_path);
+                on_action.call(MaterialCatalogEvent::MaterialAdded);
+            }
+            Err(e) => {
+                log::error!("Failed to publish material to registry: {e}");
+            }
+        }
+    });
 
-    // Callback: Starting a new draft
+    // Callback: Initialize a fresh draft
     let on_create_new = use_callback(move |_| {
         material_state.set(Material::new_draft(
             "New Material",
@@ -148,31 +144,25 @@ pub fn MaterialCatalog(
         open_materialeditor.set(true);
     });
 
-    // Callback: Loading an existing material into the editor
-    let on_edit_material =
-        use_callback(
-            move |id: Uuid| match loader.read().load::<Material>(id, None) {
-                Ok(loaded_material) => {
-                    material_state.set(loaded_material.new_draft_from());
-                    open_materialeditor.set(true);
-                }
-                Err(err) => {
-                    log::error!("Failed to load material from registry: {err}");
-                }
-            },
-        );
-
-    // Callback: Rebuilding the material asset index
-    let handle_refresh_index = use_callback(move |_| {
-        let _ = index_sig.write().build_from_loader(&loader.read());
+    // Callback: Load an existing asset and prepare a new draft version
+    let on_edit_material = use_callback(move |id: Uuid| {
+        match registry.read().load(id, None) {
+            Ok(loaded_material) => {
+                material_state.set(loaded_material.new_draft_from());
+                open_materialeditor.set(true);
+            }
+            Err(err) => {
+                log::error!("Failed to load material from registry: {err}");
+            }
+        }
     });
 
-    // Callback: Executing version deletion against the asset loader
+    // Callback: Delete latest version and update the in-memory cache
     let handle_execute_delete = use_callback(move |target: DeleteTarget| {
-        match loader.read().delete_latest_version::<Material>(target.id) {
+        match registry.write().delete_latest_version(target.id) {
             Ok(Some(new_latest)) => {
                 log::info!(
-                    "Deleted version v{} of '{}'. Rolled back to v{}.",
+                    "Deleted version v{} of '{}'. Reverted to v{}.",
                     target.latest_version,
                     target.name,
                     new_latest
@@ -190,10 +180,9 @@ pub fn MaterialCatalog(
                 log::error!("Failed to delete material version: {e}");
             }
         }
-        let _ = index_sig.write().build_from_loader(&loader.read());
     });
 
-    // Callback: Confirming deletion from the modal dialog
+    // Callback: Confirm deletion modal
     let handle_confirm_delete = use_callback(move |_| {
         if let Some(target) = pending_delete.read().clone() {
             handle_execute_delete.call(target);
@@ -201,13 +190,13 @@ pub fn MaterialCatalog(
         show_delete_dialog.set(false);
     });
 
-    // Callback: Cancelling deletion
+    // Callback: Cancel deletion modal
     let handle_cancel_delete = use_callback(move |_| {
         show_delete_dialog.set(false);
     });
 
     rsx! {
-      // Main Catalog Dialog
+      // 1. Main Catalog Modal Dialog
       AlertDialog {
         open: open(),
         on_open_change: move |v: bool| open.set(v),
@@ -222,7 +211,6 @@ pub fn MaterialCatalog(
                   "Material Catalog"
                 }
               }
-              // Only render creation action in management mode
               if !is_select_mode {
                 CardAction {
                   Button {
@@ -235,9 +223,9 @@ pub fn MaterialCatalog(
               }
             }
             CardContent {
-              // Filter & Search Toolbar
+              // Search & Filter Toolbar (Optimized 3-column layout)
               div { class: "row mb-4 align-items-end",
-                div { class: "col-md-4",
+                div { class: "col-md-6",
                   label { class: "form-label fw-bold small",
                     "Search Name / Manufacturer"
                   }
@@ -279,17 +267,9 @@ pub fn MaterialCatalog(
                     oninput: move |e| max_nd.set(e.value().parse().ok()),
                   }
                 }
-                div { class: "col-md-2 text-end",
-                  Button {
-                    title: "Refresh index",
-                    onclick: handle_refresh_index,
-                    Icon { icon: FaArrowsRotate }
-                    "Refresh"
-                  }
-                }
               }
 
-              // Scrollable Container for the Results Table
+              // Results Table View
               ScrollArea { height: "25rem",
                 div { class: "table-responsive",
                   table { class: "table table-hover table-sm align-middle mb-0",
@@ -335,7 +315,7 @@ pub fn MaterialCatalog(
                             }
                           }
                           td { class: "text-end d-flex justify-content-end gap-1",
-                            // In Selection Mode: ONLY render the Select button
+                            // In Select Mode: Render only the Select button
                             if let Some(select_handler) = on_select {
                               Button {
                                 title: "Select this material for the current node",
@@ -344,7 +324,7 @@ pub fn MaterialCatalog(
                                     let id = entry.common.id;
                                     let version = entry.common.latest_version;
                                     move |_| {
-                                        if let Ok(loaded) = loader.read().load::<Material>(id, Some(version)) {
+                                        if let Ok(loaded) = registry.read().load(id, Some(version)) {
                                             select_handler.call(loaded);
                                             open.set(false);
                                         }
@@ -354,7 +334,7 @@ pub fn MaterialCatalog(
                                 "Select"
                               }
                             } else {
-                              // In Management Mode: render Edit and Delete actions
+                              // In Catalog Management Mode: Render Edit & Delete actions
                               Button {
                                 title: "Add new version of the material",
                                 onclick: {
@@ -405,7 +385,7 @@ pub fn MaterialCatalog(
         }
       }
 
-      // Material Editor Dialog (only utilized in Management Mode)
+      // 2. Material Editor Dialog (only mounted when in Management Mode)
       if !is_select_mode {
         MaterialEditor {
           open: open_materialeditor,
@@ -416,7 +396,7 @@ pub fn MaterialCatalog(
         }
       }
 
-      // Deletion Confirmation Dialog
+      // 3. Deletion Confirmation Dialog
       AlertDialog {
         open: show_delete_dialog(),
         on_open_change: move |open: bool| {

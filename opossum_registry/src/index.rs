@@ -1,13 +1,10 @@
-use opossum_core::error::{OpmResult, OpossumError};
-use opossum_core::material::Material;
-use std::collections::HashMap;
-use std::fs;
-use std::marker::PhantomData;
+use opossum_core::{
+    error::{OpmResult, OpossumError},
+    material::Material,
+};
+use std::{collections::HashMap, fmt::Debug, fs, marker::PhantomData};
 use uuid::Uuid;
-
-use crate::asset::RegisterableAsset;
-use crate::coating::CoatingAsset;
-use crate::loader::AssetLoader;
+use crate::{asset::RegisterableAsset, coating::CoatingAsset, loader::AssetLoader};
 
 /// Standard d-line wavelength (587.56 nm) used for nominal refractive index anchor (`n_d`).
 pub const WAVELENGTH_D_LINE_NM: f64 = 587.56;
@@ -63,7 +60,7 @@ impl<T: IndexableAsset> Default for AssetIndex<T> {
 /// Extension trait for assets that can provide type-specific data for RAM caching.
 pub trait IndexableAsset: RegisterableAsset {
     /// The specific data type stored in the index alongside the common metadata.
-    type IndexData;
+    type IndexData: Debug + Clone + PartialEq;
 
     /// Computes and returns the type-specific index data for this asset.
     fn create_index_data(&self) -> Self::IndexData;
@@ -258,6 +255,51 @@ impl<T: IndexableAsset> AssetIndex<T> {
         }
 
         Ok(self.entries.len())
+    }
+    /// Inserts or updates a single asset entry in the in-memory index in O(1).
+    ///
+    /// This avoids full filesystem rescans when an asset is published or modified in memory.
+    pub fn update_entry(&mut self, asset: &T, available_versions: Vec<u32>) {
+        let common = CommonIndex {
+            id: asset.id(),
+            latest_version: asset.version(),
+            available_versions,
+            name: asset.name().to_string(),
+            manufacturer: asset.manufacturer().map(String::from),
+            description: asset.header().description.clone(),
+        };
+
+        let index_entry = IndexEntry {
+            common,
+            specific: asset.create_index_data(),
+        };
+
+        self.entries.insert(asset.id(), index_entry);
+    }
+
+    /// Removes an asset from the index entirely, or reverts its entry to the new latest version.
+    ///
+    /// # Errors
+    /// Returns an [`OpossumError`] if loading the previous version from disk fails.
+    pub fn remove_or_revert_entry(
+        &mut self,
+        id: Uuid,
+        remaining_latest: Option<u32>,
+        loader: &AssetLoader,
+    ) -> OpmResult<()> {
+        match remaining_latest {
+            Some(latest_version) => {
+                // Reload the newly active latest version to update common metadata and specific index data
+                let asset: T = loader.load(id, Some(latest_version))?;
+                let versions = loader.list_versions::<T>(id)?;
+                self.update_entry(&asset, versions);
+            }
+            None => {
+                // All versions were deleted; remove entry from cache completely
+                self.entries.remove(&id);
+            }
+        }
+        Ok(())
     }
 }
 
