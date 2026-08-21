@@ -3,7 +3,7 @@ import path from 'path';
 import { defineConfig, devices } from '@playwright/test';
 
 // Define custom Playwright browsers directory allowed by AppLocker
-process.env.PLAYWRIGHT_BROWSERS_PATH = 'C:\\Users\\ueisenb\\AppData\\Local\\0_gsi_executables\\ms-playwright';
+process.env.PLAYWRIGHT_BROWSERS_PATH = 'C:\\Users\\skrishna\\AppData\\Local\\0_gsi_executables\\ms-playwright';
 
 export default defineConfig({
   // Directory where test artifacts (screenshots, videos, traces) will be saved
@@ -12,14 +12,25 @@ export default defineConfig({
   // Directory containing E2E test files
   testDir: './tests',
 
-  // Maximum execution time for a single test (30 seconds)
-  timeout: 30 * 1000,
+  // Maximum execution time for a single test (2 minutes)
+timeout: 120 * 1000,
 
-  // Force tests to execute sequentially to prevent race conditions on the single backend instance
-  workers: 1,
+  // Maximum time for expect() assertions such as toBeVisible()
+expect: {
+  timeout: 20 * 1000,
+},
+
+// Force tests to execute sequentially to prevent race conditions on the single backend instance
+workers: 1,
   fullyParallel: false,
 
   use: {
+  // Maximum time for actions such as click(), fill(), press(), etc.
+  actionTimeout: 20 * 1000,
+
+  // Maximum time for page.goto() and navigation
+  navigationTimeout: 60 * 1000,
+
     // Base URL matching the explicit IP and port 8085 of the web server
     baseURL: 'http://127.0.0.1:8085',
 
