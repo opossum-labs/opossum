@@ -30,7 +30,7 @@ impl AnalysisRayTrace for Lens {
         // 1. Eintrittsfläche
         self.pass_through_surface_generic(
             in_port,
-            Some(refri),
+            Some(refri.optical.refractive_index),
             &mut rays_bundle,
             config,
             self.inverted(),

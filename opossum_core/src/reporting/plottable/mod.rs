@@ -179,7 +179,7 @@ impl PlotType {
     pub fn plot(&self, plt_series: &Vec<PlotSeries>) -> OpmResult<Option<RgbImage>> {
         let params = self.get_plot_params();
         // No need to check file/path compatibility on WASM
-        let mut plot = Plot::new(plt_series, params);
+        let mut plot = Plot::new(plt_series, params)?;
         if plot.auto_size {
             plot.auto_size();
         }

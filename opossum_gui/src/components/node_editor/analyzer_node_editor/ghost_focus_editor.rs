@@ -1,5 +1,5 @@
-use crate::OPOSSUM_UI_LOGS;
-use crate::api;
+// File: src/components/node_editor/analyzer_node_editor/ghost_focus_editor.rs
+
 use crate::components::node_editor::{
     analyzer_node_editor::light_data_editor::ray_source_editor::RaySourceEditor,
     inputs::{
@@ -21,58 +21,45 @@ use uuid::Uuid;
 #[component]
 pub fn GhostFocusEditor(
     node_id: Uuid,
-    ghost_focus_config: GhostFocusConfig,
+    ghost_focus_config: ReadSignal<GhostFocusConfig>,
     on_change: EventHandler<NodeChangeEvent>,
+    available_sources: Vec<SourcePortDto>,
 ) -> Element {
-    let mut available_sources = use_signal(Vec::<SourcePortDto>::new);
+    info!("🔄 Render: GhostFocusEditor");
 
-    use_future(move || async move {
-        if let Ok(sources) = api::get_available_sources().await {
-            available_sources.set(sources);
-        } else {
-            OPOSSUM_UI_LOGS
-                .write()
-                .add_log("Failed to fetch available source ports from backend.");
+    // Stable callback reading directly from the reactive ReadSignal handle
+    let on_save_max_bounces = use_callback(move |val: String| {
+        if let Ok(max_bounces) = val.parse::<usize>() {
+            let mut local_config = ghost_focus_config.peek().clone();
+            local_config.set_max_bounces(max_bounces);
+            on_change.call(NodeChangeEvent {
+                node_id,
+                action: NodeChangeAction::AnalyzerType(AnalyzerType::GhostFocus(local_config)),
+            });
         }
     });
 
-    let on_save_max_bounces = {
-        let config = ghost_focus_config.clone();
-        move |val: String| {
-            if let Ok(max_bounces) = val.parse::<usize>() {
-                let mut local_config = config.clone();
-                local_config.set_max_bounces(max_bounces);
-                on_change.call(NodeChangeEvent {
-                    node_id,
-                    action: NodeChangeAction::AnalyzerType(AnalyzerType::GhostFocus(local_config)),
-                });
-            }
+    // Stable callback reading directly from the reactive ReadSignal handle
+    let on_change_fluence = use_callback(move |e: Event<FormData>| {
+        let val = e.value();
+        if let Some(fluence_estimator) = FluenceEstimator::default_from_name(val.as_str()) {
+            let mut local_config = ghost_focus_config.peek().clone();
+            local_config.set_fluence_estimator(fluence_estimator);
+            on_change.call(NodeChangeEvent {
+                node_id,
+                action: NodeChangeAction::AnalyzerType(AnalyzerType::GhostFocus(local_config)),
+            });
         }
-    };
+    });
 
-    let on_change_fluence = {
-        let config = ghost_focus_config.clone();
-        move |e: Event<FormData>| {
-            let val = e.value();
-            if let Some(fluence_estimator) = FluenceEstimator::default_from_name(val.as_str()) {
-                let mut local_config = config.clone();
-                local_config.set_fluence_estimator(fluence_estimator);
-                on_change.call(NodeChangeEvent {
-                    node_id,
-                    action: NodeChangeAction::AnalyzerType(AnalyzerType::GhostFocus(local_config)),
-                });
-            }
-        }
-    };
-
-    let sources_list = available_sources.read().clone();
+    let current_config = ghost_focus_config.read();
 
     rsx! {
         div { class: "ghost-focus-fields",
             FlushableTextInput {
                 id: "ghostFocusMaxBounces".to_string(),
                 label: "Max Bounces".to_string(),
-                value: format!("{}", ghost_focus_config.max_bounces()),
+                value: format!("{}", current_config.max_bounces()),
                 r#type: "number",
                 step: "1",
                 min: "0",
@@ -84,26 +71,26 @@ pub fn GhostFocusEditor(
             LabeledSelect {
                 id: "ghostFocusFluence".to_string(),
                 label: "Fluence Estimator".to_string(),
-                options: select_options_from_enum_iterator(ghost_focus_config.fluence_estimator(), None),
+                options: select_options_from_enum_iterator(current_config.fluence_estimator(), None),
                 onchange: on_change_fluence,
             }
 
             div { class: "mt-4 border-top pt-3 text-light",
                 h6 { class: "text-secondary mb-3", "Sources Definitions" }
 
-                if sources_list.is_empty() {
+                if available_sources.is_empty() {
                     div { class: "text-muted small italic", "No Source Ports found." }
                 }
 
                 {
-                    sources_list
+                    available_sources
                         .into_iter()
                         .map(|port| {
                             rsx! {
                                 SourcePortCard {
                                     key: "{port.uuid}",
                                     port,
-                                    ghost_focus_config: ghost_focus_config.clone(),
+                                    ghost_focus_config: current_config.clone(),
                                     on_change,
                                     analyzer_id: node_id,
                                 }
@@ -120,18 +107,22 @@ fn SourcePortCard(
     port: SourcePortDto,
     ghost_focus_config: GhostFocusConfig,
     on_change: EventHandler<NodeChangeEvent>,
-    analyzer_id: Uuid, // Cleaned up: Only analyzer_id needed
+    analyzer_id: Uuid,
 ) -> Element {
     let mut is_collapsed = use_signal(|| true);
     let port_uuid = port.uuid;
     let port_name = port.name;
+
+    super::use_source_card_focus(analyzer_id, port_uuid, is_collapsed);
 
     let existing_source = ghost_focus_config
         .get_source(&port_uuid)
         .map_or_else(RayDataSource::default, |builder| builder.source().clone());
 
     rsx! {
-        div { class: "card bg-dark border-secondary mb-2",
+        div {
+            class: "card bg-dark border-secondary mb-2",
+            id: "sourceCard{port_uuid}",
             div {
                 class: "card-header bg-secondary py-1 px-2 text-light d-flex justify-content-between align-items-center noselect",
                 style: "cursor: pointer;",

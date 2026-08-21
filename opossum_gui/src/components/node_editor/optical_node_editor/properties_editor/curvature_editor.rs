@@ -1,4 +1,5 @@
 use crate::components::node_editor::{
+    hooks::use_synced_signal,
     inputs::{
         InputData, InputParam,
         input_components::{InputParamLabeledInput, NodeConfigUnitInput, UnitHandling},
@@ -15,13 +16,13 @@ use uuid::Uuid;
 
 #[component]
 pub fn CurvatureEditor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     curvature: Length,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    let mut curvature_sig = use_signal(|| curvature);
+    let mut curvature_sig = use_synced_signal(curvature);
     let is_finite_sig = use_memo(move || curvature_sig.read().is_finite());
     let mut last_finite_curvature = use_signal(|| {
         if curvature.is_finite() {

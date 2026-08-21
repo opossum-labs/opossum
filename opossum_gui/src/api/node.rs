@@ -2,8 +2,9 @@ use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_core::{
     prelude::*,
     types::api_types::{
-        AddPortMappingRequest, AnalyzerItemDto, ConnectInfo, ConvertToGroupRequest,
-        MoveNodesRequest, NewNode, NewRefNode, NodeInfo, NodePortsResponse, NodePropertiesResponse,
+        AddPortMappingRequest, ConnectInfo, ConvertToGroupRequest, ConvertToGroupResponse,
+        CutNodesResponse, DeleteNodeResponse, MoveNodesRequest, MoveNodesResponse, NewNode,
+        NewRefNode, NodeInfo, NodePortsResponse, NodePropertiesResponse, PasteNodesResponse,
         PortMappingsResponse, PortNamesResponse, RemovePortMapResponse, UpdateConnectionRequest,
         UpdateNodeRequest, UpdatePortRequest,
     },
@@ -94,29 +95,40 @@ pub async fn post_copy_nodes(nodes: HashSet<Uuid>) -> Result<String, String> {
         .await
 }
 
+/// Duplicates the currently copied nodes into `group_id` at `pos`, minting a fresh uuid for each copy.
+/// Moving nodes without duplicating them (a cut) is a separate call - see [`post_cut_nodes`].
+///
+/// # Errors
+///
+/// This function will return an error if the request fails (e.g. the target group does not exist)
+/// or the response cannot be deserialized into a [`PasteNodesResponse`].
 pub async fn post_paste_nodes(
     group_id: Uuid,
     pos: Point2D<f64>,
-) -> Result<
-    (
-        HashMap<Uuid, Vec<NodeInfo>>,
-        Vec<AnalyzerItemDto>,
-        HashMap<Uuid, Vec<ConnectInfo>>,
-    ),
-    String,
-> {
+) -> Result<PasteNodesResponse, String> {
     HTTP_API_CLIENT()
-        .post::<(Uuid, (f64, f64)), (
-            HashMap<Uuid, Vec<NodeInfo>>,
-            Vec<AnalyzerItemDto>,
-            HashMap<Uuid, Vec<ConnectInfo>>,
-        )>("/api/operations/paste_nodes", (group_id, (pos.x, pos.y)))
+        .post::<(Uuid, (f64, f64)), PasteNodesResponse>(
+            "/api/operations/paste_nodes",
+            (group_id, (pos.x, pos.y)),
+        )
         .await
 }
 
-pub async fn post_cut_nodes(group_id: Uuid) -> Result<(Vec<Uuid>, Uuid), String> {
+/// Cut the currently copied nodes into `group_id` at `pos` - a UUID-preserving *move* rather than a
+/// duplicate. Each node keeps its uuid, so references, port maps and connections pointing at it stay
+/// valid; a node already in `group_id` is only repositioned, one from another group is relocated into it.
+/// The whole gesture is a single undo step. See the backend's `post_cut_nodes` doc comment.
+///
+/// # Errors
+///
+/// This function will return an error if the request fails (e.g. the target group does not exist) or the
+/// response cannot be deserialized into a [`CutNodesResponse`].
+pub async fn post_cut_nodes(group_id: Uuid, pos: Point2D<f64>) -> Result<CutNodesResponse, String> {
     HTTP_API_CLIENT()
-        .post::<Uuid, (Vec<Uuid>, Uuid)>("/api/operations/cut_nodes", group_id)
+        .post::<(Uuid, (f64, f64)), CutNodesResponse>(
+            "/api/operations/cut_nodes",
+            (group_id, (pos.x, pos.y)),
+        )
         .await
 }
 
@@ -137,19 +149,18 @@ pub async fn post_add_ref_node(
         .post::<NewRefNode, NodeInfo>(&format!("/api/nodes/{group_id}/references"), new_ref_info)
         .await
 }
-/// Delete a node and all its connections.
-///
-/// This function will return a vector of [`Uuid`]s that were actually deleted. This could include
-/// the provided [`Uuid`] and possibly any other nodes that reference it.
+/// Delete a whole selection - optical nodes and/or analyzers - together in one request, so the backend
+/// records a single undo step for the whole selection (see the backend's `delete_nodes`, which
+/// classifies each id itself). Returns the merged [`DeleteNodeResponse`], with any deleted analyzers
+/// reported in its `deleted_analyzers` field.
 ///
 /// # Errors
 ///
-/// This function will return an error if
-/// - the provided [`Uuid`] cannot be serialized or found
-/// - the returned response cannot be deserialized into a vector of [`Uuid`]
-pub async fn delete_node(id: Uuid) -> Result<Vec<Uuid>, String> {
+/// This function will return an error if the request fails or the response cannot be deserialized
+/// into a [`DeleteNodeResponse`].
+pub async fn delete_nodes(ids: Vec<Uuid>) -> Result<DeleteNodeResponse, String> {
     HTTP_API_CLIENT()
-        .delete::<String, Vec<Uuid>>(&format!("/api/nodes/{id}"), String::new())
+        .post::<Vec<Uuid>, DeleteNodeResponse>("/api/nodes/delete", ids)
         .await
 }
 /// Get the `NodeInfo` of an optical node.
@@ -218,22 +229,6 @@ pub async fn update_distance(
         .patch::<UpdateConnectionRequest>(&format!("/api/nodes/{group_id}/connections"), connection)
         .await
 }
-/// Update the GUI position coordinates of the node with the given `node_id`.
-///
-/// # Errors
-///
-/// This function will return an error if the `node_id` was not found.
-pub async fn update_node_position(node_id: Uuid, gui_position: Point2D<f64>) -> Result<(), String> {
-    let position = (gui_position.x, gui_position.y);
-    let update_node_request = UpdateNodeRequest {
-        gui_position: Some(Some(position)),
-        ..Default::default()
-    };
-    HTTP_API_CLIENT()
-        .patch::<UpdateNodeRequest>(&format!("/api/nodes/{node_id}"), update_node_request)
-        .await
-}
-
 /// Update the name of the node with the given `node_id`.
 ///
 /// # Errors
@@ -261,7 +256,7 @@ pub async fn get_node_references(node_id: Uuid) -> Result<HashMap<Uuid, Vec<Uuid
 /// This function will return an error if the `node_id` was not found or if the alignment cannot be serialized.
 pub async fn update_node_alignment(node_id: Uuid, alignment: Isometry) -> Result<(), String> {
     let update_node_request = UpdateNodeRequest {
-        alignment: Some(alignment),
+        alignment: Some(Some(alignment)),
         ..Default::default()
     };
     HTTP_API_CLIENT()
@@ -291,13 +286,13 @@ pub async fn get_group_hierarchy(group_id: Uuid) -> Result<Vec<(Uuid, String)>, 
 pub async fn convert_nodes_to_group(
     nodes: Vec<Uuid>,
     group_id: Uuid,
-) -> Result<(NodeInfo, Vec<ConnectInfo>), String> {
+) -> Result<ConvertToGroupResponse, String> {
     let convert_to_group_request = ConvertToGroupRequest {
         group_id,
         nodes_to_convert: nodes,
     };
     HTTP_API_CLIENT()
-        .post::<ConvertToGroupRequest, (NodeInfo, Vec<ConnectInfo>)>(
+        .post::<ConvertToGroupRequest, ConvertToGroupResponse>(
             "/api/operations/convert_to_group",
             convert_to_group_request,
         )
@@ -314,14 +309,17 @@ pub async fn drop_nodes_into_group(
     nodes: Vec<Uuid>,
     from_group_id: Uuid,
     drop_group_id: Uuid,
-) -> Result<String, String> {
+) -> Result<MoveNodesResponse, String> {
     let move_nodes_request = MoveNodesRequest {
         source_group_id: from_group_id,
         target_group_id: drop_group_id,
         nodes_to_move: nodes.clone(),
     };
     HTTP_API_CLIENT()
-        .post::<MoveNodesRequest, String>("/api/operations/move_nodes", move_nodes_request)
+        .post::<MoveNodesRequest, MoveNodesResponse>(
+            "/api/operations/move_nodes",
+            move_nodes_request,
+        )
         .await
 }
 

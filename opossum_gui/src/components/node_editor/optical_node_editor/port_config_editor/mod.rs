@@ -8,7 +8,7 @@ use opossum_core::{
     core_optics::optic_ports::PortConfig,
     nodes::fluence_detector::Fluence,
     prelude::{Aperture, PortType},
-    types::api_types::{NodeInfo, UpdatePortRequest},
+    types::api_types::{NodeEditorPanel, NodeInfo, UpdatePortRequest},
 };
 use uom::si::radiant_exposure::joule_per_square_centimeter;
 use uuid::Uuid;
@@ -17,7 +17,9 @@ use crate::{
     OPOSSUM_UI_LOGS,
     api::get_ports_of_group,
     components::node_editor::{
-        accordion::AccordionItem,
+        accordion::{
+            AccordionItem, content_id_for_panel, open_accordion_content, open_accordion_section,
+        },
         inputs::input_components::{NodeConfigUnitInput, UnitHandling},
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
         optical_node_editor::port_config_editor::{
@@ -28,7 +30,7 @@ use crate::{
 
 #[component]
 pub fn PortConfigEditor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     node_info: ReadSignal<NodeInfo>,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
@@ -37,6 +39,7 @@ pub fn PortConfigEditor(
     let mut editor_inputs = Vec::new();
 
     let ports_resource = use_resource(move || async move {
+        crate::NODE_DETAILS_REFRESH();
         match get_ports_of_group(current_node_id).await {
             Ok(ports_info) => Some(ports_info),
             Err(err_str) => {
@@ -44,6 +47,33 @@ pub fn PortConfigEditor(
                 None
             }
         }
+    });
+
+    // Open the Port Config panel when undo/redo asked for it (`PENDING_PANEL_OPEN`, set by
+    // `apply_document_changes` from the backend's `JumpTarget`). This runs as an effect - not inside the
+    // resource - so it fires *after* this node's ports have rendered: unlike the always-present General /
+    // Properties sections, the "Port Configuration" accordion's DOM only exists once the ports resource
+    // resolves, so opening it any earlier is a silent no-op. Reading the resource with `.read()` (not
+    // `.read_unchecked()`) subscribes the effect, so it re-runs the moment the ports resolve - which is
+    // what makes this reliable across a preceding re-fetch (e.g. an invert that swapped the port set).
+    // Also expands each port's own sub-accordion, plus its nested Aperture Configuration accordion, so
+    // the reverted value isn't hidden behind a collapsed row.
+    use_effect(move || {
+        let Some((uuid, panel)) = *crate::PENDING_PANEL_OPEN.read() else {
+            return;
+        };
+        if panel != NodeEditorPanel::PortConfig || uuid != current_node_id {
+            return;
+        }
+        let Some(Some(ports_info)) = ports_resource.read().clone() else {
+            return;
+        };
+        open_accordion_section(NodeEditorPanel::PortConfig);
+        for port_name in ports_info.inputs.keys().chain(ports_info.outputs.keys()) {
+            open_accordion_content(&format!("singlePortCollapse{port_name}"));
+            open_accordion_content(&format!("apertureConfigCollapse{port_name}"));
+        }
+        *crate::PENDING_PANEL_OPEN.write() = None;
     });
 
     let handle_port_update = move |(p_name, p_type, req): (String, PortType, UpdatePortRequest)| {
@@ -90,7 +120,7 @@ pub fn PortConfigEditor(
                 header: "Port Configuration",
                 header_id: "portConfigHeading",
                 parent_id: "accordionNodeConfig",
-                content_id: "portConfigCollapse",
+                content_id: content_id_for_panel(NodeEditorPanel::PortConfig),
                 level: 1,
 
             }
@@ -104,7 +134,7 @@ pub fn PortConfigEditor(
 }
 #[component]
 pub fn SinglePortConfigEditor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     port_name: String,
     port_config: PortConfig,
     on_change: EventHandler<UpdatePortRequest>,
@@ -146,6 +176,7 @@ pub fn SinglePortConfigEditor(
         }
         ApertureEditor {
             node_id,
+            port_name: port_name.clone(),
             aperture: port_config.aperture,
             on_change: move |aperture: Aperture| {
                 let update_port_request = UpdatePortRequest {

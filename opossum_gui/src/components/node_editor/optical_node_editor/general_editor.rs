@@ -1,59 +1,73 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
-use crate::components::{
-    node_editor::{
-        accordion::AccordionItem,
-        inputs::input_components::{FlushableTextInput, LabeledCheckboxInput, LabeledInput},
-        node_config_editor::{NodeChangeAction, NodeChangeEvent},
-    },
-    scenery_editor::SelectedNode,
+use crate::components::node_editor::{
+    accordion::{AccordionItem, content_id_for_panel},
+    inputs::input_components::{FlushableTextInput, LabeledCheckboxInput, LabeledInput},
+    node_config_editor::{NodeChangeAction, NodeChangeEvent},
 };
 use dioxus::prelude::*;
-use opossum_core::types::api_types::NodeInfo;
+use opossum_core::types::api_types::NodeEditorPanel;
+use uuid::Uuid;
 
 #[component]
 pub fn GeneralEditor(
-    node_info: ReadSignal<NodeInfo>,
-    active_node: Memo<SelectedNode>,
+    node_id: Uuid,
+    name: String,
+    node_type: String,
+    inverted: bool,
+    is_active: bool,
+    graph_id: Uuid,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    let accordion_content = if node_info.read().uuid == active_node.read().node_id {
-        let node_id = node_info.read().uuid;
-        let node_type = node_info.read().node_type.clone();
-        let name = node_info.read().name.clone();
-        let inverted = node_info.read().inverted;
+    info!("🔄 Render: GeneralEditor");
+
+    // Stable callback for renaming nodes.
+    // Since node_id is passed by value and constant for this component lifecycle,
+    // it is safely captured by the move closure.
+    let on_name_save = use_callback(move |new_name: String| {
+        on_change.call(NodeChangeEvent {
+            node_id,
+            action: NodeChangeAction::Name(new_name),
+        });
+    });
+
+    // Stable callback for toggling node inversion.
+    // Safely captures the value-based node_id and graph_id.
+    let on_inverted_change = use_callback(move |new_state: bool| {
+        on_change.call(NodeChangeEvent {
+            node_id,
+            action: NodeChangeAction::Inverted {
+                inverted: new_state,
+                graph_id,
+            },
+        });
+    });
+
+    let accordion_content = if is_active {
         vec![
             rsx! {
-                NodeTypeInput { node_type: node_type, label: "Node Type" }
+                NodeTypeInput {
+                    node_type,
+                    label: "Node Type",
+                }
             },
             rsx! {
                 FlushableTextInput {
-                    id: format!("nodeName_{}", node_id),
+                    id: format!("nodeName_{node_id}"),
                     label: "Node Name".to_string(),
                     value: name,
                     container_class: "form-floating border-start".to_string(),
                     input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
                     label_class: "form-label text-secondary".to_string(),
                     readonly,
-                    on_save: move |new_name: String| {
-                        on_change.call(NodeChangeEvent {
-                            node_id,
-                            action: NodeChangeAction::Name(new_name),
-                        });
-                    },
+                    on_save: on_name_save,
                 }
             },
             rsx! {
-                // no readonly here even for a reference!
                 NodeInvertedInput {
                     value: inverted,
                     label: "Invert Node",
-                    on_valid_change: move |new_state: bool| {
-                        on_change.call(NodeChangeEvent {
-                            node_id,
-                            action: NodeChangeAction::Inverted{inverted: new_state, graph_id: active_node.read().graph_id},
-                        });
-                    }
+                    on_valid_change: on_inverted_change,
                 }
             },
         ]
@@ -67,7 +81,7 @@ pub fn GeneralEditor(
             header: "General",
             header_id: "generalHeading",
             parent_id: "accordionNodeConfig",
-            content_id: "generalCollapse",
+            content_id: content_id_for_panel(NodeEditorPanel::General),
             level: 1,
         }
     }
@@ -76,13 +90,13 @@ pub fn GeneralEditor(
 #[component]
 pub fn NodeInvertedInput(
     value: bool,
-    label: String,
+    label: &'static str,
     on_valid_change: EventHandler<bool>,
 ) -> Element {
     rsx! {
         LabeledCheckboxInput {
             id: "inputNodeInverted".to_string(),
-            label,
+            label: label.to_string(),
             value: format!("{}", value),
             onchange: move |e: Event<FormData>| {
                 if let Ok(new_val) = e.data.parsed::<bool>() {

@@ -1,5 +1,14 @@
 //! Routes for managing the document
-use crate::{app_state::AppState, error::BackEndErrorResponse, sse_logger::SENDER};
+use crate::{
+    app_state::AppState,
+    error::BackEndErrorResponse,
+    helper_functions::{analyzer_mut_or_404, parent_group_id_or_self},
+    sse_logger::SENDER,
+    undo::{
+        Command, PatchGlobalConf, PatchNode, RepositionAnalyzer, SetViewport,
+        capture_old_node_request,
+    },
+};
 use actix_web::{
     Error, HttpResponse, Responder, delete, get, patch, post, put,
     web::{self, Json},
@@ -9,7 +18,10 @@ use log::{error, info, warn};
 use opossum_core::{
     core_optics::{SceneryResources, node_attr::HasNodeAttr},
     opm_document::OpmDocument,
-    types::api_types::{ErrorResponse, LoadDocumentResponse},
+    types::api_types::{
+        DocumentChange, ErrorResponse, JumpTarget, LoadDocumentResponse, PositionUpdate,
+        UndoRedoResponse, UpdateNodeRequest, ViewportChangeRequest,
+    },
 };
 use std::{path::PathBuf, str::FromStr};
 use tokio::sync::mpsc;
@@ -25,6 +37,7 @@ async fn delete_document(data: web::Data<AppState>) -> impl Responder {
     let mut document = data.document.lock();
     *document = OpmDocument::default();
     drop(document);
+    data.clear_undo_history();
     HttpResponse::NoContent().finish()
 }
 #[utoipa::path(tag = "document",
@@ -50,10 +63,18 @@ async fn get_global_conf(data: web::Data<AppState>) -> impl Responder {
 async fn patch_global_conf(
     data: web::Data<AppState>,
     new_global_conf: web::Json<SceneryResources>,
-) -> impl Responder {
-    let global_conf = new_global_conf.into_inner();
-    data.document.lock().set_global_conf(global_conf.clone());
-    web::Json(global_conf)
+) -> Result<Json<SceneryResources>, BackEndErrorResponse> {
+    let new = new_global_conf.into_inner();
+    let mut document = data.document.lock();
+    let old = document.global_conf().lock().unwrap().clone();
+    let inverse = Command::PatchGlobalConf(PatchGlobalConf {
+        old,
+        new: new.clone(),
+    })
+    .apply(&mut document)?;
+    data.push_undo(inverse);
+    drop(document);
+    Ok(Json(new))
 }
 #[utoipa::path(tag = "document",
     responses((status = 200, description = "Scenery Uuid", body = SceneryResources))
@@ -109,11 +130,311 @@ async fn put_document(
     let needs_autolayout = document.needs_autolayout();
 
     drop(document);
+    data.clear_undo_history();
 
     Ok(Json(LoadDocumentResponse {
         name,
         needs_autolayout,
     }))
+}
+
+/// Undo the last checkpointed document edit.
+///
+/// Pops the most recent entry off the undo history, reverses it, and pushes its own inverse onto
+/// the redo history. Returns the concrete changes this made (so the GUI can update its canvas state
+/// directly, the same way it reacts to a normal edit) plus the resulting undo/redo availability.
+#[utoipa::path(tag = "document",
+    responses(
+        (status = OK, description = "Undo applied", body = UndoRedoResponse),
+        (status = 409, description = "Nothing to undo", body = ErrorResponse)
+    )
+)]
+#[post("/undo")]
+pub async fn undo_document(
+    data: web::Data<AppState>,
+) -> Result<Json<UndoRedoResponse>, BackEndErrorResponse> {
+    let Some(command) = data.undo_stack.lock().pop_back() else {
+        return Err(BackEndErrorResponse::new(409, "Opossum", "Nothing to undo"));
+    };
+    // Run against a clone (keeping `command`), so if `describe`/`apply` fails the popped entry can be
+    // pushed back onto the undo stack rather than silently dropped - the document is left untouched by
+    // `with_rollback` on failure, so the still-valid command can be undone again later.
+    match apply_history_step(&data, command.clone()) {
+        Ok((changes, jump, inverse)) => {
+            data.redo_stack.lock().push_back(inverse);
+            Ok(Json(UndoRedoResponse {
+                changes,
+                jump,
+                can_undo: !data.undo_stack.lock().is_empty(),
+                can_redo: true,
+            }))
+        }
+        Err(err) => {
+            data.undo_stack.lock().push_back(command);
+            Err(err)
+        }
+    }
+}
+
+/// Runs one undo or redo step: describes `command` for the GUI and computes its [`JumpTarget`], then
+/// applies it under a rollback guard, returning `(changes, jump, inverse)`. Callers pass a clone and keep
+/// the original, so on error they can push the still-valid command back onto its source stack (see
+/// [`undo_document`]/[`redo_document`]).
+///
+/// # Errors
+///
+/// Returns `describe`'s or `apply`'s error; on an `apply` failure `with_rollback` has already restored
+/// the document to its pre-call state.
+fn apply_history_step(
+    data: &AppState,
+    command: Command,
+) -> Result<(Vec<DocumentChange>, Option<JumpTarget>, Command), BackEndErrorResponse> {
+    let changes = command.describe()?;
+    let mut document = data.document.lock();
+    // Where the GUI should focus after this step - computed from the command, not reconstructed by the GUI.
+    let jump = command.jump_target(document.scenery().node_attr().uuid());
+    // `with_rollback` snapshots the whole document as a transient safety net against a multi-step `apply`
+    // failing partway and leaving it torn. Atomic commands can't partial-fail, so skip the snapshot for
+    // them - most importantly for the very frequent `SetViewport` camera undos, which don't touch the
+    // document at all. This is a per-operation backup, distinct from the per-entry stored snapshot the
+    // lightweight-command design deliberately avoids (see `MAX_UNDO_DEPTH` in `app_state.rs`).
+    let inverse = if command.needs_rollback() {
+        with_rollback(&mut document, |d| command.apply(d))?
+    } else {
+        command.apply(&mut document)?
+    };
+    drop(document);
+    Ok((changes, jump, inverse))
+}
+
+/// Redo the last undone document edit.
+///
+/// Symmetric to [`undo_document`]: pops from the redo history, applies it, and pushes its inverse
+/// back onto the undo history.
+#[utoipa::path(tag = "document",
+    responses(
+        (status = OK, description = "Redo applied", body = UndoRedoResponse),
+        (status = 409, description = "Nothing to redo", body = ErrorResponse)
+    )
+)]
+#[post("/redo")]
+pub async fn redo_document(
+    data: web::Data<AppState>,
+) -> Result<Json<UndoRedoResponse>, BackEndErrorResponse> {
+    let Some(command) = data.redo_stack.lock().pop_back() else {
+        return Err(BackEndErrorResponse::new(409, "Opossum", "Nothing to redo"));
+    };
+    // Symmetric to `undo_document`: on failure, push the popped entry back onto the redo stack.
+    match apply_history_step(&data, command.clone()) {
+        Ok((changes, jump, inverse)) => {
+            data.undo_stack.lock().push_back(inverse);
+            Ok(Json(UndoRedoResponse {
+                changes,
+                jump,
+                can_undo: true,
+                can_redo: !data.redo_stack.lock().is_empty(),
+            }))
+        }
+        Err(err) => {
+            data.redo_stack.lock().push_back(command);
+            Err(err)
+        }
+    }
+}
+
+/// Record a canvas viewport change (pan/zoom of a tab) as its own undo step.
+///
+/// Pushes a `SetViewport` whose undo restores `before` and whose redo restores `after`. The camera is
+/// purely a GUI concern and never touches the document; this only makes the change reversible on the
+/// shared undo stack, so a single undo reverts a camera move (or an edit), one step at a time.
+///
+/// **Coalescing is gesture-type-aware:** only when the request's `coalesce` is `true` *and* the top undo
+/// entry is itself a coalescing `SetViewport` on the same tab does this extend that entry (keeping its
+/// undo target, moving its redo target to `after`) - so a whole scroll-zoom burst is one step. Discrete
+/// gestures (pan, center, zoom-to-fit) send `coalesce: false`: they never merge, and nothing merges into
+/// them - so a pan after a zoom is a separate undo step.
+///
+/// **Merging into the previous edit:** when `merge_into_previous` is set and the top undo entry is a
+/// [`Command::Batch`], this appends the camera move to that batch instead of pushing its own entry -
+/// so Auto Layout's post-layout fit rides on the same undo step as the node re-positioning it just did.
+/// The GUI only sets this immediately after the edit it means to fold into, so the top entry is that
+/// edit's batch; if it happens not to be a batch, this falls back to pushing a normal entry.
+#[utoipa::path(tag = "document",
+    request_body(content = ViewportChangeRequest, description = "The viewport before/after the gesture, whether it may coalesce, and whether it folds into the previous edit"),
+    responses((status = NO_CONTENT, description = "Viewport change recorded"))
+)]
+#[post("/viewport_change")]
+async fn post_viewport_change(
+    data: web::Data<AppState>,
+    body: web::Json<ViewportChangeRequest>,
+) -> impl Responder {
+    let ViewportChangeRequest {
+        before,
+        after,
+        coalesce,
+        merge_into_previous,
+    } = body.into_inner();
+    // A gesture that didn't actually move the camera (e.g. a middle-click without a drag, or centering an
+    // already-centered graph) must not create a no-op undo step.
+    if before == after {
+        return HttpResponse::NoContent().finish();
+    }
+    // Undo (applying the pushed command) moves the camera back to `before`; its inverse (redo) to `after`.
+    let before_graph_id = before.graph_id;
+    let mut undo_stack = data.undo_stack.lock();
+    if merge_into_previous && let Some(Command::Batch(commands)) = undo_stack.back_mut() {
+        // Fold into the preceding edit's undo step; its push already cleared the redo stack.
+        commands.push(Command::SetViewport(SetViewport {
+            from: after,
+            to: before,
+            coalescing: coalesce,
+        }));
+        drop(undo_stack);
+    } else if coalesce
+        && let Some(Command::SetViewport(top)) = undo_stack.back_mut()
+        && top.coalescing
+        && top.to.graph_id == before_graph_id
+    {
+        // Extend the ongoing coalescing camera step forward to `after`, keeping its undo target (`to`).
+        top.from = after;
+        drop(undo_stack);
+        data.redo_stack.lock().clear();
+    } else {
+        drop(undo_stack);
+        data.push_undo(Command::SetViewport(SetViewport {
+            from: after,
+            to: before,
+            coalescing: coalesce,
+        }));
+    }
+    HttpResponse::NoContent().finish()
+}
+
+/// Batch-update the GUI positions of several nodes/analyzers in one step.
+///
+/// Used at the end of a multi-node drag or after auto-layout, so moving N nodes is one undo step
+/// instead of N.
+#[utoipa::path(tag = "document",
+    request_body(content = Vec<PositionUpdate>, description = "The nodes/analyzers to reposition"),
+    responses((status = NO_CONTENT, description = "Positions updated"))
+)]
+#[patch("/positions")]
+async fn patch_positions(
+    data: web::Data<AppState>,
+    body: web::Json<Vec<PositionUpdate>>,
+) -> Result<HttpResponse, BackEndErrorResponse> {
+    let updates = body.into_inner();
+    if updates.is_empty() {
+        return Ok(HttpResponse::NoContent().finish());
+    }
+
+    let mut document = data.document.lock();
+    // `apply_position_updates` restores the document itself on a partial failure (by replaying the atomic
+    // inverses it already collects), so no whole-document snapshot is needed here - the GUI only applies
+    // changes on a successful response.
+    let mut inverses = apply_position_updates(&mut document, updates)?;
+    inverses.reverse();
+    data.push_undo(Command::Batch(inverses));
+    drop(document);
+
+    Ok(HttpResponse::NoContent().finish())
+}
+
+/// Applies each position update to `document` in order, returning the inverse commands (one per update, in
+/// application order). On the first failure it restores `document` by replaying the inverses of the updates
+/// already applied, in reverse - so a partially-applied batch never leaks, without a whole-document
+/// snapshot. This inverse-unwind is a valid substitute for a snapshot *here specifically* because every
+/// sub-update is an atomic [`Command::PatchNode`]/[`Command::RepositionAnalyzer`] field-set whose inverse,
+/// applied to a node/analyzer that still exists, cannot itself fail.
+///
+/// # Errors
+///
+/// Returns the first update's error, with `document` restored to its pre-call state.
+pub fn apply_position_updates(
+    document: &mut OpmDocument,
+    updates: Vec<PositionUpdate>,
+) -> Result<Vec<Command>, BackEndErrorResponse> {
+    let mut inverses = Vec::with_capacity(updates.len());
+    for update in updates {
+        match apply_one_position_update(document, &update) {
+            Ok(inverse) => inverses.push(inverse),
+            Err(err) => {
+                // Restore by replaying the applied inverses in reverse. Each is an atomic field-set on an
+                // existing node/analyzer, so apply cannot fail; discard the re-inverse it returns.
+                for inverse in inverses.into_iter().rev() {
+                    let _ = inverse.apply(document);
+                }
+                return Err(err);
+            }
+        }
+    }
+    Ok(inverses)
+}
+
+/// Applies a single position update, returning the [`Command`] that inverts it: optical nodes go through
+/// [`Command::PatchNode`] (capturing the old `gui_position`), analyzers through
+/// [`Command::RepositionAnalyzer`].
+///
+/// # Errors
+///
+/// Returns an error if `update.uuid` doesn't resolve to a node (optical) or an analyzer.
+fn apply_one_position_update(
+    document: &mut OpmDocument,
+    update: &PositionUpdate,
+) -> Result<Command, BackEndErrorResponse> {
+    if update.is_optical {
+        let new = UpdateNodeRequest {
+            gui_position: Some(Some(update.gui_position)),
+            ..Default::default()
+        };
+        let old = document
+            .scenery()
+            .with_node_attr(update.uuid, |node_attr| {
+                capture_old_node_request(node_attr, &new)
+            })?;
+        let parent_group_id = parent_group_id_or_self(document.scenery(), update.uuid)?;
+        Command::PatchNode(PatchNode {
+            uuid: update.uuid,
+            parent_group_id,
+            old,
+            new,
+        })
+        .apply(document)
+    } else {
+        let old_pos = analyzer_mut_or_404(document, update.uuid)?
+            .gui_position()
+            .map_or((0., 0.), |p| (p.x, p.y));
+        Command::RepositionAnalyzer(RepositionAnalyzer {
+            id: update.uuid,
+            old_pos,
+            new_pos: update.gui_position,
+        })
+        .apply(document)
+    }
+}
+
+/// Runs `mutate` against `document`, restoring `document` to exactly its pre-call state if it
+/// fails - so a bug in a multi-step mutation (e.g. a [`Command::Batch`] applied by undo/redo) can never
+/// leave the live document silently torn. Used for commands whose `apply` mutates in several fallible
+/// steps without collecting its own inverses; the position batch instead self-unwinds (see
+/// [`apply_position_updates`]).
+///
+/// # Errors
+///
+/// Returns `mutate`'s own error after restoring the backup, or an error if the document cannot be
+/// serialized/deserialized for the backup itself.
+fn with_rollback<T>(
+    document: &mut OpmDocument,
+    mutate: impl FnOnce(&mut OpmDocument) -> Result<T, BackEndErrorResponse>,
+) -> Result<T, BackEndErrorResponse> {
+    let backup = document.to_opm_file_string()?;
+    match mutate(document) {
+        Ok(value) => Ok(value),
+        Err(err) => {
+            *document = OpmDocument::from_string(&backup)?;
+            Err(err)
+        }
+    }
 }
 
 #[utoipa::path(tag = "document", request_body(content = String,
@@ -175,7 +496,7 @@ async fn simulate(data: web::Data<AppState>, report_dir: String) -> impl Respond
         .content_type("text/event-stream")
         .streaming(
             ReceiverStream::new(rx).map(|s| -> Result<actix_web::web::Bytes, Error> {
-                Ok(actix_web::web::Bytes::from(format!("data: {}\n\n", &s)))
+                Ok(actix_web::web::Bytes::from(format!("data: {s}\n\n")))
             }),
         )
 }
@@ -190,14 +511,22 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
 
     cfg.service(get_root_uuid);
 
+    cfg.service(undo_document);
+    cfg.service(redo_document);
+    cfg.service(post_viewport_change);
+    cfg.service(patch_positions);
+
     // cfg.service(simulate);
 }
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::app_state::AppState;
-    use actix_web::{App, dev::Service, test, web::Data};
-    use opossum_core::core_optics::SceneryResources;
+    use crate::{
+        app_state::AppState,
+        undo::{Command, NodeSnapshot},
+    };
+    use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
+    use opossum_core::{core_optics::SceneryResources, nodes::create_node_ref};
 
     #[actix_web::test]
     async fn test_get_global_conf() {
@@ -213,5 +542,975 @@ mod test {
         let resp = app.call(req).await.unwrap();
         assert_eq!(resp.status(), 200);
         let _: SceneryResources = test::read_body_json(resp).await; // Panics, if not valid JSON
+    }
+
+    #[actix_web::test]
+    async fn test_undo_redo_empty_stack_returns_409() {
+        let app_state = Data::new(AppState::default());
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state)
+                .service(undo_document)
+                .service(redo_document),
+        )
+        .await;
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CONFLICT);
+
+        let req = test::TestRequest::post().uri("/redo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CONFLICT);
+    }
+
+    /// Mirrors what `nodes/core.rs::delete_node` does: capture a node's `OpticRef` and push its
+    /// `AddNode` inverse, i.e. simulates "a node was deleted" for the purposes of this test.
+    #[actix_web::test]
+    async fn test_undo_redo_restores_node_with_same_uuid() {
+        let app_state = Data::new(AppState::default());
+
+        let node_ref = create_node_ref("dummy").unwrap();
+        let node_uuid = node_ref.uuid().unwrap();
+        let root_id = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            document
+                .scenery_mut()
+                .with_group_node_mut(root_id, |g| g.add_node_ref(node_ref.clone()))
+                .unwrap()
+                .unwrap();
+            root_id
+        };
+        app_state.push_undo(Command::RemoveNode(NodeSnapshot {
+            parent_group_id: root_id,
+            node: node_ref,
+            cascaded: Vec::new(),
+            connections: Vec::new(),
+        }));
+        assert!(
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .node_recursive(node_uuid)
+                .is_ok()
+        );
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(undo_document)
+                .service(redo_document),
+        )
+        .await;
+
+        // Undo removes the node.
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: UndoRedoResponse = test::read_body_json(resp).await;
+        assert!(!body.can_undo);
+        assert!(body.can_redo);
+        assert_eq!(body.changes.len(), 1);
+        assert!(matches!(
+            &body.changes[0],
+            opossum_core::types::api_types::DocumentChange::NodeRemoved { uuid, .. }
+                if *uuid == node_uuid
+        ));
+        assert!(
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .node_recursive(node_uuid)
+                .is_err()
+        );
+
+        // Redo restores it under the exact same uuid.
+        let req = test::TestRequest::post().uri("/redo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: UndoRedoResponse = test::read_body_json(resp).await;
+        assert!(body.can_undo);
+        assert!(!body.can_redo);
+        assert!(
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .node_recursive(node_uuid)
+                .is_ok()
+        );
+    }
+
+    #[actix_web::test]
+    async fn test_patch_positions_is_one_undo_step_for_multiple_nodes() {
+        let app_state = Data::new(AppState::default());
+
+        let (root_id, node_a, node_b) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let scenery = document.scenery_mut();
+            let a = scenery
+                .with_group_node_mut(root_id, |g| {
+                    g.add_node_ref(create_node_ref("dummy").unwrap())
+                })
+                .unwrap()
+                .unwrap();
+            let b = scenery
+                .with_group_node_mut(root_id, |g| {
+                    g.add_node_ref(create_node_ref("dummy").unwrap())
+                })
+                .unwrap()
+                .unwrap();
+            (root_id, a, b)
+        };
+        let _ = root_id;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(patch_positions)
+                .service(undo_document),
+        )
+        .await;
+
+        let updates = vec![
+            opossum_core::types::api_types::PositionUpdate {
+                uuid: node_a,
+                is_optical: true,
+                gui_position: (10.0, 20.0),
+            },
+            opossum_core::types::api_types::PositionUpdate {
+                uuid: node_b,
+                is_optical: true,
+                gui_position: (30.0, 40.0),
+            },
+        ];
+        let req = test::TestRequest::patch()
+            .uri("/positions")
+            .set_json(&updates)
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+        assert_eq!(app_state.undo_stack.lock().len(), 1); // one batch, not two entries
+
+        // One undo reverts both moves at once.
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: UndoRedoResponse = test::read_body_json(resp).await;
+        assert!(!body.can_undo);
+        assert_eq!(body.changes.len(), 2);
+    }
+
+    /// Regression test for the inverse-unwind that replaced the whole-document snapshot in
+    /// `patch_positions`: a batch whose later update is unresolvable must restore the document (undoing
+    /// the updates already applied) and push no undo entry - the GUI only applies changes on success.
+    /// Moves node A, then targets a nonexistent uuid so the batch fails after A already moved, and asserts
+    /// A is back at its original position and the undo stack is empty.
+    #[actix_web::test]
+    async fn test_patch_positions_rolls_back_on_partial_failure() {
+        use opossum_core::{nodes::Dummy, types::api_types::PositionUpdate};
+        use uuid::Uuid;
+
+        let app_state = Data::new(AppState::default());
+        let node_a = {
+            let mut document = app_state.document.lock();
+            document.scenery_mut().add_node(Dummy::default()).unwrap()
+        };
+        let original = app_state
+            .document
+            .lock()
+            .scenery()
+            .with_node_attr(node_a, |attr| attr.gui_position().map(|p| (p.x, p.y)))
+            .unwrap();
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(patch_positions),
+        )
+        .await;
+
+        let updates = vec![
+            PositionUpdate {
+                uuid: node_a,
+                is_optical: true,
+                gui_position: (10.0, 20.0),
+            },
+            PositionUpdate {
+                uuid: Uuid::new_v4(),
+                is_optical: true,
+                gui_position: (30.0, 40.0),
+            },
+        ];
+        let req = test::TestRequest::patch()
+            .uri("/positions")
+            .set_json(&updates)
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert!(
+            !resp.status().is_success(),
+            "a batch with an unresolvable update must fail"
+        );
+
+        let after = app_state
+            .document
+            .lock()
+            .scenery()
+            .with_node_attr(node_a, |attr| attr.gui_position().map(|p| (p.x, p.y)))
+            .unwrap();
+        assert_eq!(
+            after, original,
+            "the already-applied first update must be unwound when the batch fails"
+        );
+        assert!(
+            app_state.undo_stack.lock().is_empty(),
+            "a failed position batch must push no undo entry"
+        );
+    }
+
+    /// Regression test for the bug where undoing a group conversion of *connected* nodes silently
+    /// dropped the connection between them, and crashed with "target node ... does not exist" if the
+    /// group also had a connection to a node outside it. Builds `node_a -> node_b -> node_c`, converts
+    /// `{node_a, node_b}` into a group (so `a->b` becomes internal and `b->c` crosses the new group's
+    /// boundary), undoes the conversion, and asserts both connections - and the group node itself -
+    /// end up exactly as they were before grouping.
+    #[actix_web::test]
+    async fn test_undo_group_conversion_restores_internal_and_boundary_connections() {
+        use opossum_core::{
+            meter, nodes::Dummy, nodes::NodeGroup, types::api_types::ConvertToGroupRequest,
+        };
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, node_a, node_b, node_c) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let scenery = document.scenery_mut();
+            let node_a = scenery.add_node(Dummy::default()).unwrap();
+            let node_b = scenery.add_node(Dummy::default()).unwrap();
+            let node_c = scenery.add_node(Dummy::default()).unwrap();
+            scenery
+                .connect_nodes(node_a, "output_1", node_b, "input_1", meter!(0.1))
+                .unwrap();
+            scenery
+                .connect_nodes(node_b, "output_1", node_c, "input_1", meter!(0.2))
+                .unwrap();
+            (root_id, node_a, node_b, node_c)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(crate::operations::post_convert_nodes_to_group)
+                .service(undo_document),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/convert_to_group")
+            .set_json(&ConvertToGroupRequest {
+                group_id: root_id,
+                nodes_to_convert: vec![node_a, node_b],
+            })
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        // Read the group's id back from backend state rather than the response body: node_a now
+        // resolves *inside* the new group, so its reported parent is the group's own uuid.
+        let group_id = app_state
+            .document
+            .lock()
+            .scenery()
+            .node_recursive(node_a)
+            .unwrap()
+            .1;
+        assert_ne!(group_id, root_id, "node_a must now be inside a new group");
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::OK,
+            "undo of the group conversion must not error"
+        );
+
+        let document = app_state.document.lock();
+        assert!(
+            document.scenery().node_recursive(group_id).is_err(),
+            "group node must be gone after undo"
+        );
+        assert!(document.scenery().node_recursive(node_a).is_ok());
+        assert!(document.scenery().node_recursive(node_b).is_ok());
+        assert!(document.scenery().node_recursive(node_c).is_ok());
+
+        let connections = document
+            .scenery()
+            .with_group_node(root_id, NodeGroup::connections)
+            .unwrap();
+        assert_eq!(connections.len(), 2, "both connections must be restored");
+        assert!(
+            connections
+                .iter()
+                .any(|c| c.src_id == node_a && c.target_id == node_b),
+            "the formerly-internal a->b connection must be restored"
+        );
+        assert!(
+            connections
+                .iter()
+                .any(|c| c.src_id == node_b && c.target_id == node_c),
+            "the formerly-boundary-crossing b->c connection must be restored"
+        );
+    }
+
+    /// Regression test for the desync where a `Command` failing partway through a multi-step `apply`
+    /// left the live document torn (partially mutated) while the GUI - which only reacts to a
+    /// *successful* response - kept showing stale state. Hand-crafts a `Batch` whose first sub-command
+    /// succeeds and second is guaranteed to fail, and asserts the document is restored byte-for-byte.
+    #[actix_web::test]
+    async fn test_failed_undo_rolls_back_partial_mutation() {
+        use crate::undo::{Command, EdgeSnapshot};
+        use opossum_core::{nodes::Dummy, types::api_types::ConnectInfo};
+        use uuid::Uuid;
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, node_x, node_y) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let scenery = document.scenery_mut();
+            let node_x = scenery.add_node(Dummy::default()).unwrap();
+            let node_y = scenery.add_node(Dummy::default()).unwrap();
+            (root_id, node_x, node_y)
+        };
+
+        let before = app_state.document.lock().to_opm_file_string().unwrap();
+
+        // Step 1 succeeds (connects two real, currently-unconnected nodes); step 2 is guaranteed to
+        // fail (disconnecting a connection between two uuids that don't exist).
+        app_state.push_undo(Command::Batch(vec![
+            Command::AddEdge(EdgeSnapshot {
+                group_id: root_id,
+                connect_info: ConnectInfo::new(
+                    node_x,
+                    "output_1".to_string(),
+                    node_y,
+                    "input_1".to_string(),
+                    0.1,
+                    false,
+                ),
+            }),
+            Command::RemoveEdge(EdgeSnapshot {
+                group_id: root_id,
+                connect_info: ConnectInfo::new(
+                    Uuid::new_v4(),
+                    "output_1".to_string(),
+                    Uuid::new_v4(),
+                    "input_1".to_string(),
+                    0.1,
+                    false,
+                ),
+            }),
+        ]));
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(undo_document),
+        )
+        .await;
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert!(
+            !resp.status().is_success(),
+            "the crafted second step must fail"
+        );
+
+        let after = app_state.document.lock().to_opm_file_string().unwrap();
+        assert_eq!(
+            before, after,
+            "a failed undo must leave the document exactly as it was, including undoing the first \
+             sub-command's already-applied effect"
+        );
+        // The history entry must survive the failure - popped, but pushed back rather than dropped, so
+        // the edit can still be undone later instead of vanishing.
+        assert_eq!(
+            app_state.undo_stack.lock().len(),
+            1,
+            "a failed undo must keep its command on the undo stack, not silently drop it"
+        );
+        assert!(
+            app_state.redo_stack.lock().is_empty(),
+            "a failed undo must not push anything onto the redo stack"
+        );
+    }
+
+    /// Companion to `test_failed_undo_rolls_back_partial_mutation` for the redo path: a redo whose
+    /// command fails partway must roll the document back *and* keep its entry on the redo stack rather
+    /// than dropping it. Pushes a crafted failing `Batch` straight onto the redo stack, redoes, and
+    /// asserts the redo errored, the document is unchanged, and the entry is still there.
+    #[actix_web::test]
+    async fn test_failed_redo_restores_command_to_redo_stack() {
+        use crate::undo::{Command, EdgeSnapshot};
+        use opossum_core::{nodes::Dummy, types::api_types::ConnectInfo};
+        use uuid::Uuid;
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, node_x, node_y) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let scenery = document.scenery_mut();
+            let node_x = scenery.add_node(Dummy::default()).unwrap();
+            let node_y = scenery.add_node(Dummy::default()).unwrap();
+            (root_id, node_x, node_y)
+        };
+
+        let before = app_state.document.lock().to_opm_file_string().unwrap();
+
+        // Same shape as the undo test: step 1 succeeds, step 2 is guaranteed to fail. Pushed straight
+        // onto the redo stack (a successful undo is what would normally put it there).
+        app_state.redo_stack.lock().push_back(Command::Batch(vec![
+            Command::AddEdge(EdgeSnapshot {
+                group_id: root_id,
+                connect_info: ConnectInfo::new(
+                    node_x,
+                    "output_1".to_string(),
+                    node_y,
+                    "input_1".to_string(),
+                    0.1,
+                    false,
+                ),
+            }),
+            Command::RemoveEdge(EdgeSnapshot {
+                group_id: root_id,
+                connect_info: ConnectInfo::new(
+                    Uuid::new_v4(),
+                    "output_1".to_string(),
+                    Uuid::new_v4(),
+                    "input_1".to_string(),
+                    0.1,
+                    false,
+                ),
+            }),
+        ]));
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(redo_document),
+        )
+        .await;
+        let req = test::TestRequest::post().uri("/redo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert!(
+            !resp.status().is_success(),
+            "the crafted second step must fail"
+        );
+
+        let after = app_state.document.lock().to_opm_file_string().unwrap();
+        assert_eq!(
+            before, after,
+            "a failed redo must leave the document exactly as it was"
+        );
+        assert_eq!(
+            app_state.redo_stack.lock().len(),
+            1,
+            "a failed redo must keep its command on the redo stack, not silently drop it"
+        );
+        assert!(
+            app_state.undo_stack.lock().is_empty(),
+            "a failed redo must not push anything onto the undo stack"
+        );
+    }
+
+    /// Regression test for two bugs in undoing a "remove port map": first, `describe()` refreshed only
+    /// the group's own tab, so the restored connection and the group's own exposed port (both rendered
+    /// in its *parent's* tab) never reappeared; fixing that broke a second thing, since the group's own
+    /// tab also needs a refresh for its `mapped_ports` state (the "mapped" symbol on the internal node's
+    /// port). Asserts `/undo` reports a `GraphNeedsRefresh` for *both* the group and its parent - like
+    /// `MoveNodes` already does for its two affected tabs.
+    #[actix_web::test]
+    async fn test_undo_remove_port_map_refreshes_group_and_parent() {
+        use opossum_core::{
+            meter,
+            nodes::{Dummy, NodeGroup},
+        };
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, group_id) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let scenery = document.scenery_mut();
+
+            let mut group = NodeGroup::new("inner group");
+            let n1 = group.add_node(Dummy::default()).unwrap();
+            group.map_input_port(n1, "input_1", "ext_in_1").unwrap();
+            let group_id = scenery.add_node(group).unwrap();
+
+            let ext_node_a = scenery.add_node(Dummy::default()).unwrap();
+            scenery
+                .connect_nodes(ext_node_a, "output_1", group_id, "ext_in_1", meter!(0.1))
+                .unwrap();
+            (root_id, group_id)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(crate::nodes::port_mappings::remove_port_map)
+                .service(undo_document),
+        )
+        .await;
+
+        let req = test::TestRequest::delete()
+            .uri(&format!(
+                "/{group_id}/port_mappings?external_port_name=ext_in_1&port_type=Input"
+            ))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: UndoRedoResponse = test::read_body_json(resp).await;
+        assert!(
+            body.changes.iter().any(|c| matches!(
+                c,
+                opossum_core::types::api_types::DocumentChange::GraphNeedsRefresh { graph_id, .. }
+                    if *graph_id == root_id
+            )),
+            "expected a GraphNeedsRefresh targeting the parent (root) scenery, got: {:?}",
+            body.changes
+        );
+        assert!(
+            body.changes.iter().any(|c| matches!(
+                c,
+                opossum_core::types::api_types::DocumentChange::GraphNeedsRefresh { graph_id, .. }
+                    if *graph_id == group_id
+            )),
+            "expected a GraphNeedsRefresh targeting the group's own tab too (mapped_ports lives there), got: {:?}",
+            body.changes
+        );
+    }
+
+    /// Regression test for the crash reported after the fix above: `GraphNeedsRefresh` for a tab already
+    /// re-fetches everything in it, so a `Batch` that *also* reports a more granular change for the same
+    /// tab (here, `EdgeAdded` for the connection the port-map removal tore down and undo restores) makes
+    /// the GUI double-apply it - for `GraphStore.edges`, a plain `Vec`, that means the same connection
+    /// twice, and `EdgesComponent` keys each edge on its endpoints, so two identical entries crash
+    /// Dioxus's keyed-list diffing ("keyed siblings must each have a unique key"). Asserts `/undo`'s
+    /// response contains the refresh but no separately-duplicated edge/node change for the same tab.
+    #[actix_web::test]
+    async fn test_undo_remove_port_map_does_not_report_duplicate_tab_changes() {
+        use opossum_core::{
+            meter,
+            nodes::{Dummy, NodeGroup},
+            types::api_types::DocumentChange,
+        };
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, group_id) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let scenery = document.scenery_mut();
+
+            let mut group = NodeGroup::new("inner group");
+            let n1 = group.add_node(Dummy::default()).unwrap();
+            group.map_input_port(n1, "input_1", "ext_in_1").unwrap();
+            let group_id = scenery.add_node(group).unwrap();
+
+            let ext_node_a = scenery.add_node(Dummy::default()).unwrap();
+            scenery
+                .connect_nodes(ext_node_a, "output_1", group_id, "ext_in_1", meter!(0.1))
+                .unwrap();
+            (root_id, group_id)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(crate::nodes::port_mappings::remove_port_map)
+                .service(undo_document),
+        )
+        .await;
+
+        let req = test::TestRequest::delete()
+            .uri(&format!(
+                "/{group_id}/port_mappings?external_port_name=ext_in_1&port_type=Input"
+            ))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: UndoRedoResponse = test::read_body_json(resp).await;
+
+        let refresh_count = body
+            .changes
+            .iter()
+            .filter(|c| matches!(c, DocumentChange::GraphNeedsRefresh { graph_id, .. } if *graph_id == root_id))
+            .count();
+        assert_eq!(
+            refresh_count, 1,
+            "expected exactly one GraphNeedsRefresh for the parent tab, got: {:?}",
+            body.changes
+        );
+        assert!(
+            !body.changes.iter().any(|c| matches!(
+                c,
+                DocumentChange::EdgeAdded { graph_id, .. }
+                    | DocumentChange::EdgeRemoved { graph_id, .. }
+                    | DocumentChange::EdgeUpdated { graph_id, .. }
+                    | DocumentChange::NodeAdded { graph_id, .. }
+                    | DocumentChange::NodeRemoved { graph_id, .. }
+                    | DocumentChange::NodePatched { graph_id, .. }
+                    if *graph_id == root_id
+            )),
+            "a change already covered by the GraphNeedsRefresh must not also appear separately, got: {:?}",
+            body.changes
+        );
+    }
+
+    /// Regression test for the gap where `PATCH /global_conf` replaced the document's global scenery
+    /// config without pushing any undo command. Patches the config to a distinct value and asserts a
+    /// single undo restores the previous one.
+    #[actix_web::test]
+    async fn test_undo_patch_global_conf_restores_old_config() {
+        use opossum_core::refractive_index::{RefrIndexConst, RefractiveIndexType};
+
+        let app_state = Data::new(AppState::default());
+        let old_repr = format!(
+            "{:?}",
+            *app_state.document.lock().global_conf().lock().unwrap()
+        );
+
+        let new_conf = SceneryResources {
+            ambient_refr_index: RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()),
+        };
+        let new_repr = format!("{new_conf:?}");
+        assert_ne!(
+            old_repr, new_repr,
+            "the test's replacement config must differ from the default"
+        );
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(patch_global_conf)
+                .service(undo_document),
+        )
+        .await;
+
+        let req = test::TestRequest::patch()
+            .uri("/global_conf")
+            .set_json(&new_conf)
+            .to_request();
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
+        assert_eq!(
+            format!(
+                "{:?}",
+                *app_state.document.lock().global_conf().lock().unwrap()
+            ),
+            new_repr,
+            "the patch must have applied the new config"
+        );
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
+        assert_eq!(
+            format!(
+                "{:?}",
+                *app_state.document.lock().global_conf().lock().unwrap()
+            ),
+            old_repr,
+            "undo must restore the old global config"
+        );
+    }
+
+    /// Regression test for fix6 (camera as its own undo step): recording a viewport change must make it
+    /// reversible on the same undo stack. Undo emits a `ViewportChanged` back to the pre-gesture
+    /// viewport, redo emits one forward to the post-gesture viewport - and neither touches the document.
+    #[actix_web::test]
+    async fn test_viewport_change_undo_redo_round_trip() {
+        use opossum_core::types::api_types::{DocumentChange, Viewport, ViewportChangeRequest};
+
+        let app_state = Data::new(AppState::default());
+        let graph_id = app_state.document.lock().scenery().node_attr().uuid();
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_viewport_change)
+                .service(undo_document)
+                .service(redo_document),
+        )
+        .await;
+
+        let before = Viewport {
+            graph_id,
+            zoom: 1.0,
+            shift: (0.0, 0.0),
+        };
+        let after = Viewport {
+            graph_id,
+            zoom: 2.0,
+            shift: (50.0, -10.0),
+        };
+
+        let req = test::TestRequest::post()
+            .uri("/viewport_change")
+            .set_json(&ViewportChangeRequest {
+                before,
+                after,
+                coalesce: false,
+                merge_into_previous: false,
+            })
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        // Undo must move the camera back to `before` (zoom 1.0, shift (0,0)).
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: UndoRedoResponse = test::read_body_json(resp).await;
+        assert!(
+            matches!(
+                body.changes.as_slice(),
+                [DocumentChange::ViewportChanged { graph_id: g, zoom, shift }]
+                    if *g == graph_id && (*zoom - 1.0).abs() < f64::EPSILON && *shift == (0.0, 0.0)
+            ),
+            "undo must move the camera back to `before`, got {:?}",
+            body.changes
+        );
+
+        // Redo must move it forward to `after` (zoom 2.0, shift (50,-10)).
+        let req = test::TestRequest::post().uri("/redo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: UndoRedoResponse = test::read_body_json(resp).await;
+        assert!(
+            matches!(
+                body.changes.as_slice(),
+                [DocumentChange::ViewportChanged { graph_id: g, zoom, shift }]
+                    if *g == graph_id && (*zoom - 2.0).abs() < f64::EPSILON && *shift == (50.0, -10.0)
+            ),
+            "redo must move the camera forward to `after`, got {:?}",
+            body.changes
+        );
+    }
+
+    /// A scroll-zoom burst is dozens of tiny viewport changes; they must coalesce into a *single* undo
+    /// step that returns to the pre-burst viewport, not one step per tick. Pushes three consecutive
+    /// changes and asserts one undo entry, and that a single undo jumps back to the very first viewport.
+    #[actix_web::test]
+    async fn test_viewport_change_coalesces_consecutive_camera_moves() {
+        use opossum_core::types::api_types::{DocumentChange, Viewport, ViewportChangeRequest};
+
+        let app_state = Data::new(AppState::default());
+        let graph_id = app_state.document.lock().scenery().node_attr().uuid();
+        let vp = |zoom: f64| Viewport {
+            graph_id,
+            zoom,
+            shift: (0.0, 0.0),
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_viewport_change)
+                .service(undo_document),
+        )
+        .await;
+
+        for (before, after) in [(vp(1.0), vp(1.5)), (vp(1.5), vp(2.0)), (vp(2.0), vp(2.5))] {
+            let req = test::TestRequest::post()
+                .uri("/viewport_change")
+                .set_json(&ViewportChangeRequest {
+                    before,
+                    after,
+                    coalesce: true,
+                    merge_into_previous: false,
+                })
+                .to_request();
+            assert_eq!(
+                app.call(req).await.unwrap().status(),
+                StatusCode::NO_CONTENT
+            );
+        }
+        assert_eq!(
+            app_state.undo_stack.lock().len(),
+            1,
+            "the whole burst must be a single undo step, not one per tick"
+        );
+
+        // One undo jumps all the way back to the pre-burst viewport (zoom 1.0).
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: UndoRedoResponse = test::read_body_json(resp).await;
+        assert!(
+            matches!(
+                body.changes.as_slice(),
+                [DocumentChange::ViewportChanged { zoom, .. }] if (*zoom - 1.0).abs() < f64::EPSILON
+            ),
+            "one undo must return to the pre-burst viewport, got {:?}",
+            body.changes
+        );
+        assert!(
+            !body.can_undo,
+            "the burst was a single step, so nothing left to undo"
+        );
+    }
+
+    /// Gesture types stay separate: a coalescing move (zoom, `coalesce=true`) followed by discrete
+    /// gestures (pan, `coalesce=false`) must NOT merge. A `coalesce=false` push is never merged into and
+    /// never merges. So zoom → pan → pan is three undo steps, not one.
+    #[actix_web::test]
+    async fn test_viewport_change_does_not_coalesce_across_gesture_types() {
+        use opossum_core::types::api_types::{Viewport, ViewportChangeRequest};
+
+        let app_state = Data::new(AppState::default());
+        let graph_id = app_state.document.lock().scenery().node_attr().uuid();
+        let vp = |zoom: f64, x: f64| Viewport {
+            graph_id,
+            zoom,
+            shift: (x, 0.0),
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_viewport_change),
+        )
+        .await;
+
+        for (before, after, coalesce) in [
+            (vp(1.0, 0.0), vp(2.0, 0.0), true),      // zoom (coalescing)
+            (vp(2.0, 0.0), vp(2.0, 100.0), false),   // pan (discrete)
+            (vp(2.0, 100.0), vp(2.0, 200.0), false), // another pan (discrete)
+        ] {
+            let req = test::TestRequest::post()
+                .uri("/viewport_change")
+                .set_json(&ViewportChangeRequest {
+                    before,
+                    after,
+                    coalesce,
+                    merge_into_previous: false,
+                })
+                .to_request();
+            assert_eq!(
+                app.call(req).await.unwrap().status(),
+                StatusCode::NO_CONTENT
+            );
+        }
+        assert_eq!(
+            app_state.undo_stack.lock().len(),
+            3,
+            "different gesture types (zoom, pan, pan) must each be their own undo step"
+        );
+    }
+
+    /// Auto Layout re-positions the nodes (one `patch_positions` batch = one undo step) and then fits
+    /// the view. That fit is sent with `merge_into_previous: true` so it folds into the position batch
+    /// instead of being a second undo step - a single undo must then revert both. Simulates the two
+    /// requests, asserts the undo stack still has exactly one entry, and that undoing it reports both
+    /// the position change and the viewport change together.
+    #[actix_web::test]
+    async fn test_viewport_change_merges_into_preceding_position_batch() {
+        use opossum_core::{
+            nodes::Dummy,
+            types::api_types::{DocumentChange, PositionUpdate, Viewport, ViewportChangeRequest},
+        };
+
+        let app_state = Data::new(AppState::default());
+        let (graph_id, node_id) = {
+            let mut document = app_state.document.lock();
+            let graph_id = document.scenery().node_attr().uuid();
+            let node_id = document.scenery_mut().add_node(Dummy::default()).unwrap();
+            (graph_id, node_id)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(patch_positions)
+                .service(post_viewport_change)
+                .service(undo_document),
+        )
+        .await;
+
+        // Auto Layout step 1: reposition the node (one batched undo step).
+        let req = test::TestRequest::patch()
+            .uri("/positions")
+            .set_json(&vec![PositionUpdate {
+                uuid: node_id,
+                is_optical: true,
+                gui_position: (123.0, 456.0),
+            }])
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        // Auto Layout step 2: fit the view, folded into the same undo step.
+        let req = test::TestRequest::post()
+            .uri("/viewport_change")
+            .set_json(&ViewportChangeRequest {
+                before: Viewport {
+                    graph_id,
+                    zoom: 1.0,
+                    shift: (0.0, 0.0),
+                },
+                after: Viewport {
+                    graph_id,
+                    zoom: 2.0,
+                    shift: (10.0, 20.0),
+                },
+                coalesce: false,
+                merge_into_previous: true,
+            })
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        assert_eq!(
+            app_state.undo_stack.lock().len(),
+            1,
+            "the fit must fold into the position batch, not become a second undo step"
+        );
+
+        // One undo reverts both the reposition and the fit.
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: UndoRedoResponse = test::read_body_json(resp).await;
+        assert!(
+            body.changes
+                .iter()
+                .any(|c| matches!(c, DocumentChange::ViewportChanged { .. })),
+            "undo must revert the fit, got {:?}",
+            body.changes
+        );
+        assert!(
+            body.changes
+                .iter()
+                .any(|c| matches!(c, DocumentChange::NodePatched { .. })),
+            "undo must revert the reposition, got {:?}",
+            body.changes
+        );
+        assert!(
+            !body.can_undo,
+            "both were one step, so nothing left to undo"
+        );
     }
 }

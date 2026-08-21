@@ -4,6 +4,7 @@ use actix_web::{
 };
 use opossum_core::{
     meter,
+    opm_document::OpmDocument,
     types::api_types::{ConnectInfo, ErrorResponse, UpdateConnectionRequest},
 };
 use serde::Deserialize;
@@ -11,7 +12,12 @@ use uom::si::length::meter;
 use utoipa::IntoParams;
 use uuid::Uuid;
 
-use crate::{app_state::AppState, error::BackEndErrorResponse};
+use crate::{
+    app_state::AppState,
+    error::BackEndErrorResponse,
+    helper_functions::is_reference_target,
+    undo::{Command, EdgeSnapshot, UpdateEdgeDistance},
+};
 
 #[derive(Debug, Deserialize, IntoParams)]
 pub struct DeleteConnectionQuery {
@@ -45,12 +51,7 @@ pub async fn get_connections(
     let connect_infos = connections
         .iter()
         .map(|c| {
-            let is_reference = scenery
-                .with_node_attr(c.target_id, |node_attr| {
-                    let prop = node_attr.properties();
-                    prop.get("reference id").is_ok()
-                })
-                .unwrap_or(false);
+            let is_reference = is_reference_target(scenery, c.target_id);
 
             ConnectInfo::new(
                 c.src_id,
@@ -100,14 +101,15 @@ pub async fn post_connection(
             )
         })??;
 
-    let is_ref_node = document
-        .scenery()
-        .with_node_attr(connect_info.target_uuid(), |n| {
-            n.properties().get("reference id").is_ok()
-        })?;
+    let is_ref_node = is_reference_target(document.scenery(), connect_info.target_uuid());
 
     let mut connect_info = connect_info.into_inner();
     connect_info.set_is_reference(is_ref_node);
+
+    data.push_undo(Command::RemoveEdge(EdgeSnapshot {
+        group_id: group_uuid,
+        connect_info: connect_info.clone(),
+    }));
     drop(document);
 
     Ok(HttpResponse::Created().json(connect_info)) // <-- REST Standard
@@ -138,16 +140,22 @@ pub async fn update_connection(
 
     let mut document = data.document.lock();
 
-    document
-        .scenery_mut()
-        .with_group_node_mut(group_uuid, |group| {
-            group.update_connection_distance(
-                update_req.src_uuid,
-                &update_req.src_port,
-                meter!(update_req.distance),
-            )
-        })??;
+    let old = capture_existing_connection(
+        &document,
+        group_uuid,
+        update_req.src_uuid,
+        &update_req.src_port,
+    )?;
+    let mut new = old.clone();
+    new.set_distance(update_req.distance);
 
+    let inverse = Command::UpdateEdgeDistance(UpdateEdgeDistance {
+        group_id: group_uuid,
+        old,
+        new,
+    })
+    .apply(&mut document)?;
+    data.push_undo(inverse);
     drop(document);
 
     // HIER: REST-Standard für erfolgreiche Updates ohne Rückgabedaten
@@ -178,14 +186,52 @@ pub async fn delete_connection(
     let query = query.into_inner();
 
     let mut document = data.document.lock();
+
+    let connect_info =
+        capture_existing_connection(&document, group_uuid, query.src_uuid, &query.src_port)?;
+
     document
         .scenery_mut()
         .with_group_node_mut(group_uuid, |group| {
             group.disconnect_nodes(query.src_uuid, &query.src_port)
         })??;
 
+    data.push_undo(Command::AddEdge(EdgeSnapshot {
+        group_id: group_uuid,
+        connect_info,
+    }));
     drop(document);
     Ok(HttpResponse::NoContent().finish())
+}
+
+/// Finds the existing connection in group `group_uuid` originating from (`src_uuid`, `src_port`)
+/// and captures it as a [`ConnectInfo`] (including whether its target is a reference node) - the
+/// old-value snapshot an update/delete against that connection needs for its undo command.
+///
+/// # Errors
+///
+/// Returns an error if `group_uuid` does not resolve to a group, or a 400 "Connection not found"
+/// error if no connection originates from the given source node and port.
+fn capture_existing_connection(
+    document: &OpmDocument,
+    group_uuid: Uuid,
+    src_uuid: Uuid,
+    src_port: &str,
+) -> Result<ConnectInfo, BackEndErrorResponse> {
+    let existing = document.scenery().with_group_node(group_uuid, |g| {
+        g.connections()
+            .into_iter()
+            .find(|c| c.src_id == src_uuid && c.src_port == src_port)
+    })?;
+    let Some(existing) = existing else {
+        return Err(BackEndErrorResponse::new(
+            400,
+            "Opossum",
+            "Connection not found",
+        ));
+    };
+    let is_reference = is_reference_target(document.scenery(), existing.target_id);
+    Ok(ConnectInfo::from_connection_info(&existing, is_reference))
 }
 
 #[cfg(test)]

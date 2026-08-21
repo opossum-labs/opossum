@@ -9,10 +9,10 @@ use crate::{
     degree,
     error::{OpmResult, OpossumError},
     light::{LightResult, Rays, lightdata::ray_data_builder::RayDataBuilder},
+    material::Material,
     nodes::NodeGroup,
     picojoule,
-    properties::Proptype,
-    refractive_index::RefractiveIndexType,
+    properties::{Proptype, proptype::AssetRef},
     reporting::analysis_report::AnalysisReport,
 };
 use log::{info, warn};
@@ -132,6 +132,16 @@ impl RayTraceConfig {
     pub fn prune_source_map(&mut self, model: &NodeGroup) {
         self.source_map.retain(|uuid, _builder| model.exists(*uuid));
     }
+    /// The first source UUID whose mapping differs from `other`'s (added, removed, or changed value), if
+    /// any. Used to focus the exact source-port card an undo/redo of a source-mapping change touched.
+    #[must_use]
+    pub fn first_differing_source(&self, other: &Self) -> Option<Uuid> {
+        self.source_map
+            .keys()
+            .chain(other.source_map.keys())
+            .copied()
+            .find(|uuid| self.source_map.get(uuid) != other.source_map.get(uuid))
+    }
     /// Sets the entire source map of this [`RayTraceConfig`].
     ///
     /// This will overwrite any existing mappings. Use with care.
@@ -221,16 +231,14 @@ pub trait AnalysisRayTrace: OpticNode {
     /// Returns the necessary node attributes for ray tracing
     ///
     /// # Errors
-    /// This function errors if the node attributes: Isometry, Refractive Index or Center Thickness cannot be read,
+    /// This function errors if the node attributes: Isometry, Material or Center Thickness cannot be read,
     fn get_node_attributes_ray_trace(
         &self,
         node_attr: &NodeAttr,
-    ) -> OpmResult<(RefractiveIndexType, Length, Angle)> {
-        let Ok(Proptype::RefractiveIndex(index_model)) = node_attr.get_property("refractive index")
+    ) -> OpmResult<(Material, Length, Angle)> {
+        let Ok(Proptype::Material(AssetRef::Inline(material))) = node_attr.get_property("material")
         else {
-            return Err(OpossumError::Analysis(
-                "cannot read refractive index".into(),
-            ));
+            return Err(OpossumError::Analysis("cannot read material".into()));
         };
         let Ok(Proptype::Length(center_thickness)) = node_attr.get_property("center thickness")
         else {
@@ -243,7 +251,7 @@ pub trait AnalysisRayTrace: OpticNode {
         } else {
             degree!(0.)
         };
-        Ok((index_model.clone(), *center_thickness, angle))
+        Ok((material.clone(), *center_thickness, angle))
     }
 }
 

@@ -63,3 +63,5 @@ This structure is physically nonsensical and becomes unmanageable with complex r
 To solve this, OPOSSUM uses **Reference Nodes**. A reference node contains only a reference to another existing node and behaves exactly like the node it references. This allows a linear resonator to be "unrolled" in the graph, effectively translating it into a ring resonator structure without topological ambiguity.
 
 > **Note:** Strictly speaking, light in a ring resonator can propagate in both directions (unless suppressed by optical components). Since we use a directed graph, only one direction can be modelled at a time. Solutions for bidirectional propagation are currently being [investigated](https://git.gsi.de/phelix/rust/opossum/-/issues/2).
+
+> **Note:** A reference node that refers to a group must not be placed inside that same group, or inside any group nested within it. This would make the group depend on its own reference, which OPOSSUM rejects when creating, moving, cutting, or pasting the reference node.

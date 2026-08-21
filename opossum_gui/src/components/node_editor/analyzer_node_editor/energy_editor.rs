@@ -1,9 +1,6 @@
-use crate::{
-    OPOSSUM_UI_LOGS, api,
-    components::node_editor::{
-        analyzer_node_editor::light_data_editor::energy_source_editor::EnergySourceEditor,
-        node_config_editor::{NodeChangeAction, NodeChangeEvent},
-    },
+use crate::components::node_editor::{
+    analyzer_node_editor::light_data_editor::energy_source_editor::EnergySourceEditor,
+    node_config_editor::{NodeChangeAction, NodeChangeEvent},
 };
 
 use dioxus::prelude::*;
@@ -17,41 +14,30 @@ use uuid::Uuid;
 #[component]
 pub fn EnergyEditor(
     node_id: Uuid,
-    energy_config: EnergyConfig,
+    energy_config: ReadSignal<EnergyConfig>,
     on_change: EventHandler<NodeChangeEvent>,
+    available_sources: Vec<SourcePortDto>,
 ) -> Element {
-    let mut available_sources = use_signal(Vec::<SourcePortDto>::new);
-
-    use_future(move || async move {
-        if let Ok(sources) = api::get_available_sources().await {
-            available_sources.set(sources);
-        } else {
-            OPOSSUM_UI_LOGS
-                .write()
-                .add_log("Failed to fetch available source ports from backend.");
-        }
-    });
-
-    let sources_list = available_sources.read().clone();
+    info!("🔄 Render: EnergyEditor");
 
     rsx! {
       div { class: "energy-analyzer-fields",
         div { class: "mt-2 text-light",
           h6 { class: "text-secondary mb-3", "Sources Definitions" }
 
-          if sources_list.is_empty() {
+          if available_sources.is_empty() {
             div { class: "text-muted small italic", "No Source Ports found." }
           }
 
           {
-              sources_list
+              available_sources
                   .into_iter()
                   .map(|port| {
                       rsx! {
                         SourcePortCard {
                           key: "{port.uuid}",
                           port,
-                          energy_config: energy_config.clone(),
+                          energy_config,
                           on_change,
                           analyzer_id: node_id,
                         }
@@ -66,21 +52,27 @@ pub fn EnergyEditor(
 #[component]
 fn SourcePortCard(
     port: SourcePortDto,
-    energy_config: EnergyConfig,
+    energy_config: ReadSignal<EnergyConfig>,
     on_change: EventHandler<NodeChangeEvent>,
-    analyzer_id: Uuid, // Cleaned up: Only analyzer_id needed
+    analyzer_id: Uuid,
 ) -> Element {
     let mut is_collapsed = use_signal(|| true);
     let port_uuid = port.uuid;
     let port_name = port.name;
 
+    // Trigger auto-focus and accordion expansion on undo/redo actions
+    super::use_source_card_focus(analyzer_id, port_uuid, is_collapsed);
+
     let existing_source = energy_config
+        .read()
         .get_source(&port_uuid)
         .cloned()
         .unwrap_or_else(EnergyDataBuilder::default);
 
     rsx! {
-      div { class: "card bg-dark border-secondary mb-2",
+      div {
+        class: "card bg-dark border-secondary mb-2",
+        id: "sourceCard{port_uuid}",
         div {
           class: "card-header bg-secondary py-1 px-2 text-light d-flex justify-content-between align-items-center noselect",
           style: "cursor: pointer;",
@@ -106,7 +98,7 @@ fn SourcePortCard(
               readonly: false,
               on_save: move |light_builder| {
                   if let LightDataBuilder::Energy(updated_builder) = light_builder {
-                      let mut updated_config = energy_config.clone();
+                      let mut updated_config = energy_config.peek().clone();
                       updated_config.map_source(port_uuid, updated_builder);
 
                       on_change

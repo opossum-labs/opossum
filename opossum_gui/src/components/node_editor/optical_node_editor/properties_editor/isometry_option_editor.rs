@@ -1,5 +1,6 @@
 use crate::components::node_editor::{
     accordion::AccordionItem,
+    hooks::use_synced_signal,
     node_config_editor::NodeChangeEvent,
     optical_node_editor::{
         RotationAlignmentInputs, TranslationAlignmentInputs, on_new_rotation, on_new_translation,
@@ -12,14 +13,14 @@ use uuid::Uuid;
 
 #[component]
 pub fn IsometryOptionEditor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     isometry: Isometry,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    let isometry_sig = use_signal(|| isometry);
-    let on_save = on_save_proptype_handler(isometry_sig, property_key, on_change, node_id.into());
+    let isometry_sig = use_synced_signal(isometry);
+    let on_save = on_save_proptype_handler(isometry_sig, property_key, on_change, node_id);
 
     let position_memo = use_memo(move || *isometry_sig.read());
 

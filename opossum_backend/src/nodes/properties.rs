@@ -1,12 +1,17 @@
-use crate::{app_state::AppState, error::BackEndErrorResponse};
+use crate::{
+    app_state::AppState,
+    error::BackEndErrorResponse,
+    helper_functions::{
+        apply_and_push_undo, parent_group_id_or_self, resolve_reference_chain, ron_or_json_response,
+    },
+    undo::{Command, PatchProperty},
+};
 use actix_web::{HttpRequest, HttpResponse, get, patch, web};
 use opossum_core::{
-    core_optics::NodeAttr,
-    prelude::{OpmDocument, Proptype},
+    prelude::Proptype,
     types::api_types::{ErrorResponse, NodePropertiesResponse},
     utils::LockExt,
 };
-use parking_lot::MutexGuard;
 use uuid::Uuid;
 
 /// Get all custom properties of an optical node
@@ -35,32 +40,15 @@ pub async fn get_properties(
     let uuid = path.into_inner();
     let document = data.document.lock();
 
-    let (node_attr, is_reference) = get_referenced_node_attr_from_state(false, uuid, &document)?;
+    let (optic_ref, is_reference) = resolve_reference_chain(&document, uuid)?;
+    let node_attr = optic_ref.optical_ref.lock_opm()?.node_attr().clone();
 
     let response_data = NodePropertiesResponse {
         properties: node_attr.properties().clone(),
         is_reference,
     };
 
-    // Content Negotiation
-    let wants_ron = req
-        .headers()
-        .get(actix_web::http::header::ACCEPT)
-        .and_then(|h| h.to_str().ok())
-        .is_some_and(|s| s.contains("application/ron"));
-
-    if wants_ron {
-        let body = ron::ser::to_string_pretty(
-            &response_data,
-            ron::ser::PrettyConfig::new().new_line("\n"),
-        )
-        .map_err(|e| BackEndErrorResponse::new(500, "Serialization Error", &e.to_string()))?;
-        Ok(HttpResponse::Ok()
-            .content_type("application/ron")
-            .body(body))
-    } else {
-        Ok(HttpResponse::Ok().json(response_data))
-    }
+    ron_or_json_response(&req, &response_data)
 }
 
 /// Update a specific property of an optical node
@@ -100,56 +88,91 @@ pub async fn patch_property(
         )
     })?;
 
-    data.document
-        .lock()
-        .scenery_mut()
-        .with_node_attr_mut(uuid, |node_attr| {
-            node_attr.set_property(&prop_name, new_value)
-        })??;
+    let document = data.document.lock();
+    let old_value = document.scenery().with_node_attr(uuid, |node_attr| {
+        node_attr.properties().get(&prop_name).cloned()
+    })??;
+    let parent_group_id = parent_group_id_or_self(document.scenery(), uuid)?;
 
-    Ok(HttpResponse::NoContent().finish())
-}
-
-// --- Helper Functions ---
-
-fn get_referenced_node_attr_from_state(
-    mut is_reference: bool,
-    uuid: Uuid,
-    document: &MutexGuard<'_, OpmDocument>,
-) -> Result<(NodeAttr, bool), BackEndErrorResponse> {
-    let node_attr = document
-        .scenery()
-        .node_recursive(uuid)?
-        .0
-        .optical_ref
-        .lock_opm()?
-        .node_attr()
-        .clone();
-
-    if node_attr.node_type() == "reference" {
-        is_reference = true;
-        let ref_node_props = node_attr.properties();
-        if let Ok(Proptype::Uuid(ref_uuid)) = ref_node_props.get("reference id") {
-            get_referenced_node_attr_from_state(is_reference, *ref_uuid, document)
-        } else {
-            Err(BackEndErrorResponse::new(
-                400,
-                "Opossum",
-                "'reference id' property not found on reference node",
-            ))
-        }
-    } else {
-        Ok((node_attr, is_reference))
-    }
+    let command = Command::PatchProperty(PatchProperty {
+        uuid,
+        parent_group_id,
+        prop_name,
+        old: old_value,
+        new: new_value,
+    });
+    apply_and_push_undo(&data, document, command, true)
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::document::undo_document;
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
+    use opossum_core::{
+        core_optics::node_attr::HasNodeAttr,
+        nodes::Dummy,
+        types::api_types::{DocumentChange, NodeEditorPanel, UndoRedoResponse},
+    };
 
     fn create_test_state() -> Data<AppState> {
         Data::new(AppState::default())
+    }
+
+    /// Regression test: `DocumentChange::NodeDetailsChanged` for a property patch must carry the
+    /// node's `graph_id` and tag `panel: NodeEditorPanel::Properties`, so the GUI's
+    /// auto-select-and-open-panel feature can locate and reveal the right node/panel on undo/redo.
+    #[actix_web::test]
+    async fn test_patch_property_reports_graph_id_and_properties_panel() {
+        let app_state = create_test_state();
+        let (root_id, node_id) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let node_id = document.scenery_mut().add_node(Dummy::default()).unwrap();
+            document
+                .scenery_mut()
+                .with_node_attr_mut(node_id, |attr| {
+                    attr.create_property("test_prop", "test", Proptype::Bool(false))
+                })
+                .unwrap()
+                .unwrap();
+            (root_id, node_id)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(patch_property)
+                .service(undo_document),
+        )
+        .await;
+
+        let req = test::TestRequest::patch()
+            .uri(&format!("/{node_id}/properties/test_prop"))
+            .set_payload("Bool(true)")
+            .insert_header(("Content-Type", "application/ron"))
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: UndoRedoResponse = test::read_body_json(resp).await;
+        assert!(
+            matches!(
+                &body.changes[0],
+                DocumentChange::NodeDetailsChanged { graph_id, .. } if *graph_id == root_id
+            ),
+            "a property patch must report a details refresh on the node's graph_id"
+        );
+        assert_eq!(
+            body.jump.expect("an undo must carry a jump target").panel,
+            Some(NodeEditorPanel::Properties),
+            "a property patch must jump to the Properties panel"
+        );
     }
 
     #[actix_web::test]

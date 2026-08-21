@@ -14,6 +14,7 @@ use crate::components::node_editor::{
         image_source_editor::get_image_source_input_params,
         point_source_editor::ReferenceLengthEditor,
     },
+    hooks::use_synced_signal,
     inputs::input_components::RowedInputs,
 };
 
@@ -23,7 +24,7 @@ pub fn RaySourceEditor(
     on_save: EventHandler<LightDataBuilder>,
     readonly: bool,
 ) -> Element {
-    let mut ray_data_builder_sig: Signal<RayDataSource> = use_signal(|| ray_data_builder.clone());
+    let mut ray_data_builder_sig: Signal<RayDataSource> = use_synced_signal(ray_data_builder);
 
     let on_ray_data_builder_save = EventHandler::new(move |new_ray_data_builder: RayDataSource| {
         on_save.call(LightDataBuilder::Geometric(new_ray_data_builder.clone()));

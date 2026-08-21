@@ -1,5 +1,6 @@
 use crate::components::node_editor::{
     accordion::ElementList,
+    hooks::use_synced_signal,
     inputs::{input_components::LabeledSelect, select_options_from_enum_iterator},
     node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::{
@@ -13,18 +14,18 @@ use uuid::Uuid;
 
 #[component]
 pub fn SplitterTypeEditor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     splitting_config_builder: SplittingConfigBuilder,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    let splitting_config_builder_sig = use_signal(|| splitting_config_builder.clone());
+    let splitting_config_builder_sig = use_synced_signal(splitting_config_builder);
     let on_save = on_save_proptype_handler(
         splitting_config_builder_sig,
         property_key,
         on_change,
-        node_id.into(),
+        node_id,
     );
 
     let mut element_list = vec![rsx! {

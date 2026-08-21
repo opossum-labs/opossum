@@ -1,10 +1,11 @@
 use std::{
     collections::{HashMap, HashSet},
-    time::{Duration, Instant},
+    time::Duration,
 };
+use web_time::Instant;
 
 use crate::{
-    CONTEXT_MENU,
+    CONTEXT_MENU, api,
     components::scenery_editor::{
         GraphState, NodeType,
         constants::{MAX_ZOOM, MIN_ZOOM, ZOOM_SENSITIVITY},
@@ -18,7 +19,10 @@ use dioxus::{
     html::{geometry::euclid::default::Point2D, input_data::MouseButton},
     prelude::*,
 };
-use opossum_core::{prelude::*, types::api_types::ConnectInfo};
+use opossum_core::{
+    prelude::*,
+    types::api_types::{ConnectInfo, Viewport},
+};
 use uuid::Uuid;
 
 pub fn use_zoom() -> impl FnMut(WheelEvent) {
@@ -26,6 +30,12 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
     let editor_status = graph_state.editor_state();
     let workspace = use_context::<ReadStore<GraphsWorkspaceState>>();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
+    // Debounce state for the undo-recording POST (see the send site below): the viewport at the start of
+    // the current scroll burst, the latest viewport, and a generation counter so only the newest wheel
+    // tick's task actually sends.
+    let mut gesture_start = use_signal(|| None::<Viewport>);
+    let mut latest = use_signal(|| None::<Viewport>);
+    let mut debounce_gen = use_signal(|| 0u64);
 
     move |wheel_event| {
         let current_graph_zoom = *editor_status.zoom().read();
@@ -45,6 +55,25 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
         let new_shift_y = mouse_on_graph_y.mul_add(-new_graph_zoom, mouse_pos.y);
 
         let graph_id = *workspace.active_tab().read();
+
+        let before = Viewport {
+            graph_id,
+            zoom: current_graph_zoom,
+            shift: (current_graph_shift.x, current_graph_shift.y),
+        };
+        let after = Viewport {
+            graph_id,
+            zoom: new_graph_zoom,
+            shift: (new_shift_x, new_shift_y),
+        };
+        // At the MIN/MAX zoom clamp the tick doesn't move the camera (before == after). The backend would
+        // discard it anyway, so skip the no-op SetZoom/SetShift and - crucially - the optimistic
+        // Undo-enable below, which would otherwise light up the Undo button for a no-op (and clicking it
+        // 409s on an empty stack). Mirrors `push_viewport_change`'s own before==after guard.
+        if before == after {
+            return;
+        }
+
         workspace_processor.send(GraphsWorkspaceAction::SetZoom {
             graph_id,
             zoom: new_graph_zoom,
@@ -52,6 +81,45 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
         workspace_processor.send(GraphsWorkspaceAction::SetShift {
             graph_id,
             shift: Point2D::new(new_shift_x, new_shift_y),
+        });
+
+        // A zoom is undoable, so enable Undo / grey out Redo like any other edit.
+        *crate::UNDO_REDO_STATUS.write() = (true, false);
+
+        // Record this as an undo step, but debounce the backend POST: a scroll burst is dozens of ticks, so
+        // instead of posting each one we cache the burst's start/end and send a single request once ~120ms
+        // pass with no further tick. The local SetZoom/SetShift above are applied every tick, so the view
+        // stays smooth in the meantime.
+        if gesture_start.peek().is_none() {
+            gesture_start.set(Some(before));
+        }
+        latest.set(Some(after));
+        let generation = *debounce_gen.peek() + 1;
+        debounce_gen.set(generation);
+        spawn(async move {
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                // Native platform (Desktop): use tokio
+                tokio::time::sleep(std::time::Duration::from_millis(120)).await;
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                // Web platform (WASM): use gloo_timers
+                gloo_timers::future::sleep(std::time::Duration::from_millis(120)).await;
+            }
+
+            // Only the newest tick's task flushes; a later tick bumps the generation, superseding earlier
+            // tasks, so those just return.
+            if *debounce_gen.peek() != generation {
+                return;
+            }
+            let start = gesture_start.write().take();
+            let end = latest.write().take();
+            if let (Some(start), Some(end)) = (start, end) {
+                // coalesce=true so consecutive scroll bursts still combine into one undo step (see
+                // `post_viewport_change`); the burst itself is now a single request.
+                let _ = api::post_viewport_change(start, end, true, false).await;
+            }
         });
     }
 }
@@ -117,6 +185,7 @@ pub fn use_on_mouse_down(
                         workspace_processor.send(GraphsWorkspaceAction::CenterGraph {
                             graph_id,
                             save_changes: true,
+                            record_undo: true,
                         });
                         last_click.set(None);
                     }
@@ -237,10 +306,17 @@ pub fn use_on_key_down(
                     }
                     event.stop_propagation();
                 } else if event.data().key() == Key::Delete {
-                    let nodes_to_delete = graph_store.read().selected_nodes();
-                    for node_id in nodes_to_delete.keys() {
-                        workspace_processor.send(GraphsWorkspaceAction::DeleteNode {
-                            node_id: *node_id,
+                    let node_ids: Vec<Uuid> = graph_store
+                        .read()
+                        .selected_nodes()
+                        .keys()
+                        .copied()
+                        .collect();
+                    if !node_ids.is_empty() {
+                        // One action for the whole selection, so deleting several nodes at once is a
+                        // single undo step instead of one per node.
+                        workspace_processor.send(GraphsWorkspaceAction::DeleteNodes {
+                            node_ids,
                             graph_id: graph_state.graph_info().read().id,
                         });
                     }
@@ -270,19 +346,20 @@ pub fn use_drag_end(
                 DragStatus::Nodes => {
                     if droppable_groups.is_none() {
                         let selected_nodes = graph_store().selected_nodes();
-                        for node_id in selected_nodes.keys() {
-                            if let Some((pos, is_optical)) = graph_store
-                                .nodes()
-                                .read()
-                                .get(node_id)
-                                .map(|n| (n.pos(), n.is_optical_node()))
-                            {
-                                workspace_processor.send(GraphsWorkspaceAction::SyncNodePosition {
-                                    pos,
-                                    node_id: *node_id,
-                                    is_optical,
-                                });
-                            }
+                        let nodes_field = graph_store.nodes();
+                        let nodes = nodes_field.read();
+                        let moves: Vec<(Uuid, bool, Point2D<f64>)> = selected_nodes
+                            .keys()
+                            .filter_map(|node_id| {
+                                nodes
+                                    .get(node_id)
+                                    .map(|n| (*node_id, n.is_optical_node(), n.pos()))
+                            })
+                            .collect();
+                        drop(nodes);
+                        if !moves.is_empty() {
+                            workspace_processor
+                                .send(GraphsWorkspaceAction::SyncNodePositions { moves });
                         }
                     } else if let Some((to_graph_id, _)) = droppable_groups {
                         let selected_optical_nodes = graph_store().selected_optical_nodes();

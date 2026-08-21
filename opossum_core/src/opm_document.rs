@@ -9,7 +9,9 @@ use crate::{
     analyzers::{Analyzer, AnalyzerRegistration, AnalyzerType},
     core_optics::{NodeAttrExt, OpticNode, SceneryResources},
     error::{OpmResult, OpossumError},
+    material::Material,
     nodes::NodeGroup,
+    properties::{Proptype, proptype::AssetRef},
     reporting::analysis_report::AnalysisReport,
     utils::{
         LockExt,
@@ -79,6 +81,8 @@ pub struct OpmDocument {
     global_conf: Arc<Mutex<SceneryResources>>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     analyzers: IndexMap<Uuid, AnalyzerInfo>,
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    embedded_materials: IndexMap<Uuid, Material>,
 }
 impl Default for OpmDocument {
     fn default() -> Self {
@@ -87,6 +91,7 @@ impl Default for OpmDocument {
             scenery: NodeGroup::default(),
             global_conf: Arc::new(Mutex::new(SceneryResources::default())),
             analyzers: IndexMap::default(),
+            embedded_materials: IndexMap::default(),
         }
     }
 }
@@ -99,6 +104,63 @@ impl OpmDocument {
             scenery,
             ..Default::default()
         }
+    }
+    /// Replaces all `AssetRef::Id(Uuid)` properties in scene nodes with
+    /// the full `AssetRef::Inline(Material)` looked up from `embedded_materials`.
+    fn resolve_embedded_materials(&self) -> OpmResult<()> {
+        for node_ref in self.scenery.nodes() {
+            if let Ok(mut node) = node_ref.optical_ref.lock_opm() {
+                let mut updates = Vec::new();
+
+                for (prop_name, prop) in node.node_attr().properties() {
+                    if let Proptype::Material(AssetRef::Id(id)) = prop.prop() {
+                        let material = self.embedded_materials.get(id).ok_or_else(|| {
+                            OpossumError::OpmDocument(format!(
+                                "Embedded material with UUID {id} not found for property '{prop_name}' in node '{}'",
+                                node.node_attr().name()
+                            ))
+                        })?;
+
+                        updates.push((
+                            prop_name.clone(),
+                            Proptype::Material(AssetRef::Inline(material.clone())),
+                        ));
+                    }
+                }
+
+                for (prop_name, new_prop) in updates {
+                    node.node_attr_mut().set_property(&prop_name, new_prop)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Extracts full `Material` structs into `embedded_materials` and replaces
+    /// node properties with explicit `AssetRef::Id(Uuid)`.
+    fn prepare_materials_for_serialization(&mut self) -> OpmResult<()> {
+        for node_ref in self.scenery.nodes() {
+            if let Ok(mut node) = node_ref.optical_ref.lock_opm() {
+                let mut updates = Vec::new();
+
+                for (prop_name, prop) in node.node_attr().properties() {
+                    if let Proptype::Material(AssetRef::Inline(material)) = prop.prop() {
+                        self.embedded_materials
+                            .insert(material.id(), material.clone());
+
+                        updates.push((
+                            prop_name.clone(),
+                            Proptype::Material(AssetRef::Id(material.id())),
+                        ));
+                    }
+                }
+
+                for (prop_name, new_prop) in updates {
+                    node.node_attr_mut().set_property(&prop_name, new_prop)?;
+                }
+            }
+        }
+        Ok(())
     }
     /// Create a new [`OpmDocument`] from an `.opm` file at the given path.
     ///
@@ -133,20 +195,28 @@ impl OpmDocument {
             );
         }
         document.scenery.after_deserialization_hook()?;
+        // Resolve every reference against the now fully-built scenery, once at the root. A reference nested
+        // in a group can point at a node in an ancestor or sibling branch that didn't exist yet during
+        // per-group deserialization (see `OpticGraph::resolve_all_references`); this can't live in
+        // `after_deserialization_hook`, which also runs per-node bottom-up during parse (before the whole
+        // tree exists) via `OpticRef`'s deserializer.
+        document.scenery.graph().resolve_all_references()?;
+
+        // Resolve embedded material references into full in-memory Material structs
+        document.resolve_embedded_materials()?;
+
         document
             .scenery
             .graph_mut()
             .update_global_config(&Some(document.global_conf.clone()));
         Ok(document)
     }
-    /// Save this [`OpmDocument`] to an `.opm` file with the given path
+    /// Saves this [`OpmDocument`] to an `.opm` file at the specified path.
+    ///
+    /// This is a read-only operation on `&self` and does not mutate the in-memory document state.
     ///
     /// # Errors
-    ///
-    /// This function will return an error if
-    ///   - the serialization of the document failed.
-    ///   - the file path cannot be created.
-    ///   - it cannot write into the file (e.g. no space).
+    /// Returns an [`OpossumError`] if file creation, writing, or serialization fails.
     pub fn save_to_file(&self, path: &Path) -> OpmResult<()> {
         let serialized = self.to_opm_file_string()?;
         let mut output = File::create(path).map_err(|e| {
@@ -165,16 +235,23 @@ impl OpmDocument {
         })?;
         Ok(())
     }
-    /// Returns the content of the `.opm` file from this [`OpmDocument`]
+    /// Generates the RON string content representation of this [`OpmDocument`].
+    ///
+    /// Internally clones the document to extract embedded materials and replace node
+    /// material properties with UUID references without mutating the original `self`.
     ///
     /// # Errors
-    ///
-    /// This function will return an error if the serialization of the internal structures fail.
+    /// Returns an [`OpossumError`] if serialization fails.
     pub fn to_opm_file_string(&self) -> OpmResult<String> {
+        // Create a temporary mutable clone for serialization preparation
+        let mut doc_to_serialize = self.clone();
+        doc_to_serialize.prepare_materials_for_serialization()?;
+
         let config = PrettyConfig::new()
             .extensions(Extensions::UNWRAP_VARIANT_NEWTYPES)
             .new_line("\n");
-        ron::ser::to_string_pretty(&self, config).map_err(|e| {
+
+        ron::ser::to_string_pretty(&doc_to_serialize, config).map_err(|e| {
             OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}"))
         })
     }
@@ -249,6 +326,14 @@ impl OpmDocument {
                 "Analyzer with given Uuid not found".into(),
             ))
         }
+    }
+    /// Re-inserts a previously-removed analyzer under its original [`Uuid`].
+    ///
+    /// Unlike [`add_analyzer_with_position`](Self::add_analyzer_with_position), this does not mint a new id -
+    /// it is used to restore an analyzer to the exact identity it had before, which undo/redo relies on so that
+    /// later history entries referencing that id (e.g. a config patch) keep resolving correctly.
+    pub fn insert_analyzer(&mut self, id: Uuid, info: AnalyzerInfo) {
+        self.analyzers.insert(id, info);
     }
     /// Returns a reference to the scenery of this [`OpmDocument`].
     #[must_use]
@@ -399,6 +484,47 @@ mod test {
                 .is_ok()
         );
     }
+    /// Regression test for a reference whose target lives one level *up* (in an ancestor group) failing to
+    /// reload: `root { A, G { ref -> A } }`. Reference resolution used to run per-group during
+    /// deserialization, which builds inner groups before outer ones - so `G`'s reference couldn't see `A`
+    /// (in the not-yet-built root) and the load errored with "reference node found, which does not reference
+    /// anything". It is now deferred to a whole-scenery pass run after the full tree exists. Round-trips the
+    /// document through its `.opm` string and asserts it reloads with the reference resolving to A.
+    #[test]
+    fn reference_into_ancestor_round_trips() {
+        use crate::{
+            nodes::{Dummy, NodeReference},
+            utils::LockExt,
+        };
+
+        let mut document = OpmDocument::default();
+        let r_id = {
+            let scenery = document.scenery_mut();
+            let a_id = scenery.add_node(Dummy::default()).unwrap();
+            let a_ref = scenery.node_recursive(a_id).unwrap().0;
+            let mut g = NodeGroup::new("G");
+            let r_id = g
+                .add_node(NodeReference::from_node(&a_ref).unwrap())
+                .unwrap();
+            scenery.add_node(g).unwrap();
+            r_id
+        };
+
+        let serialized = document.to_opm_file_string().unwrap();
+        // Before the fix this errored: G's reference to A (a level up) couldn't resolve mid-deserialization.
+        let reloaded = OpmDocument::from_string(&serialized)
+            .expect("a reference pointing at an ancestor node must reload");
+
+        let (reference, _) = reloaded
+            .scenery()
+            .node_recursive(r_id)
+            .expect("the reference must still exist after reload");
+        let ports = reference.optical_ref.lock_opm().unwrap().ports();
+        assert!(
+            !ports.names(&PortType::Output).is_empty(),
+            "the reloaded reference must resolve to A (non-empty mirrored ports)"
+        );
+    }
     #[test]
     fn save_to_file() -> OpmResult<()> {
         let file = NamedTempFile::new()
@@ -408,6 +534,72 @@ mod test {
         assert!(document.save_to_file(&path).is_ok());
         path.close()
             .map_err(|e| OpossumError::OpmDocument(format!("Error closing temp file: {e}")))?;
+        Ok(())
+    }
+    #[test]
+    fn test_material_referencing_serialization_roundtrip() -> OpmResult<()> {
+        // Note: Ensure AssetRef is imported in the test module:
+        // use crate::properties::proptype::AssetRef;
+
+        let material_id = Uuid::new_v4();
+        let const_refr = RefrIndexConst::new(1.5)?;
+        let material = Material::new_for_test(material_id, 1, "N-BK7 Shared", const_refr.into());
+
+        let mut scenery = NodeGroup::default();
+
+        // Create two lenses sharing the same material instance
+        let lens1 = Lens::new(
+            "Lens 1",
+            millimeter!(100.0),
+            millimeter!(-100.0),
+            millimeter!(10.0),
+            material.clone(),
+        )?;
+        let lens2 = Lens::new(
+            "Lens 2",
+            millimeter!(200.0),
+            millimeter!(-200.0),
+            millimeter!(12.0),
+            material,
+        )?;
+
+        scenery.add_node(lens1)?;
+        scenery.add_node(lens2)?;
+
+        let doc = OpmDocument::new(scenery);
+
+        // Serialize to RON string
+        let ron_str = doc.to_opm_file_string()?;
+
+        // Verify RON contains embedded_materials table with the single material
+        assert!(ron_str.contains("embedded_materials:"));
+        assert!(ron_str.contains("N-BK7 Shared"));
+
+        // Verify nodes in RON string use AssetRef::Id instead of duplicating full struct
+        assert!(ron_str.contains("Id("));
+
+        // Deserialize back from RON string
+        let reloaded_doc = OpmDocument::from_string(&ron_str)?;
+
+        // Verify that embedded_materials contains exactly 1 deduplicated entry
+        assert_eq!(reloaded_doc.embedded_materials.len(), 1);
+
+        // Verify that nodes have their full Material struct restored for calculation
+        for node_ref in reloaded_doc.scenery().nodes() {
+            let node = node_ref.optical_ref.lock_opm()?;
+            let prop = node.node_attr().get_property("material")?;
+
+            // Unpack the AssetRef::Inline to verify the material is correctly loaded into RAM
+            if let Proptype::Material(AssetRef::Inline(mat)) = prop {
+                assert_eq!(mat.id(), material_id);
+                assert_eq!(mat.name(), "N-BK7 Shared");
+            } else {
+                panic!(
+                    "Expected Proptype::Material(AssetRef::Inline) in node after deserialization resolution"
+                );
+            }
+        }
+
         Ok(())
     }
     #[test]
@@ -521,6 +713,29 @@ mod test {
         check_logs(log::Level::Warn, vec![]);
         Ok(())
     }
+    /// Round-trip stability test: `files_for_testing/opm/all_nodes_roundtrip.opm` (generated by
+    /// `examples/all_nodes_roundtrip_fixture.rs`) contains one of every registered node type, a nested
+    /// group with mapped ports, a reference node into that group, and one of every analyzer type.
+    /// Loading it and immediately re-serializing it must reproduce the exact same file content - any
+    /// field that gets dropped, reordered non-deterministically, or misparsed during the load -> save
+    /// round trip would show up as a diff here instead of silently corrupting a user's model on next
+    /// save (see issue #1144, where a nested group's mapped ports vanished this way).
+    #[test]
+    fn all_nodes_roundtrip_is_stable() -> OpmResult<()> {
+        let original = fs::read_to_string("./files_for_testing/opm/all_nodes_roundtrip.opm")
+            .map_err(|e| OpossumError::OpmDocument(format!("cannot read fixture file: {e}")))?;
+
+        let doc = OpmDocument::from_string(&original)?;
+        let roundtripped = doc.to_opm_file_string()?;
+
+        assert_eq!(
+            roundtripped, original,
+            "loading and re-saving the fixture must reproduce it byte-for-byte; if this is an \
+             intentional schema change, regenerate the fixture with `cargo run -p opossum_core \
+             --example all_nodes_roundtrip_fixture` and re-check it in"
+        );
+        Ok(())
+    }
     #[test]
     fn full_analysis_with_save_and_load() -> OpmResult<()> {
         let mut scenery = NodeGroup::new("Lens Ray-trace test");
@@ -561,6 +776,207 @@ mod test {
         let mut doc = OpmDocument::from_file(temp_model_file.path())?;
         let _ = doc.analyze()?;
         check_logs(log::Level::Warn, vec![]);
+        Ok(())
+    }
+    #[test]
+    fn test_skip_unknown_node_type_during_deserialization() -> OpmResult<()> {
+        // Raw RON model data with a valid dummy node, an unknown node type, and a second valid dummy node
+        let ron_data = r#"#![enable(unwrap_variant_newtypes)]
+(
+    opm_file_version: "0",
+    scenery: {
+        "node_type": "group",
+        "name": "test",
+        "uuid": "84d4007c-514e-44ca-8b63-bfa86bee265f",
+        "graph": (
+            nodes: [
+                {
+                    "node_type": "dummy",
+                    "name": "valid_dummy_1",
+                    "uuid": "26e56527-c7f9-4e9c-9cda-0e0fa96e39bd",
+                },
+                {
+                    "node_type": "unknown_future_node",
+                    "name": "invalid_node",
+                    "uuid": "c52398ba-1742-4d86-82e1-8e75874d91ba",
+                },
+                {
+                    "node_type": "dummy",
+                    "name": "valid_dummy_2",
+                    "uuid": "54e2d453-9632-4b9d-b9c7-48491526f198",
+                },
+            ],
+            edges: [],
+        ),
+    },
+    global: (
+        ambient_refr_index: Const(
+            refractive_index: 1.0,
+        ),
+    ),
+)"#;
+
+        // Setup testing logger to catch emitted warnings
+        testing_logger::setup();
+
+        // Parse document from string
+        let doc = OpmDocument::from_string(ron_data)?;
+
+        // Ensure the unknown node was skipped and only 2 valid nodes remain
+        assert_eq!(
+            doc.scenery().nodes().len(),
+            2,
+            "Document graph should contain exactly 2 valid nodes after skipping the unknown node"
+        );
+
+        // Verify the exact warning string logged by `deserialize_nodes_lossy`
+        check_logs(
+            log::Level::Warn,
+            vec![
+                "Skipping node that failed to load (node_type: unknown_future_node, name: invalid_node, uuid: c52398ba-1742-4d86-82e1-8e75874d91ba).",
+            ],
+        );
+
+        Ok(())
+    }
+    #[test]
+    fn test_skip_invalid_edge_connection() -> OpmResult<()> {
+        // Raw RON model data with one valid node and an edge pointing to a non-existent target UUID
+        let ron_data = r#"#![enable(unwrap_variant_newtypes)]
+(
+    opm_file_version: "0",
+    scenery: {
+        "node_type": "group",
+        "name": "test",
+        "uuid": "0e0e825e-5f4c-4e0a-b6ce-6c25b608f4aa",
+        "graph": (
+            nodes: [
+                {
+                    "node_type": "dummy",
+                    "name": "dummy_1",
+                    "uuid": "ecb719a2-2e21-44d0-b0b9-1e4a813e964e",
+                },
+            ],
+            edges: [
+                (
+                    src_id: "ecb719a2-2e21-44d0-b0b9-1e4a813e964e",
+                    src_port: "output_1",
+                    target_id: "00000000-0000-0000-0000-000000000000",
+                    target_port: "input_1",
+                    distance: 0.0,
+                ),
+            ],
+        ),
+    },
+    global: (
+        ambient_refr_index: Const(
+            refractive_index: 1.0,
+        ),
+    ),
+)"#;
+
+        // Initialize testing logger to capture warnings during graph reconstruction
+        testing_logger::setup();
+
+        // Deserialization should succeed despite the broken connection
+        let doc = OpmDocument::from_string(ron_data)?;
+
+        // Verify that the valid node was loaded correctly
+        assert_eq!(
+            doc.scenery().nodes().len(),
+            1,
+            "The valid node should be present in the graph"
+        );
+
+        // Verify that the broken edge warning was recorded in the log with the exact error string
+        check_logs(
+            log::Level::Warn,
+            vec![
+                "Skipping invalid node connection from 'ecb719a2-2e21-44d0-b0b9-1e4a813e964e' (output_1) to '00000000-0000-0000-0000-000000000000' (input_1): OpticScenery:target node with given id does not exist",
+            ],
+        );
+
+        Ok(())
+    }
+    /// Regression test for issue #1144: loading a `.opm` file with a nested group whose ports are mapped
+    /// to the outside must not silently drop that group. Every node entry is deserialized through
+    /// `deserialize_nodes_lossy`'s `#[serde(untagged)]` enum (introduced by #1097 for the "unknown node
+    /// type" tolerance above), which buffers each entry into serde's generic `Content` representation
+    /// first; RON cannot distinguish the group's `input_map`/`output_map` (a `PortMap` newtype struct)
+    /// from a one-element tuple while buffering, which used to make `PortMap` fail to reconstruct and -
+    /// because `untagged` swallows that failure - silently dropped the *entire* group. See the doc
+    /// comment on `PortMap`'s `Deserialize` impl in `nodes/node_group/port_map.rs` for the full
+    /// explanation.
+    #[test]
+    fn test_load_nested_group_with_mapped_ports() -> OpmResult<()> {
+        // Raw RON model data with a group nested inside the top-level scenery; the nested group maps
+        // both ports of its single dummy node to the outside (`input_map` / `output_map`).
+        let ron_data = r#"#![enable(unwrap_variant_newtypes)]
+(
+    opm_file_version: "0",
+    scenery: {
+        "node_type": "group",
+        "name": "test",
+        "uuid": "84d4007c-514e-44ca-8b63-bfa86bee265f",
+        "graph": (
+            nodes: [
+                {
+                    "node_type": "group",
+                    "name": "nested group",
+                    "uuid": "3f7e3f9e-6b1a-4b1a-8c1a-9e6b1a4b1a8c",
+                    "graph": (
+                        nodes: [
+                            {
+                                "node_type": "dummy",
+                                "name": "d1",
+                                "uuid": "26e56527-c7f9-4e9c-9cda-0e0fa96e39bd",
+                            },
+                        ],
+                        edges: [],
+                        input_map: ({
+                            "input_1": ("26e56527-c7f9-4e9c-9cda-0e0fa96e39bd", "input_1"),
+                        }),
+                        output_map: ({
+                            "output_1": ("26e56527-c7f9-4e9c-9cda-0e0fa96e39bd", "output_1"),
+                        }),
+                    ),
+                },
+            ],
+            edges: [],
+        ),
+    },
+    global: (
+        ambient_refr_index: Const(
+            refractive_index: 1.0,
+        ),
+    ),
+)"#;
+
+        testing_logger::setup();
+
+        let doc = OpmDocument::from_string(ron_data)?;
+
+        // Before the fix, the nested group vanished entirely: this came back empty.
+        assert_eq!(
+            doc.scenery().nodes().len(),
+            1,
+            "the nested group must survive loading"
+        );
+        let (input_names, output_names) = {
+            let group_ref = doc.scenery().nodes()[0].optical_ref.lock_opm()?;
+            let group = group_ref
+                .as_any()
+                .downcast_ref::<NodeGroup>()
+                .expect("the surviving node must still be the nested group");
+            (
+                group.graph().port_map(&PortType::Input).port_names(),
+                group.graph().port_map(&PortType::Output).port_names(),
+            )
+        };
+        assert_eq!(input_names, vec!["input_1".to_string()]);
+        assert_eq!(output_names, vec!["output_1".to_string()]);
+        check_logs(log::Level::Warn, vec![]);
+
         Ok(())
     }
     #[test]

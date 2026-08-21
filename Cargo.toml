@@ -18,13 +18,14 @@ members = [
     "opossum_gui",
     "opossum_core/opm_macros_lib",
     "xtask",
+    "opossum_registry",
 ]
 # default-members = ["opossum_backend", "opossum_cli", "opossum_gui", "opossum_core", "opossum_core/opm_macros_lib"]
 # default-members = ["opossum_backend", "opossum_cli", "opossum_gui", "opossum_core"]
 resolver = "3"
 
 [workspace.package]
-version = "0.7.2"
+version = "0.7.3"
 edition = "2024"
 authors = [
     "Udo Eisenbarth <u.eisenbarth@gsi.de>",
@@ -37,11 +38,12 @@ keywords = ["laser", "optics", "physics", "simulation"]
 categories = ["science", "simulation"]
 
 [workspace.dependencies]
-opossum_core = { version = "0.7.2", path = "opossum_core" }
-opm_macros_lib = { version = "0.7.2", path = "opossum_core/opm_macros_lib" }
-opossum_backend = { version = "0.7.2", path = "opossum_backend" }
-opossum_cli = { version = "0.7.2", path = "opossum_cli" }
-opossum_gui = { version = "0.7.2", path = "opossum_gui" }
+opossum_core = { version = "0.7.3", path = "opossum_core" }
+opm_macros_lib = { version = "0.7.3", path = "opossum_core/opm_macros_lib" }
+opossum_backend = { version = "0.7.3", path = "opossum_backend" }
+opossum_cli = { version = "0.7.3", path = "opossum_cli" }
+opossum_gui = { version = "0.7.3", path = "opossum_gui" }
+opossum_registry = { version = "0.7.2", path = "opossum_registry" }
 
 approx = "0.5"
 chrono = { version = "0.4.45", features = ["serde"] }

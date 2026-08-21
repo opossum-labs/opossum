@@ -2,6 +2,7 @@
 mod energy_type_selection;
 mod laser_line_editor;
 mod spectrum_from_file_editor;
+use crate::components::node_editor::hooks::use_synced_signal;
 use dioxus::prelude::*;
 use energy_type_selection::EnergyDataBuilderSelector;
 use laser_line_editor::EnergyLaserLineEditor;
@@ -14,7 +15,7 @@ pub fn EnergySourceEditor(
     on_save: EventHandler<LightDataBuilder>,
     readonly: bool,
 ) -> Element {
-    let mut energy_data_builder_sig = use_signal(|| energy_data_builder.clone());
+    let mut energy_data_builder_sig = use_synced_signal(energy_data_builder);
 
     let on_energy_data_builder_save = EventHandler::new(move |new_builder: EnergyDataBuilder| {
         if new_builder != *energy_data_builder_sig.read() {

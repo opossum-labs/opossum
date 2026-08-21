@@ -16,7 +16,12 @@ pub enum GraphsWorkspaceAction {
         /// The ID of the graph.
         graph_id: Uuid,
     },
-
+    /// Atomically resets backend leftovers and initializes the new root scenery tab.
+    /// This prevents intermediate store clears and reduces startup re-renders.
+    ResetAndInitializeRootScenery {
+        /// The initial name of the root scenery.
+        name: String,
+    },
     /// Navigates to a port that is mapped to a node within a group.
     JumpToMappedPort {
         /// The ID of the mapped node.
@@ -37,7 +42,8 @@ pub enum GraphsWorkspaceAction {
         /// The ID of the node to remove.
         node_id: Uuid,
     },
-
+    /// Resynchronizes frontend state with backend state.
+    Refresh,
     /// Adds a node to the current selection.
     AddToNodeSelection {
         /// The ID of the graph.
@@ -214,6 +220,11 @@ pub enum GraphsWorkspaceAction {
         graph_id: Uuid,
         /// Whether the new position should be saved.
         save_changes: bool,
+        /// Whether the camera move should become an undo step. True for user-triggered centering
+        /// (Layout menu, double-middle-click); false for programmatic centering (the graph view's
+        /// mount effect on new project / file load), which must not make Undo available on a
+        /// fresh document.
+        record_undo: bool,
     },
 
     /// Adjusts zoom and position so the entire graph fits within the viewport.
@@ -224,6 +235,11 @@ pub enum GraphsWorkspaceAction {
         graph_id: Uuid,
         /// Whether the new zoom/position should be saved.
         save_changes: bool,
+        /// Whether this fit should be folded into the immediately preceding edit's undo step
+        /// instead of becoming its own. True for the fitting that Auto Layout runs right after
+        /// re-positioning the nodes, so a single undo reverts both the layout and the fit; false
+        /// for a user-triggered zoom-to-fit, which is its own undo step.
+        merge_into_previous_undo: bool,
     },
 
     /// Replaces all edges in the graph with a new set of connections.
@@ -300,20 +316,20 @@ pub enum GraphsWorkspaceAction {
         graph_id: Uuid,
     },
 
-    /// Synchronizes a node's position with an external update.
-    SyncNodePosition {
-        /// The new position of the node.
-        pos: Point2D<f64>,
-        /// The ID of the node to update.
-        node_id: Uuid,
-        is_optical: bool,
+    /// Synchronizes one or more nodes' positions with an external update (e.g. the end of a drag, or
+    /// an auto-layout pass). Batched into a single request/undo-step, even for a multi-node drag.
+    SyncNodePositions {
+        /// The moved nodes: id, whether it's an optical node (vs. an analyzer), and its new position.
+        moves: Vec<(Uuid, bool, Point2D<f64>)>,
     },
 
-    /// Deletes a node from the graph.
-    DeleteNode {
-        /// The ID of the node to delete.
-        node_id: Uuid,
-        /// The ID of the graph containing the node.
+    /// Deletes a whole selection - optical nodes and analyzers alike - together as a single undo step
+    /// (see the backend's `delete_nodes`, which classifies each id and folds every removal into one
+    /// undo entry). A single-node delete is just a one-element selection.
+    DeleteNodes {
+        /// The IDs of the selected nodes to delete.
+        node_ids: Vec<Uuid>,
+        /// The ID of the graph containing the nodes.
         graph_id: Uuid,
     },
 
@@ -326,4 +342,9 @@ pub enum GraphsWorkspaceAction {
         /// The ID of the destination graph or group.
         to_graph_id: Uuid,
     },
+
+    /// Undoes the last checkpointed document edit.
+    Undo,
+    /// Redoes the last undone document edit.
+    Redo,
 }

@@ -3,8 +3,12 @@
 //!
 //! The `PortMap` struct represents a mapping between externally visible port names and internal node-port pairs within a [`NodeGroup`](super::NodeGroup). It allows to associate an external port name (e.g., `input_1`) with a specific internal port name on a specific node (identified by a [`Uuid`]) within the optical graph of a node group.
 use crate::error::{OpmResult, OpossumError};
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize, Serialize,
+    de::{self, Deserializer, MapAccess, SeqAccess, Visitor},
+};
 use std::collections::HashMap;
+use std::fmt;
 use utoipa::ToSchema;
 use uuid::Uuid;
 /// Represents a mapping between externally visible port names and internal node-port pairs.
@@ -12,8 +16,71 @@ use uuid::Uuid;
 /// The `PortMap` stores associations where an external port name (e.g., `input_1`)
 /// maps to a specific internal port name on a specific node (identified by a [`Uuid`])
 /// within a the optical graph.
-#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
+#[derive(Debug, Default, Clone, Serialize, PartialEq, Eq, ToSchema)]
 pub struct PortMap(HashMap<String, (Uuid, String)>);
+
+// Hand-written `Deserialize` for `PortMap` - do not replace this with `#[derive(Deserialize)]`.
+//
+// `PortMap` is the only newtype struct in the `.opm` format. When a `PortMap` field is deserialized
+// through serde's `#[serde(untagged)]` machinery (as node entries are - see `deserialize_nodes_lossy` in
+// `optic_graph/serialization.rs`), serde first buffers the whole node into its generic `Content`
+// representation via `deserialize_any`. RON's `deserialize_any` cannot distinguish a newtype struct
+// `PortMap(...)` from a one-element tuple purely from the token stream `({...})`, so it buffers the value
+// as `Content::Seq([Content::Map(...)])` instead of `Content::Newtype(Content::Map(...))`. A derived
+// `Deserialize` only accepts a bare map there and fails - and because `untagged` swallows that error and
+// falls back to skipping the entry, the *entire* node the `PortMap` lives on (i.e. any group with mapped
+// ports) silently disappeared (see issue #1144). This impl accepts both the plain-map shape (produced by
+// deserializing directly from RON/JSON/...) and the buffered one-element-sequence-of-map shape (produced
+// when routed through `Content`), so a `PortMap` survives either path.
+impl<'de> Deserialize<'de> for PortMap {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_newtype_struct("PortMap", PortMapVisitor)
+    }
+}
+
+struct PortMapVisitor;
+
+impl<'de> Visitor<'de> for PortMapVisitor {
+    type Value = PortMap;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .write_str("a port map, either as a bare map or a one-element sequence wrapping one")
+    }
+
+    // What a deserializer that reports the newtype wrapper faithfully calls (RON when reading the
+    // original, unbuffered token stream; the `Content` type when it did buffer a genuine
+    // `Content::Newtype`). Re-dispatch through `deserialize_any` so `visit_map`/`visit_seq` below handle
+    // whichever shape the inner value turns out to be.
+    fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_any(self)
+    }
+
+    // The plain-map shape.
+    fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+    where
+        A: MapAccess<'de>,
+    {
+        HashMap::deserialize(de::value::MapAccessDeserializer::new(map)).map(PortMap)
+    }
+
+    // The buffered one-element-sequence shape; see the doc comment on the `Deserialize` impl above.
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: SeqAccess<'de>,
+    {
+        let map = seq
+            .next_element::<HashMap<String, (Uuid, String)>>()?
+            .ok_or_else(|| de::Error::invalid_length(0, &self))?;
+        Ok(PortMap(map))
+    }
+}
 
 impl PortMap {
     /// Add a new mapping to this [`PortMap`].
@@ -72,6 +139,10 @@ impl PortMap {
         self.0.retain(|_, v| v.0 != node_id);
         let len_after = self.0.len();
         len_after < len_before
+    }
+    /// Remove all port mappings from this [`PortMap`].
+    pub fn clear(&mut self) {
+        self.0.clear();
     }
     /// Returns the port names of this [`PortMap`].
     #[must_use]
@@ -158,6 +229,37 @@ impl<'a> IntoIterator for &'a PortMap {
 mod tests {
     use super::*;
     #[test]
+    fn deserialize_direct_map() -> OpmResult<()> {
+        let mut port_map = PortMap::default();
+        port_map.add("external1", Uuid::new_v4(), "internal1")?;
+        let serialized = ron::ser::to_string(&port_map).unwrap();
+        let deserialized: PortMap = ron::from_str(&serialized).unwrap();
+        assert_eq!(deserialized, port_map);
+        Ok(())
+    }
+    /// Regression test for issue #1144: `PortMap` must also survive being routed through serde's generic
+    /// `Content` buffering, which is what happens whenever it is nested inside a `#[serde(untagged)]`
+    /// enum (as it is via `NodeGroup`'s node entries during `.opm` loading, see
+    /// `deserialize_nodes_lossy` in `optic_graph/serialization.rs`). RON cannot tell a newtype struct
+    /// apart from a one-element tuple while buffering, which used to make this round-trip fail while
+    /// the direct one above kept passing - see the doc comment on `PortMap`'s `Deserialize` impl.
+    #[test]
+    fn deserialize_through_untagged_buffering() -> OpmResult<()> {
+        #[derive(serde::Serialize, serde::Deserialize)]
+        #[serde(untagged)]
+        enum Wrapper {
+            Map(PortMap),
+        }
+
+        let mut port_map = PortMap::default();
+        port_map.add("external1", Uuid::new_v4(), "internal1")?;
+
+        let serialized = ron::ser::to_string(&port_map).unwrap();
+        let Wrapper::Map(deserialized) = ron::from_str(&serialized).unwrap();
+        assert_eq!(deserialized, port_map);
+        Ok(())
+    }
+    #[test]
     fn add() -> OpmResult<()> {
         let mut port_map = PortMap::default();
         assert!(port_map.0.is_empty());
@@ -194,6 +296,16 @@ mod tests {
         assert_eq!(port_map.remove_all_from_uuid(uuid1), true);
         assert_eq!(port_map.0.len(), 3);
         assert_eq!(port_map.remove_all_from_uuid(uuid2), true);
+        assert!(port_map.0.is_empty());
+        Ok(())
+    }
+    #[test]
+    fn clear() -> OpmResult<()> {
+        let mut port_map = PortMap::default();
+        port_map.add("external1", Uuid::new_v4(), "internal1")?;
+        port_map.add("external2", Uuid::new_v4(), "internal2")?;
+        assert_eq!(port_map.0.len(), 2);
+        port_map.clear();
         assert!(port_map.0.is_empty());
         Ok(())
     }

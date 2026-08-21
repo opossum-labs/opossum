@@ -1,4 +1,6 @@
-use opossum_core::types::api_types::LoadDocumentResponse;
+use opossum_core::types::api_types::{
+    LoadDocumentResponse, PositionUpdate, UndoRedoResponse, Viewport, ViewportChangeRequest,
+};
 use uuid::Uuid;
 
 use crate::HTTP_API_CLIENT;
@@ -37,5 +39,63 @@ pub async fn put_document(opm_string: String) -> Result<LoadDocumentResponse, St
     // Use regular .put() instead of .put_string() to deserialize the JSON response
     HTTP_API_CLIENT()
         .put_string_receive_json::<LoadDocumentResponse>("/api/document", opm_string)
+        .await
+}
+
+/// Undo the last checkpointed document edit.
+///
+/// # Errors
+///
+/// This function will return an error if there is nothing to undo, or the request fails.
+pub async fn undo_document() -> Result<UndoRedoResponse, String> {
+    HTTP_API_CLIENT().post("/api/document/undo", ()).await
+}
+
+/// Redo the last undone document edit.
+///
+/// # Errors
+///
+/// This function will return an error if there is nothing to redo, or the request fails.
+pub async fn redo_document() -> Result<UndoRedoResponse, String> {
+    HTTP_API_CLIENT().post("/api/document/redo", ()).await
+}
+
+/// Batch-update the GUI positions of several nodes/analyzers in one undo step.
+///
+/// # Errors
+///
+/// This function will return an error if the request fails.
+pub async fn patch_positions(updates: Vec<PositionUpdate>) -> Result<(), String> {
+    HTTP_API_CLIENT()
+        .patch("/api/document/positions", updates)
+        .await
+}
+
+/// Record a canvas viewport change (pan/zoom of a tab), given the viewport `before` and `after` the
+/// gesture. `coalesce` = true for scroll-zoom ticks (a whole burst collapses to one undo step
+/// backend-side), false for discrete gestures (pan, center, zoom-to-fit) so they stay separate undo
+/// steps and never merge with an adjacent zoom. `merge_into_previous` = true folds this change into
+/// the immediately preceding edit's undo entry instead of pushing its own (Auto Layout's post-layout
+/// fit, so one undo reverts both).
+///
+/// # Errors
+///
+/// This function will return an error if the request fails.
+pub async fn post_viewport_change(
+    before: Viewport,
+    after: Viewport,
+    coalesce: bool,
+    merge_into_previous: bool,
+) -> Result<(), String> {
+    HTTP_API_CLIENT()
+        .post_receive_no_content(
+            "/api/document/viewport_change",
+            ViewportChangeRequest {
+                before,
+                after,
+                coalesce,
+                merge_into_previous,
+            },
+        )
         .await
 }

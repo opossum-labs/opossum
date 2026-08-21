@@ -22,6 +22,7 @@ use sobol_editor::SobolParam;
 
 use crate::components::node_editor::{
     accordion::AccordionItem,
+    hooks::use_synced_signal,
     inputs::{
         InputData, IntoInputData,
         input_components::{LabeledSelect, RowedInputs},
@@ -93,7 +94,7 @@ pub fn PositionDistributionEditor(
     on_save: EventHandler<RayDataSource>,
     readonly: bool,
 ) -> Element {
-    let mut pos_dist_type_sig = use_signal(|| pos_dist_type);
+    let mut pos_dist_type_sig = use_synced_signal(pos_dist_type);
 
     let on_pos_dist_save = EventHandler::new(move |new_pos_dist_type: PosDistType| {
         pos_dist_type_sig.set(new_pos_dist_type);

@@ -264,7 +264,7 @@ pub fn SimulationWindow(
             if report_path.exists() {
                 if let Some(path_str) = report_path.to_str() {
                     // Using our safe helper wrapper to handle UNC paths correctly
-                    match open_report_safely(path_str) {
+                    match webbrowser::open(path_str) {
                         Ok(()) => {
                             let _ = writeln!(output.write(), "[INFO] Opened {report_filename}");
                             opened_any = true;
@@ -377,28 +377,4 @@ pub fn SimulationWindow(
             }
         }
     }
-}
-
-/// -------------------
-/// Workaround function
-/// -------------------
-/// Opens a file path or URL in the default web browser.
-/// This function contains a temporary workaround for Windows UNC network paths
-/// because the `webbrowser` crate currently strips the host name from them.
-fn open_report_safely(path_str: &str) -> std::io::Result<()> {
-    #[cfg(windows)]
-    {
-        // If it's a Windows UNC network path (starts with \\)
-        if path_str.starts_with("\\\\") {
-            // Bypass the webbrowser crate completely and let the native windows shell handle it.
-            // cmd /c start "" "path" natively understands UNC paths and triggers the browser correctly.
-            return std::process::Command::new("cmd")
-                .args(["/c", "start", "", path_str])
-                .spawn()
-                .map(|_| ());
-        }
-    }
-
-    // Fallback for local Windows paths, Linux, and macOS
-    webbrowser::open(path_str).map_err(|e| std::io::Error::other(e.to_string()))
 }

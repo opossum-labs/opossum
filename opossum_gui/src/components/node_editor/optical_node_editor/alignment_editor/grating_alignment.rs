@@ -30,22 +30,32 @@ use uuid::Uuid;
 #[component]
 pub fn GratingAlignmentInputs(
     alignment_sig_outside: ReadSignal<Isometry>,
-    node_properties_sig: ReadSignal<Properties>,
+    node_properties: ReadSignal<Properties>,
     on_save: EventHandler<Isometry>,
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     readonly: bool,
 ) -> Element {
+    // NOTE: the grating alignment controls here - the littrow-vs-direct selector (`alignment_select_sig`),
+    // the incident/diffracted toggle (`incident_angle_sig`, in `LittrowConfigEditor`) and the reference
+    // wavelength (`reference_wavelength_sig`) - are GUI-local computation aids, NOT persisted state. They
+    // only feed the *display* math that derives the shown Littrow angle. The only thing written to the
+    // document (and therefore the only undoable output of this editor) is the resulting alignment
+    // isometry, sent via `on_save`/`NodeChangeAction::Alignment` when the angle field is edited. These
+    // three controls are deliberately NOT undoable and are NOT serialized into the `.opm`: on reload they
+    // reset to their defaults (1053 nm, incident, littrow) and the saved angle is back-computed from the
+    // stored Yaw rotation. Making them undoable would require persisting them in the document; that is a
+    // deliberate non-goal here (see the branch's undo work / QA checklist).
     let mut alignment_select_sig = use_signal(|| true);
     let alignment_memo = use_memo(move || *alignment_sig_outside.read());
     let diffraction_order_memo = use_memo(move || {
-        if let Ok(Proptype::I32(p)) = node_properties_sig.read().get("diffraction order") {
+        if let Ok(Proptype::I32(p)) = node_properties.read().get("diffraction order") {
             *p
         } else {
             -1
         }
     });
     let line_density_memo = use_memo(move || {
-        if let Ok(Proptype::LinearDensity(p)) = node_properties_sig.read().get("line density") {
+        if let Ok(Proptype::LinearDensity(p)) = node_properties.read().get("line density") {
             *p
         } else {
             num_per_mm!(1740.)
@@ -58,8 +68,8 @@ pub fn GratingAlignmentInputs(
 
     if let (true, Ok(Proptype::I32(_)), Ok(Proptype::LinearDensity(_))) = (
         *alignment_select_sig.read(),
-        node_properties_sig.read().get("diffraction order").cloned(),
-        node_properties_sig.read().get("line density").cloned(),
+        node_properties.read().get("diffraction order").cloned(),
+        node_properties.read().get("line density").cloned(),
     ) {
         element_list.push(rsx! {
             LittrowConfigEditor {

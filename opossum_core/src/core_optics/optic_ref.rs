@@ -120,7 +120,12 @@ impl<'de> Deserialize<'de> for OpticRef {
         let intermediate = OpticRefIntermediate::deserialize(deserializer)?;
 
         let node_type = intermediate.attributes.node_type();
+        // Note: an unknown node type is not logged here. `OpticRef::deserialize` itself never skips a
+        // node - callers that tolerate a failing node (currently `deserialize_nodes_lossy` in
+        // `optic_graph/serialization.rs`) do the skipping and log accordingly, since only they know the
+        // node was skipped rather than the whole document failing to load.
         let node_ref = create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
+
         node_ref
             .optical_ref
             .lock_opm()
@@ -129,8 +134,6 @@ impl<'de> Deserialize<'de> for OpticRef {
             .map_err(|e| de::Error::custom(e.to_string()))?;
 
         // If the node is a group node, set its graph.
-        // The 'intermediate.graph' will always contain a valid OpticGraph
-        // (either deserialized from the source or a default one).
         if let Some(group_node) = node_ref
             .optical_ref
             .lock_opm()

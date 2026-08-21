@@ -79,9 +79,14 @@ pub fn Node(
 
     let z_index = node.z_index();
 
+    // Construct the deterministic test ID for Playwright (e.g., "node-1", "node-2")
+    let test_id = format!("node-{}", node.node_index());
+
     let node_icon = node.node_type.icon();
     rsx! {
         div {
+            // Assign deterministic test ID attribute for E2E testing
+            "data-testid": "{test_id}",
             id: format!("node_container_{}", node_id.as_simple()),
             tabindex: 0, // necessary to allow to receive keyboard focus
             class: "node {is_active} {in_selection_box_class} {is_drop_group}",

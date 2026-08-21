@@ -11,7 +11,8 @@ Nodes form the building blocks of the optical model and normally represent optic
 - [Reference node](./nodes/reference_node.md)
 
     A reference node refers to an already existing node in the model. Reference nodes are necessary in multi pass setups.
-    Another use case is the modeling of linear resonators.
+    Another use case is the modeling of linear resonators. A reference to a group must not be placed inside that same
+    group or any group nested within it (see [Reference node](./nodes/reference_node.md)).
 
 ## Node Properties
 

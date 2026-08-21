@@ -10,6 +10,7 @@ use crate::{
     components::{
         logger::LogResultExt,
         node_editor::{
+            hooks::use_synced_signal,
             inputs::{
                 dynamic_list::DynamicListComponent,
                 input_components::{LabeledSelect, RowedInputs},
@@ -28,12 +29,15 @@ pub fn StackedApertureInput(
     readonly: bool,
 ) -> Element {
     let mut current_aperture = use_signal(Aperture::default);
-    let mut stacked_aperture_sig = use_signal(|| stacked_aperture.clone());
+    let mut stacked_aperture_sig = use_synced_signal(stacked_aperture);
     let mut editing_index = use_signal(|| None::<usize>);
 
     let on_save = EventHandler::new(move |stack: StackShape| {
         if stack != *stacked_aperture_sig.read() {
-            on_shape_change.call(ApertureShape::Stack(stacked_aperture_sig.read().clone()));
+            // Send the *new* stack, not the old signal value - sending the stale signal made every
+            // PatchPort lag one add behind, so one undo wiped the whole stack and redo restored only
+            // the first entry.
+            on_shape_change.call(ApertureShape::Stack(stack.clone()));
             stacked_aperture_sig.set(stack);
         }
     });

@@ -1,5 +1,8 @@
 use crate::{
-    OPOSSUM_UI_LOGS, components::node_editor::inputs::input_components::NodeConfigPlainF64Input,
+    OPOSSUM_UI_LOGS,
+    components::node_editor::{
+        hooks::use_synced_signal, inputs::input_components::NodeConfigPlainF64Input,
+    },
 };
 use approx::relative_ne;
 use dioxus::prelude::*;
@@ -13,7 +16,7 @@ pub fn ConstantFilterTypeEditor<T>(
 where
     T: TryFrom<f64> + PartialEq + Clone + 'static,
 {
-    let transmission_sig = use_signal(|| transmission);
+    let transmission_sig = use_synced_signal(transmission);
 
     rsx! {
         NodeConfigPlainF64Input {

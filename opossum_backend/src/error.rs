@@ -13,6 +13,9 @@ impl BackEndErrorResponse {
     pub fn not_found() -> Self {
         Self::new(404, "NotFound", "The requested resource was not found")
     }
+    pub fn analyzer_not_found() -> Self {
+        Self::new(404, "Opossum", "UUID not found in analyzers")
+    }
 }
 // Display ist für Actix Pflicht
 impl std::fmt::Display for BackEndErrorResponse {

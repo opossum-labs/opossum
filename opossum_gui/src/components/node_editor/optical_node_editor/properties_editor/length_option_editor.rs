@@ -1,4 +1,5 @@
 use crate::components::node_editor::{
+    hooks::use_synced_signal,
     inputs::input_components::{LabeledSelect, NodeConfigUnitInput, UnitHandling},
     node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::on_save_proptype_handler,
@@ -11,19 +12,15 @@ use uuid::Uuid;
 
 #[component]
 pub fn LengthOptionEditor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     length_opt: Option<Length>,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    let length_opt_sig = use_signal(|| length_opt);
-    let on_save = on_save_proptype_handler(
-        length_opt_sig,
-        property_key.clone(),
-        on_change,
-        node_id.into(),
-    );
+    let length_opt_sig = use_synced_signal(length_opt);
+    let on_save =
+        on_save_proptype_handler(length_opt_sig, property_key.clone(), on_change, node_id);
 
     rsx! {
         LabeledSelect {
