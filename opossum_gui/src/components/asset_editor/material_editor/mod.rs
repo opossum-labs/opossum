@@ -62,6 +62,11 @@ pub fn MaterialEditor(
     #[props(default)]
     on_save: Option<EventHandler<()>>,
 
+    /// Custom label for the primary action button (e.g. "Save Changes" for AdHoc editing).
+    /// If None, defaults to "Publish New Version" (for drafts) or "Overwrite Version vX".
+    #[props(default)]
+    save_label: Option<String>,
+
     /// Base ID used for HTML element IDs to avoid DOM collisions.
     #[props(default = "materialEditor".to_string())]
     base_id: String,
@@ -95,13 +100,14 @@ pub fn MaterialEditor(
     });
 
     // Handler that checks whether a direct save or a confirmation warning is required
+    let save_label_for_click = save_label.clone();
     let handle_save_click = use_callback(move |_| {
         if let Some(save_handler) = on_save {
-            if is_draft {
-                // Drafts safely publish as next version (latest + 1)
+            // Direct save if it is a draft or if a custom save label is used (e.g. local AdHoc save)
+            if is_draft || save_label_for_click.is_some() {
                 save_handler.call(());
             } else {
-                // Existing version: Require explicit user confirmation before overwriting
+                // Existing catalog version: Require explicit user confirmation before overwriting on disk
                 show_overwrite_warning.set(true);
             }
         }
@@ -122,7 +128,11 @@ pub fn MaterialEditor(
               h4 { class: "mb-0",
                 "{material.read().name()}"
                 if is_draft {
-                  span { class: "badge bg-secondary ms-2", "Draft (Auto-Version)" }
+                  if save_label.is_some() {
+                    span { class: "badge bg-secondary ms-2", "AdHoc Material" }
+                  } else {
+                    span { class: "badge bg-secondary ms-2", "Draft (Auto-Version)" }
+                  }
                 } else {
                   span { class: "badge bg-warning text-dark ms-2",
                     "Target Version: v{current_version}"
@@ -199,7 +209,9 @@ pub fn MaterialEditor(
 
           if on_save.is_some() && !readonly {
             AlertDialogAction { on_click: handle_save_click,
-              if is_draft {
+              if let Some(custom_label) = save_label.as_deref() {
+                "{custom_label}"
+              } else if is_draft {
                 "Publish New Version"
               } else {
                 "Overwrite Version {current_version}"

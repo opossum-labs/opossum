@@ -120,13 +120,16 @@ pub fn App() -> Element {
             .cloned()
             .unwrap_or_else(|| PathBuf::from("./catalogs"));
 
-        // Ensure the directory exists
         if !registry_path.exists() {
             let _ = std::fs::create_dir_all(&registry_path);
         }
 
         AssetLoader::new(registry_path)
     });
+
+    // Provide the Signal<AssetLoader> to all child components
+    provide_context(loader);
+
     // Reactive update: re-instantiate AssetLoader when catalog_dir changes in APP_CONFIG
     use_effect(move || {
         if let Some(catalog_path) = APP_CONFIG.read().catalog_dir() {
@@ -463,7 +466,7 @@ pub fn App() -> Element {
         }
         SimulationWindow { show_simulation: run_simulation, model_file_path }
         SettingsDialog { open: show_settings }
-        MaterialCatalog { open: show_material_catalog, loader }
+        MaterialCatalog { open: show_material_catalog }
     }
 
     #[cfg(target_arch = "wasm32")]
