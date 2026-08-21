@@ -2,9 +2,9 @@
 use crate::{
     APP_CONFIG,
     components::{
+        catalog_editor::MaterialCatalog,
         context_menu::cx_menu::{ContextMenu, CxtCommand},
         logger::logger_component::Logger,
-        material_catalog::MaterialCatalog,
         menu_bar::{
             menu_bar_component::{AppCommand, MenuBar},
             project_helper::{select_open_path, select_save_path},
