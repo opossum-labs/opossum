@@ -13,15 +13,14 @@ use uuid::Uuid;
 
 #[component]
 pub fn AngleEditor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     angle: Angle,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
     let angle_sig = use_synced_signal(angle);
-    let on_save =
-        on_save_proptype_handler(angle_sig, property_key.clone(), on_change, node_id.into());
+    let on_save = on_save_proptype_handler(angle_sig, property_key.clone(), on_change, node_id);
 
     rsx! {
         NodeConfigUnitInput {

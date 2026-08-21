@@ -9,15 +9,14 @@ use uuid::Uuid;
 
 #[component]
 pub fn BoolEditor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     b: bool,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
     let bool_sig = use_synced_signal(b);
-    let on_save =
-        on_save_proptype_handler(bool_sig, property_key.clone(), on_change, node_id.into());
+    let on_save = on_save_proptype_handler(bool_sig, property_key.clone(), on_change, node_id);
 
     rsx! {
         LabeledCheckboxInput {

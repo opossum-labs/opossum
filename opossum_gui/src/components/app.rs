@@ -2,15 +2,16 @@
 use crate::{
     APP_CONFIG,
     components::{
-        alert_dialog::{
-            AlertDialogAction, AlertDialogActions, AlertDialogCancel, AlertDialogContent,
-            AlertDialogDescription, AlertDialogRoot, AlertDialogTitle,
-        },
+        catalog_editor::MaterialCatalog,
         context_menu::cx_menu::{ContextMenu, CxtCommand},
         logger::logger_component::Logger,
         menu_bar::{
             menu_bar_component::{AppCommand, MenuBar},
             project_helper::{select_open_path, select_save_path},
+        },
+        primitives::alert_dialog::{
+            AlertDialog, AlertDialogAction, AlertDialogActions, AlertDialogCancel,
+            AlertDialogDescription, AlertDialogTitle,
         },
         scenery_editor::{GraphEditor, NodeEditorCommand},
         settings_dialog::SettingsDialog,
@@ -18,6 +19,8 @@ use crate::{
     },
 };
 use dioxus::prelude::*;
+use dioxus_primitives::alert_dialog::AlertDialogContent;
+use opossum_registry::AssetLoader;
 use std::path::PathBuf;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -109,6 +112,30 @@ pub fn App() -> Element {
     #[cfg(not(target_arch = "wasm32"))]
     let mut run_simulation = use_signal(|| false);
 
+    // Initialize AssetLoader with the path from AppConfig
+    let mut loader = use_signal(|| {
+        let registry_path = APP_CONFIG
+            .read()
+            .catalog_dir()
+            .cloned()
+            .unwrap_or_else(|| PathBuf::from("./catalogs"));
+
+        // Ensure the directory exists
+        if !registry_path.exists() {
+            let _ = std::fs::create_dir_all(&registry_path);
+        }
+
+        AssetLoader::new(registry_path)
+    });
+    // Reactive update: re-instantiate AssetLoader when catalog_dir changes in APP_CONFIG
+    use_effect(move || {
+        if let Some(catalog_path) = APP_CONFIG.read().catalog_dir() {
+            if !catalog_path.exists() {
+                let _ = std::fs::create_dir_all(catalog_path);
+            }
+            *loader.write() = AssetLoader::new(catalog_path.clone());
+        }
+    });
     let mut node_editor_command: Signal<Option<NodeEditorCommand>> = use_signal(|| None);
     let node_editor_command_handler =
         EventHandler::new(move |node_editor_command_opt: Option<NodeEditorCommand>| {
@@ -124,6 +151,7 @@ pub fn App() -> Element {
     let mut pending_action = use_signal(|| Option::<PendingAction>::None);
     let mut show_alert = use_signal(|| false);
     let mut show_settings = use_signal(|| false);
+    let mut show_material_catalog = use_signal(|| false);
 
     let mut execute_immediate = move |cmd: AppCommand| match cmd {
         AppCommand::NewProject => {
@@ -221,6 +249,9 @@ pub fn App() -> Element {
             {
                 run_simulation.set(true);
             }
+        }
+        AppCommand::OpenMaterialCatalog => {
+            show_material_catalog.set(true);
         }
     };
 
@@ -431,7 +462,8 @@ pub fn App() -> Element {
             }
         }
         SimulationWindow { show_simulation: run_simulation, model_file_path }
-        SettingsDialog { show: show_settings }
+        SettingsDialog { open: show_settings }
+        MaterialCatalog { open: show_material_catalog, loader }
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -457,7 +489,7 @@ pub fn App() -> Element {
                 on_alert_cancel,
             }
         }
-        SettingsDialog { show: show_settings }
+        SettingsDialog { open: show_settings }
     }
 }
 
@@ -475,28 +507,26 @@ fn CommonAppLayout(
     on_alert_confirm: EventHandler<MouseEvent>,
     on_alert_cancel: EventHandler<MouseEvent>,
 ) -> Element {
+    info!("🔄 Render: App::CommonAppLayout");
+    // --- GUI Layout Drag Logic ---
     let mut root_tab_open = use_signal(|| true);
     let root_tab_open_handler = EventHandler::<bool>::new(move |b| root_tab_open.set(b));
     let mut height = use_signal(|| 100.0);
     let mut dragging = use_signal(|| false);
     let mut last_y = use_signal(|| 0.0);
 
-    let on_mousemove = {
-        move |evt: MouseEvent| {
-            if *dragging.read() {
-                let height_val = *height.read();
-                let dy = evt.client_coordinates().y - *last_y.read();
-                height.set((height_val - dy).max(100.0));
-                last_y.set(evt.client_coordinates().y);
-            }
+    let on_mousemove = move |evt: MouseEvent| {
+        if *dragging.read() {
+            let height_val = *height.read();
+            let dy = evt.client_coordinates().y - *last_y.read();
+            height.set((height_val - dy).max(100.0));
+            last_y.set(evt.client_coordinates().y);
         }
     };
-    let on_mouseup = { move |_| dragging.set(false) };
-    let on_mousedown = {
-        move |evt: f64| {
-            dragging.set(true);
-            last_y.set(evt);
-        }
+    let on_mouseup = move |_| dragging.set(false);
+    let on_mousedown = move |evt: f64| {
+        dragging.set(true);
+        last_y.set(evt);
     };
 
     rsx! {
@@ -527,7 +557,7 @@ fn CommonAppLayout(
             }
             Logger { drag_handler: on_mousedown, height }
         }
-        AlertDialogRoot {
+        AlertDialog {
             open: show_alert(),
             on_open_change: move |v: bool| show_alert.set(v),
             AlertDialogContent {

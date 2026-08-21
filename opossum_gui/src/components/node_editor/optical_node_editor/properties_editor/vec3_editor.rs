@@ -42,7 +42,7 @@ impl DefaultFromName for Vec3Options {}
 
 #[component]
 pub fn Vec3Editor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     vector: Vector3<f64>,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
@@ -52,8 +52,7 @@ pub fn Vec3Editor(
     let vec_sig = use_synced_signal(vector);
 
     // Create the save handler to propagate changes up to the core
-    let on_save =
-        on_save_proptype_handler(vec_sig, property_key.clone(), on_change, node_id.into());
+    let on_save = on_save_proptype_handler(vec_sig, property_key.clone(), on_change, node_id);
 
     let dummy_legacy_callback = EventHandler::new(|_| {});
     let vec_x_input = InputData::new(
@@ -113,32 +112,32 @@ pub fn Vec3Editor(
     });
 
     rsx! {
-      LabeledSelect {
-        id: format!("vec3Property{property_key}").to_camel_case(),
-        label: select_label,
-        options: select_options_from_enum_iterator(&vec3_select(), None),
-        readonly,
-        onchange: move |e: Event<FormData>| {
-            if let Some(vec_3_opt) = Vec3Options::default_from_name(&e.data.value()) {
-                let new_vec = match vec_3_opt {
-                    Vec3Options::X => Vector3::new(1., 0., 0.),
-                    Vec3Options::Y => Vector3::new(0., 1., 0.),
-                    Vec3Options::Z => Vector3::new(0., 0., 1.),
-                    Vec3Options::Mix => Vector3::new(1., 1., 1.),
-                };
-                on_save.call(new_vec);
+        LabeledSelect {
+            id: format!("vec3Property{property_key}").to_camel_case(),
+            label: select_label,
+            options: select_options_from_enum_iterator(&vec3_select(), None),
+            readonly,
+            onchange: move |e: Event<FormData>| {
+                if let Some(vec_3_opt) = Vec3Options::default_from_name(&e.data.value()) {
+                    let new_vec = match vec_3_opt {
+                        Vec3Options::X => Vector3::new(1., 0., 0.),
+                        Vec3Options::Y => Vector3::new(0., 1., 0.),
+                        Vec3Options::Z => Vector3::new(0., 0., 1.),
+                        Vec3Options::Mix => Vector3::new(1., 1., 1.),
+                    };
+                    on_save.call(new_vec);
+                }
+            },
+        }
+        {
+            if vec3_select() == Vec3Options::Mix {
+                rsx! {
+                    RowedInputs { inputs: vec![vec_x_input, vec_y_input, vec_z_input] }
+                }
+            } else {
+                rsx! {}
             }
-        },
-      }
-      {
-          if vec3_select() == Vec3Options::Mix {
-              rsx! {
-                RowedInputs { inputs: vec![vec_x_input, vec_y_input, vec_z_input] }
-              }
-          } else {
-              rsx! {}
-          }
-      }
+        }
     }
 }
 

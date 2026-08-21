@@ -24,7 +24,7 @@ impl AnalysisRayTrace for Wedge {
             ));
         };
 
-        let (refri, _, _) = self.get_node_attributes_ray_trace(&self.node_attr)?;
+        let (material, _, _) = self.get_node_attributes_ray_trace(&self.node_attr)?;
 
         let mut rays_bundle = vec![rays];
         let refraction_intended = true;
@@ -32,7 +32,7 @@ impl AnalysisRayTrace for Wedge {
         // 1. Eintrittsfläche
         self.pass_through_surface_generic(
             in_port,
-            Some(refri),
+            Some(material.optical.refractive_index),
             &mut rays_bundle,
             config,
             self.inverted(),

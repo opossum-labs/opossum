@@ -42,6 +42,7 @@ pub fn NodeConfigEditor(
     workspace_processor: Coroutine<GraphsWorkspaceAction>,
     active_graph_id: ReadSignal<Uuid>,
 ) -> Element {
+    info!("🔄 Render: NodeConfigEditor");
     let save_manager = use_save_manager();
     let flush_trigger = save_manager.flush_trigger;
     let dirty_count = save_manager.dirty_count;
@@ -51,10 +52,51 @@ pub fn NodeConfigEditor(
         dirty_count,
     });
 
-    #[allow(clippy::redundant_closure)]
-    let mut displayed_nodes = use_signal(|| selected_nodes_memo());
+    // Stores the last confirmed selection while the form is clean
+    let mut last_clean_selection = use_signal(&*selected_nodes_memo);
 
-    let memo_active_node_id = use_memo(move || {
+    // Synchronously derive displayed nodes during render to prevent double-render cycles
+    let displayed_nodes = use_memo(move || {
+        let is_dirty = *dirty_count.read() > 0;
+        if is_dirty {
+            // Keep existing selection locked while editing
+            last_clean_selection.read().clone()
+        } else {
+            // Always reflect the latest selection immediately
+            selected_nodes_memo()
+        }
+    });
+
+    use_effect(move || {
+        let current_selection = selected_nodes_memo();
+        if *dirty_count.read() == 0
+            && last_clean_selection.peek().as_slice() != current_selection.as_slice()
+        {
+            last_clean_selection.set(current_selection);
+        }
+    });
+
+    // --- NEW: Granular memos to prevent unnecessary re-renders in child components ---
+
+    // Extract only the node_id. Child will only re-render if the UUID actually changes.
+    let memo_node_id = use_memo(move || {
+        displayed_nodes()
+            .first()
+            .map_or_else(Uuid::nil, |n| n.node_id)
+    });
+
+    // Extract only the graph_id.
+    let memo_graph_id = use_memo(move || {
+        displayed_nodes()
+            .first()
+            .map_or_else(Uuid::nil, |n| n.graph_id)
+    });
+
+    // Extract the node_type.
+    let memo_node_type = use_memo(move || displayed_nodes().first().map(|n| n.node_type.clone()));
+
+    // --- TRANSITION ONLY: Kept for AnalyzerNodeEditor until we refactor it ---
+    let legacy_memo_active_node = use_memo(move || {
         displayed_nodes()
             .first()
             .cloned()
@@ -65,31 +107,28 @@ pub fn NodeConfigEditor(
             })
     });
 
-    use_effect(move || {
-        if *dirty_count.read() == 0 {
-            displayed_nodes.set(selected_nodes_memo());
-        }
-    });
-
     // Standard Processing
     use_node_config_processor(model_modified_handler);
     let node_config_processor = use_coroutine_handle::<NodeChangeEvent>();
-    let on_node_change = EventHandler::new(move |evt: NodeChangeEvent| {
+    let on_change = use_callback(move |evt: NodeChangeEvent| {
         node_config_processor.send(evt);
     });
 
     if displayed_nodes.len() == 1 {
-        match displayed_nodes().first().map(|n| n.node_type.clone()) {
+        match memo_node_type() {
             Some(NodeType::Optical(_)) => rsx! {
                 OpticalNodeEditor {
-                    active_node: memo_active_node_id,
-                    on_change: on_node_change,
+                    // Pass the granular memos directly
+                    node_id: memo_node_id,
+                    graph_id: memo_graph_id,
+                    on_change,
                 }
             },
             Some(NodeType::Analyzer(_)) => rsx! {
                 AnalyzerNodeEditor {
-                    active_node: memo_active_node_id,
-                    on_change: on_node_change,
+                    // We still use the legacy memo here until we refactor AnalyzerNodeEditor
+                    active_node: legacy_memo_active_node,
+                    on_change,
                 }
             },
             None => rsx! {

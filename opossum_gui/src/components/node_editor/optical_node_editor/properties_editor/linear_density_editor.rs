@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 #[component]
 pub fn LinearDensityEditor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     linear_density: LinearNumberDensity,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
@@ -20,12 +20,8 @@ pub fn LinearDensityEditor(
 ) -> Element {
     let linear_density_sig = use_synced_signal(linear_density);
 
-    let on_save = on_save_proptype_handler(
-        linear_density_sig,
-        property_key.clone(),
-        on_change,
-        node_id.into(),
-    );
+    let on_save =
+        on_save_proptype_handler(linear_density_sig, property_key.clone(), on_change, node_id);
 
     rsx! {
         NodeConfigUnitInput {
