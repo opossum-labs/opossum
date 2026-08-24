@@ -52,6 +52,7 @@ impl From<OpossumError> for BackEndErrorResponse {
             OpossumError::Spectrum(_) => (400, "Spectrum"),
             OpossumError::Console(_) => (400, "Console"),
             OpossumError::Properties(_) => (400, "Properties"),
+            OpossumError::Registry(_) => (400, "Registry"),
             OpossumError::Other(_) => (400, "Other"),
         };
 
