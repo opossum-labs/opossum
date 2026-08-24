@@ -1,9 +1,9 @@
-use crate::components::node_editor::{
-    hooks::use_synced_signal,
-    inputs::input_components::LabeledSelect,
-    node_config_editor::NodeChangeEvent,
-    optical_node_editor::properties_editor::{
-        on_save_proptype_handler, refractive_index_editor::RefractiveIndexEditor,
+use crate::components::{
+    inputs::RefractiveIndexEditor,
+    node_editor::{
+        hooks::use_synced_signal, inputs::input_components::LabeledSelect,
+        node_config_editor::NodeChangeEvent,
+        optical_node_editor::properties_editor::on_save_proptype_handler,
     },
 };
 use dioxus::prelude::*;
@@ -32,7 +32,7 @@ const DEFINED_BY_REFRACTIVE_INDEX: &str = "Manual (refractive index)";
 /// * `readonly` - whether the inputs are shown read-only.
 #[component]
 pub fn MaterialEditor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     material: Material,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
@@ -42,12 +42,7 @@ pub fn MaterialEditor(
 
     // `Material` converts into `Proptype::Material(AssetRef::Inline(..))`, so editing a material
     // always yields an embedded one - which is what a hand-defined material is.
-    let on_save = on_save_proptype_handler(
-        material_sig,
-        property_key.clone(),
-        on_change,
-        node_id.into(),
-    );
+    let on_save = on_save_proptype_handler(material_sig, property_key.clone(), on_change, node_id);
 
     // Replace only the index model inside the current material, so its identity (uuid, name) and
     // every other datum survive an index edit.
@@ -57,7 +52,9 @@ pub fn MaterialEditor(
         on_save.call(material);
     });
 
-    let ref_ind_type = material_sig.read().refractive_index().clone();
+    // A derived read-signal rather than a plain clone: `RefractiveIndexEditor` syncs its internal
+    // state from `value`, so the index has to stay reactive when the material changes underneath.
+    let ref_ind_memo = use_memo(move || material_sig.read().refractive_index().clone());
     rsx! {
         LabeledSelect {
             id: format!("materialProperty{property_key}").to_camel_case(),
@@ -70,9 +67,9 @@ pub fn MaterialEditor(
         }
         div { class: "accordion-content-wrapper-div border-start",
             RefractiveIndexEditor {
-                id: format!("refractiveIndexProperty{property_key}"),
-                ref_ind_type,
-                on_save: on_save_refractive_index,
+                value: ref_ind_memo,
+                on_change: on_save_refractive_index,
+                base_id: format!("refractiveIndexProperty{property_key}"),
                 readonly,
             }
         }

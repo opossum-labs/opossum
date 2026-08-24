@@ -69,7 +69,7 @@ fn clear_aperture_input_data(
 /// * `readonly` - whether the inputs are shown read-only.
 #[component]
 pub fn ClearApertureEditor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     aperture: ApertureShape,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
@@ -77,12 +77,7 @@ pub fn ClearApertureEditor(
 ) -> Element {
     let aperture_sig = use_synced_signal(aperture);
 
-    let on_save = on_save_proptype_handler(
-        aperture_sig,
-        property_key.clone(),
-        on_change,
-        node_id.into(),
-    );
+    let on_save = on_save_proptype_handler(aperture_sig, property_key.clone(), on_change, node_id);
 
     // Pre-rendered outside the `rsx!` block below, as in the port aperture editor: the polygon
     // brings its own input component rather than a list of numeric rows.
