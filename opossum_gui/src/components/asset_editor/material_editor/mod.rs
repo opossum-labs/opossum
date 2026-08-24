@@ -179,10 +179,26 @@ pub fn MaterialEditor(
                     style: "width: 5.5rem;",
                     r#type: "number",
                     min: "0",
+                    step: "1",
                     disabled: readonly,
                     value: "{current_version}",
+                    // Prevent typing of negative signs, decimal points, and scientific notation
+                    onkeydown: move |evt| {
+                        if let Key::Character(ref c) = evt.key() {
+                            if ["-", "+", ".", ",", "e", "E"].contains(&c.as_str()) {
+                                evt.prevent_default();
+                            }
+                        }
+                    },
                     oninput: move |evt| {
-                        if let Ok(version_val) = evt.value().parse::<u32>() {
+                        let raw_val = evt.value();
+                        if raw_val.is_empty() {
+                            // Optional fallback: Reset to 0 (draft) if field is cleared
+                            on_change
+                                .call(MaterialChangeEvent {
+                                    action: MaterialChangeAction::SetVersion(0),
+                                });
+                        } else if let Ok(version_val) = raw_val.parse::<u32>() {
                             on_change
                                 .call(MaterialChangeEvent {
                                     action: MaterialChangeAction::SetVersion(version_val),
