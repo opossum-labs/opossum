@@ -41,6 +41,22 @@ fn is_amplifier_candidate(node_id: Uuid) -> bool {
     crate::AMPLIFIER_CANDIDATES.read().contains(&node_id)
 }
 
+/// Builds the canvas element of a freshly fetched node, carrying the amplifier state the caches
+/// hold for it.
+///
+/// `From<&NodeInfo> for NodeElement` deliberately does *not* do this: it stays free of any
+/// `GlobalSignal` read so that it remains testable outside a mounted app. The price is that every
+/// path materialising nodes has to seed the two fields itself — which is why they all go through
+/// here rather than each remembering to. A path that forgot it showed up as amplifier markers
+/// silently vanishing from a whole tab whenever it was refilled (opening a group, dropping a node
+/// into one, loading a file), while the document still listed the nodes as amplifiers.
+fn node_element_with_amp_state(node_info: &NodeInfo) -> NodeElement {
+    let mut node_element = NodeElement::from(node_info);
+    node_element.set_amp_model(active_scenario_amp_model(node_info.uuid()));
+    node_element.set_amplifier_candidate(is_amplifier_candidate(node_info.uuid()));
+    node_element
+}
+
 #[derive(Clone, PartialEq, Store, Default)]
 pub struct GraphState {
     graph_store: GraphStore,
@@ -188,9 +204,11 @@ impl<Lens> Store<GraphStore, Lens> {
         }
     }
     fn add_nodes(&mut self, nodes: &[NodeInfo]) {
-        self.nodes()
-            .write()
-            .extend(nodes.iter().map(|node| (node.uuid(), node.into())));
+        self.nodes().write().extend(
+            nodes
+                .iter()
+                .map(|node| (node.uuid(), node_element_with_amp_state(node))),
+        );
     }
     fn add_analyzers(&mut self, analyzers: &[AnalyzerItemDto]) {
         self.nodes()
@@ -293,9 +311,7 @@ impl<Lens> Store<GraphStore, Lens> {
     /// # Returns:
     /// A `NodeElement` representing the newly added reference node.
     fn add_new_reference_node(&mut self, ref_node_info: &NodeInfo) -> NodeElement {
-        let mut node_element = NodeElement::from(ref_node_info);
-        node_element.set_amp_model(active_scenario_amp_model(ref_node_info.uuid()));
-        node_element.set_amplifier_candidate(is_amplifier_candidate(ref_node_info.uuid()));
+        let mut node_element = node_element_with_amp_state(ref_node_info);
         node_element.set_node_index(self.fetch_next_node_index());
         let id = ref_node_info.uuid();
         let nr_of_nodes = self.nodes().len();
@@ -325,9 +341,7 @@ impl<Lens> Store<GraphStore, Lens> {
     /// # Arguments:
     /// * `node_info`: The `NodeInfo` containing the type and position of the new node.
     fn add_new_optical_node(&mut self, node_info: &NodeInfo) {
-        let mut node_element = NodeElement::from(node_info);
-        node_element.set_amp_model(active_scenario_amp_model(node_info.uuid()));
-        node_element.set_amplifier_candidate(is_amplifier_candidate(node_info.uuid()));
+        let mut node_element = node_element_with_amp_state(node_info);
         node_element.set_node_index(self.fetch_next_node_index());
         self.nodes().insert(node_info.uuid(), node_element.clone());
         self.set_node_active(node_info.uuid(), node_element.z_index(), true);
