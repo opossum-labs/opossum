@@ -16,19 +16,15 @@ use uuid::Uuid;
 
 #[component]
 pub fn FilterTypeEditor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     filter_type_builder: FilterTypeBuilder,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
     let filter_type_builder_sig = use_synced_signal(filter_type_builder);
-    let on_save = on_save_proptype_handler(
-        filter_type_builder_sig,
-        property_key,
-        on_change,
-        node_id.into(),
-    );
+    let on_save =
+        on_save_proptype_handler(filter_type_builder_sig, property_key, on_change, node_id);
 
     let mut element_list: Vec<Result<VNode, RenderError>> = vec![rsx! {
         FilterTypeSelector { filter_type_builder_sig, on_spectral_filter_change: on_save }

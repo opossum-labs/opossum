@@ -1,5 +1,7 @@
 pub mod app;
+pub mod asset_editor;
 pub mod context_menu;
+pub mod inputs;
 pub mod logger;
 pub mod menu_bar;
 pub mod node_editor;
@@ -9,4 +11,5 @@ pub mod short_cuts;
 pub mod simulation;
 // pub mod plot;
 // pub mod render_3d;
-pub mod alert_dialog;
+pub mod catalog_editor;
+pub mod primitives;

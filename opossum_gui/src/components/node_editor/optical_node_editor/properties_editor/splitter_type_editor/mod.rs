@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 #[component]
 pub fn SplitterTypeEditor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     splitting_config_builder: SplittingConfigBuilder,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
@@ -25,7 +25,7 @@ pub fn SplitterTypeEditor(
         splitting_config_builder_sig,
         property_key,
         on_change,
-        node_id.into(),
+        node_id,
     );
 
     let mut element_list = vec![rsx! {

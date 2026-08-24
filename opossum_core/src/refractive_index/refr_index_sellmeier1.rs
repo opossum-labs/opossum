@@ -56,7 +56,7 @@ impl Default for RefrIndexSellmeier1 {
                 l2: 0.020_017_914_4,
                 l3: 103.560_653_0,
             },
-            wvl_range: nanometer!(1000.)..nanometer!(1100.),
+            wvl_range: nanometer!(300.)..nanometer!(2500.),
         }
     }
 }
@@ -318,7 +318,7 @@ mod test {
         // Check if default is indeed N-BK7 (Schott)
         assert_eq!(bk7.k1(), 1.039_612_120);
         assert_eq!(bk7.l1(), 0.006_000_698_67);
-        assert_eq!(bk7.wavelength_range().start, nanometer!(1000.0));
+        assert_eq!(bk7.wavelength_range().start, nanometer!(300.0));
     }
 
     #[test]
@@ -349,13 +349,13 @@ mod test {
 
     #[test]
     fn test_wavelength_range_logic() {
-        let r = RefrIndexSellmeier1::default(); // 1000nm to 1100nm
+        let r = RefrIndexSellmeier1::default(); // 300nm to 2500nm
 
         // Lower bound: inclusive
-        assert!(r.get_refractive_index(nanometer!(1000.0)).is_ok());
+        assert!(r.get_refractive_index(nanometer!(300.0)).is_ok());
 
         // Upper bound: exclusive (Rust Range behavior: start..end)
-        assert!(r.get_refractive_index(nanometer!(1100.0)).is_err());
+        assert!(r.get_refractive_index(nanometer!(2500.0)).is_err());
     }
 
     #[test]

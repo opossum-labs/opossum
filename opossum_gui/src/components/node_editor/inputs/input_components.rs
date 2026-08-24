@@ -285,29 +285,36 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
     }
 }
 
+/// Renders a list of input components arranged in two-column grid rows.
 #[component]
 pub fn RowedInputs(inputs: Vec<InputData>) -> Element {
+    info!("🔄 Render: RowedInputs");
+
     rsx! {
-        for chunk in inputs.iter().chunks(2) {
-            {
-                let inputs: Vec<&InputData> = chunk.collect::<Vec<&InputData>>();
-                if inputs.len() == 2 {
-                    rsx! {
-                        div { class: "row gy-1 gx-2",
-                            div { class: "col-sm",
-                                InputParamLabeledInput { input_data: inputs[0].clone() }
-                            }
-                            div { class: "col-sm",
-                                InputParamLabeledInput { input_data: inputs[1].clone() }
-                            }
+        // Standard slice chunks yield sub-slices without any intermediate heap allocation
+        for (row_idx , chunk) in inputs.chunks(2).enumerate() {
+            div {
+                // Key ensures fast and stable Virtual DOM reconciliation
+                key: "input_row_{row_idx}",
+                class: "row gy-1 gx-2 mb-1",
+
+                match chunk {
+                    // Two inputs in a row: Split equally into two columns
+                    [first, second] => rsx! {
+                        div { class: "col-sm-6",
+                            InputParamLabeledInput { input_data: first.clone() }
                         }
-                    }
-                } else if inputs.len() == 1 {
-                    rsx! {
-                        InputParamLabeledInput { input_data: inputs[0].clone() }
-                    }
-                } else {
-                    rsx! {}
+                        div { class: "col-sm-6",
+                            InputParamLabeledInput { input_data: second.clone() }
+                        }
+                    },
+                    // Single trailing input: Render in a half-width column for visual consistency
+                    [single] => rsx! {
+                        div { class: "col-sm-6",
+                            InputParamLabeledInput { input_data: single.clone() }
+                        }
+                    },
+                    _ => rsx! {},
                 }
             }
         }
@@ -338,7 +345,7 @@ pub fn RowedElements(elements: Vec<Element>, num_per_row: usize) -> Element {
 pub fn LabeledInput(
     id: String,
     label: String,
-    value: String,
+    value: ReadSignal<String>,
     onchange: EventHandler<Event<FormData>>,
     #[props(default = "text")] r#type: &'static str,
     #[props(optional)] step: Option<&'static str>,
@@ -545,32 +552,55 @@ pub fn UnitInput(
     }
 }
 
+/// A stylized floating-label select input component.
 #[component]
 pub fn LabeledSelect(
+    /// Unique HTML ID for the select element.
     id: String,
+
+    /// Label text displayed in the floating header.
     label: String,
+
+    /// Options list where each entry consists of `(is_selected, value_and_display_text)`.
     options: Vec<(bool, String)>,
+
+    /// Event handler emitting the selected string value directly.
     onchange: EventHandler<Event<FormData>>,
-    #[props(default = false)] readonly: bool,
+
+    /// If true, disables user interaction.
+    #[props(default = false)]
+    readonly: bool,
 ) -> Element {
+    info!("🔄 Render: LabeledSelect");
+
     let select_class = if readonly {
         "form-select bg-dark text-light disabled-select"
     } else {
         "form-select bg-dark text-light"
     };
+
     rsx! {
         div { class: "form-floating border-start", "data-mdb-input-init": "",
             select {
                 class: select_class,
-                id: id.as_str(),
+                id: "{id}",
                 disabled: readonly,
-                "aria-label": label,
-                onchange: move |e| onchange.call(e),
-                for (is_selected , option) in options {
-                    option { selected: is_selected, value: option, {option.clone()} }
+                "aria-label": "{label}",
+                // Extract the value directly from the DOM event and emit the clean String
+                onchange: move |e: Event<FormData>| {
+                    onchange.call(e);
+                },
+                // Use key for fast VDOM list reconciliation and avoid .clone()
+                for (is_selected , option) in &options {
+                    option {
+                        key: "{option}",
+                        selected: *is_selected,
+                        value: "{option}",
+                        "{option}"
+                    }
                 }
             }
-            label { class: "text-secondary", r#for: id, "{label}" }
+            label { class: "text-secondary", r#for: "{id}", "{label}" }
         }
     }
 }

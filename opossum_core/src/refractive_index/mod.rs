@@ -220,8 +220,8 @@ mod test {
     #[test]
     fn test_error_propagation_from_variants() {
         // Ensure that variant-specific errors (like out of range) are propagated.
-        let bk7 = RefractiveIndexType::default(); // Valid range: 1000..1100nm
-        let out_of_range = bk7.get_refractive_index(nanometer!(500.0));
+        let bk7 = RefractiveIndexType::default(); // Valid range: 300..2500nm
+        let out_of_range = bk7.get_refractive_index(nanometer!(2500.0));
         assert!(out_of_range.is_err());
     }
 

@@ -16,7 +16,12 @@ pub enum GraphsWorkspaceAction {
         /// The ID of the graph.
         graph_id: Uuid,
     },
-
+    /// Atomically resets backend leftovers and initializes the new root scenery tab.
+    /// This prevents intermediate store clears and reduces startup re-renders.
+    ResetAndInitializeRootScenery {
+        /// The initial name of the root scenery.
+        name: String,
+    },
     /// Navigates to a port that is mapped to a node within a group.
     JumpToMappedPort {
         /// The ID of the mapped node.

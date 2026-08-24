@@ -44,7 +44,7 @@ In this tutorial, we will model a simple Kepler telescope consisting of a source
 
 Use the `Node` menu to add either an optical node or an analyzer node. Let's start by selecting an optical node: a `Source` node, which represents the starting point of our optical system.
 
-Once selected, the source node appears on the canvas. You can move the node by simply clicking and dragging it. Next, add two `Lens` nodes and place them on the canvas as well.
+Once selected, the source port node appears on the canvas. You can move the node by simply clicking and dragging it. Next, add two `Lens` nodes and place them on the canvas as well.
 
 ![first step](../images/opossum_gui_first_steps_1.PNG)
 
@@ -54,13 +54,13 @@ The canvas itself is virtually infinite. You can pan the viewport by clicking an
 
 ### Connecting Nodes
 
-To form an optical network, the nodes must be connected. Click on an output port (the light green square on the right side of a node) and drag a line to the input port of another node. Connect them in this order: `Source -> Lens -> Lens`. Your screen should look similar to this:
+To form an optical network, the nodes must be connected. Click on an output port (the light green square on the right side of a node) and drag a line to the input port of another node. Connect them in this order: `Sourceport -> Lens -> Lens`. Your screen should look similar to this:
 
 ![third step](../images/opossum_gui_first_steps_3.PNG)
 Each node port can only be connected to exactly one other port, i.e., a single source cannot be connected to multiple inputs simultaneously. 
 For example, if a light source or signal needs to be split into multiple paths, a dedicated beamsplitter node must be used.
 
-Each connection displays a numeric value representing the spatial separation between the connected nodes (the distance along the optical axis). For a detailed discussion on element placement, please refer to the [Concepts](../concepts/concepts.md) section. For this example, set the distance between the source and the first lens to **10 mm**, and the distance between the two lenses to **200 mm**.
+Each connection displays a numeric value representing the spatial separation between the connected nodes (the distance along the optical axis). For a detailed discussion on element placement, please refer to the [Concepts](../concepts/concepts.md) section. For this example, set the distance between the sourceport and the first lens to **10 mm**, and the distance between the two lenses to **200 mm**.
 
 Numeric values can be entered manually, with units, and unit prefixes are supported. For example, distances can be specified from millimeters (mm) to kilometers (km), including metric system prefixes from quecto (q) to quetta (Q). The system automatically reads these prefixes and converts the values into a standard internal unit.
 
@@ -82,7 +82,7 @@ Set the **Center Thickness** to **3 mm**, the **Front Radius** to **60 mm**, and
 
 Repeat this step for the second lens: Set the **Center Thickness** to **3 mm**, the **Front Surface** to **Flat** (Plane), and the **Back Surface** to **-40 mm**.
 
-Finally, select the `Source` node to configure the spectral properties. Navigate to `Properties -> Light definition -> Spectral distribution`. Change the `Rays spectral distribution` from "Gaussian" to "Laser Lines". This generates a monochromatic source (defaulting to 1054 nm) instead of a broad spectrum.
+Finally, select the `Sourceport` node to configure the spectral properties. Navigate to `Properties -> Light definition -> Spectral distribution`. Change the `Rays spectral distribution` from "Gaussian" to "Laser Lines". This generates a monochromatic source (defaulting to 1054 nm) instead of a broad spectrum.
 
 ### Adding an Analyzer
 
