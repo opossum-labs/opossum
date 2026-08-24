@@ -113,6 +113,17 @@ pub fn use_workspace_processor(
                         *crate::AMP_LIST_REFRESH.write() += 1;
                         *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
                     }
+                    GraphsWorkspaceAction::ResetAndInitializeRootScenery { name } => {
+                        process_reset_and_initialize_root_scenery(
+                            workspace,
+                            workspace_handlers,
+                            set_file_path_handler,
+                            name,
+                        )
+                        .await;
+                        // Clear undo/redo history on initial startup/reset
+                        *crate::UNDO_REDO_STATUS.write() = (false, false);
+                    }
                     GraphsWorkspaceAction::Refresh => {
                         process_refresh(workspace, root_graph_id, workspace_handlers).await;
                     }
@@ -2270,4 +2281,52 @@ async fn process_rename_root_scenery(
                 .set_node_name(name.clone(), root_id, root_id, needs_saving);
         }),
     );
+}
+/// Atomically resets backend state and initializes the root scenery tab.
+/// All asynchronous backend calls are resolved BEFORE any UI store mutation occurs,
+/// guaranteeing that `GraphEditor` re-renders exactly once.
+async fn process_reset_and_initialize_root_scenery(
+    _workspace: ReadStore<GraphsWorkspaceState>,
+    ws_handler: WorkSpaceSignalHandlers,
+    set_file_path_handler: EventHandler<Option<PathBuf>>,
+    name: String,
+) {
+    // Phase 1: Asynchronous backend preparation
+    if let Err(err_str) = delete_document().await {
+        OPOSSUM_UI_LOGS
+            .write()
+            .add_log(&format!("Failed to clean up backend state: {err_str}"));
+    }
+
+    let root_id = match api::get_document_root_uuid().await {
+        Ok(id) => id,
+        Err(err_str) => {
+            OPOSSUM_UI_LOGS
+                .write()
+                .add_log(&format!("Failed to get root scenery UUID: {err_str}"));
+            return;
+        }
+    };
+
+    // Rename the root scenery on the backend before touching UI state
+    if let Err(err_str) = api::update_node_name(root_id, &name).await {
+        OPOSSUM_UI_LOGS
+            .write()
+            .add_log(&format!("Failed to set root scenery name: {err_str}"));
+    }
+
+    // Phase 2: Synchronous atomic UI state updates (no await points in between)
+    set_file_path_handler.call(None);
+    ws_handler.workspace.clear_workspace();
+    ws_handler.workspace.set_root_scenery_id(root_id);
+    ws_handler.workspace.add_new_group_tab(GraphInfo {
+        name: name.clone(),
+        id: root_id,
+        hierarchy: vec![(root_id, name)],
+    });
+    ws_handler.workspace.set_needs_saving(false);
+
+    // Note: get_editor_area is intentionally omitted here.
+    // The DOM element does not exist yet; the container's `onresize` event
+    // will trigger it automatically as soon as the tab is rendered.
 }

@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 #[component]
 pub fn FluenceEstimatorEditor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     fluence_estimator: FluenceEstimator,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
@@ -25,7 +25,7 @@ pub fn FluenceEstimatorEditor(
         fluence_estimator_sig,
         property_key.clone(),
         on_change,
-        node_id.into(),
+        node_id,
     );
 
     rsx! {

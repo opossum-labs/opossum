@@ -43,7 +43,7 @@ impl DefaultFromName for Vec2Options {}
 
 #[component]
 pub fn Vec2Editor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     vector: Vector2<f64>,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
@@ -52,8 +52,7 @@ pub fn Vec2Editor(
     let select_label = property_key.to_sentence_case();
     let vec_sig = use_synced_signal(vector);
 
-    let on_save =
-        on_save_proptype_handler(vec_sig, property_key.clone(), on_change, node_id.into());
+    let on_save = on_save_proptype_handler(vec_sig, property_key.clone(), on_change, node_id);
 
     let dummy_legacy_callback = EventHandler::new(|_| {});
 

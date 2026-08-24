@@ -16,7 +16,7 @@ use uuid::Uuid;
 
 #[component]
 pub fn CurvatureEditor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     curvature: Length,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,

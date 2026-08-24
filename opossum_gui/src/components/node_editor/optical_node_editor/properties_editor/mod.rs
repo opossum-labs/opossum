@@ -29,8 +29,9 @@ use crate::components::node_editor::{
         fluence_estimator_editor::FluenceEstimatorEditor, i32_editor::I32Editor,
         isometry_option_editor::IsometryOptionEditor, length_editor::LengthEditor,
         length_option_editor::LengthOptionEditor, linear_density_editor::LinearDensityEditor,
-        material_editor::MaterialEditor, splitter_type_editor::SplitterTypeEditor,
-        string_editor::StringEditor, vec2_editor::Vec2Editor, vec3_editor::Vec3Editor,
+        refractive_index_editor::RefractiveIndexPropertyEditor,
+        splitter_type_editor::SplitterTypeEditor, string_editor::StringEditor,
+        vec2_editor::Vec2Editor, vec3_editor::Vec3Editor,
     },
 };
 use dioxus::prelude::*;
@@ -43,15 +44,15 @@ use uuid::Uuid;
 
 #[component]
 pub fn PropertiesEditor(
-    node_id: Memo<Uuid>,
-    node_properties_sig: ReadSignal<Properties>,
+    node_id: ReadSignal<Uuid>,
+    node_properties: ReadSignal<Properties>,
     node_info_sig: ReadSignal<NodeInfo>,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
     let editor_inputs = if node_info_sig.read().uuid == *node_id.read() {
         let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
-        for (property_key, property) in node_properties_sig.read().iter() {
+        for (property_key, property) in node_properties.read().iter() {
             if let Some(editor) =
                 get_editor(node_id, property, property_key.clone(), on_change, readonly)
             {
@@ -75,7 +76,7 @@ pub fn PropertiesEditor(
 }
 
 fn get_editor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     property: &Property,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
@@ -96,7 +97,7 @@ fn get_editor(
 }
 
 fn get_primitive_editor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     property: &Property,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
@@ -163,7 +164,7 @@ fn get_primitive_editor(
 
 /// Editors for properties describing an optical behaviour.
 fn get_optical_editor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     property: &Property,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
@@ -207,11 +208,8 @@ fn get_optical_editor(
             }
         }),
         Proptype::LightDataBuilder(_light_data_builder) => Some(rsx! { "no longer available" }),
-        // A document is hydrated on load, so a material reaching the editor is normally embedded.
-        // A bare id can only show up for a registry material this GUI cannot resolve yet - it is
-        // named rather than skipped, so the property never silently disappears from the panel.
-        Proptype::Material(AssetRef::Inline(material)) => Some(rsx! {
-            MaterialEditor {
+        Proptype::RefractiveIndex(ref_ind_type) => Some(rsx! {
+            RefractiveIndexPropertyEditor {
                 node_id,
                 material,
                 property_key,
@@ -229,7 +227,7 @@ fn get_optical_editor(
 }
 
 fn get_geometric_editor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     property: &Property,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,

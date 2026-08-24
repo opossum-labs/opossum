@@ -27,7 +27,7 @@ use uuid::Uuid;
 
 #[component]
 pub fn ApertureEditor(
-    node_id: Memo<Uuid>,
+    node_id: ReadSignal<Uuid>,
     port_name: String,
     aperture: Aperture,
     on_change: EventHandler<Aperture>,

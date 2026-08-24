@@ -35,6 +35,7 @@ pub fn GraphEditor(
     root_tab_open_handler: EventHandler<bool>,
     sidebar_drag_handler: EventHandler<f64>,
 ) -> Element {
+    info!("🔄 Render: GraphEditor");
     let workspace = use_store(GraphsWorkspaceState::default);
     use_context_provider(|| ReadStore::from(workspace));
     let root_graph_id = use_memo(move || *workspace.root_scenery_id().read());
@@ -94,9 +95,10 @@ pub fn GraphEditor(
             } else {
                 "unsaved".to_string()
             };
-            workspace_processor.send(GraphsWorkspaceAction::DeleteRootScenery);
+
+            // Atomically clean backend leftovers and initialize root tab
             workspace_processor
-                .send(GraphsWorkspaceAction::AddRootSceneryTab { name: scenery_name });
+                .send(GraphsWorkspaceAction::ResetAndInitializeRootScenery { name: scenery_name });
         }
     });
 

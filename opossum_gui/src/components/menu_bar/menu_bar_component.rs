@@ -39,6 +39,7 @@ pub enum AppCommand {
     Quit,
     Simulate,
     Settings,
+    OpenMaterialCatalog,
 }
 
 #[component]
@@ -229,6 +230,30 @@ pub fn MenuBar(
                             MenuListItemShortCut {
                                 short_cut_action: ShortCutAction::AutoLayout,
                                 on_click: move |_| on_menu_action.call(AppCommand::AutoLayout),
+                            }
+                        }
+                    }
+                    // --- Help Menu  ---
+                    li { class: "nav-item dropdown",
+                        a {
+                            "data-mdb-dropdown-init": "",
+                            "data-mdb-toggle": "dropdown",
+                            class: "nav-link dropdown-toggle link-secondary hidden-arrow",
+                            id: "navbarDropdownHelpMenuLink",
+                            role: "button",
+                            "Catalogs"
+                        }
+                        ul { class: "dropdown-menu",
+                            li {
+                                a {
+                                    class: "dropdown-item",
+                                    role: "button",
+                                    onclick: move |_| on_menu_action.call(AppCommand::OpenMaterialCatalog),
+                                    "Material catalog"
+                                }
+                            }
+                            li {
+                                a { class: "dropdown-item", role: "button", "Coating catalog" }
                             }
                         }
                     }
