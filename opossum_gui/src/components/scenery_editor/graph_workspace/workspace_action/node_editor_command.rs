@@ -38,6 +38,13 @@ pub enum NodeEditorCommand {
         group_port_name: String,
         port_type: PortType,
     },
+    /// Mark or unmark a node as an amplifier candidate (see
+    /// [`crate::components::context_menu::cx_menu::CxtCommand::ToggleAmplifierCandidate`]).
+    ToggleAmplifierCandidate {
+        node_id: Uuid,
+        graph_id: Uuid,
+        is_amplifier: bool,
+    },
     Undo,
     Redo,
 }
@@ -181,6 +188,17 @@ pub fn node_editor_command(
                     group_id,
                     group_port_name,
                     port_type,
+                });
+            }
+            NodeEditorCommand::ToggleAmplifierCandidate {
+                node_id,
+                graph_id,
+                is_amplifier,
+            } => {
+                workspace_processor.send(GraphsWorkspaceAction::SetAmplifierCandidate {
+                    node_id,
+                    graph_id,
+                    is_amplifier,
                 });
             }
             NodeEditorCommand::JumpToMappedPort {

@@ -16,6 +16,9 @@ impl BackEndErrorResponse {
     pub fn analyzer_not_found() -> Self {
         Self::new(404, "Opossum", "UUID not found in analyzers")
     }
+    pub fn pump_scenario_not_found() -> Self {
+        Self::new(404, "Opossum", "UUID not found in pump scenarios")
+    }
 }
 // Display ist für Actix Pflicht
 impl std::fmt::Display for BackEndErrorResponse {

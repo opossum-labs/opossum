@@ -3,12 +3,12 @@
 
 use crate::{
     analyzers::energy::AnalysisEnergy,
-    core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType},
+    core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType, Volumetric},
     error::{OpmResult, OpossumError},
     geometry::{Plane, Sphere, geo_surface::GeoSurfaceRef},
-    material::Material,
+    material::{MATERIAL, Material},
     meter, millimeter,
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, create_volume_properties},
     properties::{Proptype, validator::Validator},
     radian,
     refractive_index::RefrIndexConst,
@@ -47,7 +47,8 @@ inventory::submit! {
 ///   - `front curvature`
 ///   - `rear curvature`
 ///   - `center thickness`
-///   - `refractive index`
+///   - `material`
+///   - `clear aperture`
 pub struct Lens {
     node_attr: NodeAttr,
 }
@@ -88,7 +89,7 @@ impl Default for Lens {
             .unwrap();
         node_attr
             .create_property(
-                "material",
+                MATERIAL,
                 "material of the lens",
                 Material::new_draft(
                     "lens material",
@@ -99,6 +100,7 @@ impl Default for Lens {
                 .into(),
             )
             .unwrap();
+        create_volume_properties(&mut node_attr).unwrap();
         let mut lens = Self { node_attr };
         lens.update_surfaces().unwrap();
         lens
@@ -130,7 +132,7 @@ impl Lens {
         lens.node_attr
             .set_property("center thickness", center_thickness.into())?;
         lens.node_attr
-            .set_property("material", material.into().into())?;
+            .set_property(MATERIAL, material.into().into())?;
         lens.update_surfaces()?;
         Ok(lens)
     }
@@ -222,7 +224,11 @@ impl Lens {
     // }
 }
 
+impl Volumetric for Lens {}
 impl OpticNode for Lens {
+    fn as_volume(&self) -> Option<&dyn Volumetric> {
+        Some(self)
+    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
         let Ok(Proptype::Curvature(front_curvature)) =
@@ -345,7 +351,7 @@ mod test {
         };
         assert_eq!(*ct, millimeter!(10.0));
         let Ok(Proptype::Material(AssetRef::Inline(material))) =
-            node.node_attr.get_property("material")
+            node.node_attr.get_property(MATERIAL)
         else {
             panic!()
         };
@@ -485,7 +491,7 @@ mod test {
         };
         assert_eq!(*ct, millimeter!(11.0));
         let Ok(Proptype::Material(AssetRef::Inline(material))) =
-            node.node_attr.get_property("material")
+            node.node_attr.get_property(MATERIAL)
         else {
             panic!()
         };
@@ -570,6 +576,85 @@ mod test {
         } else {
             assert!(false);
         }
+        Ok(())
+    }
+    /// Reference values for the entry surface → volume → exit surface propagation.
+    ///
+    /// This pins the current behaviour down completely so that refactoring the two-surface
+    /// sequence in `analysis_raytrace.rs` can be verified to be behaviour-neutral. The values are
+    /// recorded, not derived — physical correctness is covered by the other tests in this module.
+    #[test]
+    fn volume_propagation_regression() -> OpmResult<()> {
+        let mut node = Lens::new(
+            "regression",
+            millimeter!(100.0),
+            millimeter!(-100.0),
+            millimeter!(10.0),
+            RefrIndexConst::new(1.5)?,
+        )?;
+        node.set_isometry(Isometry::identity())?;
+        test_volume_propagation_regression(
+            &mut node,
+            &[
+                [0.0, 0.0, 10.0, 0.0, 0.0, 1.0, 1.0, 15.0],
+                [
+                    4.837_210_642_342,
+                    0.0,
+                    9.882_938_448_974,
+                    -0.049_284_003_372,
+                    0.0,
+                    0.998_784_805_157,
+                    1.0,
+                    14.763_905_268_675,
+                ],
+                [
+                    0.331_985_150_282,
+                    -3.203_693_130_790,
+                    9.948_117_221_805,
+                    0.047_993_663_920,
+                    0.135_562_167_588,
+                    0.989_605_733_079,
+                    1.0,
+                    14.938_120_918_052,
+                ],
+            ],
+        )
+    }
+    #[test]
+    fn volume_body() -> OpmResult<()> {
+        test_volume_body::<Lens>()
+    }
+    #[test]
+    fn clear_aperture() -> OpmResult<()> {
+        test_clear_aperture::<Lens>()
+    }
+    #[test]
+    fn clear_aperture_absent_in_file() -> OpmResult<()> {
+        test_clear_aperture_absent_in_file::<Lens>()
+    }
+    /// The body of a biconvex lens is thinner towards its rim by the sag of both surfaces.
+    #[test]
+    fn volume_body_thins_out_towards_the_rim() -> OpmResult<()> {
+        let curvature = millimeter!(100.0);
+        let center_thickness = millimeter!(10.0);
+        let ray_position = millimeter!(5.0, 0.0, 0.0);
+        let ray_height = ray_position.x;
+        let mut node = Lens::new(
+            "rim",
+            curvature,
+            -curvature,
+            center_thickness,
+            RefrIndexConst::new(1.5)?,
+        )?;
+        node.set_isometry(Isometry::identity())?;
+        let path_length = path_length_through(&node, ray_position)?;
+        // Both surfaces recede by the same sag, so the volume is two sags thinner at that height.
+        let sag = curvature - (curvature * curvature - ray_height * ray_height).sqrt();
+        assert_relative_eq!(
+            path_length.value,
+            (center_thickness - 2.0 * sag).value,
+            epsilon = 1e-12
+        );
         Ok(())
     }
     #[test]

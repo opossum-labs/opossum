@@ -170,7 +170,7 @@ pub fn OpticalNodeEditor(
         }
     } else {
         rsx! {
-            div { "No data" }
+            div { class: "noselect", "No data" }
         }
     }
 }

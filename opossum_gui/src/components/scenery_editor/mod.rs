@@ -7,7 +7,7 @@ mod node;
 mod ports;
 mod selection_box;
 
-pub use graph_editor::GraphEditor;
+pub use graph_editor::{GraphEditor, SidebarView};
 pub use graph_workspace::{
     DragStatus, EditorState, EditorStateStoreExt, GraphState, GraphStore, GraphsWorkspaceAction,
     GraphsWorkspaceState, GraphsWorkspaceStateStoreExt, NodeEditorCommand, SelectedNode,

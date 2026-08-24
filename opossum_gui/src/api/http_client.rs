@@ -149,27 +149,50 @@ impl HTTPClient {
         body: B,
     ) -> Result<(), String> {
         let res = self.client().put(self.url(route)).json(&body).send().await;
-        res.map_or_else(
-            |_| Err(format!("Error on put request on route: \"{route}\"")),
-            |_response| Ok(()),
-        )
+        Self::no_content_result(res, route, "put").await
     }
 
     /// Send a POST request to the given route with the provided body, expecting no content (204).
     ///
     /// # Errors
     ///
-    /// This function will return an error if the request fails (e.g. the route is not reachable).
+    /// This function will return an error if the request fails (e.g. the route is not reachable)
+    /// or if the response status indicates an error (e.g. a rejected value).
     pub async fn post_receive_no_content<B: Serialize + DeserializeOwned>(
         &self,
         route: &str,
         body: B,
     ) -> Result<(), String> {
         let res = self.client().post(self.url(route)).json(&body).send().await;
-        res.map_or_else(
-            |_| Err(format!("Error on post request on route: \"{route}\"")),
-            |_response| Ok(()),
-        )
+        Self::no_content_result(res, route, "post").await
+    }
+
+    /// Turns the raw result of a request expecting an empty `204` body into `Result<(), String>`.
+    ///
+    /// Shared by [`Self::put_receive_no_content`] and [`Self::post_receive_no_content`], both of
+    /// which used to treat *any* response that merely arrived (including a `4xx`/`5xx`) as success -
+    /// silently swallowing server-side rejections such as a validation error. This checks the status
+    /// the same way [`Self::delete_no_content`] already does, and additionally surfaces the server's
+    /// [`ErrorResponse`] message when the body carries one.
+    async fn no_content_result(
+        res: reqwest::Result<Response>,
+        route: &str,
+        verb: &str,
+    ) -> Result<(), String> {
+        let response = res.map_err(|_| format!("Error on {verb} request on route: \"{route}\""))?;
+        if response.status().is_success() {
+            return Ok(());
+        }
+        let status = response.status();
+        match response.json::<ErrorResponse>().await {
+            Ok(err_res) => Err(format!(
+                "Error {}: {} - {}",
+                err_res.status, err_res.category, err_res.message
+            )),
+            Err(_) => Err(format!(
+                "{verb} request to \"{route}\" failed with status: {status}"
+            )),
+        }
     }
     /// Send a PATCH request to the given route with the provided body.
     ///

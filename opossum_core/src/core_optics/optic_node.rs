@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::core_optics::{NodeAttrExt, OpticPorts};
 use crate::{
     analyzers::Analyzable,
-    core_optics::{PortType, SceneryResources, node_attr::HasNodeAttr},
+    core_optics::{PortType, SceneryResources, node_attr::HasNodeAttr, volumetric::Volumetric},
     error::OpmResult,
     light::LightData,
     nodes::fluence_detector::Fluence,
@@ -103,6 +103,20 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     fn set_inverted(&mut self, inverted: bool) -> OpmResult<()> {
         self.node_attr_mut().set_inverted(inverted);
         Ok(())
+    }
+    /// Return this node as a [`Volumetric`] one, if it encloses a volume of material.
+    ///
+    /// This is the one question that answers "may this component amplify, absorb, or otherwise act
+    /// on light along a path *inside* it" — and it is asked of the node itself rather than of its
+    /// type name, because that is all a caller holding a `dyn Analyzable` still has. Every node
+    /// answers it; only those implementing [`Volumetric`] answer with `Some`, which they do by
+    /// overriding this method with `Some(self)`.
+    ///
+    /// # Returns
+    ///
+    /// The node as a [`Volumetric`], or `None` if it has no volume.
+    fn as_volume(&self) -> Option<&dyn Volumetric> {
+        None
     }
     /// Return [`NodeReport`] of the current state of this [`OpticNode`].
     ///

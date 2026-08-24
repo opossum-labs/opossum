@@ -267,6 +267,7 @@ impl Proptype {
                 Self::Energy(value) => {
                     template_engine.render("simple", &format_quantity(joule, *value))
                 }
+                Self::Aperture(shape) => template_engine.render("simple", &shape.to_string()),
                 Self::Material(AssetRef::Inline(mat)) => template_engine
                     .render("simple", &format!("{} (v{})", mat.name(), mat.version())),
                 Self::Material(AssetRef::Id(mat_id)) => {
@@ -514,6 +515,20 @@ mod test {
                 0
             )?,
             "Ocean Optics HR2000".to_string()
+        );
+        // An embedded material is named by its header, a referenced one only by its id.
+        assert_eq!(
+            Proptype::from(Material::default()).to_html("id", "property_name", 0)?,
+            "Default Glass (v0)".to_string()
+        );
+        let material_id = Uuid::nil();
+        assert_eq!(
+            Proptype::Material(AssetRef::<Material>::Id(material_id)).to_html(
+                "id",
+                "property_name",
+                0
+            )?,
+            format!("MaterialRef({material_id})")
         );
         assert_eq!(
             Proptype::WaveFrontData(WaveFrontMap::default())

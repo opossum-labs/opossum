@@ -13,6 +13,23 @@ use crate::{
     },
 };
 
+/// Name of the property that carries the [`Material`] of a node with a volume.
+///
+/// Same purpose as [`CLEAR_APERTURE`](crate::geometry::body::CLEAR_APERTURE) for the transversal
+/// extent: the node declarations and every reader refer to the property by this constant rather
+/// than by a literal.
+pub const MATERIAL: &str = "material";
+
+/// Name the [`MATERIAL`] property had before it carried a whole [`Material`].
+///
+/// Up to and including OPOSSUM 0.7.2 the same slot held a bare
+/// [`RefractiveIndexType`] under this name. The constant is kept so that `.opm` files written by
+/// an older OPOSSUM can be migrated on load (see `migrate_legacy_properties` in
+/// [`properties`](crate::properties)) — without that,
+/// [`Properties::update`](crate::properties::Properties::update) would silently drop the old key
+/// and the node would fall back to its default material.
+pub const LEGACY_REFRACTIVE_INDEX: &str = "refractive index";
+
 /// Primary optical properties required for optical simulation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OpticalProperties {
@@ -150,6 +167,15 @@ impl Material {
     #[must_use]
     pub fn name(&self) -> &str {
         &self.header.name
+    }
+
+    /// Returns the refractive index model n(λ) of the material.
+    ///
+    /// This hands out the model itself rather than a value at one wavelength, for the callers that
+    /// have to pass the whole dispersion model on (e.g. the volume propagation during ray tracing).
+    #[must_use]
+    pub const fn refractive_index(&self) -> &RefractiveIndexType {
+        &self.optical.refractive_index
     }
 
     /// Calculates the refractive index for a given wavelength.

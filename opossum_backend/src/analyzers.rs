@@ -3,14 +3,12 @@ use actix_web::{
     web::{self},
 };
 use opossum_core::{
-    core_optics::node_attr::HasNodeAttr,
-    error::OpossumError,
+    core_optics::NodeAttr,
     light::lightdata::{energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder},
     nodes::NodeGroup,
     opm_document::AnalyzerInfo,
     prelude::AnalyzerType,
     types::api_types::{AnalyzerItemDto, ErrorResponse, NewAnalyzerInfo, SourcePortDto},
-    utils::LockExt,
 };
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
@@ -18,50 +16,21 @@ use uuid::Uuid;
 use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
-    helper_functions::{Ron, analyzer_mut_or_404, apply_and_push_undo, ron_or_json_response},
-    undo::{Command, PatchAnalyzer, RepositionAnalyzer},
+    helper_functions::{
+        Ron, analyzer_mut_or_404, apply_and_push_undo, collect_nodes, ron_or_json_response,
+    },
+    undo::{Command, PatchAnalyzer, PatchAnalyzerPumpScenarios, RepositionAnalyzer},
 };
 
-/// Recursively collects every "source port" node under `current_group` (inclusive of nested
-/// subgroups) as `(uuid, name)` pairs. A subtree that can't be inspected (e.g. a node that fails to
-/// lock) is silently skipped rather than failing the whole walk.
-fn collect_source_ports(
-    scenery: &NodeGroup,
-    current_group: Uuid,
-    collected: &mut Vec<(Uuid, String)>,
-) {
-    let children_res = scenery.with_group_node(current_group, |g| {
-        g.nodes()
-            .iter()
-            .map(|n| {
-                let node = n.optical_ref.lock_opm()?;
-                let node_type = node.node_attr().node_type().to_string();
-                let node_uuid = node.node_attr().uuid();
-                let node_name = node.node_attr().name().to_string();
-                drop(node);
-                Ok((node_uuid, node_type, node_name))
-            })
-            .collect::<Result<Vec<(Uuid, String, String)>, OpossumError>>()
-    });
-
-    let Ok(Ok(nodes_data)) = children_res else {
-        return;
-    };
-    for (child_uuid, node_type, node_name) in nodes_data {
-        if node_type == "source port" {
-            collected.push((child_uuid, node_name));
-        } else if scenery.with_group_node(child_uuid, |_| {}).is_ok() {
-            collect_source_ports(scenery, child_uuid, collected);
-        }
-    }
-}
-
-/// Recursively collects the UUIDs of every "source port" node in `scenery`.
-fn get_all_source_port_uuids(scenery: &NodeGroup) -> Vec<Uuid> {
-    let mut collected = Vec::new();
-    let root_uuid = scenery.node_attr().uuid();
-    collect_source_ports(scenery, root_uuid, &mut collected);
-    collected.into_iter().map(|(uuid, _)| uuid).collect()
+/// Collects every "source port" node of the whole document as `(uuid, name)` pairs, in depth-first
+/// order.
+fn collect_source_ports(scenery: &NodeGroup) -> Vec<(Uuid, String)> {
+    collect_nodes(scenery, &|node_attr: &NodeAttr| {
+        (node_attr.node_type() == "source port").then(|| node_attr.name().to_string())
+    })
+    .into_iter()
+    .map(|node| (node.uuid, node.value))
+    .collect()
 }
 
 /// Get an analyzer by UUID
@@ -123,7 +92,10 @@ pub async fn post_analyzer(
     );
 
     // 2. Automatically populate default mappings for all currently existing source ports
-    let source_uuids = get_all_source_port_uuids(document.scenery());
+    let source_uuids: Vec<Uuid> = collect_source_ports(document.scenery())
+        .into_iter()
+        .map(|(uuid, _)| uuid)
+        .collect();
     if let Some(analyzer_info) = document.analyzer_mut(uuid) {
         let mut a_type = analyzer_info.analyzer_type().clone();
 
@@ -266,6 +238,48 @@ pub async fn put_analyzer_gui_position(
     apply_and_push_undo(&data, document, command, true)
 }
 
+/// Set which pump scenarios an analyzer runs in
+///
+/// An analyzer produces one report per listed scenario, in the given order; an empty list is a
+/// single passive run, which is what every analyzer did before scenarios existed.
+#[utoipa::path(
+    tag = "analyzer",
+    params(("uuid" = Uuid, Path, description = "UUID of the analyzer")),
+    request_body(content = Vec<Uuid>, description = "pump scenario UUIDs to run, in order", content_type = "application/json"),
+    responses(
+        (status = NO_CONTENT, description = "Pump scenario selection successfully updated"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "Analyzer UUID not found, or a listed pump scenario does not exist", content_type="application/json")
+    )
+)]
+#[put("/{uuid}/pump_scenarios")]
+pub async fn put_analyzer_pump_scenarios(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    body: web::Json<Vec<Uuid>>,
+) -> Result<HttpResponse, BackEndErrorResponse> {
+    let uuid = path.into_inner();
+    let new = body.into_inner();
+    let mut document = data.document.lock();
+
+    if let Some(missing) = new
+        .iter()
+        .find(|scenario_id| document.pump_scenario(**scenario_id).is_none())
+    {
+        return Err(BackEndErrorResponse::new(
+            400,
+            "Opossum",
+            &format!("pump scenario {missing} does not exist"),
+        ));
+    }
+
+    let old = analyzer_mut_or_404(&mut document, uuid)?
+        .pump_scenarios()
+        .to_vec();
+    let command =
+        Command::PatchAnalyzerPumpScenarios(PatchAnalyzerPumpScenarios { id: uuid, old, new });
+    apply_and_push_undo(&data, document, command, true)
+}
+
 /// Get all available `SourcePort` nodes (UUID and Name) in the entire document recursively
 #[utoipa::path(
     tag = "analyzer",
@@ -275,17 +289,14 @@ pub async fn put_analyzer_gui_position(
     )
 )]
 #[get("/available_sources")]
+// The document lock is deliberately held for the whole read-only walk, as in the other lookup
+// helpers - releasing it early would mean cloning the scenery for nothing.
+#[allow(clippy::significant_drop_tightening)]
 pub async fn get_available_sources(
     data: web::Data<AppState>,
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let document = data.document.lock();
-    let scenery = document.scenery().clone();
-    let root_uuid = scenery.node_attr().uuid();
-    drop(document);
-
-    let mut collected = Vec::new();
-    collect_source_ports(&scenery, root_uuid, &mut collected);
-    let collected_sources: Vec<SourcePortDto> = collected
+    let collected_sources: Vec<SourcePortDto> = collect_source_ports(document.scenery())
         .into_iter()
         .map(|(uuid, name)| SourcePortDto { uuid, name })
         .collect();
@@ -301,4 +312,96 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(patch_analyzer);
     cfg.service(delete_analyzer);
     cfg.service(put_analyzer_gui_position);
+    cfg.service(put_analyzer_pump_scenarios);
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{app_state::AppState, document::undo_document};
+    use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
+    use opossum_core::prelude::EnergyConfig;
+
+    #[actix_web::test]
+    async fn set_pump_scenario_selection_and_undo() {
+        let app_state = Data::new(AppState::default());
+        let (analyzer_id, scenario_id) = {
+            let mut document = app_state.document.lock();
+            let analyzer_id = document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()));
+            let scenario_id = document.add_pump_scenario("full power");
+            (analyzer_id, scenario_id)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(put_analyzer_pump_scenarios)
+                .service(undo_document),
+        )
+        .await;
+
+        let req = test::TestRequest::put()
+            .uri(&format!("/{analyzer_id}/pump_scenarios"))
+            .set_json(vec![scenario_id])
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+        assert_eq!(
+            app_state
+                .document
+                .lock()
+                .analyzer(analyzer_id)
+                .unwrap()
+                .pump_scenarios(),
+            vec![scenario_id]
+        );
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(
+            app_state
+                .document
+                .lock()
+                .analyzer(analyzer_id)
+                .unwrap()
+                .pump_scenarios()
+                .is_empty()
+        );
+    }
+
+    /// A selection naming a scenario that doesn't exist must be rejected outright - letting it
+    /// through would only fail much later, at analysis time, with a less specific error.
+    #[actix_web::test]
+    async fn set_pump_scenario_selection_rejects_unknown_scenario() {
+        let app_state = Data::new(AppState::default());
+        let analyzer_id = {
+            let mut document = app_state.document.lock();
+            document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()))
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(put_analyzer_pump_scenarios),
+        )
+        .await;
+
+        let req = test::TestRequest::put()
+            .uri(&format!("/{analyzer_id}/pump_scenarios"))
+            .set_json(vec![Uuid::new_v4()])
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        assert!(
+            app_state
+                .document
+                .lock()
+                .analyzer(analyzer_id)
+                .unwrap()
+                .pump_scenarios()
+                .is_empty(),
+            "a rejected selection must not be partially applied"
+        );
+    }
 }

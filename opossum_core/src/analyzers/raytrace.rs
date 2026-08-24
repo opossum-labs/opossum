@@ -5,14 +5,12 @@ use std::collections::HashMap;
 use super::{Analyzer, AnalyzerType};
 use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
-    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, node_attr::HasNodeAttr},
-    degree,
+    core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
+    gain::{ActiveScenario, GainModel, PumpScenario},
     light::{LightResult, Rays, lightdata::ray_data_builder::RayDataBuilder},
-    material::Material,
     nodes::NodeGroup,
     picojoule,
-    properties::{Proptype, proptype::AssetRef},
     reporting::analysis_report::AnalysisReport,
 };
 use log::{info, warn};
@@ -27,7 +25,7 @@ inventory::submit! {
         |at| if let AnalyzerType::RayTrace(config) = at { Some(Box::new(RayTracingAnalyzer::new(config.clone()))) } else { None }
     )
 }
-use uom::si::f64::{Angle, Energy, Length};
+use uom::si::f64::Energy;
 
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 /// Configuration data for a rays tracing analysis.
@@ -43,6 +41,10 @@ pub struct RayTraceConfig {
     max_number_of_refractions: usize,
     missed_surface_strategy: MissedSurfaceStrategy,
     source_map: HashMap<Uuid, RayDataBuilder>,
+    /// The operating point of the run currently being performed - see [`ActiveScenario`]. Not part
+    /// of the configuration a user edits and not written to file.
+    #[serde(skip)]
+    active_pump_scenario: ActiveScenario,
 }
 impl Default for RayTraceConfig {
     /// Create a default config for a ray tracing analysis with the following parameters:
@@ -58,6 +60,7 @@ impl Default for RayTraceConfig {
             max_number_of_refractions: 1000,
             missed_surface_strategy: MissedSurfaceStrategy::Stop,
             source_map: HashMap::new(),
+            active_pump_scenario: ActiveScenario::default(),
         }
     }
 }
@@ -128,6 +131,14 @@ impl RayTraceConfig {
     pub fn remove_source(&mut self, uuid: &Uuid) -> Option<RayDataBuilder> {
         self.source_map.remove(uuid)
     }
+    /// Set the [`PumpScenario`] this analysis run is being performed in.
+    ///
+    /// # Arguments
+    ///
+    /// * `pump_scenario` - the operating point, or `None` for a passive run.
+    pub fn set_active_pump_scenario(&mut self, pump_scenario: Option<PumpScenario>) {
+        self.active_pump_scenario.set(pump_scenario);
+    }
     /// Removes all source mappings whose UUIDs no longer exist in the given model.
     pub fn prune_source_map(&mut self, model: &NodeGroup) {
         self.source_map.retain(|uuid, _builder| model.exists(*uuid));
@@ -153,6 +164,9 @@ impl RayTraceConfig {
 impl PropagationStrategy for RayTraceConfig {
     fn missed_surface_strategy(&self) -> MissedSurfaceStrategy {
         *self.missed_surface_strategy()
+    }
+    fn gain_model(&self, node_id: Uuid) -> GainModel {
+        self.active_pump_scenario.gain_model(node_id)
     }
     fn on_after_apodization(&self, rays: &mut Rays) -> OpmResult<()> {
         rays.invalidate_by_threshold_energy(self.min_energy_per_ray())?;
@@ -228,31 +242,6 @@ pub trait AnalysisRayTrace: OpticNode {
             self.analyze(incoming_data, config)
         }
     }
-    /// Returns the necessary node attributes for ray tracing
-    ///
-    /// # Errors
-    /// This function errors if the node attributes: Isometry, Material or Center Thickness cannot be read,
-    fn get_node_attributes_ray_trace(
-        &self,
-        node_attr: &NodeAttr,
-    ) -> OpmResult<(Material, Length, Angle)> {
-        let Ok(Proptype::Material(AssetRef::Inline(material))) = node_attr.get_property("material")
-        else {
-            return Err(OpossumError::Analysis("cannot read material".into()));
-        };
-        let Ok(Proptype::Length(center_thickness)) = node_attr.get_property("center thickness")
-        else {
-            return Err(OpossumError::Analysis(
-                "cannot read center thickness".into(),
-            ));
-        };
-        let angle = if let Ok(Proptype::Angle(wedge)) = node_attr.get_property("wedge") {
-            *wedge
-        } else {
-            degree!(0.)
-        };
-        Ok((material.clone(), *center_thickness, angle))
-    }
 }
 
 #[cfg(test)]
@@ -300,7 +289,7 @@ mod test {
     fn config_debug() {
         assert_eq!(
             format!("{:?}", RayTraceConfig::default()),
-            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop, source_map: {} }"
+            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop, source_map: {}, active_pump_scenario: ActiveScenario(None) }"
         );
     }
     #[test]

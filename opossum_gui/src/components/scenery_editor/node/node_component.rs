@@ -1,7 +1,7 @@
 #![allow(clippy::derive_partial_eq_without_eq)]
 use std::collections::HashSet;
 
-use super::NodeElement;
+use super::{AMP_STATUS_HEIGHT, NodeElement};
 use crate::CONTEXT_MENU;
 use crate::components::scenery_editor::DragStatus;
 use crate::components::scenery_editor::graph_workspace::{
@@ -20,7 +20,7 @@ use crate::components::{
 use dioxus::html::geometry::euclid::default::Point2D;
 use dioxus::html::input_data::MouseButton;
 use dioxus::prelude::*;
-use opossum_core::types::api_types::NewRefNode;
+use opossum_core::{nodes::is_volume_node_type, types::api_types::NewRefNode};
 use uuid::Uuid;
 
 #[component]
@@ -42,6 +42,17 @@ pub fn Node(
     let active_optical_node_ids = graph_store().selected_optical_nodes();
     let node_id = node.id();
     let is_optical_node = node.is_optical_node();
+    // Only components with a physical volume can amplify - they are the ones a `Volumetric` node
+    // registers as. The canvas knows a node by its type name, so it asks the core rather than
+    // keeping a list of its own. Whether a node *is* an amplifier is a hardware fact independent of
+    // any pump scenario, so this no longer needs one to be active to offer the entry.
+    let is_volume_node = matches!(
+        node.node_type(),
+        NodeType::Optical(node_type) if is_volume_node_type(node_type)
+    );
+    // The amp entry is a toggle, so it needs the node's current candidacy. That state is already on
+    // the canvas (see `NodeElement::is_amplifier_candidate`), so a right-click costs no request.
+    let is_amplifier = node.is_amplifier_candidate();
     let is_active = if active_node_ids.contains(&node.id()) {
         "active-node"
     } else {
@@ -157,19 +168,35 @@ pub fn Node(
                         if active_optical_node_ids.len() <= 1 {
                             // Show reference option only if 0 or 1 optical nodes are selected
                             cx_menu
-                                .entries
-                                .push((
+                                .add_entry((
                                     "Create reference".to_owned(),
                                     CxtCommand::AddRefNode(new_ref_node),
                                 ));
                         } else {
                             cx_menu
-                                .entries
-                                .push((
+                                .add_entry((
                                     "Group optical nodes".to_owned(),
                                     CxtCommand::ConvertToGroup {
                                         nodes: active_optical_node_ids.iter().copied().collect(),
                                         graph_id,
+                                    },
+                                ));
+                        }
+                        if is_volume_node {
+                            // Offer the way back, too: an accidentally marked node must be curable
+                            // from the same menu it was marked an amplifier candidate in.
+                            let (label, target_state) = if is_amplifier {
+                                ("As passive optic", false)
+                            } else {
+                                ("As amplifier", true)
+                            };
+                            cx_menu
+                                .add_entry((
+                                    label.to_owned(),
+                                    CxtCommand::ToggleAmplifierCandidate {
+                                        node_id,
+                                        graph_id,
+                                        is_amplifier: target_state,
                                     },
                                 ));
                         }
@@ -205,6 +232,22 @@ pub fn Node(
                         NodePorts { node: node.clone(), inverted: node.inverted() }
                     }
                 },
+                // Shown for every amplifier candidate, not only while it actively amplifies in the
+                // current scenario - candidacy has to stay visible (as "None") so it's obvious this
+                // node is a potential amplifier while editing its other properties, even with no
+                // scenario active or with this scenario leaving it passive.
+                footer: node.is_amplifier_candidate()
+                    .then(|| {
+                        let amp_model = node.amp_model().unwrap_or("None");
+                        rsx! {
+                            div {
+                                class: "node-amp-status",
+                                pointer_events: "none",
+                                style: format!("height: {AMP_STATUS_HEIGHT}px;"),
+                                "amp: {amp_model}"
+                            }
+                        }
+                    }),
             }
         }
     }

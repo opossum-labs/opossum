@@ -13,20 +13,25 @@ use std::collections::HashSet;
 use opossum_core::{
     analyzers::AnalyzerType,
     opm_document::OpmDocument,
-    types::api_types::{AnalyzerItemDto, DocumentChange, JumpTarget, NodeEditorPanel},
+    types::api_types::{
+        AnalyzerItemDto, DocumentChange, JumpTarget, NodeEditorPanel, PumpScenarioItemDto,
+    },
 };
 use uuid::Uuid;
 
 use crate::error::BackEndErrorResponse;
 
+mod amplifier_node_commands;
 mod analyzer_commands;
 mod edge_commands;
 mod global_conf_commands;
 mod group_commands;
 mod node_commands;
 mod port_map_commands;
+mod pump_scenario_commands;
 mod viewport_commands;
 
+pub use amplifier_node_commands::PatchAmplifierNodes;
 pub use analyzer_commands::{PatchAnalyzer, RepositionAnalyzer};
 pub use edge_commands::{EdgeSnapshot, UpdateEdgeDistance};
 pub use global_conf_commands::PatchGlobalConf;
@@ -35,6 +40,7 @@ pub use node_commands::{
     CascadedNode, NodeSnapshot, PatchNode, PatchPort, PatchProperty, capture_old_node_request,
 };
 pub use port_map_commands::{AddPortMap, RemovePortMap};
+pub use pump_scenario_commands::{PatchAnalyzerPumpScenarios, PatchPumpScenario};
 pub use viewport_commands::SetViewport;
 
 /// A reversible document mutation. See the module docs for the overall design.
@@ -68,6 +74,20 @@ pub enum Command {
     PatchAnalyzer(PatchAnalyzer),
     /// See [`RepositionAnalyzer`].
     RepositionAnalyzer(RepositionAnalyzer),
+    /// Re-inserts a previously removed pump scenario under its original id.
+    AddPumpScenario(PumpScenarioItemDto),
+    /// Removes the pump scenario with the given id. Also strips it from every analyzer's selection
+    /// as a side effect of [`OpmDocument::remove_pump_scenario`] - a handler that deletes a scenario
+    /// a user might have selected has to fold a [`Self::PatchAnalyzerPumpScenarios`] per affected
+    /// analyzer into the same undo batch (see `delete_pump_scenario` in
+    /// `opossum_backend::pump_scenarios`).
+    RemovePumpScenario(PumpScenarioItemDto),
+    /// See [`PatchPumpScenario`].
+    PatchPumpScenario(PatchPumpScenario),
+    /// See [`PatchAnalyzerPumpScenarios`].
+    PatchAnalyzerPumpScenarios(PatchAnalyzerPumpScenarios),
+    /// See [`PatchAmplifierNodes`]. Replaces the whole document-wide amplifier-candidate set.
+    PatchAmplifierNodes(PatchAmplifierNodes),
     /// See [`MoveNodes`]. Moves nodes between two groups; `apply` swaps source/target to build its
     /// inverse and carries `affected_groups` through, so undo/redo can refresh every tab a reroute
     /// touched - not just source and target.
@@ -124,6 +144,21 @@ impl Command {
             Self::RepositionAnalyzer(cmd) => {
                 analyzer_commands::apply_reposition_analyzer(document, cmd)
             }
+            Self::AddPumpScenario(cmd) => Ok(pump_scenario_commands::apply_add_pump_scenario(
+                document, cmd,
+            )),
+            Self::RemovePumpScenario(cmd) => {
+                pump_scenario_commands::apply_remove_pump_scenario(document, cmd)
+            }
+            Self::PatchPumpScenario(cmd) => {
+                pump_scenario_commands::apply_patch_pump_scenario(document, cmd)
+            }
+            Self::PatchAnalyzerPumpScenarios(cmd) => {
+                pump_scenario_commands::apply_patch_analyzer_pump_scenarios(document, cmd)
+            }
+            Self::PatchAmplifierNodes(cmd) => Ok(
+                amplifier_node_commands::apply_patch_amplifier_nodes(document, cmd),
+            ),
             Self::MoveNodes(cmd) => group_commands::apply_move_nodes(document, cmd),
             Self::InsertGroup(cmd) => group_commands::apply_insert_group(document, cmd),
             Self::ExtractGroup(cmd) => group_commands::apply_extract_group(document, cmd),
@@ -165,6 +200,11 @@ impl Command {
             | Self::RemoveAnalyzer(_)
             | Self::PatchAnalyzer(_)
             | Self::RepositionAnalyzer(_)
+            | Self::AddPumpScenario(_)
+            | Self::RemovePumpScenario(_)
+            | Self::PatchPumpScenario(_)
+            | Self::PatchAnalyzerPumpScenarios(_)
+            | Self::PatchAmplifierNodes(_)
             | Self::PatchGlobalConf(_)
             | Self::SetViewport(_) => false,
             // Multi-step: several fallible sub-steps, so a mid-apply failure could tear the document.
@@ -247,7 +287,17 @@ impl Command {
             Self::InsertGroup(cmd) | Self::ExtractGroup(cmd) => {
                 Some(JumpTarget::new_from_graph_id(cmd.parent_group_id))
             }
-            Self::PatchGlobalConf(_) => None,
+            // An operating point (and which analyzer runs in it) is not an object on the canvas:
+            // there is nothing to jump to and no node to select, so undoing a scenario edit leaves
+            // the view where the user left it. Same for the candidate set: it names nodes but isn't
+            // itself a canvas object, and it can name several at once, so there is no single node to
+            // focus.
+            Self::AddPumpScenario(_)
+            | Self::RemovePumpScenario(_)
+            | Self::PatchPumpScenario(_)
+            | Self::PatchAnalyzerPumpScenarios(_)
+            | Self::PatchAmplifierNodes(_)
+            | Self::PatchGlobalConf(_) => None,
             Self::SetViewport(cmd) => Some(JumpTarget::new_from_graph_id(cmd.to.graph_id)),
             Self::Batch(commands) => batch_jump_target(commands, root_id),
         }
@@ -304,9 +354,23 @@ impl Command {
                 analyzer: cmd.clone(),
             }],
             Self::RemoveAnalyzer(cmd) => vec![DocumentChange::AnalyzerRemoved { id: cmd.id }],
-            Self::PatchAnalyzer(PatchAnalyzer { id, .. }) => {
+            // The pump-scenario-selection patch changes only that selection, not the analyzer's own
+            // config or position - the same refetch signal as any other analyzer detail change
+            // covers both.
+            Self::PatchAnalyzer(PatchAnalyzer { id, .. })
+            | Self::PatchAnalyzerPumpScenarios(PatchAnalyzerPumpScenarios { id, .. }) => {
                 vec![DocumentChange::AnalyzerChanged { id: *id }]
             }
+            Self::AddPumpScenario(cmd) => vec![DocumentChange::PumpScenarioAdded {
+                scenario: cmd.clone(),
+            }],
+            Self::RemovePumpScenario(cmd) => {
+                vec![DocumentChange::PumpScenarioRemoved { id: cmd.id }]
+            }
+            Self::PatchPumpScenario(PatchPumpScenario { id, .. }) => {
+                vec![DocumentChange::PumpScenarioChanged { id: *id }]
+            }
+            Self::PatchAmplifierNodes(_) => vec![DocumentChange::AmplifierNodesChanged],
             // Reports the position `apply` will set (`new_pos`), so the GUI moves the analyzer on the
             // canvas rather than only refreshing the details panel.
             Self::RepositionAnalyzer(cmd) => vec![DocumentChange::AnalyzerMoved {
@@ -464,6 +528,10 @@ fn dedup_against_full_refreshes(changes: Vec<DocumentChange>) -> Vec<DocumentCha
             | DocumentChange::AnalyzerRemoved { .. }
             | DocumentChange::AnalyzerChanged { .. }
             | DocumentChange::AnalyzerMoved { .. }
+            | DocumentChange::PumpScenarioAdded { .. }
+            | DocumentChange::PumpScenarioRemoved { .. }
+            | DocumentChange::PumpScenarioChanged { .. }
+            | DocumentChange::AmplifierNodesChanged
             | DocumentChange::GraphClosed { .. }
             | DocumentChange::ViewportChanged { .. } => true,
         })

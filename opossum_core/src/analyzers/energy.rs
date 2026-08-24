@@ -7,6 +7,7 @@ use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
     core_optics::{NodeAttrExt, OpticNode, node_attr::HasNodeAttr},
     error::OpmResult,
+    gain::{ActiveScenario, GainModel, PumpScenario},
     light::LightResult,
     nodes::NodeGroup,
     prelude::EnergyDataBuilder,
@@ -27,8 +28,20 @@ inventory::submit! {
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct EnergyConfig {
     source_map: HashMap<Uuid, EnergyDataBuilder>,
+    /// The operating point of the run currently being performed - see [`ActiveScenario`]. Not part
+    /// of the configuration a user edits and not written to file.
+    #[serde(skip)]
+    active_pump_scenario: ActiveScenario,
 }
 impl EnergyConfig {
+    /// Set the [`PumpScenario`] this analysis run is being performed in.
+    ///
+    /// # Arguments
+    ///
+    /// * `pump_scenario` - the operating point, or `None` for a passive run.
+    pub fn set_active_pump_scenario(&mut self, pump_scenario: Option<PumpScenario>) {
+        self.active_pump_scenario.set(pump_scenario);
+    }
     /// Maps an energy data builder to the `SourcePort` node with the given UUID
     ///
     /// If a builder was already mapped this function returns `true`. A new mapping
@@ -67,6 +80,9 @@ impl EnergyConfig {
 impl PropagationStrategy for EnergyConfig {
     fn missed_surface_strategy(&self) -> MissedSurfaceStrategy {
         MissedSurfaceStrategy::Stop
+    }
+    fn gain_model(&self, node_id: Uuid) -> GainModel {
+        self.active_pump_scenario.gain_model(node_id)
     }
 }
 /// Analyzer for simulating a simple energy flow
@@ -109,7 +125,7 @@ pub trait AnalysisEnergy: OpticNode {
     fn analyze(
         &mut self,
         mut incoming_data: LightResult,
-        _config: &EnergyConfig,
+        config: &EnergyConfig,
     ) -> OpmResult<LightResult> {
         let in_ports = self.ports().names(&crate::core_optics::PortType::Input);
         let out_ports = self.ports().names(&crate::core_optics::PortType::Output);
@@ -132,9 +148,14 @@ pub trait AnalysisEnergy: OpticNode {
         let in_port = &in_ports[0];
         let out_port = &out_ports[0];
 
-        let Some(data) = incoming_data.remove(in_port) else {
+        let Some(mut data) = incoming_data.remove(in_port) else {
             return Ok(LightResult::default());
         };
+        // A component with a medium may be an amplifier in the operating point being analyzed. It is
+        // the capability that decides, so no node type has to know about gain to take part in it.
+        if let Some(volume) = self.as_volume() {
+            volume.amplify_energy_data(&mut data, config)?;
+        }
         let apodized = if let Some(surf) = self.get_optic_surface(out_port)
             && !surf.aperture().is_none()
         {

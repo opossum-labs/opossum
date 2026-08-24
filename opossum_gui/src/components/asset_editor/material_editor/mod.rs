@@ -114,154 +114,154 @@ pub fn MaterialEditor(
     });
 
     rsx! {
-      // 1. Main Material Editor Dialog
-      AlertDialog {
-        open: open(),
-        on_open_change: move |v| open.set(v),
-        max_width: "50rem".to_string(),
-        AlertDialogTitle { "Material Editor" }
-        AlertDialogDescription {
-          div { class: "material-editor-container", id: "{base_id}",
+        // 1. Main Material Editor Dialog
+        AlertDialog {
+            open: open(),
+            on_open_change: move |v| open.set(v),
+            max_width: "50rem".to_string(),
+            AlertDialogTitle { "Material Editor" }
+            AlertDialogDescription {
+                div { class: "material-editor-container", id: "{base_id}",
 
-            // Clean Header Bar: Displays asset title and status badge
-            div { class: "d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom",
-              h4 { class: "mb-0",
-                "{material.read().name()}"
-                if is_draft {
-                  if save_label.is_some() {
-                    span { class: "badge bg-secondary ms-2", "AdHoc Material" }
-                  } else {
-                    span { class: "badge bg-secondary ms-2", "Draft (Auto-Version)" }
-                  }
-                } else {
-                  span { class: "badge bg-warning text-dark ms-2",
-                    "Target Version: v{current_version}"
-                  }
-                }
-              }
-            }
-          }
-
-          // Main Scroll Area for Material Attributes
-          ScrollArea { height: "45em",
-            AssetHeaderEditor {
-              header: header_memo,
-              readonly,
-              on_change: handle_header_change,
-            }
-            OpticalPropertiesEditor {
-              optical: optical_memo,
-              base_id: format!("{}_optical", base_id),
-              readonly,
-              on_change: handle_optical_change,
-            }
-
-            // Advanced / Dangerous Options: Positioned at the very bottom
-            details { class: "mt-4 p-3 border rounded bg-light",
-              summary {
-                class: "fw-bold text-secondary text-uppercase small",
-                style: "cursor: pointer;",
-                "Advanced Settings (Expert Only)"
-              }
-              div { class: "mt-3",
-                div { class: "alert alert-warning py-2 px-3 small mb-2",
-                  "Warning: Manually altering the version number bypasses the append-only database rule. Overwriting existing versions may cause merge conflicts when synchronizing with remote repositories."
-                }
-                div { class: "d-flex align-items-center gap-2",
-                  label {
-                    class: "form-label mb-0 small text-muted",
-                    r#for: "{base_id}_version_input",
-                    "Target Version Number:"
-                  }
-                  input {
-                    id: "{base_id}_version_input",
-                    class: "form-control form-control-sm text-center",
-                    style: "width: 5.5rem;",
-                    r#type: "number",
-                    min: "0",
-                    step: "1",
-                    disabled: readonly,
-                    value: "{current_version}",
-                    // Prevent typing of negative signs, decimal points, and scientific notation
-                    onkeydown: move |evt| {
-                        if let Key::Character(ref c) = evt.key() {
-                            if ["-", "+", ".", ",", "e", "E"].contains(&c.as_str()) {
-                                evt.prevent_default();
+                    // Clean Header Bar: Displays asset title and status badge
+                    div { class: "d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom",
+                        h4 { class: "mb-0",
+                            "{material.read().name()}"
+                            if is_draft {
+                                if save_label.is_some() {
+                                    span { class: "badge bg-secondary ms-2", "AdHoc Material" }
+                                } else {
+                                    span { class: "badge bg-secondary ms-2", "Draft (Auto-Version)" }
+                                }
+                            } else {
+                                span { class: "badge bg-warning text-dark ms-2",
+                                    "Target Version: v{current_version}"
+                                }
                             }
                         }
-                    },
-                    oninput: move |evt| {
-                        let raw_val = evt.value();
-                        if raw_val.is_empty() {
-                            // Optional fallback: Reset to 0 (draft) if field is cleared
-                            on_change
-                                .call(MaterialChangeEvent {
-                                    action: MaterialChangeAction::SetVersion(0),
-                                });
-                        } else if let Ok(version_val) = raw_val.parse::<u32>() {
-                            on_change
-                                .call(MaterialChangeEvent {
-                                    action: MaterialChangeAction::SetVersion(version_val),
-                                });
+                    }
+                }
+
+                // Main Scroll Area for Material Attributes
+                ScrollArea { height: "45em",
+                    AssetHeaderEditor {
+                        header: header_memo,
+                        readonly,
+                        on_change: handle_header_change,
+                    }
+                    OpticalPropertiesEditor {
+                        optical: optical_memo,
+                        base_id: format!("{}_optical", base_id),
+                        readonly,
+                        on_change: handle_optical_change,
+                    }
+
+                    // Advanced / Dangerous Options: Positioned at the very bottom
+                    details { class: "mt-4 p-3 border rounded bg-light",
+                        summary {
+                            class: "fw-bold text-secondary text-uppercase small",
+                            style: "cursor: pointer;",
+                            "Advanced Settings (Expert Only)"
+                        }
+                        div { class: "mt-3",
+                            div { class: "alert alert-warning py-2 px-3 small mb-2",
+                                "Warning: Manually altering the version number bypasses the append-only database rule. Overwriting existing versions may cause merge conflicts when synchronizing with remote repositories."
+                            }
+                            div { class: "d-flex align-items-center gap-2",
+                                label {
+                                    class: "form-label mb-0 small text-muted",
+                                    r#for: "{base_id}_version_input",
+                                    "Target Version Number:"
+                                }
+                                input {
+                                    id: "{base_id}_version_input",
+                                    class: "form-control form-control-sm text-center",
+                                    style: "width: 5.5rem;",
+                                    r#type: "number",
+                                    min: "0",
+                                    step: "1",
+                                    disabled: readonly,
+                                    value: "{current_version}",
+                                    // Prevent typing of negative signs, decimal points, and scientific notation
+                                    onkeydown: move |evt| {
+                                        if let Key::Character(ref c) = evt.key() {
+                                            if ["-", "+", ".", ",", "e", "E"].contains(&c.as_str()) {
+                                                evt.prevent_default();
+                                            }
+                                        }
+                                    },
+                                    oninput: move |evt| {
+                                        let raw_val = evt.value();
+                                        if raw_val.is_empty() {
+                                            // Optional fallback: Reset to 0 (draft) if field is cleared
+                                            on_change
+                                                .call(MaterialChangeEvent {
+                                                    action: MaterialChangeAction::SetVersion(0),
+                                                });
+                                        } else if let Ok(version_val) = raw_val.parse::<u32>() {
+                                            on_change
+                                                .call(MaterialChangeEvent {
+                                                    action: MaterialChangeAction::SetVersion(version_val),
+                                                });
+                                        }
+                                    },
+                                }
+                                span { class: "small text-muted",
+                                    if is_draft {
+                                        "(0 = Assign next available version automatically)"
+                                    } else {
+                                        "(Will overwrite version {current_version} on disk)"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Primary Action Footer
+            AlertDialogActions {
+                AlertDialogCancel { "Cancel" }
+
+                if on_save.is_some() && !readonly {
+                    AlertDialogAction { on_click: handle_save_click,
+                        if let Some(custom_label) = save_label.as_deref() {
+                            "{custom_label}"
+                        } else if is_draft {
+                            "Publish New Version"
+                        } else {
+                            "Overwrite Version {current_version}"
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Overwrite Confirmation Warning Dialog
+        AlertDialog {
+            open: show_overwrite_warning(),
+            on_open_change: move |v| show_overwrite_warning.set(v),
+            max_width: "35rem".to_string(),
+            AlertDialogTitle { "Confirm Version Overwrite" }
+            AlertDialogDescription {
+                div { class: "text-danger fw-bold mb-2",
+                    "Attention: You are about to overwrite version {current_version}!"
+                }
+                p { class: "small text-muted mb-0",
+                    "This operation replaces the existing version file on disk. If this version has already been pushed to a remote repository, this change can cause Git merge conflicts during synchronization."
+                }
+            }
+            AlertDialogActions {
+                AlertDialogCancel { "Cancel" }
+                AlertDialogAction {
+                    on_click: move |_| {
+                        if let Some(save_handler) = on_save {
+                            save_handler.call(());
                         }
                     },
-                  }
-                  span { class: "small text-muted",
-                    if is_draft {
-                      "(0 = Assign next available version automatically)"
-                    } else {
-                      "(Will overwrite version {current_version} on disk)"
-                    }
-                  }
+                    "Yes, Overwrite Version"
                 }
-              }
             }
-          }
         }
-
-        // Primary Action Footer
-        AlertDialogActions {
-          AlertDialogCancel { "Cancel" }
-
-          if on_save.is_some() && !readonly {
-            AlertDialogAction { on_click: handle_save_click,
-              if let Some(custom_label) = save_label.as_deref() {
-                "{custom_label}"
-              } else if is_draft {
-                "Publish New Version"
-              } else {
-                "Overwrite Version {current_version}"
-              }
-            }
-          }
-        }
-      }
-
-      // 2. Overwrite Confirmation Warning Dialog
-      AlertDialog {
-        open: show_overwrite_warning(),
-        on_open_change: move |v| show_overwrite_warning.set(v),
-        max_width: "35rem".to_string(),
-        AlertDialogTitle { "Confirm Version Overwrite" }
-        AlertDialogDescription {
-          div { class: "text-danger fw-bold mb-2",
-            "Attention: You are about to overwrite version {current_version}!"
-          }
-          p { class: "small text-muted mb-0",
-            "This operation replaces the existing version file on disk. If this version has already been pushed to a remote repository, this change can cause Git merge conflicts during synchronization."
-          }
-        }
-        AlertDialogActions {
-          AlertDialogCancel { "Cancel" }
-          AlertDialogAction {
-            on_click: move |_| {
-                if let Some(save_handler) = on_save {
-                    save_handler.call(());
-                }
-            },
-            "Yes, Overwrite Version"
-          }
-        }
-      }
     }
 }

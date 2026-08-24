@@ -34,7 +34,6 @@
                     "name": "cylindric lens",
                     "uuid": "f1e1e825-0989-42b6-9258-891d148c93da",
                     "props": {
-                        "center thickness": Length(0.01),
                         "front curvature": Curvature(0.5),
                         "material": Material(Id("5186eca7-1a41-487d-b4e4-1f9b7cf4a59c")),
                         "rear curvature": Curvature(-0.5),
@@ -53,7 +52,6 @@
                     "name": "lens",
                     "uuid": "19a6fb46-82cc-4ac0-95f6-32f1ee5b21e2",
                     "props": {
-                        "center thickness": Length(0.01),
                         "front curvature": Curvature(0.5),
                         "material": Material(Id("5fb41686-7866-4d42-9adf-1f2806485d7a")),
                         "rear curvature": Curvature(-0.5),
@@ -67,6 +65,9 @@
                         "center thickness": Length(0.01),
                         "material": Material(Id("b68136f8-9bad-4738-b58f-300e52426330")),
                         "wedge": Angle(0.0),
+                        "clear aperture": Aperture(BinaryCircle(
+                            radius: 0.0125,
+                        )),
                     },
                 },
                 {
@@ -150,8 +151,8 @@
                     "name": "ray propagation",
                     "uuid": "a03376f8-6cfd-4f9c-8e3c-a71a65c6ac8a",
                     "props": {
-                        "ray transparency": F64(0.4),
                         "view_direction": Vec3(1.0, 0.0, 0.0),
+                        "ray transparency": F64(0.4),
                     },
                 },
                 {
@@ -207,9 +208,9 @@
                     ),
                     "uuid": "7046e7bc-0449-4141-8dd0-bd1aa808bf07",
                     "props": {
-                        "collimating": Bool(false),
                         "focal length": Length(1.0),
                         "off-axis angle": Angle(0.0),
+                        "collimating": Bool(false),
                         "off-axis direction": Vec2(1.0, 0.0),
                     },
                 },
@@ -218,8 +219,8 @@
                     "name": "reflective grating",
                     "uuid": "f99ec7f9-10f7-4a91-a936-751545339623",
                     "props": {
-                        "diffraction order": I32(-1),
                         "line density": LinearDensity(1740000.0),
+                        "diffraction order": I32(-1),
                     },
                     "alignment": Some(
                         transform: (

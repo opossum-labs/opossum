@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::components::scenery_editor::graph_workspace::{
     GraphStateStoreExt, GraphStore, GraphStoreStoreExt, GraphStoreStoreImplExt,
@@ -7,6 +7,7 @@ use crate::components::scenery_editor::graph_workspace::{
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::{
+    gain::GainModel,
     prelude::PortType,
     types::api_types::{AnalyzerItemDto, NewAnalyzerInfo, NodeInfo},
 };
@@ -20,6 +21,10 @@ pub struct NodeHandlers {
     remove_nodes: EventHandler<(Vec<Uuid>, Uuid)>,
     update_node_positions: EventHandler<(HashMap<Uuid, Point2D<f64>>, Uuid)>,
     invert_node: EventHandler<(Uuid, bool, Uuid)>,
+    set_amp_model: EventHandler<(Uuid, Option<String>, Uuid)>,
+    sync_amp_markers: EventHandler<HashMap<Uuid, GainModel>>,
+    set_amplifier_candidate: EventHandler<(Uuid, bool, Uuid)>,
+    sync_amplifier_candidates: EventHandler<HashSet<Uuid>>,
     set_node_name: EventHandler<(String, Uuid, Uuid, bool)>,
     add_group_nodes: EventHandler<(Uuid, Vec<NodeInfo>)>,
     add_group_analyzers: EventHandler<(Uuid, Vec<AnalyzerItemDto>)>,
@@ -42,6 +47,10 @@ impl NodeHandlers {
             remove_nodes: remove_nodes_handler(workspace),
             update_node_positions: update_node_positions_handler(workspace),
             invert_node: invert_node_handler(workspace),
+            set_amp_model: set_amp_model_handler(workspace),
+            sync_amp_markers: sync_amp_markers_handler(workspace),
+            set_amplifier_candidate: set_amplifier_candidate_handler(workspace),
+            sync_amplifier_candidates: sync_amplifier_candidates_handler(workspace),
             set_node_name: set_node_name_handler(workspace),
             add_group_nodes: add_group_nodes_handler(workspace),
             add_group_analyzers: add_group_analyzers_handler(workspace),
@@ -129,6 +138,32 @@ impl NodeHandlers {
 
     pub fn invert_node(&self, node_id: Uuid, inverted: bool, graph_id: Uuid) {
         self.invert_node.call((node_id, inverted, graph_id));
+    }
+
+    /// Updates the amplification marker the canvas shows for a node. `None` removes it, which also
+    /// shrinks the node back by the status line's height.
+    pub fn set_amp_model(&self, node_id: Uuid, amp_model: Option<String>, graph_id: Uuid) {
+        self.set_amp_model.call((node_id, amp_model, graph_id));
+    }
+
+    /// Brings every currently rendered node's amplifier marker (across every open tab) in line with
+    /// `gain_models` in one pass - used after the active pump scenario changed, or after an undo/redo
+    /// touched its contents, rather than one request per node.
+    pub fn sync_amp_markers(&self, gain_models: HashMap<Uuid, GainModel>) {
+        self.sync_amp_markers.call(gain_models);
+    }
+
+    /// Updates the amplifier-candidate flag the canvas shows for a node.
+    pub fn set_amplifier_candidate(&self, node_id: Uuid, is_amplifier: bool, graph_id: Uuid) {
+        self.set_amplifier_candidate
+            .call((node_id, is_amplifier, graph_id));
+    }
+
+    /// Brings every currently rendered node's amplifier-candidate flag (across every open tab) in
+    /// line with `candidates` in one pass - used after a candidacy toggle, or after an undo/redo
+    /// touched the candidate set, rather than one request per node.
+    pub fn sync_amplifier_candidates(&self, candidates: HashSet<Uuid>) {
+        self.sync_amplifier_candidates.call(candidates);
     }
 
     pub fn set_node_name(&self, name: String, node_id: Uuid, graph_id: Uuid, needs_saving: bool) {
@@ -282,6 +317,55 @@ fn invert_node_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandler<(
     EventHandler::new(move |(node_id, inverted, graph_id)| {
         with_graph_store(workspace, graph_id, true, |store| {
             store.set_node_inverted(node_id, inverted);
+        });
+    })
+}
+/// Mirrors a node's gain model in the active pump scenario into the canvas. Not marked dirty here:
+/// the scenario patch that caused it already marks the document unsaved (and on undo/redo the saved
+/// state is restored, so mirroring must not re-dirty it).
+fn set_amp_model_handler(
+    workspace: Store<GraphsWorkspaceState>,
+) -> EventHandler<(Uuid, Option<String>, Uuid)> {
+    EventHandler::new(
+        move |(node_id, amp_model, graph_id): (Uuid, Option<String>, Uuid)| {
+            with_graph_store(workspace, graph_id, false, |store| {
+                store.set_amp_model_of_node(node_id, amp_model.clone());
+            });
+        },
+    )
+}
+/// Bulk-mirrors a gain-model map into every currently open tab's canvas, via
+/// [`GraphStore::sync_amp_markers`](super::super::workspace_state::GraphStore).
+fn sync_amp_markers_handler(
+    workspace: Store<GraphsWorkspaceState>,
+) -> EventHandler<HashMap<Uuid, GainModel>> {
+    EventHandler::new(move |gain_models: HashMap<Uuid, GainModel>| {
+        for_each_tab(workspace, false, |tab| {
+            tab.graph_store().sync_amp_markers(&gain_models);
+        });
+    })
+}
+/// Mirrors a node's amplifier candidacy into the canvas. Not marked dirty here: the PUT that caused
+/// it already marks the document unsaved (same reasoning as `set_amp_model_handler`).
+fn set_amplifier_candidate_handler(
+    workspace: Store<GraphsWorkspaceState>,
+) -> EventHandler<(Uuid, bool, Uuid)> {
+    EventHandler::new(
+        move |(node_id, is_amplifier, graph_id): (Uuid, bool, Uuid)| {
+            with_graph_store(workspace, graph_id, false, |store| {
+                store.set_amplifier_candidate_of_node(node_id, is_amplifier);
+            });
+        },
+    )
+}
+/// Bulk-mirrors the amplifier-candidate set into every currently open tab's canvas, via
+/// [`GraphStore::sync_amplifier_candidates`](super::super::workspace_state::GraphStore).
+fn sync_amplifier_candidates_handler(
+    workspace: Store<GraphsWorkspaceState>,
+) -> EventHandler<HashSet<Uuid>> {
+    EventHandler::new(move |candidates: HashSet<Uuid>| {
+        for_each_tab(workspace, false, |tab| {
+            tab.graph_store().sync_amplifier_candidates(&candidates);
         });
     })
 }

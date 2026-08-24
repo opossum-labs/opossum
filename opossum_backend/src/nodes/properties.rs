@@ -111,7 +111,10 @@ mod test {
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
     use opossum_core::{
         core_optics::node_attr::HasNodeAttr,
-        nodes::Dummy,
+        material::{MATERIAL, Material},
+        nodes::{Dummy, Lens},
+        properties::proptype::AssetRef,
+        refractive_index::{RefrIndexConst, RefractiveIndexType},
         types::api_types::{DocumentChange, NodeEditorPanel, UndoRedoResponse},
     };
 
@@ -173,6 +176,68 @@ mod test {
             Some(NodeEditorPanel::Properties),
             "a property patch must jump to the Properties panel"
         );
+    }
+
+    /// The material editor of the GUI patches a whole `Material`, not a bare refractive index.
+    ///
+    /// There is practically no test coverage in the GUI crate, so this pins down the contract its
+    /// editor relies on: a `Proptype::Material` payload is accepted for the `material` property and
+    /// arrives at the node. A payload of the old `Proptype::RefractiveIndex` shape must be rejected
+    /// instead of silently landing somewhere, because `Property::set_value` refuses a value of a
+    /// different `Proptype` variant.
+    #[actix_web::test]
+    async fn test_material_patch_reaches_the_node() {
+        let app_state = create_test_state();
+        let node_id = {
+            let mut document = app_state.document.lock();
+            document.scenery_mut().add_node(Lens::default()).unwrap()
+        };
+        let index_model =
+            |value: f64| RefractiveIndexType::Const(RefrIndexConst::new(value).unwrap());
+        let index_model_of_node = || {
+            let property = app_state
+                .document
+                .lock()
+                .scenery()
+                .with_node_attr(node_id, |attr| attr.properties().get(MATERIAL).cloned())
+                .unwrap()
+                .unwrap();
+            let Proptype::Material(AssetRef::Inline(material)) = property else {
+                panic!("a lens must carry an embedded material property")
+            };
+            material.refractive_index().clone()
+        };
+        assert_eq!(index_model_of_node(), index_model(1.5));
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(patch_property),
+        )
+        .await;
+
+        let req = test::TestRequest::patch()
+            .uri(&format!("/{node_id}/properties/{MATERIAL}"))
+            .set_payload(ron::to_string(&Proptype::from(Material::from(index_model(2.0)))).unwrap())
+            .insert_header(("Content-Type", "application/ron"))
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+        assert_eq!(index_model_of_node(), index_model(2.0));
+
+        // The pre-rename payload shape must not be accepted for the material property.
+        let req = test::TestRequest::patch()
+            .uri(&format!("/{node_id}/properties/{MATERIAL}"))
+            .set_payload(ron::to_string(&Proptype::RefractiveIndex(index_model(3.0))).unwrap())
+            .insert_header(("Content-Type", "application/ron"))
+            .to_request();
+        assert_ne!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+        assert_eq!(index_model_of_node(), index_model(2.0));
     }
 
     #[actix_web::test]
