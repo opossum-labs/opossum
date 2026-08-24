@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use opossum_core::{material::OpticalProperties, refractive_index::RefractiveIndexType};
+use opossum_core::{absorption::absorption_model::AbsorptionModel, material::OpticalProperties, refractive_index::RefractiveIndexType};
 
 // Adjust import path according to your module layout
 use crate::components::{
@@ -13,12 +13,12 @@ pub enum OpticalPropertiesChangeAction {
     /// The refractive index model or its coefficients changed.
     RefractiveIndex(RefractiveIndexType),
     /// The absorption coefficient changed (None if cleared).
-    Absorption(Option<f64>),
+    Absorption(AbsorptionModel),
 }
 
 impl OpticalPropertiesChangeAction {
     /// Applies the change action directly to the given `OpticalProperties`.
-    pub const fn apply(self, optical: &mut opossum_core::material::OpticalProperties) {
+    pub fn apply(self, optical: &mut opossum_core::material::OpticalProperties) {
         match self {
             Self::RefractiveIndex(new_model) => optical.refractive_index = new_model,
             Self::Absorption(abs) => optical.absorption = abs,
@@ -72,10 +72,10 @@ pub fn OpticalPropertiesEditor(
     let ref_ind_memo = use_memo(move || optical.read().refractive_index.clone());
 
     // Format current absorption value for display
-    let absorption_str = optical
-        .read()
-        .absorption
-        .map_or_else(String::new, |val| format!("{val}"));
+    // let absorption_str = optical
+    //     .read()
+    //     .absorption
+    //     .map_or_else(String::new, |val| format!("{val}"));
 
     let handle_ref_ind_change = use_callback(move |new_model: RefractiveIndexType| {
         on_change.call(OpticalPropertiesChangeEvent {
@@ -83,13 +83,13 @@ pub fn OpticalPropertiesEditor(
         });
     });
 
-    let handle_absorption_change = use_callback(move |e: Event<FormData>| {
-        if let Some(opt_absorption) = parse_optional_f64(&e.value()) {
-            on_change.call(OpticalPropertiesChangeEvent {
-                action: OpticalPropertiesChangeAction::Absorption(opt_absorption),
-            });
-        }
-    });
+    // let handle_absorption_change = use_callback(move |e: Event<FormData>| {
+    //     if let Some(opt_absorption) = parse_optional_f64(&e.value()) {
+    //         on_change.call(OpticalPropertiesChangeEvent {
+    //             action: OpticalPropertiesChangeAction::Absorption(opt_absorption),
+    //         });
+    //     }
+    // });
 
     rsx! {
         Card {
@@ -107,31 +107,31 @@ pub fn OpticalPropertiesEditor(
                         on_change: handle_ref_ind_change,
                     }
                 }
-                hr {}
-                // Section 2: Absorption Coefficient
-                div { class: "row",
-                    div { class: "col-md-6",
-                        label {
-                            class: "form-label fw-bold",
-                            r#for: format!("{}_absorption", base_id),
-                            "Absorption Coefficient (1/m)"
-                        }
-                        input {
-                            id: format!("{}_absorption", base_id),
-                            class: "form-control",
-                            r#type: "number",
-                            step: "any",
-                            min: "0",
-                            placeholder: "e.g., 0.001 (optional)",
-                            value: "{absorption_str}",
-                            readonly,
-                            oninput: handle_absorption_change,
-                        }
-                        div { class: "form-text text-muted small",
-                            "Leave empty if linear absorption is neglected."
-                        }
-                    }
-                }
+                        // hr {}
+            // // Section 2: Absorption Coefficient
+            // div { class: "row",
+            //     div { class: "col-md-6",
+            //         label {
+            //             class: "form-label fw-bold",
+            //             r#for: format!("{}_absorption", base_id),
+            //             "Absorption Coefficient (1/m)"
+            //         }
+            //         input {
+            //             id: format!("{}_absorption", base_id),
+            //             class: "form-control",
+            //             r#type: "number",
+            //             step: "any",
+            //             min: "0",
+            //             placeholder: "e.g., 0.001 (optional)",
+            //             value: "{absorption_str}",
+            //             readonly,
+            //             oninput: handle_absorption_change,
+            //         }
+            //         div { class: "form-text text-muted small",
+            //             "Leave empty if linear absorption is neglected."
+            //         }
+            //     }
+            // }
             }
         }
     }

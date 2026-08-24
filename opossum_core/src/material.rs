@@ -5,9 +5,7 @@ use uom::si::f64::Length;
 use uuid::Uuid;
 
 use crate::{
-    asset::AssetHeader,
-    error::OpmResult,
-    refractive_index::{
+    absorption::absorption_model::AbsorptionModel, asset::AssetHeader, error::OpmResult, refractive_index::{
         RefrIndexAir, RefrIndexConrady, RefrIndexConst, RefrIndexSchott, RefrIndexSellmeier1,
         RefractiveIndexType,
     },
@@ -21,16 +19,27 @@ pub struct OpticalProperties {
 
     /// Optional constant absorption coefficient (e.g., in 1/m).
     #[serde(default)]
-    pub absorption: Option<f64>,
+    pub absorption: AbsorptionModel,
 }
 
 impl OpticalProperties {
     /// Creates a new `OpticalProperties` container.
     #[must_use]
-    pub const fn new(refractive_index: RefractiveIndexType) -> Self {
+    pub fn new(refractive_index: RefractiveIndexType) -> Self {
         Self {
             refractive_index,
-            absorption: None,
+            absorption: AbsorptionModel::default(),
+        }
+    }
+    /// Creates a container with a custom refractive index and custom absorption model.
+    #[must_use]
+    pub const fn with_absorption(
+        refractive_index: RefractiveIndexType,
+        absorption: AbsorptionModel,
+    ) -> Self {
+        Self {
+            refractive_index,
+            absorption,
         }
     }
 }
