@@ -282,23 +282,41 @@ impl OpmDocument {
     }
     /// Generates the RON string content representation of this [`OpmDocument`].
     ///
-    /// Internally clones the document to extract embedded materials and replace node
-    /// material properties with UUID references without mutating the original `self`.
+    /// Extracts embedded materials and replaces node material properties with UUID references,
+    /// then puts the materials back, so that writing a document leaves it exactly as it was.
+    ///
+    /// **The clone below is not a copy of the nodes.** An [`OpticRef`](crate::core_optics::OpticRef)
+    /// is an `Arc<Mutex<..>>`, so a cloned document shares its very nodes with the original, and
+    /// rewriting their material property reaches straight through into this document. Only
+    /// `embedded_materials` — a plain map — is genuinely cloned. Leaving it at that emptied the
+    /// live document of its materials while filling a table nobody kept: the next write then found
+    /// nothing left to embed and produced a file whose references resolved to nothing, and every
+    /// volume node in the running session lost the material its analysis reads.
+    ///
+    /// Hence the restore, which runs whatever the serialization did.
     ///
     /// # Errors
     /// Returns an [`OpossumError`] if serialization fails.
     pub fn to_opm_file_string(&self) -> OpmResult<String> {
         // Create a temporary mutable clone for serialization preparation
         let mut doc_to_serialize = self.clone();
-        doc_to_serialize.prepare_materials_for_serialization()?;
+        let prepared = doc_to_serialize.prepare_materials_for_serialization();
 
         let config = PrettyConfig::new()
             .extensions(Extensions::UNWRAP_VARIANT_NEWTYPES)
             .new_line("\n");
 
-        ron::ser::to_string_pretty(&doc_to_serialize, config).map_err(|e| {
-            OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}"))
-        })
+        let serialized = prepared.and_then(|()| {
+            ron::ser::to_string_pretty(&doc_to_serialize, config).map_err(|e| {
+                OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}"))
+            })
+        });
+
+        // Give the shared nodes their inline materials back before returning - including on the
+        // failure paths, which would otherwise leave the live document stripped.
+        doc_to_serialize.resolve_embedded_materials()?;
+
+        serialized
     }
     /// Returns the list of analyzers of this [`OpmDocument`].
     #[must_use]
@@ -1333,6 +1351,10 @@ mod test {
     /// field that gets dropped, reordered non-deterministically, or misparsed during the load -> save
     /// round trip would show up as a diff here instead of silently corrupting a user's model on next
     /// save (see issue #1144, where a nested group's mapped ports vanished this way).
+    ///
+    /// Note that this passes even with the materials leaking away, because it writes a *freshly
+    /// loaded* document only once - which is exactly why `saving_twice_keeps_the_materials` below
+    /// exists next to it.
     #[test]
     fn all_nodes_roundtrip_is_stable() -> OpmResult<()> {
         let original = fs::read_to_string("./files_for_testing/opm/all_nodes_roundtrip.opm")
@@ -1346,6 +1368,44 @@ mod test {
             "loading and re-saving the fixture must reproduce it byte-for-byte; if this is an \
              intentional schema change, regenerate the fixture with `cargo run -p opossum_core \
              --example all_nodes_roundtrip_fixture` and re-check it in"
+        );
+        Ok(())
+    }
+    /// Writing a document must not consume the materials it is made of.
+    ///
+    /// `to_opm_file_string` prepares a *clone* for serialization, but an `OpticRef` is an
+    /// `Arc<Mutex<..>>`: a cloned document shares its very nodes with the original. Rewriting their
+    /// material property to a uuid reference therefore reaches through into the live document, while
+    /// the lookup table those uuids point into is filled on the throwaway clone alone. The second
+    /// write then finds no inline material left to embed and produces a file whose references
+    /// resolve to nothing.
+    #[test]
+    fn saving_twice_keeps_the_materials() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let lens_id = scenery.add_node(Lens::default())?;
+        let document = OpmDocument::new(scenery);
+
+        let first = document.to_opm_file_string()?;
+        let second = document.to_opm_file_string()?;
+        assert_eq!(
+            first, second,
+            "writing the same document twice must produce the same file"
+        );
+        // ... and the file it produces has to be readable again.
+        OpmDocument::from_string(&second)?;
+
+        // The cause, pinned directly: writing must leave the live node's material where an analysis
+        // looks for it. `Volumetric::material` reads `AssetRef::Inline` and nothing else, so a node
+        // left holding a bare uuid reference would fail to trace with "cannot read material" - a
+        // second, quieter symptom of the same slip.
+        let node_ref = document.scenery().node(lens_id)?;
+        let node = node_ref.optical_ref.lock_opm()?;
+        assert!(
+            matches!(
+                node.node_attr().get_property(MATERIAL),
+                Ok(Proptype::Material(AssetRef::Inline(_)))
+            ),
+            "saving must not leave the node holding a bare material reference"
         );
         Ok(())
     }
