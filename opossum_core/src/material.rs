@@ -125,6 +125,16 @@ impl Material {
         draft
     }
 
+    /// Creates an independent ad-hoc copy with a new random UUID and version 0.
+    /// This detaches the material from any catalog identity.
+    #[must_use]
+    pub fn clone_as_adhoc(&self) -> Self {
+        let mut adhoc = self.clone();
+        adhoc.header.id = Uuid::new_v4();
+        adhoc.header.version = 0;
+        adhoc
+    }
+
     /// For testing purposes only: Creates a material with a specific UUID and version.
     #[cfg(test)]
     pub fn new_for_test(

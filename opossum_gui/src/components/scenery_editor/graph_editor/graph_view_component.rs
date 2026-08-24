@@ -150,7 +150,7 @@ pub fn GraphViewEditor(
                         shift().y,
                         zoom(),
                     ),
-                    for (_ , node) in graph_store.nodes().iter() {
+                    for (_, node) in graph_store.nodes().iter() {
                         {
                             rsx! {
                                 Node {

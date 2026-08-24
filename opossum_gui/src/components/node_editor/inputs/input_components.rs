@@ -292,7 +292,7 @@ pub fn RowedInputs(inputs: Vec<InputData>) -> Element {
 
     rsx! {
         // Standard slice chunks yield sub-slices without any intermediate heap allocation
-        for (row_idx , chunk) in inputs.chunks(2).enumerate() {
+        for (row_idx, chunk) in inputs.chunks(2).enumerate() {
             div {
                 // Key ensures fast and stable Virtual DOM reconciliation
                 key: "input_row_{row_idx}",
@@ -591,7 +591,7 @@ pub fn LabeledSelect(
                     onchange.call(e);
                 },
                 // Use key for fast VDOM list reconciliation and avoid .clone()
-                for (is_selected , option) in &options {
+                for (is_selected, option) in &options {
                     option {
                         key: "{option}",
                         selected: *is_selected,

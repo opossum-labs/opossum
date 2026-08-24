@@ -142,11 +142,7 @@ pub fn GraphEditor(
                 // Bootstrap `.row`, whose `.row > *` rule sets `width: 100%`. With a flex-basis of
                 // `auto` that width becomes the basis, so the collapsed bar would claim the entire
                 // row and wrap the graph editor out of sight.
-                style: if SIDEBAR_COLLAPSED() {
-                    "flex: 0 0 auto; width: auto;".to_string()
-                } else {
-                    format!("flex: 0 0 {}px; width: auto;", SIDEBAR_WIDTH())
-                },
+                style: if SIDEBAR_COLLAPSED() { "flex: 0 0 auto; width: auto;".to_string() } else { format!("flex: 0 0 {}px; width: auto;", SIDEBAR_WIDTH()) },
                 SidebarViewSwitcher {}
                 if !SIDEBAR_COLLAPSED() {
                     div { class: "flex-grow-1 sidebar-view",
@@ -193,7 +189,7 @@ pub fn GraphEditor(
                         let tab_order = workspace.tab_order().read().clone();
                         rsx! {
                             TabList { class: "editor-tab-list",
-                                for (i , id) in tab_order.iter().enumerate() {
+                                for (i, id) in tab_order.iter().enumerate() {
                                     if let Some(graph_state) = workspace.tabs().get(*id) {
                                         TabTrigger {
                                             key: "{id.as_simple().to_string()}",
@@ -225,7 +221,7 @@ pub fn GraphEditor(
                                 id: "graphEditorContentContainer",
                                 class: "graph-editor-tab-content",
                                 onresize: move |_| workspace_processor.send(GraphsWorkspaceAction::GetEditorArea),
-                                for (i , id) in tab_order.iter().enumerate() {
+                                for (i, id) in tab_order.iter().enumerate() {
                                     if let Some(graph_state) = workspace.tabs().get(*id) {
                                         TabContent {
                                             key: "{id.as_simple().to_string()}",

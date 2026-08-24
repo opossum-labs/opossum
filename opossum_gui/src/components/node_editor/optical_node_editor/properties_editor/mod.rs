@@ -12,7 +12,7 @@ mod isometry_option_editor;
 mod length_editor;
 mod length_option_editor;
 mod linear_density_editor;
-mod material_editor;
+mod material_property_editor;
 mod splitter_type_editor;
 mod string_editor;
 mod vec2_editor;
@@ -28,14 +28,13 @@ use crate::components::node_editor::{
         fluence_estimator_editor::FluenceEstimatorEditor, i32_editor::I32Editor,
         isometry_option_editor::IsometryOptionEditor, length_editor::LengthEditor,
         length_option_editor::LengthOptionEditor, linear_density_editor::LinearDensityEditor,
-        material_editor::MaterialEditor, splitter_type_editor::SplitterTypeEditor,
+        material_property_editor::MaterialPropertyEditor, splitter_type_editor::SplitterTypeEditor,
         string_editor::StringEditor, vec2_editor::Vec2Editor, vec3_editor::Vec3Editor,
     },
 };
 use dioxus::prelude::*;
 use opossum_core::{
     prelude::{Properties, Property, Proptype},
-    properties::proptype::AssetRef,
     types::api_types::{NodeEditorPanel, NodeInfo},
 };
 use uuid::Uuid;
@@ -169,6 +168,15 @@ fn get_optical_editor(
     readonly: bool,
 ) -> Option<Element> {
     match property.prop().clone() {
+        Proptype::Material(material_ref) => Some(rsx! {
+            MaterialPropertyEditor {
+                node_id,
+                material_ref,
+                property_key,
+                on_change,
+                readonly,
+            }
+        }),
         Proptype::SplittingConfigBuilder(splitting_config_builder) => Some(rsx! {
             SplitterTypeEditor {
                 node_id,
@@ -206,20 +214,6 @@ fn get_optical_editor(
             }
         }),
         Proptype::LightDataBuilder(_light_data_builder) => Some(rsx! { "no longer available" }),
-        Proptype::Material(AssetRef::Inline(material)) => Some(rsx! {
-            MaterialEditor {
-                node_id,
-                material,
-                property_key,
-                on_change,
-                readonly,
-            }
-        }),
-        Proptype::Material(AssetRef::Id(material_id)) => Some(rsx! {
-            div { class: "accordion-content-wrapper-div",
-                "Material from registry ({material_id})"
-            }
-        }),
         _ => None,
     }
 }

@@ -20,7 +20,8 @@ use crate::{
 };
 use dioxus::prelude::*;
 use dioxus_primitives::alert_dialog::AlertDialogContent;
-use opossum_registry::AssetLoader;
+use opossum_core::material::Material;
+use opossum_registry::AssetRegistry;
 use std::path::PathBuf;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -115,28 +116,59 @@ pub fn App() -> Element {
     #[cfg(not(target_arch = "wasm32"))]
     let mut run_simulation = use_signal(|| false);
 
-    // Initialize AssetLoader with the path from AppConfig
-    let mut loader = use_signal(|| {
+    let mut material_registry = use_signal(|| {
         let registry_path = APP_CONFIG
             .read()
             .catalog_dir()
             .cloned()
             .unwrap_or_else(|| PathBuf::from("./catalogs"));
 
-        // Ensure the directory exists
+        // Ensure the directory exists on startup
         if !registry_path.exists() {
             let _ = std::fs::create_dir_all(&registry_path);
         }
 
-        AssetLoader::new(registry_path)
+        // Initialize registry facade and build in-memory index
+        AssetRegistry::<Material>::new(registry_path).unwrap_or_else(|err| {
+            log::error!("Failed to initialize MaterialRegistry: {err}");
+            // Fallback to in-memory/empty registry on severe I/O errors
+            AssetRegistry::new("./catalogs").expect("Fallback registry path failed")
+        })
     });
-    // Reactive update: re-instantiate AssetLoader when catalog_dir changes in APP_CONFIG
+
+    // Provide the shared AssetRegistry signal to all child components via Dioxus context
+    provide_context(material_registry);
+
+    // 2. Reactive update: re-instantiate AssetRegistry and rebuild index when catalog_dir changes in APP_CONFIG
     use_effect(move || {
         if let Some(catalog_path) = APP_CONFIG.read().catalog_dir() {
+            // Ensure newly selected directory exists on disk
             if !catalog_path.exists() {
-                let _ = std::fs::create_dir_all(catalog_path);
+                if let Err(e) = std::fs::create_dir_all(catalog_path) {
+                    log::error!(
+                        "Failed to create new catalog directory {}: {e}",
+                        catalog_path.display()
+                    );
+                    return;
+                }
             }
-            *loader.write() = AssetLoader::new(catalog_path.clone());
+
+            // Create new registry instance for the updated path (automatically scans and builds the index)
+            match AssetRegistry::<Material>::new(catalog_path.clone()) {
+                Ok(new_registry) => {
+                    info!(
+                        "Successfully reloaded MaterialRegistry from: {}",
+                        catalog_path.display()
+                    );
+                    *material_registry.write() = new_registry;
+                }
+                Err(err) => {
+                    log::error!(
+                        "Failed to reload MaterialRegistry from {}: {err}",
+                        catalog_path.display()
+                    );
+                }
+            }
         }
     });
     let mut node_editor_command: Signal<Option<NodeEditorCommand>> = use_signal(|| None);
@@ -479,7 +511,7 @@ pub fn App() -> Element {
         }
         SimulationWindow { show_simulation: run_simulation, model_file_path }
         SettingsDialog { open: show_settings }
-        MaterialCatalog { open: show_material_catalog, loader }
+        MaterialCatalog { open: show_material_catalog }
     }
 
     #[cfg(target_arch = "wasm32")]

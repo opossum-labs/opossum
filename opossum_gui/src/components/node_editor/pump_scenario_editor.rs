@@ -250,7 +250,11 @@ fn ScenarioCard(
                 div {
                     class: "amp-card-sub scenario-expand-toggle",
                     onclick: move |_| on_toggle_expanded.call(id),
-                    if is_expanded { "\u{25be} amplifiers" } else { "\u{25b8} amplifiers" }
+                    if is_expanded {
+                        "\u{25be} amplifiers"
+                    } else {
+                        "\u{25b8} amplifiers"
+                    }
                 }
                 if is_expanded {
                     ScenarioAmplifiers { scenario_id: id }
@@ -303,7 +307,7 @@ fn ScenarioAmplifiers(scenario_id: Uuid) -> Element {
                 }
             } else {
                 div { class: "amp-filter",
-                    for (label , shows_one_group) in [("All", false), ("By group", true)] {
+                    for (label, shows_one_group) in [("All", false), ("By group", true)] {
                         button {
                             key: "{label}",
                             r#type: "button",
@@ -320,7 +324,7 @@ fn ScenarioAmplifiers(scenario_id: Uuid) -> Element {
                         onchange: move |e| {
                             selected_group.set(Uuid::parse_str(&e.value()).ok());
                         },
-                        for (group_id , group_name) in groups {
+                        for (group_id, group_name) in groups {
                             option { key: "{group_id}", value: "{group_id}", "{group_name}" }
                         }
                     }

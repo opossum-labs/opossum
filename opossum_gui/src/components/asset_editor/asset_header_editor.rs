@@ -63,89 +63,89 @@ pub fn AssetHeaderEditor(props: AssetHeaderEditorProps) -> Element {
     info!("🔄 Render: AssetHeaderEditor");
     let header = props.header.read();
     rsx! {
-      Card {
-        CardHeader {
-          CardTitle { "General" }
-        }
-        CardContent {
-          // Row 1: Name and Manufacturer
-          div { class: "row mb-3",
-            div { class: "col-md-6",
-              LabeledInput {
-                id: "name",
-                label: "Name*",
-                value: header.name.clone(),
-                onchange: move |e: Event<FormData>| {
-                    props
-                        .on_change
-                        .call(AssetHeaderChangeEvent {
-                            action: AssetHeaderChangeAction::Name(e.value()),
-                        });
-                },
-              }
+        Card {
+            CardHeader {
+                CardTitle { "General" }
             }
+            CardContent {
+                // Row 1: Name and Manufacturer
+                div { class: "row mb-3",
+                    div { class: "col-md-6",
+                        LabeledInput {
+                            id: "name",
+                            label: "Name*",
+                            value: header.name.clone(),
+                            onchange: move |e: Event<FormData>| {
+                                props
+                                    .on_change
+                                    .call(AssetHeaderChangeEvent {
+                                        action: AssetHeaderChangeAction::Name(e.value()),
+                                    });
+                            },
+                        }
+                    }
 
-            div { class: "col-md-6",
+                    div { class: "col-md-6",
 
-              LabeledInput {
-                id: "manufacturer",
-                label: "Manufacturer",
-                value: header.manufacturer.clone().unwrap_or_default(),
-                onchange: move |e: Event<FormData>| {
-                    let opt_val = parse_optional_string(&e.value());
-                    props
-                        .on_change
-                        .call(AssetHeaderChangeEvent {
-                            action: AssetHeaderChangeAction::Manufacturer(opt_val),
-                        });
-                },
-              }
-            }
-          }
-
-          // Row 2: Description
-          div { class: "row mb-3",
-            div { class: "col-12",
-              LabeledInput {
-                id: "description",
-                label: "Description",
-                value: header.description.clone().unwrap_or_default(),
-                onchange: move |e: Event<FormData>| {
-                    let opt_val = parse_optional_string(&e.value());
-                    props
-                        .on_change
-                        .call(AssetHeaderChangeEvent {
-                            action: AssetHeaderChangeAction::Description(opt_val),
-                        });
-                },
-              }
-            }
-          }
-        }
-        CardFooter {
-          // Row 3: Read-only system metadata (UUID, Schema, Version)
-          div { class: "row text-muted small",
-            div { class: "col-md-5",
-              span { class: "fw-bold me-1", "Asset ID:" }
-              span { class: "user-select-all", "{header.id}" }
-            }
-            div { class: "col-md-4",
-              span { class: "fw-bold me-1", "Version:" }
-              span {
-                // Version 0 indicates a local draft
-                if header.version == 0 {
-                  "Unpublished Draft (v0)"
-                } else {
-                  "v{header.version}"
+                        LabeledInput {
+                            id: "manufacturer",
+                            label: "Manufacturer",
+                            value: header.manufacturer.clone().unwrap_or_default(),
+                            onchange: move |e: Event<FormData>| {
+                                let opt_val = parse_optional_string(&e.value());
+                                props
+                                    .on_change
+                                    .call(AssetHeaderChangeEvent {
+                                        action: AssetHeaderChangeAction::Manufacturer(opt_val),
+                                    });
+                            },
+                        }
+                    }
                 }
-              }
+
+                // Row 2: Description
+                div { class: "row mb-3",
+                    div { class: "col-12",
+                        LabeledInput {
+                            id: "description",
+                            label: "Description",
+                            value: header.description.clone().unwrap_or_default(),
+                            onchange: move |e: Event<FormData>| {
+                                let opt_val = parse_optional_string(&e.value());
+                                props
+                                    .on_change
+                                    .call(AssetHeaderChangeEvent {
+                                        action: AssetHeaderChangeAction::Description(opt_val),
+                                    });
+                            },
+                        }
+                    }
+                }
             }
-            div { class: "col-md-3",
-              span { class: "fw-bold me-1", "Schema:" }
-              span { "v{header.schema_version}" }
+            CardFooter {
+                // Row 3: Read-only system metadata (UUID, Schema, Version)
+                div { class: "row text-muted small",
+                    div { class: "col-md-5",
+                        span { class: "fw-bold me-1", "Asset ID:" }
+                        span { class: "user-select-all", "{header.id}" }
+                    }
+                    div { class: "col-md-4",
+                        span { class: "fw-bold me-1", "Version:" }
+                        span {
+                            // Version 0 indicates a local draft
+                            if header.version == 0 {
+                                "Unpublished Draft (v0)"
+                            } else {
+                                "v{header.version}"
+                            }
+                        }
+                    }
+                    div { class: "col-md-3",
+                        span { class: "fw-bold me-1", "Schema:" }
+                        span { "v{header.schema_version}" }
+                    }
+                }
             }
-          }
         }
-      }
     }
 }

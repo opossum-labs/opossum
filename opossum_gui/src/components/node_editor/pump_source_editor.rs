@@ -147,7 +147,11 @@ fn AnalyticPumpFields(
             BeerLambertFields {
                 id_prefix,
                 profile,
-                on_change: move |absorbed| rebuilt(peak, transversal, LongitudinalProfile::BeerLambert(absorbed)),
+                on_change: move |absorbed| rebuilt(
+                    peak,
+                    transversal,
+                    LongitudinalProfile::BeerLambert(absorbed),
+                ),
             }
         }
     }
@@ -187,7 +191,13 @@ fn SuperGaussianFields(
                 step: 0.5,
                 min: Some(0.0),
                 on_save: move |value: f64| {
-                    rebuilt(center, millimeter!(value, millimeters(sigma.y)), power, theta, rectangular);
+                    rebuilt(
+                        center,
+                        millimeter!(value, millimeters(sigma.y)),
+                        power,
+                        theta,
+                        rectangular,
+                    );
                 },
             }
             NumberField {
@@ -197,7 +207,13 @@ fn SuperGaussianFields(
                 step: 0.5,
                 min: Some(0.0),
                 on_save: move |value: f64| {
-                    rebuilt(center, millimeter!(millimeters(sigma.x), value), power, theta, rectangular);
+                    rebuilt(
+                        center,
+                        millimeter!(millimeters(sigma.x), value),
+                        power,
+                        theta,
+                        rectangular,
+                    );
                 },
             }
             NumberField {
@@ -207,7 +223,13 @@ fn SuperGaussianFields(
                 step: 0.5,
                 min: None,
                 on_save: move |value: f64| {
-                    rebuilt(millimeter!(value, millimeters(center.y)), sigma, power, theta, rectangular);
+                    rebuilt(
+                        millimeter!(value, millimeters(center.y)),
+                        sigma,
+                        power,
+                        theta,
+                        rectangular,
+                    );
                 },
             }
             NumberField {
@@ -217,7 +239,13 @@ fn SuperGaussianFields(
                 step: 0.5,
                 min: None,
                 on_save: move |value: f64| {
-                    rebuilt(millimeter!(millimeters(center.x), value), sigma, power, theta, rectangular);
+                    rebuilt(
+                        millimeter!(millimeters(center.x), value),
+                        sigma,
+                        power,
+                        theta,
+                        rectangular,
+                    );
                 },
             }
             NumberField {

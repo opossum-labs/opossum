@@ -22,74 +22,74 @@ pub fn SettingsDialog(open: Signal<bool>) -> Element {
     });
 
     rsx! {
-      AlertDialog {
-        open: open(),
-        on_open_change: move |v: bool| open.set(v),
-        max_width: "50rem".to_string(),
-        AlertDialogTitle { "OPOSSUM Settings" }
-        AlertDialogDescription {
-          // Body with split layout
-          div { class: "d-flex p-0", style: "min-height: 400px;",
+        AlertDialog {
+            open: open(),
+            on_open_change: move |v: bool| open.set(v),
+            max_width: "50rem".to_string(),
+            AlertDialogTitle { "OPOSSUM Settings" }
+            AlertDialogDescription {
+                // Body with split layout
+                div { class: "d-flex p-0", style: "min-height: 400px;",
 
-            // Left column: Navigation tabs
-            div { class: "list-group list-group-flush w-25 bg-dark border-end border-secondary",
-              button {
-                class: format!(
-                    "list-group-item list-group-item-action py-3 border-0 {}",
-                    if active_tab() == 0 {
-                        "bg-secondary text-white fw-bold"
-                    } else {
-                        "bg-dark text-white-50"
-                    },
-                ),
-                onclick: move |_| active_tab.set(0),
-                "General"
-              }
-              button {
-                class: format!(
-                    "list-group-item list-group-item-action py-3 border-0 {}",
-                    if active_tab() == 1 {
-                        "bg-secondary text-white fw-bold"
-                    } else {
-                        "bg-dark text-white-50"
-                    },
-                ),
-                onclick: move |_| active_tab.set(1),
-                "Physics / Model"
-              }
-            }
+                    // Left column: Navigation tabs
+                    div { class: "list-group list-group-flush w-25 bg-dark border-end border-secondary",
+                        button {
+                            class: format!(
+                                "list-group-item list-group-item-action py-3 border-0 {}",
+                                if active_tab() == 0 {
+                                    "bg-secondary text-white fw-bold"
+                                } else {
+                                    "bg-dark text-white-50"
+                                },
+                            ),
+                            onclick: move |_| active_tab.set(0),
+                            "General"
+                        }
+                        button {
+                            class: format!(
+                                "list-group-item list-group-item-action py-3 border-0 {}",
+                                if active_tab() == 1 {
+                                    "bg-secondary text-white fw-bold"
+                                } else {
+                                    "bg-dark text-white-50"
+                                },
+                            ),
+                            onclick: move |_| active_tab.set(1),
+                            "Physics / Model"
+                        }
+                    }
 
-            // Right column: Dynamic content
-            div {
-              class: "p-4 flex-grow-1",
-              style: "background-color: #1e1e1e; border-radius: 0 0 4px 0;",
-              match active_tab() {
-                  0 => rsx! {
-                    GeneralSettingsTab { temp_config }
-                  },
-                  1 => rsx! {
-                    PhysicsSettingsTab { temp_config }
-                  },
-                  _ => rsx! {
-                    div { class: "text-danger", "Unknown category" }
-                  },
-              }
-            }
-          }
-        }
-        AlertDialogActions {
-          AlertDialogCancel { "Cancel" }
-          AlertDialogAction {
-            on_click: move |_| {
-                *APP_CONFIG.write() = temp_config.read().clone();
-                if let Err(e) = APP_CONFIG.read().to_file() {
-                    eprintln!("Error while saving configuration: {e}");
+                    // Right column: Dynamic content
+                    div {
+                        class: "p-4 flex-grow-1",
+                        style: "background-color: #1e1e1e; border-radius: 0 0 4px 0;",
+                        match active_tab() {
+                            0 => rsx! {
+                                GeneralSettingsTab { temp_config }
+                            },
+                            1 => rsx! {
+                                PhysicsSettingsTab { temp_config }
+                            },
+                            _ => rsx! {
+                                div { class: "text-danger", "Unknown category" }
+                            },
+                        }
+                    }
                 }
-            },
-            "Save & Close"
-          }
+            }
+            AlertDialogActions {
+                AlertDialogCancel { "Cancel" }
+                AlertDialogAction {
+                    on_click: move |_| {
+                        *APP_CONFIG.write() = temp_config.read().clone();
+                        if let Err(e) = APP_CONFIG.read().to_file() {
+                            eprintln!("Error while saving configuration: {e}");
+                        }
+                    },
+                    "Save & Close"
+                }
+            }
         }
-      }
     }
 }
 
@@ -109,100 +109,100 @@ fn GeneralSettingsTab(mut temp_config: Signal<crate::AppConfig>) -> Element {
     let sync_on_startup = temp_config.read().sync_catalog_on_startup();
 
     rsx! {
-      div { class: "d-flex flex-column gap-3",
-        h4 { class: "mb-3", "General Settings" }
+        div { class: "d-flex flex-column gap-3",
+            h4 { class: "mb-3", "General Settings" }
 
-        // Report Base Directory Setting
-        div { class: "form-group",
-          label { class: "form-label text-muted small", "Report Base Directory" }
-          div { class: "input-group",
-            input {
-              r#type: "text",
-              class: "form-control bg-dark text-white border-secondary",
-              style: "font-family: monospace; font-size: 13px;",
-              readonly: true,
-              value: "{current_report_path_str}",
+            // Report Base Directory Setting
+            div { class: "form-group",
+                label { class: "form-label text-muted small", "Report Base Directory" }
+                div { class: "input-group",
+                    input {
+                        r#type: "text",
+                        class: "form-control bg-dark text-white border-secondary",
+                        style: "font-family: monospace; font-size: 13px;",
+                        readonly: true,
+                        value: "{current_report_path_str}",
+                    }
+                    button {
+                        class: "btn btn-secondary",
+                        r#type: "button",
+                        onclick: move |_| {
+                            spawn(async move {
+                                if let Some(folder) = select_folder_path().await
+                                    && let Err(e) = temp_config.write().set_report_dir(&folder)
+                                {
+                                    eprintln!("Error setting report directory: {e}");
+                                }
+                            });
+                        },
+                        "Browse..."
+                    }
+                }
             }
-            button {
-              class: "btn btn-secondary",
-              r#type: "button",
-              onclick: move |_| {
-                  spawn(async move {
-                      if let Some(folder) = select_folder_path().await
-                          && let Err(e) = temp_config.write().set_report_dir(&folder)
-                      {
-                          eprintln!("Error setting report directory: {e}");
-                      }
-                  });
-              },
-              "Browse..."
-            }
-          }
-        }
 
-        // Catalog Base Directory Setting
-        div { class: "form-group",
-          label { class: "form-label text-muted small",
-            "Catalog Directory (Materials, Coatings, etc.)"
-          }
-          div { class: "input-group",
-            input {
-              r#type: "text",
-              class: "form-control bg-dark text-white border-secondary",
-              style: "font-family: monospace; font-size: 13px;",
-              readonly: true,
-              value: "{current_catalog_path_str}",
+            // Catalog Base Directory Setting
+            div { class: "form-group",
+                label { class: "form-label text-muted small",
+                    "Catalog Directory (Materials, Coatings, etc.)"
+                }
+                div { class: "input-group",
+                    input {
+                        r#type: "text",
+                        class: "form-control bg-dark text-white border-secondary",
+                        style: "font-family: monospace; font-size: 13px;",
+                        readonly: true,
+                        value: "{current_catalog_path_str}",
+                    }
+                    button {
+                        class: "btn btn-secondary",
+                        r#type: "button",
+                        onclick: move |_| {
+                            spawn(async move {
+                                if let Some(folder) = select_folder_path().await
+                                    && let Err(e) = temp_config.write().set_catalog_dir(&folder)
+                                {
+                                    eprintln!("Error setting catalog directory: {e}");
+                                }
+                            });
+                        },
+                        "Browse..."
+                    }
+                }
             }
-            button {
-              class: "btn btn-secondary",
-              r#type: "button",
-              onclick: move |_| {
-                  spawn(async move {
-                      if let Some(folder) = select_folder_path().await
-                          && let Err(e) = temp_config.write().set_catalog_dir(&folder)
-                      {
-                          eprintln!("Error setting catalog directory: {e}");
-                      }
-                  });
-              },
-              "Browse..."
+
+            // Catalog Remote Git URL Setting
+            div { class: "form-group",
+                label { class: "form-label text-muted small", "Catalog Git Remote URL" }
+                input {
+                    r#type: "text",
+                    class: "form-control bg-dark text-white border-secondary",
+                    style: "font-family: monospace; font-size: 13px;",
+                    value: "{current_remote_url}",
+                    placeholder: "https://github.com/opossum-labs/opossum_catalog.git",
+                    oninput: move |evt| {
+                        temp_config.write().set_catalog_remote_url(evt.value());
+                    },
+                }
             }
-          }
-        }
 
-        // Catalog Remote Git URL Setting
-        div { class: "form-group",
-          label { class: "form-label text-muted small", "Catalog Git Remote URL" }
-          input {
-            r#type: "text",
-            class: "form-control bg-dark text-white border-secondary",
-            style: "font-family: monospace; font-size: 13px;",
-            value: "{current_remote_url}",
-            placeholder: "https://github.com/opossum-labs/opossum_catalog.git",
-            oninput: move |evt| {
-                temp_config.write().set_catalog_remote_url(evt.value());
-            },
-          }
+            // Sync on Startup Toggle Switch
+            div { class: "form-check form-switch pt-1",
+                input {
+                    r#type: "checkbox",
+                    class: "form-check-input",
+                    id: "syncCatalogOnStartupSwitch",
+                    checked: sync_on_startup,
+                    onchange: move |evt| {
+                        temp_config.write().set_sync_catalog_on_startup(evt.checked());
+                    },
+                }
+                label {
+                    class: "form-check-label text-muted small user-select-none",
+                    r#for: "syncCatalogOnStartupSwitch",
+                    "Automatically check and update catalog repository on startup"
+                }
+            }
         }
-
-        // Sync on Startup Toggle Switch
-        div { class: "form-check form-switch pt-1",
-          input {
-            r#type: "checkbox",
-            class: "form-check-input",
-            id: "syncCatalogOnStartupSwitch",
-            checked: sync_on_startup,
-            onchange: move |evt| {
-                temp_config.write().set_sync_catalog_on_startup(evt.checked());
-            },
-          }
-          label {
-            class: "form-check-label text-muted small user-select-none",
-            r#for: "syncCatalogOnStartupSwitch",
-            "Automatically check and update catalog repository on startup"
-          }
-        }
-      }
     }
 }
 
@@ -220,21 +220,21 @@ fn PhysicsSettingsTab(mut temp_config: Signal<crate::AppConfig>) -> Element {
     let current_wavelength = temp_config.read().default_wavelength();
 
     rsx! {
-      div { class: "d-flex flex-column gap-3",
-        h4 { class: "mb-3", "Default Model Parameters" }
+        div { class: "d-flex flex-column gap-3",
+            h4 { class: "mb-3", "Default Model Parameters" }
 
-        div { class: "form-group",
-          NodeConfigUnitInput {
-            id: "defaultWavelengthSetting",
-            label: "Default Wavelength".to_string(),
-            value: current_wavelength.value,
-            unit_config: UnitHandling::new("m", true),
-            readonly: false,
-            onchange: move |new_length: f64| {
-                temp_config.write().set_default_wavelength(meter!(new_length));
-            },
-          }
+            div { class: "form-group",
+                NodeConfigUnitInput {
+                    id: "defaultWavelengthSetting",
+                    label: "Default Wavelength".to_string(),
+                    value: current_wavelength.value,
+                    unit_config: UnitHandling::new("m", true),
+                    readonly: false,
+                    onchange: move |new_length: f64| {
+                        temp_config.write().set_default_wavelength(meter!(new_length));
+                    },
+                }
+            }
         }
-      }
     }
 }
