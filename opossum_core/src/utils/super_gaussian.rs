@@ -137,6 +137,32 @@ impl SuperGaussianShape {
             rectangular,
         })
     }
+    /// Return the center this shape peaks at.
+    #[must_use]
+    pub const fn center(&self) -> Point2<Length> {
+        *self.mu_xy.get()
+    }
+    /// Return the standard deviation along each axis.
+    #[must_use]
+    pub const fn sigma(&self) -> Point2<Length> {
+        *self.sigma_xy.get()
+    }
+    /// Return the steepness of the flanks: 1 is an ordinary Gaussian, larger values are
+    /// super-Gaussians.
+    #[must_use]
+    pub const fn power(&self) -> f64 {
+        *self.power.get()
+    }
+    /// Return the rotation of this shape in the transversal plane.
+    #[must_use]
+    pub const fn theta(&self) -> Angle {
+        *self.theta.get()
+    }
+    /// Return whether the flanks are shaped rectangularly rather than elliptically.
+    #[must_use]
+    pub const fn rectangular(&self) -> bool {
+        self.rectangular
+    }
     /// Return the value of this shape at the given transversal position.
     ///
     /// The shape is **peak-normalised**: this answers 1 at its center and falls off towards the

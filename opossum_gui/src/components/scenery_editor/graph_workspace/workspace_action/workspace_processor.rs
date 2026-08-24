@@ -12,7 +12,7 @@ use dioxus::{
 };
 use futures_util::StreamExt;
 use opossum_core::{
-    gain::GainModel,
+    gain::{GainModel, PumpSource},
     prelude::{AnalyzerType, PortType},
     types::api_types::{
         AnalyzerItemDto, ConnectInfo, CutNodesResponse, DeleteNodeResponse, DocumentChange,
@@ -471,6 +471,19 @@ pub fn use_workspace_processor(
                         )
                         .await;
                     }
+                    GraphsWorkspaceAction::SetScenarioPumpSource {
+                        scenario_id,
+                        node_id,
+                        pump,
+                    } => {
+                        process_set_scenario_pump_source(
+                            scenario_id,
+                            node_id,
+                            pump,
+                            workspace_handlers,
+                        )
+                        .await;
+                    }
                     GraphsWorkspaceAction::SetAmplifierCandidate {
                         node_id,
                         graph_id,
@@ -595,6 +608,7 @@ const fn is_document_edit_action(action: &GraphsWorkspaceAction) -> bool {
             | GraphsWorkspaceAction::RemovePortMap { .. }
             | GraphsWorkspaceAction::SyncNodePositions { .. }
             | GraphsWorkspaceAction::SetScenarioGainModel { .. }
+            | GraphsWorkspaceAction::SetScenarioPumpSource { .. }
             | GraphsWorkspaceAction::SetAmplifierCandidate { .. }
     )
 }
@@ -637,6 +651,33 @@ async fn process_set_scenario_gain_model(
                     .nodes
                     .set_amp_model(node_id, model.active_name(), graph_id);
             }
+        }),
+    );
+}
+
+/// Sets how a node's medium is pumped within one pump scenario.
+///
+/// The counterpart of [`process_set_scenario_gain_model`], and deliberately shorter: the canvas
+/// marker states whether a node *amplifies*, which the extraction model alone answers, so pumping
+/// has nothing to mirror there.
+///
+/// # Arguments
+///
+/// * `scenario_id` - the scenario being edited.
+/// * `node_id` - the node whose pump source in that scenario is being set.
+/// * `pump` - how its medium is pumped.
+/// * `ws_handler` - workspace signal handlers, used to mark the document as unsaved.
+async fn process_set_scenario_pump_source(
+    scenario_id: Uuid,
+    node_id: Uuid,
+    pump: PumpSource,
+    ws_handler: WorkSpaceSignalHandlers,
+) {
+    eval_action_run(
+        api::put_pump_scenario_pump_source(scenario_id, node_id, pump).await,
+        Some(move |()| {
+            ws_handler.workspace.set_needs_saving(true);
+            *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
         }),
     );
 }

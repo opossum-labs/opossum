@@ -225,6 +225,16 @@ impl BeerLambertProfile {
         profile.direction = direction;
         Ok(profile)
     }
+    /// Return the absorption coefficient of the medium at the pump wavelength.
+    #[must_use]
+    pub const fn absorption(&self) -> ReciprocalLength {
+        *self.absorption.get()
+    }
+    /// Return which face the pump enters through.
+    #[must_use]
+    pub const fn direction(&self) -> PumpDirection {
+        self.direction
+    }
     /// Set the absorption coefficient.
     ///
     /// # Arguments
@@ -426,6 +436,16 @@ impl AnalyticPump {
     #[must_use]
     pub const fn peak_gain_coefficient(&self) -> ReciprocalLength {
         *self.peak_gain_coefficient.get()
+    }
+    /// Return how the pump is distributed across the cross section.
+    #[must_use]
+    pub const fn transversal(&self) -> TransversalProfile {
+        self.transversal
+    }
+    /// Return how the pump is distributed along the optical axis.
+    #[must_use]
+    pub const fn longitudinal(&self) -> LongitudinalProfile {
+        self.longitudinal
     }
     /// Set the small-signal gain coefficient at the peak of the profile.
     ///

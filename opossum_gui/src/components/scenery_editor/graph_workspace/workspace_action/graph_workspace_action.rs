@@ -1,7 +1,7 @@
 use crate::components::scenery_editor::{DragStatus, edges::edges_component::EdgeCreation};
 use dioxus::html::geometry::euclid::default::{Point2D, Rect};
 use opossum_core::{
-    gain::GainModel,
+    gain::{GainModel, PumpSource},
     prelude::{AnalyzerType, PortType},
     types::api_types::{ConnectInfo, NewRefNode},
 };
@@ -364,6 +364,21 @@ pub enum GraphsWorkspaceAction {
         graph_id: Uuid,
         /// The model to set. `GainModel::None` takes the node out of the scenario again.
         model: GainModel,
+    },
+
+    /// Sets how a node's medium is pumped within one pump scenario - the other half of what
+    /// [`Self::SetScenarioGainModel`] sets, edited through its own endpoint so that changing one
+    /// never overwrites the other.
+    ///
+    /// Unlike the gain model this has no canvas effect: the marker states whether a node amplifies,
+    /// which the extraction model alone answers.
+    SetScenarioPumpSource {
+        /// The scenario being edited.
+        scenario_id: Uuid,
+        /// The node whose pump source in that scenario is being set.
+        node_id: Uuid,
+        /// How its medium is pumped. `PumpSource::None` leaves it unpumped.
+        pump: PumpSource,
     },
 
     /// Marks or unmarks a node as an amplifier candidate - what the context menu's "As

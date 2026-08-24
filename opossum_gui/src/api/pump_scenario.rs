@@ -2,9 +2,10 @@
 
 use crate::HTTP_API_CLIENT;
 use opossum_core::{
-    gain::{GainModel, PumpScenario},
+    gain::{GainModel, PumpScenario, PumpSource},
     types::api_types::{
         NewPumpScenario, PumpScenarioItemDto, ScenarioAmplifierDto, SetScenarioGainModel,
+        SetScenarioPumpSource,
     },
 };
 use uuid::Uuid;
@@ -101,6 +102,28 @@ pub async fn put_pump_scenario_gain_model(
                 node_id,
                 gain_model,
             },
+        )
+        .await
+}
+
+/// Set how a node's medium is pumped within a pump scenario.
+///
+/// The counterpart of [`put_pump_scenario_gain_model`] for the other half of the node's
+/// configuration. [`PumpSource::None`] leaves the medium unpumped, and takes the node out of the
+/// scenario if it does not amplify either.
+///
+/// # Errors
+///
+/// This function will return an error if the request fails or the UUID is not found.
+pub async fn put_pump_scenario_pump_source(
+    scenario_id: Uuid,
+    node_id: Uuid,
+    pump: PumpSource,
+) -> Result<(), String> {
+    HTTP_API_CLIENT()
+        .put_receive_no_content(
+            &format!("/api/pump_scenarios/{scenario_id}/pump_source"),
+            SetScenarioPumpSource { node_id, pump },
         )
         .await
 }

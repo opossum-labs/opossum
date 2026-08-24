@@ -575,31 +575,7 @@ body {
     margin-top: 6px;
 }
 
-/* None/Const switch for one candidate's gain model within a scenario - same "own classes instead of
-   MDB" reasoning as `.amp-filter-btn`/`.scenario-active-btn` above, same amber "active" accent as
-   `.scenario-active-btn.active`/`.scenario-card.active`. */
-.amp-gain-switch {
-    padding: 2px 8px;
-    font-size: 11px;
-    cursor: pointer;
-    color: rgb(205, 205, 205);
-    background-color: rgb(58, 58, 58);
-    border: 1px solid rgb(95, 95, 95);
-    border-radius: 4px;
-}
-
-.amp-gain-switch:hover {
-    color: #ffffff;
-    background-color: rgb(78, 78, 78);
-}
-
-.amp-gain-switch.active {
-    color: rgb(20, 20, 20);
-    background-color: rgb(255, 193, 7);
-    border-color: rgb(255, 193, 7);
-}
-
-/* Gain-factor input, shown under a candidate's row only while its switch is Const. */
+/* Gain-factor input, shown under a candidate's row only while its gain model is Const. */
 .amp-gain-input {
     width: 100%;
     margin-top: 4px;
@@ -609,6 +585,31 @@ body {
     background-color: rgb(58, 58, 58);
     border: 1px solid rgb(90, 90, 90);
     border-radius: 4px;
+}
+
+/* One stack of controls configuring a candidate within a scenario - the gain model with its own
+   parameters, and, where the model calls for it, the pump source with its. Stacked rather than laid
+   out in a grid because the sidebar it lives in is narrow. */
+.amp-config-block {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.amp-config-block .form-control,
+.amp-config-block .form-select {
+    font-size: 12px;
+}
+
+/* One level in from the block: the parameters of a profile the user picked inside it, set off by a
+   rule so it reads as belonging to the dropdown above rather than to the pump as a whole. */
+.amp-pump-nested {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-left: 8px;
+    border-left: 2px solid rgb(90, 90, 90);
 }
 
 /* Status line below the body of an amplifying node. Its height must stay in sync with

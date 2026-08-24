@@ -151,6 +151,29 @@ impl GainModel {
     pub const fn is_active(&self) -> bool {
         !matches!(self, Self::None)
     }
+    /// Return whether this model draws on the inversion stored in the medium.
+    ///
+    /// A model that works from its own parameters alone — a fixed factor, say — does not care how
+    /// the medium was pumped, or whether it was pumped at all: configuring a
+    /// [`PumpSource`](super::PumpSource) for it would be a setting without an effect. Only a model
+    /// that actually reads the [`InversionField`](super::InversionField) makes the pumping matter.
+    ///
+    /// This is asked *of the model* rather than derived from a list of variant names kept somewhere
+    /// else, so that the answer travels with the model instead of having to be maintained wherever
+    /// pumping is offered.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the medium's inversion is an input to this model.
+    #[must_use]
+    pub const fn needs_inversion(&self) -> bool {
+        // Matched exhaustively on purpose: a model added later has to state here whether it reads
+        // the state of the medium, rather than silently inheriting "no" and leaving the pump
+        // settings it depends on out of reach.
+        match self {
+            Self::None | Self::Const(_) => false,
+        }
+    }
     /// Return this model's display name, or `None` if it does not amplify.
     ///
     /// This is the shape a user interface wants: one value that answers "does it amplify" and
@@ -181,6 +204,18 @@ mod test {
                 .as_deref(),
             Some("Const")
         );
+    }
+    /// Neither model shipped so far reads the medium's state - a constant factor is constant. The
+    /// moment a stage does read it (`SmallSignalGain`), this is what makes its pump settings
+    /// reachable, and the exhaustive match above is what forces that decision to be made.
+    #[test]
+    fn no_model_yet_draws_on_the_inversion() {
+        for variant in GainModel::iter() {
+            assert!(
+                !variant.needs_inversion(),
+                "model {variant} claims to read the inversion, but nothing evaluates one yet"
+            );
+        }
     }
     #[test]
     fn const_gain_default_is_neutral() {

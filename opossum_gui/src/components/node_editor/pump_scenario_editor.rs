@@ -1,11 +1,18 @@
 use crate::{
     ACTIVE_PUMP_SCENARIO, OPOSSUM_UI_LOGS, PUMP_SCENARIO_LIST_REFRESH, api,
-    components::scenery_editor::GraphsWorkspaceAction,
+    components::{
+        node_editor::{
+            inputs::{input_components::LabeledSelect, select_options_from_enum_iterator},
+            pump_source_editor::PumpSourceEditor,
+        },
+        scenery_editor::GraphsWorkspaceAction,
+    },
 };
 use dioxus::prelude::*;
 use opossum_core::{
     gain::{ConstGain, GainModel, PumpScenario},
     types::api_types::ScenarioAmplifierDto,
+    utils::default_from_name::DefaultFromName,
 };
 use uuid::Uuid;
 
@@ -382,13 +389,11 @@ fn ScenarioAmplifierRow(
         group_name,
         config,
     } = amplifier;
-    // Only the extraction half is edited here so far; the pump source gets its own sub-editor.
     let gain_model = config.gain_model();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
-    let is_active = gain_model.is_active();
 
     // Local text form of the gain factor, re-synced whenever the fetched `gain_model` actually
-    // changes (a switch flip made elsewhere, an undo/redo, this very row's own save completing) -
+    // changes (a model picked elsewhere, an undo/redo, this very row's own save completing) -
     // same "compare and pull in" shape `FlushableTextInput` uses, without needing that component's
     // dirty-tracking: nothing here re-renders mid-keystroke, only after a completed save.
     let mut gain_str = use_signal(|| format_gain(gain_model));
@@ -430,35 +435,58 @@ fn ScenarioAmplifierRow(
     rsx! {
         div { class: "card bg-dark border-secondary mb-1 amp-overview-card",
             div { class: "card-body p-2 text-light",
-                div { class: "d-flex justify-content-between align-items-center",
-                    span {
-                        class: "fw-bold small amp-row-reveal",
-                        onclick: move |_| on_reveal.call((uuid, group_id)),
-                        "{name}"
-                    }
-                    button {
-                        r#type: "button",
-                        title: if is_active { "Turn off amplification in this scenario" } else { "Turn on amplification in this scenario" },
-                        class: if is_active { "amp-gain-switch active" } else { "amp-gain-switch" },
-                        onclick: move |_| {
-                            set_model(if is_active { GainModel::None } else { GainModel::Const(ConstGain::default()) });
+                span {
+                    class: "fw-bold small amp-row-reveal",
+                    onclick: move |_| on_reveal.call((uuid, group_id)),
+                    "{name}"
+                }
+                div { class: "amp-config-block",
+                    LabeledSelect {
+                        id: format!("amp-{uuid}-gain"),
+                        label: "Gain model".to_string(),
+                        options: select_options_from_enum_iterator(&gain_model, None),
+                        onchange: move |e: Event<FormData>| {
+                            // A freshly picked model starts at its own default, which for `Const` is
+                            // a factor of 1.0 - selecting it must not change a result on its own.
+                            if let Some(picked) = GainModel::default_from_name(&e.value()) {
+                                set_model(picked);
+                            }
                         },
-                        if is_active { "Const" } else { "None" }
+                    }
+                    // The factor belongs to `Const` specifically, not to "amplifies at all" - a
+                    // later model has its own parameters and would be mis-edited by this field.
+                    if matches!(gain_model, GainModel::Const(_)) {
+                        input {
+                            class: "amp-gain-input",
+                            r#type: "number",
+                            step: "0.1",
+                            min: "0",
+                            value: "{gain_str}",
+                            oninput: move |e| gain_str.set(e.value()),
+                            onblur: move |_| save_gain(),
+                            onkeydown: move |e| {
+                                if e.key() == Key::Enter {
+                                    save_gain();
+                                }
+                            },
+                        }
                     }
                 }
-                if is_active {
-                    input {
-                        class: "amp-gain-input",
-                        r#type: "number",
-                        step: "0.1",
-                        min: "0",
-                        value: "{gain_str}",
-                        oninput: move |e| gain_str.set(e.value()),
-                        onblur: move |_| save_gain(),
-                        onkeydown: move |e| {
-                            if e.key() == Key::Enter {
-                                save_gain();
-                            }
+                // Pumping only means anything to a model that reads the medium's inversion. For one
+                // that works from its own parameters - a fixed factor, or none at all - these
+                // settings would have no effect, so they are not offered. Which models those are is
+                // the model's own answer, not a list kept here.
+                if gain_model.needs_inversion() {
+                    PumpSourceEditor {
+                        id_prefix: format!("amp-{uuid}"),
+                        source: config.pump(),
+                        on_change: move |pump| {
+                            workspace_processor
+                                .send(GraphsWorkspaceAction::SetScenarioPumpSource {
+                                    scenario_id,
+                                    node_id: uuid,
+                                    pump,
+                                });
                         },
                     }
                 }
