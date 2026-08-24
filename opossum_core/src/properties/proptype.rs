@@ -71,6 +71,66 @@ pub enum AssetRef<T> {
     Id(Uuid),
 }
 
+impl<T> AssetRef<T> {
+    /// Returns a reference to the inline asset if available.
+    #[must_use]
+    pub const fn as_inline(&self) -> Option<&T> {
+        match self {
+            Self::Inline(asset) => Some(asset),
+            Self::Id(_) => None,
+        }
+    }
+
+    /// Returns a mutable reference to the inline asset if available.
+    #[must_use]
+    pub const fn as_inline_mut(&mut self) -> Option<&mut T> {
+        match self {
+            Self::Inline(asset) => Some(asset),
+            Self::Id(_) => None,
+        }
+    }
+
+    /// Extracts the inline asset reference, panicking if it is a pure ID reference.
+    ///
+    /// # Panics
+    ///
+    /// As the function name already says, this function panics one tires to unwrap an [`AssetRef::Id`] item.
+    #[must_use]
+    pub fn unwrap_inline(&self) -> &T {
+        match self {
+            Self::Inline(asset) => asset,
+            Self::Id(id) => panic!("Expected inline asset, found AssetRef::Id({id})"),
+        }
+    }
+
+    /// Extracts a mutable inline asset reference, panicking if it is a pure ID reference.
+    ///
+    /// # Panics
+    ///
+    /// As the function name already says, this function panics one tires to unwrap an [`AssetRef::Id`] item.
+    #[must_use]
+    pub fn unwrap_inline_mut(&mut self) -> &mut T {
+        match self {
+            Self::Inline(asset) => asset,
+            Self::Id(id) => panic!("Expected inline asset, found AssetRef::Id({id})"),
+        }
+    }
+}
+
+/// Generic conversion from any concrete asset type T into an [`AssetRef::Inline`].
+impl<T> From<T> for AssetRef<T> {
+    fn from(value: T) -> Self {
+        Self::Inline(value)
+    }
+}
+
+/// Conversion from [`AssetRef<Material>`] into Proptype.
+impl From<AssetRef<Material>> for Proptype {
+    fn from(value: AssetRef<Material>) -> Self {
+        Self::Material(value)
+    }
+}
+
 // #[non_exhaustive]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 /// The type of the [`Property`](crate::properties::Property).

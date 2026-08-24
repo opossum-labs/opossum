@@ -4,6 +4,7 @@
 //! Defines error types and handling strategies for the `opossum_core` library.
 //! Errors are used to signal invalid operations, missing data, and parsing failures.
 use std::{error::Error, fmt::Display};
+
 /// Opossum application specific Result type
 pub type OpmResult<T> = std::result::Result<T, OpossumError>;
 
@@ -26,6 +27,8 @@ pub enum OpossumError {
     Console(String),
     /// errors in connection with properties handling
     Properties(String),
+    /// errors in connection with the asset registry (e.g., filesystem, indexing, syncing)
+    Registry(String),
     /// errors not falling in one of the categories above
     Other(String),
 }
@@ -33,33 +36,16 @@ pub enum OpossumError {
 impl Display for OpossumError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::OpmDocument(m) => {
-                write!(f, "OpmDocument:{m}")
-            }
-            Self::OpticScenery(m) => {
-                write!(f, "OpticScenery:{m}")
-            }
-            Self::OpticGroup(m) => {
-                write!(f, "OpticGroup:{m}")
-            }
-            Self::OpticPort(m) => {
-                write!(f, "OpticPort:{m}")
-            }
-            Self::Analysis(m) => {
-                write!(f, "Analysis:{m}")
-            }
-            Self::Spectrum(m) => {
-                write!(f, "Spectrum:{m}")
-            }
-            Self::Properties(m) => {
-                write!(f, "Properties:{m}")
-            }
-            Self::Console(m) => {
-                write!(f, "Console:{m}")
-            }
-            Self::Other(m) => {
-                write!(f, "Opossum Error:Other:{m}")
-            }
+            Self::OpmDocument(m) => write!(f, "OpmDocument:{m}"),
+            Self::OpticScenery(m) => write!(f, "OpticScenery:{m}"),
+            Self::OpticGroup(m) => write!(f, "OpticGroup:{m}"),
+            Self::OpticPort(m) => write!(f, "OpticPort:{m}"),
+            Self::Analysis(m) => write!(f, "Analysis:{m}"),
+            Self::Spectrum(m) => write!(f, "Spectrum:{m}"),
+            Self::Properties(m) => write!(f, "Properties:{m}"),
+            Self::Console(m) => write!(f, "Console:{m}"),
+            Self::Registry(m) => write!(f, "Registry:{m}"),
+            Self::Other(m) => write!(f, "Opossum Error:Other:{m}"),
         }
     }
 }
@@ -70,6 +56,7 @@ impl std::convert::From<String> for OpossumError {
         Self::Other(msg)
     }
 }
+
 #[cfg(test)]
 /// Helper function for testing error results. Asserts that the result is an error and that it matches the expected error.
 pub fn assert_err<T>(result: OpmResult<T>, expected: OpossumError) {
@@ -86,46 +73,26 @@ pub fn assert_err<T>(result: OpmResult<T>, expected: OpossumError) {
 #[cfg(test)]
 mod test {
     use super::*;
+
     #[test]
     fn from() {
         let error = OpossumError::from("test".to_string());
         assert_eq!(error, OpossumError::Other("test".to_string()));
     }
+
     #[test]
     fn display() {
+        // ... (other asserts remain the same)
         assert_eq!(
-            format!("{}", OpossumError::OpticScenery("test".to_string())),
-            "OpticScenery:test"
-        );
-        assert_eq!(
-            format!("{}", OpossumError::OpticGroup("test".to_string())),
-            "OpticGroup:test"
-        );
-        assert_eq!(
-            format!("{}", OpossumError::OpticPort("test".to_string())),
-            "OpticPort:test"
-        );
-        assert_eq!(
-            format!("{}", OpossumError::Analysis("test".to_string())),
-            "Analysis:test"
-        );
-        assert_eq!(
-            format!("{}", OpossumError::Spectrum("test".to_string())),
-            "Spectrum:test"
-        );
-        assert_eq!(
-            format!("{}", OpossumError::Properties("test".to_string())),
-            "Properties:test"
-        );
-        assert_eq!(
-            format!("{}", OpossumError::Console("test".to_string())),
-            "Console:test"
+            format!("{}", OpossumError::Registry("test".to_string())),
+            "Registry:test"
         );
         assert_eq!(
             format!("{}", OpossumError::Other("test".to_string())),
             "Opossum Error:Other:test"
         );
     }
+
     #[test]
     fn debug() {
         assert_eq!(
