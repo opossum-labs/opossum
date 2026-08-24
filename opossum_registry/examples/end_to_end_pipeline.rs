@@ -14,7 +14,7 @@ use opossum_core::{
 };
 
 // Imports from opossum_registry
-use opossum_registry::{AssetIndex, AssetLoader, sync::RegistrySync};
+use opossum_registry::{AssetRegistry, sync::RegistrySync};
 
 /// Recursively traverses a directory, writes blobs for all files, and constructs Git tree objects.
 ///
@@ -122,10 +122,11 @@ fn setup_dummy_remote(repo_path: &Path) {
 }
 
 /// Helper function to simulate a community update on the remote repository.
-/// Creates a new material ("F2"), adds it to the tree, and commits it on `main`.
+/// Creates a new material ("F2"), publishes it to disk, and commits it on `main`.
 fn simulate_remote_catalog_update(repo_path: &Path) {
     let repo = gix::open(repo_path).expect("Failed to open remote repo");
-    let loader = AssetLoader::new(repo_path);
+    let mut remote_registry =
+        AssetRegistry::<Material>::new(repo_path).expect("Failed to open remote asset registry");
 
     // Create new material on the "server"
     let refr_index = RefrIndexConst::new(1.62).unwrap().into();
@@ -135,7 +136,7 @@ fn simulate_remote_catalog_update(repo_path: &Path) {
         Some("Flint glass".to_string()),
         refr_index,
     );
-    loader
+    remote_registry
         .publish(&mut f2_mat)
         .expect("Failed to publish F2 remotely");
 
@@ -197,7 +198,7 @@ fn main() -> OpmResult<()> {
     println!("  -> Remote server simulated at: {}", remote_url);
 
     // -------------------------------------------------------------------------
-    // Phase 1: Clone registry from "Remote" and initialize AssetLoader
+    // Phase 1: Clone registry from "Remote" and initialize AssetRegistry
     // -------------------------------------------------------------------------
     println!("\n[2/8] Cloning registry via RegistrySync...");
     let temp_registry_dir = TempDir::new().expect("Failed to create temp registry dir");
@@ -205,11 +206,12 @@ fn main() -> OpmResult<()> {
     let sync = RegistrySync::new(temp_registry_dir.path(), &remote_url);
     sync.init_or_clone()?;
 
-    let loader = AssetLoader::new(temp_registry_dir.path());
-    println!("  -> Cloned successfully into local working directory.");
+    // Initialize the unified AssetRegistry (builds in-memory index automatically)
+    let mut registry = AssetRegistry::<Material>::new(temp_registry_dir.path())?;
+    println!("  -> Cloned successfully and initialized AssetRegistry.");
 
     // -------------------------------------------------------------------------
-    // Phase 2: Create a local material WITHOUT committing it
+    // Phase 2: Create a local material (persisted & indexed automatically)
     // -------------------------------------------------------------------------
     println!("\n[3/8] Creating local custom material (untracked by Git)...");
 
@@ -221,8 +223,13 @@ fn main() -> OpmResult<()> {
         refr_index,
     );
 
-    let saved_path = loader.publish(&mut bk7_material)?;
+    // Publishing atomically saves to disk and inserts into the RAM index
+    let saved_path = registry.publish(&mut bk7_material)?;
     println!("  -> Saved local material 'N-BK7' to: {:?}", saved_path);
+    println!(
+        "  -> In-memory index size: {} asset(s)",
+        registry.index().len()
+    );
 
     // -------------------------------------------------------------------------
     // Phase 3: Simulate community adding a material to the remote repository
@@ -236,18 +243,17 @@ fn main() -> OpmResult<()> {
     // -------------------------------------------------------------------------
     println!("\n[5/8] Pulling updates from remote repository...");
     sync.pull_updates()?;
-    println!("  -> Successfully pulled changes. Local repository is up to date.");
+    println!("  -> Successfully pulled changes. Local files updated via Git.");
 
     // -------------------------------------------------------------------------
-    // Phase 5: Index materials in RAM and verify both materials exist
+    // Phase 5: Rebuild index after external Git pull and verify availability
     // -------------------------------------------------------------------------
-    println!("\n[6/8] Building in-memory index and verifying availability...");
-    let mut index = AssetIndex::<Material>::new();
-    let item_count = index.build_from_loader(&loader)?;
+    println!("\n[6/8] Rebuilding registry index from disk after Git pull...");
+    let item_count = registry.rebuild_index()?;
     println!("  -> Indexed {} material(s) in RAM.", item_count);
 
     // Verify remote material
-    let search_remote = index.search(Some("F2"), None);
+    let search_remote = registry.search_text("F2");
     assert!(
         !search_remote.is_empty(),
         "Material search should return F2 from remote"
@@ -258,7 +264,7 @@ fn main() -> OpmResult<()> {
     );
 
     // Verify local material
-    let search_local = index.search(Some("BK7"), None);
+    let search_local = registry.search_text("BK7");
     assert!(
         !search_local.is_empty(),
         "Material search should return N-BK7 from local"
@@ -268,7 +274,8 @@ fn main() -> OpmResult<()> {
         search_local[0].common.name
     );
 
-    let catalog_material: Material = loader.load(search_local[0].common.id, None)?;
+    // Load full material model directly from registry
+    let catalog_material: Material = registry.load(search_local[0].common.id, None)?;
 
     // -------------------------------------------------------------------------
     // Phase 6: Construct optical model in opossum_core using the local material
