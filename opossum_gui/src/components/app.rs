@@ -21,7 +21,7 @@ use crate::{
 use dioxus::prelude::*;
 use dioxus_primitives::alert_dialog::AlertDialogContent;
 use opossum_core::material::Material;
-use opossum_registry::{AssetLoader, AssetRegistry};
+use opossum_registry::AssetRegistry;
 use std::path::PathBuf;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -126,12 +126,11 @@ pub fn App() -> Element {
         }
 
         // Initialize registry facade and build in-memory index
-        AssetRegistry::<Material>::new(registry_path)
-            .unwrap_or_else(|err| {
-                log::error!("Failed to initialize MaterialRegistry: {err}");
-                // Fallback to in-memory/empty registry on severe I/O errors
-                AssetRegistry::new("./catalogs").expect("Fallback registry path failed")
-            })
+        AssetRegistry::<Material>::new(registry_path).unwrap_or_else(|err| {
+            log::error!("Failed to initialize MaterialRegistry: {err}");
+            // Fallback to in-memory/empty registry on severe I/O errors
+            AssetRegistry::new("./catalogs").expect("Fallback registry path failed")
+        })
     });
 
     // Provide the shared AssetRegistry signal to all child components via Dioxus context
@@ -143,7 +142,10 @@ pub fn App() -> Element {
             // Ensure newly selected directory exists on disk
             if !catalog_path.exists() {
                 if let Err(e) = std::fs::create_dir_all(catalog_path) {
-                    log::error!("Failed to create new catalog directory {}: {e}", catalog_path.display());
+                    log::error!(
+                        "Failed to create new catalog directory {}: {e}",
+                        catalog_path.display()
+                    );
                     return;
                 }
             }
@@ -151,7 +153,10 @@ pub fn App() -> Element {
             // Create new registry instance for the updated path (automatically scans and builds the index)
             match AssetRegistry::<Material>::new(catalog_path.clone()) {
                 Ok(new_registry) => {
-                    info!("Successfully reloaded MaterialRegistry from: {}", catalog_path.display());
+                    info!(
+                        "Successfully reloaded MaterialRegistry from: {}",
+                        catalog_path.display()
+                    );
                     *material_registry.write() = new_registry;
                 }
                 Err(err) => {

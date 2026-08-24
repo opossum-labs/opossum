@@ -120,7 +120,7 @@ mod tests {
 
     #[test]
     fn test_registry_atomic_publish_and_index_sync() -> OpmResult<()> {
-        let temp_dir = TempDir::new().map_err(|e| OpossumError::Other(e.to_string()))?;
+        let temp_dir = TempDir::new().map_err(|e| OpossumError::Registry(e.to_string()))?;
         let mut registry = AssetRegistry::<Material>::new(temp_dir.path())?;
 
         assert_eq!(registry.index().len(), 0);

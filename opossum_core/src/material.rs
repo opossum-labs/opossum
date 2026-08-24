@@ -107,7 +107,7 @@ impl Material {
         draft.header.version = 0; // Mark as unsaved draft
         draft
     }
-    
+
     /// Creates an independent ad-hoc copy with a new random UUID and version 0.
     /// This detaches the material from any catalog identity.
     #[must_use]
@@ -117,7 +117,7 @@ impl Material {
         adhoc.header.version = 0;
         adhoc
     }
-    
+
     /// For testing purposes only: Creates a material with a specific UUID and version.
     #[cfg(test)]
     pub fn new_for_test(

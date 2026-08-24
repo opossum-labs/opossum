@@ -1,10 +1,10 @@
+use crate::{asset::RegisterableAsset, coating::CoatingAsset, loader::AssetLoader};
 use opossum_core::{
     error::{OpmResult, OpossumError},
     material::Material,
 };
 use std::{collections::HashMap, fmt::Debug, fs, marker::PhantomData};
 use uuid::Uuid;
-use crate::{asset::RegisterableAsset, coating::CoatingAsset, loader::AssetLoader};
 
 /// Standard d-line wavelength (587.56 nm) used for nominal refractive index anchor (`n_d`).
 pub const WAVELENGTH_D_LINE_NM: f64 = 587.56;

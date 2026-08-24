@@ -121,17 +121,18 @@ pub fn MaterialCatalog(
     });
 
     // Callback: Publish draft to disk (automatically synchronizes in-memory index)
-    let on_material_save = use_callback(move |()| {
-        match registry.write().publish(&mut *material_state.write()) {
-            Ok(saved_path) => {
-                info!("Successfully published material to {:?}", saved_path);
-                on_action.call(MaterialCatalogEvent::MaterialAdded);
-            }
-            Err(e) => {
-                log::error!("Failed to publish material to registry: {e}");
-            }
-        }
-    });
+    let on_material_save =
+        use_callback(
+            move |()| match registry.write().publish(&mut *material_state.write()) {
+                Ok(saved_path) => {
+                    info!("Successfully published material to {:?}", saved_path);
+                    on_action.call(MaterialCatalogEvent::MaterialAdded);
+                }
+                Err(e) => {
+                    log::error!("Failed to publish material to registry: {e}");
+                }
+            },
+        );
 
     // Callback: Initialize a fresh draft
     let on_create_new = use_callback(move |_| {
@@ -145,15 +146,13 @@ pub fn MaterialCatalog(
     });
 
     // Callback: Load an existing asset and prepare a new draft version
-    let on_edit_material = use_callback(move |id: Uuid| {
-        match registry.read().load(id, None) {
-            Ok(loaded_material) => {
-                material_state.set(loaded_material.new_draft_from());
-                open_materialeditor.set(true);
-            }
-            Err(err) => {
-                log::error!("Failed to load material from registry: {err}");
-            }
+    let on_edit_material = use_callback(move |id: Uuid| match registry.read().load(id, None) {
+        Ok(loaded_material) => {
+            material_state.set(loaded_material.new_draft_from());
+            open_materialeditor.set(true);
+        }
+        Err(err) => {
+            log::error!("Failed to load material from registry: {err}");
         }
     });
 

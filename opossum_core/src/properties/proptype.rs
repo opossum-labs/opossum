@@ -83,7 +83,7 @@ impl<T> AssetRef<T> {
 
     /// Returns a mutable reference to the inline asset if available.
     #[must_use]
-    pub fn as_inline_mut(&mut self) -> Option<&mut T> {
+    pub const fn as_inline_mut(&mut self) -> Option<&mut T> {
         match self {
             Self::Inline(asset) => Some(asset),
             Self::Id(_) => None,
@@ -91,6 +91,10 @@ impl<T> AssetRef<T> {
     }
 
     /// Extracts the inline asset reference, panicking if it is a pure ID reference.
+    ///
+    /// # Panics
+    ///
+    /// As the function name already says, this function panics one tires to unwrap an [`AssetRef::Id`] item.
     #[must_use]
     pub fn unwrap_inline(&self) -> &T {
         match self {
@@ -100,6 +104,10 @@ impl<T> AssetRef<T> {
     }
 
     /// Extracts a mutable inline asset reference, panicking if it is a pure ID reference.
+    ///
+    /// # Panics
+    ///
+    /// As the function name already says, this function panics one tires to unwrap an [`AssetRef::Id`] item.
     #[must_use]
     pub fn unwrap_inline_mut(&mut self) -> &mut T {
         match self {
@@ -109,14 +117,14 @@ impl<T> AssetRef<T> {
     }
 }
 
-/// Generic conversion from any concrete asset type T into an AssetRef::Inline.
+/// Generic conversion from any concrete asset type T into an [`AssetRef::Inline`].
 impl<T> From<T> for AssetRef<T> {
     fn from(value: T) -> Self {
         Self::Inline(value)
     }
 }
 
-/// Conversion from AssetRef<Material> into Proptype.
+/// Conversion from [`AssetRef<Material>`] into Proptype.
 impl From<AssetRef<Material>> for Proptype {
     fn from(value: AssetRef<Material>) -> Self {
         Self::Material(value)
