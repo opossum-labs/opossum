@@ -194,9 +194,10 @@ impl AbsorptionModel {
 //         }
 //     }
 // }
+type ValidatedTransmittance = validated_type!(f64, AllFinite && AllPositive);
 /// Helper function to linearly interpolate tabulated catalog transmittance data.
 fn interpolate_catalog_data(
-    data: &[(Length, validated_type!(f64, AllFinite && AllPositive))],
+    data: &[(Length, ValidatedTransmittance)],
     target_wavelength: Length,
 ) -> OpmResult<f64> {
     if data.is_empty() {
@@ -208,33 +209,25 @@ fn interpolate_catalog_data(
         return Ok(*data[0].1.get());
     }
 
-    let target_nm = target_wavelength.get::<uom::si::length::nanometer>();
-    let first_nm = data[0].0.get::<uom::si::length::nanometer>();
-    let last_nm = data.last().unwrap().0.get::<uom::si::length::nanometer>();
+    // let target_nm = target_wavelength;
+    let first_wvl = data[0].0;
+    let last_wvl = data.last().unwrap().0;
 
-    if target_nm < first_nm || target_nm > last_nm {
+    if target_wavelength < first_wvl || target_wavelength > last_wvl {
         return Err(OpossumError::Spectrum(format!(
-            "Wavelength {target_nm:.2} nm is outside catalog table range [{first_nm:.2}, {last_nm:.2}] nm."
+            "Wavelength {target_wavelength:?} nm is outside catalog table range [{first_wvl:?}, {last_wvl:?}] nm."
         )));
     }
-
     // Find the bounding interval for linear interpolation
     for window in data.windows(2) {
-        let (lambda_0, val_0) = (
-            window[0].0.get::<uom::si::length::nanometer>(),
-            *window[0].1.get(),
-        );
-        let (lambda_1, val_1) = (
-            window[1].0.get::<uom::si::length::nanometer>(),
-            *window[1].1.get(),
-        );
+        let (lambda_0, val_0) = (window[0].0, *window[0].1.get());
+        let (lambda_1, val_1) = (window[1].0, *window[1].1.get());
 
-        if (lambda_0..=lambda_1).contains(&target_nm) {
-            let ratio = (target_nm - lambda_0) / (lambda_1 - lambda_0);
-            return Ok(ratio.mul_add(val_1 - val_0, val_0));
+        if (lambda_0..=lambda_1).contains(&target_wavelength) {
+            let ratio = (target_wavelength - lambda_0) / (lambda_1 - lambda_0);
+            return Ok(ratio.value.mul_add(val_1 - val_0, val_0));
         }
     }
-
     Ok(*data.last().unwrap().1.get())
 }
 
