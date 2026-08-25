@@ -14,6 +14,10 @@ The analyzer is also used to configure the properties of source ports.
 
 Depending on the selected analyzer type, different source port configuration options are available.
 
+Besides its own configuration, an analyzer carries a list of the [pump scenarios](pump_scenarios.md)
+it is run in — the operating points at which the model's amplifying components are driven. It
+produces one report per listed scenario; an empty list means a single run on the passive model.
+
 The following analyzers are implemented:
 
 - Energy Analysis
