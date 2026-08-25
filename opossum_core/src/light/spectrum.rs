@@ -2,9 +2,7 @@
 //! Module for creation and handling of optical spectra
 use crate::{
     error::{OpmResult, OpossumError},
-    generic_validators::{
-        AllNormal, AllNotEmpty, AllPositive, SecondLarger, ValidateTrait, XNormal, YFinite,
-    },
+    generic_validators::{AllNormal, AllNotEmpty, AllPositive, SecondLarger, XNormal, YFinite},
     light::lightdata::energy_data_builder::EnergyDataBuilder,
     micrometer,
     prelude::EnergyLaserLines,

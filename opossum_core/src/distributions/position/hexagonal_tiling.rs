@@ -3,7 +3,7 @@ use std::f64::consts::PI;
 
 use crate::{
     error::OpmResult,
-    generic_validators::{AllFinite, AllPositive, ValidateTrait},
+    generic_validators::{AllFinite, AllPositive},
     meter, millimeter, validated, validated_type,
 };
 

@@ -10,7 +10,7 @@ use super::{RefractiveIndex, RefractiveIndexType};
 use crate::generic_validators::StaticBounds;
 use crate::{
     error::OpmResult,
-    generic_validators::{AllFinite, StaticInRange, ValidateTrait},
+    generic_validators::{AllFinite, StaticInRange},
     validated, validated_type,
 };
 

@@ -1,5 +1,4 @@
 use super::Shape;
-use crate::generic_validators::ValidateTrait;
 use crate::prelude::ApertureShape;
 use crate::{error::OpmResult, types::validated_type_definitions::ValidatedSideLengths2D};
 use nalgebra::{Point2, Point3};

@@ -1,7 +1,7 @@
 //! Circular, hexapolar distribution
 use crate::{
     error::OpmResult,
-    generic_validators::{AllFinite, AllPositive, ValidateTrait},
+    generic_validators::{AllFinite, AllPositive},
     millimeter, validated, validated_type,
 };
 

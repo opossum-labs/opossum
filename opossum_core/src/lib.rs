@@ -36,6 +36,10 @@ pub mod reporting;
 pub mod utils;
 
 use chrono::DateTime;
+
+// Allows internal macro expansions that use the ::opossum_core:: path
+// to resolve correctly within this crate itself.
+extern crate self as opossum_core;
 /// Return the version information of the currently built OPOSSUM executable.
 ///
 /// This function returns a `String` which contains the current Git tag/hash combination as well as

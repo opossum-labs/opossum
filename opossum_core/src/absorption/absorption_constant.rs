@@ -1,4 +1,3 @@
-use crate::generic_validators::ValidateTrait;
 use crate::generic_validators::{AllFinite, StaticBounds, StaticInRange};
 use crate::{validated, validated_type};
 use opm_macros_lib::EnsureValidated;

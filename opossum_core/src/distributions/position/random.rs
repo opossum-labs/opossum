@@ -3,7 +3,7 @@
 use super::PositionDistribution;
 use crate::{
     error::OpmResult,
-    generic_validators::{AllFinite, AllNotZero, AllPositive, NotAllZero, ValidateTrait},
+    generic_validators::{AllFinite, AllNotZero, AllPositive, NotAllZero},
     millimeter, validated, validated_type,
 };
 use nalgebra::{Point2, Point3, point};
