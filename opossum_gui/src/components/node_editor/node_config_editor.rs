@@ -28,6 +28,13 @@ pub enum NodeChangeAction {
     Property(String, Proptype),
     Isometry(Option<Isometry>),
     AnalyzerType(AnalyzerType),
+    /// The pump scenarios an analyzer is run in, in the given order - one report per entry, and a
+    /// single passive run when empty.
+    ///
+    /// Separate from [`NodeChangeAction::AnalyzerType`] because the selection sits next to the
+    /// analyzer's config rather than inside it: it names operating points of the document, which is
+    /// why it has an endpoint (and an undo command) of its own on the backend.
+    AnalyzerPumpScenarios(Vec<Uuid>),
     PortConfig {
         port_name: String,
         port_type: PortType,
@@ -232,6 +239,9 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                     }
                     NodeChangeAction::AnalyzerType(analyzer_type) => {
                         api::update_analyzer_config_ron(uuid, analyzer_type).await
+                    }
+                    NodeChangeAction::AnalyzerPumpScenarios(scenarios) => {
+                        api::put_analyzer_pump_scenarios(uuid, scenarios).await
                     }
                     NodeChangeAction::PortConfig {
                         port_name,
