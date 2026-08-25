@@ -374,9 +374,11 @@ mod test {
         analyzers::{
             Analyzer, GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy,
             energy::EnergyAnalyzer, energy::EnergyConfig, ghostfocus::AnalysisGhostFocus,
-            raytrace::AnalysisRayTrace, raytrace::RayTracingAnalyzer,
+            ghostfocus::GhostFocusAnalyzer, raytrace::AnalysisRayTrace,
+            raytrace::RayTracingAnalyzer,
         },
-        core_optics::{Alignable, node_attr::HasNodeAttr},
+        coatings::CoatingConstantR,
+        core_optics::{Alignable, PortType, node_attr::HasNodeAttr},
         degree,
         gain::{ConstGain, PumpScenario},
         joule,
@@ -387,9 +389,11 @@ mod test {
         },
         millimeter, nanometer,
         nodes::{
-            EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort, ThinMirror, create_node_ref,
-            node_types, round_collimated_ray_builder,
+            EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort, SpotDiagram, ThinMirror,
+            create_node_ref, node_types, round_collimated_ray_builder,
         },
+        percent,
+        refractive_index::RefrIndexConst,
         utils::{LockExt, test_helper::test_helper::metered_energy},
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
@@ -664,6 +668,131 @@ mod test {
             gain * gain,
             epsilon = 1e-9
         );
+        Ok(())
+    }
+    /// The reflectivity both faces of the amplifier head in the ghost focus test carry.
+    ///
+    /// An uncoated glass surface at normal incidence, which is what makes the ghost paths below
+    /// exist in the first place.
+    const GHOST_REFLECTIVITY: f64 = 0.04;
+    /// Run a ghost focus analysis on an amplifier head reflecting [`GHOST_REFLECTIVITY`] at both
+    /// faces, and return the energy accumulated at each bounce level.
+    ///
+    /// The head is plane on both sides, so every reflection runs straight back the way it came and
+    /// the ghost paths are the ones written out in
+    /// [`ghost_reflections_are_amplified_on_every_pass_through_the_medium`] - no focusing, no
+    /// walk-off, nothing to obscure the energy bookkeeping.
+    ///
+    /// # Arguments
+    ///
+    /// * `gain` - the factor the head amplifies by. 1.0 makes it a passive lens.
+    /// * `max_bounces` - how many reflections the analysis follows.
+    ///
+    /// # Returns
+    ///
+    /// The total energy of all ray bundles accumulated at bounce 0, 1, ... in joule.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the model cannot be built or the analysis fails.
+    fn ghost_energies_per_bounce(gain: f64, max_bounces: usize) -> OpmResult<Vec<f64>> {
+        let plane = millimeter!(f64::INFINITY);
+        let mut head = Lens::new(
+            "head",
+            plane,
+            plane,
+            millimeter!(10.0),
+            RefrIndexConst::new(1.5)?,
+        )?;
+        for (port_type, port_name) in [(PortType::Input, "input_1"), (PortType::Output, "output_1")]
+        {
+            head.set_coating(
+                &port_type,
+                port_name,
+                &CoatingConstantR::new(percent!(GHOST_REFLECTIVITY * 100.0))?.into(),
+            )?;
+        }
+        let mut model = NodeGroup::default();
+        let source = model.add_node(SourcePort::default())?;
+        let head = model.add_node(head)?;
+        let screen = model.add_node(SpotDiagram::default())?;
+        model.connect_nodes(source, "output_1", head, "input_1", millimeter!(30.0))?;
+        model.connect_nodes(head, "output_1", screen, "input_1", millimeter!(30.0))?;
+
+        let mut config = GhostFocusConfig::default();
+        config.set_max_bounces(max_bounces);
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 1)?,
+        );
+        let mut scenario = PumpScenario::new("full power");
+        scenario.set_gain_model(head, GainModel::Const(ConstGain::new(gain)?));
+        config.set_active_pump_scenario(Some(scenario));
+
+        let analyzer = GhostFocusAnalyzer::new(config);
+        analyzer.analyze(&mut model)?;
+        Ok(model
+            .accumulated_rays()
+            .iter()
+            .map(|bundles| {
+                bundles
+                    .values()
+                    .map(|rays| rays.total_energy().value)
+                    .sum::<f64>()
+            })
+            .collect())
+    }
+    /// Every traversal of a pumped medium multiplies by the gain - the ghost paths included.
+    ///
+    /// This is the case the ghost focus analysis exists for, and the one where getting the gain
+    /// wrong is most consequential: a ghost is dangerous because of the fluence it carries, and a
+    /// ghost that ran through an amplifier twice more than the main beam carries orders of magnitude
+    /// more of it. Counting its passes wrong understates exactly the hazard being looked for.
+    ///
+    /// With both faces reflecting `R` and transmitting `T = 1 - R`, the paths up to the second
+    /// bounce are, written out with one `G` per traversal of the medium:
+    ///
+    /// - **bounce 0** - straight through: `T·G·T`
+    /// - **bounce 1** - the front-face reflection, which never enters the medium at all (`R`), plus
+    ///   the ghost that entered, reflected off the rear face and came back out (`T·G·R·G·T`)
+    /// - **bounce 2** - that ghost reflected once more off the front face from inside and sent
+    ///   forward again: `T·G·R·G·R·G·T`
+    ///
+    /// The same formulas with `G = 1` describe the passive head, which is checked first: it pins
+    /// down the reflection bookkeeping itself, so the pumped run can only differ by the gain.
+    #[test]
+    fn ghost_reflections_are_amplified_on_every_pass_through_the_medium() -> OpmResult<()> {
+        let r = GHOST_REFLECTIVITY;
+        let t = 1.0 - r;
+        // The powers of `g` are the number of times each path crosses the medium - which is the
+        // whole assertion here, so they are spelled out rather than folded into an exponent.
+        let expected_energies = |g: f64| {
+            let straight_through = t * g * t;
+            let front_face_reflection = r;
+            let ghost_off_the_rear_face = t * g * r * g * t;
+            let ghost_reflected_once_more = t * g * r * g * r * g * t;
+            [
+                straight_through,
+                front_face_reflection + ghost_off_the_rear_face,
+                ghost_reflected_once_more,
+            ]
+        };
+        for gain in [1.0, 2.0, 3.0] {
+            let measured = ghost_energies_per_bounce(gain, 2)?;
+            let expected = expected_energies(gain);
+            assert_eq!(
+                measured.len(),
+                expected.len(),
+                "expected one energy per bounce level up to the second"
+            );
+            for (bounce, (measured, expected)) in measured.iter().zip(expected.iter()).enumerate() {
+                assert_relative_eq!(measured, expected, epsilon = 1e-9);
+                assert!(
+                    *measured > 0.0,
+                    "bounce {bounce} carries no energy at all with a gain of {gain}"
+                );
+            }
+        }
         Ok(())
     }
     /// A ghost focus analysis traverses the very same medium and has to amplify there too.
