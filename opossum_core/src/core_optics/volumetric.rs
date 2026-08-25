@@ -372,18 +372,31 @@ mod test {
     use super::*;
     use crate::{
         analyzers::{
-            RayTraceConfig, energy::AnalysisEnergy, energy::EnergyConfig,
-            raytrace::AnalysisRayTrace,
+            Analyzer, GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy,
+            energy::EnergyAnalyzer, energy::EnergyConfig, ghostfocus::AnalysisGhostFocus,
+            ghostfocus::GhostFocusAnalyzer, raytrace::AnalysisRayTrace,
+            raytrace::RayTracingAnalyzer,
         },
-        core_optics::node_attr::HasNodeAttr,
+        coatings::CoatingConstantR,
+        core_optics::{Alignable, PortType, node_attr::HasNodeAttr},
+        degree,
         gain::{ConstGain, PumpScenario},
         joule,
-        light::{Rays, spectrum_helper::create_he_ne_spec},
+        light::{
+            Rays,
+            lightdata::energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
+            spectrum_helper::create_he_ne_spec,
+        },
         millimeter, nanometer,
-        nodes::{Lens, create_node_ref, node_types},
-        utils::LockExt,
+        nodes::{
+            EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort, SpotDiagram, ThinMirror,
+            create_node_ref, node_types, round_collimated_ray_builder,
+        },
+        percent,
+        refractive_index::RefrIndexConst,
+        utils::{LockExt, test_helper::test_helper::metered_energy},
     };
-    use approx::assert_abs_diff_eq;
+    use approx::{assert_abs_diff_eq, assert_relative_eq};
     use uuid::Uuid;
 
     /// A lens sitting at the origin, ready to be traced through.
@@ -480,6 +493,336 @@ mod test {
             2.5,
             epsilon = 1e-12
         );
+        Ok(())
+    }
+    /// Trace a collimated bundle of 1 J through the given model and return the energy its
+    /// [`EnergyMeter`] recorded.
+    ///
+    /// The model is analyzed as a whole rather than node by node, which is what places the nodes at
+    /// the distances they are connected with - the amplifying nodes therefore sit where a real
+    /// layout would put them instead of all sharing one position.
+    ///
+    /// The model is cleared out before the run, as
+    /// [`OpmDocument::analyze`](crate::opm_document::OpmDocument::analyze) does between two
+    /// operating points, so the same model may be measured in several scenarios in a row and every
+    /// run starts from the same state.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the analysis fails or its report holds no energy reading.
+    fn metered_energy_of(
+        model: &mut NodeGroup,
+        source: Uuid,
+        gains: PumpScenario,
+    ) -> OpmResult<f64> {
+        model.clear_edges();
+        model.reset_data();
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 3)?,
+        );
+        config.set_active_pump_scenario(Some(gains));
+        let analyzer = RayTracingAnalyzer::new(config);
+        analyzer.analyze(model)?;
+        metered_energy(&analyzer.report(model)?)
+    }
+    /// The energy flow counterpart of [`metered_energy_of`]: 1 J into the model, the
+    /// [`EnergyMeter`]'s reading out of it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the analysis fails or its report holds no energy reading.
+    fn metered_energy_of_energy_flow(
+        model: &mut NodeGroup,
+        source: Uuid,
+        gains: PumpScenario,
+    ) -> OpmResult<f64> {
+        let mut config = EnergyConfig::default();
+        config.map_source(
+            source,
+            EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
+                vec![(nanometer!(1053.0), joule!(1.0))],
+                nanometer!(1.0),
+            )?),
+        );
+        config.set_active_pump_scenario(Some(gains));
+        let analyzer = EnergyAnalyzer::new(config);
+        analyzer.analyze(model)?;
+        metered_energy(&analyzer.report(model)?)
+    }
+    /// Several amplifiers in a row multiply, so a chain's overall gain is the product of its stages.
+    ///
+    /// This is the layout an amplifier chain is actually built as, and the first case where one
+    /// scenario has to hand each of several nodes *its own* factor - a single lookup reused for the
+    /// whole run would pass the single-stage test and fail here.
+    #[test]
+    fn a_chain_of_amplifiers_multiplies_their_factors() -> OpmResult<()> {
+        let gains = [2.0, 3.0, 5.0];
+        let mut model = NodeGroup::default();
+        let source = model.add_node(SourcePort::default())?;
+        let mut scenario = PumpScenario::new("full power");
+        let mut upstream = source;
+        for gain in gains {
+            let stage = model.add_node(Lens::default())?;
+            model.connect_nodes(upstream, "output_1", stage, "input_1", millimeter!(20.0))?;
+            scenario.set_gain_model(stage, GainModel::Const(ConstGain::new(gain)?));
+            upstream = stage;
+        }
+        let meter = model.add_node(EnergyMeter::default())?;
+        model.connect_nodes(upstream, "output_1", meter, "input_1", millimeter!(20.0))?;
+
+        assert_relative_eq!(
+            metered_energy_of(&mut model, source, scenario)?,
+            gains.iter().product::<f64>(),
+            epsilon = 1e-9
+        );
+        Ok(())
+    }
+    /// A multipass amplifier: the same head, passed several times, gains its factor once per pass.
+    ///
+    /// Built from [`NodeReference`]s, which need no amplification machinery of their own - what this
+    /// pins down is that the scenario is looked up under the uuid of the node that *has* the medium,
+    /// not under the uuid of the reference standing in for it. Were it the latter, a multipass
+    /// amplifier would silently run passive on every pass but the first.
+    ///
+    /// Analyzed as an energy flow, like the reference node's own example
+    /// (`examples/reference_test.rs`): a reference chained in a straight line is a statement about
+    /// how often the light passes a component, not about where that component is - which is exactly
+    /// what an energy analysis asks. Sending rays through it instead would need the beam folded back
+    /// onto the head by real mirrors, since the head keeps the one position it was placed at.
+    #[test]
+    fn passing_the_same_amplifier_again_amplifies_again() -> OpmResult<()> {
+        let passes = 3;
+        let gain = 2.0;
+        let mut model = NodeGroup::default();
+        let source = model.add_node(SourcePort::default())?;
+        let head = model.add_node(Lens::default())?;
+        model.connect_nodes(source, "output_1", head, "input_1", millimeter!(20.0))?;
+        let mut scenario = PumpScenario::new("full power");
+        scenario.set_gain_model(head, GainModel::Const(ConstGain::new(gain)?));
+
+        let mut upstream = head;
+        for _ in 1..passes {
+            let further_pass = model.add_node(NodeReference::from_node(&model.node(head)?)?)?;
+            model.connect_nodes(
+                upstream,
+                "output_1",
+                further_pass,
+                "input_1",
+                millimeter!(20.0),
+            )?;
+            upstream = further_pass;
+        }
+        let meter = model.add_node(EnergyMeter::default())?;
+        model.connect_nodes(upstream, "output_1", meter, "input_1", millimeter!(20.0))?;
+
+        assert_relative_eq!(
+            metered_energy_of_energy_flow(&mut model, source, scenario)?,
+            gain.powi(passes),
+            epsilon = 1e-9
+        );
+        Ok(())
+    }
+    /// A folded double pass: a mirror sends the beam back through the very same head, and the rays
+    /// leave with the gain applied twice.
+    ///
+    /// The ray trace counterpart of [`passing_the_same_amplifier_again_amplifies_again`], and the
+    /// one that pins down the geometry as well as the bookkeeping: here the second pass really
+    /// traverses the medium a second time, entering it through the surface the first pass left by.
+    /// The head is therefore reached as an *inverted* [`NodeReference`], which is what turns its
+    /// ports around - it is entered through the port it normally leaves by, exactly as
+    /// `examples/lens_inverse.rs` builds the same fold.
+    ///
+    /// The passive run is measured first. Both passes are lossless without a scenario, so anything
+    /// the second measurement shows above 1 J came from the operating point rather than from the
+    /// fold - without that baseline a mirror quietly swallowing rays would be indistinguishable
+    /// from an amplifier that only ran once.
+    #[test]
+    fn a_mirror_folding_the_beam_back_amplifies_on_both_passes() -> OpmResult<()> {
+        let gain = 2.0;
+        let mut model = NodeGroup::default();
+        let source = model.add_node(SourcePort::default())?;
+        let head = model.add_node(Lens::default())?;
+        // Tilted, so the returning beam is separated from the incoming one instead of running back
+        // into the source - which is what a real double pass does too.
+        let fold = model.add_node(ThinMirror::new("fold").with_tilt(degree!(2.0, 0.0, 0.0))?)?;
+        let mut second_pass = NodeReference::from_node(&model.node(head)?)?;
+        second_pass.set_inverted(true)?;
+        let second_pass = model.add_node(second_pass)?;
+        let meter = model.add_node(EnergyMeter::default())?;
+        model.connect_nodes(source, "output_1", head, "input_1", millimeter!(30.0))?;
+        model.connect_nodes(head, "output_1", fold, "input_1", millimeter!(50.0))?;
+        model.connect_nodes(fold, "output_1", second_pass, "output_1", millimeter!(50.0))?;
+        model.connect_nodes(second_pass, "input_1", meter, "input_1", millimeter!(30.0))?;
+
+        assert_relative_eq!(
+            metered_energy_of(&mut model, source, PumpScenario::new("cold"))?,
+            1.0,
+            epsilon = 1e-9
+        );
+        let mut scenario = PumpScenario::new("full power");
+        scenario.set_gain_model(head, GainModel::Const(ConstGain::new(gain)?));
+        assert_relative_eq!(
+            metered_energy_of(&mut model, source, scenario)?,
+            gain * gain,
+            epsilon = 1e-9
+        );
+        Ok(())
+    }
+    /// The reflectivity both faces of the amplifier head in the ghost focus test carry.
+    ///
+    /// An uncoated glass surface at normal incidence, which is what makes the ghost paths below
+    /// exist in the first place.
+    const GHOST_REFLECTIVITY: f64 = 0.04;
+    /// Run a ghost focus analysis on an amplifier head reflecting [`GHOST_REFLECTIVITY`] at both
+    /// faces, and return the energy accumulated at each bounce level.
+    ///
+    /// The head is plane on both sides, so every reflection runs straight back the way it came and
+    /// the ghost paths are the ones written out in
+    /// [`ghost_reflections_are_amplified_on_every_pass_through_the_medium`] - no focusing, no
+    /// walk-off, nothing to obscure the energy bookkeeping.
+    ///
+    /// # Arguments
+    ///
+    /// * `gain` - the factor the head amplifies by. 1.0 makes it a passive lens.
+    /// * `max_bounces` - how many reflections the analysis follows.
+    ///
+    /// # Returns
+    ///
+    /// The total energy of all ray bundles accumulated at bounce 0, 1, ... in joule.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the model cannot be built or the analysis fails.
+    fn ghost_energies_per_bounce(gain: f64, max_bounces: usize) -> OpmResult<Vec<f64>> {
+        let plane = millimeter!(f64::INFINITY);
+        let mut head = Lens::new(
+            "head",
+            plane,
+            plane,
+            millimeter!(10.0),
+            RefrIndexConst::new(1.5)?,
+        )?;
+        for (port_type, port_name) in [(PortType::Input, "input_1"), (PortType::Output, "output_1")]
+        {
+            head.set_coating(
+                &port_type,
+                port_name,
+                &CoatingConstantR::new(percent!(GHOST_REFLECTIVITY * 100.0))?.into(),
+            )?;
+        }
+        let mut model = NodeGroup::default();
+        let source = model.add_node(SourcePort::default())?;
+        let head = model.add_node(head)?;
+        let screen = model.add_node(SpotDiagram::default())?;
+        model.connect_nodes(source, "output_1", head, "input_1", millimeter!(30.0))?;
+        model.connect_nodes(head, "output_1", screen, "input_1", millimeter!(30.0))?;
+
+        let mut config = GhostFocusConfig::default();
+        config.set_max_bounces(max_bounces);
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 1)?,
+        );
+        let mut scenario = PumpScenario::new("full power");
+        scenario.set_gain_model(head, GainModel::Const(ConstGain::new(gain)?));
+        config.set_active_pump_scenario(Some(scenario));
+
+        let analyzer = GhostFocusAnalyzer::new(config);
+        analyzer.analyze(&mut model)?;
+        Ok(model
+            .accumulated_rays()
+            .iter()
+            .map(|bundles| {
+                bundles
+                    .values()
+                    .map(|rays| rays.total_energy().value)
+                    .sum::<f64>()
+            })
+            .collect())
+    }
+    /// Every traversal of a pumped medium multiplies by the gain - the ghost paths included.
+    ///
+    /// This is the case the ghost focus analysis exists for, and the one where getting the gain
+    /// wrong is most consequential: a ghost is dangerous because of the fluence it carries, and a
+    /// ghost that ran through an amplifier twice more than the main beam carries orders of magnitude
+    /// more of it. Counting its passes wrong understates exactly the hazard being looked for.
+    ///
+    /// With both faces reflecting `R` and transmitting `T = 1 - R`, the paths up to the second
+    /// bounce are, written out with one `G` per traversal of the medium:
+    ///
+    /// - **bounce 0** - straight through: `T·G·T`
+    /// - **bounce 1** - the front-face reflection, which never enters the medium at all (`R`), plus
+    ///   the ghost that entered, reflected off the rear face and came back out (`T·G·R·G·T`)
+    /// - **bounce 2** - that ghost reflected once more off the front face from inside and sent
+    ///   forward again: `T·G·R·G·R·G·T`
+    ///
+    /// The same formulas with `G = 1` describe the passive head, which is checked first: it pins
+    /// down the reflection bookkeeping itself, so the pumped run can only differ by the gain.
+    #[test]
+    fn ghost_reflections_are_amplified_on_every_pass_through_the_medium() -> OpmResult<()> {
+        let r = GHOST_REFLECTIVITY;
+        let t = 1.0 - r;
+        // The powers of `g` are the number of times each path crosses the medium - which is the
+        // whole assertion here, so they are spelled out rather than folded into an exponent.
+        let expected_energies = |g: f64| {
+            let straight_through = t * g * t;
+            let front_face_reflection = r;
+            let ghost_off_the_rear_face = t * g * r * g * t;
+            let ghost_reflected_once_more = t * g * r * g * r * g * t;
+            [
+                straight_through,
+                front_face_reflection + ghost_off_the_rear_face,
+                ghost_reflected_once_more,
+            ]
+        };
+        for gain in [1.0, 2.0, 3.0] {
+            let measured = ghost_energies_per_bounce(gain, 2)?;
+            let expected = expected_energies(gain);
+            assert_eq!(
+                measured.len(),
+                expected.len(),
+                "expected one energy per bounce level up to the second"
+            );
+            for (bounce, (measured, expected)) in measured.iter().zip(expected.iter()).enumerate() {
+                assert_relative_eq!(measured, expected, epsilon = 1e-9);
+                assert!(
+                    *measured > 0.0,
+                    "bounce {bounce} carries no energy at all with a gain of {gain}"
+                );
+            }
+        }
+        Ok(())
+    }
+    /// A ghost focus analysis traverses the very same medium and has to amplify there too.
+    ///
+    /// It reaches the volume through an entry point of its own
+    /// ([`Volumetric::unified_analyze_volume_node_ghost_focus`]), so "the ray trace amplifies" says
+    /// nothing about it: a stray reflection running through a pumped head picks up its gain like any
+    /// other pass, and reporting it as if it did not is exactly the error that analysis exists to
+    /// catch.
+    #[test]
+    fn a_scenario_amplifies_a_ghost_focus_pass() -> OpmResult<()> {
+        let mut lens = placed_lens()?;
+        let mut config = GhostFocusConfig::default();
+        config.set_active_pump_scenario(Some(scenario_with_gain(lens.node_attr().uuid(), 2.5)?));
+        let rays = Rays::new_uniform_collimated(
+            nanometer!(1053.0),
+            joule!(1.0),
+            &crate::distributions::position::Hexapolar::new(millimeter!(1.0), 1)?,
+        )?;
+        let energy_before = rays.total_energy();
+        let incoming = LightRays::from([("input_1".into(), vec![rays])]);
+        let outgoing =
+            AnalysisGhostFocus::analyze(&mut lens, incoming, &config, &mut Vec::new(), 0)?;
+        let energy_after: uom::si::f64::Energy = outgoing
+            .get("output_1")
+            .ok_or_else(|| OpossumError::Analysis("expected rays at the output port".into()))?
+            .iter()
+            .map(Rays::total_energy)
+            .sum();
+        assert_abs_diff_eq!((energy_after / energy_before).value, 2.5, epsilon = 1e-12);
         Ok(())
     }
     /// Only the nodes that really enclose a medium may present themselves as [`Volumetric`].

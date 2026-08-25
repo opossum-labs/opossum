@@ -128,6 +128,27 @@ pub async fn put_pump_scenario_pump_source(
         .await
 }
 
-// A client wrapper for `PUT /api/analyzers/{uuid}/pump_scenarios` (setting an analyzer's scenario
-// selection) belongs here once the analyzer editor grows the widget that calls it - the endpoint
-// itself already exists and is tested on the backend (`opossum_backend::analyzers`).
+/// Set which pump scenarios an analyzer runs in.
+///
+/// The analyzer produces one report per listed scenario, in the given order; an empty list is a
+/// single passive run, which is what every analyzer did before scenarios existed.
+///
+/// This addresses an analyzer rather than a scenario, but it lives here with the other scenario
+/// calls: it is the operating point half of the analyzer's configuration, and the endpoints that
+/// keep it consistent (deleting a scenario strips it from every selection) are the ones above.
+///
+/// # Errors
+///
+/// This function will return an error if the request fails, the analyzer UUID is not found or one
+/// of the listed scenarios does not exist.
+pub async fn put_analyzer_pump_scenarios(
+    analyzer_id: Uuid,
+    scenarios: Vec<Uuid>,
+) -> Result<(), String> {
+    HTTP_API_CLIENT()
+        .put_receive_no_content(
+            &format!("/api/analyzers/{analyzer_id}/pump_scenarios"),
+            scenarios,
+        )
+        .await
+}

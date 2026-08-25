@@ -716,7 +716,7 @@ mod test {
         nodes::round_collimated_ray_builder,
         prelude::*,
         refractive_index::RefrIndexConst,
-        utils::test_helper::test_helper::check_logs,
+        utils::test_helper::test_helper::{check_logs, metered_energy},
     };
     use approx::assert_relative_eq;
     use std::{
@@ -1016,21 +1016,6 @@ mod test {
             "the error has to name the missing scenario, got: {message}"
         );
         Ok(())
-    }
-    /// Read the energy an [`EnergyMeter`] recorded from an analysis report.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the report contains no energy reading at all.
-    fn metered_energy(report: &AnalysisReport) -> OpmResult<f64> {
-        report
-            .node_reports()
-            .iter()
-            .find_map(|node_report| match node_report.properties().get("Energy") {
-                Ok(Proptype::Energy(energy)) => Some(energy.value),
-                _ => None,
-            })
-            .ok_or_else(|| OpossumError::Other("no energy reading in the report".into()))
     }
     /// The whole point of scenarios: the same model, analyzed in two operating points, gives two
     /// different results - here a lens amplifying twice as strongly in one of them.
