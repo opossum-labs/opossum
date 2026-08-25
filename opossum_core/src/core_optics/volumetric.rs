@@ -376,7 +376,8 @@ mod test {
             energy::EnergyAnalyzer, energy::EnergyConfig, ghostfocus::AnalysisGhostFocus,
             raytrace::AnalysisRayTrace, raytrace::RayTracingAnalyzer,
         },
-        core_optics::node_attr::HasNodeAttr,
+        core_optics::{Alignable, node_attr::HasNodeAttr},
+        degree,
         gain::{ConstGain, PumpScenario},
         joule,
         light::{
@@ -386,8 +387,8 @@ mod test {
         },
         millimeter, nanometer,
         nodes::{
-            EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort, create_node_ref, node_types,
-            round_collimated_ray_builder,
+            EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort, ThinMirror, create_node_ref,
+            node_types, round_collimated_ray_builder,
         },
         utils::{LockExt, test_helper::test_helper::metered_energy},
     };
@@ -497,6 +498,11 @@ mod test {
     /// the distances they are connected with - the amplifying nodes therefore sit where a real
     /// layout would put them instead of all sharing one position.
     ///
+    /// The model is cleared out before the run, as
+    /// [`OpmDocument::analyze`](crate::opm_document::OpmDocument::analyze) does between two
+    /// operating points, so the same model may be measured in several scenarios in a row and every
+    /// run starts from the same state.
+    ///
     /// # Errors
     ///
     /// Returns an error if the analysis fails or its report holds no energy reading.
@@ -505,6 +511,8 @@ mod test {
         source: Uuid,
         gains: PumpScenario,
     ) -> OpmResult<f64> {
+        model.clear_edges();
+        model.reset_data();
         let mut config = RayTraceConfig::default();
         config.map_source(
             source,
@@ -608,6 +616,52 @@ mod test {
         assert_relative_eq!(
             metered_energy_of_energy_flow(&mut model, source, scenario)?,
             gain.powi(passes),
+            epsilon = 1e-9
+        );
+        Ok(())
+    }
+    /// A folded double pass: a mirror sends the beam back through the very same head, and the rays
+    /// leave with the gain applied twice.
+    ///
+    /// The ray trace counterpart of [`passing_the_same_amplifier_again_amplifies_again`], and the
+    /// one that pins down the geometry as well as the bookkeeping: here the second pass really
+    /// traverses the medium a second time, entering it through the surface the first pass left by.
+    /// The head is therefore reached as an *inverted* [`NodeReference`], which is what turns its
+    /// ports around - it is entered through the port it normally leaves by, exactly as
+    /// `examples/lens_inverse.rs` builds the same fold.
+    ///
+    /// The passive run is measured first. Both passes are lossless without a scenario, so anything
+    /// the second measurement shows above 1 J came from the operating point rather than from the
+    /// fold - without that baseline a mirror quietly swallowing rays would be indistinguishable
+    /// from an amplifier that only ran once.
+    #[test]
+    fn a_mirror_folding_the_beam_back_amplifies_on_both_passes() -> OpmResult<()> {
+        let gain = 2.0;
+        let mut model = NodeGroup::default();
+        let source = model.add_node(SourcePort::default())?;
+        let head = model.add_node(Lens::default())?;
+        // Tilted, so the returning beam is separated from the incoming one instead of running back
+        // into the source - which is what a real double pass does too.
+        let fold = model.add_node(ThinMirror::new("fold").with_tilt(degree!(2.0, 0.0, 0.0))?)?;
+        let mut second_pass = NodeReference::from_node(&model.node(head)?)?;
+        second_pass.set_inverted(true)?;
+        let second_pass = model.add_node(second_pass)?;
+        let meter = model.add_node(EnergyMeter::default())?;
+        model.connect_nodes(source, "output_1", head, "input_1", millimeter!(30.0))?;
+        model.connect_nodes(head, "output_1", fold, "input_1", millimeter!(50.0))?;
+        model.connect_nodes(fold, "output_1", second_pass, "output_1", millimeter!(50.0))?;
+        model.connect_nodes(second_pass, "input_1", meter, "input_1", millimeter!(30.0))?;
+
+        assert_relative_eq!(
+            metered_energy_of(&mut model, source, PumpScenario::new("cold"))?,
+            1.0,
+            epsilon = 1e-9
+        );
+        let mut scenario = PumpScenario::new("full power");
+        scenario.set_gain_model(head, GainModel::Const(ConstGain::new(gain)?));
+        assert_relative_eq!(
+            metered_energy_of(&mut model, source, scenario)?,
+            gain * gain,
             epsilon = 1e-9
         );
         Ok(())
