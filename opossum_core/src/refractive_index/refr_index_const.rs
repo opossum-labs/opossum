@@ -7,19 +7,25 @@ use serde::Serialize;
 use utoipa::ToSchema;
 
 use super::{RefractiveIndex, RefractiveIndexType};
+use crate::generic_validators::StaticBounds;
 use crate::{
     error::OpmResult,
-    generic_validators::{AllFinite, AllInRange, ValidateTrait},
+    generic_validators::{AllFinite, StaticInRange, ValidateTrait},
     validated, validated_type,
 };
-#[derive(Deserialize)]
-struct NonValidatedRefrIndexConst {
-    pub refractive_index: f64,
-}
-impl TryFrom<NonValidatedRefrIndexConst> for RefrIndexConst {
-    type Error = String;
-    fn try_from(helper: NonValidatedRefrIndexConst) -> Result<Self, Self::Error> {
-        Self::new(helper.refractive_index).map_err(|e| e.to_string())
+
+#[derive(Copy, Clone, PartialEq, Debug, Eq)]
+struct RefIndBounds;
+
+impl StaticBounds<f64> for RefIndBounds {
+    fn min() -> f64 {
+        1.0
+    }
+    fn max() -> f64 {
+        f64::INFINITY
+    }
+    fn inclusive() -> bool {
+        true
     }
 }
 
@@ -32,12 +38,12 @@ pub fn refr_index_vaccuum() -> RefractiveIndexType {
     RefractiveIndexType::Const(RefrIndexConst::new(1.0).unwrap())
 }
 
-type ValidatedRefIndConst = validated_type!(f64, AllFinite && AllInRange::<f64>);
+type ValidatedRefIndConst = validated_type!(f64, AllFinite && StaticInRange::<f64, RefIndBounds>);
 impl Default for ValidatedRefIndConst {
     fn default() -> Self {
         validated!(
             1.5,
-            AllFinite && (AllInRange::new(1.0, f64::INFINITY, true).unwrap())
+            AllFinite && StaticInRange::<f64, RefIndBounds>::default()
         )
         .unwrap()
     }
@@ -47,7 +53,6 @@ impl Default for ValidatedRefIndConst {
 #[derive(
     Default, Clone, Serialize, Deserialize, ToSchema, Debug, PartialEq, Copy, EnsureValidated,
 )]
-#[serde(try_from = "NonValidatedRefrIndexConst")]
 pub struct RefrIndexConst {
     refractive_index: ValidatedRefIndConst,
 }

@@ -5,7 +5,10 @@ use uom::si::f64::Length;
 use uuid::Uuid;
 
 use crate::{
-    absorption::absorption_model::AbsorptionModel, asset::AssetHeader, error::OpmResult, refractive_index::{
+    absorption::absorption_model::AbsorptionModel,
+    asset::AssetHeader,
+    error::OpmResult,
+    refractive_index::{
         RefrIndexAir, RefrIndexConrady, RefrIndexConst, RefrIndexSchott, RefrIndexSellmeier1,
         RefractiveIndexType,
     },

@@ -1,5 +1,8 @@
 use dioxus::prelude::*;
-use opossum_core::{absorption::absorption_model::AbsorptionModel, material::OpticalProperties, refractive_index::RefractiveIndexType};
+use opossum_core::{
+    absorption::absorption_model::AbsorptionModel, material::OpticalProperties,
+    refractive_index::RefractiveIndexType,
+};
 
 // Adjust import path according to your module layout
 use crate::components::{

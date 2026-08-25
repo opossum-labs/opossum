@@ -1,25 +1,25 @@
 //! Module for optical absorption models in `opossum_core`.
 
-use std::f64::consts::PI;
-
-use serde::{Deserialize, Serialize};
-use uom::si::{
-    f64::{Length, LinearNumberDensity},
-    length::meter,
-    linear_number_density::per_meter,
-};
-
 use crate::{
     error::{OpmResult, OpossumError},
     generic_validators::{AllFinite, AllPositive},
     light::Spectrum,
     validated, validated_type,
 };
+use serde::{Deserialize, Serialize};
+use std::f64::consts::PI;
+use uom::si::{
+    f64::{Length, LinearNumberDensity},
+    length::meter,
+    linear_number_density::per_meter,
+};
 
+type ValidatedTransmission = validated_type!(f64, AllFinite && AllPositive);
 /// Defines the absorption model for an optical material.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum AbsorptionModel {
     /// No absorption (perfectly transparent material).
+    #[default]
     None,
 
     /// Wavelength- and path-length-independent attenuation factor [0.0, 1.0].
@@ -40,18 +40,12 @@ pub enum AbsorptionModel {
         /// The reference thickness for the given transmittance data.
         reference_thickness: validated_type!(Length, AllFinite && AllPositive),
         /// Tabulated wavelength-transmittance pairs.
-        data: Vec<(Length, validated_type!(f64, AllFinite && AllPositive))>,
+        data: Vec<(Length, ValidatedTransmission)>,
     },
 
     /// Constant extinction coefficient `k` (imaginary part of complex refractive index n + i*k).
     /// The absorption coefficient is calculated via alpha(lambda) = 4 * PI * k / lambda.
     ExtinctionCoefficient(f64),
-}
-
-impl Default for AbsorptionModel {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 impl AbsorptionModel {
@@ -178,6 +172,28 @@ impl AbsorptionModel {
     }
 }
 
+// impl Display for AbsorptionModel {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         match self {
+//             Self::None => write!(f, "None"),
+//             Self::ConstantAttenuation(_) => {
+//                 write!(f, "Constant Attenuation")
+//             }
+//             Self::LambertBeerConstant(_) => {
+//                 write!(f, "Lambert-Beer (Constant)")
+//             }
+//             Self::LambertBeerSpectrum(_) => {
+//                 write!(f, "Lambert-Beer (Spectrum)")
+//             }
+//             Self::CatalogTransmittance(_) => {
+//                 write!(f, "Catalog Transmittance")
+//             }
+//             Self::ExtinctionCoefficient(_) => {
+//                 write!(f, "Extinction Coefficient")
+//             }
+//         }
+//     }
+// }
 /// Helper function to linearly interpolate tabulated catalog transmittance data.
 fn interpolate_catalog_data(
     data: &[(Length, validated_type!(f64, AllFinite && AllPositive))],
@@ -198,8 +214,7 @@ fn interpolate_catalog_data(
 
     if target_nm < first_nm || target_nm > last_nm {
         return Err(OpossumError::Spectrum(format!(
-            "Wavelength {:.2} nm is outside catalog table range [{:.2}, {:.2}] nm.",
-            target_nm, first_nm, last_nm
+            "Wavelength {target_nm:.2} nm is outside catalog table range [{first_nm:.2}, {last_nm:.2}] nm."
         )));
     }
 
@@ -216,12 +231,47 @@ fn interpolate_catalog_data(
 
         if (lambda_0..=lambda_1).contains(&target_nm) {
             let ratio = (target_nm - lambda_0) / (lambda_1 - lambda_0);
-            return Ok(val_0 + ratio * (val_1 - val_0));
+            return Ok(ratio.mul_add(val_1 - val_0, val_0));
         }
     }
 
     Ok(*data.last().unwrap().1.get())
 }
+
+// impl DefaultFromName for AbsorptionModel {
+//     fn default_from_name(name: &str) -> Option<Self> {
+//         match name {
+//             "None" => Some(Self::None),
+//             "ConstantAttenuation" | "Constant Attenuation" => {
+//                 let factor = validated!(1.0_f64, AllFinite && AllPositive).ok()?;
+//                 Some(Self::ConstantAttenuation(factor))
+//             }
+//             "LambertBeerConstant" | "Lambert-Beer (Constant)" => {
+//                 let alpha = validated!(
+//                     LinearNumberDensity::new::<per_meter>(0.0),
+//                     AllFinite && AllPositive
+//                 )
+//                 .ok()?;
+//                 Some(Self::LambertBeerConstant(alpha))
+//             }
+//             "LambertBeerSpectrum" | "Lambert-Beer (Spectrum)" => {
+//                 let spectrum = Spectrum::default();
+//                 Some(Self::LambertBeerSpectrum(spectrum))
+//             }
+//             "ExtinctionCoefficient" | "Extinction Coefficient (k)" => {
+//                 Some(Self::ExtinctionCoefficient(0.0))
+//             }
+//             "CatalogTransmittance" | "Catalog Transmittance" => {
+//                 let ref_thickness = validated!(millimeter!(10.0), AllFinite && AllPositive).ok()?;
+//                 Some(Self::CatalogTransmittance {
+//                     reference_thickness: ref_thickness,
+//                     data: Vec::new(),
+//                 })
+//             }
+//             _ => None,
+//         }
+//     }
+// }
 
 // --- From Implementations for Infallible Conversions ---
 

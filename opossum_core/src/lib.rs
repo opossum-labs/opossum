@@ -12,10 +12,10 @@ doc = ::embed_doc_image::embed_image!("opossum_logo", "logo/Logo_text.svg")))]
            to enable."
 )]
 #![allow(clippy::module_name_repetitions)]
+pub mod absorption;
 pub mod analyzers;
 pub mod apertures;
 pub mod coatings;
-pub mod absorption;
 pub mod core_optics;
 pub mod distributions;
 pub mod error;
