@@ -372,18 +372,26 @@ mod test {
     use super::*;
     use crate::{
         analyzers::{
-            RayTraceConfig, energy::AnalysisEnergy, energy::EnergyConfig,
-            raytrace::AnalysisRayTrace,
+            Analyzer, GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy,
+            energy::EnergyAnalyzer, energy::EnergyConfig, ghostfocus::AnalysisGhostFocus,
+            raytrace::AnalysisRayTrace, raytrace::RayTracingAnalyzer,
         },
         core_optics::node_attr::HasNodeAttr,
         gain::{ConstGain, PumpScenario},
         joule,
-        light::{Rays, spectrum_helper::create_he_ne_spec},
+        light::{
+            Rays,
+            lightdata::energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
+            spectrum_helper::create_he_ne_spec,
+        },
         millimeter, nanometer,
-        nodes::{Lens, create_node_ref, node_types},
-        utils::LockExt,
+        nodes::{
+            EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort, create_node_ref, node_types,
+            round_collimated_ray_builder,
+        },
+        utils::{LockExt, test_helper::test_helper::metered_energy},
     };
-    use approx::assert_abs_diff_eq;
+    use approx::{assert_abs_diff_eq, assert_relative_eq};
     use uuid::Uuid;
 
     /// A lens sitting at the origin, ready to be traced through.
@@ -480,6 +488,158 @@ mod test {
             2.5,
             epsilon = 1e-12
         );
+        Ok(())
+    }
+    /// Trace a collimated bundle of 1 J through the given model and return the energy its
+    /// [`EnergyMeter`] recorded.
+    ///
+    /// The model is analyzed as a whole rather than node by node, which is what places the nodes at
+    /// the distances they are connected with - the amplifying nodes therefore sit where a real
+    /// layout would put them instead of all sharing one position.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the analysis fails or its report holds no energy reading.
+    fn metered_energy_of(
+        model: &mut NodeGroup,
+        source: Uuid,
+        gains: PumpScenario,
+    ) -> OpmResult<f64> {
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 3)?,
+        );
+        config.set_active_pump_scenario(Some(gains));
+        let analyzer = RayTracingAnalyzer::new(config);
+        analyzer.analyze(model)?;
+        metered_energy(&analyzer.report(model)?)
+    }
+    /// The energy flow counterpart of [`metered_energy_of`]: 1 J into the model, the
+    /// [`EnergyMeter`]'s reading out of it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the analysis fails or its report holds no energy reading.
+    fn metered_energy_of_energy_flow(
+        model: &mut NodeGroup,
+        source: Uuid,
+        gains: PumpScenario,
+    ) -> OpmResult<f64> {
+        let mut config = EnergyConfig::default();
+        config.map_source(
+            source,
+            EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
+                vec![(nanometer!(1053.0), joule!(1.0))],
+                nanometer!(1.0),
+            )?),
+        );
+        config.set_active_pump_scenario(Some(gains));
+        let analyzer = EnergyAnalyzer::new(config);
+        analyzer.analyze(model)?;
+        metered_energy(&analyzer.report(model)?)
+    }
+    /// Several amplifiers in a row multiply, so a chain's overall gain is the product of its stages.
+    ///
+    /// This is the layout an amplifier chain is actually built as, and the first case where one
+    /// scenario has to hand each of several nodes *its own* factor - a single lookup reused for the
+    /// whole run would pass the single-stage test and fail here.
+    #[test]
+    fn a_chain_of_amplifiers_multiplies_their_factors() -> OpmResult<()> {
+        let gains = [2.0, 3.0, 5.0];
+        let mut model = NodeGroup::default();
+        let source = model.add_node(SourcePort::default())?;
+        let mut scenario = PumpScenario::new("full power");
+        let mut upstream = source;
+        for gain in gains {
+            let stage = model.add_node(Lens::default())?;
+            model.connect_nodes(upstream, "output_1", stage, "input_1", millimeter!(20.0))?;
+            scenario.set_gain_model(stage, GainModel::Const(ConstGain::new(gain)?));
+            upstream = stage;
+        }
+        let meter = model.add_node(EnergyMeter::default())?;
+        model.connect_nodes(upstream, "output_1", meter, "input_1", millimeter!(20.0))?;
+
+        assert_relative_eq!(
+            metered_energy_of(&mut model, source, scenario)?,
+            gains.iter().product::<f64>(),
+            epsilon = 1e-9
+        );
+        Ok(())
+    }
+    /// A multipass amplifier: the same head, passed several times, gains its factor once per pass.
+    ///
+    /// Built from [`NodeReference`]s, which need no amplification machinery of their own - what this
+    /// pins down is that the scenario is looked up under the uuid of the node that *has* the medium,
+    /// not under the uuid of the reference standing in for it. Were it the latter, a multipass
+    /// amplifier would silently run passive on every pass but the first.
+    ///
+    /// Analyzed as an energy flow, like the reference node's own example
+    /// (`examples/reference_test.rs`): a reference chained in a straight line is a statement about
+    /// how often the light passes a component, not about where that component is - which is exactly
+    /// what an energy analysis asks. Sending rays through it instead would need the beam folded back
+    /// onto the head by real mirrors, since the head keeps the one position it was placed at.
+    #[test]
+    fn passing_the_same_amplifier_again_amplifies_again() -> OpmResult<()> {
+        let passes = 3;
+        let gain = 2.0;
+        let mut model = NodeGroup::default();
+        let source = model.add_node(SourcePort::default())?;
+        let head = model.add_node(Lens::default())?;
+        model.connect_nodes(source, "output_1", head, "input_1", millimeter!(20.0))?;
+        let mut scenario = PumpScenario::new("full power");
+        scenario.set_gain_model(head, GainModel::Const(ConstGain::new(gain)?));
+
+        let mut upstream = head;
+        for _ in 1..passes {
+            let further_pass = model.add_node(NodeReference::from_node(&model.node(head)?)?)?;
+            model.connect_nodes(
+                upstream,
+                "output_1",
+                further_pass,
+                "input_1",
+                millimeter!(20.0),
+            )?;
+            upstream = further_pass;
+        }
+        let meter = model.add_node(EnergyMeter::default())?;
+        model.connect_nodes(upstream, "output_1", meter, "input_1", millimeter!(20.0))?;
+
+        assert_relative_eq!(
+            metered_energy_of_energy_flow(&mut model, source, scenario)?,
+            gain.powi(passes),
+            epsilon = 1e-9
+        );
+        Ok(())
+    }
+    /// A ghost focus analysis traverses the very same medium and has to amplify there too.
+    ///
+    /// It reaches the volume through an entry point of its own
+    /// ([`Volumetric::unified_analyze_volume_node_ghost_focus`]), so "the ray trace amplifies" says
+    /// nothing about it: a stray reflection running through a pumped head picks up its gain like any
+    /// other pass, and reporting it as if it did not is exactly the error that analysis exists to
+    /// catch.
+    #[test]
+    fn a_scenario_amplifies_a_ghost_focus_pass() -> OpmResult<()> {
+        let mut lens = placed_lens()?;
+        let mut config = GhostFocusConfig::default();
+        config.set_active_pump_scenario(Some(scenario_with_gain(lens.node_attr().uuid(), 2.5)?));
+        let rays = Rays::new_uniform_collimated(
+            nanometer!(1053.0),
+            joule!(1.0),
+            &crate::distributions::position::Hexapolar::new(millimeter!(1.0), 1)?,
+        )?;
+        let energy_before = rays.total_energy();
+        let incoming = LightRays::from([("input_1".into(), vec![rays])]);
+        let outgoing =
+            AnalysisGhostFocus::analyze(&mut lens, incoming, &config, &mut Vec::new(), 0)?;
+        let energy_after: uom::si::f64::Energy = outgoing
+            .get("output_1")
+            .ok_or_else(|| OpossumError::Analysis("expected rays at the output port".into()))?
+            .iter()
+            .map(Rays::total_energy)
+            .sum();
+        assert_abs_diff_eq!((energy_after / energy_before).value, 2.5, epsilon = 1e-12);
         Ok(())
     }
     /// Only the nodes that really enclose a medium may present themselves as [`Volumetric`].
