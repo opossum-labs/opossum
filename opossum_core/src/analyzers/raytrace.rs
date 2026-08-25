@@ -7,7 +7,7 @@ use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
     core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
-    gain::{ActiveScenario, GainModel, PumpScenario},
+    gain::{ActiveScenario, PumpConfig, PumpScenario},
     light::{LightResult, Rays, lightdata::ray_data_builder::RayDataBuilder},
     nodes::NodeGroup,
     picojoule,
@@ -165,8 +165,8 @@ impl PropagationStrategy for RayTraceConfig {
     fn missed_surface_strategy(&self) -> MissedSurfaceStrategy {
         *self.missed_surface_strategy()
     }
-    fn gain_model(&self, node_id: Uuid) -> GainModel {
-        self.active_pump_scenario.gain_model(node_id)
+    fn pump_config(&self, node_id: Uuid) -> PumpConfig {
+        self.active_pump_scenario.config(node_id)
     }
     fn on_after_apodization(&self, rays: &mut Rays) -> OpmResult<()> {
         rays.invalidate_by_threshold_energy(self.min_energy_per_ray())?;

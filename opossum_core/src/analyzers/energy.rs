@@ -7,7 +7,7 @@ use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
     core_optics::{NodeAttrExt, OpticNode, node_attr::HasNodeAttr},
     error::OpmResult,
-    gain::{ActiveScenario, GainModel, PumpScenario},
+    gain::{ActiveScenario, PumpConfig, PumpScenario},
     light::LightResult,
     nodes::NodeGroup,
     prelude::EnergyDataBuilder,
@@ -81,8 +81,8 @@ impl PropagationStrategy for EnergyConfig {
     fn missed_surface_strategy(&self) -> MissedSurfaceStrategy {
         MissedSurfaceStrategy::Stop
     }
-    fn gain_model(&self, node_id: Uuid) -> GainModel {
-        self.active_pump_scenario.gain_model(node_id)
+    fn pump_config(&self, node_id: Uuid) -> PumpConfig {
+        self.active_pump_scenario.config(node_id)
     }
 }
 /// Analyzer for simulating a simple energy flow

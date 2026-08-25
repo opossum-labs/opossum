@@ -283,7 +283,30 @@ impl ActiveScenario {
     pub fn set(&mut self, scenario: Option<PumpScenario>) {
         self.0 = scenario;
     }
+    /// Return the whole [`PumpConfig`] the node with the given [`Uuid`] runs under.
+    ///
+    /// The operating point of a node is handed out as one object because a gain model reading the
+    /// state of the medium needs both halves at once - see
+    /// [`PropagationStrategy::pump_config`](crate::analyzers::propagation_strategy::PropagationStrategy::pump_config).
+    ///
+    /// # Arguments
+    ///
+    /// * `node_id` - the node to look up.
+    ///
+    /// # Returns
+    ///
+    /// The node's configuration, or the default one - neither pumping nor amplifying - if no
+    /// operating point is set at all.
+    #[must_use]
+    pub fn config(&self, node_id: Uuid) -> PumpConfig {
+        self.0
+            .as_ref()
+            .map_or_else(PumpConfig::default, |scenario| scenario.config(node_id))
+    }
     /// Return the [`GainModel`] the node with the given [`Uuid`] runs with.
+    ///
+    /// Derived from [`ActiveScenario::config`] rather than looked up separately, so the two cannot
+    /// disagree.
     ///
     /// # Arguments
     ///
@@ -294,9 +317,7 @@ impl ActiveScenario {
     /// The node's gain model, or [`GainModel::None`] if no operating point is set at all.
     #[must_use]
     pub fn gain_model(&self, node_id: Uuid) -> GainModel {
-        self.0
-            .as_ref()
-            .map_or(GainModel::None, |scenario| scenario.gain_model(node_id))
+        self.config(node_id).gain_model()
     }
 }
 
@@ -410,8 +431,15 @@ mod test {
     }
     #[test]
     fn an_unset_active_scenario_amplifies_nothing() {
+        let node_id = Uuid::new_v4();
+        // Neither half of the operating point does anything without a scenario ...
         assert_eq!(
-            ActiveScenario::default().gain_model(Uuid::new_v4()),
+            ActiveScenario::default().config(node_id),
+            PumpConfig::default()
+        );
+        // ... and the derived answer says the same.
+        assert_eq!(
+            ActiveScenario::default().gain_model(node_id),
             GainModel::None
         );
     }
@@ -419,12 +447,20 @@ mod test {
     fn an_active_scenario_answers_for_its_nodes() -> OpmResult<()> {
         let node_id = Uuid::new_v4();
         let model = GainModel::Const(ConstGain::new(2.5)?);
+        let pump = PumpSource::Const(ConstInversion::new(reciprocal_centimeter!(0.5))?);
         let mut scenario = PumpScenario::new("full power");
         scenario.set_gain_model(node_id, model);
+        scenario.set_pump_source(node_id, pump);
         let mut active = ActiveScenario::default();
         active.set(Some(scenario));
+        // Both halves arrive together, out of the same scenario ...
+        assert_eq!(active.config(node_id), PumpConfig::new(model, pump));
+        // ... and the gain model derived from that config is the very same one.
         assert_eq!(active.gain_model(node_id), model);
-        assert_eq!(active.gain_model(Uuid::new_v4()), GainModel::None);
+        // A node the scenario does not mention is passive in both halves.
+        let stranger = Uuid::new_v4();
+        assert_eq!(active.config(stranger), PumpConfig::default());
+        assert_eq!(active.gain_model(stranger), GainModel::None);
         Ok(())
     }
     /// What a run is doing right now is not part of what a user configured, so it must not make two

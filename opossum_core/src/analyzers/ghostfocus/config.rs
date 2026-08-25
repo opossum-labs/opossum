@@ -3,7 +3,7 @@ use crate::{
     core_optics::hit_map::fluence_estimator::FluenceEstimator,
     core_optics::optic_surface::OpticSurface,
     error::OpmResult,
-    gain::{ActiveScenario, GainModel, PumpScenario},
+    gain::{ActiveScenario, PumpConfig, PumpScenario},
     light::{Rays, lightdata::ray_data_builder::RayDataBuilder},
     nodes::NodeGroup,
 };
@@ -101,8 +101,8 @@ impl PropagationStrategy for GhostFocusConfig {
     fn missed_surface_strategy(&self) -> MissedSurfaceStrategy {
         MissedSurfaceStrategy::Ignore
     }
-    fn gain_model(&self, node_id: Uuid) -> GainModel {
-        self.active_pump_scenario.gain_model(node_id)
+    fn pump_config(&self, node_id: Uuid) -> PumpConfig {
+        self.active_pump_scenario.config(node_id)
     }
     fn on_surface_interaction(
         &self,

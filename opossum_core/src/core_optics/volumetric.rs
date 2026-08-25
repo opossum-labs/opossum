@@ -202,10 +202,14 @@ pub trait Volumetric: OpticNode {
         rays_bundle: &mut [Rays],
         strategy: &dyn PropagationStrategy,
     ) -> OpmResult<()> {
+        // The whole operating point is fetched once, not one half at a time: a model reading the
+        // state of the medium needs the pumping next to the extraction, and both have to come from
+        // the same scenario.
+        let config = strategy.pump_config(self.node_attr().uuid());
         // Matched exhaustively on purpose: a model that cannot be evaluated from "the ray was in
         // here" alone - anything saturating or path dependent - has to be handled here explicitly
         // rather than falling into a catch-all arm that would silently do nothing.
-        match strategy.gain_model(self.node_attr().uuid()) {
+        match config.gain_model() {
             GainModel::None => Ok(()),
             GainModel::Const(const_gain) => {
                 // A constant gain is by definition independent of the path through the medium, so
@@ -238,7 +242,8 @@ pub trait Volumetric: OpticNode {
         data: &mut LightData,
         strategy: &dyn PropagationStrategy,
     ) -> OpmResult<()> {
-        match strategy.gain_model(self.node_attr().uuid()) {
+        let config = strategy.pump_config(self.node_attr().uuid());
+        match config.gain_model() {
             GainModel::None => Ok(()),
             GainModel::Const(const_gain) => {
                 if let LightData::Energy(spectrum) = data {
