@@ -11,10 +11,12 @@
 //! Each escalation stage of the gain modelling adds one further [`GainModel`] variant rather than a
 //! parallel set of node types.
 
+pub mod extraction;
 pub mod inversion_field;
 pub mod pump_source;
 pub mod scenario;
 pub mod small_signal;
+pub use extraction::{Extraction, Medium};
 pub use inversion_field::InversionField;
 pub use pump_source::{
     AnalyticPump, BeerLambertProfile, ConstInversion, LongitudinalProfile, PumpDirection,
@@ -26,6 +28,8 @@ pub use small_signal::SmallSignalGain;
 use crate::{
     error::OpmResult,
     generic_validators::{AllFinite, AllPositive, ValidateTrait},
+    geometry::body::Body,
+    light::{Rays, Spectrum},
     utils::default_from_name::DefaultFromName,
     validated, validated_type,
 };
@@ -118,6 +122,37 @@ impl From<ConstGain> for GainModel {
         Self::Const(value)
     }
 }
+impl Extraction for ConstGain {
+    fn name(&self) -> &'static str {
+        "Const"
+    }
+    fn needs_inversion(&self) -> bool {
+        // A constant factor is constant: how the medium was pumped, or whether it was pumped at
+        // all, cannot change it.
+        false
+    }
+    fn pumped_medium(
+        &self,
+        _body: &dyn Body,
+        _config: &PumpConfig,
+    ) -> OpmResult<Option<InversionField>> {
+        // Reading no inversion, this model must not pay for a grid either.
+        Ok(None)
+    }
+    fn amplify_rays(&self, _medium: &Medium<'_>, rays_bundle: &mut [Rays]) -> OpmResult<()> {
+        // Independent of the path through the medium by definition, so every ray of the bundle is
+        // multiplied by the same factor, once per pass.
+        for rays in rays_bundle.iter_mut() {
+            rays.scale_energy(self.gain())?;
+        }
+        Ok(())
+    }
+    fn amplify_spectrum(&self, _medium: &Medium<'_>, spectrum: &mut Spectrum) -> OpmResult<()> {
+        // Needing no beam path, this model is just as evaluable in an energy flow as in a ray
+        // trace - leaving it out would silently report an amplifier chain as passive.
+        spectrum.scale_vertical(&self.gain())
+    }
+}
 impl From<SmallSignalGain> for GainModel {
     fn from(value: SmallSignalGain) -> Self {
         Self::SmallSignalGain(value)
@@ -145,10 +180,9 @@ pub enum GainModel {
 }
 impl Display for GainModel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::None => write!(f, "None"),
-            Self::Const(_) => write!(f, "Const"),
-            Self::SmallSignalGain(_) => write!(f, "SmallSignalGain"),
+        match self.as_extraction() {
+            None => write!(f, "None"),
+            Some(model) => write!(f, "{}", model.name()),
         }
     }
 }
@@ -162,29 +196,41 @@ impl GainModel {
     pub const fn is_active(&self) -> bool {
         !matches!(self, Self::None)
     }
+    /// Return this model as an [`Extraction`], or `None` if it does not amplify.
+    ///
+    /// **The one place a variant of this enum is named outside its own module.** Everything a model
+    /// does — how it is displayed, whether it reads the medium, how it discretises it and how it
+    /// amplifies — is asked of the [`Extraction`] and therefore lives with the model, so adding a
+    /// stage to the gain modelling does not edit the volume machinery every component shares.
+    ///
+    /// The match stays exhaustive: a variant added later has to appear here, and the trait it then
+    /// has to implement has no default methods, so the compiler still walks it through every
+    /// question rather than answering any of them silently.
+    ///
+    /// # Returns
+    ///
+    /// The model behind this variant, or `None` for [`GainModel::None`], which has no behaviour to
+    /// hand out.
+    #[must_use]
+    pub const fn as_extraction(&self) -> Option<&dyn Extraction> {
+        match self {
+            Self::None => None,
+            Self::Const(model) => Some(model),
+            Self::SmallSignalGain(model) => Some(model),
+        }
+    }
     /// Return whether this model draws on the inversion stored in the medium.
     ///
-    /// A model that works from its own parameters alone — a fixed factor, say — does not care how
-    /// the medium was pumped, or whether it was pumped at all: configuring a
-    /// [`PumpSource`](super::PumpSource) for it would be a setting without an effect. Only a model
-    /// that actually reads the [`InversionField`](super::InversionField) makes the pumping matter.
-    ///
-    /// This is asked *of the model* rather than derived from a list of variant names kept somewhere
-    /// else, so that the answer travels with the model instead of having to be maintained wherever
-    /// pumping is offered.
+    /// See [`Extraction::needs_inversion`], which answers it. Kept on the enum because a caller
+    /// deciding whether to *offer* pump settings holds a [`GainModel`], including the passive one.
     ///
     /// # Returns
     ///
     /// `true` if the medium's inversion is an input to this model.
     #[must_use]
-    pub const fn needs_inversion(&self) -> bool {
-        // Matched exhaustively on purpose: a model added later has to state here whether it reads
-        // the state of the medium, rather than silently inheriting "no" and leaving the pump
-        // settings it depends on out of reach.
-        match self {
-            Self::None | Self::Const(_) => false,
-            Self::SmallSignalGain(_) => true,
-        }
+    pub fn needs_inversion(&self) -> bool {
+        self.as_extraction()
+            .is_some_and(Extraction::needs_inversion)
     }
     /// Return this model's display name, or `None` if it does not amplify.
     ///

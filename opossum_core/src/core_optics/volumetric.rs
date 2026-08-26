@@ -18,10 +18,7 @@ use crate::{
     apertures::{Aperture, ApertureType},
     core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, optic_node_ext::single_io_port_names},
     error::{OpmResult, OpossumError},
-    gain::{
-        GainModel,
-        small_signal::{gain_factor, pumped_field},
-    },
+    gain::Medium,
     geometry::body::{CLEAR_APERTURE, SurfaceBoundedBody},
     light::{LightData, LightRays, LightResult, Rays},
     material::{MATERIAL, Material},
@@ -211,46 +208,30 @@ pub trait Volumetric: OpticNode {
         // state of the medium needs the pumping next to the extraction, and both have to come from
         // the same scenario.
         let config = strategy.pump_config(self.node_attr().uuid());
-        // Matched exhaustively on purpose: a model that cannot be evaluated from "the ray was in
-        // here" alone - anything saturating or path dependent - has to be handled here explicitly
-        // rather than falling into a catch-all arm that would silently do nothing.
-        match config.gain_model() {
-            GainModel::None => Ok(()),
-            GainModel::Const(const_gain) => {
-                // A constant gain is by definition independent of the path through the medium, so
-                // every ray of the bundle is multiplied by the same factor, once per pass.
-                for rays in rays_bundle.iter_mut() {
-                    rays.scale_energy(const_gain.gain())?;
-                }
-                Ok(())
-            }
-            GainModel::SmallSignalGain(model) => {
-                // Both are derived once per pass, not per ray: resolving the node's ports copies
-                // its whole `OpticPorts` (see `Volumetric::volume_body`), and laying out the grid
-                // evaluates the geometry of every cell.
-                let body = self.volume_body()?;
-                let field = pumped_field(&body, &config, &model)?;
-                for rays in rays_bundle.iter_mut() {
-                    for ray in rays.iter_mut() {
-                        // Invalid rays no longer take part in the propagation - the same rule
-                        // `Rays::scale_energy` and `Rays::filter_energy` follow.
-                        if ray.valid() {
-                            let factor = gain_factor(&model, &body, &field, ray)?;
-                            ray.scale_energy(factor)?;
-                        }
-                    }
-                }
-                Ok(())
-            }
+        let gain_model = config.gain_model();
+        let Some(extraction) = gain_model.as_extraction() else {
+            return Ok(());
+        };
+        // A model working from its own parameters (a constant factor) reads nothing about the
+        // medium, so it is handed a passive one: resolving the node's ports and laying out a grid
+        // for a value it never touches would be pure waste on every pass.
+        if !extraction.needs_inversion() {
+            return extraction.amplify_rays(&Medium::passive(self.name()), rays_bundle);
         }
+        // Derived once per pass, not per ray: resolving the node's ports copies the whole
+        // `OpticPorts` (see `Volumetric::volume_body`), and laying out a grid evaluates the
+        // geometry of every cell.
+        let body = self.volume_body()?;
+        let field = extraction.pumped_medium(&body, &config)?;
+        let medium = Medium::new(&body, field.as_ref(), self.name());
+        extraction.amplify_rays(&medium, rays_bundle)
     }
     /// Amplify the spectral energy passing through this node's medium.
     ///
     /// The energy counterpart of [`Volumetric::amplify_inside`]. An energy flow analysis knows no
-    /// rays and no path lengths, so it can only evaluate models that do not need them - which is
-    /// exactly what the match below states: a model that depends on the path a beam takes has to
-    /// decide here what an energy analysis is supposed to do with it, and until that decision is
-    /// made the code does not compile.
+    /// rays and no path lengths, so a model that depends on the path a beam takes has to decide in
+    /// its own [`Extraction::amplify_spectrum`](crate::gain::Extraction::amplify_spectrum) what an
+    /// energy analysis is supposed to do with it - state a nominal path, or refuse.
     ///
     /// # Parameters
     ///
@@ -266,23 +247,24 @@ pub trait Volumetric: OpticNode {
         strategy: &dyn PropagationStrategy,
     ) -> OpmResult<()> {
         let config = strategy.pump_config(self.node_attr().uuid());
-        match config.gain_model() {
-            GainModel::None => Ok(()),
-            GainModel::Const(const_gain) => {
-                if let LightData::Energy(spectrum) = data {
-                    spectrum.scale_vertical(&const_gain.gain())?;
-                }
-                // Any other kind of light data does not belong to an energy analysis and is left
-                // untouched here rather than being reinterpreted.
-                Ok(())
-            }
-            GainModel::SmallSignalGain(_) => Err(OpossumError::Analysis(format!(
-                "node '{}' is configured with a small signal gain, which is integrated along the \
-                 path a beam takes through the medium - an energy flow analysis knows no path. \
-                 Analyze it as a ray trace, or use a constant gain here.",
-                self.name()
-            ))),
+        let gain_model = config.gain_model();
+        let Some(extraction) = gain_model.as_extraction() else {
+            return Ok(());
+        };
+        // Any other kind of light data does not belong to an energy analysis and is left untouched
+        // here rather than being reinterpreted.
+        let LightData::Energy(spectrum) = data else {
+            return Ok(());
+        };
+        // As on the ray path, a model that reads nothing about the medium gets a passive one rather
+        // than a body resolved and a grid laid out for nothing.
+        if !extraction.needs_inversion() {
+            return extraction.amplify_spectrum(&Medium::passive(self.name()), spectrum);
         }
+        let body = self.volume_body()?;
+        let field = extraction.pumped_medium(&body, &config)?;
+        let medium = Medium::new(&body, field.as_ref(), self.name());
+        extraction.amplify_spectrum(&medium, spectrum)
     }
     /// A unified helper function to analyze optical nodes that enclose a volume of material.
     ///
@@ -414,7 +396,7 @@ mod test {
         coatings::CoatingConstantR,
         core_optics::{Alignable, PortType, node_attr::HasNodeAttr},
         degree,
-        gain::{ConstGain, ConstInversion, PumpScenario, PumpSource, SmallSignalGain},
+        gain::{ConstGain, ConstInversion, GainModel, PumpScenario, PumpSource, SmallSignalGain},
         joule,
         light::{
             Rays,
