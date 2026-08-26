@@ -1,3 +1,4 @@
+use crate::error::OpmResult;
 use crate::generic_validators::{AllFinite, StaticBounds, StaticInRange};
 use crate::{validated, validated_type};
 use opm_macros_lib::EnsureValidated;
@@ -28,6 +29,16 @@ impl Default for ValidatedAbsConst {
 
 #[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq, Copy, EnsureValidated)]
 pub struct AbsConst {
-    absoprtion_constant: ValidatedAbsConst,
+    absorption_constant: ValidatedAbsConst,
 }
-impl AbsConst {}
+impl AbsConst {
+    pub fn new(factor: f64) -> OpmResult<Self> {
+        let mut abs_const = Self::default();
+        abs_const.absorption_constant.set(factor)?;
+        Ok(abs_const)
+    }
+    
+    pub fn absorption_constant(&self) -> f64 {
+        *self.absorption_constant.get()
+    }
+}

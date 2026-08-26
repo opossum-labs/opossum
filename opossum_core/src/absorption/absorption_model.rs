@@ -1,6 +1,7 @@
 //! Module for optical absorption models in `opossum_core`.
 
 use crate::{
+    absorption::absorption_constant::AbsConst,
     error::{OpmResult, OpossumError},
     generic_validators::{AllFinite, AllPositive},
     light::Spectrum,
@@ -24,7 +25,7 @@ pub enum AbsorptionModel {
 
     /// Wavelength- and path-length-independent attenuation factor [0.0, 1.0].
     /// Applies a flat intensity reduction upon surface interaction or transit.
-    ConstantAttenuation(validated_type!(f64, AllFinite && AllPositive)),
+    ConstantAttenuation(AbsConst),
 
     /// Wavelength-independent absorption coefficient for the Lambert-Beer law.
     /// Represents the coefficient alpha (e.g., in 1/m).
@@ -54,8 +55,8 @@ impl AbsorptionModel {
     /// # Errors
     /// Returns an error if `factor` is non-positive or non-finite.
     pub fn new_constant_attenuation(factor: f64) -> OpmResult<Self> {
-        let validated_factor = validated!(factor, AllFinite && AllPositive)?;
-        Ok(Self::ConstantAttenuation(validated_factor))
+        let abs_const=AbsConst::new(factor)?;
+        Ok(Self::ConstantAttenuation(abs_const))
     }
 
     /// Creates a constant Lambert-Beer absorption model with validation.
@@ -149,7 +150,7 @@ impl AbsorptionModel {
 
         match self {
             Self::None => Ok(1.0),
-            Self::ConstantAttenuation(factor) => Ok(factor.get().clamp(0.0, 1.0)),
+            Self::ConstantAttenuation(abs_const) => Ok(abs_const.absorption_constant()),
             Self::LambertBeerConstant(_)
             | Self::LambertBeerSpectrum(_)
             | Self::ExtinctionCoefficient(_) => {
@@ -283,12 +284,6 @@ impl From<&Spectrum> for AbsorptionModel {
 impl From<validated_type!(LinearNumberDensity, AllFinite && AllPositive)> for AbsorptionModel {
     fn from(alpha: validated_type!(LinearNumberDensity, AllFinite && AllPositive)) -> Self {
         Self::LambertBeerConstant(alpha)
-    }
-}
-
-impl From<validated_type!(f64, AllFinite && AllPositive)> for AbsorptionModel {
-    fn from(factor: validated_type!(f64, AllFinite && AllPositive)) -> Self {
-        Self::ConstantAttenuation(factor)
     }
 }
 
@@ -489,14 +484,6 @@ mod tests {
         assert_eq!(
             from_density,
             AbsorptionModel::LambertBeerConstant(val_density)
-        );
-
-        // Validated f64 conversion
-        let val_factor = validated!(0.85_f64, AllFinite && AllPositive)?;
-        let from_factor: AbsorptionModel = val_factor.into();
-        assert_eq!(
-            from_factor,
-            AbsorptionModel::ConstantAttenuation(val_factor)
         );
         Ok(())
     }
