@@ -21,12 +21,21 @@
 //! - *No saturation and no extraction warning.* Nothing is drawn out of the medium, so there is
 //!   nothing that could be overdrawn.
 
-use super::inversion_field::CellIndex;
-use crate::{
-    error::OpmResult,
-    generic_validators::{AllFinite, AllNotZero, AllPositive, ValidateTrait},
-    square_centimeter, validated, validated_type,
+use super::{
+    inversion_field::{CellIndex, InversionField},
+    pump_source::four_level_gain_from_inversion,
+    scenario::PumpConfig,
 };
+use crate::{
+    error::{OpmResult, OpossumError},
+    generic_validators::{AllFinite, AllNotZero, AllPositive, ValidateTrait},
+    geometry::body::Body,
+    light::Ray,
+    square_centimeter,
+    utils::math_utils::to_f64,
+    validated, validated_type,
+};
+use nalgebra::Point3;
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Area;
@@ -235,11 +244,208 @@ impl SmallSignalGain {
     }
 }
 
+/// Lay an [`InversionField`] over the given body and pump it as the operating point says.
+///
+/// This is the one place the two halves of a [`PumpConfig`] meet: the
+/// [`PumpSource`](super::PumpSource) writes the inversion, the gain model supplies the σ_e its gain
+/// coefficient is stated against, and the field that comes out is what [`gain_factor`] reads.
+/// Neither half knows the other.
+///
+/// # Arguments
+///
+/// * `body` - the volume of the medium, which the grid is laid out over.
+/// * `config` - the operating point of the node, whose pump source fills the field.
+/// * `model` - the gain model, which supplies the grid resolution and σ_e.
+///
+/// # Returns
+///
+/// A field over the body, pumped. An unpumped medium yields a field at zero everywhere, which
+/// amplifies nothing.
+///
+/// # Errors
+///
+/// This function returns an error if the grid cannot be laid over the body, or if the pump source
+/// cannot deposit its inversion into it.
+pub(crate) fn pumped_field(
+    body: &dyn Body,
+    config: &PumpConfig,
+    model: &SmallSignalGain,
+) -> OpmResult<InversionField> {
+    let mut field = InversionField::from_body(body, model.grid())?;
+    config
+        .pump()
+        .deposit(&mut field, model.emission_cross_section())?;
+    Ok(field)
+}
+
+/// Integrate the gain a ray picks up on its way through a pumped medium.
+///
+/// The ray is expected to sit **on the entrance surface** with the direction it was refracted into,
+/// which is where [`pass_through_volume_generic`](crate::core_optics::volumetric::Volumetric::pass_through_volume_generic)
+/// hands it over: the chord from there to the exit is exactly the stretch that amplifies it.
+///
+/// The integral is evaluated by the **midpoint rule** over
+/// [`n_steps`](SmallSignalGain::n_steps) equal substeps. Midpoints rather than endpoints for two
+/// reasons: it is second order accurate for the same number of samples, and it never samples
+/// exactly on a bounding surface, where both [`Body::contains`] and [`InversionField::cell_at`] are
+/// half-open and would answer "outside" for the very point the ray entered or left through.
+///
+/// Nothing is written back - the inversion is frozen, see the [module documentation](self).
+///
+/// # Arguments
+///
+/// * `model` - the gain model, supplying σ_e and the number of substeps.
+/// * `body` - the volume of the medium, which states how far the ray travels inside it.
+/// * `field` - the pumped medium, as produced by [`pumped_field`].
+/// * `ray` - the ray crossing the medium.
+///
+/// # Returns
+///
+/// The factor this ray's energy is multiplied by. A ray that does not pass through the body at all
+/// - because it missed it, left it sideways, or would have to re-enter it - answers exactly 1.0
+/// rather than an error: not being amplified is precisely what should happen to it.
+///
+/// # Errors
+///
+/// This function returns an error if the body cannot state the path length, or if the accumulated
+/// gain is not a finite factor - an energy that overflows is a modelling mistake worth stopping for
+/// rather than an infinity to propagate.
+pub(crate) fn gain_factor(
+    model: &SmallSignalGain,
+    body: &dyn Body,
+    field: &InversionField,
+    ray: &Ray,
+) -> OpmResult<f64> {
+    let Some(chord) = body.path_length_inside(ray)? else {
+        return Ok(1.0);
+    };
+    // A ray grazing the very edge of the medium travels no distance in it and gains nothing. Caught
+    // here so that the step width below cannot become zero over zero.
+    if chord.value <= 0.0 {
+        return Ok(1.0);
+    }
+    // `Ray::direction` is explicitly not guaranteed to be normalized, and stepping along it would
+    // otherwise cover the wrong distance. `path_length_inside` is unaffected - it measures between
+    // the two intersections rather than along the vector.
+    let direction = ray.direction();
+    let norm = direction.norm();
+    if !norm.is_normal() {
+        return Ok(1.0);
+    }
+    let direction = direction / norm;
+    let steps = model.n_steps();
+    let step_width = chord / to_f64(steps);
+    let start = ray.position();
+    // The frame is taken from the body rather than from the node, because that is the frame
+    // `InversionField::from_body` masked its cells in. Asking the same object makes it impossible
+    // for the sampling and the masking to disagree about where the medium is.
+    let frame = body.isometry();
+    let mut exponent = 0.0_f64;
+    for step in 0..steps {
+        let travelled = step_width * (to_f64(step) + 0.5);
+        let sample = Point3::new(
+            start.x + direction.x * travelled,
+            start.y + direction.y * travelled,
+            start.z + direction.z * travelled,
+        );
+        let local = frame.inverse_transform_point(&sample);
+        // Outside the grid, or inside it but not in the medium: there is nothing there to amplify
+        // with, so the substep contributes nothing rather than failing.
+        let Some(cell) = field.cell_at(&local) else {
+            continue;
+        };
+        if !field.is_inside(cell) {
+            continue;
+        }
+        let Some(inversion) = field.population(cell) else {
+            continue;
+        };
+        exponent +=
+            (four_level_gain_from_inversion(inversion, model.emission_cross_section()) * step_width).value;
+    }
+    let factor = exponent.exp();
+    if factor.is_finite() {
+        Ok(factor)
+    } else {
+        Err(OpossumError::Analysis(format!(
+            "a small signal gain of exp({exponent}) over a path of {} mm through the medium is not \
+             a finite factor",
+            chord.get::<uom::si::length::millimeter>()
+        )))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{error::OpossumError, square_meter};
+    use crate::{
+        apertures::{Aperture, ApertureType},
+        degree,
+        gain::{
+            AnalyticPump, BeerLambertProfile, ConstInversion, GainModel, LongitudinalProfile,
+            PumpDirection, PumpSource, TransversalProfile,
+        },
+        geometry::{Plane, body::SurfaceBoundedBody, geo_surface::GeoSurfaceRef},
+        joule, millimeter, nanometer, reciprocal_centimeter, square_meter,
+        types::validated_type_definitions::ValidatedCrossSection,
+        utils::{geom_transformation::Isometry, super_gaussian::SuperGaussianShape},
+    };
     use approx::assert_relative_eq;
+    use nalgebra::{Point2, Vector3};
+    use std::sync::{Arc, Mutex};
+    use uom::si::f64::{Length, ReciprocalLength};
+
+    /// The thickness of the disk every physics test below amplifies through.
+    const THICKNESS: f64 = 10.0;
+
+    /// Create a plane-parallel disk of the given thickness and radius, sitting at the origin.
+    ///
+    /// Plane faces on purpose: the chord of an on-axis ray is then exactly the thickness, so every
+    /// expected value below can be worked out from `exp(g₀·L)` by hand.
+    fn disk(thickness: Length, radius: Length) -> OpmResult<SurfaceBoundedBody> {
+        Ok(SurfaceBoundedBody::new(
+            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(Isometry::identity())))),
+            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(Isometry::new_along_z(
+                thickness,
+            )?)))),
+            ValidatedCrossSection::try_new(Aperture::new_circle(
+                radius,
+                ApertureType::Hole,
+                None,
+            )?)?,
+            Isometry::identity(),
+        ))
+    }
+    /// The disk every physics test below is performed on: 10 mm thick, 5 mm in radius.
+    fn test_disk() -> OpmResult<SurfaceBoundedBody> {
+        disk(millimeter!(THICKNESS), millimeter!(5.0))
+    }
+    /// A ray entering the medium at the given transversal offset, travelling along the axis.
+    fn ray_at(x: f64, y: f64) -> OpmResult<Ray> {
+        Ray::new(
+            millimeter!(x, y, 0.0),
+            Vector3::new(0.0, 0.0, 1.0),
+            nanometer!(1054.0),
+            joule!(1.0),
+        )
+    }
+    /// An operating point that pumps a medium uniformly to the given gain coefficient.
+    fn pumped_at(g_0: ReciprocalLength) -> OpmResult<PumpConfig> {
+        Ok(PumpConfig::new(
+            GainModel::None,
+            PumpSource::Const(ConstInversion::new(g_0)?),
+        ))
+    }
+    /// The factor a ray picks up crossing the test disk in the given operating point.
+    fn factor_through_disk(
+        model: &SmallSignalGain,
+        config: &PumpConfig,
+        ray: &Ray,
+    ) -> OpmResult<f64> {
+        let body = test_disk()?;
+        let field = pumped_field(&body, config, model)?;
+        gain_factor(model, &body, &field, ray)
+    }
 
     #[test]
     fn the_default_is_usable_and_neutral() {
@@ -310,6 +516,231 @@ mod test {
         let deserialized: SmallSignalGain =
             ron::from_str(&serialized).map_err(|e| OpossumError::Other(e.to_string()))?;
         assert_eq!(model, deserialized);
+        Ok(())
+    }
+    #[test]
+    fn a_homogeneous_medium_amplifies_by_exp_g0_l() -> OpmResult<()> {
+        // The defining case: a uniformly pumped medium gives `G = exp(g0 * L)`, and for an on-axis
+        // ray through a plane-parallel disk `L` is exactly the thickness.
+        let model = SmallSignalGain::default();
+        let g_0 = reciprocal_centimeter!(0.5);
+        let factor = factor_through_disk(&model, &pumped_at(g_0)?, &ray_at(0.0, 0.0)?)?;
+        assert_relative_eq!(
+            factor,
+            f64::exp((g_0 * millimeter!(THICKNESS)).value),
+            max_relative = 1e-12
+        );
+        Ok(())
+    }
+    #[test]
+    fn a_negative_inversion_absorbs() -> OpmResult<()> {
+        // A negative coefficient is the same physics with the inversion turned around, so it has to
+        // come out as plain Beer-Lambert absorption over the very same path.
+        let model = SmallSignalGain::default();
+        let g_0 = reciprocal_centimeter!(-0.5);
+        let factor = factor_through_disk(&model, &pumped_at(g_0)?, &ray_at(0.0, 0.0)?)?;
+        assert_relative_eq!(
+            factor,
+            f64::exp((g_0 * millimeter!(THICKNESS)).value),
+            max_relative = 1e-12
+        );
+        assert!(factor < 1.0, "an absorbing medium must not amplify");
+        Ok(())
+    }
+    #[test]
+    fn an_unpumped_medium_is_a_plain_pass() -> OpmResult<()> {
+        // Picking the model must not change a result on its own.
+        let model = SmallSignalGain::default();
+        let passive = PumpConfig::new(GainModel::None, PumpSource::None);
+        assert_relative_eq!(
+            factor_through_disk(&model, &passive, &ray_at(0.0, 0.0)?)?,
+            1.0
+        );
+        Ok(())
+    }
+    #[test]
+    fn an_oblique_ray_gains_over_its_real_path() -> OpmResult<()> {
+        // The whole difference to a constant gain: the path counts. At 45 degrees the chord through
+        // a plane-parallel disk is longer by sqrt(2), and the gain has to follow.
+        //
+        // The disk is deliberately made wider than the standard one here: at this angle the ray
+        // wanders a full thickness across the cross section on its way through, and one that leaves
+        // sideways does not pass through the body at all - see
+        // `a_ray_that_does_not_cross_the_medium_is_not_amplified` for that case.
+        let body = disk(millimeter!(THICKNESS), millimeter!(20.0))?;
+        let model = SmallSignalGain::default();
+        let g_0 = reciprocal_centimeter!(0.5);
+        let field = pumped_field(&body, &pumped_at(g_0)?, &model)?;
+        let oblique = Ray::new(
+            millimeter!(0.0, -5.0, 0.0),
+            Vector3::new(0.0, 1.0, 1.0),
+            nanometer!(1054.0),
+            joule!(1.0),
+        )?;
+        let factor = gain_factor(&model, &body, &field, &oblique)?;
+        assert_relative_eq!(
+            factor,
+            f64::exp((g_0 * millimeter!(THICKNESS) * f64::sqrt(2.0)).value),
+            max_relative = 1e-12
+        );
+        Ok(())
+    }
+    #[test]
+    fn a_ray_leaving_sideways_is_not_amplified() -> OpmResult<()> {
+        // The same 45 degree ray through the standard, narrow disk: it enters the medium but leaves
+        // through the barrel rather than the exit face. There is no chord to integrate over, so it
+        // is left alone rather than amplified over a path it never completed.
+        let model = SmallSignalGain::default();
+        let escaping = Ray::new(
+            millimeter!(0.0, -3.0, 0.0),
+            Vector3::new(0.0, 1.0, 1.0),
+            nanometer!(1054.0),
+            joule!(1.0),
+        )?;
+        assert_relative_eq!(
+            factor_through_disk(&model, &pumped_at(reciprocal_centimeter!(0.5))?, &escaping)?,
+            1.0
+        );
+        Ok(())
+    }
+    #[test]
+    fn the_emission_cross_section_cancels_out() -> OpmResult<()> {
+        // sigma_e divides when the pump's coefficient becomes a density and multiplies when that
+        // density becomes a gain again. As long as both sides use the same number - which is what
+        // putting it on the model guarantees - it cannot influence the result at all.
+        let g_0 = reciprocal_centimeter!(0.5);
+        let config = pumped_at(g_0)?;
+        let ray = ray_at(0.0, 0.0)?;
+        let lean = SmallSignalGain::new(square_meter!(2.0e-24), 8, (8, 8, 8))?;
+        let fat = SmallSignalGain::new(square_meter!(2.0e-23), 8, (8, 8, 8))?;
+        assert_relative_eq!(
+            factor_through_disk(&lean, &config, &ray)?,
+            factor_through_disk(&fat, &config, &ray)?,
+            max_relative = 1e-12
+        );
+        Ok(())
+    }
+    #[test]
+    fn the_march_converges_when_it_is_refined() -> OpmResult<()> {
+        // A flat profile is integrated exactly by a single midpoint step, so the convergence has to
+        // be shown on an inversion that actually varies along the ray. Beer-Lambert has a closed
+        // form: the integral of g0*exp(-alpha*s) from 0 to L is g0/alpha * (1 - exp(-alpha*L)).
+        let g_0 = reciprocal_centimeter!(0.5);
+        let alpha = reciprocal_centimeter!(2.0);
+        let length = millimeter!(THICKNESS);
+        let config = PumpConfig::new(
+            GainModel::None,
+            PumpSource::Analytic(AnalyticPump::new(
+                g_0,
+                TransversalProfile::Flat,
+                LongitudinalProfile::BeerLambert(BeerLambertProfile::new(
+                    alpha,
+                    PumpDirection::Forward,
+                )?),
+            )?),
+        );
+        let exact = f64::exp(((g_0 / alpha) * (1.0 - f64::exp(-(alpha * length).value))).value);
+        let ray = ray_at(0.0, 0.0)?;
+        // The grid is kept far finer than the march so that what is being refined here is the
+        // integration, not the sampling of the profile.
+        let error = |steps: usize| -> OpmResult<f64> {
+            let model = SmallSignalGain::new(square_meter!(2.0e-24), steps, (4, 4, 512))?;
+            Ok((factor_through_disk(&model, &config, &ray)? - exact).abs() / exact)
+        };
+        let (coarse, medium, fine) = (error(2)?, error(8)?, error(64)?);
+        assert!(
+            medium < coarse,
+            "refining 2 -> 8 did not help: {coarse} -> {medium}"
+        );
+        assert!(
+            fine < medium,
+            "refining 8 -> 64 did not help: {medium} -> {fine}"
+        );
+        assert!(fine < 1e-3, "the fine march is still off by {fine}");
+        Ok(())
+    }
+    #[test]
+    fn a_transversal_profile_makes_an_edge_ray_gain_less() -> OpmResult<()> {
+        // The inversion varies across the cross section, so two parallel rays through the same
+        // medium leave with different factors - something a bundle-wide factor could not express.
+        let sigma = millimeter!(2.0);
+        let config = PumpConfig::new(
+            GainModel::None,
+            PumpSource::Analytic(AnalyticPump::new(
+                reciprocal_centimeter!(0.5),
+                TransversalProfile::SuperGaussian(SuperGaussianShape::new(
+                    Point2::new(millimeter!(0.0), millimeter!(0.0)),
+                    Point2::new(sigma, sigma),
+                    1.0,
+                    degree!(0.0),
+                    false,
+                )?),
+                LongitudinalProfile::Flat,
+            )?),
+        );
+        // An odd cell count puts one column of cells exactly on the axis, so the axial ray really
+        // samples the peak of the profile rather than a neighbour of it.
+        let model = SmallSignalGain::new(square_meter!(2.0e-24), 8, (65, 65, 8))?;
+        let axial = factor_through_disk(&model, &config, &ray_at(0.0, 0.0)?)?;
+        let outer = factor_through_disk(&model, &config, &ray_at(0.0, 4.0)?)?;
+        assert!(
+            axial > outer,
+            "the axial ray should gain more: {axial} vs {outer}"
+        );
+        // ... and the axial one follows the peak of the profile, which is the plain exp(g0*L)
+        assert_relative_eq!(
+            axial,
+            f64::exp((reciprocal_centimeter!(0.5) * millimeter!(THICKNESS)).value),
+            max_relative = 1e-2
+        );
+        Ok(())
+    }
+    #[test]
+    fn the_inversion_is_frozen() -> OpmResult<()> {
+        // What makes this the *small signal* stage: extracting energy does not draw the medium
+        // down, so a second pass sees exactly what the first one saw.
+        let body = test_disk()?;
+        let model = SmallSignalGain::default();
+        let field = pumped_field(&body, &pumped_at(reciprocal_centimeter!(0.5))?, &model)?;
+        let untouched = field.clone();
+        let ray = ray_at(0.0, 0.0)?;
+        let first = gain_factor(&model, &body, &field, &ray)?;
+        let second = gain_factor(&model, &body, &field, &ray)?;
+        assert_eq!(field, untouched);
+        assert_relative_eq!(first, second);
+        Ok(())
+    }
+    #[test]
+    fn a_ray_that_does_not_cross_the_medium_is_not_amplified() -> OpmResult<()> {
+        let body = test_disk()?;
+        let model = SmallSignalGain::default();
+        let field = pumped_field(&body, &pumped_at(reciprocal_centimeter!(0.5))?, &model)?;
+        // beside the disk, running past it ...
+        let beside = Ray::new(
+            millimeter!(20.0, 0.0, 0.0),
+            Vector3::new(0.0, 0.0, 1.0),
+            nanometer!(1054.0),
+            joule!(1.0),
+        )?;
+        assert_relative_eq!(gain_factor(&model, &body, &field, &beside)?, 1.0);
+        // ... and one pointing away from it, which never reaches it either
+        let away = Ray::new(
+            millimeter!(0.0, 0.0, 0.0),
+            Vector3::new(0.0, 0.0, -1.0),
+            nanometer!(1054.0),
+            joule!(1.0),
+        )?;
+        assert_relative_eq!(gain_factor(&model, &body, &field, &away)?, 1.0);
+        Ok(())
+    }
+    #[test]
+    fn a_gain_that_would_overflow_is_refused() -> OpmResult<()> {
+        // An absurd operating point has to stop the analysis rather than hand an infinite energy
+        // down the graph, where it would only surface much later as a meaningless report.
+        let body = test_disk()?;
+        let model = SmallSignalGain::default();
+        let field = pumped_field(&body, &pumped_at(reciprocal_centimeter!(1.0e6))?, &model)?;
+        assert!(gain_factor(&model, &body, &field, &ray_at(0.0, 0.0)?).is_err());
         Ok(())
     }
     #[test]

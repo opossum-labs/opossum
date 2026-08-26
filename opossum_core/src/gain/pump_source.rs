@@ -602,7 +602,7 @@ impl PumpSource {
 ///
 /// This function returns an error if the cross section is not finite and positive — a medium that
 /// cannot emit has no inversion that would explain a gain — or if the quotient is not finite.
-fn inversion_from_gain(
+pub(crate) fn inversion_from_gain(
     gain_coefficient: ReciprocalLength,
     emission_cross_section: Area,
 ) -> OpmResult<VolumetricNumberDensity> {
@@ -626,6 +626,33 @@ fn inversion_from_gain(
             gain_coefficient.value
         )))
     }
+}
+
+/// Convert an inversion density into the gain per unit length it yields.
+///
+/// The exact inverse of [`inversion_from_gain`], and the direction an extraction needs: the field
+/// stores the density, but what amplifies a ray over a stretch of its path is `g₀ = σ_e · ΔN`. Both
+/// directions live here together on purpose - a model depositing with one σ_e and extracting with
+/// another would be describing two different media, and keeping the pair in one place is what lets
+/// the two cancel exactly rather than to within floating point luck.
+///
+/// # Arguments
+///
+/// - `inversion`: ΔN, the local inversion density. May be negative for an absorbing medium, which
+///   yields a negative coefficient.
+/// - `emission_cross_section`: `σ_e` of the medium at the laser wavelength.
+///
+/// # Returns
+///
+/// The gain per unit length that inversion provides.
+pub(crate) fn four_level_gain_from_inversion(
+    inversion: VolumetricNumberDensity,
+    emission_cross_section: Area,
+) -> ReciprocalLength {
+    // `uom` keeps number densities in a kind of their own, so the product has to be moved back into
+    // the plain quantity explicitly - the same conversion `inversion_from_gain` performs the other
+    // way round.
+    (inversion * emission_cross_section).into()
 }
 
 #[cfg(test)]

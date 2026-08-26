@@ -18,7 +18,10 @@ use crate::{
     apertures::{Aperture, ApertureType},
     core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, optic_node_ext::single_io_port_names},
     error::{OpmResult, OpossumError},
-    gain::GainModel,
+    gain::{
+        GainModel,
+        small_signal::{gain_factor, pumped_field},
+    },
     geometry::body::{CLEAR_APERTURE, SurfaceBoundedBody},
     light::{LightData, LightRays, LightResult, Rays},
     material::{MATERIAL, Material},
@@ -132,9 +135,11 @@ pub trait Volumetric: OpticNode {
     /// This is the counterpart of [`OpticNodeExt::pass_through_surface_generic`] for the nodes that
     /// enclose a volume of material (lens, wedge, cylindric lens, ...). All of them perform the very
     /// same two-step sequence, which is collected here so that the step in between — what happens
-    /// *inside* the medium — exists in exactly one place. Today that step is the amplification of an
-    /// active medium ([`Volumetric::amplify_inside`]); the segmentation of the inner path follows
-    /// once a model needs it.
+    /// *inside* the medium — exists in exactly one place. That step is the amplification of an
+    /// active medium ([`Volumetric::amplify_inside`]), which for a path dependent model walks the
+    /// chord between the two surfaces in substeps. The rays are **not** moved by it: they are still
+    /// carried from one surface to the other by the exit pass below, exactly as they are through a
+    /// passive component.
     ///
     /// # Parameters
     ///
@@ -219,6 +224,24 @@ pub trait Volumetric: OpticNode {
                 }
                 Ok(())
             }
+            GainModel::SmallSignalGain(model) => {
+                // Both are derived once per pass, not per ray: resolving the node's ports copies
+                // its whole `OpticPorts` (see `Volumetric::volume_body`), and laying out the grid
+                // evaluates the geometry of every cell.
+                let body = self.volume_body()?;
+                let field = pumped_field(&body, &config, &model)?;
+                for rays in rays_bundle.iter_mut() {
+                    for ray in rays.iter_mut() {
+                        // Invalid rays no longer take part in the propagation - the same rule
+                        // `Rays::scale_energy` and `Rays::filter_energy` follow.
+                        if ray.valid() {
+                            let factor = gain_factor(&model, &body, &field, ray)?;
+                            ray.scale_energy(factor)?;
+                        }
+                    }
+                }
+                Ok(())
+            }
         }
     }
     /// Amplify the spectral energy passing through this node's medium.
@@ -253,6 +276,12 @@ pub trait Volumetric: OpticNode {
                 // untouched here rather than being reinterpreted.
                 Ok(())
             }
+            GainModel::SmallSignalGain(_) => Err(OpossumError::Analysis(format!(
+                "node '{}' is configured with a small signal gain, which is integrated along the \
+                 path a beam takes through the medium - an energy flow analysis knows no path. \
+                 Analyze it as a ray trace, or use a constant gain here.",
+                self.name()
+            ))),
         }
     }
     /// A unified helper function to analyze optical nodes that enclose a volume of material.
@@ -385,7 +414,7 @@ mod test {
         coatings::CoatingConstantR,
         core_optics::{Alignable, PortType, node_attr::HasNodeAttr},
         degree,
-        gain::{ConstGain, PumpScenario},
+        gain::{ConstGain, ConstInversion, PumpScenario, PumpSource, SmallSignalGain},
         joule,
         light::{
             Rays,
@@ -397,11 +426,12 @@ mod test {
             EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort, SpotDiagram, ThinMirror,
             create_node_ref, node_types, round_collimated_ray_builder,
         },
-        percent,
+        percent, reciprocal_centimeter,
         refractive_index::RefrIndexConst,
         utils::{LockExt, test_helper::test_helper::metered_energy},
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
+    use uom::si::f64::ReciprocalLength;
     use uuid::Uuid;
 
     /// A lens sitting at the origin, ready to be traced through.
@@ -420,9 +450,74 @@ mod test {
     ///
     /// Returns an error if the gain factor is rejected.
     fn scenario_with_gain(node_id: Uuid, gain: f64) -> OpmResult<PumpScenario> {
+        Ok(scenario_with_model(
+            node_id,
+            GainModel::Const(ConstGain::new(gain)?),
+            PumpSource::None,
+        ))
+    }
+    /// An operating point in which the node with the given [`Uuid`] runs the given configuration.
+    ///
+    /// The general form of [`scenario_with_gain`]: a model reading the medium's state needs the
+    /// pumping alongside it, and both have to come out of the same scenario.
+    fn scenario_with_model(node_id: Uuid, model: GainModel, pump: PumpSource) -> PumpScenario {
         let mut scenario = PumpScenario::new("full power");
-        scenario.set_gain_model(node_id, GainModel::Const(ConstGain::new(gain)?));
-        Ok(scenario)
+        scenario.set_gain_model(node_id, model);
+        scenario.set_pump_source(node_id, pump);
+        scenario
+    }
+    /// The thickness of the plane-parallel amplifier head the small signal tests trace through.
+    const HEAD_THICKNESS: f64 = 10.0;
+    /// The refractive index of that head's material.
+    const HEAD_INDEX: f64 = 1.5;
+    /// How far the fold mirror of the double pass test is tilted, in degrees.
+    ///
+    /// It has to be tilted at all so the returning beam is separated from the incoming one instead
+    /// of running back into the source - which is what a real double pass does too. The consequence
+    /// is that the second pass crosses the medium slightly obliquely, and the test has to account
+    /// for it.
+    const FOLD_TILT: f64 = 2.0;
+    /// The gain coefficient the medium of that head is pumped to.
+    fn head_gain_coefficient() -> ReciprocalLength {
+        reciprocal_centimeter!(0.5)
+    }
+    /// The factor a single on-axis pass through that head amplifies by: `G = exp(g₀·d)`.
+    ///
+    /// Worked out from the formula rather than hard coded, so the expectation is a statement of the
+    /// physics rather than a number somebody once measured.
+    fn single_pass_gain() -> f64 {
+        f64::exp((head_gain_coefficient() * millimeter!(HEAD_THICKNESS)).value)
+    }
+    /// A plane-parallel amplifier head of [`HEAD_THICKNESS`], which a collimated bundle crosses
+    /// without being bent - so the chord of every ray really is the centre thickness.
+    fn amplifier_head() -> OpmResult<Lens> {
+        let plane = millimeter!(f64::INFINITY);
+        Lens::new(
+            "head",
+            plane,
+            plane,
+            millimeter!(HEAD_THICKNESS),
+            RefrIndexConst::new(HEAD_INDEX)?,
+        )
+    }
+    /// The factor a pass crossing that head at the given external angle amplifies by.
+    ///
+    /// The generalisation of [`single_pass_gain`], which is this at normal incidence: refraction at
+    /// the entrance face bends the beam to `asin(sin θ / n)` inside the medium, so it travels
+    /// `d / cos` of that rather than `d`, and the gain follows the longer chord. This is precisely
+    /// what a constant factor cannot express, so a test using it is asserting the new capability
+    /// rather than repeating the old one.
+    fn gain_at_angle(external_degrees: f64) -> f64 {
+        let internal = (external_degrees.to_radians().sin() / HEAD_INDEX).asin();
+        f64::exp((head_gain_coefficient() * millimeter!(HEAD_THICKNESS)).value / internal.cos())
+    }
+    /// An operating point running the given node as a uniformly pumped small signal amplifier.
+    fn scenario_with_small_signal(node_id: Uuid) -> OpmResult<PumpScenario> {
+        Ok(scenario_with_model(
+            node_id,
+            GainModel::SmallSignalGain(SmallSignalGain::default()),
+            PumpSource::Const(ConstInversion::new(head_gain_coefficient())?),
+        ))
     }
     /// Trace a ray bundle through the given lens and return by how much its energy grew.
     ///
@@ -690,7 +785,8 @@ mod test {
     ///
     /// # Arguments
     ///
-    /// * `gain` - the factor the head amplifies by. 1.0 makes it a passive lens.
+    /// * `model` - how the head amplifies. [`GainModel::None`] makes it a passive lens.
+    /// * `pump` - how its medium is pumped, which only a model reading the inversion cares about.
     /// * `max_bounces` - how many reflections the analysis follows.
     ///
     /// # Returns
@@ -700,15 +796,12 @@ mod test {
     /// # Errors
     ///
     /// Returns an error if the model cannot be built or the analysis fails.
-    fn ghost_energies_per_bounce(gain: f64, max_bounces: usize) -> OpmResult<Vec<f64>> {
-        let plane = millimeter!(f64::INFINITY);
-        let mut head = Lens::new(
-            "head",
-            plane,
-            plane,
-            millimeter!(10.0),
-            RefrIndexConst::new(1.5)?,
-        )?;
+    fn ghost_energies_per_bounce(
+        gain_model: GainModel,
+        pump: PumpSource,
+        max_bounces: usize,
+    ) -> OpmResult<Vec<f64>> {
+        let mut head = amplifier_head()?;
         for (port_type, port_name) in [(PortType::Input, "input_1"), (PortType::Output, "output_1")]
         {
             head.set_coating(
@@ -730,9 +823,7 @@ mod test {
             source,
             round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 1)?,
         );
-        let mut scenario = PumpScenario::new("full power");
-        scenario.set_gain_model(head, GainModel::Const(ConstGain::new(gain)?));
-        config.set_active_pump_scenario(Some(scenario));
+        config.set_active_pump_scenario(Some(scenario_with_model(head, gain_model, pump)));
 
         let analyzer = GhostFocusAnalyzer::new(config);
         analyzer.analyze(&mut model)?;
@@ -783,7 +874,11 @@ mod test {
             ]
         };
         for gain in [1.0, 2.0, 3.0] {
-            let measured = ghost_energies_per_bounce(gain, 2)?;
+            let measured = ghost_energies_per_bounce(
+                GainModel::Const(ConstGain::new(gain)?),
+                PumpSource::None,
+                2,
+            )?;
             let expected = expected_energies(gain);
             assert_eq!(
                 measured.len(),
@@ -828,6 +923,142 @@ mod test {
             .map(Rays::total_energy)
             .sum();
         assert_abs_diff_eq!((energy_after / energy_before).value, 2.5, epsilon = 1e-12);
+        Ok(())
+    }
+    /// The acceptance test of the small signal stage: a real amplifier head against a hand
+    /// calculation.
+    ///
+    /// A plane-parallel head of 10 mm, uniformly pumped to g₀ = 0.5 / cm, amplifies a collimated
+    /// bundle by `exp(0.5) ≈ 1.6487`. Nothing about the number is hard coded - it is worked out from
+    /// the formula in [`single_pass_gain`], so the test states the physics rather than a
+    /// measurement.
+    #[test]
+    fn a_small_signal_scenario_amplifies_by_exp_of_the_path() -> OpmResult<()> {
+        let mut head = amplifier_head()?;
+        head.set_isometry(Isometry::identity())?;
+        let node_id = head.node_attr().uuid();
+        // Passive without a scenario, so the two runs differ by nothing but the operating point.
+        assert_relative_eq!(
+            traced_energy_ratio(&mut head, &RayTraceConfig::default())?,
+            1.0,
+            epsilon = 1e-9
+        );
+        let mut config = RayTraceConfig::default();
+        config.set_active_pump_scenario(Some(scenario_with_small_signal(node_id)?));
+        assert_relative_eq!(
+            traced_energy_ratio(&mut head, &config)?,
+            single_pass_gain(),
+            epsilon = 1e-9
+        );
+        Ok(())
+    }
+    /// The two halves of an operating point really are independent.
+    ///
+    /// A gain model that reads the medium finds nothing there if nobody pumped it, and a medium
+    /// nobody pumped must come out exactly as passive as it went in - not "almost", and not with the
+    /// model's own parameters leaking into the result.
+    #[test]
+    fn a_small_signal_head_is_passive_without_a_pump() -> OpmResult<()> {
+        let mut head = amplifier_head()?;
+        head.set_isometry(Isometry::identity())?;
+        let mut config = RayTraceConfig::default();
+        config.set_active_pump_scenario(Some(scenario_with_model(
+            head.node_attr().uuid(),
+            GainModel::SmallSignalGain(SmallSignalGain::default()),
+            PumpSource::None,
+        )));
+        assert_relative_eq!(
+            traced_energy_ratio(&mut head, &config)?,
+            1.0,
+            epsilon = 1e-12
+        );
+        Ok(())
+    }
+    /// An energy flow analysis has no rays and therefore no path to integrate the gain along.
+    ///
+    /// It says so instead of guessing: silently amplifying by nothing would report a pumped chain as
+    /// passive, and silently picking some path length would invent a number nobody stated.
+    #[test]
+    fn an_energy_flow_refuses_a_path_dependent_model() -> OpmResult<()> {
+        let mut head = amplifier_head()?;
+        head.set_isometry(Isometry::identity())?;
+        let mut config = EnergyConfig::default();
+        config.set_active_pump_scenario(Some(scenario_with_small_signal(head.node_attr().uuid())?));
+        let incoming =
+            LightResult::from([("input_1".into(), LightData::Energy(create_he_ne_spec(1.0)?))]);
+        let result = AnalysisEnergy::analyze(&mut head, incoming, &config);
+        assert!(
+            result.is_err(),
+            "an energy flow analysis must not silently evaluate a path dependent gain"
+        );
+        Ok(())
+    }
+    /// A folded double pass through a pumped medium amplifies on both passes.
+    ///
+    /// The small signal counterpart of
+    /// [`a_mirror_folding_the_beam_back_amplifies_on_both_passes`], and the test that pins down the
+    /// march through an **inverted** node: the returning beam enters the head through the face the
+    /// first pass left by. The body is geometry and keeps its physical orientation either way, so
+    /// the march has to work in both directions.
+    ///
+    /// The two passes do **not** gain the same amount, and that is the point. The fold mirror is
+    /// tilted by [`FOLD_TILT`], so it sends the beam back at twice that angle and the second pass
+    /// crosses the medium obliquely - over a chord longer by `1/cos` of the refracted angle. A
+    /// constant gain is blind to this; a path dependent one must not be, so the expectation is
+    /// built from the two angles rather than from twice the same factor.
+    #[test]
+    fn a_folded_double_pass_amplifies_small_signal_on_both_passes() -> OpmResult<()> {
+        let mut model = NodeGroup::default();
+        let source = model.add_node(SourcePort::default())?;
+        let head = model.add_node(amplifier_head()?)?;
+        let fold =
+            model.add_node(ThinMirror::new("fold").with_tilt(degree!(FOLD_TILT, 0.0, 0.0))?)?;
+        let mut second_pass = NodeReference::from_node(&model.node(head)?)?;
+        second_pass.set_inverted(true)?;
+        let second_pass = model.add_node(second_pass)?;
+        let meter = model.add_node(EnergyMeter::default())?;
+        model.connect_nodes(source, "output_1", head, "input_1", millimeter!(30.0))?;
+        model.connect_nodes(head, "output_1", fold, "input_1", millimeter!(50.0))?;
+        model.connect_nodes(fold, "output_1", second_pass, "output_1", millimeter!(50.0))?;
+        model.connect_nodes(second_pass, "input_1", meter, "input_1", millimeter!(30.0))?;
+
+        // The passive baseline first: both passes are lossless without a scenario, so anything the
+        // pumped run shows above 1 J came from the operating point rather than from the fold.
+        assert_relative_eq!(
+            metered_energy_of(&mut model, source, PumpScenario::new("cold"))?,
+            1.0,
+            epsilon = 1e-9
+        );
+        assert_relative_eq!(
+            metered_energy_of(&mut model, source, scenario_with_small_signal(head)?)?,
+            single_pass_gain() * gain_at_angle(2.0 * FOLD_TILT),
+            epsilon = 1e-9
+        );
+        Ok(())
+    }
+    /// Ghost paths through a pumped medium pick up the small signal gain on every traversal.
+    ///
+    /// The same path algebra as
+    /// [`ghost_reflections_are_amplified_on_every_pass_through_the_medium`], with `G = exp(g₀·d)`
+    /// instead of a stated factor. Worth checking separately: the ghost focus analysis reaches the
+    /// volume through an entry point of its own, and a reflected ray crosses the medium in the
+    /// opposite direction, which is exactly where a march that assumed a direction would break.
+    #[test]
+    fn small_signal_ghost_reflections_are_amplified_on_every_pass() -> OpmResult<()> {
+        let r = GHOST_REFLECTIVITY;
+        let t = 1.0 - r;
+        let g = single_pass_gain();
+        let expected = [t * g * t, r + t * g * r * g * t, t * g * r * g * r * g * t];
+        let measured = ghost_energies_per_bounce(
+            GainModel::SmallSignalGain(SmallSignalGain::default()),
+            PumpSource::Const(ConstInversion::new(head_gain_coefficient())?),
+            2,
+        )?;
+        assert_eq!(measured.len(), expected.len());
+        for (bounce, (measured, expected)) in measured.iter().zip(expected.iter()).enumerate() {
+            assert_relative_eq!(measured, expected, epsilon = 1e-6);
+            assert!(*measured > 0.0, "bounce {bounce} carries no energy at all");
+        }
         Ok(())
     }
     /// Only the nodes that really enclose a medium may present themselves as [`Volumetric`].

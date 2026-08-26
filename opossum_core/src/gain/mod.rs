@@ -118,6 +118,11 @@ impl From<ConstGain> for GainModel {
         Self::Const(value)
     }
 }
+impl From<SmallSignalGain> for GainModel {
+    fn from(value: SmallSignalGain) -> Self {
+        Self::SmallSignalGain(value)
+    }
+}
 
 /// Amplification model of a node with a volume.
 ///
@@ -134,12 +139,16 @@ pub enum GainModel {
     /// Constant energy gain, independent of the path length through the medium and without
     /// saturation. See [`ConstGain`].
     Const(ConstGain),
+    /// Unsaturated gain integrated along the path through the medium, reading the local inversion.
+    /// See [`SmallSignalGain`].
+    SmallSignalGain(SmallSignalGain),
 }
 impl Display for GainModel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::None => write!(f, "None"),
             Self::Const(_) => write!(f, "Const"),
+            Self::SmallSignalGain(_) => write!(f, "SmallSignalGain"),
         }
     }
 }
@@ -174,6 +183,7 @@ impl GainModel {
         // settings it depends on out of reach.
         match self {
             Self::None | Self::Const(_) => false,
+            Self::SmallSignalGain(_) => true,
         }
     }
     /// Return this model's display name, or `None` if it does not amplify.
@@ -199,6 +209,7 @@ mod test {
         assert_eq!(GainModel::default(), GainModel::None);
         assert!(!GainModel::default().is_active());
         assert!(GainModel::Const(ConstGain::default()).is_active());
+        assert!(GainModel::SmallSignalGain(SmallSignalGain::default()).is_active());
         assert_eq!(GainModel::None.active_name(), None);
         assert_eq!(
             GainModel::Const(ConstGain::default())
@@ -206,16 +217,28 @@ mod test {
                 .as_deref(),
             Some("Const")
         );
+        assert_eq!(
+            GainModel::SmallSignalGain(SmallSignalGain::default())
+                .active_name()
+                .as_deref(),
+            Some("SmallSignalGain")
+        );
     }
-    /// Neither model shipped so far reads the medium's state - a constant factor is constant. The
-    /// moment a stage does read it (`SmallSignalGain`), this is what makes its pump settings
-    /// reachable, and the exhaustive match above is what forces that decision to be made.
+    /// Only the models that actually evaluate an inversion say so, and that answer is what makes
+    /// the pump settings reachable in the first place - the scenario editor offers them exactly
+    /// where this returns `true`. The exhaustive match in `needs_inversion` is what forces every
+    /// further stage to make the decision rather than inherit a silent "no".
     #[test]
-    fn no_model_yet_draws_on_the_inversion() {
-        for variant in GainModel::iter() {
+    fn only_the_models_reading_the_medium_say_so() {
+        assert!(!GainModel::None.needs_inversion());
+        assert!(!GainModel::Const(ConstGain::default()).needs_inversion());
+        assert!(GainModel::SmallSignalGain(SmallSignalGain::default()).needs_inversion());
+        // A model that reads the inversion has to amplify at all, or the pump settings would be
+        // offered for something that then does nothing with them.
+        for variant in GainModel::iter().filter(GainModel::needs_inversion) {
             assert!(
-                !variant.needs_inversion(),
-                "model {variant} claims to read the inversion, but nothing evaluates one yet"
+                variant.is_active(),
+                "model {variant} reads the inversion but does not amplify"
             );
         }
     }
@@ -248,6 +271,10 @@ mod test {
             format!("{}", GainModel::Const(ConstGain::default())),
             "Const"
         );
+        assert_eq!(
+            format!("{}", GainModel::SmallSignalGain(SmallSignalGain::default())),
+            "SmallSignalGain"
+        );
     }
     #[test]
     fn default_from_name_yields_neutral_variants() {
@@ -257,6 +284,15 @@ mod test {
             panic!("expected a Const gain model");
         };
         assert_relative_eq!(const_gain.gain(), 1.0);
+        // A freshly selected `SmallSignalGain` is neutral for a different reason: it amplifies by
+        // whatever the medium holds, and nobody has pumped it yet. Its own parameters must still be
+        // usable rather than neutral - see `SmallSignalGain::emission_cross_section`.
+        let Some(GainModel::SmallSignalGain(model)) =
+            GainModel::default_from_name("SmallSignalGain")
+        else {
+            panic!("expected a small signal gain model");
+        };
+        assert!(model.emission_cross_section().value > 0.0);
         assert_eq!(GainModel::default_from_name("does not exist"), None);
     }
     #[test]
@@ -271,7 +307,15 @@ mod test {
     }
     #[test]
     fn serde_roundtrip() -> OpmResult<()> {
-        for model in [GainModel::None, GainModel::Const(ConstGain::new(3.0)?)] {
+        for model in [
+            GainModel::None,
+            GainModel::Const(ConstGain::new(3.0)?),
+            GainModel::SmallSignalGain(SmallSignalGain::new(
+                crate::square_meter!(3.0e-24),
+                8,
+                (4, 5, 6),
+            )?),
+        ] {
             let serialized =
                 ron::to_string(&model).map_err(|e| OpossumError::Other(e.to_string()))?;
             let deserialized: GainModel =
