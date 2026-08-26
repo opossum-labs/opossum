@@ -73,17 +73,19 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     /// Returns an error if the body cannot be derived from the node's surfaces or if building the
     /// inversion field fails.
     fn prepare_volume(&mut self, strategy: &dyn PropagationStrategy) -> OpmResult<()> {
-        if self.as_volume().is_none() {
+        if let Some(volumetric) = self.as_volume(){
+            let body = volumetric.volume_body()?;
+            let config = strategy.pump_config(self.node_attr().uuid());
+            let gain_model = config.gain_model();
+            let inversion = match gain_model.as_extraction() {
+                Some(model) => model.build_inversion(&body, &config)?,
+                None => None,
+            };
+            self.node_attr_mut().set_runtime_medium(body, inversion);
+        }
+        else {
             return Ok(());
         }
-        let body = self.as_volume().unwrap().volume_body()?;
-        let config = strategy.pump_config(self.node_attr().uuid());
-        let gain_model = config.gain_model();
-        let inversion = match gain_model.as_extraction() {
-            Some(model) => model.build_inversion(&body, &config)?,
-            None => None,
-        };
-        self.node_attr_mut().set_runtime_medium(body, inversion);
         Ok(())
     }
     /// This function is called right after a node has been deserialized (e.g. read from a file). By default, this
