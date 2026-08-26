@@ -3,8 +3,8 @@
 //!
 //! Amplification is not modelled as a dedicated node type. Instead, a document-wide
 //! [`PumpScenario`] maps the uuid of any node with a physical volume (a lens, a wedge, a cylindric
-//! lens, ...) to a [`GainModel`] — see
-//! [`PropagationStrategy::gain_model`](crate::analyzers::propagation_strategy::PropagationStrategy::gain_model).
+//! lens, ...) to a [`PumpConfig`] — see
+//! [`PropagationStrategy::pump_config`](crate::analyzers::propagation_strategy::PropagationStrategy::pump_config).
 //! A node the active scenario does not name, or one mapped to [`GainModel::None`], behaves exactly
 //! like the passive component it is.
 //!
@@ -14,12 +14,14 @@
 pub mod inversion_field;
 pub mod pump_source;
 pub mod scenario;
+pub mod small_signal;
 pub use inversion_field::InversionField;
 pub use pump_source::{
     AnalyticPump, BeerLambertProfile, ConstInversion, LongitudinalProfile, PumpDirection,
     PumpSource, TransversalProfile,
 };
 pub use scenario::{ActiveScenario, PumpConfig, PumpScenario};
+pub use small_signal::SmallSignalGain;
 
 use crate::{
     error::OpmResult,
