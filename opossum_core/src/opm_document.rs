@@ -235,6 +235,20 @@ impl OpmDocument {
         })?;
         Ok(())
     }
+    /// Creates a complete deep copy of the document and all scene nodes.
+    /// 
+    /// # Errors
+    /// 
+    /// This function returns an error if nested components cannot be cloned deeply.
+    pub fn clone_deep(&self) -> OpmResult<Self> {
+        Ok(Self {
+            opm_file_version: self.opm_file_version.clone(),
+            scenery: self.scenery.clone_deep()?,
+            global_conf: Arc::new(Mutex::new(self.global_conf.lock_opm()?.clone())),
+            analyzers: self.analyzers.clone(),
+            embedded_materials: self.embedded_materials.clone(),
+        })
+    }
     /// Generates the RON string content representation of this [`OpmDocument`].
     ///
     /// Internally clones the document to extract embedded materials and replace node
@@ -244,7 +258,7 @@ impl OpmDocument {
     /// Returns an [`OpossumError`] if serialization fails.
     pub fn to_opm_file_string(&self) -> OpmResult<String> {
         // Create a temporary mutable clone for serialization preparation
-        let mut doc_to_serialize = self.clone();
+        let mut doc_to_serialize = self.clone_deep()?;
         doc_to_serialize.prepare_materials_for_serialization()?;
 
         let config = PrettyConfig::new()

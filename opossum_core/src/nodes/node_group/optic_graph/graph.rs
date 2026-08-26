@@ -1,6 +1,7 @@
 use super::{super::port_map::PortMap, serialization::SerializableGraph};
 use crate::{
     core_optics::{OpticRef, SceneryResources},
+    error::OpmResult,
     light::LightFlow,
     prelude::PortType,
 };
@@ -101,6 +102,18 @@ impl OpticGraph {
         for node in self.g.node_weights_mut() {
             node.update_global_config(global_conf.clone());
         }
+    }
+    /// Creates a deep copy of this optical graph where every contained [`OpticRef`]
+    /// is cloned into a new Arc<Mutex<dyn Analyzable>> instance.
+    pub fn clone_deep(&self) -> OpmResult<Self> {
+        let mut new_graph = self.clone();
+
+        // Deep-clone all node weights inside petgraph::DiGraph
+        for node_ref in new_graph.g.node_weights_mut() {
+            *node_ref = node_ref.clone_deep()?;
+        }
+
+        Ok(new_graph)
     }
 }
 #[cfg(test)]
