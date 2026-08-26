@@ -260,6 +260,19 @@ impl From<&Spectrum> for AbsorptionModel {
     }
 }
 
+// In opossum_core::absorption::absorption_model:
+impl From<AbsLBConst> for AbsorptionModel {
+    fn from(model: AbsLBConst) -> Self {
+        Self::LambertBeerConstant(model)
+    }
+}
+
+impl From<&AbsLBConst> for AbsorptionModel {
+    fn from(model: &AbsLBConst) -> Self {
+        Self::LambertBeerConstant(*model)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
