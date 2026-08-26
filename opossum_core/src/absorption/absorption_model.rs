@@ -1,20 +1,25 @@
 //! Module for optical absorption models in `opossum_core`.
 
 use crate::{
-    absorption::{absorption_constant::AbsConst, absorption_lb_constant::AbsLBConst}, error::{OpmResult, OpossumError}, generic_validators::{AllFinite, AllPositive}, light::Spectrum, validated, validated_type,
+    absorption::{
+        absorption_catalog_transmittance::AbsCatTrans, absorption_constant::AbsConst,
+        absorption_lb_constant::AbsLBConst,
+    },
+    error::{OpmResult, OpossumError},
+    light::Spectrum,
+    utils::default_from_name::DefaultFromName,
 };
 use serde::{Deserialize, Serialize};
+use std::{f64::consts::PI, fmt::Display};
 use strum::EnumIter;
-use std::f64::consts::PI;
 use uom::si::{
     f64::{Length, LinearNumberDensity},
     length::meter,
     linear_number_density::per_meter,
 };
 
-type ValidatedTransmission = validated_type!(f64, AllFinite && AllPositive);
 /// Defines the absorption model for an optical material.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)] //, EnumIter)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, EnumIter)]
 pub enum AbsorptionModel {
     /// No absorption (perfectly transparent material).
     #[default]
@@ -33,12 +38,7 @@ pub enum AbsorptionModel {
 
     /// Tabulated internal transmittance from glass catalogs.
     /// Provides transmittances at specific wavelengths for a given reference thickness.
-    CatalogTransmittance {
-        /// The reference thickness for the given transmittance data.
-        reference_thickness: validated_type!(Length, AllFinite && AllPositive),
-        /// Tabulated wavelength-transmittance pairs.
-        data: Vec<(Length, ValidatedTransmission)>,
-    },
+    CatalogTransmittance(AbsCatTrans),
 
     /// Constant extinction coefficient `k` (imaginary part of complex refractive index n + i*k).
     /// The absorption coefficient is calculated via alpha(lambda) = 4 * PI * k / lambda.
@@ -51,7 +51,7 @@ impl AbsorptionModel {
     /// # Errors
     /// Returns an error if `factor` is non-positive or non-finite.
     pub fn new_constant_attenuation(factor: f64) -> OpmResult<Self> {
-        let abs_const=AbsConst::new(factor)?;
+        let abs_const = AbsConst::new(factor)?;
         Ok(Self::ConstantAttenuation(abs_const))
     }
 
@@ -72,18 +72,9 @@ impl AbsorptionModel {
         reference_thickness: Length,
         raw_data: Vec<(Length, f64)>,
     ) -> OpmResult<Self> {
-        let validated_thickness = validated!(reference_thickness, AllFinite && AllPositive)?;
-        let mut validated_data = Vec::with_capacity(raw_data.len());
+        let act = AbsCatTrans::new(reference_thickness, raw_data)?;
 
-        for (lambda, t_val) in raw_data {
-            let val = validated!(t_val, AllFinite && AllPositive)?;
-            validated_data.push((lambda, val));
-        }
-
-        Ok(Self::CatalogTransmittance {
-            reference_thickness: validated_thickness,
-            data: validated_data,
-        })
+        Ok(Self::CatalogTransmittance(act))
     }
 
     /// Calculates the effective absorption coefficient alpha for a given wavelength.
@@ -111,12 +102,9 @@ impl AbsorptionModel {
                 })?;
                 Ok(LinearNumberDensity::new::<per_meter>(alpha_val))
             }
-            Self::CatalogTransmittance {
-                reference_thickness,
-                data,
-            } => {
-                let tau_i = interpolate_catalog_data(data, wavelength)?;
-                let d_ref_m = reference_thickness.get().get::<meter>();
+            Self::CatalogTransmittance(abs_cat_trans) => {
+                let tau_i = interpolate_catalog_data(abs_cat_trans.data(), wavelength)?;
+                let d_ref_m = abs_cat_trans.reference_thickness().get::<meter>();
 
                 if tau_i <= 0.0 {
                     Ok(LinearNumberDensity::new::<per_meter>(f64::INFINITY))
@@ -155,12 +143,9 @@ impl AbsorptionModel {
                 let d_m = path_length.get::<meter>();
                 Ok((-alpha_m * d_m).exp())
             }
-            Self::CatalogTransmittance {
-                reference_thickness,
-                data,
-            } => {
-                let tau_i = interpolate_catalog_data(data, wavelength)?;
-                let d_ref_m = reference_thickness.get().get::<meter>();
+            Self::CatalogTransmittance(abs_cat_trans) => {
+                let tau_i = interpolate_catalog_data(abs_cat_trans.data(), wavelength)?;
+                let d_ref_m = abs_cat_trans.reference_thickness().get::<meter>();
                 let d_m = path_length.get::<meter>();
                 let exponent = d_m / d_ref_m;
                 Ok(tau_i.clamp(0.0, 1.0).powf(exponent))
@@ -169,32 +154,31 @@ impl AbsorptionModel {
     }
 }
 
-// impl Display for AbsorptionModel {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match self {
-//             Self::None => write!(f, "None"),
-//             Self::ConstantAttenuation(_) => {
-//                 write!(f, "Constant Attenuation")
-//             }
-//             Self::LambertBeerConstant(_) => {
-//                 write!(f, "Lambert-Beer (Constant)")
-//             }
-//             Self::LambertBeerSpectrum(_) => {
-//                 write!(f, "Lambert-Beer (Spectrum)")
-//             }
-//             Self::CatalogTransmittance(_) => {
-//                 write!(f, "Catalog Transmittance")
-//             }
-//             Self::ExtinctionCoefficient(_) => {
-//                 write!(f, "Extinction Coefficient")
-//             }
-//         }
-//     }
-// }
-type ValidatedTransmittance = validated_type!(f64, AllFinite && AllPositive);
+impl Display for AbsorptionModel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::None => write!(f, "None"),
+            Self::ConstantAttenuation(_) => {
+                write!(f, "Constant Attenuation")
+            }
+            Self::LambertBeerConstant(_) => {
+                write!(f, "Lambert-Beer (Constant)")
+            }
+            Self::LambertBeerSpectrum(_) => {
+                write!(f, "Lambert-Beer (Spectrum)")
+            }
+            Self::CatalogTransmittance(_) => {
+                write!(f, "Catalog Transmittance")
+            }
+            Self::ExtinctionCoefficient(_) => {
+                write!(f, "Extinction Coefficient")
+            }
+        }
+    }
+}
 /// Helper function to linearly interpolate tabulated catalog transmittance data.
 fn interpolate_catalog_data(
-    data: &[(Length, ValidatedTransmittance)],
+    data: &Vec<(Length, f64)>,
     target_wavelength: Length,
 ) -> OpmResult<f64> {
     if data.is_empty() {
@@ -203,7 +187,7 @@ fn interpolate_catalog_data(
         ));
     }
     if data.len() == 1 {
-        return Ok(*data[0].1.get());
+        return Ok(data[0].1);
     }
 
     // let target_nm = target_wavelength;
@@ -217,51 +201,40 @@ fn interpolate_catalog_data(
     }
     // Find the bounding interval for linear interpolation
     for window in data.windows(2) {
-        let (lambda_0, val_0) = (window[0].0, *window[0].1.get());
-        let (lambda_1, val_1) = (window[1].0, *window[1].1.get());
+        let (lambda_0, val_0) = (window[0].0, window[0].1);
+        let (lambda_1, val_1) = (window[1].0, window[1].1);
 
         if (lambda_0..=lambda_1).contains(&target_wavelength) {
             let ratio = (target_wavelength - lambda_0) / (lambda_1 - lambda_0);
             return Ok(ratio.value.mul_add(val_1 - val_0, val_0));
         }
     }
-    Ok(*data.last().unwrap().1.get())
+    Ok(data.last().unwrap().1)
 }
 
-// impl DefaultFromName for AbsorptionModel {
-//     fn default_from_name(name: &str) -> Option<Self> {
-//         match name {
-//             "None" => Some(Self::None),
-//             "ConstantAttenuation" | "Constant Attenuation" => {
-//                 let factor = validated!(1.0_f64, AllFinite && AllPositive).ok()?;
-//                 Some(Self::ConstantAttenuation(factor))
-//             }
-//             "LambertBeerConstant" | "Lambert-Beer (Constant)" => {
-//                 let alpha = validated!(
-//                     LinearNumberDensity::new::<per_meter>(0.0),
-//                     AllFinite && AllPositive
-//                 )
-//                 .ok()?;
-//                 Some(Self::LambertBeerConstant(alpha))
-//             }
-//             "LambertBeerSpectrum" | "Lambert-Beer (Spectrum)" => {
-//                 let spectrum = Spectrum::default();
-//                 Some(Self::LambertBeerSpectrum(spectrum))
-//             }
-//             "ExtinctionCoefficient" | "Extinction Coefficient (k)" => {
-//                 Some(Self::ExtinctionCoefficient(0.0))
-//             }
-//             "CatalogTransmittance" | "Catalog Transmittance" => {
-//                 let ref_thickness = validated!(millimeter!(10.0), AllFinite && AllPositive).ok()?;
-//                 Some(Self::CatalogTransmittance {
-//                     reference_thickness: ref_thickness,
-//                     data: Vec::new(),
-//                 })
-//             }
-//             _ => None,
-//         }
-//     }
-// }
+impl DefaultFromName for AbsorptionModel {
+    fn default_from_name(name: &str) -> Option<Self> {
+        match name {
+            "None" => Some(Self::None),
+            "ConstantAttenuation" | "Constant Attenuation" => {
+                Some(Self::ConstantAttenuation(AbsConst::default()))
+            }
+            "LambertBeerConstant" | "Lambert-Beer (Constant)" => {
+                Some(Self::LambertBeerConstant(AbsLBConst::default()))
+            }
+            "LambertBeerSpectrum" | "Lambert-Beer (Spectrum)" => {
+                Some(Self::LambertBeerSpectrum(Spectrum::default()))
+            }
+            "ExtinctionCoefficient" | "Extinction Coefficient (k)" => {
+                Some(Self::ExtinctionCoefficient(0.0))
+            }
+            "CatalogTransmittance" | "Catalog Transmittance" => {
+                Some(Self::CatalogTransmittance(AbsCatTrans::default()))
+            }
+            _ => None,
+        }
+    }
+}
 
 // --- From Implementations for Infallible Conversions ---
 
