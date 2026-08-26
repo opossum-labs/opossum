@@ -18,7 +18,6 @@ use crate::{
     apertures::{Aperture, ApertureType},
     core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, optic_node_ext::single_io_port_names},
     error::{OpmResult, OpossumError},
-    gain::Medium,
     geometry::body::{CLEAR_APERTURE, SurfaceBoundedBody},
     light::{LightData, LightRays, LightResult, Rays},
     material::{MATERIAL, Material},
@@ -212,19 +211,14 @@ pub trait Volumetric: OpticNode {
         let Some(extraction) = gain_model.as_extraction() else {
             return Ok(());
         };
-        // A model working from its own parameters (a constant factor) reads nothing about the
-        // medium, so it is handed a passive one: resolving the node's ports and laying out a grid
-        // for a value it never touches would be pure waste on every pass.
-        if !extraction.needs_inversion() {
-            return extraction.amplify_rays(&Medium::passive(self.name()), rays_bundle);
-        }
         // Derived once per pass, not per ray: resolving the node's ports copies the whole
         // `OpticPorts` (see `Volumetric::volume_body`), and laying out a grid evaluates the
         // geometry of every cell.
         let body = self.volume_body()?;
-        let field = extraction.pumped_medium(&body, &config)?;
-        let medium = Medium::new(&body, field.as_ref(), self.name());
-        extraction.amplify_rays(&medium, rays_bundle)
+        let inversion = extraction.build_inversion(&body, &config)?;
+        extraction
+            .amplify_rays(&body, inversion.as_ref(), rays_bundle)
+            .map_err(|e| OpossumError::Analysis(format!("node '{}': {e}", self.name())))
     }
     /// Amplify the spectral energy passing through this node's medium.
     ///
@@ -256,15 +250,11 @@ pub trait Volumetric: OpticNode {
         let LightData::Energy(spectrum) = data else {
             return Ok(());
         };
-        // As on the ray path, a model that reads nothing about the medium gets a passive one rather
-        // than a body resolved and a grid laid out for nothing.
-        if !extraction.needs_inversion() {
-            return extraction.amplify_spectrum(&Medium::passive(self.name()), spectrum);
-        }
         let body = self.volume_body()?;
-        let field = extraction.pumped_medium(&body, &config)?;
-        let medium = Medium::new(&body, field.as_ref(), self.name());
-        extraction.amplify_spectrum(&medium, spectrum)
+        let inversion = extraction.build_inversion(&body, &config)?;
+        extraction
+            .amplify_spectrum(&body, inversion.as_ref(), spectrum)
+            .map_err(|e| OpossumError::Analysis(format!("node '{}': {e}", self.name())))
     }
     /// A unified helper function to analyze optical nodes that enclose a volume of material.
     ///

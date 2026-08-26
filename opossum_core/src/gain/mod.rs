@@ -16,7 +16,7 @@ pub mod inversion_field;
 pub mod pump_source;
 pub mod scenario;
 pub mod small_signal;
-pub use extraction::{Extraction, Medium};
+pub use extraction::Extraction;
 pub use inversion_field::InversionField;
 pub use pump_source::{
     AnalyticPump, BeerLambertProfile, ConstInversion, LongitudinalProfile, PumpDirection,
@@ -131,7 +131,7 @@ impl Extraction for ConstGain {
         // all, cannot change it.
         false
     }
-    fn pumped_medium(
+    fn build_inversion(
         &self,
         _body: &dyn Body,
         _config: &PumpConfig,
@@ -139,7 +139,12 @@ impl Extraction for ConstGain {
         // Reading no inversion, this model must not pay for a grid either.
         Ok(None)
     }
-    fn amplify_rays(&self, _medium: &Medium<'_>, rays_bundle: &mut [Rays]) -> OpmResult<()> {
+    fn amplify_rays(
+        &self,
+        _body: &dyn Body,
+        _inversion: Option<&InversionField>,
+        rays_bundle: &mut [Rays],
+    ) -> OpmResult<()> {
         // Independent of the path through the medium by definition, so every ray of the bundle is
         // multiplied by the same factor, once per pass.
         for rays in rays_bundle.iter_mut() {
@@ -147,7 +152,12 @@ impl Extraction for ConstGain {
         }
         Ok(())
     }
-    fn amplify_spectrum(&self, _medium: &Medium<'_>, spectrum: &mut Spectrum) -> OpmResult<()> {
+    fn amplify_spectrum(
+        &self,
+        _body: &dyn Body,
+        _inversion: Option<&InversionField>,
+        spectrum: &mut Spectrum,
+    ) -> OpmResult<()> {
         // Needing no beam path, this model is just as evaluable in an energy flow as in a ray
         // trace - leaving it out would silently report an amplifier chain as passive.
         spectrum.scale_vertical(&self.gain())

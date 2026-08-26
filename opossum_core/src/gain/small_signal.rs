@@ -22,7 +22,7 @@
 //!   nothing that could be overdrawn.
 
 use super::{
-    extraction::{Extraction, Medium},
+    extraction::Extraction,
     inversion_field::{CellIndex, InversionField},
     pump_source::four_level_gain_from_inversion,
     scenario::PumpConfig,
@@ -263,7 +263,8 @@ impl SmallSignalGain {
     ///
     /// # Arguments
     ///
-    /// * `medium` - the active medium being crossed.
+    /// * `body` - the volume the light passes through.
+    /// * `field` - the inversion field prepared for this medium.
     /// * `ray` - the ray crossing it.
     ///
     /// # Returns
@@ -274,11 +275,15 @@ impl SmallSignalGain {
     ///
     /// # Errors
     ///
-    /// This function returns an error if the medium carries no inversion field, if the body cannot
-    /// state the path length, or if the accumulated gain is not a finite factor - an energy that
-    /// overflows is a modelling mistake worth stopping for rather than an infinity to propagate.
-    pub fn gain_factor(&self, medium: &Medium<'_>, ray: &Ray) -> OpmResult<f64> {
-        let body = medium.body()?;
+    /// This function returns an error if the body cannot state the path length, or if the
+    /// accumulated gain is not a finite factor - an energy that overflows is a modelling mistake
+    /// worth stopping for rather than an infinity to propagate.
+    pub fn gain_factor(
+        &self,
+        body: &dyn Body,
+        field: &InversionField,
+        ray: &Ray,
+    ) -> OpmResult<f64> {
         let Some(chord) = body.path_length_inside(ray)? else {
             return Ok(1.0);
         };
@@ -296,7 +301,6 @@ impl SmallSignalGain {
             return Ok(1.0);
         }
         let direction = direction / norm;
-        let field = medium.field()?;
         let steps = self.n_steps();
         let step_width = chord / to_f64(steps);
         let start = ray.position();
@@ -333,9 +337,8 @@ impl SmallSignalGain {
             Ok(factor)
         } else {
             Err(OpossumError::Analysis(format!(
-                "node '{}' would amplify by exp({exponent}) over a path of {} mm through its \
+                "would amplify by exp({exponent}) over a path of {} mm through the \
                  medium, which is not a finite factor",
-                medium.node_name(),
                 chord.get::<uom::si::length::millimeter>()
             )))
         }
@@ -357,7 +360,7 @@ impl Extraction for SmallSignalGain {
     /// [`PumpSource`](super::PumpSource) writes the inversion, this model supplies the σ_e that its
     /// gain coefficient is stated against, and the field that comes out is what
     /// [`gain_factor`](SmallSignalGain::gain_factor) reads. Neither half knows the other.
-    fn pumped_medium(
+    fn build_inversion(
         &self,
         body: &dyn Body,
         config: &PumpConfig,
@@ -368,26 +371,43 @@ impl Extraction for SmallSignalGain {
             .deposit(&mut field, self.emission_cross_section())?;
         Ok(Some(field))
     }
-    fn amplify_rays(&self, medium: &Medium<'_>, rays_bundle: &mut [Rays]) -> OpmResult<()> {
+    fn amplify_rays(
+        &self,
+        body: &dyn Body,
+        inversion: Option<&InversionField>,
+        rays_bundle: &mut [Rays],
+    ) -> OpmResult<()> {
+        // The Option is resolved once per pass rather than per ray: a model that was handed no
+        // field cannot amplify any ray, and that is a caller error worth surfacing immediately.
+        let Some(field) = inversion else {
+            return Err(OpossumError::Analysis(
+                "a small signal model was given no prepared field to read from".into(),
+            ));
+        };
         for rays in rays_bundle.iter_mut() {
             for ray in rays.iter_mut() {
                 // Invalid rays no longer take part in the propagation - the same rule
                 // `Rays::scale_energy` and `Rays::filter_energy` follow.
                 if ray.valid() {
-                    let factor = self.gain_factor(medium, ray)?;
+                    let factor = self.gain_factor(body, field, ray)?;
                     ray.scale_energy(factor)?;
                 }
             }
         }
         Ok(())
     }
-    fn amplify_spectrum(&self, medium: &Medium<'_>, _spectrum: &mut Spectrum) -> OpmResult<()> {
-        Err(OpossumError::Analysis(format!(
-            "node '{}' is configured with a small signal gain, which is integrated along the path a \
-             beam takes through the medium - an energy flow analysis knows no path. Analyze it as a \
-             ray trace, or use a constant gain here.",
-            medium.node_name()
-        )))
+    fn amplify_spectrum(
+        &self,
+        _body: &dyn Body,
+        _inversion: Option<&InversionField>,
+        _spectrum: &mut Spectrum,
+    ) -> OpmResult<()> {
+        Err(OpossumError::Analysis(
+            "a small signal gain is integrated along the path a beam takes through the medium - \
+             an energy flow analysis knows no path. Analyze it as a ray trace, or use a constant \
+             gain here."
+                .into(),
+        ))
     }
 }
 
@@ -459,8 +479,10 @@ mod test {
         config: &PumpConfig,
         ray: &Ray,
     ) -> OpmResult<f64> {
-        let field = model.pumped_medium(body, config)?;
-        model.gain_factor(&Medium::new(body, field.as_ref(), "test head"), ray)
+        let field = model
+            .build_inversion(body, config)?
+            .ok_or_else(|| OpossumError::Other("SmallSignalGain must build a field".into()))?;
+        model.gain_factor(body, &field, ray)
     }
     /// The factor a ray picks up crossing the standard [`test_disk`].
     fn factor_through_disk(
@@ -725,13 +747,12 @@ mod test {
         let body = test_disk()?;
         let model = SmallSignalGain::default();
         let field = model
-            .pumped_medium(&body, &pumped_at(reciprocal_centimeter!(0.5))?)?
+            .build_inversion(&body, &pumped_at(reciprocal_centimeter!(0.5))?)?
             .ok_or_else(|| OpossumError::Other("this model must pump the medium".into()))?;
         let untouched = field.clone();
-        let medium = Medium::new(&body, Some(&field), "test head");
         let ray = ray_at(0.0, 0.0)?;
-        let first = model.gain_factor(&medium, &ray)?;
-        let second = model.gain_factor(&medium, &ray)?;
+        let first = model.gain_factor(&body, &field, &ray)?;
+        let second = model.gain_factor(&body, &field, &ray)?;
         assert_eq!(field, untouched);
         assert_relative_eq!(first, second);
         Ok(())
@@ -768,15 +789,12 @@ mod test {
         Ok(())
     }
     #[test]
-    fn a_model_reading_an_unpumped_medium_says_so() -> OpmResult<()> {
-        // The one inconsistency `Medium::field` guards against: a model that claims to read the
-        // inversion but was handed no field. Not reachable through the volume machinery, which
-        // always asks the very same model for the field it is about to read - but a clear error
-        // beats a silent 1.0 if a future caller gets it wrong.
+    fn a_small_signal_model_without_a_prepared_field_says_so() -> OpmResult<()> {
+        // Not reachable through the volume machinery, which always hands the model the field it
+        // just built - but a clear error beats a silent 1.0 if a future caller gets it wrong.
         let body = test_disk()?;
         let model = SmallSignalGain::default();
-        let medium = Medium::new(&body, None, "test head");
-        assert!(model.gain_factor(&medium, &ray_at(0.0, 0.0)?).is_err());
+        assert!(model.amplify_rays(&body, None, &mut []).is_err());
         Ok(())
     }
     #[test]
