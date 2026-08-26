@@ -58,6 +58,10 @@ impl RuntimeMedium {
     pub fn inversion(&self) -> Option<&InversionField> {
         self.inversion.as_ref()
     }
+    /// Set the inversion field of this [`RuntimeMedium`]
+    pub fn set_inversion(&mut self, inversion: Option<InversionField>){
+        self.inversion = inversion;
+    }
 }
 
 fn deserialize_name<'de, D>(deserializer: D) -> Result<String, D::Error>
@@ -340,12 +344,20 @@ impl NodeAttr {
     ) {
         self.runtime_medium = Some(RuntimeMedium { body, inversion });
     }
+    pub fn set_runtime_inversion(
+        &mut self,
+        inversion: Option<InversionField>,
+    ) {
+        self.runtime_medium.as_mut().map(|medium| medium.set_inversion(inversion));
+    }
     /// Clear the prepared medium for this node.
     ///
     /// Called by [`OpticNode::reset_data`](crate::core_optics::OpticNode::reset_data) to discard the
     /// state between analysis runs.
-    pub fn clear_runtime_medium(&mut self) {
-        self.runtime_medium = None;
+    pub fn clear_runtime_inversion(&mut self) {
+        if let Some(medium) = self.runtime_medium.as_mut(){
+            medium.set_inversion(None);
+        }
     }
     /// Returns a reference to the uuid of this [`NodeAttr`].
     #[must_use]
@@ -430,12 +442,13 @@ mod test {
         assert!(NodeAttr::new("test").runtime_medium().is_none());
     }
     #[test]
-    fn set_and_clear_runtime_medium() -> OpmResult<()> {
+    fn set_and_clear_runtime_inversion() -> OpmResult<()> {
         let mut attr = NodeAttr::new("test");
         attr.set_runtime_medium(test_body()?, None);
         assert!(attr.runtime_medium().is_some());
-        attr.clear_runtime_medium();
-        assert!(attr.runtime_medium().is_none());
+        attr.clear_runtime_inversion();
+        assert!(attr.runtime_medium().is_some());
+        assert!(attr.runtime_medium().unwrap().inversion().is_none());
         Ok(())
     }
     #[test]

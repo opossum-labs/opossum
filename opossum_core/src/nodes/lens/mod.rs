@@ -103,6 +103,7 @@ impl Default for Lens {
         create_volume_properties(&mut node_attr).unwrap();
         let mut lens = Self { node_attr };
         lens.update_surfaces().unwrap();
+        lens.init_runtime_medium().unwrap();
         lens
     }
 }
@@ -134,6 +135,7 @@ impl Lens {
         lens.node_attr
             .set_property(MATERIAL, material.into().into())?;
         lens.update_surfaces()?;
+        lens.init_runtime_medium()?;
         Ok(lens)
     }
 

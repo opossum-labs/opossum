@@ -101,6 +101,7 @@ impl Default for Wedge {
         create_volume_properties(&mut node_attr).unwrap();
         let mut wedge = Self { node_attr };
         wedge.update_surfaces().unwrap();
+        wedge.init_runtime_medium().unwrap();
         wedge
     }
 }
@@ -129,6 +130,7 @@ impl Wedge {
             .set_property(MATERIAL, material.into().into())?;
         wedge.node_attr.set_property("wedge", wedge_angle.into())?;
         wedge.update_surfaces()?;
+        wedge.init_runtime_medium()?;
         Ok(wedge)
     }
 }

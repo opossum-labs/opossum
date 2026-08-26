@@ -155,6 +155,9 @@ pub trait OpticNodeExt {
         optic_surf_name: &str,
         refri_after_surf: Option<RefractiveIndexType>,
     ) -> OpmResult<LightResult>;
+
+    /// Set up this node's runtime medium
+    fn init_runtime_medium(&mut self)-> OpmResult<()> ;
 }
 
 /// Return the names of the one input and the one output port of `node`.
@@ -211,6 +214,15 @@ pub(crate) fn single_io_port_names<T: ?Sized + OpticNode>(node: &T) -> OpmResult
 }
 
 impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNodeExt for T {
+
+    fn init_runtime_medium(&mut self)-> OpmResult<()> {
+        if let Some(volumetric) = self.as_volume(){
+            let body = volumetric.volume_body()?;
+            self.node_attr_mut().set_runtime_medium(body, None);
+        }
+        Ok(())
+    }
+
     fn effective_node_iso(&self) -> Option<Isometry> {
         self.isometry().as_ref().and_then(|iso| {
             self.node_attr()

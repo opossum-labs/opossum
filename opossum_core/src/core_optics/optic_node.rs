@@ -5,7 +5,7 @@ use nalgebra::Point3;
 use uom::si::f64::{Angle, Length};
 use uuid::Uuid;
 
-use crate::core_optics::{NodeAttrExt, OpticPorts};
+use crate::core_optics::{NodeAttrExt, OpticNodeExt, OpticPorts};
 use crate::{
     analyzers::{Analyzable, propagation_strategy::PropagationStrategy},
     core_optics::{PortType, SceneryResources, node_attr::HasNodeAttr, volumetric::Volumetric},
@@ -55,7 +55,7 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     fn reset_data(&mut self) {
         self.set_light_data(None);
         self.reset_optic_surfaces();
-        self.node_attr_mut().clear_runtime_medium();
+        self.node_attr_mut().clear_runtime_inversion();
     }
     /// Prepare this node's medium before the first ray is traced (Phase A).
     ///
@@ -73,7 +73,17 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     /// Returns an error if the body cannot be derived from the node's surfaces or if building the
     /// inversion field fails.
     fn prepare_volume(&mut self, strategy: &dyn PropagationStrategy) -> OpmResult<()> {
-        if let Some(volumetric) = self.as_volume(){
+        let node_attr = self.node_attr_mut();
+        if let Some(medium) = node_attr.runtime_medium(){
+            let config = strategy.pump_config(node_attr.uuid());
+            let gain_model = config.gain_model();
+            let inversion = match gain_model.as_extraction() {
+                Some(model) => model.build_inversion(medium.body(), &config)?,
+                None => None,
+            };
+            node_attr.set_runtime_inversion(inversion);
+        }
+        else if let Some(volumetric) = self.as_volume(){
             let body = volumetric.volume_body()?;
             let config = strategy.pump_config(self.node_attr().uuid());
             let gain_model = config.gain_model();
@@ -88,6 +98,7 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
         }
         Ok(())
     }
+
     /// This function is called right after a node has been deserialized (e.g. read from a file). By default, this
     /// function does nothing and returns no error.
     ///
@@ -98,6 +109,7 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     /// This function will return an error if the overwritten function generates an error.
     fn after_deserialization_hook(&mut self) -> OpmResult<()> {
         self.update_surfaces()?;
+        self.init_runtime_medium()?;
         Ok(())
     }
     /// Updates the surfaces of this node after deserialization
