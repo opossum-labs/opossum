@@ -11,14 +11,17 @@ impl Default for ValidatedLBConst {
 }
 
 #[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq, Copy, EnsureValidated)]
-pub struct LamberBeerConstant{
+pub struct AbsLBConst{
   absorption_coefficient: ValidatedLBConst
 }
 
-impl LamberBeerConstant {
+impl AbsLBConst {
   pub fn new(absoprtion: LinearNumberDensity) -> OpmResult<Self> {
-    let mut lbc=LamberBeerConstant::default();
+    let mut lbc=Self::default();
     lbc.absorption_coefficient.set(absoprtion)?;
     Ok(lbc)
+  }
+  pub fn alpha(&self) -> LinearNumberDensity {
+    *self.absorption_coefficient.get()
   }
 }

@@ -17,7 +17,7 @@ mod numlike;
 mod only_one_zero;
 mod pass;
 mod path_valid;
-pub mod positive;
+mod positive;
 mod second_larger;
 mod static_in_range;
 

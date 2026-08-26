@@ -19,7 +19,7 @@ impl StaticBounds<f64> for AbsBounds {
     }
 }
 
-type ValidatedAbsConst = validated_type!(f64, AllFinite && StaticInRange::<f64, AbsBounds>);
+pub type ValidatedAbsConst = validated_type!(f64, AllFinite && StaticInRange::<f64, AbsBounds>);
 
 impl Default for ValidatedAbsConst {
     fn default() -> Self {

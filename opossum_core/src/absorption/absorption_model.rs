@@ -1,13 +1,10 @@
 //! Module for optical absorption models in `opossum_core`.
 
 use crate::{
-    absorption::absorption_constant::AbsConst,
-    error::{OpmResult, OpossumError},
-    generic_validators::{AllFinite, AllPositive},
-    light::Spectrum,
-    validated, validated_type,
+    absorption::{absorption_constant::AbsConst, absorption_lb_constant::AbsLBConst}, error::{OpmResult, OpossumError}, generic_validators::{AllFinite, AllPositive}, light::Spectrum, validated, validated_type,
 };
 use serde::{Deserialize, Serialize};
+use strum::EnumIter;
 use std::f64::consts::PI;
 use uom::si::{
     f64::{Length, LinearNumberDensity},
@@ -17,7 +14,7 @@ use uom::si::{
 
 type ValidatedTransmission = validated_type!(f64, AllFinite && AllPositive);
 /// Defines the absorption model for an optical material.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)] //, EnumIter)]
 pub enum AbsorptionModel {
     /// No absorption (perfectly transparent material).
     #[default]
@@ -28,8 +25,7 @@ pub enum AbsorptionModel {
     ConstantAttenuation(AbsConst),
 
     /// Wavelength-independent absorption coefficient for the Lambert-Beer law.
-    /// Represents the coefficient alpha (e.g., in 1/m).
-    LambertBeerConstant(validated_type!(LinearNumberDensity, AllFinite && AllPositive)),
+    LambertBeerConstant(AbsLBConst),
 
     /// Wavelength-dependent absorption coefficient (alpha) for the Lambert-Beer law.
     /// Uses a spectrum mapping wavelengths to absorption coefficients (in 1/m).
@@ -64,8 +60,8 @@ impl AbsorptionModel {
     /// # Errors
     /// Returns an error if `alpha` is non-positive or non-finite.
     pub fn new_lambert_beer_constant(alpha: LinearNumberDensity) -> OpmResult<Self> {
-        let validated_alpha = validated!(alpha, AllFinite && AllPositive)?;
-        Ok(Self::LambertBeerConstant(validated_alpha))
+        let lbc = AbsLBConst::new(alpha)?;
+        Ok(Self::LambertBeerConstant(lbc))
     }
 
     /// Creates a catalog internal transmittance model with validation.
@@ -105,7 +101,7 @@ impl AbsorptionModel {
             Self::None | Self::ConstantAttenuation(_) => {
                 Ok(LinearNumberDensity::new::<per_meter>(0.0))
             }
-            Self::LambertBeerConstant(alpha) => Ok(*alpha.get()),
+            Self::LambertBeerConstant(alpha) => Ok(alpha.alpha()),
             Self::LambertBeerSpectrum(spectrum) => {
                 let alpha_val = spectrum.get_value(&wavelength).ok_or_else(|| {
                     OpossumError::Spectrum(format!(
@@ -278,12 +274,6 @@ impl From<Spectrum> for AbsorptionModel {
 impl From<&Spectrum> for AbsorptionModel {
     fn from(spectrum: &Spectrum) -> Self {
         Self::LambertBeerSpectrum(spectrum.clone())
-    }
-}
-
-impl From<validated_type!(LinearNumberDensity, AllFinite && AllPositive)> for AbsorptionModel {
-    fn from(alpha: validated_type!(LinearNumberDensity, AllFinite && AllPositive)) -> Self {
-        Self::LambertBeerConstant(alpha)
     }
 }
 
@@ -474,17 +464,6 @@ mod tests {
             AbsorptionModel::LambertBeerSpectrum(spec.clone())
         );
         assert_eq!(from_borrowed, AbsorptionModel::LambertBeerSpectrum(spec));
-
-        // Validated LinearNumberDensity conversion
-        let val_density = validated!(
-            LinearNumberDensity::new::<per_meter>(15.0),
-            AllFinite && AllPositive
-        )?;
-        let from_density: AbsorptionModel = val_density.into();
-        assert_eq!(
-            from_density,
-            AbsorptionModel::LambertBeerConstant(val_density)
-        );
         Ok(())
     }
 }
