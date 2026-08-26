@@ -59,6 +59,14 @@ impl OpticRef {
             .unwrap()
             .set_global_conf(global_conf);
     }
+    /// Creates a deep copy of this optic reference with a fresh, independent node instance.
+    pub fn clone_deep(&self) -> OpmResult<Self> {
+        let guard = self.optical_ref.lock_opm()?;
+        let cloned_node = guard.clone_analyzable();
+        Ok(Self {
+            optical_ref: cloned_node,
+        })
+    }
 }
 impl Debug for OpticRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

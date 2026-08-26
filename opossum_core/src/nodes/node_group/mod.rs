@@ -45,6 +45,7 @@ inventory::submit! {
     NodeRegistration::new::<NodeGroup>("group", "group node containing other nodes or groups")
 }
 #[derive(OpmNode, Debug, Clone, Serialize, Deserialize)]
+#[manual_analyzable]
 /// The basic building block of an optical system. It represents a group of other optical
 /// nodes ([`OpticNode`]s) arranged in a (sub)graph.
 ///
@@ -88,6 +89,14 @@ pub struct NodeGroup {
     #[serde(skip)]
     accumulated_rays: Vec<HashMap<Uuid, Rays>>,
 }
+impl Analyzable for NodeGroup {
+    fn clone_analyzable(&self) -> Arc<Mutex<dyn Analyzable>> {
+        Arc::new(Mutex::new(
+            self.clone_deep()
+                .expect("Failed to deep-clone NodeGroup instance"),
+        ))
+    }
+}
 impl Default for NodeGroup {
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("group");
@@ -117,7 +126,12 @@ impl NodeGroup {
         group.node_attr.set_name(name);
         group
     }
-
+    /// Creates a deep copy of this [`NodeGroup`] and all contained nodes.
+    pub fn clone_deep(&self) -> OpmResult<Self> {
+        let mut new_group = self.clone();
+        new_group.graph = self.graph.clone_deep()?;
+        Ok(new_group)
+    }
     /// Add a given [`OpticNode`] to the (sub-)graph of this [`NodeGroup`].
     ///
     /// This command just adds an [`OpticNode`] but does not connect it to existing nodes in the (sub-)graph. The given node is
