@@ -236,7 +236,17 @@ impl DefaultFromName for AbsorptionModel {
     }
 }
 
-// --- From Implementations for Infallible Conversions ---
+impl From<AbsConst> for AbsorptionModel {
+    fn from(abs_const: AbsConst) -> Self {
+        Self::ConstantAttenuation(abs_const)
+    }
+}
+
+impl From<&AbsConst> for AbsorptionModel {
+    fn from(abs_const: &AbsConst) -> Self {
+        Self::ConstantAttenuation(*abs_const)
+    }
+}
 
 impl From<Spectrum> for AbsorptionModel {
     fn from(spectrum: Spectrum) -> Self {
