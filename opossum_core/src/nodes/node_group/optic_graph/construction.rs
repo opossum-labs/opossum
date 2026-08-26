@@ -69,7 +69,6 @@ impl OpticGraph {
         }
         Ok(self.g.add_node(node))
     }
-
     /// Recursively cleans up connections (edges) and port mappings that refer to
     /// ports that no longer exist on their target or source nodes.
     fn cleanup_orphan_connections_and_mappings(&mut self) -> OpmResult<()> {

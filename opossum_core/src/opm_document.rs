@@ -235,6 +235,20 @@ impl OpmDocument {
         })?;
         Ok(())
     }
+    /// Creates a complete deep copy of the document and all scene nodes.
+    /// 
+    /// # Errors
+    /// 
+    /// This function returns an error if nested components cannot be cloned deeply.
+    pub fn clone_deep(&self) -> OpmResult<Self> {
+        Ok(Self {
+            opm_file_version: self.opm_file_version.clone(),
+            scenery: self.scenery.clone_deep()?,
+            global_conf: Arc::new(Mutex::new(self.global_conf.lock_opm()?.clone())),
+            analyzers: self.analyzers.clone(),
+            embedded_materials: self.embedded_materials.clone(),
+        })
+    }
     /// Generates the RON string content representation of this [`OpmDocument`].
     ///
     /// Internally clones the document to extract embedded materials and replace node
@@ -244,7 +258,7 @@ impl OpmDocument {
     /// Returns an [`OpossumError`] if serialization fails.
     pub fn to_opm_file_string(&self) -> OpmResult<String> {
         // Create a temporary mutable clone for serialization preparation
-        let mut doc_to_serialize = self.clone();
+        let mut doc_to_serialize = self.clone_deep()?;
         doc_to_serialize.prepare_materials_for_serialization()?;
 
         let config = PrettyConfig::new()
@@ -1017,5 +1031,47 @@ mod test {
         let new_position = Point2::new(3.0, 4.0);
         at.set_gui_position(Some(new_position));
         assert_eq!(at.gui_position(), Some(new_position))
+    }
+    #[test]
+    fn test_repeated_serialization_preserves_embedded_materials() -> OpmResult<()> {
+        let material_id = Uuid::new_v4();
+        let const_refr = RefrIndexConst::new(1.5)?;
+        let material = Material::new_for_test(material_id, 1, "N-BK7 Test", const_refr.into());
+
+        let mut scenery = NodeGroup::default();
+        let lens = Lens::new(
+            "Test Lens",
+            millimeter!(100.0),
+            millimeter!(-100.0),
+            millimeter!(10.0),
+            material,
+        )?;
+        scenery.add_node(lens)?;
+
+        let doc = OpmDocument::new(scenery);
+
+        // First serialization
+        let first_ron = doc.to_opm_file_string()?;
+        assert!(
+            first_ron.contains("embedded_materials:"),
+            "First serialization must contain embedded_materials"
+        );
+
+        // Second serialization on the same in-memory document instance
+        let second_ron = doc.to_opm_file_string()?;
+        assert!(
+            second_ron.contains("embedded_materials:"),
+            "Second serialization must still contain embedded_materials"
+        );
+
+        // Ensure the second serialized document can be reloaded without missing material errors
+        let reloaded_doc = OpmDocument::from_string(&second_ron)?;
+        assert_eq!(
+            reloaded_doc.embedded_materials.len(),
+            1,
+            "Reloaded document must contain the resolved material"
+        );
+
+        Ok(())
     }
 }
