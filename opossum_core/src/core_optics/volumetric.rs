@@ -1053,4 +1053,75 @@ mod test {
         }
         Ok(())
     }
+    /// Phase A: every analyzer installs a prepared medium before the first ray is traced.
+    ///
+    /// The medium is installed on the node's `NodeAttr` slot rather than passed per call, so an
+    /// amplifier that did not get its medium prepared before the first ray would find nothing to
+    /// read from. This test pins down that all three analyzers honour the contract: ray trace,
+    /// energy flow, and ghost focus each call `prepare_volume` on every volume node they traverse.
+    #[test]
+    fn every_analyzer_prepares_the_media_it_traverses() -> OpmResult<()> {
+        let make_model = || -> OpmResult<(NodeGroup, Uuid, Uuid)> {
+            let mut model = NodeGroup::default();
+            let source = model.add_node(SourcePort::default())?;
+            let head = model.add_node(amplifier_head()?)?;
+            let screen = model.add_node(SpotDiagram::default())?;
+            model.connect_nodes(source, "output_1", head, "input_1", millimeter!(30.0))?;
+            model.connect_nodes(head, "output_1", screen, "input_1", millimeter!(30.0))?;
+            Ok((model, source, head))
+        };
+        let medium_is_prepared = |model: &NodeGroup, head: Uuid| -> OpmResult<bool> {
+            let head_ref = model.graph().node(head)?;
+            let head_node = head_ref.optical_ref.lock_opm()?;
+            Ok(head_node.node_attr().runtime_medium().is_some())
+        };
+
+        // Ray trace
+        let (mut model, source, head) = make_model()?;
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 1)?,
+        );
+        config.set_active_pump_scenario(Some(scenario_with_small_signal(head)?));
+        RayTracingAnalyzer::new(config).analyze(&mut model)?;
+        assert!(
+            medium_is_prepared(&model, head)?,
+            "ray trace did not prepare the medium"
+        );
+
+        // Energy flow — uses ConstGain because the energy flow analysis has no path length and
+        // refuses path-dependent models; the important thing is that prepare_volume is called.
+        let (mut model, source, head) = make_model()?;
+        let mut config = EnergyConfig::default();
+        config.map_source(
+            source,
+            EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
+                vec![(nanometer!(1053.0), joule!(1.0))],
+                nanometer!(1.0),
+            )?),
+        );
+        config.set_active_pump_scenario(Some(scenario_with_gain(head, 2.0)?));
+        EnergyAnalyzer::new(config).analyze(&mut model)?;
+        assert!(
+            medium_is_prepared(&model, head)?,
+            "energy flow did not prepare the medium"
+        );
+
+        // Ghost focus
+        let (mut model, source, head) = make_model()?;
+        let mut config = GhostFocusConfig::default();
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 1)?,
+        );
+        config.set_active_pump_scenario(Some(scenario_with_small_signal(head)?));
+        GhostFocusAnalyzer::new(config).analyze(&mut model)?;
+        assert!(
+            medium_is_prepared(&model, head)?,
+            "ghost focus did not prepare the medium"
+        );
+
+        Ok(())
+    }
 }

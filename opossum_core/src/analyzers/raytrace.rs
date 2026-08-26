@@ -195,6 +195,7 @@ impl Analyzer for RayTracingAnalyzer {
         info!("Calculate node positions of scenery{scenery_name}.");
         AnalysisRayTrace::calc_node_positions(scenery, LightResult::default(), &self.config)?;
         scenery.reset_data();
+        scenery.prepare_volume(&self.config)?;
         info!("Performing ray tracing analysis of scenery{scenery_name}.");
         AnalysisRayTrace::analyze(scenery, LightResult::default(), &self.config)?;
         Ok(())

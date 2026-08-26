@@ -143,6 +143,7 @@ impl Analyzer for GhostFocusAnalyzer {
         let mut raytrace_config = RayTraceConfig::default();
         raytrace_config.set_source_map(self.config.source_map().clone());
         AnalysisRayTrace::calc_node_positions(scenery, LightResult::default(), &raytrace_config)?;
+        scenery.prepare_volume(self.config())?;
         info!(
             "Performing ghost focus analysis of scenery{scenery_name} up to {} ray bounces.",
             self.config.max_bounces()

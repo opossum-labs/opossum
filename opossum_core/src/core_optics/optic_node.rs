@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::core_optics::{NodeAttrExt, OpticPorts};
 use crate::{
-    analyzers::Analyzable,
+    analyzers::{Analyzable, propagation_strategy::PropagationStrategy},
     core_optics::{PortType, SceneryResources, node_attr::HasNodeAttr, volumetric::Volumetric},
     error::OpmResult,
     light::LightData,
@@ -55,6 +55,36 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     fn reset_data(&mut self) {
         self.set_light_data(None);
         self.reset_optic_surfaces();
+        self.node_attr_mut().clear_runtime_medium();
+    }
+    /// Prepare this node's medium before the first ray is traced (Phase A).
+    ///
+    /// Derives the node's [`SurfaceBoundedBody`](crate::geometry::body::SurfaceBoundedBody) and,
+    /// if the gain model reads the inversion, builds the [`InversionField`](crate::gain::InversionField)
+    /// from the pump configuration. Both are stored in [`NodeAttr`]'s `runtime_medium` slot so
+    /// that [`Volumetric::amplify_inside`](crate::core_optics::volumetric::Volumetric::amplify_inside)
+    /// (Phase B) can read them without rebuilding per pass.
+    ///
+    /// Non-volume nodes return immediately. [`NodeGroup`](crate::nodes::NodeGroup) overrides this to
+    /// recurse into every child node.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the body cannot be derived from the node's surfaces or if building the
+    /// inversion field fails.
+    fn prepare_volume(&mut self, strategy: &dyn PropagationStrategy) -> OpmResult<()> {
+        if self.as_volume().is_none() {
+            return Ok(());
+        }
+        let body = self.as_volume().unwrap().volume_body()?;
+        let config = strategy.pump_config(self.node_attr().uuid());
+        let gain_model = config.gain_model();
+        let inversion = match gain_model.as_extraction() {
+            Some(model) => model.build_inversion(&body, &config)?,
+            None => None,
+        };
+        self.node_attr_mut().set_runtime_medium(body, inversion);
+        Ok(())
     }
     /// This function is called right after a node has been deserialized (e.g. read from a file). By default, this
     /// function does nothing and returns no error.

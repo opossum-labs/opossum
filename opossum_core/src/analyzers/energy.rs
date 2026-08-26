@@ -106,6 +106,7 @@ impl Analyzer for EnergyAnalyzer {
         } else {
             format!(" '{}'", scenery.node_attr().name())
         };
+        scenery.prepare_volume(&self.config)?;
         info!("Performing energy flow analysis of scenery{scenery_name}.");
         AnalysisEnergy::analyze(scenery, LightResult::default(), &self.config)?;
         Ok(())

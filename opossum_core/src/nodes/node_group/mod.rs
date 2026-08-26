@@ -9,6 +9,7 @@ mod analysis_raytrace;
 mod optic_graph;
 pub mod port_map;
 use crate::{
+    analyzers::propagation_strategy::PropagationStrategy,
     core_optics::{
         NodeAttr, NodeAttrExt, OpticNode, OpticPorts, OpticRef, PortType, SceneryResources,
         node_attr::HasNodeAttr,
@@ -997,6 +998,12 @@ impl OpticNode for NodeGroup {
             }
         }
         self.accumulated_rays = Vec::<HashMap<Uuid, Rays>>::new();
+    }
+    fn prepare_volume(&mut self, strategy: &dyn PropagationStrategy) -> OpmResult<()> {
+        for node in self.graph.nodes() {
+            node.optical_ref.lock_opm()?.prepare_volume(strategy)?;
+        }
+        Ok(())
     }
     // fn get_optic_surface_mut(&mut self, _surf_name: &str) -> Option<&mut OpticSurface> {
     //     None

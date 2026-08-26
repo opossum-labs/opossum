@@ -14,6 +14,8 @@ use uuid::Uuid;
 use crate::{
     core_optics::{OpticPorts, SceneryResources, optic_surface::OpticSurface},
     error::{OpmResult, OpossumError},
+    gain::InversionField,
+    geometry::body::SurfaceBoundedBody,
     properties::{Properties, Proptype, validator::Validator},
     utils::{file_utils::sanitize_filename, geom_transformation::Isometry},
 };
@@ -35,6 +37,29 @@ impl RuntimeSurfaces {
         self.inputs.iter().chain(self.outputs.iter())
     }
 }
+/// The volume state a node was prepared with for the current analysis run.
+///
+/// The counterpart of [`RuntimeSurfaces`] for what lies *between* the surfaces. Built once per node
+/// per run by [`OpticNode::prepare_volume`](crate::core_optics::OpticNode::prepare_volume) and
+/// cleared by [`OpticNode::reset_data`](crate::core_optics::OpticNode::reset_data).
+#[derive(Debug, Clone)]
+pub struct RuntimeMedium {
+    body: SurfaceBoundedBody,
+    inversion: Option<InversionField>,
+}
+impl RuntimeMedium {
+    /// Return the volume body this node was prepared with.
+    #[must_use]
+    pub fn body(&self) -> &dyn crate::geometry::body::Body {
+        &self.body
+    }
+    /// Return the inversion field, if the model built one.
+    #[must_use]
+    pub fn inversion(&self) -> Option<&InversionField> {
+        self.inversion.as_ref()
+    }
+}
+
 fn deserialize_name<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -58,6 +83,8 @@ pub struct NodeAttr {
     ports: OpticPorts,
     #[serde(skip)]
     runtime_surfaces: RuntimeSurfaces,
+    #[serde(skip)]
+    runtime_medium: Option<RuntimeMedium>,
     uuid: Uuid,
     #[serde(default, skip_serializing_if = "Properties::is_empty")]
     props: Properties,
@@ -103,6 +130,7 @@ impl NodeAttr {
             props: Properties::default(),
             ports: OpticPorts::default(),
             runtime_surfaces: RuntimeSurfaces::default(),
+            runtime_medium: None,
             global_conf: None,
             isometry: None,
             inverted: false,
@@ -290,6 +318,35 @@ impl NodeAttr {
     pub const fn runtime_surfaces(&self) -> &RuntimeSurfaces {
         &self.runtime_surfaces
     }
+    /// Return the prepared medium for this node, if any.
+    ///
+    /// Set by [`OpticNode::prepare_volume`](crate::core_optics::OpticNode::prepare_volume), cleared
+    /// by [`OpticNode::reset_data`](crate::core_optics::OpticNode::reset_data). `None` means the
+    /// node has not been prepared yet or has been reset.
+    #[must_use]
+    pub const fn runtime_medium(&self) -> Option<&RuntimeMedium> {
+        self.runtime_medium.as_ref()
+    }
+    /// Store the prepared medium for this node.
+    ///
+    /// # Arguments
+    ///
+    /// * `body` - the volume the light passes through.
+    /// * `inversion` - the inversion field the model built, or `None` if it built none.
+    pub fn set_runtime_medium(
+        &mut self,
+        body: SurfaceBoundedBody,
+        inversion: Option<InversionField>,
+    ) {
+        self.runtime_medium = Some(RuntimeMedium { body, inversion });
+    }
+    /// Clear the prepared medium for this node.
+    ///
+    /// Called by [`OpticNode::reset_data`](crate::core_optics::OpticNode::reset_data) to discard the
+    /// state between analysis runs.
+    pub fn clear_runtime_medium(&mut self) {
+        self.runtime_medium = None;
+    }
     /// Returns a reference to the uuid of this [`NodeAttr`].
     #[must_use]
     pub const fn uuid(&self) -> Uuid {
@@ -345,6 +402,56 @@ pub trait HasNodeAttr {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::{
+        apertures::{Aperture, ApertureType},
+        geometry::{Plane, body::SurfaceBoundedBody, geo_surface::GeoSurfaceRef},
+        millimeter,
+        types::validated_type_definitions::ValidatedCrossSection,
+    };
+    use std::sync::{Arc, Mutex};
+
+    fn test_body() -> OpmResult<SurfaceBoundedBody> {
+        Ok(SurfaceBoundedBody::new(
+            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(Isometry::identity())))),
+            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(Isometry::new_along_z(
+                millimeter!(10.0),
+            )?)))),
+            ValidatedCrossSection::try_new(Aperture::new_circle(
+                millimeter!(5.0),
+                ApertureType::Hole,
+                None,
+            )?)?,
+            Isometry::identity(),
+        ))
+    }
+
+    #[test]
+    fn runtime_medium_starts_unset() {
+        assert!(NodeAttr::new("test").runtime_medium().is_none());
+    }
+    #[test]
+    fn set_and_clear_runtime_medium() -> OpmResult<()> {
+        let mut attr = NodeAttr::new("test");
+        attr.set_runtime_medium(test_body()?, None);
+        assert!(attr.runtime_medium().is_some());
+        attr.clear_runtime_medium();
+        assert!(attr.runtime_medium().is_none());
+        Ok(())
+    }
+    #[test]
+    fn runtime_medium_is_not_in_ron_roundtrip() -> OpmResult<()> {
+        let mut attr = NodeAttr::new("test");
+        attr.set_runtime_medium(test_body()?, None);
+        let serialized = ron::to_string(&attr).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert!(
+            !serialized.contains("runtime_medium"),
+            "runtime_medium must not be serialized: {serialized}"
+        );
+        let back: NodeAttr =
+            ron::from_str(&serialized).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert!(back.runtime_medium().is_none());
+        Ok(())
+    }
 
     #[test]
     fn set_name_sanitization() {
