@@ -26,10 +26,10 @@ use opossum_core::{
         AnalyticPump, BeerLambertProfile, ConstInversion, LongitudinalProfile, PumpDirection,
         PumpSource, TransversalProfile,
     },
-    meter, reciprocal_centimeter,
+    meter, reciprocal_meter,
     utils::{default_from_name::DefaultFromName, super_gaussian::SuperGaussianShape},
 };
-use uom::si::{angle::degree, reciprocal_length::reciprocal_centimeter};
+use uom::si::angle::degree;
 
 /// The pump source of one node in one scenario: a variant dropdown plus, per variant, its
 /// parameters.
@@ -68,25 +68,44 @@ pub fn PumpSourceEditor(
             }
             match source {
                 PumpSource::Const(constant) => rsx! {
-                    NumberField {
-                        id: format!("{id_prefix}-pump-g0"),
-                        label: "Gain g₀ (1/cm)".to_string(),
-                        value: constant.gain_coefficient().get::<reciprocal_centimeter>(),
-                        step: 0.1,
-                        min: None,
-                        on_save: move |value: f64| {
-                            save(
-                                ConstInversion::new(reciprocal_centimeter!(value)).map(PumpSource::Const),
-                                on_change,
-                            );
-                        },
-                    }
+                    ConstPumpFields { id_prefix, constant, on_change }
                 },
                 PumpSource::Analytic(analytic) => rsx! {
                     AnalyticPumpFields { id_prefix, analytic, on_change }
                 },
                 _ => rsx! {},
             }
+        }
+    }
+}
+
+/// The single parameter of a uniformly pumped medium: the small-signal gain coefficient.
+///
+/// # Props
+///
+/// * `id_prefix` - distinguishes this editor's inputs from those of the other rows in the same list.
+/// * `constant` - the constant inversion as the document currently holds it.
+/// * `on_change` - handed the complete new pump source whenever the user changes anything.
+#[component]
+fn ConstPumpFields(
+    id_prefix: String,
+    constant: ConstInversion,
+    on_change: EventHandler<PumpSource>,
+) -> Element {
+    let sig_gain = use_synced_signal(constant.gain_coefficient());
+    rsx! {
+        NodeConfigUnitInput {
+            id: format!("{id_prefix}-pump-g0"),
+            label: "Gain g₀",
+            value: sig_gain.read().value,
+            unit_config: UnitHandling::new("m⁻¹", true),
+            reciprocal: true,
+            onchange: move |v: f64| {
+                save(
+                    ConstInversion::new(reciprocal_meter!(v)).map(PumpSource::Const),
+                    on_change,
+                );
+            },
         }
     }
 }
@@ -114,15 +133,16 @@ fn AnalyticPumpFields(
     };
     let peak = analytic.peak_gain_coefficient();
     let (transversal, longitudinal) = (analytic.transversal(), analytic.longitudinal());
+    let sig_peak = use_synced_signal(peak);
     rsx! {
-        NumberField {
+        NodeConfigUnitInput {
             id: format!("{id_prefix}-pump-peak"),
-            label: "Peak gain g₀ (1/cm)".to_string(),
-            value: peak.get::<reciprocal_centimeter>(),
-            step: 0.1,
-            min: None,
-            on_save: move |value: f64| {
-                rebuilt(reciprocal_centimeter!(value), transversal, longitudinal);
+            label: "Peak gain g₀",
+            value: sig_peak.read().value,
+            unit_config: UnitHandling::new("m⁻¹", true),
+            reciprocal: true,
+            onchange: move |v: f64| {
+                rebuilt(reciprocal_meter!(v), transversal, longitudinal);
             },
         }
         LabeledSelect {
@@ -295,17 +315,18 @@ fn BeerLambertFields(
     on_change: EventHandler<BeerLambertProfile>,
 ) -> Element {
     let (absorption, direction) = (profile.absorption(), profile.direction());
+    let sig_absorption = use_synced_signal(absorption);
     rsx! {
         div { class: "amp-pump-nested",
-            NumberField {
+            NodeConfigUnitInput {
                 id: format!("{id_prefix}-beer-alpha"),
-                label: "Absorption α (1/cm)".to_string(),
-                value: absorption.get::<reciprocal_centimeter>(),
-                step: 0.1,
-                min: Some(0.0),
-                on_save: move |value: f64| {
+                label: "Absorption α",
+                value: sig_absorption.read().value,
+                unit_config: UnitHandling::new("m⁻¹", true),
+                reciprocal: true,
+                onchange: move |v: f64| {
                     save(
-                        BeerLambertProfile::new(reciprocal_centimeter!(value), direction),
+                        BeerLambertProfile::new(reciprocal_meter!(v), direction),
                         on_change,
                     );
                 },
