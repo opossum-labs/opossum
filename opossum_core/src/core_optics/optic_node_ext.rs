@@ -156,19 +156,6 @@ pub trait OpticNodeExt {
         refri_after_surf: Option<RefractiveIndexType>,
     ) -> OpmResult<LightResult>;
 
-    /// Set up this node's runtime medium.
-    ///
-    /// Builds a [`SurfaceBoundedBody`](crate::geometry::body::SurfaceBoundedBody) from the node's
-    /// current surfaces and stores it (with no inversion) in the `runtime_medium` slot of
-    /// [`NodeAttr`](crate::core_optics::NodeAttr). Called from
-    /// [`OpticNode::after_deserialization_hook`](crate::core_optics::OpticNode::after_deserialization_hook)
-    /// so that deserialized nodes have their body ready before the first analysis.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the node does not have exactly one input and one output port, or if the
-    /// body cannot be derived from the node's surfaces.
-    fn init_runtime_medium(&mut self) -> OpmResult<()>;
 }
 
 /// Return the names of the one input and the one output port of `node`.
@@ -225,14 +212,6 @@ pub(crate) fn single_io_port_names<T: ?Sized + OpticNode>(node: &T) -> OpmResult
 }
 
 impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNodeExt for T {
-    fn init_runtime_medium(&mut self) -> OpmResult<()> {
-        if let Some(volumetric) = self.as_volume() {
-            let body = volumetric.volume_body()?;
-            self.node_attr_mut().set_runtime_medium(body, None);
-        }
-        Ok(())
-    }
-
     fn effective_node_iso(&self) -> Option<Isometry> {
         self.isometry().as_ref().and_then(|iso| {
             self.node_attr()

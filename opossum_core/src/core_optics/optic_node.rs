@@ -5,7 +5,7 @@ use nalgebra::Point3;
 use uom::si::f64::{Angle, Length};
 use uuid::Uuid;
 
-use crate::core_optics::{NodeAttrExt, OpticNodeExt, OpticPorts};
+use crate::core_optics::{NodeAttrExt, OpticPorts};
 use crate::{
     analyzers::{Analyzable, propagation_strategy::PropagationStrategy},
     core_optics::{PortType, SceneryResources, node_attr::HasNodeAttr, volumetric::Volumetric},
@@ -59,41 +59,36 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     }
     /// Prepare this node's medium before the first ray is traced (Phase A).
     ///
-    /// Derives the node's [`SurfaceBoundedBody`](crate::geometry::body::SurfaceBoundedBody) and,
-    /// if the gain model reads the inversion, builds the [`InversionField`](crate::gain::InversionField)
-    /// from the pump configuration. Both are stored in [`NodeAttr`]'s `runtime_medium` slot so
-    /// that [`Volumetric::amplify_inside`](crate::core_optics::volumetric::Volumetric::amplify_inside)
-    /// (Phase B) can read them without rebuilding per pass.
+    /// Derives the node's [`SurfaceBoundedBody`](crate::geometry::body::SurfaceBoundedBody) from the
+    /// **current** node isometry and, if the gain model reads the inversion, builds the
+    /// [`InversionField`](crate::gain::InversionField) from the pump configuration. Both are stored
+    /// in [`NodeAttr`]'s `runtime_medium` slot so that
+    /// [`Volumetric::amplify_inside`](crate::core_optics::volumetric::Volumetric::amplify_inside)
+    /// (Phase B) can read them without rebuilding per ray pass.
     ///
-    /// Non-volume nodes return immediately. [`NodeGroup`](crate::nodes::NodeGroup) overrides this to
-    /// recurse into every child node.
+    /// The body is always re-derived on every call, so geometry edits (e.g. changed centre
+    /// thickness) and repositioning by the analyzer's `calc_node_positions` are picked up
+    /// correctly. Non-volume nodes and nodes with no active gain model return immediately without
+    /// touching the medium slot.
+    ///
+    /// [`NodeGroup`](crate::nodes::NodeGroup) overrides this to recurse into every child node.
     ///
     /// # Errors
     ///
     /// Returns an error if the body cannot be derived from the node's surfaces or if building the
     /// inversion field fails.
     fn prepare_volume(&mut self, strategy: &dyn PropagationStrategy) -> OpmResult<()> {
-        let node_attr = self.node_attr_mut();
-        if let Some(medium) = node_attr.runtime_medium() {
-            let config = strategy.pump_config(node_attr.uuid());
-            let gain_model = config.gain_model();
-            let inversion = match gain_model.as_extraction() {
-                Some(model) => model.build_inversion(medium.body(), &config)?,
-                None => None,
-            };
-            node_attr.set_runtime_inversion(inversion);
-        } else if let Some(volumetric) = self.as_volume() {
-            let body = volumetric.volume_body()?;
-            let config = strategy.pump_config(self.node_attr().uuid());
-            let gain_model = config.gain_model();
-            let inversion = match gain_model.as_extraction() {
-                Some(model) => model.build_inversion(&body, &config)?,
-                None => None,
-            };
-            self.node_attr_mut().set_runtime_medium(body, inversion);
-        } else {
+        let Some(volumetric) = self.as_volume() else {
             return Ok(());
-        }
+        };
+        let config = strategy.pump_config(self.node_attr().uuid());
+        let gain_model = config.gain_model();
+        let Some(model) = gain_model.as_extraction() else {
+            return Ok(());
+        };
+        let body = volumetric.volume_body()?;
+        let inversion = model.build_inversion(&body, &config)?;
+        self.node_attr_mut().set_runtime_medium(body, inversion);
         Ok(())
     }
 
@@ -107,7 +102,6 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     /// This function will return an error if the overwritten function generates an error.
     fn after_deserialization_hook(&mut self) -> OpmResult<()> {
         self.update_surfaces()?;
-        self.init_runtime_medium()?;
         Ok(())
     }
     /// Updates the surfaces of this node after deserialization

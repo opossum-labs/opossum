@@ -40,8 +40,10 @@ impl RuntimeSurfaces {
 /// The volume state a node was prepared with for the current analysis run.
 ///
 /// The counterpart of [`RuntimeSurfaces`] for what lies *between* the surfaces. Built once per node
-/// per run by [`OpticNode::prepare_volume`](crate::core_optics::OpticNode::prepare_volume) and
-/// cleared by [`OpticNode::reset_data`](crate::core_optics::OpticNode::reset_data).
+/// per run by [`OpticNode::prepare_volume`](crate::core_optics::OpticNode::prepare_volume).
+/// Between analysis passes [`OpticNode::reset_data`](crate::core_optics::OpticNode::reset_data)
+/// clears only the inversion field — the body is always re-derived by the next `prepare_volume`
+/// call and does not need to be cached across resets.
 #[derive(Debug, Clone)]
 pub struct RuntimeMedium {
     body: SurfaceBoundedBody,
@@ -57,10 +59,6 @@ impl RuntimeMedium {
     #[must_use]
     pub const fn inversion(&self) -> Option<&InversionField> {
         self.inversion.as_ref()
-    }
-    /// Set the inversion field of this [`RuntimeMedium`]
-    pub fn set_inversion(&mut self, inversion: Option<InversionField>) {
-        self.inversion = inversion;
     }
 }
 
@@ -324,9 +322,8 @@ impl NodeAttr {
     }
     /// Return the prepared medium for this node, if any.
     ///
-    /// Set by [`OpticNode::prepare_volume`](crate::core_optics::OpticNode::prepare_volume), cleared
-    /// by [`OpticNode::reset_data`](crate::core_optics::OpticNode::reset_data). `None` means the
-    /// node has not been prepared yet or has been reset.
+    /// Set by [`OpticNode::prepare_volume`](crate::core_optics::OpticNode::prepare_volume).
+    /// `None` means the node has not been prepared yet for this analysis run.
     #[must_use]
     pub const fn runtime_medium(&self) -> Option<&RuntimeMedium> {
         self.runtime_medium.as_ref()
@@ -344,18 +341,15 @@ impl NodeAttr {
     ) {
         self.runtime_medium = Some(RuntimeMedium { body, inversion });
     }
-    pub fn set_runtime_inversion(&mut self, inversion: Option<InversionField>) {
-        if let Some(medium) = self.runtime_medium.as_mut() {
-            medium.set_inversion(inversion);
-        }
-    }
-    /// Clear the prepared medium for this node.
+    /// Clear the inversion field of the prepared medium for this node.
     ///
-    /// Called by [`OpticNode::reset_data`](crate::core_optics::OpticNode::reset_data) to discard the
-    /// state between analysis runs.
+    /// Called by [`OpticNode::reset_data`](crate::core_optics::OpticNode::reset_data) between
+    /// analysis runs. The body is intentionally kept: it is re-derived from the current geometry
+    /// by the next [`OpticNode::prepare_volume`](crate::core_optics::OpticNode::prepare_volume)
+    /// call, and `runtime_medium()` remaining `Some` after a reset is expected.
     pub fn clear_runtime_inversion(&mut self) {
         if let Some(medium) = self.runtime_medium.as_mut() {
-            medium.set_inversion(None);
+            medium.inversion = None;
         }
     }
     /// Returns a reference to the uuid of this [`NodeAttr`].

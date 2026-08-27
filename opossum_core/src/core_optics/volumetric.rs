@@ -928,6 +928,54 @@ mod test {
         );
         Ok(())
     }
+    /// `prepare_volume` always uses the current node position, not a body cached at an earlier one.
+    ///
+    /// This is the regression test for the bug commit `b1f766b8` identified but incompletely fixed.
+    /// `init_runtime_medium` (called from `after_deserialization_hook`) built and stored a body at
+    /// the node's position at deserialization time — which is the origin, because `set_isometry`
+    /// from `calc_node_positions` had not run yet — and `prepare_volume`'s first branch then reused
+    /// that stale body for all subsequent runs. A head placed anywhere but the origin had its
+    /// inversion field laid out at the wrong coordinates, so `gain_factor` found no inversion for
+    /// any real ray and returned exactly `1.0`.
+    ///
+    /// After the fix: `prepare_volume` always re-derives the body from the current geometry, so the
+    /// inversion and the sampling frame are always consistent with the node's actual position.
+    #[test]
+    fn prepare_volume_uses_current_position_not_a_cached_body() -> OpmResult<()> {
+        let mut head = amplifier_head()?;
+        // Start with the head at identity.
+        head.set_isometry(Isometry::identity())?;
+        let node_id = head.node_attr().uuid();
+
+        // Seed a body at the current (identity) position, simulating what
+        // `init_runtime_medium` used to do inside `after_deserialization_hook`.
+        let identity_body = head.as_volume().unwrap().volume_body()?;
+        head.node_attr_mut().set_runtime_medium(identity_body, None);
+
+        // Move the head 500 mm along z — what `calc_node_positions` does after deserialization.
+        head.set_isometry(Isometry::new(
+            millimeter!(0.0, 0.0, 500.0),
+            degree!(0.0, 0.0, 0.0),
+        )?)?;
+        // Simulate `reset_data`: clear only the inversion, leave the (stale, identity) body.
+        head.node_attr_mut().clear_runtime_inversion();
+
+        let mut config = RayTraceConfig::default();
+        config.set_active_pump_scenario(Some(scenario_with_small_signal(node_id)?));
+
+        // `traced_energy_ratio` calls `prepare_volume` and then analyzes.
+        // Before the fix: `prepare_volume` saw `runtime_medium().is_some()` and reused the
+        // identity body; `gain_factor` sampled at the real position, found no inversion, and
+        // returned `1.0` — a silently passive amplifier.
+        // After the fix: `prepare_volume` always rebuilds the body from the 500 mm isometry,
+        // so the inversion covers the real position and the result is the expected gain.
+        assert_relative_eq!(
+            traced_energy_ratio(&mut head, &config)?,
+            single_pass_gain(),
+            epsilon = 1e-9
+        );
+        Ok(())
+    }
     /// The two halves of an operating point really are independent.
     ///
     /// A gain model that reads the medium finds nothing there if nobody pumped it, and a medium
