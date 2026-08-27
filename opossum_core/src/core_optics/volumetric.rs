@@ -226,6 +226,11 @@ pub trait Volumetric: OpticNode {
     /// its own [`Extraction::amplify_spectrum`](crate::gain::Extraction::amplify_spectrum) what an
     /// energy analysis is supposed to do with it - state a nominal path, or refuse.
     ///
+    /// Reads from the medium prepared by
+    /// [`OpticNode::prepare_volume`](crate::core_optics::OpticNode::prepare_volume) rather than
+    /// rebuilding the body and inversion on every call. Returns immediately if no medium has been
+    /// prepared yet (positioning run).
+    ///
     /// # Parameters
     ///
     /// * `data`: the light data arriving at the node, modified in place.
@@ -233,14 +238,14 @@ pub trait Volumetric: OpticNode {
     ///
     /// # Errors
     ///
-    /// This function errors if the amplified spectrum cannot be scaled.
+    /// This function errors if the amplified spectrum cannot be scaled, or if the active gain
+    /// model refuses energy analysis (e.g. [`SmallSignalGain`](crate::gain::SmallSignalGain)).
     fn amplify_energy_data(
         &self,
         data: &mut LightData,
         strategy: &dyn PropagationStrategy,
     ) -> OpmResult<()> {
-        let config = strategy.pump_config(self.node_attr().uuid());
-        let gain_model = config.gain_model();
+        let gain_model = strategy.pump_config(self.node_attr().uuid()).gain_model();
         let Some(extraction) = gain_model.as_extraction() else {
             return Ok(());
         };
@@ -249,10 +254,11 @@ pub trait Volumetric: OpticNode {
         let LightData::Energy(spectrum) = data else {
             return Ok(());
         };
-        let body = self.volume_body()?;
-        let inversion = extraction.build_inversion(&body, &config)?;
+        let Some(medium) = self.node_attr().runtime_medium() else {
+            return Ok(());
+        };
         extraction
-            .amplify_spectrum(&body, inversion.as_ref(), spectrum)
+            .amplify_spectrum(medium.body(), medium.inversion(), spectrum)
             .map_err(|e| OpossumError::Analysis(format!("node '{}': {e}", self.name())))
     }
     /// A unified helper function to analyze optical nodes that enclose a volume of material.
@@ -556,6 +562,7 @@ mod test {
         let mut lens = placed_lens()?;
         let mut config = EnergyConfig::default();
         config.set_active_pump_scenario(Some(scenario_with_gain(lens.node_attr().uuid(), 2.5)?));
+        lens.prepare_volume(&config)?;
         let spectrum = create_he_ne_spec(1.0)?;
         let energy_before = spectrum.total_energy();
         let incoming = LightResult::from([("input_1".into(), LightData::Energy(spectrum))]);
@@ -1008,6 +1015,7 @@ mod test {
         head.set_isometry(Isometry::identity())?;
         let mut config = EnergyConfig::default();
         config.set_active_pump_scenario(Some(scenario_with_small_signal(head.node_attr().uuid())?));
+        head.prepare_volume(&config)?;
         let incoming =
             LightResult::from([("input_1".into(), LightData::Energy(create_he_ne_spec(1.0)?))]);
         let result = AnalysisEnergy::analyze(&mut head, incoming, &config);
