@@ -587,6 +587,31 @@ body {
     border-radius: 4px;
 }
 
+/* SmallSignalGain-specific parameters: integration steps and inversion-field grid. */
+.ssg-params {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.ssg-params-label {
+    font-size: 11px;
+    color: rgb(180, 180, 180);
+    margin-bottom: 0;
+}
+
+/* Three grid-cell inputs side by side (x / y / z). */
+.ssg-params-grid {
+    display: flex;
+    gap: 4px;
+}
+
+.ssg-params-grid .amp-gain-input {
+    width: 0;
+    flex: 1 1 0;
+}
+
 /* One stack of controls configuring a candidate within a scenario - the gain model with its own
    parameters, and, where the model calls for it, the pump source with its. Stacked rather than laid
    out in a grid because the sidebar it lives in is narrow. */
