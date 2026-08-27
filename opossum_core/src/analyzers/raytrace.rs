@@ -45,6 +45,10 @@ pub struct RayTraceConfig {
     /// of the configuration a user edits and not written to file.
     #[serde(skip)]
     active_pump_scenario: ActiveScenario,
+    /// `true` when this config drives [`AnalysisRayTrace::calc_node_positions`]: the medium has
+    /// not been prepared yet and gain models must skip amplification. Not saved to file.
+    #[serde(skip)]
+    positioning_run: bool,
 }
 impl Default for RayTraceConfig {
     /// Create a default config for a ray tracing analysis with the following parameters:
@@ -61,6 +65,7 @@ impl Default for RayTraceConfig {
             missed_surface_strategy: MissedSurfaceStrategy::Stop,
             source_map: HashMap::new(),
             active_pump_scenario: ActiveScenario::default(),
+            positioning_run: false,
         }
     }
 }
@@ -159,6 +164,31 @@ impl RayTraceConfig {
     pub fn set_source_map(&mut self, source_map: HashMap<Uuid, RayDataBuilder>) {
         self.source_map = source_map;
     }
+    /// Mark this config as driving the geometry-positioning run.
+    ///
+    /// When set, [`PropagationStrategy::is_positioning_run`] returns `true` and gain models skip
+    /// amplification, because [`OpticNode::prepare_volume`](crate::core_optics::OpticNode::prepare_volume)
+    /// has not been called yet.
+    pub fn set_positioning_run(&mut self, positioning_run: bool) {
+        self.positioning_run = positioning_run;
+    }
+    /// Return a config suitable for the geometry-positioning run.
+    ///
+    /// Copies the source map and scalar settings from `self` but drops the `active_pump_scenario`
+    /// (to avoid cloning a potentially large [`PumpScenario`]) and sets `positioning_run = true`
+    /// so that gain models know no medium has been prepared yet.
+    #[must_use]
+    pub fn for_positioning(&self) -> Self {
+        Self {
+            min_energy_per_ray: self.min_energy_per_ray,
+            max_number_of_bounces: self.max_number_of_bounces,
+            max_number_of_refractions: self.max_number_of_refractions,
+            missed_surface_strategy: self.missed_surface_strategy,
+            source_map: self.source_map.clone(),
+            active_pump_scenario: ActiveScenario::default(),
+            positioning_run: true,
+        }
+    }
 }
 
 impl PropagationStrategy for RayTraceConfig {
@@ -167,6 +197,9 @@ impl PropagationStrategy for RayTraceConfig {
     }
     fn pump_config(&self, node_id: Uuid) -> PumpConfig {
         self.active_pump_scenario.config(node_id)
+    }
+    fn is_positioning_run(&self) -> bool {
+        self.positioning_run
     }
     fn on_after_apodization(&self, rays: &mut Rays) -> OpmResult<()> {
         rays.invalidate_by_threshold_energy(self.min_energy_per_ray())?;
@@ -193,12 +226,10 @@ impl Analyzer for RayTracingAnalyzer {
             format!(" '{}'", scenery.node_attr().name())
         };
         info!("Calculate node positions of scenery{scenery_name}.");
-        let mut positioning_config = self.config.clone();
-        positioning_config.set_active_pump_scenario(None);
         AnalysisRayTrace::calc_node_positions(
             scenery,
             LightResult::default(),
-            &positioning_config,
+            &self.config.for_positioning(),
         )?;
         scenery.reset_data();
         scenery.prepare_volume(&self.config)?;
@@ -296,7 +327,7 @@ mod test {
     fn config_debug() {
         assert_eq!(
             format!("{:?}", RayTraceConfig::default()),
-            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop, source_map: {}, active_pump_scenario: ActiveScenario(None) }"
+            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop, source_map: {}, active_pump_scenario: ActiveScenario(None), positioning_run: false }"
         );
     }
     #[test]

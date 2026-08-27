@@ -67,6 +67,16 @@ pub trait PropagationStrategy {
         PumpConfig::default()
     }
 
+    /// Returns `true` if this config is driving the geometry-positioning run.
+    ///
+    /// During the positioning run [`OpticNode::prepare_volume`](crate::core_optics::OpticNode::prepare_volume)
+    /// has not been called yet, so no medium is available and gain models must skip amplification.
+    /// The default is `false`; analyzers override this for the config they pass to
+    /// [`AnalysisRayTrace::calc_node_positions`](crate::analyzers::raytrace::AnalysisRayTrace::calc_node_positions).
+    fn is_positioning_run(&self) -> bool {
+        false
+    }
+
     /// Hook executed immediately after a ray bundle interacts with a surface.
     /// Allows the analyzer to perform specific tasks, like evaluating fluence
     /// or storing caching data (e.g., for `GhostFocus`).

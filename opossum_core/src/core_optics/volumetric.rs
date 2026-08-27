@@ -172,8 +172,9 @@ pub trait Volumetric: OpticNode {
             backward,
             refraction_intended,
         )?;
-
-        self.amplify_inside(rays_bundle, strategy)?;
+        if !strategy.is_positioning_run() {
+            self.amplify_inside(rays_bundle, strategy)?;
+        }       
 
         self.pass_through_surface_generic(
             exit_surf_name,
@@ -189,8 +190,12 @@ pub trait Volumetric: OpticNode {
     /// This is the step *between* the two surface passes: the rays are inside the material here, so
     /// this is where an active medium adds energy to them. Which model applies is not asked of the
     /// node but of the analysis, because whether a component is pumped belongs to the operating
-    /// point being analyzed - see
-    /// [`PropagationStrategy::gain_model`](crate::analyzers::propagation_strategy::PropagationStrategy::gain_model).
+    /// point being analyzed — see
+    /// [`PropagationStrategy::pump_config`](crate::analyzers::propagation_strategy::PropagationStrategy::pump_config).
+    ///
+    /// Returns immediately if [`PropagationStrategy::is_positioning_run`] is `true` — no medium
+    /// has been prepared yet and amplification is skipped. After the positioning run, a missing
+    /// medium is a programming error and causes an [`OpossumError::Analysis`].
     ///
     /// # Parameters
     ///
@@ -199,7 +204,8 @@ pub trait Volumetric: OpticNode {
     ///
     /// # Errors
     ///
-    /// This function errors if the resulting ray energies would not be finite.
+    /// This function errors if the medium was not prepared before this call (outside a positioning
+    /// run), or if the resulting ray energies would not be finite.
     fn amplify_inside(
         &mut self,
         rays_bundle: &mut [Rays],
@@ -210,10 +216,11 @@ pub trait Volumetric: OpticNode {
         let Some(extraction) = gain_model.as_extraction() else {
             return Ok(());
         };
-        // No medium prepared yet (positioning run): skip amplification silently.
-        // `prepare_volume` is always called between positioning and the real analysis pass.
         let Some(medium) = self.node_attr().runtime_medium() else {
-            return Ok(());
+            return Err(OpossumError::Analysis(format!(
+                "node '{}': medium was not prepared before amplification",
+                self.name()
+            )));
         };
         extraction
             .amplify_rays(medium.body(), medium.inversion(), rays_bundle)
@@ -254,8 +261,14 @@ pub trait Volumetric: OpticNode {
         let LightData::Energy(spectrum) = data else {
             return Ok(());
         };
-        let Some(medium) = self.node_attr().runtime_medium() else {
+        if strategy.is_positioning_run() {
             return Ok(());
+        }
+        let Some(medium) = self.node_attr().runtime_medium() else {
+            return Err(OpossumError::Analysis(format!(
+                "node '{}': medium was not prepared before amplification",
+                self.name()
+            )));
         };
         extraction
             .amplify_spectrum(medium.body(), medium.inversion(), spectrum)
