@@ -32,8 +32,7 @@ use crate::{
     generic_validators::{AllFinite, AllNotZero, AllPositive, ValidateTrait},
     geometry::body::Body,
     light::Spectrum,
-    square_centimeter,
-    validated, validated_type,
+    square_centimeter, validated, validated_type,
 };
 use nalgebra::Point3;
 use opm_macros_lib::EnsureValidated;
@@ -244,7 +243,6 @@ impl SmallSignalGain {
     }
 }
 
-
 impl Extraction for SmallSignalGain {
     fn name(&self) -> &'static str {
         "SmallSignalGain"
@@ -323,8 +321,9 @@ mod test {
             PumpDirection, PumpSource, TransversalProfile,
         },
         geometry::{Plane, body::SurfaceBoundedBody, geo_surface::GeoSurfaceRef},
-        joule, millimeter, nanometer, reciprocal_centimeter, square_meter,
+        joule,
         light::Ray,
+        millimeter, nanometer, reciprocal_centimeter, square_meter,
         types::validated_type_definitions::ValidatedCrossSection,
         utils::{
             geom_transformation::Isometry, math_utils::to_f64, super_gaussian::SuperGaussianShape,
@@ -417,7 +416,9 @@ mod test {
         if factor.is_finite() {
             Ok(factor)
         } else {
-            Err(OpossumError::Analysis(format!("exp({exponent}) is not finite")))
+            Err(OpossumError::Analysis(format!(
+                "exp({exponent}) is not finite"
+            )))
         }
     }
     /// The factor a ray picks up crossing the given body in the given operating point.
@@ -692,7 +693,8 @@ mod test {
         // down, so a second pass sees exactly what the first one saw.
         let body = test_disk()?;
         let model = SmallSignalGain::default();
-        let mut inversion = model.build_inversion(&body, &pumped_at(reciprocal_centimeter!(0.5))?)?;
+        let mut inversion =
+            model.build_inversion(&body, &pumped_at(reciprocal_centimeter!(0.5))?)?;
         let untouched = inversion.clone();
         let ray = ray_at(0.0, 0.0)?;
         let first = z_march_factor(&body, &model, &mut inversion, &ray)?;

@@ -34,11 +34,11 @@ use crate::{
     validated, validated_type,
 };
 use nalgebra::Point3;
-use uom::si::f64::Length;
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum::EnumIter;
+use uom::si::f64::Length;
 use utoipa::ToSchema;
 
 /// Deserialization shim for [`ConstGain`].

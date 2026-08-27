@@ -16,8 +16,12 @@
 use crate::{
     analyzers::propagation_strategy::PropagationStrategy,
     apertures::{Aperture, ApertureType},
-    core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, optic_node_ext::single_io_port_names},
+    core_optics::{
+        NodeAttrExt, OpticNode, OpticNodeExt, node_attr::RuntimeMedium,
+        optic_node_ext::single_io_port_names,
+    },
     error::{OpmResult, OpossumError},
+    gain::Extraction,
     geometry::body::{CLEAR_APERTURE, SurfaceBoundedBody},
     light::{LightData, LightRays, LightResult, Rays},
     material::{MATERIAL, Material},
@@ -213,6 +217,7 @@ pub trait Volumetric: OpticNode {
     ) -> OpmResult<()> {
         let config = strategy.pump_config(self.node_attr().uuid());
         let gain_model = config.gain_model();
+        // A passive node — no gain model in the current operating point — leaves the rays untouched.
         let Some(extraction) = gain_model.as_extraction() else {
             return Ok(());
         };
@@ -223,63 +228,10 @@ pub trait Volumetric: OpticNode {
         let node_name = self.name().to_owned();
         let Some(medium) = self.node_attr_mut().runtime_medium_mut() else {
             return Err(OpossumError::Analysis(format!(
-                "node '{node_name}': medium was not prepared before amplification"
+                "node '{node_name}': medium was not prepared before propagation"
             )));
         };
-        // Split the medium into an immutable body reference and a mutable inversion reference so
-        // that saturating models can read and write the field in each substep.
-        let (body, inversion) = medium.parts_mut();
-        let n_steps = extraction.n_steps();
-        for rays in rays_bundle.iter_mut() {
-            for ray in rays.iter_mut() {
-                if !ray.valid() {
-                    continue;
-                }
-                let Some(chord) = body.path_length_inside(ray).map_err(|e| {
-                    OpossumError::Analysis(format!("node '{node_name}': {e}"))
-                })? else {
-                    continue;
-                };
-                if chord.value <= 0.0 {
-                    continue;
-                }
-                // `Ray::direction` is not guaranteed normalised — stepping along the raw vector
-                // would cover the wrong distance. `path_length_inside` is unaffected.
-                let direction = ray.direction();
-                let norm = direction.norm();
-                if !norm.is_normal() {
-                    continue;
-                }
-                let direction = direction / norm;
-                let step_width = chord / to_f64(n_steps);
-                let start = ray.position();
-                // The body's own frame is used so the sampling frame and the inversion field grid
-                // always agree on where the medium is.
-                let frame = body.isometry();
-                let mut exponent = 0.0_f64;
-                for step in 0..n_steps {
-                    let travelled = step_width * (to_f64(step) + 0.5);
-                    let local = frame.inverse_transform_point(&Point3::new(
-                        start.x + direction.x * travelled,
-                        start.y + direction.y * travelled,
-                        start.z + direction.z * travelled,
-                    ));
-                    exponent += extraction.gain_exponent_at(&local, step_width, inversion);
-                }
-                let factor = exponent.exp();
-                if !factor.is_finite() {
-                    return Err(OpossumError::Analysis(format!(
-                        "node '{node_name}': would amplify by exp({exponent}) over a path of \
-                         {} mm through the medium, which is not a finite factor",
-                        chord.get::<uom::si::length::millimeter>()
-                    )));
-                }
-                ray.scale_energy(factor).map_err(|e| {
-                    OpossumError::Analysis(format!("node '{node_name}': {e}"))
-                })?;
-            }
-        }
-        Ok(())
+        march_extraction_along_chords(&node_name, medium, extraction, rays_bundle)
     }
     /// Amplify the spectral energy passing through this node's medium.
     ///
@@ -445,6 +397,90 @@ fn cross_section<T: ?Sized + Volumetric>(node: &T) -> OpmResult<ValidatedCrossSe
             node.name()
         ))
     })
+}
+
+/// Apply a gain extraction model along the chord each ray travels through the medium.
+///
+/// This is the mechanism half of [`Volumetric::propagate_inside_medium`]: it performs the
+/// per-ray z-march without asking *whether* to run — that decision belongs to the caller, which
+/// has already confirmed the operating point is active and a medium is available.
+///
+/// For each valid ray, the chord through the medium body is computed, divided into
+/// [`Extraction::n_steps`] equal segments, and [`Extraction::gain_exponent_at`] is accumulated
+/// over those segments. The ray's energy is then scaled by `exp(Σ gain_exponent_at)`. A factor
+/// that is not finite is rejected as a programming error in the model.
+///
+/// # Arguments
+///
+/// * `node_name` - name of the owning node, used in error messages.
+/// * `medium` - the prepared medium for this analysis run, split into body and inversion.
+/// * `extraction` - the gain model to query per segment.
+/// * `rays_bundle` - the ray bundle inside the medium, modified in place.
+///
+/// # Errors
+///
+/// This function errors if `path_length_inside` fails, if the accumulated exponent would produce
+/// a non-finite scale factor, or if `scale_energy` rejects the resulting value.
+fn march_extraction_along_chords(
+    node_name: &str,
+    medium: &mut RuntimeMedium,
+    extraction: &dyn Extraction,
+    rays_bundle: &mut [Rays],
+) -> OpmResult<()> {
+    // Split the medium into an immutable body reference and a mutable inversion reference so
+    // that saturating models can read and write the field in each substep.
+    let (body, inversion) = medium.parts_mut();
+    let n_steps = extraction.n_steps();
+    for rays in rays_bundle.iter_mut() {
+        for ray in rays.iter_mut() {
+            if !ray.valid() {
+                continue;
+            }
+            let Some(chord) = body
+                .path_length_inside(ray)
+                .map_err(|e| OpossumError::Analysis(format!("node '{node_name}': {e}")))?
+            else {
+                continue;
+            };
+            if chord.value <= 0.0 {
+                continue;
+            }
+            // `Ray::direction` is not guaranteed normalised — stepping along the raw vector
+            // would cover the wrong distance. `path_length_inside` is unaffected.
+            let direction = ray.direction();
+            let norm = direction.norm();
+            if !norm.is_normal() {
+                continue;
+            }
+            let direction = direction / norm;
+            let step_width = chord / to_f64(n_steps);
+            let start = ray.position();
+            // The body's own frame is used so the sampling frame and the inversion field grid
+            // always agree on where the medium is.
+            let frame = body.isometry();
+            let mut exponent = 0.0_f64;
+            for step in 0..n_steps {
+                let travelled = step_width * (to_f64(step) + 0.5);
+                let local = frame.inverse_transform_point(&Point3::new(
+                    start.x + direction.x * travelled,
+                    start.y + direction.y * travelled,
+                    start.z + direction.z * travelled,
+                ));
+                exponent += extraction.gain_exponent_at(&local, step_width, inversion);
+            }
+            let factor = exponent.exp();
+            if !factor.is_finite() {
+                return Err(OpossumError::Analysis(format!(
+                    "node '{node_name}': would amplify by exp({exponent}) over a path of \
+                     {} mm through the medium, which is not a finite factor",
+                    chord.get::<uom::si::length::millimeter>()
+                )));
+            }
+            ray.scale_energy(factor)
+                .map_err(|e| OpossumError::Analysis(format!("node '{node_name}': {e}")))?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -619,6 +655,41 @@ mod test {
         config.set_active_pump_scenario(Some(scenario_with_gain(Uuid::new_v4(), 2.5)?));
         assert_abs_diff_eq!(
             traced_energy_ratio(&mut lens, &config)?,
+            1.0,
+            epsilon = 1e-12
+        );
+        Ok(())
+    }
+    /// A passive volume node gets a prepared body even without a gain model.
+    ///
+    /// This is the regression test for the new `prepare_volume` contract: the body is geometry, so
+    /// it is built for every volume node regardless of the operating point. Previously a passive lens
+    /// (no active scenario) returned from `prepare_volume` immediately, leaving `runtime_medium`
+    /// unset. Now it is always set — the inversion slot is `None`, but the body is there.
+    ///
+    /// The second assertion (energy ratio `1.0`) pins the "stays passive" guarantee: a body in the
+    /// medium slot must not cause any energy change when no gain model is present.
+    #[test]
+    fn a_passive_volume_node_has_a_prepared_body_after_prepare_volume() -> OpmResult<()> {
+        let mut lens = placed_lens()?;
+        let config = RayTraceConfig::default(); // no active pump scenario
+        lens.prepare_volume(&config)?;
+        // The body is now available even though no gain model was set.
+        assert!(
+            lens.node_attr().runtime_medium().is_some(),
+            "prepare_volume must build the body for a passive volume node"
+        );
+        // And the inversion slot is empty — the body alone does nothing to the rays.
+        assert!(
+            lens.node_attr()
+                .runtime_medium()
+                .and_then(|m| m.inversion())
+                .is_none(),
+            "a passive node must not have an inversion field"
+        );
+        // The passive contract: no gain model → no energy change, even with a prepared body.
+        assert_abs_diff_eq!(
+            retraced_energy_value(&mut lens, &config)?,
             1.0,
             epsilon = 1e-12
         );

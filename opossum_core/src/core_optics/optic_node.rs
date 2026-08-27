@@ -60,16 +60,16 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     /// Prepare this node's medium before the first ray is traced (Phase A).
     ///
     /// Derives the node's [`SurfaceBoundedBody`](crate::geometry::body::SurfaceBoundedBody) from the
-    /// **current** node isometry and, if the gain model reads the inversion, builds the
-    /// [`InversionField`](crate::gain::InversionField) from the pump configuration. Both are stored
-    /// in [`NodeAttr`]'s `runtime_medium` slot so that
+    /// **current** node isometry and stores it in [`NodeAttr`]'s `runtime_medium` slot so that
     /// [`Volumetric::propagate_inside_medium`](crate::core_optics::volumetric::Volumetric::propagate_inside_medium)
-    /// (Phase B) can read them without rebuilding per ray pass.
+    /// (Phase B) can read it without rebuilding per ray pass. If the operating point provides a gain
+    /// model that reads the inversion, the [`InversionField`](crate::gain::InversionField) is built
+    /// from the pump configuration and stored alongside the body; otherwise the inversion slot is
+    /// `None`.
     ///
     /// The body is always re-derived on every call, so geometry edits (e.g. changed centre
     /// thickness) and repositioning by the analyzer's `calc_node_positions` are picked up
-    /// correctly. Non-volume nodes and nodes with no active gain model return immediately without
-    /// touching the medium slot.
+    /// correctly. Non-volume nodes return immediately without touching the medium slot.
     ///
     /// [`NodeGroup`](crate::nodes::NodeGroup) overrides this to recurse into every child node.
     ///
@@ -81,13 +81,15 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
         let Some(volumetric) = self.as_volume() else {
             return Ok(());
         };
-        let config = strategy.pump_config(self.node_attr().uuid());
-        let gain_model = config.gain_model();
-        let Some(model) = gain_model.as_extraction() else {
-            return Ok(());
-        };
+        // The body is pure geometry — build it for every volume node regardless of the operating
+        // point, so it is available whenever anything needs to query the medium.
         let body = volumetric.volume_body()?;
-        let inversion = model.build_inversion(&body, &config)?;
+        let config = strategy.pump_config(self.node_attr().uuid());
+        // The inversion is gain-specific: only build it when the gain model reads one.
+        let inversion = match config.gain_model().as_extraction() {
+            Some(model) => model.build_inversion(&body, &config)?,
+            None => None,
+        };
         self.node_attr_mut().set_runtime_medium(body, inversion);
         Ok(())
     }

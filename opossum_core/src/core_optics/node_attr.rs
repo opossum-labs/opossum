@@ -70,7 +70,12 @@ impl RuntimeMedium {
     ///
     /// `(&dyn Body, &mut Option<InversionField>)` — the body for geometric queries and the
     /// inversion field that saturating models may deplete between substeps.
-    pub fn parts_mut(&mut self) -> (&dyn crate::geometry::body::Body, &mut Option<InversionField>) {
+    pub fn parts_mut(
+        &mut self,
+    ) -> (
+        &dyn crate::geometry::body::Body,
+        &mut Option<InversionField>,
+    ) {
         (&self.body, &mut self.inversion)
     }
 }

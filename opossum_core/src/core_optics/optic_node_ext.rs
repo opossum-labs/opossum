@@ -155,7 +155,6 @@ pub trait OpticNodeExt {
         optic_surf_name: &str,
         refri_after_surf: Option<RefractiveIndexType>,
     ) -> OpmResult<LightResult>;
-
 }
 
 /// Return the names of the one input and the one output port of `node`.

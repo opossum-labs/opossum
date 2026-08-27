@@ -14,10 +14,7 @@
 
 use super::scenario::PumpConfig;
 use crate::{
-    error::OpmResult,
-    gain::inversion_field::InversionField,
-    geometry::body::Body,
-    light::Spectrum,
+    error::OpmResult, gain::inversion_field::InversionField, geometry::body::Body, light::Spectrum,
 };
 use nalgebra::Point3;
 use uom::si::f64::Length;
