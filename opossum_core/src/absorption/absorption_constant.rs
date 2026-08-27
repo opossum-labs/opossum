@@ -32,13 +32,18 @@ pub struct AbsConst {
     absorption_constant: ValidatedAbsConst,
 }
 impl AbsConst {
+    /// Create a constant absorption factor [`AbsConst`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the given factor is outside the interval `[0.0..1.0]`.
     pub fn new(factor: f64) -> OpmResult<Self> {
         let mut abs_const = Self::default();
         abs_const.absorption_constant.set(factor)?;
         Ok(abs_const)
     }
-
-    pub fn absorption_constant(&self) -> f64 {
+    #[must_use]
+    pub const fn absorption_constant(&self) -> f64 {
         *self.absorption_constant.get()
     }
 }

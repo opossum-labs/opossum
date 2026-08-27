@@ -1,4 +1,8 @@
-use crate::{error::OpmResult, generic_validators::*, num_per_m, validated, validated_type};
+use crate::{
+    error::OpmResult,
+    generic_validators::{AllFinite, AllPositive},
+    num_per_m, validated, validated_type,
+};
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::LinearNumberDensity;
@@ -16,12 +20,18 @@ pub struct AbsLBConst {
 }
 
 impl AbsLBConst {
+    /// Create a new [`AbsLBConst`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the given absorption parameter is negative or nor finite.
     pub fn new(absoprtion: LinearNumberDensity) -> OpmResult<Self> {
         let mut lbc = Self::default();
         lbc.absorption_coefficient.set(absoprtion)?;
         Ok(lbc)
     }
-    pub fn alpha(&self) -> LinearNumberDensity {
+    #[must_use]
+    pub const fn alpha(&self) -> LinearNumberDensity {
         *self.absorption_coefficient.get()
     }
 }

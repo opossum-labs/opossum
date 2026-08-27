@@ -1,7 +1,8 @@
 use crate::error::OpmResult;
 use crate::validated_type;
 use crate::{
-    generic_validators::*, millimeter, nanometer, validated, validated_vec, validated_vec_type,
+    generic_validators::{AllFinite, AllNotEmpty, AllPositive, XNormal, YFinite},
+    millimeter, nanometer, validated, validated_vec, validated_vec_type,
 };
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
@@ -36,6 +37,14 @@ pub struct AbsCatTrans {
 }
 
 impl AbsCatTrans {
+    /// Create a new [`AbsCatTrans`] struct.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    ///
+    /// - `reference_thickness` is <=0 m or not finite.
+    /// - the given data points contain illegal values (wavelength<=0 nm or value not in `[0.0..1.0]`).
     pub fn new(reference_thickness: Length, data: Vec<(Length, f64)>) -> OpmResult<Self> {
         let mut act = Self::default();
         act.reference_thickness.set(reference_thickness)?;
@@ -48,7 +57,8 @@ impl AbsCatTrans {
         act.data.set(converted_data)?;
         Ok(act)
     }
-    pub fn reference_thickness(&self) -> Length {
+    #[must_use]
+    pub const fn reference_thickness(&self) -> Length {
         *self.reference_thickness.get()
     }
     #[must_use]

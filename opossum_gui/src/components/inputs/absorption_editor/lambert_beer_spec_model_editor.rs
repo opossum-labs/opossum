@@ -1,17 +1,11 @@
+use opossum_core::{absorption::absorption_model::AbsorptionModel, light::Spectrum, micrometer};
 use std::path::Path;
-use opossum_core::{
-    absorption::absorption_model::AbsorptionModel,
-    light::Spectrum,
-    micrometer,
-};
 use strum::EnumIter;
 use uom::si::length::nanometer;
 
 use crate::{
     OPOSSUM_UI_LOGS,
-    components::node_editor::inputs::{
-        InputParam, IntoInputData, IntoInputDataStrings,
-    },
+    components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings},
 };
 
 /// Parameter descriptors for the spectral Lambert-Beer absorption model.
@@ -64,7 +58,7 @@ impl IntoInputData<String, Spectrum, AbsorptionModel> for LambertBeerSpecParam {
     fn setter_from_obj(&self) -> impl FnMut(&mut Spectrum, String) {
         move |obj: &mut Spectrum, file_path: String| {
             let path = Path::new(&file_path);
-            
+
             match Spectrum::from_csv(path) {
                 Ok(loaded_spectrum) => {
                     *obj = loaded_spectrum;
