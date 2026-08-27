@@ -45,7 +45,7 @@ impl Default for Spectrum {
     fn default() -> Self {
         Self {
             data: validated_vec!(
-                vec![(1054., 1.)],
+                vec![(1.054, 1.)],
                 AllPositive && XNormal && YFinite,
                 AllNotEmpty
             )
@@ -111,17 +111,13 @@ impl Spectrum {
     /// Create a new [`Spectrum`] from a text-based file (CSV, TSV, or space-separated).
     ///
     /// The file must contain exactly two columns per line. Columns can be separated by
-    /// semicolons, commas, tabs, or spaces (even mixed). The first column corresponds to
-    /// the wavelength in nm, the second column represents values in percent.
-    /// The decimal separator must strictly be a dot `.`.
+    /// semicolons, commas, tabs, or spaces (even mixed).
+    /// Handles UTF-8 BOM characters automatically.
     ///
     /// # Errors
     ///
-    /// This function will return an [`OpossumError::Spectrum`] if
-    ///   - the file path is not found or could not be read.
-    ///   - the file contains lines that do not resolve to exactly two columns.
-    ///   - the values within the columns cannot be parsed into 64-bit floating-point numbers.
-    ///   - no valid data was found in the file.
+    /// Returns an [`OpossumError::Spectrum`] if the file cannot be opened, has malformed lines,
+    /// or contains invalid floating-point values.
     pub fn from_csv(path: &Path) -> OpmResult<Self> {
         // Open the file and wrap it in a BufReader for efficient line-by-line reading
         let file = File::open(path).map_err(|e| OpossumError::Spectrum(e.to_string()))?;
@@ -130,15 +126,15 @@ impl Spectrum {
 
         for (index, line_result) in reader.lines().enumerate() {
             let line = line_result.map_err(|e| OpossumError::Spectrum(e.to_string()))?;
-            let line = line.trim();
+            // Strip leading UTF-8 BOM (if present) and surrounding whitespace
+            let line = line.trim().trim_start_matches('\u{feff}').trim();
 
-            // Gracefully skip completely empty lines (e.g., at the end of the file)
+            // Gracefully skip completely empty lines
             if line.is_empty() {
                 continue;
             }
 
-            // Split the line using an array of allowed delimiter characters
-            // and filter out empty strings caused by consecutive delimiters.
+            // Split the line using supported delimiters (comma, semicolon, tab, whitespace)
             let tokens: Vec<&str> = line
                 .split([';', ',', '\t', ' '])
                 .filter(|s| !s.is_empty())
@@ -175,7 +171,7 @@ impl Spectrum {
             datas.push((lambda * 1.0E-3, data * 0.01));
         }
 
-        // Ensure we actually collected some data
+        // Ensure valid data entries were found
         if datas.is_empty() {
             return Err(OpossumError::Spectrum(
                 "No valid data was found in the file".into(),
