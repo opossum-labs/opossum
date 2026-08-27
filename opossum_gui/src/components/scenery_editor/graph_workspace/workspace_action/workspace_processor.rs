@@ -1885,7 +1885,7 @@ async fn process_refresh(
             )
             .await;
 
-            ws_handler.workspace.set_needs_saving(false);
+            ws_handler.workspace.set_needs_saving(true);
             *crate::UNDO_REDO_STATUS.write() = (false, false);
         }
         Err(err_str) => {
