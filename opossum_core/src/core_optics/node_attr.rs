@@ -60,6 +60,19 @@ impl RuntimeMedium {
     pub const fn inversion(&self) -> Option<&InversionField> {
         self.inversion.as_ref()
     }
+    /// Return the body and inversion as a split mutable borrow.
+    ///
+    /// Splits `&mut RuntimeMedium` into an immutable reference to the body and a mutable reference
+    /// to the inversion field. The two borrows are valid simultaneously because they target
+    /// different fields of the struct.
+    ///
+    /// # Returns
+    ///
+    /// `(&dyn Body, &mut Option<InversionField>)` — the body for geometric queries and the
+    /// inversion field that saturating models may deplete between substeps.
+    pub fn parts_mut(&mut self) -> (&dyn crate::geometry::body::Body, &mut Option<InversionField>) {
+        (&self.body, &mut self.inversion)
+    }
 }
 
 fn deserialize_name<'de, D>(deserializer: D) -> Result<String, D::Error>
@@ -327,6 +340,14 @@ impl NodeAttr {
     #[must_use]
     pub const fn runtime_medium(&self) -> Option<&RuntimeMedium> {
         self.runtime_medium.as_ref()
+    }
+    /// Return a mutable reference to the prepared medium for this node, if any.
+    ///
+    /// Used by
+    /// [`Volumetric::amplify_inside`](crate::core_optics::volumetric::Volumetric::amplify_inside)
+    /// to pass a mutable inversion field to saturating models that deplete it between substeps.
+    pub fn runtime_medium_mut(&mut self) -> Option<&mut RuntimeMedium> {
+        self.runtime_medium.as_mut()
     }
     /// Store the prepared medium for this node.
     ///

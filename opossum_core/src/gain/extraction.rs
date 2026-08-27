@@ -17,8 +17,10 @@ use crate::{
     error::OpmResult,
     gain::inversion_field::InversionField,
     geometry::body::Body,
-    light::{Rays, Spectrum},
+    light::Spectrum,
 };
+use nalgebra::Point3;
+use uom::si::f64::Length;
 
 /// How one gain model draws energy out of an active medium.
 ///
@@ -66,28 +68,46 @@ pub trait Extraction {
         body: &dyn Body,
         config: &PumpConfig,
     ) -> OpmResult<Option<InversionField>>;
-    /// Amplify a ray bundle crossing the medium.
+    /// Number of z-march steps this model uses per chord through the medium.
     ///
-    /// The rays sit **on the entrance surface** with the direction they were refracted into, and
-    /// this must not move them: they are carried to the exit surface afterwards, exactly as through
-    /// a passive component.
+    /// [`volumetric::Volumetric::amplify_inside`](crate::core_optics::volumetric::Volumetric) divides
+    /// the chord a ray travels inside the medium into this many equal segments and calls
+    /// [`gain_exponent_at`](Self::gain_exponent_at) once per segment. A model with no geometric
+    /// sensitivity — a constant factor — returns 1, so one evaluation covers the full chord.
+    ///
+    /// # Returns
+    ///
+    /// Number of integration steps; must be non-zero.
+    fn n_steps(&self) -> usize;
+
+    /// Gain exponent contributed by one z-march segment through the medium.
+    ///
+    /// [`volumetric::Volumetric::amplify_inside`](crate::core_optics::volumetric::Volumetric)
+    /// accumulates the return values of all segments and exponentiates the sum to obtain the gain
+    /// factor for the whole chord: `factor = exp(Σ gain_exponent_at(…))`.
+    ///
+    /// `inversion` is `&mut Option<InversionField>` so that saturating models can deplete the field
+    /// between substeps; the [`Option`] layer stays because models such as [`ConstGain`](super::ConstGain)
+    /// never build an inversion.
     ///
     /// # Arguments
     ///
-    /// * `body` - the volume the light passes through.
-    /// * `inversion` - the inversion field the node was prepared with, or `None` if this model
-    ///   built none.
-    /// * `rays_bundle` - the rays inside it, modified in place.
+    /// * `local` - midpoint of the segment in the body's local coordinate frame.
+    /// * `step_width` - arc length of the segment.
+    /// * `inversion` - the inversion field the node was prepared with, mutable so that saturating
+    ///   models can write depletion back. `None` if this model built no field.
     ///
-    /// # Errors
+    /// # Returns
     ///
-    /// This function errors if the resulting ray energies would not be finite.
-    fn amplify_rays(
+    /// The dimensionless exponent contribution `g · Δz` for this segment.
+    /// Returns `0.0` for a segment that contributes nothing — outside the grid, outside the medium,
+    /// or no field available.
+    fn gain_exponent_at(
         &self,
-        body: &dyn Body,
-        inversion: Option<&InversionField>,
-        rays_bundle: &mut [Rays],
-    ) -> OpmResult<()>;
+        local: &Point3<Length>,
+        step_width: Length,
+        inversion: &mut Option<InversionField>,
+    ) -> f64;
     /// Amplify the spectral energy passing through the medium.
     ///
     /// An energy flow analysis knows no rays and no path lengths, so a model depending on them has

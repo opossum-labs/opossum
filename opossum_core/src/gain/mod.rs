@@ -29,10 +29,12 @@ use crate::{
     error::OpmResult,
     generic_validators::{AllFinite, AllPositive, ValidateTrait},
     geometry::body::Body,
-    light::{Rays, Spectrum},
+    light::Spectrum,
     utils::default_from_name::DefaultFromName,
     validated, validated_type,
 };
+use nalgebra::Point3;
+use uom::si::f64::Length;
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
@@ -139,18 +141,19 @@ impl Extraction for ConstGain {
         // Reading no inversion, this model must not pay for a grid either.
         Ok(None)
     }
-    fn amplify_rays(
+    fn n_steps(&self) -> usize {
+        // Path-independent by definition: one evaluation covers the full chord.
+        1
+    }
+    fn gain_exponent_at(
         &self,
-        _body: &dyn Body,
-        _inversion: Option<&InversionField>,
-        rays_bundle: &mut [Rays],
-    ) -> OpmResult<()> {
-        // Independent of the path through the medium by definition, so every ray of the bundle is
-        // multiplied by the same factor, once per pass.
-        for rays in rays_bundle.iter_mut() {
-            rays.scale_energy(self.gain())?;
-        }
-        Ok(())
+        _local: &Point3<Length>,
+        _step_width: Length,
+        _inversion: &mut Option<InversionField>,
+    ) -> f64 {
+        // The gain is a fixed factor regardless of position or path length, so the exponent for
+        // the single step is ln(gain), giving factor = exp(ln(gain)) = gain.
+        self.gain().ln()
     }
     fn amplify_spectrum(
         &self,

@@ -23,8 +23,9 @@ use crate::{
     material::{MATERIAL, Material},
     properties::{Proptype, proptype::AssetRef},
     types::validated_type_definitions::ValidatedCrossSection,
-    utils::geom_transformation::Isometry,
+    utils::{geom_transformation::Isometry, math_utils::to_f64},
 };
+use nalgebra::Point3;
 
 /// An [`OpticNode`] that encloses a volume of material between two of its surfaces.
 ///
@@ -216,15 +217,70 @@ pub trait Volumetric: OpticNode {
         let Some(extraction) = gain_model.as_extraction() else {
             return Ok(());
         };
-        let Some(medium) = self.node_attr().runtime_medium() else {
+        if strategy.is_positioning_run() {
+            return Ok(());
+        }
+        // Capture the name before the mutable borrow of `self` through `node_attr_mut`.
+        let node_name = self.name().to_owned();
+        let Some(medium) = self.node_attr_mut().runtime_medium_mut() else {
             return Err(OpossumError::Analysis(format!(
-                "node '{}': medium was not prepared before amplification",
-                self.name()
+                "node '{node_name}': medium was not prepared before amplification"
             )));
         };
-        extraction
-            .amplify_rays(medium.body(), medium.inversion(), rays_bundle)
-            .map_err(|e| OpossumError::Analysis(format!("node '{}': {e}", self.name())))
+        // Split the medium into an immutable body reference and a mutable inversion reference so
+        // that saturating models can read and write the field in each substep.
+        let (body, inversion) = medium.parts_mut();
+        let n_steps = extraction.n_steps();
+        for rays in rays_bundle.iter_mut() {
+            for ray in rays.iter_mut() {
+                if !ray.valid() {
+                    continue;
+                }
+                let Some(chord) = body.path_length_inside(ray).map_err(|e| {
+                    OpossumError::Analysis(format!("node '{node_name}': {e}"))
+                })? else {
+                    continue;
+                };
+                if chord.value <= 0.0 {
+                    continue;
+                }
+                // `Ray::direction` is not guaranteed normalised — stepping along the raw vector
+                // would cover the wrong distance. `path_length_inside` is unaffected.
+                let direction = ray.direction();
+                let norm = direction.norm();
+                if !norm.is_normal() {
+                    continue;
+                }
+                let direction = direction / norm;
+                let step_width = chord / to_f64(n_steps);
+                let start = ray.position();
+                // The body's own frame is used so the sampling frame and the inversion field grid
+                // always agree on where the medium is.
+                let frame = body.isometry();
+                let mut exponent = 0.0_f64;
+                for step in 0..n_steps {
+                    let travelled = step_width * (to_f64(step) + 0.5);
+                    let local = frame.inverse_transform_point(&Point3::new(
+                        start.x + direction.x * travelled,
+                        start.y + direction.y * travelled,
+                        start.z + direction.z * travelled,
+                    ));
+                    exponent += extraction.gain_exponent_at(&local, step_width, inversion);
+                }
+                let factor = exponent.exp();
+                if !factor.is_finite() {
+                    return Err(OpossumError::Analysis(format!(
+                        "node '{node_name}': would amplify by exp({exponent}) over a path of \
+                         {} mm through the medium, which is not a finite factor",
+                        chord.get::<uom::si::length::millimeter>()
+                    )));
+                }
+                ray.scale_energy(factor).map_err(|e| {
+                    OpossumError::Analysis(format!("node '{node_name}': {e}"))
+                })?;
+            }
+        }
+        Ok(())
     }
     /// Amplify the spectral energy passing through this node's medium.
     ///
@@ -955,8 +1011,8 @@ mod test {
     /// the node's position at deserialization time — which is the origin, because `set_isometry`
     /// from `calc_node_positions` had not run yet — and `prepare_volume`'s first branch then reused
     /// that stale body for all subsequent runs. A head placed anywhere but the origin had its
-    /// inversion field laid out at the wrong coordinates, so `gain_factor` found no inversion for
-    /// any real ray and returned exactly `1.0`.
+    /// inversion field laid out at the wrong coordinates, so `gain_exponent_at` found no inversion
+    /// for any real ray and returned exactly `0.0`, giving a gain factor of `1.0`.
     ///
     /// After the fix: `prepare_volume` always re-derives the body from the current geometry, so the
     /// inversion and the sampling frame are always consistent with the node's actual position.
@@ -985,8 +1041,8 @@ mod test {
 
         // `traced_energy_ratio` calls `prepare_volume` and then analyzes.
         // Before the fix: `prepare_volume` saw `runtime_medium().is_some()` and reused the
-        // identity body; `gain_factor` sampled at the real position, found no inversion, and
-        // returned `1.0` — a silently passive amplifier.
+        // identity body; `gain_exponent_at` sampled at the real position, found no inversion, and
+        // returned `0.0` — giving factor `1.0`, a silently passive amplifier.
         // After the fix: `prepare_volume` always rebuilds the body from the 500 mm isometry,
         // so the inversion covers the real position and the result is the expected gain.
         assert_relative_eq!(
