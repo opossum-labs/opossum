@@ -612,6 +612,16 @@ body {
     flex: 1 1 0;
 }
 
+/* Two inputs side by side — used for paired parameters like σx/σy or center x/center y. */
+.field-pair {
+    display: flex;
+    gap: 4px;
+}
+.field-pair > * {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
 /* One stack of controls configuring a candidate within a scenario - the gain model with its own
    parameters, and, where the model calls for it, the pump source with its. Stacked rather than laid
    out in a grid because the sidebar it lives in is narrow. */

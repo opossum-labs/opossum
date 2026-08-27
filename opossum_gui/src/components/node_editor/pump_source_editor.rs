@@ -11,8 +11,12 @@
 
 use crate::{
     OPOSSUM_UI_LOGS,
-    components::node_editor::inputs::{
-        input_components::LabeledSelect, select_options_from_enum_iterator,
+    components::node_editor::{
+        hooks::use_synced_signal,
+        inputs::{
+            input_components::{FormContext, LabeledSelect, NodeConfigUnitInput, UnitHandling},
+            select_options_from_enum_iterator,
+        },
     },
 };
 use dioxus::prelude::*;
@@ -22,12 +26,10 @@ use opossum_core::{
         AnalyticPump, BeerLambertProfile, ConstInversion, LongitudinalProfile, PumpDirection,
         PumpSource, TransversalProfile,
     },
-    millimeter, reciprocal_centimeter,
+    meter, reciprocal_centimeter,
     utils::{default_from_name::DefaultFromName, super_gaussian::SuperGaussianShape},
 };
-use uom::si::{
-    angle::degree, f64::Length, length::millimeter, reciprocal_length::reciprocal_centimeter,
-};
+use uom::si::{angle::degree, reciprocal_length::reciprocal_centimeter};
 
 /// The pump source of one node in one scenario: a variant dropdown plus, per variant, its
 /// parameters.
@@ -43,6 +45,13 @@ pub fn PumpSourceEditor(
     source: PumpSource,
     on_change: EventHandler<PumpSource>,
 ) -> Element {
+    let flush_trigger = use_signal(|| 0usize);
+    let dirty_count = use_signal(|| 0usize);
+    use_context_provider(|| FormContext {
+        flush_trigger,
+        dirty_count,
+    });
+
     rsx! {
         div { class: "amp-config-block",
             LabeledSelect {
@@ -181,72 +190,58 @@ fn SuperGaussianFields(
     };
     let (center, sigma) = (shape.center(), shape.sigma());
     let (power, theta, rectangular) = (shape.power(), shape.theta(), shape.rectangular());
-    let millimeters = |axis: Length| axis.get::<millimeter>();
+
+    // Synced signals drive NodeConfigUnitInput's reactive re-sync when the shape is changed
+    // externally (a save completing, an undo) without losing a mid-edit value.
+    let sig_sigma_x = use_synced_signal(sigma.x);
+    let sig_sigma_y = use_synced_signal(sigma.y);
+    let sig_center_x = use_synced_signal(center.x);
+    let sig_center_y = use_synced_signal(center.y);
+    let sig_theta = use_synced_signal(theta);
+
+    let unit_m = UnitHandling::new("m", true);
+
     rsx! {
         div { class: "amp-pump-nested",
-            NumberField {
-                id: format!("{id_prefix}-spot-sigma-x"),
-                label: "Width σx (mm)".to_string(),
-                value: millimeters(sigma.x),
-                step: 0.5,
-                min: Some(0.0),
-                on_save: move |value: f64| {
-                    rebuilt(
-                        center,
-                        millimeter!(value, millimeters(sigma.y)),
-                        power,
-                        theta,
-                        rectangular,
-                    );
-                },
+            div { class: "field-pair",
+                NodeConfigUnitInput {
+                    id: format!("{id_prefix}-spot-sigma-x"),
+                    label: "σx",
+                    value: sig_sigma_x.read().value,
+                    unit_config: unit_m.clone(),
+                    onchange: move |x_m: f64| {
+                        rebuilt(center, meter!(x_m, sigma.y.get::<uom::si::length::meter>()), power, theta, rectangular);
+                    },
+                }
+                NodeConfigUnitInput {
+                    id: format!("{id_prefix}-spot-sigma-y"),
+                    label: "σy",
+                    value: sig_sigma_y.read().value,
+                    unit_config: unit_m.clone(),
+                    onchange: move |y_m: f64| {
+                        rebuilt(center, meter!(sigma.x.get::<uom::si::length::meter>(), y_m), power, theta, rectangular);
+                    },
+                }
             }
-            NumberField {
-                id: format!("{id_prefix}-spot-sigma-y"),
-                label: "Width σy (mm)".to_string(),
-                value: millimeters(sigma.y),
-                step: 0.5,
-                min: Some(0.0),
-                on_save: move |value: f64| {
-                    rebuilt(
-                        center,
-                        millimeter!(millimeters(sigma.x), value),
-                        power,
-                        theta,
-                        rectangular,
-                    );
-                },
-            }
-            NumberField {
-                id: format!("{id_prefix}-spot-mu-x"),
-                label: "Center x (mm)".to_string(),
-                value: millimeters(center.x),
-                step: 0.5,
-                min: None,
-                on_save: move |value: f64| {
-                    rebuilt(
-                        millimeter!(value, millimeters(center.y)),
-                        sigma,
-                        power,
-                        theta,
-                        rectangular,
-                    );
-                },
-            }
-            NumberField {
-                id: format!("{id_prefix}-spot-mu-y"),
-                label: "Center y (mm)".to_string(),
-                value: millimeters(center.y),
-                step: 0.5,
-                min: None,
-                on_save: move |value: f64| {
-                    rebuilt(
-                        millimeter!(millimeters(center.x), value),
-                        sigma,
-                        power,
-                        theta,
-                        rectangular,
-                    );
-                },
+            div { class: "field-pair",
+                NodeConfigUnitInput {
+                    id: format!("{id_prefix}-spot-mu-x"),
+                    label: "Center x",
+                    value: sig_center_x.read().value,
+                    unit_config: unit_m.clone(),
+                    onchange: move |x_m: f64| {
+                        rebuilt(meter!(x_m, center.y.get::<uom::si::length::meter>()), sigma, power, theta, rectangular);
+                    },
+                }
+                NodeConfigUnitInput {
+                    id: format!("{id_prefix}-spot-mu-y"),
+                    label: "Center y",
+                    value: sig_center_y.read().value,
+                    unit_config: unit_m.clone(),
+                    onchange: move |y_m: f64| {
+                        rebuilt(meter!(center.x.get::<uom::si::length::meter>(), y_m), sigma, power, theta, rectangular);
+                    },
+                }
             }
             NumberField {
                 id: format!("{id_prefix}-spot-power"),
@@ -258,14 +253,13 @@ fn SuperGaussianFields(
                     rebuilt(center, sigma, value, theta, rectangular);
                 },
             }
-            NumberField {
+            NodeConfigUnitInput {
                 id: format!("{id_prefix}-spot-theta"),
-                label: "Rotation (°)".to_string(),
-                value: theta.get::<degree>(),
-                step: 5.0,
-                min: None,
-                on_save: move |value: f64| {
-                    rebuilt(center, sigma, power, degree!(value), rectangular);
+                label: "Rotation",
+                value: sig_theta.read().get::<degree>(),
+                unit_config: UnitHandling::new("°", true),
+                onchange: move |d: f64| {
+                    rebuilt(center, sigma, power, degree!(d), rectangular);
                 },
             }
             div { class: "form-check",
