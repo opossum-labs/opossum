@@ -225,7 +225,7 @@ impl DefaultFromName for AbsorptionModel {
             "LambertBeerSpectrum" | "Lambert-Beer (Spectrum)" => {
                 Some(Self::LambertBeerSpectrum(Spectrum::default()))
             }
-            "ExtinctionCoefficient" | "Extinction Coefficient (k)" => {
+            "ExtinctionCoefficient" | "Extinction Coefficient" => {
                 Some(Self::ExtinctionCoefficient(0.0))
             }
             "CatalogTransmittance" | "Catalog Transmittance" => {
@@ -260,7 +260,6 @@ impl From<&Spectrum> for AbsorptionModel {
     }
 }
 
-// In opossum_core::absorption::absorption_model:
 impl From<AbsLBConst> for AbsorptionModel {
     fn from(model: AbsLBConst) -> Self {
         Self::LambertBeerConstant(model)
@@ -273,6 +272,17 @@ impl From<&AbsLBConst> for AbsorptionModel {
     }
 }
 
+impl From<f64> for AbsorptionModel {
+    fn from(k: f64) -> Self {
+        Self::ExtinctionCoefficient(k)
+    }
+}
+
+impl From<&f64> for AbsorptionModel {
+    fn from(k: &f64) -> Self {
+        Self::ExtinctionCoefficient(*k)
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

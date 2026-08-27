@@ -37,7 +37,7 @@ impl AbsConst {
         abs_const.absorption_constant.set(factor)?;
         Ok(abs_const)
     }
-    
+
     pub fn absorption_constant(&self) -> f64 {
         *self.absorption_constant.get()
     }

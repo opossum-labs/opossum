@@ -13,13 +13,18 @@ impl Default for ValidatedLength {
     }
 }
 type ValidatedData = validated_vec_type!(
-        Vec<(Length, f64)>,
-        XNormal && YFinite && AllPositive,
-        AllNotEmpty);
+    Vec<(Length, f64)>,
+    XNormal && YFinite && AllPositive,
+    AllNotEmpty
+);
 impl Default for ValidatedData {
     fn default() -> Self {
-        validated_vec!(vec![(nanometer!(1000.0), 1.0)], XNormal && YFinite && AllPositive,
-        AllNotEmpty).unwrap()
+        validated_vec!(
+            vec![(nanometer!(1000.0), 1.0)],
+            XNormal && YFinite && AllPositive,
+            AllNotEmpty
+        )
+        .unwrap()
     }
 }
 #[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq, EnsureValidated)]
@@ -36,9 +41,7 @@ impl AbsCatTrans {
         act.reference_thickness.set(reference_thickness)?;
         let converted_data = data
             .into_iter()
-            .map(|(wvl, val)| {
-                Ok((wvl, val))
-            })
+            .map(|(wvl, val)| Ok((wvl, val)))
             .collect::<OpmResult<Vec<_>>>()?;
 
         // Validate container constraints (AllNotEmpty) and store

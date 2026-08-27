@@ -6,8 +6,7 @@ use super::lambert_beer_spec_model_editor::LambertBeerSpecParam;
 
 use dioxus::prelude::*;
 use opossum_core::{
-    absorption::absorption_model::AbsorptionModel,
-    utils::default_from_name::DefaultFromName,
+    absorption::absorption_model::AbsorptionModel, utils::default_from_name::DefaultFromName,
 };
 
 use crate::components::node_editor::inputs::{
@@ -69,19 +68,19 @@ pub fn AbsorptionEditor(
     let current_model = internal_state.read();
 
     rsx! {
-      div { class: "absorption-editor-container",
-        LabeledSelect {
-          id: format!("{}Select", base_id),
-          label: "Absorption Model Definition".to_string(),
-          options: select_options.read().clone(),
-          readonly,
-          onchange: handle_select_change,
-        }
+        div { class: "absorption-editor-container",
+            LabeledSelect {
+                id: format!("{}Select", base_id),
+                label: "Absorption Model Definition".to_string(),
+                options: select_options.read().clone(),
+                readonly,
+                onchange: handle_select_change,
+            }
 
-        div { class: "accordion-content-wrapper-div border-start mt-2 px-2",
-          RowedInputs { inputs: get_absorption_input_data(&current_model, handle_internal_change, readonly) }
+            div { class: "accordion-content-wrapper-div border-start mt-2 px-2",
+                RowedInputs { inputs: get_absorption_input_data(&current_model, handle_internal_change, readonly) }
+            }
         }
-      }
     }
 }
 
@@ -106,7 +105,7 @@ fn get_absorption_input_data(
             CatalogTransmittanceParam::to_input_data_vec(abs_cat_trans, on_save, readonly)
         }
         AbsorptionModel::ExtinctionCoefficient(k) => {
-            ExtinctionParam::to_input_data_vec(*k, on_save, readonly)
+            ExtinctionParam::to_input_data_vec(k, on_save, readonly)
         }
     }
 }

@@ -1,13 +1,7 @@
-use dioxus::prelude::*;
-use opossum_core::absorption::{
-    absorption_constant::AbsConst,
-    absorption_model::AbsorptionModel,
-};
+use opossum_core::absorption::{absorption_constant::AbsConst, absorption_model::AbsorptionModel};
 use strum::EnumIter;
 
-use crate::components::node_editor::inputs::{
-    InputParam, IntoInputData, IntoInputDataStrings,
-};
+use crate::components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings};
 
 /// Parameter descriptors for the constant attenuation model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter)]

@@ -1,9 +1,6 @@
-use dioxus::prelude::*;
-use opossum_core::{
-    absorption::absorption_model::AbsorptionModel,
-    light::Spectrum,
-};
 use crate::components::node_editor::inputs::InputData;
+use dioxus::prelude::*;
+use opossum_core::{absorption::absorption_model::AbsorptionModel, light::Spectrum};
 
 /// Parameter helper for the spectral Lambert-Beer absorption model.
 pub struct LambertBeerSpecParam;

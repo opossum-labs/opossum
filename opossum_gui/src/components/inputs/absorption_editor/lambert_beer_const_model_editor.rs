@@ -1,16 +1,11 @@
 use opossum_core::{
-    absorption::{
-        absorption_lb_constant::AbsLBConst,
-        absorption_model::AbsorptionModel,
-    },
+    absorption::{absorption_lb_constant::AbsLBConst, absorption_model::AbsorptionModel},
     num_per_m,
 };
 use strum::EnumIter;
 use uom::si::linear_number_density::per_meter;
 
-use crate::components::node_editor::inputs::{
-    InputParam, IntoInputData, IntoInputDataStrings,
-};
+use crate::components::node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings};
 
 /// Parameter descriptors for the constant Lambert-Beer absorption model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter)]

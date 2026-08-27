@@ -1,13 +1,13 @@
 use dioxus::prelude::*;
 use opossum_core::{
-    absorption::absorption_model::AbsorptionModel,
-    material::OpticalProperties,
+    absorption::absorption_model::AbsorptionModel, material::OpticalProperties,
     refractive_index::RefractiveIndexType,
 };
 
 // Adjust import path according to your module layout if needed
 use crate::components::{
-    inputs::{RefractiveIndexEditor, absorption_editor::AbsorptionEditor}, primitives::card::{Card, CardContent, CardHeader, CardTitle},
+    inputs::{RefractiveIndexEditor, absorption_editor::AbsorptionEditor},
+    primitives::card::{Card, CardContent, CardHeader, CardTitle},
 };
 
 /// Actions representing modifications in optical properties.

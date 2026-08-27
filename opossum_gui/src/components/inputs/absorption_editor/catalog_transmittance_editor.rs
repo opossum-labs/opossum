@@ -1,9 +1,8 @@
+use crate::components::node_editor::inputs::InputData;
 use dioxus::prelude::*;
 use opossum_core::absorption::{
-    absorption_catalog_transmittance::AbsCatTrans,
-    absorption_model::AbsorptionModel,
+    absorption_catalog_transmittance::AbsCatTrans, absorption_model::AbsorptionModel,
 };
-use crate::components::node_editor::inputs::InputData;
 
 /// Parameter helper for tabulated catalog transmittance data.
 pub struct CatalogTransmittanceParam;
