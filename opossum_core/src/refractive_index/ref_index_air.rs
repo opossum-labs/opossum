@@ -8,7 +8,7 @@ use super::{RefractiveIndex, RefractiveIndexType};
 use crate::{
     degree_celsius,
     error::{OpmResult, OpossumError},
-    generic_validators::{AllFinite, AllInRange, ValidateTrait},
+    generic_validators::{AllFinite, StaticBounds, StaticInRange},
     hectopascal, validated, validated_type,
 };
 use opm_macros_lib::EnsureValidated;
@@ -82,22 +82,62 @@ fn partial_vapor_pressure(temperature: ThermodynamicTemperature, humidity: f64) 
     (humidity / 100.0) * saturation_vapor_pressure(temperature)
 }
 
-#[derive(Deserialize)]
-struct NonValidatedRefrIndexAir {
-    temperature: ThermodynamicTemperature,
-    pressure: Pressure,
-    humidity: f64,
+#[derive(Copy, Clone, PartialEq, Debug, Eq)]
+struct HumidityBounds;
+
+impl StaticBounds<f64> for HumidityBounds {
+    fn min() -> f64 {
+        HUMIDITY_MIN
+    }
+    fn max() -> f64 {
+        HUMIDITY_MAX
+    }
+    fn inclusive() -> bool {
+        true
+    }
 }
 
-type ValidatedRelativeHumidity = validated_type!(f64, AllFinite && AllInRange::<f64>);
-type ValidatedPressure = validated_type!(Pressure, AllFinite && AllInRange::<Pressure>);
+#[derive(Copy, Clone, PartialEq, Debug, Eq)]
+struct PressureBounds;
+
+impl StaticBounds<Pressure> for PressureBounds {
+    fn min() -> Pressure {
+        hectopascal!(PRESS_MIN)
+    }
+    fn max() -> Pressure {
+        hectopascal!(PRESS_MAX)
+    }
+    fn inclusive() -> bool {
+        true
+    }
+}
+#[derive(Copy, Clone, PartialEq, Debug, Eq)]
+struct TemperatureBounds;
+
+impl StaticBounds<ThermodynamicTemperature> for TemperatureBounds {
+    fn min() -> ThermodynamicTemperature {
+        degree_celsius!(TEMP_MIN)
+    }
+    fn max() -> ThermodynamicTemperature {
+        degree_celsius!(TEMP_MAX)
+    }
+    fn inclusive() -> bool {
+        true
+    }
+}
+type ValidatedRelativeHumidity =
+    validated_type!(f64, AllFinite && StaticInRange::<f64, HumidityBounds>);
+type ValidatedPressure = validated_type!(
+    Pressure,
+    AllFinite && StaticInRange::<Pressure, PressureBounds>
+);
 type ValidatedTemperature = validated_type!(
     ThermodynamicTemperature,
-    AllFinite && AllInRange::<ThermodynamicTemperature>
+    AllFinite && StaticInRange::<ThermodynamicTemperature, TemperatureBounds>
 );
 
 /// Refractive index model for air using the Edlén formula.
-#[derive(Clone, Serialize, Debug, PartialEq, EnsureValidated)]
+#[derive(Clone, Deserialize, Serialize, Debug, PartialEq, EnsureValidated)]
 pub struct RefrIndexAir {
     temperature: ValidatedTemperature,
     pressure: ValidatedPressure,
@@ -124,20 +164,17 @@ impl Default for RefrIndexAir {
             temperature: validated!(
                 degree_celsius!(20.0),
                 AllFinite
-                    && AllInRange::new(degree_celsius!(TEMP_MIN), degree_celsius!(TEMP_MAX), true)
-                        .unwrap()
+                    && StaticInRange::<ThermodynamicTemperature, TemperatureBounds>::default()
             )
             .unwrap(),
             pressure: validated!(
                 hectopascal!(1013.25),
-                AllFinite
-                    && AllInRange::new(hectopascal!(PRESS_MIN), hectopascal!(PRESS_MAX), true)
-                        .unwrap()
+                AllFinite && StaticInRange::<Pressure, PressureBounds>::default()
             )
             .unwrap(),
             humidity: validated!(
                 50.0,
-                AllFinite && AllInRange::new(HUMIDITY_MIN, HUMIDITY_MAX, true).unwrap()
+                AllFinite && StaticInRange::<f64, HumidityBounds>::default()
             )
             .unwrap(),
             // Initialized with dummy values, updated immediately below
@@ -256,17 +293,6 @@ impl RefrIndexAir {
     #[must_use]
     pub const fn humidity(&self) -> f64 {
         *self.humidity.get()
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for RefrIndexAir {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let helper = NonValidatedRefrIndexAir::deserialize(deserializer)?;
-        Self::new(helper.temperature, helper.pressure, helper.humidity)
-            .map_err(serde::de::Error::custom)
     }
 }
 

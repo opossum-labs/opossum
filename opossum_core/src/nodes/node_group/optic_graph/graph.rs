@@ -105,6 +105,10 @@ impl OpticGraph {
     }
     /// Creates a deep copy of this optical graph where every contained [`OpticRef`]
     /// is cloned into a new Arc<Mutex<dyn Analyzable>> instance.
+    ///
+    /// # Errors
+    ///
+    /// This function might return an error if underlying `clone_deep()` function return an error.
     pub fn clone_deep(&self) -> OpmResult<Self> {
         let mut new_graph = self.clone();
 

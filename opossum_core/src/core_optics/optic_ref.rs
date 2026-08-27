@@ -60,9 +60,13 @@ impl OpticRef {
             .set_global_conf(global_conf);
     }
     /// Creates a deep copy of this optic reference with a fresh, independent node instance.
+    ///
+    /// # Errors
+    ///
+    /// This function might return an error if locking the internal optical reference was not
+    /// successful.
     pub fn clone_deep(&self) -> OpmResult<Self> {
-        let guard = self.optical_ref.lock_opm()?;
-        let cloned_node = guard.clone_analyzable();
+        let cloned_node = self.optical_ref.lock_opm()?.clone_analyzable();
         Ok(Self {
             optical_ref: cloned_node,
         })

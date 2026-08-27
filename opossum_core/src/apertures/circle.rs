@@ -1,7 +1,6 @@
 use super::Shape;
 use crate::{
-    error::OpmResult, generic_validators::ValidateTrait, prelude::ApertureShape,
-    types::validated_type_definitions::ValidatedRadius,
+    error::OpmResult, prelude::ApertureShape, types::validated_type_definitions::ValidatedRadius,
 };
 use nalgebra::Point3;
 use opm_macros_lib::EnsureValidated;

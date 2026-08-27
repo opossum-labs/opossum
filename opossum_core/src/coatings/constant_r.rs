@@ -1,36 +1,36 @@
 #![warn(missing_docs)]
 use super::{Coating, CoatingType};
+use crate::generic_validators::StaticBounds;
+use crate::generic_validators::StaticInRange;
 use crate::percent;
-use crate::{
-    error::OpmResult,
-    generic_validators::{AllInRange, ValidateTrait},
-    light::Ray,
-    validated, validated_type,
-};
+use crate::{error::OpmResult, light::Ray, validated, validated_type};
 use nalgebra::Vector3;
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Ratio;
 use utoipa::ToSchema;
 
-#[derive(Deserialize)]
-struct NonValidatedCoatingConstantR {
-    pub reflectivity: Ratio,
-}
+#[derive(Copy, Clone, PartialEq, Debug, Eq)]
+pub struct ConstantRBounds;
 
-impl TryFrom<NonValidatedCoatingConstantR> for CoatingConstantR {
-    type Error = String;
-    fn try_from(helper: NonValidatedCoatingConstantR) -> Result<Self, Self::Error> {
-        Self::new(helper.reflectivity).map_err(|e| e.to_string())
+impl StaticBounds<Ratio> for ConstantRBounds {
+    fn min() -> Ratio {
+        percent!(0.0)
+    }
+    fn max() -> Ratio {
+        percent!(100.0)
+    }
+    fn inclusive() -> bool {
+        true
     }
 }
 
-pub type ValidatedReflectivity = validated_type!(Ratio, AllInRange<Ratio>);
+pub type ValidatedReflectivity = validated_type!(Ratio, StaticInRange::<Ratio, ConstantRBounds>);
 impl Default for ValidatedReflectivity {
     fn default() -> Self {
         validated!(
             percent!(1.0),
-            AllInRange::new(percent!(0.0), percent!(100.0), true).unwrap()
+            StaticInRange::<Ratio, ConstantRBounds>::default()
         )
         .unwrap()
     }
@@ -43,7 +43,6 @@ impl Default for ValidatedReflectivity {
 #[derive(
     Default, Deserialize, Serialize, Debug, Clone, ToSchema, PartialEq, EnsureValidated, Copy,
 )]
-#[serde(try_from = "NonValidatedCoatingConstantR")]
 pub struct CoatingConstantR {
     /// The reflectivity of the coating in the range [0.0, 1.0].
     #[schema(value_type = f64, example = 0.5)]

@@ -236,9 +236,9 @@ impl OpmDocument {
         Ok(())
     }
     /// Creates a complete deep copy of the document and all scene nodes.
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// This function returns an error if nested components cannot be cloned deeply.
     pub fn clone_deep(&self) -> OpmResult<Self> {
         Ok(Self {

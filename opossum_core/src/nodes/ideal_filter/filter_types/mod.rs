@@ -11,34 +11,41 @@ use uom::si::f64::Ratio;
 
 use std::fmt::Display;
 
-use crate::error::OpossumError;
-use crate::generic_validators::AllFinite;
-use crate::generic_validators::AllInRange;
-use crate::generic_validators::ValidateTrait;
 use crate::{
-    error::OpmResult, light::Spectrum, percent, utils::default_from_name::DefaultFromName,
+    error::{OpmResult, OpossumError},
+    generic_validators::{AllFinite, StaticBounds, StaticInRange},
+    light::Spectrum,
+    percent,
+    utils::default_from_name::DefaultFromName,
     validated, validated_type,
 };
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, IntoEnumIterator};
 
-#[derive(Deserialize)]
-struct NonValidatedTransmission {
-    pub transmission: Ratio,
-}
-impl TryFrom<NonValidatedTransmission> for FilterConst {
-    type Error = String;
-    fn try_from(helper: NonValidatedTransmission) -> Result<Self, Self::Error> {
-        Self::new(helper.transmission).map_err(|e| e.to_string())
+#[derive(Copy, Clone, PartialEq, Debug, Eq)]
+struct TransmissionBounds;
+
+impl StaticBounds<Ratio> for TransmissionBounds {
+    fn min() -> Ratio {
+        percent!(0.0)
+    }
+    fn max() -> Ratio {
+        percent!(100.0)
+    }
+    fn inclusive() -> bool {
+        true
     }
 }
 
-type ValidatedTransmission = validated_type!(Ratio, AllFinite && AllInRange::<Ratio>);
+type ValidatedTransmission = validated_type!(
+    Ratio,
+    AllFinite && StaticInRange::<Ratio, TransmissionBounds>
+);
 impl Default for ValidatedTransmission {
     fn default() -> Self {
         validated!(
             percent!(100.0),
-            AllFinite && (AllInRange::new(percent!(0.0), percent!(100.0), true).unwrap())
+            AllFinite && StaticInRange::<Ratio, TransmissionBounds>::default()
         )
         .unwrap()
     }
@@ -46,7 +53,6 @@ impl Default for ValidatedTransmission {
 
 /// Config data for a constant filter type.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, EnsureValidated)]
-#[serde(try_from = "NonValidatedTransmission")]
 pub struct FilterConst {
     /// the constant transmission value of the filter. Must be between 0.0 and 1.0
     transmission: ValidatedTransmission,
@@ -138,5 +144,16 @@ impl TryFrom<f64> for FilterTypeBuilder {
 
     fn try_from(value: f64) -> Result<Self, Self::Error> {
         Ok(Self::Constant(FilterConst::new(value.into())?))
+    }
+}
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn new() {
+        assert!(FilterConst::new(percent!(0.0)).is_ok());
+        assert!(FilterConst::new(percent!(100.0)).is_ok());
+        assert!(FilterConst::new(percent!(-0.1)).is_err());
+        assert!(FilterConst::new(percent!(100.1)).is_err());
     }
 }

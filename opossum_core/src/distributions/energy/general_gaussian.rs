@@ -3,7 +3,7 @@ use super::EnergyDistribution;
 use crate::{
     degree,
     error::OpmResult,
-    generic_validators::{AllFinite, AllNormal, AllNotZero, AllPositive, ValidateTrait},
+    generic_validators::{AllFinite, AllNormal, AllNotZero, AllPositive},
     joule, millimeter,
     utils::math_distribution_functions::{
         general_2d_super_gaussian_point_elliptical, general_2d_super_gaussian_point_rectangular,
