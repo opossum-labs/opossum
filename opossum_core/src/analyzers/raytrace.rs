@@ -193,7 +193,13 @@ impl Analyzer for RayTracingAnalyzer {
             format!(" '{}'", scenery.node_attr().name())
         };
         info!("Calculate node positions of scenery{scenery_name}.");
-        AnalysisRayTrace::calc_node_positions(scenery, LightResult::default(), &self.config)?;
+        let mut positioning_config = self.config.clone();
+        positioning_config.set_active_pump_scenario(None);
+        AnalysisRayTrace::calc_node_positions(
+            scenery,
+            LightResult::default(),
+            &positioning_config,
+        )?;
         scenery.reset_data();
         scenery.prepare_volume(&self.config)?;
         info!("Performing ray tracing analysis of scenery{scenery_name}.");

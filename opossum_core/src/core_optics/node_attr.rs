@@ -55,11 +55,11 @@ impl RuntimeMedium {
     }
     /// Return the inversion field, if the model built one.
     #[must_use]
-    pub fn inversion(&self) -> Option<&InversionField> {
+    pub const fn inversion(&self) -> Option<&InversionField> {
         self.inversion.as_ref()
     }
     /// Set the inversion field of this [`RuntimeMedium`]
-    pub fn set_inversion(&mut self, inversion: Option<InversionField>){
+    pub fn set_inversion(&mut self, inversion: Option<InversionField>) {
         self.inversion = inversion;
     }
 }
@@ -344,18 +344,17 @@ impl NodeAttr {
     ) {
         self.runtime_medium = Some(RuntimeMedium { body, inversion });
     }
-    pub fn set_runtime_inversion(
-        &mut self,
-        inversion: Option<InversionField>,
-    ) {
-        self.runtime_medium.as_mut().map(|medium| medium.set_inversion(inversion));
+    pub fn set_runtime_inversion(&mut self, inversion: Option<InversionField>) {
+        if let Some(medium) = self.runtime_medium.as_mut() {
+            medium.set_inversion(inversion);
+        }
     }
     /// Clear the prepared medium for this node.
     ///
     /// Called by [`OpticNode::reset_data`](crate::core_optics::OpticNode::reset_data) to discard the
     /// state between analysis runs.
     pub fn clear_runtime_inversion(&mut self) {
-        if let Some(medium) = self.runtime_medium.as_mut(){
+        if let Some(medium) = self.runtime_medium.as_mut() {
             medium.set_inversion(None);
         }
     }

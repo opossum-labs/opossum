@@ -13,10 +13,17 @@
 //! it once was. [`OpticNode::as_volume`] is the one question that survives that erasure — every node
 //! answers it, and only those with a volume answer it with `Some`.
 
-use log::warn;
-
 use crate::{
-    analyzers::propagation_strategy::PropagationStrategy, apertures::{Aperture, ApertureType}, core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, optic_node_ext::single_io_port_names}, error::{OpmResult, OpossumError}, gain::GainModel, geometry::body::{CLEAR_APERTURE, SurfaceBoundedBody}, light::{LightData, LightRays, LightResult, Rays}, material::{MATERIAL, Material}, properties::{Proptype, proptype::AssetRef}, types::validated_type_definitions::ValidatedCrossSection, utils::geom_transformation::Isometry,
+    analyzers::propagation_strategy::PropagationStrategy,
+    apertures::{Aperture, ApertureType},
+    core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, optic_node_ext::single_io_port_names},
+    error::{OpmResult, OpossumError},
+    geometry::body::{CLEAR_APERTURE, SurfaceBoundedBody},
+    light::{LightData, LightRays, LightResult, Rays},
+    material::{MATERIAL, Material},
+    properties::{Proptype, proptype::AssetRef},
+    types::validated_type_definitions::ValidatedCrossSection,
+    utils::geom_transformation::Isometry,
 };
 
 /// An [`OpticNode`] that encloses a volume of material between two of its surfaces.
@@ -167,7 +174,7 @@ pub trait Volumetric: OpticNode {
         )?;
 
         self.amplify_inside(rays_bundle, strategy)?;
-        
+
         self.pass_through_surface_generic(
             exit_surf_name,
             Some(self.ambient_idx()),
@@ -200,19 +207,17 @@ pub trait Volumetric: OpticNode {
     ) -> OpmResult<()> {
         let config = strategy.pump_config(self.node_attr().uuid());
         let gain_model = config.gain_model();
-        let Some(extraction) = gain_model.as_extraction() else { return Ok(()) };
-        if let Some(medium) = self.node_attr().runtime_medium(){
-            //FIX this!!! just a dirty hack for the positioning run
-            if let GainModel::SmallSignalGain(_) = gain_model && medium.inversion().is_none(){
-                warn!("no inversion defined!");
-                return Ok(())
-            }
-            extraction.amplify_rays(medium.body(), medium.inversion(), rays_bundle)
-                .map_err(|e| OpossumError::Analysis(format!("node '{}': {e}", self.name())))
-        }
-        else{
-            Err(OpossumError::Analysis(format!("node '{}': No runtime-medium defined to amplify inside this volume!", self.name())))
-        }
+        let Some(extraction) = gain_model.as_extraction() else {
+            return Ok(());
+        };
+        // No medium prepared yet (positioning run): skip amplification silently.
+        // `prepare_volume` is always called between positioning and the real analysis pass.
+        let Some(medium) = self.node_attr().runtime_medium() else {
+            return Ok(());
+        };
+        extraction
+            .amplify_rays(medium.body(), medium.inversion(), rays_bundle)
+            .map_err(|e| OpossumError::Analysis(format!("node '{}': {e}", self.name())))
     }
     /// Amplify the spectral energy passing through this node's medium.
     ///
@@ -593,7 +598,6 @@ mod test {
             round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 3)?,
         );
         config.set_active_pump_scenario(Some(gains));
-        model.prepare_volume(&config)?;
         let analyzer = RayTracingAnalyzer::new(config);
         analyzer.analyze(model)?;
         metered_energy(&analyzer.report(model)?)
@@ -878,6 +882,7 @@ mod test {
         let mut lens = placed_lens()?;
         let mut config = GhostFocusConfig::default();
         config.set_active_pump_scenario(Some(scenario_with_gain(lens.node_attr().uuid(), 2.5)?));
+        lens.prepare_volume(&config)?;
         let rays = Rays::new_uniform_collimated(
             nanometer!(1053.0),
             joule!(1.0),
@@ -995,11 +1000,11 @@ mod test {
 
         // The passive baseline first: both passes are lossless without a scenario, so anything the
         // pumped run shows above 1 J came from the operating point rather than from the fold.
-        // assert_relative_eq!(
-        //     metered_energy_of(&mut model, source, PumpScenario::new("cold"))?,
-        //     1.0,
-        //     epsilon = 1e-9
-        // );
+        assert_relative_eq!(
+            metered_energy_of(&mut model, source, PumpScenario::new("cold"))?,
+            1.0,
+            epsilon = 1e-9
+        );
         assert_relative_eq!(
             metered_energy_of(&mut model, source, scenario_with_small_signal(head)?)?,
             single_pass_gain() * gain_at_angle(2.0 * FOLD_TILT),

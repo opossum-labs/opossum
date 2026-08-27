@@ -104,7 +104,6 @@ impl Default for CylindricLens {
         create_volume_properties(&mut node_attr).unwrap();
         let mut cyl_lens = Self { node_attr };
         cyl_lens.update_surfaces().unwrap();
-        cyl_lens.init_runtime_medium().unwrap();
         cyl_lens
     }
 }
@@ -142,7 +141,6 @@ impl CylindricLens {
             .node_attr
             .set_property(MATERIAL, material.into().into())?;
         cyl_lens.update_surfaces()?;
-        cyl_lens.init_runtime_medium()?;
         Ok(cyl_lens)
     }
 }

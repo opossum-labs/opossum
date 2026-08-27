@@ -74,7 +74,7 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     /// inversion field fails.
     fn prepare_volume(&mut self, strategy: &dyn PropagationStrategy) -> OpmResult<()> {
         let node_attr = self.node_attr_mut();
-        if let Some(medium) = node_attr.runtime_medium(){
+        if let Some(medium) = node_attr.runtime_medium() {
             let config = strategy.pump_config(node_attr.uuid());
             let gain_model = config.gain_model();
             let inversion = match gain_model.as_extraction() {
@@ -82,8 +82,7 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
                 None => None,
             };
             node_attr.set_runtime_inversion(inversion);
-        }
-        else if let Some(volumetric) = self.as_volume(){
+        } else if let Some(volumetric) = self.as_volume() {
             let body = volumetric.volume_body()?;
             let config = strategy.pump_config(self.node_attr().uuid());
             let gain_model = config.gain_model();
@@ -92,8 +91,7 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
                 None => None,
             };
             self.node_attr_mut().set_runtime_medium(body, inversion);
-        }
-        else {
+        } else {
             return Ok(());
         }
         Ok(())
