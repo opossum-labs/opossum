@@ -62,11 +62,53 @@ ghost that has crossed an amplifier more often than the main beam carries corres
 it. Counting those passes as unamplified would understate exactly the hazard the analysis exists to
 find.
 
+## The monochromatic small signal gain model
+
+The constant gain model is deliberately unphysical — it is a bookkeeping tool. The monochromatic
+small signal gain model is the first step towards a physical description of a laser amplifier.
+
+**Inversion field.** A pumped medium has more atoms in the upper laser level than the lower one.
+That population inversion is what a passing photon can stimulate: it gains energy from the medium
+at a rate proportional to the local small-signal gain coefficient g₀. OPOSSUM represents g₀ as a
+three-dimensional field discretized over the component's volume, so a spatially non-uniform pump
+(such as a Gaussian beam or an end-pumped rod) maps directly onto a spatially varying gain.
+
+**Two phases.** Before any ray is traced, OPOSSUM builds the gain field from the pump source.
+During ray tracing, each ray accumulates a gain factor exp(g₀ × Δz) along every step of its path
+through the medium — a z-march integration. The path is the ray's actual geometric path, not an
+on-axis approximation, so off-axis and angled rays see the correct medium thickness automatically.
+
+**Pump profiles.** The pump source defines how g₀ varies across the volume. A constant pump fills
+the entire volume uniformly; an analytic pump composes a transversal profile (flat or
+super-Gaussian across the aperture) with a longitudinal profile (flat or Beer-Lambert along the
+propagation axis, for end-pumped or side-pumped geometries).
+
+**Monochromatic.** The gain coefficient g₀ is wavelength-independent — all wavelengths in a
+polychromatic beam receive the same gain. A wavelength-dependent gain (gain bandwidth, lineshape)
+is a separate model that builds on this one.
+
+**Why energy analysis is excluded.** The gain a ray accumulates depends on the path it takes —
+an off-axis ray through the edge of a Gaussian gain profile picks up less than an on-axis ray.
+An energy flow analysis carries no spatial or geometric information about rays; it cannot determine
+this, and silently averaging over it would give the wrong answer. Energy flow analysis therefore
+refuses a model that includes a small signal gain component, rather than silently returning an
+incorrect result.
+
+**Still ideal.** This model is called *small signal* because it assumes the signal is too weak to
+change the inversion. The gain field is built from the pump alone and is not modified as rays pass
+through. That makes multi-pass counting exact — a ray that traverses the medium three times
+accumulates three times the single-pass gain — but it overstates the gain for strong pulses, where
+the first pass depletes the medium for subsequent ones.
+
 ## What comes next
 
-Later gain models will read the state of the pumped medium rather than a fixed number. Once they do,
-the path length through the material starts to matter, and after that the energy already extracted
-does too — a strong pulse then depletes the medium for what follows it. How a component is *pumped*
-becomes a setting of its own alongside the gain model at that point. The split described above is
-what makes room for this: those models are further entries in the same place, not a different way of
-building the model.
+The monochromatic small signal model has two idealisations: the signal is too weak to deplete the
+medium, and the gain does not depend on wavelength. Later models lift one at a time.
+
+Saturation first: a strong pulse changes the inversion as it passes through. The first part of the
+pulse sees more gain than the last, because the population inversion the front extracted is no
+longer available to the tail. The Frantz–Nodvik model captures this depletion — the gain is then a
+function of the fluence the pulse has already delivered, not just of the local inversion.
+
+Spectral gain follows after that: a real gain medium amplifies some wavelengths more than others.
+That gain bandwidth, and eventually amplified spontaneous emission, extend the model further.
