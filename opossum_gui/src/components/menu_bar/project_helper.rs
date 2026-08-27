@@ -45,21 +45,37 @@ pub async fn select_save_path() -> Option<PathBuf> {
     }
 }
 
-/// Opens a folder selection dialog.
+/// Opens a folder selection dialog with an optional starting directory and dialog title.
 /// Returns `Some(PathBuf)` if a folder was selected, or `None` otherwise.
-pub async fn select_folder_path() -> Option<PathBuf> {
+pub async fn select_folder_path(
+    starting_dir: Option<&Path>,
+    title: Option<&str>,
+) -> Option<PathBuf> {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let folder = AsyncFileDialog::new()
-            .set_directory("./")
-            .set_title("Select OPOSSUM report directory")
-            .pick_folder()
-            .await;
+        let mut dialog = AsyncFileDialog::new();
 
+        // Use the provided starting directory if available, otherwise fall back to current working directory
+        if let Some(dir) = starting_dir {
+            dialog = dialog.set_directory(dir);
+        } else {
+            dialog = dialog.set_directory("./");
+        }
+
+        // Set custom dialog title or default fallback
+        if let Some(custom_title) = title {
+            dialog = dialog.set_title(custom_title);
+        } else {
+            dialog = dialog.set_title("Select directory");
+        }
+
+        let folder = dialog.pick_folder().await;
         folder.map(|handle| handle.path().to_path_buf())
     }
     #[cfg(target_arch = "wasm32")]
     {
+        let _ = starting_dir;
+        let _ = title;
         None
     }
 }
@@ -86,13 +102,11 @@ pub async fn save_opm_data(path: &Path, content: &str) -> Result<(), String> {
 
         // JavaScript to handle the client-side download in the browser.
         let script = r#"
-            // Explicitly receive the JSON payload sent from Rust (Dioxus 0.5+ requirement)
             let msg = await dioxus.recv();
             const filename = msg.filename;
             const content = msg.content;
 
             async function triggerSave() {
-                // 1. Try the modern File System Access API first (Chrome, Edge, Opera)
                 if ('showSaveFilePicker' in window) {
                     try {
                         const handle = await window.showSaveFilePicker({
@@ -108,15 +122,11 @@ pub async fn save_opm_data(path: &Path, content: &str) -> Result<(), String> {
                         return true;
                     } catch (err) {
                         if (err.name === 'AbortError') {
-                            // The user explicitly cancelled the file picker dialog
                             return false;
                         }
-                        // Fall through to the standard download method on other execution errors
                     }
                 }
 
-                // 2. Fallback mechanism for browsers without File System Access API (e.g., Firefox)
-                // We use application/octet-stream to force a file download instead of opening it in a tab.
                 const blob = new Blob([content], { type: 'application/octet-stream' });
                 const url = URL.createObjectURL(blob);
                 
@@ -126,16 +136,9 @@ pub async fn save_opm_data(path: &Path, content: &str) -> Result<(), String> {
                 a.download = filename;
 
                 document.body.appendChild(a);
-                
-                // Synchronously trigger the download
                 a.click();
-                
-                // It is safe to immediately remove the anchor element from the DOM
                 document.body.removeChild(a);
 
-                // Defer URL revocation to the very end of the current JavaScript event loop.
-                // This ensures the browser's download manager has securely picked up the blob reference
-                // without relying on arbitrary timeouts.
                 setTimeout(() => {
                     URL.revokeObjectURL(url);
                 }, 0);
@@ -148,7 +151,6 @@ pub async fn save_opm_data(path: &Path, content: &str) -> Result<(), String> {
 
         let mut eval_handle = eval(script);
 
-        // Send the required data (filename and content) to the JavaScript context
         eval_handle
             .send(serde_json::json!({
                 "filename": filename,
@@ -156,7 +158,6 @@ pub async fn save_opm_data(path: &Path, content: &str) -> Result<(), String> {
             }))
             .map_err(|e| e.to_string())?;
 
-        // Await the boolean result from the JavaScript execution
         match eval_handle.recv::<bool>().await {
             Ok(true) => Ok(()),
             Ok(false) => Err("Save operation was cancelled by user".to_string()),
