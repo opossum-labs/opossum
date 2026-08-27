@@ -1,68 +1,64 @@
 use crate::error::OpmResult;
-use crate::validated_type;
-use crate::{
-    generic_validators::{AllFinite, AllNotEmpty, AllPositive, XNormal, YFinite},
-    millimeter, nanometer, validated, validated_vec, validated_vec_type,
-};
+use crate::generic_validators::{AllFinite, AllPositive};
+use crate::light::Spectrum;
+use crate::{millimeter, validated, validated_type};
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
+
 type ValidatedLength = validated_type!(Length, AllFinite && AllPositive);
+
 impl Default for ValidatedLength {
     fn default() -> Self {
         validated!(millimeter!(10.0), AllFinite && AllPositive).unwrap()
     }
 }
-type ValidatedData = validated_vec_type!(
-    Vec<(Length, f64)>,
-    XNormal && YFinite && AllPositive,
-    AllNotEmpty
-);
-impl Default for ValidatedData {
-    fn default() -> Self {
-        validated_vec!(
-            vec![(nanometer!(1000.0), 1.0)],
-            XNormal && YFinite && AllPositive,
-            AllNotEmpty
-        )
-        .unwrap()
-    }
-}
+
+/// Holds catalog internal transmittance data for a specific reference sample thickness.
 #[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq, EnsureValidated)]
 pub struct AbsCatTrans {
     /// The reference thickness for the given transmittance data.
     reference_thickness: ValidatedLength,
-    /// Tabulated wavelength-transmittance pairs.
-    data: ValidatedData,
+    /// Tabulated wavelength-transmittance spectrum.
+    spectrum: Spectrum,
 }
 
 impl AbsCatTrans {
-    /// Create a new [`AbsCatTrans`] struct.
+    /// Creates a new catalog transmittance dataset.
     ///
     /// # Errors
     ///
-    /// This function will return an error if
-    ///
-    /// - `reference_thickness` is <=0 m or not finite.
-    /// - the given data points contain illegal values (wavelength<=0 nm or value not in `[0.0..1.0]`).
-    pub fn new(reference_thickness: Length, data: Vec<(Length, f64)>) -> OpmResult<Self> {
+    /// This function returns an error if the given reference thickness is <=0m or not finite
+    pub fn new(reference_thickness: Length, spectrum: Spectrum) -> OpmResult<Self> {
         let mut act = Self::default();
         act.reference_thickness.set(reference_thickness)?;
-        let converted_data = data
-            .into_iter()
-            .map(|(wvl, val)| Ok((wvl, val)))
-            .collect::<OpmResult<Vec<_>>>()?;
-
-        // Validate container constraints (AllNotEmpty) and store
-        act.data.set(converted_data)?;
+        act.spectrum = spectrum;
         Ok(act)
     }
+
+    /// Returns the reference sample thickness.
     #[must_use]
     pub const fn reference_thickness(&self) -> Length {
         *self.reference_thickness.get()
     }
+
+    /// Updates the reference thickness with validation.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the given reference thickness is <=0m or not finite.
+    pub fn set_reference_thickness(&mut self, thickness: Length) -> OpmResult<()> {
+        self.reference_thickness.set(thickness)
+    }
+
+    /// Returns a shared reference to the internal transmittance spectrum.
     #[must_use]
-    pub fn data(&self) -> &Vec<(Length, f64)> {
-        self.data.get()
+    pub const fn spectrum(&self) -> &Spectrum {
+        &self.spectrum
+    }
+
+    /// Replaces the internal transmittance spectrum.
+    pub fn set_spectrum(&mut self, spectrum: Spectrum) {
+        self.spectrum = spectrum;
     }
 }

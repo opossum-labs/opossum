@@ -1,5 +1,15 @@
 //! Module for optical absorption models in `opossum_core`.
 
+use std::{f64::consts::PI, fmt::Display};
+
+use serde::{Deserialize, Serialize};
+use strum::EnumIter;
+use uom::si::{
+    f64::{Length, LinearNumberDensity},
+    length::meter,
+    linear_number_density::per_meter,
+};
+
 use crate::{
     absorption::{
         absorption_catalog_transmittance::AbsCatTrans, absorption_constant::AbsConst,
@@ -9,14 +19,6 @@ use crate::{
     light::Spectrum,
     utils::default_from_name::DefaultFromName,
 };
-use serde::{Deserialize, Serialize};
-use std::{f64::consts::PI, fmt::Display};
-use strum::EnumIter;
-use uom::si::{
-    f64::{Length, LinearNumberDensity},
-    length::meter,
-    linear_number_density::per_meter,
-};
 
 /// Defines the absorption model for an optical material.
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, EnumIter)]
@@ -25,7 +27,7 @@ pub enum AbsorptionModel {
     #[default]
     None,
 
-    /// Wavelength- and path-length-independent attenuation factor [0.0, 1.0].
+    /// Wavelength- and path-length-independent attenuation factor in range [0.0, 1.0].
     /// Applies a flat intensity reduction upon surface interaction or transit.
     ConstantAttenuation(AbsConst),
 
@@ -46,10 +48,10 @@ pub enum AbsorptionModel {
 }
 
 impl AbsorptionModel {
-    /// Creates a constant attenuation model with validation (factor must be positive and finite).
+    /// Creates a constant attenuation model with validation (factor must be within [0.0, 1.0]).
     ///
     /// # Errors
-    /// Returns an error if `factor` is non-positive or non-finite.
+    /// Returns an error if `factor` is outside [0.0, 1.0] or non-finite.
     pub fn new_constant_attenuation(factor: f64) -> OpmResult<Self> {
         let abs_const = AbsConst::new(factor)?;
         Ok(Self::ConstantAttenuation(abs_const))
@@ -67,17 +69,16 @@ impl AbsorptionModel {
     /// Creates a catalog internal transmittance model with validation.
     ///
     /// # Errors
-    /// Returns an error if `reference_thickness` or any transmittance value fails validation.
+    /// Returns an error if `reference_thickness` is non-positive or non-finite.
     pub fn new_catalog_transmittance(
         reference_thickness: Length,
-        raw_data: Vec<(Length, f64)>,
+        spectrum: Spectrum,
     ) -> OpmResult<Self> {
-        let act = AbsCatTrans::new(reference_thickness, raw_data)?;
-
+        let act = AbsCatTrans::new(reference_thickness, spectrum)?;
         Ok(Self::CatalogTransmittance(act))
     }
 
-    /// Calculates the effective absorption coefficient alpha for a given wavelength.
+    /// Calculates the effective linear absorption coefficient alpha for a given wavelength.
     ///
     /// # Errors
     /// Returns an error if the wavelength is non-positive or out of bounds for spectral lookups.
@@ -96,14 +97,22 @@ impl AbsorptionModel {
             Self::LambertBeerSpectrum(spectrum) => {
                 let alpha_val = spectrum.get_value(&wavelength).ok_or_else(|| {
                     OpossumError::Spectrum(format!(
-                        "Wavelength {} nm is outside absorption spectrum range.",
+                        "Wavelength {:.2} nm is outside absorption spectrum range.",
                         wavelength.get::<uom::si::length::nanometer>()
                     ))
                 })?;
                 Ok(LinearNumberDensity::new::<per_meter>(alpha_val))
             }
             Self::CatalogTransmittance(abs_cat_trans) => {
-                let tau_i = interpolate_catalog_data(abs_cat_trans.data(), wavelength)?;
+                let tau_i = abs_cat_trans
+                    .spectrum()
+                    .get_value(&wavelength)
+                    .ok_or_else(|| {
+                        OpossumError::Spectrum(format!(
+                            "Wavelength {:.2} nm is outside catalog transmittance range.",
+                            wavelength.get::<uom::si::length::nanometer>()
+                        ))
+                    })?;
                 let d_ref_m = abs_cat_trans.reference_thickness().get::<meter>();
 
                 if tau_i <= 0.0 {
@@ -144,7 +153,15 @@ impl AbsorptionModel {
                 Ok((-alpha_m * d_m).exp())
             }
             Self::CatalogTransmittance(abs_cat_trans) => {
-                let tau_i = interpolate_catalog_data(abs_cat_trans.data(), wavelength)?;
+                let tau_i = abs_cat_trans
+                    .spectrum()
+                    .get_value(&wavelength)
+                    .ok_or_else(|| {
+                        OpossumError::Spectrum(format!(
+                            "Wavelength {:.2} nm is outside catalog transmittance range.",
+                            wavelength.get::<uom::si::length::nanometer>()
+                        ))
+                    })?;
                 let d_ref_m = abs_cat_trans.reference_thickness().get::<meter>();
                 let d_m = path_length.get::<meter>();
                 let exponent = d_m / d_ref_m;
@@ -158,58 +175,13 @@ impl Display for AbsorptionModel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::None => write!(f, "None"),
-            Self::ConstantAttenuation(_) => {
-                write!(f, "Constant Attenuation")
-            }
-            Self::LambertBeerConstant(_) => {
-                write!(f, "Lambert-Beer (Constant)")
-            }
-            Self::LambertBeerSpectrum(_) => {
-                write!(f, "Lambert-Beer (Spectrum)")
-            }
-            Self::CatalogTransmittance(_) => {
-                write!(f, "Catalog Transmittance")
-            }
-            Self::ExtinctionCoefficient(_) => {
-                write!(f, "Extinction Coefficient")
-            }
+            Self::ConstantAttenuation(_) => write!(f, "Constant Attenuation"),
+            Self::LambertBeerConstant(_) => write!(f, "Lambert-Beer (Constant)"),
+            Self::LambertBeerSpectrum(_) => write!(f, "Lambert-Beer (Spectrum)"),
+            Self::CatalogTransmittance(_) => write!(f, "Catalog Transmittance"),
+            Self::ExtinctionCoefficient(_) => write!(f, "Extinction Coefficient (k)"),
         }
     }
-}
-/// Helper function to linearly interpolate tabulated catalog transmittance data.
-fn interpolate_catalog_data(
-    data: &Vec<(Length, f64)>,
-    target_wavelength: Length,
-) -> OpmResult<f64> {
-    if data.is_empty() {
-        return Err(OpossumError::Other(
-            "Catalog transmittance data table is empty.".into(),
-        ));
-    }
-    if data.len() == 1 {
-        return Ok(data[0].1);
-    }
-
-    // let target_nm = target_wavelength;
-    let first_wvl = data[0].0;
-    let last_wvl = data.last().unwrap().0;
-
-    if target_wavelength < first_wvl || target_wavelength > last_wvl {
-        return Err(OpossumError::Spectrum(format!(
-            "Wavelength {target_wavelength:?} nm is outside catalog table range [{first_wvl:?}, {last_wvl:?}] nm."
-        )));
-    }
-    // Find the bounding interval for linear interpolation
-    for window in data.windows(2) {
-        let (lambda_0, val_0) = (window[0].0, window[0].1);
-        let (lambda_1, val_1) = (window[1].0, window[1].1);
-
-        if (lambda_0..=lambda_1).contains(&target_wavelength) {
-            let ratio = (target_wavelength - lambda_0) / (lambda_1 - lambda_0);
-            return Ok(ratio.value.mul_add(val_1 - val_0, val_0));
-        }
-    }
-    Ok(data.last().unwrap().1)
 }
 
 impl DefaultFromName for AbsorptionModel {
@@ -225,7 +197,7 @@ impl DefaultFromName for AbsorptionModel {
             "LambertBeerSpectrum" | "Lambert-Beer (Spectrum)" => {
                 Some(Self::LambertBeerSpectrum(Spectrum::default()))
             }
-            "ExtinctionCoefficient" | "Extinction Coefficient" => {
+            "ExtinctionCoefficient" | "Extinction Coefficient" | "Extinction Coefficient (k)" => {
                 Some(Self::ExtinctionCoefficient(0.0))
             }
             "CatalogTransmittance" | "Catalog Transmittance" => {
@@ -236,6 +208,8 @@ impl DefaultFromName for AbsorptionModel {
     }
 }
 
+// --- From Implementations for Infallible Conversions (GUI IntoInputData Support) ---
+
 impl From<AbsConst> for AbsorptionModel {
     fn from(abs_const: AbsConst) -> Self {
         Self::ConstantAttenuation(abs_const)
@@ -245,6 +219,30 @@ impl From<AbsConst> for AbsorptionModel {
 impl From<&AbsConst> for AbsorptionModel {
     fn from(abs_const: &AbsConst) -> Self {
         Self::ConstantAttenuation(*abs_const)
+    }
+}
+
+impl From<AbsLBConst> for AbsorptionModel {
+    fn from(lbc: AbsLBConst) -> Self {
+        Self::LambertBeerConstant(lbc)
+    }
+}
+
+impl From<&AbsLBConst> for AbsorptionModel {
+    fn from(lbc: &AbsLBConst) -> Self {
+        Self::LambertBeerConstant(*lbc)
+    }
+}
+
+impl From<AbsCatTrans> for AbsorptionModel {
+    fn from(act: AbsCatTrans) -> Self {
+        Self::CatalogTransmittance(act)
+    }
+}
+
+impl From<&AbsCatTrans> for AbsorptionModel {
+    fn from(act: &AbsCatTrans) -> Self {
+        Self::CatalogTransmittance(act.clone())
     }
 }
 
@@ -260,18 +258,6 @@ impl From<&Spectrum> for AbsorptionModel {
     }
 }
 
-impl From<AbsLBConst> for AbsorptionModel {
-    fn from(model: AbsLBConst) -> Self {
-        Self::LambertBeerConstant(model)
-    }
-}
-
-impl From<&AbsLBConst> for AbsorptionModel {
-    fn from(model: &AbsLBConst) -> Self {
-        Self::LambertBeerConstant(*model)
-    }
-}
-
 impl From<f64> for AbsorptionModel {
     fn from(k: f64) -> Self {
         Self::ExtinctionCoefficient(k)
@@ -283,11 +269,11 @@ impl From<&f64> for AbsorptionModel {
         Self::ExtinctionCoefficient(*k)
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use approx::assert_relative_eq;
-    use std::f64::consts::PI;
     use uom::si::linear_number_density::per_meter;
 
     use crate::{micrometer, millimeter, nanometer};
@@ -304,7 +290,6 @@ mod tests {
         let wvl = nanometer!(1054.0);
         let path = millimeter!(100.0);
 
-        // Perfectly transparent: alpha = 0, T = 1.0
         let alpha = model.absorption_coefficient(wvl)?;
         assert_relative_eq!(alpha.get::<per_meter>(), 0.0);
 
@@ -319,15 +304,14 @@ mod tests {
         let wvl = nanometer!(532.0);
         let path = millimeter!(50.0);
 
-        // Path-length independent attenuation
         let alpha = model.absorption_coefficient(wvl)?;
         assert_relative_eq!(alpha.get::<per_meter>(), 0.0);
 
         let transmittance = model.transmittance(wvl, path)?;
         assert_relative_eq!(transmittance, 0.75);
 
-        // Validation failure on strictly negative factor
         assert!(AbsorptionModel::new_constant_attenuation(-0.5).is_err());
+        assert!(AbsorptionModel::new_constant_attenuation(1.5).is_err());
         assert!(AbsorptionModel::new_constant_attenuation(f64::NAN).is_err());
         Ok(())
     }
@@ -343,11 +327,9 @@ mod tests {
         let alpha = model.absorption_coefficient(wvl)?;
         assert_relative_eq!(alpha.get::<per_meter>(), 100.0);
 
-        // T = exp(-100 m^-1 * 0.01 m) = exp(-1.0)
         let transmittance = model.transmittance(wvl, path)?;
         assert_relative_eq!(transmittance, (-1.0_f64).exp(), epsilon = 1e-12);
 
-        // Validation failure on strictly negative alpha
         let negative_alpha = LinearNumberDensity::new::<per_meter>(-10.0);
         assert!(AbsorptionModel::new_lambert_beer_constant(negative_alpha).is_err());
         Ok(())
@@ -356,27 +338,22 @@ mod tests {
     #[test]
     fn test_lambert_beer_spectrum() -> OpmResult<()> {
         let mut spectrum = Spectrum::new(micrometer!(0.5)..micrometer!(1.5), micrometer!(0.5))?;
-        // Set absorption coefficients (in 1/m): 500 nm -> 10 m^-1, 1000 nm -> 50 m^-1, 1500 nm -> 100 m^-1
         spectrum.set_data(vec![(0.5, 10.0), (1.0, 50.0), (1.5, 100.0)])?;
 
         let model = AbsorptionModel::from(spectrum);
 
-        // Exact match (with epsilon tolerance for floating-point interpolation)
         let wvl_1000 = nanometer!(1000.0);
-        let path = millimeter!(20.0); // 0.02 m
+        let path = millimeter!(20.0);
         let alpha = model.absorption_coefficient(wvl_1000)?;
         assert_relative_eq!(alpha.get::<per_meter>(), 50.0, epsilon = 1e-9);
 
-        // T = exp(-50 * 0.02) = exp(-1.0)
         let transmittance = model.transmittance(wvl_1000, path)?;
         assert_relative_eq!(transmittance, (-1.0_f64).exp(), epsilon = 1e-9);
 
-        // Interpolated match: 750 nm -> alpha = 30 m^-1
         let wvl_750 = nanometer!(750.0);
         let alpha_interp = model.absorption_coefficient(wvl_750)?;
         assert_relative_eq!(alpha_interp.get::<per_meter>(), 30.0, epsilon = 1e-9);
 
-        // Out-of-bounds wavelength should error
         let wvl_out = nanometer!(2000.0);
         assert!(model.absorption_coefficient(wvl_out).is_err());
         assert!(model.transmittance(wvl_out, path).is_err());
@@ -384,35 +361,27 @@ mod tests {
     }
 
     #[test]
-    fn test_catalog_transmittance_interpolation_and_scaling() -> OpmResult<()> {
+    fn test_catalog_transmittance_with_spectrum() -> OpmResult<()> {
         let d_ref = millimeter!(10.0);
-        let raw_data = vec![
-            (nanometer!(500.0), 0.90),
-            (nanometer!(1000.0), 0.80),
-            (nanometer!(1500.0), 0.50),
-        ];
+        let mut spectrum = Spectrum::new(micrometer!(0.5)..micrometer!(1.5), micrometer!(0.5))?;
+        spectrum.set_data(vec![(0.5, 0.90), (1.0, 0.80), (1.5, 0.50)])?;
 
-        let model = AbsorptionModel::new_catalog_transmittance(d_ref, raw_data)?;
+        let model = AbsorptionModel::new_catalog_transmittance(d_ref, spectrum)?;
 
-        // Test reference thickness transmittance: T(10 mm) at 1000 nm should be exactly 0.80
         let wvl_1000 = nanometer!(1000.0);
         let t_10mm = model.transmittance(wvl_1000, millimeter!(10.0))?;
         assert_relative_eq!(t_10mm, 0.80, epsilon = 1e-12);
 
-        // Double thickness: T(20 mm) = 0.80^2 = 0.64
         let t_20mm = model.transmittance(wvl_1000, millimeter!(20.0))?;
         assert_relative_eq!(t_20mm, 0.64, epsilon = 1e-12);
 
-        // Half thickness: T(5 mm) = 0.80^0.5
         let t_5mm = model.transmittance(wvl_1000, millimeter!(5.0))?;
         assert_relative_eq!(t_5mm, 0.80_f64.sqrt(), epsilon = 1e-12);
 
-        // Interpolation test: 750 nm -> tau_i = 0.85
         let wvl_750 = nanometer!(750.0);
         let t_interp = model.transmittance(wvl_750, millimeter!(10.0))?;
         assert_relative_eq!(t_interp, 0.85, epsilon = 1e-12);
 
-        // Absorption coefficient: alpha = -ln(0.80) / 0.01 m
         let alpha = model.absorption_coefficient(wvl_1000)?;
         let expected_alpha = -0.80_f64.ln() / 0.01;
         assert_relative_eq!(alpha.get::<per_meter>(), expected_alpha, epsilon = 1e-10);
@@ -427,12 +396,10 @@ mod tests {
         let wvl = nanometer!(1000.0);
         let path = millimeter!(1.0);
 
-        // alpha = 4 * PI * k / lambda = 4 * PI * 1e-4 / 1e-6 = 400 * PI ~ 1256.637 m^-1
         let alpha = model.absorption_coefficient(wvl)?;
         let expected_alpha = 400.0 * PI;
         assert_relative_eq!(alpha.get::<per_meter>(), expected_alpha, epsilon = 1e-10);
 
-        // T = exp(-alpha * d)
         let transmittance = model.transmittance(wvl, path)?;
         assert_relative_eq!(
             transmittance,
@@ -446,12 +413,10 @@ mod tests {
     fn test_invalid_arguments_guardrails() -> OpmResult<()> {
         let model = AbsorptionModel::new_constant_attenuation(0.9)?;
 
-        // Negative path length must return an error
         let negative_path = millimeter!(-1.0);
         let wvl = nanometer!(500.0);
         assert!(model.transmittance(wvl, negative_path).is_err());
 
-        // Zero or negative wavelength must return an error
         let zero_wvl = nanometer!(0.0);
         let neg_wvl = nanometer!(-500.0);
         assert!(model.absorption_coefficient(zero_wvl).is_err());
@@ -460,16 +425,25 @@ mod tests {
     }
 
     #[test]
-    fn test_from_trait_conversions() -> OpmResult<()> {
-        // Spectrum conversion
+    fn test_from_trait_conversions() {
         let spec = Spectrum::default();
-        let from_owned: AbsorptionModel = spec.clone().into();
-        let from_borrowed: AbsorptionModel = (&spec).into();
-        assert_eq!(
-            from_owned,
-            AbsorptionModel::LambertBeerSpectrum(spec.clone())
-        );
-        assert_eq!(from_borrowed, AbsorptionModel::LambertBeerSpectrum(spec));
-        Ok(())
+        let from_spec: AbsorptionModel = spec.clone().into();
+        assert_eq!(from_spec, AbsorptionModel::LambertBeerSpectrum(spec));
+
+        let abs_const = AbsConst::default();
+        let from_const: AbsorptionModel = abs_const.into();
+        assert_eq!(from_const, AbsorptionModel::ConstantAttenuation(abs_const));
+
+        let lbc = AbsLBConst::default();
+        let from_lbc: AbsorptionModel = lbc.into();
+        assert_eq!(from_lbc, AbsorptionModel::LambertBeerConstant(lbc));
+
+        let act = AbsCatTrans::default();
+        let from_act: AbsorptionModel = act.clone().into();
+        assert_eq!(from_act, AbsorptionModel::CatalogTransmittance(act));
+
+        let k_val = 0.05_f64;
+        let from_k: AbsorptionModel = k_val.into();
+        assert_eq!(from_k, AbsorptionModel::ExtinctionCoefficient(k_val));
     }
 }
