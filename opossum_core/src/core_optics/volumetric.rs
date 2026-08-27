@@ -132,11 +132,11 @@ pub trait Volumetric: OpticNode {
     /// This is the counterpart of [`OpticNodeExt::pass_through_surface_generic`] for the nodes that
     /// enclose a volume of material (lens, wedge, cylindric lens, ...). All of them perform the very
     /// same two-step sequence, which is collected here so that the step in between — what happens
-    /// *inside* the medium — exists in exactly one place. That step is the amplification of an
-    /// active medium ([`Volumetric::amplify_inside`]), which for a path dependent model walks the
-    /// chord between the two surfaces in substeps. The rays are **not** moved by it: they are still
-    /// carried from one surface to the other by the exit pass below, exactly as they are through a
-    /// passive component.
+    /// *inside* the medium — exists in exactly one place. That step is
+    /// [`Volumetric::propagate_inside_medium`]: for a passive node it returns immediately; for an
+    /// active one it walks the chord in substeps and scales each ray's energy accordingly. The rays
+    /// are **not** moved by it: they are still carried from one surface to the other by the exit pass
+    /// below, exactly as they are through a passive component.
     ///
     /// # Parameters
     ///
@@ -159,7 +159,7 @@ pub trait Volumetric: OpticNode {
         // Behind the exit surface the node's ambient index applies, inside it the material's. The
         // whole material is read rather than just its refractive index because what happens
         // *inside* the volume depends on more than refraction — absorption, thermal and stress
-        // data, and later the gain.
+        // data, and potentially gain.
         let material_inside = self.material()?;
         let backward = self.inverted();
         // The rays are meant to be refracted at both surfaces of the volume, not just traced to them.
@@ -173,10 +173,8 @@ pub trait Volumetric: OpticNode {
             backward,
             refraction_intended,
         )?;
-        if !strategy.is_positioning_run() {
-            self.amplify_inside(rays_bundle, strategy)?;
-        }       
-
+        // The positioning-run guard lives inside `propagate_inside_medium`; no outer check here.
+        self.propagate_inside_medium(rays_bundle, strategy)?;
         self.pass_through_surface_generic(
             exit_surf_name,
             Some(self.ambient_idx()),
@@ -186,17 +184,18 @@ pub trait Volumetric: OpticNode {
             refraction_intended,
         )
     }
-    /// Amplify a ray bundle travelling inside this node's medium.
+    /// Apply whatever the medium does to a ray bundle travelling through it.
     ///
-    /// This is the step *between* the two surface passes: the rays are inside the material here, so
-    /// this is where an active medium adds energy to them. Which model applies is not asked of the
-    /// node but of the analysis, because whether a component is pumped belongs to the operating
-    /// point being analyzed — see
-    /// [`PropagationStrategy::pump_config`](crate::analyzers::propagation_strategy::PropagationStrategy::pump_config).
+    /// This is the step *between* the two surface passes: the rays are inside the material here.
+    /// What that means depends on the operating point — for a passive node (no gain model in the
+    /// current [`PropagationStrategy`]) the call returns immediately without touching the rays. For
+    /// an active node it queries the gain model from
+    /// [`PropagationStrategy::pump_config`](crate::analyzers::propagation_strategy::PropagationStrategy::pump_config)
+    /// and amplifies along the chord through the medium.
     ///
     /// Returns immediately if [`PropagationStrategy::is_positioning_run`] is `true` — no medium
-    /// has been prepared yet and amplification is skipped. After the positioning run, a missing
-    /// medium is a programming error and causes an [`OpossumError::Analysis`].
+    /// has been prepared yet and the step is skipped entirely. After the positioning run, a missing
+    /// medium on an active node is a programming error and causes an [`OpossumError::Analysis`].
     ///
     /// # Parameters
     ///
@@ -205,9 +204,9 @@ pub trait Volumetric: OpticNode {
     ///
     /// # Errors
     ///
-    /// This function errors if the medium was not prepared before this call (outside a positioning
-    /// run), or if the resulting ray energies would not be finite.
-    fn amplify_inside(
+    /// This function errors if the medium was not prepared before this call on an active node
+    /// (outside a positioning run), or if the resulting ray energies would not be finite.
+    fn propagate_inside_medium(
         &mut self,
         rays_bundle: &mut [Rays],
         strategy: &dyn PropagationStrategy,
@@ -284,10 +283,11 @@ pub trait Volumetric: OpticNode {
     }
     /// Amplify the spectral energy passing through this node's medium.
     ///
-    /// The energy counterpart of [`Volumetric::amplify_inside`]. An energy flow analysis knows no
-    /// rays and no path lengths, so a model that depends on the path a beam takes has to decide in
-    /// its own [`Extraction::amplify_spectrum`](crate::gain::Extraction::amplify_spectrum) what an
-    /// energy analysis is supposed to do with it - state a nominal path, or refuse.
+    /// The energy counterpart of [`Volumetric::propagate_inside_medium`]. An energy flow analysis
+    /// knows no rays and no path lengths — for a passive node (no gain model) it returns
+    /// immediately. For an active node, the gain model's
+    /// [`Extraction::amplify_spectrum`](crate::gain::Extraction::amplify_spectrum) decides what to
+    /// do without a beam path: state a nominal path length, or refuse.
     ///
     /// Reads from the medium prepared by
     /// [`OpticNode::prepare_volume`](crate::core_optics::OpticNode::prepare_volume) rather than
@@ -301,9 +301,9 @@ pub trait Volumetric: OpticNode {
     ///
     /// # Errors
     ///
-    /// This function errors if the amplified spectrum cannot be scaled, or if the active gain
-    /// model refuses energy analysis (e.g. [`SmallSignalGain`](crate::gain::SmallSignalGain)).
-    fn amplify_energy_data(
+    /// This function errors if the spectrum cannot be scaled, or if the active gain model refuses
+    /// energy analysis (e.g. [`SmallSignalGain`](crate::gain::SmallSignalGain)).
+    fn propagate_energy_inside_medium(
         &self,
         data: &mut LightData,
         strategy: &dyn PropagationStrategy,

@@ -63,7 +63,7 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     /// **current** node isometry and, if the gain model reads the inversion, builds the
     /// [`InversionField`](crate::gain::InversionField) from the pump configuration. Both are stored
     /// in [`NodeAttr`]'s `runtime_medium` slot so that
-    /// [`Volumetric::amplify_inside`](crate::core_optics::volumetric::Volumetric::amplify_inside)
+    /// [`Volumetric::propagate_inside_medium`](crate::core_optics::volumetric::Volumetric::propagate_inside_medium)
     /// (Phase B) can read them without rebuilding per ray pass.
     ///
     /// The body is always re-derived on every call, so geometry edits (e.g. changed centre

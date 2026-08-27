@@ -155,7 +155,7 @@ pub trait AnalysisEnergy: OpticNode {
         // A component with a medium may be an amplifier in the operating point being analyzed. It is
         // the capability that decides, so no node type has to know about gain to take part in it.
         if let Some(volume) = self.as_volume() {
-            volume.amplify_energy_data(&mut data, config)?;
+            volume.propagate_energy_inside_medium(&mut data, config)?;
         }
         let apodized = if let Some(surf) = self.get_optic_surface(out_port)
             && !surf.aperture().is_none()

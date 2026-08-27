@@ -272,7 +272,7 @@ impl Extraction for SmallSignalGain {
         Ok(Some(field))
     }
     fn n_steps(&self) -> usize {
-        // Delegate to the model's own getter; the loop over substeps lives in `amplify_inside`.
+        // Delegate to the model's own getter; the loop over substeps lives in `propagate_inside_medium`.
         self.n_steps()
     }
     fn gain_exponent_at(
@@ -378,7 +378,7 @@ mod test {
     }
     /// Run the z-march loop for `ray` through `body` using an already-built inversion.
     ///
-    /// Mirrors the loop in `amplify_inside` so tests exercise the same integration path as
+    /// Mirrors the loop in `propagate_inside_medium` so tests exercise the same integration path as
     /// production code, while keeping the inversion mutable so `the_inversion_is_frozen` can
     /// verify that SmallSignalGain does not write back.
     fn z_march_factor(

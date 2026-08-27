@@ -70,7 +70,7 @@ pub trait Extraction {
     ) -> OpmResult<Option<InversionField>>;
     /// Number of z-march steps this model uses per chord through the medium.
     ///
-    /// [`volumetric::Volumetric::amplify_inside`](crate::core_optics::volumetric::Volumetric) divides
+    /// [`volumetric::Volumetric::propagate_inside_medium`](crate::core_optics::volumetric::Volumetric) divides
     /// the chord a ray travels inside the medium into this many equal segments and calls
     /// [`gain_exponent_at`](Self::gain_exponent_at) once per segment. A model with no geometric
     /// sensitivity — a constant factor — returns 1, so one evaluation covers the full chord.
@@ -82,7 +82,7 @@ pub trait Extraction {
 
     /// Gain exponent contributed by one z-march segment through the medium.
     ///
-    /// [`volumetric::Volumetric::amplify_inside`](crate::core_optics::volumetric::Volumetric)
+    /// [`volumetric::Volumetric::propagate_inside_medium`](crate::core_optics::volumetric::Volumetric)
     /// accumulates the return values of all segments and exponentiates the sum to obtain the gain
     /// factor for the whole chord: `factor = exp(Σ gain_exponent_at(…))`.
     ///

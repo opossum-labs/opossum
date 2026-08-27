@@ -344,7 +344,7 @@ impl NodeAttr {
     /// Return a mutable reference to the prepared medium for this node, if any.
     ///
     /// Used by
-    /// [`Volumetric::amplify_inside`](crate::core_optics::volumetric::Volumetric::amplify_inside)
+    /// [`Volumetric::propagate_inside_medium`](crate::core_optics::volumetric::Volumetric::propagate_inside_medium)
     /// to pass a mutable inversion field to saturating models that deplete it between substeps.
     pub fn runtime_medium_mut(&mut self) -> Option<&mut RuntimeMedium> {
         self.runtime_medium.as_mut()
