@@ -5,6 +5,7 @@
 /doc/book/book/
 /opossum_core/playground/*
 /opossum_gui/assets/examples/
+/opm_examples
 # exception to the rule
 !playground/.gitkeep 
 .VSCodeCounter

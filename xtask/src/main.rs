@@ -116,7 +116,7 @@ fn generate_examples(sh: &Shell, target_dir: &Path) -> Result<(), anyhow::Error>
         println!("   -> Generating {}...", example);
         cmd!(
             sh,
-            "cargo run --release -p opossum_core --example {example}"
+            "cargo run -p opossum_core --example {example}"
         )
         .run()?;
     }

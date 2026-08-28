@@ -101,7 +101,7 @@ fn main() -> OpmResult<()> {
     let i_m1 = scenery.add_node(ThinMirror::new("mirror 1").with_tilt(degree!(0.0, 45.0, 0.0))?)?;
     let i_m2 = scenery.add_node(ThinMirror::new("mirror 2").with_tilt(degree!(0.0, 45.0, 0.0))?)?;
     // Long focal-length relay optic
-    let lens2 = ParaxialSurface::new("Input lens", millimeter!(7590.0))?;
+    let lens2 = ParaxialSurface::new("Exit lens", millimeter!(7590.0))?;
     let i_l2 = scenery.add_node(lens2)?;
 
     // Steering mirrors before the amplifier section
@@ -172,7 +172,7 @@ fn main() -> OpmResult<()> {
 
     // Final transport optics
     // Final relay optic
-    let lens3 = ParaxialSurface::new("Input lens", millimeter!(7590.0))?;
+    let lens3 = ParaxialSurface::new("MA exit lens", millimeter!(7590.0))?;
     let i_l3 = scenery.add_node(lens3)?;
     // Create ray propagation visualizer
     let mut ray_prop_vis = RayPropagationVisualizer::new("propagation", None)?;
