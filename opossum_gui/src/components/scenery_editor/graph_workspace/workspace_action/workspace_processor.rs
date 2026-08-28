@@ -1680,7 +1680,7 @@ async fn process_fill_graph_of_group(
     ws_handler: WorkSpaceSignalHandlers,
     needs_autolayout: bool,
     should_center: bool,
-    workspace: ReadStore<GraphsWorkspaceState>, // <-- Neu: Workspace
+    workspace: ReadStore<GraphsWorkspaceState>,
 ) {
     eval_action_run(
         api::get_nodes(group_id).await,
@@ -1698,11 +1698,16 @@ async fn process_fill_graph_of_group(
         api::get_connections(group_id).await,
         Some(move |connect_infos: Vec<ConnectInfo>| {
             ws_handler.edges.add_group_edges(group_id, connect_infos);
-
-            // Layout für Sub-Gruppen starten
+            
+            // Layout für Sub-Gruppen asynchron starten
             if needs_autolayout && *root_scenery_id.read() != group_id {
                 dioxus::prelude::spawn(async move {
+                    // Warten, bis das Layout berechnet und angewendet wurde
                     process_optimize_layout(workspace, ws_handler, group_id).await;
+                    
+                    if should_center {
+                        ws_handler.view.zoom_to_fit(group_id, false);
+                    }
                 });
             }
         }),
@@ -1713,18 +1718,23 @@ async fn process_fill_graph_of_group(
             api::get_analyzers().await,
             Some(move |analyzers: Vec<AnalyzerItemDto>| {
                 ws_handler.nodes.add_group_analyzers(group_id, analyzers);
-
-                // Layout für die Root-Scenery starten
+                
+                // Layout für die Root-Scenery asynchron starten
                 if needs_autolayout {
                     dioxus::prelude::spawn(async move {
+                        // Warten, bis das Layout berechnet und angewendet wurde
                         process_optimize_layout(workspace, ws_handler, group_id).await;
+                        
+                        if should_center {
+                            ws_handler.view.zoom_to_fit(group_id, false);
+                        }
                     });
                 }
             }),
         );
     }
 
-    if should_center {
+    if should_center && !needs_autolayout {
         ws_handler.view.center_graph(group_id, false);
     }
 }
