@@ -1682,8 +1682,25 @@ async fn process_fill_graph_of_group(
     should_center: bool,
     workspace: ReadStore<GraphsWorkspaceState>,
 ) {
+    // Fetch nodes first to evaluate their positions
+    let nodes_result = api::get_nodes(group_id).await;
+    
+    // Determine dynamically if an autolayout is required for this specific group
+    let mut actual_needs_layout = needs_autolayout;
+    if let Ok(ref nodes) = nodes_result {
+        // Check if all nodes are overlapping at the origin (or have no position)
+        let unpositioned = nodes.iter().all(|n| {
+            n.gui_position().is_none() || n.gui_position() == Some((0.0, 0.0))
+        });
+        
+        // Apply layout if we have more than one node and they are overlapping
+        if nodes.len() > 1 && unpositioned {
+            actual_needs_layout = true;
+        }
+    }
+
     eval_action_run(
-        api::get_nodes(group_id).await,
+        nodes_result,
         Some(move |nodes: Vec<NodeInfo>| ws_handler.nodes.add_group_nodes(group_id, nodes)),
     );
 
@@ -1698,13 +1715,11 @@ async fn process_fill_graph_of_group(
         api::get_connections(group_id).await,
         Some(move |connect_infos: Vec<ConnectInfo>| {
             ws_handler.edges.add_group_edges(group_id, connect_infos);
-            
-            // Layout für Sub-Gruppen asynchron starten
-            if needs_autolayout && *root_scenery_id.read() != group_id {
+            // Start layout for sub-groups asynchronously
+            if actual_needs_layout && *root_scenery_id.read() != group_id {
                 dioxus::prelude::spawn(async move {
-                    // Warten, bis das Layout berechnet und angewendet wurde
+                    // Wait until the layout is calculated and applied
                     process_optimize_layout(workspace, ws_handler, group_id).await;
-                    
                     if should_center {
                         ws_handler.view.zoom_to_fit(group_id, false);
                     }
@@ -1718,13 +1733,11 @@ async fn process_fill_graph_of_group(
             api::get_analyzers().await,
             Some(move |analyzers: Vec<AnalyzerItemDto>| {
                 ws_handler.nodes.add_group_analyzers(group_id, analyzers);
-                
-                // Layout für die Root-Scenery asynchron starten
-                if needs_autolayout {
+                // Start layout for the root scenery asynchronously
+                if actual_needs_layout {
                     dioxus::prelude::spawn(async move {
-                        // Warten, bis das Layout berechnet und angewendet wurde
+                        // Wait until the layout is calculated and applied
                         process_optimize_layout(workspace, ws_handler, group_id).await;
-                        
                         if should_center {
                             ws_handler.view.zoom_to_fit(group_id, false);
                         }
@@ -1734,7 +1747,7 @@ async fn process_fill_graph_of_group(
         );
     }
 
-    if should_center && !needs_autolayout {
+    if should_center && !actual_needs_layout {
         ws_handler.view.center_graph(group_id, false);
     }
 }
