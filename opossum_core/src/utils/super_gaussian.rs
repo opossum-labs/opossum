@@ -16,7 +16,6 @@
 
 use crate::{
     error::OpmResult,
-    generic_validators::ValidateTrait,
     millimeter,
     types::validated_type_definitions::{
         ValidatedAngle1D, ValidatedCenter2D, ValidatedGaussianPower, ValidatedSideLengths2D,

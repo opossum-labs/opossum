@@ -41,6 +41,7 @@ pub trait PropagationStrategy {
     /// Determines how rays missing a surface should be handled.
     fn missed_surface_strategy(&self) -> MissedSurfaceStrategy;
 
+    ///Return the refractive index type of the ambient medium defined in this analyzer
     fn ambient_refractive_index(&self) -> RefractiveIndexType;
     /// The whole [`PumpConfig`] the node with the given [`Uuid`] runs under in this analysis.
     ///

@@ -474,9 +474,7 @@ mod test {
         core_optics::{Alignable, PortType, node_attr::HasNodeAttr},
         degree,
         gain::{
-            ConstGain, ConstInversion, GainModel, PumpScenario, PumpSource, SmallSignalGain,
-            inversion_field::CellIndex,
-        },
+            ConstGain, ConstInversion, GainModel, PumpScenario, PumpSource, SmallSignalGain  },
         joule,
         light::{
             Rays,

@@ -29,7 +29,7 @@ use super::{
 };
 use crate::{
     error::{OpmResult, OpossumError},
-    generic_validators::{AllFinite, AllNotZero, AllPositive, ValidateTrait},
+    generic_validators::{AllFinite, AllNotZero, AllPositive},
     geometry::body::Body,
     light::{Ray, Spectrum},
     square_centimeter, validated, validated_type,

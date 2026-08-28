@@ -11,7 +11,7 @@ use crate::error::{OpmResult, OpossumError};
 use crate::material::{LEGACY_REFRACTIVE_INDEX, MATERIAL, Material};
 use crate::properties::validator::Validator;
 use indexmap::IndexMap;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 

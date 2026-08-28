@@ -27,7 +27,7 @@ pub use small_signal::SmallSignalGain;
 
 use crate::{
     error::OpmResult,
-    generic_validators::{AllFinite, AllPositive, ValidateTrait},
+    generic_validators::{AllFinite, AllPositive},
     geometry::body::Body,
     light::{Ray, Spectrum},
     utils::default_from_name::DefaultFromName,

@@ -22,7 +22,7 @@
 use super::inversion_field::{InversionField, cells};
 use crate::{
     error::{OpmResult, OpossumError},
-    generic_validators::{AllFinite, AllPositive, ValidateTrait},
+    generic_validators::{AllFinite, AllPositive},
     geometry::body::BoundingBox,
     reciprocal_centimeter,
     utils::{default_from_name::DefaultFromName, super_gaussian::SuperGaussianShape},
