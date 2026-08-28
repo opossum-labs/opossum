@@ -3,6 +3,7 @@ pub mod energy_editor;
 pub mod ghost_focus_editor;
 mod light_data_editor;
 pub mod ray_trace_editor;
+mod source_port_card;
 
 use crate::components::{
     node_editor::{

@@ -24,7 +24,6 @@ use crate::error::BackEndErrorResponse;
 mod amplifier_node_commands;
 mod analyzer_commands;
 mod edge_commands;
-mod global_conf_commands;
 mod group_commands;
 mod node_commands;
 mod port_map_commands;
@@ -34,7 +33,6 @@ mod viewport_commands;
 pub use amplifier_node_commands::PatchAmplifierNodes;
 pub use analyzer_commands::{PatchAnalyzer, RepositionAnalyzer};
 pub use edge_commands::{EdgeSnapshot, UpdateEdgeDistance};
-pub use global_conf_commands::PatchGlobalConf;
 pub use group_commands::{GroupConversion, MoveNodes, ReroutedMapping};
 pub use node_commands::{
     CascadedNode, NodeSnapshot, PatchNode, PatchPort, PatchProperty, capture_old_node_request,
@@ -96,8 +94,6 @@ pub enum Command {
     InsertGroup(GroupConversion),
     /// See [`GroupConversion`]. Converts the group back into flat members.
     ExtractGroup(GroupConversion),
-    /// See [`PatchGlobalConf`]. Replaces the document's global scenery config.
-    PatchGlobalConf(PatchGlobalConf),
     /// See [`SetViewport`]. Moves the canvas camera (pan/zoom) of a tab; does not touch the document.
     SetViewport(SetViewport),
     /// Applies each sub-command in order; its inverse is the sub-commands' inverses in reverse order,
@@ -162,9 +158,6 @@ impl Command {
             Self::MoveNodes(cmd) => group_commands::apply_move_nodes(document, cmd),
             Self::InsertGroup(cmd) => group_commands::apply_insert_group(document, cmd),
             Self::ExtractGroup(cmd) => group_commands::apply_extract_group(document, cmd),
-            Self::PatchGlobalConf(cmd) => {
-                Ok(global_conf_commands::apply_patch_global_conf(document, cmd))
-            }
             Self::SetViewport(cmd) => Ok(viewport_commands::apply_set_viewport(cmd)),
             Self::Batch(commands) => {
                 let mut inverses = Vec::with_capacity(commands.len());
@@ -351,7 +344,7 @@ impl Command {
                 ..
             }) => port_map_commands::describe(group_id, parent_group_id),
             Self::AddAnalyzer(cmd) => vec![DocumentChange::AnalyzerAdded {
-                analyzer: cmd.clone(),
+                analyzer: Box::new(cmd.clone()),
             }],
             Self::RemoveAnalyzer(cmd) => vec![DocumentChange::AnalyzerRemoved { id: cmd.id }],
             // The pump-scenario-selection patch changes only that selection, not the analyzer's own
@@ -405,11 +398,6 @@ impl Command {
                     group.uuid().ok(),
                 )
             }
-            // The global config has no canvas element the GUI mirrors incrementally, so this reports
-            // no `DocumentChange` for now - the document is still correctly reverted by `apply`, and a
-            // future global-config editor can add a matching change variant when there's something to
-            // refresh.
-            Self::PatchGlobalConf(_) => Vec::new(),
             Self::SetViewport(cmd) => viewport_commands::describe_set_viewport(cmd),
             Self::Batch(commands) => {
                 let mut changes = Vec::new();

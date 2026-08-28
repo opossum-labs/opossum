@@ -2,7 +2,7 @@ use directories::{ProjectDirs, UserDirs};
 use opm_macros_lib::EnsureValidated;
 use opossum_core::{
     error::{OpmResult, OpossumError},
-    generic_validators::{AllFinite, AllNotZero, AllPositive, ValidateTrait},
+    generic_validators::{AllFinite, AllNotZero, AllPositive},
     nanometer, validated, validated_type,
 };
 use ron::ser::PrettyConfig;

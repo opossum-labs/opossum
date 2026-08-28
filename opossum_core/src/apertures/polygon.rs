@@ -1,7 +1,6 @@
 use super::Shape;
 use crate::{
     error::{OpmResult, OpossumError},
-    generic_validators::ValidateTrait,
     millimeter,
     prelude::ApertureShape,
     types::validated_type_definitions::ValidatedPolygonPoints2D,

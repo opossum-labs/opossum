@@ -5,6 +5,7 @@ use uom::si::f64::Length;
 use uuid::Uuid;
 
 use crate::{
+    absorption::absorption_model::AbsorptionModel,
     asset::AssetHeader,
     error::OpmResult,
     refractive_index::{
@@ -12,6 +13,33 @@ use crate::{
         RefractiveIndexType,
     },
 };
+
+#[must_use]
+#[allow(clippy::missing_panics_doc)]
+/// Create a vacuum "material"
+///
+/// This returns a [`Material`] with a constant refractive  index of 1.0.
+pub fn material_vaccuum() -> Material {
+    let mut material: Material = Material::new_draft(
+        "vacuum",
+        None,
+        None,
+        RefractiveIndexType::Const(RefrIndexConst::new(1.0).unwrap()),
+    );
+    material.header.id = Uuid::nil();
+    material
+}
+
+#[must_use]
+#[allow(clippy::missing_panics_doc)]
+/// Create a [`Material`] representing air.
+///
+/// This returns a [`Material`] based on an air model [`RefrIndexAir::default()`].
+pub fn material_air() -> Material {
+    let mut material: Material = RefractiveIndexType::Air(RefrIndexAir::default()).into();
+    material.header.name = "air".to_string();
+    material
+}
 
 /// Name of the property that carries the [`Material`] of a node with a volume.
 ///
@@ -38,16 +66,27 @@ pub struct OpticalProperties {
 
     /// Optional constant absorption coefficient (e.g., in 1/m).
     #[serde(default)]
-    pub absorption: Option<f64>,
+    pub absorption: AbsorptionModel,
 }
 
 impl OpticalProperties {
     /// Creates a new `OpticalProperties` container.
     #[must_use]
-    pub const fn new(refractive_index: RefractiveIndexType) -> Self {
+    pub fn new(refractive_index: RefractiveIndexType) -> Self {
         Self {
             refractive_index,
-            absorption: None,
+            absorption: AbsorptionModel::default(),
+        }
+    }
+    /// Creates a container with a custom refractive index and custom absorption model.
+    #[must_use]
+    pub const fn with_absorption(
+        refractive_index: RefractiveIndexType,
+        absorption: AbsorptionModel,
+    ) -> Self {
+        Self {
+            refractive_index,
+            absorption,
         }
     }
 }
@@ -186,6 +225,12 @@ impl Material {
         self.optical
             .refractive_index
             .get_refractive_index(wavelength)
+    }
+
+    /// Returns a reference to the refractive index type of this [`Material`].
+    #[must_use]
+    pub const fn refractive_index_type(&self) -> &RefractiveIndexType {
+        &self.optical.refractive_index
     }
 }
 

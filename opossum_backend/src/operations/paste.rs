@@ -135,7 +135,7 @@ fn partition_cache(
     for item in items {
         match item {
             NodeCacheItem::Optical(o) => optical.push(o),
-            NodeCacheItem::Analyzer(a) => analyzer.push(a),
+            NodeCacheItem::Analyzer(a) => analyzer.push(*a),
         }
     }
     (optical, analyzer)

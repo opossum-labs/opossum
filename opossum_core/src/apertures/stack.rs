@@ -2,7 +2,7 @@ use super::Shape;
 use crate::{
     apertures::{Aperture, CircleShape},
     error::OpmResult,
-    generic_validators::{AllNotEmpty, Pass, ValidateTrait},
+    generic_validators::{AllNotEmpty, Pass},
     prelude::Isometry,
     reporting::plottable::{PlotData, PlotSeries},
     utils::math_distribution_functions::ellipse,

@@ -5,7 +5,7 @@ use utoipa::ToSchema;
 
 use super::Shape;
 use crate::{
-    apertures::ApertureShape, error::OpmResult, generic_validators::ValidateTrait,
+    apertures::ApertureShape, error::OpmResult,
     types::validated_type_definitions::ValidatedSideLengths2D,
 };
 use opm_macros_lib::EnsureValidated;

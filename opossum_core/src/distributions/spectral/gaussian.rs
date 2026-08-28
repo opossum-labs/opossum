@@ -7,7 +7,7 @@ use crate::utils::griddata::linspace;
 use crate::utils::math_distribution_functions::gaussian;
 use crate::validated;
 use crate::{
-    generic_validators::{AllNormal, AllNotZero, AllPositive, SecondLarger, ValidateTrait},
+    generic_validators::{AllNormal, AllNotZero, AllPositive, SecondLarger},
     meter, nanometer, validated_type,
 };
 use kahan::KahanSummator;

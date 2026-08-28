@@ -2,7 +2,7 @@
 use super::EnergyDistribution;
 use crate::{
     error::OpmResult,
-    generic_validators::{AllFinite, AllNotZero, AllPositive, ValidateTrait},
+    generic_validators::{AllFinite, AllNormal, AllNotZero, AllPositive},
     joule, millimeter,
     types::validated_type_definitions::{
         ValidatedAngle1D, ValidatedCenter2D, ValidatedGaussianPower, ValidatedSideLengths2D,

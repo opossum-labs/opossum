@@ -3,7 +3,7 @@
 use super::PositionDistribution;
 use crate::{
     error::OpmResult,
-    generic_validators::{AllFinite, AllNotZero, AllPositive, NotAllZero, ValidateTrait},
+    generic_validators::{AllFinite, AllNotZero, AllPositive, NotAllZero},
     millimeter,
     utils::to_f64,
     validated, validated_type,

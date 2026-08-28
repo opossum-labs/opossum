@@ -8,17 +8,14 @@ use uuid::Uuid;
 use crate::core_optics::{NodeAttrExt, OpticPorts};
 use crate::{
     analyzers::{Analyzable, propagation_strategy::PropagationStrategy},
-    core_optics::{PortType, SceneryResources, node_attr::HasNodeAttr, volumetric::Volumetric},
+    core_optics::{PortType, node_attr::HasNodeAttr, volumetric::Volumetric},
     error::OpmResult,
     light::LightData,
     nodes::fluence_detector::Fluence,
     reporting::{Dottable, node_report::NodeReport},
     utils::geom_transformation::Isometry,
 };
-use std::{
-    any::Any,
-    sync::{Arc, Mutex},
-};
+use std::any::Any;
 
 /// Helper trait for dynamic downcasting of optical nodes.
 /// This trait is automatically implemented by the `#[derive(OpmNode)]` macro.
@@ -123,11 +120,6 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     /// Return the (base) [`Isometry`] of this optical node.
     fn isometry(&self) -> Option<Isometry> {
         self.node_attr().isometry()
-    }
-    /// Set the global configuration for this [`OpticNode`].
-    /// **Note**: This function should normally only be used internally by `OpticRef`.
-    fn set_global_conf(&mut self, global_conf: Option<Arc<Mutex<SceneryResources>>>) {
-        self.node_attr_mut().set_global_conf(global_conf);
     }
     /// Set this [`OpticNode`] as inverted.
     ///

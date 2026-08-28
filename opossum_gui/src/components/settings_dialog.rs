@@ -112,63 +112,85 @@ fn GeneralSettingsTab(mut temp_config: Signal<crate::AppConfig>) -> Element {
         div { class: "d-flex flex-column gap-3",
             h4 { class: "mb-3", "General Settings" }
 
-            // Report Base Directory Setting
-            div { class: "form-group",
-                label { class: "form-label text-muted small", "Report Base Directory" }
-                div { class: "input-group",
-                    input {
-                        r#type: "text",
-                        class: "form-control bg-dark text-white border-secondary",
-                        style: "font-family: monospace; font-size: 13px;",
-                        readonly: true,
-                        value: "{current_report_path_str}",
-                    }
-                    button {
-                        class: "btn btn-secondary",
-                        r#type: "button",
-                        onclick: move |_| {
-                            spawn(async move {
-                                if let Some(folder) = select_folder_path().await
-                                    && let Err(e) = temp_config.write().set_report_dir(&folder)
-                                {
-                                    eprintln!("Error setting report directory: {e}");
-                                }
-                            });
-                        },
-                        "Browse..."
-                    }
-                }
+        // Report Base Directory Setting
+        div { class: "form-group",
+          label { class: "form-label text-muted small", "Report Base Directory" }
+          div { class: "input-group",
+            input {
+              r#type: "text",
+              class: "form-control bg-dark text-white border-secondary",
+              style: "font-family: monospace; font-size: 13px;",
+              readonly: true,
+              value: "{current_report_path_str}",
             }
+            button {
+              class: "btn btn-secondary",
+              r#type: "button",
+              onclick: move |_| {
+                  // Retrieve the current directory and clone it if it exists on disk
+                  let starting_dir = temp_config
+                      .read()
+                      .report_dir()
+                      .filter(|p| p.exists())
+                      .cloned();
 
-            // Catalog Base Directory Setting
-            div { class: "form-group",
-                label { class: "form-label text-muted small",
-                    "Catalog Directory (Materials, Coatings, etc.)"
-                }
-                div { class: "input-group",
-                    input {
-                        r#type: "text",
-                        class: "form-control bg-dark text-white border-secondary",
-                        style: "font-family: monospace; font-size: 13px;",
-                        readonly: true,
-                        value: "{current_catalog_path_str}",
-                    }
-                    button {
-                        class: "btn btn-secondary",
-                        r#type: "button",
-                        onclick: move |_| {
-                            spawn(async move {
-                                if let Some(folder) = select_folder_path().await
-                                    && let Err(e) = temp_config.write().set_catalog_dir(&folder)
-                                {
-                                    eprintln!("Error setting catalog directory: {e}");
-                                }
-                            });
-                        },
-                        "Browse..."
-                    }
-                }
+                  spawn(async move {
+                      if let Some(folder) = select_folder_path(
+                              starting_dir.as_deref(),
+                              Some("Select OPOSSUM report directory"),
+                          )
+                          .await
+                              && let Err(e) = temp_config.write().set_report_dir(&folder)
+                      {
+                          eprintln!("Error setting report directory: {e}");
+                      }
+                  });
+              },
+              "Browse..."
             }
+          }
+        }
+
+        // Catalog Base Directory Setting
+        div { class: "form-group",
+          label { class: "form-label text-muted small",
+            "Catalog Directory (Materials, Coatings, etc.)"
+          }
+          div { class: "input-group",
+            input {
+              r#type: "text",
+              class: "form-control bg-dark text-white border-secondary",
+              style: "font-family: monospace; font-size: 13px;",
+              readonly: true,
+              value: "{current_catalog_path_str}",
+            }
+            button {
+              class: "btn btn-secondary",
+              r#type: "button",
+              onclick: move |_| {
+                  // Retrieve the current directory and clone it if it exists on disk
+                  let starting_dir = temp_config
+                      .read()
+                      .catalog_dir()
+                      .filter(|p| p.exists())
+                      .cloned();
+
+                  spawn(async move {
+                      if let Some(folder) = select_folder_path(
+                              starting_dir.as_deref(),
+                              Some("Select OPOSSUM catalog directory"),
+                          )
+                          .await
+                              && let Err(e) = temp_config.write().set_catalog_dir(&folder)
+                      {
+                          eprintln!("Error setting catalog directory: {e}");
+                      }
+                  });
+              },
+              "Browse..."
+            }
+          }
+        }
 
             // Catalog Remote Git URL Setting
             div { class: "form-group",

@@ -865,7 +865,7 @@ pub enum DocumentChange {
         connect_info: ConnectInfo,
     },
     /// Mirrors `POST /api/analyzers`.
-    AnalyzerAdded { analyzer: AnalyzerItemDto },
+    AnalyzerAdded { analyzer: Box<AnalyzerItemDto> },
     /// Mirrors `DELETE /api/analyzers/{uuid}`.
     AnalyzerRemoved { id: Uuid },
     /// The analyzer's config changed (not its position); the properties panel should re-fetch it.

@@ -1,7 +1,7 @@
 //! Uniform energy distribution
 
 use crate::{
-    generic_validators::{AllFinite, AllNotZero, AllPositive, ValidateTrait},
+    generic_validators::{AllFinite, AllNotZero, AllPositive},
     joule, validated, validated_type,
 };
 use nalgebra::Point2;

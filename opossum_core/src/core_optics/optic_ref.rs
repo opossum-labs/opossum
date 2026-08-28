@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::{
     analyzers::Analyzable,
-    core_optics::{NodeAttr, NodeAttrExt, SceneryResources, node_attr::HasNodeAttr},
+    core_optics::{NodeAttr, NodeAttrExt, node_attr::HasNodeAttr},
     error::OpmResult,
     nodes::{NodeGroup, OpticGraph, create_node_ref},
     utils::LockExt,
@@ -32,11 +32,7 @@ impl OpticRef {
     /// # Panics
     ///
     /// This function might theoretically panic if locking of an internal mutex fails.
-    pub fn new(
-        node: Arc<Mutex<dyn Analyzable>>,
-        global_conf: Option<Arc<Mutex<SceneryResources>>>,
-    ) -> Self {
-        node.lock_opm().unwrap().set_global_conf(global_conf);
+    pub fn new(node: Arc<Mutex<dyn Analyzable>>) -> Self {
         Self { optical_ref: node }
     }
     /// Returns the [`Uuid`] of the node, reference to by this [`OpticRef`].
@@ -47,17 +43,17 @@ impl OpticRef {
     pub fn uuid(&self) -> OpmResult<Uuid> {
         Ok(self.optical_ref.lock_opm()?.node_attr().uuid())
     }
-    /// Update the reference to the global configuration.
-    /// **Note**: This functions is normally only called from `OpticGraph`.
+    /// Creates a deep copy of this optic reference with a fresh, independent node instance.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// This function might theoretically panic if locking of an internal mutex fails.
-    pub fn update_global_config(&self, global_conf: Option<Arc<Mutex<SceneryResources>>>) {
-        self.optical_ref
-            .lock_opm()
-            .unwrap()
-            .set_global_conf(global_conf);
+    /// This function might return an error if locking the internal optical reference was not
+    /// successful.
+    pub fn clone_deep(&self) -> OpmResult<Self> {
+        let cloned_node = self.optical_ref.lock_opm()?.clone_analyzable();
+        Ok(Self {
+            optical_ref: cloned_node,
+        })
     }
 }
 impl Debug for OpticRef {
@@ -117,7 +113,7 @@ impl<'de> Deserialize<'de> for OpticRef {
     where
         D: serde::Deserializer<'de>,
     {
-        let intermediate = OpticRefIntermediate::deserialize(deserializer)?;
+        let mut intermediate = OpticRefIntermediate::deserialize(deserializer)?;
 
         let node_type = intermediate.attributes.node_type();
         // Note: an unknown node type is not logged here. `OpticRef::deserialize` itself never skips a
@@ -125,6 +121,19 @@ impl<'de> Deserialize<'de> for OpticRef {
         // `optic_graph/serialization.rs`) do the skipping and log accordingly, since only they know the
         // node was skipped rather than the whole document failing to load.
         let node_ref = create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
+
+        // Merge the deserialized properties on top of the node's default properties.
+        // This ensures that:
+        // 1. Properties not present in intermediate (e.g. skipped due to parse errors or omitted)
+        //    remain at their default values.
+        // 2. Property descriptions and validators registered on the default node are preserved.
+        {
+            let default_node = node_ref.optical_ref.lock_opm().unwrap();
+            let mut merged_props = default_node.node_attr().properties().clone();
+            drop(default_node);
+            merged_props.update(intermediate.attributes.properties().clone());
+            intermediate.attributes.set_properties(merged_props);
+        }
 
         node_ref
             .optical_ref
@@ -168,13 +177,13 @@ mod test {
         let uuid = Uuid::new_v4();
         let mut dummy = Dummy::default();
         dummy.node_attr_mut().set_uuid(uuid);
-        let optic_ref = OpticRef::new(Arc::new(Mutex::new(dummy)), None);
+        let optic_ref = OpticRef::new(Arc::new(Mutex::new(dummy)));
         assert_eq!(optic_ref.uuid()?, uuid);
         Ok(())
     }
     #[test]
     fn serialize() {
-        let optic_ref = OpticRef::new(Arc::new(Mutex::new(Dummy::default())), None);
+        let optic_ref = OpticRef::new(Arc::new(Mutex::new(Dummy::default())));
         assert!(
             ron::ser::to_string_pretty(&optic_ref, ron::ser::PrettyConfig::new().new_line("\n"))
                 .is_ok()
@@ -205,7 +214,7 @@ mod test {
         assert_eq!(
             format!(
                 "{:?}",
-                OpticRef::new(Arc::new(Mutex::new(Dummy::default())), None)
+                OpticRef::new(Arc::new(Mutex::new(Dummy::default())))
             ),
             "OpticRef { optical_ref: 'dummy' (dummy) }"
         );

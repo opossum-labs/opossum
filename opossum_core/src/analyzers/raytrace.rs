@@ -9,6 +9,8 @@ use crate::{
     error::{OpmResult, OpossumError},
     gain::{ActiveScenario, PumpConfig, PumpScenario},
     light::{LightResult, Rays, lightdata::ray_data_builder::RayDataBuilder},
+    material::Material,
+    material_vaccuum,
     nodes::NodeGroup,
     picojoule,
     reporting::analysis_report::AnalysisReport,
@@ -41,6 +43,7 @@ pub struct RayTraceConfig {
     max_number_of_refractions: usize,
     missed_surface_strategy: MissedSurfaceStrategy,
     source_map: HashMap<Uuid, RayDataBuilder>,
+    ambient_material: Material,
     /// The operating point of the run currently being performed - see [`ActiveScenario`]. Not part
     /// of the configuration a user edits and not written to file.
     #[serde(skip)]
@@ -64,6 +67,7 @@ impl Default for RayTraceConfig {
             max_number_of_refractions: 1000,
             missed_surface_strategy: MissedSurfaceStrategy::Stop,
             source_map: HashMap::new(),
+            ambient_material: material_vaccuum(),
             active_pump_scenario: ActiveScenario::default(),
             positioning_run: false,
         }
@@ -163,6 +167,15 @@ impl RayTraceConfig {
     /// This will overwrite any existing mappings. Use with care.
     pub fn set_source_map(&mut self, source_map: HashMap<Uuid, RayDataBuilder>) {
         self.source_map = source_map;
+    }
+    /// Returns a reference to the ambient material of this analysis
+    #[must_use]
+    pub const fn ambient_material(&self) -> &Material {
+        &self.ambient_material
+    }
+    /// Sets the ambient material for this analysis
+    pub fn set_ambient_material(&mut self, material: Material) {
+        self.ambient_material = material;
     }
     /// Mark this config as driving the geometry-positioning run.
     ///
@@ -327,7 +340,7 @@ mod test {
     fn config_debug() {
         assert_eq!(
             format!("{:?}", RayTraceConfig::default()),
-            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop, source_map: {}, active_pump_scenario: ActiveScenario(None), positioning_run: false }"
+            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop, source_map: {}, active_pump_scenario: ActiveScenario(None), positioning_run: false, ambient_material: Material { header: AssetHeader { schema_version: 1, id: 00000000-0000-0000-0000-000000000000, version: 0, name: \"vacuum\", manufacturer: None, description: None }, optical: OpticalProperties { refractive_index: Const(RefrIndexConst { refractive_index: Validated { value: 1.0, validator: AndValidator { v1: AllFinite, v2: StaticInRange { _marker: PhantomData<(f64, opossum_core::refractive_index::refr_index_const::RefIndBounds)> }, _marker: PhantomData<f64> } } }), absorption: None }, thermal: None, mechanical: None } }"
         );
     }
     #[test]

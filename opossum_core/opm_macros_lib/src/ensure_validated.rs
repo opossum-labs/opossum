@@ -198,7 +198,7 @@ fn process_field(
         checks.push(quote! {
                 let _ : fn() = || {
             // The type itself must implement the trait
-            fn _check<T: ValidateTrait>() {}
+            fn _check<T: ::opossum_core::generic_validators::ValidateTrait>() {}
             _check::<#ty>();
         };
             });

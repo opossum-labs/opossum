@@ -393,11 +393,6 @@
             ],
         ),
     },
-    global: (
-        ambient_refr_index: Const(
-            refractive_index: 1.0,
-        ),
-    ),
     analyzers: {
         "d6824bb9-29cf-4f68-aeee-8c7ac70b2c24": (
             analyzer_type: Energy(
@@ -465,6 +460,18 @@
                         ),
                     ),
                 },
+                ambient_material: {
+                    "schema_version": 1,
+                    "id": "00000000-0000-0000-0000-000000000000",
+                    "version": 0,
+                    "name": "vacuum",
+                    "optical": (
+                        refractive_index: Const(
+                            refractive_index: 1.0,
+                        ),
+                        absorption: r#None,
+                    ),
+                },
             ),
         ),
     },
@@ -478,7 +485,7 @@
                 refractive_index: Const(
                     refractive_index: 1.5,
                 ),
-                absorption: None,
+                absorption: r#None,
             ),
         },
         "6b517904-bf61-4cc0-903a-dc1ea5d1473b": {
@@ -490,7 +497,7 @@
                 refractive_index: Const(
                     refractive_index: 1.5,
                 ),
-                absorption: None,
+                absorption: r#None,
             ),
         },
         "89bc2a9b-b14b-4c0e-a456-a9c56cdb65dd": {
@@ -502,7 +509,7 @@
                 refractive_index: Const(
                     refractive_index: 1.5,
                 ),
-                absorption: None,
+                absorption: r#None,
             ),
         },
     },

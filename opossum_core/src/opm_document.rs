@@ -7,7 +7,7 @@
 //! This module also handles reading and writing of `.opm` files.
 use crate::{
     analyzers::{Analyzer, AnalyzerRegistration, AnalyzerType},
-    core_optics::{NodeAttrExt, OpticNode, SceneryResources},
+    core_optics::{NodeAttrExt, OpticNode},
     error::{OpmResult, OpossumError},
     gain::{GainModel, PumpScenario},
     material::Material,
@@ -28,7 +28,6 @@ use std::{
     fs::{self, File},
     io::Write,
     path::Path,
-    sync::{Arc, Mutex},
 };
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -111,8 +110,6 @@ pub struct OpmDocument {
     opm_file_version: String,
     #[serde(default)]
     scenery: NodeGroup,
-    #[serde(default, rename = "global")]
-    global_conf: Arc<Mutex<SceneryResources>>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     analyzers: IndexMap<Uuid, AnalyzerInfo>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
@@ -132,7 +129,6 @@ impl Default for OpmDocument {
         Self {
             opm_file_version: env!("OPM_FILE_VERSION").to_string(),
             scenery: NodeGroup::default(),
-            global_conf: Arc::new(Mutex::new(SceneryResources::default())),
             analyzers: IndexMap::default(),
             pump_scenarios: IndexMap::default(),
             amplifier_nodes: HashSet::default(),
@@ -143,8 +139,7 @@ impl Default for OpmDocument {
 impl OpmDocument {
     /// Creates a new [`OpmDocument`].
     #[must_use]
-    pub fn new(mut scenery: NodeGroup) -> Self {
-        scenery.set_global_conf(Some(Arc::new(Mutex::new(SceneryResources::default()))));
+    pub fn new(scenery: NodeGroup) -> Self {
         Self {
             scenery,
             ..Default::default()
@@ -249,11 +244,6 @@ impl OpmDocument {
 
         // Resolve embedded material references into full in-memory Material structs
         document.resolve_embedded_materials()?;
-
-        document
-            .scenery
-            .graph_mut()
-            .update_global_config(&Some(document.global_conf.clone()));
         Ok(document)
     }
     /// Saves this [`OpmDocument`] to an `.opm` file at the specified path.
@@ -280,6 +270,19 @@ impl OpmDocument {
         })?;
         Ok(())
     }
+    /// Creates a complete deep copy of the document and all scene nodes.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if nested components cannot be cloned deeply.
+    pub fn clone_deep(&self) -> OpmResult<Self> {
+        Ok(Self {
+            opm_file_version: self.opm_file_version.clone(),
+            scenery: self.scenery.clone_deep()?,
+            analyzers: self.analyzers.clone(),
+            embedded_materials: self.embedded_materials.clone(),
+        })
+    }
     /// Generates the RON string content representation of this [`OpmDocument`].
     ///
     /// Extracts embedded materials and replaces node material properties with UUID references,
@@ -299,8 +302,8 @@ impl OpmDocument {
     /// Returns an [`OpossumError`] if serialization fails.
     pub fn to_opm_file_string(&self) -> OpmResult<String> {
         // Create a temporary mutable clone for serialization preparation
-        let mut doc_to_serialize = self.clone();
-        let prepared = doc_to_serialize.prepare_materials_for_serialization();
+        let mut doc_to_serialize = self.clone_deep()?;
+        doc_to_serialize.prepare_materials_for_serialization()?;
 
         let config = PrettyConfig::new()
             .extensions(Extensions::UNWRAP_VARIANT_NEWTYPES)
@@ -554,19 +557,6 @@ impl OpmDocument {
     /// Returns a mutable reference to the scenery of this [`OpmDocument`].
     pub const fn scenery_mut(&mut self) -> &mut NodeGroup {
         &mut self.scenery
-    }
-    /// Returns a reference to the global config of this [`OpmDocument`].
-    #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
-    pub fn global_conf(&self) -> &Mutex<SceneryResources> {
-        &self.global_conf
-    }
-    /// Sets the global config of this [`OpmDocument`].
-    pub fn set_global_conf(&mut self, rsrc: SceneryResources) {
-        self.global_conf = Arc::new(Mutex::new(rsrc));
-        self.scenery
-            .graph_mut()
-            .update_global_config(&Some(self.global_conf.clone()));
     }
     /// Perform an analysis run of this [`OpmDocument`].
     ///
@@ -1311,7 +1301,6 @@ mod test {
         scenery.connect_nodes(i_14, "output_1", i_15, "input_1", millimeter!(50.0))?;
         scenery.connect_nodes(i_15, "output_1", i_16, "input_1", millimeter!(50.0))?;
 
-        scenery.set_global_conf(Some(Arc::new(Mutex::new(SceneryResources::default()))));
         let ray_builder = round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1)?;
         let mut config = RayTraceConfig::default();
         config.map_source(i_0, ray_builder.clone());
@@ -1468,9 +1457,18 @@ mod test {
         ),
     },
     global: (
-        ambient_refr_index: Const(
-            refractive_index: 1.0,
-        ),
+        ambient_material: {
+            "schema_version": 1,
+            "id": "6c30ef98-7380-4477-bc91-a5a1a407fec7",
+            "version": 0,
+            "name": "Custom Material",
+            "optical": (
+                refractive_index: Const(
+                    refractive_index: 1.0,
+                ),
+                absorption: r#None,
+            ),
+        },
     ),
 )"#;
 
@@ -1595,9 +1593,18 @@ mod test {
         ),
     },
     global: (
-        ambient_refr_index: Const(
-            refractive_index: 1.0,
-        ),
+        ambient_material: {
+            "schema_version": 1,
+            "id": "6c30ef98-7380-4477-bc91-a5a1a407fec7",
+            "version": 0,
+            "name": "Custom Material",
+            "optical": (
+                refractive_index: Const(
+                    refractive_index: 1.0,
+                ),
+                absorption: r#None,
+            ),
+        },
     ),
 )"#;
 
@@ -1672,9 +1679,18 @@ mod test {
         ),
     },
     global: (
-        ambient_refr_index: Const(
-            refractive_index: 1.0,
-        ),
+        ambient_material: {
+            "schema_version": 1,
+            "id": "6c30ef98-7380-4477-bc91-a5a1a407fec7",
+            "version": 0,
+            "name": "Custom Material",
+            "optical": (
+                refractive_index: Const(
+                    refractive_index: 1.0,
+                ),
+                absorption: r#None,
+            ),
+        },
     ),
 )"#;
 
@@ -1743,5 +1759,115 @@ mod test {
         let new_position = Point2::new(3.0, 4.0);
         at.set_gui_position(Some(new_position));
         assert_eq!(at.gui_position(), Some(new_position))
+    }
+    #[test]
+    fn test_repeated_serialization_preserves_embedded_materials() -> OpmResult<()> {
+        let material_id = Uuid::new_v4();
+        let const_refr = RefrIndexConst::new(1.5)?;
+        let material = Material::new_for_test(material_id, 1, "N-BK7 Test", const_refr.into());
+
+        let mut scenery = NodeGroup::default();
+        let lens = Lens::new(
+            "Test Lens",
+            millimeter!(100.0),
+            millimeter!(-100.0),
+            millimeter!(10.0),
+            material,
+        )?;
+        scenery.add_node(lens)?;
+
+        let doc = OpmDocument::new(scenery);
+
+        // First serialization
+        let first_ron = doc.to_opm_file_string()?;
+        assert!(
+            first_ron.contains("embedded_materials:"),
+            "First serialization must contain embedded_materials"
+        );
+
+        // Second serialization on the same in-memory document instance
+        let second_ron = doc.to_opm_file_string()?;
+        assert!(
+            second_ron.contains("embedded_materials:"),
+            "Second serialization must still contain embedded_materials"
+        );
+
+        // Ensure the second serialized document can be reloaded without missing material errors
+        let reloaded_doc = OpmDocument::from_string(&second_ron)?;
+        assert_eq!(
+            reloaded_doc.embedded_materials.len(),
+            1,
+            "Reloaded document must contain the resolved material"
+        );
+
+        Ok(())
+    }
+    #[test]
+    fn test_corrupt_node_property_falls_back_to_default_and_warns() -> OpmResult<()> {
+        // RON data with an illegal variant "ength(0.01)" instead of "Length(0.01)"
+        let ron_data = r#"#![enable(unwrap_variant_newtypes)]
+(
+    opm_file_version: "0",
+    scenery: {
+        "node_type": "group",
+        "name": "test",
+        "uuid": "131024b9-f447-476d-ace2-b2c027ba0ef3",
+        "props": {
+            "expand view": Bool(false),
+        },
+        "graph": (
+            nodes: [
+                {
+                    "node_type": "paraxial surface",
+                    "name": "paraxial surface",
+                    "uuid": "74e7f1d3-2315-4479-9649-21afb3a18e3a",
+                    "props": {
+                        "focal length": ength(0.01),
+                    },
+                    "gui_position": Some(-65.0, -40.17220926998195),
+                },
+            ],
+            edges: [],
+        ),
+    },
+    global: (
+         ambient_material: {
+            "schema_version": 1,
+            "id": "6c30ef98-7380-4477-bc91-a5a1a407fec7",
+            "version": 0,
+            "name": "Vaccumm",
+            "optical": (
+                refractive_index: Const(
+                    refractive_index: 1.0,
+                ),
+                absorption: r#None,
+            ),
+        },
+    ),
+)"#;
+
+        testing_logger::setup();
+
+        // Loading must succeed without skipping the node
+        let doc = OpmDocument::from_string(ron_data)?;
+
+        // The node must still be present in the graph
+        assert_eq!(doc.scenery().nodes().len(), 1);
+
+        // Verify that the focal length property was kept at its default value
+        let node_ref = &doc.scenery().nodes()[0];
+        let node = node_ref.optical_ref.lock_opm()?;
+        let focal_length_prop = node.node_attr().get_property("focal length")?;
+
+        // Ensure it is a valid Length proptype
+        assert!(matches!(focal_length_prop, Proptype::Length(_)));
+
+        // Verify that the warning was logged
+        check_logs(
+            log::Level::Warn,
+            vec!["Skipping property 'focal length' that failed to parse; keeping default value."],
+        );
+
+        Ok(())
     }
 }

@@ -1,6 +1,6 @@
 use crate::{
     error::OpmResult,
-    generic_validators::{AllNotEmpty, AllPositive, ValidateTrait, XNormal, YFinite, YNotAllZero},
+    generic_validators::{AllNotEmpty, AllPositive, XNormal, YFinite, YNotAllZero},
     nanometer, validated_vec, validated_vec_type,
 };
 use opm_macros_lib::EnsureValidated;

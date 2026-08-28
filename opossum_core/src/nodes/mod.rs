@@ -122,7 +122,7 @@ impl NodeRegistration {
         }
     }
     fn build_node_wrapper<T: Analyzable + Default + 'static>() -> OpticRef {
-        OpticRef::new(Arc::new(Mutex::new(T::default())), None)
+        OpticRef::new(Arc::new(Mutex::new(T::default())))
     }
 }
 

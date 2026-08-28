@@ -4,7 +4,7 @@ use std::f64::consts::PI;
 
 use crate::{
     error::OpmResult,
-    generic_validators::{AllFinite, AllNotZero, AllPositive, NotAllZero, ValidateTrait},
+    generic_validators::{AllFinite, AllNotZero, AllPositive, NotAllZero},
     millimeter, validated, validated_type,
 };
 

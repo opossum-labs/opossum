@@ -2,13 +2,13 @@ use crate::{
     analyzers::propagation_strategy::PropagationStrategy,
     apertures::Aperture,
     coatings::CoatingType,
-    core_optics::{NodeAttrExt, OpticNode, PortType, SceneryResources},
+    core_optics::{NodeAttrExt, OpticNode, PortType},
     error::{OpmResult, OpossumError},
     geometry::{Plane, geo_surface::GeoSurfaceRef},
     light::{LightData, LightResult, Rays},
     nodes::fluence_detector::Fluence,
     refractive_index::RefractiveIndexType,
-    utils::{LockExt, geom_transformation::Isometry},
+    utils::geom_transformation::Isometry,
 };
 use nalgebra::Vector3;
 use std::sync::{Arc, Mutex};
@@ -30,11 +30,6 @@ pub trait OpticNodeExt {
     /// - no effective node isometry is defined  
     /// - the surface with the specified name cannot be found
     fn effective_surface_iso(&self, surf_name: &str) -> OpmResult<Isometry>;
-    /// Get the ambient refractive index.
-    ///
-    /// This value is determined by the global configuration. A warning is issued and a default value is returned
-    /// if the global config could not be found.
-    fn ambient_idx(&self) -> RefractiveIndexType;
     /// Set local alignment (decenter, tilt) of an optical node.
     ///
     /// # Errors
@@ -228,18 +223,6 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
             OpossumError::Other(format!("no surface with name {surf_name} defined"))
         })?;
         Ok(eff_node_iso.append(surf.anchor_point_iso()))
-    }
-
-    fn ambient_idx(&self) -> RefractiveIndexType {
-        self.global_conf().as_ref().map_or_else(
-            || {
-                log::warn!(
-                    "could not get ambient medium since global config not found ... using default"
-                );
-                SceneryResources::default().ambient_refr_index
-            },
-            |conf| conf.lock_opm().unwrap().ambient_refr_index.clone(),
-        )
     }
 
     fn set_alignment(
