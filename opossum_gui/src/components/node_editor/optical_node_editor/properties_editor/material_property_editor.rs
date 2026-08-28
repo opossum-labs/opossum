@@ -2,7 +2,7 @@ use crate::components::{
     asset_editor::material_editor::{MaterialChangeEvent, MaterialEditor},
     catalog_editor::MaterialCatalog,
     node_editor::node_config_editor::{NodeChangeAction, NodeChangeEvent},
-    primitives::button::{Button, ButtonVariant},
+    primitives::button::{Button, ButtonSize, ButtonVariant},
 };
 use dioxus::prelude::*;
 use dioxus_free_icons::{
@@ -111,90 +111,74 @@ pub fn MaterialPropertyEditor(
     };
 
     rsx! {
-        div { class: "mb-3",
-            // Property label header
-            label { class: "form-label fw-bold small text-capitalize mb-1", "{property_key}" }
 
-            // Row 1: Full-width container with material name and status badge — styled as a
-            // readonly form-control so it matches the visual weight of other property inputs.
-            div { class: "form-control form-control-sm bg-dark text-light d-flex justify-content-between align-items-center",
+        div { class: "form-floating border-start",
+            div { class: "form-control form-control-sm material-prop-display",
                 span {
-                    class: "text-truncate fw-semibold small text-light",
+                    class: "material-prop-name text-truncate",
                     title: "{material_name}",
                     "{material_name}"
                 }
                 if is_catalog {
-                    span { class: "badge bg-primary flex-shrink-0 ms-2", "v{current_version}" }
+                    span { class: "badge bg-primary flex-shrink-0", "v{current_version}" }
+                    if !readonly {
+                        Button {
+                            size: ButtonSize::IconXs,
+                            variant: ButtonVariant::Primary,
+                            title: "Choose a different material from the catalog",
+                            class: "material-btn",
+                            onclick: move |_| show_catalog_dialog.set(true),
+                            Icon { icon: FaBook }
+                        }
+                        Button {
+                            size: ButtonSize::IconXs,
+                            variant: ButtonVariant::Secondary,
+                            title: "Detach from catalog (create a local copy)",
+                            class: "material-btn",
+                            onclick: on_unlink_to_adhoc,
+                            Icon { icon: FaLinkSlash }
+                        }
+                    }
                 } else {
-                    span { class: "badge bg-secondary flex-shrink-0 ms-2", "AdHoc" }
-                }
-            }
-
-            // Row 2: Action buttons row — btn-sm-row keeps buttons compact like other panel controls.
-            if !readonly {
-                div { class: "d-flex gap-1 mt-1 align-items-stretch btn-sm-row",
-                    if is_catalog {
-                        // 1. Catalog mode actions: Two full-width buttons
-                        div { class: "flex-fill",
-                            Button {
-                                title: "Choose a different material from the catalog",
-                                onclick: move |_| show_catalog_dialog.set(true),
-                                Icon { icon: FaBook }
-                                "Change"
-                            }
+                    span { class: "badge bg-secondary flex-shrink-0", "AdHoc" }
+                    if !readonly {
+                        Button {
+                            size: ButtonSize::IconXs,
+                            variant: ButtonVariant::Primary,
+                            title: "Edit local material properties",
+                            class: "material-btn",
+                            onclick: {
+                                let mat = current_material.clone();
+                                move |_| {
+                                    editing_material.set(mat.clone());
+                                    show_editor_dialog.set(true);
+                                }
+                            },
+                            Icon { icon: FaPencil }
                         }
-                        div { class: "flex-fill",
-                            Button {
-                                title: "Detach from catalog (create an independent local copy)",
-                                variant: ButtonVariant::Secondary,
-                                onclick: on_unlink_to_adhoc,
-                                Icon { icon: FaLinkSlash }
-                                "Unlink"
-                            }
+                        Button {
+                            size: ButtonSize::IconXs,
+                            variant: ButtonVariant::Success,
+                            title: "Publish this AdHoc material into the permanent catalog",
+                            class: "material-btn",
+                            onclick: on_publish_adhoc_to_catalog,
+                            Icon { icon: FaCloudArrowUp }
                         }
-                    } else {
-                        // 2. AdHoc mode actions: Edit & Publish expand; Catalog is a compact icon button
-                        div { class: "flex-fill",
-                            Button {
-                                title: "Edit local material properties",
-                                onclick: {
-                                    let mat = current_material.clone();
-                                    move |_| {
-                                        editing_material.set(mat.clone());
-                                        show_editor_dialog.set(true);
-                                    }
-                                },
-                                Icon { icon: FaPencil }
-                                "Edit"
-                            }
-                        }
-                        div { class: "flex-fill",
-                            Button {
-                                title: "Publish this AdHoc material into the permanent catalog",
-                                variant: ButtonVariant::Success,
-                                onclick: on_publish_adhoc_to_catalog,
-                                Icon { icon: FaCloudArrowUp }
-                                "Publish"
-                            }
-                        }
-                        // Compact icon-only button for picking from the catalog
-                        div {
-                            Button {
-                                title: "Replace with an existing material from catalog",
-                                variant: ButtonVariant::Outline,
-                                onclick: move |_| show_catalog_dialog.set(true),
-                                Icon { icon: FaBook }
-                            }
+                        Button {
+                            size: ButtonSize::IconXs,
+                            variant: ButtonVariant::Primary,
+                            title: "Replace with an existing catalog material",
+                            class: "material-btn",
+                            onclick: move |_| show_catalog_dialog.set(true),
+                            Icon { icon: FaBook }
                         }
                     }
                 }
             }
+            label { class: "form-label text-secondary", "{property_key}" }
         }
 
-        // Catalog Selection Modal Dialog
         MaterialCatalog { open: show_catalog_dialog, on_select: on_catalog_select }
-
-        // AdHoc Material Editor Modal Dialog
         MaterialEditor {
             open: show_editor_dialog,
             material: editing_material,

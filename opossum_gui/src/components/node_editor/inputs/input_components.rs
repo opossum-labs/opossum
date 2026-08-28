@@ -574,9 +574,9 @@ pub fn LabeledSelect(
     info!("🔄 Render: LabeledSelect");
 
     let select_class = if readonly {
-        "form-select bg-dark text-light disabled-select"
+        "form-select text-light disabled-select"
     } else {
-        "form-select bg-dark text-light"
+        "form-select text-light"
     };
 
     rsx! {

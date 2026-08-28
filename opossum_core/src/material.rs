@@ -18,7 +18,7 @@ use crate::{
 /// Same purpose as [`CLEAR_APERTURE`](crate::geometry::body::CLEAR_APERTURE) for the transversal
 /// extent: the node declarations and every reader refer to the property by this constant rather
 /// than by a literal.
-pub const MATERIAL: &str = "material";
+pub const MATERIAL: &str = "Material";
 
 /// Name the [`MATERIAL`] property had before it carried a whole [`Material`].
 ///
