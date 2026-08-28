@@ -254,6 +254,7 @@ impl<'de> Deserialize<'de> for Properties {
                 }
             }
         }
+        migrate_legacy_properties(&mut props);
         Ok(Self { props })
     }
 }
@@ -368,7 +369,7 @@ mod test {
         let props: Properties = ron::from_str(&format!(
             r#"{{
                 "refractive index": RefractiveIndex(Const((refractive_index: 2.0))),
-                "material": {material},
+                "{MATERIAL}": {material},
             }}"#
         ))
         .map_err(|e| OpossumError::Other(e.to_string()))?;

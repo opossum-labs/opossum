@@ -319,7 +319,7 @@ pub trait Volumetric: OpticNode {
                 "expected ray data at input port".into(),
             ));
         };
-        
+
         let mut rays_bundle = vec![rays];
         self.pass_through_volume_generic(
             &in_port_name,
@@ -465,15 +465,33 @@ mod test {
     use super::*;
     use crate::{
         analyzers::{
-            Analyzer, GhostFocusConfig, RayTraceConfig, energy::{AnalysisEnergy, EnergyAnalyzer, EnergyConfig}, ghostfocus::{AnalysisGhostFocus, GhostFocusAnalyzer}, raytrace::{AnalysisRayTrace, RayTracingAnalyzer},
-        }, coatings::CoatingConstantR, core_optics::{Alignable, PortType, node_attr::HasNodeAttr}, degree, gain::{ConstGain, ConstInversion, GainModel, PumpScenario, PumpSource, SmallSignalGain, inversion_field::CellIndex}, joule, light::{
+            Analyzer, GhostFocusConfig, RayTraceConfig,
+            energy::{AnalysisEnergy, EnergyAnalyzer, EnergyConfig},
+            ghostfocus::{AnalysisGhostFocus, GhostFocusAnalyzer},
+            raytrace::{AnalysisRayTrace, RayTracingAnalyzer},
+        },
+        coatings::CoatingConstantR,
+        core_optics::{Alignable, PortType, node_attr::HasNodeAttr},
+        degree,
+        gain::{
+            ConstGain, ConstInversion, GainModel, PumpScenario, PumpSource, SmallSignalGain,
+            inversion_field::CellIndex,
+        },
+        joule,
+        light::{
             Rays,
             lightdata::energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
             spectrum_helper::create_he_ne_spec,
-        }, millimeter, nanometer, nodes::{
+        },
+        millimeter, nanometer,
+        nodes::{
             EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort, SpotDiagram, ThinMirror,
             create_node_ref, node_types, round_collimated_ray_builder,
-        }, percent, reciprocal_centimeter, refractive_index::RefrIndexConst, square_centimeter, utils::{LockExt, test_helper::test_helper::metered_energy},
+        },
+        percent, reciprocal_centimeter,
+        refractive_index::RefrIndexConst,
+        square_centimeter,
+        utils::{LockExt, test_helper::test_helper::metered_energy},
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
     use uom::si::f64::ReciprocalLength;
@@ -560,7 +578,10 @@ mod test {
     fn scenario_with_small_signal(node_id: Uuid) -> OpmResult<PumpScenario> {
         Ok(scenario_with_model(
             node_id,
-            GainModel::SmallSignalGain(SmallSignalGain::new(square_centimeter!(2.0e-20), (16,16,16))?),
+            GainModel::SmallSignalGain(SmallSignalGain::new(
+                square_centimeter!(2.0e-20),
+                (16, 16, 16),
+            )?),
             PumpSource::Const(ConstInversion::new(head_gain_coefficient())?),
         ))
     }

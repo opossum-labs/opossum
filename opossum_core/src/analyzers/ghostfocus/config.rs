@@ -113,7 +113,7 @@ impl PropagationStrategy for GhostFocusConfig {
     fn missed_surface_strategy(&self) -> MissedSurfaceStrategy {
         MissedSurfaceStrategy::Ignore
     }
-    
+
     fn pump_config(&self, node_id: Uuid) -> PumpConfig {
         self.active_pump_scenario.config(node_id)
     }
@@ -129,7 +129,7 @@ impl PropagationStrategy for GhostFocusConfig {
         surf.add_to_rays_cache(reflected_rays, backward);
         Ok(())
     }
-    
+
     fn ambient_refractive_index(&self) -> crate::refractive_index::RefractiveIndexType {
         self.ambient_material.refractive_index().clone()
     }

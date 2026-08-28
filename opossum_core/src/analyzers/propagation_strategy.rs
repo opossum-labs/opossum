@@ -10,7 +10,8 @@ use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 
 use crate::{
-    core_optics::optic_surface::OpticSurface, error::OpmResult, gain::PumpConfig, light::Rays, refractive_index::RefractiveIndexType, utils::default_from_name::DefaultFromName,
+    core_optics::optic_surface::OpticSurface, error::OpmResult, gain::PumpConfig, light::Rays,
+    refractive_index::RefractiveIndexType, utils::default_from_name::DefaultFromName,
 };
 use uuid::Uuid;
 

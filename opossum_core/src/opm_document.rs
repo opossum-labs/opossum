@@ -282,8 +282,7 @@ impl OpmDocument {
             analyzers: self.analyzers.clone(),
             embedded_materials: self.embedded_materials.clone(),
             pump_scenarios: self.pump_scenarios.clone(),
-            amplifier_nodes: self.amplifier_nodes.clone()
-            
+            amplifier_nodes: self.amplifier_nodes.clone(),
         })
     }
     /// Generates the RON string content representation of this [`OpmDocument`].
@@ -1196,7 +1195,7 @@ mod test {
         // Verify that nodes have their full Material struct restored for calculation
         for node_ref in reloaded_doc.scenery().nodes() {
             let node = node_ref.optical_ref.lock_opm()?;
-            let prop = node.node_attr().get_property("material")?;
+            let prop = node.node_attr().get_property(MATERIAL)?;
 
             // Unpack the AssetRef::Inline to verify the material is correctly loaded into RAM
             if let Proptype::Material(AssetRef::Inline(mat)) = prop {

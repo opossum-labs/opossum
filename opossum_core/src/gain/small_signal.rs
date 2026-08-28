@@ -256,8 +256,19 @@ impl Extraction for SmallSignalGain {
         let local_origin = iso.inverse_transform_point(&ray.position());
         let local_dir = iso.inverse_transform_vector_f64(&dir);
 
+        let cells = field.traverse(&local_origin, &local_dir);
+        // A ghost ray exiting at the lower boundary of the grid (traveling outward) produces an
+        // empty forward traversal because t_exit == t_enter == 0. For non-saturating small-signal
+        // gain the integral is path-symmetric, so falling back to the reverse direction recovers
+        // the full chord without affecting the computed gain magnitude.
+        let cells = if cells.is_empty() {
+            field.traverse(&local_origin, &(-local_dir))
+        } else {
+            cells
+        };
+
         let mut exponent = 0.0_f64;
-        for (cell, ds) in field.traverse(&local_origin, &local_dir) {
+        for (cell, ds) in cells {
             if !field.is_inside(cell) {
                 continue;
             }
@@ -300,9 +311,7 @@ mod test {
         light::Ray,
         millimeter, nanometer, reciprocal_centimeter, square_meter,
         types::validated_type_definitions::ValidatedCrossSection,
-        utils::{
-            geom_transformation::Isometry, super_gaussian::SuperGaussianShape,
-        },
+        utils::{geom_transformation::Isometry, super_gaussian::SuperGaussianShape},
     };
     use approx::assert_relative_eq;
     use nalgebra::{Point2, Vector3};
@@ -403,7 +412,14 @@ mod test {
         // the moment a pump source is picked, so the default has to be a real value.
         assert!(model.emission_cross_section().value > 0.0);
         assert!(model.emission_cross_section().is_finite());
-        assert_eq!(model.grid(), (DEFAULT_TRANSVERSAL_CELLS, DEFAULT_TRANSVERSAL_CELLS, DEFAULT_LONGITUDINAL_CELLS));
+        assert_eq!(
+            model.grid(),
+            (
+                DEFAULT_TRANSVERSAL_CELLS,
+                DEFAULT_TRANSVERSAL_CELLS,
+                DEFAULT_LONGITUDINAL_CELLS
+            )
+        );
     }
     #[test]
     fn new_keeps_what_it_was_given() -> OpmResult<()> {

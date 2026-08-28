@@ -4,7 +4,15 @@ use std::collections::HashMap;
 
 use super::{Analyzer, AnalyzerRegistration, AnalyzerType};
 use crate::{
-    analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy}, core_optics::{NodeAttrExt, OpticNode, node_attr::HasNodeAttr}, error::OpmResult, gain::{ActiveScenario, PumpConfig, PumpScenario}, light::LightResult, nodes::NodeGroup, prelude::EnergyDataBuilder, refractive_index::RefrIndexConst, reporting::analysis_report::AnalysisReport,
+    analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
+    core_optics::{NodeAttrExt, OpticNode, node_attr::HasNodeAttr},
+    error::OpmResult,
+    gain::{ActiveScenario, PumpConfig, PumpScenario},
+    light::LightResult,
+    nodes::NodeGroup,
+    prelude::EnergyDataBuilder,
+    refractive_index::RefrIndexConst,
+    reporting::analysis_report::AnalysisReport,
 };
 use log::info;
 use serde::{Deserialize, Serialize};

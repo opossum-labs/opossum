@@ -249,15 +249,27 @@ impl InversionField {
     /// # Returns
     ///
     /// The index of the cell containing the point, or `None` if the point lies outside the grid.
-    /// Cells are half-open, so a point on the upper boundary of the grid belongs to no cell, the
-    /// same way [`Body::contains`] treats the exit boundary of a body.
+    ///
+    /// A point whose `cells_from_start` is exactly equal to the cell count (i.e. it lands
+    /// precisely on the upper boundary of the grid) is clamped to the last cell on that axis so
+    /// that a DDA traversal starting at the far face still covers the full grid. Points strictly
+    /// outside the boundary (where `cells_from_start > count`, so `floor` exceeds `count` or
+    /// equals it only with a fractional remainder) still return `None`.
     #[must_use]
     pub fn cell_at(&self, local_point: &Point3<Length>) -> Option<CellIndex> {
         let (nx, ny, nz) = self.dimensions();
         let index = |position: Length, range: &Range<Length>, count: usize| {
             let cells_from_start = ((position - range.start) / extent(range)).value * to_f64(count);
             let index = try_f64_to_usize(cells_from_start.floor())?;
-            (index < count).then_some(index)
+            if index < count {
+                Some(index)
+            } else if index == count && cells_from_start == to_f64(count) {
+                // Exactly at the upper boundary: clamp to the last cell so that a ray
+                // starting at the far face can still enter the DDA traversal.
+                count.checked_sub(1)
+            } else {
+                None
+            }
         };
         Some((
             index(local_point.x, &self.bounds.x_range(), nx)?,
@@ -602,10 +614,12 @@ mod test {
                 .ok_or_else(|| OpossumError::Other(format!("cell {cell:?} has no center")))?;
             assert_eq!(field.cell_at(&center), Some(cell));
         }
-        // Beyond the grid there is no cell, on either side and on every axis. The upper boundary
-        // belongs to no cell either, the same way a body does not claim its exit surface.
+        // Points strictly outside the grid return None.
         assert_eq!(field.cell_at(&millimeter!(0.0, 0.0, -0.1)), None);
-        assert_eq!(field.cell_at(&millimeter!(0.0, 0.0, 10.0)), None);
+        // A point exactly on the upper boundary is clamped to the last cell so a DDA ray
+        // starting at the far face can still traverse the full grid.
+        assert_eq!(field.cell_at(&millimeter!(0.0, 0.0, 10.0)), Some((3, 2, 2)));
+        // Points beyond the boundary (cells_from_start > count, not exactly equal) still → None.
         assert_eq!(field.cell_at(&millimeter!(5.1, 0.0, 5.0)), None);
         assert_eq!(field.cell_at(&millimeter!(0.0, -5.1, 5.0)), None);
         Ok(())
