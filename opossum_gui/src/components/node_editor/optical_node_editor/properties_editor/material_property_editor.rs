@@ -115,8 +115,9 @@ pub fn MaterialPropertyEditor(
             // Property label header
             label { class: "form-label fw-bold small text-capitalize mb-1", "{property_key}" }
 
-            // Row 1: Full-width container with material name and status badge
-            div { class: "d-flex justify-content-between align-items-center px-2 py-1 rounded bg-dark border border-secondary",
+            // Row 1: Full-width container with material name and status badge — styled as a
+            // readonly form-control so it matches the visual weight of other property inputs.
+            div { class: "form-control form-control-sm bg-dark text-light d-flex justify-content-between align-items-center",
                 span {
                     class: "text-truncate fw-semibold small text-light",
                     title: "{material_name}",
@@ -129,9 +130,9 @@ pub fn MaterialPropertyEditor(
                 }
             }
 
-            // Row 2: Action buttons row
+            // Row 2: Action buttons row — btn-sm-row keeps buttons compact like other panel controls.
             if !readonly {
-                div { class: "d-flex gap-1 mt-1 align-items-stretch",
+                div { class: "d-flex gap-1 mt-1 align-items-stretch btn-sm-row",
                     if is_catalog {
                         // 1. Catalog mode actions: Two full-width buttons
                         div { class: "flex-fill",

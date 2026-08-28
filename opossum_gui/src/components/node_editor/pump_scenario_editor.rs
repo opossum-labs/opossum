@@ -400,6 +400,7 @@ fn ScenarioAmplifierRow(
     // changes (a model picked elsewhere, an undo/redo, this very row's own save completing) -
     // same "compare and pull in" shape `FlushableTextInput` uses, without needing that component's
     // dirty-tracking: nothing here re-renders mid-keystroke, only after a completed save.
+    let mut is_collapsed = use_signal(|| true);
     let mut gain_str = use_signal(|| format_gain(gain_model));
     let mut ssg_cells_x_str = use_signal(|| format_ssg_cells_x(gain_model));
     let mut ssg_cells_y_str = use_signal(|| format_ssg_cells_y(gain_model));
@@ -478,13 +479,16 @@ fn ScenarioAmplifierRow(
     };
 
     rsx! {
-        div { class: "card bg-dark border-secondary mb-1 amp-overview-card",
-            div { class: "card-body p-2 text-light",
-                span {
-                    class: "fw-bold small amp-row-reveal",
-                    onclick: move |_| on_reveal.call((uuid, group_id)),
-                    "{name}"
+        div { class: "amp-overview-card",
+            div {
+                class: "amp-row-header",
+                onclick: move |_| is_collapsed.toggle(),
+                span { class: "amp-row-arrow",
+                    if is_collapsed() { "\u{25b8}" } else { "\u{25be}" }
                 }
+                span { class: "fw-bold small", "{name}" }
+            }
+            if !is_collapsed() {
                 div { class: "amp-config-block",
                     LabeledSelect {
                         id: format!("amp-{uuid}-gain"),
@@ -584,13 +588,13 @@ fn ScenarioAmplifierRow(
                         },
                     }
                 }
-                div {
-                    class: "amp-card-sub amp-row-reveal",
-                    onclick: move |_| on_reveal.call((uuid, group_id)),
-                    "{node_type}"
-                    if show_group {
-                        span { " · {group_name}" }
-                    }
+            }
+            div {
+                class: "amp-card-sub amp-row-reveal",
+                onclick: move |_| on_reveal.call((uuid, group_id)),
+                "{node_type}"
+                if show_group {
+                    span { " · {group_name}" }
                 }
             }
         }

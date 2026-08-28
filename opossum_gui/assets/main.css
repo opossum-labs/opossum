@@ -443,13 +443,39 @@ body {
     color: rgb(180, 180, 180);
 }
 
-.amp-overview-card:hover {
-    border-color: rgb(255, 214, 130) !important;
+/* Flat accordion-style row replacing the old bordered card — a subtle bottom divider separates
+   adjacent rows without creating a nested-card look inside the scenario card. */
+.amp-overview-card {
+    padding: 4px 8px;
+    border-bottom: 1px solid rgb(60, 60, 60);
 }
 
-/* Only the name and the subtext of a scenario's amplifier-candidate row reveal the node on the
-   canvas now - the gain switch and factor input beside/below them need their own normal cursor,
-   so the whole card is no longer uniformly clickable the way the old amp-overview card was. */
+.amp-overview-card:last-child {
+    border-bottom: none;
+}
+
+/* Clickable collapse-toggle header row for an individual amplifier. */
+.amp-row-header {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    color: rgb(235, 235, 235);
+    user-select: none;
+}
+
+.amp-row-header:hover {
+    color: #ffffff;
+}
+
+.amp-row-arrow {
+    font-size: 11px;
+    flex-shrink: 0;
+    color: rgb(180, 180, 180);
+}
+
+/* Only the subtext of a scenario's amplifier-candidate row reveals the node on the canvas.
+   The header toggle uses its own onclick and does not forward to reveal. */
 .amp-row-reveal {
     cursor: pointer;
 }
@@ -501,10 +527,12 @@ body {
    after this stylesheet and would otherwise win the tie. */
 .scenario-card {
     cursor: pointer;
+    border-color: rgb(70, 70, 70) !important;
 }
 
 .scenario-card.active {
     background-color: rgb(56, 56, 56) !important;
+    border-color: rgb(100, 100, 100) !important;
 }
 
 .scenario-header {
@@ -645,6 +673,13 @@ body {
     gap: 4px;
     padding-left: 8px;
     border-left: 2px solid rgb(90, 90, 90);
+}
+
+/* Compact button row for property editors (e.g. MaterialPropertyEditor) — keeps action buttons
+   visually in line with other small panel controls rather than defaulting to full-size. */
+.btn-sm-row .btn {
+    font-size: 12px;
+    padding: 2px 8px;
 }
 
 /* Status line below the body of an amplifying node. Its height must stay in sync with
