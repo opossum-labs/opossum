@@ -32,14 +32,11 @@ exactly like the passive component it is.
   The gain coefficient g₀ is wavelength-independent — all wavelengths in the beam receive the same
   gain. For the underlying concepts see [Amplification](../concepts/amplification.md).
 
-    `integration steps`
-    : Number of steps along a ray's path through the medium used to integrate the gain. More steps
-      give a more accurate result; fewer are faster. Must be at least 1. Default: 20.
-
     `grid` (n_x × n_y × n_z)
     : Number of cells in the discretized gain field, along x, y (transversal) and z (longitudinal).
-      Finer grids resolve spatial structure in the pump profile more accurately.
-      All three must be at least 1. Default: 10 × 10 × 10.
+      The ray traverses each cell exactly (Amanatides–Woo algorithm), so finer grids resolve
+      spatial structure in the pump profile more accurately without any additional step count.
+      All three must be at least 1. Default: 16 × 16 × 16.
 
     **Pump source**
 

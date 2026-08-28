@@ -327,6 +327,7 @@ impl InversionField {
     /// empty list if the ray misses the grid entirely, if `t_exit ≤ t_enter`, or if the grid has
     /// no cells along any axis.
     #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub fn traverse(
         &self,
         origin: &Point3<Length>,

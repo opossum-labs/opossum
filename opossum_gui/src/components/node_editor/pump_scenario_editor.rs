@@ -401,7 +401,6 @@ fn ScenarioAmplifierRow(
     // same "compare and pull in" shape `FlushableTextInput` uses, without needing that component's
     // dirty-tracking: nothing here re-renders mid-keystroke, only after a completed save.
     let mut gain_str = use_signal(|| format_gain(gain_model));
-    let mut ssg_n_steps_str = use_signal(|| format_ssg_n_steps(gain_model));
     let mut ssg_cells_x_str = use_signal(|| format_ssg_cells_x(gain_model));
     let mut ssg_cells_y_str = use_signal(|| format_ssg_cells_y(gain_model));
     let mut ssg_cells_z_str = use_signal(|| format_ssg_cells_z(gain_model));
@@ -409,7 +408,6 @@ fn ScenarioAmplifierRow(
     if *last_gain_model.peek() != gain_model {
         last_gain_model.set(gain_model);
         gain_str.set(format_gain(gain_model));
-        ssg_n_steps_str.set(format_ssg_n_steps(gain_model));
         ssg_cells_x_str.set(format_ssg_cells_x(gain_model));
         ssg_cells_y_str.set(format_ssg_cells_y(gain_model));
         ssg_cells_z_str.set(format_ssg_cells_z(gain_model));
@@ -446,13 +444,12 @@ fn ScenarioAmplifierRow(
 
     let mut save_ssg = move || {
         if let GainModel::SmallSignalGain(current) = gain_model {
-            let n = ssg_n_steps_str.peek().trim().parse::<usize>();
             let x = ssg_cells_x_str.peek().trim().parse::<usize>();
             let y = ssg_cells_y_str.peek().trim().parse::<usize>();
             let z = ssg_cells_z_str.peek().trim().parse::<usize>();
-            match (n, x, y, z) {
-                (Ok(n), Ok(x), Ok(y), Ok(z)) => {
-                    match SmallSignalGain::new(current.emission_cross_section(), n, (x, y, z)) {
+            match (x, y, z) {
+                (Ok(x), Ok(y), Ok(z)) => {
+                    match SmallSignalGain::new(current.emission_cross_section(), (x, y, z)) {
                         Ok(ssg) => {
                             if ssg != current {
                                 set_model(GainModel::SmallSignalGain(ssg));
@@ -462,7 +459,6 @@ fn ScenarioAmplifierRow(
                             OPOSSUM_UI_LOGS
                                 .write()
                                 .add_log(&format!("Invalid SmallSignalGain parameters: {e}"));
-                            ssg_n_steps_str.set(format_ssg_n_steps(gain_model));
                             ssg_cells_x_str.set(format_ssg_cells_x(gain_model));
                             ssg_cells_y_str.set(format_ssg_cells_y(gain_model));
                             ssg_cells_z_str.set(format_ssg_cells_z(gain_model));
@@ -472,8 +468,7 @@ fn ScenarioAmplifierRow(
                 _ => {
                     OPOSSUM_UI_LOGS
                         .write()
-                        .add_log("SmallSignalGain: step and grid counts must be positive integers");
-                    ssg_n_steps_str.set(format_ssg_n_steps(gain_model));
+                        .add_log("SmallSignalGain: grid counts must be positive integers");
                     ssg_cells_x_str.set(format_ssg_cells_x(gain_model));
                     ssg_cells_y_str.set(format_ssg_cells_y(gain_model));
                     ssg_cells_z_str.set(format_ssg_cells_z(gain_model));
@@ -523,21 +518,6 @@ fn ScenarioAmplifierRow(
                     }
                     if let GainModel::SmallSignalGain(_) = gain_model {
                         div { class: "ssg-params",
-                            label { class: "ssg-params-label", "Integration steps" }
-                            input {
-                                class: "amp-gain-input",
-                                r#type: "number",
-                                min: "1",
-                                step: "1",
-                                value: "{ssg_n_steps_str}",
-                                oninput: move |e| ssg_n_steps_str.set(e.value()),
-                                onblur: move |_| save_ssg(),
-                                onkeydown: move |e| {
-                                    if e.key() == Key::Enter {
-                                        save_ssg();
-                                    }
-                                },
-                            }
                             label { class: "ssg-params-label", "Grid cells (x / y / z)" }
                             div { class: "ssg-params-grid",
                                 input {
@@ -625,14 +605,6 @@ fn format_gain(model: GainModel) -> String {
     match model {
         GainModel::Const(gain) => format!("{}", gain.gain()),
         _ => format!("{}", ConstGain::default().gain()),
-    }
-}
-
-fn format_ssg_n_steps(model: GainModel) -> String {
-    if let GainModel::SmallSignalGain(ssg) = model {
-        ssg.n_steps().to_string()
-    } else {
-        SmallSignalGain::default().n_steps().to_string()
     }
 }
 

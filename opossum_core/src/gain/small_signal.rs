@@ -61,15 +61,8 @@ impl Default for ValidatedEmissionCrossSection {
     }
 }
 
-/// A number of steps that is guaranteed to be non-zero.
-type ValidatedStepCount = validated_type!(usize, AllNotZero);
-
-/// How many substeps the inner path is integrated in by default.
-///
-/// Fine enough to follow a shaped pump profile across a typical head, cheap enough not to be worth
-/// tuning for a first look. It is a convergence parameter, not physics: see
-/// [`SmallSignalGain::n_steps`].
-const DEFAULT_STEPS: usize = 16;
+/// A number of cells that is guaranteed to be non-zero.
+type ValidatedCellCount = validated_type!(usize, AllNotZero);
 
 /// How many cells the medium is discretised into along each axis by default.
 const DEFAULT_CELLS: usize = 16;
@@ -83,24 +76,21 @@ pub struct SmallSignalGain {
     #[schema(value_type = f64)]
     emission_cross_section: ValidatedEmissionCrossSection,
     #[schema(value_type = usize)]
-    n_steps: ValidatedStepCount,
+    cells_x: ValidatedCellCount,
     #[schema(value_type = usize)]
-    cells_x: ValidatedStepCount,
+    cells_y: ValidatedCellCount,
     #[schema(value_type = usize)]
-    cells_y: ValidatedStepCount,
-    #[schema(value_type = usize)]
-    cells_z: ValidatedStepCount,
+    cells_z: ValidatedCellCount,
 }
 
 /// Deserialization shim for [`SmallSignalGain`].
 ///
 /// It lets the values read from an `.opm` file run through the very same validation as ones set
-/// through the setters, so a hand-edited file cannot smuggle in a zero step count or a medium that
-/// cannot emit. Same pattern as [`ConstGain`](super::ConstGain).
+/// through the setters, so a hand-edited file cannot smuggle in an unusable cross section or a
+/// zero-cell grid. Same pattern as [`ConstGain`](super::ConstGain).
 #[derive(Deserialize)]
 struct NonValidatedSmallSignalGain {
     emission_cross_section: Area,
-    n_steps: usize,
     cells_x: usize,
     cells_y: usize,
     cells_z: usize,
@@ -110,7 +100,6 @@ impl TryFrom<NonValidatedSmallSignalGain> for SmallSignalGain {
     fn try_from(helper: NonValidatedSmallSignalGain) -> Result<Self, Self::Error> {
         Self::new(
             helper.emission_cross_section,
-            helper.n_steps,
             (helper.cells_x, helper.cells_y, helper.cells_z),
         )
         .map_err(|e| e.to_string())
@@ -126,7 +115,6 @@ impl Default for SmallSignalGain {
     fn default() -> Self {
         Self {
             emission_cross_section: ValidatedEmissionCrossSection::default(),
-            n_steps: validated!(DEFAULT_STEPS, AllNotZero).unwrap(),
             cells_x: validated!(DEFAULT_CELLS, AllNotZero).unwrap(),
             cells_y: validated!(DEFAULT_CELLS, AllNotZero).unwrap(),
             cells_z: validated!(DEFAULT_CELLS, AllNotZero).unwrap(),
@@ -141,17 +129,15 @@ impl SmallSignalGain {
     ///
     /// * `emission_cross_section` - σ_e of the medium, see
     ///   [`SmallSignalGain::emission_cross_section`].
-    /// * `n_steps` - how many substeps the inner path is integrated in.
     /// * `grid` - how many cells the medium is discretised into along its x, y and z axis.
     ///
     /// # Errors
     ///
     /// Returns an [`OpossumError::Other`](crate::error::OpossumError::Other) if the cross section
-    /// is not finite, zero or negative, or if any of the four counts is zero.
-    pub fn new(emission_cross_section: Area, n_steps: usize, grid: CellIndex) -> OpmResult<Self> {
+    /// is not finite, zero or negative, or if any of the three grid counts is zero.
+    pub fn new(emission_cross_section: Area, grid: CellIndex) -> OpmResult<Self> {
         let mut model = Self::default();
         model.set_emission_cross_section(emission_cross_section)?;
-        model.set_n_steps(n_steps)?;
         model.set_grid(grid)?;
         Ok(model)
     }
@@ -168,19 +154,10 @@ impl SmallSignalGain {
     pub const fn emission_cross_section(&self) -> Area {
         *self.emission_cross_section.get()
     }
-    /// Return how many substeps the path through the medium is integrated in.
-    ///
-    /// A convergence parameter, not physics: the exact answer is the limit of refining it. One step
-    /// is already exact wherever the inversion does not vary along the ray, and more steps only pay
-    /// off where it does.
-    #[must_use]
-    pub const fn n_steps(&self) -> usize {
-        *self.n_steps.get()
-    }
     /// Return how many cells the medium is discretised into along its x, y and z axis.
     ///
     /// This is what an [`InversionField`] is laid out with, so it bounds how finely a shaped pump
-    /// profile can be resolved. Like [`SmallSignalGain::n_steps`] it is a convergence parameter.
+    /// profile can be resolved. It is the sole convergence parameter for the gain integration.
     #[must_use]
     pub const fn grid(&self) -> CellIndex {
         (
@@ -201,19 +178,6 @@ impl SmallSignalGain {
     /// not finite, zero or negative. The previous value is kept in that case.
     pub fn set_emission_cross_section(&mut self, emission_cross_section: Area) -> OpmResult<()> {
         self.emission_cross_section.set(emission_cross_section)
-    }
-    /// Set how many substeps the path through the medium is integrated in.
-    ///
-    /// # Arguments
-    ///
-    /// * `n_steps` - the number of substeps, at least one.
-    ///
-    /// # Errors
-    ///
-    /// Returns an [`OpossumError::Other`](crate::error::OpossumError::Other) if the given count is
-    /// zero. The previous value is kept in that case.
-    pub fn set_n_steps(&mut self, n_steps: usize) -> OpmResult<()> {
-        self.n_steps.set(n_steps)
     }
     /// Set how many cells the medium is discretised into along its x, y and z axis.
     ///
@@ -438,14 +402,12 @@ mod test {
         // the moment a pump source is picked, so the default has to be a real value.
         assert!(model.emission_cross_section().value > 0.0);
         assert!(model.emission_cross_section().is_finite());
-        assert_eq!(model.n_steps(), DEFAULT_STEPS);
         assert_eq!(model.grid(), (DEFAULT_CELLS, DEFAULT_CELLS, DEFAULT_CELLS));
     }
     #[test]
     fn new_keeps_what_it_was_given() -> OpmResult<()> {
-        let model = SmallSignalGain::new(square_meter!(3.0e-24), 8, (4, 5, 6))?;
+        let model = SmallSignalGain::new(square_meter!(3.0e-24), (4, 5, 6))?;
         assert_relative_eq!(model.emission_cross_section().value, 3.0e-24);
-        assert_eq!(model.n_steps(), 8);
         assert_eq!(model.grid(), (4, 5, 6));
         Ok(())
     }
@@ -455,38 +417,31 @@ mod test {
         // turned into an inversion, so zero is as unusable as a negative value.
         for refused in [0.0, -1.0e-24, f64::NAN, f64::INFINITY] {
             assert!(
-                SmallSignalGain::new(square_meter!(refused), 8, (4, 4, 4)).is_err(),
+                SmallSignalGain::new(square_meter!(refused), (4, 4, 4)).is_err(),
                 "a cross section of {refused} m^2 should be refused"
             );
         }
     }
     #[test]
-    fn a_march_without_steps_is_refused() {
-        assert!(SmallSignalGain::new(square_meter!(2.0e-24), 0, (4, 4, 4)).is_err());
-        assert!(SmallSignalGain::new(square_meter!(2.0e-24), 1, (4, 4, 4)).is_ok());
-    }
-    #[test]
     fn a_grid_without_cells_is_refused() {
         for refused in [(0, 4, 4), (4, 0, 4), (4, 4, 0)] {
             assert!(
-                SmallSignalGain::new(square_meter!(2.0e-24), 8, refused).is_err(),
+                SmallSignalGain::new(square_meter!(2.0e-24), refused).is_err(),
                 "a grid of {refused:?} should be refused"
             );
         }
-        assert!(SmallSignalGain::new(square_meter!(2.0e-24), 8, (1, 1, 1)).is_ok());
+        assert!(SmallSignalGain::new(square_meter!(2.0e-24), (1, 1, 1)).is_ok());
     }
     #[test]
     fn a_rejected_value_keeps_the_old_one() -> OpmResult<()> {
         // A half-typed value in the GUI must not damage what is already configured.
-        let mut model = SmallSignalGain::new(square_meter!(3.0e-24), 8, (4, 5, 6))?;
+        let mut model = SmallSignalGain::new(square_meter!(3.0e-24), (4, 5, 6))?;
         assert!(
             model
                 .set_emission_cross_section(square_meter!(0.0))
                 .is_err()
         );
-        assert!(model.set_n_steps(0).is_err());
         assert_relative_eq!(model.emission_cross_section().value, 3.0e-24);
-        assert_eq!(model.n_steps(), 8);
         // ... and a grid is kept as a whole, not per axis: the z axis below is fine, but the y one
         // is not, and a partially applied grid would be a size nobody asked for.
         assert!(model.set_grid((7, 0, 9)).is_err());
@@ -495,7 +450,7 @@ mod test {
     }
     #[test]
     fn serde_roundtrip() -> OpmResult<()> {
-        let model = SmallSignalGain::new(square_meter!(3.0e-24), 8, (4, 5, 6))?;
+        let model = SmallSignalGain::new(square_meter!(3.0e-24), (4, 5, 6))?;
         let serialized = ron::to_string(&model).map_err(|e| OpossumError::Other(e.to_string()))?;
         let deserialized: SmallSignalGain =
             ron::from_str(&serialized).map_err(|e| OpossumError::Other(e.to_string()))?;
@@ -594,8 +549,8 @@ mod test {
         let g_0 = reciprocal_centimeter!(0.5);
         let config = pumped_at(g_0)?;
         let ray = ray_at(0.0, 0.0)?;
-        let lean = SmallSignalGain::new(square_meter!(2.0e-24), 8, (8, 8, 8))?;
-        let fat = SmallSignalGain::new(square_meter!(2.0e-23), 8, (8, 8, 8))?;
+        let lean = SmallSignalGain::new(square_meter!(2.0e-24), (8, 8, 8))?;
+        let fat = SmallSignalGain::new(square_meter!(2.0e-23), (8, 8, 8))?;
         assert_relative_eq!(
             factor_through_disk(&lean, &config, &ray)?,
             factor_through_disk(&fat, &config, &ray)?,
@@ -626,7 +581,7 @@ mod test {
         let exact = f64::exp(((g_0 / alpha) * (1.0 - f64::exp(-(alpha * length).value))).value);
         let ray = ray_at(0.0, 0.0)?;
         let error = |cells_z: usize| -> OpmResult<f64> {
-            let model = SmallSignalGain::new(square_meter!(2.0e-24), 1, (4, 4, cells_z))?;
+            let model = SmallSignalGain::new(square_meter!(2.0e-24), (4, 4, cells_z))?;
             Ok((factor_through_disk(&model, &config, &ray)? - exact).abs() / exact)
         };
         let (coarse, medium, fine) = (error(2)?, error(8)?, error(64)?);
@@ -662,7 +617,7 @@ mod test {
         );
         // An odd cell count puts one column of cells exactly on the axis, so the axial ray really
         // samples the peak of the profile rather than a neighbour of it.
-        let model = SmallSignalGain::new(square_meter!(2.0e-24), 8, (65, 65, 8))?;
+        let model = SmallSignalGain::new(square_meter!(2.0e-24), (65, 65, 8))?;
         let axial = factor_through_disk(&model, &config, &ray_at(0.0, 0.0)?)?;
         let outer = factor_through_disk(&model, &config, &ray_at(0.0, 4.0)?)?;
         assert!(
@@ -729,9 +684,9 @@ mod test {
     fn a_hand_edited_file_cannot_smuggle_past_the_validation() {
         // The shim is what makes reading a file go through the very same setters as the GUI does.
         for refused in [
-            "(emission_cross_section:3.0e-24,n_steps:0,cells_x:4,cells_y:5,cells_z:6)",
-            "(emission_cross_section:0.0,n_steps:8,cells_x:4,cells_y:5,cells_z:6)",
-            "(emission_cross_section:3.0e-24,n_steps:8,cells_x:0,cells_y:5,cells_z:6)",
+            "(emission_cross_section:0.0,cells_x:4,cells_y:5,cells_z:6)",
+            "(emission_cross_section:3.0e-24,cells_x:0,cells_y:5,cells_z:6)",
+            "(emission_cross_section:3.0e-24,cells_x:4,cells_y:0,cells_z:6)",
         ] {
             assert!(
                 ron::from_str::<SmallSignalGain>(refused).is_err(),
@@ -797,7 +752,7 @@ mod test {
             nanometer!(1054.0),
             joule!(1.0),
         )?;
-        let model = SmallSignalGain::new(sigma_e, 1, (2, 1, 1))?;
+        let model = SmallSignalGain::new(sigma_e, (2, 1, 1))?;
         let factor = traverse_factor(&body, &model, &mut Some(inversion), &ray)?;
 
         let chord = body
@@ -850,7 +805,7 @@ mod test {
         let inv_fwd = field_with(&body, dims, sigma_e, |cell| {
             Ok(if cell.0 == 0 { g_a } else { g_b })
         })?;
-        let model = SmallSignalGain::new(sigma_e, 1, dims)?;
+        let model = SmallSignalGain::new(sigma_e, dims)?;
         let factor_fwd = traverse_factor(&body, &model, &mut Some(inv_fwd), &ray)?;
         let expected_fwd = f64::exp((g_a * chord / 3.0 + g_b * chord * 2.0 / 3.0).value);
         assert_relative_eq!(factor_fwd, expected_fwd, max_relative = 1e-12);
@@ -891,7 +846,7 @@ mod test {
             .expect("the ray must cross the disk");
         let exact = f64::exp((g_a * chord / 3.0 + g_b * chord * 2.0 / 3.0).value);
 
-        let model = SmallSignalGain::new(sigma_e, 1, dims)?;
+        let model = SmallSignalGain::new(sigma_e, dims)?;
         let inv = field_with(&body, dims, sigma_e, |cell| {
             Ok(if cell.0 == 0 { g_a } else { g_b })
         })?;
@@ -943,7 +898,7 @@ mod test {
         // Vary cells_z; transversal resolution is flat so 4×4 is exact there.
         let sigma_e = square_meter!(2.0e-24);
         let error = |cells_z: usize| -> OpmResult<f64> {
-            let model = SmallSignalGain::new(sigma_e, 1, (4, 4, cells_z))?;
+            let model = SmallSignalGain::new(sigma_e, (4, 4, cells_z))?;
             let factor = factor_through(&body, &model, &config, &oblique)?;
             Ok((factor - exact).abs() / exact)
         };

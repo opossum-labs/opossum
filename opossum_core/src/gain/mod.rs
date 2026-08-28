@@ -365,7 +365,6 @@ mod test {
             GainModel::Const(ConstGain::new(3.0)?),
             GainModel::SmallSignalGain(SmallSignalGain::new(
                 crate::square_meter!(3.0e-24),
-                8,
                 (4, 5, 6),
             )?),
         ] {
