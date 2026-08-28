@@ -41,7 +41,7 @@ use crate::{
     num_per_m3,
     utils::math_utils::{to_f64, try_f64_to_usize},
 };
-use nalgebra::{DMatrix, Point3};
+use nalgebra::{DMatrix, Point3, Vector3};
 use std::ops::Range;
 use uom::si::f64::{Length, Volume, VolumetricNumberDensity};
 
@@ -294,6 +294,172 @@ impl InversionField {
             cell_center(&self.bounds.z_range(), nz, k),
         ))
     }
+
+    /// Walk a ray through the grid cell by cell, returning each traversed cell paired with the
+    /// exact arc length the ray spends inside it (Amanatides–Woo grid traversal).
+    ///
+    /// The ray is expressed **in the field's own frame** (the optic's local frame). The caller
+    /// transforms the global ray origin and direction into that frame before calling this method —
+    /// [`Body::isometry`] supplies the transform, and the body's own
+    /// [`Isometry::inverse_transform_point`](crate::utils::geom_transformation::Isometry::inverse_transform_point)
+    /// and
+    /// [`Isometry::inverse_transform_vector_f64`](crate::utils::geom_transformation::Isometry::inverse_transform_vector_f64)
+    /// apply it.
+    ///
+    /// `direction` **must be unit length** so that the parametric distances in the walk directly
+    /// equal arc lengths: `position_at_t = origin + direction * t`. The caller is responsible for
+    /// normalising; this method does not check.
+    ///
+    /// The return value is an owned `Vec` rather than a borrowing iterator so that a future
+    /// saturating model can hold `&mut InversionField` while processing the cells — the same
+    /// rationale as [`cells`].
+    ///
+    /// # Arguments
+    ///
+    /// - `origin`: start of the ray, in the optic's local frame.
+    /// - `direction`: unit direction vector (dimensionless).
+    ///
+    /// # Returns
+    ///
+    /// A list of `(cell, path_length)` pairs in traversal order. The cells are the unique grid
+    /// cells the ray passes through; the arc lengths sum to the total chord of the ray through the
+    /// grid's bounding box (clipped so that points behind the origin are excluded). Returns an
+    /// empty list if the ray misses the grid entirely, if `t_exit ≤ t_enter`, or if the grid has
+    /// no cells along any axis.
+    #[must_use]
+    pub fn traverse(
+        &self,
+        origin: &Point3<Length>,
+        direction: &Vector3<f64>,
+    ) -> Vec<(CellIndex, Length)> {
+        use uom::si::length::meter;
+
+        let (nx, ny, nz) = self.dimensions();
+        if nx == 0 || ny == 0 || nz == 0 {
+            return Vec::new();
+        }
+
+        let x_range = self.bounds.x_range();
+        let y_range = self.bounds.y_range();
+        let z_range = self.bounds.z_range();
+
+        // All t-values are in SI metres; direction is unit so t equals arc length in metres.
+        let cell_w = [
+            extent(&x_range).value / to_f64(nx),
+            extent(&y_range).value / to_f64(ny),
+            extent(&z_range).value / to_f64(nz),
+        ];
+        let lo = [x_range.start.value, y_range.start.value, z_range.start.value];
+        let hi = [x_range.end.value, y_range.end.value, z_range.end.value];
+        let org = [origin.x.value, origin.y.value, origin.z.value];
+        let dir = [direction.x, direction.y, direction.z];
+
+        // Slab-clip one axis: returns (t_enter, t_exit) in metres from the ray origin,
+        // or `None` if the ray misses the slab entirely.
+        let slab = |oc: f64, dc: f64, lo_v: f64, hi_v: f64| -> Option<(f64, f64)> {
+            if dc == 0.0 {
+                // Ray is parallel to this axis: inside iff the origin lies within the slab.
+                (oc >= lo_v && oc < hi_v).then_some((f64::NEG_INFINITY, f64::INFINITY))
+            } else {
+                let (t1, t2) = ((lo_v - oc) / dc, (hi_v - oc) / dc);
+                Some(if t1 <= t2 { (t1, t2) } else { (t2, t1) })
+            }
+        };
+
+        let Some((tx0, tx1)) = slab(org[0], dir[0], lo[0], hi[0]) else {
+            return Vec::new();
+        };
+        let Some((ty0, ty1)) = slab(org[1], dir[1], lo[1], hi[1]) else {
+            return Vec::new();
+        };
+        let Some((tz0, tz1)) = slab(org[2], dir[2], lo[2], hi[2]) else {
+            return Vec::new();
+        };
+
+        // Entry is the latest of the three per-axis entries (and no earlier than the ray start).
+        // Exit is the earliest of the three per-axis exits.
+        let t_enter = tx0.max(ty0).max(tz0).max(0.0);
+        let t_exit = tx1.min(ty1).min(tz1);
+        if t_enter >= t_exit {
+            return Vec::new();
+        }
+
+        // The cell the ray enters first. Floating-point nudge is absorbed by `cell_at`'s floor.
+        let entry = Point3::new(
+            origin.x + dir[0] * Length::new::<meter>(t_enter),
+            origin.y + dir[1] * Length::new::<meter>(t_enter),
+            origin.z + dir[2] * Length::new::<meter>(t_enter),
+        );
+        let Some(start_cell) = self.cell_at(&entry) else {
+            return Vec::new();
+        };
+
+        let counts = [nx, ny, nz];
+        let mut cell = [start_cell.0, start_cell.1, start_cell.2];
+
+        // Per-axis DDA state (all in metres from the ray origin).
+        // `t_max[a]` = t at which the ray next crosses a boundary on axis a.
+        // `t_delta[a]` = distance between consecutive boundaries on axis a.
+        // Both stay at INFINITY for axes the ray does not traverse (dir[a] == 0).
+        let mut t_max = [f64::INFINITY; 3];
+        let mut t_delta = [f64::INFINITY; 3];
+        // step direction per axis: +1 forward, -1 backward, 0 parallel (never advanced)
+        let mut step_dir = [0i32; 3];
+
+        for a in 0..3 {
+            if dir[a] > 0.0 {
+                step_dir[a] = 1;
+                t_max[a] = (lo[a] + cell_w[a] * to_f64(cell[a] + 1) - org[a]) / dir[a];
+                t_delta[a] = cell_w[a] / dir[a];
+            } else if dir[a] < 0.0 {
+                step_dir[a] = -1;
+                t_max[a] = (lo[a] + cell_w[a] * to_f64(cell[a]) - org[a]) / dir[a];
+                t_delta[a] = cell_w[a] / (-dir[a]);
+            }
+        }
+
+        let mut result = Vec::new();
+        let mut t_cur = t_enter;
+
+        loop {
+            // Advance along the axis whose next boundary is closest.
+            let a = if t_max[0] <= t_max[1] && t_max[0] <= t_max[2] {
+                0
+            } else if t_max[1] <= t_max[2] {
+                1
+            } else {
+                2
+            };
+
+            let t_step = t_max[a].min(t_exit);
+            let ds = t_step - t_cur;
+            if ds > 0.0 {
+                result.push(((cell[0], cell[1], cell[2]), Length::new::<meter>(ds)));
+            }
+            t_cur = t_step;
+            if t_cur >= t_exit {
+                break;
+            }
+
+            // Move to the neighbouring cell and update the next-boundary distance.
+            if step_dir[a] == 1 {
+                let new_idx = cell[a] + 1;
+                if new_idx >= counts[a] {
+                    break;
+                }
+                cell[a] = new_idx;
+            } else {
+                // step_dir[a] == -1 (never 0 since t_max[a] < INFINITY here)
+                if cell[a] == 0 {
+                    break;
+                }
+                cell[a] -= 1;
+            }
+            t_max[a] += t_delta[a];
+        }
+
+        result
+    }
 }
 
 /// Iterate over every cell of a grid of the given size.
@@ -356,6 +522,7 @@ mod test {
         utils::geom_transformation::Isometry,
     };
     use approx::assert_abs_diff_eq;
+    use nalgebra::Vector3;
     use std::{
         f64::consts::PI,
         sync::{Arc, Mutex},
@@ -564,6 +731,142 @@ mod test {
         assert!((0..5).all(|k| field.is_inside((4, 4, k))));
         // ... while the corners of the box are outside the round clear aperture
         assert!(!field.is_inside((0, 0, 2)));
+        Ok(())
+    }
+
+    // --- traverse tests ---
+    //
+    // These tests lock the Amanatides–Woo grid-traversal primitive independently of the physics
+    // that consume it. Every test checks geometric invariants only (path lengths, cell ordering)
+    // — not gain — so they stand regardless of how the gain model evolves.
+
+    #[test]
+    fn traverse_on_axis_ray_yields_equal_z_cells() -> OpmResult<()> {
+        // An on-axis ray through a (1,1,4) grid must visit exactly four z-cells of equal length.
+        // z-range is [0, 10 mm], so each cell is 2.5 mm deep.
+        let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
+        let field = InversionField::from_body(&body, (1, 1, 4))?;
+        let origin = millimeter!(0.0, 0.0, -5.0); // starts before the disk
+        let direction = Vector3::new(0.0, 0.0, 1.0);
+        let segs = field.traverse(&origin, &direction);
+        assert_eq!(segs.len(), 4, "expected 4 z-cells, got {:?}", segs);
+        for &(_, ds) in &segs {
+            assert_abs_diff_eq!(ds.value, millimeter!(2.5).value, epsilon = 1e-12);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn traverse_path_lengths_sum_to_chord() -> OpmResult<()> {
+        // For any ray that passes through the grid, the sum of all emitted path lengths must equal
+        // the total chord clipped to the bounding box. Checked on-axis and oblique.
+        let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
+        let field = InversionField::from_body(&body, (4, 4, 8))?;
+
+        // On-axis: chord = 10 mm.
+        let sum_axis: f64 = field
+            .traverse(&millimeter!(0.0, 0.0, -5.0), &Vector3::new(0.0, 0.0, 1.0))
+            .iter()
+            .map(|&(_, ds)| ds.value)
+            .sum();
+        assert_abs_diff_eq!(sum_axis, millimeter!(10.0).value, epsilon = 1e-12);
+
+        // 5° oblique (small enough that the ray does not clip against the side of the disk):
+        // chord = 10 mm / cos(5°).
+        let theta = 5_f64.to_radians();
+        let dir = Vector3::new(theta.sin(), 0.0, theta.cos());
+        let sum_oblique: f64 = field
+            .traverse(&millimeter!(0.0, 0.0, -5.0), &dir)
+            .iter()
+            .map(|&(_, ds)| ds.value)
+            .sum();
+        let expected = millimeter!(10.0).value / theta.cos();
+        assert_abs_diff_eq!(sum_oblique, expected, epsilon = 1e-10);
+        Ok(())
+    }
+
+    #[test]
+    fn traverse_a_miss_returns_empty() -> OpmResult<()> {
+        let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
+        let field = InversionField::from_body(&body, (4, 4, 4))?;
+
+        // Ray starts past the exit face and continues onward.
+        assert!(field
+            .traverse(&millimeter!(0.0, 0.0, 15.0), &Vector3::new(0.0, 0.0, 1.0))
+            .is_empty());
+
+        // Ray passes entirely beside the disk (x too large).
+        assert!(field
+            .traverse(&millimeter!(10.0, 0.0, 5.0), &Vector3::new(0.0, 0.0, 1.0))
+            .is_empty());
+
+        // Ray heading in the wrong direction (away from disk).
+        assert!(field
+            .traverse(&millimeter!(0.0, 0.0, -5.0), &Vector3::new(0.0, 0.0, -1.0))
+            .is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn traverse_cells_are_visited_in_ray_order() -> OpmResult<()> {
+        // For an on-axis ray in +z, consecutive cells must increase the z-index by one.
+        let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
+        let field = InversionField::from_body(&body, (1, 1, 8))?;
+        let segs = field.traverse(&millimeter!(0.0, 0.0, -1.0), &Vector3::new(0.0, 0.0, 1.0));
+        assert_eq!(segs.len(), 8);
+        for w in segs.windows(2) {
+            let ((_, _, k0), _) = w[0];
+            let ((_, _, k1), _) = w[1];
+            assert_eq!(k1, k0 + 1, "z-index must increase by one each step");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn traverse_x_boundary_crossing_gives_exact_path_lengths() -> OpmResult<()> {
+        // Two-cell grid in x, ray in +x direction starting inside cell 0.
+        // The x-range is [-5, 5] mm so the boundary is at x = 0.
+        // Starting at x = -2.5 mm: cell 0 has 2.5 mm remaining, cell 1 has 5 mm.
+        let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
+        let field = InversionField::from_body(&body, (2, 1, 1))?;
+        let origin = millimeter!(-2.5, 0.0, 5.0);
+        let direction = Vector3::new(1.0, 0.0, 0.0);
+        let segs = field.traverse(&origin, &direction);
+        assert_eq!(segs.len(), 2, "expected exactly 2 cells: {:?}", segs);
+        assert_abs_diff_eq!(segs[0].1.value, millimeter!(2.5).value, epsilon = 1e-12);
+        assert_abs_diff_eq!(segs[1].1.value, millimeter!(5.0).value, epsilon = 1e-12);
+        // The total equals the clipped chord.
+        let total: f64 = segs.iter().map(|&(_, ds)| ds.value).sum();
+        assert_abs_diff_eq!(total, millimeter!(7.5).value, epsilon = 1e-12);
+        Ok(())
+    }
+
+    #[test]
+    fn traverse_crossing_at_one_third_is_exact() -> OpmResult<()> {
+        // Two x-cells, ray in +x crossing the x=0 boundary after exactly 1/3 of the full chord.
+        // x-range = [-5, 5] mm; full chord = 10 mm; boundary at x=0.
+        // A ray from x=-5 to x=5 with the boundary at x=0 splits the chord into 5/10 and 5/10.
+        // For an unequal split: use a sub-chord. Starting at x=-5 mm (grid entry), going +x:
+        //   cell 0 (x∈[-5,0]): ds = 5 mm
+        //   cell 1 (x∈[0,5]):  ds = 5 mm
+        // For a crossing at 1/3 of the total chord (10 mm), the ray must enter at x=-5 and the
+        // boundary must appear at t = 10/3 mm from entry. Use x-range: [-5, 5] with 2 cells.
+        // The boundary is at x = 0 = midpoint. To have the boundary at 1/3: shift origin.
+        // Origin at x = -10/3 mm ≈ -3.333 mm, direction +x.
+        // Remaining in cell 0 from that point: 0 - (-10/3) = 10/3 mm.
+        // Cell 1 full width: 5 mm.
+        // Total chord (from -10/3 to +5): 5 + 10/3 = 25/3 mm.
+        let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
+        let field = InversionField::from_body(&body, (2, 1, 1))?;
+        let x_start = -10.0 / 3.0; // mm — not a cell boundary for the 2-cell grid
+        let origin = millimeter!(x_start, 0.0, 5.0);
+        let direction = Vector3::new(1.0, 0.0, 0.0);
+        let segs = field.traverse(&origin, &direction);
+        assert_eq!(segs.len(), 2);
+        let ds_a_expected = 10.0 / 3.0; // mm (distance from x_start to x=0)
+        let ds_b_expected = 5.0; // mm (x=0 to x=5, full width of cell 1)
+        assert_abs_diff_eq!(segs[0].1.value, millimeter!(ds_a_expected).value, epsilon = 1e-12);
+        assert_abs_diff_eq!(segs[1].1.value, millimeter!(ds_b_expected).value, epsilon = 1e-12);
         Ok(())
     }
 }

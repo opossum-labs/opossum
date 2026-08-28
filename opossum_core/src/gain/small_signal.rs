@@ -318,7 +318,8 @@ mod test {
         degree,
         gain::{
             AnalyticPump, BeerLambertProfile, ConstInversion, GainModel, LongitudinalProfile,
-            PumpDirection, PumpSource, TransversalProfile,
+            PumpDirection, PumpSource, TransversalProfile, inversion_field::cells,
+            pump_source::inversion_from_gain,
         },
         geometry::{Plane, body::SurfaceBoundedBody, geo_surface::GeoSurfaceRef},
         joule,
@@ -332,7 +333,7 @@ mod test {
     use approx::assert_relative_eq;
     use nalgebra::{Point2, Vector3};
     use std::sync::{Arc, Mutex};
-    use uom::si::f64::{Length, ReciprocalLength};
+    use uom::si::f64::{Area, Length, ReciprocalLength};
 
     /// The thickness of the disk every physics test below amplifies through.
     const THICKNESS: f64 = 10.0;
@@ -748,5 +749,264 @@ mod test {
                 "the file content {refused} should be refused"
             );
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Inhomogeneous inversion + oblique ray: path-length weighting tests
+    //
+    // Geometry shared by the two-cell tests: a wide plane-parallel disk (thick
+    // enough not to let 45°-class rays escape sideways) with a (2,1,1) grid.
+    // The grid splits x at x = 0 (the disk's bounding box is symmetric about
+    // the axis), so cell (0,0,0) covers x < 0 and cell (1,0,0) covers x > 0.
+    // A ray in the x–z plane crosses that boundary at a predictable depth.
+    // -------------------------------------------------------------------------
+
+    /// An `InversionField` over `body` where every in-medium cell carries the gain coefficient
+    /// returned by `g(cell_index)`.
+    ///
+    /// Bypasses the pump/profile path so tests can prescribe an exact piecewise-constant field and
+    /// compute analytic expectations without profile-discretisation error.  `sigma_e` is shared
+    /// with the marching model so the density→coefficient round-trip cancels exactly.
+    fn field_with(
+        body: &dyn Body,
+        dims: CellIndex,
+        sigma_e: Area,
+        g: impl Fn(CellIndex) -> OpmResult<ReciprocalLength>,
+    ) -> OpmResult<InversionField> {
+        let mut field = InversionField::from_body(body, dims)?;
+        for cell in cells(dims) {
+            if field.is_inside(cell) {
+                field.set_population(cell, inversion_from_gain(g(cell)?, sigma_e)?)?;
+            }
+        }
+        Ok(field)
+    }
+
+    #[test]
+    fn an_oblique_ray_weights_each_cell_by_its_path_length() -> OpmResult<()> {
+        // A ray that enters cell A (x < 0) and exits through cell B (x > 0), crossing x = 0
+        // exactly at half the disk thickness, spends equal chord-fractions in each cell.
+        //
+        // With an even n_steps the midpoints fall alternately in A and B, so the accumulated
+        // exponent is `(g_a + g_b)/2 · chord` — exact with no step-boundary artefact.
+        //
+        // Expected gain factor: exp((g_a + g_b)/2 · chord).  The chord of a ray at 45° through a
+        // 10 mm disk is 10·sqrt(2) mm.
+        //
+        // Also checked: the factor lies strictly between exp(g_a·chord) and exp(g_b·chord) — a
+        // bundle-wide or endpoint-only approximation could not produce a value in between.
+        let body = disk(millimeter!(THICKNESS), millimeter!(20.0))?;
+        let sigma_e = square_meter!(2.0e-24);
+        let g_a = reciprocal_centimeter!(0.3_f64);
+        let g_b = reciprocal_centimeter!(0.8_f64);
+
+        let inversion = field_with(&body, (2, 1, 1), sigma_e, |cell| {
+            Ok(if cell.0 == 0 { g_a } else { g_b })
+        })?;
+
+        // A ray from (-5, 0, 0) mm toward (5, 0, L) crosses x = 0 at z = L/2.  With an even
+        // n_steps = 8 the midpoints land at L/16, 3L/16, 5L/16, 7L/16 (cell A) and 9L/16,
+        // 11L/16, 13L/16, 15L/16 (cell B) — exactly 4 in each half.
+        let ray = Ray::new(
+            millimeter!(-5.0, 0.0, 0.0),
+            Vector3::new(10.0, 0.0, THICKNESS),
+            nanometer!(1054.0),
+            joule!(1.0),
+        )?;
+        let model = SmallSignalGain::new(sigma_e, 8, (2, 1, 1))?;
+        let factor = z_march_factor(&body, &model, &mut Some(inversion), &ray)?;
+
+        // chord through a disk at this angle via path_length_inside
+        let chord = body
+            .path_length_inside(&ray)?
+            .expect("the ray must cross the disk");
+
+        // Each half of the chord carries its own coefficient.
+        let expected = f64::exp(((g_a + g_b) * 0.5 * chord).value);
+        assert_relative_eq!(factor, expected, max_relative = 1e-12);
+
+        // Bracketing: the mixed result must sit strictly between the two pure homogeneous ones.
+        let only_a = f64::exp((g_a * chord).value);
+        let only_b = f64::exp((g_b * chord).value);
+        assert!(
+            factor > only_a && factor < only_b,
+            "mixed factor {factor} should be between {only_a} (all A) and {only_b} (all B)"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn which_cell_holds_the_longer_path_decides() -> OpmResult<()> {
+        // A ray from (-5, 0, 0) mm in direction (15, 0, L): x goes from -5 to -5+15=10 mm
+        // over L mm in z, so x(z) = -5 + 15/L · z → x=0 at z = 5·L/15 = L/3.
+        // Path fractions: 1/3 in cell A (x < 0), 2/3 in cell B (x ≥ 0).
+        //
+        // Expected gain: exp(g_a · chord/3 + g_b · 2·chord/3).
+        //
+        // Crossing at L/3 is NOT a step boundary for n = 4, 16, or 64 (since 4/3, 16/3, 64/3
+        // are all non-integers), so the midpoint rule has a genuine O(1/n) error — unlike L/4
+        // which divides evenly into these step counts and gives an exact 0 error.
+        //
+        // Swapping g_a ↔ g_b must change the factor to exp(g_b·chord/3 + g_a·2·chord/3),
+        // proving the result depends on how long the ray spends in each cell.
+        let body = disk(millimeter!(THICKNESS), millimeter!(20.0))?;
+        let sigma_e = square_meter!(2.0e-24);
+        let g_a = reciprocal_centimeter!(0.05_f64);
+        let g_b = reciprocal_centimeter!(0.10_f64);
+
+        let dims = (2, 1, 1);
+        let ray = Ray::new(
+            millimeter!(-5.0, 0.0, 0.0),
+            Vector3::new(15.0, 0.0, THICKNESS),
+            nanometer!(1054.0),
+            joule!(1.0),
+        )?;
+        let chord = body
+            .path_length_inside(&ray)?
+            .expect("the ray must cross the disk");
+
+        // -- forward assignment: g_a in cell (0,*,*), g_b in cell (1,*,*) --
+        let inv_fwd = field_with(&body, dims, sigma_e, |cell| {
+            Ok(if cell.0 == 0 { g_a } else { g_b })
+        })?;
+        let model = SmallSignalGain::new(sigma_e, 64, dims)?;
+        let factor_fwd = z_march_factor(&body, &model, &mut Some(inv_fwd), &ray)?;
+        // exact: exp(g_a · chord/3 + g_b · 2·chord/3)
+        let expected_fwd = f64::exp((g_a * chord / 3.0 + g_b * chord * 2.0 / 3.0).value);
+        assert_relative_eq!(factor_fwd, expected_fwd, max_relative = 1e-3);
+
+        // -- swapped assignment: g_b in cell (0,*,*), g_a in cell (1,*,*) --
+        let inv_swp = field_with(&body, dims, sigma_e, |cell| {
+            Ok(if cell.0 == 0 { g_b } else { g_a })
+        })?;
+        let factor_swp = z_march_factor(&body, &model, &mut Some(inv_swp), &ray)?;
+        let expected_swp = f64::exp((g_b * chord / 3.0 + g_a * chord * 2.0 / 3.0).value);
+        assert_relative_eq!(factor_swp, expected_swp, max_relative = 1e-3);
+
+        // The two factors must differ (if the code used only cell count or entry-cell value,
+        // they would be the same).
+        assert!(
+            (factor_fwd - factor_swp).abs() > 1e-9,
+            "swapping the coefficients must change the factor: {factor_fwd} vs {factor_swp}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn the_march_across_a_cell_boundary_converges() -> OpmResult<()> {
+        // The asymmetric two-cell setup (1/3 of the chord in A, 2/3 in B) from
+        // `which_cell_holds_the_longer_path_decides`, but now we refine n_steps and verify that
+        // the midpoint-quadrature error against the exact two-segment integral shrinks
+        // monotonically.  With a piecewise-constant inversion the only error is the one step that
+        // straddles the x = 0 boundary (at z = L/3 = 1/3 of the chord), so the error is O(1/n).
+        //
+        // The crossing at L/3 is never a step boundary for n = 4, 16, 64 (since 4/3, 16/3, 64/3
+        // are all non-integers), guaranteeing a non-zero error at every resolution for comparison.
+        let body = disk(millimeter!(THICKNESS), millimeter!(20.0))?;
+        let sigma_e = square_meter!(2.0e-24);
+        let g_a = reciprocal_centimeter!(0.05_f64);
+        let g_b = reciprocal_centimeter!(0.10_f64);
+        let dims = (2, 1, 1);
+        let ray = Ray::new(
+            millimeter!(-5.0, 0.0, 0.0),
+            Vector3::new(15.0, 0.0, THICKNESS),
+            nanometer!(1054.0),
+            joule!(1.0),
+        )?;
+        let chord = body
+            .path_length_inside(&ray)?
+            .expect("the ray must cross the disk");
+        // exact: exp(g_a · chord/3 + g_b · 2·chord/3)
+        let exact = f64::exp((g_a * chord / 3.0 + g_b * chord * 2.0 / 3.0).value);
+
+        let rel_error = |n_steps: usize| -> OpmResult<f64> {
+            let model = SmallSignalGain::new(sigma_e, n_steps, dims)?;
+            let inv = field_with(&body, dims, sigma_e, |cell| {
+                Ok(if cell.0 == 0 { g_a } else { g_b })
+            })?;
+            let factor = z_march_factor(&body, &model, &mut Some(inv), &ray)?;
+            Ok((factor - exact).abs() / exact)
+        };
+        let (coarse, medium, fine) = (rel_error(4)?, rel_error(16)?, rel_error(64)?);
+        assert!(
+            medium < coarse,
+            "refining 4 → 16 steps did not help: {coarse} → {medium}"
+        );
+        assert!(
+            fine < medium,
+            "refining 16 → 64 steps did not help: {medium} → {fine}"
+        );
+        assert!(
+            fine < 1e-3,
+            "the fine march (64 steps) is still off by {fine} relative"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn an_oblique_ray_through_a_beer_lambert_profile_matches_the_closed_form() -> OpmResult<()> {
+        // A Beer-Lambert profile sets the gain density as g(z) = g0 · exp(-α·z) (forward pump).
+        // For a ray travelling at angle θ to the optical axis, the path element is ds = dz/cosθ,
+        // so the line integral over the disk thickness L is:
+        //
+        //   ∫₀ᴸ g(z) · dz/cosθ  =  g0/(α·cosθ) · (1 − exp(−α·L))
+        //
+        // The on-axis case (θ = 0, cosθ = 1) is already tested by
+        // `the_march_converges_when_it_is_refined`; here we add an oblique ray to verify that
+        // the 1/cosθ factor is naturally produced by the longer physical path, not hard-coded.
+        //
+        // Ray: 45° in the y-z plane from (0, -5, 0) mm toward (0, 5, L).  The disk is made wide
+        // so the ray does not escape through the barrel.  cosθ = L/chord = 1/sqrt(2).
+        //
+        // Grid: flat transversal (4, 4) so sampling there is exact; 512 slices in z so the
+        // profile is resolved (same ratio as the on-axis convergence test).
+        let g_0 = reciprocal_centimeter!(0.5_f64);
+        let alpha = reciprocal_centimeter!(2.0_f64);
+        let length = millimeter!(THICKNESS);
+        let config = PumpConfig::new(
+            GainModel::None,
+            PumpSource::Analytic(AnalyticPump::new(
+                g_0,
+                TransversalProfile::Flat,
+                LongitudinalProfile::BeerLambert(BeerLambertProfile::new(
+                    alpha,
+                    PumpDirection::Forward,
+                )?),
+            )?),
+        );
+        let body = disk(length, millimeter!(20.0))?;
+
+        // theta = 45°, cos(theta) = 1/sqrt(2)
+        let cos_theta = 1.0_f64 / f64::sqrt(2.0);
+        // Closed-form: exp( g0 / (alpha * cos_theta) * (1 - exp(-alpha*L)) )
+        let exact =
+            f64::exp(((g_0 / alpha / cos_theta) * (1.0 - f64::exp(-(alpha * length).value))).value);
+
+        let oblique = Ray::new(
+            millimeter!(0.0, -5.0, 0.0),
+            Vector3::new(0.0, 1.0, 1.0),
+            nanometer!(1054.0),
+            joule!(1.0),
+        )?;
+
+        // The march is refined: steps 8 → 64 must both converge toward `exact`.
+        let sigma_e = square_meter!(2.0e-24);
+        let error = |n_steps: usize| -> OpmResult<f64> {
+            let model = SmallSignalGain::new(sigma_e, n_steps, (4, 4, 512))?;
+            let factor = factor_through(&body, &model, &config, &oblique)?;
+            Ok((factor - exact).abs() / exact)
+        };
+        let (coarse, fine) = (error(8)?, error(64)?);
+        assert!(
+            fine < coarse,
+            "refining 8 → 64 steps did not help for the oblique Beer-Lambert case: \
+             {coarse} → {fine}"
+        );
+        assert!(
+            fine < 1e-3,
+            "the oblique Beer-Lambert march (64 steps) is still off by {fine} relative vs \
+             exp(g0/(alpha*cosθ)*(1-exp(-alpha*L))) = {exact}"
+        );
+        Ok(())
     }
 }
