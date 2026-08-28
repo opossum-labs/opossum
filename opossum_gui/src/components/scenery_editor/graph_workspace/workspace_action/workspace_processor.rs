@@ -1684,15 +1684,15 @@ async fn process_fill_graph_of_group(
 ) {
     // Fetch nodes first to evaluate their positions
     let nodes_result = api::get_nodes(group_id).await;
-    
+
     // Determine dynamically if an autolayout is required for this specific group
     let mut actual_needs_layout = needs_autolayout;
     if let Ok(ref nodes) = nodes_result {
         // Check if all nodes are overlapping at the origin (or have no position)
-        let unpositioned = nodes.iter().all(|n| {
-            n.gui_position().is_none() || n.gui_position() == Some((0.0, 0.0))
-        });
-        
+        let unpositioned = nodes
+            .iter()
+            .all(|n| n.gui_position().is_none() || n.gui_position() == Some((0.0, 0.0)));
+
         // Apply layout if we have more than one node and they are overlapping
         if nodes.len() > 1 && unpositioned {
             actual_needs_layout = true;

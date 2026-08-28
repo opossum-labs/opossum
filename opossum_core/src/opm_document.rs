@@ -1074,4 +1074,63 @@ mod test {
 
         Ok(())
     }
+    #[test]
+    fn test_corrupt_node_property_falls_back_to_default_and_warns() -> OpmResult<()> {
+        // RON data with an illegal variant "ength(0.075)" instead of "Length(0.075)"
+        let ron_data = r#"#![enable(unwrap_variant_newtypes)]
+(
+    opm_file_version: "0",
+    scenery: {
+        "node_type": "group",
+        "name": "test",
+        "uuid": "131024b9-f447-476d-ace2-b2c027ba0ef3",
+        "props": {
+            "expand view": Bool(false),
+        },
+        "graph": (
+            nodes: [
+                {
+                    "node_type": "paraxial surface",
+                    "name": "paraxial surface",
+                    "uuid": "74e7f1d3-2315-4479-9649-21afb3a18e3a",
+                    "props": {
+                        "focal length": ength(0.01),
+                    },
+                    "gui_position": Some(-65.0, -40.17220926998195),
+                },
+            ],
+            edges: [],
+        ),
+    },
+    global: (
+        ambient_refr_index: Const(
+            refractive_index: 1.0,
+        ),
+    ),
+)"#;
+
+        testing_logger::setup();
+
+        // Loading must succeed without skipping the node
+        let doc = OpmDocument::from_string(ron_data)?;
+
+        // The node must still be present in the graph
+        assert_eq!(doc.scenery().nodes().len(), 1);
+
+        // Verify that the focal length property was kept at its default value
+        let node_ref = &doc.scenery().nodes()[0];
+        let node = node_ref.optical_ref.lock_opm()?;
+        let focal_length_prop = node.node_attr().get_property("focal length")?;
+
+        // Ensure it is a valid Length proptype
+        assert!(matches!(focal_length_prop, Proptype::Length(_)));
+
+        // Verify that the warning was logged
+        check_logs(
+            log::Level::Warn,
+            vec!["Skipping property 'focal length' that failed to parse; keeping default value."],
+        );
+
+        Ok(())
+    }
 }
