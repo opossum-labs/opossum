@@ -1,7 +1,6 @@
 use crate::{
     core_optics::{
-        NodeAttr, OpticPorts, SceneryResources, hit_map::HitMap, node_attr::HasNodeAttr,
-        optic_surface::OpticSurface,
+        NodeAttr, OpticPorts, hit_map::HitMap, node_attr::HasNodeAttr, optic_surface::OpticSurface,
     },
     error::OpmResult,
     light::Rays,
@@ -10,7 +9,6 @@ use crate::{
 };
 use nalgebra::Point2;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 
 /// Extension trait providing standardized, non-overridable methods
 /// for checking and manipulating core node attributes.
@@ -36,9 +34,6 @@ pub trait NodeAttrExt {
     ///
     /// This function returns `None` if no local alignment is defined for this node.
     fn alignment(&self) -> Option<Isometry>;
-
-    /// Get a reference to a global configuration (if any).
-    fn global_conf(&self) -> &Option<Arc<Mutex<SceneryResources>>>;
 
     /// Return a [`String`] in the form `'name' (type)` for display purposes.
     fn node_info(&self) -> String;
@@ -103,10 +98,6 @@ impl<T: ?Sized + HasNodeAttr> NodeAttrExt for T {
 
     fn alignment(&self) -> Option<Isometry> {
         *self.node_attr().alignment()
-    }
-
-    fn global_conf(&self) -> &Option<Arc<Mutex<SceneryResources>>> {
-        self.node_attr().global_conf()
     }
 
     fn node_info(&self) -> String {

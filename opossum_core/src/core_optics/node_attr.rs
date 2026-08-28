@@ -4,15 +4,12 @@
 //! These attributes are shared across different types of optical nodes in the system.
 use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::BTreeMap,
-    sync::{Arc, Mutex},
-};
+use std::collections::BTreeMap;
 use uom::si::f64::Length;
 use uuid::Uuid;
 
 use crate::{
-    core_optics::{OpticPorts, SceneryResources, optic_surface::OpticSurface},
+    core_optics::{OpticPorts, optic_surface::OpticSurface},
     error::{OpmResult, OpossumError},
     properties::{Properties, Proptype, validator::Validator},
     utils::{file_utils::sanitize_filename, geom_transformation::Isometry},
@@ -67,8 +64,6 @@ pub struct NodeAttr {
     inverted: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     alignment: Option<Isometry>,
-    #[serde(skip)]
-    global_conf: Option<Arc<Mutex<SceneryResources>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     align_like_node_at_distance: Option<(Uuid, Length)>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -103,7 +98,6 @@ impl NodeAttr {
             props: Properties::default(),
             ports: OpticPorts::default(),
             runtime_surfaces: RuntimeSurfaces::default(),
-            global_conf: None,
             isometry: None,
             inverted: false,
             alignment: None,
@@ -242,15 +236,6 @@ impl NodeAttr {
     /// unset (unlike [`Self::set_alignment`], which can only ever set a concrete value).
     pub const fn set_alignment_option(&mut self, alignment_opt: Option<Isometry>) {
         self.alignment = alignment_opt;
-    }
-    /// Returns a reference to the global config (if any) of this [`NodeAttr`].
-    #[must_use]
-    pub const fn global_conf(&self) -> &Option<Arc<Mutex<SceneryResources>>> {
-        &self.global_conf
-    }
-    /// Sets the global conf of this [`NodeAttr`].
-    pub fn set_global_conf(&mut self, global_conf: Option<Arc<Mutex<SceneryResources>>>) {
-        self.global_conf = global_conf;
     }
     /// Sets the name of this [`NodeAttr`].
     pub fn set_name(&mut self, name: &str) {

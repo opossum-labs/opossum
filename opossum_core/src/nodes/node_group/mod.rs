@@ -10,8 +10,7 @@ mod optic_graph;
 pub mod port_map;
 use crate::{
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticPorts, OpticRef, PortType, SceneryResources,
-        node_attr::HasNodeAttr,
+        NodeAttr, NodeAttrExt, OpticNode, OpticPorts, OpticRef, PortType, node_attr::HasNodeAttr,
     },
     error::{OpmResult, OpossumError},
     light::{
@@ -314,10 +313,7 @@ impl NodeGroup {
     /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
     pub fn node(&self, node_id: Uuid) -> OpmResult<OpticRef> {
         if node_id == self.node_attr.uuid() {
-            Ok(OpticRef::new(
-                Arc::new(Mutex::new(self.clone())),
-                self.global_conf().clone(),
-            ))
+            Ok(OpticRef::new(Arc::new(Mutex::new(self.clone()))))
         } else {
             self.graph.node(node_id)
         }
@@ -996,11 +992,6 @@ impl OpticNode for NodeGroup {
                 group_props,
             )))
         }
-    }
-    fn set_global_conf(&mut self, global_conf: Option<Arc<Mutex<SceneryResources>>>) {
-        let node_attr = self.node_attr_mut();
-        node_attr.set_global_conf(global_conf.clone());
-        self.graph.update_global_config(&global_conf);
     }
     fn set_inverted(&mut self, inverted: bool) -> OpmResult<()> {
         self.graph.set_is_inverted(inverted);

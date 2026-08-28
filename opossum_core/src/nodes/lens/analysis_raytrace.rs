@@ -38,9 +38,10 @@ impl AnalysisRayTrace for Lens {
         )?;
 
         // 2. Austrittsfläche
+        let ambient_refr_idx = config.ambient_material().refractive_index_type().clone();
         self.pass_through_surface_generic(
             out_port,
-            Some(self.ambient_idx()),
+            Some(ambient_refr_idx),
             &mut rays_bundle,
             config,
             self.inverted(),

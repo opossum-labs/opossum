@@ -1,9 +1,10 @@
 use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
-    core_optics::hit_map::fluence_estimator::FluenceEstimator,
-    core_optics::optic_surface::OpticSurface,
+    core_optics::{hit_map::fluence_estimator::FluenceEstimator, optic_surface::OpticSurface},
     error::OpmResult,
     light::{Rays, lightdata::ray_data_builder::RayDataBuilder},
+    material::Material,
+    material_vaccuum,
     nodes::NodeGroup,
 };
 use serde::{Deserialize, Serialize};
@@ -16,6 +17,7 @@ pub struct GhostFocusConfig {
     max_bounces: usize,
     fluence_estimator: FluenceEstimator,
     source_map: HashMap<Uuid, RayDataBuilder>,
+    ambient_material: Material,
 }
 
 impl GhostFocusConfig {
@@ -73,6 +75,15 @@ impl GhostFocusConfig {
             .copied()
             .find(|uuid| self.source_map.get(uuid) != other.source_map.get(uuid))
     }
+    /// Returns a reference to the ambient material of this analysis
+    #[must_use]
+    pub const fn ambient_material(&self) -> &Material {
+        &self.ambient_material
+    }
+    /// Sets the ambient material for this analysis
+    pub fn set_ambient_material(&mut self, material: Material) {
+        self.ambient_material = material;
+    }
 }
 impl Default for GhostFocusConfig {
     fn default() -> Self {
@@ -80,6 +91,7 @@ impl Default for GhostFocusConfig {
             max_bounces: 1,
             fluence_estimator: FluenceEstimator::Voronoi,
             source_map: HashMap::new(),
+            ambient_material: material_vaccuum(),
         }
     }
 }

@@ -4,7 +4,7 @@
     scenery: {
         "node_type": "group",
         "name": "OpticScenery demo",
-        "uuid": "3cc6bd66-0bd4-49df-bb32-ccaa525d2101",
+        "uuid": "a2475c01-2daf-46c1-90e7-8647458f4d52",
         "props": {
             "expand view": Bool(false),
         },
@@ -13,47 +13,45 @@
                 {
                     "node_type": "dummy",
                     "name": "dummy1",
-                    "uuid": "914d3900-fa95-49a4-8be0-defe701bd53c",
+                    "uuid": "16b23c9f-d617-4cd5-b23a-01cc03366c1d",
                 },
                 {
                     "node_type": "dummy",
                     "name": "dummy2",
-                    "uuid": "21607c06-5dfd-4bd9-87ba-c8e99f0c05a0",
+                    "uuid": "918d5cb6-19b1-4d7b-92ae-d8ba12ad2976",
                 },
             ],
             edges: [
                 (
-                    src_id: "914d3900-fa95-49a4-8be0-defe701bd53c",
+                    src_id: "16b23c9f-d617-4cd5-b23a-01cc03366c1d",
                     src_port: "output_1",
-                    target_id: "21607c06-5dfd-4bd9-87ba-c8e99f0c05a0",
+                    target_id: "918d5cb6-19b1-4d7b-92ae-d8ba12ad2976",
                     target_port: "input_1",
                     distance: 0.0,
                 ),
             ],
         ),
     },
-    global: (
-        ambient_material: {
-            "schema_version": 1,
-            "id": "6c30ef98-7380-4477-bc91-a5a1a407fec7",
-            "version": 0,
-            "name": "Custom Material",
-            "optical": (
-                refractive_index: Const(
-                    refractive_index: 1.0,
-                ),
-                absorption: r#None,
-            ),
-        },
-    ),
     analyzers: {
-        "dde08c56-20e1-43fb-a712-eb558fb79794": (
+        "7298d589-2928-4829-a9f5-b4b6d0898a9f": (
             analyzer_type: RayTrace(
                 min_energy_per_ray: 0.000000000001,
                 max_number_of_bounces: 1000,
                 max_number_of_refractions: 1000,
                 missed_surface_strategy: Stop,
                 source_map: {},
+                ambient_material: {
+                    "schema_version": 1,
+                    "id": "86dac8fb-b2de-4ba1-8bf8-6f8e4730cf1e",
+                    "version": 0,
+                    "name": "vaccuum",
+                    "optical": (
+                        refractive_index: Const(
+                            refractive_index: 1.0,
+                        ),
+                        absorption: r#None,
+                    ),
+                },
             ),
         ),
     },

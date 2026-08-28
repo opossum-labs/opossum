@@ -4,10 +4,7 @@ use crate::{
     error::BackEndErrorResponse,
     helper_functions::{analyzer_mut_or_404, parent_group_id_or_self},
     sse_logger::SENDER,
-    undo::{
-        Command, PatchGlobalConf, PatchNode, RepositionAnalyzer, SetViewport,
-        capture_old_node_request,
-    },
+    undo::{Command, PatchNode, RepositionAnalyzer, SetViewport, capture_old_node_request},
 };
 use actix_web::{
     Error, HttpResponse, Responder, delete, get, patch, post, put,
@@ -16,7 +13,7 @@ use actix_web::{
 use futures_util::StreamExt;
 use log::{error, info, warn};
 use opossum_core::{
-    core_optics::{SceneryResources, node_attr::HasNodeAttr},
+    core_optics::node_attr::HasNodeAttr,
     opm_document::OpmDocument,
     types::api_types::{
         DocumentChange, ErrorResponse, JumpTarget, LoadDocumentResponse, PositionUpdate,
@@ -40,44 +37,9 @@ async fn delete_document(data: web::Data<AppState>) -> impl Responder {
     data.clear_undo_history();
     HttpResponse::NoContent().finish()
 }
-#[utoipa::path(tag = "document",
-    responses((status = 200, description = "Global configuration", body = SceneryResources))
-)]
-/// Get the global configuration of this model
-///
-/// This function returns the global configuration of the model.
-#[get("/global_conf")]
-async fn get_global_conf(data: web::Data<AppState>) -> impl Responder {
-    let document = data.document.lock();
-    web::Json(document.global_conf().lock().unwrap().clone())
-}
 
 #[utoipa::path(tag = "document",
-    responses((status = 200, description = "Global configuration", body = SceneryResources))
-)]
-/// Set the global configuration
-///
-/// This function sets the global configuration of the model. The old global configuration is
-/// replaced by the new one.
-#[patch("/global_conf")]
-async fn patch_global_conf(
-    data: web::Data<AppState>,
-    new_global_conf: web::Json<SceneryResources>,
-) -> Result<Json<SceneryResources>, BackEndErrorResponse> {
-    let new = new_global_conf.into_inner();
-    let mut document = data.document.lock();
-    let old = document.global_conf().lock().unwrap().clone();
-    let inverse = Command::PatchGlobalConf(PatchGlobalConf {
-        old,
-        new: new.clone(),
-    })
-    .apply(&mut document)?;
-    data.push_undo(inverse);
-    drop(document);
-    Ok(Json(new))
-}
-#[utoipa::path(tag = "document",
-    responses((status = 200, description = "Scenery Uuid", body = SceneryResources))
+    responses((status = 200, description = "Scenery Uuid"))
 )]
 /// Get the uuid of the root node of this model
 ///
@@ -506,9 +468,6 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(put_document);
     cfg.service(delete_document);
 
-    cfg.service(get_global_conf);
-    cfg.service(patch_global_conf);
-
     cfg.service(get_root_uuid);
 
     cfg.service(undo_document);
@@ -526,23 +485,7 @@ mod test {
         undo::{Command, NodeSnapshot},
     };
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
-    use opossum_core::{core_optics::SceneryResources, material::Material, nodes::create_node_ref};
-
-    #[actix_web::test]
-    async fn test_get_global_conf() {
-        let app_state = Data::new(AppState::default());
-        let app = test::init_service(
-            App::new()
-                .app_data(app_state)
-                .service(get_global_conf)
-                .service(patch_global_conf),
-        )
-        .await;
-        let req = test::TestRequest::get().uri("/global_conf").to_request();
-        let resp = app.call(req).await.unwrap();
-        assert_eq!(resp.status(), 200);
-        let _: SceneryResources = test::read_body_json(resp).await; // Panics, if not valid JSON
-    }
+    use opossum_core::nodes::create_node_ref;
 
     #[actix_web::test]
     async fn test_undo_redo_empty_stack_returns_409() {
@@ -1172,60 +1115,6 @@ mod test {
             )),
             "a change already covered by the GraphNeedsRefresh must not also appear separately, got: {:?}",
             body.changes
-        );
-    }
-
-    /// Regression test for the gap where `PATCH /global_conf` replaced the document's global scenery
-    /// config without pushing any undo command. Patches the config to a distinct value and asserts a
-    /// single undo restores the previous one.
-    #[actix_web::test]
-    async fn test_undo_patch_global_conf_restores_old_config() {
-        let app_state = Data::new(AppState::default());
-        let old_repr = format!(
-            "{:?}",
-            *app_state.document.lock().global_conf().lock().unwrap()
-        );
-
-        let new_conf = SceneryResources {
-            ambient_material: Material::default(),
-        };
-        let new_repr = format!("{new_conf:?}");
-        assert_ne!(
-            old_repr, new_repr,
-            "the test's replacement config must differ from the default"
-        );
-
-        let app = test::init_service(
-            App::new()
-                .app_data(app_state.clone())
-                .service(patch_global_conf)
-                .service(undo_document),
-        )
-        .await;
-
-        let req = test::TestRequest::patch()
-            .uri("/global_conf")
-            .set_json(&new_conf)
-            .to_request();
-        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
-        assert_eq!(
-            format!(
-                "{:?}",
-                *app_state.document.lock().global_conf().lock().unwrap()
-            ),
-            new_repr,
-            "the patch must have applied the new config"
-        );
-
-        let req = test::TestRequest::post().uri("/undo").to_request();
-        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
-        assert_eq!(
-            format!(
-                "{:?}",
-                *app_state.document.lock().global_conf().lock().unwrap()
-            ),
-            old_repr,
-            "undo must restore the old global config"
         );
     }
 

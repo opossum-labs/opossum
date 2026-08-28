@@ -20,9 +20,13 @@ use crate::{
 ///
 /// This returns a [`Material`] with a constant refractive  index of 1.0.
 pub fn material_vaccuum() -> Material {
-    let mut material: Material =
-        RefractiveIndexType::Const(RefrIndexConst::new(1.0).unwrap()).into();
-    material.header.name = "vaccuum".to_string();
+    let mut material: Material = Material::new_draft(
+        "vacuum",
+        None,
+        None,
+        RefractiveIndexType::Const(RefrIndexConst::new(1.0).unwrap()),
+    );
+    material.header.id = Uuid::nil();
     material
 }
 
