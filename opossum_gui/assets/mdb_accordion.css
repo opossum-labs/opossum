@@ -243,11 +243,11 @@ input[type=number] {
 }
 
 .accordion-button-h1 {
-    background-color: rgb(50, 50, 50) !important;
+    background-color: rgb(62, 62, 62) !important;
 }
 
 .accordion-item:has(> .accordion-header > .accordion-button-h1) > .accordion-collapse > .accordion-body {
-    background-color: rgb(45, 45, 45) !important;
+    background-color: rgb(56, 56, 56) !important;
 }
 
 /* ── Level-2 sections: mini-card nested inside a level-1 body ──────────────────────────── */
@@ -259,26 +259,27 @@ input[type=number] {
 }
 
 .accordion-button-h2 {
-    background-color: rgb(52, 52, 52) !important;
+    background-color: rgb(56, 56, 56) !important;
 }
 
 .accordion-item:has(> .accordion-header > .accordion-button-h2) > .accordion-collapse > .accordion-body {
-    background-color: rgb(47, 47, 47) !important;
+    background-color: rgb(50, 50, 50) !important;
 }
 
-/* ── All form fields inside an accordion body: consistent gray background ─────────────────
-   The border/accent comes from .border-start on the outer wrapper — we only set the fill.
-   Border-radius on inner controls clips to the wrapper's shape. */
+/* ── Dark input background shared by node-config accordion body and pump-scenario block ──
+   rgb(33,37,41) = Bootstrap/MDB bg-dark. Both contexts use the same value so the color is
+   defined exactly once. The lighter section backgrounds (56,56,56 / 50,50,50) give the
+   contrast that makes inputs and selects read as distinct fields. */
 .accordion-body .form-floating > .form-control,
-.accordion-body .form-floating > .form-select {
-    background-color: rgb(58, 58, 58) !important;
+.accordion-body .form-floating > .form-select,
+.amp-config-block .form-floating > .form-control,
+.amp-config-block .form-floating > .form-select, 
+.accordion-body .form-floating-checkbox,
+.form-floating > .form-select > option {
+    background-color: rgb(50, 50, 50) !important;
 }
 
-/* Checkbox container is the wrapper itself (not a child), so it gets only a background fill —
-   border-start provides the left accent, no border-radius (no box to round). */
-.accordion-body .form-floating-checkbox {
-    background-color: rgb(58, 58, 58) !important;
-}
+
 
 /* Vertical spacing between fields — mirrors the gap in the pump-editor's amp-config-block. */
 .accordion-body .form-floating,
@@ -286,14 +287,8 @@ input[type=number] {
     margin-bottom: 4px;
 }
 
-/* ── Same treatment for selects inside the pump-scenario amp-config block ─────────────── */
-.amp-config-block .form-floating > .form-select {
-    background-color: rgb(58, 58, 58) !important;
-}
-
 /* ── Option elements: platform-painted dropdown list needs explicit colours too ─────────── */
 .form-floating > .form-select > option {
-    background-color: rgb(58, 58, 58);
     color: rgb(235, 235, 235);
 }
 
