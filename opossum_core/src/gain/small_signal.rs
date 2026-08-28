@@ -301,7 +301,7 @@ mod test {
         millimeter, nanometer, reciprocal_centimeter, square_meter,
         types::validated_type_definitions::ValidatedCrossSection,
         utils::{
-            geom_transformation::Isometry, math_utils::to_f64, super_gaussian::SuperGaussianShape,
+            geom_transformation::Isometry, super_gaussian::SuperGaussianShape,
         },
     };
     use approx::assert_relative_eq;
