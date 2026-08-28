@@ -47,10 +47,7 @@ impl OpticGraph {
                 "node with uuid {node_id} already exists"
             )));
         }
-        self.g.add_node(OpticRef::new(
-            Arc::new(Mutex::new(node)),
-            self.global_confg(),
-        ));
+        self.g.add_node(OpticRef::new(Arc::new(Mutex::new(node))));
         Ok(node_id)
     }
 

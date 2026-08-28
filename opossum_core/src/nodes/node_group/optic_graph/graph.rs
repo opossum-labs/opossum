@@ -1,16 +1,8 @@
 use super::{super::port_map::PortMap, serialization::SerializableGraph};
-use crate::{
-    core_optics::{OpticRef, SceneryResources},
-    error::OpmResult,
-    light::LightFlow,
-    prelude::PortType,
-};
+use crate::{core_optics::OpticRef, error::OpmResult, light::LightFlow, prelude::PortType};
 use petgraph::graph::DiGraph;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::BTreeMap,
-    sync::{Arc, Mutex},
-};
+use std::collections::BTreeMap;
 use uom::si::f64::Length;
 use uuid::Uuid;
 
@@ -56,7 +48,6 @@ pub struct OpticGraph {
     pub(super) output_port_map: PortMap,
     is_inverted: bool,
     external_distances: BTreeMap<String, Length>,
-    global_confg: Option<Arc<Mutex<SceneryResources>>>,
 }
 
 impl OpticGraph {
@@ -74,11 +65,6 @@ impl OpticGraph {
     pub const fn set_is_inverted(&mut self, is_inverted: bool) {
         self.is_inverted = is_inverted;
     }
-    /// Returns the global config of this [`OpticGraph`].
-    #[must_use]
-    pub fn global_confg(&self) -> Option<Arc<Mutex<SceneryResources>>> {
-        self.global_confg.clone()
-    }
     /// Returns a reference to the input port map of this [`OpticGraph`].
     #[must_use]
     pub const fn port_map(&self, port_type: &PortType) -> &PortMap {
@@ -95,13 +81,6 @@ impl OpticGraph {
     #[must_use]
     pub fn external_distances(&self) -> &BTreeMap<String, Length> {
         &self.external_distances
-    }
-    /// Update reference to global config for each node in this [`OpticGraph`].
-    /// This function is needed after deserialization.
-    pub fn update_global_config(&mut self, global_conf: &Option<Arc<Mutex<SceneryResources>>>) {
-        for node in self.g.node_weights_mut() {
-            node.update_global_config(global_conf.clone());
-        }
     }
     /// Creates a deep copy of this optical graph where every contained [`OpticRef`]
     /// is cloned into a new Arc<Mutex<dyn Analyzable>> instance.

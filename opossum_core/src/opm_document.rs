@@ -7,7 +7,7 @@
 //! This module also handles reading and writing of `.opm` files.
 use crate::{
     analyzers::{Analyzer, AnalyzerRegistration, AnalyzerType},
-    core_optics::{NodeAttrExt, OpticNode, SceneryResources},
+    core_optics::{NodeAttrExt, OpticNode},
     error::{OpmResult, OpossumError},
     material::Material,
     nodes::NodeGroup,
@@ -26,7 +26,6 @@ use std::{
     fs::{self, File},
     io::Write,
     path::Path,
-    sync::{Arc, Mutex},
 };
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -77,8 +76,6 @@ pub struct OpmDocument {
     opm_file_version: String,
     #[serde(default)]
     scenery: NodeGroup,
-    #[serde(default, rename = "global")]
-    global_conf: Arc<Mutex<SceneryResources>>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     analyzers: IndexMap<Uuid, AnalyzerInfo>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
@@ -89,7 +86,6 @@ impl Default for OpmDocument {
         Self {
             opm_file_version: env!("OPM_FILE_VERSION").to_string(),
             scenery: NodeGroup::default(),
-            global_conf: Arc::new(Mutex::new(SceneryResources::default())),
             analyzers: IndexMap::default(),
             embedded_materials: IndexMap::default(),
         }
@@ -98,8 +94,7 @@ impl Default for OpmDocument {
 impl OpmDocument {
     /// Creates a new [`OpmDocument`].
     #[must_use]
-    pub fn new(mut scenery: NodeGroup) -> Self {
-        scenery.set_global_conf(Some(Arc::new(Mutex::new(SceneryResources::default()))));
+    pub fn new(scenery: NodeGroup) -> Self {
         Self {
             scenery,
             ..Default::default()
@@ -204,11 +199,6 @@ impl OpmDocument {
 
         // Resolve embedded material references into full in-memory Material structs
         document.resolve_embedded_materials()?;
-
-        document
-            .scenery
-            .graph_mut()
-            .update_global_config(&Some(document.global_conf.clone()));
         Ok(document)
     }
     /// Saves this [`OpmDocument`] to an `.opm` file at the specified path.
@@ -244,7 +234,6 @@ impl OpmDocument {
         Ok(Self {
             opm_file_version: self.opm_file_version.clone(),
             scenery: self.scenery.clone_deep()?,
-            global_conf: Arc::new(Mutex::new(self.global_conf.lock_opm()?.clone())),
             analyzers: self.analyzers.clone(),
             embedded_materials: self.embedded_materials.clone(),
         })
@@ -358,19 +347,6 @@ impl OpmDocument {
     pub const fn scenery_mut(&mut self) -> &mut NodeGroup {
         &mut self.scenery
     }
-    /// Returns a reference to the global config of this [`OpmDocument`].
-    #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
-    pub fn global_conf(&self) -> &Mutex<SceneryResources> {
-        &self.global_conf
-    }
-    /// Sets the global config of this [`OpmDocument`].
-    pub fn set_global_conf(&mut self, rsrc: SceneryResources) {
-        self.global_conf = Arc::new(Mutex::new(rsrc));
-        self.scenery
-            .graph_mut()
-            .update_global_config(&Some(self.global_conf.clone()));
-    }
     /// Perform an analysis run of this [`OpmDocument`].
     ///
     /// This function will perform the analysis of the defined analyzers in the order they were added.
@@ -459,10 +435,7 @@ mod test {
         refractive_index::RefrIndexConst,
         utils::test_helper::test_helper::check_logs,
     };
-    use std::{
-        path::PathBuf,
-        sync::{Arc, Mutex},
-    };
+    use std::path::PathBuf;
     use tempfile::NamedTempFile;
 
     #[test]
@@ -709,7 +682,6 @@ mod test {
         scenery.connect_nodes(i_14, "output_1", i_15, "input_1", millimeter!(50.0))?;
         scenery.connect_nodes(i_15, "output_1", i_16, "input_1", millimeter!(50.0))?;
 
-        scenery.set_global_conf(Some(Arc::new(Mutex::new(SceneryResources::default()))));
         let ray_builder = round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1)?;
         let mut config = RayTraceConfig::default();
         config.map_source(i_0, ray_builder.clone());
@@ -824,9 +796,18 @@ mod test {
         ),
     },
     global: (
-        ambient_refr_index: Const(
-            refractive_index: 1.0,
-        ),
+        ambient_material: {
+            "schema_version": 1,
+            "id": "6c30ef98-7380-4477-bc91-a5a1a407fec7",
+            "version": 0,
+            "name": "Custom Material",
+            "optical": (
+                refractive_index: Const(
+                    refractive_index: 1.0,
+                ),
+                absorption: r#None,
+            ),
+        },
     ),
 )"#;
 
@@ -883,9 +864,18 @@ mod test {
         ),
     },
     global: (
-        ambient_refr_index: Const(
-            refractive_index: 1.0,
-        ),
+        ambient_material: {
+            "schema_version": 1,
+            "id": "6c30ef98-7380-4477-bc91-a5a1a407fec7",
+            "version": 0,
+            "name": "Custom Material",
+            "optical": (
+                refractive_index: Const(
+                    refractive_index: 1.0,
+                ),
+                absorption: r#None,
+            ),
+        },
     ),
 )"#;
 
@@ -960,9 +950,18 @@ mod test {
         ),
     },
     global: (
-        ambient_refr_index: Const(
-            refractive_index: 1.0,
-        ),
+        ambient_material: {
+            "schema_version": 1,
+            "id": "6c30ef98-7380-4477-bc91-a5a1a407fec7",
+            "version": 0,
+            "name": "Custom Material",
+            "optical": (
+                refractive_index: Const(
+                    refractive_index: 1.0,
+                ),
+                absorption: r#None,
+            ),
+        },
     ),
 )"#;
 
@@ -1076,7 +1075,7 @@ mod test {
     }
     #[test]
     fn test_corrupt_node_property_falls_back_to_default_and_warns() -> OpmResult<()> {
-        // RON data with an illegal variant "ength(0.075)" instead of "Length(0.075)"
+        // RON data with an illegal variant "ength(0.01)" instead of "Length(0.01)"
         let ron_data = r#"#![enable(unwrap_variant_newtypes)]
 (
     opm_file_version: "0",
@@ -1103,9 +1102,18 @@ mod test {
         ),
     },
     global: (
-        ambient_refr_index: Const(
-            refractive_index: 1.0,
-        ),
+         ambient_material: {
+            "schema_version": 1,
+            "id": "6c30ef98-7380-4477-bc91-a5a1a407fec7",
+            "version": 0,
+            "name": "Vaccumm",
+            "optical": (
+                refractive_index: Const(
+                    refractive_index: 1.0,
+                ),
+                absorption: r#None,
+            ),
+        },
     ),
 )"#;
 

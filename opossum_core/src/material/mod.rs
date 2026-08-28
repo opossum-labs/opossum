@@ -14,6 +14,33 @@ use crate::{
     },
 };
 
+#[must_use]
+#[allow(clippy::missing_panics_doc)]
+/// Create a vacuum "material"
+///
+/// This returns a [`Material`] with a constant refractive  index of 1.0.
+pub fn material_vaccuum() -> Material {
+    let mut material: Material = Material::new_draft(
+        "vacuum",
+        None,
+        None,
+        RefractiveIndexType::Const(RefrIndexConst::new(1.0).unwrap()),
+    );
+    material.header.id = Uuid::nil();
+    material
+}
+
+#[must_use]
+#[allow(clippy::missing_panics_doc)]
+/// Create a [`Material`] representing air.
+///
+/// This returns a [`Material`] based on an air model [`RefrIndexAir::default()`].
+pub fn material_air() -> Material {
+    let mut material: Material = RefractiveIndexType::Air(RefrIndexAir::default()).into();
+    material.header.name = "air".to_string();
+    material
+}
+
 /// Primary optical properties required for optical simulation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OpticalProperties {
@@ -172,6 +199,12 @@ impl Material {
         self.optical
             .refractive_index
             .get_refractive_index(wavelength)
+    }
+
+    /// Returns a reference to the refractive index type of this [`Material`].
+    #[must_use]
+    pub const fn refractive_index_type(&self) -> &RefractiveIndexType {
+        &self.optical.refractive_index
     }
 }
 
