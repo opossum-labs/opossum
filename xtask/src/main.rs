@@ -159,21 +159,22 @@ fn task_bundle() -> Result<(), anyhow::Error> {
 
     println!("🦀 Start build process for OPOSSUM...");
 
-    // 1. Derive host triple
+    // 1. Derive host target triple
     let target_triple = get_host_target_triple()?;
     println!("🎯 Target Triple: {target_triple}");
 
-    // 2. Build binaries (Release)
-    {
-        println!("\n📦 Building binaries...");
-        cmd!(sh, "cargo build --release -p opossum_cli").run()?;
-        cmd!(sh, "cargo build --release -p opossum_backend").run()?;
-    }
+    // 2. Locate Cargo's build output directory (respects external CARGO_TARGET_DIR)
+    let cargo_target_dir =
+        env::var("CARGO_TARGET_DIR").map_or_else(|_| root.join("target"), PathBuf::from);
+    let release_dir = cargo_target_dir.join("release");
 
-    // 3. Create staging and examples area and rename/copy binaries
-    let staging_path = root.join("opossum_gui").join("staging");
-    let examples_target_dir = root.join("opossum_gui").join("opm_examples");
+    // 3. Define workspace-local target directory for staging and resources
+    // This ensures relative paths in Dioxus.toml ('../target/...') remain valid at all times.
+    let local_target_dir = root.join("target");
+    let staging_path = local_target_dir.join("staging");
+    let examples_target_dir = local_target_dir.join("opm_examples");
 
+    // Guards automatically remove directories when exiting task_bundle (or on error)
     let _staging_guard = StagingGuard {
         path: staging_path.clone(),
     };
@@ -181,21 +182,26 @@ fn task_bundle() -> Result<(), anyhow::Error> {
         path: examples_target_dir.clone(),
     };
 
+    // 4. Build binaries (Release)
     {
-        println!("\n🚚 Staging binaries...");
+        println!("\n📦 Building binaries...");
+        cmd!(sh, "cargo build --release -p opossum_cli").run()?;
+        cmd!(sh, "cargo build --release -p opossum_backend").run()?;
+    }
+
+    // 5. Stage binaries from Cargo's output dir into the local target staging dir
+    {
+        println!("\n🚚 Staging binaries into target directory...");
         if !staging_path.exists() {
             fs::create_dir_all(&staging_path)?;
         }
-        let target_dir =
-            env::var("CARGO_TARGET_DIR").map_or_else(|_| root.join("target"), PathBuf::from);
-        let release_dir = target_dir.join("release");
 
         let exe_ext = env::consts::EXE_SUFFIX; // ".exe" or ""
 
         for bin_name in ["opossum_backend", "opossum_cli"] {
             let src = release_dir.join(format!("{bin_name}{exe_ext}"));
 
-            // Constructs the exact naming format expected by Dioxus
+            // Format filename as expected by Dioxus bundler
             let dest_filename = if exe_ext.is_empty() {
                 format!("{bin_name}-{target_triple}")
             } else {
@@ -209,15 +215,18 @@ fn task_bundle() -> Result<(), anyhow::Error> {
                 fs::copy(&src, &dest)?;
                 println!("   -> Staged for Dioxus: {dest_filename}");
             } else {
-                return Err(anyhow::anyhow!("Binary not found: {}", src.display()));
+                return Err(anyhow::anyhow!(
+                    "Binary not found at expected build location: {}",
+                    src.display()
+                ));
             }
         }
     }
 
-    // 4. Generate Examples (delegated to reusable helper)
+    // 6. Generate Examples into local workspace target directory
     generate_examples(&sh, &examples_target_dir)?;
 
-    // 5. Bundling
+    // 7. Execute Dioxus Bundle
     {
         println!("\n🎨 Running Dioxus Bundle...");
         let _dir = sh.push_dir("opossum_gui");
@@ -233,7 +242,7 @@ fn task_bundle() -> Result<(), anyhow::Error> {
         cmd!(sh, "dx bundle --release {bundle_args...}").run()?;
     }
 
-    // 6. Windows-specific: Compile the final EXE Installer using Inno Setup
+    // 8. Windows-specific: Compile final EXE Installer using Inno Setup
     #[cfg(target_os = "windows")]
     {
         println!("\n🛠️ Running Inno Setup Compiler (ISCC) for EXE Installer...");

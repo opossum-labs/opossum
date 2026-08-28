@@ -1,6 +1,6 @@
 [application]
 name = "opossum_gui"
-icon = "assets/favicon.ico" # Steuert Fenster & EXE-Ressource direkt
+icon = "assets/favicon.ico" # Controls window & EXE resource directly
 
 [web.app]
 title = "OPOSSUM"
@@ -18,24 +18,28 @@ icon = [
     "assets/icons/256x256.png",
     "assets/icons/512x512.png"
 ]
-resources = ["opm_examples/workshop_00_kepler_paraxial.opm",
-            "opm_examples/workshop_01_kepler_real_lenses.opm",
-            "opm_examples/workshop_02_kepler_chromatism.opm",
-            "opm_examples/workshop_03_kepler_wavefront.opm",
-            "opm_examples/workshop_04_kepler_imaging_point.opm",
-            "opm_examples/workshop_06_geometry_mirrors.opm",
-            "opm_examples/workshop_07_geometry_shifted_lens.opm",
-            "opm_examples/workshop_08_reference_node.opm",
-            "opm_examples/workshop_09_phelix.opm",
-            "opm_examples/workshop_10_multi_path.opm",
-            "opm_examples/workshop_11_ghostfocus.opm"]
 
-# Workaround for Dioxus bundling bug
+# Example files generated dynamically into the workspace target directory
+resources = [
+    "../target/opm_examples/workshop_00_kepler_paraxial.opm",
+    "../target/opm_examples/workshop_01_kepler_real_lenses.opm",
+    "../target/opm_examples/workshop_02_kepler_chromatism.opm",
+    "../target/opm_examples/workshop_03_kepler_wavefront.opm",
+    "../target/opm_examples/workshop_04_kepler_imaging_point.opm",
+    "../target/opm_examples/workshop_06_geometry_mirrors.opm",
+    "../target/opm_examples/workshop_07_geometry_shifted_lens.opm",
+    "../target/opm_examples/workshop_08_reference_node.opm",
+    "../target/opm_examples/workshop_09_phelix.opm",
+    "../target/opm_examples/workshop_10_multi_path.opm",
+    "../target/opm_examples/workshop_11_ghostfocus.opm"
+]
+
+# Sidecar binaries staged inside the workspace target directory (Workaround for Dioxus bundling)
 external_bin = [
-    "staging/opossum_backend",
-    "staging/opossum_cli",
-    "staging/opossum_backend.exe",
-    "staging/opossum_cli.exe"
+    "../target/staging/opossum_backend",
+    "../target/staging/opossum_cli",
+    "../target/staging/opossum_backend.exe",
+    "../target/staging/opossum_cli.exe"
 ]
 
 [bundle.windows]
