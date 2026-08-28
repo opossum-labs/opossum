@@ -31,13 +31,12 @@ use crate::{
     error::{OpmResult, OpossumError},
     generic_validators::{AllFinite, AllNotZero, AllPositive, ValidateTrait},
     geometry::body::Body,
-    light::Spectrum,
+    light::{Ray, Spectrum},
     square_centimeter, validated, validated_type,
 };
-use nalgebra::Point3;
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
-use uom::si::f64::{Area, Length};
+use uom::si::f64::Area;
 use utoipa::ToSchema;
 
 /// An emission cross section that is guaranteed to be finite and strictly positive.
@@ -269,31 +268,41 @@ impl Extraction for SmallSignalGain {
             .deposit(&mut field, self.emission_cross_section())?;
         Ok(Some(field))
     }
-    fn n_steps(&self) -> usize {
-        // Delegate to the model's own getter; the loop over substeps lives in `propagate_inside_medium`.
-        self.n_steps()
-    }
-    fn gain_exponent_at(
+    fn path_exponent(
         &self,
-        local: &Point3<Length>,
-        step_width: Length,
+        body: &dyn Body,
+        ray: &Ray,
         inversion: &mut Option<InversionField>,
     ) -> f64 {
-        // Outside the grid, or inside it but not in the medium: there is nothing there to
-        // amplify with, so the substep contributes nothing rather than failing.
         let Some(field) = inversion.as_ref() else {
             return 0.0;
         };
-        let Some(cell) = field.cell_at(local) else {
-            return 0.0;
-        };
-        if !field.is_inside(cell) {
+        // Normalize the ray direction: the DDA requires a unit vector so that parametric
+        // distances equal arc lengths.
+        let direction = ray.direction();
+        let norm = direction.norm();
+        if !norm.is_normal() {
             return 0.0;
         }
-        let Some(inv) = field.population(cell) else {
-            return 0.0;
-        };
-        (four_level_gain_from_inversion(inv, self.emission_cross_section()) * step_width).value
+        let dir = direction / norm;
+
+        // Transform origin and direction into the field's local frame (the body's own frame).
+        let iso = body.isometry();
+        let local_origin = iso.inverse_transform_point(&ray.position());
+        let local_dir = iso.inverse_transform_vector_f64(&dir);
+
+        let mut exponent = 0.0_f64;
+        for (cell, ds) in field.traverse(&local_origin, &local_dir) {
+            if !field.is_inside(cell) {
+                continue;
+            }
+            let Some(inv) = field.population(cell) else {
+                continue;
+            };
+            exponent +=
+                (four_level_gain_from_inversion(inv, self.emission_cross_section()) * ds).value;
+        }
+        exponent
     }
     fn amplify_spectrum(
         &self,
@@ -376,12 +385,12 @@ mod test {
             PumpSource::Const(ConstInversion::new(g_0)?),
         ))
     }
-    /// Run the z-march loop for `ray` through `body` using an already-built inversion.
+    /// Compute the gain factor a ray picks up traversing the body via the production path_exponent.
     ///
-    /// Mirrors the loop in `propagate_inside_medium` so tests exercise the same integration path as
-    /// production code, while keeping the inversion mutable so `the_inversion_is_frozen` can
-    /// verify that SmallSignalGain does not write back.
-    fn z_march_factor(
+    /// This calls production code rather than reimplementing the integration, so the tests actually
+    /// exercise what runs in the analysis. Keeping `inversion` mutable lets
+    /// `the_inversion_is_frozen` verify that [`SmallSignalGain`] does not write back into it.
+    fn traverse_factor(
         body: &dyn Body,
         model: &SmallSignalGain,
         inversion: &mut Option<InversionField>,
@@ -393,26 +402,7 @@ mod test {
         if chord.value <= 0.0 {
             return Ok(1.0);
         }
-        let direction = ray.direction();
-        let norm = direction.norm();
-        if !norm.is_normal() {
-            return Ok(1.0);
-        }
-        let direction = direction / norm;
-        let n = Extraction::n_steps(model);
-        let step_width = chord / to_f64(n);
-        let start = ray.position();
-        let frame = body.isometry();
-        let mut exponent = 0.0_f64;
-        for step in 0..n {
-            let travelled = step_width * (to_f64(step) + 0.5);
-            let local = frame.inverse_transform_point(&Point3::new(
-                start.x + direction.x * travelled,
-                start.y + direction.y * travelled,
-                start.z + direction.z * travelled,
-            ));
-            exponent += Extraction::gain_exponent_at(model, &local, step_width, inversion);
-        }
+        let exponent = Extraction::path_exponent(model, body, ray, inversion);
         let factor = exponent.exp();
         if factor.is_finite() {
             Ok(factor)
@@ -430,7 +420,7 @@ mod test {
         ray: &Ray,
     ) -> OpmResult<f64> {
         let mut inversion = model.build_inversion(body, config)?;
-        z_march_factor(body, model, &mut inversion, ray)
+        traverse_factor(body, model, &mut inversion, ray)
     }
     /// The factor a ray picks up crossing the standard [`test_disk`].
     fn factor_through_disk(
@@ -614,10 +604,11 @@ mod test {
         Ok(())
     }
     #[test]
-    fn the_march_converges_when_it_is_refined() -> OpmResult<()> {
-        // A flat profile is integrated exactly by a single midpoint step, so the convergence has to
-        // be shown on an inversion that actually varies along the ray. Beer-Lambert has a closed
-        // form: the integral of g0*exp(-alpha*s) from 0 to L is g0/alpha * (1 - exp(-alpha*L)).
+    fn the_integral_converges_when_the_grid_is_refined() -> OpmResult<()> {
+        // With exact voxel traversal the only remaining error is the discretization of the
+        // inversion profile onto the grid cells. Beer-Lambert has a closed form:
+        // the integral of g0·exp(-α·s) from 0 to L is g0/α · (1 − exp(-α·L)).
+        // Finer cells_z → smaller staircase approximation error → factor converges to exact.
         let g_0 = reciprocal_centimeter!(0.5);
         let alpha = reciprocal_centimeter!(2.0);
         let length = millimeter!(THICKNESS);
@@ -634,22 +625,20 @@ mod test {
         );
         let exact = f64::exp(((g_0 / alpha) * (1.0 - f64::exp(-(alpha * length).value))).value);
         let ray = ray_at(0.0, 0.0)?;
-        // The grid is kept far finer than the march so that what is being refined here is the
-        // integration, not the sampling of the profile.
-        let error = |steps: usize| -> OpmResult<f64> {
-            let model = SmallSignalGain::new(square_meter!(2.0e-24), steps, (4, 4, 512))?;
+        let error = |cells_z: usize| -> OpmResult<f64> {
+            let model = SmallSignalGain::new(square_meter!(2.0e-24), 1, (4, 4, cells_z))?;
             Ok((factor_through_disk(&model, &config, &ray)? - exact).abs() / exact)
         };
         let (coarse, medium, fine) = (error(2)?, error(8)?, error(64)?);
         assert!(
             medium < coarse,
-            "refining 2 -> 8 did not help: {coarse} -> {medium}"
+            "refining cells_z 2 -> 8 did not help: {coarse} -> {medium}"
         );
         assert!(
             fine < medium,
-            "refining 8 -> 64 did not help: {medium} -> {fine}"
+            "refining cells_z 8 -> 64 did not help: {medium} -> {fine}"
         );
-        assert!(fine < 1e-3, "the fine march is still off by {fine}");
+        assert!(fine < 1e-3, "the fine grid is still off by {fine}");
         Ok(())
     }
     #[test]
@@ -698,8 +687,8 @@ mod test {
             model.build_inversion(&body, &pumped_at(reciprocal_centimeter!(0.5))?)?;
         let untouched = inversion.clone();
         let ray = ray_at(0.0, 0.0)?;
-        let first = z_march_factor(&body, &model, &mut inversion, &ray)?;
-        let second = z_march_factor(&body, &model, &mut inversion, &ray)?;
+        let first = traverse_factor(&body, &model, &mut inversion, &ray)?;
+        let second = traverse_factor(&body, &model, &mut inversion, &ray)?;
         // SmallSignalGain must not write back into the field — both passes see identical inversion.
         assert_eq!(inversion, untouched);
         assert_relative_eq!(first, second);
@@ -785,13 +774,10 @@ mod test {
     #[test]
     fn an_oblique_ray_weights_each_cell_by_its_path_length() -> OpmResult<()> {
         // A ray that enters cell A (x < 0) and exits through cell B (x > 0), crossing x = 0
-        // exactly at half the disk thickness, spends equal chord-fractions in each cell.
+        // exactly at half the chord, spends equal path lengths in each cell.
         //
-        // With an even n_steps the midpoints fall alternately in A and B, so the accumulated
-        // exponent is `(g_a + g_b)/2 · chord` — exact with no step-boundary artefact.
-        //
-        // Expected gain factor: exp((g_a + g_b)/2 · chord).  The chord of a ray at 45° through a
-        // 10 mm disk is 10·sqrt(2) mm.
+        // With exact voxel traversal each cell receives its geometric path length, so the
+        // accumulated exponent is (g_a + g_b)/2 · chord — exact at any grid resolution.
         //
         // Also checked: the factor lies strictly between exp(g_a·chord) and exp(g_b·chord) — a
         // bundle-wide or endpoint-only approximation could not produce a value in between.
@@ -804,28 +790,23 @@ mod test {
             Ok(if cell.0 == 0 { g_a } else { g_b })
         })?;
 
-        // A ray from (-5, 0, 0) mm toward (5, 0, L) crosses x = 0 at z = L/2.  With an even
-        // n_steps = 8 the midpoints land at L/16, 3L/16, 5L/16, 7L/16 (cell A) and 9L/16,
-        // 11L/16, 13L/16, 15L/16 (cell B) — exactly 4 in each half.
+        // A ray from (-5, 0, 0) mm toward (5, 0, L) crosses x = 0 exactly at half the chord.
         let ray = Ray::new(
             millimeter!(-5.0, 0.0, 0.0),
             Vector3::new(10.0, 0.0, THICKNESS),
             nanometer!(1054.0),
             joule!(1.0),
         )?;
-        let model = SmallSignalGain::new(sigma_e, 8, (2, 1, 1))?;
-        let factor = z_march_factor(&body, &model, &mut Some(inversion), &ray)?;
+        let model = SmallSignalGain::new(sigma_e, 1, (2, 1, 1))?;
+        let factor = traverse_factor(&body, &model, &mut Some(inversion), &ray)?;
 
-        // chord through a disk at this angle via path_length_inside
         let chord = body
             .path_length_inside(&ray)?
             .expect("the ray must cross the disk");
 
-        // Each half of the chord carries its own coefficient.
         let expected = f64::exp(((g_a + g_b) * 0.5 * chord).value);
         assert_relative_eq!(factor, expected, max_relative = 1e-12);
 
-        // Bracketing: the mixed result must sit strictly between the two pure homogeneous ones.
         let only_a = f64::exp((g_a * chord).value);
         let only_b = f64::exp((g_b * chord).value);
         assert!(
@@ -843,9 +824,9 @@ mod test {
         //
         // Expected gain: exp(g_a · chord/3 + g_b · 2·chord/3).
         //
-        // Crossing at L/3 is NOT a step boundary for n = 4, 16, or 64 (since 4/3, 16/3, 64/3
-        // are all non-integers), so the midpoint rule has a genuine O(1/n) error — unlike L/4
-        // which divides evenly into these step counts and gives an exact 0 error.
+        // The crossing at L/3 was NOT a step boundary for any integer n_steps, so the old
+        // midpoint rule had a genuine O(1/n) error. Exact voxel traversal eliminates that error
+        // entirely — this test now asserts the analytic value at 1e-12 precision.
         //
         // Swapping g_a ↔ g_b must change the factor to exp(g_b·chord/3 + g_a·2·chord/3),
         // proving the result depends on how long the ray spends in each cell.
@@ -865,26 +846,23 @@ mod test {
             .path_length_inside(&ray)?
             .expect("the ray must cross the disk");
 
-        // -- forward assignment: g_a in cell (0,*,*), g_b in cell (1,*,*) --
+        // -- forward: g_a in cell (0,*,*), g_b in cell (1,*,*) --
         let inv_fwd = field_with(&body, dims, sigma_e, |cell| {
             Ok(if cell.0 == 0 { g_a } else { g_b })
         })?;
-        let model = SmallSignalGain::new(sigma_e, 64, dims)?;
-        let factor_fwd = z_march_factor(&body, &model, &mut Some(inv_fwd), &ray)?;
-        // exact: exp(g_a · chord/3 + g_b · 2·chord/3)
+        let model = SmallSignalGain::new(sigma_e, 1, dims)?;
+        let factor_fwd = traverse_factor(&body, &model, &mut Some(inv_fwd), &ray)?;
         let expected_fwd = f64::exp((g_a * chord / 3.0 + g_b * chord * 2.0 / 3.0).value);
-        assert_relative_eq!(factor_fwd, expected_fwd, max_relative = 1e-3);
+        assert_relative_eq!(factor_fwd, expected_fwd, max_relative = 1e-12);
 
-        // -- swapped assignment: g_b in cell (0,*,*), g_a in cell (1,*,*) --
+        // -- swapped: g_b in cell (0,*,*), g_a in cell (1,*,*) --
         let inv_swp = field_with(&body, dims, sigma_e, |cell| {
             Ok(if cell.0 == 0 { g_b } else { g_a })
         })?;
-        let factor_swp = z_march_factor(&body, &model, &mut Some(inv_swp), &ray)?;
+        let factor_swp = traverse_factor(&body, &model, &mut Some(inv_swp), &ray)?;
         let expected_swp = f64::exp((g_b * chord / 3.0 + g_a * chord * 2.0 / 3.0).value);
-        assert_relative_eq!(factor_swp, expected_swp, max_relative = 1e-3);
+        assert_relative_eq!(factor_swp, expected_swp, max_relative = 1e-12);
 
-        // The two factors must differ (if the code used only cell count or entry-cell value,
-        // they would be the same).
         assert!(
             (factor_fwd - factor_swp).abs() > 1e-9,
             "swapping the coefficients must change the factor: {factor_fwd} vs {factor_swp}"
@@ -893,15 +871,10 @@ mod test {
     }
 
     #[test]
-    fn the_march_across_a_cell_boundary_converges() -> OpmResult<()> {
-        // The asymmetric two-cell setup (1/3 of the chord in A, 2/3 in B) from
-        // `which_cell_holds_the_longer_path_decides`, but now we refine n_steps and verify that
-        // the midpoint-quadrature error against the exact two-segment integral shrinks
-        // monotonically.  With a piecewise-constant inversion the only error is the one step that
-        // straddles the x = 0 boundary (at z = L/3 = 1/3 of the chord), so the error is O(1/n).
-        //
-        // The crossing at L/3 is never a step boundary for n = 4, 16, 64 (since 4/3, 16/3, 64/3
-        // are all non-integers), guaranteeing a non-zero error at every resolution for comparison.
+    fn the_x_boundary_crossing_is_exact_not_approximate() -> OpmResult<()> {
+        // The asymmetric two-cell setup (1/3 of the chord in A, 2/3 in B): exact voxel traversal
+        // gives the analytic result at 1e-12 with no refinement at all, in contrast to the old
+        // midpoint march which had O(1/n) error for a crossing not aligned with step boundaries.
         let body = disk(millimeter!(THICKNESS), millimeter!(20.0))?;
         let sigma_e = square_meter!(2.0e-24);
         let g_a = reciprocal_centimeter!(0.05_f64);
@@ -916,30 +889,14 @@ mod test {
         let chord = body
             .path_length_inside(&ray)?
             .expect("the ray must cross the disk");
-        // exact: exp(g_a · chord/3 + g_b · 2·chord/3)
         let exact = f64::exp((g_a * chord / 3.0 + g_b * chord * 2.0 / 3.0).value);
 
-        let rel_error = |n_steps: usize| -> OpmResult<f64> {
-            let model = SmallSignalGain::new(sigma_e, n_steps, dims)?;
-            let inv = field_with(&body, dims, sigma_e, |cell| {
-                Ok(if cell.0 == 0 { g_a } else { g_b })
-            })?;
-            let factor = z_march_factor(&body, &model, &mut Some(inv), &ray)?;
-            Ok((factor - exact).abs() / exact)
-        };
-        let (coarse, medium, fine) = (rel_error(4)?, rel_error(16)?, rel_error(64)?);
-        assert!(
-            medium < coarse,
-            "refining 4 → 16 steps did not help: {coarse} → {medium}"
-        );
-        assert!(
-            fine < medium,
-            "refining 16 → 64 steps did not help: {medium} → {fine}"
-        );
-        assert!(
-            fine < 1e-3,
-            "the fine march (64 steps) is still off by {fine} relative"
-        );
+        let model = SmallSignalGain::new(sigma_e, 1, dims)?;
+        let inv = field_with(&body, dims, sigma_e, |cell| {
+            Ok(if cell.0 == 0 { g_a } else { g_b })
+        })?;
+        let factor = traverse_factor(&body, &model, &mut Some(inv), &ray)?;
+        assert_relative_eq!(factor, exact, max_relative = 1e-12);
         Ok(())
     }
 
@@ -951,15 +908,13 @@ mod test {
         //
         //   ∫₀ᴸ g(z) · dz/cosθ  =  g0/(α·cosθ) · (1 − exp(−α·L))
         //
-        // The on-axis case (θ = 0, cosθ = 1) is already tested by
-        // `the_march_converges_when_it_is_refined`; here we add an oblique ray to verify that
-        // the 1/cosθ factor is naturally produced by the longer physical path, not hard-coded.
+        // With exact voxel traversal, the path-length weighting is exact; the remaining error
+        // comes only from discretizing the profile onto cells_z slices. Finer cells_z → converges
+        // toward the closed form. The 1/cosθ factor is naturally produced by the longer physical
+        // path, not hard-coded.
         //
-        // Ray: 45° in the y-z plane from (0, -5, 0) mm toward (0, 5, L).  The disk is made wide
-        // so the ray does not escape through the barrel.  cosθ = L/chord = 1/sqrt(2).
-        //
-        // Grid: flat transversal (4, 4) so sampling there is exact; 512 slices in z so the
-        // profile is resolved (same ratio as the on-axis convergence test).
+        // Ray: 45° in the y-z plane from (0, -5, 0) mm toward (0, 5, L). cosθ = 1/sqrt(2).
+        // Disk is made wide so the ray does not escape through the barrel.
         let g_0 = reciprocal_centimeter!(0.5_f64);
         let alpha = reciprocal_centimeter!(2.0_f64);
         let length = millimeter!(THICKNESS);
@@ -975,13 +930,9 @@ mod test {
             )?),
         );
         let body = disk(length, millimeter!(20.0))?;
-
-        // theta = 45°, cos(theta) = 1/sqrt(2)
         let cos_theta = 1.0_f64 / f64::sqrt(2.0);
-        // Closed-form: exp( g0 / (alpha * cos_theta) * (1 - exp(-alpha*L)) )
         let exact =
             f64::exp(((g_0 / alpha / cos_theta) * (1.0 - f64::exp(-(alpha * length).value))).value);
-
         let oblique = Ray::new(
             millimeter!(0.0, -5.0, 0.0),
             Vector3::new(0.0, 1.0, 1.0),
@@ -989,23 +940,22 @@ mod test {
             joule!(1.0),
         )?;
 
-        // The march is refined: steps 8 → 64 must both converge toward `exact`.
+        // Vary cells_z; transversal resolution is flat so 4×4 is exact there.
         let sigma_e = square_meter!(2.0e-24);
-        let error = |n_steps: usize| -> OpmResult<f64> {
-            let model = SmallSignalGain::new(sigma_e, n_steps, (4, 4, 512))?;
+        let error = |cells_z: usize| -> OpmResult<f64> {
+            let model = SmallSignalGain::new(sigma_e, 1, (4, 4, cells_z))?;
             let factor = factor_through(&body, &model, &config, &oblique)?;
             Ok((factor - exact).abs() / exact)
         };
         let (coarse, fine) = (error(8)?, error(64)?);
         assert!(
             fine < coarse,
-            "refining 8 → 64 steps did not help for the oblique Beer-Lambert case: \
-             {coarse} → {fine}"
+            "refining cells_z 8 → 64 did not help for oblique Beer-Lambert: {coarse} → {fine}"
         );
         assert!(
             fine < 1e-3,
-            "the oblique Beer-Lambert march (64 steps) is still off by {fine} relative vs \
-             exp(g0/(alpha*cosθ)*(1-exp(-alpha*L))) = {exact}"
+            "oblique Beer-Lambert (cells_z=64) still off by {fine} vs \
+             exp(g0/(α·cosθ)·(1−exp(−α·L))) = {exact}"
         );
         Ok(())
     }

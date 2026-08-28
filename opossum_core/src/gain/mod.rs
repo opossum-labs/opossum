@@ -29,16 +29,14 @@ use crate::{
     error::OpmResult,
     generic_validators::{AllFinite, AllPositive, ValidateTrait},
     geometry::body::Body,
-    light::Spectrum,
+    light::{Ray, Spectrum},
     utils::default_from_name::DefaultFromName,
     validated, validated_type,
 };
-use nalgebra::Point3;
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum::EnumIter;
-use uom::si::f64::Length;
 use utoipa::ToSchema;
 
 /// Deserialization shim for [`ConstGain`].
@@ -141,18 +139,14 @@ impl Extraction for ConstGain {
         // Reading no inversion, this model must not pay for a grid either.
         Ok(None)
     }
-    fn n_steps(&self) -> usize {
-        // Path-independent by definition: one evaluation covers the full chord.
-        1
-    }
-    fn gain_exponent_at(
+    fn path_exponent(
         &self,
-        _local: &Point3<Length>,
-        _step_width: Length,
+        _body: &dyn Body,
+        _ray: &Ray,
         _inversion: &mut Option<InversionField>,
     ) -> f64 {
-        // The gain is a fixed factor regardless of position or path length, so the exponent for
-        // the single step is ln(gain), giving factor = exp(ln(gain)) = gain.
+        // The gain is a fixed factor regardless of path length or position, so the exponent for
+        // the whole chord is ln(gain), giving factor = exp(ln(gain)) = gain.
         self.gain().ln()
     }
     fn amplify_spectrum(

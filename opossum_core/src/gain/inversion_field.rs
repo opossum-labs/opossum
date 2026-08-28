@@ -349,7 +349,11 @@ impl InversionField {
             extent(&y_range).value / to_f64(ny),
             extent(&z_range).value / to_f64(nz),
         ];
-        let lo = [x_range.start.value, y_range.start.value, z_range.start.value];
+        let lo = [
+            x_range.start.value,
+            y_range.start.value,
+            z_range.start.value,
+        ];
         let hi = [x_range.end.value, y_range.end.value, z_range.end.value];
         let org = [origin.x.value, origin.y.value, origin.z.value];
         let dir = [direction.x, direction.y, direction.z];
@@ -791,19 +795,25 @@ mod test {
         let field = InversionField::from_body(&body, (4, 4, 4))?;
 
         // Ray starts past the exit face and continues onward.
-        assert!(field
-            .traverse(&millimeter!(0.0, 0.0, 15.0), &Vector3::new(0.0, 0.0, 1.0))
-            .is_empty());
+        assert!(
+            field
+                .traverse(&millimeter!(0.0, 0.0, 15.0), &Vector3::new(0.0, 0.0, 1.0))
+                .is_empty()
+        );
 
         // Ray passes entirely beside the disk (x too large).
-        assert!(field
-            .traverse(&millimeter!(10.0, 0.0, 5.0), &Vector3::new(0.0, 0.0, 1.0))
-            .is_empty());
+        assert!(
+            field
+                .traverse(&millimeter!(10.0, 0.0, 5.0), &Vector3::new(0.0, 0.0, 1.0))
+                .is_empty()
+        );
 
         // Ray heading in the wrong direction (away from disk).
-        assert!(field
-            .traverse(&millimeter!(0.0, 0.0, -5.0), &Vector3::new(0.0, 0.0, -1.0))
-            .is_empty());
+        assert!(
+            field
+                .traverse(&millimeter!(0.0, 0.0, -5.0), &Vector3::new(0.0, 0.0, -1.0))
+                .is_empty()
+        );
         Ok(())
     }
 
@@ -865,8 +875,16 @@ mod test {
         assert_eq!(segs.len(), 2);
         let ds_a_expected = 10.0 / 3.0; // mm (distance from x_start to x=0)
         let ds_b_expected = 5.0; // mm (x=0 to x=5, full width of cell 1)
-        assert_abs_diff_eq!(segs[0].1.value, millimeter!(ds_a_expected).value, epsilon = 1e-12);
-        assert_abs_diff_eq!(segs[1].1.value, millimeter!(ds_b_expected).value, epsilon = 1e-12);
+        assert_abs_diff_eq!(
+            segs[0].1.value,
+            millimeter!(ds_a_expected).value,
+            epsilon = 1e-12
+        );
+        assert_abs_diff_eq!(
+            segs[1].1.value,
+            millimeter!(ds_b_expected).value,
+            epsilon = 1e-12
+        );
         Ok(())
     }
 }

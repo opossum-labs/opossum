@@ -14,10 +14,11 @@
 
 use super::scenario::PumpConfig;
 use crate::{
-    error::OpmResult, gain::inversion_field::InversionField, geometry::body::Body, light::Spectrum,
+    error::OpmResult,
+    gain::inversion_field::InversionField,
+    geometry::body::Body,
+    light::{Ray, Spectrum},
 };
-use nalgebra::Point3;
-use uom::si::f64::Length;
 
 /// How one gain model draws energy out of an active medium.
 ///
@@ -65,44 +66,38 @@ pub trait Extraction {
         body: &dyn Body,
         config: &PumpConfig,
     ) -> OpmResult<Option<InversionField>>;
-    /// Number of z-march steps this model uses per chord through the medium.
-    ///
-    /// [`volumetric::Volumetric::propagate_inside_medium`](crate::core_optics::volumetric::Volumetric) divides
-    /// the chord a ray travels inside the medium into this many equal segments and calls
-    /// [`gain_exponent_at`](Self::gain_exponent_at) once per segment. A model with no geometric
-    /// sensitivity — a constant factor — returns 1, so one evaluation covers the full chord.
-    ///
-    /// # Returns
-    ///
-    /// Number of integration steps; must be non-zero.
-    fn n_steps(&self) -> usize;
-
-    /// Gain exponent contributed by one z-march segment through the medium.
+    /// Gain exponent accumulated along the whole chord a ray travels through the medium.
     ///
     /// [`volumetric::Volumetric::propagate_inside_medium`](crate::core_optics::volumetric::Volumetric)
-    /// accumulates the return values of all segments and exponentiates the sum to obtain the gain
-    /// factor for the whole chord: `factor = exp(Σ gain_exponent_at(…))`.
+    /// calls this once per ray that passes through the medium and exponentiates the result to get
+    /// the gain factor: `factor = exp(path_exponent(…))`.
+    ///
+    /// Grid-reading models implement this by walking the ray through the [`InversionField`] cell by
+    /// cell (Amanatides–Woo exact traversal) and summing `g_cell · Δs_cell` per cell, where
+    /// `Δs_cell` is the exact arc length the ray spends inside that cell. A path-independent model
+    /// — a constant factor — returns `ln(gain)` and ignores the geometry.
     ///
     /// `inversion` is `&mut Option<InversionField>` so that saturating models can deplete the field
-    /// between substeps; the [`Option`] layer stays because models such as [`ConstGain`](super::ConstGain)
-    /// never build an inversion.
+    /// as the ray passes through; the [`Option`] layer stays because models such as
+    /// [`ConstGain`](super::ConstGain) never build a field.
     ///
     /// # Arguments
     ///
-    /// * `local` - midpoint of the segment in the body's local coordinate frame.
-    /// * `step_width` - arc length of the segment.
-    /// * `inversion` - the inversion field the node was prepared with, mutable so that saturating
-    ///   models can write depletion back. `None` if this model built no field.
+    /// * `body` - the volume the ray travels through; its isometry converts global ray coordinates
+    ///   into the inversion field's own local frame.
+    /// * `ray` - the ray whose chord is being integrated; must be a valid ray (the caller has
+    ///   already confirmed it is valid and that its chord through the body is positive).
+    /// * `inversion` - the inversion field prepared by [`Extraction::build_inversion`], mutable so
+    ///   that saturating models can write depletion back.
     ///
     /// # Returns
     ///
-    /// The dimensionless exponent contribution `g · Δz` for this segment.
-    /// Returns `0.0` for a segment that contributes nothing — outside the grid, outside the medium,
-    /// or no field available.
-    fn gain_exponent_at(
+    /// The dimensionless exponent `∫ g(s) ds` for the full chord. Returns `0.0` for a ray that
+    /// contributes nothing — a degenerate direction, no field, or no populated cells on the path.
+    fn path_exponent(
         &self,
-        local: &Point3<Length>,
-        step_width: Length,
+        body: &dyn Body,
+        ray: &Ray,
         inversion: &mut Option<InversionField>,
     ) -> f64;
     /// Amplify the spectral energy passing through the medium.

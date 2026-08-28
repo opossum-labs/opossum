@@ -27,9 +27,8 @@ use crate::{
     material::{MATERIAL, Material},
     properties::{Proptype, proptype::AssetRef},
     types::validated_type_definitions::ValidatedCrossSection,
-    utils::{geom_transformation::Isometry, math_utils::to_f64},
+    utils::geom_transformation::Isometry,
 };
-use nalgebra::Point3;
 
 /// An [`OpticNode`] that encloses a volume of material between two of its surfaces.
 ///
@@ -399,38 +398,35 @@ fn cross_section<T: ?Sized + Volumetric>(node: &T) -> OpmResult<ValidatedCrossSe
     })
 }
 
-/// Apply a gain extraction model along the chord each ray travels through the medium.
+/// Apply a gain extraction model to each ray that travels through the medium.
 ///
-/// This is the mechanism half of [`Volumetric::propagate_inside_medium`]: it performs the
-/// per-ray z-march without asking *whether* to run — that decision belongs to the caller, which
-/// has already confirmed the operating point is active and a medium is available.
+/// This is the mechanism half of [`Volumetric::propagate_inside_medium`]: it applies the gain
+/// without asking *whether* to run — that decision belongs to the caller, which has already
+/// confirmed the operating point is active and a medium is available.
 ///
-/// For each valid ray, the chord through the medium body is computed, divided into
-/// [`Extraction::n_steps`] equal segments, and [`Extraction::gain_exponent_at`] is accumulated
-/// over those segments. The ray's energy is then scaled by `exp(Σ gain_exponent_at)`. A factor
-/// that is not finite is rejected as a programming error in the model.
+/// For each valid ray with a positive chord through the body, the gain exponent is computed by
+/// [`Extraction::path_exponent`] (which performs an exact Amanatides–Woo voxel walk for
+/// grid-based models) and the ray energy is scaled by `exp(path_exponent)`.
 ///
 /// # Arguments
 ///
 /// * `node_name` - name of the owning node, used in error messages.
 /// * `medium` - the prepared medium for this analysis run, split into body and inversion.
-/// * `extraction` - the gain model to query per segment.
+/// * `extraction` - the gain model to apply.
 /// * `rays_bundle` - the ray bundle inside the medium, modified in place.
 ///
 /// # Errors
 ///
-/// This function errors if `path_length_inside` fails, if the accumulated exponent would produce
-/// a non-finite scale factor, or if `scale_energy` rejects the resulting value.
+/// This function errors if `path_length_inside` fails, if the exponent would produce a non-finite
+/// scale factor, or if `scale_energy` rejects the resulting value.
 fn march_extraction_along_chords(
     node_name: &str,
     medium: &mut RuntimeMedium,
     extraction: &dyn Extraction,
     rays_bundle: &mut [Rays],
 ) -> OpmResult<()> {
-    // Split the medium into an immutable body reference and a mutable inversion reference so
-    // that saturating models can read and write the field in each substep.
+    // Split the medium so saturating models can read and deplete the inversion per traversed cell.
     let (body, inversion) = medium.parts_mut();
-    let n_steps = extraction.n_steps();
     for rays in rays_bundle.iter_mut() {
         for ray in rays.iter_mut() {
             if !ray.valid() {
@@ -445,29 +441,7 @@ fn march_extraction_along_chords(
             if chord.value <= 0.0 {
                 continue;
             }
-            // `Ray::direction` is not guaranteed normalised — stepping along the raw vector
-            // would cover the wrong distance. `path_length_inside` is unaffected.
-            let direction = ray.direction();
-            let norm = direction.norm();
-            if !norm.is_normal() {
-                continue;
-            }
-            let direction = direction / norm;
-            let step_width = chord / to_f64(n_steps);
-            let start = ray.position();
-            // The body's own frame is used so the sampling frame and the inversion field grid
-            // always agree on where the medium is.
-            let frame = body.isometry();
-            let mut exponent = 0.0_f64;
-            for step in 0..n_steps {
-                let travelled = step_width * (to_f64(step) + 0.5);
-                let local = frame.inverse_transform_point(&Point3::new(
-                    start.x + direction.x * travelled,
-                    start.y + direction.y * travelled,
-                    start.z + direction.z * travelled,
-                ));
-                exponent += extraction.gain_exponent_at(&local, step_width, inversion);
-            }
+            let exponent = extraction.path_exponent(body, ray, inversion);
             let factor = exponent.exp();
             if !factor.is_finite() {
                 return Err(OpossumError::Analysis(format!(
