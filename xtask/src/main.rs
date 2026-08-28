@@ -37,11 +37,12 @@ enum Commands {
     Ci,
     /// Create a coverage report (requires grcov)
     Coverage,
-    /// Generate example files from opossum_core
+    /// Generate example files from `opossum_core`
     Examples {
-        /// Target directory where generated example files are placed
-        #[arg(short, long, default_value = "opm_examples")]
-        output_dir: PathBuf,
+        /// Target directory where generated example files are placed.
+        /// Defaults to `<workspace_root>/opm_examples` if omitted.
+        #[arg(short, long)]
+        output_dir: Option<PathBuf>,
     },
 }
 
@@ -52,9 +53,26 @@ fn main() -> Result<(), anyhow::Error> {
         Commands::Bundle => task_bundle()?,
         Commands::Ci => xtaskops::tasks::ci()?,
         Commands::Coverage => xtaskops::tasks::coverage(true)?,
-        Commands::Examples { output_dir } => task_examples(&output_dir)?,
+        Commands::Examples { output_dir } => {
+            // If no explicit path is provided, resolve to <workspace_root>/opm_examples
+            let target_dir = match output_dir {
+                Some(dir) => dir,
+                None => project_root()?.join("opm_examples"),
+            };
+            task_examples(&target_dir)?;
+        }
     }
     Ok(())
+}
+
+/// Helper function to locate the workspace root directory.
+/// Assumes this crate is located at `<workspace_root>/xtask`.
+fn project_root() -> Result<PathBuf, anyhow::Error> {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = manifest_dir
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("Failed to find workspace root directory"))?;
+    Ok(root.to_path_buf())
 }
 
 struct StagingGuard {
@@ -86,6 +104,10 @@ impl Drop for ExamplesGuard {
 /// Standalone task to generate example files
 fn task_examples(output_dir: &Path) -> Result<(), anyhow::Error> {
     let sh = Shell::new()?;
+    // Always change into the workspace root directory for consistent relative cargo calls
+    let root = project_root()?;
+    let _dir_guard = sh.push_dir(&root);
+
     generate_examples(&sh, output_dir)?;
     println!(
         "\n✨ Examples generation completed in '{}'",
@@ -105,7 +127,14 @@ fn generate_examples(sh: &Shell, target_dir: &Path) -> Result<(), anyhow::Error>
         fs::create_dir_all(target_dir)?;
     }
 
-    let target_dir_str = target_dir
+    // Canonicalize or ensure we have an absolute path so child processes receive a stable path
+    let target_dir_absolute = if target_dir.is_relative() {
+        env::current_dir()?.join(target_dir)
+    } else {
+        target_dir.to_path_buf()
+    };
+
+    let target_dir_str = target_dir_absolute
         .to_str()
         .ok_or_else(|| anyhow::anyhow!("Target path contains invalid UTF-8 characters"))?;
 
@@ -113,12 +142,11 @@ fn generate_examples(sh: &Shell, target_dir: &Path) -> Result<(), anyhow::Error>
     let _env_guard = sh.push_env("OPOSSUM_EXAMPLES_OUT_DIR", target_dir_str);
 
     for example in EXAMPLES {
-        println!("   -> Generating {}...", example);
-        cmd!(
-            sh,
-            "cargo run --release -p opossum_core --example {example}"
-        )
-        .run()?;
+        println!("   -> Generating {example}...");
+        // Suppress command echoing and Cargo compilation messages
+        cmd!(sh, "cargo run --quiet -p opossum_core --example {example}")
+            .quiet()
+            .run()?;
     }
 
     Ok(())
@@ -126,11 +154,14 @@ fn generate_examples(sh: &Shell, target_dir: &Path) -> Result<(), anyhow::Error>
 
 fn task_bundle() -> Result<(), anyhow::Error> {
     let sh = Shell::new()?;
+    let root = project_root()?;
+    let _dir_guard = sh.push_dir(&root);
+
     println!("🦀 Start build process for OPOSSUM...");
 
     // 1. Derive host triple
     let target_triple = get_host_target_triple()?;
-    println!("🎯 Target Triple: {}", target_triple);
+    println!("🎯 Target Triple: {target_triple}");
 
     // 2. Build binaries (Release)
     {
@@ -140,9 +171,8 @@ fn task_bundle() -> Result<(), anyhow::Error> {
     }
 
     // 3. Create staging and examples area and rename/copy binaries
-    let cwd = env::current_dir()?;
-    let staging_path = cwd.join("opossum_gui").join("staging");
-    let examples_target_dir = cwd.join("opossum_gui").join("opm_examples");
+    let staging_path = root.join("opossum_gui").join("staging");
+    let examples_target_dir = root.join("opossum_gui").join("opm_examples");
 
     let _staging_guard = StagingGuard {
         path: staging_path.clone(),
@@ -156,29 +186,28 @@ fn task_bundle() -> Result<(), anyhow::Error> {
         if !staging_path.exists() {
             fs::create_dir_all(&staging_path)?;
         }
-        let target_dir = env::var("CARGO_TARGET_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| Path::new("target").to_path_buf());
+        let target_dir =
+            env::var("CARGO_TARGET_DIR").map_or_else(|_| root.join("target"), PathBuf::from);
         let release_dir = target_dir.join("release");
 
         let exe_ext = env::consts::EXE_SUFFIX; // ".exe" or ""
 
         for bin_name in ["opossum_backend", "opossum_cli"] {
-            let src = release_dir.join(format!("{}{}", bin_name, exe_ext));
+            let src = release_dir.join(format!("{bin_name}{exe_ext}"));
 
             // Constructs the exact naming format expected by Dioxus
             let dest_filename = if exe_ext.is_empty() {
-                format!("{}-{}", bin_name, target_triple)
+                format!("{bin_name}-{target_triple}")
             } else {
                 // Windows workaround for Dioxus bundling
-                format!("{}{}-{}", bin_name, exe_ext, target_triple)
+                format!("{bin_name}{exe_ext}-{target_triple}")
             };
 
             let dest = staging_path.join(&dest_filename);
 
             if src.exists() {
                 fs::copy(&src, &dest)?;
-                println!("   -> Staged for Dioxus: {}", dest_filename);
+                println!("   -> Staged for Dioxus: {dest_filename}");
             } else {
                 return Err(anyhow::anyhow!("Binary not found: {}", src.display()));
             }
