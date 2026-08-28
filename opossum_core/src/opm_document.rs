@@ -824,9 +824,18 @@ mod test {
         ),
     },
     global: (
-        ambient_refr_index: Const(
-            refractive_index: 1.0,
-        ),
+        ambient_material: {
+            "schema_version": 1,
+            "id": "6c30ef98-7380-4477-bc91-a5a1a407fec7",
+            "version": 0,
+            "name": "Custom Material",
+            "optical": (
+                refractive_index: Const(
+                    refractive_index: 1.0,
+                ),
+                absorption: r#None,
+            ),
+        },
     ),
 )"#;
 
@@ -883,9 +892,18 @@ mod test {
         ),
     },
     global: (
-        ambient_refr_index: Const(
-            refractive_index: 1.0,
-        ),
+        ambient_material: {
+            "schema_version": 1,
+            "id": "6c30ef98-7380-4477-bc91-a5a1a407fec7",
+            "version": 0,
+            "name": "Custom Material",
+            "optical": (
+                refractive_index: Const(
+                    refractive_index: 1.0,
+                ),
+                absorption: r#None,
+            ),
+        },
     ),
 )"#;
 
@@ -960,9 +978,18 @@ mod test {
         ),
     },
     global: (
-        ambient_refr_index: Const(
-            refractive_index: 1.0,
-        ),
+        ambient_material: {
+            "schema_version": 1,
+            "id": "6c30ef98-7380-4477-bc91-a5a1a407fec7",
+            "version": 0,
+            "name": "Custom Material",
+            "optical": (
+                refractive_index: Const(
+                    refractive_index: 1.0,
+                ),
+                absorption: r#None,
+            ),
+        },
     ),
 )"#;
 
@@ -1076,7 +1103,7 @@ mod test {
     }
     #[test]
     fn test_corrupt_node_property_falls_back_to_default_and_warns() -> OpmResult<()> {
-        // RON data with an illegal variant "ength(0.075)" instead of "Length(0.075)"
+        // RON data with an illegal variant "ength(0.01)" instead of "Length(0.01)"
         let ron_data = r#"#![enable(unwrap_variant_newtypes)]
 (
     opm_file_version: "0",
@@ -1103,9 +1130,18 @@ mod test {
         ),
     },
     global: (
-        ambient_refr_index: Const(
-            refractive_index: 1.0,
-        ),
+         ambient_material: {
+            "schema_version": 1,
+            "id": "6c30ef98-7380-4477-bc91-a5a1a407fec7",
+            "version": 0,
+            "name": "Vaccumm",
+            "optical": (
+                refractive_index: Const(
+                    refractive_index: 1.0,
+                ),
+                absorption: r#None,
+            ),
+        },
     ),
 )"#;
 

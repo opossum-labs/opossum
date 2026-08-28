@@ -35,6 +35,8 @@ pub mod material;
 pub mod reporting;
 pub mod utils;
 
+pub use material::{material_air, material_vaccuum};
+
 use chrono::DateTime;
 
 // Allows internal macro expansions that use the ::opossum_core:: path

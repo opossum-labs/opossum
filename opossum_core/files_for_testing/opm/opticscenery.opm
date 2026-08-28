@@ -4,7 +4,7 @@
     scenery: {
         "node_type": "group",
         "name": "OpticScenery demo",
-        "uuid": "8f33db44-c94d-4b64-ae1a-a4bdd35ce4ed",
+        "uuid": "3cc6bd66-0bd4-49df-bb32-ccaa525d2101",
         "props": {
             "expand view": Bool(false),
         },
@@ -13,19 +13,19 @@
                 {
                     "node_type": "dummy",
                     "name": "dummy1",
-                    "uuid": "55a68309-3dcc-4b20-8343-a44364ce362e",
+                    "uuid": "914d3900-fa95-49a4-8be0-defe701bd53c",
                 },
                 {
                     "node_type": "dummy",
                     "name": "dummy2",
-                    "uuid": "53f03321-5414-46c0-a518-eff38decf917",
+                    "uuid": "21607c06-5dfd-4bd9-87ba-c8e99f0c05a0",
                 },
             ],
             edges: [
                 (
-                    src_id: "55a68309-3dcc-4b20-8343-a44364ce362e",
+                    src_id: "914d3900-fa95-49a4-8be0-defe701bd53c",
                     src_port: "output_1",
-                    target_id: "53f03321-5414-46c0-a518-eff38decf917",
+                    target_id: "21607c06-5dfd-4bd9-87ba-c8e99f0c05a0",
                     target_port: "input_1",
                     distance: 0.0,
                 ),
@@ -33,12 +33,21 @@
         ),
     },
     global: (
-        ambient_refr_index: Const(
-            refractive_index: 1.0,
-        ),
+        ambient_material: {
+            "schema_version": 1,
+            "id": "6c30ef98-7380-4477-bc91-a5a1a407fec7",
+            "version": 0,
+            "name": "Custom Material",
+            "optical": (
+                refractive_index: Const(
+                    refractive_index: 1.0,
+                ),
+                absorption: r#None,
+            ),
+        },
     ),
     analyzers: {
-        "ef404ea1-189e-4ea4-b895-747411a2f343": (
+        "dde08c56-20e1-43fb-a712-eb558fb79794": (
             analyzer_type: RayTrace(
                 min_energy_per_ray: 0.000000000001,
                 max_number_of_bounces: 1000,
@@ -46,8 +55,6 @@
                 missed_surface_strategy: Stop,
                 source_map: {},
             ),
-            id: "ef404ea1-189e-4ea4-b895-747411a2f343",
-            gui_position: None,
         ),
     },
 )

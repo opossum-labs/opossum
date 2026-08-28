@@ -526,7 +526,7 @@ mod test {
         undo::{Command, NodeSnapshot},
     };
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
-    use opossum_core::{core_optics::SceneryResources, nodes::create_node_ref};
+    use opossum_core::{core_optics::SceneryResources, material::Material, nodes::create_node_ref};
 
     #[actix_web::test]
     async fn test_get_global_conf() {
@@ -1180,8 +1180,6 @@ mod test {
     /// single undo restores the previous one.
     #[actix_web::test]
     async fn test_undo_patch_global_conf_restores_old_config() {
-        use opossum_core::refractive_index::{RefrIndexConst, RefractiveIndexType};
-
         let app_state = Data::new(AppState::default());
         let old_repr = format!(
             "{:?}",
@@ -1189,7 +1187,7 @@ mod test {
         );
 
         let new_conf = SceneryResources {
-            ambient_refr_index: RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()),
+            ambient_material: Material::default(),
         };
         let new_repr = format!("{new_conf:?}");
         assert_ne!(

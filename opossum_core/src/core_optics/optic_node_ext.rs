@@ -185,9 +185,18 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
                 log::warn!(
                     "could not get ambient medium since global config not found ... using default"
                 );
-                SceneryResources::default().ambient_refr_index
+                SceneryResources::default()
+                    .ambient_material
+                    .refractive_index_type()
+                    .clone()
             },
-            |conf| conf.lock_opm().unwrap().ambient_refr_index.clone(),
+            |conf| {
+                conf.lock_opm()
+                    .unwrap()
+                    .ambient_material
+                    .refractive_index_type()
+                    .clone()
+            },
         )
     }
 
