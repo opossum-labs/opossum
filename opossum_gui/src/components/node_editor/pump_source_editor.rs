@@ -14,7 +14,7 @@ use crate::{
     components::node_editor::{
         hooks::use_synced_signal,
         inputs::{
-            input_components::{FormContext, LabeledSelect, NodeConfigUnitInput, UnitHandling},
+            input_components::{FormContext, LabeledCheckboxInput, LabeledSelect, NodeConfigUnitInput, UnitHandling},
             select_options_from_enum_iterator,
         },
     },
@@ -282,19 +282,13 @@ fn SuperGaussianFields(
                     rebuilt(center, sigma, power, degree!(d), rectangular);
                 },
             }
-            div { class: "form-check",
-                input {
-                    class: "form-check-input",
-                    r#type: "checkbox",
-                    id: format!("{id_prefix}-spot-rectangular"),
-                    checked: rectangular,
-                    onchange: move |e| rebuilt(center, sigma, power, theta, e.checked()),
-                }
-                label {
-                    class: "form-check-label text-secondary small",
-                    r#for: format!("{id_prefix}-spot-rectangular"),
-                    "Rectangular flanks"
-                }
+            LabeledCheckboxInput {
+                id: format!("{id_prefix}-spot-rectangular"),
+                label: "Rectangular flanks".to_string(),
+                value: format!("{rectangular}"),
+                onchange: move |e: Event<FormData>| {
+                    rebuilt(center, sigma, power, theta, e.checked());
+                },
             }
         }
     }

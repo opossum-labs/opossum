@@ -273,8 +273,9 @@ input[type=number] {
 .accordion-body .form-floating > .form-control,
 .accordion-body .form-floating > .form-select,
 .amp-config-block .form-floating > .form-control,
-.amp-config-block .form-floating > .form-select, 
+.amp-config-block .form-floating > .form-select,
 .accordion-body .form-floating-checkbox,
+.amp-config-block .form-floating-checkbox,
 .form-floating > .form-select > option {
     background-color: rgb(50, 50, 50) !important;
 }

@@ -521,51 +521,57 @@ fn ScenarioAmplifierRow(
                         }
                     }
                     if let GainModel::SmallSignalGain(_) = gain_model {
-                        div { class: "ssg-params",
-                            label { class: "ssg-params-label", "Grid cells (x / y / z)" }
-                            div { class: "ssg-params-grid",
+                        div { class: "ssg-params-grid",
+                            div { class: "form-floating border-start ssg-params-cell",
                                 input {
-                                    class: "amp-gain-input",
+                                    class: "form-control bg-dark text-light form-control-sm noselect",
                                     r#type: "number",
+                                    id: format!("ssg-x-{uuid}"),
+                                    placeholder: "x",
                                     min: "1",
                                     step: "1",
                                     value: "{ssg_cells_x_str}",
                                     oninput: move |e| ssg_cells_x_str.set(e.value()),
                                     onblur: move |_| save_ssg(),
                                     onkeydown: move |e| {
-                                        if e.key() == Key::Enter {
-                                            save_ssg();
-                                        }
+                                        if e.key() == Key::Enter { save_ssg(); }
                                     },
                                 }
+                                label { class: "form-label text-secondary", r#for: format!("ssg-x-{uuid}"), "x-Points" }
+                            }
+                            div { class: "form-floating border-start ssg-params-cell",
                                 input {
-                                    class: "amp-gain-input",
+                                    class: "form-control bg-dark text-light form-control-sm noselect",
                                     r#type: "number",
+                                    id: format!("ssg-y-{uuid}"),
+                                    placeholder: "y",
                                     min: "1",
                                     step: "1",
                                     value: "{ssg_cells_y_str}",
                                     oninput: move |e| ssg_cells_y_str.set(e.value()),
                                     onblur: move |_| save_ssg(),
                                     onkeydown: move |e| {
-                                        if e.key() == Key::Enter {
-                                            save_ssg();
-                                        }
+                                        if e.key() == Key::Enter { save_ssg(); }
                                     },
                                 }
+                                label { class: "form-label text-secondary", r#for: format!("ssg-y-{uuid}"), "y-Points" }
+                            }
+                            div { class: "form-floating border-start ssg-params-cell",
                                 input {
-                                    class: "amp-gain-input",
+                                    class: "form-control bg-dark text-light form-control-sm noselect",
                                     r#type: "number",
+                                    id: format!("ssg-z-{uuid}"),
+                                    placeholder: "z",
                                     min: "1",
                                     step: "1",
                                     value: "{ssg_cells_z_str}",
                                     oninput: move |e| ssg_cells_z_str.set(e.value()),
                                     onblur: move |_| save_ssg(),
                                     onkeydown: move |e| {
-                                        if e.key() == Key::Enter {
-                                            save_ssg();
-                                        }
+                                        if e.key() == Key::Enter { save_ssg(); }
                                     },
                                 }
+                                label { class: "form-label text-secondary", r#for: format!("ssg-z-{uuid}"), "z-Points" }
                             }
                         }
                     }

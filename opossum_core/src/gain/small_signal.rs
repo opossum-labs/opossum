@@ -65,7 +65,8 @@ impl Default for ValidatedEmissionCrossSection {
 type ValidatedCellCount = validated_type!(usize, AllNotZero);
 
 /// How many cells the medium is discretised into along each axis by default.
-const DEFAULT_CELLS: usize = 16;
+const DEFAULT_TRANSVERSAL_CELLS: usize = 256;
+const DEFAULT_LONGITUDINAL_CELLS: usize = 16;
 
 /// Parameters of an unsaturated gain that follows the path through the medium.
 ///
@@ -115,9 +116,9 @@ impl Default for SmallSignalGain {
     fn default() -> Self {
         Self {
             emission_cross_section: ValidatedEmissionCrossSection::default(),
-            cells_x: validated!(DEFAULT_CELLS, AllNotZero).unwrap(),
-            cells_y: validated!(DEFAULT_CELLS, AllNotZero).unwrap(),
-            cells_z: validated!(DEFAULT_CELLS, AllNotZero).unwrap(),
+            cells_x: validated!(DEFAULT_TRANSVERSAL_CELLS, AllNotZero).unwrap(),
+            cells_y: validated!(DEFAULT_TRANSVERSAL_CELLS, AllNotZero).unwrap(),
+            cells_z: validated!(DEFAULT_LONGITUDINAL_CELLS, AllNotZero).unwrap(),
         }
     }
 }
@@ -402,7 +403,7 @@ mod test {
         // the moment a pump source is picked, so the default has to be a real value.
         assert!(model.emission_cross_section().value > 0.0);
         assert!(model.emission_cross_section().is_finite());
-        assert_eq!(model.grid(), (DEFAULT_CELLS, DEFAULT_CELLS, DEFAULT_CELLS));
+        assert_eq!(model.grid(), (DEFAULT_TRANSVERSAL_CELLS, DEFAULT_TRANSVERSAL_CELLS, DEFAULT_LONGITUDINAL_CELLS));
     }
     #[test]
     fn new_keeps_what_it_was_given() -> OpmResult<()> {

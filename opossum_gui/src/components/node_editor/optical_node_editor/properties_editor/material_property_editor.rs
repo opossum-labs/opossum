@@ -115,7 +115,7 @@ pub fn MaterialPropertyEditor(
         div { class: "form-floating border-start",
             div { class: "form-control form-control-sm material-prop-display",
                 span {
-                    class: "material-prop-name text-truncate",
+                    class: "material-prop-name text-truncate ",
                     title: "{material_name}",
                     "{material_name}"
                 }
@@ -140,7 +140,7 @@ pub fn MaterialPropertyEditor(
                         }
                     }
                 } else {
-                    span { class: "badge bg-secondary flex-shrink-0", "AdHoc" }
+                    span { class: "material-btn badge flex-shrink-0", "AdHoc" }
                     if !readonly {
                         Button {
                             size: ButtonSize::IconXs,
