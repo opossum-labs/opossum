@@ -129,7 +129,7 @@ impl<'de> Deserialize<'de> for OpticRef {
     where
         D: serde::Deserializer<'de>,
     {
-        let intermediate = OpticRefIntermediate::deserialize(deserializer)?;
+        let mut intermediate = OpticRefIntermediate::deserialize(deserializer)?;
 
         let node_type = intermediate.attributes.node_type();
         // Note: an unknown node type is not logged here. `OpticRef::deserialize` itself never skips a
@@ -137,6 +137,19 @@ impl<'de> Deserialize<'de> for OpticRef {
         // `optic_graph/serialization.rs`) do the skipping and log accordingly, since only they know the
         // node was skipped rather than the whole document failing to load.
         let node_ref = create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
+
+        // Merge the deserialized properties on top of the node's default properties.
+        // This ensures that:
+        // 1. Properties not present in intermediate (e.g. skipped due to parse errors or omitted)
+        //    remain at their default values.
+        // 2. Property descriptions and validators registered on the default node are preserved.
+        {
+            let default_node = node_ref.optical_ref.lock_opm().unwrap();
+            let mut merged_props = default_node.node_attr().properties().clone();
+            drop(default_node);
+            merged_props.update(intermediate.attributes.properties().clone());
+            intermediate.attributes.set_properties(merged_props);
+        }
 
         node_ref
             .optical_ref

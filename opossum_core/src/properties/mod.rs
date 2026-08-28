@@ -34,7 +34,7 @@ use crate::reporting::html_report::HtmlProperty;
 /// # Ok(())
 /// # }
 /// ```
-#[derive(Default, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Default, Serialize, Debug, Clone, PartialEq)]
 #[serde(transparent)]
 pub struct Properties {
     props: BTreeMap<String, Property>,
@@ -192,6 +192,37 @@ impl Properties {
             }
         }
         html_props
+    }
+}
+
+/// Fault tolerant deserializer.
+///
+/// If a property cannot be read mark it as "Invalid".
+impl<'de> Deserialize<'de> for Properties {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum PropertyEntry {
+            Valid(Box<Property>),
+            Invalid(serde::de::IgnoredAny),
+        }
+
+        let raw_props = BTreeMap::<String, PropertyEntry>::deserialize(deserializer)?;
+        let mut props = BTreeMap::new();
+        for (key, entry) in raw_props {
+            match entry {
+                PropertyEntry::Valid(prop) => {
+                    props.insert(key, *prop);
+                }
+                PropertyEntry::Invalid(_) => {
+                    warn!("Skipping property '{key}' that failed to parse; keeping default value.");
+                }
+            }
+        }
+        Ok(Self { props })
     }
 }
 

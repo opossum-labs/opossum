@@ -151,6 +151,10 @@ impl NodeAttr {
     pub fn update_properties(&mut self, new_props: Properties) {
         self.props.update(new_props);
     }
+    /// Sets the entire properties map of this [`NodeAttr`].
+    pub fn set_properties(&mut self, props: Properties) {
+        self.props = props;
+    }
     /// Create a property within this [`NodeAttr`].
     ///
     /// # Errors
