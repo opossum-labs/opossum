@@ -219,7 +219,7 @@ pub mod test_helper {
     fn load_without_property<T: Default + Analyzable + 'static>(
         property_name: &str,
     ) -> OpmResult<OpticRef> {
-        let optic_ref = OpticRef::new(Arc::new(Mutex::new(T::default())), None);
+        let optic_ref = OpticRef::new(Arc::new(Mutex::new(T::default())));
         let serialized =
             ron::to_string(&optic_ref).map_err(|e| OpossumError::Other(e.to_string()))?;
         let without_property = remove_property_entry(&serialized, property_name);

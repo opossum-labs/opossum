@@ -176,11 +176,13 @@ pub trait Volumetric: OpticNode {
             backward,
             refraction_intended,
         )?;
+        let ambient_refr_idx = strategy.ambient_refractive_index();
+
         // The positioning-run guard lives inside `propagate_inside_medium`; no outer check here.
         self.propagate_inside_medium(rays_bundle, strategy)?;
         self.pass_through_surface_generic(
             exit_surf_name,
-            Some(self.ambient_idx()),
+            Some(ambient_refr_idx),
             rays_bundle,
             strategy,
             backward,
@@ -317,6 +319,7 @@ pub trait Volumetric: OpticNode {
                 "expected ray data at input port".into(),
             ));
         };
+        
         let mut rays_bundle = vec![rays];
         self.pass_through_volume_generic(
             &in_port_name,

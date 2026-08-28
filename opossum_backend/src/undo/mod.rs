@@ -198,7 +198,6 @@ impl Command {
             | Self::PatchPumpScenario(_)
             | Self::PatchAnalyzerPumpScenarios(_)
             | Self::PatchAmplifierNodes(_)
-            | Self::PatchGlobalConf(_)
             | Self::SetViewport(_) => false,
             // Multi-step: several fallible sub-steps, so a mid-apply failure could tear the document.
             Self::AddNode(_)
@@ -289,8 +288,7 @@ impl Command {
             | Self::RemovePumpScenario(_)
             | Self::PatchPumpScenario(_)
             | Self::PatchAnalyzerPumpScenarios(_)
-            | Self::PatchAmplifierNodes(_)
-            | Self::PatchGlobalConf(_) => None,
+            | Self::PatchAmplifierNodes(_) => None,
             Self::SetViewport(cmd) => Some(JumpTarget::new_from_graph_id(cmd.to.graph_id)),
             Self::Batch(commands) => batch_jump_target(commands, root_id),
         }

@@ -12,6 +12,7 @@ use crate::material::{LEGACY_REFRACTIVE_INDEX, MATERIAL, Material};
 use crate::properties::validator::Validator;
 use indexmap::IndexMap;
 use serde::{Deserialize, Deserializer, Serialize};
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 use crate::reporting::html_report::HtmlProperty;
@@ -246,33 +247,33 @@ impl Properties {
 /// Fault tolerant deserializer.
 ///
 /// If a property cannot be read mark it as "Invalid".
-impl<'de> Deserialize<'de> for Properties {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum PropertyEntry {
-            Valid(Box<Property>),
-            Invalid(serde::de::IgnoredAny),
-        }
+// impl<'de> Deserialize<'de> for Properties {
+//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+//     where
+//         D: serde::Deserializer<'de>,
+//     {
+//         #[derive(Deserialize)]
+//         #[serde(untagged)]
+//         enum PropertyEntry {
+//             Valid(Box<Property>),
+//             Invalid(serde::de::IgnoredAny),
+//         }
 
-        let raw_props = BTreeMap::<String, PropertyEntry>::deserialize(deserializer)?;
-        let mut props = BTreeMap::new();
-        for (key, entry) in raw_props {
-            match entry {
-                PropertyEntry::Valid(prop) => {
-                    props.insert(key, *prop);
-                }
-                PropertyEntry::Invalid(_) => {
-                    warn!("Skipping property '{key}' that failed to parse; keeping default value.");
-                }
-            }
-        }
-        Ok(Self { props })
-    }
-}
+//         let raw_props = BTreeMap::<String, PropertyEntry>::deserialize(deserializer)?;
+//         let mut props = BTreeMap::new();
+//         for (key, entry) in raw_props {
+//             match entry {
+//                 PropertyEntry::Valid(prop) => {
+//                     props.insert(key, *prop);
+//                 }
+//                 PropertyEntry::Invalid(_) => {
+//                     warn!("Skipping property '{key}' that failed to parse; keeping default value.");
+//                 }
+//             }
+//         }
+//         Ok(Self { props })
+//     }
+// }
 
 impl<'a> IntoIterator for &'a Properties {
     type IntoIter = indexmap::map::Iter<'a, String, Property>;

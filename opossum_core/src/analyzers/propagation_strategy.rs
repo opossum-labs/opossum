@@ -10,8 +10,7 @@ use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 
 use crate::{
-    core_optics::optic_surface::OpticSurface, error::OpmResult, gain::PumpConfig, light::Rays,
-    utils::default_from_name::DefaultFromName,
+    core_optics::optic_surface::OpticSurface, error::OpmResult, gain::PumpConfig, light::Rays, refractive_index::RefractiveIndexType, utils::default_from_name::DefaultFromName,
 };
 use uuid::Uuid;
 
@@ -41,6 +40,7 @@ pub trait PropagationStrategy {
     /// Determines how rays missing a surface should be handled.
     fn missed_surface_strategy(&self) -> MissedSurfaceStrategy;
 
+    fn ambient_refractive_index(&self) -> RefractiveIndexType;
     /// The whole [`PumpConfig`] the node with the given [`Uuid`] runs under in this analysis.
     ///
     /// Whether a component amplifies is a property of the operating point being analyzed, not of the

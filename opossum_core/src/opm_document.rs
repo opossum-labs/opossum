@@ -281,6 +281,9 @@ impl OpmDocument {
             scenery: self.scenery.clone_deep()?,
             analyzers: self.analyzers.clone(),
             embedded_materials: self.embedded_materials.clone(),
+            pump_scenarios: self.pump_scenarios.clone(),
+            amplifier_nodes: self.amplifier_nodes.clone()
+            
         })
     }
     /// Generates the RON string content representation of this [`OpmDocument`].
@@ -303,7 +306,7 @@ impl OpmDocument {
     pub fn to_opm_file_string(&self) -> OpmResult<String> {
         // Create a temporary mutable clone for serialization preparation
         let mut doc_to_serialize = self.clone_deep()?;
-        doc_to_serialize.prepare_materials_for_serialization()?;
+        let prepared = doc_to_serialize.prepare_materials_for_serialization();
 
         let config = PrettyConfig::new()
             .extensions(Extensions::UNWRAP_VARIANT_NEWTYPES)

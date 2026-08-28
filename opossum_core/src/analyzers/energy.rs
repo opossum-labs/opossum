@@ -4,14 +4,7 @@ use std::collections::HashMap;
 
 use super::{Analyzer, AnalyzerRegistration, AnalyzerType};
 use crate::{
-    analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
-    core_optics::{NodeAttrExt, OpticNode, node_attr::HasNodeAttr},
-    error::OpmResult,
-    gain::{ActiveScenario, PumpConfig, PumpScenario},
-    light::LightResult,
-    nodes::NodeGroup,
-    prelude::EnergyDataBuilder,
-    reporting::analysis_report::AnalysisReport,
+    analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy}, core_optics::{NodeAttrExt, OpticNode, node_attr::HasNodeAttr}, error::OpmResult, gain::{ActiveScenario, PumpConfig, PumpScenario}, light::LightResult, nodes::NodeGroup, prelude::EnergyDataBuilder, refractive_index::RefrIndexConst, reporting::analysis_report::AnalysisReport,
 };
 use log::info;
 use serde::{Deserialize, Serialize};
@@ -80,6 +73,9 @@ impl EnergyConfig {
 impl PropagationStrategy for EnergyConfig {
     fn missed_surface_strategy(&self) -> MissedSurfaceStrategy {
         MissedSurfaceStrategy::Stop
+    }
+    fn ambient_refractive_index(&self) -> crate::refractive_index::RefractiveIndexType {
+        crate::refractive_index::RefractiveIndexType::Const(RefrIndexConst::new(1.0).unwrap())
     }
     fn pump_config(&self, node_id: Uuid) -> PumpConfig {
         self.active_pump_scenario.config(node_id)
