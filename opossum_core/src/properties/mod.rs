@@ -69,24 +69,7 @@ fn migrate_legacy_properties(props: &mut IndexMap<String, Property>) {
 pub struct Properties {
     props: IndexMap<String, Property>,
 }
-impl<'de> Deserialize<'de> for Properties {
-    /// Deserialize [`Properties`] and migrate properties stored under an older name.
-    ///
-    /// This is the deserialization counterpart of the transparent `Serialize` derive: it reads the
-    /// same plain map, but runs [`migrate_legacy_properties`] on it before handing it out.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the underlying map of properties cannot be read.
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let mut props = IndexMap::<String, Property>::deserialize(deserializer)?;
-        migrate_legacy_properties(&mut props);
-        Ok(Self { props })
-    }
-}
+
 impl Properties {
     /// Create a new property with the given name.
     ///
@@ -247,33 +230,33 @@ impl Properties {
 /// Fault tolerant deserializer.
 ///
 /// If a property cannot be read mark it as "Invalid".
-// impl<'de> Deserialize<'de> for Properties {
-//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-//     where
-//         D: serde::Deserializer<'de>,
-//     {
-//         #[derive(Deserialize)]
-//         #[serde(untagged)]
-//         enum PropertyEntry {
-//             Valid(Box<Property>),
-//             Invalid(serde::de::IgnoredAny),
-//         }
+impl<'de> Deserialize<'de> for Properties {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum PropertyEntry {
+            Valid(Box<Property>),
+            Invalid(serde::de::IgnoredAny),
+        }
 
-//         let raw_props = BTreeMap::<String, PropertyEntry>::deserialize(deserializer)?;
-//         let mut props = BTreeMap::new();
-//         for (key, entry) in raw_props {
-//             match entry {
-//                 PropertyEntry::Valid(prop) => {
-//                     props.insert(key, *prop);
-//                 }
-//                 PropertyEntry::Invalid(_) => {
-//                     warn!("Skipping property '{key}' that failed to parse; keeping default value.");
-//                 }
-//             }
-//         }
-//         Ok(Self { props })
-//     }
-// }
+        let raw_props = BTreeMap::<String, PropertyEntry>::deserialize(deserializer)?;
+        let mut props = IndexMap::new();
+        for (key, entry) in raw_props {
+            match entry {
+                PropertyEntry::Valid(prop) => {
+                    props.insert(key, *prop);
+                }
+                PropertyEntry::Invalid(_) => {
+                    warn!("Skipping property '{key}' that failed to parse; keeping default value.");
+                }
+            }
+        }
+        Ok(Self { props })
+    }
+}
 
 impl<'a> IntoIterator for &'a Properties {
     type IntoIter = indexmap::map::Iter<'a, String, Property>;
