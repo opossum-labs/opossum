@@ -15,7 +15,8 @@ use crate::{
         hooks::use_synced_signal,
         inputs::{
             input_components::{
-                FormContext, LabeledCheckboxInput, LabeledSelect, NodeConfigUnitInput, UnitHandling,
+                FormContext, LabeledCheckboxInput, LabeledSelect, NodeConfigPlainF64Input,
+                NodeConfigUnitInput, NodeConfigUsizeInput, UnitHandling,
             },
             select_options_from_enum_iterator,
         },
@@ -147,29 +148,23 @@ fn AnalyticPumpFields(
         }
         div { class: "amp-pump-nested",
         div { class: "ssg-params-grid",
-        NumberField {
+        NodeConfigUsizeInput {
             id: format!("{id_prefix}-pump-cells-x"),
             label: "Cells x".to_string(),
-            value: grid.0 as f64,
-            step: 1.0,
-            min: Some(1.0),
-            on_save: move |v: f64| rebuilt(transversal, longitudinal, (v as usize, grid.1, grid.2)),
+            value: grid.0,
+            onchange: move |v| rebuilt(transversal, longitudinal, (v, grid.1, grid.2)),
         }
-        NumberField {
+        NodeConfigUsizeInput {
             id: format!("{id_prefix}-pump-cells-y"),
             label: "Cells y".to_string(),
-            value: grid.1 as f64,
-            step: 1.0,
-            min: Some(1.0),
-            on_save: move |v: f64| rebuilt(transversal, longitudinal, (grid.0, v as usize, grid.2)),
+            value: grid.1,
+            onchange: move |v| rebuilt(transversal, longitudinal, (grid.0, v, grid.2)),
         }
-        NumberField {
+        NodeConfigUsizeInput {
             id: format!("{id_prefix}-pump-cells-z"),
             label: "Cells z".to_string(),
-            value: grid.2 as f64,
-            step: 1.0,
-            min: Some(1.0),
-            on_save: move |v: f64| rebuilt(transversal, longitudinal, (grid.0, grid.1, v as usize)),
+            value: grid.2,
+            onchange: move |v| rebuilt(transversal, longitudinal, (grid.0, grid.1, v)),
         }
     }
         }
@@ -208,6 +203,7 @@ fn SuperGaussianFields(
     let sig_center_x = use_synced_signal(center.x);
     let sig_center_y = use_synced_signal(center.y);
     let sig_theta = use_synced_signal(theta);
+    let sig_power = use_synced_signal(power);
 
     let unit_m = UnitHandling::new("m", true);
 
@@ -253,13 +249,11 @@ fn SuperGaussianFields(
                     },
                 }
             }
-            NumberField {
+            NodeConfigPlainF64Input {
                 id: format!("{id_prefix}-spot-power"),
                 label: "Order (1 = Gaussian)".to_string(),
-                value: power,
-                step: 1.0,
-                min: Some(0.0),
-                on_save: move |value: f64| {
+                value: sig_power,
+                onchange: move |value: f64| {
                     rebuilt(center, sigma, value, theta, rectangular);
                 },
             }
@@ -325,77 +319,6 @@ fn BeerLambertFields(
                     }
                 },
             }
-        }
-    }
-}
-
-/// A number the user edits, saved when the field is left or `Enter` is pressed.
-///
-/// The value is only pushed upward once the user is done with it, not per keystroke — every save
-/// here is a round trip to the document. Text that is not a number at all is refused on the spot and
-/// the field falls back to what the document holds; a number the *core* refuses (a negative width,
-/// say) is reported in the log and simply not applied, so the field keeps showing what was typed
-/// until it is corrected.
-///
-/// # Props
-///
-/// * `id` - the input's own id, which its label points at.
-/// * `label` - what the field is called.
-/// * `value` - the number as the document currently holds it.
-/// * `step` - how much the spinner arrows change it by.
-/// * `min` - the smallest accepted value, if the quantity has one.
-/// * `on_save` - handed the parsed number when the user is done editing.
-#[component]
-fn NumberField(
-    id: String,
-    label: String,
-    value: f64,
-    step: f64,
-    min: Option<f64>,
-    on_save: EventHandler<f64>,
-) -> Element {
-    // Same "compare and pull in" shape the gain factor next to this uses: the text is local while it
-    // is being typed, and re-synced whenever the document's own value actually changes - a save
-    // completing, an undo, an edit made somewhere else.
-    let mut text = use_signal(|| format!("{value}"));
-    let mut last_value = use_signal(|| value);
-    if (*last_value.peek() - value).abs() > f64::EPSILON
-        || last_value.peek().is_nan() != value.is_nan()
-    {
-        last_value.set(value);
-        text.set(format!("{value}"));
-    }
-
-    let mut commit = move || {
-        let raw = text.peek().trim().to_string();
-        if let Ok(parsed) = raw.parse::<f64>() {
-            on_save.call(parsed);
-        } else {
-            OPOSSUM_UI_LOGS
-                .write()
-                .add_log(&format!("'{raw}' is not a number"));
-            text.set(format!("{value}"));
-        }
-    };
-
-    rsx! {
-        div { class: "form-floating border-start",
-            input {
-                class: "form-control bg-dark text-light",
-                r#type: "number",
-                id: id.as_str(),
-                step: "{step}",
-                min: min.map(|m| format!("{m}")),
-                value: "{text}",
-                oninput: move |e| text.set(e.value()),
-                onblur: move |_| commit(),
-                onkeydown: move |e| {
-                    if e.key() == Key::Enter {
-                        commit();
-                    }
-                },
-            }
-            label { class: "text-secondary", r#for: id, "{label}" }
         }
     }
 }

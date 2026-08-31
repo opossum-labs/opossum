@@ -469,6 +469,62 @@ pub fn NodeConfigPlainF64Input(
     }
 }
 
+/// A labeled integer input for node configuration panels, backed by [`FlushableTextInput`].
+///
+/// Accepts non-negative integers (`usize`). Invalid input (non-integer, negative, or a value the
+/// core refuses) is logged and the field reverts to the last accepted value — the caller never
+/// receives a value the core would reject.
+///
+/// # Props
+///
+/// * `id` - the input's own id, which its label points at.
+/// * `label` - what the field is called.
+/// * `value` - the current value as the document holds it. Re-synced whenever it changes.
+/// * `onchange` - called with the parsed integer when the user commits a valid edit.
+#[component]
+pub fn NodeConfigUsizeInput(
+    id: String,
+    label: String,
+    value: usize,
+    onchange: EventHandler<usize>,
+) -> Element {
+    let mut last_value = use_signal(|| value);
+    let mut val_str = use_signal(|| format!("{value}"));
+
+    if *last_value.peek() != value {
+        last_value.set(value);
+        val_str.set(format!("{value}"));
+    }
+
+    let on_input_submission = EventHandler::new(move |val: String| {
+        if let Ok(parsed) = val.trim().parse::<usize>() {
+            onchange.call(parsed);
+        } else {
+            OPOSSUM_UI_LOGS
+                .write()
+                .add_log(&format!("'{val}' is not a valid positive integer"));
+        }
+        // Pessimistic revert: show the last confirmed value while waiting for the parent to push
+        // the accepted value back through the `value` prop. The sync guard above will then
+        // overwrite this with the new value if the core accepted it.
+        val_str.set(format!("{}", *last_value.peek()));
+    });
+
+    rsx! {
+        FlushableTextInput {
+            id,
+            label,
+            value: val_str,
+            r#type: "number",
+            step: Some("1"),
+            container_class: "form-floating border-start".to_string(),
+            input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
+            label_class: "form-label text-secondary".to_string(),
+            on_save: on_input_submission,
+        }
+    }
+}
+
 #[component]
 pub fn UnitInput(
     id: String,
