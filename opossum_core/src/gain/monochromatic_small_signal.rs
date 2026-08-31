@@ -249,7 +249,7 @@ impl Extraction for MonochromaticSmallSignalGain {
                         // Entry-boundary voxel or lateral exterior cell: center-point mask says
                         // "outside", but the clipped segment [t_lo, t_hi] may still lie inside
                         // the body. Check the midpoint of the clipped segment in world coordinates.
-                        let t_mid = (t_lo + t_hi) * 0.5;
+                        let t_mid = f64::midpoint(t_lo, t_hi);
                         let displacement = local_dir.map(|v| Length::new::<meter>(v * t_mid));
                         let world_mid = iso.transform_point(&(local_origin + displacement));
                         if body.contains(&world_mid).unwrap_or(false) {
@@ -296,7 +296,7 @@ mod test {
             PumpSource, TransversalProfile,
             inversion_field::{CellIndex, cells},
         },
-        geometry::{Plane, body::SurfaceBoundedBody, geo_surface::GeoSurfaceRef},
+        geometry::{Plane, Sphere, body::SurfaceBoundedBody, geo_surface::GeoSurfaceRef},
         joule,
         light::Ray,
         millimeter, nanometer, reciprocal_centimeter,
@@ -889,6 +889,129 @@ mod test {
             "oblique Beer-Lambert (cells_z=64) still off by {fine} vs \
              exp(g0/(α·cosθ)·(1−exp(−α·L))) = {exact}"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn a_curved_exit_surface_clips_the_boundary_voxel() -> OpmResult<()> {
+        // Regression test for boundary-voxel clipping at curved surfaces.
+        //
+        // Geometry: sphere centered at the origin, radius R = 20 mm.
+        //   - Flat entrance at z = 0.
+        //   - Convex spherical exit: vertex at z = R (the on-axis maximum), center at
+        //     z = 0. Using a negative stored radius −R places the center at
+        //     vertex_z + (−R) = R − R = 0, i.e. the origin.
+        //   - Sphere equation (front hemisphere): z_exit(x) = √(R² − x²).
+        //
+        // At x = R·√3/2 the exit is at z = R/2, giving chord = R/2 — exactly half the
+        // on-axis chord R. With a single (1×1×1) voxel spanning the bounding box
+        // [0, R] in z, the old code assigns ds = R (the full box) and overcounts by 2×.
+        // The fix clips ds to t_body_exit = R/2, so the Field exponent must equal the
+        // Uniform (exact-chord) exponent to within floating-point precision.
+        let radius_mm = 20.0_f64; // R
+        let peak = reciprocal_centimeter!(1.0);
+
+        // Sphere vertex at z = R, center at z = 0 (origin).
+        // Aperture = 18 mm: must contain the ray at x = R·√3/2 ≈ 17.3 mm, and must be
+        // strictly less than R so the sphere does not degenerate at the aperture edge
+        // (at x = R the sphere would reach z = 0 = entrance, giving zero thickness).
+        let aperture_mm = 18.0_f64;
+        let entrance = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(Isometry::identity()))));
+        let exit = GeoSurfaceRef(Arc::new(Mutex::new(Sphere::new_at_position(
+            millimeter!(-radius_mm), // stored radius −R → center at vertex_z − R = 0
+            millimeter!(0.0, 0.0, radius_mm), // vertex at z = R
+        )?)));
+        let body = SurfaceBoundedBody::new(
+            entrance,
+            exit,
+            ValidatedCrossSection::try_new(Aperture::new_circle(
+                millimeter!(aperture_mm),
+                ApertureType::Hole,
+                None,
+            )?)?,
+            Isometry::identity(),
+        );
+
+        // At x = R·√3/2 the chord equals R/2 exactly: √(R² − 3R²/4) = R/2.
+        let x_ray_mm = radius_mm * f64::sqrt(3.0) / 2.0;
+        let ray = ray_at(x_ray_mm, 0.0)?;
+        let model = MonochromaticSmallSignalGain::new(peak)?;
+
+        // Exact exponent via the Uniform path (uses path_length_inside directly).
+        let chord = body
+            .path_length_inside(&ray)?
+            .expect("off-axis ray must cross the plano-spherical body");
+        let exact_exponent = (peak * chord).value;
+
+        // Voxel exponent via the Field path with a single cell (β = 1 everywhere).
+        // One cell makes the boundary error maximal: ds spans the full bounding box.
+        let inv = field_with(&body, (1, 1, 1), peak, |_| Ok(peak))?;
+        let voxel_exponent =
+            Extraction::path_exponent(&model, &body, &ray, &mut Some(Inversion::Field(inv)));
+
+        assert_relative_eq!(voxel_exponent, exact_exponent, max_relative = 1e-10);
+        Ok(())
+    }
+
+    #[test]
+    fn a_curved_entrance_surface_clips_the_boundary_voxel() -> OpmResult<()> {
+        // Regression test for boundary-voxel clipping at curved surfaces.
+        //
+        // Geometry: convex spherical entrance, flat exit.
+        //   - Sphere center at z = R, radius R = 20 mm; vertex (minimum z of surface) at z = 0.
+        //     Using a positive stored radius +R places the center at vertex_z + R = 0 + R = R.
+        //   - Sphere equation (lower hemisphere): z_entrance(x) = R − √(R² − x²).
+        //   - Flat exit at z = R.
+        //
+        // At x = R·√3/2 the entrance is at z = R/2, giving chord = R − R/2 = R/2 — exactly
+        // half the on-axis chord R. With a single (1×1×1) voxel spanning the bounding box
+        // [0, R] in z, the old code assigns ds = R (the full box) and overcounts by 2×.
+        // The fix clips ds to t_body_enter = R/2, so the Field exponent must equal the
+        // Uniform (exact-chord) exponent to within floating-point precision.
+        let radius_mm = 20.0_f64; // R
+        let peak = reciprocal_centimeter!(1.0);
+
+        // Sphere vertex at z = 0, center at z = R.
+        // Aperture = 18 mm: must contain the ray at x = R·√3/2 ≈ 17.3 mm, and must be
+        // strictly less than R so the sphere does not degenerate at the aperture edge
+        // (at x = R the entrance would reach z = R = exit, giving zero thickness).
+        let aperture_mm = 18.0_f64;
+        let entrance = GeoSurfaceRef(Arc::new(Mutex::new(Sphere::new_at_position(
+            millimeter!(radius_mm), // stored radius +R → center at vertex_z + R = R
+            millimeter!(0.0, 0.0, 0.0), // vertex at z = 0
+        )?)));
+        let exit = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(
+            Isometry::new_along_z(millimeter!(radius_mm))?, // flat exit at z = R
+        ))));
+        let body = SurfaceBoundedBody::new(
+            entrance,
+            exit,
+            ValidatedCrossSection::try_new(Aperture::new_circle(
+                millimeter!(aperture_mm),
+                ApertureType::Hole,
+                None,
+            )?)?,
+            Isometry::identity(),
+        );
+
+        // At x = R·√3/2 the entrance is at z = R/2, giving chord R − R/2 = R/2 exactly.
+        let x_ray_mm = radius_mm * f64::sqrt(3.0) / 2.0;
+        let ray = ray_at(x_ray_mm, 0.0)?;
+        let model = MonochromaticSmallSignalGain::new(peak)?;
+
+        // Exact exponent via the Uniform path (uses path_length_inside directly).
+        let chord = body
+            .path_length_inside(&ray)?
+            .expect("off-axis ray must cross the plano-spherical body");
+        let exact_exponent = (peak * chord).value;
+
+        // Voxel exponent via the Field path with a single cell (β = 1 everywhere).
+        // One cell makes the boundary error maximal: ds spans the full bounding box.
+        let inv = field_with(&body, (1, 1, 1), peak, |_| Ok(peak))?;
+        let voxel_exponent =
+            Extraction::path_exponent(&model, &body, &ray, &mut Some(Inversion::Field(inv)));
+
+        assert_relative_eq!(voxel_exponent, exact_exponent, max_relative = 1e-10);
         Ok(())
     }
 }

@@ -23,7 +23,7 @@
 //! cargo run -p opossum_core --example small_signal_gain_fluence
 //! ```
 use opossum_core::{
-    core_optics::hit_map::fluence_estimator::FluenceEstimator,
+    core_optics::{NodeAttrExt, hit_map::fluence_estimator::FluenceEstimator},
     distributions::{energy::General2DGaussian, position::FibonacciEllipse, spectral::LaserLines},
     gain::{
         AnalyticPump, GainModel, LongitudinalProfile, MonochromaticSmallSignalGain, PumpSource,
@@ -84,8 +84,8 @@ fn main() -> OpmResult<()> {
                 degree!(0.0),
                 false,
             )?),
-            LongitudinalProfile::Flat,  // uniform inversion from entrance to exit face
-            (64, 64, 16),               // 64 × 64 transversal cells; 16 longitudinal
+            LongitudinalProfile::Flat, // uniform inversion from entrance to exit face
+            (64, 64, 16),              // 64 × 64 transversal cells; 16 longitudinal
         )?),
     );
 
