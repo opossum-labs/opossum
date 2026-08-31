@@ -65,7 +65,7 @@ impl Default for ValidatedEmissionCrossSection {
 type ValidatedCellCount = validated_type!(usize, AllNotZero);
 
 /// How many cells the medium is discretised into along each axis by default.
-const DEFAULT_TRANSVERSAL_CELLS: usize = 256;
+const DEFAULT_TRANSVERSAL_CELLS: usize = 128;
 const DEFAULT_LONGITUDINAL_CELLS: usize = 16;
 
 /// Parameters of an unsaturated gain that follows the path through the medium.

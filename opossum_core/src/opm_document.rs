@@ -711,8 +711,7 @@ mod test {
         utils::test_helper::test_helper::{check_logs, metered_energy},
     };
     use approx::assert_relative_eq;
-    use std::
-        path::PathBuf;
+    use std::path::PathBuf;
     use tempfile::NamedTempFile;
 
     #[test]

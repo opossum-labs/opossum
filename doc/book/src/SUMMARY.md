@@ -22,6 +22,7 @@
   - [Usage](./tutorial/usage.md)
 - [How-to Guides](./howto%20guides/howto%20guide.md)
   - [Model an amplifier](./howto%20guides/model_an_amplifier.md)
+  - [Shaped pump profiles](./howto%20guides/shaped_pump_profile.md)
 - [Reference](./reference/reference.md)
   - [Nodes](./reference/nodes.md)
     - [Beam propagation visualizer](./reference/nodes/beam_propagation_visualizer.md)

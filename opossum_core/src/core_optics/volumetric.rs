@@ -473,8 +473,7 @@ mod test {
         coatings::CoatingConstantR,
         core_optics::{Alignable, PortType, node_attr::HasNodeAttr},
         degree,
-        gain::{
-            ConstGain, ConstInversion, GainModel, PumpScenario, PumpSource, SmallSignalGain  },
+        gain::{ConstGain, ConstInversion, GainModel, PumpScenario, PumpSource, SmallSignalGain},
         joule,
         light::{
             Rays,
