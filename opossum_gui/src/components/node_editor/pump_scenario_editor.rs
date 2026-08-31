@@ -2,7 +2,10 @@ use crate::{
     ACTIVE_PUMP_SCENARIO, OPOSSUM_UI_LOGS, PUMP_SCENARIO_LIST_REFRESH, api,
     components::{
         node_editor::{
-            inputs::{input_components::LabeledSelect, select_options_from_enum_iterator},
+            inputs::{
+                input_components::{FormContext, LabeledSelect, NodeConfigUnitInput, UnitHandling},
+                select_options_from_enum_iterator,
+            },
             pump_source_editor::PumpSourceEditor,
         },
         scenery_editor::GraphsWorkspaceAction,
@@ -401,14 +404,20 @@ fn ScenarioAmplifierRow(
     // changes (a model picked elsewhere, an undo/redo, this very row's own save completing) -
     // same "compare and pull in" shape `FlushableTextInput` uses, without needing that component's
     // dirty-tracking: nothing here re-renders mid-keystroke, only after a completed save.
+    let flush_trigger = use_signal(|| 0usize);
+    let dirty_count = use_signal(|| 0usize);
+    use_context_provider(|| FormContext {
+        flush_trigger,
+        dirty_count,
+    });
     let mut is_collapsed = use_signal(|| true);
     let mut gain_str = use_signal(|| format_gain(gain_model));
-    let mut ssg_g0_str = use_signal(|| format_ssg_g0(gain_model));
+    let mut ssg_g0_val = use_signal(|| ssg_g0_f64(gain_model));
     let mut last_gain_model = use_signal(|| gain_model);
     if *last_gain_model.peek() != gain_model {
         last_gain_model.set(gain_model);
         gain_str.set(format_gain(gain_model));
-        ssg_g0_str.set(format_ssg_g0(gain_model));
+        ssg_g0_val.set(ssg_g0_f64(gain_model));
     }
 
     let set_model = move |model: GainModel| {
@@ -443,17 +452,14 @@ fn ScenarioAmplifierRow(
     // The one parameter of the monochromatic model: its peak gain coefficient g₀ (in m⁻¹, and free
     // to be negative for an absorbing medium). The grid it is resolved on lives on the analytic
     // pump, not here.
-    let mut save_ssg = move || {
-        let raw = ssg_g0_str.peek().trim().to_string();
-        match raw.parse::<f64>().map_err(|e| e.to_string()).and_then(|v| {
-            MonochromaticSmallSignalGain::new(reciprocal_meter!(v)).map_err(|e| e.to_string())
-        }) {
+    let mut save_ssg = move |v: f64| {
+        match MonochromaticSmallSignalGain::new(reciprocal_meter!(v)).map_err(|e| e.to_string()) {
             Ok(ssg) => set_model(GainModel::MonochromaticSmallSignalGain(ssg)),
             Err(err_str) => {
                 OPOSSUM_UI_LOGS.write().add_log(&format!(
-                    "'{raw}' is not a valid gain coefficient: {err_str}"
+                    "'{v}' m⁻¹ is not a valid gain coefficient: {err_str}"
                 ));
-                ssg_g0_str.set(format_ssg_g0(gain_model));
+                ssg_g0_val.set(ssg_g0_f64(gain_model));
             }
         }
     };
@@ -505,26 +511,13 @@ fn ScenarioAmplifierRow(
                         }
                     }
                     if let GainModel::MonochromaticSmallSignalGain(_) = gain_model {
-                        div { class: "form-floating border-start",
-                            input {
-                                class: "form-control bg-dark text-light form-control-sm noselect",
-                                r#type: "number",
-                                id: format!("ssg-g0-{uuid}"),
-                                step: "0.1",
-                                value: "{ssg_g0_str}",
-                                oninput: move |e| ssg_g0_str.set(e.value()),
-                                onblur: move |_| save_ssg(),
-                                onkeydown: move |e| {
-                                    if e.key() == Key::Enter {
-                                        save_ssg();
-                                    }
-                                },
-                            }
-                            label {
-                                class: "form-label text-secondary",
-                                r#for: format!("ssg-g0-{uuid}"),
-                                "Peak gain g₀ (m⁻¹)"
-                            }
+                        NodeConfigUnitInput {
+                            id: format!("ssg-g0-{uuid}"),
+                            label: "Peak gain g₀".to_string(),
+                            value: *ssg_g0_val.read(),
+                            unit_config: UnitHandling::new("m⁻¹", true),
+                            reciprocal: true,
+                            onchange: move |v: f64| save_ssg(v),
                         }
                     }
                 }
@@ -570,14 +563,12 @@ fn format_gain(model: GainModel) -> String {
     }
 }
 
-/// Text form of the monochromatic model's peak gain coefficient in m⁻¹ - the model's own value, or
-/// the default (zero) it starts at for any other variant, so the field is pre-filled sensibly the
-/// moment the switch turns the model on.
-fn format_ssg_g0(model: GainModel) -> String {
-    let coefficient = if let GainModel::MonochromaticSmallSignalGain(ssg) = model {
-        ssg.peak_gain_coefficient()
+/// Peak gain coefficient g₀ in m⁻¹ as `f64` - the model's own value, or the default (zero) for any
+/// other variant, so the field is pre-filled sensibly the moment the switch turns the model on.
+fn ssg_g0_f64(model: GainModel) -> f64 {
+    if let GainModel::MonochromaticSmallSignalGain(ssg) = model {
+        ssg.peak_gain_coefficient().value
     } else {
-        MonochromaticSmallSignalGain::default().peak_gain_coefficient()
-    };
-    format!("{}", coefficient.value)
+        MonochromaticSmallSignalGain::default().peak_gain_coefficient().value
+    }
 }
