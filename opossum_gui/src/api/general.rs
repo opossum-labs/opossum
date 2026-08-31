@@ -3,7 +3,7 @@ use crate::HTTP_API_CLIENT;
 use opossum_core::prelude::*;
 use opossum_core::types::api_types::{NodeType, VersionInfo};
 
-/// Send a request to check if the bace url is reachable and corresponds to the opossum backend.
+/// Send a request to check if the backend url is reachable and corresponds to the opossum backend.
 ///
 /// # Errors
 ///
@@ -12,7 +12,7 @@ use opossum_core::types::api_types::{NodeType, VersionInfo};
 /// - the response cannot be deserialized into a string
 #[allow(dead_code)]
 pub async fn get_api_welcome() -> Result<String, String> {
-    HTTP_API_CLIENT().get::<String>("/api/").await
+    HTTP_API_CLIENT().get_raw("/api/").await
 }
 
 /// Send reqeust to get the version of the opossum backend and the opossum library.
