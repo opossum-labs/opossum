@@ -170,7 +170,7 @@ pub trait Volumetric: OpticNode {
         // Refraction at a surface is governed by the index alone, so only that is handed down.
         self.pass_through_surface_generic(
             entry_surf_name,
-            Some(material_inside.refractive_index().clone()),
+            Some(material_inside.refractive_index_type().clone()),
             rays_bundle,
             strategy,
             backward,

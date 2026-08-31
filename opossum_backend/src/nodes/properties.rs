@@ -205,7 +205,7 @@ mod test {
             let Proptype::Material(AssetRef::Inline(material)) = property else {
                 panic!("a lens must carry an embedded material property")
             };
-            material.refractive_index().clone()
+            material.refractive_index_type().clone()
         };
         assert_eq!(index_model_of_node(), index_model(1.5));
 

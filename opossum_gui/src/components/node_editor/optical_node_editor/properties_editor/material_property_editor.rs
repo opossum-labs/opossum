@@ -102,7 +102,6 @@ pub fn MaterialPropertyEditor(
     });
 
     let on_inline_editor_save = {
-        let emit_material_change = emit_material_change;
         use_callback(move |()| {
             let updated = editing_material.read().clone();
             emit_material_change(updated);

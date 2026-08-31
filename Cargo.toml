@@ -21,7 +21,7 @@ members = [
     "opossum_registry",
 ]
 # default-members = ["opossum_backend", "opossum_cli", "opossum_gui", "opossum_core", "opossum_core/opm_macros_lib"]
-# default-members = ["opossum_backend", "opossum_cli", "opossum_gui", "opossum_core"]
+default-members = ["opossum_backend", "opossum_cli", "opossum_gui", "opossum_core"]
 resolver = "3"
 
 [workspace.package]

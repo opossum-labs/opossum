@@ -130,7 +130,7 @@ impl PropagationStrategy for GhostFocusConfig {
     }
 
     fn ambient_refractive_index(&self) -> crate::refractive_index::RefractiveIndexType {
-        self.ambient_material.refractive_index().clone()
+        self.ambient_material.refractive_index_type().clone()
     }
 }
 #[cfg(test)]

@@ -21,7 +21,7 @@ pub fn StringEditor(
     rsx! {
         FlushableTextInput {
             id: format!("stringProperty{property_key}").to_camel_case(),
-            label: property_key.to_sentence_case().clone(),
+            label: property_key.to_sentence_case(),
             value: string_sig(),
             on_save,
             container_class: "form-floating border-start".to_string(),

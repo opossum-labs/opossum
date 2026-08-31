@@ -21,7 +21,7 @@ pub fn I32Editor(
     rsx! {
         FlushableTextInput {
             id: format!("i32Property{property_key}").to_camel_case(),
-            label: property_key.to_sentence_case().clone(),
+            label: property_key.to_sentence_case(),
             value: int32_sig().to_string(),
             on_save: move |new_val: String| {
                 if let Ok(val) = new_val.parse::<i32>() {
