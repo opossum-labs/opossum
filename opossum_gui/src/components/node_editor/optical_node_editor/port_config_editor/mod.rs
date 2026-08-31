@@ -1,4 +1,4 @@
-mod aperture_editor;
+pub mod aperture_editor;
 mod coating_editor;
 
 use dioxus::prelude::*;
@@ -91,26 +91,26 @@ pub fn PortConfigEditor(
         && let Some(Some(ports)) = ports_resource.read_unchecked().clone()
     {
         for (port_name, port_config) in ports.inputs {
-            editor_inputs.push(rsx!(
-                SinglePortConfigEditor {
-                    node_id,
-                    port_name: port_name.clone(),
-                    port_config: port_config.clone(),
-                    on_change: move |req| handle_port_update((port_name.clone(), PortType::Input, req)),
-                    readonly,
-                }
-            ));
+            editor_inputs.push(rsx!(SinglePortConfigEditor {
+                node_id,
+                port_name: port_name.clone(),
+                port_config: port_config.clone(),
+                on_change: move |req| handle_port_update((port_name.clone(), PortType::Input, req)),
+                readonly,
+            }));
         }
         for (port_name, port_config) in ports.outputs {
-            editor_inputs.push(rsx!(
-                SinglePortConfigEditor {
-                    node_id,
-                    port_name: port_name.clone(),
-                    port_config: port_config.clone(),
-                    on_change: move |req| handle_port_update((port_name.clone(), PortType::Output, req)),
-                    readonly,
-                }
-            ));
+            editor_inputs.push(rsx!(SinglePortConfigEditor {
+                node_id,
+                port_name: port_name.clone(),
+                port_config: port_config.clone(),
+                on_change: move |req| handle_port_update((
+                    port_name.clone(),
+                    PortType::Output,
+                    req
+                )),
+                readonly,
+            }));
         }
         rsx! {
 

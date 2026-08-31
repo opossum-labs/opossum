@@ -452,15 +452,15 @@ fn ScenarioAmplifierRow(
     // The one parameter of the monochromatic model: its peak gain coefficient g₀ (in m⁻¹, and free
     // to be negative for an absorbing medium). The grid it is resolved on lives on the analytic
     // pump, not here.
-    let mut save_ssg = move |v: f64| {
-        match MonochromaticSmallSignalGain::new(reciprocal_meter!(v)).map_err(|e| e.to_string()) {
-            Ok(ssg) => set_model(GainModel::MonochromaticSmallSignalGain(ssg)),
-            Err(err_str) => {
-                OPOSSUM_UI_LOGS.write().add_log(&format!(
-                    "'{v}' m⁻¹ is not a valid gain coefficient: {err_str}"
-                ));
-                ssg_g0_val.set(ssg_g0_f64(gain_model));
-            }
+    let mut save_ssg = move |v: f64| match MonochromaticSmallSignalGain::new(reciprocal_meter!(v))
+        .map_err(|e| e.to_string())
+    {
+        Ok(ssg) => set_model(GainModel::MonochromaticSmallSignalGain(ssg)),
+        Err(err_str) => {
+            OPOSSUM_UI_LOGS.write().add_log(&format!(
+                "'{v}' m⁻¹ is not a valid gain coefficient: {err_str}"
+            ));
+            ssg_g0_val.set(ssg_g0_f64(gain_model));
         }
     };
 
@@ -569,6 +569,8 @@ fn ssg_g0_f64(model: GainModel) -> f64 {
     if let GainModel::MonochromaticSmallSignalGain(ssg) = model {
         ssg.peak_gain_coefficient().value
     } else {
-        MonochromaticSmallSignalGain::default().peak_gain_coefficient().value
+        MonochromaticSmallSignalGain::default()
+            .peak_gain_coefficient()
+            .value
     }
 }

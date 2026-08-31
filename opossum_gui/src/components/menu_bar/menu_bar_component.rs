@@ -33,7 +33,6 @@ pub enum AppCommand {
     Refresh,
     AddNode(String),
     AddAnalyzer(Box<AnalyzerType>),
-    AddAnalyzer(Box<AnalyzerType>),
     AutoLayout,
     CenterGraph,
     ZoomToFit,

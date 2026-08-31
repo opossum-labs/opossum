@@ -1,3 +1,4 @@
+use crate::components::app::SIDEBAR_SWITCHER_WIDTH;
 use crate::components::{
     node_editor::{NodeConfigEditor, PumpScenarioEditor},
     scenery_editor::{
