@@ -30,10 +30,10 @@ impl From<CatalogTransmittanceParam> for InputParam {
     fn from(param: CatalogTransmittanceParam) -> Self {
         match param {
             CatalogTransmittanceParam::ReferenceThickness => {
-                InputParam::SIUnit("Reference thickness".to_string(), "m".to_string())
+                Self::SIUnit("Reference thickness".to_string(), "m".to_string())
             }
             CatalogTransmittanceParam::CsvFile => {
-                InputParam::FilePath("Catalog Transmittance (CSV)".to_string(), "csv".to_string())
+                Self::FilePath("Catalog Transmittance (CSV)".to_string(), "csv".to_string())
             }
         }
     }
@@ -75,15 +75,16 @@ impl IntoInputData<String, AbsCatTrans, AbsorptionModel> for CatalogTransmittanc
     fn setter_from_obj(&self) -> impl FnMut(&mut AbsCatTrans, String) {
         let this = *self;
         move |obj: &mut AbsCatTrans, val: String| match this {
-            CatalogTransmittanceParam::ReferenceThickness => {
-                if let Ok(thickness_val) = val.parse::<f64>() {
-                    if thickness_val > 0.0 && thickness_val.is_finite() {
-                        let length = Length::new::<meter>(thickness_val);
-                        let _ = obj.set_reference_thickness(length);
-                    }
+            Self::ReferenceThickness => {
+                if let Ok(thickness_val) = val.parse::<f64>()
+                    && thickness_val > 0.0
+                    && thickness_val.is_finite()
+                {
+                    let length = Length::new::<meter>(thickness_val);
+                    let _ = obj.set_reference_thickness(length);
                 }
             }
-            CatalogTransmittanceParam::CsvFile => {
+            Self::CsvFile => {
                 let path = Path::new(&val);
                 match Spectrum::from_csv(path) {
                     Ok(loaded_spectrum) => {

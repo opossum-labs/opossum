@@ -2,7 +2,7 @@
 // Visible crate-wide because the per-shape parameter widgets are shared with the *clear aperture*
 // property editor (`properties_editor::clear_aperture_editor`) - both edit an `ApertureShape`, so
 // the rows for a circle or a rectangle are written once and used by both.
-pub(crate) mod aperture_editor;
+pub mod aperture_editor;
 mod coating_editor;
 
 use dioxus::prelude::*;

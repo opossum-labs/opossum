@@ -8,15 +8,17 @@
 //! medium reads out of it. Neither side has to know the other, and the field survives between
 //! passes, which is what makes a multi-pass amplifier more than a repeated single pass.
 //!
-//! **What a cell holds** is the absolute inversion density, as a [`VolumetricNumberDensity`]: the
-//! population of the upper laser level over that of the lower one, which for the ideal four level
-//! system stored here is the upper level alone. The value is **signed** — a negative one describes a
-//! medium that absorbs rather than amplifies, which is the same physics with the inversion turned
-//! around, not a separate case. A relative inversion would be the more convenient number to hand a
-//! gain formula, but it is a ratio to a dopant density that
-//! [`Material`](crate::material::Material) does not carry today — an absolute density needs nothing
-//! but itself and can be converted once the material data exists. One level is stored; further
-//! levels are further fields, not a different type.
+//! **What a cell holds** is the normalized inversion `β ∈ [0, 1]`: the local fraction of the peak
+//! inversion the pump produces, dimensionless and carrying no spectroscopy. A pump source deposits
+//! only this shape; the magnitude — and, with it, the sign that tells an amplifying medium from an
+//! absorbing one — lives on the [`GainModel`](super::GainModel), which turns `β` into a gain
+//! coefficient (`g = peak_gain_coefficient · β` for the monochromatic model). Keeping the field
+//! spectroscopy-free is what lets every gain model read the very same `β` and apply its own physics
+//! to it: a four-level model reads `β = 0` as transparency, a future three-level one reads the same
+//! `β = 0` as absorption, without the pump having to know which asked.
+//!
+//! A spatially uniform inversion needs no field at all — see [`Inversion`], which carries the
+//! uniform case as a single number and reserves the grid for a shaped pump.
 //!
 //! **The grid** is Cartesian and lives entirely in the optic's own frame, so it follows the
 //! component when that is moved or tilted instead of sampling it on a staircase. Round edges do get
@@ -38,23 +40,39 @@
 use crate::{
     error::{OpmResult, OpossumError},
     geometry::body::{Body, BoundingBox},
-    num_per_m3,
     utils::math_utils::{to_f64, try_f64_to_usize},
 };
 use nalgebra::{DMatrix, Point3, Vector3};
 use std::ops::Range;
-use uom::si::f64::{Length, Volume, VolumetricNumberDensity};
+use uom::si::f64::{Length, Volume};
 
 /// The index of one cell of an [`InversionField`], counted along x, y and z.
 pub type CellIndex = (usize, usize, usize);
+
+/// The inversion a prepared medium presents to a [`GainModel`](super::GainModel).
+///
+/// A pump either fills the medium uniformly or shapes it. The uniform case does not need a grid at
+/// all — its gain is `peak · β · L` over the exact chord `L` through the body — so it is carried as
+/// a single number rather than paid for as a field of identical cells. This is also what keeps an
+/// *unpumped* medium representable: `Uniform(0.0)` is a real state a three-level model can read as
+/// absorption, distinct from a model that reads no inversion at all
+/// (`Option::None` in [`RuntimeMedium`](crate::core_optics::node_attr::RuntimeMedium)).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Inversion {
+    /// A spatially constant normalized inversion `β` over the whole body: an unpumped medium is
+    /// `Uniform(0.0)`, a uniformly pumped one `Uniform(1.0)`.
+    Uniform(f64),
+    /// A normalized inversion `β` resolved on a grid, as a shaped pump produces it.
+    Field(InversionField),
+}
 
 /// The inversion of an active medium, sampled on a grid over the medium's [`Body`].
 ///
 /// See the [module documentation](self) for what a cell holds and which frame the grid lives in.
 #[derive(Debug, Clone, PartialEq)]
 pub struct InversionField {
-    /// inversion density: one transversal plane per longitudinal step
-    slices: Vec<DMatrix<VolumetricNumberDensity>>,
+    /// normalized inversion β: one transversal plane per longitudinal step
+    slices: Vec<DMatrix<f64>>,
     /// which cells of each plane lie within the body
     inside: Vec<DMatrix<bool>>,
     /// the extent the grid spans, in the optic's frame — the body's own bounding box
@@ -79,7 +97,7 @@ impl InversionField {
     ///
     /// # Returns
     ///
-    /// A field spanning the body's bounding box, with every cell at zero population density.
+    /// A field spanning the body's bounding box, with every cell at zero normalized inversion.
     ///
     /// # Errors
     ///
@@ -115,7 +133,7 @@ impl InversionField {
                 }
             }
             inside.push(DMatrix::from_vec(ny, nx, mask));
-            slices.push(DMatrix::from_element(ny, nx, num_per_m3!(0.0)));
+            slices.push(DMatrix::from_element(ny, nx, 0.0));
         }
         Ok(Self {
             slices,
@@ -150,8 +168,9 @@ impl InversionField {
     }
     /// Return the volume of a single cell of this [`InversionField`].
     ///
-    /// All cells are the same size, so this is what turns a population density into a number of
-    /// excited ions — the step any energy balance over the medium starts from.
+    /// All cells are the same size. Geometry only — the normalized inversion the cells carry is
+    /// dimensionless, but the cell volume is what an energy balance over the medium will start from
+    /// once a saturating model needs it.
     ///
     /// # Returns
     ///
@@ -185,7 +204,7 @@ impl InversionField {
             .copied()
             .unwrap_or(false)
     }
-    /// Return the inversion density stored in the given cell.
+    /// Return the normalized inversion β stored in the given cell.
     ///
     /// # Arguments
     ///
@@ -193,20 +212,20 @@ impl InversionField {
     ///
     /// # Returns
     ///
-    /// The population density of the cell, or `None` if it is not part of the grid. A cell outside
+    /// The normalized inversion of the cell, or `None` if it is not part of the grid. A cell outside
     /// the body reads as the zero it was initialised to — ask [`InversionField::is_inside`] to tell
     /// the two apart.
     #[must_use]
-    pub fn population(&self, cell: CellIndex) -> Option<VolumetricNumberDensity> {
+    pub fn population(&self, cell: CellIndex) -> Option<f64> {
         let (i, j, k) = cell;
         self.slices.get(k)?.get((j, i)).copied()
     }
-    /// Write the inversion density of the given cell.
+    /// Write the normalized inversion β of the given cell.
     ///
     /// # Arguments
     ///
     /// - `cell`: the cell to be written
-    /// - `population`: the population density to store
+    /// - `population`: the normalized inversion to store
     ///
     /// # Errors
     ///
@@ -214,11 +233,7 @@ impl InversionField {
     /// outside the body is *not* an error: whether a cell carries medium is a question for
     /// [`InversionField::is_inside`], and a producer sweeping a region should not have to be right
     /// about the body's outline to be allowed to write.
-    pub fn set_population(
-        &mut self,
-        cell: CellIndex,
-        population: VolumetricNumberDensity,
-    ) -> OpmResult<()> {
+    pub fn set_population(&mut self, cell: CellIndex, population: f64) -> OpmResult<()> {
         let (i, j, k) = cell;
         let Some(entry) = self
             .slices
@@ -263,7 +278,7 @@ impl InversionField {
             let index = try_f64_to_usize(cells_from_start.floor())?;
             if index < count {
                 Some(index)
-            } else if index == count && cells_from_start == to_f64(count) {
+            } else if index == count && (cells_from_start - to_f64(count)).abs() < f64::EPSILON {
                 // Exactly at the upper boundary: clamp to the last cell so that a ray
                 // starting at the far face can still enter the DDA traversal.
                 count.checked_sub(1)
@@ -426,11 +441,11 @@ impl InversionField {
         for a in 0..3 {
             if dir[a] > 0.0 {
                 step_dir[a] = 1;
-                t_max[a] = (lo[a] + cell_w[a] * to_f64(cell[a] + 1) - org[a]) / dir[a];
+                t_max[a] = (cell_w[a].mul_add(to_f64(cell[a] + 1), lo[a]) - org[a]) / dir[a];
                 t_delta[a] = cell_w[a] / dir[a];
             } else if dir[a] < 0.0 {
                 step_dir[a] = -1;
-                t_max[a] = (lo[a] + cell_w[a] * to_f64(cell[a]) - org[a]) / dir[a];
+                t_max[a] = (cell_w[a].mul_add(to_f64(cell[a]), lo[a]) - org[a]) / dir[a];
                 t_delta[a] = cell_w[a] / (-dir[a]);
             }
         }
@@ -451,7 +466,7 @@ impl InversionField {
             let t_step = t_max[a].min(t_exit);
             let ds = t_step - t_cur;
             if ds > 0.0 {
-                result.push(((cell[0], cell[1], cell[2]), Length::new::<meter>(ds)));
+                result.push((cell.into(), Length::new::<meter>(ds)));
             }
             t_cur = t_step;
             if t_cur >= t_exit {
@@ -534,7 +549,6 @@ mod test {
         geometry::{Plane, body::SurfaceBoundedBody, geo_surface::GeoSurfaceRef},
         millimeter,
         nodes::Lens,
-        num_per_cm3,
         types::validated_type_definitions::ValidatedCrossSection,
         utils::geom_transformation::Isometry,
     };
@@ -725,12 +739,12 @@ mod test {
         let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
         let mut field = InversionField::from_body(&body, (4, 4, 2))?;
         // A fresh field is unpumped everywhere.
-        assert!(cells((4, 4, 2)).all(|cell| field.population(cell) == Some(num_per_m3!(0.0))));
-        let population = num_per_cm3!(1.0e19);
+        assert!(cells((4, 4, 2)).all(|cell| field.population(cell) == Some(0.0)));
+        let population = 0.7;
         field.set_population((1, 2, 1), population)?;
         assert_eq!(field.population((1, 2, 1)), Some(population));
         // ... and only that one cell changed
-        assert_eq!(field.population((2, 1, 1)), Some(num_per_m3!(0.0)));
+        assert_eq!(field.population((2, 1, 1)), Some(0.0));
         // Cells outside the grid can neither be read nor written.
         assert_eq!(field.population((4, 0, 0)), None);
         assert_eq!(field.population((0, 0, 2)), None);

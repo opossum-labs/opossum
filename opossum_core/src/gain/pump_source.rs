@@ -12,17 +12,19 @@
 //! of the run being analyzed. Both therefore live in a
 //! [`PumpScenario`](super::PumpScenario).
 //!
-//! **A pump source is stated as a small-signal gain coefficient g₀**, not as an inversion density.
-//! That is the number an amplifier is actually specified in — `G = exp(g₀·L)` for a single pass
-//! through a length `L` — and the inversion is implicit in it. The field stores the density, though,
-//! because that is what does not depend on a wavelength, so [`PumpSource::deposit`] converts between
-//! the two through `g₀ = σ_e · ΔN`. The emission cross section needed for that is an *argument*: see
-//! there for why it cannot be read off the medium yet.
+//! **A pump source describes only a shape.** It writes the normalized inversion `β ∈ [0, 1]` — the
+//! local fraction of the peak inversion — into the field, and nothing about *how hard* the medium is
+//! pumped: that magnitude is the small-signal gain coefficient the [`GainModel`](super::GainModel)
+//! carries, stated once there rather than split across every pump variant. A uniform pump is the
+//! shapeless case, `β = 1` everywhere; it needs no grid at all and is handled as
+//! [`Inversion::Uniform`](super::Inversion) by the model, so only the [`AnalyticPump`] ever deposits
+//! into a field. Keeping the field spectroscopy-free is what lets a future three-level model read
+//! the very same `β`.
 
-use super::inversion_field::{InversionField, cells};
+use super::inversion_field::{CellIndex, InversionField, cells};
 use crate::{
-    error::{OpmResult, OpossumError},
-    generic_validators::{AllFinite, AllPositive},
+    error::OpmResult,
+    generic_validators::{AllFinite, AllNotZero, AllPositive},
     geometry::body::BoundingBox,
     reciprocal_centimeter,
     utils::{default_from_name::DefaultFromName, super_gaussian::SuperGaussianShape},
@@ -33,114 +35,19 @@ use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, ops::Range};
 use strum::EnumIter;
-use uom::si::f64::{Area, Length, ReciprocalLength, VolumetricNumberDensity};
+use uom::si::f64::{Length, ReciprocalLength};
 use utoipa::ToSchema;
 
-/// Deserialization shim for [`ConstInversion`].
+/// A number of cells that is guaranteed to be non-zero.
 ///
-/// It lets a coefficient read from an `.opm` file run through the very same validation as one set
-/// through [`ConstInversion::set_gain_coefficient`], so a hand-edited file cannot smuggle in a
-/// non-finite value. Same pattern as [`ConstGain`](super::ConstGain).
-#[derive(Deserialize)]
-struct NonValidatedConstInversion {
-    gain_coefficient: ReciprocalLength,
-}
-impl TryFrom<NonValidatedConstInversion> for ConstInversion {
-    type Error = String;
-    fn try_from(helper: NonValidatedConstInversion) -> Result<Self, Self::Error> {
-        Self::new(helper.gain_coefficient).map_err(|e| e.to_string())
-    }
-}
+/// The grid a shaped pump is resolved onto lives here, on the [`AnalyticPump`], because it only
+/// means something where there is a profile to resolve — a uniform pump has no shape and needs no
+/// grid.
+type ValidatedCellCount = validated_type!(usize, AllNotZero);
 
-/// A small-signal gain coefficient that is guaranteed to be finite.
-///
-/// Deliberately **not** constrained to be positive. A negative coefficient describes a medium that
-/// absorbs where an amplifier would amplify — the same physics with the inversion turned around, and
-/// the state an unpumped doped medium is actually in.
-type ValidatedGainCoefficient = validated_type!(ReciprocalLength, AllFinite);
-impl Default for ValidatedGainCoefficient {
-    /// No gain at all, i.e. an unpumped medium.
-    fn default() -> Self {
-        validated!(reciprocal_centimeter!(0.0), AllFinite).unwrap()
-    }
-}
-
-/// Parameters of a medium pumped uniformly throughout.
-///
-/// The simplest conceivable pump: the same inversion everywhere inside the body, with no transversal
-/// profile and no decay along the pump axis. It is what one assumes for a first estimate of an
-/// amplifier chain, and it is the reference every shaped profile is compared against.
-#[derive(Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnsureValidated)]
-#[serde(try_from = "NonValidatedConstInversion")]
-pub struct ConstInversion {
-    #[schema(value_type = f64)]
-    gain_coefficient: ValidatedGainCoefficient,
-}
-impl Default for ConstInversion {
-    /// Create an unpumped [`ConstInversion`] with a gain coefficient of zero.
-    ///
-    /// Choosing this variant must not change a result on its own — the medium starts out as passive
-    /// as it was, and only entering a coefficient pumps it.
-    fn default() -> Self {
-        Self {
-            gain_coefficient: ValidatedGainCoefficient::default(),
-        }
-    }
-}
-impl ConstInversion {
-    /// Create a new [`ConstInversion`] with the given small-signal gain coefficient.
-    ///
-    /// # Arguments
-    ///
-    /// * `gain_coefficient` - g₀, the gain per unit length the medium provides. Zero leaves it
-    ///   passive, a negative value makes it absorbing. Total small-signal gain relates as G₀ = exp(g₀ x l)
-    ///
-    /// # Errors
-    ///
-    /// Returns an [`OpossumError::Other`] if the given coefficient is not finite.
-    pub fn new(gain_coefficient: ReciprocalLength) -> OpmResult<Self> {
-        let mut inversion = Self::default();
-        inversion.set_gain_coefficient(gain_coefficient)?;
-        Ok(inversion)
-    }
-    /// Return the small-signal gain coefficient.
-    #[must_use]
-    pub const fn gain_coefficient(&self) -> ReciprocalLength {
-        *self.gain_coefficient.get()
-    }
-    /// Set the small-signal gain coefficient.
-    ///
-    /// # Arguments
-    ///
-    /// * `gain_coefficient` - g₀, the gain per unit length the medium provides.
-    ///
-    /// # Errors
-    ///
-    /// Returns an [`OpossumError::Other`] if the given coefficient is not finite. The previous value
-    /// is kept in that case.
-    pub fn set_gain_coefficient(&mut self, gain_coefficient: ReciprocalLength) -> OpmResult<()> {
-        self.gain_coefficient.set(gain_coefficient)
-    }
-}
-impl From<ConstInversion> for PumpSource {
-    fn from(value: ConstInversion) -> Self {
-        Self::Const(value)
-    }
-}
-impl From<ConstInversion> for AnalyticPump {
-    /// A uniformly pumped medium *is* the analytic profile with no shape at all.
-    ///
-    /// Stating it that way is what lets [`PumpSource::deposit`] evaluate both over one and the same
-    /// grid walk. It cannot fail: both hold the coefficient in the same validated type, so the value
-    /// is known to be good already.
-    fn from(value: ConstInversion) -> Self {
-        Self {
-            peak_gain_coefficient: value.gain_coefficient,
-            transversal: TransversalProfile::Flat,
-            longitudinal: LongitudinalProfile::Flat,
-        }
-    }
-}
+/// How many cells a shaped pump is discretised into along each axis by default.
+const DEFAULT_TRANSVERSAL_CELLS: usize = 128;
+const DEFAULT_LONGITUDINAL_CELLS: usize = 16;
 
 /// Which end of the medium the pump enters through.
 ///
@@ -166,7 +73,7 @@ impl Display for PumpDirection {
 }
 impl DefaultFromName for PumpDirection {}
 
-/// Deserialization shim for [`BeerLambertProfile`], mirroring [`NonValidatedConstInversion`].
+/// Deserialization shim for [`BeerLambertProfile`], mirroring [`NonValidatedAnalyticPump`].
 #[derive(Deserialize)]
 struct NonValidatedBeerLambertProfile {
     absorption: ReciprocalLength,
@@ -366,20 +273,26 @@ impl LongitudinalProfile {
     }
 }
 
-/// Deserialization shim for [`AnalyticPump`], mirroring [`NonValidatedConstInversion`].
+/// Deserialization shim for [`AnalyticPump`].
+///
+/// It lets the values read from an `.opm` file run through the very same validation as ones set
+/// through the constructor, so a hand-edited file cannot smuggle in a zero-cell grid. Same pattern
+/// as [`ConstGain`](super::ConstGain).
 #[derive(Deserialize)]
 struct NonValidatedAnalyticPump {
-    peak_gain_coefficient: ReciprocalLength,
     transversal: TransversalProfile,
     longitudinal: LongitudinalProfile,
+    cells_x: usize,
+    cells_y: usize,
+    cells_z: usize,
 }
 impl TryFrom<NonValidatedAnalyticPump> for AnalyticPump {
     type Error = String;
     fn try_from(helper: NonValidatedAnalyticPump) -> Result<Self, Self::Error> {
         Self::new(
-            helper.peak_gain_coefficient,
             helper.transversal,
             helper.longitudinal,
+            (helper.cells_x, helper.cells_y, helper.cells_z),
         )
         .map_err(|e| e.to_string())
     }
@@ -391,51 +304,65 @@ impl TryFrom<NonValidatedAnalyticPump> for AnalyticPump {
 /// across its face *and* an absorption decay along its axis at the same time, and stating them
 /// separately is what lets either be varied without touching the other.
 ///
-/// Both profiles are peak-normalised, so their product reaches 1 exactly where they both peak — on
-/// the axis of the spot, at the face the pump enters through — and the coefficient below is what the
-/// medium provides there. If that point happens to lie outside the body, the medium simply never
-/// reaches the stated peak; the parameter describes the profile, not the outcome.
-#[derive(
-    Default, Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnsureValidated,
-)]
+/// Both profiles are peak-normalised, so their product — the normalized inversion `β` this pump
+/// deposits — reaches 1 exactly where they both peak: on the axis of the spot, at the face the pump
+/// enters through. The gain coefficient that peak stands for is not stated here but on the
+/// [`GainModel`](super::GainModel); this side only carries the shape and the grid it is resolved on.
+#[derive(Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnsureValidated)]
 #[serde(try_from = "NonValidatedAnalyticPump")]
 pub struct AnalyticPump {
-    #[schema(value_type = f64)]
-    peak_gain_coefficient: ValidatedGainCoefficient,
     #[validate(skip)]
     transversal: TransversalProfile,
     #[validate(skip)]
     longitudinal: LongitudinalProfile,
+    #[schema(value_type = usize)]
+    cells_x: ValidatedCellCount,
+    #[schema(value_type = usize)]
+    cells_y: ValidatedCellCount,
+    #[schema(value_type = usize)]
+    cells_z: ValidatedCellCount,
+}
+impl Default for AnalyticPump {
+    /// A shapeless pump on a moderate grid: flat across the face and along the axis.
+    ///
+    /// Flat both ways is `β = 1` everywhere, so a freshly selected analytic pump is the uniform one
+    /// until a profile is dialled in — and the grid is a usable default rather than a size nobody
+    /// asked for.
+    fn default() -> Self {
+        Self {
+            transversal: TransversalProfile::Flat,
+            longitudinal: LongitudinalProfile::Flat,
+            cells_x: validated!(DEFAULT_TRANSVERSAL_CELLS, AllNotZero).unwrap(),
+            cells_y: validated!(DEFAULT_TRANSVERSAL_CELLS, AllNotZero).unwrap(),
+            cells_z: validated!(DEFAULT_LONGITUDINAL_CELLS, AllNotZero).unwrap(),
+        }
+    }
 }
 impl AnalyticPump {
     /// Create a new [`AnalyticPump`].
     ///
     /// # Arguments
     ///
-    /// * `peak_gain_coefficient` - g₀ at the peak of the combined profile.
     /// * `transversal` - how the pump is distributed across the cross section.
     /// * `longitudinal` - how it is distributed along the optical axis.
+    /// * `grid` - how many cells the shape is resolved onto along the body's x, y and z axis.
     ///
     /// # Errors
     ///
-    /// Returns an [`OpossumError::Other`] if the coefficient is not finite.
+    /// Returns an [`OpossumError::Other`](crate::error::OpossumError::Other) if any of the three grid
+    /// counts is zero.
     pub fn new(
-        peak_gain_coefficient: ReciprocalLength,
         transversal: TransversalProfile,
         longitudinal: LongitudinalProfile,
+        grid: CellIndex,
     ) -> OpmResult<Self> {
         let mut pump = Self {
             transversal,
             longitudinal,
             ..Self::default()
         };
-        pump.set_peak_gain_coefficient(peak_gain_coefficient)?;
+        pump.set_grid(grid)?;
         Ok(pump)
-    }
-    /// Return the small-signal gain coefficient at the peak of the profile.
-    #[must_use]
-    pub const fn peak_gain_coefficient(&self) -> ReciprocalLength {
-        *self.peak_gain_coefficient.get()
     }
     /// Return how the pump is distributed across the cross section.
     #[must_use]
@@ -447,21 +374,42 @@ impl AnalyticPump {
     pub const fn longitudinal(&self) -> LongitudinalProfile {
         self.longitudinal
     }
-    /// Set the small-signal gain coefficient at the peak of the profile.
+    /// Return how many cells the shape is resolved onto along the body's x, y and z axis.
+    ///
+    /// This is what an [`InversionField`] is laid out with, so it bounds how finely the profile can
+    /// be resolved. It is the sole convergence parameter for the gain integration.
+    #[must_use]
+    pub const fn grid(&self) -> CellIndex {
+        (
+            *self.cells_x.get(),
+            *self.cells_y.get(),
+            *self.cells_z.get(),
+        )
+    }
+    /// Set how many cells the shape is resolved onto along the body's x, y and z axis.
     ///
     /// # Arguments
     ///
-    /// * `peak_gain_coefficient` - g₀ at the peak of the combined profile.
+    /// * `grid` - the number of cells along each axis, each at least one.
     ///
     /// # Errors
     ///
-    /// Returns an [`OpossumError::Other`] if the coefficient is not finite. The previous value is
-    /// kept in that case.
-    pub fn set_peak_gain_coefficient(
-        &mut self,
-        peak_gain_coefficient: ReciprocalLength,
-    ) -> OpmResult<()> {
-        self.peak_gain_coefficient.set(peak_gain_coefficient)
+    /// Returns an [`OpossumError::Other`](crate::error::OpossumError::Other) if any of the three
+    /// counts is zero. The previous grid is kept in that case, as a whole: a grid that took only the
+    /// axes that happened to be valid would be a size nobody asked for.
+    pub fn set_grid(&mut self, grid: CellIndex) -> OpmResult<()> {
+        let (x, y, z) = grid;
+        // All three are validated before any of them is written, so a rejected axis cannot leave the
+        // grid half updated.
+        let (x, y, z) = (
+            validated!(x, AllNotZero)?,
+            validated!(y, AllNotZero)?,
+            validated!(z, AllNotZero)?,
+        );
+        self.cells_x = x;
+        self.cells_y = y;
+        self.cells_z = z;
+        Ok(())
     }
     /// Return the share of the peak this pump reaches at the given position in the medium.
     ///
@@ -473,11 +421,39 @@ impl AnalyticPump {
     ///
     /// # Returns
     ///
-    /// The product of the two profiles there, at most 1.
+    /// The product of the two profiles there — the normalized inversion `β`, at most 1.
     fn weight_at(&self, position: &Point3<Length>, bounds: &BoundingBox) -> f64 {
         self.transversal
             .value_at(&Point2::new(position.x, position.y))
             * self.longitudinal.value_at(position.z, &bounds.z_range())
+    }
+    /// Write the normalized inversion `β` this pump's shape produces into the given field.
+    ///
+    /// Only cells that hold medium are written; the rest of the grid spans the body's bounding box
+    /// but not the body itself, and there is nothing out there to excite. No cross section and no
+    /// magnitude enter here — the field keeps the pure shape, and the [`GainModel`](super::GainModel)
+    /// turns it into a gain.
+    ///
+    /// # Arguments
+    ///
+    /// * `field` - the field to fill, already laid out over the medium with this pump's grid.
+    ///
+    /// # Errors
+    ///
+    /// This function errors only if a cell reported inside the grid cannot be written, which is a
+    /// programming error rather than a configuration one.
+    pub fn deposit_shape(&self, field: &mut InversionField) -> OpmResult<()> {
+        let bounds = field.bounds();
+        for cell in cells(field.dimensions()) {
+            if !field.is_inside(cell) {
+                continue;
+            }
+            let Some(center) = field.cell_center(cell) else {
+                continue;
+            };
+            field.set_population(cell, self.weight_at(&center, &bounds))?;
+        }
+        Ok(())
     }
 }
 impl From<AnalyticPump> for PumpSource {
@@ -499,8 +475,12 @@ pub enum PumpSource {
     /// This is the default, so a component nobody pumped behaves exactly as it always did.
     #[default]
     None,
-    /// A uniform inversion throughout the medium. See [`ConstInversion`].
-    Const(ConstInversion),
+    /// A uniform inversion throughout the medium: `β = 1` everywhere it reaches.
+    ///
+    /// It carries no parameters — how hard the medium is pumped is the gain coefficient the
+    /// [`GainModel`](super::GainModel) holds. A uniform inversion needs no grid, so the model reads
+    /// it as [`Inversion::Uniform`](super::Inversion) and integrates over the exact chord.
+    Const,
     /// An inversion shaped by profiles given in closed form. See [`AnalyticPump`].
     Analytic(AnalyticPump),
 }
@@ -508,7 +488,7 @@ impl Display for PumpSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::None => write!(f, "None"),
-            Self::Const(_) => write!(f, "Const"),
+            Self::Const => write!(f, "Const"),
             Self::Analytic(_) => write!(f, "Analytic"),
         }
     }
@@ -523,136 +503,6 @@ impl PumpSource {
     pub const fn is_active(&self) -> bool {
         !matches!(self, Self::None)
     }
-    /// Add the inversion this source produces to the given [`InversionField`].
-    ///
-    /// The inversion is **added** to whatever the field already holds rather than replacing it. On a
-    /// fresh field the two are the same thing, but adding is what lets several sources pump the very
-    /// same medium, and it is the shape the reverse operation needs — an extraction, or a pump
-    /// solver depositing energy, is this with the opposite sign.
-    ///
-    /// Only cells that hold medium are written; the rest of the grid spans the body's bounding box
-    /// but not the body itself, and there is nothing out there to excite.
-    ///
-    /// # Arguments
-    ///
-    /// * `field` - the field to pump, already laid out over the medium.
-    /// * `emission_cross_section` - `σ_e` of the medium at the laser wavelength. It is needed to turn
-    ///   the gain coefficient this source is stated in into the inversion density the field stores,
-    ///   and it is an argument rather than something read off the medium because
-    ///   [`Material`](crate::material::Material) carries no spectroscopic data yet. Once it does,
-    ///   this is the one place that has to start asking it.
-    ///
-    /// # Errors
-    ///
-    /// This function errors if the cross section is not finite and positive, or if the resulting
-    /// inversion density is not finite.
-    pub fn deposit(
-        &self,
-        field: &mut InversionField,
-        emission_cross_section: Area,
-    ) -> OpmResult<()> {
-        // Matched exhaustively on purpose: a source added later has to state here how it is shaped
-        // over the grid, rather than falling into a catch-all arm that would silently pump nothing.
-        // A uniform source is the shapeless case of a profile, so both leave here as one and the
-        // grid is walked once below rather than once per variant.
-        let profile = match self {
-            Self::None => return Ok(()),
-            Self::Const(constant) => AnalyticPump::from(*constant),
-            Self::Analytic(analytic) => *analytic,
-        };
-        let peak = inversion_from_gain(profile.peak_gain_coefficient(), emission_cross_section)?;
-        let bounds = field.bounds();
-        for cell in cells(field.dimensions()) {
-            if !field.is_inside(cell) {
-                continue;
-            }
-            let (Some(center), Some(present)) = (field.cell_center(cell), field.population(cell))
-            else {
-                continue;
-            };
-            let deposited = peak * profile.weight_at(&center, &bounds);
-            if !deposited.is_finite() {
-                return Err(OpossumError::Other(format!(
-                    "pumping cell {cell:?} would leave it at an inversion that is not finite"
-                )));
-            }
-            field.set_population(cell, present + deposited)?;
-        }
-        Ok(())
-    }
-}
-
-/// Convert a small-signal gain coefficient into the inversion density producing it.
-///
-/// `g₀ = σ_e · ΔN` is what the gain coefficient *is*: the inversion, measured in how much
-/// amplification it yields per unit length. Turning that around is what lets a pump source be stated
-/// in the quantity an amplifier is specified in while the field keeps the density, which — unlike
-/// the coefficient — does not depend on the wavelength the medium is looked at with.
-///
-/// # Arguments
-///
-/// - `gain_coefficient`: g₀, the gain per unit length. May be negative for an absorbing medium.
-/// - `emission_cross_section`: `σ_e` of the medium at the laser wavelength.
-///
-/// # Returns
-///
-/// The inversion density that produces the given coefficient.
-///
-/// # Errors
-///
-/// This function returns an error if the cross section is not finite and positive — a medium that
-/// cannot emit has no inversion that would explain a gain — or if the quotient is not finite.
-pub(crate) fn inversion_from_gain(
-    gain_coefficient: ReciprocalLength,
-    emission_cross_section: Area,
-) -> OpmResult<VolumetricNumberDensity> {
-    let cross_section = emission_cross_section.value;
-    if !cross_section.is_finite() || cross_section <= 0.0 {
-        return Err(OpossumError::Other(format!(
-            "an emission cross section of {cross_section} m^2 cannot relate a gain coefficient to \
-             an inversion: it has to be finite and positive"
-        )));
-    }
-    // `uom` keeps number densities in a kind of their own so that they cannot be confused with the
-    // other quantities of dimension 1/length^3, which is why the quotient has to be moved into it
-    // explicitly rather than simply being one.
-    let inversion: VolumetricNumberDensity = (gain_coefficient / emission_cross_section).into();
-    if inversion.is_finite() {
-        Ok(inversion)
-    } else {
-        Err(OpossumError::Other(format!(
-            "a gain coefficient of {} 1/m over a cross section of {cross_section} m^2 is not a \
-             finite inversion density",
-            gain_coefficient.value
-        )))
-    }
-}
-
-/// Convert an inversion density into the gain per unit length it yields.
-///
-/// The exact inverse of [`inversion_from_gain`], and the direction an extraction needs: the field
-/// stores the density, but what amplifies a ray over a stretch of its path is `g₀ = σ_e · ΔN`. Both
-/// directions live here together on purpose - a model depositing with one σ_e and extracting with
-/// another would be describing two different media, and keeping the pair in one place is what lets
-/// the two cancel exactly rather than to within floating point luck.
-///
-/// # Arguments
-///
-/// - `inversion`: ΔN, the local inversion density. May be negative for an absorbing medium, which
-///   yields a negative coefficient.
-/// - `emission_cross_section`: `σ_e` of the medium at the laser wavelength.
-///
-/// # Returns
-///
-/// The gain per unit length that inversion provides.
-pub(crate) fn four_level_gain_from_inversion(
-    inversion: VolumetricNumberDensity,
-    emission_cross_section: Area,
-) -> ReciprocalLength {
-    // `uom` keeps number densities in a kind of their own, so the product has to be moved back into
-    // the plain quantity explicitly - the same conversion `inversion_from_gain` performs the other
-    // way round.
-    (inversion * emission_cross_section).into()
 }
 
 #[cfg(test)]
@@ -661,21 +511,18 @@ mod test {
     use crate::{
         apertures::{Aperture, ApertureType},
         degree,
+        error::OpossumError,
         gain::inversion_field::CellIndex,
         geometry::{Plane, body::SurfaceBoundedBody, geo_surface::GeoSurfaceRef},
-        millimeter, num_per_cm3, square_centimeter,
+        millimeter,
         types::validated_type_definitions::ValidatedCrossSection,
         utils::geom_transformation::Isometry,
     };
     use approx::assert_relative_eq;
     use std::sync::{Arc, Mutex};
     use strum::IntoEnumIterator;
-    use uom::si::{f64::Length, volumetric_number_density::per_cubic_centimeter};
+    use uom::si::f64::Length;
 
-    /// The emission cross section of a typical solid state gain medium, of the order Yb:YAG has.
-    fn cross_section() -> Area {
-        square_centimeter!(2.0e-20)
-    }
     /// Create a disk of the given thickness and radius, sitting at the origin.
     fn disk(thickness: Length, radius: Length) -> OpmResult<SurfaceBoundedBody> {
         Ok(SurfaceBoundedBody::new(
@@ -713,139 +560,77 @@ mod test {
             .cell_center(cell)
             .ok_or_else(|| OpossumError::Other(format!("cell {cell:?} is not part of the grid")))
     }
-    /// Return the inversion of the given cell in 1/cm^3, or an error if it is not part of the grid.
-    fn inversion_at(field: &InversionField, cell: (usize, usize, usize)) -> OpmResult<f64> {
+    /// Return the normalized inversion β of the given cell, or an error if it is not on the grid.
+    fn beta_at(field: &InversionField, cell: CellIndex) -> OpmResult<f64> {
         field
             .population(cell)
-            .map(|density| density.get::<per_cubic_centimeter>())
             .ok_or_else(|| OpossumError::Other(format!("cell {cell:?} is not part of the grid")))
     }
     #[test]
-    fn a_constant_source_pumps_the_whole_medium_evenly() -> OpmResult<()> {
+    fn a_flat_pump_fills_the_medium_with_unit_beta() -> OpmResult<()> {
+        // Flat both ways is the shapeless pump: β = 1 in every cell that holds medium, 0 outside.
         let mut field = field_over_a_disk()?;
-        let source = PumpSource::Const(ConstInversion::new(reciprocal_centimeter!(0.5))?);
-        source.deposit(&mut field, cross_section())?;
-        // 0.5 1/cm over 2e-20 cm^2 is an inversion of 2.5e19 1/cm^3, everywhere the medium reaches.
+        AnalyticPump::new(
+            TransversalProfile::Flat,
+            LongitudinalProfile::Flat,
+            (8, 8, 4),
+        )?
+        .deposit_shape(&mut field)?;
         for cell in cells(field.dimensions()) {
-            let expected = if field.is_inside(cell) { 2.5e19 } else { 0.0 };
-            assert_relative_eq!(inversion_at(&field, cell)?, expected, max_relative = 1e-12);
+            let expected = if field.is_inside(cell) { 1.0 } else { 0.0 };
+            assert_relative_eq!(beta_at(&field, cell)?, expected, max_relative = 1e-12);
         }
-        // ... and the mask really did leave something out, otherwise the check above is vacuous
+        // ... and the mask really did leave something out, otherwise the check above is vacuous.
         assert!(cells(field.dimensions()).any(|cell| !field.is_inside(cell)));
         Ok(())
     }
     #[test]
-    fn a_larger_cross_section_needs_less_inversion_for_the_same_gain() -> OpmResult<()> {
-        // The gain coefficient is what the user states, so doubling the cross section of the medium
-        // means half the inversion produces it.
-        let source = PumpSource::Const(ConstInversion::new(reciprocal_centimeter!(0.5))?);
-        let mut weak = field_over_a_disk()?;
-        let mut strong = field_over_a_disk()?;
-        source.deposit(&mut weak, cross_section())?;
-        source.deposit(&mut strong, cross_section() * 2.0)?;
-        assert_relative_eq!(
-            inversion_at(&weak, (3, 3, 0))?,
-            2.0 * inversion_at(&strong, (3, 3, 0))?,
-            max_relative = 1e-12
-        );
-        Ok(())
-    }
-    #[test]
-    fn pumping_twice_adds_up() -> OpmResult<()> {
-        // Depositing accumulates rather than overwrites, so a medium pumped from two sides ends up
-        // with the sum - and an extraction can later subtract through the very same field.
-        let mut field = field_over_a_disk()?;
-        let source = PumpSource::Const(ConstInversion::new(reciprocal_centimeter!(0.5))?);
-        source.deposit(&mut field, cross_section())?;
-        let once = inversion_at(&field, (3, 3, 0))?;
-        source.deposit(&mut field, cross_section())?;
-        assert_relative_eq!(inversion_at(&field, (3, 3, 0))?, 2.0 * once);
-        Ok(())
-    }
-    #[test]
-    fn an_absent_source_leaves_the_field_alone() -> OpmResult<()> {
-        let mut field = field_over_a_disk()?;
-        let untouched = field.clone();
-        PumpSource::None.deposit(&mut field, cross_section())?;
-        assert_eq!(field, untouched);
-        Ok(())
-    }
-    #[test]
-    fn a_negative_coefficient_describes_an_absorbing_medium() -> OpmResult<()> {
-        // An unpumped doped medium absorbs at the laser wavelength. That is the same physics with
-        // the inversion turned around, which is why the coefficient is not constrained to be
-        // positive and the field stores a signed density.
-        let mut field = field_over_a_disk()?;
-        let source = PumpSource::Const(ConstInversion::new(reciprocal_centimeter!(-0.5))?);
-        source.deposit(&mut field, cross_section())?;
-        assert_relative_eq!(
-            inversion_at(&field, (3, 3, 0))?,
-            -2.5e19,
-            max_relative = 1e-12
-        );
-        Ok(())
-    }
-    #[test]
-    fn a_medium_that_cannot_emit_has_no_inversion_to_speak_of() -> OpmResult<()> {
-        let mut field = field_over_a_disk()?;
-        let source = PumpSource::Const(ConstInversion::new(reciprocal_centimeter!(0.5))?);
-        for impossible in [
-            square_centimeter!(0.0),
-            square_centimeter!(-1.0e-20),
-            square_centimeter!(f64::NAN),
-            square_centimeter!(f64::INFINITY),
-        ] {
-            assert!(source.deposit(&mut field, impossible).is_err());
+    fn a_grid_without_cells_is_refused() {
+        for refused in [(0, 4, 4), (4, 0, 4), (4, 4, 0)] {
+            assert!(
+                AnalyticPump::new(TransversalProfile::Flat, LongitudinalProfile::Flat, refused)
+                    .is_err(),
+                "a grid of {refused:?} should be refused"
+            );
         }
-        // A source that does not pump is not asked to convert anything, so it does not care.
         assert!(
-            PumpSource::None
-                .deposit(&mut field, square_centimeter!(0.0))
-                .is_ok()
+            AnalyticPump::new(
+                TransversalProfile::Flat,
+                LongitudinalProfile::Flat,
+                (1, 1, 1)
+            )
+            .is_ok()
         );
+    }
+    #[test]
+    fn a_rejected_grid_keeps_the_old_one() -> OpmResult<()> {
+        // A half-typed value in the GUI must not damage what is already configured, and a grid is
+        // kept as a whole: the z axis below is fine, but the y one is not.
+        let mut pump = AnalyticPump::new(
+            TransversalProfile::Flat,
+            LongitudinalProfile::Flat,
+            (4, 5, 6),
+        )?;
+        assert!(pump.set_grid((7, 0, 9)).is_err());
+        assert_eq!(pump.grid(), (4, 5, 6));
         Ok(())
     }
     #[test]
-    fn default_is_unpumped() -> OpmResult<()> {
+    fn default_is_unpumped() {
         assert_eq!(PumpSource::default(), PumpSource::None);
         assert!(!PumpSource::default().is_active());
-        assert!(PumpSource::Const(ConstInversion::default()).is_active());
-        // A freshly selected `Const` must not pump on its own, so its default coefficient is zero.
-        assert_relative_eq!(ConstInversion::default().gain_coefficient().value, 0.0);
-        let mut field = field_over_a_disk()?;
-        PumpSource::Const(ConstInversion::default()).deposit(&mut field, cross_section())?;
-        assert_relative_eq!(inversion_at(&field, (3, 3, 0))?, 0.0);
-        Ok(())
+        // A uniform pump and a shaped one both do something; only `None` is passive.
+        assert!(PumpSource::Const.is_active());
+        assert!(PumpSource::Analytic(AnalyticPump::default()).is_active());
     }
     #[test]
-    fn a_rejected_coefficient_keeps_the_old_value() -> OpmResult<()> {
-        let mut inversion = ConstInversion::new(reciprocal_centimeter!(0.5))?;
-        // A half-typed value in a user interface must leave the medium as it was.
-        assert!(
-            inversion
-                .set_gain_coefficient(reciprocal_centimeter!(f64::NAN))
-                .is_err()
-        );
-        assert_relative_eq!(
-            inversion.gain_coefficient().value,
-            reciprocal_centimeter!(0.5).value
-        );
-        assert!(ConstInversion::new(reciprocal_centimeter!(f64::INFINITY)).is_err());
-        assert!(ConstInversion::new(reciprocal_centimeter!(f64::NEG_INFINITY)).is_err());
-        Ok(())
-    }
-    #[test]
-    fn fmt() -> OpmResult<()> {
+    fn fmt() {
         assert_eq!(format!("{}", PumpSource::None), "None");
+        assert_eq!(format!("{}", PumpSource::Const), "Const");
         assert_eq!(
-            format!("{}", PumpSource::Const(ConstInversion::default())),
-            "Const"
+            format!("{}", PumpSource::Analytic(AnalyticPump::default())),
+            "Analytic"
         );
-        assert_eq!(
-            PumpSource::from(ConstInversion::new(reciprocal_centimeter!(0.5))?),
-            PumpSource::Const(ConstInversion::new(reciprocal_centimeter!(0.5))?)
-        );
-        Ok(())
     }
     #[test]
     fn all_variants_are_reachable_by_name() {
@@ -862,15 +647,14 @@ mod test {
     fn serde_roundtrip() -> OpmResult<()> {
         for source in [
             PumpSource::None,
-            PumpSource::Const(ConstInversion::new(reciprocal_centimeter!(0.5))?),
-            PumpSource::Const(ConstInversion::new(reciprocal_centimeter!(-0.5))?),
+            PumpSource::Const,
             PumpSource::Analytic(AnalyticPump::new(
-                reciprocal_centimeter!(0.5),
                 TransversalProfile::SuperGaussian(SuperGaussianShape::default()),
                 LongitudinalProfile::BeerLambert(BeerLambertProfile::new(
                     reciprocal_centimeter!(1.0),
                     PumpDirection::Backward,
                 )?),
+                (16, 16, 8),
             )?),
         ] {
             let serialized =
@@ -879,38 +663,29 @@ mod test {
                 ron::from_str(&serialized).map_err(|e| OpossumError::Other(e.to_string()))?;
             assert_eq!(source, deserialized);
         }
-        // A hand-edited file has to run through the same validation as a setter. The accepted case
-        // is asserted alongside it so that the rejection is known to come from the value rather
-        // than from a shape `ron` could not read in the first place - the two differ in nothing
-        // else. The number is in the base unit, so 50 per meter is the 0.5 per centimeter above.
-        assert!(ron::from_str::<PumpSource>("Const((gain_coefficient:50))").is_ok());
-        assert!(ron::from_str::<PumpSource>("Const((gain_coefficient:NaN))").is_err());
-        Ok(())
-    }
-    #[test]
-    fn a_shapeless_analytic_pump_is_a_constant_one() -> OpmResult<()> {
-        // Both profiles flat means no shape at all, which is exactly what `Const` describes - and
-        // `deposit` really does walk them down the same path, so this has to come out identical.
-        let coefficient = reciprocal_centimeter!(0.5);
-        let mut shaped = field_over_a_disk()?;
-        let mut uniform = field_over_a_disk()?;
-        PumpSource::Analytic(AnalyticPump::new(
-            coefficient,
-            TransversalProfile::Flat,
-            LongitudinalProfile::Flat,
-        )?)
-        .deposit(&mut shaped, cross_section())?;
-        PumpSource::Const(ConstInversion::new(coefficient)?)
-            .deposit(&mut uniform, cross_section())?;
-        assert_eq!(shaped, uniform);
+        // A hand-edited file has to run through the same validation as the constructor. The accepted
+        // case is asserted alongside the rejected one so that the rejection is known to come from the
+        // value rather than from a shape `ron` could not read in the first place - a zero-cell grid
+        // is refused, the same shape with a valid grid is not.
+        assert!(
+            ron::from_str::<PumpSource>(
+                "Analytic((transversal:Flat,longitudinal:Flat,cells_x:8,cells_y:8,cells_z:8))"
+            )
+            .is_ok()
+        );
+        assert!(
+            ron::from_str::<PumpSource>(
+                "Analytic((transversal:Flat,longitudinal:Flat,cells_x:0,cells_y:8,cells_z:8))"
+            )
+            .is_err()
+        );
         Ok(())
     }
     #[test]
     fn a_super_gaussian_spot_peaks_on_the_axis() -> OpmResult<()> {
         let sigma = millimeter!(2.0, 2.0);
         let mut field = field_centered_on_the_axis()?;
-        PumpSource::Analytic(AnalyticPump::new(
-            reciprocal_centimeter!(0.5),
+        AnalyticPump::new(
             TransversalProfile::SuperGaussian(SuperGaussianShape::new(
                 millimeter!(0.0, 0.0),
                 sigma,
@@ -919,21 +694,18 @@ mod test {
                 false,
             )?),
             LongitudinalProfile::Flat,
-        )?)
-        .deposit(&mut field, cross_section())?;
-        // The middle column of nine sits on the axis, where the profile is at its peak ...
-        assert_relative_eq!(
-            inversion_at(&field, (4, 4, 0))?,
-            2.5e19,
-            max_relative = 1e-12
-        );
+            (9, 9, 4),
+        )?
+        .deposit_shape(&mut field)?;
+        // The middle column of nine sits on the axis, where the profile is at its peak (β = 1) ...
+        assert_relative_eq!(beta_at(&field, (4, 4, 0))?, 1.0, max_relative = 1e-12);
         // ... and every cell off it follows exp(-r^2 / 2 sigma^2), worked out at the cell's own
         // center rather than at a position the grid was chosen to make round.
         for cell in [(4, 6, 0), (6, 4, 0), (2, 2, 3)] {
             let center = center_of(&field, cell)?;
             let radial = center.x.value.hypot(center.y.value);
-            let expected = 2.5e19 * f64::exp(-0.5 * (radial / sigma.x.value).powi(2));
-            assert_relative_eq!(inversion_at(&field, cell)?, expected, max_relative = 1e-12);
+            let expected = f64::exp(-0.5 * (radial / sigma.x.value).powi(2));
+            assert_relative_eq!(beta_at(&field, cell)?, expected, max_relative = 1e-12);
         }
         Ok(())
     }
@@ -943,8 +715,7 @@ mod test {
         // section leaves the axis behind.
         let mut field = field_centered_on_the_axis()?;
         let off_axis = center_of(&field, (6, 6, 0))?;
-        PumpSource::Analytic(AnalyticPump::new(
-            reciprocal_centimeter!(0.5),
+        AnalyticPump::new(
             TransversalProfile::SuperGaussian(SuperGaussianShape::new(
                 Point2::new(off_axis.x, off_axis.y),
                 millimeter!(1.0, 1.0),
@@ -953,35 +724,32 @@ mod test {
                 false,
             )?),
             LongitudinalProfile::Flat,
-        )?)
-        .deposit(&mut field, cross_section())?;
-        assert_relative_eq!(
-            inversion_at(&field, (6, 6, 0))?,
-            2.5e19,
-            max_relative = 1e-12
-        );
-        assert!(inversion_at(&field, (4, 4, 0))? < inversion_at(&field, (6, 6, 0))?);
+            (9, 9, 4),
+        )?
+        .deposit_shape(&mut field)?;
+        assert_relative_eq!(beta_at(&field, (6, 6, 0))?, 1.0, max_relative = 1e-12);
+        assert!(beta_at(&field, (4, 4, 0))? < beta_at(&field, (6, 6, 0))?);
         Ok(())
     }
     #[test]
     fn beer_lambert_decays_along_the_axis() -> OpmResult<()> {
         let absorption = reciprocal_centimeter!(1.0);
         let mut field = field_over_a_disk()?;
-        PumpSource::Analytic(AnalyticPump::new(
-            reciprocal_centimeter!(0.5),
+        AnalyticPump::new(
             TransversalProfile::Flat,
             LongitudinalProfile::BeerLambert(BeerLambertProfile::new(
                 absorption,
                 PumpDirection::Forward,
             )?),
-        )?)
-        .deposit(&mut field, cross_section())?;
+            (8, 8, 4),
+        )?
+        .deposit_shape(&mut field)?;
         // Between the first and the last slice the pump has travelled the distance between their
-        // centers, and it is attenuated by exactly the Beer-Lambert factor over it.
+        // centers, and β is attenuated by exactly the Beer-Lambert factor over it.
         let (near, far) = ((3, 3, 0), (3, 3, 3));
         let travelled = center_of(&field, far)?.z - center_of(&field, near)?.z;
         assert_relative_eq!(
-            inversion_at(&field, far)? / inversion_at(&field, near)?,
+            beta_at(&field, far)? / beta_at(&field, near)?,
             f64::exp(-(absorption * travelled).value),
             max_relative = 1e-12
         );
@@ -991,15 +759,15 @@ mod test {
     fn pumping_from_the_other_end_mirrors_the_profile() -> OpmResult<()> {
         let make = |direction| -> OpmResult<InversionField> {
             let mut field = field_over_a_disk()?;
-            PumpSource::Analytic(AnalyticPump::new(
-                reciprocal_centimeter!(0.5),
+            AnalyticPump::new(
                 TransversalProfile::Flat,
                 LongitudinalProfile::BeerLambert(BeerLambertProfile::new(
                     reciprocal_centimeter!(1.0),
                     direction,
                 )?),
-            )?)
-            .deposit(&mut field, cross_section())?;
+                (8, 8, 4),
+            )?
+            .deposit_shape(&mut field)?;
             Ok(field)
         };
         let forward = make(PumpDirection::Forward)?;
@@ -1007,8 +775,8 @@ mod test {
         let (_, _, slices) = forward.dimensions();
         for (i, j, k) in cells(forward.dimensions()) {
             assert_relative_eq!(
-                inversion_at(&forward, (i, j, k))?,
-                inversion_at(&backward, (i, j, slices - 1 - k))?,
+                beta_at(&forward, (i, j, k))?,
+                beta_at(&backward, (i, j, slices - 1 - k))?,
                 max_relative = 1e-12
             );
         }
@@ -1021,8 +789,7 @@ mod test {
         let sigma = millimeter!(2.0, 2.0);
         let absorption = reciprocal_centimeter!(1.0);
         let mut field = field_centered_on_the_axis()?;
-        PumpSource::Analytic(AnalyticPump::new(
-            reciprocal_centimeter!(0.5),
+        AnalyticPump::new(
             TransversalProfile::SuperGaussian(SuperGaussianShape::new(
                 millimeter!(0.0, 0.0),
                 sigma,
@@ -1034,22 +801,23 @@ mod test {
                 absorption,
                 PumpDirection::Forward,
             )?),
-        )?)
-        .deposit(&mut field, cross_section())?;
+            (9, 9, 4),
+        )?
+        .deposit_shape(&mut field)?;
         let cell = (6, 5, 2);
         let center = center_of(&field, cell)?;
         let radial = center.x.value.hypot(center.y.value);
         // The medium starts at z = 0, so the depth the pump has travelled is the cell's own z.
-        let expected = 2.5e19
-            * f64::exp(-0.5 * (radial / sigma.x.value).powi(2))
+        let expected = f64::exp(-0.5 * (radial / sigma.x.value).powi(2))
             * f64::exp(-(absorption * center.z).value);
-        assert_relative_eq!(inversion_at(&field, cell)?, expected, max_relative = 1e-12);
+        assert_relative_eq!(beta_at(&field, cell)?, expected, max_relative = 1e-12);
         Ok(())
     }
     #[test]
     fn a_pump_that_grows_as_it_is_absorbed_is_refused() {
-        // A gain coefficient may be negative - that is an absorbing medium. An absorption
-        // coefficient may not: a pump getting stronger the deeper it goes is not physics.
+        // An absorption coefficient may not be negative: a pump getting stronger the deeper it goes
+        // is not physics. (A gain coefficient may be negative — that is an absorbing medium — but it
+        // lives on the gain model now, not here.)
         assert!(
             BeerLambertProfile::new(reciprocal_centimeter!(-1.0), PumpDirection::Forward).is_err()
         );
@@ -1061,20 +829,5 @@ mod test {
         assert!(
             BeerLambertProfile::new(reciprocal_centimeter!(0.0), PumpDirection::Forward).is_ok()
         );
-    }
-    /// The conversion a pump source performs, checked against the same numbers by hand.
-    #[test]
-    fn a_gain_coefficient_becomes_an_inversion_density() -> OpmResult<()> {
-        assert_relative_eq!(
-            inversion_from_gain(reciprocal_centimeter!(0.5), cross_section())?
-                .get::<per_cubic_centimeter>(),
-            2.5e19,
-            max_relative = 1e-12
-        );
-        assert_eq!(
-            inversion_from_gain(reciprocal_centimeter!(1.0), cross_section())?,
-            num_per_cm3!(5.0e19)
-        );
-        Ok(())
     }
 }

@@ -6,11 +6,11 @@ partially absorbed along the optical axis. The [`amplifier_chain.rs`](model_an_a
 example covers the simpler `Const` model; here the gain field depends on position inside the
 medium, so two parallel rays through the same slab leave with different gain factors.
 
-## When to use `Small Signal Gain` instead of `Const`
+## When to use `Monochromatic Small Signal Gain` instead of `Const`
 
 `Const` assigns one factor to the whole ray bundle regardless of where a ray enters the medium or
 how long its chord through it is. That is appropriate for chain layout and first estimates. Use
-`Small Signal Gain` when any of the following matters:
+`Monochromatic Small Signal Gain` when any of the following matters:
 
 - The pump spot does not cover the full aperture — rays near the edge are less pumped than axial
   ones.
@@ -20,9 +20,10 @@ how long its chord through it is. That is appropriate for chain layout and first
 - The analysis needs to be run in ray tracing or ghost focus mode (energy flow cannot use
   `Small Signal Gain` because it carries no per-ray geometry).
 
-`Small Signal Gain` is an *unsaturated* model: extracting energy does not draw the inversion
-down. It holds as long as the extracted fluence is small compared with the stored fluence in the
-medium. For saturating amplifiers the next gain stage (Frantz–Nodvik) will be the right tool.
+`Monochromatic Small Signal Gain` is an *unsaturated* model: extracting energy does not draw the
+inversion down. It holds as long as the extracted fluence is small compared with the stored
+fluence in the medium. For saturating amplifiers the next gain stage (Frantz–Nodvik) will be the
+right tool.
 
 ## Setting it up in code
 
@@ -40,11 +41,11 @@ passive lens would be. Nothing about the node says "amplifier":
 ```rust
 use opossum_core::{
     gain::{
-        AnalyticPump, BeerLambertProfile, GainModel, LongitudinalProfile, PumpDirection,
-        PumpSource, SmallSignalGain, TransversalProfile,
+        AnalyticPump, BeerLambertProfile, GainModel, LongitudinalProfile, MonochromaticSmallSignalGain,
+        PumpDirection, PumpSource, TransversalProfile,
     },
     prelude::*,
-    reciprocal_centimeter, square_centimeter,
+    reciprocal_centimeter,
     utils::super_gaussian::SuperGaussianShape,
 };
 
@@ -58,25 +59,25 @@ let head = scenery.add_node(Lens::new(
 ```
 
 A pump scenario assigns the gain model and the pump source to that node separately. The gain model
-says *how* a ray accumulates gain from the inversion field; the pump source says *what that field
-looks like*:
+carries the *magnitude* — the peak gain coefficient g₀ where the pump is strongest; the pump
+source carries only the *shape* — the spatial profile β ∈ [0, 1] that says how strongly each
+point of the medium is pumped relative to that peak:
 
 ```rust
 // Gain model: unsaturated path-integral gain.
-// σ_e is the emission cross section of the medium at the laser wavelength.
+// g₀ is the peak small-signal gain coefficient at the strongest point of the pump profile.
 scenario.set_gain_model(
     head,
-    GainModel::SmallSignalGain(SmallSignalGain::new(
-        square_centimeter!(2.0e-20), // σ_e ≈ 2 × 10⁻²⁰ cm² (typical solid-state medium)
-        (64, 64, 32),               // 64 × 64 transversal, 32 longitudinal cells
+    GainModel::MonochromaticSmallSignalGain(MonochromaticSmallSignalGain::new(
+        reciprocal_centimeter!(0.3), // peak g₀ where the pump is strongest (axis, near face)
     )?),
 );
 
 // Pump source: Super-Gaussian spot × Beer-Lambert longitudinal decay.
+// The pump carries only the shape and the grid it is resolved on — no amplitude here.
 scenario.set_pump_source(
     head,
     PumpSource::Analytic(AnalyticPump::new(
-        reciprocal_centimeter!(0.3),  // peak g₀ at the profile center (axis, near face)
         TransversalProfile::SuperGaussian(SuperGaussianShape::new(
             millimeter!(0.0, 0.0),  // pump centered on the optical axis
             millimeter!(5.0, 5.0),  // 1/e² half-width 5 mm along x and y
@@ -86,18 +87,19 @@ scenario.set_pump_source(
         )?),
         LongitudinalProfile::BeerLambert(BeerLambertProfile::new(
             reciprocal_centimeter!(0.5), // pump absorption coefficient in the medium
-            PumpDirection::Forward,       // pump enters from the input surface
+            PumpDirection::Forward,      // pump enters from the input surface
         )?),
+        (64, 64, 32), // 64 × 64 transversal, 32 longitudinal cells
     )?),
 );
 ```
 
 ### Choosing the grid
 
-The `(64, 64, 32)` grid is the resolution at which the inversion field is discretized. Each cell
-holds one inversion density value. A ray traverses the cells exactly (Amanatides–Woo algorithm),
-so there is no step-size error — only the discretization of the pump profile onto the grid
-introduces approximation. Rules of thumb:
+The `(64, 64, 32)` grid is the third argument of `AnalyticPump::new` — the resolution at which
+the pump shape β is discretized over the medium. Each cell holds one β value. A ray traverses the
+cells exactly (Amanatides–Woo algorithm), so there is no step-size error — only the
+discretization of the pump profile onto the grid introduces approximation. Rules of thumb:
 
 - Make `cells_z` fine enough to resolve the longitudinal profile: for Beer-Lambert with
   α = 0.5 cm⁻¹ over 40 mm, roughly 16–32 slices are sufficient for < 1 % error.
@@ -105,20 +107,13 @@ introduces approximation. Rules of thumb:
   with σ = 5 mm over a 20 mm aperture needs around 32–64 cells to be well-sampled.
 - Finer grids cost proportionally more memory but no additional traversal time per ray.
 
-### The emission cross section
-
-`SmallSignalGain` holds one emission cross section σ_e. It is a parameter of the model, not a
-property of the material node, because the material does not carry spectroscopic data yet. The
-value cancels out exactly when the pump source and the gain model both use the same σ_e (the pump
-converts g₀ → inversion density via σ_e; the gain model converts density → g₀ back, via the same
-σ_e). It only becomes a physical input at the next model stage, when gain narrowing across λ
-requires a σ_e(λ) curve. For now, any positive finite value produces a physically correct result
-as long as both halves share it.
+A constant pump (`PumpSource::Const`) has no shape to resolve, so it needs no grid and no grid
+argument — the model integrates over the exact chord the ray travels through the body.
 
 ## Running the analysis
 
-`Small Signal Gain` requires a ray-tracing or ghost-focus analysis; an energy-flow analysis is
-refused because it carries no per-ray geometry and cannot integrate g₀ along a path. Configuring
+`Monochromatic Small Signal Gain` requires a ray-tracing or ghost-focus analysis; an energy-flow
+analysis is refused because it carries no per-ray geometry and cannot integrate g₀ along a path. Configuring
 one is the same as for any other model:
 
 ```rust

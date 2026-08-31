@@ -21,11 +21,11 @@
 //! ```
 use opossum_core::{
     gain::{
-        AnalyticPump, BeerLambertProfile, GainModel, LongitudinalProfile, PumpDirection,
-        PumpSource, SmallSignalGain, TransversalProfile,
+        AnalyticPump, BeerLambertProfile, GainModel, LongitudinalProfile,
+        MonochromaticSmallSignalGain, PumpDirection, PumpSource, TransversalProfile,
     },
     prelude::*,
-    reciprocal_centimeter, square_centimeter,
+    reciprocal_centimeter,
     utils::super_gaussian::SuperGaussianShape,
 };
 use std::path::Path;
@@ -59,17 +59,17 @@ fn main() -> OpmResult<()> {
         .pump_scenario_mut(scenario_id)
         .expect("the scenario just added must be there");
 
+    // The magnitude — g₀ = 0.3 cm⁻¹ at the peak of the pump's shape — lives on the model now.
     scenario.set_gain_model(
         head,
-        GainModel::SmallSignalGain(SmallSignalGain::new(
-            square_centimeter!(2.0e-20), // σ_e ≈ 2 × 10⁻²⁰ cm², a typical solid-state medium
-            (64, 64, 32),                // 64 × 64 transversal, 32 longitudinal cells
+        GainModel::MonochromaticSmallSignalGain(MonochromaticSmallSignalGain::new(
+            reciprocal_centimeter!(0.3), // peak g₀ where the pump is strongest (axis, near face)
         )?),
     );
+    // The pump carries only the shape and the grid it is resolved on.
     scenario.set_pump_source(
         head,
         PumpSource::Analytic(AnalyticPump::new(
-            reciprocal_centimeter!(0.3),
             TransversalProfile::SuperGaussian(SuperGaussianShape::new(
                 millimeter!(0.0, 0.0), // pump centered on the optical axis
                 millimeter!(5.0, 5.0), // 1/e² half-width 5 mm along x and y
@@ -81,10 +81,11 @@ fn main() -> OpmResult<()> {
                 reciprocal_centimeter!(0.5), // absorption coefficient of the pump in the medium
                 PumpDirection::Forward,      // pump enters from the input surface
             )?),
+            (64, 64, 32), // 64 × 64 transversal, 32 longitudinal cells
         )?),
     );
 
-    // Ray-tracing analysis: SmallSignalGain integrates gain along each ray's actual path through
+    // Ray-tracing analysis: MonochromaticSmallSignalGain integrates gain along each ray's actual path through
     // the medium, so only a ray trace can reveal the spatially varying gain across the beam.
     let mut config = RayTraceConfig::default();
     config.map_source(

@@ -14,7 +14,7 @@ impl From<ConstantAttenuationParam> for InputParam {
     fn from(param: ConstantAttenuationParam) -> Self {
         match param {
             ConstantAttenuationParam::TransmissionFactor => {
-                InputParam::F64("Transmission factor".to_string())
+                Self::F64("Transmission factor".to_string())
             }
         }
     }

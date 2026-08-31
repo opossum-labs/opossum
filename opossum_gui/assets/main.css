@@ -615,7 +615,7 @@ body {
     border-radius: 4px;
 }
 
-/* SmallSignalGain-specific parameters: integration steps and inversion-field grid. */
+/* MonochromaticSmallSignalGain-specific parameters: integration steps and inversion-field grid. */
 .ssg-params {
     display: flex;
     flex-direction: column;

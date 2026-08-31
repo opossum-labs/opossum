@@ -15,7 +15,7 @@
 use super::scenario::PumpConfig;
 use crate::{
     error::OpmResult,
-    gain::inversion_field::InversionField,
+    gain::inversion_field::Inversion,
     geometry::body::Body,
     light::{Ray, Spectrum},
 };
@@ -41,45 +41,47 @@ pub trait Extraction {
     /// interface that has no component in front of it; [`Extraction::build_inversion`] is where the
     /// field is actually built.
     fn needs_inversion(&self) -> bool;
-    /// Discretise and pump the given body, ready for this model to extract from.
+    /// Prepare the inversion of the given body, ready for this model to extract from.
     ///
-    /// A model states here how finely it wants the medium resolved and what it needs deposited in
-    /// it, because both depend on what the model is going to do with it. Answering `None` means the
-    /// model reads no inversion at all and no grid is laid out for it.
+    /// A model states here what it needs deposited in the medium and, for a shaped pump, how finely
+    /// to resolve it. The result is an [`Inversion`]: a shaped pump yields
+    /// [`Inversion::Field`], a uniform one [`Inversion::Uniform`] with no grid at all, and an
+    /// unpumped medium `Uniform(0.0)` — a state a model can still read (as transparency, or, later,
+    /// as absorption). Answering `None` means the model reads no inversion at all and no grid is
+    /// laid out for it.
     ///
     /// # Arguments
     ///
     /// * `body` - the volume of the medium.
     /// * `config` - the operating point of the node, whose
-    ///   [`PumpSource`](super::PumpSource) fills the field.
+    ///   [`PumpSource`](super::PumpSource) shapes the inversion.
     ///
     /// # Returns
     ///
-    /// The pumped inversion field, or `None` if this model does not read one.
+    /// The prepared inversion, or `None` if this model does not read one.
     ///
     /// # Errors
     ///
     /// This function errors if the grid cannot be laid over the body or the medium cannot be
     /// pumped.
-    fn build_inversion(
-        &self,
-        body: &dyn Body,
-        config: &PumpConfig,
-    ) -> OpmResult<Option<InversionField>>;
+    fn build_inversion(&self, body: &dyn Body, config: &PumpConfig)
+    -> OpmResult<Option<Inversion>>;
     /// Gain exponent accumulated along the whole chord a ray travels through the medium.
     ///
     /// [`volumetric::Volumetric::propagate_inside_medium`](crate::core_optics::volumetric::Volumetric)
     /// calls this once per ray that passes through the medium and exponentiates the result to get
     /// the gain factor: `factor = exp(path_exponent(…))`.
     ///
-    /// Grid-reading models implement this by walking the ray through the [`InversionField`] cell by
-    /// cell (Amanatides–Woo exact traversal) and summing `g_cell · Δs_cell` per cell, where
-    /// `Δs_cell` is the exact arc length the ray spends inside that cell. A path-independent model
-    /// — a constant factor — returns `ln(gain)` and ignores the geometry.
+    /// Shaped-pump models implement this by walking the ray through the
+    /// [`InversionField`](super::InversionField) cell by cell (Amanatides–Woo exact traversal) and
+    /// summing `g_cell · Δs_cell` per cell, where `Δs_cell` is the exact arc length the ray spends
+    /// inside that cell; a [`Inversion::Uniform`] one integrates over the exact chord through the
+    /// body without a grid. A path-independent model — a constant factor — returns `ln(gain)` and
+    /// ignores the geometry.
     ///
-    /// `inversion` is `&mut Option<InversionField>` so that saturating models can deplete the field
+    /// `inversion` is `&mut Option<Inversion>` so that saturating models can deplete the inversion
     /// as the ray passes through; the [`Option`] layer stays because models such as
-    /// [`ConstGain`](super::ConstGain) never build a field.
+    /// [`ConstGain`](super::ConstGain) never read an inversion at all.
     ///
     /// # Arguments
     ///
@@ -87,19 +89,14 @@ pub trait Extraction {
     ///   into the inversion field's own local frame.
     /// * `ray` - the ray whose chord is being integrated; must be a valid ray (the caller has
     ///   already confirmed it is valid and that its chord through the body is positive).
-    /// * `inversion` - the inversion field prepared by [`Extraction::build_inversion`], mutable so
+    /// * `inversion` - the inversion prepared by [`Extraction::build_inversion`], mutable so
     ///   that saturating models can write depletion back.
     ///
     /// # Returns
     ///
     /// The dimensionless exponent `∫ g(s) ds` for the full chord. Returns `0.0` for a ray that
-    /// contributes nothing — a degenerate direction, no field, or no populated cells on the path.
-    fn path_exponent(
-        &self,
-        body: &dyn Body,
-        ray: &Ray,
-        inversion: &mut Option<InversionField>,
-    ) -> f64;
+    /// contributes nothing — a degenerate direction, no inversion, or no populated cells on the path.
+    fn path_exponent(&self, body: &dyn Body, ray: &Ray, inversion: &mut Option<Inversion>) -> f64;
     /// Amplify the spectral energy passing through the medium.
     ///
     /// An energy flow analysis knows no rays and no path lengths, so a model depending on them has
@@ -109,7 +106,7 @@ pub trait Extraction {
     /// # Arguments
     ///
     /// * `body` - the volume the light passes through.
-    /// * `inversion` - the inversion field the node was prepared with, or `None` if this model
+    /// * `inversion` - the inversion the node was prepared with, or `None` if this model
     ///   built none.
     /// * `spectrum` - the spectral energy arriving at the node, modified in place.
     ///
@@ -120,7 +117,7 @@ pub trait Extraction {
     fn amplify_spectrum(
         &self,
         body: &dyn Body,
-        inversion: Option<&InversionField>,
+        inversion: Option<&Inversion>,
         spectrum: &mut Spectrum,
     ) -> OpmResult<()>;
 }

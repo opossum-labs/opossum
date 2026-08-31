@@ -203,7 +203,7 @@ pub enum GraphsWorkspaceAction {
     /// Adds a new analyzer node to the specified graph.
     AddAnalyzer {
         /// The type of analyzer to create.
-        analyzer_type: AnalyzerType,
+        analyzer_type: Box<AnalyzerType>,
         /// The ID of the graph where the analyzer will be added.
         graph_id: Uuid,
     },

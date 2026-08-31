@@ -14,7 +14,9 @@ use crate::{
     components::node_editor::{
         hooks::use_synced_signal,
         inputs::{
-            input_components::{FormContext, LabeledCheckboxInput, LabeledSelect, NodeConfigUnitInput, UnitHandling},
+            input_components::{
+                FormContext, LabeledCheckboxInput, LabeledSelect, NodeConfigUnitInput, UnitHandling,
+            },
             select_options_from_enum_iterator,
         },
     },
@@ -23,8 +25,8 @@ use dioxus::prelude::*;
 use opossum_core::{
     degree,
     gain::{
-        AnalyticPump, BeerLambertProfile, ConstInversion, LongitudinalProfile, PumpDirection,
-        PumpSource, TransversalProfile,
+        AnalyticPump, BeerLambertProfile, LongitudinalProfile, PumpDirection, PumpSource,
+        TransversalProfile,
     },
     meter, reciprocal_meter,
     utils::{default_from_name::DefaultFromName, super_gaussian::SuperGaussianShape},
@@ -67,9 +69,9 @@ pub fn PumpSourceEditor(
                 },
             }
             match source {
-                PumpSource::Const(constant) => rsx! {
-                    ConstPumpFields { id_prefix, constant, on_change }
-                },
+                // A uniform pump carries no parameters of its own now - how hard it pumps is the
+                // gain coefficient on the model, edited next to this. So it shows nothing here, like
+                // an absent pump does.
                 PumpSource::Analytic(analytic) => rsx! {
                     AnalyticPumpFields { id_prefix, analytic, on_change }
                 },
@@ -79,79 +81,39 @@ pub fn PumpSourceEditor(
     }
 }
 
-/// The single parameter of a uniformly pumped medium: the small-signal gain coefficient.
-///
-/// # Props
-///
-/// * `id_prefix` - distinguishes this editor's inputs from those of the other rows in the same list.
-/// * `constant` - the constant inversion as the document currently holds it.
-/// * `on_change` - handed the complete new pump source whenever the user changes anything.
-#[component]
-fn ConstPumpFields(
-    id_prefix: String,
-    constant: ConstInversion,
-    on_change: EventHandler<PumpSource>,
-) -> Element {
-    let sig_gain = use_synced_signal(constant.gain_coefficient());
-    rsx! {
-        NodeConfigUnitInput {
-            id: format!("{id_prefix}-pump-g0"),
-            label: "Gain g₀",
-            value: sig_gain.read().value,
-            unit_config: UnitHandling::new("m⁻¹", true),
-            reciprocal: true,
-            onchange: move |v: f64| {
-                save(
-                    ConstInversion::new(reciprocal_meter!(v)).map(PumpSource::Const),
-                    on_change,
-                );
-            },
-        }
-    }
-}
-
-/// The parameters of an [`AnalyticPump`]: its peak, and one dropdown per profile it composes.
+/// The parameters of an [`AnalyticPump`]: one dropdown per profile it composes, plus the grid the
+/// shape is resolved on. Its magnitude is not here — that is the gain coefficient on the model.
 ///
 /// # Props
 ///
 /// * `id_prefix` - distinguishes this editor's inputs from those of the other rows in the same list.
 /// * `analytic` - the pump as the document currently holds it.
 /// * `on_change` - handed the complete new pump source whenever the user changes anything.
+#[allow(clippy::cast_possible_truncation)]
 #[component]
 fn AnalyticPumpFields(
     id_prefix: String,
     analytic: AnalyticPump,
     on_change: EventHandler<PumpSource>,
 ) -> Element {
-    // Rebuilding the whole pump from its three parts is what every edit below does, so it is spelled
-    // out once here. The peak is already validated, so only a rejected *new* peak can fail.
-    let rebuilt = move |peak, transversal, longitudinal| {
+    // Rebuilding the whole pump from its parts is what every edit below does, so it is spelled out
+    // once here. Only a zero-cell grid can make it fail.
+    let rebuilt = move |transversal, longitudinal, grid| {
         save(
-            AnalyticPump::new(peak, transversal, longitudinal).map(PumpSource::Analytic),
+            AnalyticPump::new(transversal, longitudinal, grid).map(PumpSource::Analytic),
             on_change,
         );
     };
-    let peak = analytic.peak_gain_coefficient();
     let (transversal, longitudinal) = (analytic.transversal(), analytic.longitudinal());
-    let sig_peak = use_synced_signal(peak);
+    let grid = analytic.grid();
     rsx! {
-        NodeConfigUnitInput {
-            id: format!("{id_prefix}-pump-peak"),
-            label: "Peak gain g₀",
-            value: sig_peak.read().value,
-            unit_config: UnitHandling::new("m⁻¹", true),
-            reciprocal: true,
-            onchange: move |v: f64| {
-                rebuilt(reciprocal_meter!(v), transversal, longitudinal);
-            },
-        }
         LabeledSelect {
             id: format!("{id_prefix}-pump-transversal"),
             label: "Transversal profile".to_string(),
             options: select_options_from_enum_iterator(&transversal, None),
             onchange: move |e: Event<FormData>| {
                 if let Some(picked) = TransversalProfile::default_from_name(&e.value()) {
-                    rebuilt(peak, picked, longitudinal);
+                    rebuilt(picked, longitudinal, grid);
                 }
             },
         }
@@ -159,7 +121,7 @@ fn AnalyticPumpFields(
             SuperGaussianFields {
                 id_prefix: id_prefix.clone(),
                 shape,
-                on_change: move |shaped| rebuilt(peak, TransversalProfile::SuperGaussian(shaped), longitudinal),
+                on_change: move |shaped| rebuilt(TransversalProfile::SuperGaussian(shaped), longitudinal, grid),
             }
         }
         LabeledSelect {
@@ -168,20 +130,48 @@ fn AnalyticPumpFields(
             options: select_options_from_enum_iterator(&longitudinal, None),
             onchange: move |e: Event<FormData>| {
                 if let Some(picked) = LongitudinalProfile::default_from_name(&e.value()) {
-                    rebuilt(peak, transversal, picked);
+                    rebuilt(transversal, picked, grid);
                 }
             },
         }
         if let LongitudinalProfile::BeerLambert(profile) = longitudinal {
             BeerLambertFields {
-                id_prefix,
+                id_prefix: id_prefix.clone(),
                 profile,
                 on_change: move |absorbed| rebuilt(
-                    peak,
                     transversal,
                     LongitudinalProfile::BeerLambert(absorbed),
+                    grid,
                 ),
             }
+        }
+        div { class: "amp-pump-nested",
+        div { class: "ssg-params-grid",
+        NumberField {
+            id: format!("{id_prefix}-pump-cells-x"),
+            label: "Cells x".to_string(),
+            value: grid.0 as f64,
+            step: 1.0,
+            min: Some(1.0),
+            on_save: move |v: f64| rebuilt(transversal, longitudinal, (v as usize, grid.1, grid.2)),
+        }
+        NumberField {
+            id: format!("{id_prefix}-pump-cells-y"),
+            label: "Cells y".to_string(),
+            value: grid.1 as f64,
+            step: 1.0,
+            min: Some(1.0),
+            on_save: move |v: f64| rebuilt(transversal, longitudinal, (grid.0, v as usize, grid.2)),
+        }
+        NumberField {
+            id: format!("{id_prefix}-pump-cells-z"),
+            label: "Cells z".to_string(),
+            value: grid.2 as f64,
+            step: 1.0,
+            min: Some(1.0),
+            on_save: move |v: f64| rebuilt(transversal, longitudinal, (grid.0, grid.1, v as usize)),
+        }
+    }
         }
     }
 }
@@ -257,7 +247,7 @@ fn SuperGaussianFields(
                     id: format!("{id_prefix}-spot-mu-y"),
                     label: "Center y",
                     value: sig_center_y.read().value,
-                    unit_config: unit_m.clone(),
+                    unit_config: unit_m,
                     onchange: move |y_m: f64| {
                         rebuilt(meter!(center.x.get::<uom::si::length::meter>(), y_m), sigma, power, theta, rectangular);
                     },

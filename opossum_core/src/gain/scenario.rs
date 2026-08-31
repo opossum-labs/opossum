@@ -326,9 +326,8 @@ mod test {
     use super::*;
     use crate::{
         error::OpmResult,
-        gain::{ConstGain, ConstInversion},
+        gain::ConstGain,
         nodes::{Dummy, Lens},
-        reciprocal_centimeter,
     };
 
     #[test]
@@ -367,7 +366,7 @@ mod test {
     fn pumping_and_amplifying_are_configured_independently() -> OpmResult<()> {
         let mut scenario = PumpScenario::new("full power");
         let node_id = Uuid::new_v4();
-        let pump = PumpSource::Const(ConstInversion::new(reciprocal_centimeter!(0.5))?);
+        let pump = PumpSource::Const;
         let model = GainModel::Const(ConstGain::new(2.5)?);
 
         // Setting one half must leave the other alone, in either order ...
@@ -390,7 +389,7 @@ mod test {
         // pumping away with it - that would silently undo work the user did on the other half.
         let mut scenario = PumpScenario::new("full power");
         let node_id = Uuid::new_v4();
-        let pump = PumpSource::Const(ConstInversion::new(reciprocal_centimeter!(0.5))?);
+        let pump = PumpSource::Const;
         scenario.set_pump_source(node_id, pump);
         scenario.set_gain_model(node_id, GainModel::Const(ConstGain::new(2.5)?));
 
@@ -447,7 +446,7 @@ mod test {
     fn an_active_scenario_answers_for_its_nodes() -> OpmResult<()> {
         let node_id = Uuid::new_v4();
         let model = GainModel::Const(ConstGain::new(2.5)?);
-        let pump = PumpSource::Const(ConstInversion::new(reciprocal_centimeter!(0.5))?);
+        let pump = PumpSource::Const;
         let mut scenario = PumpScenario::new("full power");
         scenario.set_gain_model(node_id, model);
         scenario.set_pump_source(node_id, pump);

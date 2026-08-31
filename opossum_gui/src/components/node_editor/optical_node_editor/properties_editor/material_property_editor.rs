@@ -102,7 +102,7 @@ pub fn MaterialPropertyEditor(
     });
 
     let on_inline_editor_save = {
-        let emit_material_change = emit_material_change.clone();
+        let emit_material_change = emit_material_change;
         use_callback(move |()| {
             let updated = editing_material.read().clone();
             emit_material_change(updated);
@@ -148,7 +148,7 @@ pub fn MaterialPropertyEditor(
                             title: "Edit local material properties",
                             class: "material-btn",
                             onclick: {
-                                let mat = current_material.clone();
+                                let mat = current_material;
                                 move |_| {
                                     editing_material.set(mat.clone());
                                     show_editor_dialog.set(true);

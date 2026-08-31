@@ -30,7 +30,7 @@ pub enum AppCommand {
     SaveAs,
     Refresh,
     AddNode(String),
-    AddAnalyzer(AnalyzerType),
+    AddAnalyzer(Box<AnalyzerType>),
     AutoLayout,
     CenterGraph,
     ZoomToFit,
@@ -191,7 +191,7 @@ pub fn MenuBar(
                                             ul { class: "dropdown-menu custom-scroll",
                                                 AnalyzersMenu {
                                                     on_analyzer_selected: move |analyzer_type| {
-                                                        on_menu_action.call(AppCommand::AddAnalyzer(analyzer_type));
+                                                        on_menu_action.call(AppCommand::AddAnalyzer(Box::new(analyzer_type)));
                                                         hide_dropdown("navbarDropdownNodeMenuLink");
                                                     },
                                                 }

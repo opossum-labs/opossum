@@ -11,7 +11,7 @@ use uuid::Uuid;
 use crate::{
     core_optics::{OpticPorts, optic_surface::OpticSurface},
     error::{OpmResult, OpossumError},
-    gain::InversionField,
+    gain::Inversion,
     geometry::body::SurfaceBoundedBody,
     properties::{Properties, Proptype, validator::Validator},
     utils::{file_utils::sanitize_filename, geom_transformation::Isometry},
@@ -44,7 +44,7 @@ impl RuntimeSurfaces {
 #[derive(Debug, Clone)]
 pub struct RuntimeMedium {
     body: SurfaceBoundedBody,
-    inversion: Option<InversionField>,
+    inversion: Option<Inversion>,
 }
 impl RuntimeMedium {
     /// Return the volume body this node was prepared with.
@@ -52,27 +52,22 @@ impl RuntimeMedium {
     pub fn body(&self) -> &dyn crate::geometry::body::Body {
         &self.body
     }
-    /// Return the inversion field, if the model built one.
+    /// Return the inversion, if the model built one.
     #[must_use]
-    pub const fn inversion(&self) -> Option<&InversionField> {
+    pub const fn inversion(&self) -> Option<&Inversion> {
         self.inversion.as_ref()
     }
     /// Return the body and inversion as a split mutable borrow.
     ///
     /// Splits `&mut RuntimeMedium` into an immutable reference to the body and a mutable reference
-    /// to the inversion field. The two borrows are valid simultaneously because they target
-    /// different fields of the struct.
+    /// to the inversion. The two borrows are valid simultaneously because they target different
+    /// fields of the struct.
     ///
     /// # Returns
     ///
-    /// `(&dyn Body, &mut Option<InversionField>)` — the body for geometric queries and the
-    /// inversion field that saturating models may deplete between substeps.
-    pub fn parts_mut(
-        &mut self,
-    ) -> (
-        &dyn crate::geometry::body::Body,
-        &mut Option<InversionField>,
-    ) {
+    /// `(&dyn Body, &mut Option<Inversion>)` — the body for geometric queries and the inversion
+    /// that saturating models may deplete between substeps.
+    pub fn parts_mut(&mut self) -> (&dyn crate::geometry::body::Body, &mut Option<Inversion>) {
         (&self.body, &mut self.inversion)
     }
 }
@@ -340,7 +335,7 @@ impl NodeAttr {
     /// Used by
     /// [`Volumetric::propagate_inside_medium`](crate::core_optics::volumetric::Volumetric::propagate_inside_medium)
     /// to pass a mutable inversion field to saturating models that deplete it between substeps.
-    pub fn runtime_medium_mut(&mut self) -> Option<&mut RuntimeMedium> {
+    pub const fn runtime_medium_mut(&mut self) -> Option<&mut RuntimeMedium> {
         self.runtime_medium.as_mut()
     }
     /// Store the prepared medium for this node.
@@ -348,12 +343,8 @@ impl NodeAttr {
     /// # Arguments
     ///
     /// * `body` - the volume the light passes through.
-    /// * `inversion` - the inversion field the model built, or `None` if it built none.
-    pub fn set_runtime_medium(
-        &mut self,
-        body: SurfaceBoundedBody,
-        inversion: Option<InversionField>,
-    ) {
+    /// * `inversion` - the inversion the model built, or `None` if it built none.
+    pub fn set_runtime_medium(&mut self, body: SurfaceBoundedBody, inversion: Option<Inversion>) {
         self.runtime_medium = Some(RuntimeMedium { body, inversion });
     }
     /// Clear the inversion field of the prepared medium for this node.

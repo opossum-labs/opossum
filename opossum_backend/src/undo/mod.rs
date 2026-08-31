@@ -49,7 +49,7 @@ pub enum Command {
     /// See [`NodeSnapshot`]. Removes the node.
     RemoveNode(NodeSnapshot),
     /// See [`PatchNode`].
-    PatchNode(PatchNode),
+    PatchNode(Box<PatchNode>),
     /// See [`PatchProperty`].
     PatchProperty(PatchProperty),
     /// See [`PatchPort`].
@@ -69,7 +69,7 @@ pub enum Command {
     /// Removes the analyzer with the given id.
     RemoveAnalyzer(AnalyzerItemDto),
     /// See [`PatchAnalyzer`].
-    PatchAnalyzer(PatchAnalyzer),
+    PatchAnalyzer(Box<PatchAnalyzer>),
     /// See [`RepositionAnalyzer`].
     RepositionAnalyzer(RepositionAnalyzer),
     /// Re-inserts a previously removed pump scenario under its original id.
@@ -124,7 +124,7 @@ impl Command {
         match self {
             Self::AddNode(cmd) => node_commands::apply_add_node(document, cmd),
             Self::RemoveNode(cmd) => node_commands::apply_remove_node(document, cmd),
-            Self::PatchNode(cmd) => node_commands::apply_patch_node(document, cmd),
+            Self::PatchNode(cmd) => node_commands::apply_patch_node(document, *cmd),
             Self::PatchProperty(cmd) => node_commands::apply_patch_property(document, cmd),
             Self::PatchPort(cmd) => node_commands::apply_patch_port(document, cmd),
             Self::AddEdge(cmd) => edge_commands::apply_add_edge(document, cmd),
@@ -136,7 +136,7 @@ impl Command {
             Self::RemovePortMap(cmd) => port_map_commands::apply_remove_port_map(document, cmd),
             Self::AddAnalyzer(cmd) => Ok(analyzer_commands::apply_add_analyzer(document, cmd)),
             Self::RemoveAnalyzer(cmd) => analyzer_commands::apply_remove_analyzer(document, cmd),
-            Self::PatchAnalyzer(cmd) => analyzer_commands::apply_patch_analyzer(document, cmd),
+            Self::PatchAnalyzer(cmd) => analyzer_commands::apply_patch_analyzer(document, *cmd),
             Self::RepositionAnalyzer(cmd) => {
                 analyzer_commands::apply_reposition_analyzer(document, cmd)
             }
@@ -220,15 +220,10 @@ impl Command {
     #[allow(clippy::too_many_lines)]
     pub fn jump_target(&self, root_id: Uuid) -> Option<JumpTarget> {
         match self {
-            Self::PatchNode(PatchNode {
-                uuid,
-                parent_group_id,
-                new,
-                ..
-            }) => Some(JumpTarget {
-                graph_id: *parent_group_id,
-                node: Some(*uuid),
-                panel: node_commands::panel_for_update(new),
+            Self::PatchNode(patch_node) => Some(JumpTarget {
+                graph_id: patch_node.parent_group_id,
+                node: Some(patch_node.uuid),
+                panel: node_commands::panel_for_update(&patch_node.new),
                 source_port: None,
             }),
             Self::PatchProperty(PatchProperty {
@@ -348,8 +343,12 @@ impl Command {
             // The pump-scenario-selection patch changes only that selection, not the analyzer's own
             // config or position - the same refetch signal as any other analyzer detail change
             // covers both.
-            Self::PatchAnalyzer(PatchAnalyzer { id, .. })
-            | Self::PatchAnalyzerPumpScenarios(PatchAnalyzerPumpScenarios { id, .. }) => {
+            Self::PatchAnalyzer(patch_analyzer) => {
+                vec![DocumentChange::AnalyzerChanged {
+                    id: patch_analyzer.id,
+                }]
+            }
+            Self::PatchAnalyzerPumpScenarios(PatchAnalyzerPumpScenarios { id, .. }) => {
                 vec![DocumentChange::AnalyzerChanged { id: *id }]
             }
             Self::AddPumpScenario(cmd) => vec![DocumentChange::PumpScenarioAdded {
@@ -562,12 +561,12 @@ mod test {
             "a camera move never touches the document, so it needs no rollback"
         );
         assert!(
-            !Command::PatchNode(PatchNode {
+            !Command::PatchNode(Box::new(PatchNode {
                 uuid: Uuid::new_v4(),
                 parent_group_id: Uuid::new_v4(),
                 old: UpdateNodeRequest::default(),
                 new: UpdateNodeRequest::default(),
-            })
+            }))
             .needs_rollback(),
             "a single-field patch can't leave a partial mutation"
         );
@@ -608,7 +607,7 @@ mod test {
         assert_eq!(port.panel, Some(NodeEditorPanel::PortConfig));
 
         // A name change belongs to General.
-        let name = Command::PatchNode(PatchNode {
+        let name = Command::PatchNode(Box::new(PatchNode {
             uuid: node,
             parent_group_id: graph,
             old: UpdateNodeRequest::default(),
@@ -616,13 +615,13 @@ mod test {
                 name: Some("x".to_string()),
                 ..Default::default()
             },
-        })
+        }))
         .jump_target(root)
         .unwrap();
         assert_eq!(name.panel, Some(NodeEditorPanel::General));
 
         // A gui_position-only patch (a canvas drag) selects the node but opens no panel.
-        let pos = Command::PatchNode(PatchNode {
+        let pos = Command::PatchNode(Box::new(PatchNode {
             uuid: node,
             parent_group_id: graph,
             old: UpdateNodeRequest::default(),
@@ -630,7 +629,7 @@ mod test {
                 gui_position: Some(Some((1.0, 2.0))),
                 ..Default::default()
             },
-        })
+        }))
         .jump_target(root)
         .unwrap();
         assert_eq!(pos.node, Some(node));
@@ -714,11 +713,11 @@ mod test {
 
         // A source-mapping change (here the source was removed; undo would restore it) focuses the analyzer
         // node and that exact source-port card, at the root tab where analyzers live.
-        let patch = Command::PatchAnalyzer(PatchAnalyzer {
+        let patch = Command::PatchAnalyzer(Box::new(PatchAnalyzer {
             id: analyzer,
             old: AnalyzerType::Energy(with_source),
             new: AnalyzerType::Energy(EnergyConfig::default()),
-        });
+        }));
         let jump = patch.clone().jump_target(root).unwrap();
         assert_eq!(jump.graph_id, root, "analyzers live at the root scenery");
         assert_eq!(jump.node, Some(analyzer));

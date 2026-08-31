@@ -435,6 +435,7 @@ impl SurfaceBoundedBody {
                     surface.name()
                 )));
             }
+            drop(surface);
             let anchor = relative
                 .transform_point(&Point3::new(Length::zero(), Length::zero(), vertex))
                 .z;

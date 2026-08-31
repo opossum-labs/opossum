@@ -255,7 +255,7 @@ pub trait Volumetric: OpticNode {
     /// # Errors
     ///
     /// This function errors if the spectrum cannot be scaled, or if the active gain model refuses
-    /// energy analysis (e.g. [`SmallSignalGain`](crate::gain::SmallSignalGain)).
+    /// energy analysis (e.g. [`MonochromaticSmallSignalGain`](crate::gain::MonochromaticSmallSignalGain)).
     fn propagate_energy_inside_medium(
         &self,
         data: &mut LightData,
@@ -473,7 +473,7 @@ mod test {
         coatings::CoatingConstantR,
         core_optics::{Alignable, PortType, node_attr::HasNodeAttr},
         degree,
-        gain::{ConstGain, ConstInversion, GainModel, PumpScenario, PumpSource, SmallSignalGain},
+        gain::{ConstGain, GainModel, MonochromaticSmallSignalGain, PumpScenario, PumpSource},
         joule,
         light::{
             Rays,
@@ -487,7 +487,6 @@ mod test {
         },
         percent, reciprocal_centimeter,
         refractive_index::RefrIndexConst,
-        square_centimeter,
         utils::{LockExt, test_helper::test_helper::metered_energy},
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
@@ -572,14 +571,16 @@ mod test {
         f64::exp((head_gain_coefficient() * millimeter!(HEAD_THICKNESS)).value / internal.cos())
     }
     /// An operating point running the given node as a uniformly pumped small signal amplifier.
+    ///
+    /// The magnitude lives on the model now (`peak_gain_coefficient`), and the const pump just says
+    /// "uniformly inverted" — so the head amplifies over the exact chord without a voxel grid.
     fn scenario_with_small_signal(node_id: Uuid) -> OpmResult<PumpScenario> {
         Ok(scenario_with_model(
             node_id,
-            GainModel::SmallSignalGain(SmallSignalGain::new(
-                square_centimeter!(2.0e-20),
-                (16, 16, 16),
+            GainModel::MonochromaticSmallSignalGain(MonochromaticSmallSignalGain::new(
+                head_gain_coefficient(),
             )?),
-            PumpSource::Const(ConstInversion::new(head_gain_coefficient())?),
+            PumpSource::Const,
         ))
     }
     fn retraced_energy_value(lens: &mut Lens, config: &RayTraceConfig) -> OpmResult<f64> {
@@ -1116,7 +1117,10 @@ mod test {
         let mut config = RayTraceConfig::default();
         config.set_active_pump_scenario(Some(scenario_with_model(
             head.node_attr().uuid(),
-            GainModel::SmallSignalGain(SmallSignalGain::default()),
+            // A model that would amplify given a pump: the point is that no pump leaves it passive.
+            GainModel::MonochromaticSmallSignalGain(MonochromaticSmallSignalGain::new(
+                head_gain_coefficient(),
+            )?),
             PumpSource::None,
         )));
         assert_relative_eq!(
@@ -1203,8 +1207,10 @@ mod test {
         let g = single_pass_gain();
         let expected = [t * g * t, r + t * g * r * g * t, t * g * r * g * r * g * t];
         let measured = ghost_energies_per_bounce(
-            GainModel::SmallSignalGain(SmallSignalGain::default()),
-            PumpSource::Const(ConstInversion::new(head_gain_coefficient())?),
+            GainModel::MonochromaticSmallSignalGain(MonochromaticSmallSignalGain::new(
+                head_gain_coefficient(),
+            )?),
+            PumpSource::Const,
             2,
         )?;
         assert_eq!(measured.len(), expected.len());

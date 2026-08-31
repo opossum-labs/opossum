@@ -1562,14 +1562,13 @@ mod test {
     #[actix_web::test]
     async fn test_paste_preserves_amplifier_state() {
         use opossum_core::{
-            gain::{ConstGain, ConstInversion, GainModel, PumpConfig, PumpSource},
+            gain::{ConstGain, GainModel, PumpConfig, PumpSource},
             nodes::Lens,
-            reciprocal_centimeter,
         };
 
         let app_state = Data::new(AppState::default());
         let gain = GainModel::Const(ConstGain::new(2.5).unwrap());
-        let pump = PumpSource::Const(ConstInversion::new(reciprocal_centimeter!(0.5)).unwrap());
+        let pump = PumpSource::Const;
         let (root_id, lens_id, scenario_id) = {
             let mut document = app_state.document.lock();
             let root_id = document.scenery().node_attr().uuid();

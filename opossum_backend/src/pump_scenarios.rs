@@ -331,7 +331,7 @@ mod test {
     use crate::{app_state::AppState, document::undo_document};
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
     use opossum_core::{
-        gain::{ConstGain, ConstInversion, GainModel, PumpSource},
+        gain::{ConstGain, GainModel, PumpSource},
         nodes::Lens,
     };
     use utoipa_actix_web::scope;
@@ -562,9 +562,7 @@ mod test {
         };
         let app = test_app!(app_state);
 
-        let pump = PumpSource::Const(
-            ConstInversion::new(opossum_core::reciprocal_centimeter!(0.5)).unwrap(),
-        );
+        let pump = PumpSource::Const;
         let req = test::TestRequest::put()
             .uri(&format!("/scenarios/{scenario_id}/pump_source"))
             .set_json(SetScenarioPumpSource { node_id, pump })
@@ -609,9 +607,7 @@ mod test {
         };
         let app = test_app!(app_state);
 
-        let pump = PumpSource::Const(
-            ConstInversion::new(opossum_core::reciprocal_centimeter!(0.5)).unwrap(),
-        );
+        let pump = PumpSource::Const;
         let req = test::TestRequest::put()
             .uri(&format!("/scenarios/{scenario_id}/pump_source"))
             .set_json(SetScenarioPumpSource { node_id, pump })

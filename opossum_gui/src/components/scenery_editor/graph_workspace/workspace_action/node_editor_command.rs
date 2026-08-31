@@ -11,7 +11,7 @@ pub enum NodeEditorCommand {
     DeleteAll,
     AddNode(String),
     AddNodeRef(NewRefNode),
-    AddAnalyzer(AnalyzerType),
+    AddAnalyzer(Box<AnalyzerType>),
     LoadFile(PathBuf),
     SaveFile(PathBuf),
     Refresh,
@@ -88,7 +88,7 @@ fn dispatch_add_analyzer(
     graph_id: Uuid,
 ) {
     workspace_processor.send(GraphsWorkspaceAction::AddAnalyzer {
-        analyzer_type,
+        analyzer_type: Box::new(analyzer_type),
         graph_id,
     });
 }
@@ -141,7 +141,7 @@ pub fn node_editor_command(
                 dispatch_add_node_ref(workspace_processor, new_ref_node, active_tab());
             }
             NodeEditorCommand::AddAnalyzer(analyzer_type) => {
-                dispatch_add_analyzer(workspace_processor, analyzer_type, active_tab());
+                dispatch_add_analyzer(workspace_processor, *analyzer_type, active_tab());
             }
             NodeEditorCommand::AutoLayout => {
                 dispatch_auto_layout(workspace_processor, active_tab());

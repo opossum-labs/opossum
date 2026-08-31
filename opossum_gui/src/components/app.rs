@@ -143,14 +143,14 @@ pub fn App() -> Element {
     use_effect(move || {
         if let Some(catalog_path) = APP_CONFIG.read().catalog_dir() {
             // Ensure newly selected directory exists on disk
-            if !catalog_path.exists() {
-                if let Err(e) = std::fs::create_dir_all(catalog_path) {
-                    log::error!(
-                        "Failed to create new catalog directory {}: {e}",
-                        catalog_path.display()
-                    );
-                    return;
-                }
+            if !catalog_path.exists()
+                && let Err(e) = std::fs::create_dir_all(catalog_path)
+            {
+                log::error!(
+                    "Failed to create new catalog directory {}: {e}",
+                    catalog_path.display()
+                );
+                return;
             }
 
             // Create new registry instance for the updated path (automatically scans and builds the index)

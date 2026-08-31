@@ -10,7 +10,8 @@ use crate::{
 };
 use dioxus::prelude::*;
 use opossum_core::{
-    gain::{ConstGain, GainModel, PumpScenario, SmallSignalGain},
+    gain::{ConstGain, GainModel, MonochromaticSmallSignalGain, PumpScenario},
+    reciprocal_meter,
     types::api_types::ScenarioAmplifierDto,
     utils::default_from_name::DefaultFromName,
 };
@@ -402,16 +403,12 @@ fn ScenarioAmplifierRow(
     // dirty-tracking: nothing here re-renders mid-keystroke, only after a completed save.
     let mut is_collapsed = use_signal(|| true);
     let mut gain_str = use_signal(|| format_gain(gain_model));
-    let mut ssg_cells_x_str = use_signal(|| format_ssg_cells_x(gain_model));
-    let mut ssg_cells_y_str = use_signal(|| format_ssg_cells_y(gain_model));
-    let mut ssg_cells_z_str = use_signal(|| format_ssg_cells_z(gain_model));
+    let mut ssg_g0_str = use_signal(|| format_ssg_g0(gain_model));
     let mut last_gain_model = use_signal(|| gain_model);
     if *last_gain_model.peek() != gain_model {
         last_gain_model.set(gain_model);
         gain_str.set(format_gain(gain_model));
-        ssg_cells_x_str.set(format_ssg_cells_x(gain_model));
-        ssg_cells_y_str.set(format_ssg_cells_y(gain_model));
-        ssg_cells_z_str.set(format_ssg_cells_z(gain_model));
+        ssg_g0_str.set(format_ssg_g0(gain_model));
     }
 
     let set_model = move |model: GainModel| {
@@ -443,37 +440,20 @@ fn ScenarioAmplifierRow(
         }
     };
 
+    // The one parameter of the monochromatic model: its peak gain coefficient g₀ (in m⁻¹, and free
+    // to be negative for an absorbing medium). The grid it is resolved on lives on the analytic
+    // pump, not here.
     let mut save_ssg = move || {
-        if let GainModel::SmallSignalGain(current) = gain_model {
-            let x = ssg_cells_x_str.peek().trim().parse::<usize>();
-            let y = ssg_cells_y_str.peek().trim().parse::<usize>();
-            let z = ssg_cells_z_str.peek().trim().parse::<usize>();
-            match (x, y, z) {
-                (Ok(x), Ok(y), Ok(z)) => {
-                    match SmallSignalGain::new(current.emission_cross_section(), (x, y, z)) {
-                        Ok(ssg) => {
-                            if ssg != current {
-                                set_model(GainModel::SmallSignalGain(ssg));
-                            }
-                        }
-                        Err(e) => {
-                            OPOSSUM_UI_LOGS
-                                .write()
-                                .add_log(&format!("Invalid SmallSignalGain parameters: {e}"));
-                            ssg_cells_x_str.set(format_ssg_cells_x(gain_model));
-                            ssg_cells_y_str.set(format_ssg_cells_y(gain_model));
-                            ssg_cells_z_str.set(format_ssg_cells_z(gain_model));
-                        }
-                    }
-                }
-                _ => {
-                    OPOSSUM_UI_LOGS
-                        .write()
-                        .add_log("SmallSignalGain: grid counts must be positive integers");
-                    ssg_cells_x_str.set(format_ssg_cells_x(gain_model));
-                    ssg_cells_y_str.set(format_ssg_cells_y(gain_model));
-                    ssg_cells_z_str.set(format_ssg_cells_z(gain_model));
-                }
+        let raw = ssg_g0_str.peek().trim().to_string();
+        match raw.parse::<f64>().map_err(|e| e.to_string()).and_then(|v| {
+            MonochromaticSmallSignalGain::new(reciprocal_meter!(v)).map_err(|e| e.to_string())
+        }) {
+            Ok(ssg) => set_model(GainModel::MonochromaticSmallSignalGain(ssg)),
+            Err(err_str) => {
+                OPOSSUM_UI_LOGS.write().add_log(&format!(
+                    "'{raw}' is not a valid gain coefficient: {err_str}"
+                ));
+                ssg_g0_str.set(format_ssg_g0(gain_model));
             }
         }
     };
@@ -520,59 +500,21 @@ fn ScenarioAmplifierRow(
                             },
                         }
                     }
-                    if let GainModel::SmallSignalGain(_) = gain_model {
-                        div { class: "ssg-params-grid",
-                            div { class: "form-floating border-start ssg-params-cell",
-                                input {
-                                    class: "form-control bg-dark text-light form-control-sm noselect",
-                                    r#type: "number",
-                                    id: format!("ssg-x-{uuid}"),
-                                    placeholder: "x",
-                                    min: "1",
-                                    step: "1",
-                                    value: "{ssg_cells_x_str}",
-                                    oninput: move |e| ssg_cells_x_str.set(e.value()),
-                                    onblur: move |_| save_ssg(),
-                                    onkeydown: move |e| {
-                                        if e.key() == Key::Enter { save_ssg(); }
-                                    },
-                                }
-                                label { class: "form-label text-secondary", r#for: format!("ssg-x-{uuid}"), "x-Points" }
+                    if let GainModel::MonochromaticSmallSignalGain(_) = gain_model {
+                        div { class: "form-floating border-start",
+                            input {
+                                class: "form-control bg-dark text-light form-control-sm noselect",
+                                r#type: "number",
+                                id: format!("ssg-g0-{uuid}"),
+                                step: "0.1",
+                                value: "{ssg_g0_str}",
+                                oninput: move |e| ssg_g0_str.set(e.value()),
+                                onblur: move |_| save_ssg(),
+                                onkeydown: move |e| {
+                                    if e.key() == Key::Enter { save_ssg(); }
+                                },
                             }
-                            div { class: "form-floating border-start ssg-params-cell",
-                                input {
-                                    class: "form-control bg-dark text-light form-control-sm noselect",
-                                    r#type: "number",
-                                    id: format!("ssg-y-{uuid}"),
-                                    placeholder: "y",
-                                    min: "1",
-                                    step: "1",
-                                    value: "{ssg_cells_y_str}",
-                                    oninput: move |e| ssg_cells_y_str.set(e.value()),
-                                    onblur: move |_| save_ssg(),
-                                    onkeydown: move |e| {
-                                        if e.key() == Key::Enter { save_ssg(); }
-                                    },
-                                }
-                                label { class: "form-label text-secondary", r#for: format!("ssg-y-{uuid}"), "y-Points" }
-                            }
-                            div { class: "form-floating border-start ssg-params-cell",
-                                input {
-                                    class: "form-control bg-dark text-light form-control-sm noselect",
-                                    r#type: "number",
-                                    id: format!("ssg-z-{uuid}"),
-                                    placeholder: "z",
-                                    min: "1",
-                                    step: "1",
-                                    value: "{ssg_cells_z_str}",
-                                    oninput: move |e| ssg_cells_z_str.set(e.value()),
-                                    onblur: move |_| save_ssg(),
-                                    onkeydown: move |e| {
-                                        if e.key() == Key::Enter { save_ssg(); }
-                                    },
-                                }
-                                label { class: "form-label text-secondary", r#for: format!("ssg-z-{uuid}"), "z-Points" }
-                            }
+                            label { class: "form-label text-secondary", r#for: format!("ssg-g0-{uuid}"), "Peak gain g₀ (m⁻¹)" }
                         }
                     }
                 }
@@ -618,26 +560,14 @@ fn format_gain(model: GainModel) -> String {
     }
 }
 
-fn format_ssg_cells_x(model: GainModel) -> String {
-    if let GainModel::SmallSignalGain(ssg) = model {
-        ssg.grid().0.to_string()
+/// Text form of the monochromatic model's peak gain coefficient in m⁻¹ - the model's own value, or
+/// the default (zero) it starts at for any other variant, so the field is pre-filled sensibly the
+/// moment the switch turns the model on.
+fn format_ssg_g0(model: GainModel) -> String {
+    let coefficient = if let GainModel::MonochromaticSmallSignalGain(ssg) = model {
+        ssg.peak_gain_coefficient()
     } else {
-        SmallSignalGain::default().grid().0.to_string()
-    }
-}
-
-fn format_ssg_cells_y(model: GainModel) -> String {
-    if let GainModel::SmallSignalGain(ssg) = model {
-        ssg.grid().1.to_string()
-    } else {
-        SmallSignalGain::default().grid().1.to_string()
-    }
-}
-
-fn format_ssg_cells_z(model: GainModel) -> String {
-    if let GainModel::SmallSignalGain(ssg) = model {
-        ssg.grid().2.to_string()
-    } else {
-        SmallSignalGain::default().grid().2.to_string()
-    }
+        MonochromaticSmallSignalGain::default().peak_gain_coefficient()
+    };
+    format!("{}", coefficient.value)
 }

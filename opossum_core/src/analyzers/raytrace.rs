@@ -182,7 +182,7 @@ impl RayTraceConfig {
     /// When set, [`PropagationStrategy::is_positioning_run`] returns `true` and gain models skip
     /// amplification, because [`OpticNode::prepare_volume`](crate::core_optics::OpticNode::prepare_volume)
     /// has not been called yet.
-    pub fn set_positioning_run(&mut self, positioning_run: bool) {
+    pub const fn set_positioning_run(&mut self, positioning_run: bool) {
         self.positioning_run = positioning_run;
     }
     /// Return a config suitable for the geometry-positioning run.

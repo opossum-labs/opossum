@@ -194,7 +194,7 @@ pub async fn patch_analyzer(
         .analyzer_type()
         .clone();
 
-    let command = Command::PatchAnalyzer(PatchAnalyzer { id: uuid, old, new });
+    let command = Command::PatchAnalyzer(Box::new(PatchAnalyzer { id: uuid, old, new }));
     apply_and_push_undo(&data, document, command, true)
 }
 

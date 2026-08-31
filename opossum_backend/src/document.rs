@@ -355,12 +355,12 @@ fn apply_one_position_update(
                 capture_old_node_request(node_attr, &new)
             })?;
         let parent_group_id = parent_group_id_or_self(document.scenery(), update.uuid)?;
-        Command::PatchNode(PatchNode {
+        Command::PatchNode(Box::new(PatchNode {
             uuid: update.uuid,
             parent_group_id,
             old,
             new,
-        })
+        }))
         .apply(document)
     } else {
         let old_pos = analyzer_mut_or_404(document, update.uuid)?

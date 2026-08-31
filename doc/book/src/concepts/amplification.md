@@ -68,20 +68,24 @@ The constant gain model is deliberately unphysical — it is a bookkeeping tool.
 small signal gain model is the first step towards a physical description of a laser amplifier.
 
 **Inversion field.** A pumped medium has more atoms in the upper laser level than the lower one.
-That population inversion is what a passing photon can stimulate: it gains energy from the medium
-at a rate proportional to the local small-signal gain coefficient g₀. OPOSSUM represents g₀ as a
-three-dimensional field discretized over the component's volume, so a spatially non-uniform pump
-(such as a Gaussian beam or an end-pumped rod) maps directly onto a spatially varying gain.
+That population inversion is what a passing photon can stimulate: the local gain per unit path
+length is g(r) = g₀ × β(r), where g₀ is the peak gain coefficient the model carries and
+β(r) ∈ [0, 1] is the normalized pump shape — how strongly pumped that point is relative to the
+peak. For a spatially non-uniform pump, OPOSSUM discretizes β onto a three-dimensional grid so
+that two parallel rays at different radial positions pick up different gain.
 
-**Two phases.** Before any ray is traced, OPOSSUM builds the gain field from the pump source.
-During ray tracing, each ray accumulates a gain factor exp(g₀ × Δz) along every step of its path
-through the medium — a z-march integration. The path is the ray's actual geometric path, not an
-on-axis approximation, so off-axis and angled rays see the correct medium thickness automatically.
+**Two phases.** Before any ray is traced, OPOSSUM builds the inversion shape from the pump
+source. During ray tracing, each ray accumulates a gain factor exp(∫ g₀ × β ds) along its actual
+path through the medium — a voxel-exact integration. The path is the ray's real geometric path,
+not an on-axis approximation, so off-axis and angled rays see the correct medium thickness
+automatically.
 
-**Pump profiles.** The pump source defines how g₀ varies across the volume. A constant pump fills
-the entire volume uniformly; an analytic pump composes a transversal profile (flat or
-super-Gaussian across the aperture) with a longitudinal profile (flat or Beer-Lambert along the
-propagation axis, for end-pumped or side-pumped geometries).
+**Pump profiles.** The pump source defines only the *shape* β — the peak gain coefficient g₀ is
+stated once on the model. A constant pump is the shapeless case: β = 1 throughout the medium, no
+grid needed, and the model integrates over the exact chord each ray travels. An analytic pump
+composes a transversal profile (flat or super-Gaussian across the aperture) with a longitudinal
+profile (flat or Beer-Lambert along the propagation axis, for end-pumped or side-pumped
+geometries), resolved onto a grid stated on the pump itself.
 
 **Monochromatic.** The gain coefficient g₀ is wavelength-independent — all wavelengths in a
 polychromatic beam receive the same gain. A wavelength-dependent gain (gain bandwidth, lineshape)

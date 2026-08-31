@@ -357,7 +357,7 @@ impl<Lens> Store<GraphStore, Lens> {
         let (x, y) = new_analyzer.gui_position;
         let mut node_element = NodeElement::new(
             format!("{}", new_analyzer.analyzer_type),
-            NodeType::Analyzer(new_analyzer.analyzer_type),
+            NodeType::Analyzer(Box::new(new_analyzer.analyzer_type)),
             analyzer_id,
             Point2D::new(x, y),
             Ports::default(),

@@ -59,7 +59,7 @@ const DEFAULT_NEW_NODE_POS: Point2D<f64> = Point2D::new(100.0, 100.0);
 #[derive(Clone, PartialEq, Debug)]
 pub enum NodeType {
     Optical(String),
-    Analyzer(AnalyzerType),
+    Analyzer(Box<AnalyzerType>),
 }
 impl Default for NodeType {
     fn default() -> Self {
@@ -337,7 +337,7 @@ impl From<&AnalyzerItemDto> for NodeElement {
 
         Self::new(
             format!("{}", dto.info.analyzer_type()),
-            NodeType::Analyzer(dto.info.analyzer_type().clone()),
+            NodeType::Analyzer(Box::new(dto.info.analyzer_type().clone())),
             dto.id,
             position,
             Ports::default(),

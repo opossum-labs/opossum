@@ -144,11 +144,11 @@ async fn post_children(
                 }
                 if a_type != old_type {
                     analyzer_info.set_analyzer_type(&a_type);
-                    analyzer_inverses.push(Command::PatchAnalyzer(PatchAnalyzer {
+                    analyzer_inverses.push(Command::PatchAnalyzer(Box::new(PatchAnalyzer {
                         id: az_uuid,
                         old: a_type,
                         new: old_type,
-                    }));
+                    })));
                 }
             }
         }
@@ -247,12 +247,12 @@ fn propagate_rename_to_references(
             capture_old_node_request(node_attr, &ref_new)
         })?;
         let ref_parent = parent_group_id_or_self(document.scenery(), *ref_id)?;
-        commands.push(Command::PatchNode(PatchNode {
+        commands.push(Command::PatchNode(Box::new(PatchNode {
             uuid: *ref_id,
             parent_group_id: ref_parent,
             old: ref_old,
             new: ref_new,
-        }));
+        })));
     }
     Ok(commands)
 }
@@ -292,12 +292,12 @@ async fn patch_node(
     // loaded project (and needlessly wipe the redo stack on save-under-a-new-name).
     let is_root = parent_group_id == uuid;
 
-    let mut commands = vec![Command::PatchNode(PatchNode {
+    let mut commands = vec![Command::PatchNode(Box::new(PatchNode {
         uuid,
         parent_group_id,
         old,
         new: new.clone(),
-    })];
+    }))];
     // Capturing reference renames as extra `PatchNode`s in the same batch makes the whole rename a
     // single undo step (previously the GUI fanned out one PATCH per reference = one undo step each).
     commands.extend(propagate_rename_to_references(
@@ -2362,11 +2362,11 @@ fn prune_analyzer_source_mappings(
         if let Ok(info) = document.analyzer(*az_uuid) {
             let new_type = info.analyzer_type().clone();
             if new_type != *old_type {
-                inverses.push(Command::PatchAnalyzer(PatchAnalyzer {
+                inverses.push(Command::PatchAnalyzer(Box::new(PatchAnalyzer {
                     id: *az_uuid,
                     old: new_type,
                     new: old_type.clone(),
-                }));
+                })));
             }
         }
     }

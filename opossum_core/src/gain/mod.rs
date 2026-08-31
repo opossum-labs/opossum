@@ -13,17 +13,17 @@
 
 pub mod extraction;
 pub mod inversion_field;
+pub mod monochromatic_small_signal;
 pub mod pump_source;
 pub mod scenario;
-pub mod small_signal;
 pub use extraction::Extraction;
-pub use inversion_field::InversionField;
+pub use inversion_field::{Inversion, InversionField};
+pub use monochromatic_small_signal::MonochromaticSmallSignalGain;
 pub use pump_source::{
-    AnalyticPump, BeerLambertProfile, ConstInversion, LongitudinalProfile, PumpDirection,
-    PumpSource, TransversalProfile,
+    AnalyticPump, BeerLambertProfile, LongitudinalProfile, PumpDirection, PumpSource,
+    TransversalProfile,
 };
 pub use scenario::{ActiveScenario, PumpConfig, PumpScenario};
-pub use small_signal::SmallSignalGain;
 
 use crate::{
     error::OpmResult,
@@ -135,7 +135,7 @@ impl Extraction for ConstGain {
         &self,
         _body: &dyn Body,
         _config: &PumpConfig,
-    ) -> OpmResult<Option<InversionField>> {
+    ) -> OpmResult<Option<Inversion>> {
         // Reading no inversion, this model must not pay for a grid either.
         Ok(None)
     }
@@ -143,7 +143,7 @@ impl Extraction for ConstGain {
         &self,
         _body: &dyn Body,
         _ray: &Ray,
-        _inversion: &mut Option<InversionField>,
+        _inversion: &mut Option<Inversion>,
     ) -> f64 {
         // The gain is a fixed factor regardless of path length or position, so the exponent for
         // the whole chord is ln(gain), giving factor = exp(ln(gain)) = gain.
@@ -152,7 +152,7 @@ impl Extraction for ConstGain {
     fn amplify_spectrum(
         &self,
         _body: &dyn Body,
-        _inversion: Option<&InversionField>,
+        _inversion: Option<&Inversion>,
         spectrum: &mut Spectrum,
     ) -> OpmResult<()> {
         // Needing no beam path, this model is just as evaluable in an energy flow as in a ray
@@ -160,9 +160,9 @@ impl Extraction for ConstGain {
         spectrum.scale_vertical(&self.gain())
     }
 }
-impl From<SmallSignalGain> for GainModel {
-    fn from(value: SmallSignalGain) -> Self {
-        Self::SmallSignalGain(value)
+impl From<MonochromaticSmallSignalGain> for GainModel {
+    fn from(value: MonochromaticSmallSignalGain) -> Self {
+        Self::MonochromaticSmallSignalGain(value)
     }
 }
 
@@ -182,8 +182,8 @@ pub enum GainModel {
     /// saturation. See [`ConstGain`].
     Const(ConstGain),
     /// Unsaturated gain integrated along the path through the medium, reading the local inversion.
-    /// See [`SmallSignalGain`].
-    SmallSignalGain(SmallSignalGain),
+    /// See [`MonochromaticSmallSignalGain`].
+    MonochromaticSmallSignalGain(MonochromaticSmallSignalGain),
 }
 impl Display for GainModel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -223,7 +223,7 @@ impl GainModel {
         match self {
             Self::None => None,
             Self::Const(model) => Some(model),
-            Self::SmallSignalGain(model) => Some(model),
+            Self::MonochromaticSmallSignalGain(model) => Some(model),
         }
     }
     /// Return whether this model draws on the inversion stored in the medium.
@@ -253,7 +253,7 @@ impl GainModel {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::error::OpossumError;
+    use crate::{error::OpossumError, reciprocal_centimeter};
     use approx::assert_relative_eq;
     use strum::IntoEnumIterator;
 
@@ -262,7 +262,10 @@ mod test {
         assert_eq!(GainModel::default(), GainModel::None);
         assert!(!GainModel::default().is_active());
         assert!(GainModel::Const(ConstGain::default()).is_active());
-        assert!(GainModel::SmallSignalGain(SmallSignalGain::default()).is_active());
+        assert!(
+            GainModel::MonochromaticSmallSignalGain(MonochromaticSmallSignalGain::default())
+                .is_active()
+        );
         assert_eq!(GainModel::None.active_name(), None);
         assert_eq!(
             GainModel::Const(ConstGain::default())
@@ -271,10 +274,10 @@ mod test {
             Some("Const")
         );
         assert_eq!(
-            GainModel::SmallSignalGain(SmallSignalGain::default())
+            GainModel::MonochromaticSmallSignalGain(MonochromaticSmallSignalGain::default())
                 .active_name()
                 .as_deref(),
-            Some("SmallSignalGain")
+            Some("Small-Signal-Gain")
         );
     }
     /// Only the models that actually evaluate an inversion say so, and that answer is what makes
@@ -285,7 +288,10 @@ mod test {
     fn only_the_models_reading_the_medium_say_so() {
         assert!(!GainModel::None.needs_inversion());
         assert!(!GainModel::Const(ConstGain::default()).needs_inversion());
-        assert!(GainModel::SmallSignalGain(SmallSignalGain::default()).needs_inversion());
+        assert!(
+            GainModel::MonochromaticSmallSignalGain(MonochromaticSmallSignalGain::default())
+                .needs_inversion()
+        );
         // A model that reads the inversion has to amplify at all, or the pump settings would be
         // offered for something that then does nothing with them.
         for variant in GainModel::iter().filter(GainModel::needs_inversion) {
@@ -325,8 +331,11 @@ mod test {
             "Const"
         );
         assert_eq!(
-            format!("{}", GainModel::SmallSignalGain(SmallSignalGain::default())),
-            "SmallSignalGain"
+            format!(
+                "{}",
+                GainModel::MonochromaticSmallSignalGain(MonochromaticSmallSignalGain::default())
+            ),
+            "Small-Signal-Gain"
         );
     }
     #[test]
@@ -337,15 +346,15 @@ mod test {
             panic!("expected a Const gain model");
         };
         assert_relative_eq!(const_gain.gain(), 1.0);
-        // A freshly selected `SmallSignalGain` is neutral for a different reason: it amplifies by
-        // whatever the medium holds, and nobody has pumped it yet. Its own parameters must still be
-        // usable rather than neutral - see `SmallSignalGain::emission_cross_section`.
-        let Some(GainModel::SmallSignalGain(model)) =
-            GainModel::default_from_name("SmallSignalGain")
+        // A freshly selected `MonochromaticSmallSignalGain` is neutral for a different reason: it
+        // amplifies by whatever the medium holds, and nobody has pumped it yet. Its own peak gain
+        // coefficient therefore defaults to zero, so picking the model changes no result on its own.
+        let Some(GainModel::MonochromaticSmallSignalGain(model)) =
+            GainModel::default_from_name("Small-Signal-Gain")
         else {
             panic!("expected a small signal gain model");
         };
-        assert!(model.emission_cross_section().value > 0.0);
+        assert_relative_eq!(model.peak_gain_coefficient().value, 0.0);
         assert_eq!(GainModel::default_from_name("does not exist"), None);
     }
     #[test]
@@ -363,9 +372,8 @@ mod test {
         for model in [
             GainModel::None,
             GainModel::Const(ConstGain::new(3.0)?),
-            GainModel::SmallSignalGain(SmallSignalGain::new(
-                crate::square_meter!(3.0e-24),
-                (4, 5, 6),
+            GainModel::MonochromaticSmallSignalGain(MonochromaticSmallSignalGain::new(
+                reciprocal_centimeter!(0.5),
             )?),
         ] {
             let serialized =
