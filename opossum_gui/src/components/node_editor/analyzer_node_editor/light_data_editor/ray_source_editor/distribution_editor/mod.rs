@@ -1,4 +1,3 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
 mod energy_distribution_editor;
 mod position_distribution_editor;
 mod spectral_distribution_editor;

@@ -1,4 +1,3 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
 mod distribution_editor;
 mod image_source_editor;
 mod point_source_editor;

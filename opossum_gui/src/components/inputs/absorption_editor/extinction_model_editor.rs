@@ -13,7 +13,7 @@ pub enum ExtinctionParam {
 impl From<ExtinctionParam> for InputParam {
     fn from(param: ExtinctionParam) -> Self {
         match param {
-            ExtinctionParam::K => InputParam::F64("Extinction coefficient (k)".to_string()),
+            ExtinctionParam::K => Self::F64("Extinction coefficient (k)".to_string()),
         }
     }
 }

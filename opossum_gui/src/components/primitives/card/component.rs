@@ -1,3 +1,4 @@
+#![allow(clippy::volatile_composites)]
 use dioxus::prelude::*;
 
 #[css_module("/src/components/primitives/card/style.css")]

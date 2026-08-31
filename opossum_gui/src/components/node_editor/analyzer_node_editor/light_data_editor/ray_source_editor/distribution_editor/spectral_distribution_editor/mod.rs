@@ -1,4 +1,3 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
 mod gaussian_editor;
 mod laser_lines_editor;
 

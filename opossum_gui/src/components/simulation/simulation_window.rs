@@ -1,4 +1,3 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
 use crate::{
     APP_CONFIG, OPOSSUM_UI_LOGS,
     api::{self, eval_action_run},
@@ -6,8 +5,7 @@ use crate::{
 };
 use dioxus::prelude::*;
 use futures_util::StreamExt;
-use std::fmt::Write;
-use std::{fs, path::PathBuf, process::Stdio};
+use std::{fmt::Write, fs, path::PathBuf, process::Stdio};
 use tempfile::tempdir;
 use tokio::{
     io::{AsyncReadExt, BufReader},

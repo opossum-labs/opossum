@@ -1,6 +1,8 @@
 // --- Common imports ---
 use crate::{
     APP_CONFIG,
+    api::get_api_welcome,
+    backend_status::BackendStatus,
     components::{
         catalog_editor::MaterialCatalog,
         context_menu::cx_menu::{ContextMenu, CxtCommand},
@@ -113,6 +115,27 @@ pub fn App() -> Element {
     #[cfg(not(target_arch = "wasm32"))]
     let mut run_simulation = use_signal(|| false);
 
+    let mut backend_status = use_signal(BackendStatus::default);
+    provide_context(backend_status);
+
+    // Asynchronous backend health check on startup
+    use_future(move || async move {
+        match get_api_welcome().await {
+            Ok(msg) if msg.contains("OPOSSUM backend") => {
+                info!("Backend connection established: {msg}");
+                backend_status.set(BackendStatus::Connected);
+            }
+            Ok(unexpected) => {
+                warn!("Backend returned unexpected welcome message: {unexpected}");
+                backend_status.set(BackendStatus::Disconnected);
+            }
+            Err(err) => {
+                warn!("Backend is unreachable: {err}");
+                backend_status.set(BackendStatus::Disconnected);
+            }
+        }
+    });
+
     let mut material_registry = use_signal(|| {
         let registry_path = APP_CONFIG
             .read()
@@ -140,14 +163,14 @@ pub fn App() -> Element {
     use_effect(move || {
         if let Some(catalog_path) = APP_CONFIG.read().catalog_dir() {
             // Ensure newly selected directory exists on disk
-            if !catalog_path.exists() {
-                if let Err(e) = std::fs::create_dir_all(catalog_path) {
-                    log::error!(
-                        "Failed to create new catalog directory {}: {e}",
-                        catalog_path.display()
-                    );
-                    return;
-                }
+            if !catalog_path.exists()
+                && let Err(e) = std::fs::create_dir_all(catalog_path)
+            {
+                log::error!(
+                    "Failed to create new catalog directory {}: {e}",
+                    catalog_path.display()
+                );
+                return;
             }
 
             // Create new registry instance for the updated path (automatically scans and builds the index)
@@ -288,39 +311,59 @@ pub fn App() -> Element {
     };
 
     let mut execute_immediate_for_alert = execute_immediate.clone();
-    let process_command = move |cmd: AppCommand| match cmd {
-        AppCommand::NewProject => {
-            if *model_modified_sig.read() {
-                pending_action.set(Some(PendingAction::NewProject));
-                show_alert.set(true);
-            } else {
-                execute_immediate(AppCommand::NewProject);
+    let process_command = move |cmd: AppCommand| {
+        let is_connected = backend_status.read().is_connected();
+        // Disallow backend-dependent commands when disconnected
+        match &cmd {
+            AppCommand::Simulate
+            | AppCommand::AutoLayout
+            | AppCommand::NewProject
+            | AppCommand::OpenTrigger
+            | AppCommand::Save
+            | AppCommand::SaveAs
+            | AppCommand::AddNode(_)
+            | AppCommand::AddAnalyzer(_)
+                if !is_connected =>
+            {
+                log::warn!("Command {cmd:?} ignored: Backend is not connected.");
+                return;
             }
+            _ => {}
         }
-        AppCommand::Quit => {
-            if *model_modified_sig.read() {
-                pending_action.set(Some(PendingAction::Quit));
-                show_alert.set(true);
-            } else {
-                execute_immediate(AppCommand::Quit);
+        match cmd {
+            AppCommand::NewProject => {
+                if *model_modified_sig.read() {
+                    pending_action.set(Some(PendingAction::NewProject));
+                    show_alert.set(true);
+                } else {
+                    execute_immediate(AppCommand::NewProject);
+                }
             }
-        }
-        AppCommand::OpenTrigger => {
-            if *model_modified_sig.read() {
-                pending_action.set(Some(PendingAction::OpenProject));
-                show_alert.set(true);
-            } else {
-                execute_immediate(AppCommand::OpenTrigger);
+            AppCommand::Quit => {
+                if *model_modified_sig.read() {
+                    pending_action.set(Some(PendingAction::Quit));
+                    show_alert.set(true);
+                } else {
+                    execute_immediate(AppCommand::Quit);
+                }
             }
-        }
-        AppCommand::Save => {
-            if let Some(path) = model_file_path.read().clone() {
-                node_editor_command_handler.call(Some(NodeEditorCommand::SaveFile(path)));
-            } else {
-                execute_immediate(AppCommand::SaveAs);
+            AppCommand::OpenTrigger => {
+                if *model_modified_sig.read() {
+                    pending_action.set(Some(PendingAction::OpenProject));
+                    show_alert.set(true);
+                } else {
+                    execute_immediate(AppCommand::OpenTrigger);
+                }
             }
+            AppCommand::Save => {
+                if let Some(path) = model_file_path.read().clone() {
+                    node_editor_command_handler.call(Some(NodeEditorCommand::SaveFile(path)));
+                } else {
+                    execute_immediate(AppCommand::SaveAs);
+                }
+            }
+            _ => execute_immediate(cmd),
         }
-        _ => execute_immediate(cmd),
     };
     let process_command_for_menu = process_command.clone();
 

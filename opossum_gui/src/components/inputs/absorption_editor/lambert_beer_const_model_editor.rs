@@ -19,7 +19,7 @@ impl From<LambertBeerConstParam> for InputParam {
         match param {
             LambertBeerConstParam::Alpha => {
                 // Configures a numeric field with SI prefix handling for inverse meters (m⁻¹)
-                InputParam::SIUnit("Absorption coefficient (α)".to_string(), "m⁻¹".to_string())
+                Self::SIUnit("Absorption coefficient (α)".to_string(), "m⁻¹".to_string())
             }
         }
     }

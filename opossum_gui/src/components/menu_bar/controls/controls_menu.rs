@@ -1,4 +1,3 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
 use dioxus::{desktop::use_window, prelude::*};
 use dioxus_free_icons::{
     Icon,

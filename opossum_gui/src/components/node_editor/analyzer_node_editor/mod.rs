@@ -1,4 +1,3 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
 pub mod energy_editor;
 pub mod ghost_focus_editor;
 mod light_data_editor;
