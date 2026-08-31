@@ -464,7 +464,11 @@ fn ScenarioAmplifierRow(
                 class: "amp-row-header",
                 onclick: move |_| is_collapsed.toggle(),
                 span { class: "amp-row-arrow",
-                    if is_collapsed() { "\u{25b8}" } else { "\u{25be}" }
+                    if is_collapsed() {
+                        "\u{25b8}"
+                    } else {
+                        "\u{25be}"
+                    }
                 }
                 span { class: "fw-bold small", "{name}" }
             }
@@ -511,10 +515,16 @@ fn ScenarioAmplifierRow(
                                 oninput: move |e| ssg_g0_str.set(e.value()),
                                 onblur: move |_| save_ssg(),
                                 onkeydown: move |e| {
-                                    if e.key() == Key::Enter { save_ssg(); }
+                                    if e.key() == Key::Enter {
+                                        save_ssg();
+                                    }
                                 },
                             }
-                            label { class: "form-label text-secondary", r#for: format!("ssg-g0-{uuid}"), "Peak gain g₀ (m⁻¹)" }
+                            label {
+                                class: "form-label text-secondary",
+                                r#for: format!("ssg-g0-{uuid}"),
+                                "Peak gain g₀ (m⁻¹)"
+                            }
                         }
                     }
                 }

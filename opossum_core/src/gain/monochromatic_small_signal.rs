@@ -977,7 +977,7 @@ mod test {
         // (at x = R the entrance would reach z = R = exit, giving zero thickness).
         let aperture_mm = 18.0_f64;
         let entrance = GeoSurfaceRef(Arc::new(Mutex::new(Sphere::new_at_position(
-            millimeter!(radius_mm), // stored radius +R → center at vertex_z + R = R
+            millimeter!(radius_mm),     // stored radius +R → center at vertex_z + R = R
             millimeter!(0.0, 0.0, 0.0), // vertex at z = 0
         )?)));
         let exit = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(

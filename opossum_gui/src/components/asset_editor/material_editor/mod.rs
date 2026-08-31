@@ -185,8 +185,9 @@ pub fn MaterialEditor(
                                     // Prevent typing of negative signs, decimal points, and scientific notation
                                     onkeydown: move |evt| {
                                         if let Key::Character(ref c) = evt.key()
-                                            && ["-", "+", ".", ",", "e", "E"].contains(&c.as_str()) {
-                                                evt.prevent_default();
+                                            && ["-", "+", ".", ",", "e", "E"].contains(&c.as_str())
+                                        {
+                                            evt.prevent_default();
                                         }
                                     },
                                     oninput: move |evt| {

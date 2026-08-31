@@ -147,26 +147,26 @@ fn AnalyticPumpFields(
             }
         }
         div { class: "amp-pump-nested",
-        div { class: "ssg-params-grid",
-        NodeConfigUsizeInput {
-            id: format!("{id_prefix}-pump-cells-x"),
-            label: "Cells x".to_string(),
-            value: grid.0,
-            onchange: move |v| rebuilt(transversal, longitudinal, (v, grid.1, grid.2)),
-        }
-        NodeConfigUsizeInput {
-            id: format!("{id_prefix}-pump-cells-y"),
-            label: "Cells y".to_string(),
-            value: grid.1,
-            onchange: move |v| rebuilt(transversal, longitudinal, (grid.0, v, grid.2)),
-        }
-        NodeConfigUsizeInput {
-            id: format!("{id_prefix}-pump-cells-z"),
-            label: "Cells z".to_string(),
-            value: grid.2,
-            onchange: move |v| rebuilt(transversal, longitudinal, (grid.0, grid.1, v)),
-        }
-    }
+            div { class: "ssg-params-grid",
+                NodeConfigUsizeInput {
+                    id: format!("{id_prefix}-pump-cells-x"),
+                    label: "Cells x".to_string(),
+                    value: grid.0,
+                    onchange: move |v| rebuilt(transversal, longitudinal, (v, grid.1, grid.2)),
+                }
+                NodeConfigUsizeInput {
+                    id: format!("{id_prefix}-pump-cells-y"),
+                    label: "Cells y".to_string(),
+                    value: grid.1,
+                    onchange: move |v| rebuilt(transversal, longitudinal, (grid.0, v, grid.2)),
+                }
+                NodeConfigUsizeInput {
+                    id: format!("{id_prefix}-pump-cells-z"),
+                    label: "Cells z".to_string(),
+                    value: grid.2,
+                    onchange: move |v| rebuilt(transversal, longitudinal, (grid.0, grid.1, v)),
+                }
+            }
         }
     }
 }
@@ -216,7 +216,13 @@ fn SuperGaussianFields(
                     value: sig_sigma_x.read().value,
                     unit_config: unit_m.clone(),
                     onchange: move |x_m: f64| {
-                        rebuilt(center, meter!(x_m, sigma.y.get::<uom::si::length::meter>()), power, theta, rectangular);
+                        rebuilt(
+                            center,
+                            meter!(x_m, sigma.y.get::< uom::si::length::meter > ()),
+                            power,
+                            theta,
+                            rectangular,
+                        );
                     },
                 }
                 NodeConfigUnitInput {
@@ -225,7 +231,13 @@ fn SuperGaussianFields(
                     value: sig_sigma_y.read().value,
                     unit_config: unit_m.clone(),
                     onchange: move |y_m: f64| {
-                        rebuilt(center, meter!(sigma.x.get::<uom::si::length::meter>(), y_m), power, theta, rectangular);
+                        rebuilt(
+                            center,
+                            meter!(sigma.x.get::< uom::si::length::meter > (), y_m),
+                            power,
+                            theta,
+                            rectangular,
+                        );
                     },
                 }
             }
@@ -236,7 +248,13 @@ fn SuperGaussianFields(
                     value: sig_center_x.read().value,
                     unit_config: unit_m.clone(),
                     onchange: move |x_m: f64| {
-                        rebuilt(meter!(x_m, center.y.get::<uom::si::length::meter>()), sigma, power, theta, rectangular);
+                        rebuilt(
+                            meter!(x_m, center.y.get::< uom::si::length::meter > ()),
+                            sigma,
+                            power,
+                            theta,
+                            rectangular,
+                        );
                     },
                 }
                 NodeConfigUnitInput {
@@ -245,7 +263,13 @@ fn SuperGaussianFields(
                     value: sig_center_y.read().value,
                     unit_config: unit_m,
                     onchange: move |y_m: f64| {
-                        rebuilt(meter!(center.x.get::<uom::si::length::meter>(), y_m), sigma, power, theta, rectangular);
+                        rebuilt(
+                            meter!(center.x.get::< uom::si::length::meter > (), y_m),
+                            sigma,
+                            power,
+                            theta,
+                            rectangular,
+                        );
                     },
                 }
             }
@@ -303,10 +327,7 @@ fn BeerLambertFields(
                 unit_config: UnitHandling::new("m⁻¹", true),
                 reciprocal: true,
                 onchange: move |v: f64| {
-                    save(
-                        BeerLambertProfile::new(reciprocal_meter!(v), direction),
-                        on_change,
-                    );
+                    save(BeerLambertProfile::new(reciprocal_meter!(v), direction), on_change);
                 },
             }
             LabeledSelect {

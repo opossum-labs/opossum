@@ -30,43 +30,43 @@ pub fn SourcePortCard(
     super::use_source_card_focus(analyzer_id, port_uuid, is_collapsed);
 
     rsx! {
-      div {
-        class: "card bg-dark border-secondary mb-2",
-        id: "sourceCard{port_uuid}",
-
-        // Accordion Header
         div {
-          class: "card-header bg-secondary py-1 px-2 text-light d-flex justify-content-between align-items-center noselect",
-          style: "cursor: pointer;",
-          onclick: move |_| is_collapsed.toggle(),
+            class: "card bg-dark border-secondary mb-2",
+            id: "sourceCard{port_uuid}",
 
-          span { class: "fw-bold small", "{port_name}" }
-          span { class: "text-muted small",
-            if is_collapsed() {
-              "▶"
-            } else {
-              "▼"
+            // Accordion Header
+            div {
+                class: "card-header bg-secondary py-1 px-2 text-light d-flex justify-content-between align-items-center noselect",
+                style: "cursor: pointer;",
+                onclick: move |_| is_collapsed.toggle(),
+
+                span { class: "fw-bold small", "{port_name}" }
+                span { class: "text-muted small",
+                    if is_collapsed() {
+                        "▶"
+                    } else {
+                        "▼"
+                    }
+                }
             }
-          }
-        }
 
-        // Accordion Body containing the source editor
-        if !is_collapsed() {
-          div {
-            key: "{analyzer_id}-{port_uuid}",
-            class: "card-body p-2 bg-dark text-light",
+            // Accordion Body containing the source editor
+            if !is_collapsed() {
+                div {
+                    key: "{analyzer_id}-{port_uuid}",
+                    class: "card-body p-2 bg-dark text-light",
 
-            RaySourceEditor {
-              ray_data_builder: source,
-              readonly,
-              on_save: move |light_builder| {
-                  if let LightDataBuilder::Geometric(updated_builder) = light_builder {
-                      on_save.call(updated_builder.into());
-                  }
-              },
+                    RaySourceEditor {
+                        ray_data_builder: source,
+                        readonly,
+                        on_save: move |light_builder| {
+                            if let LightDataBuilder::Geometric(updated_builder) = light_builder {
+                                on_save.call(updated_builder.into());
+                            }
+                        },
+                    }
+                }
             }
-          }
         }
-      }
     }
 }
