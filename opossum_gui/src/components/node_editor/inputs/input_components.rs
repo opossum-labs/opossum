@@ -68,6 +68,16 @@ pub fn FlushableTextInput(
         perform_save();
     });
 
+    // When a save completes (is_locally_dirty → false), snap the displayed text back to the last
+    // confirmed prop value. If the caller accepted the edit and updates the prop, the sync guard
+    // above will overwrite this with the new value during the same render pass; if the caller
+    // rejected the edit, the prop stays unchanged and this reset is what the user sees.
+    use_effect(move || {
+        if !*is_locally_dirty.read() {
+            local_value.set(last_prop_value.peek().clone());
+        }
+    });
+
     rsx! {
         div { class: container_class, "data-mdb-input-init": "",
             input {
