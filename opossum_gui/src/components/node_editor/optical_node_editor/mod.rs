@@ -1,4 +1,3 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
 pub mod alignment_editor;
 pub mod general_editor;
 pub mod port_config_editor;

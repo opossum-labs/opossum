@@ -20,7 +20,7 @@ impl From<LambertBeerSpecParam> for InputParam {
         match param {
             LambertBeerSpecParam::CsvFile => {
                 // File chooser filtered to CSV extensions
-                InputParam::FilePath("Absorption Spectrum (CSV)".to_string(), "csv".to_string())
+                Self::FilePath("Absorption Spectrum (CSV)".to_string(), "csv".to_string())
             }
         }
     }

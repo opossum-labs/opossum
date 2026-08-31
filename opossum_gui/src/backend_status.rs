@@ -7,7 +7,7 @@ pub enum BackendStatus {
 }
 
 impl BackendStatus {
-    pub fn is_connected(&self) -> bool {
+    pub const fn is_connected(self) -> bool {
         matches!(self, Self::Connected)
     }
 }

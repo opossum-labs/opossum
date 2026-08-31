@@ -1,4 +1,3 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::node_editor::{
     accordion::{AccordionItem, content_id_for_panel},
     inputs::input_components::{FlushableTextInput, LabeledCheckboxInput, LabeledInput},

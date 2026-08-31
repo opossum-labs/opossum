@@ -139,9 +139,8 @@ pub fn MaterialSelector(
                 Button {
                   title: "Edit local material properties",
                   onclick: {
-                      let mat = material.clone();
                       move |_| {
-                          editing_material.set(mat.clone());
+                          editing_material.set(material.clone());
                           show_editor_dialog.set(true);
                       }
                   },

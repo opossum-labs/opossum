@@ -1,5 +1,3 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
-
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::inputs::{
@@ -374,7 +372,7 @@ pub fn LabeledInput(
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct UnitHandling {
     /// The base unit of the input field. Eg. "m" for length, "W" for power, etc.
     /// This base unit will (optionally) be prefixed with the typical SI prefixes (m, k, M, etc.)

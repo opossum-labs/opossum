@@ -62,7 +62,7 @@ pub fn MaterialEditor(
     #[props(default)]
     on_save: Option<EventHandler<()>>,
 
-    /// Custom label for the primary action button (e.g. "Save Changes" for AdHoc editing).
+    /// Custom label for the primary action button (e.g. "Save Changes" for `AdHoc` editing).
     /// If None, defaults to "Publish New Version" (for drafts) or "Overwrite Version vX".
     #[props(default)]
     save_label: Option<String>,
@@ -184,10 +184,10 @@ pub fn MaterialEditor(
                     value: "{current_version}",
                     // Prevent typing of negative signs, decimal points, and scientific notation
                     onkeydown: move |evt| {
-                        if let Key::Character(ref c) = evt.key() {
-                            if ["-", "+", ".", ",", "e", "E"].contains(&c.as_str()) {
-                                evt.prevent_default();
-                            }
+                        if let Key::Character(ref c) = evt.key()
+                            && ["-", "+", ".", ",", "e", "E"].contains(&c.as_str())
+                        {
+                            evt.prevent_default();
                         }
                     },
                     oninput: move |evt| {

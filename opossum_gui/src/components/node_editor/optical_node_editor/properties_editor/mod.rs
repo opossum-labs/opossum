@@ -1,5 +1,3 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
-
 mod angle_editor;
 mod bool_editor;
 mod curvature_editor;

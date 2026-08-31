@@ -124,7 +124,7 @@ pub fn use_workspace_processor(
                         graph_id,
                     } => {
                         process_add_analyzer(
-                            analyzer_type,
+                            *analyzer_type,
                             workspace,
                             workspace_handlers,
                             graph_id,
