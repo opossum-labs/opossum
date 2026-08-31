@@ -91,25 +91,25 @@ pub fn MaterialSelector(
     };
 
     rsx! {
-      div { class: "mb-3",
-        // Optional Label Header
-        if let Some(lbl) = label {
-          label { class: "form-label fw-bold small text-capitalize mb-1", "{lbl}" }
-        }
+        div { class: "mb-3",
+            // Optional Label Header
+            if let Some(lbl) = label {
+                label { class: "form-label fw-bold small text-capitalize mb-1", "{lbl}" }
+            }
 
-        // Row 1: Material name and status badge
-        div { class: "d-flex justify-content-between align-items-center px-2 py-1 rounded bg-dark border border-secondary",
-          span {
-            class: "text-truncate fw-semibold small text-light",
-            title: "{material_name}",
-            "{material_name}"
-          }
-          if is_catalog {
-            span { class: "badge bg-primary flex-shrink-0 ms-2", "v{current_version}" }
-          } else {
-            span { class: "badge bg-secondary flex-shrink-0 ms-2", "AdHoc" }
-          }
-        }
+            // Row 1: Material name and status badge
+            div { class: "d-flex justify-content-between align-items-center px-2 py-1 rounded bg-dark border border-secondary",
+                span {
+                    class: "text-truncate fw-semibold small text-light",
+                    title: "{material_name}",
+                    "{material_name}"
+                }
+                if is_catalog {
+                    span { class: "badge bg-primary flex-shrink-0 ms-2", "v{current_version}" }
+                } else {
+                    span { class: "badge bg-secondary flex-shrink-0 ms-2", "AdHoc" }
+                }
+            }
 
         // Row 2: Action buttons row
         if !readonly {
@@ -170,17 +170,17 @@ pub fn MaterialSelector(
         }
       }
 
-      // Catalog Selection Modal Dialog
-      MaterialCatalog { open: show_catalog_dialog, on_select: on_catalog_select }
+        // Catalog Selection Modal Dialog
+        MaterialCatalog { open: show_catalog_dialog, on_select: on_catalog_select }
 
-      // AdHoc Material Editor Modal Dialog
-      MaterialEditor {
-        open: show_editor_dialog,
-        material: editing_material,
-        readonly,
-        on_change: on_inline_editor_change,
-        on_save: on_inline_editor_save,
-        save_label: "Save Changes".to_string(),
-      }
+        // AdHoc Material Editor Modal Dialog
+        MaterialEditor {
+            open: show_editor_dialog,
+            material: editing_material,
+            readonly,
+            on_change: on_inline_editor_change,
+            on_save: on_inline_editor_save,
+            save_label: "Save Changes".to_string(),
+        }
     }
 }

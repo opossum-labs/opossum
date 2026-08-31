@@ -28,6 +28,13 @@ pub enum NodeChangeAction {
     Property(String, Proptype),
     Isometry(Option<Isometry>),
     AnalyzerType(AnalyzerType),
+    /// The pump scenarios an analyzer is run in, in the given order - one report per entry, and a
+    /// single passive run when empty.
+    ///
+    /// Separate from [`NodeChangeAction::AnalyzerType`] because the selection sits next to the
+    /// analyzer's config rather than inside it: it names operating points of the document, which is
+    /// why it has an endpoint (and an undo command) of its own on the backend.
+    AnalyzerPumpScenarios(Vec<Uuid>),
     PortConfig {
         port_name: String,
         port_type: PortType,
@@ -132,12 +139,12 @@ pub fn NodeConfigEditor(
                 }
             },
             None => rsx! {
-                div { "No node selected" }
+                div { class: "noselect", "No node selected" }
             },
         }
     } else if displayed_nodes.len() == 0 {
         rsx! {
-            div { "No node selected" }
+            div { class: "noselect", "No node selected" }
         }
     } else {
         rsx! {
@@ -169,6 +176,10 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
         move |mut rx: UnboundedReceiver<NodeChangeEvent>| async move {
             while let Some(event) = rx.next().await {
                 let uuid = event.node_id;
+                // The amplifier overview lists nodes by name, so a rename has to reach it. Every
+                // other way that list can change already bumps the counter in the workspace
+                // processor; taking the flag here keeps this out of the generic property path.
+                let is_rename = matches!(event.action, NodeChangeAction::Name(_));
 
                 let result: Result<(), String> = match event.action {
                     NodeChangeAction::Name(name) => match api::get_node_references(uuid).await {
@@ -229,6 +240,9 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                     NodeChangeAction::AnalyzerType(analyzer_type) => {
                         api::update_analyzer_config_ron(uuid, analyzer_type).await
                     }
+                    NodeChangeAction::AnalyzerPumpScenarios(scenarios) => {
+                        api::put_analyzer_pump_scenarios(uuid, scenarios).await
+                    }
                     NodeChangeAction::PortConfig {
                         port_name,
                         port_type,
@@ -244,6 +258,9 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                         // it only reflects the backend's truth after an undo/redo-triggered refetch,
                         // never after a normal direct edit.
                         *crate::NODE_DETAILS_REFRESH.write() += 1;
+                        if is_rename {
+                            *crate::AMP_LIST_REFRESH.write() += 1;
+                        }
                         // The edit pushed an undo entry on the backend; reflect that in the Edit menu.
                         *crate::UNDO_REDO_STATUS.write() = (true, false);
                     }

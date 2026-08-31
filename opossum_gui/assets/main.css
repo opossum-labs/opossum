@@ -18,7 +18,15 @@ body {
     flex-grow: 1;
     /* This row will take all available space */
     display: flex;
-    /* Make this row a flex container */    
+    /* Make this row a flex container */
+    /* Bootstrap's .row puts a gutter (negative row margin + padding on every child) around its
+       columns. The sidebar's view switcher has to sit flush against the window edge like VS Code's
+       activity bar, so this row carries no gutter at all - both its children handle their own
+       inner spacing. The variable is MDB's `--mdb-gutter-x`, not upstream Bootstrap's
+       `--bs-gutter-x`; this project ships MDB. */
+    --mdb-gutter-x: 0;
+    margin-left: 0;
+    margin-right: 0;
 }
 
 .graph-view-container {
@@ -277,6 +285,443 @@ body {
     width: 45px;
 }
 
+.sidebar{
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+/* Narrow vertical bar that switches the sidebar between node properties and the amplifier
+   overview, VS-Code style. */
+.sidebar-view-switcher {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 auto;
+    gap: 2px;
+    padding: 4px 0px;
+    border-right: 1px solid rgb(70, 70, 70);
+    /* The width is applied inline from `SIDEBAR_SWITCHER_WIDTH` in app.rs, because the resize drag
+       needs to know the collapsed sidebar's total width. */
+    box-sizing: border-box;
+}
+
+.sidebar-view-button {
+    background: none;
+    border: none;
+    border-left: 3px solid transparent;
+    line-height: 0;
+    padding: 6px 0;
+    cursor: pointer;
+    /* Fill the bar's fixed width so the active marker spans the full button. */
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.sidebar-view-button img {
+    width: 40px;
+    height: 40px;
+    /* Inactive icons are dimmed rather than recoloured, so the artwork keeps its own colours. */
+    opacity: 0.4;
+}
+
+.sidebar-view-button:hover img {
+    opacity: 0.85;
+}
+
+.sidebar-view-button.active img {
+    opacity: 1;
+}
+
+.sidebar-view-button.active {
+    border-left-color: rgb(255, 214, 130);
+}
+
+.sidebar-view {
+    /* The switcher bar must stay visible while a long list scrolls. */
+    overflow-y: auto;
+    /* The row no longer supplies a gutter, so the view brings its own inner spacing. */
+    padding: 0 8px;
+    min-width: 0;
+}
+
+/* Right edge of the sidebar, dragged to resize it - the vertical counterpart of the log panel's
+   `.height_resizer`, and driven by the same listeners on the outermost container. */
+/* Shared look of both resize handles; only the axis differs, see `.width_resizer` /
+   `.height_resizer` below. The thickness is mirrored by `RESIZER_THICKNESS` in app.rs. */
+.resizer {
+    background-color: gray;
+}
+
+.resizer:hover {
+    background-color: rgb(169, 169, 169);
+    transition: 100ms;
+    z-index: 1;
+}
+
+.width_resizer {
+    flex: 0 0 auto;
+    width: 2px;
+    cursor: ew-resize;
+}
+
+.width_resizer:hover {
+    width: 3px;
+    margin-right: -1px;
+}
+
+
+
+/* "All" / "By group" switch of the amplifier overview. Styled from scratch rather than through
+   MDB's button classes: MDB's stylesheet is linked after this one, so it would win any specificity
+   tie, and its inactive outline variant is close to unreadable on this dark panel. */
+.amp-filter {
+    display: flex;
+    width: 100%;
+    margin-bottom: 8px;
+}
+
+.amp-filter-btn {
+    flex: 1 1 0;
+    padding: 3px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    color: rgb(205, 205, 205);
+    background-color: rgb(58, 58, 58);
+    border: 1px solid rgb(95, 95, 95);
+}
+
+.amp-filter-btn:first-child {
+    border-radius: 4px 0 0 4px;
+}
+
+.amp-filter-btn:last-child {
+    border-radius: 0 4px 4px 0;
+    border-left: none;
+}
+
+.amp-filter-btn:hover {
+    color: #ffffff;
+    background-color: rgb(78, 78, 78);
+}
+
+.amp-filter-btn.active {
+    color: #ffffff;
+    background-color: rgb(105, 105, 105);
+}
+
+/* Group picker of the amplifier overview. Same reasoning as the switch above - own classes instead
+   of MDB's `.form-select`, whose colours would otherwise win. The `option` rule matters separately:
+   the dropdown list is painted by the platform and falls back to system colours (dark grey on dark)
+   unless it is told what to use. */
+.amp-group-select {
+    width: 100%;
+    margin-bottom: 8px;
+    padding: 3px 6px;
+    font-size: 12px;
+    color: rgb(235, 235, 235);
+    background-color: rgb(58, 58, 58);
+    border: 1px solid rgb(95, 95, 95);
+    border-radius: 4px;
+}
+
+.amp-group-select option {
+    color: rgb(235, 235, 235);
+    background-color: rgb(58, 58, 58);
+}
+
+/* Shown when the document holds no amplifier at all - an explanation, so it has to stay readable
+   rather than fade into the panel like a caption. */
+.amp-empty {
+    font-size: 12px;
+    font-style: italic;
+    color: rgb(180, 180, 180);
+}
+
+/* Node type and group name under an amplifier's name. Bootstrap's `.text-muted` is too dark to read
+   on the card's background, and overriding it would need `!important` because that utility carries
+   one itself. */
+.amp-card-sub {
+    font-size: 12px;
+    color: rgb(180, 180, 180);
+}
+
+/* Flat accordion-style row replacing the old bordered card — a subtle bottom divider separates
+   adjacent rows without creating a nested-card look inside the scenario card. */
+.amp-overview-card {
+    padding: 4px 8px;
+    border-bottom: 1px solid rgb(60, 60, 60);
+}
+
+.amp-overview-card:last-child {
+    border-bottom: none;
+}
+
+/* Clickable collapse-toggle header row for an individual amplifier. */
+.amp-row-header {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    color: rgb(235, 235, 235);
+    user-select: none;
+}
+
+.amp-row-header:hover {
+    color: #ffffff;
+}
+
+.amp-row-arrow {
+    font-size: 11px;
+    flex-shrink: 0;
+    color: rgb(180, 180, 180);
+}
+
+/* Only the subtext of a scenario's amplifier-candidate row reveals the node on the canvas.
+   The header toggle uses its own onclick and does not forward to reveal. */
+.amp-row-reveal {
+    cursor: pointer;
+}
+
+/* Scenario editor: new-scenario row (name input + add button), same palette as the amp filter
+   buttons above so the two panels read as one family. */
+.scenario-new-row {
+    display: flex;
+    gap: 4px;
+    width: 100%;
+    margin-bottom: 8px;
+}
+
+.scenario-new-input {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 3px 6px;
+    font-size: 12px;
+    color: rgb(235, 235, 235);
+    background-color: rgb(58, 58, 58);
+    border: 1px solid rgb(90, 90, 90);
+    border-radius: 4px;
+}
+
+.scenario-new-btn {
+    padding: 3px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    color: rgb(205, 205, 205);
+    background-color: rgb(58, 58, 58);
+    border: 1px solid rgb(90, 90, 90);
+    border-radius: 4px;
+}
+
+.scenario-new-btn:hover:not(:disabled) {
+    color: #ffffff;
+    background-color: rgb(78, 78, 78);
+}
+
+.scenario-new-btn:disabled {
+    cursor: default;
+    opacity: 0.5;
+}
+
+/* One scenario card's header row: its (renamable) name plus the delete button. Clicking the card
+   anywhere (not a dedicated button) makes it active - shown as a lightened background rather than an
+   icon or a border color, since a whole clickable card with a loud border reads more like a button
+   than a card. `!important` for the same reason as elsewhere in this file: MDB's `.bg-dark` is linked
+   after this stylesheet and would otherwise win the tie. */
+.scenario-card {
+    cursor: pointer;
+    border-color: rgb(70, 70, 70) !important;
+}
+
+.scenario-card.active {
+    background-color: rgb(56, 56, 56) !important;
+    border-color: rgb(100, 100, 100) !important;
+}
+
+.scenario-header {
+    gap: 4px;
+}
+
+.scenario-name-input {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 2px 4px;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgb(235, 235, 235);
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+}
+
+.scenario-name-input:hover,
+.scenario-name-input:focus {
+    background-color: rgb(58, 58, 58);
+    border-color: rgb(90, 90, 90);
+    outline: none;
+}
+
+.scenario-actions {
+    display: flex;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.scenario-delete-btn {
+    padding: 0 4px;
+    font-size: 13px;
+    line-height: 1.6;
+    cursor: pointer;
+    color: rgb(180, 180, 180);
+    background-color: transparent;
+    border: none;
+    border-radius: 4px;
+}
+
+.scenario-delete-btn:hover {
+    color: #ffffff;
+    background-color: rgb(78, 78, 78);
+}
+
+/* The document's only scenario, while a node is still marked as an amplifier candidate - see
+   `ScenarioCard`'s `delete_blocked`. */
+.scenario-delete-btn:disabled {
+    cursor: default;
+    opacity: 0.4;
+}
+
+.scenario-delete-btn:disabled:hover {
+    color: rgb(180, 180, 180);
+    background-color: transparent;
+}
+
+/* Expand/collapse toggle for a scenario's amplifier list - reuses `.amp-card-sub`'s colour, just
+   made clickable. */
+.scenario-expand-toggle {
+    cursor: pointer;
+    margin-top: 2px;
+}
+
+.scenario-amplifier-list {
+    margin-top: 6px;
+}
+
+/* Gain-factor input, shown under a candidate's row only while its gain model is Const. */
+.amp-gain-input {
+    width: 100%;
+    margin-top: 4px;
+    padding: 2px 6px;
+    font-size: 12px;
+    color: rgb(235, 235, 235);
+    background-color: rgb(58, 58, 58);
+    border: 1px solid rgb(90, 90, 90);
+    border-radius: 4px;
+}
+
+/* MonochromaticSmallSignalGain-specific parameters: integration steps and inversion-field grid. */
+.ssg-params {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.ssg-params-label {
+    font-size: 11px;
+    color: rgb(180, 180, 180);
+    margin-bottom: 0;
+}
+
+/* Three grid-cell inputs side by side (x / y / z). */
+.ssg-params-grid {
+    display: flex;
+    gap: 4px;
+}
+
+.ssg-params-cell {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+/* Two inputs side by side — used for paired parameters like σx/σy or center x/center y. */
+.field-pair {
+    display: flex;
+    gap: 4px;
+}
+.field-pair > * {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+/* One stack of controls configuring a candidate within a scenario - the gain model with its own
+   parameters, and, where the model calls for it, the pump source with its. Stacked rather than laid
+   out in a grid because the sidebar it lives in is narrow. */
+.amp-config-block {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 6px;
+    font-size: 0.85rem;
+    line-height: 1.3;
+}
+
+.amp-config-block .form-control,
+.amp-config-block .form-select {
+    font-size: 12px;
+}
+
+/* One level in from the block: the parameters of a profile the user picked inside it, set off by a
+   rule so it reads as belonging to the dropdown above rather than to the pump as a whole. */
+.amp-pump-nested {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-left: 8px;
+    border-left: 2px solid rgb(90, 90, 90);
+}
+
+
+/* The content div replaces the <input>: flex row with name + badge + icon buttons.
+   max-height:none overrides the 40px form-control cap since icon buttons need a bit more room. */
+.material-prop-display {
+    display: flex !important;
+    align-items: flex-end;
+    gap: 4px;
+    padding-top: 0.8rem !important;
+    padding-bottom: 0.2rem !important;
+    max-height: none !important;
+    height: auto !important;
+    cursor: default;
+    overflow: hidden;
+}
+
+.material-btn{
+    background-color: rgb(121, 120, 120) !important;
+    color: #ebebeb !important;
+    border: none !important;
+}
+.material-btn:hover{
+    background-color: rgb(169, 169, 169) !important;
+}
+
+.material-prop-name {
+    flex: 1 1 0;
+    min-width: 0;
+    color: rgb(235, 235, 235);
+}
+
+/* Status line below the body of an amplifying node. Its height must stay in sync with
+   AMP_STATUS_HEIGHT, which is what the canvas geometry (bounding box, auto layout) uses. */
+.node-amp-status {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 7pt;
+    color: rgb(255, 214, 130);
+    background-color: rgba(90, 70, 30, 0.85);
+    border-radius: 0px 0px 4px 4px;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
 .node-header {
     position: relative;
     border-top: 0;
@@ -473,16 +918,13 @@ body {
     background-color: rgba(197, 216, 255,1);
 }
 
-.height_resizer{
+.height_resizer {
     width: 100%;
     height: 2px;
-    cursor: ns-resize; 
-    background-color: gray;
+    cursor: ns-resize;
 }
-.height_resizer:hover{
-    width: 100%;
-    height: 4px;
-    background-color: rgb(128, 128, 128);
+.height_resizer:hover {
+    height: 3px;
     margin-bottom: -1px;
 }
 

@@ -15,13 +15,17 @@ pub use connection_classification::{build_connect_info, reconnect_all, split_sor
 #[allow(unused_imports)]
 pub use connection_preservation::PreservedConnections;
 pub use content_negotiation::{Ron, ron_or_json_response};
+// `CollectedNode` is never named directly - callers field-access `collect_nodes`'s
+// results - but it still needs a crate-wide-reachable path, same as `PreservedConnections` above.
+#[allow(unused_imports)]
+pub use graph_lookup::CollectedNode;
 pub use graph_lookup::{
     capture_node_connections, check_reference_target_not_nested, collect_group_connections,
-    collect_node_refs_and_pos, create_new_group_node_info, is_reference_target,
+    collect_node_refs_and_pos, collect_nodes, create_new_group_node_info, is_reference_target,
     lowest_common_ancestor_group, map_port, parent_group_id_or_self, resolve_reference_chain,
     validate_relocated_references,
 };
-pub use handler_support::{analyzer_mut_or_404, apply_and_push_undo};
+pub use handler_support::{analyzer_mut_or_404, apply_and_push_undo, pump_scenario_mut_or_404};
 pub use port_map_cascade::{
     PortMapCascadeRemoval, RemovedPortMapLevel, disconnect_exposed_port_cascades_for_node,
     remove_port_map_cascade, split_cascades_for_response,

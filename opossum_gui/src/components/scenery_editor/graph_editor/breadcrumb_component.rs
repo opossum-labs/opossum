@@ -7,7 +7,7 @@ pub fn BreadCrumbs(
     bread_crumb_click_event: EventHandler<(Uuid, String)>,
 ) -> Element {
     rsx! {
-        div { class: "graph-breadcrumbs",
+        div { class: "graph-breadcrumbs noselect",
             for (i, (id, name)) in bread_crumbs.iter().enumerate() {
                 {
                     let name = name.clone();

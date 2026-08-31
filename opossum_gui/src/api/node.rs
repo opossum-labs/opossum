@@ -416,6 +416,30 @@ pub async fn add_port_map(
         .await
 }
 
+/// Get the whole document's amplifier-candidate set (node uuids only - names are resolved
+/// separately, per scenario, via `get_pump_scenario_amplifiers`).
+///
+/// # Errors
+///
+/// This function will return an error if the request fails or the response cannot be deserialized.
+pub async fn get_amplifier_candidates() -> Result<Vec<Uuid>, String> {
+    HTTP_API_CLIENT()
+        .get::<Vec<Uuid>>("/api/nodes/amplifier_candidates")
+        .await
+}
+
+/// Mark or unmark a node as an amplifier candidate - a hardware fact independent of any pump
+/// scenario. Unmarking also strips the node from every scenario's gain-model map on the backend.
+///
+/// # Errors
+///
+/// This function will return an error if the request fails or the `node_id` was not found.
+pub async fn put_node_is_amplifier(node_id: Uuid, is_amplifier: bool) -> Result<(), String> {
+    HTTP_API_CLIENT()
+        .put_receive_no_content(&format!("/api/nodes/{node_id}/is_amplifier"), is_amplifier)
+        .await
+}
+
 pub async fn remove_port_map(
     group_port_name: String,
     group_id: Uuid,

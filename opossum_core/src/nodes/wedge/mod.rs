@@ -4,13 +4,13 @@ use std::sync::{Arc, Mutex};
 use crate::refractive_index::RefractiveIndex;
 use crate::{
     analyzers::energy::AnalysisEnergy,
-    core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType},
+    core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType, Volumetric},
     degree,
     error::{OpmResult, OpossumError},
     geometry::{Plane, geo_surface::GeoSurfaceRef},
-    material::Material,
+    material::{MATERIAL, Material},
     millimeter,
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, create_volume_properties},
     properties::{Proptype, validator::Validator},
     refractive_index::RefrIndexConst,
     utils::geom_transformation::Isometry,
@@ -42,8 +42,9 @@ inventory::submit! {
 ///   - `name`
 ///   - `inverted`
 ///   - `center thickness`
-///   - `refractive index`
+///   - `material`
 ///   - `wedge`
+///   - `clear aperture`
 pub struct Wedge {
     node_attr: NodeAttr,
 }
@@ -65,7 +66,7 @@ impl Default for Wedge {
             .unwrap();
         node_attr
             .create_property(
-                "material",
+                MATERIAL,
                 "material of the wedge",
                 Material::new_draft(
                     "lens material",
@@ -97,7 +98,7 @@ impl Default for Wedge {
                 Angle::zero().into(),
             )
             .unwrap();
-
+        create_volume_properties(&mut node_attr).unwrap();
         let mut wedge = Self { node_attr };
         wedge.update_surfaces().unwrap();
         wedge
@@ -125,14 +126,18 @@ impl Wedge {
 
         wedge
             .node_attr
-            .set_property("material", material.into().into())?;
+            .set_property(MATERIAL, material.into().into())?;
         wedge.node_attr.set_property("wedge", wedge_angle.into())?;
         wedge.update_surfaces()?;
         Ok(wedge)
     }
 }
 
+impl Volumetric for Wedge {}
 impl OpticNode for Wedge {
+    fn as_volume(&self) -> Option<&dyn Volumetric> {
+        Some(self)
+    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
 
@@ -197,6 +202,7 @@ mod test {
         properties::{Proptype, proptype::AssetRef},
         refractive_index::RefractiveIndexType,
     };
+    use approx::assert_abs_diff_eq;
     use nalgebra::Vector3;
 
     #[test]
@@ -216,7 +222,7 @@ mod test {
         } else {
             assert!(false, "could not read angle.");
         }
-        if let Ok(Proptype::Material(AssetRef::Inline(p))) = node.properties().get("material") {
+        if let Ok(Proptype::Material(AssetRef::Inline(p))) = node.properties().get(MATERIAL) {
             if let RefractiveIndexType::Const(val) = &p.optical.refractive_index {
                 let idx = val.get_refractive_index(nanometer!(1000.0))?;
                 assert_eq!(idx, 1.5);
@@ -224,7 +230,7 @@ mod test {
                 assert!(false, "could not read refractive index constant.");
             }
         } else {
-            assert!(false, "could not read refractive index.");
+            assert!(false, "could not read material.");
         }
         Ok(())
     }
@@ -347,7 +353,7 @@ mod test {
         } else {
             assert!(false, "could not read angle.");
         }
-        if let Ok(Proptype::Material(AssetRef::Inline(p))) = n.properties().get("material") {
+        if let Ok(Proptype::Material(AssetRef::Inline(p))) = n.properties().get(MATERIAL) {
             if let RefractiveIndexType::Const(val) = &p.optical.refractive_index {
                 let idx = val.get_refractive_index(nanometer!(1000.0))?;
                 assert_eq!(idx, 1.0);
@@ -355,7 +361,7 @@ mod test {
                 assert!(false, "could not read refractive index constant.");
             }
         } else {
-            assert!(false, "could not read refractive index.");
+            assert!(false, "could not read material.");
         }
         Ok(())
     }
@@ -427,6 +433,93 @@ mod test {
         } else {
             assert!(false, "could not get LightData");
         }
+        Ok(())
+    }
+    /// Reference values for the entry surface → volume → exit surface propagation.
+    ///
+    /// This pins the current behaviour down completely so that refactoring the two-surface
+    /// sequence in `analysis_raytrace.rs` can be verified to be behaviour-neutral. The values are
+    /// recorded, not derived — physical correctness is covered by the other tests in this module.
+    #[test]
+    fn volume_propagation_regression() -> OpmResult<()> {
+        let mut node = Wedge::new(
+            "regression",
+            millimeter!(10.0),
+            degree!(5.0),
+            RefrIndexConst::new(1.5)?,
+        )?;
+        node.set_isometry(Isometry::identity())?;
+        test_volume_propagation_regression(
+            &mut node,
+            &[
+                [
+                    0.0,
+                    0.0,
+                    10.0,
+                    0.0,
+                    0.043_828_401_903,
+                    0.999_039_073_904,
+                    1.0,
+                    15.0,
+                ],
+                [
+                    5.0,
+                    0.0,
+                    10.0,
+                    0.0,
+                    0.043_828_401_903,
+                    0.999_039_073_904,
+                    1.0,
+                    15.0,
+                ],
+                [
+                    0.322_431_167_274,
+                    -3.355_137_665_452,
+                    9.706_463_489_704,
+                    0.049_690_399_500,
+                    0.143_782_885_757,
+                    0.988_360_939_111,
+                    1.0,
+                    14.599_804_663_813,
+                ],
+            ],
+        )
+    }
+    #[test]
+    fn volume_body() -> OpmResult<()> {
+        test_volume_body::<Wedge>()
+    }
+    #[test]
+    fn clear_aperture() -> OpmResult<()> {
+        test_clear_aperture::<Wedge>()
+    }
+    #[test]
+    fn clear_aperture_absent_in_file() -> OpmResult<()> {
+        test_clear_aperture_absent_in_file::<Wedge>()
+    }
+    /// The wedge tilts its rear surface around the axis, so the volume thickens on one side of it
+    /// by as much as it thins on the other.
+    #[test]
+    fn volume_body_is_wedge_shaped() -> OpmResult<()> {
+        let center_thickness = millimeter!(10.0);
+        let mut node = Wedge::new(
+            "wedge shape",
+            center_thickness,
+            degree!(5.0),
+            RefrIndexConst::new(1.5)?,
+        )?;
+        node.set_isometry(Isometry::identity())?;
+        let above = path_length_through(&node, millimeter!(0.0, 5.0, 0.0))?;
+        let below = path_length_through(&node, millimeter!(0.0, -5.0, 0.0))?;
+        assert!(
+            (above - below).abs() > millimeter!(0.1),
+            "a wedge of 5 degrees has to differ noticeably in thickness across 10 mm"
+        );
+        assert_abs_diff_eq!(
+            (above + below).value,
+            (2.0 * center_thickness).value,
+            epsilon = 1e-12
+        );
         Ok(())
     }
 }

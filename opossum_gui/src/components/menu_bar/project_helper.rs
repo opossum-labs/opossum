@@ -82,7 +82,7 @@ pub async fn select_folder_path(
 
 /// Abstracted method to save OPM content to disk or trigger a browser download
 /// based on the compilation target (Desktop vs. WASM).
-#[allow(clippy::unused_async)] // false positive since it only considers the non-WASM config.
+#[allow(clippy::unused_async)]
 pub async fn save_opm_data(path: &Path, content: &str) -> Result<(), String> {
     #[cfg(not(target_arch = "wasm32"))]
     {

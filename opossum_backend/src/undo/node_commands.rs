@@ -254,12 +254,12 @@ pub(super) fn apply_patch_node(
     document
         .scenery_mut()
         .with_node_attr_mut(uuid, |node_attr| apply_node_request(node_attr, &new))?;
-    Ok(Command::PatchNode(PatchNode {
+    Ok(Command::PatchNode(Box::new(PatchNode {
         uuid,
         parent_group_id,
         old: new,
         new: old,
-    }))
+    })))
 }
 
 /// Determines which node-editor sidebar panel (if any) `new`'s populated field(s) belong to, so

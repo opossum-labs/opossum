@@ -58,11 +58,11 @@ pub(super) fn apply_patch_analyzer(
     let PatchAnalyzer { id, old, new } = cmd;
     let analyzer_info = analyzer_mut_or_404(document, id)?;
     analyzer_info.set_analyzer_type(&new);
-    Ok(Command::PatchAnalyzer(PatchAnalyzer {
+    Ok(Command::PatchAnalyzer(Box::new(PatchAnalyzer {
         id,
         old: new,
         new: old,
-    }))
+    })))
 }
 
 /// Repositions an analyzer on the GUI canvas, returning the [`Command::RepositionAnalyzer`] that undoes

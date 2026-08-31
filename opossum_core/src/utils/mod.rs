@@ -7,6 +7,7 @@ pub mod griddata;
 pub mod lock_ext;
 pub mod math_distribution_functions;
 pub mod math_utils;
+pub mod super_gaussian;
 pub mod test_helper;
 pub mod unit_format;
 pub mod uom_macros;

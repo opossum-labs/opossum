@@ -1,3 +1,4 @@
+mod amplifier_candidates;
 mod connections;
 mod core;
 pub mod port_mappings;
@@ -9,6 +10,13 @@ use actix_web::web::PathConfig;
 use utoipa_actix_web::service_config::ServiceConfig;
 
 pub fn config(cfg: &mut ServiceConfig<'_>) {
+    // Document-wide queries. These must be registered before the `/{uuid}` routes below, otherwise
+    // their literal path segment would be swallowed as a (then unparseable) node UUID.
+    cfg.service(amplifier_candidates::get_amplifier_candidates);
+
+    // amplifier-candidate CRUD (the hardware-side "is this node an amplifier" toggle)
+    cfg.service(amplifier_candidates::put_node_is_amplifier);
+
     // core CRUD services
     cfg.service(core::post_children);
     cfg.service(core::get_children);

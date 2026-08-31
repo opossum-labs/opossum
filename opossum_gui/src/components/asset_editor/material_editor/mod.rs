@@ -114,47 +114,47 @@ pub fn MaterialEditor(
     });
 
     rsx! {
-      // 1. Main Material Editor Dialog
-      AlertDialog {
-        open: open(),
-        on_open_change: move |v| open.set(v),
-        max_width: "50rem".to_string(),
-        AlertDialogTitle { "Material Editor" }
-        AlertDialogDescription {
-          div { class: "material-editor-container", id: "{base_id}",
+        // 1. Main Material Editor Dialog
+        AlertDialog {
+            open: open(),
+            on_open_change: move |v| open.set(v),
+            max_width: "50rem".to_string(),
+            AlertDialogTitle { "Material Editor" }
+            AlertDialogDescription {
+                div { class: "material-editor-container", id: "{base_id}",
 
-            // Clean Header Bar: Displays asset title and status badge
-            div { class: "d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom",
-              h4 { class: "mb-0",
-                "{material.read().name()}"
-                if is_draft {
-                  if save_label.is_some() {
-                    span { class: "badge bg-secondary ms-2", "AdHoc Material" }
-                  } else {
-                    span { class: "badge bg-secondary ms-2", "Draft (Auto-Version)" }
-                  }
-                } else {
-                  span { class: "badge bg-warning text-dark ms-2",
-                    "Target Version: v{current_version}"
-                  }
+                    // Clean Header Bar: Displays asset title and status badge
+                    div { class: "d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom",
+                        h4 { class: "mb-0",
+                            "{material.read().name()}"
+                            if is_draft {
+                                if save_label.is_some() {
+                                    span { class: "badge bg-secondary ms-2", "AdHoc Material" }
+                                } else {
+                                    span { class: "badge bg-secondary ms-2", "Draft (Auto-Version)" }
+                                }
+                            } else {
+                                span { class: "badge bg-warning text-dark ms-2",
+                                    "Target Version: v{current_version}"
+                                }
+                            }
+                        }
+                    }
                 }
-              }
-            }
-          }
 
-          // Main Scroll Area for Material Attributes
-          ScrollArea { height: "45em",
-            AssetHeaderEditor {
-              header: header_memo,
-              readonly,
-              on_change: handle_header_change,
-            }
-            OpticalPropertiesEditor {
-              optical: optical_memo,
-              base_id: format!("{}_optical", base_id),
-              readonly,
-              on_change: handle_optical_change,
-            }
+                // Main Scroll Area for Material Attributes
+                ScrollArea { height: "45em",
+                    AssetHeaderEditor {
+                        header: header_memo,
+                        readonly,
+                        on_change: handle_header_change,
+                    }
+                    OpticalPropertiesEditor {
+                        optical: optical_memo,
+                        base_id: format!("{}_optical", base_id),
+                        readonly,
+                        on_change: handle_optical_change,
+                    }
 
             // Advanced / Dangerous Options: Positioned at the very bottom
             details { class: "mt-4 p-3 border rounded bg-light",
@@ -219,49 +219,49 @@ pub fn MaterialEditor(
           }
         }
 
-        // Primary Action Footer
-        AlertDialogActions {
-          AlertDialogCancel { "Cancel" }
+            // Primary Action Footer
+            AlertDialogActions {
+                AlertDialogCancel { "Cancel" }
 
-          if on_save.is_some() && !readonly {
-            AlertDialogAction { on_click: handle_save_click,
-              if let Some(custom_label) = save_label.as_deref() {
-                "{custom_label}"
-              } else if is_draft {
-                "Publish New Version"
-              } else {
-                "Overwrite Version {current_version}"
-              }
-            }
-          }
-        }
-      }
-
-      // 2. Overwrite Confirmation Warning Dialog
-      AlertDialog {
-        open: show_overwrite_warning(),
-        on_open_change: move |v| show_overwrite_warning.set(v),
-        max_width: "35rem".to_string(),
-        AlertDialogTitle { "Confirm Version Overwrite" }
-        AlertDialogDescription {
-          div { class: "text-danger fw-bold mb-2",
-            "Attention: You are about to overwrite version {current_version}!"
-          }
-          p { class: "small text-muted mb-0",
-            "This operation replaces the existing version file on disk. If this version has already been pushed to a remote repository, this change can cause Git merge conflicts during synchronization."
-          }
-        }
-        AlertDialogActions {
-          AlertDialogCancel { "Cancel" }
-          AlertDialogAction {
-            on_click: move |_| {
-                if let Some(save_handler) = on_save {
-                    save_handler.call(());
+                if on_save.is_some() && !readonly {
+                    AlertDialogAction { on_click: handle_save_click,
+                        if let Some(custom_label) = save_label.as_deref() {
+                            "{custom_label}"
+                        } else if is_draft {
+                            "Publish New Version"
+                        } else {
+                            "Overwrite Version {current_version}"
+                        }
+                    }
                 }
-            },
-            "Yes, Overwrite Version"
-          }
+            }
         }
-      }
+
+        // 2. Overwrite Confirmation Warning Dialog
+        AlertDialog {
+            open: show_overwrite_warning(),
+            on_open_change: move |v| show_overwrite_warning.set(v),
+            max_width: "35rem".to_string(),
+            AlertDialogTitle { "Confirm Version Overwrite" }
+            AlertDialogDescription {
+                div { class: "text-danger fw-bold mb-2",
+                    "Attention: You are about to overwrite version {current_version}!"
+                }
+                p { class: "small text-muted mb-0",
+                    "This operation replaces the existing version file on disk. If this version has already been pushed to a remote repository, this change can cause Git merge conflicts during synchronization."
+                }
+            }
+            AlertDialogActions {
+                AlertDialogCancel { "Cancel" }
+                AlertDialogAction {
+                    on_click: move |_| {
+                        if let Some(save_handler) = on_save {
+                            save_handler.call(());
+                        }
+                    },
+                    "Yes, Overwrite Version"
+                }
+            }
+        }
     }
 }

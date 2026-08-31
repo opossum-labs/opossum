@@ -5,14 +5,13 @@ use std::collections::HashMap;
 use super::{Analyzer, AnalyzerType};
 use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
-    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, node_attr::HasNodeAttr},
-    degree,
+    core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
+    gain::{ActiveScenario, PumpConfig, PumpScenario},
     light::{LightResult, Rays, lightdata::ray_data_builder::RayDataBuilder},
     material::Material,
     nodes::NodeGroup,
     picojoule,
-    properties::{Proptype, proptype::AssetRef},
     reporting::analysis_report::AnalysisReport,
 };
 use log::{info, warn};
@@ -27,7 +26,7 @@ inventory::submit! {
         |at| if let AnalyzerType::RayTrace(config) = at { Some(Box::new(RayTracingAnalyzer::new(config.clone()))) } else { None }
     )
 }
-use uom::si::f64::{Angle, Energy, Length};
+use uom::si::f64::Energy;
 
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 /// Configuration data for a rays tracing analysis.
@@ -44,6 +43,14 @@ pub struct RayTraceConfig {
     missed_surface_strategy: MissedSurfaceStrategy,
     source_map: HashMap<Uuid, RayDataBuilder>,
     ambient_material: Material,
+    /// The operating point of the run currently being performed - see [`ActiveScenario`]. Not part
+    /// of the configuration a user edits and not written to file.
+    #[serde(skip)]
+    active_pump_scenario: ActiveScenario,
+    /// `true` when this config drives [`AnalysisRayTrace::calc_node_positions`]: the medium has
+    /// not been prepared yet and gain models must skip amplification. Not saved to file.
+    #[serde(skip)]
+    positioning_run: bool,
 }
 impl Default for RayTraceConfig {
     /// Create a default config for a ray tracing analysis with the following parameters:
@@ -60,6 +67,8 @@ impl Default for RayTraceConfig {
             missed_surface_strategy: MissedSurfaceStrategy::Stop,
             source_map: HashMap::new(),
             ambient_material: Material::vacuum(),
+            active_pump_scenario: ActiveScenario::default(),
+            positioning_run: false,
         }
     }
 }
@@ -130,6 +139,14 @@ impl RayTraceConfig {
     pub fn remove_source(&mut self, uuid: &Uuid) -> Option<RayDataBuilder> {
         self.source_map.remove(uuid)
     }
+    /// Set the [`PumpScenario`] this analysis run is being performed in.
+    ///
+    /// # Arguments
+    ///
+    /// * `pump_scenario` - the operating point, or `None` for a passive run.
+    pub fn set_active_pump_scenario(&mut self, pump_scenario: Option<PumpScenario>) {
+        self.active_pump_scenario.set(pump_scenario);
+    }
     /// Removes all source mappings whose UUIDs no longer exist in the given model.
     pub fn prune_source_map(&mut self, model: &NodeGroup) {
         self.source_map.retain(|uuid, _builder| model.exists(*uuid));
@@ -159,11 +176,46 @@ impl RayTraceConfig {
     pub fn set_ambient_material(&mut self, material: Material) {
         self.ambient_material = material;
     }
+    /// Mark this config as driving the geometry-positioning run.
+    ///
+    /// When set, [`PropagationStrategy::is_positioning_run`] returns `true` and gain models skip
+    /// amplification, because [`OpticNode::prepare_volume`](crate::core_optics::OpticNode::prepare_volume)
+    /// has not been called yet.
+    pub const fn set_positioning_run(&mut self, positioning_run: bool) {
+        self.positioning_run = positioning_run;
+    }
+    /// Return a config suitable for the geometry-positioning run.
+    ///
+    /// Copies the source map and scalar settings from `self` but drops the `active_pump_scenario`
+    /// (to avoid cloning a potentially large [`PumpScenario`]) and sets `positioning_run = true`
+    /// so that gain models know no medium has been prepared yet.
+    #[must_use]
+    pub fn for_positioning(&self) -> Self {
+        Self {
+            min_energy_per_ray: self.min_energy_per_ray,
+            max_number_of_bounces: self.max_number_of_bounces,
+            max_number_of_refractions: self.max_number_of_refractions,
+            missed_surface_strategy: self.missed_surface_strategy,
+            source_map: self.source_map.clone(),
+            active_pump_scenario: ActiveScenario::default(),
+            ambient_material: self.ambient_material().clone(),
+            positioning_run: true,
+        }
+    }
 }
 
 impl PropagationStrategy for RayTraceConfig {
     fn missed_surface_strategy(&self) -> MissedSurfaceStrategy {
         *self.missed_surface_strategy()
+    }
+    fn ambient_refractive_index(&self) -> crate::refractive_index::RefractiveIndexType {
+        self.ambient_material().refractive_index_type().clone()
+    }
+    fn pump_config(&self, node_id: Uuid) -> PumpConfig {
+        self.active_pump_scenario.config(node_id)
+    }
+    fn is_positioning_run(&self) -> bool {
+        self.positioning_run
     }
     fn on_after_apodization(&self, rays: &mut Rays) -> OpmResult<()> {
         rays.invalidate_by_threshold_energy(self.min_energy_per_ray())?;
@@ -190,8 +242,13 @@ impl Analyzer for RayTracingAnalyzer {
             format!(" '{}'", scenery.node_attr().name())
         };
         info!("Calculate node positions of scenery{scenery_name}.");
-        AnalysisRayTrace::calc_node_positions(scenery, LightResult::default(), &self.config)?;
+        AnalysisRayTrace::calc_node_positions(
+            scenery,
+            LightResult::default(),
+            &self.config.for_positioning(),
+        )?;
         scenery.reset_data();
+        scenery.prepare_volume(&self.config)?;
         info!("Performing ray tracing analysis of scenery{scenery_name}.");
         AnalysisRayTrace::analyze(scenery, LightResult::default(), &self.config)?;
         Ok(())
@@ -238,31 +295,6 @@ pub trait AnalysisRayTrace: OpticNode {
         } else {
             self.analyze(incoming_data, config)
         }
-    }
-    /// Returns the necessary node attributes for ray tracing
-    ///
-    /// # Errors
-    /// This function errors if the node attributes: Isometry, Material or Center Thickness cannot be read,
-    fn get_node_attributes_ray_trace(
-        &self,
-        node_attr: &NodeAttr,
-    ) -> OpmResult<(Material, Length, Angle)> {
-        let Ok(Proptype::Material(AssetRef::Inline(material))) = node_attr.get_property("material")
-        else {
-            return Err(OpossumError::Analysis("cannot read material".into()));
-        };
-        let Ok(Proptype::Length(center_thickness)) = node_attr.get_property("center thickness")
-        else {
-            return Err(OpossumError::Analysis(
-                "cannot read center thickness".into(),
-            ));
-        };
-        let angle = if let Ok(Proptype::Angle(wedge)) = node_attr.get_property("wedge") {
-            *wedge
-        } else {
-            degree!(0.)
-        };
-        Ok((material.clone(), *center_thickness, angle))
     }
 }
 
@@ -311,7 +343,7 @@ mod test {
     fn config_debug() {
         assert_eq!(
             format!("{:?}", RayTraceConfig::default()),
-            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop, source_map: {}, ambient_material: Material { header: AssetHeader { schema_version: 1, id: 00000000-0000-0000-0000-000000000000, version: 0, name: \"vacuum\", manufacturer: None, description: None }, optical: OpticalProperties { refractive_index: Const(RefrIndexConst { refractive_index: Validated { value: 1.0, validator: AndValidator { v1: AllFinite, v2: StaticInRange { _marker: PhantomData<(f64, opossum_core::refractive_index::refr_index_const::RefIndBounds)> }, _marker: PhantomData<f64> } } }), absorption: None }, thermal: None, mechanical: None } }"
+            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop, source_map: {}, ambient_material: Material { header: AssetHeader { schema_version: 1, id: 00000000-0000-0000-0000-000000000000, version: 0, name: \"vacuum\", manufacturer: None, description: None }, optical: OpticalProperties { refractive_index: Const(RefrIndexConst { refractive_index: Validated { value: 1.0, validator: AndValidator { v1: AllFinite, v2: StaticInRange { _marker: PhantomData<(f64, opossum_core::refractive_index::refr_index_const::RefIndBounds)> }, _marker: PhantomData<f64> } } }), absorption: None }, thermal: None, mechanical: None }, active_pump_scenario: ActiveScenario(None), positioning_run: false }"
         );
     }
     #[test]

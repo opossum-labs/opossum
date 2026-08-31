@@ -25,6 +25,8 @@ pub enum Validator {
         inclusive: bool,
     },
     StringIsNotEmpty,
+    /// The aperture shape must delimit a region, i.e. have a hard edge.
+    ApertureDelimitsRegion,
     OrValidator {
         validators: Vec<Self>,
     },
@@ -55,9 +57,24 @@ impl Validator {
                 inclusive,
             } => Self::validate_angle_is_in_range(prop, *min, *max, *inclusive),
             Self::StringIsNotEmpty => Self::validate_string_is_not_empty(prop),
+            Self::ApertureDelimitsRegion => Self::validate_aperture_delimits_region(prop),
             Self::OrValidator { validators } => Self::validate_or_validator(prop, validators),
             Self::AndValidator { validators } => Self::validate_and_validator(prop, validators),
             Self::LightDataBuilderValidator => Self::validate_light_data_builder(prop),
+        }
+    }
+    fn validate_aperture_delimits_region(prop: &Proptype) -> OpmResult<()> {
+        let Proptype::Aperture(shape) = prop else {
+            // Silently ignore if not an aperture.
+            return Ok(());
+        };
+        if shape.is_binary() {
+            Ok(())
+        } else {
+            Err(OpossumError::Properties(format!(
+                "an aperture of shape '{shape}' does not delimit a region: only a shape with a \
+                 hard edge can state where something begins and ends"
+            )))
         }
     }
     fn validate_numeric_is_finite(prop: &Proptype) -> OpmResult<()> {

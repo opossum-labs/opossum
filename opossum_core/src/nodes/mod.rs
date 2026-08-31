@@ -70,9 +70,36 @@ pub use wedge::Wedge;
 
 use crate::{
     analyzers::Analyzable,
-    core_optics::OpticRef,
+    core_optics::{NodeAttr, OpticRef},
     error::{OpmResult, OpossumError},
+    geometry::body::{CLEAR_APERTURE, default_clear_aperture},
+    properties::validator::Validator,
+    utils::LockExt,
 };
+use std::{collections::HashSet, sync::LazyLock};
+
+/// Declare the property every node with a physical volume carries: how far its medium extends
+/// transversally ([`CLEAR_APERTURE`]).
+///
+/// Declaring it from one place keeps the node types that call this in sync with each other, and
+/// they are exactly those implementing [`Volumetric`](crate::core_optics::Volumetric) — which is
+/// what the test in that module checks.
+///
+/// # Arguments
+///
+/// * `node_attr` - the attributes of the node under construction.
+///
+/// # Errors
+///
+/// This function returns an error if the property is already declared.
+pub fn create_volume_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
+    node_attr.create_property_with_validator(
+        CLEAR_APERTURE,
+        "transversal extent of the medium",
+        Validator::ApertureDelimitsRegion,
+        default_clear_aperture().into(),
+    )
+}
 
 /// Struct to hold all info about a node type
 pub struct NodeRegistration {
@@ -131,12 +158,59 @@ pub fn node_types() -> Vec<(&'static str, &'static str)> {
         .map(|info| (info.name, info.description))
         .collect()
 }
+/// The node types that enclose a volume of material, derived from the node registry.
+///
+/// Every registered type is instantiated once and asked whether it is
+/// [`Volumetric`](crate::core_optics::Volumetric). Doing that once is worth a `LazyLock`: it builds
+/// one node of every type in the program, while the answer cannot change at runtime.
+static VOLUME_NODE_TYPES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    node_types()
+        .into_iter()
+        .filter(|(node_type, _)| {
+            create_node_ref(node_type).is_ok_and(|optic_ref| {
+                optic_ref
+                    .optical_ref
+                    .lock_opm()
+                    .is_ok_and(|node| node.as_volume().is_some())
+            })
+        })
+        .map(|(node_type, _)| node_type)
+        .collect()
+});
+
+/// Return whether nodes of the given type enclose a volume of material.
+///
+/// This is the question [`OpticNode::as_volume`](crate::core_optics::OpticNode::as_volume) answers,
+/// for a caller that has only a type name and no node: a user interface deciding whether to offer
+/// amplification for a component, for instance. It is derived from the very same capability, so the
+/// two cannot drift apart.
+///
+/// # Arguments
+///
+/// * `node_type` - the node type name as it appears in the registry and in an `.opm` file.
+///
+/// # Returns
+///
+/// `true` if nodes of that type have a volume, `false` for any other type and for a name that is
+/// not registered at all.
+#[must_use]
+pub fn is_volume_node_type(node_type: &str) -> bool {
+    VOLUME_NODE_TYPES.contains(node_type)
+}
 #[cfg(test)]
 mod test {
     use super::*;
     #[test]
     fn create_node_ref_error() {
         assert!(create_node_ref("test").is_err());
+    }
+    #[test]
+    fn only_nodes_with_a_volume_are_volume_node_types() {
+        assert!(is_volume_node_type("lens"));
+        assert!(is_volume_node_type("wedge"));
+        assert!(is_volume_node_type("cylindric lens"));
+        assert!(!is_volume_node_type("dummy"));
+        assert!(!is_volume_node_type("does not exist"));
     }
     #[test]
     fn create_node_ref_ok() {

@@ -25,7 +25,7 @@ use crate::{
     meter,
     nodes::{FilterType, SplittingConfig, fluence_detector::Fluence},
     percent,
-    utils::{LockExt, geom_transformation::Isometry},
+    utils::{LockExt, geom_transformation::Isometry, math_utils::distance_3d_point},
 };
 
 ///Struct that contains all information about an optical ray
@@ -476,11 +476,10 @@ impl Ray {
             //new ratio of the perpendicular part to the full k vector
             let k_perp_norm_out = k0_n.mul_add(k0_n, -k_para_out.norm().powi(2)).sqrt();
 
-            let pos_in_m = self.pos.map(|c| c.value);
             let intersection_in_m = intersection_point.map(|c| c.value);
             //first add gemometrical path length
             self.path_length +=
-                self.refractive_index * meter!((pos_in_m - intersection_in_m).norm());
+                self.refractive_index * distance_3d_point(&self.pos, &intersection_point);
             //then add additional phase shift due to lateral displacement from the grating origin
             let dist_from_origin = s
                 .geo_surface()
@@ -564,10 +563,8 @@ impl Ray {
             let n = surface_normal;
             let dis = (mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0);
             let reflected_dir = s1 - 2.0 * (s1.dot(&n)) * n;
-            let pos_in_m = self.pos.map(|c| c.value);
-            let intersection_in_m = intersection_point.map(|c| c.value);
             self.path_length +=
-                self.refractive_index * meter!((pos_in_m - intersection_in_m).norm());
+                self.refractive_index * distance_3d_point(&self.pos, &intersection_point);
             self.pos_hist.push(self.pos);
             self.pos = intersection_point;
             // check, if total reflection
@@ -657,7 +654,31 @@ impl Ray {
                 }
             }
         };
-        self.e = self.e * transmission;
+        self.scale_energy(transmission.value)
+    }
+    /// Scale the energy of this [`Ray`] by a given factor.
+    ///
+    /// Unlike [`filter_energy`](Ray::filter_energy), which attenuates by a transmission and can
+    /// therefore only ever remove energy, this takes any non-negative factor: it is what an active
+    /// medium needs, where a ray leaves with more energy than it entered with.
+    ///
+    /// # Arguments
+    ///
+    /// * `factor` - the factor the ray's energy is multiplied by. A factor of 1.0 leaves it
+    ///   unchanged.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the given factor is not finite or negative. A negative
+    /// factor has no physical meaning - there is no such thing as negative energy in a beam - and is
+    /// rejected rather than silently producing one.
+    pub fn scale_energy(&mut self, factor: f64) -> OpmResult<()> {
+        if !factor.is_finite() || factor < 0.0 {
+            return Err(OpossumError::Other(format!(
+                "energy scaling factor must be finite and non-negative but is {factor}"
+            )));
+        }
+        self.e *= factor;
         Ok(())
     }
     /// Split a ray with the given energy splitting ratio.
@@ -1321,6 +1342,28 @@ mod test {
         assert_abs_diff_eq!(ray.dir[0], test_reflect[0]);
         assert_abs_diff_eq!(ray.dir[1], test_reflect[1]);
         assert_abs_diff_eq!(ray.dir[2], test_reflect[2]);
+        Ok(())
+    }
+    #[test]
+    fn scale_energy() -> OpmResult<()> {
+        let mut ray =
+            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1054.0), joule!(1.0))?;
+        // an active medium hands back more energy than went in - which `filter_energy` cannot express
+        ray.scale_energy(2.5)?;
+        assert_eq!(ray.e, joule!(2.5));
+        ray.scale_energy(0.4)?;
+        assert_eq!(ray.e, joule!(1.0));
+        Ok(())
+    }
+    #[test]
+    fn scale_energy_rejects_impossible_factors() -> OpmResult<()> {
+        let mut ray =
+            Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1054.0), joule!(1.0))?;
+        for factor in [-1.0, f64::NAN, f64::INFINITY] {
+            assert!(ray.scale_energy(factor).is_err());
+            // a rejected factor must leave the ray untouched rather than half-applied
+            assert_eq!(ray.e, joule!(1.0));
+        }
         Ok(())
     }
     #[test]

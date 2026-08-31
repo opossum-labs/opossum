@@ -66,6 +66,16 @@ pub fn FlushableTextInput(
         perform_save();
     });
 
+    // When a save completes (is_locally_dirty → false), snap the displayed text back to the last
+    // confirmed prop value. If the caller accepted the edit and updates the prop, the sync guard
+    // above will overwrite this with the new value during the same render pass; if the caller
+    // rejected the edit, the prop stays unchanged and this reset is what the user sees.
+    use_effect(move || {
+        if !*is_locally_dirty.read() {
+            local_value.set(last_prop_value.peek().clone());
+        }
+    });
+
     rsx! {
         div { class: container_class, "data-mdb-input-init": "",
             input {
@@ -290,7 +300,7 @@ pub fn RowedInputs(inputs: Vec<InputData>) -> Element {
 
     rsx! {
         // Standard slice chunks yield sub-slices without any intermediate heap allocation
-        for (row_idx , chunk) in inputs.chunks(2).enumerate() {
+        for (row_idx, chunk) in inputs.chunks(2).enumerate() {
             div {
                 // Key ensures fast and stable Virtual DOM reconciliation
                 key: "input_row_{row_idx}",
@@ -467,6 +477,62 @@ pub fn NodeConfigPlainF64Input(
     }
 }
 
+/// A labeled integer input for node configuration panels, backed by [`FlushableTextInput`].
+///
+/// Accepts non-negative integers (`usize`). Invalid input (non-integer, negative, or a value the
+/// core refuses) is logged and the field reverts to the last accepted value — the caller never
+/// receives a value the core would reject.
+///
+/// # Props
+///
+/// * `id` - the input's own id, which its label points at.
+/// * `label` - what the field is called.
+/// * `value` - the current value as the document holds it. Re-synced whenever it changes.
+/// * `onchange` - called with the parsed integer when the user commits a valid edit.
+#[component]
+pub fn NodeConfigUsizeInput(
+    id: String,
+    label: String,
+    value: usize,
+    onchange: EventHandler<usize>,
+) -> Element {
+    let mut last_value = use_signal(|| value);
+    let mut val_str = use_signal(|| format!("{value}"));
+
+    if *last_value.peek() != value {
+        last_value.set(value);
+        val_str.set(format!("{value}"));
+    }
+
+    let on_input_submission = EventHandler::new(move |val: String| {
+        if let Ok(parsed) = val.trim().parse::<usize>() {
+            onchange.call(parsed);
+        } else {
+            OPOSSUM_UI_LOGS
+                .write()
+                .add_log(&format!("'{val}' is not a valid positive integer"));
+        }
+        // Pessimistic revert: show the last confirmed value while waiting for the parent to push
+        // the accepted value back through the `value` prop. The sync guard above will then
+        // overwrite this with the new value if the core accepted it.
+        val_str.set(format!("{}", *last_value.peek()));
+    });
+
+    rsx! {
+        FlushableTextInput {
+            id,
+            label,
+            value: val_str,
+            r#type: "number",
+            step: Some("1"),
+            container_class: "form-floating border-start".to_string(),
+            input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
+            label_class: "form-label text-secondary".to_string(),
+            on_save: on_input_submission,
+        }
+    }
+}
+
 #[component]
 pub fn UnitInput(
     id: String,
@@ -572,9 +638,9 @@ pub fn LabeledSelect(
     info!("🔄 Render: LabeledSelect");
 
     let select_class = if readonly {
-        "form-select bg-dark text-light disabled-select"
+        "form-select text-light disabled-select"
     } else {
-        "form-select bg-dark text-light"
+        "form-select text-light"
     };
 
     rsx! {
@@ -589,7 +655,7 @@ pub fn LabeledSelect(
                     onchange.call(e);
                 },
                 // Use key for fast VDOM list reconciliation and avoid .clone()
-                for (is_selected , option) in &options {
+                for (is_selected, option) in &options {
                     option {
                         key: "{option}",
                         selected: *is_selected,

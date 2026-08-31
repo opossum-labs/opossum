@@ -1,14 +1,14 @@
 //! Cylindrical surface
 //!
 //! This module implements a cylindrical surface with a given radius of curvature and a given position / alignment in 3D space.
-use super::geo_surface::GeoSurface;
+use super::geo_surface::{GeoSurface, curved_local_z, is_behind_curvature};
 use crate::{
     error::{OpmResult, OpossumError},
     light::Ray,
     meter, radian,
     utils::geom_transformation::Isometry,
 };
-use nalgebra::{Point3, Vector3};
+use nalgebra::{Point2, Point3, Vector3};
 use num::Zero;
 use roots::{Roots, find_roots_quadratic};
 use uom::si::f64::Length;
@@ -125,6 +125,16 @@ impl GeoSurface for Cylinder {
         ))
     }
 
+    fn local_z_at(&self, transversal_position: &Point2<Length>) -> Option<Length> {
+        // The cylinder axis runs along y, so the surface is straight in that direction and reaches
+        // arbitrarily far along it — only the x offset bends it.
+        curved_local_z(transversal_position.x.value.abs(), self.radius.value).map(|z| meter!(z))
+    }
+    fn is_behind_do(&self, point: &Point3<Length>) -> bool {
+        // The local origin lies on the cylinder axis which runs along y, so the surface is the
+        // circle of |radius| in the xz plane.
+        is_behind_curvature(point.x.value.hypot(point.z.value), self.radius.value)
+    }
     fn set_isometry(&mut self, isometry: Isometry) {
         let anchor_isometry = Isometry::new(
             Point3::new(Length::zero(), Length::zero(), self.radius),
@@ -164,6 +174,32 @@ mod test {
         let s = Cylinder::new(millimeter!(2.0), iso)?;
         assert_eq!(s.radius, millimeter!(2.0));
         assert_eq!(s.get_pos(), millimeter!(0.0, 0.0, -1.0));
+        Ok(())
+    }
+    #[test]
+    fn is_behind() -> OpmResult<()> {
+        // cylinder axis at z = 10 mm, so the vertex of the convex surface lies at z = 9 mm
+        let iso = Isometry::new_along_z(millimeter!(10.0))?;
+        let s = Cylinder::new(millimeter!(1.0), iso)?;
+        assert!(s.is_behind(&millimeter!(0.0, 0.0, 9.5)));
+        // a point exactly on the surface counts as behind it
+        assert!(s.is_behind(&millimeter!(0.0, 0.0, 9.0)));
+        assert!(!s.is_behind(&millimeter!(0.0, 0.0, 8.5)));
+        // the surface is not curved along y, so the y position does not matter
+        assert!(s.is_behind(&millimeter!(0.0, 100.0, 9.5)));
+        assert!(!s.is_behind(&millimeter!(0.0, 100.0, 8.5)));
+        // the sag at x = 0.6 mm is 1 - sqrt(1 - 0.36) = 0.2 mm
+        assert!(s.is_behind(&millimeter!(0.6, 0.0, 9.3)));
+        assert!(!s.is_behind(&millimeter!(0.6, 0.0, 9.1)));
+        Ok(())
+    }
+    #[test]
+    fn is_behind_concave() -> OpmResult<()> {
+        // negative radius: the axis lies in front of the surface, whose vertex is at z = 11 mm
+        let iso = Isometry::new_along_z(millimeter!(10.0))?;
+        let s = Cylinder::new(millimeter!(-1.0), iso)?;
+        assert!(s.is_behind(&millimeter!(0.0, 0.0, 11.5)));
+        assert!(!s.is_behind(&millimeter!(0.0, 0.0, 10.5)));
         Ok(())
     }
     #[test]

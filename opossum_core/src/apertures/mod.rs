@@ -31,7 +31,8 @@ mod stack;
 
 use crate::{
     degree,
-    error::OpmResult,
+    error::{OpmResult, OpossumError},
+    generic_validators::Validate,
     meter,
     prelude::Isometry,
     properties::Proptype,
@@ -46,7 +47,7 @@ use opm_macros_lib::EnsureValidated;
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
-use strum::EnumIter;
+use strum::{EnumIter, IntoEnumIterator};
 use uom::si::{
     f64::{Angle, Length},
     length::millimeter,
@@ -190,6 +191,22 @@ impl Aperture {
     pub const fn isometry(&self) -> Option<&Isometry> {
         self.isometry.as_ref()
     }
+    /// Return whether this [`Aperture`] delimits a region geometrically.
+    ///
+    /// An aperture describes how much light a surface transmits where, which is more general than
+    /// an outline: only a binary shape used as a [`ApertureType::Hole`] encloses a well-defined
+    /// region. A [`ApertureShape::Gaussian`] has no edge at all — it attenuates everywhere and
+    /// transmits nowhere completely — an [`ApertureType::Obstruction`] delimits the *complement* of
+    /// a region, and a [`ApertureShape::Stack`] may combine both. Anything that has to know where a
+    /// body ends, rather than how much light passes, has to ask this first.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the aperture can be read as the outline of a region.
+    #[must_use]
+    pub const fn is_geometric_bound(&self) -> bool {
+        matches!(self.a_type, ApertureType::Hole) && self.shape.is_binary()
+    }
     /// Set the shape of this [`Aperture`].
     pub fn set_shape(&mut self, shape: ApertureShape) {
         self.shape = shape;
@@ -312,6 +329,26 @@ impl Aperture {
     }
 }
 
+/// Validator accepting only those [`Aperture`]s that delimit a region.
+///
+/// See [`Aperture::is_geometric_bound`] for what that rules out and why.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeometricBound;
+
+impl Validate<Aperture> for GeometricBound {
+    fn validate(&self, value: &Aperture) -> OpmResult<()> {
+        if value.is_geometric_bound() {
+            Ok(())
+        } else {
+            Err(OpossumError::Other(format!(
+                "a {} aperture of shape '{}' does not delimit a region",
+                value.aperture_type(),
+                value.shape()
+            )))
+        }
+    }
+}
+
 /// Different aperture types
 #[derive(
     Default, Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema, EnumIter, EnsureValidated,
@@ -353,6 +390,39 @@ impl ApertureShape {
     /// Check if the aperture is [`ApertureShape::Open`]
     pub const fn is_none(&self) -> bool {
         matches!(self, Self::Open)
+    }
+    /// Check whether this shape has a hard edge, i.e. transmits either fully or not at all.
+    ///
+    /// # Returns
+    ///
+    /// `true` for the binary shapes, `false` for [`ApertureShape::Open`],
+    /// [`ApertureShape::Gaussian`] and [`ApertureShape::Stack`].
+    #[must_use]
+    pub const fn is_binary(&self) -> bool {
+        matches!(
+            self,
+            Self::BinaryCircle(_) | Self::BinaryRectangle(_) | Self::BinaryPolygon(_)
+        )
+    }
+    /// Return one instance of every shape that does **not** delimit a region.
+    ///
+    /// These are the shapes that cannot state where a medium ends, so anything describing an
+    /// outline rather than a transmission mask has to refuse them — the clear aperture of a volume
+    /// node ([`CLEAR_APERTURE`](crate::geometry::body::CLEAR_APERTURE)) above all, whose property is
+    /// guarded by [`Validator::ApertureDelimitsRegion`](crate::properties::validator::Validator).
+    /// A user interface offering a choice of shapes asks here rather than keeping a list of its own,
+    /// which would silently go stale as soon as a variant is added.
+    ///
+    /// The list is derived from [`Self::is_binary`] rather than spelled out, so the two cannot
+    /// disagree. The returned values are the [`Default`] of each variant: only *which* variant each
+    /// one is carries meaning here, never its contents.
+    ///
+    /// # Returns
+    ///
+    /// One instance of [`Self::Open`], [`Self::Gaussian`] and [`Self::Stack`].
+    #[must_use]
+    pub fn non_delimiting() -> Vec<Self> {
+        Self::iter().filter(|shape| !shape.is_binary()).collect()
     }
     /// Calculate the transmission factor of a given point on the [`Aperture`]. The value is in the range (0.0..=1.0)
     /// 0.0 is fully opaque, 1.0 fully transparent.
@@ -510,6 +580,36 @@ mod test {
     #[test]
     fn default() {
         assert!(matches!(ApertureShape::default(), ApertureShape::Open));
+    }
+    /// Every shape is either able to delimit a region or listed as unable to — a new variant must
+    /// end up on exactly one of the two sides, never silently on neither.
+    #[test]
+    fn non_delimiting_covers_every_non_binary_shape() {
+        let non_delimiting = ApertureShape::non_delimiting();
+        assert!(
+            !non_delimiting.iter().any(ApertureShape::is_binary),
+            "a shape that delimits a region must not be listed as one that does not"
+        );
+        assert_eq!(
+            non_delimiting.len()
+                + ApertureShape::iter()
+                    .filter(ApertureShape::is_binary)
+                    .count(),
+            ApertureShape::iter().count(),
+            "every shape has to be classified"
+        );
+        for shape in [
+            ApertureShape::Open,
+            ApertureShape::Gaussian(GaussianShape::default()),
+            ApertureShape::Stack(StackShape::default()),
+        ] {
+            assert!(
+                non_delimiting
+                    .iter()
+                    .any(|s| std::mem::discriminant(s) == std::mem::discriminant(&shape)),
+                "{shape} has no edge to bound a medium with and must be listed"
+            );
+        }
     }
     #[test]
     fn test_new_circle() {

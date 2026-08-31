@@ -72,7 +72,7 @@ pub fn MenuBar(
                 Icon { width: 25, icon: FaBars }
             }
             div {
-                class: "collapse navbar-collapse flex-grow-0 w-auto",
+                class: "noselect collapse navbar-collapse flex-grow-0 w-auto",
                 id: "navbarSupportedContent",
                 img {
                     class: "navbar-brand mt-lg-0",

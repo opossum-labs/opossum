@@ -14,6 +14,7 @@ use crate::{
         NodeAttrExt,
         optic_ports::{PortConfig, ValidatedLidt},
     },
+    gain::{GainModel, PumpConfig, PumpScenario, PumpSource},
     nodes::ConnectionInfo,
     opm_document::AnalyzerInfo,
     prelude::{AnalyzerType, Aperture, Isometry, PortMap, PortType, Properties},
@@ -659,6 +660,49 @@ impl NewAnalyzerInfo {
 }
 
 // ============================================================================
+// PUMP SCENARIOS
+// ============================================================================
+
+/// Request payload to create a new, empty pump scenario.
+#[derive(Debug, Serialize, Deserialize, ToSchema, Clone)]
+pub struct NewPumpScenario {
+    /// Display name of the new scenario.
+    #[schema(example = "Full power")]
+    pub name: String,
+}
+
+/// Data Transfer Object to send a pump scenario together with its id to the client.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, ToSchema)]
+pub struct PumpScenarioItemDto {
+    /// The unique identifier of the pump scenario.
+    pub id: Uuid,
+    /// The scenario itself: its name and what every node it configures does.
+    pub scenario: PumpScenario,
+}
+
+/// Request payload to set the [`GainModel`] a node runs with within one pump scenario.
+///
+/// [`GainModel::None`] takes the node out of the scenario again unless its medium is still pumped -
+/// see [`PumpScenario::set_gain_model`].
+#[derive(Debug, Serialize, Deserialize, ToSchema, Clone, Copy)]
+pub struct SetScenarioGainModel {
+    pub node_id: Uuid,
+    pub gain_model: GainModel,
+}
+
+/// Request payload to set the [`PumpSource`] a node's medium is pumped with within one pump
+/// scenario.
+///
+/// The counterpart of [`SetScenarioGainModel`] for the other half of a
+/// [`PumpConfig`]: [`PumpSource::None`] takes the node out of the scenario again unless it still
+/// amplifies - see [`PumpScenario::set_pump_source`].
+#[derive(Debug, Serialize, Deserialize, ToSchema, Clone, Copy)]
+pub struct SetScenarioPumpSource {
+    pub node_id: Uuid,
+    pub pump: PumpSource,
+}
+
+// ============================================================================
 // MACRO OPERATIONS
 // ============================================================================
 
@@ -691,6 +735,32 @@ pub struct LoadDocumentResponse {
 pub struct SourcePortDto {
     pub uuid: Uuid,
     pub name: String,
+}
+
+/// One amplifier candidate of the document, together with its [`GainModel`] in one particular pump
+/// scenario, for the scenario editor.
+///
+/// Every candidate appears here - configured in this scenario or not - not just the ones actively
+/// amplifying: an unconfigured candidate carries [`GainModel::None`], so the editor can render one
+/// row per candidate and let it be turned on or off, rather than only ever showing rows that are
+/// already active. `gain_model` is the structured value (not a display name) because the editor
+/// needs to show and edit it, in particular a `Const` gain's factor.
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema, PartialEq)]
+pub struct ScenarioAmplifierDto {
+    pub uuid: Uuid,
+    #[schema(example = "Main amplifier")]
+    pub name: String,
+    #[schema(example = "lens")]
+    pub node_type: String,
+    /// The group the node lives in. The editor needs it to open the right tab when the user asks to
+    /// be taken to the node, and to offer filtering by subsystem.
+    pub group_id: Uuid,
+    /// Display name of that group (the document's own name for the root scenery).
+    #[schema(example = "Frontend")]
+    pub group_name: String,
+    /// What this node does in this scenario — how it is pumped and how it amplifies. A candidate
+    /// this scenario simply hasn't configured carries the default, which does neither.
+    pub config: PumpConfig,
 }
 
 // ============================================================================
@@ -803,6 +873,20 @@ pub enum DocumentChange {
     /// The analyzer moved on the canvas to `gui_position`. Emitted when undoing/redoing an analyzer
     /// reposition, so the GUI can move it back (a details refetch alone doesn't touch canvas state).
     AnalyzerMoved { id: Uuid, gui_position: (f64, f64) },
+    /// Mirrors `POST /api/pump_scenarios`.
+    PumpScenarioAdded { scenario: PumpScenarioItemDto },
+    /// Mirrors `DELETE /api/pump_scenarios/{uuid}`.
+    PumpScenarioRemoved { id: Uuid },
+    /// A pump scenario changed - it was renamed, or a node's gain model in it was set, or the
+    /// entries of deleted nodes were dropped from it. Anything showing that operating point (the
+    /// scenario editor, and the amplifier status of the nodes if it is the active one) should
+    /// re-fetch it.
+    PumpScenarioChanged { id: Uuid },
+    /// The document-wide amplifier-candidate set changed - a node was marked or unmarked, or the
+    /// entries of a deleted node were dropped from it. There is only one such set, so no id is
+    /// carried; anything showing candidacy (the context-menu toggle's state, every scenario editor's
+    /// row list) should re-fetch it.
+    AmplifierNodesChanged,
     /// One tab's nodes/edges/port-maps should be re-fetched from scratch (see the type's own doc
     /// comment for which operations use this).
     GraphNeedsRefresh { graph_id: Uuid },

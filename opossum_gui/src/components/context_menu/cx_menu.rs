@@ -26,6 +26,14 @@ pub enum CxtCommand {
         mapped_node_id: Uuid,
         parent: (Uuid, String),
     },
+    /// Marks or unmarks a node as an amplifier candidate - what the context menu's "As
+    /// amplifier"/"As passive optic" entry sends. A hardware fact, independent of any pump
+    /// scenario: offered for every volume node type regardless of whether one is active.
+    ToggleAmplifierCandidate {
+        node_id: Uuid,
+        graph_id: Uuid,
+        is_amplifier: bool,
+    },
 }
 
 #[derive(Clone, PartialEq, Debug)]
