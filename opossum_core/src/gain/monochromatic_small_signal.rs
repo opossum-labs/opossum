@@ -184,6 +184,8 @@ impl Extraction for MonochromaticSmallSignalGain {
                 _ => 0.0,
             },
             Some(Inversion::Field(field)) => {
+                use uom::si::{f64::Length, length::meter};
+
                 // Normalize the ray direction: the DDA requires a unit vector so that parametric
                 // distances equal arc lengths.
                 let direction = ray.direction();
@@ -198,6 +200,20 @@ impl Extraction for MonochromaticSmallSignalGain {
                 let local_origin = iso.inverse_transform_point(&ray.position());
                 let local_dir = iso.inverse_transform_vector_f64(&dir);
 
+                // The exact chord gives the body's extent along the ray: t = 0 at the entrance
+                // surface (where the refracted ray starts) and t = t_body_exit at the exit
+                // surface. Clipping each cell's ds to [0, t_body_exit] corrects two
+                // boundary-voxel errors that arise at curved surfaces:
+                //   - exit voxel: center-point mask says "inside", but the full DDA ds extends
+                //     past the curved exit surface → clip to t_body_exit.
+                //   - entry voxel: center-point mask says "outside" because the curved entrance
+                //     surface cuts through the voxel, but the clipped segment already lies
+                //     inside the body → the midpoint check below catches it.
+                let t_body_exit = match body.path_length_inside(ray) {
+                    Ok(Some(chord)) if chord.value > 0.0 => chord.value,
+                    _ => return 0.0,
+                };
+
                 let cells = field.traverse(&local_origin, &local_dir);
                 // A ghost ray exiting at the lower boundary of the grid (traveling outward) produces
                 // an empty forward traversal because t_exit == t_enter == 0. For non-saturating
@@ -209,15 +225,44 @@ impl Extraction for MonochromaticSmallSignalGain {
                     cells
                 };
 
+                // Accumulate t along the traversal so the [t_start, t_end] interval of each cell
+                // is known — traverse() yields only ds, not the absolute position along the ray.
+                let mut t_cur = 0.0_f64;
                 let mut exponent = 0.0_f64;
                 for (cell, ds) in cells {
-                    if !field.is_inside(cell) {
+                    let t_start = t_cur;
+                    let t_end = t_cur + ds.value;
+                    t_cur = t_end;
+
+                    let t_lo = t_start.max(0.0);
+                    let t_hi = t_end.min(t_body_exit);
+                    if t_hi <= t_lo {
                         continue;
                     }
-                    let Some(beta) = field.population(cell) else {
+                    let effective_ds = Length::new::<meter>(t_hi - t_lo);
+
+                    let beta = if field.is_inside(cell) {
+                        // Interior or exit-boundary cell: center-point mask confirms medium;
+                        // t-clipping already trims any overshoot past the exit surface.
+                        field.population(cell)
+                    } else {
+                        // Entry-boundary voxel or lateral exterior cell: center-point mask says
+                        // "outside", but the clipped segment [t_lo, t_hi] may still lie inside
+                        // the body. Check the midpoint of the clipped segment in world coordinates.
+                        let t_mid = (t_lo + t_hi) * 0.5;
+                        let displacement = local_dir.map(|v| Length::new::<meter>(v * t_mid));
+                        let world_mid = iso.transform_point(&(local_origin + displacement));
+                        if body.contains(&world_mid).unwrap_or(false) {
+                            field.population(cell)
+                        } else {
+                            None
+                        }
+                    };
+
+                    let Some(beta) = beta else {
                         continue;
                     };
-                    exponent = (self.peak_gain_coefficient() * ds)
+                    exponent = (self.peak_gain_coefficient() * effective_ds)
                         .value
                         .mul_add(beta, exponent);
                 }

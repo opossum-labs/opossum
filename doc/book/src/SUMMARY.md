@@ -23,6 +23,7 @@
 - [How-to Guides](./howto%20guides/howto%20guide.md)
   - [Model an amplifier](./howto%20guides/model_an_amplifier.md)
   - [Shaped pump profiles](./howto%20guides/shaped_pump_profile.md)
+  - [Pump profile in output fluence](./howto%20guides/small_signal_gain_fluence.md)
 - [Reference](./reference/reference.md)
   - [Nodes](./reference/nodes.md)
     - [Beam propagation visualizer](./reference/nodes/beam_propagation_visualizer.md)
