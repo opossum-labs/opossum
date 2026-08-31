@@ -1,26 +1,25 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
-use std::collections::HashSet;
-
 use super::{AMP_STATUS_HEIGHT, NodeElement};
-use crate::CONTEXT_MENU;
-use crate::components::scenery_editor::DragStatus;
-use crate::components::scenery_editor::graph_workspace::{
-    GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceStateStoreExt,
-};
-use crate::components::scenery_editor::{GraphState, GraphsWorkspaceState};
-use crate::components::{
-    context_menu::cx_menu::{CxMenu, CxtCommand},
-    scenery_editor::{
-        constants::{BORDER_WIDTH, NODE_WIDTH},
-        node::graph_node_components::GraphNodeContent,
-        ports::ports_component::NodePorts,
-        {GraphsWorkspaceAction, NodeType},
+use crate::{
+    CONTEXT_MENU,
+    components::{
+        context_menu::cx_menu::{CxMenu, CxtCommand},
+        scenery_editor::{
+            DragStatus, GraphState, GraphsWorkspaceAction, GraphsWorkspaceState, NodeType,
+            constants::{BORDER_WIDTH, NODE_WIDTH},
+            graph_workspace::{
+                GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceStateStoreExt,
+            },
+            node::graph_node_components::GraphNodeContent,
+            ports::ports_component::NodePorts,
+        },
     },
 };
-use dioxus::html::geometry::euclid::default::Point2D;
-use dioxus::html::input_data::MouseButton;
-use dioxus::prelude::*;
+use dioxus::{
+    html::{geometry::euclid::default::Point2D, input_data::MouseButton},
+    prelude::*,
+};
 use opossum_core::{nodes::is_volume_node_type, types::api_types::NewRefNode};
+use std::collections::HashSet;
 use uuid::Uuid;
 
 #[component]

@@ -1,4 +1,3 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use opossum_core::prelude::*;
@@ -25,7 +24,7 @@ pub fn AnalyzersMenu(on_analyzer_selected: EventHandler<AnalyzerType>) -> Elemen
         _ => vec![],
     };
     rsx! {
-        for (analyzer_type, analyzer_name) in analyzer_list.into_iter() {
+        for (analyzer_type , analyzer_name) in analyzer_list.into_iter() {
             {
                 rsx! {
                     li {

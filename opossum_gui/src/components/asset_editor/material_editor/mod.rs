@@ -156,68 +156,68 @@ pub fn MaterialEditor(
                         on_change: handle_optical_change,
                     }
 
-                    // Advanced / Dangerous Options: Positioned at the very bottom
-                    details { class: "mt-4 p-3 border rounded bg-light",
-                        summary {
-                            class: "fw-bold text-secondary text-uppercase small",
-                            style: "cursor: pointer;",
-                            "Advanced Settings (Expert Only)"
-                        }
-                        div { class: "mt-3",
-                            div { class: "alert alert-warning py-2 px-3 small mb-2",
-                                "Warning: Manually altering the version number bypasses the append-only database rule. Overwriting existing versions may cause merge conflicts when synchronizing with remote repositories."
-                            }
-                            div { class: "d-flex align-items-center gap-2",
-                                label {
-                                    class: "form-label mb-0 small text-muted",
-                                    r#for: "{base_id}_version_input",
-                                    "Target Version Number:"
-                                }
-                                input {
-                                    id: "{base_id}_version_input",
-                                    class: "form-control form-control-sm text-center",
-                                    style: "width: 5.5rem;",
-                                    r#type: "number",
-                                    min: "0",
-                                    step: "1",
-                                    disabled: readonly,
-                                    value: "{current_version}",
-                                    // Prevent typing of negative signs, decimal points, and scientific notation
-                                    onkeydown: move |evt| {
-                                        if let Key::Character(ref c) = evt.key()
-                                            && ["-", "+", ".", ",", "e", "E"].contains(&c.as_str())
-                                        {
-                                            evt.prevent_default();
-                                        }
-                                    },
-                                    oninput: move |evt| {
-                                        let raw_val = evt.value();
-                                        if raw_val.is_empty() {
-                                            // Optional fallback: Reset to 0 (draft) if field is cleared
-                                            on_change
-                                                .call(MaterialChangeEvent {
-                                                    action: MaterialChangeAction::SetVersion(0),
-                                                });
-                                        } else if let Ok(version_val) = raw_val.parse::<u32>() {
-                                            on_change
-                                                .call(MaterialChangeEvent {
-                                                    action: MaterialChangeAction::SetVersion(version_val),
-                                                });
-                                        }
-                                    },
-                                }
-                                span { class: "small text-muted",
-                                    if is_draft {
-                                        "(0 = Assign next available version automatically)"
-                                    } else {
-                                        "(Will overwrite version {current_version} on disk)"
-                                    }
-                                }
-                            }
-                        }
-                    }
+            // Advanced / Dangerous Options: Positioned at the very bottom
+            details { class: "mt-4 p-3 border rounded bg-light",
+              summary {
+                class: "fw-bold text-secondary text-uppercase small",
+                style: "cursor: pointer;",
+                "Advanced Settings (Expert Only)"
+              }
+              div { class: "mt-3",
+                div { class: "alert alert-warning py-2 px-3 small mb-2",
+                  "Warning: Manually altering the version number bypasses the append-only database rule. Overwriting existing versions may cause merge conflicts when synchronizing with remote repositories."
                 }
+                div { class: "d-flex align-items-center gap-2",
+                  label {
+                    class: "form-label mb-0 small text-muted",
+                    r#for: "{base_id}_version_input",
+                    "Target Version Number:"
+                  }
+                  input {
+                    id: "{base_id}_version_input",
+                    class: "form-control form-control-sm text-center",
+                    style: "width: 5.5rem;",
+                    r#type: "number",
+                    min: "0",
+                    step: "1",
+                    disabled: readonly,
+                    value: "{current_version}",
+                    // Prevent typing of negative signs, decimal points, and scientific notation
+                    onkeydown: move |evt| {
+                        if let Key::Character(ref c) = evt.key()
+                            && ["-", "+", ".", ",", "e", "E"].contains(&c.as_str())
+                        {
+                            evt.prevent_default();
+                        }
+                    },
+                    oninput: move |evt| {
+                        let raw_val = evt.value();
+                        if raw_val.is_empty() {
+                            // Optional fallback: Reset to 0 (draft) if field is cleared
+                            on_change
+                                .call(MaterialChangeEvent {
+                                    action: MaterialChangeAction::SetVersion(0),
+                                });
+                        } else if let Ok(version_val) = raw_val.parse::<u32>() {
+                            on_change
+                                .call(MaterialChangeEvent {
+                                    action: MaterialChangeAction::SetVersion(version_val),
+                                });
+                        }
+                    },
+                  }
+                  span { class: "small text-muted",
+                    if is_draft {
+                      "(0 = Assign next available version automatically)"
+                    } else {
+                      "(Will overwrite version {current_version} on disk)"
+                    }
+                  }
+                }
+              }
             }
+          }
+        }
 
             // Primary Action Footer
             AlertDialogActions {

@@ -1,8 +1,4 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
-// Visible crate-wide because the per-shape parameter widgets are shared with the *clear aperture*
-// property editor (`properties_editor::clear_aperture_editor`) - both edit an `ApertureShape`, so
-// the rows for a circle or a rectangle are written once and used by both.
-pub mod aperture_editor;
+mod aperture_editor;
 mod coating_editor;
 
 use dioxus::prelude::*;

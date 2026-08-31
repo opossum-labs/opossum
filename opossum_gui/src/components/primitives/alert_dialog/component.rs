@@ -1,3 +1,4 @@
+#![allow(clippy::volatile_composites)]
 use dioxus::prelude::*;
 use dioxus_primitives::alert_dialog::{
     self, AlertDialogActionProps, AlertDialogActionsProps, AlertDialogCancelProps,

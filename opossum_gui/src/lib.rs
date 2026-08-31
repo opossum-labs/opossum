@@ -5,6 +5,7 @@ use std::{
 };
 mod api;
 mod app_config;
+mod backend_status;
 mod components;
 
 use api::http_client::HTTPClient;

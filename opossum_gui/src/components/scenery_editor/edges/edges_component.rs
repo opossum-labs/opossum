@@ -1,4 +1,3 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::scenery_editor::{
     EditorStateStoreExt, GraphState,
     constants::EDGE_BEZIER_OFFSET,
@@ -17,7 +16,7 @@ pub struct NewEdgeCreationStart {
     pub start_pos: Point2D<f64>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EdgePort {
     pub node_id: Uuid,
     pub port_name: String,

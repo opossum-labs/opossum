@@ -1,8 +1,3 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
-// The `asset!` macro expands to a type clippy flags as not volatile-compatible; every other module
-// using it carries the same allow (see `scenery_editor/node/mod.rs`).
-#![allow(clippy::volatile_composites)]
-use crate::components::app::SIDEBAR_SWITCHER_WIDTH;
 use crate::components::{
     node_editor::{NodeConfigEditor, PumpScenarioEditor},
     scenery_editor::{

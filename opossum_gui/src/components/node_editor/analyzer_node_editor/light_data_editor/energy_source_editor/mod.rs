@@ -1,4 +1,3 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
 mod energy_type_selection;
 mod laser_line_editor;
 mod spectrum_from_file_editor;

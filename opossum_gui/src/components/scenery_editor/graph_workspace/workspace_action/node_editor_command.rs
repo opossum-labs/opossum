@@ -1,5 +1,3 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
-
 use dioxus::prelude::*;
 use opossum_core::{prelude::*, types::api_types::NewRefNode};
 use std::path::PathBuf;

@@ -1,5 +1,3 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
-
 use crate::components::node_editor::inputs::{
     input_components::LabeledSelect, select_options_from_enum_iterator,
 };
