@@ -5,7 +5,6 @@ use crate::{
     gain::{ActiveScenario, PumpConfig, PumpScenario},
     light::{Rays, lightdata::ray_data_builder::RayDataBuilder},
     material::Material,
-    material_vaccuum,
     nodes::NodeGroup,
 };
 use serde::{Deserialize, Serialize};
@@ -104,7 +103,7 @@ impl Default for GhostFocusConfig {
             max_bounces: 1,
             fluence_estimator: FluenceEstimator::Voronoi,
             source_map: HashMap::new(),
-            ambient_material: material_vaccuum(),
+            ambient_material: Material::vacuum(),
             active_pump_scenario: ActiveScenario::default(),
         }
     }

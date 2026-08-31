@@ -10,7 +10,6 @@ use crate::{
     gain::{ActiveScenario, PumpConfig, PumpScenario},
     light::{LightResult, Rays, lightdata::ray_data_builder::RayDataBuilder},
     material::Material,
-    material_vaccuum,
     nodes::NodeGroup,
     picojoule,
     reporting::analysis_report::AnalysisReport,
@@ -67,7 +66,7 @@ impl Default for RayTraceConfig {
             max_number_of_refractions: 1000,
             missed_surface_strategy: MissedSurfaceStrategy::Stop,
             source_map: HashMap::new(),
-            ambient_material: material_vaccuum(),
+            ambient_material: Material::vacuum(),
             active_pump_scenario: ActiveScenario::default(),
             positioning_run: false,
         }
