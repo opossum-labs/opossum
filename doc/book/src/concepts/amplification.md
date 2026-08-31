@@ -109,10 +109,11 @@ the first pass depletes the medium for subsequent ones.
 The monochromatic small signal model has two idealisations: the signal is too weak to deplete the
 medium, and the gain does not depend on wavelength. Later models lift one at a time.
 
-Saturation first: a strong pulse changes the inversion as it passes through. The first part of the
+Spectral gain first: a real gain medium amplifies some wavelengths more than others. 
+This is manifested in the spectroscopic properties of a material. This behaviour can already be implemented for the small signal gain model
+
+Saturation second: a strong pulse changes the inversion as it passes through. The first part of the
 pulse sees more gain than the last, because the population inversion the front extracted is no
 longer available to the tail. The Frantz–Nodvik model captures this depletion — the gain is then a
 function of the fluence the pulse has already delivered, not just of the local inversion.
 
-Spectral gain follows after that: a real gain medium amplifies some wavelengths more than others.
-That gain bandwidth, and eventually amplified spontaneous emission, extend the model further.
