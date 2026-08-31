@@ -1,4 +1,4 @@
-//! A two-stage amplifier chain, analyzed in two pump scenarios.
+//! Two-stage amplifier chain with constant gain, analyzed at two operating points.
 //!
 //! This is the code counterpart of the "Model an amplifier" how-to guide in the handbook: the same
 //! set-up a user clicks together in the GUI, written out as a program. Running it writes an `.opm`
@@ -9,6 +9,19 @@
 //! volume of material (a lens, a wedge or a cylindric lens) that a pump scenario assigns a
 //! [`GainModel`] to. The scenario lives on the document rather than on the node, so the very same
 //! model can be run at several operating points without being edited in between.
+//!
+//! # What to look for
+//!
+//! Open the resulting `.opm` file in the GUI and run the energy-flow analysis. The energy meter at
+//! the end of the chain reads the product of the two gain factors — 20 J at full power (5 × 4),
+//! 5 J at half power (2.5 × 2) — starting from a 1 J input. Two reports are produced, one per
+//! scenario, named after their scenario.
+//!
+//! Run with
+//!
+//! ```bash
+//! cargo run -p opossum_core --example amplifier_const_gain_chain
+//! ```
 use opossum_core::{
     gain::{ConstGain, GainModel},
     prelude::*,
@@ -87,5 +100,7 @@ fn main() -> OpmResult<()> {
         .set_pump_scenarios(scenario_ids);
 
     // 1 J in, so the meter reads the chain's overall gain directly: 20 J at full power, 5 J at half.
-    document.save_to_file(Path::new("./opossum_core/playground/amplifier_chain.opm"))
+    document.save_to_file(Path::new(
+        "./opossum_core/playground/amplifier_const_gain_chain.opm",
+    ))
 }

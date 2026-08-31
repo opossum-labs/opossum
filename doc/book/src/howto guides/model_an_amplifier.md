@@ -51,10 +51,10 @@ On the canvas, a marked component shows `amp: <model>` in its footer — the gai
 
 A model built in Rust configures the same three things: the components, the scenarios, and which
 scenarios the analyzer runs in. The complete, runnable program is
-`opossum_core/examples/amplifier_chain.rs`; run it with
+`opossum_core/examples/amplifier_const_gain_chain.rs`; run it with
 
 ```bash
-cargo run -p opossum_core --example amplifier_chain
+cargo run -p opossum_core --example amplifier_const_gain_chain
 ```
 
 and open the resulting `.opm` file in the GUI to see the very same set-up there. The parts that

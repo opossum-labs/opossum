@@ -36,25 +36,25 @@ pub fn Logger(drag_handler: EventHandler<f64>, height: ReadSignal<f64>) -> Eleme
                                         // Minified and cleaned JS payload for cross-environment clipboard support
                                         let js_code = format!(
                                             r#"
-                                                                                                                            (function() {{
-                                                                                                                                var text = {log_to_copy:?};
-                                                                                                                                if (navigator.clipboard) {{
-                                                                                                                                    navigator.clipboard.writeText(text).catch(function() {{ fallback(text); }});
-                                                                                                                                }} else {{
-                                                                                                                                    fallback(text);
-                                                                                                                                }}
-                                                                                                                                function fallback(t) {{
-                                                                                                                                    var ta = document.createElement("textarea");
-                                                                                                                                    ta.value = t;
-                                                                                                                                    ta.style.position = "fixed";
-                                                                                                                                    ta.style.opacity = "0";
-                                                                                                                                    document.body.appendChild(ta);
-                                                                                                                                    ta.select();
-                                                                                                                                    try {{ document.execCommand("copy"); }} catch (e) {{}}
-                                                                                                                                    document.body.removeChild(ta);
-                                                                                                                                }}
-                                                                                                                            }})();
-                                                                                                                            "#,
+                                                                                                                                                        (function() {{
+                                                                                                                                                            var text = {log_to_copy:?};
+                                                                                                                                                            if (navigator.clipboard) {{
+                                                                                                                                                                navigator.clipboard.writeText(text).catch(function() {{ fallback(text); }});
+                                                                                                                                                            }} else {{
+                                                                                                                                                                fallback(text);
+                                                                                                                                                            }}
+                                                                                                                                                            function fallback(t) {{
+                                                                                                                                                                var ta = document.createElement("textarea");
+                                                                                                                                                                ta.value = t;
+                                                                                                                                                                ta.style.position = "fixed";
+                                                                                                                                                                ta.style.opacity = "0";
+                                                                                                                                                                document.body.appendChild(ta);
+                                                                                                                                                                ta.select();
+                                                                                                                                                                try {{ document.execCommand("copy"); }} catch (e) {{}}
+                                                                                                                                                                document.body.removeChild(ta);
+                                                                                                                                                            }}
+                                                                                                                                                        }})();
+                                                                                                                                                        "#,
                                         );
 
                                         let js = eval(&js_code);

@@ -19,6 +19,8 @@ const EXAMPLES: &[&str] = &[
     "workshop_09_phelix",
     "workshop_10_multi_path",
     "workshop_11_ghostfocus",
+    "amplifier_const_gain_chain",
+    "amplifier_gaussian_pump_fluence",
 ];
 
 #[derive(Parser)]

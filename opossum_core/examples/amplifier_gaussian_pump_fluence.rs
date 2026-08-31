@@ -20,7 +20,7 @@
 //! Run with
 //!
 //! ```bash
-//! cargo run -p opossum_core --example small_signal_gain_fluence
+//! cargo run -p opossum_core --example amplifier_gaussian_pump_fluence
 //! ```
 use opossum_core::{
     core_optics::{NodeAttrExt, hit_map::fluence_estimator::FluenceEstimator},
@@ -119,6 +119,6 @@ fn main() -> OpmResult<()> {
         .set_pump_scenarios(scenario_ids);
 
     document.save_to_file(Path::new(
-        "./opossum_core/playground/small_signal_gain_fluence.opm",
+        "./opossum_core/playground/amplifier_gaussian_pump_fluence.opm",
     ))
 }

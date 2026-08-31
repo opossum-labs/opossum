@@ -4,10 +4,10 @@ This guide shows what happens when a collimated beam with a uniform energy distr
 through a medium whose pump spot does not fill the full aperture. Because the gain is stronger
 where the pump is most intense, the output fluence map at the detector reproduces the transversal
 pump profile — even though the input beam was flat. The complete, runnable program is
-`opossum_core/examples/small_signal_gain_fluence.rs`; run it with
+`opossum_core/examples/amplifier_gaussian_pump_fluence.rs`; run it with
 
 ```bash
-cargo run -p opossum_core --example small_signal_gain_fluence
+cargo run -p opossum_core --example amplifier_gaussian_pump_fluence
 ```
 
 ## The setup

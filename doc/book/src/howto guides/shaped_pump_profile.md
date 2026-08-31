@@ -27,12 +27,16 @@ right tool.
 
 ## Setting it up in code
 
-The complete, runnable program is `opossum_core/examples/inhomogeneous_small_signal.rs`; run it
-with
+The complete, runnable program that shows these concepts with a fluence detector is
+`opossum_core/examples/amplifier_gaussian_pump_fluence.rs`; run it with
 
 ```bash
-cargo run -p opossum_core --example inhomogeneous_small_signal
+cargo run -p opossum_core --example amplifier_gaussian_pump_fluence
 ```
+
+That example uses a flat longitudinal profile to isolate the transversal effect. The code
+below focuses on the gain and pump source configuration for a Beer-Lambert longitudinal
+profile; the rest of the setup follows the same pattern.
 
 The hardware is a plane-parallel glass slab — a [`Lens`](../reference/nodes/spherical_lens.md)
 with infinite radii of curvature. The slab is 40 mm thick and refractive index 1.5, exactly as any
@@ -139,18 +143,17 @@ fraction of its peak.
 
 ## What to look for in the result
 
-Open the resulting `.opm` file in the GUI, run the analysis in the `shaped pump` scenario, and
-open the spot diagram report. Each dot in the diagram represents one ray; its color encodes the
-per-ray energy. You should see:
+Open the `amplifier_gaussian_pump_fluence.opm` file in the GUI, run the analysis in the
+`Gaussian pump` scenario, and open the fluence detector report. The fluence map shows:
 
-- Rays near the optical axis carry the highest energy — the pump spot is strongest there.
-- Energy drops toward the aperture edge because the Super-Gaussian profile falls off.
-- Rays at the same radius but different azimuth carry the same energy (because the profile is
-  circularly symmetric and the pump is centered on axis).
-- The Beer-Lambert decay along z does not produce a difference between parallel axial rays —
-  all of them traverse the same longitudinal inversion gradient at their respective radii.
-  The longitudinal effect would show up in the gain difference between an axial ray and an
-  oblique ray that crosses more strongly inverted slices near the entrance face.
+- A bright central spot where the Gaussian pump profile is strongest and gain is highest.
+- A smooth radial fall-off that mirrors the pump's σ = 5 mm half-width.
+- Near-zero fluence beyond the pump spot (r ≫ σ): rays there barely see the pump.
+
+To see the Beer-Lambert longitudinal effect on top of a transversal profile, configure the
+pump source as shown above (Super-Gaussian × Beer-Lambert) and compare the fluence map with
+the flat-profile result: oblique rays and axial rays at the same radius will carry slightly
+different energies because they enter the slab at different longitudinal inversion gradients.
 
 For parameter definitions and the full list of transversal and longitudinal profile options see
 [Pump scenarios](../reference/pump_scenarios.md).
