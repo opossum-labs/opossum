@@ -375,13 +375,12 @@ mod test {
         if chord.value <= 0.0 {
             return Ok(1.0);
         }
-        let exponent = Extraction::path_exponent(model, body, ray, inversion);
-        let factor = exponent.exp();
+        let factor = Extraction::gain_factor(model, body, ray, inversion);
         if factor.is_finite() {
             Ok(factor)
         } else {
             Err(OpossumError::Analysis(format!(
-                "exp({exponent}) is not finite"
+                "gain_factor ({factor}) is not finite"
             )))
         }
     }

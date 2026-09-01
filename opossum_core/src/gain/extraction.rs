@@ -97,6 +97,24 @@ pub trait Extraction {
     /// The dimensionless exponent `∫ g(s) ds` for the full chord. Returns `0.0` for a ray that
     /// contributes nothing — a degenerate direction, no inversion, or no populated cells on the path.
     fn path_exponent(&self, body: &dyn Body, ray: &Ray, inversion: &mut Option<Inversion>) -> f64;
+    /// Returns the multiplicative gain factor `exp(∫ g(s) ds)` for the given ray chord.
+    ///
+    /// This is the result callers normally need: a dimensionless factor by which the ray's energy
+    /// is multiplied after passing through the medium.
+    ///
+    /// # Arguments
+    ///
+    /// * `body` - the volume the light passes through.
+    /// * `ray` - the ray whose chord is being integrated.
+    /// * `inversion` - the inversion prepared by [`Extraction::build_inversion`], mutable so
+    ///   that saturating models can write depletion back.
+    ///
+    /// # Returns
+    ///
+    /// `exp(path_exponent(body, ray, inversion))`.
+    fn gain_factor(&self, body: &dyn Body, ray: &Ray, inversion: &mut Option<Inversion>) -> f64 {
+        self.path_exponent(body, ray, inversion).exp()
+    }
     /// Amplify the spectral energy passing through the medium.
     ///
     /// An energy flow analysis knows no rays and no path lengths, so a model depending on them has

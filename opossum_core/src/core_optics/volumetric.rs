@@ -487,7 +487,7 @@ fn march_medium_along_chords(
             // absorption attenuates, and they multiply on the ray energy.
             let mut factor = 1.0_f64;
             if let Some(extraction) = extraction {
-                factor *= extraction.path_exponent(body, ray, inversion).exp();
+                factor *= extraction.gain_factor(body, ray, inversion);
             }
             if let Some(absorption) = absorption {
                 factor *= absorption
