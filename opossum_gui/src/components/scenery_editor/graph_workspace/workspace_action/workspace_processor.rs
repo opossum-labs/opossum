@@ -106,8 +106,12 @@ pub fn use_workspace_processor(
                         // A reset document is genuinely empty (`OpmDocument::default()`), so clearing
                         // is exact here, unlike the load path which has to re-fetch afterward.
                         crate::AMPLIFIER_CANDIDATES.write().clear();
-                        process_delete_root_scenery(workspace, workspace_handlers, set_file_path_handler)
-                            .await;
+                        process_delete_root_scenery(
+                            workspace,
+                            workspace_handlers,
+                            set_file_path_handler,
+                        )
+                        .await;
                         // The backend clears its undo/redo history on every reset; mirror that here.
                         *crate::UNDO_REDO_STATUS.write() = (false, false);
                         *crate::AMP_LIST_REFRESH.write() += 1;
@@ -2176,7 +2180,9 @@ async fn process_delete_root_scenery(
         delete_document().await,
         Some(move |_| {
             workspace_handlers.workspace.clear_workspace();
-            workspace_handlers.workspace.set_editor_area(saved_editor_area);
+            workspace_handlers
+                .workspace
+                .set_editor_area(saved_editor_area);
             set_file_path_handler.call(None);
         }),
     );

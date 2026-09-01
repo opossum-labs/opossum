@@ -460,7 +460,6 @@ pub fn use_drag_end(
                 }
                 _ => {}
             }
-
         }
     }
 }
