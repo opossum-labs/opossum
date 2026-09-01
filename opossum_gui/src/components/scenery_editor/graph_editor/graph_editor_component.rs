@@ -99,8 +99,8 @@ pub fn GraphEditor(
     });
 
     let current_mouse_in_editor_pos = use_signal(Point2D::<f64>::default);
-    let ctrl_pressed = use_signal(|| false);
-    let shift_pressed = use_signal(|| false);
+    let mut ctrl_pressed = use_signal(|| false);
+    let mut shift_pressed = use_signal(|| false);
 
     use_effect(move || {
         let is_unsaved = *workspace.needs_saving().read();
@@ -172,6 +172,14 @@ pub fn GraphEditor(
                 onkeydown: onkeydownhandler,
                 onmouseleave: onmouseleave_handler,
                 onkeyup: onkeyuphandler,
+                onblur: move |_| {
+                    ctrl_pressed.set(false);
+                    shift_pressed.set(false);
+                },
+                onfocus: move |_| {
+                    ctrl_pressed.set(false);
+                    shift_pressed.set(false);
+                },
 
                 Tabs {
                     class: "editor-tabs",
