@@ -58,6 +58,20 @@ pub async fn post_pump_scenario(name: &str) -> Result<Uuid, String> {
         .await
 }
 
+/// Duplicate a pump scenario, returning the new scenario's UUID.
+///
+/// Creates a copy with " (copy)" appended to the name, carrying all node configurations of the
+/// original. Undoing the operation removes the duplicate.
+///
+/// # Errors
+///
+/// This function will return an error if the request fails or the UUID is not found.
+pub async fn post_pump_scenario_duplicate(uuid: Uuid) -> Result<Uuid, String> {
+    HTTP_API_CLIENT()
+        .post_no_body::<Uuid>(&format!("/api/pump_scenarios/{uuid}/duplicate"))
+        .await
+}
+
 /// Delete a pump scenario.
 ///
 /// Also strips it from the selection of every analyzer that was running it - see the endpoint's
