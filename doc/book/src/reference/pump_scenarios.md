@@ -9,6 +9,15 @@ any node, and are stored in the `.opm` file. For the reasoning behind that split
 A scenario consists of a name and, per node, a gain model. A node no scenario mentions is analyzed
 exactly like the passive component it is.
 
+## Managing scenarios
+
+Scenarios are created by typing a name in the "New scenario name" field at the top of the pump
+scenario panel and pressing **Add** (or Enter). An existing scenario can be **duplicated** — button
+with the copy icon (⧉) next to the delete button on the scenario card, or via **right-click →
+Duplicate** on the card — which creates a copy of the scenario, including all its node
+configurations, with " (copy)" appended to the name. Both the original and the copy can then be
+edited independently. Duplicating is undoable.
+
 ## Gain models
 
 `None`
