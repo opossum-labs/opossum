@@ -106,7 +106,7 @@ pub fn use_workspace_processor(
                         // A reset document is genuinely empty (`OpmDocument::default()`), so clearing
                         // is exact here, unlike the load path which has to re-fetch afterward.
                         crate::AMPLIFIER_CANDIDATES.write().clear();
-                        process_delete_root_scenery(workspace_handlers, set_file_path_handler)
+                        process_delete_root_scenery(workspace, workspace_handlers, set_file_path_handler)
                             .await;
                         // The backend clears its undo/redo history on every reset; mirror that here.
                         *crate::UNDO_REDO_STATUS.write() = (false, false);
@@ -2121,7 +2121,7 @@ async fn process_load_from_file(
     ws_handler: WorkSpaceSignalHandlers,
     set_file_path_handler: EventHandler<Option<PathBuf>>,
 ) {
-    process_delete_root_scenery(ws_handler, set_file_path_handler).await;
+    process_delete_root_scenery(workspace, ws_handler, set_file_path_handler).await;
     let opm_string = match fs::read_to_string(&path) {
         Ok(s) => s,
         Err(e) => {
@@ -2164,13 +2164,19 @@ async fn process_load_from_file(
 }
 
 async fn process_delete_root_scenery(
+    workspace: ReadStore<GraphsWorkspaceState>,
     workspace_handlers: WorkSpaceSignalHandlers,
     set_file_path_handler: EventHandler<Option<PathBuf>>,
 ) {
+    // Save the editor area before wiping state: the canvas's physical pixel region does not
+    // change between documents, so restoring it immediately lets node placement use the
+    // correct center while the new DOM element is still being constructed.
+    let saved_editor_area = *workspace.editor_area().read();
     eval_action_run(
         delete_document().await,
         Some(move |_| {
             workspace_handlers.workspace.clear_workspace();
+            workspace_handlers.workspace.set_editor_area(saved_editor_area);
             set_file_path_handler.call(None);
         }),
     );
@@ -2231,7 +2237,14 @@ async fn process_add_root_scenery_tab(
 ) {
     match api::get_document_root_uuid().await {
         Ok(id) => {
+            // Save the current editor area before wiping the workspace — the physical canvas
+            // region (pixels) does not change when a new document is loaded, so restoring it
+            // immediately avoids the race where the DOM element for the new tab does not exist
+            // yet when process_get_editor_area runs. The onresize handler will refresh it if
+            // the window is later resized. (Same pattern as process_refresh.)
+            let saved_editor_area = *workspace.editor_area().read();
             ws_handler.workspace.clear_workspace();
+            ws_handler.workspace.set_editor_area(saved_editor_area);
             ws_handler.workspace.set_root_scenery_id(id);
             ws_handler.workspace.add_new_group_tab(GraphInfo {
                 name: name.clone(),
@@ -2239,7 +2252,6 @@ async fn process_add_root_scenery_tab(
                 hierarchy: vec![(id, name.clone())],
             });
             process_rename_root_scenery(ws_handler, name, id, false).await;
-            process_get_editor_area(workspace, ws_handler).await;
         }
         Err(err_str) => {
             OPOSSUM_UI_LOGS.write().add_log(&err_str);
