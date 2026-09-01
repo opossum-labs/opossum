@@ -3,7 +3,9 @@
 Laser systems do not only transport light, they make more of it. This section explains how an
 amplifying component is represented in OPOSSUM and why it is split across two places instead of
 one. For the settings themselves see [Pump scenarios](../reference/pump_scenarios.md); for the
-steps to set one up, see [Model an amplifier](../howto%20guides/model_an_amplifier.md).
+steps to set one up, see [Model an amplifier](../howto%20guides/model_an_amplifier.md). Its passive
+counterpart — energy a real medium takes *out* of the beam — is covered in
+[Absorption](./absorption.md), and the two are designed to act together.
 
 ## There is no amplifier node
 

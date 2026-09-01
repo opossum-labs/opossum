@@ -14,6 +14,7 @@
 //! answers it, and only those with a volume answer it with `Some`.
 
 use crate::{
+    absorption::absorption_model::AbsorptionModel,
     analyzers::propagation_strategy::PropagationStrategy,
     apertures::{Aperture, ApertureType},
     core_optics::{
@@ -192,11 +193,17 @@ pub trait Volumetric: OpticNode {
     /// Apply whatever the medium does to a ray bundle travelling through it.
     ///
     /// This is the step *between* the two surface passes: the rays are inside the material here.
-    /// What that means depends on the operating point — for a passive node (no gain model in the
-    /// current [`PropagationStrategy`]) the call returns immediately without touching the rays. For
-    /// an active node it queries the gain model from
-    /// [`PropagationStrategy::pump_config`](crate::analyzers::propagation_strategy::PropagationStrategy::pump_config)
-    /// and amplifies along the chord through the medium.
+    /// Two effects can act here, and when both are present they are applied in a **single**
+    /// traversal of the medium (one chord, one energy factor per ray), never in two passes:
+    ///
+    /// * **Dopant gain** — a property of the operating point. Queried from the gain model of
+    ///   [`PropagationStrategy::pump_config`](crate::analyzers::propagation_strategy::PropagationStrategy::pump_config)
+    ///   and amplifies along the chord through the medium.
+    /// * **Host-material absorption** — a property of the component's own [`Material`]. Applied
+    ///   whenever that material carries an [`AbsorptionModel`] other than
+    ///   [`AbsorptionModel::None`], attenuating along the same chord.
+    ///
+    /// A node that neither amplifies nor absorbs returns immediately without touching the rays.
     ///
     /// Returns immediately if [`PropagationStrategy::is_positioning_run`] is `true` — no medium
     /// has been prepared yet and the step is skipped entirely. After the positioning run, a missing
@@ -217,11 +224,21 @@ pub trait Volumetric: OpticNode {
         strategy: &dyn PropagationStrategy,
     ) -> OpmResult<()> {
         let config = strategy.pump_config(self.node_attr().uuid());
+        // The dopant gain is a property of the operating point being analyzed. `gain_model` is
+        // bound so the model it hands out outlives the `extraction` borrowed from it.
         let gain_model = config.gain_model();
-        // A passive node — no gain model in the current operating point — leaves the rays untouched.
-        let Some(extraction) = gain_model.as_extraction() else {
+        let extraction = gain_model.as_extraction();
+        // The host-material absorption is a property of the component itself, so it is read from the
+        // node rather than from the scenario. `material()` returns an owned clone, so this borrow of
+        // `self` ends immediately and does not clash with the `&mut self` taken for the medium below.
+        // A material without an absorption model (`None`) leaves the rays untouched.
+        let material = self.material()?;
+        let absorption = (material.optical.absorption != AbsorptionModel::None)
+            .then_some(&material.optical.absorption);
+        // A node that neither amplifies nor absorbs leaves the rays untouched.
+        if extraction.is_none() && absorption.is_none() {
             return Ok(());
-        };
+        }
         if strategy.is_positioning_run() {
             return Ok(());
         }
@@ -232,7 +249,7 @@ pub trait Volumetric: OpticNode {
                 "node '{node_name}': medium was not prepared before propagation"
             )));
         };
-        march_extraction_along_chords(&node_name, medium, extraction, rays_bundle)
+        march_medium_along_chords(&node_name, medium, extraction, absorption, rays_bundle)
     }
     /// Amplify the spectral energy passing through this node's medium.
     ///
@@ -246,6 +263,19 @@ pub trait Volumetric: OpticNode {
     /// [`OpticNode::prepare_volume`](crate::core_optics::OpticNode::prepare_volume) rather than
     /// rebuilding the body and inversion on every call. Returns immediately if no medium has been
     /// prepared yet (positioning run).
+    ///
+    /// # TODO — host-material absorption for the energy flow
+    ///
+    /// Unlike [`Volumetric::propagate_inside_medium`], this path does **not** yet apply the host
+    /// material's [`AbsorptionModel`]. The long-term goal is that gain and absorption behave the
+    /// same here as they do for rays, but the energy flow analysis has no beam and therefore no
+    /// path length, and every path-length-dependent effect (Lambert-Beer absorption exactly like
+    /// [`MonochromaticSmallSignalGain`](crate::gain::MonochromaticSmallSignalGain)) needs one.
+    /// A nominal length still has to be defined for this analysis — for instance from a ray sent
+    /// in the optic's local +z direction through its anchor point, whose chord through the body
+    /// gives the length, unless the geometry already pins it down (e.g. via the node's center
+    /// thickness). Once that nominal length exists, `transmittance(λ, L)` can attenuate the
+    /// spectrum here just as `march_medium_along_chords` attenuates rays.
     ///
     /// # Parameters
     ///
@@ -401,31 +431,40 @@ fn cross_section<T: ?Sized + Volumetric>(node: &T) -> OpmResult<ValidatedCrossSe
     })
 }
 
-/// Apply a gain extraction model to each ray that travels through the medium.
+/// Apply the medium's effects — gain and host-material absorption — to each ray that travels
+/// through it, in a single traversal.
 ///
-/// This is the mechanism half of [`Volumetric::propagate_inside_medium`]: it applies the gain
+/// This is the mechanism half of [`Volumetric::propagate_inside_medium`]: it applies the effects
 /// without asking *whether* to run — that decision belongs to the caller, which has already
-/// confirmed the operating point is active and a medium is available.
+/// confirmed at least one effect is present and a medium is available.
 ///
-/// For each valid ray with a positive chord through the body, the gain exponent is computed by
-/// [`Extraction::path_exponent`] (which performs an exact Amanatides–Woo voxel walk for
-/// grid-based models) and the ray energy is scaled by `exp(path_exponent)`.
+/// The two effects share the very same chord and the very same ray step: for each valid ray with a
+/// positive chord through the body, the dopant gain exponent (from [`Extraction::path_exponent`],
+/// which performs an exact Amanatides–Woo voxel walk for grid-based models) and the host-material
+/// transmittance (from [`AbsorptionModel::transmittance`] over the geometric chord) are combined
+/// into a single energy factor `exp(∫ g₀·β ds) · T(λ, L)` and applied with one `scale_energy`.
+/// Both compose multiplicatively on the ray energy and commute, so the order is immaterial — what
+/// matters is that the medium is walked once, not once per effect.
+///
+/// Either effect may be absent (`None`); the caller has guaranteed at least one is present.
 ///
 /// # Arguments
 ///
 /// * `node_name` - name of the owning node, used in error messages.
 /// * `medium` - the prepared medium for this analysis run, split into body and inversion.
-/// * `extraction` - the gain model to apply.
+/// * `extraction` - the dopant gain model to apply, or `None` for a non-amplifying node.
+/// * `absorption` - the host material's absorption model, or `None` for a transparent material.
 /// * `rays_bundle` - the ray bundle inside the medium, modified in place.
 ///
 /// # Errors
 ///
-/// This function errors if `path_length_inside` fails, if the exponent would produce a non-finite
-/// scale factor, or if `scale_energy` rejects the resulting value.
-fn march_extraction_along_chords(
+/// This function errors if `path_length_inside` or `transmittance` fails, if the combined factor
+/// would not be finite, or if `scale_energy` rejects the resulting value.
+fn march_medium_along_chords(
     node_name: &str,
     medium: &mut RuntimeMedium,
-    extraction: &dyn Extraction,
+    extraction: Option<&dyn Extraction>,
+    absorption: Option<&AbsorptionModel>,
     rays_bundle: &mut [Rays],
 ) -> OpmResult<()> {
     // Split the medium so saturating models can read and deplete the inversion per traversed cell.
@@ -444,12 +483,21 @@ fn march_extraction_along_chords(
             if chord.value <= 0.0 {
                 continue;
             }
-            let exponent = extraction.path_exponent(body, ray, inversion);
-            let factor = exponent.exp();
+            // Both effects act on the same chord in the same step: gain amplifies, host-material
+            // absorption attenuates, and they multiply on the ray energy.
+            let mut factor = 1.0_f64;
+            if let Some(extraction) = extraction {
+                factor *= extraction.gain_factor(body, ray, inversion);
+            }
+            if let Some(absorption) = absorption {
+                factor *= absorption
+                    .transmittance(ray.wavelength(), chord)
+                    .map_err(|e| OpossumError::Analysis(format!("node '{node_name}': {e}")))?;
+            }
             if !factor.is_finite() {
                 return Err(OpossumError::Analysis(format!(
-                    "node '{node_name}': would amplify by exp({exponent}) over a path of \
-                     {} mm through the medium, which is not a finite factor",
+                    "node '{node_name}': the net medium factor over a path of {} mm through the \
+                     medium is {factor}, which is not finite",
                     chord.get::<uom::si::length::millimeter>()
                 )));
             }
@@ -476,11 +524,11 @@ mod test {
         gain::{ConstGain, GainModel, MonochromaticSmallSignalGain, PumpScenario, PumpSource},
         joule,
         light::{
-            Rays,
+            Rays, Spectrum,
             lightdata::energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
             spectrum_helper::create_he_ne_spec,
         },
-        millimeter, nanometer,
+        micrometer, millimeter, nanometer,
         nodes::{
             EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort, SpotDiagram, ThinMirror,
             create_node_ref, node_types, round_collimated_ray_builder,
@@ -490,7 +538,10 @@ mod test {
         utils::{LockExt, test_helper::test_helper::metered_energy},
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
-    use uom::si::f64::ReciprocalLength;
+    use uom::si::{
+        f64::{Length, LinearNumberDensity, ReciprocalLength},
+        linear_number_density::per_meter,
+    };
     use uuid::Uuid;
 
     /// A lens sitting at the origin, ready to be traced through.
@@ -584,8 +635,18 @@ mod test {
         ))
     }
     fn retraced_energy_value(lens: &mut Lens, config: &RayTraceConfig) -> OpmResult<f64> {
+        retraced_energy_value_at(lens, config, nanometer!(1053.0))
+    }
+    /// The generalisation of [`retraced_energy_value`] to an arbitrary wavelength, so a
+    /// wavelength-dependent effect (a spectral absorption model) can be measured at more than the
+    /// one line the rest of the tests use.
+    fn retraced_energy_value_at(
+        lens: &mut Lens,
+        config: &RayTraceConfig,
+        wavelength: Length,
+    ) -> OpmResult<f64> {
         let rays = Rays::new_uniform_collimated(
-            nanometer!(1053.0),
+            wavelength,
             joule!(1.0),
             &crate::distributions::position::Hexapolar::new(millimeter!(1.0), 1)?,
         )?;
@@ -1309,6 +1370,143 @@ mod test {
             "ghost focus did not prepare the medium"
         );
 
+        Ok(())
+    }
+    /// The Lambert-Beer absorption coefficient the absorbing head's host material carries.
+    ///
+    /// `α = 50 / m` over the [`HEAD_THICKNESS`] of 10 mm gives `α·d = 0.5`, so a single on-axis
+    /// pass transmits `exp(-0.5)`.
+    fn head_absorption_coefficient() -> LinearNumberDensity {
+        LinearNumberDensity::new::<per_meter>(50.0)
+    }
+    /// The transmittance a single on-axis pass through the absorbing head gives: `T = exp(-α·d)`.
+    ///
+    /// Worked out from the formula rather than hard coded, so the expectation states the physics.
+    fn single_pass_transmittance() -> f64 {
+        let alpha = head_absorption_coefficient().get::<per_meter>();
+        let d = millimeter!(HEAD_THICKNESS).get::<uom::si::length::meter>();
+        (-alpha * d).exp()
+    }
+    /// A plane-parallel head of [`HEAD_THICKNESS`] whose host material carries the given absorption
+    /// model, placed at the origin so a collimated bundle crosses it straight and the chord of
+    /// every ray is exactly the centre thickness.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the material or lens cannot be built or the head cannot be placed.
+    fn head_with_absorption(absorption: AbsorptionModel) -> OpmResult<Lens> {
+        let plane = millimeter!(f64::INFINITY);
+        let mut material = Material::new_draft(
+            "absorbing glass",
+            None,
+            None,
+            RefrIndexConst::new(HEAD_INDEX)?.into(),
+        );
+        material.optical.absorption = absorption;
+        let mut head = Lens::new(
+            "absorbing head",
+            plane,
+            plane,
+            millimeter!(HEAD_THICKNESS),
+            material,
+        )?;
+        head.set_isometry(Isometry::identity())?;
+        Ok(head)
+    }
+    /// The [`head_with_absorption`] whose host material follows the constant Lambert-Beer law with
+    /// the given coefficient.
+    fn absorbing_head(alpha: LinearNumberDensity) -> OpmResult<Lens> {
+        head_with_absorption(AbsorptionModel::new_lambert_beer_constant(alpha)?)
+    }
+    /// A host material that defines absorption attenuates the rays crossing its volume, without any
+    /// operating point being involved.
+    ///
+    /// The counterpart of [`a_scenario_amplifies_the_rays_passing_the_medium`] for the passive,
+    /// material-bound half: the head is named by no scenario, so the only thing that can change the
+    /// energy is the absorption its own material carries.
+    #[test]
+    fn a_material_absorbs_the_rays_passing_the_medium() -> OpmResult<()> {
+        let mut head = absorbing_head(head_absorption_coefficient())?;
+        assert_relative_eq!(
+            traced_energy_ratio(&mut head, &RayTraceConfig::default())?,
+            single_pass_transmittance(),
+            epsilon = 1e-9
+        );
+        Ok(())
+    }
+    /// The absorption is looked up at each ray's own wavelength, so a spectral model attenuates two
+    /// lines differently.
+    ///
+    /// A constant model could pass [`a_material_absorbs_the_rays_passing_the_medium`] while ignoring
+    /// the wavelength entirely; tracing two lines through a [`AbsorptionModel::LambertBeerSpectrum`]
+    /// with different coefficients is what pins down that `ray.wavelength()` really reaches the
+    /// transmittance.
+    #[test]
+    fn material_absorption_is_looked_up_per_wavelength() -> OpmResult<()> {
+        // α = 100 / m at 500 nm and α = 50 / m at 1000 nm, on a grid whose points coincide with the
+        // queried lines so no interpolation stands between the input and the expectation.
+        let mut spectrum = Spectrum::new(micrometer!(0.5)..micrometer!(1.5), micrometer!(0.5))?;
+        spectrum.set_data(vec![(0.5, 100.0), (1.0, 50.0), (1.5, 25.0)])?;
+        let mut head = head_with_absorption(AbsorptionModel::from(spectrum))?;
+
+        let d = millimeter!(HEAD_THICKNESS).get::<uom::si::length::meter>();
+        let config = RayTraceConfig::default();
+        // Prepare the body once; both traces reuse it. (`traced_energy_ratio` does this internally,
+        // but the two-wavelength measurement calls the lower-level helper directly.)
+        head.prepare_volume(&config)?;
+        assert_relative_eq!(
+            retraced_energy_value_at(&mut head, &config, nanometer!(1000.0))?,
+            (-50.0 * d).exp(),
+            epsilon = 1e-9
+        );
+        assert_relative_eq!(
+            retraced_energy_value_at(&mut head, &config, nanometer!(500.0))?,
+            (-100.0 * d).exp(),
+            epsilon = 1e-9
+        );
+        Ok(())
+    }
+    /// Dopant gain and host-material absorption act together on the same pass through the medium.
+    ///
+    /// This is the case the whole design has to allow: the amplification comes from the operating
+    /// point (a doped medium being pumped), the absorption from the component's own host material,
+    /// and the two are independent. Traced through the same head they must compose multiplicatively
+    /// — `G·T` — which is only true if both were applied over the one chord in the one pass.
+    #[test]
+    fn absorption_and_gain_act_together_on_one_pass() -> OpmResult<()> {
+        let gain = 2.5;
+        let mut head = absorbing_head(head_absorption_coefficient())?;
+        let node_id = head.node_attr().uuid();
+
+        // Absorption alone, no operating point: transmittance only.
+        assert_relative_eq!(
+            traced_energy_ratio(&mut head, &RayTraceConfig::default())?,
+            single_pass_transmittance(),
+            epsilon = 1e-9
+        );
+
+        // The same head, now also amplifying by a constant factor: the two effects multiply.
+        let mut config = RayTraceConfig::default();
+        config.set_active_pump_scenario(Some(scenario_with_gain(node_id, gain)?));
+        assert_relative_eq!(
+            traced_energy_ratio(&mut head, &config)?,
+            gain * single_pass_transmittance(),
+            epsilon = 1e-9
+        );
+        Ok(())
+    }
+    /// A material whose absorption model is [`AbsorptionModel::None`] leaves the rays untouched.
+    ///
+    /// The passive contract for the material-bound half: an explicitly transparent material must
+    /// not change the energy of a ray crossing it, exactly as no material information at all would.
+    #[test]
+    fn a_none_absorption_model_leaves_the_rays_untouched() -> OpmResult<()> {
+        let mut head = head_with_absorption(AbsorptionModel::None)?;
+        assert_relative_eq!(
+            traced_energy_ratio(&mut head, &RayTraceConfig::default())?,
+            1.0,
+            epsilon = 1e-12
+        );
         Ok(())
     }
 }
