@@ -1,16 +1,10 @@
 use super::{AMP_STATUS_HEIGHT, NodeElement};
 use crate::{
-    CONTEXT_MENU,
-    components::{
-        context_menu::cx_menu::{CxMenu, CxtCommand},
-        scenery_editor::{
-            DragStatus, GraphState, GraphsWorkspaceAction, GraphsWorkspaceState, NodeType,
-            constants::{BORDER_WIDTH, NODE_WIDTH},
-            graph_workspace::{
+    CONTEXT_MENU, components::{
+        context_menu::cx_menu::{CxMenu, CxtCommand}, scenery_editor::{
+            DragStatus, GraphState, GraphsWorkspaceAction, GraphsWorkspaceState, NodeType, constants::{BORDER_WIDTH, NODE_WIDTH}, graph_workspace::{
                 GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceStateStoreExt,
-            },
-            node::graph_node_components::GraphNodeContent,
-            ports::ports_component::NodePorts,
+            }, node::{graph_node_components::GraphNodeContent, node_icon::{NodeIconSprite, NodeSvgIcon, NodeSymbolIcon}}, ports::ports_component::NodePorts,
         },
     },
 };
@@ -93,6 +87,7 @@ pub fn Node(
     let test_id = format!("node-{}", node.node_index());
 
     let node_icon = node.node_type.icon();
+    let node_icon_svg = node.node_type().icon_svg_data();
     rsx! {
         div {
             // Assign deterministic test ID attribute for E2E testing
@@ -225,9 +220,12 @@ pub fn Node(
                         class: "node-body",
                         draggable: false,
                         style: format!("height: {}px;", node.node_body_height()),
-                        if let Some(icon_url) = node_icon {
-                            img { src: icon_url, draggable: false }
+
+                        // Render inline SVG icon
+                        if let Some(svg_content) = node_icon_svg {
+                            NodeSymbolIcon { symbol_id: "parabola" }
                         }
+
                         NodePorts { node: node.clone(), inverted: node.inverted() }
                     }
                 },

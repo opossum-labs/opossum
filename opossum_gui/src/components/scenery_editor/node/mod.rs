@@ -10,6 +10,7 @@ use opossum_core::{
 };
 use uuid::Uuid;
 mod graph_node_components;
+mod node_icon;
 pub mod node_component;
 use crate::components::scenery_editor::constants::{
     BORDER_WIDTH, HEADER_HEIGHT, NODE_WIDTH, PORT_VER_SPACING,
@@ -90,6 +91,19 @@ impl NodeType {
                 _ => Some(NODE_UNKNOWN),
             },
             Self::Analyzer(_) => None,
+        }
+    }
+    pub fn icon_svg_data(&self) -> Option<&'static str> {
+        match self {
+            NodeType::Optical(name) => match name.as_str() {
+                "lens" => Some(include_str!("../../../../assets/icons/node_lens.svg")),
+                "mirror" => Some(include_str!("../../../../assets/icons/node_mirror.svg")),
+                "source port" => Some(include_str!("../../../../assets/icons/node_source.svg")),
+                "fluence detector" => Some(include_str!("../../../../assets/icons/node_fluence.svg")),
+                _ => Some(include_str!("../../../../assets/icons/node_unknown.svg")),
+            },
+            // Handle non-optical nodes or fallbacks
+            _ => None,
         }
     }
 }

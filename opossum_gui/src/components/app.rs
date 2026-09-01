@@ -555,6 +555,11 @@ pub fn App() -> Element {
         SimulationWindow { show_simulation: run_simulation, model_file_path }
         SettingsDialog { open: show_settings }
         MaterialCatalog { open: show_material_catalog }
+        // Invisible master sprite containing all icon definitions
+        div {
+            style: "display: none;",
+            dangerous_inner_html: include_str!("../../../opossum_core/logo/NodeIcons.svg"),
+        }
     }
 
     #[cfg(target_arch = "wasm32")]
