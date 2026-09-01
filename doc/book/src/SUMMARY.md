@@ -5,6 +5,7 @@
   - [Introduction](./concepts/intro.md)
   - [Modeling optical systems](./concepts/optical_graph.md)
   - [Amplification](./concepts/amplification.md)
+  - [Absorption](./concepts/absorption.md)
   - [Position distributions](./concepts/position_distributions.md)
   - [Energy distributions](./concepts/energy_distributions.md)
   - [Fluence calculcations](./concepts/fluence.md)
