@@ -72,6 +72,10 @@ pub fn GraphViewEditor(
     });
 
     use_effect(move || {
+        if *workspace.active_tab().read() != graph_id {
+            return;
+        }
+
         let mouse = mouse_pos_in_editor.read();
 
         if *workspace.drag_status().read() != DragStatus::Nodes {

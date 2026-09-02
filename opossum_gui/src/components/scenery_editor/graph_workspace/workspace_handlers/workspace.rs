@@ -319,7 +319,7 @@ fn add_new_group_tab_handler(workspace: Store<GraphsWorkspaceState>) -> EventHan
         if !workspace.tab_order().read().contains(&id) {
             workspace.tab_order().write().push(id);
         }
-        workspace.active_tab().set(id);
+        record_and_set_active_tab(workspace, id);
     })
 }
 
@@ -360,8 +360,16 @@ fn clear_workspace_handler(mut workspace: Store<GraphsWorkspaceState>) -> EventH
     })
 }
 
+fn record_and_set_active_tab(workspace: Store<GraphsWorkspaceState>, new_id: Uuid) {
+    let current = *workspace.active_tab().read();
+    if current != Uuid::nil() && current != new_id {
+        workspace.tab_history().write().push(current);
+    }
+    workspace.active_tab().set(new_id);
+}
+
 fn set_active_tab_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandler<Uuid> {
     EventHandler::new(move |id| {
-        workspace.active_tab().set(id);
+        record_and_set_active_tab(workspace, id);
     })
 }
