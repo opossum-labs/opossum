@@ -592,6 +592,44 @@ body {
     background-color: transparent;
 }
 
+/* Right-click context menu for a scenario card. */
+.scenario-ctx-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+}
+
+.scenario-ctx-menu {
+    position: fixed;
+    z-index: 1000;
+    background-color: rgb(42, 42, 42);
+    border: 1px solid rgb(80, 80, 80);
+    border-radius: 4px;
+    padding: 2px 0;
+    min-width: 120px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.scenario-ctx-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 5px 10px;
+    font-size: 12px;
+    color: rgb(180, 180, 180);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.scenario-ctx-item:hover {
+    background-color: rgb(60, 60, 60);
+    color: #ffffff;
+}
+
 /* Expand/collapse toggle for a scenario's amplifier list - reuses `.amp-card-sub`'s colour, just
    made clickable. */
 .scenario-expand-toggle {

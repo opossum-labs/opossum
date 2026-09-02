@@ -12,6 +12,7 @@ use crate::{
     },
 };
 use dioxus::prelude::*;
+use dioxus_free_icons::{Icon, icons::fa_solid_icons::FaCopy};
 use opossum_core::{
     gain::{ConstGain, GainModel, MonochromaticSmallSignalGain, PumpScenario},
     reciprocal_meter,
@@ -165,6 +166,7 @@ fn ScenarioCard(
         original_name.set(saved_name.clone());
         name_input.set(saved_name);
     }
+    let mut ctx_menu_pos = use_signal(|| None::<(f64, f64)>);
     let is_active = ACTIVE_PUMP_SCENARIO() == Some(id);
     // Deleting the document's only scenario while a node is still marked as an amplifier candidate
     // would recreate exactly the dead end `ensure_a_pump_scenario_exists` exists to avoid: a
@@ -206,6 +208,12 @@ fn ScenarioCard(
         div {
             class: if is_active { "card bg-dark border-secondary mb-2 scenario-card active" } else { "card bg-dark border-secondary mb-2 scenario-card" },
             onclick: move |_| activate(),
+            oncontextmenu: move |event: Event<MouseData>| {
+                event.prevent_default();
+                event.stop_propagation();
+                let coords = event.client_coordinates();
+                ctx_menu_pos.set(Some((coords.x, coords.y)));
+            },
             div { class: "card-body p-2 text-light",
                 div { class: "d-flex justify-content-between align-items-center scenario-header",
                     input {
@@ -221,6 +229,24 @@ fn ScenarioCard(
                         },
                     }
                     div { class: "scenario-actions",
+                        button {
+                            r#type: "button",
+                            title: "Duplicate this scenario",
+                            class: "scenario-delete-btn",
+                            onclick: move |event: Event<MouseData>| {
+                                event.stop_propagation();
+                                spawn(async move {
+                                    api::eval_action_run(
+                                        api::post_pump_scenario_duplicate(id).await,
+                                        Some(move |_new_id: Uuid| {
+                                            *PUMP_SCENARIO_LIST_REFRESH.write() += 1;
+                                            on_changed.call(());
+                                        }),
+                                    );
+                                });
+                            },
+                            Icon { icon: FaCopy, width: 14, height: 14, fill: "currentColor" }
+                        }
                         button {
                             r#type: "button",
                             title: if delete_blocked { "Can't delete the last scenario while a node is still marked as an amplifier - unmark it first" } else { "Delete this scenario" },
@@ -262,6 +288,33 @@ fn ScenarioCard(
                 }
                 if is_expanded {
                     ScenarioAmplifiers { scenario_id: id }
+                }
+            }
+        }
+        if let Some((cx, cy)) = ctx_menu_pos() {
+            div {
+                class: "scenario-ctx-backdrop",
+                onclick: move |_| ctx_menu_pos.set(None),
+            }
+            div {
+                class: "scenario-ctx-menu",
+                style: "top: {cy}px; left: {cx}px;",
+                button {
+                    class: "scenario-ctx-item",
+                    onclick: move |_| {
+                        ctx_menu_pos.set(None);
+                        spawn(async move {
+                            api::eval_action_run(
+                                api::post_pump_scenario_duplicate(id).await,
+                                Some(move |_new_id: Uuid| {
+                                    *PUMP_SCENARIO_LIST_REFRESH.write() += 1;
+                                    on_changed.call(());
+                                }),
+                            );
+                        });
+                    },
+                    Icon { icon: FaCopy, width: 14, height: 14, fill: "currentColor" }
+                    " Duplicate"
                 }
             }
         }

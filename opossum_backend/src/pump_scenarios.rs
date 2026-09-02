@@ -221,6 +221,42 @@ pub async fn delete_pump_scenario(
     Ok(HttpResponse::NoContent().finish())
 }
 
+/// Duplicate a pump scenario
+///
+/// Creates a copy of the given scenario with " (copy)" appended to its name, carrying all of
+/// the original's node configurations. The two scenarios can then be edited independently.
+/// Undoing the operation removes the duplicate.
+#[utoipa::path(
+    tag = "pump_scenario",
+    params(("uuid" = Uuid, Path, description = "UUID of the pump scenario to duplicate")),
+    responses(
+        (status = CREATED, body = Uuid, description = "UUID of the newly created duplicate"),
+        (status = NOT_FOUND, body = ErrorResponse, description = "UUID not found", content_type = "application/json")
+    )
+)]
+#[post("/{uuid}/duplicate")]
+pub async fn post_pump_scenario_duplicate(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+) -> Result<HttpResponse, BackEndErrorResponse> {
+    let uuid = path.into_inner();
+    let mut document = data.document.lock();
+    let original = document
+        .pump_scenario(uuid)
+        .cloned()
+        .ok_or_else(BackEndErrorResponse::pump_scenario_not_found)?;
+    let mut duplicate = original.clone();
+    duplicate.set_name(&format!("{} (copy)", original.name()));
+    let new_id = Uuid::new_v4();
+    document.insert_pump_scenario(new_id, duplicate.clone());
+    data.push_undo(Command::RemovePumpScenario(PumpScenarioItemDto {
+        id: new_id,
+        scenario: duplicate,
+    }));
+    drop(document);
+    Ok(HttpResponse::Created().json(new_id))
+}
+
 /// Rename a pump scenario
 #[utoipa::path(
     tag = "pump_scenario",
@@ -319,6 +355,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_pump_scenario);
     cfg.service(get_pump_scenario_amplifiers);
     cfg.service(post_pump_scenario);
+    cfg.service(post_pump_scenario_duplicate);
     cfg.service(delete_pump_scenario);
     cfg.service(put_pump_scenario_name);
     cfg.service(put_pump_scenario_gain_model);
@@ -632,6 +669,77 @@ mod test {
         let scenario = document.pump_scenario(scenario_id).unwrap();
         assert_eq!(scenario.pump_source(node_id), pump);
         assert_eq!(scenario.amplifiers().count(), 1);
+    }
+
+    #[actix_web::test]
+    async fn duplicate_creates_copy_with_modified_name_and_undo_removes_it() {
+        let app_state = Data::new(AppState::default());
+        let original_id = add_scenario(&app_state, "full power").await;
+        let node_id = {
+            let mut document = app_state.document.lock();
+            let id = document.scenery_mut().add_node(Lens::default()).unwrap();
+            document
+                .pump_scenario_mut(original_id)
+                .unwrap()
+                .set_gain_model(id, GainModel::Const(ConstGain::new(2.0).unwrap()));
+            id
+        };
+        let app = test_app!(app_state);
+
+        let req = test::TestRequest::post()
+            .uri(&format!("/scenarios/{original_id}/duplicate"))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let new_id: Uuid = test::read_body_json(resp).await;
+        assert_ne!(new_id, original_id);
+
+        {
+            let document = app_state.document.lock();
+            let listed: Vec<&opossum_core::gain::PumpScenario> =
+                document.pump_scenarios().values().collect();
+            assert_eq!(
+                listed.len(),
+                2,
+                "original and duplicate must both be present"
+            );
+            let duplicate = document
+                .pump_scenario(new_id)
+                .expect("new scenario must exist");
+            assert_eq!(duplicate.name(), "full power (copy)");
+            assert_eq!(
+                duplicate.gain_model(node_id),
+                GainModel::Const(ConstGain::new(2.0).unwrap()),
+                "node config must be copied over"
+            );
+        }
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(
+            app_state.document.lock().pump_scenario(new_id).is_none(),
+            "undo must remove the duplicate"
+        );
+        assert!(
+            app_state
+                .document
+                .lock()
+                .pump_scenario(original_id)
+                .is_some(),
+            "original must survive the undo"
+        );
+    }
+
+    #[actix_web::test]
+    async fn duplicate_of_missing_scenario_is_404() {
+        let app_state = Data::new(AppState::default());
+        let app = test_app!(app_state);
+        let req = test::TestRequest::post()
+            .uri(&format!("/scenarios/{}/duplicate", Uuid::new_v4()))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     }
 
     #[actix_web::test]

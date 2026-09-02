@@ -86,6 +86,24 @@ impl HTTPClient {
         }
     }
 
+    /// Send a POST request to the given route with no body.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the request fails or if the response cannot be
+    /// deserialized into the expected type.
+    pub async fn post_no_body<R: Serialize + DeserializeOwned>(
+        &self,
+        route: &str,
+    ) -> Result<R, String> {
+        let res = self.client().post(self.url(route)).send().await;
+        if let Ok(response) = res {
+            self.process_response::<R>(response).await
+        } else {
+            Err(format!("Error on post request on route: \"{route}\""))
+        }
+    }
+
     /// Send a POST reqeust to the given route with the provided body.
     ///
     /// # Errors
