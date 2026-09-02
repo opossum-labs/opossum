@@ -35,9 +35,9 @@
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
      showgrid="true"
-     inkscape:zoom="1.0000001"
-     inkscape:cx="524.49997"
-     inkscape:cy="621.49997"
+     inkscape:zoom="0.70710682"
+     inkscape:cx="523.9661"
+     inkscape:cy="542.35087"
      inkscape:window-width="1920"
      inkscape:window-height="1147"
      inkscape:window-x="-8"
@@ -83,59 +83,25 @@
          id="path1" />
     </marker>
     <linearGradient
-       id="linearGradient58"
-       inkscape:label="Glass">
-      <stop
-         style="stop-color:#ff0000;stop-opacity:1;"
-         offset="0"
-         id="stop57" />
-      <stop
-         style="stop-color:#ffd100;stop-opacity:1;"
-         offset="0.24352331"
-         id="stop59" />
-      <stop
-         style="stop-color:#00c300;stop-opacity:1;"
-         offset="0.50259072"
-         id="stop60" />
-      <stop
-         style="stop-color:#0000ff;stop-opacity:1;"
-         offset="0.80051816"
-         id="stop61" />
-      <stop
-         style="stop-color:#0000ff;stop-opacity:0;"
-         offset="1"
-         id="stop58" />
-    </linearGradient>
-    <linearGradient
        id="linearGradient157"
        inkscape:label="Glass">
       <stop
          style="stop-color:#00dcff;stop-opacity:1;"
-         offset="0"
+         offset="0%"
          id="stop55" />
       <stop
          style="stop-color:#0000ff;stop-opacity:0;"
-         offset="1"
+         offset="100%"
          id="stop56" />
     </linearGradient>
     <linearGradient
        inkscape:collect="always"
        xlink:href="#linearGradient157"
        id="linearGradient158"
-       x1="25"
-       y1="80"
-       x2="43.275608"
-       y2="99.510414"
-       gradientUnits="userSpaceOnUse" />
-    <linearGradient
-       inkscape:collect="always"
-       xlink:href="#linearGradient157"
-       id="linearGradient161"
-       x1="80"
-       y1="80"
-       x2="100"
-       y2="100"
-       gradientUnits="userSpaceOnUse" />
+       x1="0%"
+       y1="0%"
+       x2="80%"
+       y2="80%" />
     <linearGradient
        inkscape:collect="always"
        xlink:href="#linearGradient157"
@@ -202,34 +168,21 @@
        x2="566.01947"
        y2="911.49414"
        gradientUnits="userSpaceOnUse" />
-    <radialGradient
-       inkscape:collect="always"
-       xlink:href="#linearGradient58"
-       id="radialGradient55"
-       cx="200"
-       cy="35"
-       fx="200"
-       fy="35"
-       r="12.249998"
-       gradientUnits="userSpaceOnUse" />
     <symbol
-       id="unknown"
+       id="dummy"
        viewBox="10 10 50 50">
       <rect
          style="display:inline;fill:none;stroke:currentColor;stroke-width:0.497271;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
          id="rect1"
-         width="50"
-         height="50"
-         x="10"
-         y="10"
+         width="48"
+         height="48"
+         x="11"
+         y="11"
          ry="5"
-         inkscape:export-filename="..\..\opossum_gui\assets\icons\node_unknown.svg"
-         inkscape:export-xdpi="96"
-         inkscape:export-ydpi="96"
          inkscape:label="Icon Frame"
          class="iconframe" />
       <path
-         style="font-weight:bold;font-size:35.2778px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';text-align:center;text-anchor:middle;fill:#808080;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel"
+         style="font-weight:bold;font-size:35.2778px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';text-align:center;text-anchor:middle;fill:currentColor;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel"
          d="m 36.812334,40.9831 h -4.392499 q -0.01723,-0.947402 -0.01723,-1.154107 0,-2.135961 0.706245,-3.514 0.706245,-1.378039 2.824981,-3.100588 2.118735,-1.722549 2.532146,-2.256539 0.637343,-0.844049 0.637343,-1.860353 0,-1.41249 -1.136882,-2.411569 -1.119657,-1.016303 -3.031686,-1.016303 -1.843127,0 -3.083362,1.050754 -1.240236,1.050755 -1.705324,3.203941 L 25.70189,29.373121 q 0.18948,-3.083363 2.618274,-5.236549 2.44602,-2.153186 6.407882,-2.153186 4.168569,0 6.631814,2.187637 2.463244,2.170412 2.463244,5.064294 0,1.60197 -0.91295,3.031686 -0.895726,1.429715 -3.85851,3.89296 -1.533068,1.274687 -1.912029,2.049834 -0.361736,0.775147 -0.327285,2.773303 z m -4.392499,6.511235 v -4.840362 h 4.840362 v 4.840362 z"
          id="text151"
          aria-label="?" />
@@ -243,92 +196,76 @@
          xlink:href="#rect1"
          id="use144"
          transform="translate(55,0)"
-         inkscape:export-filename="..\..\opossum_gui\assets\icons\node_group.svg"
-         inkscape:export-xdpi="96"
-         inkscape:export-ydpi="96"
          style="display:inline" />
       <path
-         style="font-size:35.2778px;font-family:Sans;-inkscape-font-specification:'Sans, Normal';text-align:center;text-anchor:middle;fill:#808080;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel"
+         style="font-size:35.2778px;font-family:Sans;-inkscape-font-specification:'Sans, Normal';text-align:center;text-anchor:middle;fill:currentColor;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel"
          d="m 86.66009,51.516487 h -2.583824 q -3.083362,0 -5.012617,-1.722549 -1.912029,-1.705323 -1.912029,-4.943715 v -2.566598 q 0,-2.911108 -1.429716,-4.547529 -1.429715,-1.653647 -4.375274,-1.653647 h -0.8785 v -2.687176 h 0.8785 q 2.945559,0 4.375274,-1.636422 1.429716,-1.653647 1.429716,-4.564754 v -2.566598 q 0,-3.238392 1.912029,-4.943716 1.929255,-1.722549 5.012617,-1.722549 h 2.583824 v 2.377118 h -1.963706 q -2.342667,0 -3.410647,1.085206 -1.050755,1.085205 -1.050755,3.496774 v 3.014461 q 0,2.394343 -1.326362,4.030764 -1.326363,1.619196 -3.686255,2.566598 v 0.413412 q 2.359892,0.947401 3.686255,2.583823 1.326362,1.619196 1.326362,4.013539 v 3.01446 q 0,2.411569 1.050755,3.496775 1.06798,1.085206 3.410647,1.085206 h 1.963706 z m 22.63429,-15.434038 h -0.8785 q -2.94556,0 -4.37527,1.653647 -1.42972,1.636421 -1.42972,4.547529 v 2.566598 q 0,3.238392 -1.92925,4.943715 -1.912032,1.722549 -4.995395,1.722549 H 93.102422 V 49.13937 h 1.963706 q 2.342666,0 3.393421,-1.085206 1.06798,-1.085206 1.06798,-3.496775 v -3.01446 q 0,-2.394343 1.326361,-4.013539 1.32636,-1.636422 3.68626,-2.583823 v -0.413412 q -2.3599,-0.947402 -3.68626,-2.566598 -1.326361,-1.636421 -1.326361,-4.030764 v -3.014461 q 0,-2.411569 -1.06798,-3.496774 -1.050755,-1.085206 -3.393421,-1.085206 h -1.963706 v -2.377118 h 2.583823 q 3.083363,0 4.995395,1.722549 1.92925,1.705324 1.92925,4.943716 v 2.566598 q 0,2.911107 1.42972,4.564754 1.42971,1.636422 4.37527,1.636422 h 0.8785 z"
          id="text152"
          aria-label="{}" />
     </symbol>
     <symbol
-       id="paraxial"
+       id="paraxial_surface"
        viewBox="120 10 50 50">
       <use
          x="0"
          y="0"
          xlink:href="#rect1"
          id="use145"
-         transform="translate(110,0)"
-         inkscape:export-filename="..\..\opossum_gui\assets\icons\node_paraxial.svg"
-         inkscape:export-xdpi="96"
-         inkscape:export-ydpi="96" />
+         transform="translate(110,0)" />
       <path
-         style="fill:none;stroke:#808080;stroke-width:1;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+         style="fill:none;stroke:currentColor;stroke-width:1;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
          d="m 150,49.999999 5,-5 5,5"
          id="path156"
          sodipodi:nodetypes="ccc" />
       <path
-         style="fill:none;stroke:#808080;stroke-width:1;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+         style="fill:none;stroke:currentColor;stroke-width:1;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
          d="m 150,19.999999 5,5 5,-5"
          id="path155" />
       <path
-         style="fill:#000000;stroke:#808080;stroke-width:1;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+         style="fill:#000000;stroke:currentColor;stroke-width:1;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
          d="m 135,19.999999 v 30"
          id="path152"
          sodipodi:nodetypes="cc" />
       <path
-         style="fill:none;stroke:#808080;stroke-width:1;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+         style="fill:none;stroke:currentColor;stroke-width:1;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
          d="m 130,24.999999 5,-5 v 0 l 5,5"
          id="path153" />
       <path
-         style="fill:none;stroke:#808080;stroke-width:1;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+         style="fill:none;stroke:currentColor;stroke-width:1;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
          d="m 130,44.999999 5,5 5.5,-4.5"
          id="path154"
          sodipodi:nodetypes="ccc" />
       <path
-         style="fill:#000000;stroke:#808080;stroke-width:1;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+         style="fill:#000000;stroke:currentColor;stroke-width:1;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
          d="m 155,24.999999 v 20"
          id="path152-8"
          sodipodi:nodetypes="cc" />
     </symbol>
     <symbol
-       id="fluence"
+       id="fluence_detector"
        viewBox="175 10 50 50">
       <use
          x="0"
          y="0"
          xlink:href="#rect1"
          id="use51"
-         transform="translate(165,0)"
-         inkscape:export-filename="..\..\opossum_gui\assets\icons\node.fluence.svg"
-         inkscape:export-xdpi="96"
-         inkscape:export-ydpi="96" />
+         transform="translate(165,0)" />
       <g
-         id="g6-8-6-7"
-         transform="translate(165,-109.99999)">
+         id="plot"
+         transform="translate(165,-110)">
         <path
-           style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+           style="fill:none;fill-opacity:0.560784;stroke:currentColor;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
            d="m 15,130 v 29.99999 h 40"
            id="path167-8-1-6" />
         <path
-           style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+           style="fill:none;fill-opacity:0.560784;stroke:currentColor;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
            d="m 14,131 1,-1 1,1"
            id="path169-2-4-1" />
         <path
-           style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+           style="fill:none;fill-opacity:0.560784;stroke:currentColor;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
            d="m 54,158.99999 1,1 -1,1"
            id="path170-4-2-8" />
       </g>
-      <ellipse
-         style="fill:url(#radialGradient55);fill-opacity:0.774295;fill-rule:nonzero;stroke:none;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
-         id="path54"
-         cx="200"
-         cy="35"
-         rx="11.999998"
-         ry="12" />
     </symbol>
     <symbol
        id="lens"
@@ -338,10 +275,7 @@
          y="0"
          xlink:href="#rect1"
          id="use146"
-         transform="translate(0,55)"
-         inkscape:export-filename="..\..\opossum_gui\assets\icons\node_lens.svg"
-         inkscape:export-xdpi="96"
-         inkscape:export-ydpi="96" />
+         transform="translate(0,55)" />
       <path
          style="fill:url(#linearGradient158);stroke:#808080;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
          d="m 30,74.999997 h 10.000002 c 0,0 4.999999,5.000001 4.999997,14.999999 C 44.999997,99.999994 40.000002,105 40.000002,105 H 30 c 0,0 -5.000001,-5.000006 -5,-15.000004 1e-6,-9.999998 5,-14.999999 5,-14.999999 z"
@@ -356,28 +290,22 @@
          y="0"
          xlink:href="#rect1"
          id="use147"
-         transform="translate(55,55)"
-         inkscape:export-filename="..\..\opossum_gui\assets\icons\node_wedge.svg"
-         inkscape:export-xdpi="96"
-         inkscape:export-ydpi="96" />
+         transform="translate(55,55)" />
       <path
-         style="fill:url(#linearGradient161);fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+         style="fill:url(#linearGradient158);fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
          d="m 80.000002,74.999998 h 15 L 100,105 H 80.000002 Z"
          id="path158"
          sodipodi:nodetypes="ccccc" />
     </symbol>
     <symbol
-       id="grating"
+       id="reflective_grating"
        viewBox="120 65 50 50">
       <use
          x="0"
          y="0"
          xlink:href="#rect1"
          id="use148"
-         transform="translate(110,55)"
-         inkscape:export-filename="..\..\opossum_gui\assets\icons\node_grating.svg"
-         inkscape:export-xdpi="96"
-         inkscape:export-ydpi="96" />
+         transform="translate(110,55)" />
       <path
          style="fill:#00ff00;fill-opacity:0.560784;stroke:#ff0000;stroke-width:1;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
          d="M 142.5,101.5 150,74.999997"
@@ -401,33 +329,20 @@
          id="path161" />
     </symbol>
     <symbol
-       id="wavefront"
+       id="wavefront_monitor"
        viewBox="175 65 50 50">
       <use
          x="0"
          y="0"
          xlink:href="#rect1"
          id="use52"
-         transform="translate(165,55)"
-         inkscape:export-filename="..\..\opossum_gui\assets\node_wavefront.svg"
-         inkscape:export-xdpi="96"
-         inkscape:export-ydpi="96" />
-      <g
-         id="g6-8-6-7-9"
-         transform="translate(165,-54.999989)">
-        <path
-           style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
-           d="m 15,130 v 29.99999 h 40"
-           id="path167-8-1-6-5" />
-        <path
-           style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
-           d="m 14,131 1,-1 1,1"
-           id="path169-2-4-1-4" />
-        <path
-           style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
-           d="m 54,158.99999 1,1 -1,1"
-           id="path170-4-2-8-3" />
-      </g>
+         transform="translate(165,55)" />
+      <use
+         id="use7"
+         xlink:href="#plot"
+         x="0"
+         y="0"
+         transform="translate(0,55)" />
     </symbol>
     <symbol
        id="spectrometer"
@@ -437,43 +352,28 @@
          y="0"
          xlink:href="#rect1"
          id="use149"
-         transform="translate(0,110)"
-         inkscape:export-filename="..\..\opossum_gui\assets\icons\node_spectrometer.svg"
-         inkscape:export-xdpi="96"
-         inkscape:export-ydpi="96" />
-      <g
-         id="g6">
-        <path
-           style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
-           d="m 15,130 v 29.99999 h 40"
-           id="path167" />
-        <path
-           style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
-           d="m 14,131 1,-1 1,1"
-           id="path169" />
-        <path
-           style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
-           d="m 54,158.99999 1,1 -1,1"
-           id="path170" />
-      </g>
+         transform="translate(0,110)" />
+      <use
+         id="use8"
+         xlink:href="#plot"
+         x="0"
+         y="0"
+         transform="translate(-165,110)" />
       <path
-         style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+         style="fill:none;fill-opacity:0.560784;stroke:currentColor;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
          d="m 16,155 4,-1e-5 c 0,0 1,-19.99999 2.000001,-19.99999 1,-1e-5 1.999999,19.99999 1.999999,19.99999 h 3.999999 c 0,0 0.514307,-3.99999 1.000001,-3.99999 0.485694,0 1,3.99999 1,3.99999 h 3 c 0,0 1.000001,-14.99999 1.603126,-14.99999 0.603125,0 0.396877,7.99998 1.396876,7.99999 0.999999,1e-5 1.999999,-11.00001 2.999999,-11 1,1e-5 2.999999,18 2.999999,18 h 8"
          id="path171"
          sodipodi:nodetypes="cczcczcczzzcc" />
     </symbol>
     <symbol
-       id="beamsplitter"
+       id="beam_splitter"
        viewBox="65 120 50 50">
       <use
          x="0"
          y="0"
          xlink:href="#rect1"
          id="use150"
-         transform="translate(55,110)"
-         inkscape:export-filename="..\..\opossum_gui\assets\icons\node_beamsplitter.svg"
-         inkscape:export-xdpi="96"
-         inkscape:export-ydpi="96" />
+         transform="translate(55,110)" />
       <rect
          style="fill:url(#linearGradient172);fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
          id="rect171"
@@ -486,42 +386,39 @@
          d="M 79.999998,154.67721 100,135"
          id="path172" />
       <path
-         style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+         style="fill:none;fill-opacity:0.560784;stroke:currentColor;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
          d="M 70.000002,144.99999 H 110"
          id="path173" />
       <path
-         style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+         style="fill:none;fill-opacity:0.560784;stroke:currentColor;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
          d="m 89.999999,164.83541 2e-6,-39.68749"
          id="path174" />
       <path
-         style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+         style="fill:none;fill-opacity:0.560784;stroke:currentColor;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
          d="M 78.000002,143 80,144.99999 78.000002,147"
          id="path175" />
       <path
-         style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+         style="fill:none;fill-opacity:0.560784;stroke:currentColor;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
          d="m 108,143 2,1.99999 L 108,147"
          id="path176" />
       <path
-         style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+         style="fill:none;fill-opacity:0.560784;stroke:currentColor;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
          d="M 88,127 90.000001,124.99999 92,127"
          id="path177" />
       <path
-         style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
+         style="fill:none;fill-opacity:0.560784;stroke:currentColor;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
          d="m 88,156.99999 2.000001,-2 1.999999,2"
          id="path178" />
     </symbol>
     <symbol
-       id="source"
+       id="source_port"
        viewBox="120 120 50 50">
       <use
          x="0"
          y="0"
          xlink:href="#rect1"
          id="use151"
-         transform="translate(110,110)"
-         inkscape:export-filename="..\..\opossum_gui\assets\icons\node_source.svg"
-         inkscape:export-xdpi="96"
-         inkscape:export-ydpi="96" />
+         transform="translate(110,110)" />
       <path
          style="fill:none;fill-opacity:0.560784;stroke:#ff0000;stroke-width:1;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
          d="M 145,159.99999 V 130 v 0"
@@ -556,38 +453,35 @@
          id="path193" />
     </symbol>
     <symbol
-       id="energy meter"
+       id="energy_meter"
        viewBox="175 120 50 50">
       <use
          x="0"
          y="0"
          xlink:href="#rect1"
          id="use53"
-         transform="translate(165,110)"
-         inkscape:export-filename="..\..\opossum_gui\assets\icons\node_energymeter.svg"
-         inkscape:export-xdpi="96"
-         inkscape:export-ydpi="96" />
+         transform="translate(165,110)" />
       <path
-         style="font-weight:bold;font-size:17.6389px;font-family:Sans;-inkscape-font-specification:'Sans, Bold';text-align:center;text-anchor:middle;fill:#808080;stroke:#808080;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel"
+         style="font-weight:bold;font-size:17.6389px;font-family:Sans;-inkscape-font-specification:'Sans, Bold';text-align:center;text-anchor:middle;fill:currentColor;stroke:currentColor;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel"
          d="m 204.04576,157.82607 q 0,0.84405 -0.30145,1.58475 -0.30144,0.73208 -0.89572,1.24023 -0.62873,0.54261 -1.51585,0.84405 -0.88711,0.29284 -2.19625,0.29284 -0.88711,0 -1.67087,-0.0689 -0.78376,-0.0603 -1.37804,-0.18086 v -2.60105 h 0.31006 q 0.41341,0.15503 0.86128,0.29283 0.44786,0.12919 1.14549,0.12919 0.90434,0 1.38665,-0.24115 0.49093,-0.24116 0.69763,-0.6718 0.1981,-0.42202 0.22394,-0.92156 0.0258,-0.50815 0.0258,-1.29191 v -5.10736 h -2.93694 v -2.35989 h 6.24424 z"
          id="text3"
          aria-label="J" />
       <rect
-         style="fill:none;fill-opacity:1;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+         style="fill:none;fill-opacity:1;stroke:currentColor;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
          id="rect3"
          width="30.000002"
          height="40"
          x="185"
          y="125" />
       <rect
-         style="fill:none;fill-opacity:1;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+         style="fill:none;fill-opacity:1;stroke:currentColor;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
          id="rect4"
          width="20.000002"
          height="15.000001"
          x="190"
          y="130" />
       <path
-         style="fill:none;fill-opacity:1;stroke:#808080;stroke-width:0.499999;stroke-linecap:butt;stroke-linejoin:bevel;stroke-dasharray:0.499999, 1.5;stroke-dashoffset:0"
+         style="fill:none;fill-opacity:1;stroke:currentColor;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:bevel;stroke-dasharray:0.5, 1.5;stroke-dashoffset:0"
          id="path4"
          sodipodi:type="arc"
          sodipodi:cx="-200"
@@ -601,50 +495,37 @@
          d="m -192,-142 a 8,8 0 0 1 -7.95375,7.99987 8,8 0 0 1 -8.04572,-7.90737"
          transform="scale(-1)" />
       <path
-         style="fill:none;fill-opacity:1;stroke:#808080;stroke-width:0.499999;stroke-linecap:butt;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0;marker-end:url(#ArrowWide)"
+         style="fill:none;fill-opacity:1;stroke:currentColor;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0;marker-end:url(#ArrowWide)"
          d="m 200,143 -5,-5"
          id="path5" />
     </symbol>
     <symbol
-       id="propagation"
+       id="ray_propagation"
        viewBox="10 175 50 50">
       <use
          x="0"
          y="0"
          xlink:href="#rect1"
          id="use1"
-         transform="translate(0,165)"
-         inkscape:export-filename="..\..\opossum_gui\assets\icons\node_propagation.svg"
-         inkscape:export-xdpi="96"
-         inkscape:export-ydpi="96" />
-      <g
-         id="g6-8"
-         transform="translate(3.4513955e-7,55.000004)">
-        <path
-           style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
-           d="m 15,130 v 29.99999 h 40"
-           id="path167-8" />
-        <path
-           style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
-           d="m 14,131 1,-1 1,1"
-           id="path169-2" />
-        <path
-           style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
-           d="m 54,158.99999 1,1 -1,1"
-           id="path170-4" />
-      </g>
+         transform="translate(0,165)" />
+      <use
+         id="use9"
+         xlink:href="#plot"
+         x="0"
+         y="0"
+         transform="translate(-165,165)" />
       <path
-         style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+         style="fill:none;fill-opacity:0.560784;stroke:currentColor;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
          d="m 20,204.99999 h 10 v -15 h 5.000001 l 15,3"
          id="path6"
          sodipodi:nodetypes="ccccc" />
       <path
-         style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+         style="fill:none;fill-opacity:0.560784;stroke:currentColor;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
          d="m 20,206.99999 7.999999,2e-5 v -15 h 7.000002 l 15,-2e-5"
          id="path7"
          sodipodi:nodetypes="ccccc" />
       <path
-         style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+         style="fill:none;fill-opacity:0.560784;stroke:currentColor;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
          d="m 20,208.99999 h 6 v -15 h 9.000001 l 15,-3"
          id="path8"
          sodipodi:nodetypes="ccccc" />
@@ -672,10 +553,7 @@
          y="0"
          xlink:href="#rect1"
          id="use2"
-         transform="translate(55,165)"
-         inkscape:export-filename="..\..\opossum_gui\assets\icons\node_mirror.svg"
-         inkscape:export-xdpi="96"
-         inkscape:export-ydpi="96" />
+         transform="translate(55,165)" />
       <rect
          style="fill:url(#linearGradient12);stroke:#808080;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
          id="rect11"
@@ -685,30 +563,27 @@
          y="62.287003"
          transform="rotate(45)" />
       <path
-         style="fill:none;fill-opacity:0.774295;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+         style="fill:none;fill-opacity:0.774295;stroke:currentColor;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
          d="m 70.000002,199.99999 h 19.999999 l 10e-7,-20"
          id="path12" />
       <path
-         style="fill:none;fill-opacity:0.774295;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+         style="fill:none;fill-opacity:0.774295;stroke:currentColor;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
          d="m 73.000001,197.99999 1.999999,2 -1.999999,2"
          id="path13" />
       <path
-         style="fill:none;fill-opacity:0.774295;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+         style="fill:none;fill-opacity:0.774295;stroke:currentColor;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
          d="m 88,181.99999 2.000001,-2 1.999999,2"
          id="path14" />
     </symbol>
     <symbol
-       id="ideal filter"
+       id="ideal_filter"
        viewBox="120 175 50 50">
       <use
          x="0"
          y="0"
          xlink:href="#rect1"
          id="use3"
-         transform="translate(110,165)"
-         inkscape:export-filename="..\..\opossum_gui\assets\icons\node_filter.svg"
-         inkscape:export-xdpi="96"
-         inkscape:export-ydpi="96" />
+         transform="translate(110,165)" />
       <rect
          style="fill:url(#linearGradient14);stroke:#808080;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
          id="rect11-1"
@@ -717,87 +592,74 @@
          x="142.33333"
          y="184.47772" />
       <path
-         style="fill:none;fill-opacity:0.774295;stroke:#808080;stroke-width:1.5;stroke-linecap:butt;stroke-linejoin:bevel;stroke-dasharray:none"
+         style="fill:none;fill-opacity:0.774295;stroke:currentColor;stroke-width:1.5;stroke-linecap:butt;stroke-linejoin:bevel;stroke-dasharray:none"
          d="m 125,199.99999 h 17"
          id="path15" />
       <path
-         style="fill:none;fill-opacity:0.774295;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+         style="fill:none;fill-opacity:0.774295;stroke:currentColor;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
          d="m 148,199.99999 h 17"
          id="path16" />
       <path
-         style="fill:none;fill-opacity:0.774295;stroke:#808080;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+         style="fill:none;fill-opacity:0.774295;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
          d="m 140,197.99999 2,2 -2,2"
          id="path17" />
       <path
-         style="fill:none;fill-opacity:0.774295;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
+         style="fill:none;fill-opacity:0.774295;stroke:currentColor;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none"
          d="m 163,197.99999 2,2 -2,2"
          id="path18" />
     </symbol>
     <symbol
-       id="spot diagram"
+       id="spot_diagram"
        viewBox="10 230 50 50">
       <use
          x="0"
          y="0"
          xlink:href="#use1"
          id="use4"
-         transform="translate(0,55)"
-         inkscape:export-filename="..\..\opossum_gui\assets\icons\node_spotdiagram.svg"
-         inkscape:export-xdpi="96"
-         inkscape:export-ydpi="96" />
-      <g
-         id="g6-8-6"
-         transform="translate(8.0531984e-7,110)">
-        <path
-           style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
-           d="m 15,130 v 29.99999 h 40"
-           id="path167-8-1" />
-        <path
-           style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
-           d="m 14,131 1,-1 1,1"
-           id="path169-2-4" />
-        <path
-           style="fill:none;fill-opacity:0.560784;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-opacity:1"
-           d="m 54,158.99999 1,1 -1,1"
-           id="path170-4-2" />
-      </g>
+         transform="translate(0,55)" />
+      <use
+         id="use10"
+         xlink:href="#plot"
+         x="0"
+         y="0"
+         transform="translate(-165,220)" />
       <ellipse
          id="path19"
-         style="fill:#808080;stroke:#808080;stroke-width:0.3;stroke-dasharray:none"
+         style="fill:#808080;stroke:currentColor;stroke-width:0.3;stroke-dasharray:none"
          cx="35"
          cy="254.99998"
          rx="0.99999923"
          ry="0.99999189" />
       <ellipse
-         style="fill:none;fill-opacity:0.774295;stroke:#808080;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:bevel;stroke-dasharray:0.5, 1;stroke-dashoffset:0"
+         style="fill:none;fill-opacity:0.774295;stroke:currentColor;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:bevel;stroke-dasharray:0.5, 1;stroke-dashoffset:0"
          id="path20"
          cx="35"
          cy="254.99998"
          rx="3"
          ry="2.9999998" />
       <ellipse
-         style="fill:none;fill-opacity:0.774295;stroke:#808080;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:bevel;stroke-dasharray:0.5, 1.5;stroke-dashoffset:0"
+         style="fill:none;fill-opacity:0.774295;stroke:currentColor;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:bevel;stroke-dasharray:0.5, 1.5;stroke-dashoffset:0"
          id="path21"
          cx="35"
          cy="254.99998"
          rx="4"
          ry="3.9999998" />
       <ellipse
-         style="fill:none;fill-opacity:0.774295;stroke:#808080;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:bevel;stroke-dasharray:0.5, 1.5;stroke-dashoffset:0"
+         style="fill:none;fill-opacity:0.774295;stroke:currentColor;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:bevel;stroke-dasharray:0.5, 1.5;stroke-dashoffset:0"
          id="path22"
          cx="35"
          cy="254.99998"
          rx="5.9999995"
          ry="5.9999919" />
       <ellipse
-         style="fill:none;fill-opacity:0.774295;stroke:#808080;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:bevel;stroke-dasharray:0.5, 2;stroke-dashoffset:0"
+         style="fill:none;fill-opacity:0.774295;stroke:currentColor;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:bevel;stroke-dasharray:0.5, 2;stroke-dashoffset:0"
          id="path23"
          cx="35"
          cy="254.99998"
          rx="7.9999995"
          ry="9.9999914" />
       <ellipse
-         style="fill:none;fill-opacity:0.774295;stroke:#808080;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:bevel;stroke-dasharray:0.5, 6;stroke-dashoffset:0"
+         style="fill:none;fill-opacity:0.774295;stroke:currentColor;stroke-width:0.5;stroke-linecap:butt;stroke-linejoin:bevel;stroke-dasharray:0.5, 6;stroke-dashoffset:0"
          id="path24"
          cx="35"
          cy="254.99998"
@@ -805,47 +667,41 @@
          ry="12.999991" />
     </symbol>
     <symbol
-       id="parabola"
+       id="parabolic_mirror"
        viewBox="65 230 50 50">
       <use
          x="0"
          y="0"
          xlink:href="#use1"
          id="use5"
-         transform="translate(55,55)"
-         inkscape:export-filename="..\..\opossum_gui\assets\icons\node_parabola.svg"
-         inkscape:export-xdpi="96"
-         inkscape:export-ydpi="96" />
+         transform="translate(55,55)" />
       <path
          style="fill:url(#linearGradient26);stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:miter;stroke-dasharray:none;stroke-dashoffset:0"
          d="m 92.995779,239.23068 c 0,0 0.4258,11.70834 -2.213344,16.33129 -2.639147,4.62296 -12.696154,9.99038 -12.696154,9.99038 l 8.660255,5 15.241554,-26.12996 z"
          id="path25"
          sodipodi:nodetypes="czcccc" />
       <path
-         style="fill:none;fill-opacity:0.774295;stroke:#808080;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+         style="fill:none;fill-opacity:0.774295;stroke:currentColor;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
          d="M 70.000002,259.99999 H 86.651041 L 75,245.99999"
          id="path26" />
       <path
-         style="fill:none;fill-opacity:0.774295;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+         style="fill:none;fill-opacity:0.774295;stroke:currentColor;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
          d="M 70.000002,257.99999 H 89.000001 L 75,245.99999"
          id="path27" />
       <path
-         style="fill:none;fill-opacity:0.774295;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+         style="fill:none;fill-opacity:0.774295;stroke:currentColor;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
          d="m 70.000002,255.99999 h 20.53922 L 75,245.99999"
          id="path28" />
     </symbol>
     <symbol
-       id="cylindric lens"
+       id="cylindric_lens"
        viewBox="120 230 50 50">
       <use
          x="0"
          y="0"
          xlink:href="#use1"
          id="use6"
-         transform="translate(110,55)"
-         inkscape:export-filename="..\..\opossum_gui\assets\icons\node_cylindric_lens.svg"
-         inkscape:export-xdpi="96"
-         inkscape:export-ydpi="96" />
+         transform="translate(110,55)" />
       <path
          style="fill:none;fill-opacity:0.774295;stroke:#808080;stroke-width:0.499999;stroke-linecap:round;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
          d="m 135,272.99999 v -28 l 15,-10 v 28 z"
@@ -888,72 +744,6 @@
          id="path49"
          transform="scale(0.26458333)" />
     </symbol>
-    <radialGradient
-       inkscape:collect="always"
-       xlink:href="#linearGradient58"
-       id="radialGradient55-7"
-       cx="200"
-       cy="35"
-       fx="200"
-       fy="35"
-       r="12.249998"
-       gradientUnits="userSpaceOnUse" />
-    <linearGradient
-       inkscape:collect="always"
-       xlink:href="#linearGradient157"
-       id="linearGradient158-6"
-       x1="25"
-       y1="80"
-       x2="43.275608"
-       y2="99.510414"
-       gradientUnits="userSpaceOnUse" />
-    <linearGradient
-       inkscape:collect="always"
-       xlink:href="#linearGradient157"
-       id="linearGradient161-8"
-       x1="80"
-       y1="80"
-       x2="100"
-       y2="100"
-       gradientUnits="userSpaceOnUse" />
-    <linearGradient
-       inkscape:collect="always"
-       xlink:href="#linearGradient157"
-       id="linearGradient163-1"
-       x1="125"
-       y1="99"
-       x2="160"
-       y2="108"
-       gradientUnits="userSpaceOnUse" />
-    <linearGradient
-       inkscape:collect="always"
-       xlink:href="#linearGradient157"
-       id="linearGradient172-1"
-       x1="78"
-       y1="133"
-       x2="97"
-       y2="152"
-       gradientUnits="userSpaceOnUse" />
-    <linearGradient
-       inkscape:collect="always"
-       xlink:href="#linearGradient157"
-       id="linearGradient49-8"
-       x1="518.67957"
-       y1="971.35437"
-       x2="566.01947"
-       y2="971.35437"
-       gradientUnits="userSpaceOnUse"
-       gradientTransform="scale(0.26458333)" />
-    <linearGradient
-       inkscape:collect="always"
-       xlink:href="#linearGradient157"
-       id="linearGradient51-2"
-       x1="511.74051"
-       y1="911.49414"
-       x2="566.01947"
-       y2="911.49414"
-       gradientUnits="userSpaceOnUse"
-       gradientTransform="scale(0.26458333)" />
   </defs>
   <g
      inkscape:groupmode="layer"
@@ -961,7 +751,7 @@
      inkscape:label="Icons"
      style="display:inline">
     <use
-       xlink:href="#unknown"
+       xlink:href="#dummy"
        width="50"
        height="50"
        id="use1-1"
@@ -973,13 +763,13 @@
        id="use1-4"
        transform="translate(65.248636,10.248636)" />
     <use
-       xlink:href="#paraxial"
+       xlink:href="#paraxial_surface"
        width="50"
        height="50"
        id="use1-7"
        transform="translate(120.24864,9.751365)" />
     <use
-       xlink:href="#fluence"
+       xlink:href="#fluence_detector"
        width="50"
        height="50"
        id="use1-2"
@@ -997,13 +787,13 @@
        id="use1-0"
        transform="translate(65.248636,64.751365)" />
     <use
-       xlink:href="#grating"
+       xlink:href="#reflective_grating"
        width="50"
        height="50"
        id="use1-9"
        transform="translate(120.24864,64.751365)" />
     <use
-       xlink:href="#wavefront"
+       xlink:href="#wavefront_monitor"
        width="50"
        height="50"
        id="use1-63"
@@ -1015,25 +805,25 @@
        id="use1-72"
        transform="translate(10.248636,119.75137)" />
     <use
-       xlink:href="#beamsplitter"
+       xlink:href="#beam_splitter"
        width="50"
        height="50"
        id="use1-07"
        transform="translate(65.248636,119.75137)" />
     <use
-       xlink:href="#source"
+       xlink:href="#source_port"
        width="50"
        height="50"
        id="use1-8"
        transform="translate(120.24864,119.75137)" />
     <use
-       xlink:href="#energy%20meter"
+       xlink:href="#energy_meter"
        width="50"
        height="50"
        id="use1-94"
        transform="translate(175.24864,119.75137)" />
     <use
-       xlink:href="#propagation"
+       xlink:href="#ray_propagation"
        width="50"
        height="50"
        id="use2-8"
@@ -1045,25 +835,25 @@
        id="use1-78"
        transform="translate(65.248636,174.75137)" />
     <use
-       xlink:href="#ideal%20filter"
+       xlink:href="#ideal_filter"
        width="50"
        height="50"
        id="use1-5"
        transform="translate(120.24864,174.75137)" />
     <use
-       xlink:href="#spot%20diagram"
+       xlink:href="#spot_diagram"
        width="50"
        height="50"
        id="use1-3"
        transform="translate(10.248636,229.75137)" />
     <use
-       xlink:href="#parabola"
+       xlink:href="#parabolic_mirror"
        width="50"
        height="50"
        id="use1-68"
        transform="translate(65.248636,229.75137)" />
     <use
-       xlink:href="#cylindric%20lens"
+       xlink:href="#cylindric_lens"
        width="50"
        height="50"
        id="use2-6"

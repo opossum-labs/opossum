@@ -457,7 +457,7 @@ pub fn App() -> Element {
 
     #[cfg(not(target_arch = "wasm32"))]
     rsx! {
-        div { class: "app-container", tabindex: 0,
+        div { class: "app-container", tabindex: 0, "data-theme": "dark",
             // Keyboard shortcuts are handled by the document-level listener installed above, not here -
             // an element `onkeydown` only fires while focus is inside it, which breaks after a panel
             // re-render drops focus to `<body>`.
@@ -557,8 +557,8 @@ pub fn App() -> Element {
         MaterialCatalog { open: show_material_catalog }
         // Invisible master sprite containing all icon definitions
         div {
-            style: "display: none;",
-            dangerous_inner_html: include_str!("../../../opossum_core/logo/NodeIcons.svg"),
+            style: "position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none;",
+            dangerous_inner_html: include_str!("../../assets/icons/NodeIcons.svg"),
         }
     }
 

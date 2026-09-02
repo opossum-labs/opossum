@@ -1084,27 +1084,36 @@ canvas {
     cursor: nwse-resize;
 }
 
-/* Styling for the SVG wrapper and children */
+/* Container for the node icon, placed and centered within .node-body */
 .node-symbol-wrapper {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  /* Control icon size here */
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
   pointer-events: none;
 }
 
-.node-symbol-wrapper svg {
+/* Scalable SVG element inside wrapper */
+.node-symbol-icon {
   width: 100%;
   height: 100%;
+  display: block;
+  /* Default fallback color (used if no theme attribute is matched) */
+  color: #e5e7eb;
 }
 
-/* Dark Mode (Default) */
+/* Dark Mode color override (applied when data-theme="dark" is active) */
 [data-theme="dark"] .node-symbol-icon {
-  color: #e5e7eb; /* Crisp light grey for axes, borders, arrows */
+  color: #e5e7eb;
 }
 
-/* Light Mode */
+/* Light Mode color override (applied when data-theme="light" is active) */
 [data-theme="light"] .node-symbol-icon {
-  color: #374151; /* High-contrast dark charcoal */
+  color: #374151;
 }
