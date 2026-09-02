@@ -9,7 +9,7 @@ use crate::{
             graph_workspace::{
                 GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceStateStoreExt,
             },
-            node::graph_node_components::GraphNodeContent,
+            node::{graph_node_components::GraphNodeContent, node_icon::NodeSymbolIcon},
             ports::ports_component::NodePorts,
         },
     },
@@ -92,7 +92,6 @@ pub fn Node(
     // Construct the deterministic test ID for Playwright (e.g., "node-1", "node-2")
     let test_id = format!("node-{}", node.node_index());
 
-    let node_icon = node.node_type.icon();
     rsx! {
         div {
             // Assign deterministic test ID attribute for E2E testing
@@ -225,9 +224,12 @@ pub fn Node(
                         class: "node-body",
                         draggable: false,
                         style: format!("height: {}px;", node.node_body_height()),
-                        if let Some(icon_url) = node_icon {
-                            img { src: icon_url, draggable: false }
+
+                        // Render the theme-adaptive symbol dynamically based on the node type
+                        if let Some(symbol_id) = node.node_type().symbol_id() {
+                            NodeSymbolIcon { symbol_id }
                         }
+
                         NodePorts { node: node.clone(), inverted: node.inverted() }
                     }
                 },

@@ -1,8 +1,5 @@
 #![allow(clippy::volatile_composites)]
-use dioxus::{
-    html::geometry::euclid::default::{Point2D, Rect, Size2D},
-    prelude::*,
-};
+use dioxus::html::geometry::euclid::default::{Point2D, Rect, Size2D};
 use opossum_core::{
     prelude::*,
     types::api_types::{AnalyzerItemDto, NodeInfo},
@@ -11,31 +8,13 @@ use opossum_core::{
 use uuid::Uuid;
 mod graph_node_components;
 pub mod node_component;
+mod node_icon;
 use crate::components::scenery_editor::constants::{
     BORDER_WIDTH, HEADER_HEIGHT, NODE_WIDTH, PORT_VER_SPACING,
 };
 
 use super::ports::ports_component::Ports;
 pub use node_component::Node;
-
-const NODE_BEAMSPLITTER: Asset = asset!("/assets/icons/node_beamsplitter.svg");
-const NODE_CYLINDRIC_LENS: Asset = asset!("/assets/icons/node_cylindric_lens.svg");
-const NODE_ENERGY_METER: Asset = asset!("/assets/icons/node_energymeter.svg");
-const NODE_FILTER: Asset = asset!("/assets/icons/node_filter.svg");
-const NODE_FLUENCE: Asset = asset!("/assets/icons/node_fluence.svg");
-const NODE_GRATING: Asset = asset!("/assets/icons/node_grating.svg");
-const NODE_GROUP: Asset = asset!("/assets/icons/node_group.svg");
-const NODE_LENS: Asset = asset!("/assets/icons/node_lens.svg");
-const NODE_MIRROR: Asset = asset!("/assets/icons/node_mirror.svg");
-const NODE_PARABOLA: Asset = asset!("/assets/icons/node_parabola.svg");
-const NODE_PARAXIAL: Asset = asset!("/assets/icons/node_paraxial.svg");
-const NODE_PROPAGATION: Asset = asset!("/assets/icons/node_propagation.svg");
-const NODE_SOURCEPORT: Asset = asset!("/assets/icons/node_source.svg");
-const NODE_SPECTROMETER: Asset = asset!("/assets/icons/node_spectrometer.svg");
-const NODE_WAVEFRONT: Asset = asset!("/assets/icons/node_wavefront.svg");
-const NODE_SPOTDIAGRAM: Asset = asset!("/assets/icons/node_spotdiagram.svg");
-const NODE_UNKNOWN: Asset = asset!("/assets/icons/node_unknown.svg");
-const NODE_WEDGE: Asset = asset!("/assets/icons/node_wedge.svg");
 
 // Constants for node dimensions and port positions
 const GOLDEN_RATIO: f64 = 1.618_033_988_7;
@@ -67,28 +46,16 @@ impl Default for NodeType {
     }
 }
 impl NodeType {
-    fn icon(&self) -> Option<Asset> {
+    /// Resolves the SVG symbol ID directly from the node type variant.
+    /// Replaces spaces with underscores to form a clean, URL-safe SVG identifier.
+    #[must_use]
+    pub fn symbol_id(&self) -> Option<String> {
         match self {
-            Self::Optical(node_type) => match node_type.as_str() {
-                "beam splitter" => Some(NODE_BEAMSPLITTER),
-                "energy meter" => Some(NODE_ENERGY_METER),
-                "group" => Some(NODE_GROUP),
-                "ideal filter" => Some(NODE_FILTER),
-                "reflective grating" => Some(NODE_GRATING),
-                "lens" => Some(NODE_LENS),
-                "cylindric lens" => Some(NODE_CYLINDRIC_LENS),
-                "source port" => Some(NODE_SOURCEPORT),
-                "spectrometer" => Some(NODE_SPECTROMETER),
-                "spot diagram" => Some(NODE_SPOTDIAGRAM),
-                "wavefront monitor" => Some(NODE_WAVEFRONT),
-                "paraxial surface" => Some(NODE_PARAXIAL),
-                "ray propagation" => Some(NODE_PROPAGATION),
-                "fluence detector" => Some(NODE_FLUENCE),
-                "wedge" => Some(NODE_WEDGE),
-                "mirror" => Some(NODE_MIRROR),
-                "parabolic mirror" => Some(NODE_PARABOLA),
-                _ => Some(NODE_UNKNOWN),
-            },
+            Self::Optical(name) => {
+                // E.g. "parabolic mirror" -> "parabolic_mirror"
+                Some(name.replace(' ', "_"))
+            }
+            // Analyzer nodes can return None or a dedicated shared symbol ID
             Self::Analyzer(_) => None,
         }
     }

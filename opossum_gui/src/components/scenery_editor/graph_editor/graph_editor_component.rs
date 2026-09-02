@@ -193,7 +193,7 @@ pub fn GraphEditor(
                         let tab_order = workspace.tab_order().read().clone();
                         rsx! {
                             TabList { class: "editor-tab-list",
-                                for (i, id) in tab_order.iter().enumerate() {
+                                for (i , id) in tab_order.iter().enumerate() {
                                     if let Some(graph_state) = workspace.tabs().get(*id) {
                                         TabTrigger {
                                             key: "{id.as_simple().to_string()}",
@@ -225,7 +225,7 @@ pub fn GraphEditor(
                                 id: "graphEditorContentContainer",
                                 class: "graph-editor-tab-content",
                                 onresize: move |_| workspace_processor.send(GraphsWorkspaceAction::GetEditorArea),
-                                for (i, id) in tab_order.iter().enumerate() {
+                                for (i , id) in tab_order.iter().enumerate() {
                                     if let Some(graph_state) = workspace.tabs().get(*id) {
                                         TabContent {
                                             key: "{id.as_simple().to_string()}",
@@ -253,9 +253,10 @@ pub fn GraphEditor(
         }
     }
 }
-
-const NODE_CONFIG_ICON: Asset = asset!("/assets/Node_config_icon.png");
-const AMPLIFIER_ICON: Asset = asset!("/assets/amplifier_menu_icon.png");
+#[allow(clippy::volatile_composites)]
+const NODE_CONFIG_ICON: Asset = asset!("/assets/icons/node_config_icon.png");
+#[allow(clippy::volatile_composites)]
+const AMPLIFIER_ICON: Asset = asset!("/assets/icons/amplifier_menu_icon.png");
 
 /// Which of the sidebar's two views is showing.
 #[derive(Clone, Copy, PartialEq, Eq)]
