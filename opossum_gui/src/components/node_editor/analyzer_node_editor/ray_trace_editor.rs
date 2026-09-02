@@ -1,4 +1,5 @@
 use crate::OPOSSUM_UI_LOGS;
+use crate::components::node_editor::analyzer_node_editor::light_data_editor::default_ray_data_source;
 use crate::components::{
     inputs::material_selector::MaterialSelector,
     node_editor::{
@@ -157,9 +158,15 @@ pub fn RayTraceEditor(
                             let port_uuid = port.uuid;
                             let source = current_config
                                 .get_source(&port_uuid)
-                                .map_or_else(RayDataSource::default, |b| b.source().clone());
-
-                            // Create the handler closure outside the rsx! block to avoid macro syntax ambiguities
+                                .map_or_else(
+                                    || {
+                                        let default_wvl = crate::APP_CONFIG
+                                            .read()
+                                            .default_wavelength();
+                                        default_ray_data_source(default_wvl)
+                                    },
+                                    |b| b.source().clone(),
+                                );
                             let on_save_source = move |updated_builder| {
                                 let mut updated_config = ray_trace_config.peek().clone();
                                 updated_config.map_source(port_uuid, updated_builder);

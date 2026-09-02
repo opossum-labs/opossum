@@ -46,7 +46,14 @@ impl IntoInputDataStrings<EnergyLaserLines> for EnergyLaserLinesParam {
             Self::Wavelength => obj
                 .lines()
                 .last()
-                .map_or_else(|| "1054.000".to_string(), |ll| format!("{}", ll.0.value)),
+                .map_or_else(
+                    || {
+                        // Fall back to default wavelength from global application configuration
+                        let default_wvl = crate::APP_CONFIG.read().default_wavelength();
+                        format!("{}", default_wvl.value)
+                    },
+                    |ll| format!("{}", ll.0.value),
+                ),
             Self::Energy => obj
                 .lines()
                 .last()
@@ -184,7 +191,7 @@ pub fn EnergyLaserLineEditor(
                 value: "Add laser line",
                 readonly,
                 disabled: readonly,
-
+            
             }
             LaserLineList {
                 laser_lines: energy_laser_lines.clone(),
@@ -204,7 +211,7 @@ fn LaserLineList(
 ) -> Element {
     rsx! {
         ul { class: "list-group border-start", id: "laserLineList",
-            for (i, line) in laser_lines.clone().lines().iter().enumerate() {
+            for (i , line) in laser_lines.clone().lines().iter().enumerate() {
                 {
                     let class = if i % 2 == 0 {
                         "list-group-item d-grid text-secondary"

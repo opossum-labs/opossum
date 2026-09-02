@@ -1,19 +1,16 @@
 use crate::components::{
-    inputs::material_selector::MaterialSelector,
-    node_editor::{
-        analyzer_node_editor::source_port_card::SourcePortCard,
-        inputs::{
+    inputs::material_selector::MaterialSelector, node_editor::{
+        analyzer_node_editor::{light_data_editor::default_ray_data_source, source_port_card::SourcePortCard}, inputs::{
             input_components::{FlushableTextInput, LabeledSelect},
             select_options_from_enum_iterator,
-        },
-        node_config_editor::{NodeChangeAction, NodeChangeEvent},
+        }, node_config_editor::{NodeChangeAction, NodeChangeEvent},
     },
 };
 use dioxus::prelude::*;
 use opossum_core::{
     core_optics::hit_map::fluence_estimator::FluenceEstimator,
     material::Material,
-    prelude::{AnalyzerType, GhostFocusConfig, RayDataSource},
+    prelude::{AnalyzerType, GhostFocusConfig},
     types::api_types::SourcePortDto,
     utils::default_from_name::DefaultFromName,
 };
@@ -109,7 +106,12 @@ pub fn GhostFocusEditor(
                             let source = current_config
                                 .get_source(&port_uuid)
                                 .map_or_else(
-                                    RayDataSource::default,
+                                    || {
+                                        let default_wvl = crate::APP_CONFIG
+                                            .read()
+                                            .default_wavelength();
+                                        default_ray_data_source(default_wvl)
+                                    },
                                     |builder| builder.source().clone(),
                                 );
                             let on_save_source = move |updated_builder| {

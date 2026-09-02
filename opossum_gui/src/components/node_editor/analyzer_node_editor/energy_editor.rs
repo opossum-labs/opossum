@@ -1,5 +1,7 @@
 use crate::components::node_editor::{
-    analyzer_node_editor::light_data_editor::energy_source_editor::EnergySourceEditor,
+    analyzer_node_editor::light_data_editor::{
+        default_energy_data_builder, energy_source_editor::EnergySourceEditor,
+    },
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
 };
 
@@ -64,10 +66,13 @@ fn SourcePortCard(
     super::use_source_card_focus(analyzer_id, port_uuid, is_collapsed);
 
     let existing_source = energy_config
-        .read()
-        .get_source(&port_uuid)
-        .cloned()
-        .unwrap_or_else(EnergyDataBuilder::default);
+    .read()
+    .get_source(&port_uuid)
+    .cloned()
+    .unwrap_or_else(|| {
+        let default_wvl = crate::APP_CONFIG.read().default_wavelength();
+        default_energy_data_builder(default_wvl)
+    });
 
     rsx! {
         div {
