@@ -9,14 +9,22 @@ use dioxus::prelude::*;
 use itertools::Itertools;
 use std::ops::{AddAssign, SubAssign};
 
-// ========================================================
-// 1. NEU: SEMAPHORE PROTOKOLL (Dirty Check)
-// ========================================================
-
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct FormContext {
     pub flush_trigger: Signal<usize>,
     pub dirty_count: Signal<usize>,
+}
+
+impl FormContext {
+    /// Increments the count of fields with unsaved changes.
+    pub fn mark_dirty(&mut self) {
+        self.dirty_count.write().add_assign(1);
+    }
+
+    /// Decrements the count of fields with unsaved changes.
+    pub fn mark_clean(&mut self) {
+        self.dirty_count.write().sub_assign(1);
+    }
 }
 
 #[component]
@@ -25,6 +33,9 @@ pub fn FlushableTextInput(
     label: String,
     value: String,
     on_save: EventHandler<String>,
+    /// Explicitly supply a FormContext, or leave as None to automatically resolve via ambient context.
+    #[props(optional)]
+    form_context: Option<FormContext>,
     #[props(default = String::new())] container_class: String,
     #[props(default = String::new())] input_class: String,
     #[props(default = String::new())] label_class: String,
@@ -34,14 +45,13 @@ pub fn FlushableTextInput(
     #[props(optional)] max: Option<&'static str>,
     #[props(default = false)] readonly: bool,
 ) -> Element {
-    let mut form_ctx = use_context::<FormContext>();
+    // Resolve context: explicit prop takes precedence; fall back to ambient context without panicking.
+    let mut resolved_ctx = form_context.or_else(try_use_context::<FormContext>);
 
     let mut local_value = use_signal(|| value.clone());
     let mut is_locally_dirty = use_signal(|| false);
-    // Tracks the prop's own last-seen value, separately from `local_value` (what's displayed) - this
-    // is what lets us tell "the prop changed to something new" (pull it in) apart from "the prop just
-    // hasn't caught up with a save we made a moment ago" (don't stomp our own optimistic update while
-    // waiting for that round-trip).
+
+    // Tracks the prop's own last-seen value separately from `local_value` to allow optimistic updates.
     let mut last_prop_value = use_signal(|| value.clone());
 
     if *last_prop_value.peek() != value {
@@ -56,20 +66,22 @@ pub fn FlushableTextInput(
             let val = local_value.peek().clone();
             on_save.call(val);
             is_locally_dirty.set(false);
-            form_ctx.dirty_count.write().sub_assign(1);
+            if let Some(mut ctx) = resolved_ctx {
+                ctx.mark_clean();
+            }
         }
     };
 
-    let flush_sig = form_ctx.flush_trigger;
+    // Listen to external flush signals when a FormContext is available.
     use_effect(move || {
-        flush_sig();
-        perform_save();
+        if let Some(ctx) = resolved_ctx {
+            // Subscribing to signal changes triggers this effect when flush_trigger updates.
+            (ctx.flush_trigger)();
+            perform_save();
+        }
     });
 
-    // When a save completes (is_locally_dirty → false), snap the displayed text back to the last
-    // confirmed prop value. If the caller accepted the edit and updates the prop, the sync guard
-    // above will overwrite this with the new value during the same render pass; if the caller
-    // rejected the edit, the prop stays unchanged and this reset is what the user sees.
+    // Snap displayed text back to confirmed prop value when save completes.
     use_effect(move || {
         if !*is_locally_dirty.read() {
             local_value.set(last_prop_value.peek().clone());
@@ -96,9 +108,10 @@ pub fn FlushableTextInput(
                     local_value.set(new_value);
                     if !*is_locally_dirty.peek() {
                         is_locally_dirty.set(true);
-                        form_ctx.dirty_count.write().add_assign(1);
+                        if let Some(mut ctx) = resolved_ctx {
+                            ctx.mark_dirty();
+                        }
                     }
-
                 },
                 onblur: move |_| perform_save(),
                 onkeydown: move |e: Event<KeyboardData>| {
@@ -116,10 +129,6 @@ pub fn FlushableTextInput(
         }
     }
 }
-
-// ========================================================
-// 2. EXISTIERENDE KOMPONENTEN (Wiederhergestellt)
-// ========================================================
 
 #[component]
 pub fn LabeledCheckboxInput(
@@ -300,7 +309,7 @@ pub fn RowedInputs(inputs: Vec<InputData>) -> Element {
 
     rsx! {
         // Standard slice chunks yield sub-slices without any intermediate heap allocation
-        for (row_idx, chunk) in inputs.chunks(2).enumerate() {
+        for (row_idx , chunk) in inputs.chunks(2).enumerate() {
             div {
                 // Key ensures fast and stable Virtual DOM reconciliation
                 key: "input_row_{row_idx}",
@@ -655,7 +664,7 @@ pub fn LabeledSelect(
                     onchange.call(e);
                 },
                 // Use key for fast VDOM list reconciliation and avoid .clone()
-                for (is_selected, option) in &options {
+                for (is_selected , option) in &options {
                     option {
                         key: "{option}",
                         selected: *is_selected,

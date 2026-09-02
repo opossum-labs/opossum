@@ -1,8 +1,6 @@
 use crate::APP_CONFIG;
 use crate::components::menu_bar::project_helper::select_folder_path;
-use crate::components::node_editor::inputs::input_components::{
-    FormContext, NodeConfigUnitInput, UnitHandling,
-};
+use crate::components::node_editor::inputs::input_components::{NodeConfigUnitInput, UnitHandling};
 use crate::components::primitives::alert_dialog::{
     AlertDialog, AlertDialogAction, AlertDialogActions, AlertDialogCancel, AlertDialogDescription,
     AlertDialogTitle,
@@ -230,15 +228,6 @@ fn GeneralSettingsTab(mut temp_config: Signal<crate::AppConfig>) -> Element {
 
 #[component]
 fn PhysicsSettingsTab(mut temp_config: Signal<crate::AppConfig>) -> Element {
-    // *** This is a hack to avoid crashes while using FlushedTextInput *****
-    let flush_trigger = use_signal(|| 0usize);
-    let dirty_count = use_signal(|| 0usize);
-    use_context_provider(|| FormContext {
-        flush_trigger,
-        dirty_count,
-    });
-    // **********************************************************************
-
     let current_wavelength = temp_config.read().default_wavelength();
 
     rsx! {

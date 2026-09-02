@@ -17,7 +17,7 @@ use opossum_core::{
 
 use crate::components::node_editor::inputs::{
     InputData, IntoInputData,
-    input_components::{FormContext, LabeledSelect, RowedInputs},
+    input_components::{LabeledSelect, RowedInputs},
     select_options_from_enum_iterator,
 };
 
@@ -39,16 +39,6 @@ pub fn RefractiveIndexEditor(
     readonly: bool,
 ) -> Element {
     info!("🔄 Render: RefractiveIndexEditor");
-
-    // *** This is a hack to avoid crashes while using FlushedTextInput *****
-    let flush_trigger = use_signal(|| 0usize);
-    let dirty_count = use_signal(|| 0usize);
-    use_context_provider(|| FormContext {
-        flush_trigger,
-        dirty_count,
-    });
-    // **********************************************************************
-
     // 1. Internal State: This makes the component fully decoupled and snappy.
     let mut internal_state = use_signal(|| value.read().clone());
 
