@@ -45,7 +45,7 @@ passive lens would be. Nothing about the node says "amplifier":
 ```rust
 use opossum_core::{
     gain::{
-        AnalyticPump, BeerLambertProfile, GainModel, LongitudinalProfile, MonochromaticSmallSignalGain,
+        AnalyticPump, LambertBeerProfile, GainModel, LongitudinalProfile, MonochromaticSmallSignalGain,
         PumpDirection, PumpSource, TransversalProfile,
     },
     prelude::*,
@@ -89,7 +89,7 @@ scenario.set_pump_source(
             degree!(0.0),
             false,
         )?),
-        LongitudinalProfile::BeerLambert(BeerLambertProfile::new(
+        LongitudinalProfile::LambertBeer(LambertBeerProfile::new(
             reciprocal_centimeter!(0.5), // pump absorption coefficient in the medium
             PumpDirection::Forward,      // pump enters from the input surface
         )?),

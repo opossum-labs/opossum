@@ -20,7 +20,7 @@ pub use extraction::Extraction;
 pub use inversion_field::{Inversion, InversionField};
 pub use monochromatic_small_signal::MonochromaticSmallSignalGain;
 pub use pump_source::{
-    AnalyticPump, BeerLambertProfile, LongitudinalProfile, PumpDirection, PumpSource,
+    AnalyticPump, LambertBeerProfile, LongitudinalProfile, PumpDirection, PumpSource,
     TransversalProfile,
 };
 pub use scenario::{ActiveScenario, PumpConfig, PumpScenario};

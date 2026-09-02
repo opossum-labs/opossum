@@ -292,7 +292,7 @@ mod test {
         apertures::{Aperture, ApertureType},
         degree,
         gain::{
-            AnalyticPump, BeerLambertProfile, GainModel, LongitudinalProfile, PumpDirection,
+            AnalyticPump, GainModel, LambertBeerProfile, LongitudinalProfile, PumpDirection,
             PumpSource, TransversalProfile,
             inversion_field::{CellIndex, cells},
         },
@@ -558,7 +558,7 @@ mod test {
         let error = |cells_z: usize| -> OpmResult<f64> {
             let config = analytic(
                 TransversalProfile::Flat,
-                LongitudinalProfile::BeerLambert(BeerLambertProfile::new(
+                LongitudinalProfile::LambertBeer(LambertBeerProfile::new(
                     alpha,
                     PumpDirection::Forward,
                 )?),
@@ -869,7 +869,7 @@ mod test {
         let error = |cells_z: usize| -> OpmResult<f64> {
             let config = analytic(
                 TransversalProfile::Flat,
-                LongitudinalProfile::BeerLambert(BeerLambertProfile::new(
+                LongitudinalProfile::LambertBeer(LambertBeerProfile::new(
                     alpha,
                     PumpDirection::Forward,
                 )?),

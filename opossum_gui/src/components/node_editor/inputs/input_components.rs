@@ -9,7 +9,7 @@ use dioxus::prelude::*;
 use itertools::Itertools;
 use std::ops::{AddAssign, SubAssign};
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct FormContext {
     pub flush_trigger: Signal<usize>,
     pub dirty_count: Signal<usize>,
@@ -33,7 +33,7 @@ pub fn FlushableTextInput(
     label: String,
     value: String,
     on_save: EventHandler<String>,
-    /// Explicitly supply a FormContext, or leave as None to automatically resolve via ambient context.
+    /// Explicitly supply a `FormContext`, or leave as None to automatically resolve via ambient context.
     #[props(optional)]
     form_context: Option<FormContext>,
     #[props(default = String::new())] container_class: String,
@@ -46,7 +46,7 @@ pub fn FlushableTextInput(
     #[props(default = false)] readonly: bool,
 ) -> Element {
     // Resolve context: explicit prop takes precedence; fall back to ambient context without panicking.
-    let mut resolved_ctx = form_context.or_else(try_use_context::<FormContext>);
+    let resolved_ctx = form_context.or_else(try_use_context::<FormContext>);
 
     let mut local_value = use_signal(|| value.clone());
     let mut is_locally_dirty = use_signal(|| false);

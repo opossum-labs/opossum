@@ -106,7 +106,7 @@ preserves is lost.
 way through the medium — for example when the medium is short compared with the pump absorption
 length, or when the pump is a side-pump geometry whose longitudinal variation is captured in the
 transversal profile instead. For end-pumped media where the pump is partially absorbed along the
-optical axis, `LongitudinalProfile::BeerLambert` models the exponential fall-off of the pump
+optical axis, `LongitudinalProfile::LambertBeer` models the exponential fall-off of the pump
 intensity from entrance to exit. That case is covered in
 [Shaped pump profiles](./shaped_pump_profile.md).
 

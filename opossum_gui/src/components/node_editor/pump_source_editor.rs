@@ -26,7 +26,7 @@ use dioxus::prelude::*;
 use opossum_core::{
     degree,
     gain::{
-        AnalyticPump, BeerLambertProfile, LongitudinalProfile, PumpDirection, PumpSource,
+        AnalyticPump, LambertBeerProfile, LongitudinalProfile, PumpDirection, PumpSource,
         TransversalProfile,
     },
     meter, reciprocal_meter,
@@ -135,13 +135,13 @@ fn AnalyticPumpFields(
                 }
             },
         }
-        if let LongitudinalProfile::BeerLambert(profile) = longitudinal {
-            BeerLambertFields {
+        if let LongitudinalProfile::LambertBeer(profile) = longitudinal {
+            LambertBeerFields {
                 id_prefix: id_prefix.clone(),
                 profile,
                 on_change: move |absorbed| rebuilt(
                     transversal,
-                    LongitudinalProfile::BeerLambert(absorbed),
+                    LongitudinalProfile::LambertBeer(absorbed),
                     grid,
                 ),
             }
@@ -302,7 +302,7 @@ fn SuperGaussianFields(
     }
 }
 
-/// The parameters of a [`BeerLambertProfile`]: how strongly the pump is absorbed, and which face it
+/// The parameters of a [`LambertBeerProfile`]: how strongly the pump is absorbed, and which face it
 /// enters through.
 ///
 /// # Props
@@ -311,10 +311,10 @@ fn SuperGaussianFields(
 /// * `profile` - the absorption as the document currently holds it.
 /// * `on_change` - handed the complete new profile whenever the user changes anything.
 #[component]
-fn BeerLambertFields(
+fn LambertBeerFields(
     id_prefix: String,
-    profile: BeerLambertProfile,
-    on_change: EventHandler<BeerLambertProfile>,
+    profile: LambertBeerProfile,
+    on_change: EventHandler<LambertBeerProfile>,
 ) -> Element {
     let (absorption, direction) = (profile.absorption(), profile.direction());
     let sig_absorption = use_synced_signal(absorption);
@@ -327,7 +327,7 @@ fn BeerLambertFields(
                 unit_config: UnitHandling::new("m⁻¹", true),
                 reciprocal: true,
                 onchange: move |v: f64| {
-                    save(BeerLambertProfile::new(reciprocal_meter!(v), direction), on_change);
+                    save(LambertBeerProfile::new(reciprocal_meter!(v), direction), on_change);
                 },
             }
             LabeledSelect {
@@ -336,7 +336,7 @@ fn BeerLambertFields(
                 options: select_options_from_enum_iterator(&direction, None),
                 onchange: move |e: Event<FormData>| {
                     if let Some(picked) = PumpDirection::default_from_name(&e.value()) {
-                        save(BeerLambertProfile::new(absorption, picked), on_change);
+                        save(LambertBeerProfile::new(absorption, picked), on_change);
                     }
                 },
             }

@@ -73,15 +73,15 @@ impl Display for PumpDirection {
 }
 impl DefaultFromName for PumpDirection {}
 
-/// Deserialization shim for [`BeerLambertProfile`], mirroring [`NonValidatedAnalyticPump`].
+/// Deserialization shim for [`LambertBeerProfile`], mirroring [`NonValidatedAnalyticPump`].
 #[derive(Deserialize)]
-struct NonValidatedBeerLambertProfile {
+struct NonValidatedLambertBeerProfile {
     absorption: ReciprocalLength,
     direction: PumpDirection,
 }
-impl TryFrom<NonValidatedBeerLambertProfile> for BeerLambertProfile {
+impl TryFrom<NonValidatedLambertBeerProfile> for LambertBeerProfile {
     type Error = String;
-    fn try_from(helper: NonValidatedBeerLambertProfile) -> Result<Self, Self::Error> {
+    fn try_from(helper: NonValidatedLambertBeerProfile) -> Result<Self, Self::Error> {
         Self::new(helper.absorption, helper.direction).map_err(|e| e.to_string())
     }
 }
@@ -107,15 +107,15 @@ impl Default for ValidatedAbsorptionCoefficient {
 #[derive(
     Default, Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnsureValidated,
 )]
-#[serde(try_from = "NonValidatedBeerLambertProfile")]
-pub struct BeerLambertProfile {
+#[serde(try_from = "NonValidatedLambertBeerProfile")]
+pub struct LambertBeerProfile {
     #[schema(value_type = f64)]
     absorption: ValidatedAbsorptionCoefficient,
     #[validate(skip)]
     direction: PumpDirection,
 }
-impl BeerLambertProfile {
-    /// Create a new [`BeerLambertProfile`].
+impl LambertBeerProfile {
+    /// Create a new [`LambertBeerProfile`].
     ///
     /// # Arguments
     ///
@@ -242,14 +242,14 @@ pub enum LongitudinalProfile {
     /// The pump reaches the far end of the medium as strongly as the near one.
     #[default]
     Flat,
-    /// The pump is absorbed on its way through. See [`BeerLambertProfile`].
-    BeerLambert(BeerLambertProfile),
+    /// The pump is absorbed on its way through. See [`LambertBeerProfile`].
+    LambertBeer(LambertBeerProfile),
 }
 impl Display for LongitudinalProfile {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Flat => write!(f, "Flat"),
-            Self::BeerLambert(_) => write!(f, "BeerLambert"),
+            Self::LambertBeer(_) => write!(f, "LambertBeer"),
         }
     }
 }
@@ -268,7 +268,7 @@ impl LongitudinalProfile {
     fn value_at(&self, position: Length, extent: &Range<Length>) -> f64 {
         match self {
             Self::Flat => 1.0,
-            Self::BeerLambert(profile) => profile.value_at(position, extent),
+            Self::LambertBeer(profile) => profile.value_at(position, extent),
         }
     }
 }
@@ -650,7 +650,7 @@ mod test {
             PumpSource::Const,
             PumpSource::Analytic(AnalyticPump::new(
                 TransversalProfile::SuperGaussian(SuperGaussianShape::default()),
-                LongitudinalProfile::BeerLambert(BeerLambertProfile::new(
+                LongitudinalProfile::LambertBeer(LambertBeerProfile::new(
                     reciprocal_centimeter!(1.0),
                     PumpDirection::Backward,
                 )?),
@@ -737,7 +737,7 @@ mod test {
         let mut field = field_over_a_disk()?;
         AnalyticPump::new(
             TransversalProfile::Flat,
-            LongitudinalProfile::BeerLambert(BeerLambertProfile::new(
+            LongitudinalProfile::LambertBeer(LambertBeerProfile::new(
                 absorption,
                 PumpDirection::Forward,
             )?),
@@ -761,7 +761,7 @@ mod test {
             let mut field = field_over_a_disk()?;
             AnalyticPump::new(
                 TransversalProfile::Flat,
-                LongitudinalProfile::BeerLambert(BeerLambertProfile::new(
+                LongitudinalProfile::LambertBeer(LambertBeerProfile::new(
                     reciprocal_centimeter!(1.0),
                     direction,
                 )?),
@@ -797,7 +797,7 @@ mod test {
                 degree!(0.0),
                 false,
             )?),
-            LongitudinalProfile::BeerLambert(BeerLambertProfile::new(
+            LongitudinalProfile::LambertBeer(LambertBeerProfile::new(
                 absorption,
                 PumpDirection::Forward,
             )?),
@@ -819,15 +819,15 @@ mod test {
         // is not physics. (A gain coefficient may be negative — that is an absorbing medium — but it
         // lives on the gain model now, not here.)
         assert!(
-            BeerLambertProfile::new(reciprocal_centimeter!(-1.0), PumpDirection::Forward).is_err()
+            LambertBeerProfile::new(reciprocal_centimeter!(-1.0), PumpDirection::Forward).is_err()
         );
         assert!(
-            BeerLambertProfile::new(reciprocal_centimeter!(f64::NAN), PumpDirection::Forward)
+            LambertBeerProfile::new(reciprocal_centimeter!(f64::NAN), PumpDirection::Forward)
                 .is_err()
         );
         // No absorption at all is fine though, it is simply the flat profile.
         assert!(
-            BeerLambertProfile::new(reciprocal_centimeter!(0.0), PumpDirection::Forward).is_ok()
+            LambertBeerProfile::new(reciprocal_centimeter!(0.0), PumpDirection::Forward).is_ok()
         );
     }
 }
