@@ -16,7 +16,7 @@ use crate::components::{
 };
 use crate::{SIDEBAR_COLLAPSED, SIDEBAR_VIEW, SIDEBAR_WIDTH};
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
-use dioxus_primitives::tabs::{TabContent, TabList, TabTrigger, Tabs};
+use dioxus_primitives::tabs::{TabList, TabTrigger, Tabs};
 use std::path::PathBuf;
 use uuid::Uuid;
 
@@ -225,13 +225,14 @@ pub fn GraphEditor(
                                 id: "graphEditorContentContainer",
                                 class: "graph-editor-tab-content",
                                 onresize: move |_| workspace_processor.send(GraphsWorkspaceAction::GetEditorArea),
-                                for (i , id) in tab_order.iter().enumerate() {
+                                for (_i, id) in tab_order.iter().enumerate() {
                                     if let Some(graph_state) = workspace.tabs().get(*id) {
-                                        TabContent {
+                                        div {
                                             key: "{id.as_simple().to_string()}",
+                                            role: "tabpanel",
                                             class: "tab-content",
-                                            value: id.as_simple().to_string(),
-                                            index: i,
+                                            "data-state": if active_tab() == *id { "active" } else { "inactive" },
+                                            hidden: active_tab() != *id,
                                             GraphViewEditor {
                                                 model_modified_sig,
                                                 model_modified_handler,
