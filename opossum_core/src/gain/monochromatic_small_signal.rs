@@ -476,7 +476,7 @@ mod test {
     #[test]
     fn a_negative_coefficient_absorbs() -> OpmResult<()> {
         // A negative peak coefficient is the same physics with the inversion turned around, so it
-        // has to come out as plain Beer-Lambert absorption over the very same path.
+        // has to come out as plain Lambert-Beer absorption over the very same path.
         let g_0 = reciprocal_centimeter!(-0.5);
         let model = MonochromaticSmallSignalGain::new(g_0)?;
         let factor = factor_through_disk(&model, &const_pump(), &ray_at(0.0, 0.0)?)?;
@@ -545,7 +545,7 @@ mod test {
     #[test]
     fn the_integral_converges_when_the_grid_is_refined() -> OpmResult<()> {
         // With exact voxel traversal the only remaining error is the discretization of the
-        // inversion profile onto the grid cells. Beer-Lambert has a closed form:
+        // inversion profile onto the grid cells. Lambert-Beer has a closed form:
         // the integral of g0·exp(-α·s) from 0 to L is g0/α · (1 − exp(-α·L)).
         // Finer cells_z → smaller staircase approximation error → factor converges to exact. The
         // grid is a property of the analytic pump now, so refining it means refining the pump.
@@ -837,7 +837,7 @@ mod test {
 
     #[test]
     fn an_oblique_ray_through_a_beer_lambert_profile_matches_the_closed_form() -> OpmResult<()> {
-        // A Beer-Lambert profile sets the gain as g(z) = g0 · exp(-α·z) (forward pump).
+        // A Lambert-Beer profile sets the gain as g(z) = g0 · exp(-α·z) (forward pump).
         // For a ray travelling at angle θ to the optical axis, the path element is ds = dz/cosθ,
         // so the line integral over the disk thickness L is:
         //
@@ -881,11 +881,11 @@ mod test {
         let (coarse, fine) = (error(8)?, error(64)?);
         assert!(
             fine < coarse,
-            "refining cells_z 8 → 64 did not help for oblique Beer-Lambert: {coarse} → {fine}"
+            "refining cells_z 8 → 64 did not help for oblique Lambert-Beer: {coarse} → {fine}"
         );
         assert!(
             fine < 1e-3,
-            "oblique Beer-Lambert (cells_z=64) still off by {fine} vs \
+            "oblique Lambert-Beer (cells_z=64) still off by {fine} vs \
              exp(g0/(α·cosθ)·(1−exp(−α·L))) = {exact}"
         );
         Ok(())

@@ -304,7 +304,7 @@ Capabilities: `per_ray_wavelength`.
 **Tests:**
 
 - Homogene Inversion, gerader Durchgang: `G` gegen analytisch `exp(g₀L)`
-- Negative Inversion → Beer-Lambert-Absorption, gegen Analytik
+- Negative Inversion → Lambert-Beer-Absorption, gegen Analytik
 - Konvergenz: Ergebnis stabil bei Verdopplung von `n_steps`
 - Chromatik: Verstärkung folgt der Form von `σ_e(λ)`
 - Schräger Durchgang: Verstärkung skaliert mit der tatsächlichen Weglänge
@@ -467,7 +467,7 @@ die thermische Linse gebraucht.
 
 **Tests:**
 
-- Beer-Lambert-Absorptionsprofil gegen Analytik bei schwacher Pumpe
+- Lambert-Beer-Absorptionsprofil gegen Analytik bei schwacher Pumpe
 - Energiebilanz: absorbierte Pumpenergie = gespeicherte Energie + Quantendefekt-Wärme
 - Zweiseitenpumpen ergibt symmetrisches Profil
 - τ_f-Zerfall bei langer Pumpdauer korrekt

@@ -86,7 +86,7 @@ automatically.
 stated once on the model. A constant pump is the shapeless case: β = 1 throughout the medium, no
 grid needed, and the model integrates over the exact chord each ray travels. An analytic pump
 composes a transversal profile (flat or super-Gaussian across the aperture) with a longitudinal
-profile (flat or Beer-Lambert along the propagation axis, for end-pumped or side-pumped
+profile (flat or Lambert-Beer along the propagation axis, for end-pumped or side-pumped
 geometries), resolved onto a grid stated on the pump itself.
 
 **Monochromatic.** The gain coefficient g₀ is wavelength-independent — all wavelengths in a

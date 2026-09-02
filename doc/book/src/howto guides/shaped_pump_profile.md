@@ -35,7 +35,7 @@ cargo run -p opossum_core --example amplifier_gaussian_pump_fluence
 ```
 
 That example uses a flat longitudinal profile to isolate the transversal effect. The code
-below focuses on the gain and pump source configuration for a Beer-Lambert longitudinal
+below focuses on the gain and pump source configuration for a Lambert-Beer longitudinal
 profile; the rest of the setup follows the same pattern.
 
 The hardware is a plane-parallel glass slab — a [`Lens`](../reference/nodes/spherical_lens.md)
@@ -77,7 +77,7 @@ scenario.set_gain_model(
     )?),
 );
 
-// Pump source: Super-Gaussian spot × Beer-Lambert longitudinal decay.
+// Pump source: Super-Gaussian spot × Lambert-Beer longitudinal decay.
 // The pump carries only the shape and the grid it is resolved on — no amplitude here.
 scenario.set_pump_source(
     head,
@@ -105,7 +105,7 @@ the pump shape β is discretized over the medium. Each cell holds one β value. 
 cells exactly (Amanatides–Woo algorithm), so there is no step-size error — only the
 discretization of the pump profile onto the grid introduces approximation. Rules of thumb:
 
-- Make `cells_z` fine enough to resolve the longitudinal profile: for Beer-Lambert with
+- Make `cells_z` fine enough to resolve the longitudinal profile: for Lambert-Beer with
   α = 0.5 cm⁻¹ over 40 mm, roughly 16–32 slices are sufficient for < 1 % error.
 - Make `cells_x` and `cells_y` fine enough to resolve the transversal profile: a Super-Gaussian
   with σ = 5 mm over a 20 mm aperture needs around 32–64 cells to be well-sampled.
@@ -150,8 +150,8 @@ Open the `amplifier_gaussian_pump_fluence.opm` file in the GUI, run the analysis
 - A smooth radial fall-off that mirrors the pump's σ = 5 mm half-width.
 - Near-zero fluence beyond the pump spot (r ≫ σ): rays there barely see the pump.
 
-To see the Beer-Lambert longitudinal effect on top of a transversal profile, configure the
-pump source as shown above (Super-Gaussian × Beer-Lambert) and compare the fluence map with
+To see the Lambert-Beer longitudinal effect on top of a transversal profile, configure the
+pump source as shown above (Super-Gaussian × Lambert-Beer) and compare the fluence map with
 the flat-profile result: oblique rays and axial rays at the same radius will carry slightly
 different energies because they enter the slab at different longitudinal inversion gradients.
 

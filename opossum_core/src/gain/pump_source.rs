@@ -101,7 +101,7 @@ impl Default for ValidatedAbsorptionCoefficient {
 
 /// A pump absorbed exponentially along the optical axis of the medium.
 ///
-/// The Beer-Lambert law: a pump entering one face is attenuated by `exp(-α·s)` after a depth `s`,
+/// The Lambert-Beer law: a pump entering one face is attenuated by `exp(-α·s)` after a depth `s`,
 /// so the inversion it leaves behind decays the same way. This is what makes one end of an
 /// end-pumped rod hotter and more strongly inverted than the other.
 #[derive(
@@ -745,7 +745,7 @@ mod test {
         )?
         .deposit_shape(&mut field)?;
         // Between the first and the last slice the pump has travelled the distance between their
-        // centers, and β is attenuated by exactly the Beer-Lambert factor over it.
+        // centers, and β is attenuated by exactly the Lambert-Beer factor over it.
         let (near, far) = ((3, 3, 0), (3, 3, 3));
         let travelled = center_of(&field, far)?.z - center_of(&field, near)?.z;
         assert_relative_eq!(

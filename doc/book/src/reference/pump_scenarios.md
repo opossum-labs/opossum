@@ -101,7 +101,7 @@ edited independently. Duplicating is undoable.
         `Flat`
         : Uniform along z; L(z) = 1 everywhere.
 
-        `Beer-Lambert`
+        `Lambert-Beer`
         : Exponential absorption of the pump: L(z) = exp(−α × z), where z is measured from the
           surface the pump enters.
 

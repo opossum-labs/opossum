@@ -69,7 +69,7 @@ scenario.set_pump_source(
 );
 ```
 
-For an explanation of the grid argument and a comparison with the Beer-Lambert longitudinal
+For an explanation of the grid argument and a comparison with the Lambert-Beer longitudinal
 profile, see [Shaped pump profiles](./shaped_pump_profile.md).
 
 ## Source and detector
