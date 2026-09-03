@@ -57,9 +57,8 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     /// Prepare this node's medium before the first ray is traced (Phase A).
     ///
     /// Derives the node's [`SurfaceBoundedBody`](crate::geometry::body::SurfaceBoundedBody) from the
-    /// **current** node isometry and stores it in [`NodeAttr`]'s `runtime_medium` slot so that
-    /// [`Volumetric::propagate_inside_medium`](crate::core_optics::volumetric::Volumetric::propagate_inside_medium)
-    /// (Phase B) can read it without rebuilding per ray pass. If the operating point provides a gain
+    /// **current** node isometry and stores it in [`NodeAttr`](crate::core_optics::node_attr::NodeAttr)'s `runtime_medium` slot so that
+    /// [`Volumetric::propagate_inside_medium`] (Phase B) can read it without rebuilding per ray pass. If the operating point provides a gain
     /// model that reads the inversion, the [`InversionField`](crate::gain::InversionField) is built
     /// from the pump configuration and stored alongside the body; otherwise the inversion slot is
     /// `None`.

@@ -19,7 +19,7 @@ uom.workspace = true
 uuid.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-gix = { version = "0.86", features = [
+gix = { version = "0.87.1", features = [
     "blocking-http-transport-reqwest",
     "worktree-mutation",
     "revision"

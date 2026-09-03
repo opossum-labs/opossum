@@ -11,8 +11,7 @@
 //! **The inversion is frozen.** Extracting energy here does not draw the medium down, so a second
 //! pass sees exactly what the first one saw. That is what makes the model "small signal": it holds
 //! as long as the extracted energy is negligible against the stored energy. Saturation is the next
-//! stage and is what will start writing back into the
-//! [`InversionField`](super::InversionField).
+//! stage and is what will start writing back into the [`InversionField`].
 //!
 //! **Deliberate non-goals at this stage**, both deferred rather than forgotten:
 //!
@@ -103,7 +102,7 @@ impl MonochromaticSmallSignalGain {
     ///
     /// # Errors
     ///
-    /// Returns an [`OpossumError::Other`](crate::error::OpossumError::Other) if the coefficient is
+    /// Returns an [`OpossumError::Other`] if the coefficient is
     /// not finite.
     pub fn new(peak_gain_coefficient: ReciprocalLength) -> OpmResult<Self> {
         let mut model = Self::default();
@@ -129,7 +128,7 @@ impl MonochromaticSmallSignalGain {
     ///
     /// # Errors
     ///
-    /// Returns an [`OpossumError::Other`](crate::error::OpossumError::Other) if the given value is
+    /// Returns an [`OpossumError::Other`] if the given value is
     /// not finite. The previous value is kept in that case.
     pub fn set_peak_gain_coefficient(
         &mut self,

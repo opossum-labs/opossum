@@ -197,8 +197,7 @@ pub trait Volumetric: OpticNode {
     /// traversal of the medium (one chord, one energy factor per ray), never in two passes:
     ///
     /// * **Dopant gain** — a property of the operating point. Queried from the gain model of
-    ///   [`PropagationStrategy::pump_config`](crate::analyzers::propagation_strategy::PropagationStrategy::pump_config)
-    ///   and amplifies along the chord through the medium.
+    ///   [`PropagationStrategy::pump_config`] and amplifies along the chord through the medium.
     /// * **Host-material absorption** — a property of the component's own [`Material`]. Applied
     ///   whenever that material carries an [`AbsorptionModel`] other than
     ///   [`AbsorptionModel::None`], attenuating along the same chord.
@@ -256,13 +255,11 @@ pub trait Volumetric: OpticNode {
     /// The energy counterpart of [`Volumetric::propagate_inside_medium`]. An energy flow analysis
     /// knows no rays and no path lengths — for a passive node (no gain model) it returns
     /// immediately. For an active node, the gain model's
-    /// [`Extraction::amplify_spectrum`](crate::gain::Extraction::amplify_spectrum) decides what to
-    /// do without a beam path: state a nominal path length, or refuse.
+    /// [`Extraction::amplify_spectrum`] decides what to  do without a beam path: state a nominal path length, or refuse.
     ///
     /// Reads from the medium prepared by
-    /// [`OpticNode::prepare_volume`](crate::core_optics::OpticNode::prepare_volume) rather than
-    /// rebuilding the body and inversion on every call. Returns immediately if no medium has been
-    /// prepared yet (positioning run).
+    /// [`OpticNode::prepare_volume`] rather than rebuilding the body and inversion on every call.
+    /// Returns immediately if no medium has been prepared yet (positioning run).
     ///
     /// # TODO — host-material absorption for the energy flow
     ///
