@@ -41,5 +41,5 @@ keywords:
 repository-code: 'https://github.com/opossum-labs/opossum'
 url: 'https://github.com/opossum-labs/opossum'
 license: GPL-3.0-or-later
-version: 0.7.4
-date-released: '2026-09-04'
+version: 0.7.3
+date-released: '2026-08-14'
