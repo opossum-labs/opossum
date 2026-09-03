@@ -1400,4 +1400,142 @@ mod test {
             "both were one step, so nothing left to undo"
         );
     }
+    #[actix_web::test]
+    async fn test_get_root_uuid() {
+        let app_state = Data::new(AppState::default());
+        let expected_uuid = app_state.document.lock().scenery().node_attr().uuid();
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(get_root_uuid),
+        )
+        .await;
+
+        let req = test::TestRequest::get().uri("/root_uuid").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let root_uuid: uuid::Uuid = test::read_body_json(resp).await;
+        assert_eq!(root_uuid, expected_uuid);
+    }
+
+    #[actix_web::test]
+    async fn test_get_document_returns_ron_format() {
+        let app_state = Data::new(AppState::default());
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(web::scope("/document").service(get_document)),
+        )
+        .await;
+
+        let req = test::TestRequest::get().uri("/document").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers()
+                .get(actix_web::http::header::CONTENT_TYPE)
+                .unwrap(),
+            RON_MEDIA_TYPE
+        );
+
+        let body = test::read_body(resp).await;
+        let body_str = std::str::from_utf8(&body).unwrap();
+        assert!(OpmDocument::from_string(body_str).is_ok());
+    }
+
+    #[actix_web::test]
+    async fn test_put_document_valid_and_invalid() {
+        let app_state = Data::new(AppState::default());
+        let valid_opm = app_state.document.lock().to_opm_file_string().unwrap();
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(web::scope("/document").service(put_document)),
+        )
+        .await;
+
+        // 1. Success case: loading a valid OPM document string
+        let req = test::TestRequest::put()
+            .uri("/document")
+            .insert_header((actix_web::http::header::CONTENT_TYPE, "text/plain"))
+            .set_payload(valid_opm)
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: LoadDocumentResponse = test::read_body_json(resp).await;
+        assert_eq!(body.name, "group");
+
+        // 2. Error case: loading an invalid OPM document string
+        let req_invalid = test::TestRequest::put()
+            .uri("/document")
+            .insert_header((actix_web::http::header::CONTENT_TYPE, "text/plain"))
+            .set_payload("invalid ron string content")
+            .to_request();
+        let resp_invalid = app.call(req_invalid).await.unwrap();
+        assert_eq!(resp_invalid.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[actix_web::test]
+    async fn test_delete_document_resets_document_and_undo() {
+        let app_state = Data::new(AppState::default());
+        // Set a dummy undo item to verify history gets cleared
+        app_state
+            .undo_stack
+            .lock()
+            .push_back(Command::Batch(vec![]));
+        assert!(!app_state.undo_stack.lock().is_empty());
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(web::scope("/document").service(delete_document)),
+        )
+        .await;
+
+        let req = test::TestRequest::delete().uri("/document").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+        assert!(app_state.undo_stack.lock().is_empty());
+        assert_eq!(
+            app_state.document.lock().scenery().node_attr().name(),
+            "group"
+        );
+    }
+
+    #[actix_web::test]
+    async fn test_viewport_change_no_op_when_identical() {
+        use opossum_core::types::api_types::{Viewport, ViewportChangeRequest};
+
+        let app_state = Data::new(AppState::default());
+        let graph_id = app_state.document.lock().scenery().node_attr().uuid();
+        let vp = Viewport {
+            graph_id,
+            zoom: 1.0,
+            shift: (0.0, 0.0),
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_viewport_change),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/viewport_change")
+            .set_json(&ViewportChangeRequest {
+                before: vp.clone(),
+                after: vp,
+                coalesce: false,
+                merge_into_previous: false,
+            })
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+        assert!(app_state.undo_stack.lock().is_empty());
+    }
 }

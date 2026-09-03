@@ -133,7 +133,7 @@ impl OpticNode for WaveFront {
                 .unwrap_or_else(|_| Isometry::identity());
             let Ok(Proptype::Bool(remove_tilt)) = self.node_attr.get_property("remove tilt") else {
                 return Err(OpossumError::Analysis(
-                    "cannot read `remove tilt`collimation flag".into(),
+                    "cannot read `remove tilt` flag".into(),
                 ));
             };
             let wf_data_opt =
@@ -190,7 +190,7 @@ impl OpticNode for WaveFront {
                 .create(
                     "Warning",
                     "warning during wavefront calculation",
-                    "This warning might have been created if the Wavefront monitor was used with zero distance from Source or with multiple wavelengths in a completely paraxial setup.".into(),
+                    "This warning might have been created if the wavefront monitor was used with zero distance from Source or with multiple wavelengths in a completely paraxial setup.".into(),
                 )
                 ?;
             }

@@ -37,3 +37,37 @@ impl OpticalProperties {
         }
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::refractive_index::RefrIndexConst;
+
+    #[test]
+    fn test_optical_properties_constructors() {
+        let const_refr = RefrIndexConst::new(1.5).unwrap();
+        let props = OpticalProperties::new(const_refr.into());
+        assert_eq!(
+            props.absorption,
+            crate::absorption::absorption_model::AbsorptionModel::default()
+        );
+
+        // Test constructor with explicit absorption model
+        let custom_absorption = crate::absorption::absorption_model::AbsorptionModel::default();
+        let custom_props = OpticalProperties::with_absorption(
+            RefrIndexConst::new(1.6).unwrap().into(),
+            custom_absorption.clone(),
+        );
+        assert_eq!(custom_props.absorption, custom_absorption);
+    }
+
+    #[test]
+    fn test_optical_properties_serde_roundtrip() {
+        let const_refr = RefrIndexConst::new(1.5).unwrap();
+        let props = OpticalProperties::new(const_refr.into());
+
+        let ron = ron::to_string(&props).expect("serialization failed");
+        let deserialized: OpticalProperties = ron::from_str(&ron).expect("deserialization failed");
+
+        assert_eq!(props, deserialized);
+    }
+}

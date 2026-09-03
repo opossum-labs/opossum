@@ -112,3 +112,25 @@ pub fn start() -> Server {
 
     srv
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::{App, dev::Service, http::StatusCode, test};
+    use opossum_core::types::api_types::ErrorResponse;
+
+    #[actix_web::test]
+    async fn test_not_found_handler_returns_formatted_error() {
+        let app = test::init_service(App::new().default_service(web::route().to(not_found))).await;
+
+        let req = test::TestRequest::get()
+            .uri("/unmapped_endpoint")
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+
+        let error_body: ErrorResponse = test::read_body_json(resp).await;
+        assert_eq!(error_body.status, 404);
+        assert_eq!(error_body.category, "NotFound");
+    }
+}

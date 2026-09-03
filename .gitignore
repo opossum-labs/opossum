@@ -10,6 +10,8 @@
 !playground/.gitkeep 
 .VSCodeCounter
 *.wxs
+# profiling / coverage files
+*.profraw
 profile.json.*
 profile.kernel.etl
 CLAUDE.md
