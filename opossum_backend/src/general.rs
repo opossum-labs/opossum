@@ -1,9 +1,6 @@
 //! General endpoints
-use crate::{app_state::AppState, error::BackEndErrorResponse};
-use actix_web::{
-    HttpResponse, Responder, get, post,
-    web::{self, Json},
-};
+use crate::error::BackEndErrorResponse;
+use actix_web::{Responder, get, web::Json};
 use opossum_core::{
     analyzers::AnalyzerType,
     types::api_types::{NodeType, VersionInfo},
