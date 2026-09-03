@@ -20,9 +20,9 @@ button.
 | Work during funding period | Project start; core graph model and ray-tracing capabilities | Graphical User Interface, amplification modeling, material catalogue |
 
 The GitHub [Milestones](https://github.com/opossum-labs/opossum/milestones) group
-the tracked work; the "Funded work" row links each funding source to the
-milestones and features it financed, making a group's contribution concretely
-traceable.
+the tracked work; the "Work during funding period" row links each funding source
+to the milestones and features it financed, making a group's contribution
+concretely traceable.
 
 ## THRILL
 

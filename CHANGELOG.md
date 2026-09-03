@@ -2,6 +2,8 @@
 
 All notable changes to this project will be documented in this file.
 
+OPOSSUM is funded through THRILL (EU, grant agreement No 101095207) and LASE-FUSE (BMFTR, funding reference 13F1041); see [Funding & Acknowledgments](doc/book/src/concepts/background/funding.md). To cite OPOSSUM, use [`CITATION.cff`](CITATION.cff).
+
 ## [0.7.0] - 2026-02-18
 
 ### Bug Fixes
