@@ -2,6 +2,425 @@
 
 All notable changes to this project will be documented in this file.
 
+OPOSSUM is funded through THRILL (EU, grant agreement No 101095207) and LASE-FUSE (BMFTR, funding reference 13F1041); see [Funding & Acknowledgments](doc/book/src/concepts/background/funding.md). To cite OPOSSUM, use [`CITATION.cff`](CITATION.cff).
+
+## [0.7.3] - 2026-08-14
+
+### <!-- 0 -->Features
+
+- :sparkles: OPM files can now be saved in WASM builds - ([4c37866](https://github.com/opossum-labs/opossum/commit/4c37866b159974f0889cc78d9c7b6c5ea460c7ea))
+
+
+### <!-- 1 -->Bug Fixes
+
+- :bug: Make PortMap survive serde Content-buffering during tolerant node deserialization - ([47cdbfd](https://github.com/opossum-labs/opossum/commit/47cdbfdcbfff9366770574ef83eba33725a5259c))
+
+
+### <!-- 6 -->Miscellaneous Tasks
+
+- :bookmark: bump version 0.7.3 - ([e45e5fa](https://github.com/opossum-labs/opossum/commit/e45e5fa574265df34a7e5b73e9235f09bcc10f6a))
+
+
+## [0.7.2] - 2026-08-06
+
+### <!-- 0 -->Features
+
+- :sparkles: Show warning if a node cannot be placed without a valid optical axis. - ([9ac68d6](https://github.com/opossum-labs/opossum/commit/9ac68d6f87ff4d919f3fb082909fd312e5cc0483))
+
+- :sparkles: Connections that target a reference are now hidden - ([a70c48c](https://github.com/opossum-labs/opossum/commit/a70c48c70cf5be2c57fd5f8d099952f51dfe2ea2))
+
+- :sparkles: Graph is now dragged using the middle mouse button - ([93a06dc](https://github.com/opossum-labs/opossum/commit/93a06dc73393fce6db64ce6fa877219c93ed3a83))
+
+- :sparkles: GUI now checks, if newer version is available - ([dac0872](https://github.com/opossum-labs/opossum/commit/dac0872f6a79886bfebfd0de547e57082edcefda))
+
+- :sparkles: Doubleclick on group nodes opens new tab - ([9857b4a](https://github.com/opossum-labs/opossum/commit/9857b4a95401191561238e1b49cfd00c07872aff))
+
+- :sparkles: Name of group tab changes when group is renamed - ([218d93e](https://github.com/opossum-labs/opossum/commit/218d93ec27d25e0c9490405c3803f5008d79b705))
+
+- :sparkles: Breadcrumbs for group navigation introduced - ([addf75b](https://github.com/opossum-labs/opossum/commit/addf75bf3fd3bccf0d31075f8e135b31248739b3))
+
+- :sparkles: Selection of multiple nodes implemented - ([f31a47a](https://github.com/opossum-labs/opossum/commit/f31a47abca1fb725ea088d8de344e63b4b71e7ae))
+
+- :sparkles: Implemented functionality to convert nodes to a group - ([13fac6d](https://github.com/opossum-labs/opossum/commit/13fac6d6a6bf0fda24b104657216d7d8fd9f4bd2))
+
+- :sparkles: analyzers only aloowed to paste/add in root - ([6f1bd43](https://github.com/opossum-labs/opossum/commit/6f1bd439697d66ce58c711adce272548f7fcdcac))
+
+- :sparkles: Groups can now be copied - ([ec2c821](https://github.com/opossum-labs/opossum/commit/ec2c8214ab5895842ac176c3143e8467ea7098da))
+
+- :sparkles: PortMaps are now visualized in- and outside of groups - ([2bcf0ad](https://github.com/opossum-labs/opossum/commit/2bcf0ad9149633a8da7e18a968e4249420b0cf62))
+
+- :sparkles: Groups can now be used in the GUI - ([54a4fbf](https://github.com/opossum-labs/opossum/commit/54a4fbf6dd109ec9b46393ff93b8603584096c90))
+
+- :sparkles: Cutting out nodes using ctrl+x - ([bb4b95f](https://github.com/opossum-labs/opossum/commit/bb4b95f42c8c73e6ffe47157fbf3eff8f0f3708f))
+
+- :sparkles: Add button to open reports in the browser after the simulation - ([4a70115](https://github.com/opossum-labs/opossum/commit/4a70115eea5d022ad79386a1987826a55f84b68b))
+
+- :sparkles: Add the source port mapping feature to the backend. - ([bf43a11](https://github.com/opossum-labs/opossum/commit/bf43a1164663dcec33505e0adf10948141a9abad))
+
+- :sparkles: Add configuration for optic ports to GUI (so far LIDT & Coating) - ([0c35b5f](https://github.com/opossum-labs/opossum/commit/0c35b5ffa667189bd415fc8931a1b4309333bdd2))
+
+- :sparkles: Add option to skip using SI prefixes in UnitInput component - ([909573e](https://github.com/opossum-labs/opossum/commit/909573e2140b4f7c2389dde0c126e5006002b0b5))
+
+- :sparkles: Added ApertureConfig to PortConfig Editor - ([656cc09](https://github.com/opossum-labs/opossum/commit/656cc090b74d40ab773d88a225937c8f086a0e15))
+
+- :sparkles: Aperture Editor implemented for PortConfig in GUI - ([d0eb8dc](https://github.com/opossum-labs/opossum/commit/d0eb8dcb8cbbc6b64fc70f0053f82ed854d618d7))
+
+- :sparkles: Show error message during gui startup if backend could not be started before. - ([4cde9d9](https://github.com/opossum-labs/opossum/commit/4cde9d9c5329697b740b86202b21dbe98c3a0606))
+
+- :sparkles: The wavefront monitor now has an option to automatically subtract a wavefront tilt. - ([246a1ff](https://github.com/opossum-labs/opossum/commit/246a1ff735e175382b9d5d3cf92ba8381fe81467))
+
+- :sparkles: Do not show standard context menu of the browser in release builds - ([1b22c54](https://github.com/opossum-labs/opossum/commit/1b22c548ddeac7cdf5c5c87dad710db89fa4f873))
+
+- :sparkles: Strongly improve auto layout algorithm - ([81be232](https://github.com/opossum-labs/opossum/commit/81be232a6c9e9d5e938eb7e3a3b41e49202c685b))
+
+- :sparkles: Perform an auto layout if an opm file contains nodes with no GUI coordinates. - ([a9f7afc](https://github.com/opossum-labs/opossum/commit/a9f7afc8af8f74263c82118e0a9017d3e8710e1c))
+
+- :sparkles: Installer bundles now contain some example files. - ([0599f7c](https://github.com/opossum-labs/opossum/commit/0599f7c69deb5d14c428f141cded3f3a780cb380))
+
+- :sparkles: Imrprove handling and serialization of aperture isometries. - ([5a091ab](https://github.com/opossum-labs/opossum/commit/5a091ab4e5f330b48919b7a9ca3dd22e29338475))
+
+- :sparkles: Add application settings dialog - ([3c0c9c0](https://github.com/opossum-labs/opossum/commit/3c0c9c0f5b4ef7fabff7fb61feb2f08f48775a62))
+
+- :sparkles: Significantly improve handling of report directories in gui. - ([568feee](https://github.com/opossum-labs/opossum/commit/568feee8257b90e9674d762d0b17e944b780e979))
+
+- :memo: Documentation: Fluence.md - ([5e77bba](https://github.com/opossum-labs/opossum/commit/5e77bba63e46d22930b5073452bb956a0b61d76c))
+
+- :memo: Documentaion: workshop_11_ghostfocus.rs - ([281c76c](https://github.com/opossum-labs/opossum/commit/281c76cfa128e3d2caf07df93ac95c3a5bb11a87))
+
+- :sparkles: - ([808a078](https://github.com/opossum-labs/opossum/commit/808a078c2ddca1c476a610c63828e6145a80b9ed))
+
+- :sparkles: Add missing editor for Vec3 property type. - ([460b0b3](https://github.com/opossum-labs/opossum/commit/460b0b360cd91b5024e3b58b5424d184ae96695f))
+
+- :sparkles: Reading spectrum from csv file is now much more tolerant. - ([f795e38](https://github.com/opossum-labs/opossum/commit/f795e382d0ed40de9d0ba54d5f97ecabe7b33909))
+
+- :sparkles: Make reading of model files more fault tolerant. - ([5bf5ea6](https://github.com/opossum-labs/opossum/commit/5bf5ea6d8c42b69ecbbaf0445924bcc9c59cf997))
+
+- :sparkles: Add a refresh button to re-synchronize frontend and backend. - ([24fb4c1](https://github.com/opossum-labs/opossum/commit/24fb4c118d09c3b0e9fb365fdb8a1c1d2150d558))
+
+
+### <!-- 1 -->Bug Fixes
+
+- :bug: Return an error when connecting an already mapped port - ([1ee507a](https://github.com/opossum-labs/opossum/commit/1ee507a903d42d1afb422d41edfebcb6799a39bb))
+
+- :bug: Setting editor size when opening a new project - ([4fc2604](https://github.com/opossum-labs/opossum/commit/4fc26043240164a473a2eb818450cbce2bb6a059))
+
+- :bug: Remove edge when not connected correctly - ([e676654](https://github.com/opossum-labs/opossum/commit/e676654554247e6a2739372400f628e05ba8c6e8))
+
+- :bug: Deactive nodes when clicking on an edge input field - ([7b3dba3](https://github.com/opossum-labs/opossum/commit/7b3dba3b3a8cd31ff7781dfb9954a57413e6efd9))
+
+- :bug: GUI fast again when adding lots of nodes - ([971b6ce](https://github.com/opossum-labs/opossum/commit/971b6ceacf4d141490ee55122725d2c700f5747d))
+
+- :bug: Fixed missing edges when set of nodes is pasted into another group - ([a9128ea](https://github.com/opossum-labs/opossum/commit/a9128ea557af71c51e3450f580296979237dae48))
+
+- :bug: Removed infinite recursion and deadlocks when copying grouped groups/references - ([c130594](https://github.com/opossum-labs/opossum/commit/c13059496ca6f1b30ec0baf1e8cb98db1ba8235d))
+
+- :bug: Stabilized drop into group of nodes - ([2ed9406](https://github.com/opossum-labs/opossum/commit/2ed9406a97a23d4f5c08bdeb3f5b605d0ee113ac))
+
+- :bug: OPM files with nested groups serialize correctly again - ([88746fb](https://github.com/opossum-labs/opossum/commit/88746fb3b61229173d2f04206cab774a8cc1e050))
+
+- :bug: Using correct angle when setting grating alignment via littrow - ([b2ca217](https://github.com/opossum-labs/opossum/commit/b2ca217375f738cf7c84ed875315f80c484d89c4))
+
+- :bug: Fix panic in OpticNode::update_surface - ([7c0b675](https://github.com/opossum-labs/opossum/commit/7c0b675296621e544b72c9dbf591fb27f3688d6e))
+
+- :bug: properties usable again in GUI after backend refactor - ([1dfb552](https://github.com/opossum-labs/opossum/commit/1dfb552b5507e6da6afc4549c9aafff972c85c2d))
+
+- :bug: References nods are now renamed when original node name changes - ([b0c53c4](https://github.com/opossum-labs/opossum/commit/b0c53c406f97022b23a2674f1b441ac6e5211db9))
+
+- :bug: Do set file to status "needs saving" if centered or "zoom to fit". - ([88b9410](https://github.com/opossum-labs/opossum/commit/88b9410ec8daf35a9ff723972eb6af76018b2cb1))
+
+- :bug: Fix wrong client API while deleting an analyzer. - ([198f5f3](https://github.com/opossum-labs/opossum/commit/198f5f3cb6016bcc4073adce0eced3c9198c4a2b))
+
+- :bug: Fix wrong handling og apertures in GUI. - ([1292f1f](https://github.com/opossum-labs/opossum/commit/1292f1f955b7c00dbd799580f4bf9813553bf23c))
+
+- :bug: Fix missing field name in edge distance input. - ([79e10a4](https://github.com/opossum-labs/opossum/commit/79e10a45b17159710d6394c7bf577a70ff3a26d4))
+
+- :bug: Fix random order of analysis reports - ([90f8b0d](https://github.com/opossum-labs/opossum/commit/90f8b0df0abdee046940c216d64bb643f979dcb1))
+
+- :bug: Fix converting a set of selected nodes to a group. - ([fa1f587](https://github.com/opossum-labs/opossum/commit/fa1f5874e328a26b80814523a1c1a4c7638987dd))
+
+- :bug: Do not show `create reference` in context menu if multiple nodes are selected. - ([91b2fc5](https://github.com/opossum-labs/opossum/commit/91b2fc5fbff31a04844bfea07788bb56d2867672))
+
+- :arrow_up: Update major version of vergen-git2 crate and update code accordingly. - ([ab94dfd](https://github.com/opossum-labs/opossum/commit/ab94dfd879793707dd0dc832e750d6d2af63adf3))
+
+- :bug: Improve auto layout algorithm to further reduce connection crossings. - ([95dc161](https://github.com/opossum-labs/opossum/commit/95dc161b5c4a106826bcac869a518086913d9700))
+
+- :bug: Fix missing highlighting and Cancel functionality in Settings dialog. - ([6892847](https://github.com/opossum-labs/opossum/commit/689284726a21c86c824ac294619b3460a1b6c0cb))
+
+- :bug: Fix missing "needs saving" if port configuration of a node was changed. - ([858c2bc](https://github.com/opossum-labs/opossum/commit/858c2bc5a659051b33c2dbb93e92970a1c66723e))
+
+- :bug: Fix that SourcePort did not consider apertures at output port. - ([d32151d](https://github.com/opossum-labs/opossum/commit/d32151d5849c3afb9fb4b54c653bf332a78d3166))
+
+- :bug: Fix layout problem in node report (accordion collapse) - ([1b3d2f6](https://github.com/opossum-labs/opossum/commit/1b3d2f665b38823ca886de4380bbb1a5d384f82a))
+
+- :bug: Fix error in sequential convert_to_group calls. Improve filtering out analyzer nodes from selection. - ([ba1a960](https://github.com/opossum-labs/opossum/commit/ba1a96053c585c5d0a387afa6e5676f370513ae9))
+
+- :bug: Fix failing convert_to_group with more than one external connections. - ([342f5d3](https://github.com/opossum-labs/opossum/commit/342f5d363d79e87e1bc80d9d188cfcac1da73f96))
+
+- :bug: Removing port map now only deletes correct connection - ([747a451](https://github.com/opossum-labs/opossum/commit/747a451195f0f8222fcf1f392a7c18e6f7865d06))
+
+- :bug: Fix missing connection cleanup if nested nodes are deleted. - ([cd67a3e](https://github.com/opossum-labs/opossum/commit/cd67a3e9d1541cbecd5bc3566e8fc73bd3d5e8e6))
+
+- :bug: Do not show menu entry Quit for web builds. - ([f4b7dc9](https://github.com/opossum-labs/opossum/commit/f4b7dc9beab7dfc409567d7a5c14d013b2381be2))
+
+- :bug: Fix stale reference-node ports after a group's port mapping changes - ([a444389](https://github.com/opossum-labs/opossum/commit/a444389fa30f030cf0449f8f1461647c96c3c6ce))
+
+- :bug: Forbid nesting a reference node inside the group it refers to - ([cfd403e](https://github.com/opossum-labs/opossum/commit/cfd403ecaa78792573bc34c79357233a9ecfec43))
+
+- :bug: Fix compile / runtime errors in WASM builds - ([0233d02](https://github.com/opossum-labs/opossum/commit/0233d02eeff84189cfe9f16b5abf13d65d3398ea))
+
+- :bug: Move aperture accordion auto-open out of use_memo, scope it per port - ([1004e7a](https://github.com/opossum-labs/opossum/commit/1004e7a0837013012741cd8714a66a5d6784c01d))
+
+- :bug: Refresh analyzer source-port card list on undo/redo - ([f21b951](https://github.com/opossum-labs/opossum/commit/f21b951582d9dbec4fdbb4afe0e8fb9a14363e2b))
+
+
+### <!-- 2 -->Refactor
+
+- :recycle: Remove "synthetic" input port from Source node. - ([1c5a483](https://github.com/opossum-labs/opossum/commit/1c5a483a2f7d7115a6658f0ef08b24921ffe27b4))
+
+- :recycle: Implement From<Ray> for Rays to simplify various code locations - ([d316b3f](https://github.com/opossum-labs/opossum/commit/d316b3fb5ac8d5869c40dcb275e0c5e684497109))
+
+- :recycle: Remove center param from HexagonalTiling, moved to SourceIsometry - ([e95e9d9](https://github.com/opossum-labs/opossum/commit/e95e9d9c25976e9ea38a005c193d8cac4cc14479))
+
+- :recycle: Move all distribution functions to a common module. - ([f0a9989](https://github.com/opossum-labs/opossum/commit/f0a9989e641f76b36fe8a46f551329f9a0b757cb))
+
+- :recycle: Move OpticNode to core_optics - ([d77fa9c](https://github.com/opossum-labs/opossum/commit/d77fa9c91c088fdd9441d7b4439efb78c693c09e))
+
+- :recycle: Move OpticPorts to core_optics module - ([37aa45b](https://github.com/opossum-labs/opossum/commit/37aa45bfd42ffe8cec1d4d4361e2ff8240505322))
+
+- :recycle: Heavily change module hierachy. - ([cf50764](https://github.com/opossum-labs/opossum/commit/cf50764bc48a65781344b279d9edd09ebfe0c89b))
+
+- :recycle: Heavily refactor optical port configuration. - ([93c443e](https://github.com/opossum-labs/opossum/commit/93c443ef00de20aa0878bc1fe8aa4230e9d1003f))
+
+- :art: Improve structure of opm file format - ([43374f5](https://github.com/opossum-labs/opossum/commit/43374f5c87ec87342c3a0ef688c72f9a009c69f5))
+
+- :recycle: Only passing on readSignals for GraphStore, GraphState, EditorState and Workspace - ([4af9a2a](https://github.com/opossum-labs/opossum/commit/4af9a2a50572015ef6dc8b09ceafa680c2ea5c5d))
+
+- :recycle: Gui state structs are now implementes as dioxus stores - ([5034bba](https://github.com/opossum-labs/opossum/commit/5034bba11ac2c25b2afbb890b93ddfe399afd05b))
+
+- :recycle: Imrpvoe various unit tests by removing unwrap() - ([632d4d5](https://github.com/opossum-labs/opossum/commit/632d4d5a558f465e591e84c148daa0e212afeafc))
+
+- :recycle: Get rid of several unwrap() statements. - ([b09af85](https://github.com/opossum-labs/opossum/commit/b09af85e46a9a2469099714c4b0a373ac64b5b4e))
+
+- :recycle: Heavily refacotr backend REST API - ([570abe9](https://github.com/opossum-labs/opossum/commit/570abe975bca31050fcbbd143001fa1688d3379e))
+
+- :recycle: Imrpove handling of validated values for RefrIndexConst. - ([02a5740](https://github.com/opossum-labs/opossum/commit/02a574093f9a3979a1c9027f0e54036d564cac6e))
+
+- :recycle: Use Ratio::percent for coating reflectivity - ([7854dfc](https://github.com/opossum-labs/opossum/commit/7854dfccb5ce86dfe7ec8c89b18c359cb30835f7))
+
+- :recycle: Use Ratio for FilterType::Constant value. - ([f7b00c5](https://github.com/opossum-labs/opossum/commit/f7b00c50ae620f370c7a7aa9c0a19435ad4a3b8a))
+
+- :recycle: OpticNode::node_report() now returns an OpmResult for better error handling. - ([0a8cfee](https://github.com/opossum-labs/opossum/commit/0a8cfee72e23efa52f3dc5eb5093f3761830268b))
+
+- :recycle: Clean up responsibilitites and internal logic of WaveFrontMaps. - ([270ac8d](https://github.com/opossum-labs/opossum/commit/270ac8d0b94d48efbde7073ec151b37a942932b7))
+
+- :recycle: Remove id from AnalyzerInfo - ([8c8f8da](https://github.com/opossum-labs/opossum/commit/8c8f8dace0c84b4f4341d80ae43b069e5bf7eea6))
+
+- :rotating_light: Fix various linter warnings - ([2ea6222](https://github.com/opossum-labs/opossum/commit/2ea6222ff78cb49cf92ab102c498d7369c6339d9))
+
+- :recycle: Extend OpmNode macro to include boiler plate impls for NodeAttr. - ([efbdffd](https://github.com/opossum-labs/opossum/commit/efbdffd7eeb12ee1120914dd8fdbf2639a4198e0))
+
+- :recycle: Heavily refactored OpticNode trait by intorduction of extension traits and blanket implementations - ([22ea123](https://github.com/opossum-labs/opossum/commit/22ea1237aa860f16ce0af4d954cab7500681eb4e))
+
+
+### <!-- 4 -->Documentation
+
+- :memo: Document example workshop_02_kepler_real_lenses_chromatism.rs - ([5bfdab8](https://github.com/opossum-labs/opossum/commit/5bfdab8150cfba39c61046271bd2a3869e83c2aa))
+
+- :memo: Edit docs- Delete option, selecting Nodes, Numeric Values - ([0ad4bea](https://github.com/opossum-labs/opossum/commit/0ad4beaf14ee083cec08b0b7963a0fd825aa18ca))
+
+- :memo: Doc Update : Software Architecture - ([29083b1](https://github.com/opossum-labs/opossum/commit/29083b16ae82914df63a9bcdaf23d86e9aef0958))
+
+- :memo: corrected spacing and typo errors - ([15dffb6](https://github.com/opossum-labs/opossum/commit/15dffb62ddccbb6ae2103d8754fcc2e0a0ce6efe))
+
+- :memo: Document example workshop_00_kepler_paraxial.rs - ([daf3900](https://github.com/opossum-labs/opossum/commit/daf3900521d57303f53acea9ed1f44e15ca3de89))
+
+- :memo: Document example workshop_01_kepler_real_lenses.rs - ([f3a679f](https://github.com/opossum-labs/opossum/commit/f3a679fa21f2d61ede275ee93b985e4aa287bf8c))
+
+- :memo: #1005 Documentation: workshop_03_kepler_real_lenses_wavefront.rs - ([91722ed](https://github.com/opossum-labs/opossum/commit/91722ed453c4e35dc915c2ee4dc289c30615d456))
+
+- :memo: #1007 Document example workshop_04_kepler_real_lenses_imaging_point.rs - ([b4fed01](https://github.com/opossum-labs/opossum/commit/b4fed01d09ebc053230b85008df27865ae20a724))
+
+- :memo: #1009#1007 Document example workshop_04_kepler_real_lenses_im…#1008 - ([6b654e9](https://github.com/opossum-labs/opossum/commit/6b654e91909137079c0cf26f965156dd3526e6fe))
+
+- :memo: #1009 Documentation: workshop_05_kepler_real_lenses_imaging_field.rs - ([ff2ce98](https://github.com/opossum-labs/opossum/commit/ff2ce98dd2dc61b06a2fbf12d46c2a08142f0d5e))
+
+- :memo: #1011:DOC .workshop_06_geometry_mirrors.rs - ([9513173](https://github.com/opossum-labs/opossum/commit/9513173b2af63d6352109dcc3111273d9d534585))
+
+- :memo: #1013workshop_07_geometry_shifted_lens.rs - ([399182c](https://github.com/opossum-labs/opossum/commit/399182c4596828fae5dd28d86b04f7b71891c054))
+
+- :memo: #1013_workshop_07_geometry_shifted_lens.rs - ([73727f9](https://github.com/opossum-labs/opossum/commit/73727f958dfccb07e5e87710bf686aa54e7cc36b))
+
+- :memo: #1015_workshop_08_reference_node.rs - ([cc1630a](https://github.com/opossum-labs/opossum/commit/cc1630a1df7c4ab266130306273ffe5d56db7d18))
+
+- :memo: #1017_workshop_09_phelix.rs - ([6dbdea8](https://github.com/opossum-labs/opossum/commit/6dbdea8e455221f474633efa6f415144d4584471))
+
+- :memo: Documentation : workshop_10_multi_path.rs - ([8c5fd86](https://github.com/opossum-labs/opossum/commit/8c5fd8674dc618e3ca9cbffced56089bbdb315ba))
+
+- :memo: Update documentation of backend API data types. - ([d82a6f0](https://github.com/opossum-labs/opossum/commit/d82a6f05dc277c59e4dc5b0abcd3c28f2bfd62d6))
+
+- :memo: Documentation and a brief description of the available position distributions. - ([d57b57b](https://github.com/opossum-labs/opossum/commit/d57b57bff70a626e5e1700261aa17cf7fc732dff))
+
+- :memo: #1022 Documentation and a brief description of the available position distributions. - ([6e114fc](https://github.com/opossum-labs/opossum/commit/6e114fc020c15fda1a71f27d1bd350bc18dd80c0))
+
+- :memo: Docuentation : Source port.md - ([84d9d3d](https://github.com/opossum-labs/opossum/commit/84d9d3d6bf7f16b3af1bd8b5577fa2042bcb1adf))
+
+- Documentation : Wavefront Monitor.md - ([1857ee8](https://github.com/opossum-labs/opossum/commit/1857ee8840d7a05cce3ed0a7cd9b39ec21dae657))
+
+- :memo: Update handbook. - ([d06fd64](https://github.com/opossum-labs/opossum/commit/d06fd64d1a8782ed557a521a5d3a64a864b9bb28))
+
+- :memo: Documentation:source_port - ([67744bc](https://github.com/opossum-labs/opossum/commit/67744bc3fa1d616a4c1041a0b20c6eb04b7a3043))
+
+- :memo: Documentation: Saving_options.md - ([b0ba981](https://github.com/opossum-labs/opossum/commit/b0ba981278cde3a0e1e7e2d20991db2e635b5f95))
+
+- :memo: Documentation : Generating the Handbook - ([99e1f0a](https://github.com/opossum-labs/opossum/commit/99e1f0a5a0bc274d99505a405cbd9a5042ffc9d5))
+
+- Documentation : Groups - ([279227d](https://github.com/opossum-labs/opossum/commit/279227d7e6297af53a61b11497e41f8e2967b2d6))
+
+- documentation: saving_options - ([9d5a595](https://github.com/opossum-labs/opossum/commit/9d5a5952c7913c33727484a196a32d4253ceece9))
+
+- :memo: Doc update - ([1dd31d7](https://github.com/opossum-labs/opossum/commit/1dd31d7c6013388caea0ba5499d52e9ce7d36fe5))
+
+- :memo: Docs: Analyzers (updated ) - ([cf8eace](https://github.com/opossum-labs/opossum/commit/cf8eaced503a6e9943b123d851ce5184d4515d91))
+
+- :memo: docs: energy_distribution - ([2ab266e](https://github.com/opossum-labs/opossum/commit/2ab266ea520f6f8b6026904a38069ae7484928ca))
+
+- :memo: Docs: Analyzers (updated) - ([5cd14d9](https://github.com/opossum-labs/opossum/commit/5cd14d9eddb142b365c4326acc8934ee3f0e62ac))
+
+- :memo: Docs: spectral_distribution - ([a49f793](https://github.com/opossum-labs/opossum/commit/a49f793c0590dfe99ddb9f3bd6864890cb4c83a9))
+
+
+### <!-- 5 -->Testing
+
+- :white_check_mark: Add some unit tests for apertures. - ([86af1fa](https://github.com/opossum-labs/opossum/commit/86af1faa161453f0ea3c635fc5fad7ea47c3140c))
+
+- :test_tube: Add basic gui testing using playwright - ([8d69101](https://github.com/opossum-labs/opossum/commit/8d691017bc611d04b29545c40c24927e15106af2))
+
+
+### <!-- 6 -->Miscellaneous Tasks
+
+- :arrow_up: Update dependencies. - ([660f320](https://github.com/opossum-labs/opossum/commit/660f32047e88d029a2ae97fe3ada15a56b4fbf6f))
+
+- :arrow_up: Update dependencies with less strict version requirements. - ([bbf25ec](https://github.com/opossum-labs/opossum/commit/bbf25ec2ad3677a006c4a8c9f00b4bb99b316bf4))
+
+- :bookmark: Bump version number to 0.7.2 - ([c92698a](https://github.com/opossum-labs/opossum/commit/c92698ac1510059d02ff23b4996f24a242bddb12))
+
+
+### ConvertToGroup
+
+- Add guard if given node selection is empty. - ([3fcd1e7](https://github.com/opossum-labs/opossum/commit/3fcd1e72f5c052aa9ed1e777b90840cf4861a1de))
+
+
+### Build
+
+- :rocket: Fix application icon for debian pacakges - ([db48bba](https://github.com/opossum-labs/opossum/commit/db48bba04c92d8bc5ce8f3346e22dba0992e1c12))
+
+
+## [0.7.1] - 2026-03-16
+
+### <!-- 0 -->Features
+
+- :sparkles: node and node_recursive functions now also return group itself if id matches - ([663de18](https://github.com/opossum-labs/opossum/commit/663de1819f6515c5d0a4f6155d74334b021e372b))
+
+- :sparkles: Wavefront monitor now considers beam distortion - ([61d6c98](https://github.com/opossum-labs/opossum/commit/61d6c98bb7427e7a854f09f84011d906a44a384a))
+
+- :sparkles: Add function to find all source port nodes in a scenery. - ([6b35f2f](https://github.com/opossum-labs/opossum/commit/6b35f2f39e7214934359e798b9f3c2ffff0823c5))
+
+- :sparkles: SpotDiagram: show warning in report if used in EnergyAnalysis. - ([af6f2da](https://github.com/opossum-labs/opossum/commit/af6f2dac06cfe8bfee941d774137030cdec27553))
+
+
+### <!-- 1 -->Bug Fixes
+
+- :bug: delete_node now returns all node ids - ([7ef1a92](https://github.com/opossum-labs/opossum/commit/7ef1a9288f49f1b403e54e532c5cd6381d007d8e))
+
+- :bug: rewrote usages of node recursive - ([b281845](https://github.com/opossum-labs/opossum/commit/b281845ddf427e90461fe299034e374ffdc1fa70))
+
+- :bug: Roll/Pitch/Yaw notation corrected - ([2b7f34f](https://github.com/opossum-labs/opossum/commit/2b7f34fd0dab01c6de8db38e5dee1aca42bccb86))
+
+- :bug: Fixed to consistently apply changes in CurvatureEditor - ([1c08c95](https://github.com/opossum-labs/opossum/commit/1c08c9513cb68cdbaa0705e2fb4a7cc6be0cdf9a))
+
+- :bug: dropdown scrollbar is now always visible - ([51fc9a4](https://github.com/opossum-labs/opossum/commit/51fc9a4ef8ac53563cc513cc304df70eada56efe))
+
+- :bug: Images displayed again in report - ([6d77c8d](https://github.com/opossum-labs/opossum/commit/6d77c8d7ddf221426c0410a0b58e32545cb30487))
+
+- :bug: DIrectly nested portmaps are now displayed correctly in dot - ([da934c0](https://github.com/opossum-labs/opossum/commit/da934c092e123bb3eae2ff492cdaa833feae77af))
+
+- :bug: Inverting groups now work as intended again - ([6df41c1](https://github.com/opossum-labs/opossum/commit/6df41c1ca1992092b86ce64eb795129f6bb88061))
+
+- :bug: Fixed helper function point_ray_source - ([020e5b0](https://github.com/opossum-labs/opossum/commit/020e5b0f4ff80cbe4f0827db397d77088ec8926e))
+
+- :bug: fixed point_Ray_source helper function - ([9011da9](https://github.com/opossum-labs/opossum/commit/9011da9c371a4c384b58a75d1c173211e90cbb32))
+
+- :bug: Reference-node names change when original node name changes - ([3df01a1](https://github.com/opossum-labs/opossum/commit/3df01a181baa2d1c318d61852693f85b343a51ac))
+
+- :bug: Beam splitter ports in dot are positioned correct again - ([e3f4b46](https://github.com/opossum-labs/opossum/commit/e3f4b4660f1756e9fcfd43f81744ed16f749db53))
+
+- :bug: Beam combiner merges spectra correctly again - ([e7b9e74](https://github.com/opossum-labs/opossum/commit/e7b9e74cb3c93db4177968d65227a5ba6826aa31))
+
+- :bug: Laser lines are now correctly displayed when combined - ([073db18](https://github.com/opossum-labs/opossum/commit/073db1841e700d268eb9499ce73230ab8a9be9f0))
+
+- :bug: ray tracing plot after ghost focus shpwing again - ([502741d](https://github.com/opossum-labs/opossum/commit/502741d615601d4cdef47a23b4f54a0f88d3c84f))
+
+- :bug: Fix smooth spectrum curve. - ([c0fb911](https://github.com/opossum-labs/opossum/commit/c0fb911e6b6838c52b6840248c3264af5a564291))
+
+
+### <!-- 2 -->Refactor
+
+- :recycle: Model_modified_signal is now completely handled via EventHandlers - ([854f80d](https://github.com/opossum-labs/opossum/commit/854f80d89be7c0dbd03ad3535e54e14001221b70))
+
+- :art: A change of model_file_path is now propagated with EventHandlers - ([d267d3c](https://github.com/opossum-labs/opossum/commit/d267d3c98e32ad58722f98ce3005f15a2290a97b))
+
+- :art: Context Menu signal now changed via EventHandlers - ([b83def3](https://github.com/opossum-labs/opossum/commit/b83def38c088bed5e027e77f717483327af85b95))
+
+- :art: Connection changes from GUI now pass the group id - ([0225aa4](https://github.com/opossum-labs/opossum/commit/0225aa44212652bcd181f310f1fb4ced4a3475a2))
+
+- :recycle: Heavily refactor Analysis trait code. - ([c946ef0](https://github.com/opossum-labs/opossum/commit/c946ef00fc9d660fb1a7268b6ea96fe500e9163c))
+
+- :recycle: Remove no longer needed OpticNode::get_lightdata_mut trait function. - ([bdc9554](https://github.com/opossum-labs/opossum/commit/bdc95543cdf1134efdae99ba84dbad7537878474))
+
+- :recycle: Replace all source helper functions by corrspeonding builder functions. - ([22b994e](https://github.com/opossum-labs/opossum/commit/22b994e5cefdb69925cc6c981bcfb84daa997ead))
+
+- :recycle: Make analyzer configs source mappings consistent - ([999dc47](https://github.com/opossum-labs/opossum/commit/999dc475b76b0d5dcbda4653c5c704873dc30934))
+
+- :recycle: Drastically reducing opm file size in fluence_test example - ([0c071f5](https://github.com/opossum-labs/opossum/commit/0c071f591f2ef4347c211d12d96dfc6195695b2f))
+
+- :recycle: Improve structure of Ray <-> Rays::refract_onsurface - ([2be2bf7](https://github.com/opossum-labs/opossum/commit/2be2bf7e11553ca426e4735db80fa850a1a081aa))
+
+- :recycle: Heavily refactor IdealFilter node and reorganize filter definitions. - ([1ea16e3](https://github.com/opossum-labs/opossum/commit/1ea16e304d8e8cfd1554fc30318af3033cf1eaf0))
+
+- :recycle: Remove unnecessary functions in Lens and Cylindric Lens. - ([3e29a61](https://github.com/opossum-labs/opossum/commit/3e29a6197ac407b2ca50aeac4a14862722f7eaeb))
+
+- :recycle: Heavily refactored Analysis::ghostfocus.rs - ([2bb07fb](https://github.com/opossum-labs/opossum/commit/2bb07fb192738aabb12cde868fb7fda03c32f085))
+
+
+### <!-- 4 -->Documentation
+
+- :memo: Add download badge to README.md - ([b354e79](https://github.com/opossum-labs/opossum/commit/b354e794c7a4ce7b1e7ef4d29de72c5f7736aa40))
+
+- :memo: Fix broken screenshot link in README.md - ([d7c24ac](https://github.com/opossum-labs/opossum/commit/d7c24ac46daf7a338dd58e4d1114f8689b1fbcd2))
+
+- :memo: Update all core library examples to use SourcePort now. - ([77c7d5f](https://github.com/opossum-labs/opossum/commit/77c7d5fb63f8b5ad18a15aba22960bca059dc6c6))
+
+
+### <!-- 5 -->Testing
+
+- :white_check_mark: Add unit test for checking correct handling of ray position history. - ([c85b4b4](https://github.com/opossum-labs/opossum/commit/c85b4b4cc212a09d2882fad8256e837cb89439a0))
+
+
+### <!-- 6 -->Miscellaneous Tasks
+
+- :bookmark: bump version 0.7.1 - ([7f8ff14](https://github.com/opossum-labs/opossum/commit/7f8ff1439e5ecbeae0413454b32e64ab75eb4d9a))
+
+
+### NodeGroup
+
+- :node() now rtruns the group itself if it matches the searched for uuid - ([7efd9a8](https://github.com/opossum-labs/opossum/commit/7efd9a81c78c791e62b9117678ff58efa7548d1f))
+
+
+### Styling
+
+- :lipstick: Improve layout of automatic changelog generation - ([2af01c0](https://github.com/opossum-labs/opossum/commit/2af01c0116b45e7e9d8d53cd43376bd3b4cfb8e5))
+
+
 ## [0.7.0] - 2026-02-18
 
 ### Bug Fixes

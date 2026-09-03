@@ -17,6 +17,7 @@
     - [OpticAnalyzer](./concepts/background/opticanalyzer.md)
     - [Existing software](./concepts/background/existing_software.md)
     - [Project plan](./concepts/background/plan.md)
+    - [Funding & Acknowledgments](./concepts/background/funding.md)
   - [Model geometry](./concepts/geometry.md)
 - [Tutorial](./tutorial/tutorial.md)
   - [Installation](./tutorial/installation.md)

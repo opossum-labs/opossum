@@ -144,6 +144,23 @@ We use the standard GitHub "Fork & Pull Request" workflow.
 
 By contributing, you agree that your contributions will be licensed under the project's [LICENSE-GPLv3](LICENSE) license.
 
+## 💶 Funding & Acknowledgments
+
+OPOSSUM is developed as open-source research software financed through several
+externally funded projects:
+
+* **THRILL** — OPOSSUM was started as a task within the [THRILL project](https://www.thrill-project.eu/)
+  (Technology for High-Repetition-rate Intense Laser Laboratories). *This project has
+  received funding from the European Union under grant agreement No 101095207.*
+* **LASE-FUSE** — Continued development is supported by LASE-FUSE (LAser Simulation for
+  Enhanced FUSion Efficiency), funded by the German Federal Ministry of Research,
+  Technology and Space (BMFTR), funding reference 13F1041.
+
+See the handbook's [Funding & Acknowledgments](doc/book/src/concepts/background/funding.md)
+page for per-project attribution and which milestones each project financed. To cite
+OPOSSUM, use the [`CITATION.cff`](CITATION.cff) file (GitHub's "Cite this repository"
+button).
+
 ## 📄 License
 
 OPOSSUM is published under a [GPLv3](LICENSE) license.

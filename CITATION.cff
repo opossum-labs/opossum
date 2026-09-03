@@ -1,0 +1,45 @@
+# This CITATION.cff makes OPOSSUM citable and powers GitHub's
+# "Cite this repository" button. Format: Citation File Format 1.2.0
+# (https://citation-file-format.github.io/).
+#
+# NOTE: CFF 1.2.0 has no native funding field. Funding sources (THRILL and
+# further projects) are documented in the handbook's Funding section and in
+# README.md, not here. See doc/book/src/concepts/introduction/funding.md.
+cff-version: 1.2.0
+title: >-
+  OPOSSUM — Open-source Optics Simulation Software and Unified Modeler
+message: >-
+  If you use this software, please cite it using the metadata from this file.
+  OPOSSUM was started within the EU project THRILL (Technology for High-Repetition-rate Intense Laser Laboratories) and is further supported by
+  BMFTR-funded project LASE-FUSE (LAser Simulation for Enhanced FUSion Efficiency); see the Funding section of the handbook for details.
+type: software
+authors:
+  - given-names: Udo
+    family-names: Eisenbarth
+    email: u.eisenbarth@gsi.de
+    affiliation: GSI Helmholtzzentrum für Schwerionenforschung GmbH, Plasma physics group / PHELIX
+    orcid: 'https://orcid.org/0009-0001-0168-5932'
+  - given-names: Yannik
+    family-names: Zobus
+    email: y.zobus@gsi.de
+    affiliation: GSI Helmholtzzentrum für Schwerionenforschung GmbH, Plasma physics group / LASE-FUSE
+    orcid: 'https://orcid.org/0000-0002-0559-1167'
+abstract: >-
+  OPOSSUM is an open-source simulation platform for optical systems, with a
+  special focus on designing and analyzing large-scale, high-energy/intensity
+  laser systems. An optical setup is modeled as a graph whose nodes are optical
+  components and whose edges are light connections between component ports; the
+  graph can be processed by different analyzer modules (energy flow, ray
+  tracing, ghost-focus analysis) that each produce a report.
+keywords:
+  - optics
+  - laser
+  - simulation
+  - ray-tracing
+  - optical-design
+  - rust
+repository-code: 'https://github.com/opossum-labs/opossum'
+url: 'https://github.com/opossum-labs/opossum'
+license: GPL-3.0-or-later
+version: 0.7.3
+date-released: '2026-08-14'
