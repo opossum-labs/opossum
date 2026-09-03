@@ -1,9 +1,14 @@
 use crate::components::{
-    inputs::material_selector::MaterialSelector, node_editor::{
-        analyzer_node_editor::{light_data_editor::default_ray_data_source, source_port_card::SourcePortCard}, inputs::{
+    inputs::material_selector::MaterialSelector,
+    node_editor::{
+        analyzer_node_editor::{
+            light_data_editor::default_ray_data_source, source_port_card::SourcePortCard,
+        },
+        inputs::{
             input_components::{FlushableTextInput, LabeledSelect},
             select_options_from_enum_iterator,
-        }, node_config_editor::{NodeChangeAction, NodeChangeEvent},
+        },
+        node_config_editor::{NodeChangeAction, NodeChangeEvent},
     },
 };
 use dioxus::prelude::*;

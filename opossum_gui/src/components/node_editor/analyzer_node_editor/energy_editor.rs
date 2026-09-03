@@ -66,13 +66,13 @@ fn SourcePortCard(
     super::use_source_card_focus(analyzer_id, port_uuid, is_collapsed);
 
     let existing_source = energy_config
-    .read()
-    .get_source(&port_uuid)
-    .cloned()
-    .unwrap_or_else(|| {
-        let default_wvl = crate::APP_CONFIG.read().default_wavelength();
-        default_energy_data_builder(default_wvl)
-    });
+        .read()
+        .get_source(&port_uuid)
+        .cloned()
+        .unwrap_or_else(|| {
+            let default_wvl = crate::APP_CONFIG.read().default_wavelength();
+            default_energy_data_builder(default_wvl)
+        });
 
     rsx! {
         div {

@@ -1,6 +1,7 @@
-use crate::components::node_editor::{analyzer_node_editor::light_data_editor::apply_default_wavelength_to_ray_source, inputs::{
-    input_components::LabeledSelect, select_options_from_enum_iterator,
-}};
+use crate::components::node_editor::{
+    analyzer_node_editor::light_data_editor::apply_default_wavelength_to_ray_source,
+    inputs::{input_components::LabeledSelect, select_options_from_enum_iterator},
+};
 use dioxus::prelude::*;
 use opossum_core::{
     light::Rays, prelude::RayDataSource, utils::default_from_name::DefaultFromName,

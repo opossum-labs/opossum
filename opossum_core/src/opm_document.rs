@@ -23,13 +23,13 @@ use indexmap::IndexMap;
 use log::{info, warn};
 use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
-use uom::si::f64::Length;
 use std::{
     collections::HashSet,
     fs::{self, File},
     io::Write,
     path::Path,
 };
+use uom::si::f64::Length;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -374,7 +374,7 @@ impl OpmDocument {
             analyzer_type,
             gui_position: None,
             pump_scenarios: Vec::new(),
-            default_wavelength: None
+            default_wavelength: None,
         };
         self.analyzers.insert(id, analyzer_info);
         id
@@ -390,7 +390,7 @@ impl OpmDocument {
             analyzer_type,
             gui_position,
             pump_scenarios: Vec::new(),
-            default_wavelength: None
+            default_wavelength: None,
         };
         self.analyzers.insert(id, analyzer_info);
         id

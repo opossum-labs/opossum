@@ -81,28 +81,22 @@ fn get_node_analyzer_attr_from_state(
 
 /// Creates a default `EnergyDataBuilder` optionally configured with a custom wavelength.
 pub fn create_default_energy_builder(default_wvl: Option<Length>) -> EnergyDataBuilder {
-    match default_wvl {
-        Some(wvl) => {
-            let ell = EnergyLaserLines::new(vec![(wvl, joule!(1.0))], nanometer!(0.1))
-                .unwrap_or_default();
-            EnergyDataBuilder::LaserLines(ell)
-        }
-        None => EnergyDataBuilder::default(),
-    }
+    default_wvl.map_or_else(EnergyDataBuilder::default, |wvl| {
+        let ell =
+            EnergyLaserLines::new(vec![(wvl, joule!(1.0))], nanometer!(0.1)).unwrap_or_default();
+        EnergyDataBuilder::LaserLines(ell)
+    })
 }
 
 /// Creates a default `RayDataBuilder` optionally configured with a custom wavelength.
 pub fn create_default_ray_builder(default_wvl: Option<Length>) -> RayDataBuilder {
-    match default_wvl {
-        Some(wvl) => {
-            let mut rds = RayDataSource::default();
-            if let Ok(lines) = LaserLines::new(vec![(wvl, 1.0)]) {
-                rds.set_spectral_dist(SpecDistType::LaserLines(lines));
-            }
-            RayDataBuilder::from(rds)
+    default_wvl.map_or_else(RayDataBuilder::default, |wvl| {
+        let mut rds = RayDataSource::default();
+        if let Ok(lines) = LaserLines::new(vec![(wvl, 1.0)]) {
+            rds.set_spectral_dist(SpecDistType::LaserLines(lines));
         }
-        None => RayDataBuilder::default(),
-    }
+        RayDataBuilder::from(rds)
+    })
 }
 
 /// Add an analyzer to the model

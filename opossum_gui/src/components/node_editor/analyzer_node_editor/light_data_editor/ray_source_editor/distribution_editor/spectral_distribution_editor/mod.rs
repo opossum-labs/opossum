@@ -2,7 +2,10 @@ mod gaussian_editor;
 mod laser_lines_editor;
 
 use crate::components::node_editor::{
-    accordion::AccordionItem, analyzer_node_editor::light_data_editor::{default_gaussian, default_ray_laser_lines}, hooks::use_synced_signal, inputs::{
+    accordion::AccordionItem,
+    analyzer_node_editor::light_data_editor::{default_gaussian, default_ray_laser_lines},
+    hooks::use_synced_signal,
+    inputs::{
         IntoInputData,
         input_components::{LabeledSelect, RowedInputs},
         select_options_from_enum_iterator,
