@@ -1,6 +1,6 @@
 # Background
 
-This project is a task within the [**THRILL** project](https://www.thrill-project.eu/). The **THRILL** acronym stands for **T**echnology for **H**igh-**R**epetition-rate **I**ntense **L**aser **L**aboratories and is a project funded by the European Union.
+This project was started as a task within the [**THRILL** project](https://www.thrill-project.eu/) and is meanwhile also supported by further projects (e.g. LASE-FUSE); see [Funding & Acknowledgments](./background/funding.md) for the full list and per-project attribution. The **THRILL** acronym stands for **T**echnology for **H**igh-**R**epetition-rate **I**ntense **L**aser **L**aboratories and is a project funded by the European Union.
 
 Within the **THRILL** project, this task (3.4) has the title "supporting calculations for system design" and is led by GSI. The task description from the proposal is as follows:
 
