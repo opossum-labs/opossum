@@ -1,6 +1,6 @@
 use opossum_core::{
     core_optics::node_attr::HasNodeAttr,
-    error::OpmResult,
+    error::{OpmResult, OpossumError},
     meter,
     nodes::{ConnectionInfo, NodeGroup},
     prelude::{PortMap, PortType},
@@ -541,6 +541,7 @@ struct EdgeReconnectOutcome {
 ///
 /// Returns an error if `from_group_id`/`to_group_id` don't resolve, the moved node's port can't be
 /// resolved, or a `connect_nodes`/`map_input_port`/`map_output_port` step fails.
+#[allow(clippy::too_many_lines)]
 fn reconnect_edge(
     scenery: &mut NodeGroup,
     from_group_id: Uuid,
@@ -609,7 +610,139 @@ fn reconnect_edge(
             port_map_groups_changed: vec![to_group_id, from_group_id],
             removed_port_mapping: None,
         })
+    } else if other_node_id == to_group_id {
+        // The moved node was directly connected to the very group it is being dropped into
+        // (its boundary edge's other endpoint *is* `to_group_id`, reached through one of the
+        // group's port mappings). It now lives *inside* the group, so the link is preserved by
+        // connecting it straight to the mapping's internal target and dropping that now-consumed
+        // mapping - the group no longer needs to expose that port, its own member drives it.
+        // The old else-branch instead created a fresh mapping and a `to_group -> to_group`
+        // self-edge, which the cycle check rejected *after* the node had already been relocated.
+        //
+        // The group port that `other_port` names is the opposite side of the moved node's own
+        // port: a moved `Output` fed the group's *input* mapping; a moved `Input` was fed by the
+        // group's *output* mapping. Resolve it first (the only fallible read) so an unexpected
+        // inconsistency errors out before anything is mutated.
+        let group_port_type = match port_type {
+            PortType::Input => PortType::Output,
+            PortType::Output => PortType::Input,
+        };
+        let Some((internal_node_id, internal_port)) =
+            scenery.with_group_node(to_group_id, |g| {
+                g.graph()
+                    .port_map(&group_port_type)
+                    .get(other_port.as_str())
+                    .cloned()
+            })?
+        else {
+            return Err(OpossumError::Other(format!(
+                "port mapping '{other_port}' expected on the destination group could not be found"
+            )));
+        };
+
+        // Remove the consumed mapping first — `connect_nodes` (below) requires the target port to
+        // be free, and a mapped port counts as occupied. We already resolved the mapping's internal
+        // (node, port) above, so nothing is lost by dropping the map entry now.
+        scenery.with_group_node_mut(to_group_id, |g| {
+            g.remove_mapped_port(&other_port, group_port_type)
+        })?;
+
+        // Connect directly inside `to_group_id`, same direction as the original edge with the
+        // group replaced by its internal node, reusing the external edge's distance (group port
+        // mappings are distance-less aliases, so the distance lived entirely on that edge).
+        let (src_id, src_port, target_id, target_port) = match port_type {
+            PortType::Output => (moved_node_id, moved_port, internal_node_id, internal_port),
+            PortType::Input => (internal_node_id, internal_port, moved_node_id, moved_port),
+        };
+        scenery.with_group_node_mut(to_group_id, |g| {
+            g.connect_nodes(src_id, &src_port, target_id, &target_port, meter!(distance))
+        })??;
+
+        let new_info = build_connect_info(
+            scenery,
+            src_id,
+            &src_port,
+            target_id,
+            &target_port,
+            distance,
+        );
+        Ok(EdgeReconnectOutcome {
+            new_connection: Some((to_group_id, new_info)),
+            port_map_groups_changed: vec![to_group_id],
+            removed_port_mapping: Some((
+                to_group_id,
+                internal_node_id,
+                other_port,
+                group_port_type,
+            )),
+        })
+    } else if other_parent_id == from_group_id
+        && scenery
+            .node_recursive(from_group_id)
+            .is_ok_and(|(_, parent)| parent == to_group_id)
+    {
+        // The moved node is leaving `from_group_id` (a subgroup of `to_group_id`) and
+        // `other_node_id` is a sibling staying behind inside that same subgroup. This is an
+        // *outward* move (child → parent) with an edge to an inner node — most commonly the undo
+        // of an absorbing move (see the `other_node_id == to_group_id` branch above). The
+        // symmetrical reroute: create a port mapping on `from_group_id` for the other node's port
+        // and connect the moved node to `from_group_id` in `to_group_id`'s graph.
+        //
+        // The `other_parent_id == from_group_id` condition alone is also satisfied by the normal
+        // downward move (sibling staying in from_group when node moves into a child), so we guard
+        // additionally on to_group_id being from_group_id's *parent* to select only the upward
+        // direction.
+        let from_group_port_map = scenery.with_group_node(from_group_id, |g| {
+            // Mapping direction: if the moved node was Output (it fed the sibling), the sibling
+            // is on the Input side, so a new Input mapping on from_group exposes it outward.
+            let map_type = match port_type {
+                PortType::Output => PortType::Input,
+                PortType::Input => PortType::Output,
+            };
+            g.graph().port_map(&map_type).clone()
+        })?;
+        let from_group_map_type = match port_type {
+            PortType::Output => PortType::Input,
+            PortType::Input => PortType::Output,
+        };
+        let new_name = generate_unique_external_name(&from_group_port_map, &other_port);
+        scenery.with_group_node_mut(from_group_id, |g| {
+            map_port(
+                g,
+                from_group_map_type,
+                other_node_id,
+                &other_port,
+                &new_name,
+            )
+        })??;
+
+        // Connect moved_node → from_group_id (or the reverse) in `to_group_id`'s graph.
+        let (src_id, src_port, target_id, target_port) = match port_type {
+            PortType::Output => (moved_node_id, moved_port, from_group_id, new_name),
+            PortType::Input => (from_group_id, new_name, moved_node_id, moved_port),
+        };
+        scenery.with_group_node_mut(to_group_id, |g| {
+            g.connect_nodes(src_id, &src_port, target_id, &target_port, meter!(distance))
+        })??;
+        let new_info = build_connect_info(
+            scenery,
+            src_id,
+            &src_port,
+            target_id,
+            &target_port,
+            distance,
+        );
+        Ok(EdgeReconnectOutcome {
+            new_connection: Some((to_group_id, new_info)),
+            port_map_groups_changed: vec![from_group_id],
+            removed_port_mapping: None,
+        })
     } else {
+        // The general case: `from_group_id` is a subgroup nested inside `to_group_id`, and
+        // `other_node_id` is a sibling of `from_group_id` inside `to_group_id`. Create a port
+        // mapping on `to_group_id` for the moved node and connect `other_node ↔ to_group_id`
+        // inside `from_group_id`'s graph — both `other_node_id` and `to_group_id` are direct
+        // members of `from_group_id`'s parent, which is `to_group_id` in this direction.
         let to_group_port_map =
             scenery.with_group_node(to_group_id, |g| g.graph().port_map(&port_type).clone())?;
         let new_name = generate_unique_external_name(&to_group_port_map, &moved_port);

@@ -665,4 +665,494 @@ mod test {
             "moving a reference together with its own target as siblings must still be allowed"
         );
     }
+
+    /// Regression test: dragging the upstream neighbour of a group into that group must succeed
+    /// and connect it directly to the group's internal chain, consuming the now-redundant input
+    /// mapping. Previously the reconnect machinery had no guard for "the boundary edge's other
+    /// endpoint is the destination group itself", which caused it to create a self-edge
+    /// (`group -> group`) that the cycle check rejected *after* the node had already been
+    /// partially moved — leaving the document in an inconsistent state.
+    ///
+    /// Setup (root):  n1 → [G: n2 → n3] → n4
+    /// After move n1 into G:
+    ///   root:  [G] → n4
+    ///   G:     n1 → n2 → n3
+    ///   G's old input mapping (to n2) is consumed and dropped.
+    #[actix_web::test]
+    async fn test_move_upstream_neighbour_into_group_absorbs_chain() {
+        use opossum_core::{
+            nodes::{Dummy, NodeGroup},
+            prelude::PortType,
+        };
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, g_id, n1, n2, _n3, n4) = {
+            let mut document = app_state.document.lock();
+            let scenery = document.scenery_mut();
+            let root_id = scenery.node_attr().uuid();
+
+            // Build G = {n2 → n3} with exposed input (n2) and output (n3).
+            let mut g = NodeGroup::new("G");
+            let n2 = g.add_node(Dummy::default()).unwrap();
+            let n3 = g.add_node(Dummy::default()).unwrap();
+            g.connect_nodes(n2, "output_1", n3, "input_1", meter!(0.1))
+                .unwrap();
+            g.map_input_port(n2, "input_1", "ext_in_1").unwrap();
+            g.map_output_port(n3, "output_1", "ext_out_1").unwrap();
+
+            let g_id = scenery.add_node(g).unwrap();
+
+            // n1 → G (upstream neighbour, the node to be dragged in)
+            let n1 = scenery.add_node(Dummy::default()).unwrap();
+            scenery
+                .connect_nodes(n1, "output_1", g_id, "ext_in_1", meter!(0.25))
+                .unwrap();
+
+            // G → n4 (downstream neighbour, must stay untouched)
+            let n4 = scenery.add_node(Dummy::default()).unwrap();
+            scenery
+                .connect_nodes(g_id, "ext_out_1", n4, "input_1", meter!(0.1))
+                .unwrap();
+
+            (root_id, g_id, n1, n2, n3, n4)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_move_nodes)
+                .service(undo_document)
+                .service(redo_document),
+        )
+        .await;
+
+        // Move n1 (currently at the root) into G.
+        let req = test::TestRequest::post()
+            .uri("/move_nodes")
+            .set_json(&MoveNodesRequest {
+                source_group_id: root_id,
+                target_group_id: g_id,
+                nodes_to_move: vec![n1],
+            })
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::OK,
+            "dragging an upstream neighbour into the group must succeed, not return a loop error"
+        );
+        let response: MoveNodesResponse = test::read_body_json(resp).await;
+
+        // The response must carry the new internal edge (n1 → n2 inside G) and report
+        // the dropped input mapping so the GUI can prune it.
+        assert_eq!(
+            response.new_connections.len(),
+            1,
+            "exactly one new connection must be reported (n1 → n2 inside G)"
+        );
+        assert_eq!(
+            response.removed_port_mappings.len(),
+            1,
+            "the consumed input mapping on G must be reported as removed"
+        );
+        let (mapping_group, _mapping_node, mapping_name, mapping_type) =
+            &response.removed_port_mappings[0];
+        assert_eq!(*mapping_group, g_id, "removed mapping must be on G");
+        assert_eq!(
+            mapping_name, "ext_in_1",
+            "the consumed mapping must be the original input mapping"
+        );
+        assert_eq!(
+            *mapping_type,
+            PortType::Input,
+            "consumed mapping must be an input mapping"
+        );
+
+        {
+            let document = app_state.document.lock();
+
+            // n1 must now live inside G, not at the root.
+            assert!(
+                document
+                    .scenery()
+                    .node_recursive(n1)
+                    .is_ok_and(|(_, parent)| parent == g_id),
+                "n1 must be a member of G after the move"
+            );
+
+            // n1 → n2 must be an internal edge inside G at the original boundary distance (0.25 m).
+            let g_connections = document
+                .scenery()
+                .with_group_node(g_id, NodeGroup::connections)
+                .unwrap();
+            let n1_to_n2 = g_connections
+                .iter()
+                .find(|c| c.src_id == n1 && c.target_id == n2);
+            assert!(
+                n1_to_n2.is_some(),
+                "n1 → n2 must exist as an internal connection inside G"
+            );
+
+            // G's input mapping to n2 must be gone (n1 now drives n2 directly).
+            let input_mapping_gone = document
+                .scenery()
+                .with_group_node(g_id, |g| {
+                    g.graph()
+                        .port_map(&PortType::Input)
+                        .assigned_ports_for_node(n2)
+                        .is_empty()
+                })
+                .unwrap();
+            assert!(
+                input_mapping_gone,
+                "G's old input mapping to n2 must have been consumed and removed"
+            );
+
+            // G → n4 (the downstream link) must still exist at the root, untouched.
+            let root_connections = document.scenery().graph().connections();
+            assert!(
+                root_connections
+                    .iter()
+                    .any(|c| c.src_id == g_id && c.target_id == n4),
+                "G → n4 must still exist at the root after the move"
+            );
+        }
+
+        // Undo must restore n1 to the root and re-establish the original topology.
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::OK,
+            "undo of the absorbing move must not error"
+        );
+        {
+            let document = app_state.document.lock();
+            assert!(
+                document
+                    .scenery()
+                    .node_recursive(n1)
+                    .is_ok_and(|(_, parent)| parent == root_id),
+                "n1 must be back at the root after undo"
+            );
+            // G's input mapping to n2 must be restored.
+            let input_mapping_restored = document
+                .scenery()
+                .with_group_node(g_id, |g| {
+                    !g.graph()
+                        .port_map(&PortType::Input)
+                        .assigned_ports_for_node(n2)
+                        .is_empty()
+                })
+                .unwrap();
+            assert!(
+                input_mapping_restored,
+                "G's input mapping to n2 must be restored after undo"
+            );
+            let root_connections = document.scenery().graph().connections();
+            assert!(
+                root_connections
+                    .iter()
+                    .any(|c| c.src_id == n1 && c.target_id == g_id),
+                "n1 → G must be restored after undo"
+            );
+        }
+
+        // Redo must re-apply the absorbing move.
+        let req = test::TestRequest::post().uri("/redo").to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::OK,
+            "redo of the absorbing move must not error"
+        );
+        {
+            let document = app_state.document.lock();
+            assert!(
+                document
+                    .scenery()
+                    .node_recursive(n1)
+                    .is_ok_and(|(_, parent)| parent == g_id),
+                "n1 must be back inside G after redo"
+            );
+        }
+    }
+
+    /// Symmetric regression: dragging the *downstream* neighbour of a group into that group
+    /// must also succeed — absorbing it at the output end.
+    ///
+    /// Setup (root):  n1 → [G: n2 → n3] → n4
+    /// After move n4 into G:
+    ///   root:  n1 → [G]
+    ///   G:     n2 → n3 → n4
+    ///   G's old output mapping (to n3) is consumed and dropped.
+    #[actix_web::test]
+    async fn test_move_downstream_neighbour_into_group_absorbs_chain() {
+        use opossum_core::{
+            nodes::{Dummy, NodeGroup},
+            prelude::PortType,
+        };
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, g_id, n1, _n2, n3, n4) = {
+            let mut document = app_state.document.lock();
+            let scenery = document.scenery_mut();
+            let root_id = scenery.node_attr().uuid();
+
+            let mut g = NodeGroup::new("G");
+            let n2 = g.add_node(Dummy::default()).unwrap();
+            let n3 = g.add_node(Dummy::default()).unwrap();
+            g.connect_nodes(n2, "output_1", n3, "input_1", meter!(0.1))
+                .unwrap();
+            g.map_input_port(n2, "input_1", "ext_in_1").unwrap();
+            g.map_output_port(n3, "output_1", "ext_out_1").unwrap();
+            let g_id = scenery.add_node(g).unwrap();
+
+            let n1 = scenery.add_node(Dummy::default()).unwrap();
+            scenery
+                .connect_nodes(n1, "output_1", g_id, "ext_in_1", meter!(0.1))
+                .unwrap();
+
+            // n4 is the downstream neighbour that will be dragged in.
+            let n4 = scenery.add_node(Dummy::default()).unwrap();
+            scenery
+                .connect_nodes(g_id, "ext_out_1", n4, "input_1", meter!(0.3))
+                .unwrap();
+
+            (root_id, g_id, n1, n2, n3, n4)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_move_nodes),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/move_nodes")
+            .set_json(&MoveNodesRequest {
+                source_group_id: root_id,
+                target_group_id: g_id,
+                nodes_to_move: vec![n4],
+            })
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::OK,
+            "dragging a downstream neighbour into the group must succeed"
+        );
+        let response: MoveNodesResponse = test::read_body_json(resp).await;
+
+        assert_eq!(
+            response.removed_port_mappings.len(),
+            1,
+            "the consumed output mapping on G must be reported as removed"
+        );
+        let (mapping_group, _mapping_node, _mapping_name, mapping_type) =
+            &response.removed_port_mappings[0];
+        assert_eq!(*mapping_group, g_id, "removed mapping must be on G");
+        assert_eq!(
+            *mapping_type,
+            PortType::Output,
+            "consumed mapping must be an output mapping"
+        );
+
+        {
+            let document = app_state.document.lock();
+
+            assert!(
+                document
+                    .scenery()
+                    .node_recursive(n4)
+                    .is_ok_and(|(_, parent)| parent == g_id),
+                "n4 must be inside G after the move"
+            );
+
+            let g_connections = document
+                .scenery()
+                .with_group_node(g_id, NodeGroup::connections)
+                .unwrap();
+            assert!(
+                g_connections
+                    .iter()
+                    .any(|c| c.src_id == n3 && c.target_id == n4),
+                "n3 → n4 must exist as an internal edge inside G"
+            );
+
+            // G's output mapping to n3 must be gone.
+            let output_mapping_gone = document
+                .scenery()
+                .with_group_node(g_id, |g| {
+                    g.graph()
+                        .port_map(&PortType::Output)
+                        .assigned_ports_for_node(n3)
+                        .is_empty()
+                })
+                .unwrap();
+            assert!(
+                output_mapping_gone,
+                "G's old output mapping to n3 must be consumed and removed"
+            );
+
+            // n1 → G must still exist at the root.
+            let root_connections = document.scenery().graph().connections();
+            assert!(
+                root_connections
+                    .iter()
+                    .any(|c| c.src_id == n1 && c.target_id == g_id),
+                "n1 → G must still exist after the move"
+            );
+        }
+    }
+
+    /// Compound regression: n1 has BOTH a sibling (X) upstream of it AND is the direct upstream
+    /// neighbour of G. After moving n1 into G both links must be preserved: the absorb (n1 → n2
+    /// becomes internal) and the sibling-reroute (X → G via a fresh mapping) must compose without
+    /// interfering with each other.
+    ///
+    /// Setup (root):  X → n1 → [G: n2 → n3] → n4
+    /// After move n1 into G:
+    ///   root:  X → [G] → n4
+    ///   G:     n1 → n2 → n3  (with a fresh input mapping for n1's input, consumed by X → G)
+    ///   G's old input mapping (ext_in_1 → n2) is consumed and dropped.
+    #[actix_web::test]
+    async fn test_move_upstream_neighbour_with_own_upstream_sibling_composes_correctly() {
+        use opossum_core::{
+            nodes::{Dummy, NodeGroup},
+            prelude::PortType,
+        };
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, g_id, x, n1, n2, _n3, n4) = {
+            let mut document = app_state.document.lock();
+            let scenery = document.scenery_mut();
+            let root_id = scenery.node_attr().uuid();
+
+            let mut g = NodeGroup::new("G");
+            let n2 = g.add_node(Dummy::default()).unwrap();
+            let n3 = g.add_node(Dummy::default()).unwrap();
+            g.connect_nodes(n2, "output_1", n3, "input_1", meter!(0.1))
+                .unwrap();
+            g.map_input_port(n2, "input_1", "ext_in_1").unwrap();
+            g.map_output_port(n3, "output_1", "ext_out_1").unwrap();
+            let g_id = scenery.add_node(g).unwrap();
+
+            let x = scenery.add_node(Dummy::default()).unwrap();
+            let n1 = scenery.add_node(Dummy::default()).unwrap();
+            scenery
+                .connect_nodes(x, "output_1", n1, "input_1", meter!(0.15))
+                .unwrap();
+            scenery
+                .connect_nodes(n1, "output_1", g_id, "ext_in_1", meter!(0.25))
+                .unwrap();
+
+            let n4 = scenery.add_node(Dummy::default()).unwrap();
+            scenery
+                .connect_nodes(g_id, "ext_out_1", n4, "input_1", meter!(0.1))
+                .unwrap();
+
+            (root_id, g_id, x, n1, n2, n3, n4)
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_move_nodes),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/move_nodes")
+            .set_json(&MoveNodesRequest {
+                source_group_id: root_id,
+                target_group_id: g_id,
+                nodes_to_move: vec![n1],
+            })
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::OK,
+            "moving n1 (with upstream sibling X) into G must succeed"
+        );
+        let response: MoveNodesResponse = test::read_body_json(resp).await;
+
+        // Both the absorbed n1→n2 edge and the rerouted X→G edge must appear as new connections.
+        assert_eq!(
+            response.new_connections.len(),
+            2,
+            "two new connections expected: n1→n2 (absorb) and X→G (sibling reroute)"
+        );
+
+        {
+            let document = app_state.document.lock();
+
+            assert!(
+                document
+                    .scenery()
+                    .node_recursive(n1)
+                    .is_ok_and(|(_, parent)| parent == g_id),
+                "n1 must be inside G"
+            );
+
+            // n1 → n2 internal edge.
+            let g_connections = document
+                .scenery()
+                .with_group_node(g_id, NodeGroup::connections)
+                .unwrap();
+            assert!(
+                g_connections
+                    .iter()
+                    .any(|c| c.src_id == n1 && c.target_id == n2),
+                "n1 → n2 must exist as an internal edge inside G"
+            );
+
+            // G's old ext_in_1 mapping to n2 must be gone (n1 now drives n2 directly).
+            let n2_old_mapping_gone = document
+                .scenery()
+                .with_group_node(g_id, |g| {
+                    g.graph()
+                        .port_map(&PortType::Input)
+                        .assigned_ports_for_node(n2)
+                        .is_empty()
+                })
+                .unwrap();
+            assert!(
+                n2_old_mapping_gone,
+                "G's input mapping to n2 must be consumed and gone"
+            );
+
+            // A fresh input mapping for n1 must exist on G (for the X → G edge).
+            let n1_mapped = document
+                .scenery()
+                .with_group_node(g_id, |g| {
+                    !g.graph()
+                        .port_map(&PortType::Input)
+                        .assigned_ports_for_node(n1)
+                        .is_empty()
+                })
+                .unwrap();
+            assert!(
+                n1_mapped,
+                "G must expose a fresh input mapping for n1 so X can connect to it"
+            );
+
+            // X → G must exist at the root (the sibling link is preserved).
+            let root_connections = document.scenery().graph().connections();
+            assert!(
+                root_connections
+                    .iter()
+                    .any(|c| c.src_id == x && c.target_id == g_id),
+                "X → G must exist at the root after the move"
+            );
+
+            // G → n4 must still exist at the root.
+            assert!(
+                root_connections
+                    .iter()
+                    .any(|c| c.src_id == g_id && c.target_id == n4),
+                "G → n4 must still exist at the root"
+            );
+        }
+    }
 }
