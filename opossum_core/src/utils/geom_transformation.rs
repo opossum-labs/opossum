@@ -26,6 +26,7 @@ use uom::si::{
 /// Struct to store the isometric transofmeation matrix and its inverse
 #[derive(Debug, Clone, Default, Serialize, PartialEq, Copy)]
 pub struct Isometry {
+    #[serde(with = "transform_serde")]
     transform: Isometry3<f64>,
     #[serde(skip_serializing)]
     inverse: Isometry3<f64>,
@@ -485,6 +486,127 @@ impl Isometry {
     }
 }
 
+mod transform_serde {
+    use nalgebra::{Isometry3, Translation3, UnitQuaternion};
+    use serde::de::{self, Deserializer, MapAccess, SeqAccess, Visitor};
+    use serde::{Deserialize, Serialize, Serializer};
+
+    /// Helper struct to conditionally serialize rotation and translation.
+    #[derive(Serialize, Default, Debug, PartialEq)]
+    pub(super) struct TransformHelper {
+        #[serde(
+            default = "UnitQuaternion::identity",
+            skip_serializing_if = "is_identity_rotation"
+        )]
+        pub rotation: UnitQuaternion<f64>,
+        #[serde(
+            default = "Translation3::identity",
+            skip_serializing_if = "is_identity_translation"
+        )]
+        pub translation: Translation3<f64>,
+    }
+
+    /// Check whether rotation equals identity.
+    fn is_identity_rotation(rot: &UnitQuaternion<f64>) -> bool {
+        *rot == UnitQuaternion::identity()
+    }
+
+    /// Check whether translation equals identity (0, 0, 0).
+    fn is_identity_translation(trans: &Translation3<f64>) -> bool {
+        *trans == Translation3::identity()
+    }
+
+    /// Serializes `Isometry3` through `TransformHelper`.
+    pub fn serialize<S>(transform: &Isometry3<f64>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let helper = TransformHelper {
+            rotation: transform.rotation,
+            translation: transform.translation,
+        };
+        helper.serialize(serializer)
+    }
+
+    impl<'de> Deserialize<'de> for TransformHelper {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            struct TransformHelperVisitor;
+
+            impl<'de> Visitor<'de> for TransformHelperVisitor {
+                type Value = TransformHelper;
+
+                fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    formatter.write_str("a transform struct or ()")
+                }
+
+                // Handles `Content::Unit` when RON buffers `()` inside untagged enums
+                fn visit_unit<E>(self) -> Result<Self::Value, E>
+                where
+                    E: de::Error,
+                {
+                    Ok(TransformHelper::default())
+                }
+
+                // Handles optional or null values
+                fn visit_none<E>(self) -> Result<Self::Value, E>
+                where
+                    E: de::Error,
+                {
+                    Ok(TransformHelper::default())
+                }
+
+                // Handles empty sequences or tuples like `()`
+                fn visit_seq<A>(self, _seq: A) -> Result<Self::Value, A::Error>
+                where
+                    A: SeqAccess<'de>,
+                {
+                    Ok(TransformHelper::default())
+                }
+
+                // Handles map representation with partial fields (rotation only, translation only, or both)
+                fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+                where
+                    A: MapAccess<'de>,
+                {
+                    let mut rotation = None;
+                    let mut translation = None;
+
+                    while let Some(key) = map.next_key::<String>()? {
+                        match key.as_str() {
+                            "rotation" => {
+                                if rotation.is_some() {
+                                    return Err(de::Error::duplicate_field("rotation"));
+                                }
+                                rotation = Some(map.next_value()?);
+                            }
+                            "translation" => {
+                                if translation.is_some() {
+                                    return Err(de::Error::duplicate_field("translation"));
+                                }
+                                translation = Some(map.next_value()?);
+                            }
+                            _ => {
+                                let _ = map.next_value::<de::IgnoredAny>()?;
+                            }
+                        }
+                    }
+
+                    Ok(TransformHelper {
+                        rotation: rotation.unwrap_or_else(UnitQuaternion::identity),
+                        translation: translation.unwrap_or_else(Translation3::identity),
+                    })
+                }
+            }
+
+            // Using `deserialize_any` is crucial to let Serde's buffer call `visit_unit`
+            deserializer.deserialize_any(TransformHelperVisitor)
+        }
+    }
+}
+
 /// Define the translation and rotation axes for the [`Isometry`]
 #[derive(Debug, Clone, PartialEq, Eq, Copy, EnumIter)]
 pub enum TranslationAxis {
@@ -625,20 +747,24 @@ impl<'de> Deserialize<'de> for Isometry {
             where
                 A: MapAccess<'de>,
             {
-                // let mut node_type = None;
                 let mut transform = None;
                 while let Some(key) = map.next_key()? {
                     match key {
                         Field::Transform => {
                             if transform.is_some() {
-                                return Err(de::Error::duplicate_field("attributes"));
+                                return Err(de::Error::duplicate_field("transform"));
                             }
-                            transform = Some(map.next_value::<Isometry3<f64>>()?);
+                            let helper: transform_serde::TransformHelper = map.next_value()?;
+                            transform = Some(nalgebra::Isometry3::from_parts(
+                                helper.translation,
+                                helper.rotation,
+                            ));
                         }
                     }
                 }
 
-                let transform = transform.ok_or_else(|| de::Error::missing_field("transform"))?;
+                // Fall back to identity if transform was omitted entirely
+                let transform = transform.unwrap_or_else(nalgebra::Isometry3::identity);
                 let iso = Isometry {
                     transform,
                     inverse: transform.inverse(),
@@ -1235,5 +1361,53 @@ mod test {
     #[test]
     fn from() {
         assert_matches!(Some(Isometry::identity()).into(), Proptype::Isometry(_));
+    }
+    #[test]
+    fn test_isometry_partial_serialization_roundtrip() -> OpmResult<()> {
+        // 1. Rotation only (like a tilted mirror)
+        let rot_only = Isometry::new_rotation(degree!(45.0, 0.0, 0.0))?;
+        let ron_rot = ron::to_string(&rot_only).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert!(ron_rot.contains("rotation:"));
+        assert!(
+            !ron_rot.contains("translation:"),
+            "Identity translation should be omitted"
+        );
+        let restored_rot: Isometry =
+            ron::from_str(&ron_rot).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert_eq!(rot_only, restored_rot);
+
+        // 2. Translation only
+        let trans_only = Isometry::new_translation(meter!(1.0, 2.0, 3.0))?;
+        let ron_trans =
+            ron::to_string(&trans_only).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert!(
+            !ron_trans.contains("rotation:"),
+            "Identity rotation should be omitted"
+        );
+        assert!(ron_trans.contains("translation:"));
+        let restored_trans: Isometry =
+            ron::from_str(&ron_trans).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert_eq!(trans_only, restored_trans);
+
+        // 3. Complete identity -> transform: ()
+        let identity = Isometry::identity();
+        let ron_id = ron::to_string(&identity).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert_eq!(ron_id, "(transform:())");
+        let restored_id: Isometry =
+            ron::from_str(&ron_id).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert_eq!(identity, restored_id);
+
+        // 4. Backward compatibility: Old RON strings with both fields explicitly present
+        let legacy_ron = r#"(
+            transform: (
+                rotation: (0.0, 0.0, 0.0, 1.0),
+                translation: (0.0, 0.0, 0.0),
+            )
+        )"#;
+        let restored_legacy: Isometry =
+            ron::from_str(legacy_ron).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert_eq!(restored_legacy, Isometry::identity());
+
+        Ok(())
     }
 }

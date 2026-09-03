@@ -244,7 +244,34 @@ impl NodeGroup {
 
         Ok(result)
     }
+    /// Recursively collects all optical node references contained in this graph,
+    /// including nodes inside nested groups at any hierarchy depth.
+    ///
+    /// The returned list includes:
+    /// - Directly contained nodes
+    /// - Nodes within nested subgroups
+    /// - The nested group nodes themselves
+    ///
+    /// # Errors
+    /// Returns an error if acquiring a lock on any contained node fails.
+    pub fn collect_all_nodes_recursive(&self) -> OpmResult<Vec<OpticRef>> {
+        let mut result = Vec::new();
 
+        for node_ref in self.nodes() {
+            // Include the current node reference
+            result.push(node_ref.clone());
+
+            let node = node_ref.optical_ref.lock_opm()?;
+
+            // If the node is a group, recursively collect all of its nested nodes
+            if let Some(group) = node.as_any().downcast_ref::<Self>() {
+                let mut sub_nodes = group.collect_all_nodes_recursive()?;
+                result.append(&mut sub_nodes);
+            }
+        }
+
+        Ok(result)
+    }
     /// Returns the hierarchy of nodes starting from the given node and walking up
     /// through its parent groups until the root is reached.
     ///

@@ -45,7 +45,10 @@ const fn is_ideal_ar(coating: &CoatingType) -> bool {
 const fn is_default_lidt(lidt: &validated_type!(Fluence, AllPositive && AllNotNan)) -> bool {
     lidt.get().value.is_infinite()
 }
-
+/// Checks if an aperture configuration matches the default (Open hole without isometry).
+fn is_default_aperture(aperture: &Aperture) -> bool {
+    *aperture == Aperture::default()
+}
 /// Ein Type-Alias, um das Makro vor dem Utoipa-Parser zu verstecken.
 pub type ValidatedLidt = validated_type!(Fluence, AllPositive && AllNotNan);
 /// Configuration of an optical port containing user-adjustable parameters.
@@ -55,7 +58,7 @@ pub type ValidatedLidt = validated_type!(Fluence, AllPositive && AllNotNan);
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq)]
 pub struct PortConfig {
     /// The aperture of the port, defining the spatial transmission.
-    #[serde(default)] //, skip_serializing_if = "Aperture::is_none")]
+    #[serde(default, skip_serializing_if = "is_default_aperture")]
     pub aperture: Aperture,
     /// The coating of the port, defining reflection and transmission properties.
     #[serde(default, skip_serializing_if = "is_ideal_ar")]
