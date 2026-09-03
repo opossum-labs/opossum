@@ -31,7 +31,7 @@ mod pump_scenario_commands;
 mod viewport_commands;
 
 pub use amplifier_node_commands::PatchAmplifierNodes;
-pub use analyzer_commands::{PatchAnalyzer, RepositionAnalyzer};
+pub use analyzer_commands::{PatchAnalyzer, PatchAnalyzerName, RepositionAnalyzer};
 pub use edge_commands::{EdgeSnapshot, UpdateEdgeDistance};
 pub use group_commands::{GroupConversion, MoveNodes, ReroutedMapping};
 pub use node_commands::{
@@ -72,6 +72,8 @@ pub enum Command {
     PatchAnalyzer(Box<PatchAnalyzer>),
     /// See [`RepositionAnalyzer`].
     RepositionAnalyzer(RepositionAnalyzer),
+    /// See [`PatchAnalyzerName`].
+    PatchAnalyzerName(PatchAnalyzerName),
     /// Re-inserts a previously removed pump scenario under its original id.
     AddPumpScenario(PumpScenarioItemDto),
     /// Removes the pump scenario with the given id. Also strips it from every analyzer's selection
@@ -140,6 +142,9 @@ impl Command {
             Self::RepositionAnalyzer(cmd) => {
                 analyzer_commands::apply_reposition_analyzer(document, cmd)
             }
+            Self::PatchAnalyzerName(cmd) => {
+                analyzer_commands::apply_patch_analyzer_name(document, cmd)
+            }
             Self::AddPumpScenario(cmd) => Ok(pump_scenario_commands::apply_add_pump_scenario(
                 document, cmd,
             )),
@@ -193,6 +198,7 @@ impl Command {
             | Self::RemoveAnalyzer(_)
             | Self::PatchAnalyzer(_)
             | Self::RepositionAnalyzer(_)
+            | Self::PatchAnalyzerName(_)
             | Self::AddPumpScenario(_)
             | Self::RemovePumpScenario(_)
             | Self::PatchPumpScenario(_)
@@ -268,6 +274,9 @@ impl Command {
                 source_port: changed_source_port(&cmd.old, &cmd.new),
             }),
             Self::RepositionAnalyzer(cmd) => {
+                Some(JumpTarget::new_from_graph_and_node_id(root_id, cmd.id))
+            }
+            Self::PatchAnalyzerName(cmd) => {
                 Some(JumpTarget::new_from_graph_and_node_id(root_id, cmd.id))
             }
             Self::MoveNodes(cmd) => Some(JumpTarget::new_from_graph_id(cmd.focus_group_id)),
@@ -366,6 +375,11 @@ impl Command {
             Self::RepositionAnalyzer(cmd) => vec![DocumentChange::AnalyzerMoved {
                 id: cmd.id,
                 gui_position: cmd.new_pos,
+            }],
+            // Reports the name `apply` will set (`new`), so the GUI updates the canvas label.
+            Self::PatchAnalyzerName(cmd) => vec![DocumentChange::AnalyzerRenamed {
+                id: cmd.id,
+                name: cmd.new.clone(),
             }],
             Self::MoveNodes(cmd) => group_commands::describe_move_nodes(cmd),
             Self::InsertGroup(GroupConversion {
@@ -513,6 +527,7 @@ fn dedup_against_full_refreshes(changes: Vec<DocumentChange>) -> Vec<DocumentCha
             | DocumentChange::AnalyzerRemoved { .. }
             | DocumentChange::AnalyzerChanged { .. }
             | DocumentChange::AnalyzerMoved { .. }
+            | DocumentChange::AnalyzerRenamed { .. }
             | DocumentChange::PumpScenarioAdded { .. }
             | DocumentChange::PumpScenarioRemoved { .. }
             | DocumentChange::PumpScenarioChanged { .. }

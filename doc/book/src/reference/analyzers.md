@@ -14,6 +14,11 @@ The analyzer is also used to configure the properties of source ports.
 
 Depending on the selected analyzer type, different source port configuration options are available.
 
+Each analyzer can be assigned a user-defined **name** in the GUI. This is particularly useful when
+a model contains multiple analyzers of the same type (e.g. two Energy analyzers with different source
+configurations): the name makes them easy to tell apart on the canvas and in reports. If no name is
+set, the analyzer's type label ("Energy", "Ray Tracing", …) is used as a fallback.
+
 Besides its own configuration, an analyzer carries a list of the [pump scenarios](pump_scenarios.md)
 it is run in — the operating points at which the model's amplifying components are driven. It
 produces one report per listed scenario; an empty list means a single run on the passive model.

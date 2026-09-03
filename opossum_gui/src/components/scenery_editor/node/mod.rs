@@ -157,7 +157,13 @@ impl NodeElement {
     pub fn name(&self) -> String {
         match &self.node_type {
             NodeType::Optical(_) => self.name.clone(),
-            NodeType::Analyzer(analyzer_type) => format!("{analyzer_type}"),
+            NodeType::Analyzer(analyzer_type) => {
+                if self.name.is_empty() {
+                    format!("{analyzer_type}")
+                } else {
+                    self.name.clone()
+                }
+            }
         }
     }
     #[must_use]
@@ -303,7 +309,7 @@ impl From<&AnalyzerItemDto> for NodeElement {
             .map_or_else(Point2D::zero, |p| Point2D::new(p.x, p.y));
 
         Self::new(
-            format!("{}", dto.info.analyzer_type()),
+            dto.info.display_name(),
             NodeType::Analyzer(Box::new(dto.info.analyzer_type().clone())),
             dto.id,
             position,
