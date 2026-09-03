@@ -380,7 +380,10 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{app_state::AppState, document::undo_document};
+    use crate::{
+        app_state::AppState,
+        document::{redo_document, undo_document},
+    };
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
     use opossum_core::prelude::EnergyConfig;
 
@@ -465,5 +468,375 @@ mod test {
                 .is_empty(),
             "a rejected selection must not be partially applied"
         );
+    }
+    #[actix_web::test]
+    async fn test_get_analyzers_and_get_single_analyzer() {
+        let app_state = Data::new(AppState::default());
+        let analyzer_id = {
+            let mut document = app_state.document.lock();
+            document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()))
+        };
+
+        // Mount services under a scope so that the empty path #[get("")] resolves properly
+        let app = test::init_service(
+            App::new().app_data(app_state.clone()).service(
+                web::scope("/analyzers")
+                    .service(get_analyzers)
+                    .service(get_analyzer),
+            ),
+        )
+        .await;
+
+        // 1. Test get_analyzers list (matches scope with empty subpath)
+        let req = test::TestRequest::get().uri("/analyzers").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let list: Vec<AnalyzerItemDto> = test::read_body_json(resp).await;
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].id, analyzer_id);
+
+        // 2. Test get_analyzer for existing UUID (matches /{uuid})
+        let req = test::TestRequest::get()
+            .uri(&format!("/analyzers/{analyzer_id}"))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let info: AnalyzerInfo = test::read_body_json(resp).await;
+        assert!(matches!(info.analyzer_type(), AnalyzerType::Energy(_)));
+
+        // 3. Test get_analyzer with unknown UUID returns 404
+        let req = test::TestRequest::get()
+            .uri(&format!("/analyzers/{}", Uuid::new_v4()))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[actix_web::test]
+    async fn test_put_analyzer_name_and_undo() {
+        let app_state = Data::new(AppState::default());
+        let analyzer_id = {
+            let mut document = app_state.document.lock();
+            document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()))
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(put_analyzer_name)
+                .service(undo_document),
+        )
+        .await;
+
+        // Set custom name
+        let req = test::TestRequest::put()
+            .uri(&format!("/{analyzer_id}/name"))
+            .set_json("Diagnostic Energy Analyzer")
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+        assert_eq!(
+            app_state
+                .document
+                .lock()
+                .analyzer(analyzer_id)
+                .unwrap()
+                .name(),
+            "Diagnostic Energy Analyzer"
+        );
+
+        // Undo reverts the name
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            app_state
+                .document
+                .lock()
+                .analyzer(analyzer_id)
+                .unwrap()
+                .name(),
+            ""
+        );
+
+        // Renaming an unknown UUID returns 404
+        let req = test::TestRequest::put()
+            .uri(&format!("/{}/name", Uuid::new_v4()))
+            .set_json("Unknown")
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[actix_web::test]
+    async fn test_put_analyzer_gui_position_and_undo() {
+        let app_state = Data::new(AppState::default());
+        let analyzer_id = {
+            let mut document = app_state.document.lock();
+            document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()))
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(put_analyzer_gui_position)
+                .service(undo_document),
+        )
+        .await;
+
+        // Update coordinates
+        let req = test::TestRequest::put()
+            .uri(&format!("/{analyzer_id}/gui_position"))
+            .set_json((250.0, -100.0))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+        let pos = app_state
+            .document
+            .lock()
+            .analyzer(analyzer_id)
+            .unwrap()
+            .gui_position()
+            .unwrap();
+        assert_eq!((pos.x, pos.y), (250.0, -100.0));
+
+        // Undo reverts position
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // Repositioning an unknown UUID returns 404
+        let req = test::TestRequest::put()
+            .uri(&format!("/{}/gui_position", Uuid::new_v4()))
+            .set_json((10.0, 10.0))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+    #[actix_web::test]
+    async fn test_post_analyzer_and_undo_redo() {
+        let app_state = Data::new(AppState::default());
+
+        // Mount endpoints under a scope to match root-level empty paths correctly
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(
+                    web::scope("/analyzers")
+                        .service(post_analyzer)
+                        .service(get_analyzer),
+                )
+                .service(undo_document)
+                .service(redo_document),
+        )
+        .await;
+
+        // 1. Create a NewAnalyzerInfo payload using the provided constructor
+        let new_analyzer_payload = NewAnalyzerInfo::new(
+            AnalyzerType::Energy(EnergyConfig::default()),
+            (120.0, -45.0),
+            Some(nanometer!(1064.0)),
+        );
+
+        let req = test::TestRequest::post()
+            .uri("/analyzers")
+            .set_json(&new_analyzer_payload)
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+
+        // Extract the generated UUID from the JSON response
+        let created_id: Uuid = test::read_body_json(resp).await;
+
+        // 2. Verify the analyzer was created with the expected properties in state
+        {
+            let document = app_state.document.lock();
+            let analyzer_info = document.analyzer(created_id).expect("analyzer must exist");
+            assert_eq!(
+                analyzer_info.gui_position().map(|p| (p.x, p.y)),
+                Some((120.0, -45.0))
+            );
+            assert!(matches!(
+                analyzer_info.analyzer_type(),
+                AnalyzerType::Energy(_)
+            ));
+        }
+
+        // 3. Undo removes the freshly created analyzer
+        let req_undo = test::TestRequest::post().uri("/undo").to_request();
+        let resp_undo = app.call(req_undo).await.unwrap();
+        assert_eq!(resp_undo.status(), StatusCode::OK);
+        assert!(app_state.document.lock().analyzer(created_id).is_err());
+
+        // 4. Redo restores the analyzer under the identical UUID
+        let req_redo = test::TestRequest::post().uri("/redo").to_request();
+        let resp_redo = app.call(req_redo).await.unwrap();
+        assert_eq!(resp_redo.status(), StatusCode::OK);
+        assert!(app_state.document.lock().analyzer(created_id).is_ok());
+    }
+    #[actix_web::test]
+    async fn test_patch_analyzer_and_undo_redo() {
+        let app_state = Data::new(AppState::default());
+        let analyzer_id = {
+            let mut document = app_state.document.lock();
+            document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()))
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(web::scope("/analyzers").service(patch_analyzer))
+                .service(undo_document)
+                .service(redo_document),
+        )
+        .await;
+
+        // 1. Prepare a modified analyzer configuration
+        let mut modified_config = EnergyConfig::default();
+        let source_port_id = Uuid::new_v4();
+        modified_config.map_source(source_port_id, create_default_energy_builder(None));
+        let updated_analyzer_type = AnalyzerType::Energy(modified_config);
+
+        // Serialize the payload into RON format
+        let ron_payload = ron::to_string(&updated_analyzer_type)
+            .expect("failed to serialize AnalyzerType to RON");
+
+        // 2. Send PATCH request with application/ron content type
+        let req = test::TestRequest::patch()
+            .uri(&format!("/analyzers/{analyzer_id}"))
+            .insert_header((actix_web::http::header::CONTENT_TYPE, "application/ron"))
+            .set_payload(ron_payload.clone())
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+        // Verify analyzer configuration was successfully updated in document state
+        assert_eq!(
+            app_state
+                .document
+                .lock()
+                .analyzer(analyzer_id)
+                .unwrap()
+                .analyzer_type(),
+            &updated_analyzer_type
+        );
+
+        // 3. Undo restores original configuration
+        let req_undo = test::TestRequest::post().uri("/undo").to_request();
+        let resp_undo = app.call(req_undo).await.unwrap();
+        assert_eq!(resp_undo.status(), StatusCode::OK);
+        assert_eq!(
+            app_state
+                .document
+                .lock()
+                .analyzer(analyzer_id)
+                .unwrap()
+                .analyzer_type(),
+            &AnalyzerType::Energy(EnergyConfig::default())
+        );
+
+        // 4. Redo reapplies the patched configuration
+        let req_redo = test::TestRequest::post().uri("/redo").to_request();
+        let resp_redo = app.call(req_redo).await.unwrap();
+        assert_eq!(resp_redo.status(), StatusCode::OK);
+        assert_eq!(
+            app_state
+                .document
+                .lock()
+                .analyzer(analyzer_id)
+                .unwrap()
+                .analyzer_type(),
+            &updated_analyzer_type
+        );
+
+        // 5. Error case: patching an unknown UUID must return 404
+        let req_not_found = test::TestRequest::patch()
+            .uri(&format!("/analyzers/{}", Uuid::new_v4()))
+            .insert_header((actix_web::http::header::CONTENT_TYPE, "application/ron"))
+            .set_payload(ron_payload)
+            .to_request();
+        let resp_not_found = app.call(req_not_found).await.unwrap();
+        assert_eq!(resp_not_found.status(), StatusCode::NOT_FOUND);
+
+        // 6. Error case: malformed RON payload must be rejected
+        let req_bad_ron = test::TestRequest::patch()
+            .uri(&format!("/analyzers/{analyzer_id}"))
+            .insert_header((actix_web::http::header::CONTENT_TYPE, "application/ron"))
+            .set_payload("invalid ron content (())")
+            .to_request();
+        let resp_bad_ron = app.call(req_bad_ron).await.unwrap();
+        assert!(!resp_bad_ron.status().is_success());
+    }
+    #[actix_web::test]
+    async fn test_delete_analyzer_and_undo() {
+        let app_state = Data::new(AppState::default());
+        let analyzer_id = {
+            let mut document = app_state.document.lock();
+            document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()))
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(delete_analyzer)
+                .service(undo_document),
+        )
+        .await;
+
+        // Delete analyzer
+        let req = test::TestRequest::delete()
+            .uri(&format!("/{analyzer_id}"))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+        assert!(app_state.document.lock().analyzer(analyzer_id).is_err());
+
+        // Undo restores it
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(app_state.document.lock().analyzer(analyzer_id).is_ok());
+
+        // Deleting unknown UUID fails
+        let req = test::TestRequest::delete()
+            .uri(&format!("/{}", Uuid::new_v4()))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert!(!resp.status().is_success());
+    }
+
+    #[actix_web::test]
+    async fn test_get_available_sources() {
+        let app_state = Data::new(AppState::default());
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(get_available_sources),
+        )
+        .await;
+
+        let req = test::TestRequest::get()
+            .uri("/available_sources")
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let sources: Vec<SourcePortDto> = test::read_body_json(resp).await;
+        assert!(sources.is_empty());
+    }
+
+    #[actix_web::test]
+    async fn test_builder_constructors() {
+        // Test Energy builders with and without explicit wavelength
+        let default_energy = create_default_energy_builder(None);
+        assert!(matches!(default_energy, EnergyDataBuilder::LaserLines(_)));
+
+        let custom_energy = create_default_energy_builder(Some(nanometer!(1064.0)));
+        assert!(matches!(custom_energy, EnergyDataBuilder::LaserLines(_)));
+
+        // Test Ray builders with and without explicit wavelength
+        let default_ray = create_default_ray_builder(None);
+        let custom_ray = create_default_ray_builder(Some(nanometer!(1064.0)));
+        let _ = (default_ray, custom_ray);
     }
 }

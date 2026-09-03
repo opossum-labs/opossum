@@ -62,3 +62,76 @@ impl From<OpossumError> for BackEndErrorResponse {
         Self(ErrorResponse::new(status, category, &error.to_string()))
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::{ResponseError, http::StatusCode};
+    use opossum_core::error::OpossumError;
+
+    #[test]
+    fn test_error_constructors() {
+        // Verify manual construction
+        let err = BackEndErrorResponse::new(400, "CustomCategory", "Custom error message");
+        assert_eq!(err.0.status, 400);
+        assert_eq!(err.0.category, "CustomCategory");
+        assert_eq!(err.0.message, "Custom error message");
+
+        // Verify standard helpers
+        let not_found = BackEndErrorResponse::not_found();
+        assert_eq!(not_found.0.status, 404);
+        assert_eq!(not_found.0.category, "NotFound");
+
+        let analyzer_err = BackEndErrorResponse::analyzer_not_found();
+        assert_eq!(analyzer_err.0.status, 404);
+        assert_eq!(analyzer_err.0.category, "Opossum");
+
+        let scenario_err = BackEndErrorResponse::pump_scenario_not_found();
+        assert_eq!(scenario_err.0.status, 404);
+        assert_eq!(scenario_err.0.category, "Opossum");
+    }
+
+    #[test]
+    fn test_display_formatting() {
+        let err = BackEndErrorResponse::new(404, "TestCat", "Detailed message");
+        assert_eq!(format!("{err}"), "[404] TestCat: Detailed message");
+    }
+
+    #[test]
+    fn test_response_error_status_code_and_response() {
+        let err = BackEndErrorResponse::new(404, "NotFound", "Resource missing");
+        assert_eq!(err.status_code(), StatusCode::NOT_FOUND);
+
+        let resp = err.error_response();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+
+        // Fallback for invalid status numbers
+        let invalid_err = BackEndErrorResponse::new(9999, "Invalid", "Invalid status number");
+        assert_eq!(invalid_err.status_code(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[test]
+    fn test_from_opossum_error_all_variants() {
+        // Map each core error variant to its expected backend category
+        let error_cases = vec![
+            (OpossumError::OpmDocument("doc error".into()), "OpmDocument"),
+            (
+                OpossumError::OpticScenery("scenery error".into()),
+                "OpticScenery",
+            ),
+            (OpossumError::OpticGroup("group error".into()), "OpticGroup"),
+            (OpossumError::OpticPort("port error".into()), "OpticPort"),
+            (OpossumError::Analysis("analysis error".into()), "Analysis"),
+            (OpossumError::Spectrum("spectrum error".into()), "Spectrum"),
+            (OpossumError::Console("console error".into()), "Console"),
+            (OpossumError::Properties("props error".into()), "Properties"),
+            (OpossumError::Registry("reg error".into()), "Registry"),
+            (OpossumError::Other("other error".into()), "Other"),
+        ];
+
+        for (core_err, expected_category) in error_cases {
+            let backend_err = BackEndErrorResponse::from(core_err);
+            assert_eq!(backend_err.0.status, 400);
+            assert_eq!(backend_err.0.category, expected_category);
+        }
+    }
+}
