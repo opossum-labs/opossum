@@ -13,9 +13,14 @@ pub fn SettingsDialog(open: Signal<bool>) -> Element {
     let mut active_tab = use_signal(|| 0);
     // Create a local temporary buffer of the entire configuration struct.
     let mut temp_config = use_signal(|| APP_CONFIG.read().clone());
+    // Signal to store an active validation error message across dialog interactions.
+    let mut wavelength_error = use_signal(|| None::<String>);
+
     use_effect(move || {
         if open() {
             *temp_config.write() = APP_CONFIG.read().clone();
+            // Clear any lingering error state when opening the dialog.
+            wavelength_error.set(None);
         }
     });
 
@@ -66,7 +71,7 @@ pub fn SettingsDialog(open: Signal<bool>) -> Element {
                                 GeneralSettingsTab { temp_config }
                             },
                             1 => rsx! {
-                                PhysicsSettingsTab { temp_config }
+                                PhysicsSettingsTab { temp_config, wavelength_error }
                             },
                             _ => rsx! {
                                 div { class: "text-danger", "Unknown category" }
@@ -79,6 +84,12 @@ pub fn SettingsDialog(open: Signal<bool>) -> Element {
                 AlertDialogCancel { "Cancel" }
                 AlertDialogAction {
                     on_click: move |_| {
+                        // Prevent persisting configuration if an active validation error exists.
+                        if wavelength_error().is_some() {
+                            eprintln!("Cannot save settings: validation error present");
+                            return;
+                        }
+
                         *APP_CONFIG.write() = temp_config.read().clone();
                         if let Err(e) = APP_CONFIG.read().to_file() {
                             eprintln!("Error while saving configuration: {e}");
@@ -125,7 +136,6 @@ fn GeneralSettingsTab(mut temp_config: Signal<crate::AppConfig>) -> Element {
                         class: "btn btn-secondary",
                         r#type: "button",
                         onclick: move |_| {
-                            // Retrieve the current directory and clone it if it exists on disk
                             let starting_dir = temp_config
                                 .read()
                                 .report_dir()
@@ -166,7 +176,6 @@ fn GeneralSettingsTab(mut temp_config: Signal<crate::AppConfig>) -> Element {
                         class: "btn btn-secondary",
                         r#type: "button",
                         onclick: move |_| {
-                            // Retrieve the current directory and clone it if it exists on disk
                             let starting_dir = temp_config
                                 .read()
                                 .catalog_dir()
@@ -227,7 +236,12 @@ fn GeneralSettingsTab(mut temp_config: Signal<crate::AppConfig>) -> Element {
 }
 
 #[component]
-fn PhysicsSettingsTab(mut temp_config: Signal<crate::AppConfig>) -> Element {
+fn PhysicsSettingsTab(
+    mut temp_config: Signal<crate::AppConfig>,
+    mut wavelength_error: Signal<Option<String>>,
+) -> Element {
+    // Tracks input revisions to force a dynamic remount when reverting an invalid value.
+    let mut input_revision = use_signal(|| 0usize);
     let current_wavelength = temp_config.read().default_wavelength();
 
     rsx! {
@@ -235,15 +249,50 @@ fn PhysicsSettingsTab(mut temp_config: Signal<crate::AppConfig>) -> Element {
             h4 { class: "mb-3", "Default Model Parameters" }
 
             div { class: "form-group",
-                NodeConfigUnitInput {
-                    id: "defaultWavelengthSetting",
-                    label: "Default Wavelength".to_string(),
-                    value: current_wavelength.value,
-                    unit_config: UnitHandling::new("m", true),
-                    readonly: false,
-                    onchange: move |new_length: f64| {
-                        temp_config.write().set_default_wavelength(meter!(new_length));
-                    },
+                // Rendering inside a keyed iterator forces Dioxus to completely unmount and recreate
+                // the input component and its underlying DOM node whenever `input_revision` changes.
+                for rev in [input_revision()] {
+                    div { key: "{rev}",
+                        NodeConfigUnitInput {
+                            id: "defaultWavelengthSetting",
+                            label: "Default Wavelength".to_string(),
+                            value: current_wavelength.value,
+                            unit_config: UnitHandling::new("m", true),
+                            readonly: false,
+                            onchange: move |new_length: f64| {
+                                match temp_config.write().set_default_wavelength(meter!(new_length)) {
+                                    Ok(()) => {
+                                        wavelength_error.set(None);
+                                    }
+                                    Err(err) => {
+                                        wavelength_error.set(Some(err.to_string()));
+                                    }
+                                }
+                            },
+                        }
+                    }
+                }
+
+                // Render visual validation warning if an error occurred
+                if let Some(err_msg) = wavelength_error() {
+                    div {
+                        class: "alert alert-danger py-2 px-3 mt-2 mb-0 d-flex align-items-center justify-content-between small",
+                        role: "alert",
+                        div { class: "d-flex align-items-center gap-2",
+                            span { class: "fw-semibold", "Invalid wavelength:" }
+                            span { "{err_msg}" }
+                        }
+                        button {
+                            class: "btn btn-sm btn-outline-light py-0 px-2",
+                            r#type: "button",
+                            onclick: move |_| {
+                                // Clear the error banner and increment revision to force remount
+                                wavelength_error.set(None);
+                                input_revision.set(input_revision() + 1);
+                            },
+                            "Dismiss"
+                        }
+                    }
                 }
             }
         }

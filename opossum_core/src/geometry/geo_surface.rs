@@ -52,7 +52,7 @@ pub trait GeoSurface: Send + Sync + Debug {
     /// [`Body`](super::body::Body)).
     ///
     /// **Note**: This is a strict half space only for the surfaces that are one, i.e.
-    /// [`Plane`](super::Plane) and [`Parabola`](super::Parabola). [`Sphere`](super::Sphere) and
+    /// [`Plane`] and [`Parabola`](super::Parabola). [`Sphere`](super::Sphere) and
     /// [`Cylinder`](super::Cylinder) answer "inside the ball / cylinder of their radius", which
     /// coincides with the half space near the vertex and departs from it towards the rim, where
     /// the surface curves away and eventually closes on itself. Composing two of them into a body

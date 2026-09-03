@@ -83,7 +83,7 @@ impl OpticGraph {
         &self.external_distances
     }
     /// Creates a deep copy of this optical graph where every contained [`OpticRef`]
-    /// is cloned into a new Arc<Mutex<dyn Analyzable>> instance.
+    /// is cloned into a new `Arc<Mutex<dyn Analyzable>>` instance.
     ///
     /// # Errors
     ///

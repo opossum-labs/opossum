@@ -9,7 +9,6 @@ use opossum_core::{
     core_optics::{OpticRef, node_attr::HasNodeAttr},
     error::OpossumError,
     gain::PumpScenario,
-    light::lightdata::{energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder},
     nodes::{NodeReference, create_node_ref},
     prelude::{AnalyzerType, OpmDocument},
     types::api_types::{
@@ -21,6 +20,7 @@ use opossum_core::{
 use uuid::Uuid;
 
 use crate::{
+    analyzers::{create_default_energy_builder, create_default_ray_builder},
     app_state::AppState,
     error::BackEndErrorResponse,
     helper_functions::{
@@ -129,19 +129,23 @@ async fn post_children(
         let analyzer_keys: Vec<Uuid> = document.analyzers().keys().copied().collect();
         for az_uuid in analyzer_keys {
             if let Some(analyzer_info) = document.analyzer_mut(az_uuid) {
+                // Read the analyzer's own persisted default wavelength
+                let default_wvl = analyzer_info.default_wavelength();
                 let old_type = analyzer_info.analyzer_type().clone();
                 let mut a_type = old_type.clone();
+
                 match &mut a_type {
                     AnalyzerType::Energy(cfg) => {
-                        cfg.map_source(new_node_uuid, EnergyDataBuilder::default());
+                        cfg.map_source(new_node_uuid, create_default_energy_builder(default_wvl));
                     }
                     AnalyzerType::RayTrace(cfg) => {
-                        cfg.map_source(new_node_uuid, RayDataBuilder::default());
+                        cfg.map_source(new_node_uuid, create_default_ray_builder(default_wvl));
                     }
                     AnalyzerType::GhostFocus(cfg) => {
-                        cfg.map_source(new_node_uuid, RayDataBuilder::default());
+                        cfg.map_source(new_node_uuid, create_default_ray_builder(default_wvl));
                     }
                 }
+
                 if a_type != old_type {
                     analyzer_info.set_analyzer_type(&a_type);
                     analyzer_inverses.push(Command::PatchAnalyzer(Box::new(PatchAnalyzer {

@@ -92,7 +92,7 @@ impl ConstGain {
     ///
     /// # Errors
     ///
-    /// Returns an [`OpossumError::Other`] if the given factor is not finite or negative.
+    /// Returns an [`OpossumError::Other`](crate::error::OpossumError::Other) if the given factor is not finite or negative.
     pub fn new(gain: f64) -> OpmResult<Self> {
         let mut const_gain = Self::default();
         const_gain.set_gain(gain)?;
@@ -111,7 +111,7 @@ impl ConstGain {
     ///
     /// # Errors
     ///
-    /// Returns an [`OpossumError::Other`] if the given factor is not finite or negative. The
+    /// Returns an [`OpossumError::Other`](crate::error::OpossumError::Other) if the given factor is not finite or negative. The
     /// previous value is kept in that case.
     pub fn set_gain(&mut self, gain: f64) -> OpmResult<()> {
         self.gain.set(gain)

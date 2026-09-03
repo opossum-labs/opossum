@@ -125,7 +125,7 @@ impl LambertBeerProfile {
     ///
     /// # Errors
     ///
-    /// Returns an [`OpossumError::Other`] if the coefficient is not finite or is negative.
+    /// Returns an [`OpossumError::Other`](crate::error::OpossumError::Other) if the coefficient is not finite or is negative.
     pub fn new(absorption: ReciprocalLength, direction: PumpDirection) -> OpmResult<Self> {
         let mut profile = Self::default();
         profile.set_absorption(absorption)?;
@@ -150,7 +150,7 @@ impl LambertBeerProfile {
     ///
     /// # Errors
     ///
-    /// Returns an [`OpossumError::Other`] if the coefficient is not finite or is negative. The
+    /// Returns an [`OpossumError::Other`](crate::error::OpossumError::Other) if the coefficient is not finite or is negative. The
     /// previous value is kept in that case.
     pub fn set_absorption(&mut self, absorption: ReciprocalLength) -> OpmResult<()> {
         self.absorption.set(absorption)
