@@ -4,6 +4,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
+use uom::si::f64::Length;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
@@ -607,11 +608,16 @@ pub struct CutNodesResponse {
 // ============================================================================
 
 /// Request payload to create a new analyzer
+/// Request payload to create a new analyzer
 #[derive(Serialize, Deserialize, ToSchema, Clone)]
 pub struct NewAnalyzerInfo {
     pub analyzer_type: AnalyzerType,
     #[schema(example = json!([0.0, 0.0]))]
     pub gui_position: (f64, f64),
+    /// Optional default wavelength used to initialize source port configurations
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Object>)]
+    pub default_wavelength: Option<Length>,
 }
 
 /// Data Transfer Object to securely send an analyzer with its corresponding ID to the client.
@@ -645,16 +651,22 @@ impl From<AnalyzerInfo> for NewAnalyzerInfo {
         Self {
             analyzer_type: value.analyzer_type().clone(),
             gui_position: pos,
+            default_wavelength: None,
         }
     }
 }
 
 impl NewAnalyzerInfo {
     #[must_use]
-    pub const fn new(analyzer_type: AnalyzerType, gui_position: (f64, f64)) -> Self {
+    pub const fn new(
+        analyzer_type: AnalyzerType,
+        gui_position: (f64, f64),
+        default_wavelength: Option<Length>,
+    ) -> Self {
         Self {
             analyzer_type,
             gui_position,
+            default_wavelength,
         }
     }
 }

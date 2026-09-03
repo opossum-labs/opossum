@@ -1665,7 +1665,11 @@ async fn process_add_analyzer(
 
         let final_pos = find_suitable_element_position(proposed_pos, &existing_positions);
 
-        NewAnalyzerInfo::new(analyzer_type, final_pos)
+        // Retrieve user-defined default wavelength from application configuration
+        let default_wvl = crate::APP_CONFIG.read().default_wavelength();
+
+        // Pass the default wavelength into the creation request payload
+        NewAnalyzerInfo::new(analyzer_type, final_pos, Some(default_wvl))
     };
 
     eval_action_run(

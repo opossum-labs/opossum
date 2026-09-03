@@ -4,12 +4,20 @@ use actix_web::{
 };
 use opossum_core::{
     core_optics::NodeAttr,
-    light::lightdata::{energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder},
+    distributions::spectral::{LaserLines, SpecDistType},
+    joule,
+    light::lightdata::{
+        energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
+        ray_data_builder::RayDataBuilder,
+        ray_data_source::RayDataSource,
+    },
+    nanometer,
     nodes::NodeGroup,
     opm_document::AnalyzerInfo,
     prelude::AnalyzerType,
     types::api_types::{AnalyzerItemDto, ErrorResponse, NewAnalyzerInfo, SourcePortDto},
 };
+use uom::si::f64::Length;
 use utoipa_actix_web::service_config::ServiceConfig;
 use uuid::Uuid;
 
@@ -73,6 +81,26 @@ fn get_node_analyzer_attr_from_state(
     Ok(analyzer_info)
 }
 
+/// Creates a default `EnergyDataBuilder` optionally configured with a custom wavelength.
+pub fn create_default_energy_builder(default_wvl: Option<Length>) -> EnergyDataBuilder {
+    default_wvl.map_or_else(EnergyDataBuilder::default, |wvl| {
+        let ell =
+            EnergyLaserLines::new(vec![(wvl, joule!(1.0))], nanometer!(0.1)).unwrap_or_default();
+        EnergyDataBuilder::LaserLines(ell)
+    })
+}
+
+/// Creates a default `RayDataBuilder` optionally configured with a custom wavelength.
+pub fn create_default_ray_builder(default_wvl: Option<Length>) -> RayDataBuilder {
+    default_wvl.map_or_else(RayDataBuilder::default, |wvl| {
+        let mut rds = RayDataSource::default();
+        if let Ok(lines) = LaserLines::new(vec![(wvl, 1.0)]) {
+            rds.set_spectral_dist(SpecDistType::LaserLines(lines));
+        }
+        RayDataBuilder::from(rds)
+    })
+}
+
 /// Add an analyzer to the model
 #[utoipa::path(
     tag = "analyzer", 
@@ -85,6 +113,7 @@ pub async fn post_analyzer(
     analyzer: web::Json<NewAnalyzerInfo>,
 ) -> HttpResponse {
     let new_analyzer_info = analyzer.into_inner();
+    let default_wvl = new_analyzer_info.default_wavelength;
     let mut document = data.document.lock();
 
     // 1. Create the analyzer core instance
@@ -99,18 +128,20 @@ pub async fn post_analyzer(
         .map(|(uuid, _)| uuid)
         .collect();
     if let Some(analyzer_info) = document.analyzer_mut(uuid) {
-        let mut a_type = analyzer_info.analyzer_type().clone();
+        // Persist the default wavelength in the analyzer instance
+        analyzer_info.set_default_wavelength(default_wvl);
 
+        let mut a_type = analyzer_info.analyzer_type().clone();
         for port_uuid in source_uuids {
             match &mut a_type {
                 AnalyzerType::Energy(config) => {
-                    config.map_source(port_uuid, EnergyDataBuilder::default());
+                    config.map_source(port_uuid, create_default_energy_builder(default_wvl));
                 }
                 AnalyzerType::RayTrace(config) => {
-                    config.map_source(port_uuid, RayDataBuilder::default());
+                    config.map_source(port_uuid, create_default_ray_builder(default_wvl));
                 }
                 AnalyzerType::GhostFocus(config) => {
-                    config.map_source(port_uuid, RayDataBuilder::default());
+                    config.map_source(port_uuid, create_default_ray_builder(default_wvl));
                 }
             }
         }
@@ -121,7 +152,7 @@ pub async fn post_analyzer(
         data.push_undo(Command::RemoveAnalyzer(AnalyzerItemDto { id: uuid, info }));
     }
     drop(document);
-    HttpResponse::Created().json(uuid) // 201 Created
+    HttpResponse::Created().json(uuid)
 }
 
 /// Delete an analyzer

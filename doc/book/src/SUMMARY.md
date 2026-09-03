@@ -26,6 +26,7 @@
   - [Shaped pump profiles](./howto%20guides/shaped_pump_profile.md)
   - [Pump profile in output fluence](./howto%20guides/small_signal_gain_fluence.md)
 - [Reference](./reference/reference.md)
+  - [Application Settings](./reference/configuration.md)
   - [Nodes](./reference/nodes.md)
     - [Beam propagation visualizer](./reference/nodes/beam_propagation_visualizer.md)
     - [Beam splitter](./reference/nodes/beam_splitter.md)

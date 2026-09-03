@@ -1,12 +1,14 @@
 use crate::components::node_editor::{
-    analyzer_node_editor::light_data_editor::energy_source_editor::EnergySourceEditor,
+    analyzer_node_editor::light_data_editor::{
+        default_energy_data_builder, energy_source_editor::EnergySourceEditor,
+    },
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
 };
 
 use dioxus::prelude::*;
 use opossum_core::{
     analyzers::energy::EnergyConfig,
-    prelude::{AnalyzerType, EnergyDataBuilder, LightDataBuilder},
+    prelude::{AnalyzerType, LightDataBuilder},
     types::api_types::SourcePortDto,
 };
 use uuid::Uuid;
@@ -67,7 +69,10 @@ fn SourcePortCard(
         .read()
         .get_source(&port_uuid)
         .cloned()
-        .unwrap_or_else(EnergyDataBuilder::default);
+        .unwrap_or_else(|| {
+            let default_wvl = crate::APP_CONFIG.read().default_wavelength();
+            default_energy_data_builder(default_wvl)
+        });
 
     rsx! {
         div {
