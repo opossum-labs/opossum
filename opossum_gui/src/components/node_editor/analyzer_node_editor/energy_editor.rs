@@ -8,7 +8,7 @@ use crate::components::node_editor::{
 use dioxus::prelude::*;
 use opossum_core::{
     analyzers::energy::EnergyConfig,
-    prelude::{AnalyzerType, EnergyDataBuilder, LightDataBuilder},
+    prelude::{AnalyzerType, LightDataBuilder},
     types::api_types::SourcePortDto,
 };
 use uuid::Uuid;

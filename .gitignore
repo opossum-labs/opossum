@@ -13,4 +13,5 @@
 profile.json.*
 profile.kernel.etl
 CLAUDE.md
-
+mutants.out/
+mutants.out.old/

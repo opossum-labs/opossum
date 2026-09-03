@@ -23,6 +23,7 @@ use indexmap::IndexMap;
 use log::{info, warn};
 use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
+use uom::si::f64::Length;
 use std::{
     collections::HashSet,
     fs::{self, File},
@@ -42,7 +43,12 @@ pub struct AnalyzerInfo {
     gui_position: Option<(f64, f64)>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pump_scenarios: Vec<Uuid>,
+    /// Optional default wavelength used when configuring or auto-mapping source ports
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Object>)]
+    default_wavelength: Option<Length>,
 }
+
 impl AnalyzerInfo {
     /// Creates a new [`AnalyzerInfo`].
     #[allow(clippy::missing_const_for_fn)]
@@ -52,7 +58,18 @@ impl AnalyzerInfo {
             analyzer_type,
             gui_position: Some((gui_position.x, gui_position.y)),
             pump_scenarios: Vec::new(),
+            default_wavelength: None,
         }
+    }
+    /// Returns the default wavelength of this analyzer, if configured.
+    #[must_use]
+    pub const fn default_wavelength(&self) -> Option<Length> {
+        self.default_wavelength
+    }
+
+    /// Sets the default wavelength of this analyzer.
+    pub fn set_default_wavelength(&mut self, default_wavelength: Option<Length>) {
+        self.default_wavelength = default_wavelength;
     }
     /// Returns the [`PumpScenario`]s this analyzer is run in.
     ///
@@ -357,6 +374,7 @@ impl OpmDocument {
             analyzer_type,
             gui_position: None,
             pump_scenarios: Vec::new(),
+            default_wavelength: None
         };
         self.analyzers.insert(id, analyzer_info);
         id
@@ -372,6 +390,7 @@ impl OpmDocument {
             analyzer_type,
             gui_position,
             pump_scenarios: Vec::new(),
+            default_wavelength: None
         };
         self.analyzers.insert(id, analyzer_info);
         id
