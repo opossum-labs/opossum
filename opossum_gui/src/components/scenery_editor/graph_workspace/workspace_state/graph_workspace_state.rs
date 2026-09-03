@@ -63,7 +63,10 @@ impl<Lens> Store<GraphsWorkspaceState, Lens> {
         self.tab_history().write().retain(|x| !tab_ids.contains(x));
         let act_tab = *self.active_tab().read();
         if tab_ids.contains(&act_tab) {
-            let fallback = self.tab_history().write().pop()
+            let fallback = self
+                .tab_history()
+                .write()
+                .pop()
                 .unwrap_or_else(|| *self.root_scenery_id().read());
             self.active_tab().set(fallback);
         }

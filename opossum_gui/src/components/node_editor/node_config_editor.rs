@@ -37,7 +37,10 @@ pub enum NodeChangeAction {
     AnalyzerPumpScenarios(Vec<Uuid>),
     /// The user-assigned name of an analyzer. `graph_id` is the root graph the analyzer lives in,
     /// needed to update the canvas node label after the backend call.
-    AnalyzerName { name: String, graph_id: Uuid },
+    AnalyzerName {
+        name: String,
+        graph_id: Uuid,
+    },
     PortConfig {
         port_name: String,
         port_type: PortType,
