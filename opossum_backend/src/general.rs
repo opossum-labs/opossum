@@ -121,36 +121,12 @@ async fn get_analyzer_types() -> Result<Json<Vec<AnalyzerType>>, BackEndErrorRes
     let analyzer_types = opossum_core::analyzers::AnalyzerType::analyzer_types();
     Ok(Json(analyzer_types))
 }
-/// Terminate the backend server
-///
-/// This terminates the OPOSSUM backend server. This is a (probably temporary) endpoint which is used to kill the server
-/// when the GUI is closed. It might be removed in the future. **Note**: After sending this call you can no longer communicate as
-/// the server is closed.
-#[utoipa::path(
-    post,
-    responses(
-        (status = NO_CONTENT, description = "Server successfully terminated"),
-        (status = INTERNAL_SERVER_ERROR, description = "Server handle not found, termination failed", body = String)
-    ),
-    tag="general"
-)]
-#[post("/terminate")]
-pub async fn post_terminate(data: web::Data<AppState>) -> HttpResponse {
-    let handle_opt = data.server_handle.lock().clone();
-    if let Some(handle) = handle_opt {
-        handle.stop(true).await;
-        HttpResponse::NoContent().finish()
-    } else {
-        HttpResponse::InternalServerError().body("Server handle not found")
-    }
-}
 
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_version);
     cfg.service(get_hello);
     cfg.service(get_node_types);
     cfg.service(get_analyzer_types);
-    cfg.service(post_terminate);
 }
 #[cfg(test)]
 mod test {
