@@ -342,4 +342,99 @@ mod tests {
 
         Ok(())
     }
+    #[test]
+    fn test_material_getters_and_metadata() {
+        let const_refr = RefrIndexConst::new(1.5).unwrap();
+        let material = Material::new_draft(
+            "Crown Glass",
+            Some("Schott".to_string()),
+            Some("Standard optical glass".to_string()),
+            const_refr.into(),
+        );
+
+        assert_eq!(material.name(), "Crown Glass");
+        assert_eq!(material.version(), 0);
+        assert!(matches!(
+            material.refractive_index_type(),
+            RefractiveIndexType::Const(_)
+        ));
+    }
+
+    #[test]
+    fn test_material_default() {
+        let material = Material::default();
+        assert_eq!(material.name(), "Default Glass");
+        assert_eq!(material.version(), 0);
+        assert!(material.thermal.is_none());
+        assert!(material.mechanical.is_none());
+    }
+
+    #[test]
+    fn test_from_conversions_all_models() {
+        // 1. RefractiveIndexType & &RefractiveIndexType
+        let enum_refr: RefractiveIndexType = RefrIndexConst::new(1.52).unwrap().into();
+        let mat_enum_val = Material::from(enum_refr.clone());
+        let mat_enum_ref = Material::from(&enum_refr);
+        assert_eq!(mat_enum_val.name(), "Custom Material");
+        assert_eq!(mat_enum_ref.name(), "Custom Material");
+
+        // 2. RefrIndexConst & &RefrIndexConst
+        let const_refr = RefrIndexConst::new(1.5).unwrap();
+        let mat_const_val = Material::from(const_refr);
+        let mat_const_ref = Material::from(&const_refr);
+        assert_eq!(mat_const_val.name(), "Custom Material");
+        assert_eq!(mat_const_ref.name(), "Custom Material");
+
+        // 3. RefrIndexSellmeier1 & &RefrIndexSellmeier1
+        let sellmeier = RefrIndexSellmeier1::default();
+        let mat_sell_val = Material::from(sellmeier.clone());
+        let mat_sell_ref = Material::from(&sellmeier);
+        assert_eq!(mat_sell_val.name(), "Custom Material");
+        assert_eq!(mat_sell_ref.name(), "Custom Material");
+
+        // 4. RefrIndexSchott & &RefrIndexSchott
+        let schott = RefrIndexSchott::default();
+        let mat_schott_val = Material::from(schott.clone());
+        let mat_schott_ref = Material::from(&schott);
+        assert_eq!(mat_schott_val.name(), "Custom Material");
+        assert_eq!(mat_schott_ref.name(), "Custom Material");
+
+        // 5. RefrIndexConrady & &RefrIndexConrady
+        let conrady = RefrIndexConrady::default();
+        let mat_conrady_val = Material::from(conrady.clone());
+        let mat_conrady_ref = Material::from(&conrady);
+        assert_eq!(mat_conrady_val.name(), "Custom Material");
+        assert_eq!(mat_conrady_ref.name(), "Custom Material");
+
+        // 6. RefrIndexAir & &RefrIndexAir
+        let air = RefrIndexAir::default();
+        let mat_air_val = Material::from(air.clone());
+        let mat_air_ref = Material::from(&air);
+        assert_eq!(mat_air_val.name(), "Custom Material");
+        assert_eq!(mat_air_ref.name(), "Custom Material");
+    }
+
+    #[test]
+    fn test_material_serde_roundtrip() {
+        // Test with optional thermal and mechanical blocks present
+        let mut material = Material::default();
+        material.thermal = Some(ThermalProperties::default());
+        material.mechanical = Some(MechanicalProperties::default());
+
+        let ron = ron::to_string(&material).expect("serialization failed");
+        let deserialized: Material = ron::from_str(&ron).expect("deserialization failed");
+
+        assert_eq!(material, deserialized);
+        assert!(deserialized.thermal.is_some());
+        assert!(deserialized.mechanical.is_some());
+
+        // Test without optional blocks
+        let bare_material = Material::default();
+        let bare_ron = ron::to_string(&bare_material).expect("serialization failed");
+        let bare_deserialized: Material = ron::from_str(&bare_ron).expect("deserialization failed");
+
+        assert_eq!(bare_material, bare_deserialized);
+        assert!(bare_deserialized.thermal.is_none());
+        assert!(bare_deserialized.mechanical.is_none());
+    }
 }
