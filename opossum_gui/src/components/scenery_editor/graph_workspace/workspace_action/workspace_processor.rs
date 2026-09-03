@@ -979,6 +979,14 @@ async fn apply_document_changes(
                     .nodes
                     .update_node_positions(positions, *root_graph_id.read());
             }
+            DocumentChange::AnalyzerRenamed { id, name } => {
+                // Update the canvas label on undo/redo of a rename (a details refresh alone
+                // doesn't touch the NodeElement name stored in the graph store).
+                ws_handler
+                    .nodes
+                    .set_node_name(name, id, *root_graph_id.read(), false);
+                *NODE_DETAILS_REFRESH.write() += 1;
+            }
             DocumentChange::EdgeAdded {
                 graph_id,
                 connect_info,
@@ -1003,6 +1011,16 @@ async fn apply_document_changes(
                     analyzer.id,
                     *root_graph_id.read(),
                 );
+                // Restore the user-assigned name when undoing a delete: add_analyzer_node uses the
+                // type label by default, so a second pass is needed when the analyzer had a name.
+                if !analyzer.info.name().is_empty() {
+                    ws_handler.nodes.set_node_name(
+                        analyzer.info.display_name(),
+                        analyzer.id,
+                        *root_graph_id.read(),
+                        false,
+                    );
+                }
             }
             DocumentChange::AnalyzerRemoved { id } => {
                 ws_handler

@@ -873,6 +873,9 @@ pub enum DocumentChange {
     /// The analyzer moved on the canvas to `gui_position`. Emitted when undoing/redoing an analyzer
     /// reposition, so the GUI can move it back (a details refetch alone doesn't touch canvas state).
     AnalyzerMoved { id: Uuid, gui_position: (f64, f64) },
+    /// The analyzer was renamed. Emitted when undoing/redoing a name change, so the GUI can update
+    /// the canvas node label (a details refetch alone doesn't touch canvas state).
+    AnalyzerRenamed { id: Uuid, name: String },
     /// Mirrors `POST /api/pump_scenarios`.
     PumpScenarioAdded { scenario: PumpScenarioItemDto },
     /// Mirrors `DELETE /api/pump_scenarios/{uuid}`.

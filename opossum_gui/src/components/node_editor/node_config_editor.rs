@@ -35,6 +35,12 @@ pub enum NodeChangeAction {
     /// analyzer's config rather than inside it: it names operating points of the document, which is
     /// why it has an endpoint (and an undo command) of its own on the backend.
     AnalyzerPumpScenarios(Vec<Uuid>),
+    /// The user-assigned name of an analyzer. `graph_id` is the root graph the analyzer lives in,
+    /// needed to update the canvas node label after the backend call.
+    AnalyzerName {
+        name: String,
+        graph_id: Uuid,
+    },
     PortConfig {
         port_name: String,
         port_type: PortType,
@@ -242,6 +248,20 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                     }
                     NodeChangeAction::AnalyzerPumpScenarios(scenarios) => {
                         api::put_analyzer_pump_scenarios(uuid, scenarios).await
+                    }
+                    NodeChangeAction::AnalyzerName { name, graph_id } => {
+                        match api::update_analyzer_name(uuid, &name).await {
+                            Ok(()) => {
+                                workspace_processor.send(GraphsWorkspaceAction::SetNodeName {
+                                    name,
+                                    graph_id,
+                                    node_id: uuid,
+                                    needs_saving: true,
+                                });
+                                Ok(())
+                            }
+                            Err(e) => Err(e),
+                        }
                     }
                     NodeChangeAction::PortConfig {
                         port_name,

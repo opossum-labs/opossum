@@ -38,6 +38,8 @@ use ron::{extensions::Extensions, ser::PrettyConfig};
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct AnalyzerInfo {
     analyzer_type: AnalyzerType,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     gui_position: Option<(f64, f64)>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -50,6 +52,7 @@ impl AnalyzerInfo {
     pub fn new(analyzer_type: AnalyzerType, gui_position: Point2<f64>) -> Self {
         Self {
             analyzer_type,
+            name: String::new(),
             gui_position: Some((gui_position.x, gui_position.y)),
             pump_scenarios: Vec::new(),
         }
@@ -91,6 +94,31 @@ impl AnalyzerInfo {
     /// Sets the gui position of this [`AnalyzerInfo`].
     pub fn set_gui_position(&mut self, gui_position: Option<Point2<f64>>) {
         self.gui_position = gui_position.map(|gp| (gp.x, gp.y));
+    }
+    /// Returns the user-assigned name of this [`AnalyzerInfo`], or an empty string if none was set.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    /// Sets the user-assigned name of this [`AnalyzerInfo`].
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - the new name; an empty string clears the name.
+    pub fn set_name(&mut self, name: &str) {
+        self.name = name.to_string();
+    }
+    /// Returns the user-assigned name if set, otherwise falls back to the analyzer type label.
+    ///
+    /// Use this wherever a display label is needed rather than the raw stored name, so unnamed
+    /// analyzers continue to show their type (`"Energy"`, `"RayTrace"`, …) rather than an empty string.
+    #[must_use]
+    pub fn display_name(&self) -> String {
+        if self.name.is_empty() {
+            self.analyzer_type.to_string()
+        } else {
+            self.name.clone()
+        }
     }
     /// Returns a reference to the analyzer type of this [`AnalyzerInfo`].
     #[must_use]
@@ -355,6 +383,7 @@ impl OpmDocument {
         let id = Uuid::new_v4();
         let analyzer_info = AnalyzerInfo {
             analyzer_type,
+            name: String::new(),
             gui_position: None,
             pump_scenarios: Vec::new(),
         };
@@ -370,6 +399,7 @@ impl OpmDocument {
         let id = Uuid::new_v4();
         let analyzer_info = AnalyzerInfo {
             analyzer_type,
+            name: String::new(),
             gui_position,
             pump_scenarios: Vec::new(),
         };

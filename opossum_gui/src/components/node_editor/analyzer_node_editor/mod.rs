@@ -10,6 +10,7 @@ use crate::components::{
             energy_editor::EnergyEditor, ghost_focus_editor::GhostFocusEditor,
             ray_trace_editor::RayTraceEditor,
         },
+        inputs::input_components::FlushableTextInput,
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
         optical_node_editor::general_editor::NodeTypeInput,
     },
@@ -114,9 +115,21 @@ pub fn AnalyzerNodeEditor(
             if *loaded_id == *node_id.read() =>
         {
             let loaded_id_val = *loaded_id;
+            let graph_id = active_node.read().graph_id;
             let available_sources = available_sources.clone();
             let pump_scenarios = pump_scenarios.clone();
             let selected_scenarios = analyzer_info.pump_scenarios().to_vec();
+            let analyzer_name = analyzer_info.name().to_string();
+
+            let on_name_save = use_callback(move |new_name: String| {
+                on_change.call(NodeChangeEvent {
+                    node_id: loaded_id_val,
+                    action: NodeChangeAction::AnalyzerName {
+                        name: new_name,
+                        graph_id,
+                    },
+                });
+            });
 
             rsx! {
                 div {
@@ -130,6 +143,16 @@ pub fn AnalyzerNodeEditor(
                         NodeTypeInput {
                             node_type: format!("{}", analyzer_info.analyzer_type()),
                             label: "Analyzer Type",
+                        }
+                        FlushableTextInput {
+                            id: format!("analyzerName_{loaded_id_val}"),
+                            label: "Analyzer Name".to_string(),
+                            value: analyzer_name,
+                            container_class: "form-floating border-start".to_string(),
+                            input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
+                            label_class: "form-label text-secondary".to_string(),
+                            readonly: false,
+                            on_save: on_name_save,
                         }
                         {
                             match analyzer_info.analyzer_type() {

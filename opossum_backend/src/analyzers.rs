@@ -19,7 +19,9 @@ use crate::{
     helper_functions::{
         Ron, analyzer_mut_or_404, apply_and_push_undo, collect_nodes, ron_or_json_response,
     },
-    undo::{Command, PatchAnalyzer, PatchAnalyzerPumpScenarios, RepositionAnalyzer},
+    undo::{
+        Command, PatchAnalyzer, PatchAnalyzerName, PatchAnalyzerPumpScenarios, RepositionAnalyzer,
+    },
 };
 
 /// Collects every "source port" node of the whole document as `(uuid, name)` pairs, in depth-first
@@ -304,6 +306,34 @@ pub async fn get_available_sources(
     Ok(HttpResponse::Ok().json(collected_sources))
 }
 
+/// Set the user-assigned name of an analyzer
+///
+/// An empty string clears the name; the analyzer then shows its type label ("Energy", etc.)
+/// in the GUI.
+#[utoipa::path(
+    tag = "analyzer",
+    params(("uuid" = Uuid, Path, description = "UUID of the analyzer")),
+    request_body(content = String, description = "new name (empty string to clear)", content_type = "application/json"),
+    responses(
+        (status = NO_CONTENT, description = "Analyzer name successfully updated"),
+        (status = NOT_FOUND, body = ErrorResponse, description = "Analyzer UUID not found", content_type="application/json")
+    )
+)]
+#[put("/{uuid}/name")]
+pub async fn put_analyzer_name(
+    data: web::Data<AppState>,
+    path: web::Path<Uuid>,
+    body: web::Json<String>,
+) -> Result<HttpResponse, BackEndErrorResponse> {
+    let uuid = path.into_inner();
+    let new = body.into_inner();
+    let mut document = data.document.lock();
+
+    let old = analyzer_mut_or_404(&mut document, uuid)?.name().to_string();
+    let command = Command::PatchAnalyzerName(PatchAnalyzerName { id: uuid, old, new });
+    apply_and_push_undo(&data, document, command, true)
+}
+
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_available_sources);
     cfg.service(get_analyzers);
@@ -313,6 +343,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(delete_analyzer);
     cfg.service(put_analyzer_gui_position);
     cfg.service(put_analyzer_pump_scenarios);
+    cfg.service(put_analyzer_name);
 }
 
 #[cfg(test)]
