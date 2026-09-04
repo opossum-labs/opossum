@@ -4,8 +4,9 @@ use crate::components::node_editor::{
     node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::on_save_proptype_handler,
 };
+use crate::utils::ToSentenceCase;
 use dioxus::prelude::*;
-use inflector::Inflector;
+use heck::ToLowerCamelCase;
 use opossum_core::{
     core_optics::hit_map::fluence_estimator::FluenceEstimator,
     utils::default_from_name::DefaultFromName,
@@ -30,7 +31,7 @@ pub fn FluenceEstimatorEditor(
 
     rsx! {
         LabeledSelect {
-            id: format!("fluenceEstimatorProperty{property_key}").to_camel_case(),
+            id: format!("fluenceEstimatorProperty{property_key}").to_lower_camel_case(),
             label: property_key.to_sentence_case(),
             options: select_options_from_enum_iterator(&*fluence_estimator_sig.read(), None),
             readonly,

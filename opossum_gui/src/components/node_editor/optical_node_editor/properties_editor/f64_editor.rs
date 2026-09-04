@@ -1,11 +1,14 @@
-use crate::components::node_editor::{
-    hooks::use_synced_signal, inputs::input_components::NodeConfigPlainF64Input,
-    node_config_editor::NodeChangeEvent,
-    optical_node_editor::properties_editor::on_save_proptype_handler,
+use crate::{
+    components::node_editor::{
+        hooks::use_synced_signal, inputs::input_components::NodeConfigPlainF64Input,
+        node_config_editor::NodeChangeEvent,
+        optical_node_editor::properties_editor::on_save_proptype_handler,
+    },
+    utils::ToSentenceCase,
 };
 use approx::relative_ne;
 use dioxus::prelude::*;
-use inflector::Inflector;
+use heck::ToLowerCamelCase;
 use uuid::Uuid;
 
 #[component]
@@ -21,7 +24,7 @@ pub fn F64Editor(
 
     rsx! {
         NodeConfigPlainF64Input {
-            id: format!("float64Property{property_key}").to_camel_case(),
+            id: format!("float64Property{property_key}").to_lower_camel_case(),
             label: property_key.to_sentence_case(),
             value: float64_sig,
             readonly,

@@ -7,6 +7,7 @@ mod api;
 mod app_config;
 mod backend_status;
 mod components;
+mod utils;
 
 use api::http_client::HTTPClient;
 use app_config::AppConfig;

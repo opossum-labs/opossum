@@ -34,8 +34,8 @@ dioxus-free-icons = { version = "0.10", features = ["font-awesome-solid"] }
 directories = "6"
 futures-util = "0.3"
 ico = "0.5"
-Inflector = "0.11"
-reqwest = { version = "0.13", features = ["json", "stream"] }
+heck = "0.5"
+reqwest = { version = "0.13", default-features = false, features = ["json"] }
 rfd = { version = "0.17" }
 rust-sugiyama = "0.4"
 dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1", default-features = false }

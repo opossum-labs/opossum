@@ -1,11 +1,15 @@
-use crate::components::node_editor::{
-    hooks::use_synced_signal,
-    inputs::input_components::{NodeConfigUnitInput, UnitHandling},
-    node_config_editor::NodeChangeEvent,
-    optical_node_editor::properties_editor::on_save_proptype_handler,
+use crate::{
+    components::node_editor::{
+        hooks::use_synced_signal,
+        inputs::input_components::{NodeConfigUnitInput, UnitHandling},
+        node_config_editor::NodeChangeEvent,
+        optical_node_editor::properties_editor::on_save_proptype_handler,
+    },
+    utils::ToSentenceCase,
 };
 use dioxus::prelude::*;
-use inflector::Inflector;
+
+use heck::ToLowerCamelCase;
 use opossum_core::num_per_m;
 use uom::si::f64::LinearNumberDensity;
 use uuid::Uuid;
@@ -25,7 +29,7 @@ pub fn LinearDensityEditor(
 
     rsx! {
         NodeConfigUnitInput {
-            id: format!("linearDensityProperty{property_key}").to_camel_case(),
+            id: format!("linearDensityProperty{property_key}").to_lower_camel_case(),
             label: property_key.to_sentence_case(),
             value: linear_density_sig.read().value,
             unit_config: UnitHandling::new("m⁻¹", true),

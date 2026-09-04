@@ -1,11 +1,15 @@
-use crate::components::node_editor::{
-    hooks::use_synced_signal,
-    inputs::input_components::{LabeledSelect, NodeConfigUnitInput, UnitHandling},
-    node_config_editor::NodeChangeEvent,
-    optical_node_editor::properties_editor::on_save_proptype_handler,
+use crate::{
+    components::node_editor::{
+        hooks::use_synced_signal,
+        inputs::input_components::{LabeledSelect, NodeConfigUnitInput, UnitHandling},
+        node_config_editor::NodeChangeEvent,
+        optical_node_editor::properties_editor::on_save_proptype_handler,
+    },
+    utils::ToSentenceCase,
 };
 use dioxus::prelude::*;
-use inflector::Inflector;
+
+use heck::ToLowerCamelCase;
 use opossum_core::{meter, nanometer};
 use uom::si::f64::Length;
 use uuid::Uuid;
@@ -24,7 +28,7 @@ pub fn LengthOptionEditor(
 
     rsx! {
         LabeledSelect {
-            id: format!("lengthOptionProperty{property_key}").to_camel_case(),
+            id: format!("lengthOptionProperty{property_key}").to_lower_camel_case(),
             label: property_key.to_sentence_case(),
             options: vec![
                 (length_opt_sig.read().is_none(), "None".to_owned()),
@@ -47,7 +51,7 @@ pub fn LengthOptionEditor(
                     |length| {
                         rsx! {
                             NodeConfigUnitInput {
-                                id: format!("lengthOptionProperty{property_key}").to_camel_case().as_str(),
+                                id: format!("lengthOptionProperty{property_key}").to_lower_camel_case().as_str(),
                                 label: property_key.to_sentence_case(),
                                 value: length.value,
                                 unit_config: UnitHandling::new("m", true),
