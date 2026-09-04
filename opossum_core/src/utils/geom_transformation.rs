@@ -543,7 +543,7 @@ mod transform_serde {
         helper.serialize(serializer)
     }
 
-    /// Deserializes `Isometry3` from either flat format or legacy `(transform: ...)` format.
+    /// Deserializes `Isometry3` from flat representation.
     pub fn deserialize<'de, D>(deserializer: D) -> Result<super::Isometry, D::Error>
     where
         D: Deserializer<'de>,
@@ -570,6 +570,7 @@ mod transform_serde {
                     formatter.write_str("a transform struct or ()")
                 }
 
+                // Support empty identity isometry represented as unit `()`
                 fn visit_unit<E>(self) -> Result<Self::Value, E>
                 where
                     E: de::Error,
@@ -591,6 +592,7 @@ mod transform_serde {
                     Ok(TransformHelper::default())
                 }
 
+                // Support flat map with optional rotation and translation fields
                 fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
                 where
                     A: MapAccess<'de>,
@@ -600,10 +602,6 @@ mod transform_serde {
 
                     while let Some(key) = map.next_key::<String>()? {
                         match key.as_str() {
-                            // Support legacy format with nested `transform:` key
-                            "transform" => {
-                                return map.next_value::<TransformHelper>();
-                            }
                             "rotation" => {
                                 if rotation.is_some() {
                                     return Err(de::Error::duplicate_field("rotation"));
@@ -1370,42 +1368,35 @@ mod test {
         Ok(())
     }
     #[test]
-    fn test_isometry_flat_serialization_and_legacy_compatibility() -> OpmResult<()> {
-        // 1. New flat format with rotation only
+    fn test_isometry_flat_serialization() -> OpmResult<()> {
+        // 1. Flat format with rotation only
         let rot_only = Isometry::new_rotation(degree!(45.0, 0.0, 0.0))?;
         let ron_rot = ron::to_string(&rot_only).map_err(|e| OpossumError::Other(e.to_string()))?;
-        assert!(
-            !ron_rot.contains("transform:"),
-            "Outer `transform:` must be absent"
-        );
+        assert!(!ron_rot.contains("transform:"));
         assert!(ron_rot.contains("rotation:"));
+        assert!(!ron_rot.contains("translation:"));
         let restored_rot: Isometry =
             ron::from_str(&ron_rot).map_err(|e| OpossumError::Other(e.to_string()))?;
         assert_eq!(rot_only, restored_rot);
 
-        // 2. Identity format must be ()
+        // 2. Flat format with translation only
+        let trans_only = Isometry::new_translation(meter!(1.0, 2.0, 3.0))?;
+        let ron_trans =
+            ron::to_string(&trans_only).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert!(!ron_trans.contains("transform:"));
+        assert!(!ron_trans.contains("rotation:"));
+        assert!(ron_trans.contains("translation:"));
+        let restored_trans: Isometry =
+            ron::from_str(&ron_trans).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert_eq!(trans_only, restored_trans);
+
+        // 3. Identity format serialized as empty tuple ()
         let identity = Isometry::identity();
         let ron_id = ron::to_string(&identity).map_err(|e| OpossumError::Other(e.to_string()))?;
         assert_eq!(ron_id, "()");
         let restored_id: Isometry =
             ron::from_str(&ron_id).map_err(|e| OpossumError::Other(e.to_string()))?;
         assert_eq!(identity, restored_id);
-
-        // 3. Legacy file with nested `transform:` key
-        let legacy_ron = r#"(
-            transform: (
-                rotation: (0.3826834323650898, 0.0, 0.0, 0.9238795325112867),
-            ),
-        )"#;
-        let restored_legacy: Isometry =
-            ron::from_str(legacy_ron).map_err(|e| OpossumError::Other(e.to_string()))?;
-        assert_eq!(restored_legacy.rotation(), rot_only.rotation());
-
-        // 4. Legacy file with empty `transform: ()`
-        let legacy_empty = "(transform: ())";
-        let restored_empty: Isometry =
-            ron::from_str(legacy_empty).map_err(|e| OpossumError::Other(e.to_string()))?;
-        assert_eq!(restored_empty, Isometry::identity());
 
         Ok(())
     }

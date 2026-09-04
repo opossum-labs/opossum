@@ -31,16 +31,6 @@ use crate::{
 /// than by a literal.
 pub const MATERIAL: &str = "Material";
 
-/// Name the [`MATERIAL`] property had before it carried a whole [`Material`].
-///
-/// Up to and including OPOSSUM 0.7.2 the same slot held a bare
-/// [`RefractiveIndexType`] under this name. The constant is kept so that `.opm` files written by
-/// an older OPOSSUM can be migrated on load (see `migrate_legacy_properties` in
-/// [`properties`](crate::properties)) — without that,
-/// [`Properties::update`](crate::properties::Properties::update) would silently drop the old key
-/// and the node would fall back to its default material.
-pub const LEGACY_REFRACTIVE_INDEX: &str = "refractive index";
-
 /// Represents a complete material embedded in an OPOSSUM scenery or stored in the registry.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Material {

@@ -184,7 +184,7 @@ impl Serialize for LaserLines {
     where
         S: Serializer,
     {
-        // Serialize directly as a plain list of tuples, eliminating `lines` and `values`
+        // Serialize directly as a flat list of tuples: [(Length, f64), ...]
         self.lines().serialize(serializer)
     }
 }
@@ -194,30 +194,8 @@ impl<'de> Deserialize<'de> for LaserLines {
     where
         D: Deserializer<'de>,
     {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum LaserLinesDeHelper {
-            // New direct list representation: [(Length, f64), ...]
-            Direct(Vec<(Length, f64)>),
-            // Intermediate layer containing values: (values: [...])
-            Values { values: Vec<(Length, f64)> },
-            // Legacy outer layer: (lines: ...)
-            Lines { lines: Box<Self> },
-        }
-
-        // Recursively unwrap nested legacy structures
-        fn extract_lines(helper: LaserLinesDeHelper) -> Vec<(Length, f64)> {
-            match helper {
-                LaserLinesDeHelper::Direct(v) => v,
-                LaserLinesDeHelper::Values { values } => values,
-                LaserLinesDeHelper::Lines { lines } => extract_lines(*lines),
-            }
-        }
-
-        let helper = LaserLinesDeHelper::deserialize(deserializer)?;
-        let raw_lines = extract_lines(helper);
-
-        // Re-run validation logic (ensures sorting, difference limits, and positivity)
+        // Directly deserialize the list of tuples and validate via constructor
+        let raw_lines = Vec::<(Length, f64)>::deserialize(deserializer)?;
         Self::new(raw_lines).map_err(serde::de::Error::custom)
     }
 }
@@ -397,42 +375,18 @@ mod laser_lines_tests {
         assert!(res.is_err());
     }
     #[test]
-    fn test_laser_lines_flat_serde_and_legacy_roundtrip() -> OpmResult<()> {
+    fn test_laser_lines_flat_serde_roundtrip() -> OpmResult<()> {
         let lines_vec = vec![valid_line(532.0, 0.5), valid_line(1064.0, 0.5)];
         let laser = LaserLines::new(lines_vec.clone())?;
 
-        // 1. Verify serialization produces a clean direct list
+        // Verify serialization produces a clean list without redundant wrappers
         let ron_str = ron::to_string(&laser).map_err(|e| OpossumError::Other(e.to_string()))?;
-        assert!(!ron_str.contains("lines:"));
-        assert!(!ron_str.contains("values:"));
+        assert_eq!(ron_str, "[(0.000000532,0.5),(0.000001064,0.5)]");
 
+        // Verify deserialization works and validates the input
         let restored: LaserLines =
             ron::from_str(&ron_str).map_err(|e| OpossumError::Other(e.to_string()))?;
         assert_eq!(laser, restored);
-
-        // 2. Verify backward compatibility with full legacy nesting
-        let legacy_ron = r#"(
-            lines: (
-                values: [
-                    (0.000000532, 0.5),
-                    (0.000001064, 0.5),
-                ],
-            ),
-        )"#;
-        let restored_legacy: LaserLines =
-            ron::from_str(legacy_ron).map_err(|e| OpossumError::Other(e.to_string()))?;
-        assert_eq!(laser, restored_legacy);
-
-        // 3. Verify backward compatibility with intermediate (values: [...])
-        let intermediate_ron = r#"(
-            values: [
-                (0.000000532, 0.5),
-                (0.000001064, 0.5),
-            ],
-        )"#;
-        let restored_intermediate: LaserLines =
-            ron::from_str(intermediate_ron).map_err(|e| OpossumError::Other(e.to_string()))?;
-        assert_eq!(laser, restored_intermediate);
 
         Ok(())
     }
