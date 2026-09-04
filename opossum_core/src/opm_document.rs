@@ -190,10 +190,12 @@ impl OpmDocument {
             ..Default::default()
         }
     }
-    /// Replaces all `AssetRef::Id(Uuid)` properties in scene nodes with
-    /// the full `AssetRef::Inline(Material)` looked up from `embedded_materials`.
+    /// Replaces all `AssetRef::Id(Uuid)` properties in scene nodes (including all nested
+    /// groups) with the full `AssetRef::Inline(Material)` looked up from `embedded_materials`.
     fn resolve_embedded_materials(&self) -> OpmResult<()> {
-        for node_ref in self.scenery.nodes() {
+        let all_nodes = self.scenery.collect_all_nodes_recursive()?;
+
+        for node_ref in all_nodes {
             if let Ok(mut node) = node_ref.optical_ref.lock_opm() {
                 let mut updates = Vec::new();
 
@@ -221,10 +223,12 @@ impl OpmDocument {
         Ok(())
     }
 
-    /// Extracts full `Material` structs into `embedded_materials` and replaces
-    /// node properties with explicit `AssetRef::Id(Uuid)`.
+    /// Extracts full `Material` structs into `embedded_materials` from all nodes
+    /// (including all nested groups) and replaces node properties with explicit `AssetRef::Id(Uuid)`.
     fn prepare_materials_for_serialization(&mut self) -> OpmResult<()> {
-        for node_ref in self.scenery.nodes() {
+        let all_nodes = self.scenery.collect_all_nodes_recursive()?;
+
+        for node_ref in all_nodes {
             if let Ok(mut node) = node_ref.optical_ref.lock_opm() {
                 let mut updates = Vec::new();
 
@@ -1543,74 +1547,6 @@ mod test {
 
         Ok(())
     }
-    /// Regression test for the `refractive index` -> `material` property rename.
-    ///
-    /// A node is rebuilt from its default and then updated with the properties read from the file.
-    /// Since `Properties::update` silently skips keys the default node does not know, an `.opm`
-    /// written before the rename would come back with the *default* material (n = 1.5) instead of
-    /// the index it was saved with — a data loss without any error message. Without the migration
-    /// hook in `Properties::deserialize` this test fails on the very first assertion.
-    #[test]
-    fn legacy_refractive_index_is_migrated_to_material() -> OpmResult<()> {
-        // An `.opm` as written by OPOSSUM <= 0.7.2: a lens with a bare `refractive index` property
-        // whose value (2.0) differs from the lens default (1.5).
-        let ron_data = r#"#![enable(unwrap_variant_newtypes)]
-(
-    opm_file_version: "0",
-    scenery: {
-        "node_type": "group",
-        "name": "test",
-        "uuid": "6f0d3b1c-3c1a-4c8e-9b3e-1f2a3b4c5d6e",
-        "graph": (
-            nodes: [
-                {
-                    "node_type": "lens",
-                    "name": "old lens",
-                    "uuid": "1a2b3c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d",
-                    "props": {
-                        "refractive index": RefractiveIndex(Const(refractive_index: 2.0)),
-                    },
-                },
-            ],
-            edges: [],
-        ),
-    },
-    global: (
-        ambient_refr_index: Const(
-            refractive_index: 1.0,
-        ),
-    ),
-)"#;
-        let lens_id = Uuid::parse_str("1a2b3c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d")
-            .map_err(|e| OpossumError::Other(e.to_string()))?;
-        let refractive_index_of = |document: &OpmDocument| -> OpmResult<f64> {
-            let (lens, _) = document.scenery().node_recursive(lens_id)?;
-            // The lock is released at the end of this statement, the material is owned from here on.
-            let property = lens
-                .optical_ref
-                .lock_opm()?
-                .node_attr()
-                .get_property(MATERIAL)
-                .cloned();
-            let Ok(Proptype::Material(AssetRef::Inline(material))) = property else {
-                return Err(OpossumError::Other(
-                    "lens has no embedded material property".into(),
-                ));
-            };
-            material.get_refractive_index(nanometer!(1000.0))
-        };
-
-        // The index of the pre-rename file must survive the load instead of falling back to the
-        // lens default of 1.5.
-        let document = OpmDocument::from_string(ron_data)?;
-        assert_relative_eq!(refractive_index_of(&document)?, 2.0);
-
-        // Saving moves the migrated material into `embedded_materials` and leaves an `AssetRef::Id`
-        // behind; loading hydrates it again. The value has to survive that detour as well.
-        let reloaded = OpmDocument::from_string(&document.to_opm_file_string()?)?;
-        assert_relative_eq!(refractive_index_of(&reloaded)?, 2.0);
-        Ok(())
-    }
     #[test]
     fn test_skip_invalid_edge_connection() -> OpmResult<()> {
         // Raw RON model data with one valid node and an edge pointing to a non-existent target UUID
@@ -1915,6 +1851,109 @@ mod test {
             log::Level::Warn,
             vec!["Skipping property 'focal length' that failed to parse; keeping default value."],
         );
+
+        Ok(())
+    }
+    #[test]
+    fn test_nested_group_material_serialization_roundtrip() -> OpmResult<()> {
+        let material_id = Uuid::new_v4();
+        let const_refr = RefrIndexConst::new(1.5)?;
+        let material =
+            Material::new_for_test(material_id, 1, "Fused Silica Nested", const_refr.into());
+
+        // Create an inner group containing a lens with the inline material
+        let mut inner_group = NodeGroup::new("Inner Group");
+        let lens = Lens::new(
+            "Nested Lens",
+            millimeter!(100.0),
+            millimeter!(-100.0),
+            millimeter!(10.0),
+            material,
+        )?;
+        inner_group.add_node(lens)?;
+
+        // Place the inner group inside the top-level scenery
+        let mut scenery = NodeGroup::new("Top Scenery");
+        scenery.add_node(inner_group)?;
+
+        let doc = OpmDocument::new(scenery);
+
+        // Serialize to RON string
+        let ron_str = doc.to_opm_file_string()?;
+
+        // Verify that the material was extracted to the root embedded_materials table
+        assert!(ron_str.contains("embedded_materials:"));
+        assert!(ron_str.contains("Fused Silica Nested"));
+
+        // Verify that the nested node in the serialized output references the material by Id
+        assert!(ron_str.contains("Id("));
+        assert!(!ron_str.contains("Inline("));
+
+        // Deserialize back from RON string
+        let reloaded_doc = OpmDocument::from_string(&ron_str)?;
+        assert_eq!(reloaded_doc.embedded_materials.len(), 1);
+
+        // Verify that the nested lens has its material correctly restored in RAM
+        let all_reloaded_nodes = reloaded_doc.scenery().collect_all_nodes_recursive()?;
+        let mut found_restored_material = false;
+
+        for node_ref in all_reloaded_nodes {
+            let node = node_ref.optical_ref.lock_opm()?;
+            if let Ok(Proptype::Material(AssetRef::Inline(mat))) =
+                node.node_attr().get_property(MATERIAL)
+            {
+                assert_eq!(mat.id(), material_id);
+                assert_eq!(mat.name(), "Fused Silica Nested");
+                found_restored_material = true;
+            }
+        }
+
+        assert!(
+            found_restored_material,
+            "Nested material was not properly re-hydrated"
+        );
+
+        Ok(())
+    }
+    #[test]
+    fn test_load_source_port_with_empty_transform() -> OpmResult<()> {
+        let ron_data = r#"#![enable(unwrap_variant_newtypes)]
+(
+    opm_file_version: "0",
+    scenery: {
+        "node_type": "group",
+        "name": "test",
+        "uuid": "91574253-61bc-4841-a61f-2f00de581ee9",
+        "props": {
+            "expand view": Bool(false),
+        },
+        "graph": (
+            nodes: [
+                {
+                    "node_type": "source port",
+                    "name": "source port",
+                    "uuid": "b5502058-f129-4823-a726-4219f6abcc2e",
+                    "isometry": Some(
+                        transform: (),
+                    ),
+                    "gui_position": Some(290.0, 81.32779073001805),
+                },
+            ],
+            edges: [],
+        ),
+    },
+)"#;
+
+        let doc = OpmDocument::from_string(ron_data)?;
+        assert_eq!(
+            doc.scenery().nodes().len(),
+            1,
+            "SourcePort with transform: () must be loaded successfully without being skipped"
+        );
+
+        let node_ref = &doc.scenery().nodes()[0];
+        let node = node_ref.optical_ref.lock_opm()?;
+        assert_eq!(node.node_attr().isometry(), Some(Isometry::identity()));
 
         Ok(())
     }

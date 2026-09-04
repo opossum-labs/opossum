@@ -46,6 +46,7 @@ use nalgebra::Point2;
 use nalgebra::Vector3;
 use num::Zero;
 use opossum_core::core_optics::NodeAttrExt;
+use opossum_core::material::Material;
 use opossum_core::prelude::*;
 use opossum_core::{
     distributions::{energy::UniformDist, position::Grid, spectral::LaserLines},
@@ -69,6 +70,9 @@ fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("PHELIX MainAmp");
     // Add source node used for diagnostic ray injection
     let i_src = scenery.add_node(SourcePort::new("incoming rays DM"))?;
+
+    // Constant refractive-index material
+    let laser_disk_material: Material = RefrIndexConst::new(1.5)?.into();
 
     // Initial transport section
     // Paraxial transport optics
@@ -128,12 +132,12 @@ fn main() -> OpmResult<()> {
     let mut amps = NodeGroup::new("Amps");
 
     // Add amplifier stages
-    let i_amp1 = amps.add_node(amp("Amp 1")?)?;
-    let i_amp2 = amps.add_node(amp("Amp 2")?)?;
-    let i_amp3 = amps.add_node(amp("Amp 3")?)?;
-    let i_amp4 = amps.add_node(amp("Amp 4")?)?;
-    let i_amp5 = amps.add_node(amp("Amp 5")?)?;
-    let i_amp6 = amps.add_node(amp("Amp 6")?)?;
+    let i_amp1 = amps.add_node(amp("Amp 1", laser_disk_material.clone())?)?;
+    let i_amp2 = amps.add_node(amp("Amp 2", laser_disk_material.clone())?)?;
+    let i_amp3 = amps.add_node(amp("Amp 3", laser_disk_material.clone())?)?;
+    let i_amp4 = amps.add_node(amp("Amp 4", laser_disk_material.clone())?)?;
+    let i_amp5 = amps.add_node(amp("Amp 5", laser_disk_material.clone())?)?;
+    let i_amp6 = amps.add_node(amp("Amp 6", laser_disk_material)?)?;
 
     // Connect amplifier stages
     amps.connect_nodes(i_amp1, "output", i_amp2, "input", millimeter!(880.0))?;
@@ -313,18 +317,21 @@ fn main() -> OpmResult<()> {
 ///
 /// Returns:
 /// - `NodeGroup` representing one amplifier stage
-fn amp(name: &str) -> OpmResult<NodeGroup> {
-    // Constant refractive-index material
-    let fused_silica = RefrIndexConst::new(1.5)?;
+fn amp(name: &str, disk_material: Material) -> OpmResult<NodeGroup> {
     // Create amplifier node group
     let mut amp = NodeGroup::new(name);
     // First wedge element
-    let disk_a = Wedge::new("disk A", millimeter!(45.0), degree!(0.0), &fused_silica)?
-        .with_tilt(degree!(0.0, -56.0, 0.0))?;
+    let disk_a = Wedge::new(
+        "disk A",
+        millimeter!(45.0),
+        degree!(0.0),
+        disk_material.clone(),
+    )?
+    .with_tilt(degree!(0.0, -56.0, 0.0))?;
     let i_a1 = amp.add_node(disk_a)?;
 
     // Second wedge element
-    let disk_a = Wedge::new("disk B", millimeter!(45.0), degree!(0.0), &fused_silica)?
+    let disk_a = Wedge::new("disk B", millimeter!(45.0), degree!(0.0), disk_material)?
         .with_tilt(degree!(0.0, 56.0, 0.0))?;
     let i_a2 = amp.add_node(disk_a)?;
 
