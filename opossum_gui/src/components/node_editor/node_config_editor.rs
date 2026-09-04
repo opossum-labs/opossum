@@ -153,23 +153,29 @@ pub fn NodeConfigEditor(
             div { class: "noselect", "No node selected" }
         }
     } else {
+        let optical_count = selected_nodes_memo()
+            .iter()
+            .filter(|n| matches!(n.node_type, NodeType::Optical(_)))
+            .count();
         rsx! {
             div {
                 "Multiple nodes selected"
-                button {
-                    class: "btn btn-success",
-                    onclick: move |_| {
-                        workspace_processor
-                            .send(GraphsWorkspaceAction::ConvertToGroup {
-                                nodes: selected_nodes_memo()
-                                    .iter()
-                                    .filter(|n| matches!(n.node_type, NodeType::Optical(_)))
-                                    .map(|n| n.node_id)
-                                    .collect::<Vec<Uuid>>(),
-                                graph_id: *active_graph_id.read(),
-                            });
-                    },
-                    "Convert nodes to group"
+                if optical_count >= 2 {
+                    button {
+                        class: "btn btn-success",
+                        onclick: move |_| {
+                            workspace_processor
+                                .send(GraphsWorkspaceAction::ConvertToGroup {
+                                    nodes: selected_nodes_memo()
+                                        .iter()
+                                        .filter(|n| matches!(n.node_type, NodeType::Optical(_)))
+                                        .map(|n| n.node_id)
+                                        .collect::<Vec<Uuid>>(),
+                                    graph_id: *active_graph_id.read(),
+                                });
+                        },
+                        "Convert nodes to group"
+                    }
                 }
             }
         }
