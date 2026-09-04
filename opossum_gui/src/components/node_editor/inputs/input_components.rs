@@ -646,10 +646,15 @@ pub fn LabeledSelect(
 ) -> Element {
     info!("🔄 Render: LabeledSelect");
 
+    // `bg-dark` is set explicitly so the select keeps a dark field even outside an
+    // `.accordion-body` (e.g. the analyzer sidebar, whose sub-editors are loose children of
+    // `#accordionAnalyzerConfig`). Inside an accordion the more specific `.accordion-body ...
+    // .form-select` rule in `mdb_accordion.css` still wins, so node-config dropdowns are
+    // unchanged; without this the select would fall back to MDB's white `.form-select` default.
     let select_class = if readonly {
-        "form-select text-light disabled-select"
+        "form-select bg-dark text-light disabled-select"
     } else {
-        "form-select text-light"
+        "form-select bg-dark text-light"
     };
 
     rsx! {

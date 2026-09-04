@@ -3,6 +3,7 @@ use crate::components::node_editor::analyzer_node_editor::light_data_editor::def
 use crate::components::{
     inputs::material_selector::MaterialSelector,
     node_editor::{
+        accordion::StaticSection,
         analyzer_node_editor::source_port_card::SourcePortCard,
         inputs::{
             input_components::{
@@ -96,7 +97,7 @@ pub fn RayTraceEditor(
     let current_config = ray_trace_config.read();
 
     rsx! {
-        div { class: "ray-trace-fields",
+        StaticSection { header: "Ray Tracing",
             FlushableTextInput {
                 id: "rayTraceMaxRefr".to_string(),
                 label: "Max refractions".to_string(),
@@ -143,52 +144,48 @@ pub fn RayTraceEditor(
                 readonly: false,
                 on_change: on_change_ambient_material,
             }
+        }
 
-            div { class: "mt-4 border-top pt-3 text-light",
-                h6 { class: "text-secondary mb-3", "Sources Definitions" }
+        StaticSection { header: "Sources Definitions",
+            if available_sources.is_empty() {
+                div { class: "text-muted small italic", "No Source Ports found." }
+            }
 
-                if available_sources.is_empty() {
-                    div { class: "text-muted small italic", "No Source Ports found." }
-                }
-
-                {
-                    available_sources
-                        .into_iter()
-                        .map(|port| {
-                            let port_uuid = port.uuid;
-                            let source = current_config
-                                .get_source(&port_uuid)
-                                .map_or_else(
-                                    || {
-                                        let default_wvl = crate::APP_CONFIG
-                                            .read()
-                                            .default_wavelength();
-                                        default_ray_data_source(default_wvl)
-                                    },
-                                    |b| b.source().clone(),
-                                );
-                            let on_save_source = move |updated_builder| {
-                                let mut updated_config = ray_trace_config.peek().clone();
-                                updated_config.map_source(port_uuid, updated_builder);
-                                on_change
-                                    .call(NodeChangeEvent {
-                                        node_id,
-                                        action: NodeChangeAction::AnalyzerType(
-                                            AnalyzerType::RayTrace(updated_config),
-                                        ),
-                                    });
-                            };
-                            rsx! {
-                                SourcePortCard {
-                                    key: "{port_uuid}",
-                                    analyzer_id: node_id,
-                                    port,
-                                    source,
-                                    on_save: on_save_source,
-                                }
+            {
+                available_sources
+                    .into_iter()
+                    .map(|port| {
+                        let port_uuid = port.uuid;
+                        let source = current_config
+                            .get_source(&port_uuid)
+                            .map_or_else(
+                                || {
+                                    let default_wvl = crate::APP_CONFIG.read().default_wavelength();
+                                    default_ray_data_source(default_wvl)
+                                },
+                                |b| b.source().clone(),
+                            );
+                        let on_save_source = move |updated_builder| {
+                            let mut updated_config = ray_trace_config.peek().clone();
+                            updated_config.map_source(port_uuid, updated_builder);
+                            on_change
+                                .call(NodeChangeEvent {
+                                    node_id,
+                                    action: NodeChangeAction::AnalyzerType(
+                                        AnalyzerType::RayTrace(updated_config),
+                                    ),
+                                });
+                        };
+                        rsx! {
+                            SourcePortCard {
+                                key: "{port_uuid}",
+                                analyzer_id: node_id,
+                                port,
+                                source,
+                                on_save: on_save_source,
                             }
-                        })
-                }
+                        }
+                    })
             }
         }
     }
