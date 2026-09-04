@@ -43,10 +43,14 @@ impl IntoInputDataStrings<EnergyLaserLines> for EnergyLaserLinesParam {
     }
     fn create_value_string(&self, obj: &EnergyLaserLines) -> String {
         match self {
-            Self::Wavelength => obj
-                .lines()
-                .last()
-                .map_or_else(|| "1054.000".to_string(), |ll| format!("{}", ll.0.value)),
+            Self::Wavelength => obj.lines().last().map_or_else(
+                || {
+                    // Fall back to default wavelength from global application configuration
+                    let default_wvl = crate::APP_CONFIG.read().default_wavelength();
+                    format!("{}", default_wvl.value)
+                },
+                |ll| format!("{}", ll.0.value),
+            ),
             Self::Energy => obj
                 .lines()
                 .last()

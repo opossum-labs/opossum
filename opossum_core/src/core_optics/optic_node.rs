@@ -7,18 +7,15 @@ use uuid::Uuid;
 
 use crate::core_optics::{NodeAttrExt, OpticPorts};
 use crate::{
-    analyzers::Analyzable,
-    core_optics::{PortType, SceneryResources, node_attr::HasNodeAttr},
+    analyzers::{Analyzable, propagation_strategy::PropagationStrategy},
+    core_optics::{PortType, node_attr::HasNodeAttr, volumetric::Volumetric},
     error::OpmResult,
     light::LightData,
     nodes::fluence_detector::Fluence,
     reporting::{Dottable, node_report::NodeReport},
     utils::geom_transformation::Isometry,
 };
-use std::{
-    any::Any,
-    sync::{Arc, Mutex},
-};
+use std::any::Any;
 
 /// Helper trait for dynamic downcasting of optical nodes.
 /// This trait is automatically implemented by the `#[derive(OpmNode)]` macro.
@@ -55,7 +52,44 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     fn reset_data(&mut self) {
         self.set_light_data(None);
         self.reset_optic_surfaces();
+        self.node_attr_mut().clear_runtime_inversion();
     }
+    /// Prepare this node's medium before the first ray is traced (Phase A).
+    ///
+    /// Derives the node's [`SurfaceBoundedBody`](crate::geometry::body::SurfaceBoundedBody) from the
+    /// **current** node isometry and stores it in [`NodeAttr`](crate::core_optics::node_attr::NodeAttr)'s `runtime_medium` slot so that
+    /// [`Volumetric::propagate_inside_medium`] (Phase B) can read it without rebuilding per ray pass. If the operating point provides a gain
+    /// model that reads the inversion, the [`InversionField`](crate::gain::InversionField) is built
+    /// from the pump configuration and stored alongside the body; otherwise the inversion slot is
+    /// `None`.
+    ///
+    /// The body is always re-derived on every call, so geometry edits (e.g. changed centre
+    /// thickness) and repositioning by the analyzer's `calc_node_positions` are picked up
+    /// correctly. Non-volume nodes return immediately without touching the medium slot.
+    ///
+    /// [`NodeGroup`](crate::nodes::NodeGroup) overrides this to recurse into every child node.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the body cannot be derived from the node's surfaces or if building the
+    /// inversion field fails.
+    fn prepare_volume(&mut self, strategy: &dyn PropagationStrategy) -> OpmResult<()> {
+        let Some(volumetric) = self.as_volume() else {
+            return Ok(());
+        };
+        // The body is pure geometry — build it for every volume node regardless of the operating
+        // point, so it is available whenever anything needs to query the medium.
+        let body = volumetric.volume_body()?;
+        let config = strategy.pump_config(self.node_attr().uuid());
+        // The inversion is gain-specific: only build it when the gain model reads one.
+        let inversion = match config.gain_model().as_extraction() {
+            Some(model) => model.build_inversion(&body, &config)?,
+            None => None,
+        };
+        self.node_attr_mut().set_runtime_medium(body, inversion);
+        Ok(())
+    }
+
     /// This function is called right after a node has been deserialized (e.g. read from a file). By default, this
     /// function does nothing and returns no error.
     ///
@@ -86,11 +120,6 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     fn isometry(&self) -> Option<Isometry> {
         self.node_attr().isometry()
     }
-    /// Set the global configuration for this [`OpticNode`].
-    /// **Note**: This function should normally only be used internally by `OpticRef`.
-    fn set_global_conf(&mut self, global_conf: Option<Arc<Mutex<SceneryResources>>>) {
-        self.node_attr_mut().set_global_conf(global_conf);
-    }
     /// Set this [`OpticNode`] as inverted.
     ///
     /// This flag signifies that the [`OpticNode`] should be propagated in reverse order. This function normally simply sets the
@@ -103,6 +132,20 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     fn set_inverted(&mut self, inverted: bool) -> OpmResult<()> {
         self.node_attr_mut().set_inverted(inverted);
         Ok(())
+    }
+    /// Return this node as a [`Volumetric`] one, if it encloses a volume of material.
+    ///
+    /// This is the one question that answers "may this component amplify, absorb, or otherwise act
+    /// on light along a path *inside* it" — and it is asked of the node itself rather than of its
+    /// type name, because that is all a caller holding a `dyn Analyzable` still has. Every node
+    /// answers it; only those implementing [`Volumetric`] answer with `Some`, which they do by
+    /// overriding this method with `Some(self)`.
+    ///
+    /// # Returns
+    ///
+    /// The node as a [`Volumetric`], or `None` if it has no volume.
+    fn as_volume(&self) -> Option<&dyn Volumetric> {
+        None
     }
     /// Return [`NodeReport`] of the current state of this [`OpticNode`].
     ///

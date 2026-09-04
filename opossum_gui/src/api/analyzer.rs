@@ -79,3 +79,18 @@ pub async fn get_available_sources() -> Result<Vec<SourcePortDto>, String> {
         .get::<Vec<SourcePortDto>>("/api/analyzers/available_sources")
         .await
 }
+/// Set the user-assigned name of an analyzer node.
+///
+/// An empty string clears the name; the analyzer then shows its type label in the GUI.
+///
+/// # Errors
+///
+/// Returns an error if the request fails or the analyzer UUID is not found.
+pub async fn update_analyzer_name(analyzer_id: Uuid, name: &str) -> Result<(), String> {
+    HTTP_API_CLIENT()
+        .put_receive_no_content(
+            &format!("/api/analyzers/{analyzer_id}/name"),
+            name.to_string(),
+        )
+        .await
+}

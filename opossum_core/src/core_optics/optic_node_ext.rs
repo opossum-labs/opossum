@@ -2,13 +2,13 @@ use crate::{
     analyzers::propagation_strategy::PropagationStrategy,
     apertures::Aperture,
     coatings::CoatingType,
-    core_optics::{NodeAttrExt, OpticNode, PortType, SceneryResources},
+    core_optics::{NodeAttrExt, OpticNode, PortType},
     error::{OpmResult, OpossumError},
     geometry::{Plane, geo_surface::GeoSurfaceRef},
     light::{LightData, LightResult, Rays},
     nodes::fluence_detector::Fluence,
     refractive_index::RefractiveIndexType,
-    utils::{LockExt, geom_transformation::Isometry},
+    utils::geom_transformation::Isometry,
 };
 use nalgebra::Vector3;
 use std::sync::{Arc, Mutex};
@@ -30,11 +30,6 @@ pub trait OpticNodeExt {
     /// - no effective node isometry is defined  
     /// - the surface with the specified name cannot be found
     fn effective_surface_iso(&self, surf_name: &str) -> OpmResult<Isometry>;
-    /// Get the ambient refractive index.
-    ///
-    /// This value is determined by the global configuration. A warning is issued and a default value is returned
-    /// if the global config could not be found.
-    fn ambient_idx(&self) -> RefractiveIndexType;
     /// Set local alignment (decenter, tilt) of an optical node.
     ///
     /// # Errors
@@ -157,6 +152,59 @@ pub trait OpticNodeExt {
     ) -> OpmResult<LightResult>;
 }
 
+/// Return the names of the one input and the one output port of `node`.
+///
+/// Every helper that guides light straight through a node needs this pair, and all of them are
+/// written for components with exactly one of each.
+///
+/// A node with several inputs or outputs has to decide for itself which port feeds which - there is
+/// no general answer, and picking one silently would be wrong rather than merely imprecise. Note
+/// that "first" would not even mean "first declared": [`OpticPorts`] stores its ports in a
+/// `BTreeMap`, so any such pick would follow the alphabetical order of the port names. Multi-port
+/// nodes therefore implement `analyze` themselves and address their ports by name - see
+/// [`BeamSplitter`](crate::nodes::BeamSplitter), which additionally swaps them when inverted. This
+/// function refuses those nodes instead of guessing.
+///
+/// **Still to be built:** this is the wrong place for that decision in the long run. How many ports
+/// a node has is a static property of its type, so "exactly one in, one out" should be declared
+/// once where the node type is registered and checked when the model is built - not re-discovered
+/// on every analysis call, and not only for the nodes that happen to reach this helper. Until that
+/// exists, the check lives here, where at least no caller of these helpers can skip it.
+///
+/// # Arguments
+///
+/// * `node` - the node whose ports are looked up.
+///
+/// # Returns
+///
+/// The input port name and the output port name, in that order.
+///
+/// # Errors
+///
+/// This function returns an [`OpossumError::Analysis`] if the node does not have exactly one input
+/// and exactly one output port.
+pub(crate) fn single_io_port_names<T: ?Sized + OpticNode>(node: &T) -> OpmResult<(String, String)> {
+    let ports = node.ports();
+    let single_port = |port_type: &PortType| -> OpmResult<String> {
+        let names = ports.names(port_type);
+        if let [name] = names.as_slice() {
+            return Ok(name.clone());
+        }
+        Err(OpossumError::Analysis(format!(
+            "node '{}' ({}) has {} {port_type} ports, but this analysis path is only defined for \
+             exactly one - a node with several ports must implement `analyze` itself and address \
+             its ports by name",
+            node.name(),
+            node.node_type(),
+            names.len(),
+        )))
+    };
+    Ok((
+        single_port(&PortType::Input)?,
+        single_port(&PortType::Output)?,
+    ))
+}
+
 impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNodeExt for T {
     fn effective_node_iso(&self) -> Option<Isometry> {
         self.isometry().as_ref().and_then(|iso| {
@@ -171,24 +219,10 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         let Some(eff_node_iso) = self.effective_node_iso() else {
             return Err(OpossumError::Other("no effective node iso defined".into()));
         };
-        let Some(surf) = self.get_optic_surface(surf_name) else {
-            return Err(OpossumError::Other(format!(
-                "no surface with name {surf_name} defined"
-            )));
-        };
+        let surf = self.get_optic_surface(surf_name).ok_or_else(|| {
+            OpossumError::Other(format!("no surface with name {surf_name} defined"))
+        })?;
         Ok(eff_node_iso.append(surf.anchor_point_iso()))
-    }
-
-    fn ambient_idx(&self) -> RefractiveIndexType {
-        self.global_conf().as_ref().map_or_else(
-            || {
-                log::warn!(
-                    "could not get ambient medium since global config not found ... using default"
-                );
-                SceneryResources::default().ambient_refr_index
-            },
-            |conf| conf.lock_opm().unwrap().ambient_refr_index.clone(),
-        )
     }
 
     fn set_alignment(
@@ -369,22 +403,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         optic_surf_name: &str,
         refri_after_surf: Option<RefractiveIndexType>,
     ) -> OpmResult<LightResult> {
-        let in_port_name = self
-            .ports()
-            .names(&PortType::Input)
-            .first()
-            .cloned()
-            .ok_or_else(|| {
-                OpossumError::Analysis(format!("No input port found on node '{}'", self.name()))
-            })?;
-        let out_port_name = self
-            .ports()
-            .names(&PortType::Output)
-            .first()
-            .cloned()
-            .ok_or_else(|| {
-                OpossumError::Analysis(format!("No output port found on node '{}'", self.name()))
-            })?;
+        let (in_port_name, out_port_name) = single_io_port_names(self)?;
         let Some(data) = incoming_data.remove(&in_port_name) else {
             return Ok(LightResult::default());
         };
@@ -424,5 +443,50 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
             }
             LightData::Fourier => Ok(LightResult::default()),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{
+        analyzers::RayTraceConfig,
+        nodes::{BeamSplitter, Dummy},
+    };
+
+    /// A beam splitter has two inputs and two outputs, and which one feeds which is its own
+    /// decision - that is why it implements `analyze` itself. Reaching one of the unified helpers
+    /// with such a node is a programming error, and it has to say so instead of silently picking
+    /// the alphabetically first port.
+    #[test]
+    fn unified_helpers_reject_a_multi_port_node() {
+        let mut node = BeamSplitter::default();
+        let err = node
+            .unified_analyze_single_surface_node(
+                LightResult::default(),
+                &RayTraceConfig::default(),
+                "input_1",
+                None,
+            )
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("only defined for exactly one"),
+            "expected a multi-port rejection, got: {err}"
+        );
+    }
+
+    /// The counterpart: a node with exactly one input and one output resolves both ports and only
+    /// then finds there is nothing on the input - so the guard above cannot be satisfied vacuously.
+    #[test]
+    fn unified_helpers_accept_a_single_port_node() -> OpmResult<()> {
+        let mut node = Dummy::default();
+        let out = node.unified_analyze_single_surface_node(
+            LightResult::default(),
+            &RayTraceConfig::default(),
+            "input_1",
+            None,
+        )?;
+        assert!(out.is_empty());
+        Ok(())
     }
 }

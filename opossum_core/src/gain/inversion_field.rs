@@ -1,0 +1,919 @@
+#![warn(missing_docs)]
+//! The population inversion of an active medium, discretised over the [`Body`] it fills.
+//!
+//! A pumped medium is not pumped uniformly: the inversion varies across the volume, and every pass
+//! of a beam draws it down where that beam actually went. An [`InversionField`] is where that state
+//! lives. It is the single interface between the two sides of the amplification: whatever pumps the
+//! medium writes into it, and whatever [`GainModel`](super::GainModel) extracts energy from the
+//! medium reads out of it. Neither side has to know the other, and the field survives between
+//! passes, which is what makes a multi-pass amplifier more than a repeated single pass.
+//!
+//! **What a cell holds** is the normalized inversion `β ∈ [0, 1]`: the local fraction of the peak
+//! inversion the pump produces, dimensionless and carrying no spectroscopy. A pump source deposits
+//! only this shape; the magnitude — and, with it, the sign that tells an amplifying medium from an
+//! absorbing one — lives on the [`GainModel`](super::GainModel), which turns `β` into a gain
+//! coefficient (`g = peak_gain_coefficient · β` for the monochromatic model). Keeping the field
+//! spectroscopy-free is what lets every gain model read the very same `β` and apply its own physics
+//! to it: a four-level model reads `β = 0` as transparency, a future three-level one reads the same
+//! `β = 0` as absorption, without the pump having to know which asked.
+//!
+//! A spatially uniform inversion needs no field at all — see [`Inversion`], which carries the
+//! uniform case as a single number and reserves the grid for a shaped pump.
+//!
+//! **The grid** is Cartesian and lives entirely in the optic's own frame, so it follows the
+//! component when that is moved or tilted instead of sampling it on a staircase. Round edges do get
+//! stair-stepped transversally, which is the accepted price of a Cartesian grid over an arbitrary
+//! cross section: each cell is either in the medium or not, and [`InversionField::is_inside`] says
+//! which.
+//!
+//! *Entirely* in the optic's frame means the field stores **nothing about where that optic is**.
+//! Where a node stands is the node's own business, kept in its
+//! [`isometry`](crate::core_optics::NodeAttr::isometry) and its alignment, and a copy of it in a
+//! field that outlives a single pass would silently go stale the moment the node is moved. Instead
+//! everything here — the mask, the bounds, the populations — stays valid under any placement, and
+//! [`InversionField::cell_at`] takes its point already expressed in the optic's frame.
+//!
+//! The grid is built **once**, in [`InversionField::from_body`]: that is where all the geometry is
+//! evaluated, so every later read or write is a plain index into an owned, mutable array rather than
+//! a fresh query against the body.
+
+use crate::{
+    error::{OpmResult, OpossumError},
+    geometry::body::{Body, BoundingBox},
+    utils::math_utils::{to_f64, try_f64_to_usize},
+};
+use nalgebra::{DMatrix, Point3, Vector3};
+use std::ops::Range;
+use uom::si::f64::{Length, Volume};
+
+/// The index of one cell of an [`InversionField`], counted along x, y and z.
+pub type CellIndex = (usize, usize, usize);
+
+/// The inversion a prepared medium presents to a [`GainModel`](super::GainModel).
+///
+/// A pump either fills the medium uniformly or shapes it. The uniform case does not need a grid at
+/// all — its gain is `peak · β · L` over the exact chord `L` through the body — so it is carried as
+/// a single number rather than paid for as a field of identical cells. This is also what keeps an
+/// *unpumped* medium representable: `Uniform(0.0)` is a real state a three-level model can read as
+/// absorption, distinct from a model that reads no inversion at all
+/// (`Option::None` in [`RuntimeMedium`](crate::core_optics::node_attr::RuntimeMedium)).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Inversion {
+    /// A spatially constant normalized inversion `β` over the whole body: an unpumped medium is
+    /// `Uniform(0.0)`, a uniformly pumped one `Uniform(1.0)`.
+    Uniform(f64),
+    /// A normalized inversion `β` resolved on a grid, as a shaped pump produces it.
+    Field(InversionField),
+}
+
+/// The inversion of an active medium, sampled on a grid over the medium's [`Body`].
+///
+/// See the [module documentation](self) for what a cell holds and which frame the grid lives in.
+#[derive(Debug, Clone, PartialEq)]
+pub struct InversionField {
+    /// normalized inversion β: one transversal plane per longitudinal step
+    slices: Vec<DMatrix<f64>>,
+    /// which cells of each plane lie within the body
+    inside: Vec<DMatrix<bool>>,
+    /// the extent the grid spans, in the optic's frame — the body's own bounding box
+    bounds: BoundingBox,
+}
+
+impl InversionField {
+    /// Lay a grid of the given size over the given [`Body`] and start it out unpumped.
+    ///
+    /// This is the one place geometry is evaluated: the body's
+    /// [`bounding_box`](Body::bounding_box) gives the domain, and every cell center is tested
+    /// against [`contains`](Body::contains) once to record whether it holds medium at all. Every
+    /// later access is a plain index.
+    ///
+    /// The resolution is an argument rather than a property of the node the body came from: nothing
+    /// reads the field yet, so there is nobody to configure it for.
+    ///
+    /// # Arguments
+    ///
+    /// - `body`: the volume the field is defined over
+    /// - `dimensions`: the number of cells along the body's x, y and z axis
+    ///
+    /// # Returns
+    ///
+    /// A field spanning the body's bounding box, with every cell at zero normalized inversion.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if any of the three dimensions is zero — a grid without cells
+    /// has no extent to interpret its ranges against — or if the body cannot state its bounding box
+    /// or answer where it is.
+    pub fn from_body(body: &dyn Body, dimensions: CellIndex) -> OpmResult<Self> {
+        let (nx, ny, nz) = dimensions;
+        if nx == 0 || ny == 0 || nz == 0 {
+            return Err(OpossumError::Other(
+                "an inversion field needs at least one cell along each of its axes".into(),
+            ));
+        }
+        let bounds = body.bounding_box()?;
+        // Only needed to ask the body where it is - the grid that comes out of it is expressed in
+        // the body's own frame and does not keep the placement around.
+        let placement = body.isometry();
+        let (x_range, y_range, z_range) = (bounds.x_range(), bounds.y_range(), bounds.z_range());
+        let mut slices = Vec::with_capacity(nz);
+        let mut inside = Vec::with_capacity(nz);
+        for k in 0..nz {
+            let z = cell_center(&z_range, nz, k);
+            // `DMatrix::from_vec` reads its data column by column, and one column of a transversal
+            // plane collects the cells sharing an x position. This is the layout `FluenceData` uses
+            // for its own transversal field, where the columns count x and the rows count y.
+            let mut mask = Vec::with_capacity(nx * ny);
+            for i in 0..nx {
+                let x = cell_center(&x_range, nx, i);
+                for j in 0..ny {
+                    let y = cell_center(&y_range, ny, j);
+                    let center = placement.transform_point(&Point3::new(x, y, z));
+                    mask.push(body.contains(&center)?);
+                }
+            }
+            inside.push(DMatrix::from_vec(ny, nx, mask));
+            slices.push(DMatrix::from_element(ny, nx, 0.0));
+        }
+        Ok(Self {
+            slices,
+            inside,
+            bounds,
+        })
+    }
+    /// Return the extent this [`InversionField`] spans.
+    ///
+    /// This is the body's own [`bounding_box`](Body::bounding_box), kept as the grid was laid out
+    /// over it, and it is stated in the optic's frame like everything else here. Anything evaluating
+    /// a profile over the medium needs it: a distribution that decays from a face of the body has to
+    /// know where that face is.
+    ///
+    /// # Returns
+    ///
+    /// The box the grid covers.
+    #[must_use]
+    pub const fn bounds(&self) -> BoundingBox {
+        self.bounds
+    }
+    /// Return the number of cells of this [`InversionField`] along its x, y and z axis.
+    ///
+    /// # Returns
+    ///
+    /// The size of the grid, which is what was asked of [`InversionField::from_body`].
+    #[must_use]
+    pub fn dimensions(&self) -> CellIndex {
+        self.slices.first().map_or((0, 0, 0), |slice| {
+            (slice.ncols(), slice.nrows(), self.slices.len())
+        })
+    }
+    /// Return the volume of a single cell of this [`InversionField`].
+    ///
+    /// All cells are the same size. Geometry only — the normalized inversion the cells carry is
+    /// dimensionless, but the cell volume is what an energy balance over the medium will start from
+    /// once a saturating model needs it.
+    ///
+    /// # Returns
+    ///
+    /// The volume one cell occupies.
+    #[must_use]
+    pub fn cell_volume(&self) -> Volume {
+        let (nx, ny, nz) = self.dimensions();
+        extent(&self.bounds.x_range()) / to_f64(nx) * extent(&self.bounds.y_range()) / to_f64(ny)
+            * extent(&self.bounds.z_range())
+            / to_f64(nz)
+    }
+    /// Return whether the given cell holds medium at all.
+    ///
+    /// The grid spans the body's bounding box, which is larger than the body itself wherever that is
+    /// not a box: the cells outside it exist, but there is nothing there to excite.
+    ///
+    /// # Arguments
+    ///
+    /// - `cell`: the cell to be tested
+    ///
+    /// # Returns
+    ///
+    /// `true` if the center of the cell lies inside the body, `false` if it does not or if the cell
+    /// is not part of the grid at all.
+    #[must_use]
+    pub fn is_inside(&self, cell: CellIndex) -> bool {
+        let (i, j, k) = cell;
+        self.inside
+            .get(k)
+            .and_then(|slice| slice.get((j, i)))
+            .copied()
+            .unwrap_or(false)
+    }
+    /// Return the normalized inversion β stored in the given cell.
+    ///
+    /// # Arguments
+    ///
+    /// - `cell`: the cell to be read
+    ///
+    /// # Returns
+    ///
+    /// The normalized inversion of the cell, or `None` if it is not part of the grid. A cell outside
+    /// the body reads as the zero it was initialised to — ask [`InversionField::is_inside`] to tell
+    /// the two apart.
+    #[must_use]
+    pub fn population(&self, cell: CellIndex) -> Option<f64> {
+        let (i, j, k) = cell;
+        self.slices.get(k)?.get((j, i)).copied()
+    }
+    /// Write the normalized inversion β of the given cell.
+    ///
+    /// # Arguments
+    ///
+    /// - `cell`: the cell to be written
+    /// - `population`: the normalized inversion to store
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the cell is not part of the grid. Writing a cell that lies
+    /// outside the body is *not* an error: whether a cell carries medium is a question for
+    /// [`InversionField::is_inside`], and a producer sweeping a region should not have to be right
+    /// about the body's outline to be allowed to write.
+    pub fn set_population(&mut self, cell: CellIndex, population: f64) -> OpmResult<()> {
+        let (i, j, k) = cell;
+        let Some(entry) = self
+            .slices
+            .get_mut(k)
+            .and_then(|slice| slice.get_mut((j, i)))
+        else {
+            return Err(OpossumError::Other(format!(
+                "the cell {cell:?} is not part of an inversion field of the size {:?}",
+                self.dimensions()
+            )));
+        };
+        *entry = population;
+        Ok(())
+    }
+    /// Return the cell the given point falls into.
+    ///
+    /// This is what connects the grid back to the rest of the simulation: a ray hits the medium
+    /// somewhere, and this says which cell that somewhere is.
+    ///
+    /// # Arguments
+    ///
+    /// - `local_point`: the point to be located, given **in the frame of the optic** the medium
+    ///   belongs to. A caller holding a global point — a ray position, say — inverse transforms it
+    ///   by the node's [`effective_node_iso`](crate::core_optics::OpticNodeExt::effective_node_iso)
+    ///   first. The field does not do that itself on purpose: it would have to keep a copy of a
+    ///   placement it does not own and cannot notice changing.
+    ///
+    /// # Returns
+    ///
+    /// The index of the cell containing the point, or `None` if the point lies outside the grid.
+    ///
+    /// A point whose `cells_from_start` is exactly equal to the cell count (i.e. it lands
+    /// precisely on the upper boundary of the grid) is clamped to the last cell on that axis so
+    /// that a DDA traversal starting at the far face still covers the full grid. Points strictly
+    /// outside the boundary (where `cells_from_start > count`, so `floor` exceeds `count` or
+    /// equals it only with a fractional remainder) still return `None`.
+    #[must_use]
+    pub fn cell_at(&self, local_point: &Point3<Length>) -> Option<CellIndex> {
+        let (nx, ny, nz) = self.dimensions();
+        let index = |position: Length, range: &Range<Length>, count: usize| {
+            let cells_from_start = ((position - range.start) / extent(range)).value * to_f64(count);
+            let index = try_f64_to_usize(cells_from_start.floor())?;
+            if index < count {
+                Some(index)
+            } else if index == count && (cells_from_start - to_f64(count)).abs() < f64::EPSILON {
+                // Exactly at the upper boundary: clamp to the last cell so that a ray
+                // starting at the far face can still enter the DDA traversal.
+                count.checked_sub(1)
+            } else {
+                None
+            }
+        };
+        Some((
+            index(local_point.x, &self.bounds.x_range(), nx)?,
+            index(local_point.y, &self.bounds.y_range(), ny)?,
+            index(local_point.z, &self.bounds.z_range(), nz)?,
+        ))
+    }
+    /// Return the center of the given cell.
+    ///
+    /// The exact inverse of [`InversionField::cell_at`], and the direction anything writing into the
+    /// field needs: a pump profile is a function of position, so it has to be told where the cell it
+    /// is about to fill actually sits. The center is what the cell was masked by in
+    /// [`InversionField::from_body`], so a profile samples the medium exactly where the mask did.
+    ///
+    /// # Arguments
+    ///
+    /// - `cell`: the cell to locate
+    ///
+    /// # Returns
+    ///
+    /// The center of the cell **in the frame of the optic** the medium belongs to — the same frame
+    /// [`InversionField::cell_at`] expects its point in — or `None` if the cell is not part of the
+    /// grid.
+    #[must_use]
+    pub fn cell_center(&self, cell: CellIndex) -> Option<Point3<Length>> {
+        let (nx, ny, nz) = self.dimensions();
+        let (i, j, k) = cell;
+        if i >= nx || j >= ny || k >= nz {
+            return None;
+        }
+        Some(Point3::new(
+            cell_center(&self.bounds.x_range(), nx, i),
+            cell_center(&self.bounds.y_range(), ny, j),
+            cell_center(&self.bounds.z_range(), nz, k),
+        ))
+    }
+
+    /// Walk a ray through the grid cell by cell, returning each traversed cell paired with the
+    /// exact arc length the ray spends inside it (Amanatides–Woo grid traversal).
+    ///
+    /// The ray is expressed **in the field's own frame** (the optic's local frame). The caller
+    /// transforms the global ray origin and direction into that frame before calling this method —
+    /// [`Body::isometry`] supplies the transform, and the body's own
+    /// [`Isometry::inverse_transform_point`](crate::utils::geom_transformation::Isometry::inverse_transform_point)
+    /// and
+    /// [`Isometry::inverse_transform_vector_f64`](crate::utils::geom_transformation::Isometry::inverse_transform_vector_f64)
+    /// apply it.
+    ///
+    /// `direction` **must be unit length** so that the parametric distances in the walk directly
+    /// equal arc lengths: `position_at_t = origin + direction * t`. The caller is responsible for
+    /// normalising; this method does not check.
+    ///
+    /// The return value is an owned `Vec` rather than a borrowing iterator so that a future
+    /// saturating model can hold `&mut InversionField` while processing the cells — the same
+    /// rationale as [`cells`].
+    ///
+    /// # Arguments
+    ///
+    /// - `origin`: start of the ray, in the optic's local frame.
+    /// - `direction`: unit direction vector (dimensionless).
+    ///
+    /// # Returns
+    ///
+    /// A list of `(cell, path_length)` pairs in traversal order. The cells are the unique grid
+    /// cells the ray passes through; the arc lengths sum to the total chord of the ray through the
+    /// grid's bounding box (clipped so that points behind the origin are excluded). Returns an
+    /// empty list if the ray misses the grid entirely, if `t_exit ≤ t_enter`, or if the grid has
+    /// no cells along any axis.
+    #[must_use]
+    #[allow(clippy::too_many_lines)]
+    pub fn traverse(
+        &self,
+        origin: &Point3<Length>,
+        direction: &Vector3<f64>,
+    ) -> Vec<(CellIndex, Length)> {
+        use uom::si::length::meter;
+
+        let (nx, ny, nz) = self.dimensions();
+        if nx == 0 || ny == 0 || nz == 0 {
+            return Vec::new();
+        }
+
+        let x_range = self.bounds.x_range();
+        let y_range = self.bounds.y_range();
+        let z_range = self.bounds.z_range();
+
+        // All t-values are in SI metres; direction is unit so t equals arc length in metres.
+        let cell_w = [
+            extent(&x_range).value / to_f64(nx),
+            extent(&y_range).value / to_f64(ny),
+            extent(&z_range).value / to_f64(nz),
+        ];
+        let lo = [
+            x_range.start.value,
+            y_range.start.value,
+            z_range.start.value,
+        ];
+        let hi = [x_range.end.value, y_range.end.value, z_range.end.value];
+        let org = [origin.x.value, origin.y.value, origin.z.value];
+        let dir = [direction.x, direction.y, direction.z];
+
+        // Slab-clip one axis: returns (t_enter, t_exit) in metres from the ray origin,
+        // or `None` if the ray misses the slab entirely.
+        let slab = |oc: f64, dc: f64, lo_v: f64, hi_v: f64| -> Option<(f64, f64)> {
+            if dc == 0.0 {
+                // Ray is parallel to this axis: inside iff the origin lies within the slab.
+                (oc >= lo_v && oc < hi_v).then_some((f64::NEG_INFINITY, f64::INFINITY))
+            } else {
+                let (t1, t2) = ((lo_v - oc) / dc, (hi_v - oc) / dc);
+                Some(if t1 <= t2 { (t1, t2) } else { (t2, t1) })
+            }
+        };
+
+        let Some((tx0, tx1)) = slab(org[0], dir[0], lo[0], hi[0]) else {
+            return Vec::new();
+        };
+        let Some((ty0, ty1)) = slab(org[1], dir[1], lo[1], hi[1]) else {
+            return Vec::new();
+        };
+        let Some((tz0, tz1)) = slab(org[2], dir[2], lo[2], hi[2]) else {
+            return Vec::new();
+        };
+
+        // Entry is the latest of the three per-axis entries (and no earlier than the ray start).
+        // Exit is the earliest of the three per-axis exits.
+        let t_enter = tx0.max(ty0).max(tz0).max(0.0);
+        let t_exit = tx1.min(ty1).min(tz1);
+        if t_enter >= t_exit {
+            return Vec::new();
+        }
+
+        // The cell the ray enters first. Floating-point nudge is absorbed by `cell_at`'s floor.
+        let entry = Point3::new(
+            origin.x + dir[0] * Length::new::<meter>(t_enter),
+            origin.y + dir[1] * Length::new::<meter>(t_enter),
+            origin.z + dir[2] * Length::new::<meter>(t_enter),
+        );
+        let Some(start_cell) = self.cell_at(&entry) else {
+            return Vec::new();
+        };
+
+        let counts = [nx, ny, nz];
+        let mut cell = [start_cell.0, start_cell.1, start_cell.2];
+
+        // Per-axis DDA state (all in metres from the ray origin).
+        // `t_max[a]` = t at which the ray next crosses a boundary on axis a.
+        // `t_delta[a]` = distance between consecutive boundaries on axis a.
+        // Both stay at INFINITY for axes the ray does not traverse (dir[a] == 0).
+        let mut t_max = [f64::INFINITY; 3];
+        let mut t_delta = [f64::INFINITY; 3];
+        // step direction per axis: +1 forward, -1 backward, 0 parallel (never advanced)
+        let mut step_dir = [0i32; 3];
+
+        for a in 0..3 {
+            if dir[a] > 0.0 {
+                step_dir[a] = 1;
+                t_max[a] = (cell_w[a].mul_add(to_f64(cell[a] + 1), lo[a]) - org[a]) / dir[a];
+                t_delta[a] = cell_w[a] / dir[a];
+            } else if dir[a] < 0.0 {
+                step_dir[a] = -1;
+                t_max[a] = (cell_w[a].mul_add(to_f64(cell[a]), lo[a]) - org[a]) / dir[a];
+                t_delta[a] = cell_w[a] / (-dir[a]);
+            }
+        }
+
+        let mut result = Vec::new();
+        let mut t_cur = t_enter;
+
+        loop {
+            // Advance along the axis whose next boundary is closest.
+            let a = if t_max[0] <= t_max[1] && t_max[0] <= t_max[2] {
+                0
+            } else if t_max[1] <= t_max[2] {
+                1
+            } else {
+                2
+            };
+
+            let t_step = t_max[a].min(t_exit);
+            let ds = t_step - t_cur;
+            if ds > 0.0 {
+                result.push((cell.into(), Length::new::<meter>(ds)));
+            }
+            t_cur = t_step;
+            if t_cur >= t_exit {
+                break;
+            }
+
+            // Move to the neighbouring cell and update the next-boundary distance.
+            if step_dir[a] == 1 {
+                let new_idx = cell[a] + 1;
+                if new_idx >= counts[a] {
+                    break;
+                }
+                cell[a] = new_idx;
+            } else {
+                // step_dir[a] == -1 (never 0 since t_max[a] < INFINITY here)
+                if cell[a] == 0 {
+                    break;
+                }
+                cell[a] -= 1;
+            }
+            t_max[a] += t_delta[a];
+        }
+
+        result
+    }
+}
+
+/// Iterate over every cell of a grid of the given size.
+///
+/// This takes the dimensions rather than the field itself on purpose: a producer walks the cells
+/// *while writing into them*, and an iterator borrowing the field would rule that out.
+///
+/// # Arguments
+///
+/// - `dimensions`: the size of the grid, as reported by [`InversionField::dimensions`]
+///
+/// # Returns
+///
+/// Every cell index of that grid, once.
+pub fn cells(dimensions: CellIndex) -> impl Iterator<Item = CellIndex> {
+    let (nx, ny, nz) = dimensions;
+    (0..nx).flat_map(move |i| (0..ny).flat_map(move |j| (0..nz).map(move |k| (i, j, k))))
+}
+
+/// Return how far the given range reaches.
+///
+/// # Arguments
+///
+/// - `range`: the range to be measured
+///
+/// # Returns
+///
+/// The distance between the start and the end of the range.
+fn extent(range: &Range<Length>) -> Length {
+    range.end - range.start
+}
+
+/// Return the center of one cell of an evenly divided range.
+///
+/// # Arguments
+///
+/// - `range`: the range covered by all cells together
+/// - `count`: the number of cells the range is divided into
+/// - `index`: the index of the cell in question
+///
+/// # Returns
+///
+/// The position of the center of the cell.
+fn cell_center(range: &Range<Length>, count: usize, index: usize) -> Length {
+    range.start + extent(range) * ((to_f64(index) + 0.5) / to_f64(count))
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{
+        apertures::{Aperture, ApertureType},
+        core_optics::{OpticNode, volumetric::Volumetric},
+        degree,
+        geometry::{Plane, body::SurfaceBoundedBody, geo_surface::GeoSurfaceRef},
+        millimeter,
+        nodes::Lens,
+        types::validated_type_definitions::ValidatedCrossSection,
+        utils::geom_transformation::Isometry,
+    };
+    use approx::assert_abs_diff_eq;
+    use nalgebra::Vector3;
+    use std::{
+        f64::consts::PI,
+        sync::{Arc, Mutex},
+    };
+
+    /// Create a disk of the given thickness and radius, placed by the given isometry.
+    fn disk(
+        thickness: Length,
+        radius: Length,
+        placement: Isometry,
+    ) -> OpmResult<SurfaceBoundedBody> {
+        Ok(SurfaceBoundedBody::new(
+            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(placement)))),
+            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(
+                placement.append(&Isometry::new_along_z(thickness)?),
+            )))),
+            ValidatedCrossSection::try_new(Aperture::new_circle(
+                radius,
+                ApertureType::Hole,
+                None,
+            )?)?,
+            placement,
+        ))
+    }
+    /// Return the volume of all cells of the given field that hold medium.
+    fn covered_volume(field: &InversionField) -> Volume {
+        let covered = cells(field.dimensions())
+            .filter(|cell| field.is_inside(*cell))
+            .count();
+        field.cell_volume() * to_f64(covered)
+    }
+    #[test]
+    fn the_grid_has_the_requested_shape() -> OpmResult<()> {
+        let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
+        let field = InversionField::from_body(&body, (7, 5, 3))?;
+        assert_eq!(field.dimensions(), (7, 5, 3));
+        // The disk fills its own bounding box in z and spans twice its radius transversally, so
+        // the cells come out as that box divided by the requested number of them.
+        assert_abs_diff_eq!(
+            field.cell_volume().value,
+            (millimeter!(10.0) / 7.0 * millimeter!(10.0) / 5.0 * millimeter!(10.0) / 3.0).value,
+            epsilon = 1e-18
+        );
+        Ok(())
+    }
+    #[test]
+    fn a_grid_needs_at_least_one_cell_per_axis() -> OpmResult<()> {
+        let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
+        for dimensions in [(0, 4, 4), (4, 0, 4), (4, 4, 0)] {
+            assert!(InversionField::from_body(&body, dimensions).is_err());
+        }
+        assert!(InversionField::from_body(&body, (1, 1, 1)).is_ok());
+        Ok(())
+    }
+    #[test]
+    fn the_grid_spans_the_bounding_box_of_the_body() -> OpmResult<()> {
+        // The field keeps the box it was laid out over, so a profile can ask where a face of the
+        // medium is without going back to the body it came from.
+        let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
+        let field = InversionField::from_body(&body, (4, 4, 4))?;
+        assert_eq!(field.bounds(), body.bounding_box()?);
+        Ok(())
+    }
+    #[test]
+    fn every_cell_center_maps_back_to_its_own_cell() -> OpmResult<()> {
+        let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
+        let dimensions = (7, 5, 3);
+        let field = InversionField::from_body(&body, dimensions)?;
+        for cell in cells(dimensions) {
+            let center = field
+                .cell_center(cell)
+                .ok_or_else(|| OpossumError::Other(format!("cell {cell:?} has no center")))?;
+            assert_eq!(field.cell_at(&center), Some(cell));
+        }
+        // Points strictly outside the grid return None.
+        assert_eq!(field.cell_at(&millimeter!(0.0, 0.0, -0.1)), None);
+        // A point exactly on the upper boundary is clamped to the last cell so a DDA ray
+        // starting at the far face can still traverse the full grid.
+        assert_eq!(field.cell_at(&millimeter!(0.0, 0.0, 10.0)), Some((3, 2, 2)));
+        // Points beyond the boundary (cells_from_start > count, not exactly equal) still → None.
+        assert_eq!(field.cell_at(&millimeter!(5.1, 0.0, 5.0)), None);
+        assert_eq!(field.cell_at(&millimeter!(0.0, -5.1, 5.0)), None);
+        Ok(())
+    }
+    #[test]
+    fn a_cell_center_sits_where_the_grid_puts_it() -> OpmResult<()> {
+        // The disk spans -5..5 mm transversally and 0..10 mm in z, so with four cells per axis the
+        // first cell is centered an eighth of the way in on each of them.
+        let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
+        let field = InversionField::from_body(&body, (4, 4, 4))?;
+        let center = field
+            .cell_center((0, 0, 0))
+            .ok_or_else(|| OpossumError::Other("the first cell has no center".into()))?;
+        for (found, expected) in [
+            (center.x, millimeter!(-3.75)),
+            (center.y, millimeter!(-3.75)),
+            (center.z, millimeter!(1.25)),
+        ] {
+            assert_abs_diff_eq!(found.value, expected.value, epsilon = 1e-15);
+        }
+        // Cells outside the grid have no center, on every axis.
+        for cell in [(4, 0, 0), (0, 4, 0), (0, 0, 4)] {
+            assert_eq!(field.cell_center(cell), None);
+        }
+        Ok(())
+    }
+    #[test]
+    fn the_mask_follows_the_cross_section() -> OpmResult<()> {
+        // The grid spans the box around the disk, so its transversal corners stick out of the round
+        // cross section while its center is well within it.
+        let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
+        let field = InversionField::from_body(&body, (8, 8, 4))?;
+        assert!(field.is_inside((3, 3, 0)));
+        assert!(field.is_inside((4, 4, 3)));
+        for corner in [(0, 0, 0), (7, 0, 0), (0, 7, 0), (7, 7, 3)] {
+            assert!(
+                !field.is_inside(corner),
+                "cell {corner:?} should be outside"
+            );
+        }
+        // A cell that is not part of the grid at all holds no medium either.
+        assert!(!field.is_inside((8, 0, 0)));
+        Ok(())
+    }
+    #[test]
+    fn the_covered_volume_converges_to_the_body_volume() -> OpmResult<()> {
+        // The test that the grid really covers the right domain: a disk fills pi/4 of its own
+        // bounding box, and the staircase the Cartesian grid cuts around its rim has to vanish as
+        // the cells get smaller.
+        let (radius, thickness) = (millimeter!(5.0), millimeter!(10.0));
+        let body = disk(thickness, radius, Isometry::identity())?;
+        let exact = PI * radius * radius * thickness;
+        let error = |cells: usize| -> OpmResult<f64> {
+            let field = InversionField::from_body(&body, (cells, cells, 2))?;
+            Ok(((covered_volume(&field) - exact) / exact).value.abs())
+        };
+        // Note that the error does not fall monotonically with every refinement: which cell centers
+        // happen to land inside the rim is an arithmetic accident of the resolution, and doubling it
+        // can reproduce the very same count. The two resolutions compared here are therefore far
+        // enough apart for the trend to show rather than adjacent.
+        let (coarse, fine) = (error(8)?, error(64)?);
+        assert!(coarse < 0.05, "coarse grid is off by {coarse}");
+        assert!(
+            fine < 0.5 * coarse,
+            "refining the grid did not help: {coarse} -> {fine}"
+        );
+        assert!(fine < 0.01, "fine grid is off by {fine}");
+        Ok(())
+    }
+    #[test]
+    fn the_grid_follows_the_frame_of_the_optic() -> OpmResult<()> {
+        // Moving and tilting the component must not change the field at all: the grid is laid out
+        // in the component's own frame, and the field keeps no record of where that frame is. This
+        // is what lets it outlive a pass without going stale when the node is realigned.
+        let placement = Isometry::new(
+            millimeter!(20.0, -5.0, 100.0),
+            Point3::new(degree!(15.0), degree!(-10.0), degree!(30.0)),
+        )?;
+        let dimensions = (8, 8, 3);
+        let upright = InversionField::from_body(
+            &disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?,
+            dimensions,
+        )?;
+        let placed = InversionField::from_body(
+            &disk(millimeter!(10.0), millimeter!(5.0), placement)?,
+            dimensions,
+        )?;
+        for cell in cells(dimensions) {
+            assert_eq!(
+                upright.is_inside(cell),
+                placed.is_inside(cell),
+                "cell {cell:?} changed when the component was moved"
+            );
+        }
+        // ... and a point of the medium, stated in that frame, lands in the same cell either way
+        let on_the_axis = millimeter!(0.0, 0.0, 5.0);
+        assert_eq!(upright.cell_at(&on_the_axis), placed.cell_at(&on_the_axis));
+        assert!(upright.cell_at(&on_the_axis).is_some());
+        Ok(())
+    }
+    #[test]
+    fn a_population_can_be_written_and_read_back() -> OpmResult<()> {
+        let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
+        let mut field = InversionField::from_body(&body, (4, 4, 2))?;
+        // A fresh field is unpumped everywhere.
+        assert!(cells((4, 4, 2)).all(|cell| field.population(cell) == Some(0.0)));
+        let population = 0.7;
+        field.set_population((1, 2, 1), population)?;
+        assert_eq!(field.population((1, 2, 1)), Some(population));
+        // ... and only that one cell changed
+        assert_eq!(field.population((2, 1, 1)), Some(0.0));
+        // Cells outside the grid can neither be read nor written.
+        assert_eq!(field.population((4, 0, 0)), None);
+        assert_eq!(field.population((0, 0, 2)), None);
+        assert!(field.set_population((0, 0, 2), population).is_err());
+        Ok(())
+    }
+    #[test]
+    fn a_field_over_the_volume_of_a_lens() -> OpmResult<()> {
+        // The whole point of the exercise: the domain comes from a real component, through the
+        // body its own surfaces and clear aperture enclose.
+        let mut lens = Lens::default();
+        lens.set_isometry(Isometry::identity())?;
+        let body = lens.volume_body()?;
+        let field = InversionField::from_body(&body, (9, 9, 5))?;
+        assert_eq!(field.dimensions(), (9, 9, 5));
+        // the axis of the lens runs through the middle column of cells, which is all medium
+        assert!((0..5).all(|k| field.is_inside((4, 4, k))));
+        // ... while the corners of the box are outside the round clear aperture
+        assert!(!field.is_inside((0, 0, 2)));
+        Ok(())
+    }
+
+    // --- traverse tests ---
+    //
+    // These tests lock the Amanatides–Woo grid-traversal primitive independently of the physics
+    // that consume it. Every test checks geometric invariants only (path lengths, cell ordering)
+    // — not gain — so they stand regardless of how the gain model evolves.
+
+    #[test]
+    fn traverse_on_axis_ray_yields_equal_z_cells() -> OpmResult<()> {
+        // An on-axis ray through a (1,1,4) grid must visit exactly four z-cells of equal length.
+        // z-range is [0, 10 mm], so each cell is 2.5 mm deep.
+        let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
+        let field = InversionField::from_body(&body, (1, 1, 4))?;
+        let origin = millimeter!(0.0, 0.0, -5.0); // starts before the disk
+        let direction = Vector3::new(0.0, 0.0, 1.0);
+        let segs = field.traverse(&origin, &direction);
+        assert_eq!(segs.len(), 4, "expected 4 z-cells, got {:?}", segs);
+        for &(_, ds) in &segs {
+            assert_abs_diff_eq!(ds.value, millimeter!(2.5).value, epsilon = 1e-12);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn traverse_path_lengths_sum_to_chord() -> OpmResult<()> {
+        // For any ray that passes through the grid, the sum of all emitted path lengths must equal
+        // the total chord clipped to the bounding box. Checked on-axis and oblique.
+        let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
+        let field = InversionField::from_body(&body, (4, 4, 8))?;
+
+        // On-axis: chord = 10 mm.
+        let sum_axis: f64 = field
+            .traverse(&millimeter!(0.0, 0.0, -5.0), &Vector3::new(0.0, 0.0, 1.0))
+            .iter()
+            .map(|&(_, ds)| ds.value)
+            .sum();
+        assert_abs_diff_eq!(sum_axis, millimeter!(10.0).value, epsilon = 1e-12);
+
+        // 5° oblique (small enough that the ray does not clip against the side of the disk):
+        // chord = 10 mm / cos(5°).
+        let theta = 5_f64.to_radians();
+        let dir = Vector3::new(theta.sin(), 0.0, theta.cos());
+        let sum_oblique: f64 = field
+            .traverse(&millimeter!(0.0, 0.0, -5.0), &dir)
+            .iter()
+            .map(|&(_, ds)| ds.value)
+            .sum();
+        let expected = millimeter!(10.0).value / theta.cos();
+        assert_abs_diff_eq!(sum_oblique, expected, epsilon = 1e-10);
+        Ok(())
+    }
+
+    #[test]
+    fn traverse_a_miss_returns_empty() -> OpmResult<()> {
+        let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
+        let field = InversionField::from_body(&body, (4, 4, 4))?;
+
+        // Ray starts past the exit face and continues onward.
+        assert!(
+            field
+                .traverse(&millimeter!(0.0, 0.0, 15.0), &Vector3::new(0.0, 0.0, 1.0))
+                .is_empty()
+        );
+
+        // Ray passes entirely beside the disk (x too large).
+        assert!(
+            field
+                .traverse(&millimeter!(10.0, 0.0, 5.0), &Vector3::new(0.0, 0.0, 1.0))
+                .is_empty()
+        );
+
+        // Ray heading in the wrong direction (away from disk).
+        assert!(
+            field
+                .traverse(&millimeter!(0.0, 0.0, -5.0), &Vector3::new(0.0, 0.0, -1.0))
+                .is_empty()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn traverse_cells_are_visited_in_ray_order() -> OpmResult<()> {
+        // For an on-axis ray in +z, consecutive cells must increase the z-index by one.
+        let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
+        let field = InversionField::from_body(&body, (1, 1, 8))?;
+        let segs = field.traverse(&millimeter!(0.0, 0.0, -1.0), &Vector3::new(0.0, 0.0, 1.0));
+        assert_eq!(segs.len(), 8);
+        for w in segs.windows(2) {
+            let ((_, _, k0), _) = w[0];
+            let ((_, _, k1), _) = w[1];
+            assert_eq!(k1, k0 + 1, "z-index must increase by one each step");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn traverse_x_boundary_crossing_gives_exact_path_lengths() -> OpmResult<()> {
+        // Two-cell grid in x, ray in +x direction starting inside cell 0.
+        // The x-range is [-5, 5] mm so the boundary is at x = 0.
+        // Starting at x = -2.5 mm: cell 0 has 2.5 mm remaining, cell 1 has 5 mm.
+        let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
+        let field = InversionField::from_body(&body, (2, 1, 1))?;
+        let origin = millimeter!(-2.5, 0.0, 5.0);
+        let direction = Vector3::new(1.0, 0.0, 0.0);
+        let segs = field.traverse(&origin, &direction);
+        assert_eq!(segs.len(), 2, "expected exactly 2 cells: {:?}", segs);
+        assert_abs_diff_eq!(segs[0].1.value, millimeter!(2.5).value, epsilon = 1e-12);
+        assert_abs_diff_eq!(segs[1].1.value, millimeter!(5.0).value, epsilon = 1e-12);
+        // The total equals the clipped chord.
+        let total: f64 = segs.iter().map(|&(_, ds)| ds.value).sum();
+        assert_abs_diff_eq!(total, millimeter!(7.5).value, epsilon = 1e-12);
+        Ok(())
+    }
+
+    #[test]
+    fn traverse_crossing_at_one_third_is_exact() -> OpmResult<()> {
+        // Two x-cells, ray in +x crossing the x=0 boundary after exactly 1/3 of the full chord.
+        // x-range = [-5, 5] mm; full chord = 10 mm; boundary at x=0.
+        // A ray from x=-5 to x=5 with the boundary at x=0 splits the chord into 5/10 and 5/10.
+        // For an unequal split: use a sub-chord. Starting at x=-5 mm (grid entry), going +x:
+        //   cell 0 (x∈[-5,0]): ds = 5 mm
+        //   cell 1 (x∈[0,5]):  ds = 5 mm
+        // For a crossing at 1/3 of the total chord (10 mm), the ray must enter at x=-5 and the
+        // boundary must appear at t = 10/3 mm from entry. Use x-range: [-5, 5] with 2 cells.
+        // The boundary is at x = 0 = midpoint. To have the boundary at 1/3: shift origin.
+        // Origin at x = -10/3 mm ≈ -3.333 mm, direction +x.
+        // Remaining in cell 0 from that point: 0 - (-10/3) = 10/3 mm.
+        // Cell 1 full width: 5 mm.
+        // Total chord (from -10/3 to +5): 5 + 10/3 = 25/3 mm.
+        let body = disk(millimeter!(10.0), millimeter!(5.0), Isometry::identity())?;
+        let field = InversionField::from_body(&body, (2, 1, 1))?;
+        let x_start = -10.0 / 3.0; // mm — not a cell boundary for the 2-cell grid
+        let origin = millimeter!(x_start, 0.0, 5.0);
+        let direction = Vector3::new(1.0, 0.0, 0.0);
+        let segs = field.traverse(&origin, &direction);
+        assert_eq!(segs.len(), 2);
+        let ds_a_expected = 10.0 / 3.0; // mm (distance from x_start to x=0)
+        let ds_b_expected = 5.0; // mm (x=0 to x=5, full width of cell 1)
+        assert_abs_diff_eq!(
+            segs[0].1.value,
+            millimeter!(ds_a_expected).value,
+            epsilon = 1e-12
+        );
+        assert_abs_diff_eq!(
+            segs[1].1.value,
+            millimeter!(ds_b_expected).value,
+            epsilon = 1e-12
+        );
+        Ok(())
+    }
+}

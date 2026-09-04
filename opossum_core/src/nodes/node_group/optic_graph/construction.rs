@@ -47,10 +47,7 @@ impl OpticGraph {
                 "node with uuid {node_id} already exists"
             )));
         }
-        self.g.add_node(OpticRef::new(
-            Arc::new(Mutex::new(node)),
-            self.global_confg(),
-        ));
+        self.g.add_node(OpticRef::new(Arc::new(Mutex::new(node))));
         Ok(node_id)
     }
 
@@ -69,7 +66,6 @@ impl OpticGraph {
         }
         Ok(self.g.add_node(node))
     }
-
     /// Recursively cleans up connections (edges) and port mappings that refer to
     /// ports that no longer exist on their target or source nodes.
     fn cleanup_orphan_connections_and_mappings(&mut self) -> OpmResult<()> {

@@ -28,6 +28,19 @@ pub enum NodeChangeAction {
     Property(String, Proptype),
     Isometry(Option<Isometry>),
     AnalyzerType(AnalyzerType),
+    /// The pump scenarios an analyzer is run in, in the given order - one report per entry, and a
+    /// single passive run when empty.
+    ///
+    /// Separate from [`NodeChangeAction::AnalyzerType`] because the selection sits next to the
+    /// analyzer's config rather than inside it: it names operating points of the document, which is
+    /// why it has an endpoint (and an undo command) of its own on the backend.
+    AnalyzerPumpScenarios(Vec<Uuid>),
+    /// The user-assigned name of an analyzer. `graph_id` is the root graph the analyzer lives in,
+    /// needed to update the canvas node label after the backend call.
+    AnalyzerName {
+        name: String,
+        graph_id: Uuid,
+    },
     PortConfig {
         port_name: String,
         port_type: PortType,
@@ -132,31 +145,37 @@ pub fn NodeConfigEditor(
                 }
             },
             None => rsx! {
-                div { "No node selected" }
+                div { class: "noselect", "No node selected" }
             },
         }
     } else if displayed_nodes.len() == 0 {
         rsx! {
-            div { "No node selected" }
+            div { class: "noselect", "No node selected" }
         }
     } else {
+        let optical_count = selected_nodes_memo()
+            .iter()
+            .filter(|n| matches!(n.node_type, NodeType::Optical(_)))
+            .count();
         rsx! {
             div {
                 "Multiple nodes selected"
-                button {
-                    class: "btn btn-success",
-                    onclick: move |_| {
-                        workspace_processor
-                            .send(GraphsWorkspaceAction::ConvertToGroup {
-                                nodes: selected_nodes_memo()
-                                    .iter()
-                                    .filter(|n| matches!(n.node_type, NodeType::Optical(_)))
-                                    .map(|n| n.node_id)
-                                    .collect::<Vec<Uuid>>(),
-                                graph_id: *active_graph_id.read(),
-                            });
-                    },
-                    "Convert nodes to group"
+                if optical_count >= 2 {
+                    button {
+                        class: "btn btn-success",
+                        onclick: move |_| {
+                            workspace_processor
+                                .send(GraphsWorkspaceAction::ConvertToGroup {
+                                    nodes: selected_nodes_memo()
+                                        .iter()
+                                        .filter(|n| matches!(n.node_type, NodeType::Optical(_)))
+                                        .map(|n| n.node_id)
+                                        .collect::<Vec<Uuid>>(),
+                                    graph_id: *active_graph_id.read(),
+                                });
+                        },
+                        "Convert nodes to group"
+                    }
                 }
             }
         }
@@ -169,6 +188,10 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
         move |mut rx: UnboundedReceiver<NodeChangeEvent>| async move {
             while let Some(event) = rx.next().await {
                 let uuid = event.node_id;
+                // The amplifier overview lists nodes by name, so a rename has to reach it. Every
+                // other way that list can change already bumps the counter in the workspace
+                // processor; taking the flag here keeps this out of the generic property path.
+                let is_rename = matches!(event.action, NodeChangeAction::Name(_));
 
                 let result: Result<(), String> = match event.action {
                     NodeChangeAction::Name(name) => match api::get_node_references(uuid).await {
@@ -229,6 +252,23 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                     NodeChangeAction::AnalyzerType(analyzer_type) => {
                         api::update_analyzer_config_ron(uuid, analyzer_type).await
                     }
+                    NodeChangeAction::AnalyzerPumpScenarios(scenarios) => {
+                        api::put_analyzer_pump_scenarios(uuid, scenarios).await
+                    }
+                    NodeChangeAction::AnalyzerName { name, graph_id } => {
+                        match api::update_analyzer_name(uuid, &name).await {
+                            Ok(()) => {
+                                workspace_processor.send(GraphsWorkspaceAction::SetNodeName {
+                                    name,
+                                    graph_id,
+                                    node_id: uuid,
+                                    needs_saving: true,
+                                });
+                                Ok(())
+                            }
+                            Err(e) => Err(e),
+                        }
+                    }
                     NodeChangeAction::PortConfig {
                         port_name,
                         port_type,
@@ -244,6 +284,9 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                         // it only reflects the backend's truth after an undo/redo-triggered refetch,
                         // never after a normal direct edit.
                         *crate::NODE_DETAILS_REFRESH.write() += 1;
+                        if is_rename {
+                            *crate::AMP_LIST_REFRESH.write() += 1;
+                        }
                         // The edit pushed an undo entry on the backend; reflect that in the Edit menu.
                         *crate::UNDO_REDO_STATUS.write() = (true, false);
                     }

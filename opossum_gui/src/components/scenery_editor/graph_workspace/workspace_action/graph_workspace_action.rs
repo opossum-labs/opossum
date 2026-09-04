@@ -1,6 +1,7 @@
 use crate::components::scenery_editor::{DragStatus, edges::edges_component::EdgeCreation};
 use dioxus::html::geometry::euclid::default::{Point2D, Rect};
 use opossum_core::{
+    gain::{GainModel, PumpSource},
     prelude::{AnalyzerType, PortType},
     types::api_types::{ConnectInfo, NewRefNode},
 };
@@ -202,7 +203,7 @@ pub enum GraphsWorkspaceAction {
     /// Adds a new analyzer node to the specified graph.
     AddAnalyzer {
         /// The type of analyzer to create.
-        analyzer_type: AnalyzerType,
+        analyzer_type: Box<AnalyzerType>,
         /// The ID of the graph where the analyzer will be added.
         graph_id: Uuid,
     },
@@ -341,6 +342,71 @@ pub enum GraphsWorkspaceAction {
         from_graph_id: Uuid,
         /// The ID of the destination graph or group.
         to_graph_id: Uuid,
+    },
+
+    /// Sets which pump scenario the canvas and the context menu currently reflect - a GUI-only
+    /// choice (see [`crate::ACTIVE_PUMP_SCENARIO`]), not a document edit. Refetches and bulk-syncs
+    /// every open tab's amplifier markers to match.
+    SetActivePumpScenario(Option<Uuid>),
+
+    /// Corrects the active pump scenario if it is unset or no longer exists, by activating the
+    /// first scenario the document actually has. "No scenario active" is only a legitimate state
+    /// when the document has none at all - otherwise the canvas would show `None` for a node that
+    /// may well be configured as `Const` in every scenario, which reads as "this node doesn't
+    /// amplify" even though it does. Sent after anything that can add or remove a scenario (create,
+    /// delete, undo/redo of either, loading a document).
+    EnsureActivePumpScenario,
+
+    /// Sets the gain model a node runs with within one pump scenario - what the context menu's
+    /// amplifier toggle sends. Patches the scenario (not any node property), and mirrors the canvas
+    /// marker only if `scenario_id` is the active scenario.
+    SetScenarioGainModel {
+        /// The scenario being edited.
+        scenario_id: Uuid,
+        /// The node whose gain model in that scenario is being set.
+        node_id: Uuid,
+        /// The graph containing the node, needed to update its canvas marker.
+        graph_id: Uuid,
+        /// The model to set. `GainModel::None` takes the node out of the scenario again.
+        model: GainModel,
+    },
+
+    /// Sets how a node's medium is pumped within one pump scenario - the other half of what
+    /// [`Self::SetScenarioGainModel`] sets, edited through its own endpoint so that changing one
+    /// never overwrites the other.
+    ///
+    /// Unlike the gain model this has no canvas effect: the marker states whether a node amplifies,
+    /// which the extraction model alone answers.
+    SetScenarioPumpSource {
+        /// The scenario being edited.
+        scenario_id: Uuid,
+        /// The node whose pump source in that scenario is being set.
+        node_id: Uuid,
+        /// How its medium is pumped. `PumpSource::None` leaves it unpumped.
+        pump: PumpSource,
+    },
+
+    /// Marks or unmarks a node as an amplifier candidate - what the context menu's "As
+    /// amplifier"/"As passive optic" entry sends. A hardware fact, independent of any pump
+    /// scenario: unlike [`Self::SetScenarioGainModel`] this does not touch any scenario or any
+    /// node property - it patches the document-wide candidate set.
+    SetAmplifierCandidate {
+        /// The node being marked or unmarked.
+        node_id: Uuid,
+        /// The graph containing the node, needed to update its canvas marker.
+        graph_id: Uuid,
+        /// Whether the node is an amplifier candidate from now on.
+        is_amplifier: bool,
+    },
+
+    /// Brings a node into view: makes its graph the active tab (opening it first if needed) and
+    /// selects it. Used by the amplifier overview to take the user to a listed node, which may sit
+    /// in a group whose tab isn't even open.
+    RevealNode {
+        /// The ID of the node to reveal.
+        node_id: Uuid,
+        /// The ID of the graph containing the node.
+        graph_id: Uuid,
     },
 
     /// Undoes the last checkpointed document edit.

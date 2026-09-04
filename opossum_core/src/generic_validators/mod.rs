@@ -19,6 +19,7 @@ mod pass;
 mod path_valid;
 mod positive;
 mod second_larger;
+mod static_in_range;
 
 pub use finite::{AllFinite, XFinite, YFinite};
 pub use in_range::AllInRange;
@@ -37,6 +38,7 @@ pub use pass::Pass;
 pub use path_valid::PathValid;
 pub use positive::{AllPositive, XPositive, YPositive};
 pub use second_larger::SecondLarger;
+pub use static_in_range::{StaticBounds, StaticInRange};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Target {
@@ -83,7 +85,7 @@ pub trait ValidateVec<T> {
 ///
 /// `Validated` ensures that the value is always valid according
 /// to the validator.
-#[derive(Copy, Clone, PartialEq, Deserialize, Serialize, Debug, Eq)]
+#[derive(Copy, Clone, PartialEq, Serialize, Debug, Eq)]
 #[serde(transparent)]
 pub struct Validated<T, V: Validate<T>> {
     value: T,
@@ -143,6 +145,26 @@ impl<T, V: Validate<T>> Validated<T, V> {
     }
 }
 
+impl<'de, T, V> Deserialize<'de> for Validated<T, V>
+where
+    T: Deserialize<'de>,
+    V: Validate<T> + Default,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // Deserialize the inner value directly (matching #[serde(transparent)])
+        let value = T::deserialize(deserializer)?;
+
+        // Instantiate the zero-sized validator
+        let validator = V::default();
+
+        // Run the validation logic. If it fails, map the OpossumError to a serde error.
+        Self::new(value, validator).map_err(serde::de::Error::custom)
+    }
+}
+
 impl<T, V: Validate<T>> utoipa::ToSchema for Validated<T, V>
 where
     T: utoipa::ToSchema,
@@ -168,13 +190,42 @@ where
 ///
 /// `ValidatedVec` ensures that the values are always valid according
 /// to the validator which is the same for all values.
-#[derive(Clone, PartialEq, Serialize, Deserialize, Debug, Eq)]
+#[derive(Clone, PartialEq, Serialize, Debug, Eq)]
 pub struct ValidatedVec<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> {
     values: Vec<T>,
     #[serde(skip)]
     element_validator: EV,
     #[serde(skip)]
     container_validator: CV,
+}
+// Private helper struct to match the default serialization format: {"values": [...]}
+#[derive(Deserialize)]
+struct ValidatedVecHelper<T> {
+    values: Vec<T>,
+}
+
+// Manually implement Deserialize to guarantee validation upon loading
+impl<'de, T, EV, CV> Deserialize<'de> for ValidatedVec<T, EV, CV>
+where
+    T: Clone + Deserialize<'de>,
+    EV: Validate<T> + Default,
+    CV: ValidateVec<T> + Default,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // Deserialize into the helper to extract the vector of values
+        let helper = ValidatedVecHelper::<T>::deserialize(deserializer)?;
+
+        // Instantiate the zero-sized validators
+        let element_validator = EV::default();
+        let container_validator = CV::default();
+
+        // Validate elements and the container. Return a serde error if validation fails.
+        Self::new(helper.values, element_validator, container_validator)
+            .map_err(serde::de::Error::custom)
+    }
 }
 
 impl<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> ValidatedVec<T, EV, CV> {

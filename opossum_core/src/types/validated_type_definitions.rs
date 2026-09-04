@@ -1,5 +1,6 @@
 use crate::error::OpmResult;
 use crate::{
+    apertures::{Aperture, GeometricBound},
     degree,
     generic_validators::{AllFinite, AllNormal, AllNotNan, AllPositive, Min3Entries},
 };
@@ -83,6 +84,33 @@ impl Default for ValidatedAngle1D {
     }
 }
 
+/// A validated super-Gaussian power.
+///
+/// The exponent shaping the flanks of a generalized Gaussian: 1 is an ordinary Gaussian, larger
+/// values are super-Gaussians approaching a flat top. It must be:
+/// - normal (not NaN, infinite, zero or subnormal)
+/// - strictly positive
+pub type ValidatedGaussianPower = validated_type!(f64, AllNormal && AllPositive);
+
+impl ValidatedGaussianPower {
+    /// Attempts to create a new [`ValidatedGaussianPower`] instance.
+    ///
+    /// # Errors
+    /// Returns an error if the power is not a normal, strictly positive number.
+    pub fn try_new(power: f64) -> OpmResult<Self> {
+        validated!(power, AllNormal && AllPositive)
+    }
+}
+
+impl Default for ValidatedGaussianPower {
+    /// Returns the power of an ordinary Gaussian.
+    ///
+    /// This is guaranteed to be valid.
+    fn default() -> Self {
+        Self::try_new(1.0).unwrap()
+    }
+}
+
 /// A validated radius value.
 ///
 /// The value must be:
@@ -106,6 +134,25 @@ impl Default for ValidatedRadius {
     /// This is guaranteed to be valid.
     fn default() -> Self {
         Self::try_new(millimeter!(25.0)).unwrap()
+    }
+}
+
+/// A validated transversal boundary of a body.
+///
+/// The [`Aperture`] must delimit a region, i.e. be a binary shape acting as a hole — see
+/// [`Aperture::is_geometric_bound`]. Storing the boundary in this type is what keeps a body from
+/// being handed a transmission mask instead of an outline: a soft-edged, inverted or open aperture
+/// leaves it undefined where the medium ends, so it is rejected on construction rather than
+/// silently misread later on.
+pub type ValidatedCrossSection = validated_type!(Aperture, GeometricBound);
+
+impl ValidatedCrossSection {
+    /// Attempts to create a new [`ValidatedCrossSection`] instance.
+    ///
+    /// # Errors
+    /// Returns an error if the aperture does not delimit a region.
+    pub fn try_new(aperture: Aperture) -> OpmResult<Self> {
+        validated!(aperture, GeometricBound)
     }
 }
 

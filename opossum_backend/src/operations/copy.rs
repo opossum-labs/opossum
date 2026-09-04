@@ -40,10 +40,10 @@ pub(super) async fn post_copy_nodes(
             copied_nodes_set.push(NodeCacheItem::Optical(node_ref_to_copy));
         } else if let Some(analyzer) = document.analyzers().get(id).cloned() {
             // Save the DTO in cache so we retain the ID
-            copied_nodes_set.push(NodeCacheItem::Analyzer(AnalyzerItemDto {
+            copied_nodes_set.push(NodeCacheItem::Analyzer(Box::new(AnalyzerItemDto {
                 id: *id,
                 info: analyzer,
-            }));
+            })));
         } else {
             all_nodes_found = false;
         }

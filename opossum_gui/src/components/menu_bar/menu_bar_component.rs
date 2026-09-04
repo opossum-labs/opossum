@@ -1,4 +1,3 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
 use dioxus::{document::eval, prelude::*};
 use dioxus_free_icons::{
     Icon,
@@ -7,13 +6,16 @@ use dioxus_free_icons::{
 use opossum_core::prelude::*;
 use std::path::PathBuf;
 
-use crate::components::{
-    menu_bar::{
-        file_path_display::FilePathDisplay,
-        help::about::About,
-        node_menu::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},
+use crate::{
+    backend_status::BackendStatus,
+    components::{
+        menu_bar::{
+            file_path_display::FilePathDisplay,
+            help::about::About,
+            node_menu::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},
+        },
+        short_cuts::{SHORTCUTS, ShortCutAction},
     },
-    short_cuts::{SHORTCUTS, ShortCutAction},
 };
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -30,7 +32,7 @@ pub enum AppCommand {
     SaveAs,
     Refresh,
     AddNode(String),
-    AddAnalyzer(AnalyzerType),
+    AddAnalyzer(Box<AnalyzerType>),
     AutoLayout,
     CenterGraph,
     ZoomToFit,
@@ -51,6 +53,10 @@ pub fn MenuBar(
 ) -> Element {
     let mut about_window: Signal<bool> = use_signal(|| false);
 
+    // Read backend connectivity status from context
+    let backend_status = use_context::<Signal<BackendStatus>>();
+    let is_connected = backend_status.read().is_connected();
+
     let maximize_symbol: Signal<Result<VNode, RenderError>> = use_signal(|| {
         rsx! {
             Icon { width: 25, icon: FaWindowMaximize }
@@ -66,7 +72,7 @@ pub fn MenuBar(
                 Icon { width: 25, icon: FaBars }
             }
             div {
-                class: "collapse navbar-collapse flex-grow-0 w-auto",
+                class: "noselect collapse navbar-collapse flex-grow-0 w-auto",
                 id: "navbarSupportedContent",
                 img {
                     class: "navbar-brand mt-lg-0",
@@ -87,18 +93,22 @@ pub fn MenuBar(
                         ul { class: "dropdown-menu",
                             MenuListItemShortCut {
                                 short_cut_action: ShortCutAction::New,
+                                disabled: !is_connected,
                                 on_click: move |_| on_menu_action.call(AppCommand::NewProject),
                             }
                             MenuListItemShortCut {
                                 short_cut_action: ShortCutAction::Open,
+                                disabled: !is_connected,
                                 on_click: move |_| on_menu_action.call(AppCommand::OpenTrigger),
                             }
                             MenuListItemShortCut {
                                 short_cut_action: ShortCutAction::Save,
+                                disabled: !is_connected,
                                 on_click: move |_| on_menu_action.call(AppCommand::Save),
                             }
                             MenuListItemShortCut {
                                 short_cut_action: ShortCutAction::SaveAs,
+                                disabled: !is_connected,
                                 on_click: move |_| on_menu_action.call(AppCommand::SaveAs),
                             }
                             MenuListItemShortCut {
@@ -127,7 +137,7 @@ pub fn MenuBar(
                             }
                         }
                     }
-                    // --- Edit Menu  ---
+                    // --- Edit Menu ---
                     li { class: "nav-item dropdown",
                         a {
                             "data-mdb-dropdown-init": "",
@@ -164,17 +174,20 @@ pub fn MenuBar(
                         ul { class: "dropdown-menu",
                             li { class: "dropdown-submenu",
                                 a {
-                                    class: "dropdown-item d-flex justify-content-between align-items-center",
+                                    class: if is_connected { "dropdown-item d-flex justify-content-between align-items-center" } else { "dropdown-item d-flex justify-content-between align-items-center disabled pe-none text-muted" },
                                     role: "button",
+                                    "aria-disabled": !is_connected,
                                     "Add Node"
                                     Icon { height: 10, icon: FaAngleRight }
                                 }
-                                ul { class: "dropdown-menu custom-scroll",
-                                    NodesMenu {
-                                        on_node_selected: move |node_name| {
-                                            on_menu_action.call(AppCommand::AddNode(node_name));
-                                            hide_dropdown("navbarDropdownNodeMenuLink");
-                                        },
+                                if is_connected {
+                                    ul { class: "dropdown-menu custom-scroll",
+                                        NodesMenu {
+                                            on_node_selected: move |node_name| {
+                                                on_menu_action.call(AppCommand::AddNode(node_name));
+                                                hide_dropdown("navbarDropdownNodeMenuLink");
+                                            },
+                                        }
                                     }
                                 }
                             }
@@ -183,17 +196,21 @@ pub fn MenuBar(
                                     rsx! {
                                         li { class: "dropdown-submenu",
                                             a {
-                                                class: "dropdown-item d-flex justify-content-between align-items-center",
+                                                class: if is_connected { "dropdown-item d-flex justify-content-between align-items-center" }
+                                                else { "dropdown-item d-flex justify-content-between align-items-center disabled pe-none text-muted" },
                                                 role: "button",
+                                                "aria-disabled": !is_connected,
                                                 "Add Analyzer"
                                                 Icon { height: 10, icon: FaAngleRight }
                                             }
-                                            ul { class: "dropdown-menu custom-scroll",
-                                                AnalyzersMenu {
-                                                    on_analyzer_selected: move |analyzer_type| {
-                                                        on_menu_action.call(AppCommand::AddAnalyzer(analyzer_type));
-                                                        hide_dropdown("navbarDropdownNodeMenuLink");
-                                                    },
+                                            if is_connected {
+                                                ul { class: "dropdown-menu custom-scroll",
+                                                    AnalyzersMenu {
+                                                        on_analyzer_selected: move |analyzer_type| {
+                                                            on_menu_action.call(AppCommand::AddAnalyzer(Box::new(analyzer_type)));
+                                                            hide_dropdown("navbarDropdownNodeMenuLink");
+                                                        },
+                                                    }
                                                 }
                                             }
                                         }
@@ -229,11 +246,12 @@ pub fn MenuBar(
                             }
                             MenuListItemShortCut {
                                 short_cut_action: ShortCutAction::AutoLayout,
+                                disabled: !is_connected,
                                 on_click: move |_| on_menu_action.call(AppCommand::AutoLayout),
                             }
                         }
                     }
-                    // --- Help Menu  ---
+                    // --- Catalogs Menu ---
                     li { class: "nav-item dropdown",
                         a {
                             "data-mdb-dropdown-init": "",
@@ -257,7 +275,7 @@ pub fn MenuBar(
                             }
                         }
                     }
-                    // --- Help Menu  ---
+                    // --- Help Menu ---
                     li { class: "nav-item dropdown",
                         a {
                             "data-mdb-dropdown-init": "",
@@ -293,11 +311,16 @@ pub fn MenuBar(
                 rsx! {
                     div { class: "d-flex align-items-center",
                         button {
-                            class: "btn btn-success me-4",
+                            class: if is_connected { "btn btn-success me-4" } else { "btn btn-secondary me-4 disabled pe-none" },
+                            disabled: !is_connected,
                             "data-mdb-ripple-init": "",
                             "data-mdb-tooltip-init": "",
-                            title: "Simulate{simulate_shortcut}",
-                            onclick: move |_| on_menu_action.call(AppCommand::Simulate),
+                            title: if is_connected { format!("Simulate{simulate_shortcut}") } else { "Simulation disabled (no backend connection)".to_string() },
+                            onclick: move |_| {
+                                if is_connected {
+                                    on_menu_action.call(AppCommand::Simulate);
+                                }
+                            },
                             "Simulate"
                         }
                         ControlsMenu {

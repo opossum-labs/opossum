@@ -25,6 +25,14 @@ pub struct RepositionAnalyzer {
     pub new_pos: (f64, f64),
 }
 
+/// Renames an analyzer.
+#[derive(Clone)]
+pub struct PatchAnalyzerName {
+    pub id: Uuid,
+    pub old: String,
+    pub new: String,
+}
+
 /// Re-inserts a previously removed analyzer under its original id, returning the
 /// [`Command::RemoveAnalyzer`] that undoes it.
 pub(super) fn apply_add_analyzer(document: &mut OpmDocument, analyzer: AnalyzerItemDto) -> Command {
@@ -58,11 +66,11 @@ pub(super) fn apply_patch_analyzer(
     let PatchAnalyzer { id, old, new } = cmd;
     let analyzer_info = analyzer_mut_or_404(document, id)?;
     analyzer_info.set_analyzer_type(&new);
-    Ok(Command::PatchAnalyzer(PatchAnalyzer {
+    Ok(Command::PatchAnalyzer(Box::new(PatchAnalyzer {
         id,
         old: new,
         new: old,
-    }))
+    })))
 }
 
 /// Repositions an analyzer on the GUI canvas, returning the [`Command::RepositionAnalyzer`] that undoes
@@ -86,5 +94,25 @@ pub(super) fn apply_reposition_analyzer(
         id,
         old_pos: new_pos,
         new_pos: old_pos,
+    }))
+}
+
+/// Renames an analyzer, returning the [`Command::PatchAnalyzerName`] that undoes it (`old`/`new`
+/// swapped).
+///
+/// # Errors
+///
+/// Returns an error if `id` doesn't resolve to an analyzer.
+pub(super) fn apply_patch_analyzer_name(
+    document: &mut OpmDocument,
+    cmd: PatchAnalyzerName,
+) -> Result<Command, BackEndErrorResponse> {
+    let PatchAnalyzerName { id, old, new } = cmd;
+    let analyzer_info = analyzer_mut_or_404(document, id)?;
+    analyzer_info.set_name(&new);
+    Ok(Command::PatchAnalyzerName(PatchAnalyzerName {
+        id,
+        old: new,
+        new: old,
     }))
 }

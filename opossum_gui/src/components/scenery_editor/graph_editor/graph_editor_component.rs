@@ -1,6 +1,6 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
+use crate::components::app::SIDEBAR_SWITCHER_WIDTH;
 use crate::components::{
-    node_editor::NodeConfigEditor,
+    node_editor::{NodeConfigEditor, PumpScenarioEditor},
     scenery_editor::{
         DragStatus, NodeEditorCommand, SelectedNode,
         graph_editor::{
@@ -14,8 +14,9 @@ use crate::components::{
         },
     },
 };
+use crate::{SIDEBAR_COLLAPSED, SIDEBAR_VIEW, SIDEBAR_WIDTH};
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
-use dioxus_primitives::tabs::{TabContent, TabList, TabTrigger, Tabs};
+use dioxus_primitives::tabs::{TabList, TabTrigger, Tabs};
 use std::path::PathBuf;
 use uuid::Uuid;
 
@@ -28,6 +29,7 @@ pub fn GraphEditor(
     model_file_path: ReadSignal<Option<PathBuf>>,
     model_file_path_handler: EventHandler<Option<PathBuf>>,
     root_tab_open_handler: EventHandler<bool>,
+    sidebar_drag_handler: EventHandler<f64>,
 ) -> Element {
     info!("🔄 Render: GraphEditor");
     let workspace = use_store(GraphsWorkspaceState::default);
@@ -97,8 +99,8 @@ pub fn GraphEditor(
     });
 
     let current_mouse_in_editor_pos = use_signal(Point2D::<f64>::default);
-    let ctrl_pressed = use_signal(|| false);
-    let shift_pressed = use_signal(|| false);
+    let mut ctrl_pressed = use_signal(|| false);
+    let mut shift_pressed = use_signal(|| false);
 
     use_effect(move || {
         let is_unsaved = *workspace.needs_saving().read();
@@ -126,12 +128,42 @@ pub fn GraphEditor(
 
     rsx! {
         div { class: "row main-content-row",
-            div { style: "min-width:280px;", class: "col-2 sidebar",
-                NodeConfigEditor {
-                    selected_nodes_memo,
-                    model_modified_handler,
-                    workspace_processor,
-                    active_graph_id: active_tab,
+            div {
+                class: "sidebar d-flex",
+                // Collapsed, the bar is only as wide as its icons; expanded, its width is whatever
+                // the user dragged it to. Either way it never grows or shrinks with the window -
+                // the graph editor next to it takes the remaining space.
+                //
+                // `width: auto` is load-bearing in the collapsed case: this div is a child of a
+                // Bootstrap `.row`, whose `.row > *` rule sets `width: 100%`. With a flex-basis of
+                // `auto` that width becomes the basis, so the collapsed bar would claim the entire
+                // row and wrap the graph editor out of sight.
+                style: if SIDEBAR_COLLAPSED() { "flex: 0 0 auto; width: auto;".to_string() } else { format!("flex: 0 0 {}px; width: auto;", SIDEBAR_WIDTH()) },
+                SidebarViewSwitcher {}
+                if !SIDEBAR_COLLAPSED() {
+                    div { class: "flex-grow-1 sidebar-view",
+                        match SIDEBAR_VIEW() {
+                            SidebarView::NodeProperties => rsx! {
+                                NodeConfigEditor {
+                                    selected_nodes_memo,
+                                    model_modified_handler,
+                                    workspace_processor,
+                                    active_graph_id: active_tab,
+                                }
+                            },
+                            SidebarView::PumpScenarios => rsx! {
+                                PumpScenarioEditor {}
+                            },
+                        }
+                    }
+                }
+                // Outside the collapsed check on purpose: a collapsed sidebar must still be
+                // draggable back out, exactly as it can be dragged shut.
+                div {
+                    class: "resizer width_resizer",
+                    onmousedown: move |e: MouseEvent| {
+                        sidebar_drag_handler.call(e.client_coordinates().x);
+                    },
                 }
             }
             div {
@@ -140,6 +172,14 @@ pub fn GraphEditor(
                 onkeydown: onkeydownhandler,
                 onmouseleave: onmouseleave_handler,
                 onkeyup: onkeyuphandler,
+                onblur: move |_| {
+                    ctrl_pressed.set(false);
+                    shift_pressed.set(false);
+                },
+                onfocus: move |_| {
+                    ctrl_pressed.set(false);
+                    shift_pressed.set(false);
+                },
 
                 Tabs {
                     class: "editor-tabs",
@@ -185,13 +225,14 @@ pub fn GraphEditor(
                                 id: "graphEditorContentContainer",
                                 class: "graph-editor-tab-content",
                                 onresize: move |_| workspace_processor.send(GraphsWorkspaceAction::GetEditorArea),
-                                for (i , id) in tab_order.iter().enumerate() {
+                                for (_i, id) in tab_order.iter().enumerate() {
                                     if let Some(graph_state) = workspace.tabs().get(*id) {
-                                        TabContent {
+                                        div {
                                             key: "{id.as_simple().to_string()}",
+                                            role: "tabpanel",
                                             class: "tab-content",
-                                            value: id.as_simple().to_string(),
-                                            index: i,
+                                            "data-state": if active_tab() == *id { "active" } else { "inactive" },
+                                            hidden: active_tab() != *id,
                                             GraphViewEditor {
                                                 model_modified_sig,
                                                 model_modified_handler,
@@ -206,6 +247,69 @@ pub fn GraphEditor(
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+#[allow(clippy::volatile_composites)]
+const NODE_CONFIG_ICON: Asset = asset!("/assets/icons/node_config_icon.png");
+#[allow(clippy::volatile_composites)]
+const AMPLIFIER_ICON: Asset = asset!("/assets/icons/amplifier_menu_icon.png");
+
+/// Which of the sidebar's two views is showing.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum SidebarView {
+    /// The existing selection-bound node/analyzer configuration.
+    NodeProperties,
+    /// The document-wide editor for pump scenarios (operating points / amplifiers).
+    PumpScenarios,
+}
+impl SidebarView {
+    /// Icon and tooltip of this view's button in the switcher bar.
+    const fn icon_and_title(self) -> (Asset, &'static str) {
+        match self {
+            Self::NodeProperties => (NODE_CONFIG_ICON, "Node properties"),
+            Self::PumpScenarios => (AMPLIFIER_ICON, "Pump scenarios"),
+        }
+    }
+}
+
+/// Narrow vertical bar that switches the sidebar between its views, VS-Code style.
+///
+/// Clicking the view that is already showing collapses the sidebar to this bar; clicking any other
+/// icon switches to it (and re-expands). The bar itself never disappears, so the panel can always be
+/// brought back. The collapsed state is shared with the resize drag, which collapses the sidebar
+/// once it is pulled past half the minimum width.
+#[component]
+fn SidebarViewSwitcher() -> Element {
+    rsx! {
+        div {
+            class: "sidebar-view-switcher",
+            // Width comes from Rust because the resize drag has to know the collapsed sidebar's
+            // total width; see `COLLAPSED_SIDEBAR_WIDTH`.
+            style: "width: {SIDEBAR_SWITCHER_WIDTH}px;",
+            for entry in [SidebarView::NodeProperties, SidebarView::PumpScenarios] {
+                {
+                    let (icon, title) = entry.icon_and_title();
+                    let is_open = SIDEBAR_VIEW() == entry && !SIDEBAR_COLLAPSED();
+                    rsx! {
+                        button {
+                            key: "{title}",
+                            r#type: "button",
+                            title,
+                            class: if is_open { "noselect sidebar-view-button active" } else { "noselect sidebar-view-button" },
+                            onclick: move |_| {
+                                if is_open {
+                                    *SIDEBAR_COLLAPSED.write() = true;
+                                } else {
+                                    *SIDEBAR_VIEW.write() = entry;
+                                    *SIDEBAR_COLLAPSED.write() = false;
+                                }
+                            },
+                            img { src: icon, alt: title, draggable: false }
                         }
                     }
                 }

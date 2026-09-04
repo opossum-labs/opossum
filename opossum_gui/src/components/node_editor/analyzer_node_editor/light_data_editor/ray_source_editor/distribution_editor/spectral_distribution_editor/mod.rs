@@ -1,9 +1,9 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
 mod gaussian_editor;
 mod laser_lines_editor;
 
 use crate::components::node_editor::{
     accordion::AccordionItem,
+    analyzer_node_editor::light_data_editor::{default_gaussian, default_ray_laser_lines},
     hooks::use_synced_signal,
     inputs::{
         IntoInputData,
@@ -99,7 +99,16 @@ pub fn RaySpectralDistributionSelector(
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if let Some(sdt) = SpecDistType::default_from_name(val.as_str()) {
-                    on_save.call(sdt);
+                    let default_wvl = crate::APP_CONFIG.read().default_wavelength();
+                    let configured_sdt = match sdt {
+                        SpecDistType::Gaussian(_) => {
+                            SpecDistType::Gaussian(default_gaussian(default_wvl))
+                        }
+                        SpecDistType::LaserLines(_) => {
+                            SpecDistType::LaserLines(default_ray_laser_lines(default_wvl))
+                        }
+                    };
+                    on_save.call(configured_sdt);
                 }
             },
         }

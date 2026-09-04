@@ -5,11 +5,15 @@
 /doc/book/book/
 /opossum_core/playground/*
 /opossum_gui/assets/examples/
+/opm_examples
 # exception to the rule
 !playground/.gitkeep 
 .VSCodeCounter
 *.wxs
+# profiling / coverage files
+*.profraw
 profile.json.*
 profile.kernel.etl
 CLAUDE.md
-
+mutants.out/
+mutants.out.old/

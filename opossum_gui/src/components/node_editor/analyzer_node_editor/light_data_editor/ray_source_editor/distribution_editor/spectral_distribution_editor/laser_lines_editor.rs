@@ -41,7 +41,11 @@ impl IntoInputDataStrings<LaserLines> for LaserLinesParam {
     fn create_value_string(&self, obj: &LaserLines) -> String {
         obj.lines().last().map_or_else(
             || match self {
-                Self::Wavelength => format!("{}", 1054e-9),
+                Self::Wavelength => {
+                    // Fall back to default wavelength from global application configuration
+                    let default_wvl = crate::APP_CONFIG.read().default_wavelength();
+                    format!("{}", default_wvl.value)
+                }
                 Self::RelativeIntensity => format!("{:.3}", 1.0),
             },
             |laser_line| match self {
@@ -147,7 +151,7 @@ fn LaserLineList(
 ) -> Element {
     rsx! {
         ul { class: "list-group border-start", id: "laserLineList",
-            for (i, line) in laser_lines.clone().lines().iter().enumerate() {
+            for (i , line) in laser_lines.clone().lines().iter().enumerate() {
                 {
                     let class = if i % 2 == 0 {
                         "list-group-item d-grid text-secondary"

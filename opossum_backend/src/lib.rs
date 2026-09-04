@@ -7,6 +7,7 @@ mod helper_functions;
 mod nodes;
 mod operations;
 mod pages;
+mod pump_scenarios;
 mod routes;
 pub mod server;
 mod sse_logger;

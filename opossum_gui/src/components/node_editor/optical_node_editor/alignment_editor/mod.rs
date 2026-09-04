@@ -1,5 +1,3 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
-
 mod grating_alignment;
 use crate::{
     OPOSSUM_UI_LOGS,

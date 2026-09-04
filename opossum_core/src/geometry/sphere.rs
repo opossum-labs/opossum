@@ -1,14 +1,14 @@
 //! Spherical surface
 //!
 //! This module implements a spherical surface with a given radius of curvature.
-use super::geo_surface::GeoSurface;
+use super::geo_surface::{GeoSurface, curved_local_z, is_behind_curvature};
 use crate::{
     error::{OpmResult, OpossumError},
     light::Ray,
     meter, radian,
     utils::geom_transformation::Isometry,
 };
-use nalgebra::{Point3, Vector3};
+use nalgebra::{Point2, Point3, Vector3};
 use num::Zero;
 use roots::{Roots, find_roots_quadratic};
 use uom::si::f64::Length;
@@ -133,6 +133,19 @@ impl GeoSurface for Sphere {
             normal,
         ))
     }
+    fn local_z_at(&self, transversal_position: &Point2<Length>) -> Option<Length> {
+        // The local origin is the center of the sphere, which curves in every transversal
+        // direction alike, so only the distance from its axis matters.
+        let distance_from_axis = transversal_position
+            .x
+            .value
+            .hypot(transversal_position.y.value);
+        curved_local_z(distance_from_axis, self.radius.value).map(|z| meter!(z))
+    }
+    fn is_behind_do(&self, point: &Point3<Length>) -> bool {
+        // The local origin is the center of the sphere, so the surface is the ball of |radius|.
+        is_behind_curvature(point.coords.map(|c| c.value).norm(), self.radius.value)
+    }
     fn set_isometry(&mut self, isometry: Isometry) {
         let anchor_isometry = Isometry::new(
             Point3::new(Length::zero(), Length::zero(), self.radius),
@@ -169,6 +182,32 @@ mod test {
     use super::*;
     use crate::{joule, millimeter, nanometer};
     use approx::assert_abs_diff_eq;
+
+    #[test]
+    fn is_behind_convex() -> OpmResult<()> {
+        // vertex at z = 0, center of curvature at z = +50 mm
+        let s = Sphere::new_at_position(millimeter!(50.0), millimeter!(0.0, 0.0, 0.0))?;
+        assert!(s.is_behind(&millimeter!(0.0, 0.0, 1.0)));
+        // a point exactly on the surface counts as behind it
+        assert!(s.is_behind(&millimeter!(0.0, 0.0, 0.0)));
+        assert!(!s.is_behind(&millimeter!(0.0, 0.0, -1.0)));
+        // the sag at x = 10 mm is 50 - sqrt(50^2 - 10^2) = 1.0102 mm
+        assert!(s.is_behind(&millimeter!(10.0, 0.0, 1.1)));
+        assert!(!s.is_behind(&millimeter!(10.0, 0.0, 0.9)));
+        Ok(())
+    }
+    #[test]
+    fn is_behind_concave() -> OpmResult<()> {
+        // vertex at z = 0, center of curvature at z = -50 mm
+        let s = Sphere::new_at_position(millimeter!(-50.0), millimeter!(0.0, 0.0, 0.0))?;
+        assert!(s.is_behind(&millimeter!(0.0, 0.0, 1.0)));
+        assert!(s.is_behind(&millimeter!(0.0, 0.0, 0.0)));
+        assert!(!s.is_behind(&millimeter!(0.0, 0.0, -1.0)));
+        // the sag at x = 10 mm now points towards -z
+        assert!(s.is_behind(&millimeter!(10.0, 0.0, -0.9)));
+        assert!(!s.is_behind(&millimeter!(10.0, 0.0, -1.1)));
+        Ok(())
+    }
 
     #[test]
     fn new() -> OpmResult<()> {

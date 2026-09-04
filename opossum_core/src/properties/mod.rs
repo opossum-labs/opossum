@@ -8,17 +8,47 @@ pub use property::Property;
 pub use proptype::Proptype;
 
 use crate::error::{OpmResult, OpossumError};
+use crate::material::{LEGACY_REFRACTIVE_INDEX, MATERIAL, Material};
 use crate::properties::validator::Validator;
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 use crate::reporting::html_report::HtmlProperty;
 
+/// Carry properties of older `.opm` files over to the name they have today.
+///
+/// A node created from an `.opm` file is built as a default node first and then updated with the
+/// deserialized properties. Since [`Properties::update`] silently ignores keys the default node
+/// does not know, a renamed property would leave the node on its default value — a data loss
+/// without any error message. This function closes that gap and is the one place where such
+/// renames are recorded.
+///
+/// # Arguments
+///
+/// * `props` - the freshly deserialized properties, modified in place.
+fn migrate_legacy_properties(props: &mut IndexMap<String, Property>) {
+    // `refractive index` (a bare index model) became `material` (a whole `Material` carrying it).
+    if let Some(legacy) = props.shift_remove(LEGACY_REFRACTIVE_INDEX)
+        && !props.contains_key(MATERIAL)
+        && let Proptype::RefractiveIndex(index) = legacy.prop()
+        && let Ok(material) =
+            Property::new(Material::from(index.clone()).into(), String::new(), None)
+    {
+        props.insert(MATERIAL.to_string(), material);
+    }
+}
+
 /// A general set of (optical) properties.
 ///
 /// The property system is used for storing node specific parameters (such as focal length, splitting ratio, filter curve, etc ...).
 /// Properties have to be created once before they can be set and used.
+///
+/// Properties keep the order in which they were created, because that is the order a node author
+/// chose and the order every listing shows them in (property editor, report, `.opm` file). Sorting
+/// them by name instead would tear apart what belongs together — a lens would list its front and
+/// rear curvature with unrelated properties in between.
 ///
 /// ## Example
 /// ```rust
@@ -34,11 +64,12 @@ use crate::reporting::html_report::HtmlProperty;
 /// # Ok(())
 /// # }
 /// ```
-#[derive(Default, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Default, Serialize, Debug, Clone, PartialEq)]
 #[serde(transparent)]
 pub struct Properties {
-    props: BTreeMap<String, Property>,
+    props: IndexMap<String, Property>,
 }
+
 impl Properties {
     /// Create a new property with the given name.
     ///
@@ -122,8 +153,9 @@ impl Properties {
             .iter()
             .map(move |(s, p)| (format!("{node_report_id_str}_{s}"), p))
     }
-    /// Returns the iter of this [`Properties`].
-    pub fn iter(&self) -> std::collections::btree_map::Iter<'_, String, Property> {
+    /// Returns the iter of this [`Properties`], in the order the properties were created.
+    #[must_use]
+    pub fn iter(&self) -> indexmap::map::Iter<'_, String, Property> {
         self.props.iter()
     }
     #[must_use]
@@ -195,8 +227,40 @@ impl Properties {
     }
 }
 
+/// Fault tolerant deserializer.
+///
+/// If a property cannot be read mark it as "Invalid".
+impl<'de> Deserialize<'de> for Properties {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum PropertyEntry {
+            Valid(Box<Property>),
+            Invalid(serde::de::IgnoredAny),
+        }
+
+        let raw_props = BTreeMap::<String, PropertyEntry>::deserialize(deserializer)?;
+        let mut props = IndexMap::new();
+        for (key, entry) in raw_props {
+            match entry {
+                PropertyEntry::Valid(prop) => {
+                    props.insert(key, *prop);
+                }
+                PropertyEntry::Invalid(_) => {
+                    warn!("Skipping property '{key}' that failed to parse; keeping default value.");
+                }
+            }
+        }
+        migrate_legacy_properties(&mut props);
+        Ok(Self { props })
+    }
+}
+
 impl<'a> IntoIterator for &'a Properties {
-    type IntoIter = std::collections::btree_map::Iter<'a, String, Property>;
+    type IntoIter = indexmap::map::Iter<'a, String, Property>;
     type Item = (&'a std::string::String, &'a Property);
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
@@ -205,7 +269,11 @@ impl<'a> IntoIterator for &'a Properties {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::utils::test_helper::test_helper::check_logs;
+    use crate::{
+        properties::proptype::AssetRef,
+        refractive_index::{RefrIndexConst, RefractiveIndexType},
+        utils::test_helper::test_helper::check_logs,
+    };
     use assert_matches::assert_matches;
     use log::Level;
     #[test]
@@ -245,6 +313,79 @@ mod test {
         assert_eq!(props.is_empty(), true);
         props.create("my prop", "my description", 1.into())?;
         assert_eq!(props.is_empty(), false);
+        Ok(())
+    }
+    #[test]
+    fn iteration_follows_creation_order() -> OpmResult<()> {
+        // Every listing of a node's properties (editor, report, `.opm` file) iterates here, so the
+        // order a node author declares its properties in is the order the user sees. Sorting by
+        // name would put e.g. a lens' `material` between its `front curvature` and `rear curvature`.
+        let mut props = Properties::default();
+        props.create("front curvature", "", 1.0.into())?;
+        props.create("rear curvature", "", 2.0.into())?;
+        props.create("material", "", 3.0.into())?;
+        assert_eq!(
+            props
+                .iter()
+                .map(|(name, _)| name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["front curvature", "rear curvature", "material"]
+        );
+        Ok(())
+    }
+    /// Read the refractive index model out of a migrated `material` property.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the property is missing or does not hold an embedded [`Material`].
+    fn migrated_index_model(props: &Properties) -> OpmResult<RefractiveIndexType> {
+        let Proptype::Material(AssetRef::Inline(material)) = props.get(MATERIAL)? else {
+            panic!("expected an embedded material property")
+        };
+        Ok(material.optical.refractive_index.clone())
+    }
+    #[test]
+    fn deserialize_migrates_legacy_refractive_index() -> OpmResult<()> {
+        let props: Properties = ron::from_str(
+            r#"{"refractive index": RefractiveIndex(Const((refractive_index: 2.0)))}"#,
+        )
+        .map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert!(!props.contains(LEGACY_REFRACTIVE_INDEX));
+        assert_eq!(
+            migrated_index_model(&props)?,
+            RefractiveIndexType::Const(RefrIndexConst::new(2.0)?)
+        );
+        Ok(())
+    }
+    #[test]
+    fn deserialize_keeps_an_existing_material() -> OpmResult<()> {
+        // Should both names ever show up side by side, the already migrated value wins. The
+        // material entry is generated rather than spelled out, so it cannot drift apart from the
+        // serialized shape of `Material` (which carries a whole asset header).
+        let material = ron::to_string(&Proptype::from(Material::from(RefractiveIndexType::Const(
+            RefrIndexConst::new(3.0)?,
+        ))))
+        .map_err(|e| OpossumError::Other(e.to_string()))?;
+        let props: Properties = ron::from_str(&format!(
+            r#"{{
+                "refractive index": RefractiveIndex(Const((refractive_index: 2.0))),
+                "{MATERIAL}": {material},
+            }}"#
+        ))
+        .map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert!(!props.contains(LEGACY_REFRACTIVE_INDEX));
+        assert_eq!(
+            migrated_index_model(&props)?,
+            RefractiveIndexType::Const(RefrIndexConst::new(3.0)?)
+        );
+        Ok(())
+    }
+    #[test]
+    fn deserialize_leaves_other_properties_untouched() -> OpmResult<()> {
+        let props: Properties = ron::from_str(r#"{"my float": F64(3.14)}"#)
+            .map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert_eq!(props.nr_of_props(), 1);
+        assert_matches!(props.get("my float")?, &Proptype::F64(_));
         Ok(())
     }
     #[test]

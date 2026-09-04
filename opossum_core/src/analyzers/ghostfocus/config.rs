@@ -1,9 +1,10 @@
 use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
-    core_optics::hit_map::fluence_estimator::FluenceEstimator,
-    core_optics::optic_surface::OpticSurface,
+    core_optics::{hit_map::fluence_estimator::FluenceEstimator, optic_surface::OpticSurface},
     error::OpmResult,
+    gain::{ActiveScenario, PumpConfig, PumpScenario},
     light::{Rays, lightdata::ray_data_builder::RayDataBuilder},
+    material::Material,
     nodes::NodeGroup,
 };
 use serde::{Deserialize, Serialize};
@@ -16,6 +17,11 @@ pub struct GhostFocusConfig {
     max_bounces: usize,
     fluence_estimator: FluenceEstimator,
     source_map: HashMap<Uuid, RayDataBuilder>,
+    ambient_material: Material,
+    /// The operating point of the run currently being performed - see [`ActiveScenario`]. Not part
+    /// of the configuration a user edits and not written to file.
+    #[serde(skip)]
+    active_pump_scenario: ActiveScenario,
 }
 
 impl GhostFocusConfig {
@@ -54,6 +60,14 @@ impl GhostFocusConfig {
     pub fn remove_source(&mut self, uuid: &Uuid) -> Option<RayDataBuilder> {
         self.source_map.remove(uuid)
     }
+    /// Set the [`PumpScenario`] this analysis run is being performed in.
+    ///
+    /// # Arguments
+    ///
+    /// * `pump_scenario` - the operating point, or `None` for a passive run.
+    pub fn set_active_pump_scenario(&mut self, pump_scenario: Option<PumpScenario>) {
+        self.active_pump_scenario.set(pump_scenario);
+    }
     /// Removes all source mappings whose UUIDs no longer exist in the given model.
     pub fn prune_source_map(&mut self, model: &NodeGroup) {
         self.source_map.retain(|uuid, _builder| model.exists(*uuid));
@@ -73,6 +87,15 @@ impl GhostFocusConfig {
             .copied()
             .find(|uuid| self.source_map.get(uuid) != other.source_map.get(uuid))
     }
+    /// Returns a reference to the ambient material of this analysis
+    #[must_use]
+    pub const fn ambient_material(&self) -> &Material {
+        &self.ambient_material
+    }
+    /// Sets the ambient material for this analysis
+    pub fn set_ambient_material(&mut self, material: Material) {
+        self.ambient_material = material;
+    }
 }
 impl Default for GhostFocusConfig {
     fn default() -> Self {
@@ -80,12 +103,18 @@ impl Default for GhostFocusConfig {
             max_bounces: 1,
             fluence_estimator: FluenceEstimator::Voronoi,
             source_map: HashMap::new(),
+            ambient_material: Material::vacuum(),
+            active_pump_scenario: ActiveScenario::default(),
         }
     }
 }
 impl PropagationStrategy for GhostFocusConfig {
     fn missed_surface_strategy(&self) -> MissedSurfaceStrategy {
         MissedSurfaceStrategy::Ignore
+    }
+
+    fn pump_config(&self, node_id: Uuid) -> PumpConfig {
+        self.active_pump_scenario.config(node_id)
     }
     fn on_surface_interaction(
         &self,
@@ -98,6 +127,10 @@ impl PropagationStrategy for GhostFocusConfig {
         surf.evaluate_fluence_of_ray_bundle(rays, self.fluence_estimator())?;
         surf.add_to_rays_cache(reflected_rays, backward);
         Ok(())
+    }
+
+    fn ambient_refractive_index(&self) -> crate::refractive_index::RefractiveIndexType {
+        self.ambient_material.refractive_index_type().clone()
     }
 }
 #[cfg(test)]

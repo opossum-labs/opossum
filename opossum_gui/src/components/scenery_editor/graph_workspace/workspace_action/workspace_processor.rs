@@ -12,6 +12,7 @@ use dioxus::{
 };
 use futures_util::StreamExt;
 use opossum_core::{
+    gain::{GainModel, PumpSource},
     prelude::{AnalyzerType, PortType},
     types::api_types::{
         AnalyzerItemDto, ConnectInfo, CutNodesResponse, DeleteNodeResponse, DocumentChange,
@@ -27,10 +28,8 @@ use crate::{
     NODE_DETAILS_REFRESH, OPOSSUM_UI_LOGS, PENDING_PANEL_OPEN, PENDING_SOURCE_CARD_OPEN,
     api::{self, delete_document, eval_action_run},
     components::scenery_editor::{
-        DragStatus, NodeType,
-        constants::{
-            HEADER_HEIGHT, MIN_NODE_DISTANCE_RADIUS, NODE_PLACEMENT_MAX_ITERATIONS, NODE_WIDTH,
-        },
+        DragStatus, NodeType, SidebarView,
+        constants::{MIN_NODE_DISTANCE_RADIUS, NODE_PLACEMENT_MAX_ITERATIONS, NODE_WIDTH},
         graph_workspace::{
             EditorStateStoreExt, GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceState,
             GraphsWorkspaceStateStoreExt, GraphsWorkspaceStateStoreImplExt,
@@ -38,10 +37,11 @@ use crate::{
             workspace_action::GraphsWorkspaceAction,
             workspace_state::{GraphInfo, optimize_layout},
         },
-        node::MIN_NODE_BODY_HEIGHT,
+        node::DEFAULT_NODE_HEIGHT,
     },
 };
 #[allow(clippy::too_many_lines)]
+#[allow(clippy::large_stack_frames)]
 pub fn use_workspace_processor(
     workspace: ReadStore<GraphsWorkspaceState>,
     root_graph_id: Memo<Uuid>,
@@ -61,6 +61,18 @@ pub fn use_workspace_processor(
                 let was_document_edit = is_document_edit_action(&action);
                 match action {
                     GraphsWorkspaceAction::LoadFromFile(path) => {
+                        // A freshly loaded document's scenario ids have nothing to do with whatever
+                        // was active before - the old selection would silently point at nothing, or
+                        // worse, at an unrelated scenario the new document happens to reuse the id
+                        // of. Cleared *before* loading, so the nodes about to be constructed (which
+                        // seed their own marker from this cache) never see the old document's data.
+                        *crate::ACTIVE_PUMP_SCENARIO.write() = None;
+                        crate::ACTIVE_SCENARIO_GAIN_MODELS.write().clear();
+                        // Unlike the two above, the candidate set is real document data rather than
+                        // a GUI-only choice - cleared here only to avoid showing stale candidates
+                        // during the load, then re-fetched for real inside `process_load_from_file`
+                        // once the new document exists, before any node is constructed from it.
+                        crate::AMPLIFIER_CANDIDATES.write().clear();
                         process_load_from_file(
                             workspace,
                             path,
@@ -69,8 +81,14 @@ pub fn use_workspace_processor(
                             set_file_path_handler,
                         )
                         .await;
+                        // The just-loaded document may well have scenarios of its own even though
+                        // the GUI-only active selection was just cleared above - activate the first
+                        // one rather than leaving the canvas showing no scenario's status at all.
+                        ensure_a_scenario_is_active(workspace_handlers).await;
                         // The backend clears its undo/redo history on every load; mirror that here.
                         *crate::UNDO_REDO_STATUS.write() = (false, false);
+                        *crate::AMP_LIST_REFRESH.write() += 1;
+                        *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
                     }
                     GraphsWorkspaceAction::SaveToFile(path) => {
                         process_save_root_scenery_to_file(
@@ -83,10 +101,21 @@ pub fn use_workspace_processor(
                         .await;
                     }
                     GraphsWorkspaceAction::DeleteRootScenery => {
-                        process_delete_root_scenery(workspace_handlers, set_file_path_handler)
-                            .await;
+                        *crate::ACTIVE_PUMP_SCENARIO.write() = None;
+                        crate::ACTIVE_SCENARIO_GAIN_MODELS.write().clear();
+                        // A reset document is genuinely empty (`OpmDocument::default()`), so clearing
+                        // is exact here, unlike the load path which has to re-fetch afterward.
+                        crate::AMPLIFIER_CANDIDATES.write().clear();
+                        process_delete_root_scenery(
+                            workspace,
+                            workspace_handlers,
+                            set_file_path_handler,
+                        )
+                        .await;
                         // The backend clears its undo/redo history on every reset; mirror that here.
                         *crate::UNDO_REDO_STATUS.write() = (false, false);
+                        *crate::AMP_LIST_REFRESH.write() += 1;
+                        *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
                     }
                     GraphsWorkspaceAction::ResetAndInitializeRootScenery { name } => {
                         process_reset_and_initialize_root_scenery(
@@ -124,7 +153,7 @@ pub fn use_workspace_processor(
                         graph_id,
                     } => {
                         process_add_analyzer(
-                            analyzer_type,
+                            *analyzer_type,
                             workspace,
                             workspace_handlers,
                             graph_id,
@@ -435,6 +464,61 @@ pub fn use_workspace_processor(
                         )
                         .await;
                     }
+                    GraphsWorkspaceAction::SetActivePumpScenario(scenario_id) => {
+                        *crate::ACTIVE_PUMP_SCENARIO.write() = scenario_id;
+                        refresh_active_scenario_gain_models(workspace_handlers).await;
+                    }
+                    GraphsWorkspaceAction::EnsureActivePumpScenario => {
+                        ensure_a_scenario_is_active(workspace_handlers).await;
+                    }
+                    GraphsWorkspaceAction::SetScenarioGainModel {
+                        scenario_id,
+                        node_id,
+                        graph_id,
+                        model,
+                    } => {
+                        process_set_scenario_gain_model(
+                            scenario_id,
+                            node_id,
+                            graph_id,
+                            model,
+                            workspace_handlers,
+                        )
+                        .await;
+                    }
+                    GraphsWorkspaceAction::SetScenarioPumpSource {
+                        scenario_id,
+                        node_id,
+                        pump,
+                    } => {
+                        process_set_scenario_pump_source(
+                            scenario_id,
+                            node_id,
+                            pump,
+                            workspace_handlers,
+                        )
+                        .await;
+                    }
+                    GraphsWorkspaceAction::SetAmplifierCandidate {
+                        node_id,
+                        graph_id,
+                        is_amplifier,
+                    } => {
+                        process_set_amplifier_candidate(
+                            node_id,
+                            graph_id,
+                            is_amplifier,
+                            workspace_handlers,
+                        )
+                        .await;
+                    }
+                    GraphsWorkspaceAction::RevealNode { node_id, graph_id } => {
+                        ensure_tab_active(graph_id, workspace_handlers, root_graph_id, workspace)
+                            .await;
+                        workspace_handlers
+                            .nodes
+                            .set_node_active(graph_id, node_id, true, 0);
+                    }
                     GraphsWorkspaceAction::GetEditorArea => {
                         process_get_editor_area(workspace, workspace_handlers).await;
                     }
@@ -470,6 +554,12 @@ pub fn use_workspace_processor(
                     // Undo and greys out Redo. (Viewport gestures and node-editor edits mark this at their
                     // own push points.)
                     *crate::UNDO_REDO_STATUS.write() = (true, false);
+                    // Any of these can add, remove or relocate an amplifier, so the always-visible
+                    // amplifier overview has to re-read its list - see `AMP_LIST_REFRESH`.
+                    *crate::AMP_LIST_REFRESH.write() += 1;
+                    // Same reasoning for the pump scenario editor: deleting a node the active
+                    // scenario named, for instance, changes what an already-expanded card shows.
+                    *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
                 }
             }
         }
@@ -532,7 +622,238 @@ const fn is_document_edit_action(action: &GraphsWorkspaceAction) -> bool {
             | GraphsWorkspaceAction::MapNodePort { .. }
             | GraphsWorkspaceAction::RemovePortMap { .. }
             | GraphsWorkspaceAction::SyncNodePositions { .. }
+            | GraphsWorkspaceAction::SetScenarioGainModel { .. }
+            | GraphsWorkspaceAction::SetScenarioPumpSource { .. }
+            | GraphsWorkspaceAction::SetAmplifierCandidate { .. }
     )
+}
+
+/// Sets the gain model a node runs with within one pump scenario - what the context menu's
+/// amplifier toggle sends. Mirrors the canvas marker only if `scenario_id` is the active scenario:
+/// a scenario a user isn't currently looking at has no canvas effect.
+///
+/// # Arguments
+///
+/// * `scenario_id` - the scenario being edited.
+/// * `node_id` - the node whose gain model in that scenario is being set.
+/// * `graph_id` - the graph the node lives in, needed to update its canvas marker.
+/// * `model` - the model to set. `GainModel::None` takes the node out of the scenario again.
+/// * `ws_handler` - workspace signal handlers, used to mark the document as unsaved and mirror the
+///   canvas marker.
+async fn process_set_scenario_gain_model(
+    scenario_id: Uuid,
+    node_id: Uuid,
+    graph_id: Uuid,
+    model: GainModel,
+    ws_handler: WorkSpaceSignalHandlers,
+) {
+    eval_action_run(
+        api::put_pump_scenario_gain_model(scenario_id, node_id, model).await,
+        Some(move |()| {
+            ws_handler.workspace.set_needs_saving(true);
+            *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
+            if crate::ACTIVE_PUMP_SCENARIO() == Some(scenario_id) {
+                if model.is_active() {
+                    crate::ACTIVE_SCENARIO_GAIN_MODELS
+                        .write()
+                        .insert(node_id, model);
+                } else {
+                    crate::ACTIVE_SCENARIO_GAIN_MODELS.write().remove(&node_id);
+                }
+                // The value just written is known here, so the canvas marker needs no refetch -
+                // unlike an undo/redo of a scenario edit, which cannot know what changed.
+                ws_handler
+                    .nodes
+                    .set_amp_model(node_id, model.active_name(), graph_id);
+            }
+        }),
+    );
+}
+
+/// Sets how a node's medium is pumped within one pump scenario.
+///
+/// The counterpart of [`process_set_scenario_gain_model`], and deliberately shorter: the canvas
+/// marker states whether a node *amplifies*, which the extraction model alone answers, so pumping
+/// has nothing to mirror there.
+///
+/// # Arguments
+///
+/// * `scenario_id` - the scenario being edited.
+/// * `node_id` - the node whose pump source in that scenario is being set.
+/// * `pump` - how its medium is pumped.
+/// * `ws_handler` - workspace signal handlers, used to mark the document as unsaved.
+async fn process_set_scenario_pump_source(
+    scenario_id: Uuid,
+    node_id: Uuid,
+    pump: PumpSource,
+    ws_handler: WorkSpaceSignalHandlers,
+) {
+    eval_action_run(
+        api::put_pump_scenario_pump_source(scenario_id, node_id, pump).await,
+        Some(move |()| {
+            ws_handler.workspace.set_needs_saving(true);
+            *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
+        }),
+    );
+}
+
+/// Marks or unmarks a node as an amplifier candidate - what the context menu's "As amplifier"/"As
+/// passive optic" entry now sends. Independent of any pump scenario, unlike
+/// [`process_set_scenario_gain_model`].
+///
+/// # Arguments
+///
+/// * `node_id` - the node being marked or unmarked.
+/// * `graph_id` - the graph the node lives in, needed to update its canvas marker.
+/// * `is_amplifier` - whether the node is an amplifier candidate from now on.
+/// * `ws_handler` - workspace signal handlers, used to mark the document as unsaved and mirror the
+///   canvas marker.
+async fn process_set_amplifier_candidate(
+    node_id: Uuid,
+    graph_id: Uuid,
+    is_amplifier: bool,
+    ws_handler: WorkSpaceSignalHandlers,
+) {
+    if is_amplifier {
+        // Marking a candidate is otherwise a dead end with no scenario to configure it in - the
+        // scenario editor has nothing to expand and no row to show. A fresh document starts with no
+        // scenario at all, so this is the common case for the very first amplifier, not an edge case.
+        ensure_a_pump_scenario_exists(ws_handler).await;
+    }
+    eval_action_run(
+        api::put_node_is_amplifier(node_id, is_amplifier).await,
+        Some(move |()| {
+            ws_handler.workspace.set_needs_saving(true);
+            if is_amplifier {
+                crate::AMPLIFIER_CANDIDATES.write().insert(node_id);
+            } else {
+                crate::AMPLIFIER_CANDIDATES.write().remove(&node_id);
+            }
+            // The value just written is known here, so the canvas marker needs no refetch - unlike
+            // an undo/redo of a candidacy change, which cannot know what changed
+            // (`refresh_amplifier_candidates` handles that case instead).
+            ws_handler
+                .nodes
+                .set_amplifier_candidate(node_id, is_amplifier, graph_id);
+            // Unmarking a candidate configured in some scenario silently drops it from that
+            // scenario's row list on the backend - the editor has to re-fetch to notice, the same
+            // reasoning `process_set_scenario_gain_model` doesn't need since it never changes the
+            // candidate set itself.
+            *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
+        }),
+    );
+}
+
+/// Creates an empty pump scenario, named "Default", if the document doesn't have one yet.
+///
+/// Called before marking a node as an amplifier candidate: without this, doing so on a document
+/// with no scenario at all is a dead end - the scenario editor has nothing to expand and nowhere to
+/// offer the new candidate's row, so the gain model could never be set through the GUI. A separate
+/// undo step from the candidacy patch itself (two independent backend calls), which is an acceptable
+/// two-step undo for a one-time setup action.
+///
+/// Silently does nothing if fetching the current scenario list fails or it already has an entry -
+/// the failure case leaves the document exactly as `put_node_is_amplifier` would find it without this
+/// call, so it does not additionally block marking the candidate.
+async fn ensure_a_pump_scenario_exists(ws_handler: WorkSpaceSignalHandlers) {
+    let Ok(scenarios) = api::get_pump_scenarios().await else {
+        return;
+    };
+    if scenarios.is_empty() {
+        eval_action_run(
+            api::post_pump_scenario("Default").await,
+            Some(move |_id: Uuid| {
+                *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
+            }),
+        );
+    }
+    // Newly created here, or already there beforehand - either way make sure a scenario ends up
+    // active (see `EnsureActivePumpScenario`'s doc comment). Marking a node as a candidate is what
+    // motivated creating the scenario in the first place, so leaving it unselected would still show
+    // "None" on the canvas until the user happens to click it - a no-op if some scenario was already
+    // correctly active.
+    ensure_a_scenario_is_active(ws_handler).await;
+}
+
+/// Corrects the active pump scenario if it is unset or no longer resolves to one the document has,
+/// by activating the first scenario the document actually has - or clearing the selection if it has
+/// none at all, which is the only case "no active scenario" is a legitimate state in.
+///
+/// "No active scenario" while scenarios exist would otherwise make the canvas show `None` for a node
+/// that may well be configured as `Const` in every one of them, reading as "this node doesn't
+/// amplify" even though it does - see [`GraphsWorkspaceAction::EnsureActivePumpScenario`]'s doc
+/// comment. Sent after anything that can add or remove a scenario.
+///
+/// # Arguments
+///
+/// * `ws_handler` - workspace signal handlers used to bulk-sync every open tab's markers, via
+///   [`refresh_active_scenario_gain_models`].
+async fn ensure_a_scenario_is_active(ws_handler: WorkSpaceSignalHandlers) {
+    let Ok(scenarios) = api::get_pump_scenarios().await else {
+        return;
+    };
+    let is_valid = crate::ACTIVE_PUMP_SCENARIO()
+        .is_some_and(|active_id| scenarios.iter().any(|scenario| scenario.id == active_id));
+    if is_valid {
+        return;
+    }
+    *crate::ACTIVE_PUMP_SCENARIO.write() = scenarios.first().map(|scenario| scenario.id);
+    refresh_active_scenario_gain_models(ws_handler).await;
+}
+
+/// Re-fetches the active pump scenario's gain models and bulk-syncs every open tab's canvas
+/// markers to match - or clears both if no scenario is active.
+///
+/// Used whenever the active scenario itself changes, or an undo/redo touches its contents: unlike
+/// [`process_set_scenario_gain_model`] there is no single node whose new value is already known, so
+/// every currently rendered node has to be told apart from what actually changed.
+///
+/// # Arguments
+///
+/// * `ws_handler` - workspace signal handlers used to bulk-sync every open tab's markers.
+async fn refresh_active_scenario_gain_models(ws_handler: WorkSpaceSignalHandlers) {
+    let Some(scenario_id) = crate::ACTIVE_PUMP_SCENARIO() else {
+        crate::ACTIVE_SCENARIO_GAIN_MODELS.write().clear();
+        ws_handler.nodes.sync_amp_markers(HashMap::new());
+        return;
+    };
+    eval_action_run(
+        api::get_pump_scenario(scenario_id).await,
+        Some(move |scenario: opossum_core::gain::PumpScenario| {
+            // The canvas marker only ever asks whether a node amplifies, so the pump half of each
+            // configuration is dropped here rather than cached alongside it.
+            let gain_models: HashMap<Uuid, GainModel> = scenario
+                .amplifiers()
+                .map(|(node_id, config)| (node_id, config.gain_model()))
+                .collect();
+            crate::ACTIVE_SCENARIO_GAIN_MODELS
+                .write()
+                .clone_from(&gain_models);
+            ws_handler.nodes.sync_amp_markers(gain_models);
+        }),
+    );
+}
+
+/// Re-fetches the document-wide amplifier-candidate set and bulk-syncs every open tab's canvas
+/// flags to match.
+///
+/// Used whenever the candidate set itself changed - a candidacy toggle, or an undo/redo touching
+/// `DocumentChange::AmplifierNodesChanged`: unlike the direct toggle handler there is no single node
+/// whose new state is already known, so every currently rendered node has to be told apart from
+/// what actually changed. Mirrors [`refresh_active_scenario_gain_models`].
+///
+/// # Arguments
+///
+/// * `ws_handler` - workspace signal handlers used to bulk-sync every open tab's flags.
+async fn refresh_amplifier_candidates(ws_handler: WorkSpaceSignalHandlers) {
+    eval_action_run(
+        api::get_amplifier_candidates().await,
+        Some(move |candidates: Vec<Uuid>| {
+            let candidates: HashSet<Uuid> = candidates.into_iter().collect();
+            crate::AMPLIFIER_CANDIDATES.write().clone_from(&candidates);
+            ws_handler.nodes.sync_amplifier_candidates(candidates);
+        }),
+    );
 }
 
 /// Handles an undo/redo endpoint response: reflects the resulting Undo/Redo availability, marks the
@@ -623,6 +944,32 @@ async fn apply_document_changes(
             DocumentChange::NodeDetailsChanged { .. } | DocumentChange::AnalyzerChanged { .. } => {
                 *NODE_DETAILS_REFRESH.write() += 1;
             }
+            DocumentChange::PumpScenarioAdded { .. } => {
+                // Undoing a delete-all or redoing a create can bring the document from zero
+                // scenarios to one - activate it rather than leaving the selection at `None`.
+                ensure_a_scenario_is_active(ws_handler).await;
+                *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
+                *NODE_DETAILS_REFRESH.write() += 1;
+            }
+            DocumentChange::PumpScenarioRemoved { .. } => {
+                // The active scenario itself might just have been un-deleted-from-under (undo) or
+                // deleted (redo) - either way, its contents can no longer be trusted without a
+                // refetch, and if it was the *removed* one, another scenario (if any remain) takes
+                // over as active rather than leaving the selection at `None`.
+                ensure_a_scenario_is_active(ws_handler).await;
+                *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
+                *NODE_DETAILS_REFRESH.write() += 1;
+            }
+            DocumentChange::PumpScenarioChanged { id } => {
+                // The change carries no values (same reasoning as `NodeDetailsChanged` used to), so
+                // if this is the scenario the canvas is currently showing, the only way to know
+                // what it now amplifies is to re-fetch it.
+                if crate::ACTIVE_PUMP_SCENARIO() == Some(id) {
+                    refresh_active_scenario_gain_models(ws_handler).await;
+                }
+                *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
+                *NODE_DETAILS_REFRESH.write() += 1;
+            }
             DocumentChange::AnalyzerMoved { id, gui_position } => {
                 // Analyzers live at the root scenery; move the analyzer's canvas node back on
                 // undo/redo (a details refresh alone wouldn't touch its position).
@@ -631,6 +978,14 @@ async fn apply_document_changes(
                 ws_handler
                     .nodes
                     .update_node_positions(positions, *root_graph_id.read());
+            }
+            DocumentChange::AnalyzerRenamed { id, name } => {
+                // Update the canvas label on undo/redo of a rename (a details refresh alone
+                // doesn't touch the NodeElement name stored in the graph store).
+                ws_handler
+                    .nodes
+                    .set_node_name(name, id, *root_graph_id.read(), false);
+                *NODE_DETAILS_REFRESH.write() += 1;
             }
             DocumentChange::EdgeAdded {
                 graph_id,
@@ -656,6 +1011,16 @@ async fn apply_document_changes(
                     analyzer.id,
                     *root_graph_id.read(),
                 );
+                // Restore the user-assigned name when undoing a delete: add_analyzer_node uses the
+                // type label by default, so a second pass is needed when the analyzer had a name.
+                if !analyzer.info.name().is_empty() {
+                    ws_handler.nodes.set_node_name(
+                        analyzer.info.display_name(),
+                        analyzer.id,
+                        *root_graph_id.read(),
+                        false,
+                    );
+                }
             }
             DocumentChange::AnalyzerRemoved { id } => {
                 ws_handler
@@ -683,6 +1048,12 @@ async fn apply_document_changes(
                     )
                     .await;
                 }
+            }
+            DocumentChange::AmplifierNodesChanged => {
+                refresh_amplifier_candidates(ws_handler).await;
+                // A candidacy change can add or remove a row from every scenario's editor, the same
+                // reasoning `PumpScenarioAdded` above follows.
+                *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
             }
             DocumentChange::ViewportChanged {
                 graph_id,
@@ -713,6 +1084,11 @@ async fn apply_document_changes(
     {
         ensure_tab_active(graph_id, ws_handler, root_graph_id, workspace).await;
         if let Some(node) = node {
+            // The jump exists to show the user what was just undone/redone, so the sidebar has to be
+            // showing the node editor - a collapsed sidebar, or one left on the amplifier overview,
+            // would swallow the change entirely.
+            *crate::SIDEBAR_VIEW.write() = SidebarView::NodeProperties;
+            *crate::SIDEBAR_COLLAPSED.write() = false;
             // The tab is loaded now, so read the node's kind for the selection bookkeeping (analyzers are
             // not optical); default to optical if it isn't in the store yet.
             let is_optical =
@@ -1031,6 +1407,14 @@ async fn process_paste_nodes(
                     ws_handler.edges.add_edge(edge.clone(), *graph_id);
                 }
             }
+
+            // A copy of an amplifier is itself an amplifier candidate, possibly already configured
+            // in the active scenario (see `propagate_amplifier_state` on the backend). Neither the
+            // document-wide candidate cache nor the active scenario's gain-model cache knows that yet
+            // - both are re-fetched here and bulk-synced onto every open tab's canvas, the same way
+            // any other action that can change either does.
+            refresh_amplifier_candidates(ws_handler).await;
+            refresh_active_scenario_gain_models(ws_handler).await;
         }
         Err(e) => {
             OPOSSUM_UI_LOGS
@@ -1281,7 +1665,11 @@ async fn process_add_analyzer(
 
         let final_pos = find_suitable_element_position(proposed_pos, &existing_positions);
 
-        NewAnalyzerInfo::new(analyzer_type, final_pos)
+        // Retrieve user-defined default wavelength from application configuration
+        let default_wvl = crate::APP_CONFIG.read().default_wavelength();
+
+        // Pass the default wavelength into the creation request payload
+        NewAnalyzerInfo::new(analyzer_type, final_pos, Some(default_wvl))
     };
 
     eval_action_run(
@@ -1331,7 +1719,7 @@ async fn process_add_optic_node(
         let center = workspace.get_view_port_center();
         let proposed_pos = (
             (center.x - shift.x - NODE_WIDTH / 2.) / zoom,
-            (center.y - shift.y - f64::midpoint(MIN_NODE_BODY_HEIGHT, HEADER_HEIGHT)) / zoom,
+            (center.y - shift.y - DEFAULT_NODE_HEIGHT / 2.0) / zoom,
         );
 
         let existing_positions: Vec<_> = graph_store
@@ -1680,10 +2068,27 @@ async fn process_fill_graph_of_group(
     ws_handler: WorkSpaceSignalHandlers,
     needs_autolayout: bool,
     should_center: bool,
-    workspace: ReadStore<GraphsWorkspaceState>, // <-- Neu: Workspace
+    workspace: ReadStore<GraphsWorkspaceState>,
 ) {
+    // Fetch nodes first to evaluate their positions
+    let nodes_result = api::get_nodes(group_id).await;
+
+    // Determine dynamically if an autolayout is required for this specific group
+    let mut actual_needs_layout = needs_autolayout;
+    if let Ok(ref nodes) = nodes_result {
+        // Check if all nodes are overlapping at the origin (or have no position)
+        let unpositioned = nodes
+            .iter()
+            .all(|n| n.gui_position().is_none() || n.gui_position() == Some((0.0, 0.0)));
+
+        // Apply layout if we have more than one node and they are overlapping
+        if nodes.len() > 1 && unpositioned {
+            actual_needs_layout = true;
+        }
+    }
+
     eval_action_run(
-        api::get_nodes(group_id).await,
+        nodes_result,
         Some(move |nodes: Vec<NodeInfo>| ws_handler.nodes.add_group_nodes(group_id, nodes)),
     );
 
@@ -1698,11 +2103,14 @@ async fn process_fill_graph_of_group(
         api::get_connections(group_id).await,
         Some(move |connect_infos: Vec<ConnectInfo>| {
             ws_handler.edges.add_group_edges(group_id, connect_infos);
-
-            // Layout für Sub-Gruppen starten
-            if needs_autolayout && *root_scenery_id.read() != group_id {
+            // Start layout for sub-groups asynchronously
+            if actual_needs_layout && *root_scenery_id.read() != group_id {
                 dioxus::prelude::spawn(async move {
+                    // Wait until the layout is calculated and applied
                     process_optimize_layout(workspace, ws_handler, group_id).await;
+                    if should_center {
+                        ws_handler.view.zoom_to_fit(group_id, false);
+                    }
                 });
             }
         }),
@@ -1713,18 +2121,21 @@ async fn process_fill_graph_of_group(
             api::get_analyzers().await,
             Some(move |analyzers: Vec<AnalyzerItemDto>| {
                 ws_handler.nodes.add_group_analyzers(group_id, analyzers);
-
-                // Layout für die Root-Scenery starten
-                if needs_autolayout {
+                // Start layout for the root scenery asynchronously
+                if actual_needs_layout {
                     dioxus::prelude::spawn(async move {
+                        // Wait until the layout is calculated and applied
                         process_optimize_layout(workspace, ws_handler, group_id).await;
+                        if should_center {
+                            ws_handler.view.zoom_to_fit(group_id, false);
+                        }
                     });
                 }
             }),
         );
     }
 
-    if should_center {
+    if should_center && !actual_needs_layout {
         ws_handler.view.center_graph(group_id, false);
     }
 }
@@ -1736,7 +2147,7 @@ async fn process_load_from_file(
     ws_handler: WorkSpaceSignalHandlers,
     set_file_path_handler: EventHandler<Option<PathBuf>>,
 ) {
-    process_delete_root_scenery(ws_handler, set_file_path_handler).await;
+    process_delete_root_scenery(workspace, ws_handler, set_file_path_handler).await;
     let opm_string = match fs::read_to_string(&path) {
         Ok(s) => s,
         Err(e) => {
@@ -1749,6 +2160,16 @@ async fn process_load_from_file(
         Ok(response) => {
             process_add_root_scenery_tab(workspace, ws_handler, response.name).await;
             set_file_path_handler.call(Some(path));
+
+            // Populate the real candidate set from the just-loaded document *before* any node is
+            // constructed below - freshly constructed nodes seed their canvas flag from this cache
+            // synchronously, so it must already hold the loaded document's data by then.
+            eval_action_run(
+                api::get_amplifier_candidates().await,
+                Some(|candidates: Vec<Uuid>| {
+                    *crate::AMPLIFIER_CANDIDATES.write() = candidates.into_iter().collect();
+                }),
+            );
 
             let scenery_id = *scenery_id_sig.read();
 
@@ -1769,13 +2190,21 @@ async fn process_load_from_file(
 }
 
 async fn process_delete_root_scenery(
+    workspace: ReadStore<GraphsWorkspaceState>,
     workspace_handlers: WorkSpaceSignalHandlers,
     set_file_path_handler: EventHandler<Option<PathBuf>>,
 ) {
+    // Save the editor area before wiping state: the canvas's physical pixel region does not
+    // change between documents, so restoring it immediately lets node placement use the
+    // correct center while the new DOM element is still being constructed.
+    let saved_editor_area = *workspace.editor_area().read();
     eval_action_run(
         delete_document().await,
         Some(move |_| {
             workspace_handlers.workspace.clear_workspace();
+            workspace_handlers
+                .workspace
+                .set_editor_area(saved_editor_area);
             set_file_path_handler.call(None);
         }),
     );
@@ -1836,7 +2265,14 @@ async fn process_add_root_scenery_tab(
 ) {
     match api::get_document_root_uuid().await {
         Ok(id) => {
+            // Save the current editor area before wiping the workspace — the physical canvas
+            // region (pixels) does not change when a new document is loaded, so restoring it
+            // immediately avoids the race where the DOM element for the new tab does not exist
+            // yet when process_get_editor_area runs. The onresize handler will refresh it if
+            // the window is later resized. (Same pattern as process_refresh.)
+            let saved_editor_area = *workspace.editor_area().read();
             ws_handler.workspace.clear_workspace();
+            ws_handler.workspace.set_editor_area(saved_editor_area);
             ws_handler.workspace.set_root_scenery_id(id);
             ws_handler.workspace.add_new_group_tab(GraphInfo {
                 name: name.clone(),
@@ -1844,7 +2280,6 @@ async fn process_add_root_scenery_tab(
                 hierarchy: vec![(id, name.clone())],
             });
             process_rename_root_scenery(ws_handler, name, id, false).await;
-            process_get_editor_area(workspace, ws_handler).await;
         }
         Err(err_str) => {
             OPOSSUM_UI_LOGS.write().add_log(&err_str);
@@ -1885,7 +2320,7 @@ async fn process_refresh(
             )
             .await;
 
-            ws_handler.workspace.set_needs_saving(false);
+            ws_handler.workspace.set_needs_saving(true);
             *crate::UNDO_REDO_STATUS.write() = (false, false);
         }
         Err(err_str) => {

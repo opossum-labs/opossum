@@ -62,5 +62,92 @@ impl Clone for AppState {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum NodeCacheItem {
     Optical(OpticRef),
-    Analyzer(AnalyzerItemDto),
+    Analyzer(Box<AnalyzerItemDto>),
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::undo::{Command, SetViewport};
+    use opossum_core::{core_optics::node_attr::HasNodeAttr, types::api_types::Viewport};
+    use uuid::Uuid;
+
+    // Helper to generate a lightweight command for undo stack testing
+    fn dummy_command() -> Command {
+        Command::SetViewport(SetViewport {
+            from: Viewport {
+                graph_id: Uuid::nil(),
+                zoom: 1.0,
+                shift: (0.0, 0.0),
+            },
+            to: Viewport {
+                graph_id: Uuid::nil(),
+                zoom: 2.0,
+                shift: (10.0, 10.0),
+            },
+            coalescing: false,
+        })
+    }
+
+    #[test]
+    fn test_push_undo_clears_redo_stack() {
+        let state = AppState::default();
+
+        // Populate redo stack to ensure a new undo push invalidates pending redos
+        state.redo_stack.lock().push_back(dummy_command());
+        assert_eq!(state.redo_stack.lock().len(), 1);
+
+        state.push_undo(dummy_command());
+
+        assert_eq!(state.undo_stack.lock().len(), 1);
+        assert!(state.redo_stack.lock().is_empty());
+    }
+
+    #[test]
+    fn test_max_undo_depth_eviction() {
+        let state = AppState::default();
+
+        // Push more items than the defined maximum limit
+        for _ in 0..(MAX_UNDO_DEPTH + 15) {
+            state.push_undo(dummy_command());
+        }
+
+        // Verify that the stack size is clamped to MAX_UNDO_DEPTH
+        assert_eq!(state.undo_stack.lock().len(), MAX_UNDO_DEPTH);
+    }
+
+    #[test]
+    fn test_clear_undo_history() {
+        let state = AppState::default();
+
+        state.undo_stack.lock().push_back(dummy_command());
+        state.redo_stack.lock().push_back(dummy_command());
+
+        assert!(!state.undo_stack.lock().is_empty());
+        assert!(!state.redo_stack.lock().is_empty());
+
+        state.clear_undo_history();
+
+        assert!(state.undo_stack.lock().is_empty());
+        assert!(state.redo_stack.lock().is_empty());
+    }
+
+    #[test]
+    fn test_app_state_clone_semantics() {
+        let state = AppState::default();
+        state.undo_stack.lock().push_back(dummy_command());
+        state.redo_stack.lock().push_back(dummy_command());
+
+        let cloned = state.clone();
+
+        // History and copy cache must be clean in the cloned instance
+        assert!(cloned.undo_stack.lock().is_empty());
+        assert!(cloned.redo_stack.lock().is_empty());
+        assert!(cloned.node_copy_cache.lock().is_empty());
+
+        // The document itself should be cloned identically
+        assert_eq!(
+            state.document.lock().scenery().node_attr().name(),
+            cloned.document.lock().scenery().node_attr().name()
+        );
+    }
 }

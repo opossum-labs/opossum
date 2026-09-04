@@ -10,6 +10,7 @@
 header = """
 # Changelog\n
 All notable changes to this project will be documented in this file.\n
+OPOSSUM is funded through THRILL (EU, grant agreement No 101095207) and LASE-FUSE (BMFTR, funding reference 13F1041); see [Funding & Acknowledgments](doc/book/src/concepts/background/funding.md). To cite OPOSSUM, use [`CITATION.cff`](CITATION.cff).\n
 """
 # template for the changelog body
 # https://keats.github.io/tera/docs/#introduction

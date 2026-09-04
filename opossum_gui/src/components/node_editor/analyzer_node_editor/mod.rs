@@ -1,8 +1,8 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
 pub mod energy_editor;
 pub mod ghost_focus_editor;
 mod light_data_editor;
 pub mod ray_trace_editor;
+mod source_port_card;
 
 use crate::components::{
     node_editor::{
@@ -10,7 +10,8 @@ use crate::components::{
             energy_editor::EnergyEditor, ghost_focus_editor::GhostFocusEditor,
             ray_trace_editor::RayTraceEditor,
         },
-        node_config_editor::NodeChangeEvent,
+        inputs::input_components::FlushableTextInput,
+        node_config_editor::{NodeChangeAction, NodeChangeEvent},
         optical_node_editor::general_editor::NodeTypeInput,
     },
     scenery_editor::SelectedNode,
@@ -20,7 +21,9 @@ use dioxus::prelude::*;
 use opossum_core::{
     analyzers::energy::EnergyConfig,
     prelude::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
+    types::api_types::PumpScenarioItemDto,
 };
+use uuid::Uuid;
 
 /// Wires a source-port card to `PENDING_SOURCE_CARD_OPEN` for auto-expansion on undo/redo actions.
 pub fn use_source_card_focus(
@@ -66,6 +69,10 @@ pub fn AnalyzerNodeEditor(
     // Single unified resource to load analyzer details and source ports together
     let resource_future = use_resource(move || async move {
         crate::NODE_DETAILS_REFRESH();
+        // The scenario list is not part of the analyzer, so its own refresh signal has to be read
+        // as well - a scenario created or renamed elsewhere has to appear in the selection below
+        // without reselecting the analyzer.
+        crate::PUMP_SCENARIO_LIST_REFRESH();
 
         let current_id = *node_id.read();
 
@@ -92,15 +99,37 @@ pub fn AnalyzerNodeEditor(
             }
         };
 
-        (current_id, analyzer_info, available_sources)
+        let pump_scenarios = match api::get_pump_scenarios().await {
+            Ok(scenarios) => scenarios,
+            Err(err_str) => {
+                OPOSSUM_UI_LOGS.write().add_log(&err_str);
+                Vec::new()
+            }
+        };
+
+        (current_id, analyzer_info, available_sources, pump_scenarios)
     });
 
     match &*resource_future.read_unchecked() {
-        Some((loaded_id, Some(analyzer_info), available_sources))
+        Some((loaded_id, Some(analyzer_info), available_sources, pump_scenarios))
             if *loaded_id == *node_id.read() =>
         {
             let loaded_id_val = *loaded_id;
+            let graph_id = active_node.read().graph_id;
             let available_sources = available_sources.clone();
+            let pump_scenarios = pump_scenarios.clone();
+            let selected_scenarios = analyzer_info.pump_scenarios().to_vec();
+            let analyzer_name = analyzer_info.name().to_string();
+
+            let on_name_save = use_callback(move |new_name: String| {
+                on_change.call(NodeChangeEvent {
+                    node_id: loaded_id_val,
+                    action: NodeChangeAction::AnalyzerName {
+                        name: new_name,
+                        graph_id,
+                    },
+                });
+            });
 
             rsx! {
                 div {
@@ -114,6 +143,16 @@ pub fn AnalyzerNodeEditor(
                         NodeTypeInput {
                             node_type: format!("{}", analyzer_info.analyzer_type()),
                             label: "Analyzer Type",
+                        }
+                        FlushableTextInput {
+                            id: format!("analyzerName_{loaded_id_val}"),
+                            label: "Analyzer Name".to_string(),
+                            value: analyzer_name,
+                            container_class: "form-floating border-start".to_string(),
+                            input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
+                            label_class: "form-label text-secondary".to_string(),
+                            readonly: false,
+                            on_save: on_name_save,
                         }
                         {
                             match analyzer_info.analyzer_type() {
@@ -149,13 +188,112 @@ pub fn AnalyzerNodeEditor(
                                 }
                             }
                         }
+                        // Outside the per-type match on purpose: which operating points a run uses
+                        // is stated next to the analyzer's config, not inside it, so it applies to
+                        // every kind of analysis alike.
+                        PumpScenarioSelection {
+                            analyzer_id: loaded_id_val,
+                            selected: selected_scenarios,
+                            scenarios: pump_scenarios,
+                            on_change,
+                        }
                     }
                 }
             }
         }
         _ => {
             rsx! {
-                div { "No node selected" }
+                div { class: "noselect", "No node selected" }
+            }
+        }
+    }
+}
+
+/// The operating points this analyzer is run in: one report per selected pump scenario, none
+/// selected meaning a single passive run.
+///
+/// This is what turns a configured scenario into a result. Without it an amplifier can be set up
+/// completely - candidate, scenario, gain model - and still never amplify anything, because nothing
+/// ever tells an analysis to use that operating point.
+///
+/// Selecting a scenario appends it to the end of the list rather than reordering the selection: the
+/// order is the order the reports come out in, so a scenario that was already selected keeps its
+/// place when another one is added or removed.
+///
+/// # Props
+///
+/// * `analyzer_id` - the analyzer whose selection is edited.
+/// * `selected` - the scenarios currently selected, in report order.
+/// * `scenarios` - every scenario the document has, in document order.
+/// * `on_change` - the analyzer editor's usual change channel, which saves and marks the document
+///   modified.
+#[component]
+fn PumpScenarioSelection(
+    analyzer_id: Uuid,
+    selected: Vec<Uuid>,
+    scenarios: Vec<PumpScenarioItemDto>,
+    on_change: EventHandler<NodeChangeEvent>,
+) -> Element {
+    // Each row carries the selection its own checkbox would produce, worked out here rather than in
+    // the event handler: the handler then has nothing to decide, and every row states the whole list
+    // it sends - which is what the endpoint takes.
+    let rows: Vec<(Uuid, String, bool, Vec<Uuid>)> = scenarios
+        .iter()
+        .map(|item| {
+            let is_selected = selected.contains(&item.id);
+            let mut toggled = selected.clone();
+            if is_selected {
+                toggled.retain(|id| *id != item.id);
+            } else {
+                toggled.push(item.id);
+            }
+            (
+                item.id,
+                item.scenario.name().to_string(),
+                is_selected,
+                toggled,
+            )
+        })
+        .collect();
+    let nothing_selected = selected.is_empty();
+
+    rsx! {
+        div { class: "pump-scenario-selection mt-2",
+            label { class: "text-secondary small", "Pump scenarios" }
+            if rows.is_empty() {
+                div { class: "text-secondary small fst-italic",
+                    "No pump scenario defined - this analysis runs on the passive model."
+                }
+            } else {
+                for (scenario_id, name, is_selected, toggled) in rows {
+                    div { class: "form-check", key: "{scenario_id}",
+                        input {
+                            class: "form-check-input",
+                            r#type: "checkbox",
+                            id: "analyzer-{analyzer_id}-scenario-{scenario_id}",
+                            checked: is_selected,
+                            onchange: move |_| {
+                                on_change
+                                    .call(NodeChangeEvent {
+                                        node_id: analyzer_id,
+                                        action: NodeChangeAction::AnalyzerPumpScenarios(toggled.clone()),
+                                    });
+                            },
+                        }
+                        label {
+                            class: "form-check-label text-light small",
+                            r#for: "analyzer-{analyzer_id}-scenario-{scenario_id}",
+                            "{name}"
+                        }
+                    }
+                }
+                // Stated rather than left to be inferred from an empty list of ticks: running
+                // passively is a legitimate setting, not a missing one.
+                if nothing_selected {
+                    div { class: "text-secondary small fst-italic",
+                        "None selected - this analysis runs once, on the passive model."
+                    }
+                }
             }
         }
     }

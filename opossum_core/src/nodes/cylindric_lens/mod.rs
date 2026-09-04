@@ -3,12 +3,12 @@
 
 use crate::{
     analyzers::energy::AnalysisEnergy,
-    core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType},
+    core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType, Volumetric},
     error::{OpmResult, OpossumError},
     geometry::{Cylinder, Plane, geo_surface::GeoSurfaceRef},
-    material::Material,
+    material::{MATERIAL, Material},
     meter, millimeter,
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, create_volume_properties},
     properties::{Proptype, validator::Validator},
     radian,
     refractive_index::RefrIndexConst,
@@ -47,7 +47,8 @@ inventory::submit! {
 ///   - `front curvature`
 ///   - `rear curvature`
 ///   - `center thickness`
-///   - `refractive index`
+///   - `material`
+///   - `clear aperture`
 pub struct CylindricLens {
     node_attr: NodeAttr,
 }
@@ -89,7 +90,7 @@ impl Default for CylindricLens {
             .unwrap();
         node_attr
             .create_property(
-                "material",
+                MATERIAL,
                 "material of the lens",
                 Material::new_draft(
                     "lens material",
@@ -100,6 +101,7 @@ impl Default for CylindricLens {
                 .into(),
             )
             .unwrap();
+        create_volume_properties(&mut node_attr).unwrap();
         let mut cyl_lens = Self { node_attr };
         cyl_lens.update_surfaces().unwrap();
         cyl_lens
@@ -137,13 +139,17 @@ impl CylindricLens {
             .set_property("center thickness", center_thickness.into())?;
         cyl_lens
             .node_attr
-            .set_property("material", material.into().into())?;
+            .set_property(MATERIAL, material.into().into())?;
         cyl_lens.update_surfaces()?;
         Ok(cyl_lens)
     }
 }
 
+impl Volumetric for CylindricLens {}
 impl OpticNode for CylindricLens {
+    fn as_volume(&self) -> Option<&dyn Volumetric> {
+        Some(self)
+    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
         let Ok(Proptype::Curvature(front_curvature)) =
@@ -255,7 +261,7 @@ mod test {
         };
         assert_eq!(*ct, millimeter!(10.0));
         let Ok(Proptype::Material(AssetRef::Inline(material))) =
-            node.node_attr.get_property("material")
+            node.node_attr.get_property(MATERIAL)
         else {
             panic!()
         };
@@ -311,7 +317,7 @@ mod test {
         };
         assert_eq!(*ct, millimeter!(11.0));
         let Ok(Proptype::Material(AssetRef::Inline(material))) =
-            node.node_attr.get_property("material")
+            node.node_attr.get_property(MATERIAL)
         else {
             panic!()
         };
@@ -398,6 +404,81 @@ mod test {
         } else {
             assert!(false);
         }
+        Ok(())
+    }
+    /// Reference values for the entry surface → volume → exit surface propagation.
+    ///
+    /// This pins the current behaviour down completely so that refactoring the two-surface
+    /// sequence in `analysis_raytrace.rs` can be verified to be behaviour-neutral. The values are
+    /// recorded, not derived — physical correctness is covered by the other tests in this module.
+    #[test]
+    fn volume_propagation_regression() -> OpmResult<()> {
+        let mut node = CylindricLens::new(
+            "regression",
+            millimeter!(100.0),
+            millimeter!(-100.0),
+            millimeter!(10.0),
+            RefrIndexConst::new(1.5)?,
+        )?;
+        node.set_isometry(Isometry::identity())?;
+        test_volume_propagation_regression(
+            &mut node,
+            &[
+                [0.0, 0.0, 10.0, 0.0, 0.0, 1.0, 1.0, 15.0],
+                [
+                    4.837_210_642_342,
+                    0.0,
+                    9.882_938_448_974,
+                    -0.049_284_003_372,
+                    0.0,
+                    0.998_784_805_157,
+                    1.0,
+                    14.763_905_268_675,
+                ],
+                [
+                    0.332_163_594_108,
+                    -3.335_672_811_784,
+                    9.999_448_335_212,
+                    0.048_022_965_087,
+                    0.099_380_799_000,
+                    0.993_889_959_510,
+                    1.0,
+                    15.040_492_615_548,
+                ],
+            ],
+        )
+    }
+    #[test]
+    fn volume_body() -> OpmResult<()> {
+        test_volume_body::<CylindricLens>()
+    }
+    #[test]
+    fn clear_aperture() -> OpmResult<()> {
+        test_clear_aperture::<CylindricLens>()
+    }
+    #[test]
+    fn clear_aperture_absent_in_file() -> OpmResult<()> {
+        test_clear_aperture_absent_in_file::<CylindricLens>()
+    }
+    /// The cylindric lens is curved along x only, so its volume thins out towards the rim in that
+    /// direction while it keeps its full thickness along the cylinder axis.
+    #[test]
+    fn volume_body_thins_out_along_one_axis_only() -> OpmResult<()> {
+        let center_thickness = millimeter!(10.0);
+        let mut node = CylindricLens::new(
+            "one axis",
+            millimeter!(100.0),
+            millimeter!(-100.0),
+            center_thickness,
+            RefrIndexConst::new(1.5)?,
+        )?;
+        node.set_isometry(Isometry::identity())?;
+        assert_relative_eq!(
+            path_length_through(&node, millimeter!(0.0, 5.0, 0.0))?.value,
+            center_thickness.value,
+            epsilon = 1e-12
+        );
+        assert!(path_length_through(&node, millimeter!(5.0, 0.0, 0.0))? < center_thickness);
         Ok(())
     }
 }

@@ -6,8 +6,7 @@ use crate::{
     distributions::spectral::laser_lines::MIN_WAVELENGTH_DIFF_NM,
     error::{OpmResult, OpossumError},
     generic_validators::{
-        AllNormal, AllNotEmpty, AllPositive, PathValid, ValidateTrait, XNormal, YFinite,
-        YNotAllZero,
+        AllNormal, AllNotEmpty, AllPositive, PathValid, XNormal, YFinite, YNotAllZero,
     },
     joule,
     light::Spectrum,

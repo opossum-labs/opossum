@@ -24,6 +24,7 @@ pub struct GraphsWorkspaceState {
     tabs: HashMap<Uuid, GraphState>,
     tab_order: Vec<Uuid>,
     active_tab: Uuid,
+    tab_history: Vec<Uuid>,
     root_scenery_id: Uuid,
     editor_area: Rect<f64>,
     needs_saving: bool,
@@ -59,10 +60,15 @@ impl<Lens> Store<GraphsWorkspaceState, Lens> {
             self.tabs().write().remove(id);
             self.tab_order().write().retain(|x| x != id);
         }
+        self.tab_history().write().retain(|x| !tab_ids.contains(x));
         let act_tab = *self.active_tab().read();
-        let root_tab = *self.root_scenery_id().read();
         if tab_ids.contains(&act_tab) {
-            self.active_tab().set(root_tab);
+            let fallback = self
+                .tab_history()
+                .write()
+                .pop()
+                .unwrap_or_else(|| *self.root_scenery_id().read());
+            self.active_tab().set(fallback);
         }
     }
 

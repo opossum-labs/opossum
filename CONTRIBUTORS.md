@@ -4,17 +4,23 @@ Thank you to everyone who has contributed to the Open-source Optics Simulation S
 
 This project thrives on the dedication of its community, whether through writing core simulation code, designing the GUI, improving documentation, or reporting bugs.
 
+Funding for the contributions below is attributed per project on the handbook's
+[Funding & Acknowledgments](doc/book/src/concepts/background/funding.md) page;
+machine-readable author metadata (with ORCID) lives in [`CITATION.cff`](CITATION.cff).
+
 ## Core Authors & Maintainers
 
-* **Udo Eisenbarth** (<u.eisenbarth@gsi.de>)
-* **Yannik Zobus** (<y.zobus@gsi.de>)
+* **Udo Eisenbarth** (<u.eisenbarth@gsi.de>, [ORCID](https://orcid.org/0009-0001-0168-5932))
+  * GSI Plasma physics group / PHELIX. Contributions within the THRILL project.
+* **Yannik Zobus** (<y.zobus@gsi.de>, [ORCID](https://orcid.org/0000-0002-0559-1167))
+  * GSI Plasma physics group / LASE-FUSE. Contributions within the THRILL and LASE-FUSE projects.
 
 ## Contributors
 
 ### Documentation & Support
 
 * **Swathi Krishna** (<s.krishna@gsi.de>)
-  * Significantly improved the project documentation and user guides.
+  * Significantly improved the project documentation and user guides. Contributions within the THRILL project.
 
 ### Future Contributors
 

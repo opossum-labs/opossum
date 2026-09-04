@@ -1,18 +1,21 @@
-// File: src/components/node_editor/analyzer_node_editor/ghost_focus_editor.rs
-
-use crate::components::node_editor::{
-    analyzer_node_editor::light_data_editor::ray_source_editor::RaySourceEditor,
-    inputs::{
-        input_components::{FlushableTextInput, LabeledSelect},
-        select_options_from_enum_iterator,
+use crate::components::{
+    inputs::material_selector::MaterialSelector,
+    node_editor::{
+        analyzer_node_editor::{
+            light_data_editor::default_ray_data_source, source_port_card::SourcePortCard,
+        },
+        inputs::{
+            input_components::{FlushableTextInput, LabeledSelect},
+            select_options_from_enum_iterator,
+        },
+        node_config_editor::{NodeChangeAction, NodeChangeEvent},
     },
-    node_config_editor::{NodeChangeAction, NodeChangeEvent},
 };
-
 use dioxus::prelude::*;
 use opossum_core::{
     core_optics::hit_map::fluence_estimator::FluenceEstimator,
-    prelude::{AnalyzerType, GhostFocusConfig, LightDataBuilder, RayDataSource},
+    material::Material,
+    prelude::{AnalyzerType, GhostFocusConfig},
     types::api_types::SourcePortDto,
     utils::default_from_name::DefaultFromName,
 };
@@ -52,6 +55,16 @@ pub fn GhostFocusEditor(
         }
     });
 
+    // Callback for updating the ambient medium material
+    let on_change_ambient_material = use_callback(move |updated_material: Material| {
+        let mut local_config = ghost_focus_config.peek().clone();
+        local_config.set_ambient_material(updated_material);
+        on_change.call(NodeChangeEvent {
+            node_id,
+            action: NodeChangeAction::AnalyzerType(AnalyzerType::GhostFocus(local_config)),
+        });
+    });
+
     let current_config = ghost_focus_config.read();
 
     rsx! {
@@ -75,6 +88,14 @@ pub fn GhostFocusEditor(
                 onchange: on_change_fluence,
             }
 
+            // Material selector for the ambient medium
+            MaterialSelector {
+                label: "Ambient Material".to_string(),
+                material: current_config.ambient_material().clone(),
+                readonly: false,
+                on_change: on_change_ambient_material,
+            }
+
             div { class: "mt-4 border-top pt-3 text-light",
                 h6 { class: "text-secondary mb-3", "Sources Definitions" }
 
@@ -86,81 +107,39 @@ pub fn GhostFocusEditor(
                     available_sources
                         .into_iter()
                         .map(|port| {
-                            rsx! {
-                                SourcePortCard {
-                                    key: "{port.uuid}",
-                                    port,
-                                    ghost_focus_config: current_config.clone(),
-                                    on_change,
-                                    analyzer_id: node_id,
-                                }
-                            }
-                        })
-                }
-            }
-        }
-    }
-}
-
-#[component]
-fn SourcePortCard(
-    port: SourcePortDto,
-    ghost_focus_config: GhostFocusConfig,
-    on_change: EventHandler<NodeChangeEvent>,
-    analyzer_id: Uuid,
-) -> Element {
-    let mut is_collapsed = use_signal(|| true);
-    let port_uuid = port.uuid;
-    let port_name = port.name;
-
-    super::use_source_card_focus(analyzer_id, port_uuid, is_collapsed);
-
-    let existing_source = ghost_focus_config
-        .get_source(&port_uuid)
-        .map_or_else(RayDataSource::default, |builder| builder.source().clone());
-
-    rsx! {
-        div {
-            class: "card bg-dark border-secondary mb-2",
-            id: "sourceCard{port_uuid}",
-            div {
-                class: "card-header bg-secondary py-1 px-2 text-light d-flex justify-content-between align-items-center noselect",
-                style: "cursor: pointer;",
-                onclick: move |_| is_collapsed.toggle(),
-
-                span { class: "fw-bold small", "{port_name}" }
-                span { class: "text-muted small",
-                    if is_collapsed() {
-                        "▶"
-                    } else {
-                        "▼"
-                    }
-                }
-            }
-
-            if !is_collapsed() {
-                div {
-                    key: "{analyzer_id}",
-                    class: "card-body p-2 bg-dark text-light",
-
-                    RaySourceEditor {
-                        ray_data_builder: existing_source,
-                        readonly: false,
-                        on_save: move |light_builder| {
-                            if let LightDataBuilder::Geometric(updated_builder) = light_builder {
-                                let mut updated_config = ghost_focus_config.clone();
-                                updated_config.map_source(port_uuid, updated_builder.into());
-
+                            let port_uuid = port.uuid;
+                            let source = current_config
+                                .get_source(&port_uuid)
+                                .map_or_else(
+                                    || {
+                                        let default_wvl = crate::APP_CONFIG
+                                            .read()
+                                            .default_wavelength();
+                                        default_ray_data_source(default_wvl)
+                                    },
+                                    |builder| builder.source().clone(),
+                                );
+                            let on_save_source = move |updated_builder| {
+                                let mut updated_config = ghost_focus_config.peek().clone();
+                                updated_config.map_source(port_uuid, updated_builder);
                                 on_change
                                     .call(NodeChangeEvent {
-                                        node_id: analyzer_id,
+                                        node_id,
                                         action: NodeChangeAction::AnalyzerType(
                                             AnalyzerType::GhostFocus(updated_config),
                                         ),
                                     });
+                            };
+                            rsx! {
+                                SourcePortCard {
+                                    key: "{port_uuid}",
+                                    analyzer_id: node_id,
+                                    port,
+                                    source,
+                                    on_save: on_save_source,
+                                }
                             }
-                        },
-                    }
+                        })
                 }
             }
         }

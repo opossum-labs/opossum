@@ -2,7 +2,7 @@ use directories::{ProjectDirs, UserDirs};
 use opm_macros_lib::EnsureValidated;
 use opossum_core::{
     error::{OpmResult, OpossumError},
-    generic_validators::{AllFinite, AllNotZero, AllPositive, ValidateTrait},
+    generic_validators::{AllFinite, AllNotZero, AllPositive},
     nanometer, validated, validated_type,
 };
 use ron::ser::PrettyConfig;
@@ -111,8 +111,8 @@ impl AppConfig {
     }
 
     /// Sets the default wavelength.
-    pub fn set_default_wavelength(&mut self, wavelength: Length) {
-        let _ = self.default_wavelength.set(wavelength);
+    pub fn set_default_wavelength(&mut self, wavelength: Length) -> OpmResult<()> {
+        self.default_wavelength.set(wavelength)
     }
 
     pub const fn report_dir(&self) -> Option<&PathBuf> {

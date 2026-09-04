@@ -1,8 +1,6 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
 use crate::components::scenery_editor::{
     DragStatus, EditorStateStoreExt, GraphsWorkspaceState, GraphsWorkspaceStateStoreExt, NodeType,
     SelectionBoxComponent,
-    constants::{HEADER_HEIGHT, NODE_WIDTH},
     edges::edges_component::{EdgeCreationComponent, EdgesComponent},
     graph_editor::{
         BreadCrumbs,
@@ -11,10 +9,7 @@ use crate::components::scenery_editor::{
     graph_workspace::{GraphState, GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceAction},
     node::Node,
 };
-use dioxus::{
-    html::geometry::euclid::default::{Point2D, Rect, Size2D},
-    prelude::*,
-};
+use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use std::{collections::HashSet, path::PathBuf};
 use uuid::Uuid;
 use web_time::Instant;
@@ -77,6 +72,10 @@ pub fn GraphViewEditor(
     });
 
     use_effect(move || {
+        if *workspace.active_tab().read() != graph_id {
+            return;
+        }
+
         let mouse = mouse_pos_in_editor.read();
 
         if *workspace.drag_status().read() != DragStatus::Nodes {
@@ -97,12 +96,7 @@ pub fn GraphViewEditor(
                     continue;
                 }
 
-                let rect = Rect::new(
-                    node_read.pos(),
-                    Size2D::new(NODE_WIDTH, node_read.node_body_height() + HEADER_HEIGHT),
-                );
-
-                if rect.contains(*mouse) {
+                if node_read.get_bounding_box().contains(*mouse) {
                     let z = node_read.z_index();
 
                     match best_match {
@@ -159,7 +153,7 @@ pub fn GraphViewEditor(
                         shift().y,
                         zoom(),
                     ),
-                    for (_ , node) in graph_store.nodes().iter() {
+                    for (_, node) in graph_store.nodes().iter() {
                         {
                             rsx! {
                                 Node {

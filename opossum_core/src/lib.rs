@@ -12,15 +12,18 @@ doc = ::embed_doc_image::embed_image!("opossum_logo", "logo/Logo_text.svg")))]
            to enable."
 )]
 #![allow(clippy::module_name_repetitions)]
+pub mod absorption;
 pub mod analyzers;
 pub mod apertures;
 pub mod coatings;
 pub mod core_optics;
 pub mod distributions;
 pub mod error;
+pub mod gain;
 pub mod generic_validators;
 mod kde;
 pub mod light;
+pub mod material;
 pub mod nodes;
 pub mod opm_document;
 pub mod prelude;
@@ -30,11 +33,14 @@ pub mod types;
 // pub mod render;
 pub mod asset;
 pub mod geometry;
-pub mod material;
 pub mod reporting;
 pub mod utils;
 
 use chrono::DateTime;
+
+// Allows internal macro expansions that use the ::opossum_core:: path
+// to resolve correctly within this crate itself.
+extern crate self as opossum_core;
 /// Return the version information of the currently built OPOSSUM executable.
 ///
 /// This function returns a `String` which contains the current Git tag/hash combination as well as

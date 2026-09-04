@@ -7,8 +7,9 @@
 //! This module also handles reading and writing of `.opm` files.
 use crate::{
     analyzers::{Analyzer, AnalyzerRegistration, AnalyzerType},
-    core_optics::{NodeAttrExt, OpticNode, SceneryResources},
+    core_optics::{NodeAttrExt, OpticNode},
     error::{OpmResult, OpossumError},
+    gain::{GainModel, PumpScenario},
     material::Material,
     nodes::NodeGroup,
     properties::{Proptype, proptype::AssetRef},
@@ -23,11 +24,12 @@ use log::{info, warn};
 use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashSet,
     fs::{self, File},
     io::Write,
     path::Path,
-    sync::{Arc, Mutex},
 };
+use uom::si::f64::Length;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -37,9 +39,18 @@ use ron::{extensions::Extensions, ser::PrettyConfig};
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct AnalyzerInfo {
     analyzer_type: AnalyzerType,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     gui_position: Option<(f64, f64)>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pump_scenarios: Vec<Uuid>,
+    /// Optional default wavelength used when configuring or auto-mapping source ports
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Object>)]
+    default_wavelength: Option<Length>,
 }
+
 impl AnalyzerInfo {
     /// Creates a new [`AnalyzerInfo`].
     #[allow(clippy::missing_const_for_fn)]
@@ -47,8 +58,50 @@ impl AnalyzerInfo {
     pub fn new(analyzer_type: AnalyzerType, gui_position: Point2<f64>) -> Self {
         Self {
             analyzer_type,
+            name: String::new(),
             gui_position: Some((gui_position.x, gui_position.y)),
+            pump_scenarios: Vec::new(),
+            default_wavelength: None,
         }
+    }
+    /// Returns the default wavelength of this analyzer, if configured.
+    #[must_use]
+    pub const fn default_wavelength(&self) -> Option<Length> {
+        self.default_wavelength
+    }
+
+    /// Sets the default wavelength of this analyzer.
+    pub fn set_default_wavelength(&mut self, default_wavelength: Option<Length>) {
+        self.default_wavelength = default_wavelength;
+    }
+    /// Returns the [`PumpScenario`]s this analyzer is run in.
+    ///
+    /// An analyzer referring to no scenario at all is run once on the passive model, which is what
+    /// every analyzer did before scenarios existed.
+    #[must_use]
+    pub fn pump_scenarios(&self) -> &[Uuid] {
+        &self.pump_scenarios
+    }
+    /// Sets the [`PumpScenario`]s this analyzer is run in.
+    ///
+    /// The analyzer produces one report per listed scenario, in the given order.
+    ///
+    /// # Arguments
+    ///
+    /// * `pump_scenarios` - the scenarios to run, or an empty list for a purely passive run.
+    pub fn set_pump_scenarios(&mut self, pump_scenarios: Vec<Uuid>) {
+        self.pump_scenarios = pump_scenarios;
+    }
+    /// Stops running this analyzer in the [`PumpScenario`] with the given [`Uuid`].
+    ///
+    /// Called when that scenario is deleted: an analyzer must not keep pointing at an operating
+    /// point that no longer exists.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - the scenario no longer to be run.
+    fn remove_pump_scenario(&mut self, id: Uuid) {
+        self.pump_scenarios.retain(|scenario_id| *scenario_id != id);
     }
     /// Returns the gui position of this [`AnalyzerInfo`].
     #[must_use]
@@ -58,6 +111,31 @@ impl AnalyzerInfo {
     /// Sets the gui position of this [`AnalyzerInfo`].
     pub fn set_gui_position(&mut self, gui_position: Option<Point2<f64>>) {
         self.gui_position = gui_position.map(|gp| (gp.x, gp.y));
+    }
+    /// Returns the user-assigned name of this [`AnalyzerInfo`], or an empty string if none was set.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    /// Sets the user-assigned name of this [`AnalyzerInfo`].
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - the new name; an empty string clears the name.
+    pub fn set_name(&mut self, name: &str) {
+        self.name = name.to_string();
+    }
+    /// Returns the user-assigned name if set, otherwise falls back to the analyzer type label.
+    ///
+    /// Use this wherever a display label is needed rather than the raw stored name, so unnamed
+    /// analyzers continue to show their type (`"Energy"`, `"RayTrace"`, …) rather than an empty string.
+    #[must_use]
+    pub fn display_name(&self) -> String {
+        if self.name.is_empty() {
+            self.analyzer_type.to_string()
+        } else {
+            self.name.clone()
+        }
     }
     /// Returns a reference to the analyzer type of this [`AnalyzerInfo`].
     #[must_use]
@@ -77,10 +155,17 @@ pub struct OpmDocument {
     opm_file_version: String,
     #[serde(default)]
     scenery: NodeGroup,
-    #[serde(default, rename = "global")]
-    global_conf: Arc<Mutex<SceneryResources>>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     analyzers: IndexMap<Uuid, AnalyzerInfo>,
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    pump_scenarios: IndexMap<Uuid, PumpScenario>,
+    /// Nodes marked as amplifier candidates, independent of any [`PumpScenario`].
+    ///
+    /// This is the hardware-side half of the hardware/operating point split: whether a node *is* an
+    /// amplifier does not depend on which (if any) scenario is active. How it amplifies in a
+    /// particular scenario is configured separately, in that scenario's own gain-model map.
+    #[serde(default, skip_serializing_if = "HashSet::is_empty")]
+    amplifier_nodes: HashSet<Uuid>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     embedded_materials: IndexMap<Uuid, Material>,
 }
@@ -89,8 +174,9 @@ impl Default for OpmDocument {
         Self {
             opm_file_version: env!("OPM_FILE_VERSION").to_string(),
             scenery: NodeGroup::default(),
-            global_conf: Arc::new(Mutex::new(SceneryResources::default())),
             analyzers: IndexMap::default(),
+            pump_scenarios: IndexMap::default(),
+            amplifier_nodes: HashSet::default(),
             embedded_materials: IndexMap::default(),
         }
     }
@@ -98,8 +184,7 @@ impl Default for OpmDocument {
 impl OpmDocument {
     /// Creates a new [`OpmDocument`].
     #[must_use]
-    pub fn new(mut scenery: NodeGroup) -> Self {
-        scenery.set_global_conf(Some(Arc::new(Mutex::new(SceneryResources::default()))));
+    pub fn new(scenery: NodeGroup) -> Self {
         Self {
             scenery,
             ..Default::default()
@@ -204,11 +289,6 @@ impl OpmDocument {
 
         // Resolve embedded material references into full in-memory Material structs
         document.resolve_embedded_materials()?;
-
-        document
-            .scenery
-            .graph_mut()
-            .update_global_config(&Some(document.global_conf.clone()));
         Ok(document)
     }
     /// Saves this [`OpmDocument`] to an `.opm` file at the specified path.
@@ -235,25 +315,58 @@ impl OpmDocument {
         })?;
         Ok(())
     }
+    /// Creates a complete deep copy of the document and all scene nodes.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if nested components cannot be cloned deeply.
+    pub fn clone_deep(&self) -> OpmResult<Self> {
+        Ok(Self {
+            opm_file_version: self.opm_file_version.clone(),
+            scenery: self.scenery.clone_deep()?,
+            analyzers: self.analyzers.clone(),
+            embedded_materials: self.embedded_materials.clone(),
+            pump_scenarios: self.pump_scenarios.clone(),
+            amplifier_nodes: self.amplifier_nodes.clone(),
+        })
+    }
     /// Generates the RON string content representation of this [`OpmDocument`].
     ///
-    /// Internally clones the document to extract embedded materials and replace node
-    /// material properties with UUID references without mutating the original `self`.
+    /// Extracts embedded materials and replaces node material properties with UUID references,
+    /// then puts the materials back, so that writing a document leaves it exactly as it was.
+    ///
+    /// **The clone below is not a copy of the nodes.** An [`OpticRef`](crate::core_optics::OpticRef)
+    /// is an `Arc<Mutex<..>>`, so a cloned document shares its very nodes with the original, and
+    /// rewriting their material property reaches straight through into this document. Only
+    /// `embedded_materials` — a plain map — is genuinely cloned. Leaving it at that emptied the
+    /// live document of its materials while filling a table nobody kept: the next write then found
+    /// nothing left to embed and produced a file whose references resolved to nothing, and every
+    /// volume node in the running session lost the material its analysis reads.
+    ///
+    /// Hence the restore, which runs whatever the serialization did.
     ///
     /// # Errors
     /// Returns an [`OpossumError`] if serialization fails.
     pub fn to_opm_file_string(&self) -> OpmResult<String> {
         // Create a temporary mutable clone for serialization preparation
-        let mut doc_to_serialize = self.clone();
-        doc_to_serialize.prepare_materials_for_serialization()?;
+        let mut doc_to_serialize = self.clone_deep()?;
+        let prepared = doc_to_serialize.prepare_materials_for_serialization();
 
         let config = PrettyConfig::new()
             .extensions(Extensions::UNWRAP_VARIANT_NEWTYPES)
             .new_line("\n");
 
-        ron::ser::to_string_pretty(&doc_to_serialize, config).map_err(|e| {
-            OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}"))
-        })
+        let serialized = prepared.and_then(|()| {
+            ron::ser::to_string_pretty(&doc_to_serialize, config).map_err(|e| {
+                OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}"))
+            })
+        });
+
+        // Give the shared nodes their inline materials back before returning - including on the
+        // failure paths, which would otherwise leave the live document stripped.
+        doc_to_serialize.resolve_embedded_materials()?;
+
+        serialized
     }
     /// Returns the list of analyzers of this [`OpmDocument`].
     #[must_use]
@@ -287,7 +400,10 @@ impl OpmDocument {
         let id = Uuid::new_v4();
         let analyzer_info = AnalyzerInfo {
             analyzer_type,
+            name: String::new(),
             gui_position: None,
+            pump_scenarios: Vec::new(),
+            default_wavelength: None,
         };
         self.analyzers.insert(id, analyzer_info);
         id
@@ -301,7 +417,10 @@ impl OpmDocument {
         let id = Uuid::new_v4();
         let analyzer_info = AnalyzerInfo {
             analyzer_type,
+            name: String::new(),
             gui_position,
+            pump_scenarios: Vec::new(),
+            default_wavelength: None,
         };
         self.analyzers.insert(id, analyzer_info);
         id
@@ -335,6 +454,152 @@ impl OpmDocument {
     pub fn insert_analyzer(&mut self, id: Uuid, info: AnalyzerInfo) {
         self.analyzers.insert(id, info);
     }
+    /// Return all [`PumpScenario`]s of this [`OpmDocument`].
+    ///
+    /// The scenarios are the operating points the model can be analyzed in. A document without any
+    /// is a purely passive model, which is what every document starts out as.
+    #[must_use]
+    pub const fn pump_scenarios(&self) -> &IndexMap<Uuid, PumpScenario> {
+        &self.pump_scenarios
+    }
+    /// Return the [`PumpScenario`] with the given [`Uuid`], if there is one.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - the scenario to look up.
+    #[must_use]
+    pub fn pump_scenario(&self, id: Uuid) -> Option<&PumpScenario> {
+        self.pump_scenarios.get(&id)
+    }
+    /// Return a mutable reference to the [`PumpScenario`] with the given [`Uuid`], if there is one.
+    ///
+    /// This is how a single node is added to or removed from a scenario, without touching the model.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - the scenario to modify.
+    pub fn pump_scenario_mut(&mut self, id: Uuid) -> Option<&mut PumpScenario> {
+        self.pump_scenarios.get_mut(&id)
+    }
+    /// Add a new, empty [`PumpScenario`] with the given name to this [`OpmDocument`].
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - the name of the new scenario.
+    ///
+    /// # Returns
+    ///
+    /// The [`Uuid`] the new scenario is addressed by.
+    pub fn add_pump_scenario(&mut self, name: &str) -> Uuid {
+        let id = Uuid::new_v4();
+        self.pump_scenarios.insert(id, PumpScenario::new(name));
+        id
+    }
+    /// Re-insert a [`PumpScenario`] under a given [`Uuid`].
+    ///
+    /// Unlike [`add_pump_scenario`](Self::add_pump_scenario) this does not mint a new id, which is
+    /// what restoring a removed scenario needs: anything else referring to that scenario keeps
+    /// resolving. Same role as [`insert_analyzer`](Self::insert_analyzer).
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - the identity the scenario is restored under.
+    /// * `scenario` - the scenario to insert.
+    pub fn insert_pump_scenario(&mut self, id: Uuid, scenario: PumpScenario) {
+        self.pump_scenarios.insert(id, scenario);
+    }
+    /// Remove the [`PumpScenario`] with the given [`Uuid`] from this [`OpmDocument`].
+    ///
+    /// Every analyzer running in that scenario stops doing so, since an operating point that no
+    /// longer exists cannot be analyzed. An analyzer left without any scenario runs on the passive
+    /// model again.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - the scenario to remove.
+    ///
+    /// # Returns
+    ///
+    /// The removed scenario, or `None` if there was none with that id.
+    pub fn remove_pump_scenario(&mut self, id: Uuid) -> Option<PumpScenario> {
+        let removed = self.pump_scenarios.shift_remove(&id)?;
+        for analyzer in self.analyzers.values_mut() {
+            analyzer.remove_pump_scenario(id);
+        }
+        Some(removed)
+    }
+    /// Drop the entries of deleted nodes from every [`PumpScenario`] of this [`OpmDocument`].
+    ///
+    /// Scenarios refer to nodes by [`Uuid`] and live beside the model rather than inside it, so
+    /// deleting a node leaves them holding an entry that belongs to nothing. Running this after a
+    /// deletion keeps the operating points consistent with the model they describe.
+    pub fn prune_pump_scenarios(&mut self) {
+        for scenario in self.pump_scenarios.values_mut() {
+            scenario.prune(&self.scenery);
+        }
+    }
+    /// Return the amplifier candidate set of this [`OpmDocument`].
+    ///
+    /// Membership in this set is what marks a node as an amplifier — a hardware fact that does not
+    /// depend on any [`PumpScenario`]. Only candidates can be configured with a [`GainModel`] in a
+    /// scenario at all.
+    #[must_use]
+    pub const fn amplifier_nodes(&self) -> &HashSet<Uuid> {
+        &self.amplifier_nodes
+    }
+    /// Return whether the node with the given [`Uuid`] is an amplifier candidate.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - the node to look up.
+    #[must_use]
+    pub fn is_amplifier_node(&self, id: Uuid) -> bool {
+        self.amplifier_nodes.contains(&id)
+    }
+    /// Mark or unmark the node with the given [`Uuid`] as an amplifier candidate.
+    ///
+    /// Unmarking a node also strips it from every [`PumpScenario`]'s gain-model map, so a node
+    /// cannot stay configured in an operating point while no longer being an amplifier at all — the
+    /// same "no silent configured-but-hidden state" rule [`remove_pump_scenario`](Self::remove_pump_scenario)
+    /// already follows for deleted scenarios.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - the node to mark or unmark.
+    /// * `is_amplifier` - whether the node is an amplifier candidate from now on.
+    pub fn set_is_amplifier_node(&mut self, id: Uuid, is_amplifier: bool) {
+        if is_amplifier {
+            self.amplifier_nodes.insert(id);
+        } else {
+            self.amplifier_nodes.remove(&id);
+            for scenario in self.pump_scenarios.values_mut() {
+                scenario.set_gain_model(id, GainModel::None);
+            }
+        }
+    }
+    /// Drop the entries of deleted nodes from the amplifier candidate set of this [`OpmDocument`].
+    ///
+    /// Candidates refer to nodes by [`Uuid`] and live beside the model rather than inside it, so
+    /// deleting a node leaves an entry behind that belongs to nothing. Running this after a deletion
+    /// keeps the candidate set consistent with the model it describes.
+    pub fn prune_amplifier_nodes(&mut self) {
+        let scenery = &self.scenery;
+        self.amplifier_nodes.retain(|id| scenery.exists(*id));
+    }
+    /// Replace the whole amplifier candidate set at once.
+    ///
+    /// Unlike [`set_is_amplifier_node`](Self::set_is_amplifier_node), this does not strip the
+    /// dropped nodes from any [`PumpScenario`] as a side effect - it is meant for restoring a
+    /// previously captured set wholesale (undo/redo), where the scenarios are restored to their own
+    /// previously captured state by separate commands in the same batch, not re-derived from this
+    /// call.
+    ///
+    /// # Arguments
+    ///
+    /// * `nodes` - the candidate set to install.
+    pub fn set_amplifier_nodes(&mut self, nodes: HashSet<Uuid>) {
+        self.amplifier_nodes = nodes;
+    }
     /// Returns a reference to the scenery of this [`OpmDocument`].
     #[must_use]
     pub const fn scenery(&self) -> &NodeGroup {
@@ -344,52 +609,97 @@ impl OpmDocument {
     pub const fn scenery_mut(&mut self) -> &mut NodeGroup {
         &mut self.scenery
     }
-    /// Returns a reference to the global config of this [`OpmDocument`].
-    #[must_use]
-    #[allow(clippy::missing_const_for_fn)]
-    pub fn global_conf(&self) -> &Mutex<SceneryResources> {
-        &self.global_conf
-    }
-    /// Sets the global config of this [`OpmDocument`].
-    pub fn set_global_conf(&mut self, rsrc: SceneryResources) {
-        self.global_conf = Arc::new(Mutex::new(rsrc));
-        self.scenery
-            .graph_mut()
-            .update_global_config(&Some(self.global_conf.clone()));
-    }
     /// Perform an analysis run of this [`OpmDocument`].
     ///
     /// This function will perform the analysis of the defined analyzers in the order they were added.
+    /// An analyzer that refers to [`PumpScenario`]s is run once per scenario, so it contributes one
+    /// report per operating point; one that refers to none is run once on the passive model.
     /// The results of the analysis will be returned as a vector of [`AnalysisReport`]s.
     ///
     /// # Errors
     ///
-    /// This function will return an error if the individual analyzers fail to perform the analysis.
+    /// This function will return an error if an analyzer refers to a [`PumpScenario`] that does not
+    /// exist, or if the individual analyzers fail to perform the analysis.
     pub fn analyze(&mut self) -> OpmResult<Vec<AnalysisReport>> {
         if self.analyzers.is_empty() {
             info!("No analyzer defined in document. Stopping here.");
             return Ok(vec![]);
         }
+        let runs = self.analysis_runs()?;
         let mut reports = vec![];
-        for ana in self.analyzers.iter().enumerate() {
-            let analyzer_type = &ana.1.1.analyzer_type;
+        for (analyzer_nr, analyzer_type, scenario_name) in runs {
             let analyzer_box = inventory::iter::<AnalyzerRegistration>
                 .into_iter()
-                .find_map(|reg| (reg.builder)(analyzer_type))
+                .find_map(|reg| (reg.builder)(&analyzer_type))
                 .ok_or_else(|| {
                     OpossumError::Other(format!(
                         "No analyzer implementation found for type: {analyzer_type:?}"
                     ))
                 })?;
             let analyzer: &dyn Analyzer = &*analyzer_box;
-            info!("Analysis #{}", ana.0);
+            match &scenario_name {
+                Some(name) => info!("Analysis #{analyzer_nr}, pump scenario '{name}'"),
+                None => info!("Analysis #{analyzer_nr}"),
+            }
             analyzer.analyze(&mut self.scenery)?;
-            info!("Generating report #{}", ana.0);
-            reports.push(analyzer.report(&self.scenery)?);
+            info!("Generating report #{analyzer_nr}");
+            let mut report = analyzer.report(&self.scenery)?;
+            if let Some(name) = &scenario_name {
+                // The operating point belongs on the report the same way the kind of analysis does:
+                // it is what distinguishes two otherwise identical reports of the same model.
+                report.set_analysis_type(&format!("{} - {name}", report.analysis_type()));
+            }
+            reports.push(report);
+            // Every run starts from the same state, so this has to happen between two scenarios of
+            // one analyzer just as much as between two analyzers.
             self.scenery.clear_edges();
             self.scenery.reset_data();
         }
         Ok(reports)
+    }
+    /// Expand the analyzers of this [`OpmDocument`] into the individual runs to be performed.
+    ///
+    /// An analyzer contributes one run per [`PumpScenario`] it refers to, or a single passive run if
+    /// it refers to none. Resolving the scenarios here rather than while analyzing means a reference
+    /// to a scenario that does not exist is reported *before* the first ray is traced, instead of
+    /// after a long analysis has already run.
+    ///
+    /// # Returns
+    ///
+    /// One entry per run: the number of the analyzer it belongs to, the analyzer to build, and the
+    /// name of the operating point it runs in (if any). The entries are owned, so the document is
+    /// free to be analyzed while the plan is walked.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if an analyzer refers to a [`PumpScenario`] that does not
+    /// exist in this document.
+    fn analysis_runs(&self) -> OpmResult<Vec<(usize, AnalyzerType, Option<String>)>> {
+        let mut runs = Vec::new();
+        for (analyzer_nr, (_, analyzer_info)) in self.analyzers.iter().enumerate() {
+            if analyzer_info.pump_scenarios.is_empty() {
+                runs.push((analyzer_nr, analyzer_info.analyzer_type.clone(), None));
+                continue;
+            }
+            for scenario_id in &analyzer_info.pump_scenarios {
+                let scenario = self.pump_scenarios.get(scenario_id).ok_or_else(|| {
+                    OpossumError::OpmDocument(format!(
+                        "analysis #{analyzer_nr} refers to the pump scenario {scenario_id}, \
+                         which does not exist"
+                    ))
+                })?;
+                // The operating point rides along in the analyzer's own configuration, which is
+                // what reaches the components during the run.
+                let mut analyzer_type = analyzer_info.analyzer_type.clone();
+                analyzer_type.set_active_pump_scenario(Some(scenario.clone()));
+                runs.push((
+                    analyzer_nr,
+                    analyzer_type,
+                    Some(scenario.name().to_string()),
+                ));
+            }
+        }
+        Ok(runs)
     }
     /// Returns a mutable reference to the analyzers of this [`OpmDocument`].
     pub const fn analyzers_mut(&mut self) -> &mut IndexMap<Uuid, AnalyzerInfo> {
@@ -439,16 +749,18 @@ mod test {
             ghostfocus::GhostFocusAnalyzer, raytrace::RayTracingAnalyzer,
         },
         core_optics::{Alignable, OpticNode, node_attr::HasNodeAttr},
-        degree, joule, millimeter, nanometer,
+        degree,
+        gain::{ConstGain, GainModel},
+        joule,
+        material::MATERIAL,
+        millimeter, nanometer,
         nodes::round_collimated_ray_builder,
         prelude::*,
         refractive_index::RefrIndexConst,
-        utils::test_helper::test_helper::check_logs,
+        utils::test_helper::test_helper::{check_logs, metered_energy},
     };
-    use std::{
-        path::PathBuf,
-        sync::{Arc, Mutex},
-    };
+    use approx::assert_relative_eq;
+    use std::path::PathBuf;
     use tempfile::NamedTempFile;
 
     #[test]
@@ -464,6 +776,348 @@ mod test {
         let document = OpmDocument::default();
         assert_eq!(document.opm_file_version, env!("OPM_FILE_VERSION"));
         assert!(document.analyzers.is_empty());
+        assert!(document.pump_scenarios.is_empty());
+    }
+    #[test]
+    fn pump_scenario_crud() {
+        let mut document = OpmDocument::default();
+        let id = document.add_pump_scenario("full power");
+        assert_eq!(document.pump_scenarios().len(), 1);
+        assert_eq!(
+            document.pump_scenario(id).map(PumpScenario::name),
+            Some("full power")
+        );
+        assert!(document.pump_scenario(Uuid::new_v4()).is_none());
+
+        document
+            .pump_scenario_mut(id)
+            .expect("the scenario just added must be there")
+            .set_name("half power");
+        assert_eq!(
+            document.pump_scenario(id).map(PumpScenario::name),
+            Some("half power")
+        );
+
+        let removed = document.remove_pump_scenario(id);
+        assert_eq!(removed.as_ref().map(PumpScenario::name), Some("half power"));
+        assert!(document.pump_scenarios().is_empty());
+        assert!(document.remove_pump_scenario(id).is_none());
+
+        // Restoring a scenario keeps its identity, so anything referring to it still resolves.
+        document.insert_pump_scenario(id, removed.expect("the scenario was removed above"));
+        assert_eq!(
+            document.pump_scenario(id).map(PumpScenario::name),
+            Some("half power")
+        );
+    }
+    #[test]
+    fn pruning_follows_deleted_nodes_in_every_scenario() -> OpmResult<()> {
+        let mut document = OpmDocument::default();
+        let lens_id = document.scenery_mut().add_node(Lens::default())?;
+        let deleted_id = document.scenery_mut().add_node(Lens::default())?;
+        let gain = GainModel::Const(ConstGain::new(2.0)?);
+        for name in ["full power", "half power"] {
+            let scenario_id = document.add_pump_scenario(name);
+            let scenario = document
+                .pump_scenario_mut(scenario_id)
+                .expect("the scenario just added must be there");
+            scenario.set_gain_model(lens_id, gain);
+            scenario.set_gain_model(deleted_id, gain);
+        }
+        document.scenery_mut().delete_node(deleted_id)?;
+        document.prune_pump_scenarios();
+
+        for scenario in document.pump_scenarios().values() {
+            assert_eq!(scenario.gain_model(lens_id), gain);
+            assert_eq!(scenario.gain_model(deleted_id), GainModel::None);
+        }
+        Ok(())
+    }
+    /// A document carries its operating points, so they have to survive the way to a file and back.
+    #[test]
+    fn pump_scenarios_survive_a_file_round_trip() -> OpmResult<()> {
+        let mut document = OpmDocument::default();
+        let lens_id = document.scenery_mut().add_node(Lens::default())?;
+        let scenario_id = document.add_pump_scenario("full power");
+        let gain = GainModel::Const(ConstGain::new(2.0)?);
+        document
+            .pump_scenario_mut(scenario_id)
+            .expect("the scenario just added must be there")
+            .set_gain_model(lens_id, gain);
+
+        let serialized = document.to_opm_file_string()?;
+        let reloaded = OpmDocument::from_string(&serialized)?;
+        assert_eq!(
+            reloaded
+                .pump_scenario(scenario_id)
+                .map(|scenario| scenario.gain_model(lens_id)),
+            Some(gain)
+        );
+        Ok(())
+    }
+    /// A passive document must not gain a `pump_scenarios` entry it never asked for.
+    #[test]
+    fn a_document_without_scenarios_writes_none() -> OpmResult<()> {
+        let document = OpmDocument::default();
+        assert!(!document.to_opm_file_string()?.contains("pump_scenarios"));
+        Ok(())
+    }
+    #[test]
+    fn amplifier_node_candidacy_roundtrip() -> OpmResult<()> {
+        let mut document = OpmDocument::default();
+        let lens_id = document.scenery_mut().add_node(Lens::default())?;
+        assert!(!document.is_amplifier_node(lens_id));
+        assert!(document.amplifier_nodes().is_empty());
+
+        document.set_is_amplifier_node(lens_id, true);
+        assert!(document.is_amplifier_node(lens_id));
+        assert_eq!(document.amplifier_nodes(), &HashSet::from([lens_id]));
+
+        document.set_is_amplifier_node(lens_id, false);
+        assert!(!document.is_amplifier_node(lens_id));
+        assert!(document.amplifier_nodes().is_empty());
+        Ok(())
+    }
+    /// Unmarking a node as an amplifier candidate must not leave it configured in some scenario the
+    /// unmarking call did not happen to touch - otherwise a node could amplify in a scenario while
+    /// no longer counting as an amplifier at all.
+    #[test]
+    fn unmarking_a_candidate_wipes_its_gain_model_in_every_scenario() -> OpmResult<()> {
+        let mut document = OpmDocument::default();
+        let lens_id = document.scenery_mut().add_node(Lens::default())?;
+        document.set_is_amplifier_node(lens_id, true);
+        let gain = GainModel::Const(ConstGain::new(2.0)?);
+        let full_power = document.add_pump_scenario("full power");
+        let half_power = document.add_pump_scenario("half power");
+        document
+            .pump_scenario_mut(full_power)
+            .expect("the scenario just added must be there")
+            .set_gain_model(lens_id, gain);
+        document
+            .pump_scenario_mut(half_power)
+            .expect("the scenario just added must be there")
+            .set_gain_model(lens_id, gain);
+
+        document.set_is_amplifier_node(lens_id, false);
+
+        for scenario_id in [full_power, half_power] {
+            assert_eq!(
+                document
+                    .pump_scenario(scenario_id)
+                    .map(|scenario| scenario.gain_model(lens_id)),
+                Some(GainModel::None)
+            );
+        }
+        Ok(())
+    }
+    /// The whole-set replace is what undo/redo restores a previously captured candidate set with -
+    /// unlike `set_is_amplifier_node`, it must not touch any scenario as a side effect, since a
+    /// restore batch carries its own scenario-restoring commands separately.
+    #[test]
+    fn set_amplifier_nodes_replaces_the_whole_set_without_touching_scenarios() -> OpmResult<()> {
+        let mut document = OpmDocument::default();
+        let lens_id = document.scenery_mut().add_node(Lens::default())?;
+        let scenario_id = document.add_pump_scenario("full power");
+        let gain = GainModel::Const(ConstGain::new(2.0)?);
+        document
+            .pump_scenario_mut(scenario_id)
+            .expect("the scenario just added must be there")
+            .set_gain_model(lens_id, gain);
+
+        document.set_amplifier_nodes(HashSet::new());
+        assert!(document.amplifier_nodes().is_empty());
+        assert_eq!(
+            document
+                .pump_scenario(scenario_id)
+                .map(|scenario| scenario.gain_model(lens_id)),
+            Some(gain),
+            "a whole-set replace must not wipe any scenario's gain model"
+        );
+
+        document.set_amplifier_nodes(HashSet::from([lens_id]));
+        assert_eq!(document.amplifier_nodes(), &HashSet::from([lens_id]));
+        Ok(())
+    }
+    #[test]
+    fn prune_amplifier_nodes_drops_deleted_node_entries() -> OpmResult<()> {
+        let mut document = OpmDocument::default();
+        let lens_id = document.scenery_mut().add_node(Lens::default())?;
+        let deleted_id = document.scenery_mut().add_node(Lens::default())?;
+        document.set_is_amplifier_node(lens_id, true);
+        document.set_is_amplifier_node(deleted_id, true);
+        document.scenery_mut().delete_node(deleted_id)?;
+
+        document.prune_amplifier_nodes();
+
+        assert!(document.is_amplifier_node(lens_id));
+        assert!(!document.is_amplifier_node(deleted_id));
+        Ok(())
+    }
+    /// A document carries its amplifier candidates, so they have to survive the way to a file and
+    /// back.
+    #[test]
+    fn amplifier_nodes_survive_a_file_round_trip() -> OpmResult<()> {
+        let mut document = OpmDocument::default();
+        let lens_id = document.scenery_mut().add_node(Lens::default())?;
+        document.set_is_amplifier_node(lens_id, true);
+
+        let serialized = document.to_opm_file_string()?;
+        let reloaded = OpmDocument::from_string(&serialized)?;
+        assert!(reloaded.is_amplifier_node(lens_id));
+        Ok(())
+    }
+    /// A document without any candidates must not gain an `amplifier_nodes` entry it never asked
+    /// for, matching the same guarantee `pump_scenarios` already gives.
+    #[test]
+    fn a_document_without_amplifier_nodes_writes_none() -> OpmResult<()> {
+        let document = OpmDocument::default();
+        assert!(!document.to_opm_file_string()?.contains("amplifier_nodes"));
+        Ok(())
+    }
+    /// A document that can be analyzed: one source feeding one energy meter, plus one analyzer.
+    ///
+    /// # Returns
+    ///
+    /// The document and the [`Uuid`] of its analyzer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the model cannot be assembled.
+    fn document_with_one_analyzer() -> OpmResult<(OpmDocument, Uuid)> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let meter = scenery.add_node(EnergyMeter::default())?;
+        scenery.connect_nodes(source, "output_1", meter, "input_1", millimeter!(10.0))?;
+        let mut document = OpmDocument::new(scenery);
+        let mut config = EnergyConfig::default();
+        config.map_source(
+            source,
+            EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
+                vec![(nanometer!(1053.0), joule!(1.0))],
+                nanometer!(1.0),
+            )?),
+        );
+        let analyzer_id = document.add_analyzer(AnalyzerType::Energy(config));
+        Ok((document, analyzer_id))
+    }
+    /// Analyze a document and return the analysis type of every report it produced.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the analysis fails.
+    fn analysis_types_of(document: &mut OpmDocument) -> OpmResult<Vec<String>> {
+        Ok(document
+            .analyze()?
+            .iter()
+            .map(|report| report.analysis_type().to_string())
+            .collect())
+    }
+    /// Without an operating point nothing changes: one analyzer, one report, same title as ever.
+    #[test]
+    fn an_analyzer_without_scenarios_is_run_once() -> OpmResult<()> {
+        let (mut document, _) = document_with_one_analyzer()?;
+        assert_eq!(analysis_types_of(&mut document)?, vec!["Energy Analysis"]);
+        Ok(())
+    }
+    /// The point of scenarios: one model, several operating points, one report each.
+    #[test]
+    fn an_analyzer_is_run_once_per_scenario() -> OpmResult<()> {
+        let (mut document, analyzer_id) = document_with_one_analyzer()?;
+        let full_power = document.add_pump_scenario("full power");
+        let half_power = document.add_pump_scenario("half power");
+        document
+            .analyzer_mut(analyzer_id)
+            .expect("the analyzer just added must be there")
+            .set_pump_scenarios(vec![full_power, half_power]);
+        assert_eq!(
+            analysis_types_of(&mut document)?,
+            vec![
+                "Energy Analysis - full power",
+                "Energy Analysis - half power"
+            ]
+        );
+        Ok(())
+    }
+    /// A scenario that is gone must not be mistaken for "no scenario": that would silently report a
+    /// passive run under the name of an operating point nobody defined.
+    #[test]
+    fn an_analyzer_pointing_at_a_missing_scenario_is_an_error() -> OpmResult<()> {
+        let (mut document, analyzer_id) = document_with_one_analyzer()?;
+        let missing_id = Uuid::new_v4();
+        document
+            .analyzer_mut(analyzer_id)
+            .expect("the analyzer just added must be there")
+            .set_pump_scenarios(vec![missing_id]);
+        let message = document.analyze().unwrap_err().to_string();
+        assert!(
+            message.contains(&missing_id.to_string()),
+            "the error has to name the missing scenario, got: {message}"
+        );
+        Ok(())
+    }
+    /// The whole point of scenarios: the same model, analyzed in two operating points, gives two
+    /// different results - here a lens amplifying twice as strongly in one of them.
+    #[test]
+    fn two_scenarios_give_two_different_results() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let lens = scenery.add_node(Lens::default())?;
+        let meter = scenery.add_node(EnergyMeter::default())?;
+        scenery.connect_nodes(source, "output_1", lens, "input_1", millimeter!(10.0))?;
+        scenery.connect_nodes(lens, "output_1", meter, "input_1", millimeter!(10.0))?;
+        let mut document = OpmDocument::new(scenery);
+        let mut config = EnergyConfig::default();
+        config.map_source(
+            source,
+            EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
+                vec![(nanometer!(1053.0), joule!(1.0))],
+                nanometer!(1.0),
+            )?),
+        );
+        let analyzer_id = document.add_analyzer(AnalyzerType::Energy(config));
+
+        let mut scenario_ids = Vec::new();
+        for (name, gain) in [("full power", 4.0), ("half power", 2.0)] {
+            let scenario_id = document.add_pump_scenario(name);
+            document
+                .pump_scenario_mut(scenario_id)
+                .expect("the scenario just added must be there")
+                .set_gain_model(lens, GainModel::Const(ConstGain::new(gain)?));
+            scenario_ids.push(scenario_id);
+        }
+        document
+            .analyzer_mut(analyzer_id)
+            .expect("the analyzer just added must be there")
+            .set_pump_scenarios(scenario_ids);
+
+        let reports = document.analyze()?;
+        assert_eq!(reports.len(), 2);
+        let full_power = metered_energy(&reports[0])?;
+        let half_power = metered_energy(&reports[1])?;
+        assert_relative_eq!(full_power / half_power, 2.0, epsilon = 1e-12);
+        Ok(())
+    }
+    /// Deleting an operating point must not leave an analyzer pointing at it.
+    #[test]
+    fn removing_a_scenario_stops_the_analyzers_running_it() -> OpmResult<()> {
+        let (mut document, analyzer_id) = document_with_one_analyzer()?;
+        let full_power = document.add_pump_scenario("full power");
+        let half_power = document.add_pump_scenario("half power");
+        document
+            .analyzer_mut(analyzer_id)
+            .expect("the analyzer just added must be there")
+            .set_pump_scenarios(vec![full_power, half_power]);
+
+        assert!(document.remove_pump_scenario(full_power).is_some());
+        assert_eq!(
+            document.analyzer(analyzer_id)?.pump_scenarios(),
+            vec![half_power]
+        );
+        assert_eq!(
+            analysis_types_of(&mut document)?,
+            vec!["Energy Analysis - half power"]
+        );
+        Ok(())
     }
 
     #[test]
@@ -587,7 +1241,7 @@ mod test {
         // Verify that nodes have their full Material struct restored for calculation
         for node_ref in reloaded_doc.scenery().nodes() {
             let node = node_ref.optical_ref.lock_opm()?;
-            let prop = node.node_attr().get_property("material")?;
+            let prop = node.node_attr().get_property(MATERIAL)?;
 
             // Unpack the AssetRef::Inline to verify the material is correctly loaded into RAM
             if let Proptype::Material(AssetRef::Inline(mat)) = prop {
@@ -695,7 +1349,6 @@ mod test {
         scenery.connect_nodes(i_14, "output_1", i_15, "input_1", millimeter!(50.0))?;
         scenery.connect_nodes(i_15, "output_1", i_16, "input_1", millimeter!(50.0))?;
 
-        scenery.set_global_conf(Some(Arc::new(Mutex::new(SceneryResources::default()))));
         let ray_builder = round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1)?;
         let mut config = RayTraceConfig::default();
         config.map_source(i_0, ray_builder.clone());
@@ -720,6 +1373,10 @@ mod test {
     /// field that gets dropped, reordered non-deterministically, or misparsed during the load -> save
     /// round trip would show up as a diff here instead of silently corrupting a user's model on next
     /// save (see issue #1144, where a nested group's mapped ports vanished this way).
+    ///
+    /// Note that this passes even with the materials leaking away, because it writes a *freshly
+    /// loaded* document only once - which is exactly why `saving_twice_keeps_the_materials` below
+    /// exists next to it.
     #[test]
     fn all_nodes_roundtrip_is_stable() -> OpmResult<()> {
         let original = fs::read_to_string("./files_for_testing/opm/all_nodes_roundtrip.opm")
@@ -733,6 +1390,44 @@ mod test {
             "loading and re-saving the fixture must reproduce it byte-for-byte; if this is an \
              intentional schema change, regenerate the fixture with `cargo run -p opossum_core \
              --example all_nodes_roundtrip_fixture` and re-check it in"
+        );
+        Ok(())
+    }
+    /// Writing a document must not consume the materials it is made of.
+    ///
+    /// `to_opm_file_string` prepares a *clone* for serialization, but an `OpticRef` is an
+    /// `Arc<Mutex<..>>`: a cloned document shares its very nodes with the original. Rewriting their
+    /// material property to a uuid reference therefore reaches through into the live document, while
+    /// the lookup table those uuids point into is filled on the throwaway clone alone. The second
+    /// write then finds no inline material left to embed and produces a file whose references
+    /// resolve to nothing.
+    #[test]
+    fn saving_twice_keeps_the_materials() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let lens_id = scenery.add_node(Lens::default())?;
+        let document = OpmDocument::new(scenery);
+
+        let first = document.to_opm_file_string()?;
+        let second = document.to_opm_file_string()?;
+        assert_eq!(
+            first, second,
+            "writing the same document twice must produce the same file"
+        );
+        // ... and the file it produces has to be readable again.
+        OpmDocument::from_string(&second)?;
+
+        // The cause, pinned directly: writing must leave the live node's material where an analysis
+        // looks for it. `Volumetric::material` reads `AssetRef::Inline` and nothing else, so a node
+        // left holding a bare uuid reference would fail to trace with "cannot read material" - a
+        // second, quieter symptom of the same slip.
+        let node_ref = document.scenery().node(lens_id)?;
+        let node = node_ref.optical_ref.lock_opm()?;
+        assert!(
+            matches!(
+                node.node_attr().get_property(MATERIAL),
+                Ok(Proptype::Material(AssetRef::Inline(_)))
+            ),
+            "saving must not leave the node holding a bare material reference"
         );
         Ok(())
     }
@@ -810,9 +1505,18 @@ mod test {
         ),
     },
     global: (
-        ambient_refr_index: Const(
-            refractive_index: 1.0,
-        ),
+        ambient_material: {
+            "schema_version": 1,
+            "id": "6c30ef98-7380-4477-bc91-a5a1a407fec7",
+            "version": 0,
+            "name": "Custom Material",
+            "optical": (
+                refractive_index: Const(
+                    refractive_index: 1.0,
+                ),
+                absorption: r#None,
+            ),
+        },
     ),
 )"#;
 
@@ -837,6 +1541,74 @@ mod test {
             ],
         );
 
+        Ok(())
+    }
+    /// Regression test for the `refractive index` -> `material` property rename.
+    ///
+    /// A node is rebuilt from its default and then updated with the properties read from the file.
+    /// Since `Properties::update` silently skips keys the default node does not know, an `.opm`
+    /// written before the rename would come back with the *default* material (n = 1.5) instead of
+    /// the index it was saved with — a data loss without any error message. Without the migration
+    /// hook in `Properties::deserialize` this test fails on the very first assertion.
+    #[test]
+    fn legacy_refractive_index_is_migrated_to_material() -> OpmResult<()> {
+        // An `.opm` as written by OPOSSUM <= 0.7.2: a lens with a bare `refractive index` property
+        // whose value (2.0) differs from the lens default (1.5).
+        let ron_data = r#"#![enable(unwrap_variant_newtypes)]
+(
+    opm_file_version: "0",
+    scenery: {
+        "node_type": "group",
+        "name": "test",
+        "uuid": "6f0d3b1c-3c1a-4c8e-9b3e-1f2a3b4c5d6e",
+        "graph": (
+            nodes: [
+                {
+                    "node_type": "lens",
+                    "name": "old lens",
+                    "uuid": "1a2b3c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d",
+                    "props": {
+                        "refractive index": RefractiveIndex(Const(refractive_index: 2.0)),
+                    },
+                },
+            ],
+            edges: [],
+        ),
+    },
+    global: (
+        ambient_refr_index: Const(
+            refractive_index: 1.0,
+        ),
+    ),
+)"#;
+        let lens_id = Uuid::parse_str("1a2b3c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d")
+            .map_err(|e| OpossumError::Other(e.to_string()))?;
+        let refractive_index_of = |document: &OpmDocument| -> OpmResult<f64> {
+            let (lens, _) = document.scenery().node_recursive(lens_id)?;
+            // The lock is released at the end of this statement, the material is owned from here on.
+            let property = lens
+                .optical_ref
+                .lock_opm()?
+                .node_attr()
+                .get_property(MATERIAL)
+                .cloned();
+            let Ok(Proptype::Material(AssetRef::Inline(material))) = property else {
+                return Err(OpossumError::Other(
+                    "lens has no embedded material property".into(),
+                ));
+            };
+            material.get_refractive_index(nanometer!(1000.0))
+        };
+
+        // The index of the pre-rename file must survive the load instead of falling back to the
+        // lens default of 1.5.
+        let document = OpmDocument::from_string(ron_data)?;
+        assert_relative_eq!(refractive_index_of(&document)?, 2.0);
+
+        // Saving moves the migrated material into `embedded_materials` and leaves an `AssetRef::Id`
+        // behind; loading hydrates it again. The value has to survive that detour as well.
+        let reloaded = OpmDocument::from_string(&document.to_opm_file_string()?)?;
+        assert_relative_eq!(refractive_index_of(&reloaded)?, 2.0);
         Ok(())
     }
     #[test]
@@ -869,9 +1641,18 @@ mod test {
         ),
     },
     global: (
-        ambient_refr_index: Const(
-            refractive_index: 1.0,
-        ),
+        ambient_material: {
+            "schema_version": 1,
+            "id": "6c30ef98-7380-4477-bc91-a5a1a407fec7",
+            "version": 0,
+            "name": "Custom Material",
+            "optical": (
+                refractive_index: Const(
+                    refractive_index: 1.0,
+                ),
+                absorption: r#None,
+            ),
+        },
     ),
 )"#;
 
@@ -946,9 +1727,18 @@ mod test {
         ),
     },
     global: (
-        ambient_refr_index: Const(
-            refractive_index: 1.0,
-        ),
+        ambient_material: {
+            "schema_version": 1,
+            "id": "6c30ef98-7380-4477-bc91-a5a1a407fec7",
+            "version": 0,
+            "name": "Custom Material",
+            "optical": (
+                refractive_index: Const(
+                    refractive_index: 1.0,
+                ),
+                absorption: r#None,
+            ),
+        },
     ),
 )"#;
 
@@ -1017,5 +1807,115 @@ mod test {
         let new_position = Point2::new(3.0, 4.0);
         at.set_gui_position(Some(new_position));
         assert_eq!(at.gui_position(), Some(new_position))
+    }
+    #[test]
+    fn test_repeated_serialization_preserves_embedded_materials() -> OpmResult<()> {
+        let material_id = Uuid::new_v4();
+        let const_refr = RefrIndexConst::new(1.5)?;
+        let material = Material::new_for_test(material_id, 1, "N-BK7 Test", const_refr.into());
+
+        let mut scenery = NodeGroup::default();
+        let lens = Lens::new(
+            "Test Lens",
+            millimeter!(100.0),
+            millimeter!(-100.0),
+            millimeter!(10.0),
+            material,
+        )?;
+        scenery.add_node(lens)?;
+
+        let doc = OpmDocument::new(scenery);
+
+        // First serialization
+        let first_ron = doc.to_opm_file_string()?;
+        assert!(
+            first_ron.contains("embedded_materials:"),
+            "First serialization must contain embedded_materials"
+        );
+
+        // Second serialization on the same in-memory document instance
+        let second_ron = doc.to_opm_file_string()?;
+        assert!(
+            second_ron.contains("embedded_materials:"),
+            "Second serialization must still contain embedded_materials"
+        );
+
+        // Ensure the second serialized document can be reloaded without missing material errors
+        let reloaded_doc = OpmDocument::from_string(&second_ron)?;
+        assert_eq!(
+            reloaded_doc.embedded_materials.len(),
+            1,
+            "Reloaded document must contain the resolved material"
+        );
+
+        Ok(())
+    }
+    #[test]
+    fn test_corrupt_node_property_falls_back_to_default_and_warns() -> OpmResult<()> {
+        // RON data with an illegal variant "ength(0.01)" instead of "Length(0.01)"
+        let ron_data = r#"#![enable(unwrap_variant_newtypes)]
+(
+    opm_file_version: "0",
+    scenery: {
+        "node_type": "group",
+        "name": "test",
+        "uuid": "131024b9-f447-476d-ace2-b2c027ba0ef3",
+        "props": {
+            "expand view": Bool(false),
+        },
+        "graph": (
+            nodes: [
+                {
+                    "node_type": "paraxial surface",
+                    "name": "paraxial surface",
+                    "uuid": "74e7f1d3-2315-4479-9649-21afb3a18e3a",
+                    "props": {
+                        "focal length": ength(0.01),
+                    },
+                    "gui_position": Some(-65.0, -40.17220926998195),
+                },
+            ],
+            edges: [],
+        ),
+    },
+    global: (
+         ambient_material: {
+            "schema_version": 1,
+            "id": "6c30ef98-7380-4477-bc91-a5a1a407fec7",
+            "version": 0,
+            "name": "Vaccumm",
+            "optical": (
+                refractive_index: Const(
+                    refractive_index: 1.0,
+                ),
+                absorption: r#None,
+            ),
+        },
+    ),
+)"#;
+
+        testing_logger::setup();
+
+        // Loading must succeed without skipping the node
+        let doc = OpmDocument::from_string(ron_data)?;
+
+        // The node must still be present in the graph
+        assert_eq!(doc.scenery().nodes().len(), 1);
+
+        // Verify that the focal length property was kept at its default value
+        let node_ref = &doc.scenery().nodes()[0];
+        let node = node_ref.optical_ref.lock_opm()?;
+        let focal_length_prop = node.node_attr().get_property("focal length")?;
+
+        // Ensure it is a valid Length proptype
+        assert!(matches!(focal_length_prop, Proptype::Length(_)));
+
+        // Verify that the warning was logged
+        check_logs(
+            log::Level::Warn,
+            vec!["Skipping property 'focal length' that failed to parse; keeping default value."],
+        );
+
+        Ok(())
     }
 }

@@ -1,7 +1,6 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
-
 mod angle_editor;
 mod bool_editor;
+mod clear_aperture_editor;
 mod curvature_editor;
 mod f64_editor;
 mod filter_type_editor;
@@ -11,7 +10,7 @@ mod isometry_option_editor;
 mod length_editor;
 mod length_option_editor;
 mod linear_density_editor;
-mod refractive_index_editor;
+mod material_property_editor;
 mod splitter_type_editor;
 mod string_editor;
 mod vec2_editor;
@@ -21,14 +20,14 @@ use crate::components::node_editor::{
     accordion::{AccordionItem, content_id_for_panel},
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
     optical_node_editor::properties_editor::{
-        angle_editor::AngleEditor, bool_editor::BoolEditor, curvature_editor::CurvatureEditor,
+        angle_editor::AngleEditor, bool_editor::BoolEditor,
+        clear_aperture_editor::ClearApertureEditor, curvature_editor::CurvatureEditor,
         f64_editor::F64Editor, filter_type_editor::FilterTypeEditor,
         fluence_estimator_editor::FluenceEstimatorEditor, i32_editor::I32Editor,
         isometry_option_editor::IsometryOptionEditor, length_editor::LengthEditor,
         length_option_editor::LengthOptionEditor, linear_density_editor::LinearDensityEditor,
-        refractive_index_editor::RefractiveIndexPropertyEditor,
-        splitter_type_editor::SplitterTypeEditor, string_editor::StringEditor,
-        vec2_editor::Vec2Editor, vec3_editor::Vec3Editor,
+        material_property_editor::MaterialPropertyEditor, splitter_type_editor::SplitterTypeEditor,
+        string_editor::StringEditor, vec2_editor::Vec2Editor, vec3_editor::Vec3Editor,
     },
 };
 use dioxus::prelude::*;
@@ -158,6 +157,7 @@ fn get_primitive_editor(
     }
 }
 
+/// Editors for properties describing an optical behaviour.
 fn get_optical_editor(
     node_id: ReadSignal<Uuid>,
     property: &Property,
@@ -166,6 +166,15 @@ fn get_optical_editor(
     readonly: bool,
 ) -> Option<Element> {
     match property.prop().clone() {
+        Proptype::Material(material_ref) => Some(rsx! {
+            MaterialPropertyEditor {
+                node_id,
+                material_ref,
+                property_key,
+                on_change,
+                readonly,
+            }
+        }),
         Proptype::SplittingConfigBuilder(splitting_config_builder) => Some(rsx! {
             SplitterTypeEditor {
                 node_id,
@@ -203,15 +212,6 @@ fn get_optical_editor(
             }
         }),
         Proptype::LightDataBuilder(_light_data_builder) => Some(rsx! { "no longer available" }),
-        Proptype::RefractiveIndex(ref_ind_type) => Some(rsx! {
-            RefractiveIndexPropertyEditor {
-                node_id,
-                ref_ind_type,
-                property_key,
-                on_change,
-                readonly,
-            }
-        }),
         _ => None,
     }
 }
@@ -264,6 +264,17 @@ fn get_geometric_editor(
             AngleEditor {
                 node_id,
                 angle,
+                property_key,
+                on_change,
+                readonly,
+            }
+        }),
+        // The clear aperture is the transversal extent of a volume node's medium, i.e. a geometric
+        // size - unlike a port aperture, which masks the light passing a surface.
+        Proptype::Aperture(aperture) => Some(rsx! {
+            ClearApertureEditor {
+                node_id,
+                aperture,
                 property_key,
                 on_change,
                 readonly,

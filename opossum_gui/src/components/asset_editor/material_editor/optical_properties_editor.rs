@@ -1,9 +1,12 @@
 use dioxus::prelude::*;
-use opossum_core::{material::OpticalProperties, refractive_index::RefractiveIndexType};
+use opossum_core::{
+    absorption::absorption_model::AbsorptionModel, material::OpticalProperties,
+    refractive_index::RefractiveIndexType,
+};
 
-// Adjust import path according to your module layout
+// Adjust import path according to your module layout if needed
 use crate::components::{
-    inputs::RefractiveIndexEditor,
+    inputs::{RefractiveIndexEditor, absorption_editor::AbsorptionEditor},
     primitives::card::{Card, CardContent, CardHeader, CardTitle},
 };
 
@@ -12,13 +15,13 @@ use crate::components::{
 pub enum OpticalPropertiesChangeAction {
     /// The refractive index model or its coefficients changed.
     RefractiveIndex(RefractiveIndexType),
-    /// The absorption coefficient changed (None if cleared).
-    Absorption(Option<f64>),
+    /// The absorption model or its parameters changed.
+    Absorption(AbsorptionModel),
 }
 
 impl OpticalPropertiesChangeAction {
     /// Applies the change action directly to the given `OpticalProperties`.
-    pub const fn apply(self, optical: &mut opossum_core::material::OpticalProperties) {
+    pub fn apply(self, optical: &mut opossum_core::material::OpticalProperties) {
         match self {
             Self::RefractiveIndex(new_model) => optical.refractive_index = new_model,
             Self::Absorption(abs) => optical.absorption = abs,
@@ -33,23 +36,10 @@ pub struct OpticalPropertiesChangeEvent {
     pub action: OpticalPropertiesChangeAction,
 }
 
-/// Helper function to parse an optional floating-point number from a string.
-/// Returns `Some(None)` if the input is empty (representing a cleared field).
-/// Returns `Some(Some(value))` if the input was successfully parsed into an f64.
-/// Returns `None` if the parsing fails (e.g., due to invalid characters).
-#[allow(clippy::option_option)]
-fn parse_optional_f64(val: &str) -> Option<Option<f64>> {
-    let trimmed = val.trim();
-    if trimmed.is_empty() {
-        Some(None)
-    } else {
-        trimmed.parse::<f64>().ok().map(Some)
-    }
-}
-
 /// Editor component for optical material properties.
 ///
-/// Embeds the `RefractiveIndexEditor` and provides inputs for optional absorption.
+/// Embeds both `RefractiveIndexEditor` and `AbsorptionEditor` to manage
+/// dispersion and absorption characteristics of optical media.
 #[component]
 pub fn OpticalPropertiesEditor(
     /// Read-only signal containing the current optical properties.
@@ -68,27 +58,21 @@ pub fn OpticalPropertiesEditor(
 ) -> Element {
     info!("🔄 Render: OpticalPropertiesEditor");
 
-    // Derive a memoized read-signal for the refractive index model
+    // 1. Memoized signals for both sub-models
     let ref_ind_memo = use_memo(move || optical.read().refractive_index.clone());
+    let absorption_memo = use_memo(move || optical.read().absorption.clone());
 
-    // Format current absorption value for display
-    let absorption_str = optical
-        .read()
-        .absorption
-        .map_or_else(String::new, |val| format!("{val}"));
-
+    // 2. Event handlers forwarding changes to the parent
     let handle_ref_ind_change = use_callback(move |new_model: RefractiveIndexType| {
         on_change.call(OpticalPropertiesChangeEvent {
             action: OpticalPropertiesChangeAction::RefractiveIndex(new_model),
         });
     });
 
-    let handle_absorption_change = use_callback(move |e: Event<FormData>| {
-        if let Some(opt_absorption) = parse_optional_f64(&e.value()) {
-            on_change.call(OpticalPropertiesChangeEvent {
-                action: OpticalPropertiesChangeAction::Absorption(opt_absorption),
-            });
-        }
+    let handle_absorption_change = use_callback(move |new_model: AbsorptionModel| {
+        on_change.call(OpticalPropertiesChangeEvent {
+            action: OpticalPropertiesChangeAction::Absorption(new_model),
+        });
     });
 
     rsx! {
@@ -97,7 +81,7 @@ pub fn OpticalPropertiesEditor(
                 CardTitle { "Optical properties" }
             }
             CardContent {
-                // Section 1: Embedded Refractive Index Editor
+                // Section 1: Refractive Index & Dispersion Model
                 div { class: "mb-4",
                     h6 { class: "fw-bold text-secondary mb-2", "Dispersion & Refractive Index" }
                     RefractiveIndexEditor {
@@ -107,29 +91,17 @@ pub fn OpticalPropertiesEditor(
                         on_change: handle_ref_ind_change,
                     }
                 }
-                hr {}
-                // Section 2: Absorption Coefficient
-                div { class: "row",
-                    div { class: "col-md-6",
-                        label {
-                            class: "form-label fw-bold",
-                            r#for: format!("{}_absorption", base_id),
-                            "Absorption Coefficient (1/m)"
-                        }
-                        input {
-                            id: format!("{}_absorption", base_id),
-                            class: "form-control",
-                            r#type: "number",
-                            step: "any",
-                            min: "0",
-                            placeholder: "e.g., 0.001 (optional)",
-                            value: "{absorption_str}",
-                            readonly,
-                            oninput: handle_absorption_change,
-                        }
-                        div { class: "form-text text-muted small",
-                            "Leave empty if linear absorption is neglected."
-                        }
+
+                hr { class: "my-3" }
+
+                // Section 2: Absorption Model
+                div { class: "mb-2",
+                    h6 { class: "fw-bold text-secondary mb-2", "Absorption & Attenuation" }
+                    AbsorptionEditor {
+                        value: absorption_memo,
+                        base_id: format!("{}_absorption", base_id),
+                        readonly,
+                        on_change: handle_absorption_change,
                     }
                 }
             }

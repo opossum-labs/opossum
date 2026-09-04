@@ -1,5 +1,3 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
-
 use dioxus::prelude::*;
 use opossum_core::{prelude::*, types::api_types::NewRefNode};
 use std::path::PathBuf;
@@ -11,7 +9,7 @@ pub enum NodeEditorCommand {
     DeleteAll,
     AddNode(String),
     AddNodeRef(NewRefNode),
-    AddAnalyzer(AnalyzerType),
+    AddAnalyzer(Box<AnalyzerType>),
     LoadFile(PathBuf),
     SaveFile(PathBuf),
     Refresh,
@@ -37,6 +35,13 @@ pub enum NodeEditorCommand {
         group_id: Uuid,
         group_port_name: String,
         port_type: PortType,
+    },
+    /// Mark or unmark a node as an amplifier candidate (see
+    /// [`crate::components::context_menu::cx_menu::CxtCommand::ToggleAmplifierCandidate`]).
+    ToggleAmplifierCandidate {
+        node_id: Uuid,
+        graph_id: Uuid,
+        is_amplifier: bool,
     },
     Undo,
     Redo,
@@ -81,7 +86,7 @@ fn dispatch_add_analyzer(
     graph_id: Uuid,
 ) {
     workspace_processor.send(GraphsWorkspaceAction::AddAnalyzer {
-        analyzer_type,
+        analyzer_type: Box::new(analyzer_type),
         graph_id,
     });
 }
@@ -134,7 +139,7 @@ pub fn node_editor_command(
                 dispatch_add_node_ref(workspace_processor, new_ref_node, active_tab());
             }
             NodeEditorCommand::AddAnalyzer(analyzer_type) => {
-                dispatch_add_analyzer(workspace_processor, analyzer_type, active_tab());
+                dispatch_add_analyzer(workspace_processor, *analyzer_type, active_tab());
             }
             NodeEditorCommand::AutoLayout => {
                 dispatch_auto_layout(workspace_processor, active_tab());
@@ -181,6 +186,17 @@ pub fn node_editor_command(
                     group_id,
                     group_port_name,
                     port_type,
+                });
+            }
+            NodeEditorCommand::ToggleAmplifierCandidate {
+                node_id,
+                graph_id,
+                is_amplifier,
+            } => {
+                workspace_processor.send(GraphsWorkspaceAction::SetAmplifierCandidate {
+                    node_id,
+                    graph_id,
+                    is_amplifier,
                 });
             }
             NodeEditorCommand::JumpToMappedPort {

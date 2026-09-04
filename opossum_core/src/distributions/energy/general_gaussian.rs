@@ -1,31 +1,33 @@
 //! Generalized 2D Gaussian distribution
 use super::EnergyDistribution;
 use crate::{
-    degree,
     error::OpmResult,
-    generic_validators::{AllFinite, AllNormal, AllNotZero, AllPositive, ValidateTrait},
+    generic_validators::{AllFinite, AllNotZero, AllPositive},
     joule, millimeter,
-    utils::math_distribution_functions::{
-        general_2d_super_gaussian_point_elliptical, general_2d_super_gaussian_point_rectangular,
+    types::validated_type_definitions::{
+        ValidatedAngle1D, ValidatedCenter2D, ValidatedGaussianPower, ValidatedSideLengths2D,
     },
+    utils::super_gaussian::SuperGaussianShape,
     validated, validated_type,
 };
 use kahan::KahanSummator;
 use nalgebra::Point2;
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
-use uom::si::{
-    angle::radian,
-    f64::{Angle, Energy, Length},
-};
+use uom::si::f64::{Angle, Energy, Length};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy, EnsureValidated)]
 pub struct General2DGaussian {
     total_energy: validated_type!(Energy, AllNotZero && AllFinite && AllPositive),
-    mu_xy: validated_type!(Point2<Length>, AllFinite),
-    sigma_xy: validated_type!(Point2<Length>, AllNotZero && AllFinite && AllPositive),
-    power: validated_type!(f64, AllNormal && AllPositive),
-    theta: validated_type!(Angle, AllFinite),
+    // The four parameters below are the shape rather than the energy, and they are typed by the
+    // very same aliases [`SuperGaussianShape`] uses. That is what makes [`General2DGaussian::shape`]
+    // infallible: there is one definition of what a valid center, width, power and rotation is, not
+    // one per user of it. `Validated` is `#[serde(transparent)]`, so which validator guards a field
+    // never reaches the file.
+    mu_xy: ValidatedCenter2D,
+    sigma_xy: ValidatedSideLengths2D,
+    power: ValidatedGaussianPower,
+    theta: ValidatedAngle1D,
     #[validate(skip)]
     rectangular: bool,
 }
@@ -265,16 +267,43 @@ impl General2DGaussian {
     pub const fn set_rectangular(&mut self, rectangular: bool) {
         self.rectangular = rectangular;
     }
+    /// Returns the shape of this distribution, without the energy it spreads over it.
+    ///
+    /// Everything but [`General2DGaussian::energy`] describes a shape rather than a distribution,
+    /// and that description is not particular to spreading energy — a pumped medium is given a
+    /// transversal profile by the very same one. It therefore lives in [`SuperGaussianShape`], and
+    /// this is where the two meet.
+    ///
+    /// # Returns
+    ///
+    /// The peak-normalised shape this distribution has, which
+    /// [`EnergyDistribution::apply`] then scales to the total energy.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the parameters of this distribution are rejected by [`SuperGaussianShape`], which
+    /// cannot happen: both hold them in the very same validated types, so a value that got into one
+    /// is accepted by the other by construction.
+    #[must_use]
+    pub fn shape(&self) -> SuperGaussianShape {
+        SuperGaussianShape::new(
+            self.center(),
+            self.sigma(),
+            self.power(),
+            self.theta(),
+            self.rectangular(),
+        )
+        .expect("a validated General2DGaussian is a validated SuperGaussianShape")
+    }
 }
 impl Default for General2DGaussian {
     fn default() -> Self {
         Self {
             total_energy: validated!(joule!(0.1), AllNotZero && AllFinite && AllPositive).unwrap(),
-            mu_xy: validated!(millimeter!(0., 0.), AllFinite).unwrap(),
-            sigma_xy: validated!(millimeter!(5., 5.), AllNotZero && AllFinite && AllPositive)
-                .unwrap(),
-            power: validated!(1., AllNormal && AllPositive).unwrap(),
-            theta: validated!(degree!(0.), AllFinite).unwrap(),
+            mu_xy: ValidatedCenter2D::default(),
+            sigma_xy: ValidatedSideLengths2D::try_new(millimeter!(5., 5.)).unwrap(),
+            power: ValidatedGaussianPower::default(),
+            theta: ValidatedAngle1D::default(),
             rectangular: false,
         }
     }
@@ -282,35 +311,14 @@ impl Default for General2DGaussian {
 
 impl EnergyDistribution for General2DGaussian {
     fn apply(&self, input: &[Point2<Length>]) -> Vec<Energy> {
-        let mut energy_distribution = Vec::<f64>::with_capacity(input.len());
-        let (sin_theta, cos_theta) = self.theta().get::<radian>().sin_cos();
-        let mu_xy = Point2::new(self.center_x().value, self.center_y().value);
-        let sigma_xy = Point2::new(self.sigma_x().value, self.sigma_y().value);
-        if self.rectangular {
-            for p in input {
-                let p_m = Point2::new(p.x.value, p.y.value);
-                energy_distribution.push(general_2d_super_gaussian_point_rectangular(
-                    &p_m,
-                    mu_xy,
-                    sigma_xy,
-                    self.power(),
-                    sin_theta,
-                    cos_theta,
-                ));
-            }
-        } else {
-            for p in input {
-                let p_m = Point2::new(p.x.value, p.y.value);
-                energy_distribution.push(general_2d_super_gaussian_point_elliptical(
-                    &p_m,
-                    mu_xy,
-                    sigma_xy,
-                    self.power(),
-                    sin_theta,
-                    cos_theta,
-                ));
-            }
-        }
+        // The shape is peak-normalised, so what comes out here is the *relative* weight of each
+        // point. Turning those weights into energies is this distribution's own job, and the only
+        // part of it that is about energy at all.
+        let shape = self.shape();
+        let energy_distribution = input
+            .iter()
+            .map(|point| shape.value_at(point))
+            .collect::<Vec<f64>>();
 
         let current_energy: f64 = energy_distribution.iter().kahan_sum().sum();
 
@@ -332,7 +340,7 @@ impl From<General2DGaussian> for super::EnergyDistType {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{joule, meter, radian};
+    use crate::{degree, joule, meter, radian};
     use uom::si::energy::joule;
     #[test]
     fn new_gaussian_sigma() {
@@ -724,6 +732,27 @@ mod test {
             )
             .is_ok()
         );
+    }
+    /// The shape parameters sit directly in this struct, not nested in a shape of their own.
+    ///
+    /// They are *typed* by the same validated aliases [`SuperGaussianShape`] uses, and those are
+    /// `#[serde(transparent)]`, so which validator guards a field never reaches the file. Pinned
+    /// here because `.opm` files in the wild carry this type through a source node's light data,
+    /// and the golden roundtrip fixture happens not to contain one.
+    #[test]
+    fn serialization_stays_flat() -> OpmResult<()> {
+        let gaussian = General2DGaussian::default();
+        let serialized = ron::to_string(&gaussian)
+            .map_err(|e| crate::error::OpossumError::Other(e.to_string()))?;
+        assert_eq!(
+            serialized,
+            "(total_energy:0.1,mu_xy:(0.0,0.0),sigma_xy:(0.005,0.005),power:1.0,theta:0.0,\
+             rectangular:false)"
+        );
+        let deserialized: General2DGaussian = ron::from_str(&serialized)
+            .map_err(|e| crate::error::OpossumError::Other(e.to_string()))?;
+        assert_eq!(gaussian, deserialized);
+        Ok(())
     }
     #[test]
     fn power_parameter_influence() -> OpmResult<()> {

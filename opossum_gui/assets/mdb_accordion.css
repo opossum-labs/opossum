@@ -221,3 +221,82 @@ input[type=number] {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
+/* ── Node-config visual style: card-like accordion items matching the pump-editor aesthetic ────
+   The pump editor wraps each scenario in a Bootstrap card: a border + rounded corners create a
+   lighter "box" the inputs sit inside. We replicate that here for top-level accordion sections
+   (identified by their h1 button) using :has(), which WebView2/Chromium supports fully.
+
+   Depth ladder:
+     panel background  (#212529 via bg-dark)
+     section card body (45,45,45)  ← lifted box with border, same role as the scenario card
+     section header    (50,50,50)  ← slightly lighter so header/body read as one card
+     form input        (58,58,58)  ← clearly lighter, matching pump-editor inputs
+*/
+
+/* ── Level-1 sections: card box that lifts off the dark panel background ──────────────────── */
+.accordion-item:has(> .accordion-header > .accordion-button-h1) {
+    border: 1px solid rgb(70, 70, 70) !important;
+    border-radius: 6px !important;
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.accordion-button-h1 {
+    background-color: rgb(62, 62, 62) !important;
+}
+
+.accordion-item:has(> .accordion-header > .accordion-button-h1) > .accordion-collapse > .accordion-body {
+    background-color: rgb(56, 56, 56) !important;
+}
+
+/* ── Level-2 sections: mini-card nested inside a level-1 body ──────────────────────────── */
+.accordion-item:has(> .accordion-header > .accordion-button-h2) {
+    border: 1px solid rgb(72, 72, 72) !important;
+    border-radius: 4px !important;
+    overflow: hidden;
+    margin-bottom: 3px;
+}
+
+.accordion-button-h2 {
+    background-color: rgb(56, 56, 56) !important;
+}
+
+.accordion-item:has(> .accordion-header > .accordion-button-h2) > .accordion-collapse > .accordion-body {
+    background-color: rgb(50, 50, 50) !important;
+}
+
+/* ── Dark input background shared by node-config accordion body and pump-scenario block ──
+   rgb(33,37,41) = Bootstrap/MDB bg-dark. Both contexts use the same value so the color is
+   defined exactly once. The lighter section backgrounds (56,56,56 / 50,50,50) give the
+   contrast that makes inputs and selects read as distinct fields. */
+.accordion-body .form-floating > .form-control,
+.accordion-body .form-floating > .form-select,
+.amp-config-block .form-floating > .form-control,
+.amp-config-block .form-floating > .form-select,
+.accordion-body .form-floating-checkbox,
+.amp-config-block .form-floating-checkbox,
+.form-floating > .form-select > option {
+    background-color: rgb(50, 50, 50) !important;
+}
+
+
+
+/* Vertical spacing between fields — mirrors the gap in the pump-editor's amp-config-block. */
+.accordion-body .form-floating,
+.accordion-body .form-floating-checkbox {
+    margin-bottom: 4px;
+}
+
+/* ── Option elements: platform-painted dropdown list needs explicit colours too ─────────── */
+.form-floating > .form-select > option {
+    color: rgb(235, 235, 235);
+}
+
+/* Standalone form-controls not in a form-floating wrapper (e.g. the material display row
+   is gone, but guard against other uses). */
+.accordion-body > .accordion-content-wrapper-div .form-control:not(.form-floating .form-control) {
+    background-color: rgb(58, 58, 58) !important;
+    border: 1px solid rgb(90, 90, 90) !important;
+    border-radius: 4px;
+}

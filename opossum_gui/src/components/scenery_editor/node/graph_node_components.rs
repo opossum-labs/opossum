@@ -4,8 +4,18 @@ use crate::components::scenery_editor::node::{HEADER_HEIGHT, NODE_WIDTH};
 use dioxus::prelude::*;
 use opossum_core::utils::to_f64;
 
+/// Renders a canvas node as header + body (+ an optional footer below the body).
+///
+/// The footer is a sibling of the body rather than part of it, because the ports live *inside*
+/// `.node-body` - anything appended below therefore grows the node without moving a single port,
+/// and edges stay where they are.
 #[component]
-pub fn GraphNodeContent(name: String, node_type: NodeType, body: Element) -> Element {
+pub fn GraphNodeContent(
+    name: String,
+    node_type: NodeType,
+    body: Element,
+    footer: Option<Element>,
+) -> Element {
     let node_type = match node_type {
         NodeType::Optical(_) => "optic-node",
         NodeType::Analyzer(_) => "analyzer-node",
@@ -22,5 +32,8 @@ pub fn GraphNodeContent(name: String, node_type: NodeType, body: Element) -> Ele
             {name}
         }
         div { draggable: false, {body} }
+        if let Some(footer) = footer {
+            {footer}
+        }
     }
 }

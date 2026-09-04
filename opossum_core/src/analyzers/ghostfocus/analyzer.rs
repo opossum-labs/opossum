@@ -139,10 +139,14 @@ impl Analyzer for GhostFocusAnalyzer {
         };
         info!("Calculate node positions of scenery{scenery_name}.");
 
-        // copy source map to RayTraceConfig to be able to use it in the unified analyze function of AnalysisRayTrace
+        // Build a positioning config with the source map so AnalysisRayTrace can find the source
+        // ports, but without a pump scenario (is_positioning_run = true).
         let mut raytrace_config = RayTraceConfig::default();
         raytrace_config.set_source_map(self.config.source_map().clone());
+        raytrace_config.set_positioning_run(true);
         AnalysisRayTrace::calc_node_positions(scenery, LightResult::default(), &raytrace_config)?;
+        scenery.reset_data();
+        scenery.prepare_volume(self.config())?;
         info!(
             "Performing ghost focus analysis of scenery{scenery_name} up to {} ray bounces.",
             self.config.max_bounces()

@@ -1,5 +1,4 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
-mod aperture_editor;
+pub mod aperture_editor;
 mod coating_editor;
 
 use dioxus::prelude::*;

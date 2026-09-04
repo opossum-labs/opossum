@@ -24,13 +24,19 @@ use crate::{
         build_connect_info, capture_node_connections, map_port, parent_group_id_or_self,
         validate_relocated_references,
     },
-    undo::{CascadedNode, Command, EdgeSnapshot, NodeSnapshot},
+    undo::{
+        CascadedNode, Command, EdgeSnapshot, NodeSnapshot, PatchAmplifierNodes, PatchPumpScenario,
+    },
 };
 
 /// The pasted-in node/connection info [`insert_copied_nodes`] hands back to [`post_paste_nodes`].
 struct PastedNodes {
     grouped_node_infos: HashMap<Uuid, Vec<NodeInfo>>,
     grouped_connect_info: HashMap<Uuid, Vec<ConnectInfo>>,
+    /// Maps each copied node's original uuid to the fresh one its paste got, for state that lives
+    /// outside `NodeAttr` and so isn't carried along by the generic node-attribute copy - see
+    /// [`propagate_amplifier_state`].
+    node_id_link: HashMap<Uuid, Uuid>,
 }
 
 /// Copies `copied_optical_nodes` into `paste_group_id` (recursively, preserving group structure),
@@ -116,6 +122,7 @@ fn insert_copied_nodes(
     Ok(PastedNodes {
         grouped_node_infos,
         grouped_connect_info,
+        node_id_link,
     })
 }
 
@@ -128,7 +135,7 @@ fn partition_cache(
     for item in items {
         match item {
             NodeCacheItem::Optical(o) => optical.push(o),
-            NodeCacheItem::Analyzer(a) => analyzer.push(a),
+            NodeCacheItem::Analyzer(a) => analyzer.push(*a),
         }
     }
     (optical, analyzer)
@@ -293,6 +300,69 @@ fn build_paste_undo_batch(
     removals
 }
 
+/// Carries a pasted node's amplifier candidacy and its gain model in every pump scenario over to its
+/// fresh uuid.
+///
+/// Candidacy (`OpmDocument::amplifier_nodes`) and per-scenario gain models
+/// (`OpmDocument::pump_scenarios`) live outside `NodeAttr`, keyed by node uuid - so unlike an
+/// ordinary property (see `test_paste_preserves_node_properties`), pasting a node under a fresh uuid
+/// does not carry them along on its own. Without this, a copy of an amplifying node would silently
+/// come back passive, changing the modelled physics of the pasted subsystem without saying so - the
+/// same reasoning `set_is_amplifier_node`'s own doc comment applies to unmarking a candidate.
+///
+/// # Arguments
+///
+/// * `document` - the document to mutate.
+/// * `node_id_link` - maps each pasted node's original uuid to the fresh one it got.
+///
+/// # Returns
+///
+/// The undo commands that restore the pre-paste amplifier-candidate set and pump scenarios, meant to
+/// be folded into the same undo batch as the rest of the paste.
+fn propagate_amplifier_state(
+    document: &mut OpmDocument,
+    node_id_link: &HashMap<Uuid, Uuid>,
+) -> Vec<Command> {
+    let mut inverses = Vec::new();
+
+    let candidates_before = document.amplifier_nodes().clone();
+    for (old_id, new_id) in node_id_link {
+        if document.is_amplifier_node(*old_id) {
+            document.set_is_amplifier_node(*new_id, true);
+        }
+    }
+    if *document.amplifier_nodes() != candidates_before {
+        inverses.push(Command::PatchAmplifierNodes(PatchAmplifierNodes {
+            old: document.amplifier_nodes().clone(),
+            new: candidates_before,
+        }));
+    }
+
+    let scenario_ids: Vec<Uuid> = document.pump_scenarios().keys().copied().collect();
+    for scenario_id in scenario_ids {
+        let Some(before) = document.pump_scenario(scenario_id).cloned() else {
+            continue;
+        };
+        let Some(scenario) = document.pump_scenario_mut(scenario_id) else {
+            continue;
+        };
+        for (old_id, new_id) in node_id_link {
+            // The whole configuration travels, not just the gain model: a pasted node that was
+            // pumped has to arrive pumped, and `set_config` drops an entry that does nothing anyway.
+            scenario.set_config(*new_id, before.config(*old_id));
+        }
+        if *scenario != before {
+            inverses.push(Command::PatchPumpScenario(PatchPumpScenario {
+                id: scenario_id,
+                old: scenario.clone(),
+                new: before,
+            }));
+        }
+    }
+
+    inverses
+}
+
 /// Paste copied nodes
 ///
 /// This function duplicates the nodes/analyzers currently in the copy cache into the target group,
@@ -348,6 +418,7 @@ pub(super) async fn post_paste_nodes(
     let PastedNodes {
         grouped_node_infos,
         grouped_connect_info,
+        node_id_link,
     } = insert_copied_nodes(
         document.scenery_mut(),
         paste_group_id,
@@ -355,10 +426,13 @@ pub(super) async fn post_paste_nodes(
         &copied_optical_nodes,
     )?;
 
+    let mut amplifier_state_inverses = propagate_amplifier_state(&mut document, &node_id_link);
+
     // One paste = one undo step: removing every pasted node/analyzer undoes the whole paste at once.
     // See `build_paste_undo_batch` for why only top-level pasted roots get their own `RemoveNode`.
-    let removals =
+    let mut removals =
         build_paste_undo_batch(&document, paste_group_id, &grouped_node_infos, &analyzers);
+    removals.append(&mut amplifier_state_inverses);
     if !removals.is_empty() {
         data.push_undo(Command::Batch(removals));
     }
@@ -1395,6 +1469,197 @@ mod test {
             app.call(req).await.unwrap().status(),
             StatusCode::OK,
             "pasting a reference together with its own target as siblings must still be allowed"
+        );
+    }
+
+    /// A copy must carry every property of its original - only the uuid is new. A non-default
+    /// property that silently came back at its default would change the modelled physics of the
+    /// pasted subsystem without saying so.
+    #[actix_web::test]
+    async fn test_paste_preserves_node_properties() {
+        use opossum_core::{nodes::Lens, properties::Proptype};
+
+        const TEST_PROP: &str = "test_prop";
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, lens_id) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let lens_id = document.scenery_mut().add_node(Lens::default()).unwrap();
+            document
+                .scenery_mut()
+                .with_node_attr_mut(lens_id, |attr| {
+                    attr.create_property(TEST_PROP, "test", Proptype::Bool(true))
+                })
+                .unwrap()
+                .unwrap();
+            let ids = (root_id, lens_id);
+            drop(document);
+            ids
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_copy_nodes)
+                .service(post_paste_nodes),
+        )
+        .await;
+
+        let mut nodes_to_copy = HashSet::new();
+        nodes_to_copy.insert(lens_id);
+        let req = test::TestRequest::post()
+            .uri("/copy_nodes")
+            .set_json(&nodes_to_copy)
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        let req = test::TestRequest::post()
+            .uri("/paste_nodes")
+            .set_json(&(root_id, (500.0, 500.0)))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let pasted: PasteNodesResponse = test::read_body_json(resp).await;
+
+        let pasted_node = pasted
+            .pasted_nodes
+            .values()
+            .flatten()
+            .find(|info| info.uuid() != lens_id)
+            .expect("a pasted duplicate must exist");
+        assert_ne!(
+            pasted_node.uuid(),
+            lens_id,
+            "the copy must get a fresh uuid"
+        );
+
+        let document = app_state.document.lock();
+        let property = document
+            .scenery()
+            .with_node_attr(pasted_node.uuid(), |attr| {
+                attr.get_property(TEST_PROP).cloned()
+            })
+            .unwrap()
+            .unwrap();
+        assert!(
+            matches!(property, Proptype::Bool(true)),
+            "the pasted node must keep the original's property value"
+        );
+    }
+
+    /// A copy of an amplifying node must itself be an amplifier candidate and carry its gain model
+    /// into every scenario the original was configured in.
+    ///
+    /// Regression test: candidacy (`OpmDocument::amplifier_nodes`) and per-scenario gain models
+    /// (`OpmDocument::pump_scenarios`) live outside `NodeAttr`, so unlike an ordinary property (see
+    /// `test_paste_preserves_node_properties`), paste's uuid remap never reached them - a copy of an
+    /// amplifier silently came back passive. Also checks that undoing the paste removes the copy's
+    /// entries without disturbing the original's.
+    #[actix_web::test]
+    async fn test_paste_preserves_amplifier_state() {
+        use opossum_core::{
+            gain::{ConstGain, GainModel, PumpConfig, PumpSource},
+            nodes::Lens,
+        };
+
+        let app_state = Data::new(AppState::default());
+        let gain = GainModel::Const(ConstGain::new(2.5).unwrap());
+        let pump = PumpSource::Const;
+        let (root_id, lens_id, scenario_id) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let lens_id = document.scenery_mut().add_node(Lens::default()).unwrap();
+            document.set_is_amplifier_node(lens_id, true);
+            let scenario_id = document.add_pump_scenario("full power");
+            let scenario = document.pump_scenario_mut(scenario_id).unwrap();
+            scenario.set_gain_model(lens_id, gain);
+            scenario.set_pump_source(lens_id, pump);
+            let ids = (root_id, lens_id, scenario_id);
+            drop(document);
+            ids
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_copy_nodes)
+                .service(post_paste_nodes)
+                .service(undo_document),
+        )
+        .await;
+
+        let mut nodes_to_copy = HashSet::new();
+        nodes_to_copy.insert(lens_id);
+        let req = test::TestRequest::post()
+            .uri("/copy_nodes")
+            .set_json(&nodes_to_copy)
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        let req = test::TestRequest::post()
+            .uri("/paste_nodes")
+            .set_json(&(root_id, (500.0, 500.0)))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let pasted: PasteNodesResponse = test::read_body_json(resp).await;
+
+        let pasted_id = pasted
+            .pasted_nodes
+            .values()
+            .flatten()
+            .find(|info| info.uuid() != lens_id)
+            .expect("a pasted duplicate must exist")
+            .uuid();
+
+        {
+            let document = app_state.document.lock();
+            assert!(
+                document.is_amplifier_node(pasted_id),
+                "the copy of an amplifier must itself be an amplifier candidate"
+            );
+            assert_eq!(
+                document
+                    .pump_scenario(scenario_id)
+                    .unwrap()
+                    .config(pasted_id),
+                PumpConfig::new(gain, pump),
+                "the copy must carry the original's whole configuration - pumping included - into \
+                 the same scenario"
+            );
+        }
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
+
+        let document = app_state.document.lock();
+        assert!(
+            !document.is_amplifier_node(pasted_id),
+            "undo must remove the copy's candidacy along with the node itself"
+        );
+        assert_eq!(
+            document
+                .pump_scenario(scenario_id)
+                .unwrap()
+                .config(pasted_id),
+            PumpConfig::default(),
+            "undo must remove the copy's scenario entry along with the node itself"
+        );
+        assert!(
+            document.is_amplifier_node(lens_id),
+            "undo must not disturb the original's candidacy"
+        );
+        assert_eq!(
+            document.pump_scenario(scenario_id).unwrap().config(lens_id),
+            PumpConfig::new(gain, pump),
+            "undo must not disturb the original's configuration"
         );
     }
 }

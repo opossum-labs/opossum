@@ -4,10 +4,7 @@ use crate::{
     error::BackEndErrorResponse,
     helper_functions::{analyzer_mut_or_404, parent_group_id_or_self},
     sse_logger::SENDER,
-    undo::{
-        Command, PatchGlobalConf, PatchNode, RepositionAnalyzer, SetViewport,
-        capture_old_node_request,
-    },
+    undo::{Command, PatchNode, RepositionAnalyzer, SetViewport, capture_old_node_request},
 };
 use actix_web::{
     Error, HttpResponse, Responder, delete, get, patch, post, put,
@@ -16,7 +13,7 @@ use actix_web::{
 use futures_util::StreamExt;
 use log::{error, info, warn};
 use opossum_core::{
-    core_optics::{SceneryResources, node_attr::HasNodeAttr},
+    core_optics::node_attr::HasNodeAttr,
     opm_document::OpmDocument,
     types::api_types::{
         DocumentChange, ErrorResponse, JumpTarget, LoadDocumentResponse, PositionUpdate,
@@ -40,44 +37,9 @@ async fn delete_document(data: web::Data<AppState>) -> impl Responder {
     data.clear_undo_history();
     HttpResponse::NoContent().finish()
 }
-#[utoipa::path(tag = "document",
-    responses((status = 200, description = "Global configuration", body = SceneryResources))
-)]
-/// Get the global configuration of this model
-///
-/// This function returns the global configuration of the model.
-#[get("/global_conf")]
-async fn get_global_conf(data: web::Data<AppState>) -> impl Responder {
-    let document = data.document.lock();
-    web::Json(document.global_conf().lock().unwrap().clone())
-}
 
 #[utoipa::path(tag = "document",
-    responses((status = 200, description = "Global configuration", body = SceneryResources))
-)]
-/// Set the global configuration
-///
-/// This function sets the global configuration of the model. The old global configuration is
-/// replaced by the new one.
-#[patch("/global_conf")]
-async fn patch_global_conf(
-    data: web::Data<AppState>,
-    new_global_conf: web::Json<SceneryResources>,
-) -> Result<Json<SceneryResources>, BackEndErrorResponse> {
-    let new = new_global_conf.into_inner();
-    let mut document = data.document.lock();
-    let old = document.global_conf().lock().unwrap().clone();
-    let inverse = Command::PatchGlobalConf(PatchGlobalConf {
-        old,
-        new: new.clone(),
-    })
-    .apply(&mut document)?;
-    data.push_undo(inverse);
-    drop(document);
-    Ok(Json(new))
-}
-#[utoipa::path(tag = "document",
-    responses((status = 200, description = "Scenery Uuid", body = SceneryResources))
+    responses((status = 200, description = "Scenery Uuid"))
 )]
 /// Get the uuid of the root node of this model
 ///
@@ -393,12 +355,12 @@ fn apply_one_position_update(
                 capture_old_node_request(node_attr, &new)
             })?;
         let parent_group_id = parent_group_id_or_self(document.scenery(), update.uuid)?;
-        Command::PatchNode(PatchNode {
+        Command::PatchNode(Box::new(PatchNode {
             uuid: update.uuid,
             parent_group_id,
             old,
             new,
-        })
+        }))
         .apply(document)
     } else {
         let old_pos = analyzer_mut_or_404(document, update.uuid)?
@@ -506,9 +468,6 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(put_document);
     cfg.service(delete_document);
 
-    cfg.service(get_global_conf);
-    cfg.service(patch_global_conf);
-
     cfg.service(get_root_uuid);
 
     cfg.service(undo_document);
@@ -526,23 +485,7 @@ mod test {
         undo::{Command, NodeSnapshot},
     };
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
-    use opossum_core::{core_optics::SceneryResources, nodes::create_node_ref};
-
-    #[actix_web::test]
-    async fn test_get_global_conf() {
-        let app_state = Data::new(AppState::default());
-        let app = test::init_service(
-            App::new()
-                .app_data(app_state)
-                .service(get_global_conf)
-                .service(patch_global_conf),
-        )
-        .await;
-        let req = test::TestRequest::get().uri("/global_conf").to_request();
-        let resp = app.call(req).await.unwrap();
-        assert_eq!(resp.status(), 200);
-        let _: SceneryResources = test::read_body_json(resp).await; // Panics, if not valid JSON
-    }
+    use opossum_core::nodes::create_node_ref;
 
     #[actix_web::test]
     async fn test_undo_redo_empty_stack_returns_409() {
@@ -1175,62 +1118,6 @@ mod test {
         );
     }
 
-    /// Regression test for the gap where `PATCH /global_conf` replaced the document's global scenery
-    /// config without pushing any undo command. Patches the config to a distinct value and asserts a
-    /// single undo restores the previous one.
-    #[actix_web::test]
-    async fn test_undo_patch_global_conf_restores_old_config() {
-        use opossum_core::refractive_index::{RefrIndexConst, RefractiveIndexType};
-
-        let app_state = Data::new(AppState::default());
-        let old_repr = format!(
-            "{:?}",
-            *app_state.document.lock().global_conf().lock().unwrap()
-        );
-
-        let new_conf = SceneryResources {
-            ambient_refr_index: RefractiveIndexType::Const(RefrIndexConst::new(1.5).unwrap()),
-        };
-        let new_repr = format!("{new_conf:?}");
-        assert_ne!(
-            old_repr, new_repr,
-            "the test's replacement config must differ from the default"
-        );
-
-        let app = test::init_service(
-            App::new()
-                .app_data(app_state.clone())
-                .service(patch_global_conf)
-                .service(undo_document),
-        )
-        .await;
-
-        let req = test::TestRequest::patch()
-            .uri("/global_conf")
-            .set_json(&new_conf)
-            .to_request();
-        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
-        assert_eq!(
-            format!(
-                "{:?}",
-                *app_state.document.lock().global_conf().lock().unwrap()
-            ),
-            new_repr,
-            "the patch must have applied the new config"
-        );
-
-        let req = test::TestRequest::post().uri("/undo").to_request();
-        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
-        assert_eq!(
-            format!(
-                "{:?}",
-                *app_state.document.lock().global_conf().lock().unwrap()
-            ),
-            old_repr,
-            "undo must restore the old global config"
-        );
-    }
-
     /// Regression test for fix6 (camera as its own undo step): recording a viewport change must make it
     /// reversible on the same undo stack. Undo emits a `ViewportChanged` back to the pre-gesture
     /// viewport, redo emits one forward to the post-gesture viewport - and neither touches the document.
@@ -1512,5 +1399,143 @@ mod test {
             !body.can_undo,
             "both were one step, so nothing left to undo"
         );
+    }
+    #[actix_web::test]
+    async fn test_get_root_uuid() {
+        let app_state = Data::new(AppState::default());
+        let expected_uuid = app_state.document.lock().scenery().node_attr().uuid();
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(get_root_uuid),
+        )
+        .await;
+
+        let req = test::TestRequest::get().uri("/root_uuid").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let root_uuid: uuid::Uuid = test::read_body_json(resp).await;
+        assert_eq!(root_uuid, expected_uuid);
+    }
+
+    #[actix_web::test]
+    async fn test_get_document_returns_ron_format() {
+        let app_state = Data::new(AppState::default());
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(web::scope("/document").service(get_document)),
+        )
+        .await;
+
+        let req = test::TestRequest::get().uri("/document").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers()
+                .get(actix_web::http::header::CONTENT_TYPE)
+                .unwrap(),
+            RON_MEDIA_TYPE
+        );
+
+        let body = test::read_body(resp).await;
+        let body_str = std::str::from_utf8(&body).unwrap();
+        assert!(OpmDocument::from_string(body_str).is_ok());
+    }
+
+    #[actix_web::test]
+    async fn test_put_document_valid_and_invalid() {
+        let app_state = Data::new(AppState::default());
+        let valid_opm = app_state.document.lock().to_opm_file_string().unwrap();
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(web::scope("/document").service(put_document)),
+        )
+        .await;
+
+        // 1. Success case: loading a valid OPM document string
+        let req = test::TestRequest::put()
+            .uri("/document")
+            .insert_header((actix_web::http::header::CONTENT_TYPE, "text/plain"))
+            .set_payload(valid_opm)
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: LoadDocumentResponse = test::read_body_json(resp).await;
+        assert_eq!(body.name, "group");
+
+        // 2. Error case: loading an invalid OPM document string
+        let req_invalid = test::TestRequest::put()
+            .uri("/document")
+            .insert_header((actix_web::http::header::CONTENT_TYPE, "text/plain"))
+            .set_payload("invalid ron string content")
+            .to_request();
+        let resp_invalid = app.call(req_invalid).await.unwrap();
+        assert_eq!(resp_invalid.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[actix_web::test]
+    async fn test_delete_document_resets_document_and_undo() {
+        let app_state = Data::new(AppState::default());
+        // Set a dummy undo item to verify history gets cleared
+        app_state
+            .undo_stack
+            .lock()
+            .push_back(Command::Batch(vec![]));
+        assert!(!app_state.undo_stack.lock().is_empty());
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(web::scope("/document").service(delete_document)),
+        )
+        .await;
+
+        let req = test::TestRequest::delete().uri("/document").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+        assert!(app_state.undo_stack.lock().is_empty());
+        assert_eq!(
+            app_state.document.lock().scenery().node_attr().name(),
+            "group"
+        );
+    }
+
+    #[actix_web::test]
+    async fn test_viewport_change_no_op_when_identical() {
+        use opossum_core::types::api_types::{Viewport, ViewportChangeRequest};
+
+        let app_state = Data::new(AppState::default());
+        let graph_id = app_state.document.lock().scenery().node_attr().uuid();
+        let vp = Viewport {
+            graph_id,
+            zoom: 1.0,
+            shift: (0.0, 0.0),
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_viewport_change),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/viewport_change")
+            .set_json(&ViewportChangeRequest {
+                before: vp.clone(),
+                after: vp,
+                coalesce: false,
+                merge_into_previous: false,
+            })
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+        assert!(app_state.undo_stack.lock().is_empty());
     }
 }

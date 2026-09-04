@@ -261,8 +261,8 @@ pub fn use_on_key_down(
                 if modifiers.ctrl() {
                     ctrl_pressed.set(true);
                 }
-                if modifiers.ctrl() {
-                    shift_pressed.set(false);
+                if modifiers.shift() {
+                    shift_pressed.set(true);
                 }
 
                 if ctrl_or_meta
@@ -322,6 +322,18 @@ pub fn use_on_key_down(
                     }
 
                     event.stop_propagation();
+                } else if ctrl_or_meta
+                    && !modifiers.shift()
+                    && event.data().key() == Key::Character("z".to_string())
+                {
+                    // Undo is handled by the global JS shortcut listener; clear ctrl_pressed
+                    // here so it does not get stuck if focus cycles during the async re-render.
+                    ctrl_pressed.set(false);
+                } else if ctrl_or_meta
+                    && !modifiers.shift()
+                    && event.data().key() == Key::Character("y".to_string())
+                {
+                    ctrl_pressed.set(false);
                 }
             }
         }
@@ -341,6 +353,10 @@ pub fn use_drag_end(
             let graph_store = graph_state.graph_store();
             let drag_status = workspace.drag_status().read().clone();
             let droppable_groups = *workspace.drop_in_group().read();
+
+            if drag_status != DragStatus::None {
+                workspace_processor.send(GraphsWorkspaceAction::SetDragStatus(DragStatus::None));
+            }
 
             match drag_status {
                 DragStatus::Nodes => {
@@ -443,10 +459,6 @@ pub fn use_drag_end(
                     });
                 }
                 _ => {}
-            }
-
-            if drag_status != DragStatus::None {
-                workspace_processor.send(GraphsWorkspaceAction::SetDragStatus(DragStatus::None));
             }
         }
     }

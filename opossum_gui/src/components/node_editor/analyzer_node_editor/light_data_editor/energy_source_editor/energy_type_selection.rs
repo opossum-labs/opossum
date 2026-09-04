@@ -1,5 +1,4 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
-
+use crate::components::node_editor::analyzer_node_editor::light_data_editor::default_energy_laser_lines;
 use crate::components::node_editor::inputs::{
     input_components::LabeledSelect, select_options_from_enum_iterator,
 };
@@ -26,7 +25,16 @@ pub fn EnergyDataBuilderSelector(
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if let Some(edb) = EnergyDataBuilder::default_from_name(val.as_str()) {
-                    on_energy_data_builder_save.call(edb);
+                    let default_wvl = crate::APP_CONFIG.read().default_wavelength();
+                    let configured_edb = match edb {
+                        EnergyDataBuilder::LaserLines(_) => {
+                            EnergyDataBuilder::LaserLines(
+                                default_energy_laser_lines(default_wvl),
+                            )
+                        }
+                        other => other,
+                    };
+                    on_energy_data_builder_save.call(configured_edb);
                 }
             },
         }

@@ -1,11 +1,12 @@
 //! Builder for the generation of [`LightData`](crate::light::LightData).
 //!
 //! This module provides a builder for the generation of [`LightData`](crate::light::LightData).
+use crate::generic_validators::StaticInRange;
 use crate::{
     degree,
     distributions::{energy::EnergyDistType, position::PosDistType, spectral::SpecDistType},
     error::OpmResult,
-    generic_validators::{AllFinite, AllInRange, AllNormal, AllPositive, PathValid, ValidateTrait},
+    generic_validators::{AllFinite, AllNormal, AllPositive, PathValid, StaticBounds},
     joule,
     light::Rays,
     meter, nanometer,
@@ -331,6 +332,21 @@ impl Default for PointSrc {
     }
 }
 
+#[derive(Copy, Clone, PartialEq, Debug, Eq)]
+struct AngleBounds;
+
+impl StaticBounds<Angle> for AngleBounds {
+    fn min() -> Angle {
+        degree!(0.0)
+    }
+    fn max() -> Angle {
+        degree!(180.0)
+    }
+    fn inclusive() -> bool {
+        false
+    }
+}
+type ValidatedAngle = validated_type!(Angle, AllFinite && StaticInRange<Angle, AngleBounds>);
 /// A ray source that emits rays from an image, with a defined cone angle per pixel.
 ///
 /// `ImageSrc` is used to simulate image-based light sources in optical setups.
@@ -356,7 +372,7 @@ pub struct ImageSrc {
     /// wavelength
     wave_length: validated_type!(Length, AllPositive && AllNormal),
     /// cone angle of each point src per pixel
-    cone_angle: validated_type!(Angle, AllFinite && AllInRange::<Angle>),
+    cone_angle: ValidatedAngle,
 }
 #[derive(Deserialize)]
 struct NonValidatedImageSrc {
@@ -385,16 +401,16 @@ impl<'de> serde::Deserialize<'de> for ImageSrc {
     }
 }
 
-// helper function to deserialize the correct AllInRange validator
-fn default_cone_angle() -> validated_type!(Angle, AllFinite && AllInRange::<Angle>) {
+// helper function to deserialize the correct StaticInRange validator
+fn default_cone_angle() -> ValidatedAngle {
     validated!(
         degree!(5.0),
-        AllFinite && (AllInRange::new(degree!(0.0), degree!(180.0), false).unwrap())
+        AllFinite && StaticInRange::<Angle, AngleBounds>::default()
     )
     .unwrap()
 }
 
-// helper function to deserialize the correct AllInRange validator
+// helper function to deserialize the correct PathValid validator
 fn default_file_path() -> validated_type!(PathBuf, PathValid) {
     validated!(
         PathBuf::from("empty.jpg"),

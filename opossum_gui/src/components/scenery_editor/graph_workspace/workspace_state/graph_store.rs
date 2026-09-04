@@ -10,6 +10,7 @@ use dioxus::{
     prelude::*,
 };
 use opossum_core::{
+    gain::GainModel,
     prelude::{PortMap, PortType},
     types::api_types::{AnalyzerItemDto, ConnectInfo, NewAnalyzerInfo, NodeInfo},
     utils::to_f64,
@@ -17,6 +18,44 @@ use opossum_core::{
 use rust_sugiyama::{configure::Config, from_edges};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use uuid::Uuid;
+
+/// Looks up `node_id`'s gain model in the cached active pump scenario, for seeding a freshly
+/// constructed node's canvas marker (see [`crate::ACTIVE_SCENARIO_GAIN_MODELS`]).
+///
+/// A plain, unsubscribed read of the global signal - fine here because the caller is a one-shot
+/// node-construction path running inside the live app (not the plain-conversion `From<&NodeInfo>`,
+/// which stays testable outside a mounted app precisely by not doing this itself).
+fn active_scenario_amp_model(node_id: Uuid) -> Option<String> {
+    crate::ACTIVE_SCENARIO_GAIN_MODELS
+        .read()
+        .get(&node_id)
+        .and_then(opossum_core::gain::GainModel::active_name)
+}
+
+/// Looks up whether `node_id` is a member of the cached amplifier-candidate set, for seeding a
+/// freshly constructed node's canvas flag (see [`crate::AMPLIFIER_CANDIDATES`]).
+///
+/// Same reasoning as [`active_scenario_amp_model`]: a plain, unsubscribed read, fine here because
+/// the caller is a one-shot node-construction path running inside the live app.
+fn is_amplifier_candidate(node_id: Uuid) -> bool {
+    crate::AMPLIFIER_CANDIDATES.read().contains(&node_id)
+}
+
+/// Builds the canvas element of a freshly fetched node, carrying the amplifier state the caches
+/// hold for it.
+///
+/// `From<&NodeInfo> for NodeElement` deliberately does *not* do this: it stays free of any
+/// `GlobalSignal` read so that it remains testable outside a mounted app. The price is that every
+/// path materialising nodes has to seed the two fields itself — which is why they all go through
+/// here rather than each remembering to. A path that forgot it showed up as amplifier markers
+/// silently vanishing from a whole tab whenever it was refilled (opening a group, dropping a node
+/// into one, loading a file), while the document still listed the nodes as amplifiers.
+fn node_element_with_amp_state(node_info: &NodeInfo) -> NodeElement {
+    let mut node_element = NodeElement::from(node_info);
+    node_element.set_amp_model(active_scenario_amp_model(node_info.uuid()));
+    node_element.set_amplifier_candidate(is_amplifier_candidate(node_info.uuid()));
+    node_element
+}
 
 #[derive(Clone, PartialEq, Store, Default)]
 pub struct GraphState {
@@ -165,9 +204,11 @@ impl<Lens> Store<GraphStore, Lens> {
         }
     }
     fn add_nodes(&mut self, nodes: &[NodeInfo]) {
-        self.nodes()
-            .write()
-            .extend(nodes.iter().map(|node| (node.uuid(), node.into())));
+        self.nodes().write().extend(
+            nodes
+                .iter()
+                .map(|node| (node.uuid(), node_element_with_amp_state(node))),
+        );
     }
     fn add_analyzers(&mut self, analyzers: &[AnalyzerItemDto]) {
         self.nodes()
@@ -197,6 +238,44 @@ impl<Lens> Store<GraphStore, Lens> {
     fn set_node_inverted(&mut self, node_id: Uuid, inverted: bool) {
         if let Some(mut node) = self.nodes().get(node_id) {
             node.write().set_inverted(inverted);
+        }
+    }
+    fn set_amp_model_of_node(&mut self, node_id: Uuid, amp_model: Option<String>) {
+        if let Some(mut node) = self.nodes().get(node_id) {
+            node.write().set_amp_model(amp_model);
+        }
+    }
+    fn set_amplifier_candidate_of_node(&mut self, node_id: Uuid, is_amplifier: bool) {
+        if let Some(mut node) = self.nodes().get(node_id) {
+            node.write().set_amplifier_candidate(is_amplifier);
+        }
+    }
+    /// Sets every one of this tab's nodes' canvas amplifier marker from `gain_models`, in one pass.
+    ///
+    /// Used to bring a whole tab's markers in line with the active pump scenario at once - after
+    /// switching which scenario is active, or after an undo/redo changed the active one's contents -
+    /// rather than one request per node.
+    fn sync_amp_markers(&mut self, gain_models: &HashMap<Uuid, GainModel>) {
+        let node_ids: Vec<Uuid> = self.nodes().read().keys().copied().collect();
+        for node_id in node_ids {
+            if let Some(mut node) = self.nodes().get(node_id) {
+                let amp_model = gain_models.get(&node_id).and_then(GainModel::active_name);
+                node.write().set_amp_model(amp_model);
+            }
+        }
+    }
+    /// Sets every one of this tab's nodes' amplifier-candidate flag from `candidates`, in one pass.
+    ///
+    /// Mirrors [`Self::sync_amp_markers`] exactly - used to bring a whole tab's flags in line with
+    /// the document-wide candidate set at once (after a candidacy toggle or an undo/redo touching
+    /// one), rather than one request per node.
+    fn sync_amplifier_candidates(&mut self, candidates: &HashSet<Uuid>) {
+        let node_ids: Vec<Uuid> = self.nodes().read().keys().copied().collect();
+        for node_id in node_ids {
+            if let Some(mut node) = self.nodes().get(node_id) {
+                node.write()
+                    .set_amplifier_candidate(candidates.contains(&node_id));
+            }
         }
     }
     fn renumber_z_levels(&mut self) {
@@ -232,18 +311,8 @@ impl<Lens> Store<GraphStore, Lens> {
     /// # Returns:
     /// A `NodeElement` representing the newly added reference node.
     fn add_new_reference_node(&mut self, ref_node_info: &NodeInfo) -> NodeElement {
-        let node_index = self.fetch_next_node_index();
-        let gui_position = ref_node_info.gui_position().unwrap_or((100.0, 100.0));
-        let ports = Ports::new(ref_node_info.input_ports(), ref_node_info.output_ports());
-        let mut node_element = NodeElement::new(
-            ref_node_info.name().to_string(),
-            NodeType::Optical(ref_node_info.node_type().to_string()),
-            ref_node_info.uuid(),
-            Point2D::new(gui_position.0, gui_position.1),
-            ports,
-            ref_node_info.inverted(),
-            node_index,
-        );
+        let mut node_element = node_element_with_amp_state(ref_node_info);
+        node_element.set_node_index(self.fetch_next_node_index());
         let id = ref_node_info.uuid();
         let nr_of_nodes = self.nodes().len();
         node_element.set_z_index(nr_of_nodes + 1);
@@ -272,17 +341,8 @@ impl<Lens> Store<GraphStore, Lens> {
     /// # Arguments:
     /// * `node_info`: The `NodeInfo` containing the type and position of the new node.
     fn add_new_optical_node(&mut self, node_info: &NodeInfo) {
-        let node_index = self.fetch_next_node_index();
-        let gui_position = node_info.gui_position().unwrap_or((100.0, 100.0));
-        let node_element = NodeElement::new(
-            node_info.name().to_string(),
-            NodeType::Optical(node_info.node_type().to_string()),
-            node_info.uuid(),
-            Point2D::new(gui_position.0, gui_position.1),
-            Ports::new(node_info.input_ports(), node_info.output_ports()),
-            node_info.inverted(),
-            node_index,
-        );
+        let mut node_element = node_element_with_amp_state(node_info);
+        node_element.set_node_index(self.fetch_next_node_index());
         self.nodes().insert(node_info.uuid(), node_element.clone());
         self.set_node_active(node_info.uuid(), node_element.z_index(), true);
     }
@@ -297,7 +357,7 @@ impl<Lens> Store<GraphStore, Lens> {
         let (x, y) = new_analyzer.gui_position;
         let mut node_element = NodeElement::new(
             format!("{}", new_analyzer.analyzer_type),
-            NodeType::Analyzer(new_analyzer.analyzer_type),
+            NodeType::Analyzer(Box::new(new_analyzer.analyzer_type)),
             analyzer_id,
             Point2D::new(x, y),
             Ports::default(),

@@ -1,5 +1,3 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
-
 mod fibonacci_ellipse_editor;
 mod fibonacci_rectangle_editor;
 mod grid_editor;

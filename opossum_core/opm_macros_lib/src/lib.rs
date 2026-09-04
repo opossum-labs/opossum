@@ -1,3 +1,4 @@
+use crate::opm_node::impl_derive_opm_node;
 use proc_macro::TokenStream;
 
 mod ensure_validated;
@@ -9,9 +10,9 @@ mod validate_numeric;
 /// # Panics
 ///
 /// Panics if the arguments cannot be sucessfully parsed.
-#[proc_macro_derive(OpmNode, attributes(opm_node))]
+#[proc_macro_derive(OpmNode, attributes(opm_node, manual_analyzable))]
 pub fn derive_opm_node(input: TokenStream) -> TokenStream {
-    opm_node::impl_derive_opm_node(input)
+    impl_derive_opm_node(input)
 }
 
 /// Derive macro `EnsureValidated`.

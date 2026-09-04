@@ -283,6 +283,7 @@ mod test {
             node.filter_type()?,
             FilterType::Constant(FilterConst::new(percent!(50.0))?)
         );
+        assert!(node.set_transmission(percent!(0.0)).is_ok());
         Ok(())
     }
     #[test]

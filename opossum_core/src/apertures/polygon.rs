@@ -1,7 +1,6 @@
 use super::Shape;
 use crate::{
     error::{OpmResult, OpossumError},
-    generic_validators::ValidateTrait,
     millimeter,
     prelude::ApertureShape,
     types::validated_type_definitions::ValidatedPolygonPoints2D,
@@ -69,7 +68,7 @@ impl PolygonShape {
         Ok(chunked_indices)
     }
 
-    /// checks, if a point lies within this [`PolygonConfig`]
+    /// checks, if a point lies within this [`PolygonShape`]
     /// # Panics
     /// This function panics if the triangulation fails
     #[must_use]
@@ -99,13 +98,13 @@ impl PolygonShape {
         }
         in_polygon
     }
-    /// Returns a reference to the points of this [`PolygonConfig`].
+    /// Returns a reference to the points of this [`PolygonShape`].
     #[must_use]
     pub fn points(&self) -> &[Point2<Length>] {
         self.points.get()
     }
 
-    /// Add new points to this [`PolygonConfig`]. The new points are added to the end of the existing points.
+    /// Add new points to this [`PolygonShape`]. The new points are added to the end of the existing points.
     /// The order of the points must follow the outline of the polygon. Otherwise intersections may occur.
     /// # Errors
     /// This function will return an error if the new points are invalid, e.g. if they are indefinite.
@@ -116,7 +115,7 @@ impl PolygonShape {
         Ok(())
     }
 
-    /// Delete a point at a given index from this [`PolygonConfig`].
+    /// Delete a point at a given index from this [`PolygonShape`].
     /// # Errors
     /// This function will return an error if the index is out of bounds.
     pub fn delete_point(&mut self, index: usize) -> OpmResult<()> {

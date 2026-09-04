@@ -62,6 +62,11 @@ pub fn MaterialEditor(
     #[props(default)]
     on_save: Option<EventHandler<()>>,
 
+    /// Custom label for the primary action button (e.g. "Save Changes" for `AdHoc` editing).
+    /// If None, defaults to "Publish New Version" (for drafts) or "Overwrite Version vX".
+    #[props(default)]
+    save_label: Option<String>,
+
     /// Base ID used for HTML element IDs to avoid DOM collisions.
     #[props(default = "materialEditor".to_string())]
     base_id: String,
@@ -95,56 +100,61 @@ pub fn MaterialEditor(
     });
 
     // Handler that checks whether a direct save or a confirmation warning is required
+    let save_label_for_click = save_label.clone();
     let handle_save_click = use_callback(move |_| {
         if let Some(save_handler) = on_save {
-            if is_draft {
-                // Drafts safely publish as next version (latest + 1)
+            // Direct save if it is a draft or if a custom save label is used (e.g. local AdHoc save)
+            if is_draft || save_label_for_click.is_some() {
                 save_handler.call(());
             } else {
-                // Existing version: Require explicit user confirmation before overwriting
+                // Existing catalog version: Require explicit user confirmation before overwriting on disk
                 show_overwrite_warning.set(true);
             }
         }
     });
 
     rsx! {
-      // 1. Main Material Editor Dialog
-      AlertDialog {
-        open: open(),
-        on_open_change: move |v| open.set(v),
-        max_width: "50rem".to_string(),
-        AlertDialogTitle { "Material Editor" }
-        AlertDialogDescription {
-          div { class: "material-editor-container", id: "{base_id}",
+        // 1. Main Material Editor Dialog
+        AlertDialog {
+            open: open(),
+            on_open_change: move |v| open.set(v),
+            max_width: "50rem".to_string(),
+            AlertDialogTitle { "Material Editor" }
+            AlertDialogDescription {
+                div { class: "material-editor-container", id: "{base_id}",
 
-            // Clean Header Bar: Displays asset title and status badge
-            div { class: "d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom",
-              h4 { class: "mb-0",
-                "{material.read().name()}"
-                if is_draft {
-                  span { class: "badge bg-secondary ms-2", "Draft (Auto-Version)" }
-                } else {
-                  span { class: "badge bg-warning text-dark ms-2",
-                    "Target Version: v{current_version}"
-                  }
+                    // Clean Header Bar: Displays asset title and status badge
+                    div { class: "d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom",
+                        h4 { class: "mb-0",
+                            "{material.read().name()}"
+                            if is_draft {
+                                if save_label.is_some() {
+                                    span { class: "badge bg-secondary ms-2", "AdHoc Material" }
+                                } else {
+                                    span { class: "badge bg-secondary ms-2", "Draft (Auto-Version)" }
+                                }
+                            } else {
+                                span { class: "badge bg-warning text-dark ms-2",
+                                    "Target Version: v{current_version}"
+                                }
+                            }
+                        }
+                    }
                 }
-              }
-            }
-          }
 
-          // Main Scroll Area for Material Attributes
-          ScrollArea { height: "45em",
-            AssetHeaderEditor {
-              header: header_memo,
-              readonly,
-              on_change: handle_header_change,
-            }
-            OpticalPropertiesEditor {
-              optical: optical_memo,
-              base_id: format!("{}_optical", base_id),
-              readonly,
-              on_change: handle_optical_change,
-            }
+                // Main Scroll Area for Material Attributes
+                ScrollArea { height: "45em",
+                    AssetHeaderEditor {
+                        header: header_memo,
+                        readonly,
+                        on_change: handle_header_change,
+                    }
+                    OpticalPropertiesEditor {
+                        optical: optical_memo,
+                        base_id: format!("{}_optical", base_id),
+                        readonly,
+                        on_change: handle_optical_change,
+                    }
 
             // Advanced / Dangerous Options: Positioned at the very bottom
             details { class: "mt-4 p-3 border rounded bg-light",
@@ -169,10 +179,26 @@ pub fn MaterialEditor(
                     style: "width: 5.5rem;",
                     r#type: "number",
                     min: "0",
+                    step: "1",
                     disabled: readonly,
                     value: "{current_version}",
+                    // Prevent typing of negative signs, decimal points, and scientific notation
+                    onkeydown: move |evt| {
+                        if let Key::Character(ref c) = evt.key()
+                            && ["-", "+", ".", ",", "e", "E"].contains(&c.as_str())
+                        {
+                            evt.prevent_default();
+                        }
+                    },
                     oninput: move |evt| {
-                        if let Ok(version_val) = evt.value().parse::<u32>() {
+                        let raw_val = evt.value();
+                        if raw_val.is_empty() {
+                            // Optional fallback: Reset to 0 (draft) if field is cleared
+                            on_change
+                                .call(MaterialChangeEvent {
+                                    action: MaterialChangeAction::SetVersion(0),
+                                });
+                        } else if let Ok(version_val) = raw_val.parse::<u32>() {
                             on_change
                                 .call(MaterialChangeEvent {
                                     action: MaterialChangeAction::SetVersion(version_val),
@@ -193,47 +219,49 @@ pub fn MaterialEditor(
           }
         }
 
-        // Primary Action Footer
-        AlertDialogActions {
-          AlertDialogCancel { "Cancel" }
+            // Primary Action Footer
+            AlertDialogActions {
+                AlertDialogCancel { "Cancel" }
 
-          if on_save.is_some() && !readonly {
-            AlertDialogAction { on_click: handle_save_click,
-              if is_draft {
-                "Publish New Version"
-              } else {
-                "Overwrite Version {current_version}"
-              }
-            }
-          }
-        }
-      }
-
-      // 2. Overwrite Confirmation Warning Dialog
-      AlertDialog {
-        open: show_overwrite_warning(),
-        on_open_change: move |v| show_overwrite_warning.set(v),
-        max_width: "35rem".to_string(),
-        AlertDialogTitle { "Confirm Version Overwrite" }
-        AlertDialogDescription {
-          div { class: "text-danger fw-bold mb-2",
-            "Attention: You are about to overwrite version {current_version}!"
-          }
-          p { class: "small text-muted mb-0",
-            "This operation replaces the existing version file on disk. If this version has already been pushed to a remote repository, this change can cause Git merge conflicts during synchronization."
-          }
-        }
-        AlertDialogActions {
-          AlertDialogCancel { "Cancel" }
-          AlertDialogAction {
-            on_click: move |_| {
-                if let Some(save_handler) = on_save {
-                    save_handler.call(());
+                if on_save.is_some() && !readonly {
+                    AlertDialogAction { on_click: handle_save_click,
+                        if let Some(custom_label) = save_label.as_deref() {
+                            "{custom_label}"
+                        } else if is_draft {
+                            "Publish New Version"
+                        } else {
+                            "Overwrite Version {current_version}"
+                        }
+                    }
                 }
-            },
-            "Yes, Overwrite Version"
-          }
+            }
         }
-      }
+
+        // 2. Overwrite Confirmation Warning Dialog
+        AlertDialog {
+            open: show_overwrite_warning(),
+            on_open_change: move |v| show_overwrite_warning.set(v),
+            max_width: "35rem".to_string(),
+            AlertDialogTitle { "Confirm Version Overwrite" }
+            AlertDialogDescription {
+                div { class: "text-danger fw-bold mb-2",
+                    "Attention: You are about to overwrite version {current_version}!"
+                }
+                p { class: "small text-muted mb-0",
+                    "This operation replaces the existing version file on disk. If this version has already been pushed to a remote repository, this change can cause Git merge conflicts during synchronization."
+                }
+            }
+            AlertDialogActions {
+                AlertDialogCancel { "Cancel" }
+                AlertDialogAction {
+                    on_click: move |_| {
+                        if let Some(save_handler) = on_save {
+                            save_handler.call(());
+                        }
+                    },
+                    "Yes, Overwrite Version"
+                }
+            }
+        }
     }
 }

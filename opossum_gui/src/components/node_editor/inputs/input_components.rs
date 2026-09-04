@@ -1,5 +1,3 @@
-#![allow(clippy::derive_partial_eq_without_eq)]
-
 use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::inputs::{
@@ -11,14 +9,22 @@ use dioxus::prelude::*;
 use itertools::Itertools;
 use std::ops::{AddAssign, SubAssign};
 
-// ========================================================
-// 1. NEU: SEMAPHORE PROTOKOLL (Dirty Check)
-// ========================================================
-
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct FormContext {
     pub flush_trigger: Signal<usize>,
     pub dirty_count: Signal<usize>,
+}
+
+impl FormContext {
+    /// Increments the count of fields with unsaved changes.
+    pub fn mark_dirty(&mut self) {
+        self.dirty_count.write().add_assign(1);
+    }
+
+    /// Decrements the count of fields with unsaved changes.
+    pub fn mark_clean(&mut self) {
+        self.dirty_count.write().sub_assign(1);
+    }
 }
 
 #[component]
@@ -27,6 +33,9 @@ pub fn FlushableTextInput(
     label: String,
     value: String,
     on_save: EventHandler<String>,
+    /// Explicitly supply a `FormContext`, or leave as None to automatically resolve via ambient context.
+    #[props(optional)]
+    form_context: Option<FormContext>,
     #[props(default = String::new())] container_class: String,
     #[props(default = String::new())] input_class: String,
     #[props(default = String::new())] label_class: String,
@@ -36,14 +45,13 @@ pub fn FlushableTextInput(
     #[props(optional)] max: Option<&'static str>,
     #[props(default = false)] readonly: bool,
 ) -> Element {
-    let mut form_ctx = use_context::<FormContext>();
+    // Resolve context: explicit prop takes precedence; fall back to ambient context without panicking.
+    let resolved_ctx = form_context.or_else(try_use_context::<FormContext>);
 
     let mut local_value = use_signal(|| value.clone());
     let mut is_locally_dirty = use_signal(|| false);
-    // Tracks the prop's own last-seen value, separately from `local_value` (what's displayed) - this
-    // is what lets us tell "the prop changed to something new" (pull it in) apart from "the prop just
-    // hasn't caught up with a save we made a moment ago" (don't stomp our own optimistic update while
-    // waiting for that round-trip).
+
+    // Tracks the prop's own last-seen value separately from `local_value` to allow optimistic updates.
     let mut last_prop_value = use_signal(|| value.clone());
 
     if *last_prop_value.peek() != value {
@@ -58,14 +66,26 @@ pub fn FlushableTextInput(
             let val = local_value.peek().clone();
             on_save.call(val);
             is_locally_dirty.set(false);
-            form_ctx.dirty_count.write().sub_assign(1);
+            if let Some(mut ctx) = resolved_ctx {
+                ctx.mark_clean();
+            }
         }
     };
 
-    let flush_sig = form_ctx.flush_trigger;
+    // Listen to external flush signals when a FormContext is available.
     use_effect(move || {
-        flush_sig();
-        perform_save();
+        if let Some(ctx) = resolved_ctx {
+            // Subscribing to signal changes triggers this effect when flush_trigger updates.
+            (ctx.flush_trigger)();
+            perform_save();
+        }
+    });
+
+    // Snap displayed text back to confirmed prop value when save completes.
+    use_effect(move || {
+        if !*is_locally_dirty.read() {
+            local_value.set(last_prop_value.peek().clone());
+        }
     });
 
     rsx! {
@@ -88,9 +108,10 @@ pub fn FlushableTextInput(
                     local_value.set(new_value);
                     if !*is_locally_dirty.peek() {
                         is_locally_dirty.set(true);
-                        form_ctx.dirty_count.write().add_assign(1);
+                        if let Some(mut ctx) = resolved_ctx {
+                            ctx.mark_dirty();
+                        }
                     }
-
                 },
                 onblur: move |_| perform_save(),
                 onkeydown: move |e: Event<KeyboardData>| {
@@ -108,10 +129,6 @@ pub fn FlushableTextInput(
         }
     }
 }
-
-// ========================================================
-// 2. EXISTIERENDE KOMPONENTEN (Wiederhergestellt)
-// ========================================================
 
 #[component]
 pub fn LabeledCheckboxInput(
@@ -374,7 +391,7 @@ pub fn LabeledInput(
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct UnitHandling {
     /// The base unit of the input field. Eg. "m" for length, "W" for power, etc.
     /// This base unit will (optionally) be prefixed with the typical SI prefixes (m, k, M, etc.)
@@ -461,6 +478,62 @@ pub fn NodeConfigPlainF64Input(
             label,
             value: val_str,
             readonly,
+            container_class: "form-floating border-start".to_string(),
+            input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
+            label_class: "form-label text-secondary".to_string(),
+            on_save: on_input_submission,
+        }
+    }
+}
+
+/// A labeled integer input for node configuration panels, backed by [`FlushableTextInput`].
+///
+/// Accepts non-negative integers (`usize`). Invalid input (non-integer, negative, or a value the
+/// core refuses) is logged and the field reverts to the last accepted value — the caller never
+/// receives a value the core would reject.
+///
+/// # Props
+///
+/// * `id` - the input's own id, which its label points at.
+/// * `label` - what the field is called.
+/// * `value` - the current value as the document holds it. Re-synced whenever it changes.
+/// * `onchange` - called with the parsed integer when the user commits a valid edit.
+#[component]
+pub fn NodeConfigUsizeInput(
+    id: String,
+    label: String,
+    value: usize,
+    onchange: EventHandler<usize>,
+) -> Element {
+    let mut last_value = use_signal(|| value);
+    let mut val_str = use_signal(|| format!("{value}"));
+
+    if *last_value.peek() != value {
+        last_value.set(value);
+        val_str.set(format!("{value}"));
+    }
+
+    let on_input_submission = EventHandler::new(move |val: String| {
+        if let Ok(parsed) = val.trim().parse::<usize>() {
+            onchange.call(parsed);
+        } else {
+            OPOSSUM_UI_LOGS
+                .write()
+                .add_log(&format!("'{val}' is not a valid positive integer"));
+        }
+        // Pessimistic revert: show the last confirmed value while waiting for the parent to push
+        // the accepted value back through the `value` prop. The sync guard above will then
+        // overwrite this with the new value if the core accepted it.
+        val_str.set(format!("{}", *last_value.peek()));
+    });
+
+    rsx! {
+        FlushableTextInput {
+            id,
+            label,
+            value: val_str,
+            r#type: "number",
+            step: Some("1"),
             container_class: "form-floating border-start".to_string(),
             input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
             label_class: "form-label text-secondary".to_string(),
@@ -574,9 +647,9 @@ pub fn LabeledSelect(
     info!("🔄 Render: LabeledSelect");
 
     let select_class = if readonly {
-        "form-select bg-dark text-light disabled-select"
+        "form-select text-light disabled-select"
     } else {
-        "form-select bg-dark text-light"
+        "form-select text-light"
     };
 
     rsx! {

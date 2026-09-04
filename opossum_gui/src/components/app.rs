@@ -1,6 +1,8 @@
 // --- Common imports ---
 use crate::{
     APP_CONFIG,
+    api::get_api_welcome,
+    backend_status::BackendStatus,
     components::{
         catalog_editor::MaterialCatalog,
         context_menu::cx_menu::{ContextMenu, CxtCommand},
@@ -20,11 +22,15 @@ use crate::{
 };
 use dioxus::prelude::*;
 use dioxus_primitives::alert_dialog::AlertDialogContent;
-use opossum_registry::AssetLoader;
+use opossum_core::material::Material;
+use opossum_registry::AssetRegistry;
 use std::path::PathBuf;
 
 #[cfg(not(target_arch = "wasm32"))]
-use crate::{ProcessHandle, components::simulation::simulation_window::SimulationWindow};
+use crate::{
+    ProcessHandle, SIDEBAR_COLLAPSED, SIDEBAR_WIDTH,
+    components::simulation::simulation_window::SimulationWindow,
+};
 #[cfg(not(target_arch = "wasm32"))]
 use dioxus::desktop::{tao::window::ResizeDirection, use_window};
 
@@ -112,28 +118,80 @@ pub fn App() -> Element {
     #[cfg(not(target_arch = "wasm32"))]
     let mut run_simulation = use_signal(|| false);
 
-    // Initialize AssetLoader with the path from AppConfig
-    let mut loader = use_signal(|| {
+    let mut backend_status = use_signal(BackendStatus::default);
+    provide_context(backend_status);
+
+    // Asynchronous backend health check on startup
+    use_future(move || async move {
+        match get_api_welcome().await {
+            Ok(msg) if msg.contains("OPOSSUM backend") => {
+                info!("Backend connection established: {msg}");
+                backend_status.set(BackendStatus::Connected);
+            }
+            Ok(unexpected) => {
+                warn!("Backend returned unexpected welcome message: {unexpected}");
+                backend_status.set(BackendStatus::Disconnected);
+            }
+            Err(err) => {
+                warn!("Backend is unreachable: {err}");
+                backend_status.set(BackendStatus::Disconnected);
+            }
+        }
+    });
+
+    let mut material_registry = use_signal(|| {
         let registry_path = APP_CONFIG
             .read()
             .catalog_dir()
             .cloned()
             .unwrap_or_else(|| PathBuf::from("./catalogs"));
 
-        // Ensure the directory exists
+        // Ensure the directory exists on startup
         if !registry_path.exists() {
             let _ = std::fs::create_dir_all(&registry_path);
         }
 
-        AssetLoader::new(registry_path)
+        // Initialize registry facade and build in-memory index
+        AssetRegistry::<Material>::new(registry_path).unwrap_or_else(|err| {
+            log::error!("Failed to initialize MaterialRegistry: {err}");
+            // Fallback to in-memory/empty registry on severe I/O errors
+            AssetRegistry::new("./catalogs").expect("Fallback registry path failed")
+        })
     });
-    // Reactive update: re-instantiate AssetLoader when catalog_dir changes in APP_CONFIG
+
+    // Provide the shared AssetRegistry signal to all child components via Dioxus context
+    provide_context(material_registry);
+
+    // 2. Reactive update: re-instantiate AssetRegistry and rebuild index when catalog_dir changes in APP_CONFIG
     use_effect(move || {
         if let Some(catalog_path) = APP_CONFIG.read().catalog_dir() {
-            if !catalog_path.exists() {
-                let _ = std::fs::create_dir_all(catalog_path);
+            // Ensure newly selected directory exists on disk
+            if !catalog_path.exists()
+                && let Err(e) = std::fs::create_dir_all(catalog_path)
+            {
+                log::error!(
+                    "Failed to create new catalog directory {}: {e}",
+                    catalog_path.display()
+                );
+                return;
             }
-            *loader.write() = AssetLoader::new(catalog_path.clone());
+
+            // Create new registry instance for the updated path (automatically scans and builds the index)
+            match AssetRegistry::<Material>::new(catalog_path.clone()) {
+                Ok(new_registry) => {
+                    info!(
+                        "Successfully reloaded MaterialRegistry from: {}",
+                        catalog_path.display()
+                    );
+                    *material_registry.write() = new_registry;
+                }
+                Err(err) => {
+                    log::error!(
+                        "Failed to reload MaterialRegistry from {}: {err}",
+                        catalog_path.display()
+                    );
+                }
+            }
         }
     });
     let mut node_editor_command: Signal<Option<NodeEditorCommand>> = use_signal(|| None);
@@ -256,39 +314,59 @@ pub fn App() -> Element {
     };
 
     let mut execute_immediate_for_alert = execute_immediate.clone();
-    let process_command = move |cmd: AppCommand| match cmd {
-        AppCommand::NewProject => {
-            if *model_modified_sig.read() {
-                pending_action.set(Some(PendingAction::NewProject));
-                show_alert.set(true);
-            } else {
-                execute_immediate(AppCommand::NewProject);
+    let process_command = move |cmd: AppCommand| {
+        let is_connected = backend_status.read().is_connected();
+        // Disallow backend-dependent commands when disconnected
+        match &cmd {
+            AppCommand::Simulate
+            | AppCommand::AutoLayout
+            | AppCommand::NewProject
+            | AppCommand::OpenTrigger
+            | AppCommand::Save
+            | AppCommand::SaveAs
+            | AppCommand::AddNode(_)
+            | AppCommand::AddAnalyzer(_)
+                if !is_connected =>
+            {
+                log::warn!("Command {cmd:?} ignored: Backend is not connected.");
+                return;
             }
+            _ => {}
         }
-        AppCommand::Quit => {
-            if *model_modified_sig.read() {
-                pending_action.set(Some(PendingAction::Quit));
-                show_alert.set(true);
-            } else {
-                execute_immediate(AppCommand::Quit);
+        match cmd {
+            AppCommand::NewProject => {
+                if *model_modified_sig.read() {
+                    pending_action.set(Some(PendingAction::NewProject));
+                    show_alert.set(true);
+                } else {
+                    execute_immediate(AppCommand::NewProject);
+                }
             }
-        }
-        AppCommand::OpenTrigger => {
-            if *model_modified_sig.read() {
-                pending_action.set(Some(PendingAction::OpenProject));
-                show_alert.set(true);
-            } else {
-                execute_immediate(AppCommand::OpenTrigger);
+            AppCommand::Quit => {
+                if *model_modified_sig.read() {
+                    pending_action.set(Some(PendingAction::Quit));
+                    show_alert.set(true);
+                } else {
+                    execute_immediate(AppCommand::Quit);
+                }
             }
-        }
-        AppCommand::Save => {
-            if let Some(path) = model_file_path.read().clone() {
-                node_editor_command_handler.call(Some(NodeEditorCommand::SaveFile(path)));
-            } else {
-                execute_immediate(AppCommand::SaveAs);
+            AppCommand::OpenTrigger => {
+                if *model_modified_sig.read() {
+                    pending_action.set(Some(PendingAction::OpenProject));
+                    show_alert.set(true);
+                } else {
+                    execute_immediate(AppCommand::OpenTrigger);
+                }
             }
+            AppCommand::Save => {
+                if let Some(path) = model_file_path.read().clone() {
+                    node_editor_command_handler.call(Some(NodeEditorCommand::SaveFile(path)));
+                } else {
+                    execute_immediate(AppCommand::SaveAs);
+                }
+            }
+            _ => execute_immediate(cmd),
         }
-        _ => execute_immediate(cmd),
     };
     let process_command_for_menu = process_command.clone();
 
@@ -360,13 +438,26 @@ pub fn App() -> Element {
                         parent: parent.clone(),
                     }));
                 }
+                CxtCommand::ToggleAmplifierCandidate {
+                    node_id,
+                    graph_id,
+                    is_amplifier,
+                } => {
+                    node_editor_command_handler.call(Some(
+                        NodeEditorCommand::ToggleAmplifierCandidate {
+                            node_id: *node_id,
+                            graph_id: *graph_id,
+                            is_amplifier: *is_amplifier,
+                        },
+                    ));
+                }
             }
         }
     });
 
     #[cfg(not(target_arch = "wasm32"))]
     rsx! {
-        div { class: "app-container", tabindex: 0,
+        div { class: "app-container", tabindex: 0, "data-theme": "dark",
             // Keyboard shortcuts are handled by the document-level listener installed above, not here -
             // an element `onkeydown` only fires while focus is inside it, which breaks after a panel
             // re-render drops focus to `<body>`.
@@ -463,7 +554,12 @@ pub fn App() -> Element {
         }
         SimulationWindow { show_simulation: run_simulation, model_file_path }
         SettingsDialog { open: show_settings }
-        MaterialCatalog { open: show_material_catalog, loader }
+        MaterialCatalog { open: show_material_catalog }
+        // Invisible master sprite containing all icon definitions
+        div {
+            style: "position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none;",
+            dangerous_inner_html: include_str!("../../assets/icons/NodeIcons.svg"),
+        }
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -493,6 +589,19 @@ pub fn App() -> Element {
     }
 }
 
+/// Narrowest the node-config sidebar may be dragged before its inputs start to overlap.
+const MIN_SIDEBAR_WIDTH: f64 = 200.0;
+/// Thickness of a resize handle, matching `.resizer` in `main.css`. That rule is shared by the
+/// sidebar and the log panel, so the value stays in CSS and is only mirrored here to work out the
+/// collapsed sidebar's total width.
+const RESIZER_THICKNESS: f64 = 2.0;
+/// Width of the collapsed sidebar: its icon bar plus the resize handle. The icon bar's width is
+/// applied from here as an inline style (see `SidebarViewSwitcher`), so this constant defines it
+/// rather than having to be kept in step with a number in the stylesheet.
+pub const COLLAPSED_SIDEBAR_WIDTH: f64 = SIDEBAR_SWITCHER_WIDTH + RESIZER_THICKNESS;
+/// Width of the sidebar's vertical icon bar, wide enough for one icon button plus its padding.
+pub const SIDEBAR_SWITCHER_WIDTH: f64 = 50.0;
+
 #[component]
 fn CommonAppLayout(
     cxt_command_handler: EventHandler<Option<CxtCommand>>,
@@ -514,19 +623,70 @@ fn CommonAppLayout(
     let mut height = use_signal(|| 100.0);
     let mut dragging = use_signal(|| false);
     let mut last_y = use_signal(|| 0.0);
+    // The sidebar is resized the same way as the log panel, and for the same reason from the same
+    // place: the move/up listeners sit on the outermost container, so a drag survives the pointer
+    // leaving the element it started on - which matters here, because dragging far enough left
+    // collapses the sidebar and unmounts the very handle the drag started on.
+    // `Some((pointer x, sidebar width))` at the moment the drag started, `None` while not dragging.
+    // The requested width is derived from those two on every move rather than accumulated, so the
+    // *unclamped* width the pointer asks for needs no state of its own: dragging past the minimum
+    // keeps tracking the pointer instead of piling up at the clamp, which is what lets dragging
+    // back out restore the panel at the right moment.
+    let mut sidebar_drag_origin = use_signal(|| None::<(f64, f64)>);
 
-    let on_mousemove = move |evt: MouseEvent| {
-        if *dragging.read() {
-            let height_val = *height.read();
-            let dy = evt.client_coordinates().y - *last_y.read();
-            height.set((height_val - dy).max(100.0));
-            last_y.set(evt.client_coordinates().y);
+    let on_mousemove = {
+        move |evt: MouseEvent| {
+            if *dragging.read() {
+                let height_val = *height.read();
+                let dy = evt.client_coordinates().y - *last_y.read();
+                height.set((height_val - dy).max(100.0));
+                last_y.set(evt.client_coordinates().y);
+            }
+            if let Some((start_x, start_width)) = *sidebar_drag_origin.read() {
+                let requested = (start_width + evt.client_coordinates().x - start_x).max(0.0);
+                // Below half the minimum width the panel collapses exactly as if its icon had been
+                // clicked, and dragging back out past that point brings it straight back. Between
+                // the two the width simply sticks at the minimum.
+                let collapsed = requested < MIN_SIDEBAR_WIDTH / 2.0;
+                // Written only on an actual change: a `Signal::write` marks its subscribers dirty
+                // regardless of the value, and the whole sidebar re-renders on every mousemove
+                // otherwise - including the long stretch where the width is pinned to the minimum.
+                if SIDEBAR_COLLAPSED() != collapsed {
+                    *SIDEBAR_COLLAPSED.write() = collapsed;
+                }
+                if !collapsed {
+                    let width = requested.max(MIN_SIDEBAR_WIDTH);
+                    if (SIDEBAR_WIDTH() - width).abs() > f64::EPSILON {
+                        *SIDEBAR_WIDTH.write() = width;
+                    }
+                }
+            }
         }
     };
-    let on_mouseup = move |_| dragging.set(false);
-    let on_mousedown = move |evt: f64| {
-        dragging.set(true);
-        last_y.set(evt);
+    let on_mouseup = {
+        move |_| {
+            dragging.set(false);
+            sidebar_drag_origin.set(None);
+        }
+    };
+    let on_mousedown = {
+        move |evt: f64| {
+            dragging.set(true);
+            last_y.set(evt);
+        }
+    };
+    let on_sidebar_mousedown = {
+        move |evt: f64| {
+            // Start from the width the sidebar actually has on screen, so the panel follows the
+            // pointer from the first pixel - dragging a collapsed sidebar back out must not begin
+            // at its remembered expanded width.
+            let start_width = if SIDEBAR_COLLAPSED() {
+                COLLAPSED_SIDEBAR_WIDTH
+            } else {
+                SIDEBAR_WIDTH()
+            };
+            sidebar_drag_origin.set(Some((evt, start_width)));
+        }
     };
 
     rsx! {
@@ -554,6 +714,7 @@ fn CommonAppLayout(
                 model_file_path,
                 model_file_path_handler,
                 root_tab_open_handler,
+                sidebar_drag_handler: on_sidebar_mousedown,
             }
             Logger { drag_handler: on_mousedown, height }
         }
