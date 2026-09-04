@@ -1,5 +1,5 @@
 use nalgebra::Point2;
-use num::Zero;
+use num_traits::Zero;
 use opossum_core::{
     distributions::energy::{EnergyDistType, UniformDist},
     distributions::position::{

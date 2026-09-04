@@ -11,7 +11,7 @@ use crate::{
 };
 use approx::relative_eq;
 use nalgebra::{Isometry3, MatrixXx2, MatrixXx3, Point3, Rotation3, Translation3, Vector3, vector};
-use num::Zero;
+use num_traits::Zero;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use strum::EnumIter;
 use uom::si::{

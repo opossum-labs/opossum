@@ -233,7 +233,7 @@ mod test {
         },
         nodes::{EnergyMeter, test_helper::test_helper::*},
     };
-    use num::Zero;
+    use num_traits::Zero;
     use uom::si::f64::Length;
 
     #[test]

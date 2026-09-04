@@ -15,7 +15,7 @@ use log::warn;
 use nalgebra::{
     DMatrix, DVector, DVectorView, Matrix3xX, MatrixXx1, MatrixXx2, MatrixXx3, Vector3,
 };
-use num::ToPrimitive;
+use num_traits::ToPrimitive;
 #[cfg(not(target_arch = "wasm32"))]
 use plotters::prelude::SVGBackend;
 use plotters::{

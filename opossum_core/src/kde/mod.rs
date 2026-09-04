@@ -10,7 +10,7 @@ use crate::{
 };
 use gaussian::Gaussian2D;
 use nalgebra::{DMatrix, Point2, point};
-use num::Zero;
+use num_traits::Zero;
 use rayon::prelude::*;
 use std::ops::Range;
 use uom::si::f64::{Area, Energy, Length};

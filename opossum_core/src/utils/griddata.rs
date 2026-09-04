@@ -10,7 +10,7 @@ use approx::abs_diff_ne;
 use itertools::Itertools;
 use log::warn;
 use nalgebra::{DMatrix, DVector, DVectorView, MatrixXx2, MatrixXx3, Point2, Scalar};
-use num::{Float, NumCast, ToPrimitive};
+use num_traits::{Float, NumCast, ToPrimitive};
 use spade::{DelaunayTriangulation, HasPosition, Point2 as SpadeP, Triangulation};
 use std::ops::Add;
 use voronator::{

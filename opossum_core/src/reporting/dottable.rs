@@ -6,7 +6,7 @@
 //! Types implementing [`Dottable`] can be rendered as graph nodes and edges.
 use crate::core_optics::{OpticPorts, PortType};
 use crate::error::OpmResult;
-use num::ToPrimitive;
+use num_traits::ToPrimitive;
 use std::fmt::Write as _;
 
 /// Structure for holding the calculated layout parameters for the node's table representation.
@@ -382,7 +382,7 @@ mod test {
             SplittingConfigBuilder,
         },
     };
-    use num::Zero;
+    use num_traits::Zero;
     use std::{fs::File, io::Read};
     use uom::si::f64::Length;
 

@@ -20,7 +20,7 @@
 //! 7. Configure multi-wavelength ray tracing
 //! 8. Run analysis and save output
 use nalgebra::Point2;
-use num::Zero;
+use num_traits::Zero;
 use opossum_core::core_optics::{NodeAttrExt, OpticNodeExt};
 use opossum_core::distributions::{energy::UniformDist, position::Grid, spectral::LaserLines};
 use opossum_core::prelude::*;

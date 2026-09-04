@@ -98,7 +98,7 @@ impl From<RefrIndexConst> for RefractiveIndexType {
 }
 #[cfg(test)]
 mod test {
-    use num::Zero;
+    use num_traits::Zero;
     use uom::si::f64::Length;
 
     use crate::error::OpossumError;

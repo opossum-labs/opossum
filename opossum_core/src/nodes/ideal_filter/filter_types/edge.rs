@@ -1,7 +1,7 @@
 use std::{fmt::Display, ops::Range, str::FromStr};
 
 use log::warn;
-use num::Zero;
+use num_traits::Zero;
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 use uom::si::f64::Length;

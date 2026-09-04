@@ -29,7 +29,7 @@ use crate::{
     utils::{LockExt, geom_transformation::Isometry, math_utils::distance_3d_point},
 };
 use nalgebra::{Point2, Point3, Vector3};
-use num::Zero;
+use num_traits::Zero;
 use std::{fmt::Debug, ops::Range};
 use uom::si::f64::Length;
 

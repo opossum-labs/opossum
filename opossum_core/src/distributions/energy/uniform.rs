@@ -5,7 +5,7 @@ use crate::{
     joule, validated, validated_type,
 };
 use nalgebra::Point2;
-use num::ToPrimitive;
+use num_traits::ToPrimitive;
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::{Energy, Length};

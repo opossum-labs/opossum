@@ -40,11 +40,11 @@
 //! - `nalgebra::Point2` used for 2D source grid definition
 //! - `nalgebra::Vector3` used for visualization direction vectors
 //! - `uom` used for strongly typed physical units
-//! - `num::Zero` used for zero-valued unit initialization
+//! - `num_traits::Zero` used for zero-valued unit initialization
 
 use nalgebra::Point2;
 use nalgebra::Vector3;
-use num::Zero;
+use num_traits::Zero;
 use opossum_core::core_optics::NodeAttrExt;
 use opossum_core::material::Material;
 use opossum_core::prelude::*;

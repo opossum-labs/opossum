@@ -6,7 +6,7 @@ use crate::{
     millimeter, validated, validated_type,
 };
 use nalgebra::{Point2, Point3, point};
-use num::Zero;
+use num_traits::Zero;
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use sobol::{Sobol, params::JoeKuoD6};

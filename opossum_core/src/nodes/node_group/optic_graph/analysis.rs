@@ -346,7 +346,7 @@ mod test {
         utils::{geom_transformation::Isometry, test_helper::test_helper::check_logs},
     };
     use approx::assert_abs_diff_eq;
-    use num::Zero;
+    use num_traits::Zero;
 
     #[test]
     fn analyze_empty() -> OpmResult<()> {

@@ -3,7 +3,7 @@
 use std::f64::consts::PI;
 
 use nalgebra::Point2;
-use num::Zero;
+use num_traits::Zero;
 use uom::si::{Dimension, Quantity, Units, angle::radian, f64::Angle};
 
 use crate::error::OpmResult;

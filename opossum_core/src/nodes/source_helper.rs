@@ -15,7 +15,7 @@ use crate::{
     meter, millimeter, nanometer,
 };
 use nalgebra::Point2;
-use num::Zero;
+use num_traits::Zero;
 use uom::si::f64::{Angle, Energy, Length};
 
 /// Create a collimated [`RayDataBuilder`].

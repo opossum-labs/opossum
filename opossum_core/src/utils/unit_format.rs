@@ -1,5 +1,5 @@
 //! various functions for dealing with SI notation of (physical) values (e.g. prefix, etc.)
-use num::Zero;
+use num_traits::Zero;
 use uom::si::{
     f64::Length,
     length::{
