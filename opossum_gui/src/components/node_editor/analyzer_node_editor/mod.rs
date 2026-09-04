@@ -6,6 +6,7 @@ mod source_port_card;
 
 use crate::components::{
     node_editor::{
+        accordion::{StaticSection, open_accordion_content},
         analyzer_node_editor::{
             energy_editor::EnergyEditor, ghost_focus_editor::GhostFocusEditor,
             ray_trace_editor::RayTraceEditor,
@@ -26,24 +27,23 @@ use opossum_core::{
 use uuid::Uuid;
 
 /// Wires a source-port card to `PENDING_SOURCE_CARD_OPEN` for auto-expansion on undo/redo actions.
-pub fn use_source_card_focus(
-    analyzer_id: uuid::Uuid,
-    port_uuid: uuid::Uuid,
-    mut is_collapsed: Signal<bool>,
-) {
+///
+/// When the pending target matches this card, its MDB accordion section is expanded via the shared
+/// [`open_accordion_content`] helper (same JS-interop shape as the node-config sub-accordions) and
+/// the card is scrolled into view.
+///
+/// # Arguments
+/// * `analyzer_id` - the analyzer node the card belongs to.
+/// * `port_uuid` - the source port whose card this is; also forms the accordion/scroll element ids.
+pub fn use_source_card_focus(analyzer_id: uuid::Uuid, port_uuid: uuid::Uuid) {
     use_effect(move || {
         if *crate::PENDING_SOURCE_CARD_OPEN.read() == Some((analyzer_id, port_uuid)) {
-            is_collapsed.set(false);
+            // Expand this port's accordion section (reusing the shared MDB-collapse helper) ...
+            open_accordion_content(&format!("sourceCollapse{port_uuid}"));
+            // ... and scroll the card into view.
             let script = format!(
                 "const card = document.getElementById('sourceCard{port_uuid}'); \
-                 if (card) {{ \
-                   card.scrollIntoView({{ behavior: 'smooth', block: 'nearest' }}); \
-                   requestAnimationFrame(() => {{ \
-                     card.querySelectorAll('.accordion-collapse').forEach(el => {{ \
-                       if (window.mdb && mdb.Collapse) {{ mdb.Collapse.getOrCreateInstance(el, {{ toggle: false }}).show(); }} \
-                     }}); \
-                   }}); \
-                 }}"
+                 if (card) {{ card.scrollIntoView({{ behavior: 'smooth', block: 'nearest' }}); }}"
             );
             spawn(async move {
                 let _ = dioxus::document::eval(&script).await;
@@ -140,19 +140,22 @@ pub fn AnalyzerNodeEditor(
                     div {
                         class: "accordion accordion-borderless bg-dark",
                         id: "accordionAnalyzerConfig",
-                        NodeTypeInput {
-                            node_type: format!("{}", analyzer_info.analyzer_type()),
-                            label: "Analyzer Type",
-                        }
-                        FlushableTextInput {
-                            id: format!("analyzerName_{loaded_id_val}"),
-                            label: "Analyzer Name".to_string(),
-                            value: analyzer_name,
-                            container_class: "form-floating border-start".to_string(),
-                            input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
-                            label_class: "form-label text-secondary".to_string(),
-                            readonly: false,
-                            on_save: on_name_save,
+                        StaticSection { header: "General",
+                            NodeTypeInput {
+                                node_type: format!("{}", analyzer_info.analyzer_type()),
+                                label: "Analyzer Type",
+                            }
+                            FlushableTextInput {
+                                id: format!("analyzerName_{loaded_id_val}"),
+                                label: "Analyzer Name".to_string(),
+                                value: analyzer_name,
+                                container_class: "form-floating border-start".to_string(),
+                                input_class: "form-control bg-dark text-light form-control-sm noselect"
+                                    .to_string(),
+                                label_class: "form-label text-secondary".to_string(),
+                                readonly: false,
+                                on_save: on_name_save,
+                            }
                         }
                         {
                             match analyzer_info.analyzer_type() {
@@ -191,11 +194,13 @@ pub fn AnalyzerNodeEditor(
                         // Outside the per-type match on purpose: which operating points a run uses
                         // is stated next to the analyzer's config, not inside it, so it applies to
                         // every kind of analysis alike.
-                        PumpScenarioSelection {
-                            analyzer_id: loaded_id_val,
-                            selected: selected_scenarios,
-                            scenarios: pump_scenarios,
-                            on_change,
+                        StaticSection { header: "Pump Scenarios",
+                            PumpScenarioSelection {
+                                analyzer_id: loaded_id_val,
+                                selected: selected_scenarios,
+                                scenarios: pump_scenarios,
+                                on_change,
+                            }
                         }
                     }
                 }
@@ -258,8 +263,7 @@ fn PumpScenarioSelection(
     let nothing_selected = selected.is_empty();
 
     rsx! {
-        div { class: "pump-scenario-selection mt-2",
-            label { class: "text-secondary small", "Pump scenarios" }
+        div { class: "pump-scenario-selection",
             if rows.is_empty() {
                 div { class: "text-secondary small fst-italic",
                     "No pump scenario defined - this analysis runs on the passive model."

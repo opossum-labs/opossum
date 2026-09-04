@@ -1,7 +1,7 @@
 use crate::components::{
     asset_editor::material_editor::{MaterialChangeEvent, MaterialEditor},
     catalog_editor::MaterialCatalog,
-    primitives::button::{Button, ButtonVariant},
+    primitives::button::{Button, ButtonSize, ButtonVariant},
 };
 use dioxus::prelude::*;
 use dioxus_free_icons::{
@@ -32,6 +32,8 @@ pub fn MaterialSelector(
     let is_catalog = material.version() > 0;
     let material_name = material.name().to_string();
     let current_version = material.version();
+    // Floating-label text; empty when no label was supplied.
+    let label_text = label.unwrap_or_default();
 
     // Modal dialog visibility signals
     let mut show_catalog_dialog = use_signal(|| false);
@@ -91,84 +93,75 @@ pub fn MaterialSelector(
     };
 
     rsx! {
-        div { class: "mb-3",
-            // Optional Label Header
-            if let Some(lbl) = label {
-                label { class: "form-label fw-bold small text-capitalize mb-1", "{lbl}" }
-            }
-
-            // Row 1: Material name and status badge
-            div { class: "d-flex justify-content-between align-items-center px-2 py-1 rounded bg-dark border border-secondary",
+        // Compact material display matching the lens node's material-property editor:
+        // name + version/AdHoc badge + icon-only action buttons inside a floating-label field.
+        div { class: "form-floating border-start",
+            // `bg-dark` is set explicitly: like `LabeledSelect`, this `.form-control` lives outside an
+            // `.accordion-body` (the analyzer sidebar), so it misses the accordion-scoped dark rule in
+            // `mdb_accordion.css` and would otherwise fall back to Bootstrap's white default.
+            div { class: "form-control form-control-sm material-prop-display bg-dark",
                 span {
-                    class: "text-truncate fw-semibold small text-light",
+                    class: "material-prop-name text-truncate",
                     title: "{material_name}",
                     "{material_name}"
                 }
                 if is_catalog {
-                    span { class: "badge bg-primary flex-shrink-0 ms-2", "v{current_version}" }
+                    span { class: "badge bg-primary flex-shrink-0", "v{current_version}" }
+                    if !readonly {
+                        Button {
+                            size: ButtonSize::IconXs,
+                            variant: ButtonVariant::Primary,
+                            title: "Choose a different material from the catalog",
+                            class: "material-btn",
+                            onclick: move |_| show_catalog_dialog.set(true),
+                            Icon { icon: FaBook }
+                        }
+                        Button {
+                            size: ButtonSize::IconXs,
+                            variant: ButtonVariant::Secondary,
+                            title: "Detach from catalog (create an independent local copy)",
+                            class: "material-btn",
+                            onclick: on_unlink_to_adhoc,
+                            Icon { icon: FaLinkSlash }
+                        }
+                    }
                 } else {
-                    span { class: "badge bg-secondary flex-shrink-0 ms-2", "AdHoc" }
+                    span { class: "material-btn badge flex-shrink-0", "AdHoc" }
+                    if !readonly {
+                        Button {
+                            size: ButtonSize::IconXs,
+                            variant: ButtonVariant::Primary,
+                            title: "Edit local material properties",
+                            class: "material-btn",
+                            onclick: {
+                                move |_| {
+                                    editing_material.set(material.clone());
+                                    show_editor_dialog.set(true);
+                                }
+                            },
+                            Icon { icon: FaPencil }
+                        }
+                        Button {
+                            size: ButtonSize::IconXs,
+                            variant: ButtonVariant::Success,
+                            title: "Publish this AdHoc material into the permanent catalog",
+                            class: "material-btn",
+                            onclick: on_publish_adhoc_to_catalog,
+                            Icon { icon: FaCloudArrowUp }
+                        }
+                        Button {
+                            size: ButtonSize::IconXs,
+                            variant: ButtonVariant::Primary,
+                            title: "Replace with an existing material from catalog",
+                            class: "material-btn",
+                            onclick: move |_| show_catalog_dialog.set(true),
+                            Icon { icon: FaBook }
+                        }
+                    }
                 }
             }
-
-        // Row 2: Action buttons row
-        if !readonly {
-          div { class: "d-flex gap-1 mt-1 align-items-stretch",
-            if is_catalog {
-              // Catalog Mode: Change or Unlink
-              div { class: "flex-fill",
-                Button {
-                  title: "Choose a different material from the catalog",
-                  onclick: move |_| show_catalog_dialog.set(true),
-                  Icon { icon: FaBook }
-                  "Change"
-                }
-              }
-              div { class: "flex-fill",
-                Button {
-                  title: "Detach from catalog (create an independent local copy)",
-                  variant: ButtonVariant::Secondary,
-                  onclick: on_unlink_to_adhoc,
-                  Icon { icon: FaLinkSlash }
-                  "Unlink"
-                }
-              }
-            } else {
-              // AdHoc Mode: Edit inline, Publish, or replace from Catalog
-              div { class: "flex-fill",
-                Button {
-                  title: "Edit local material properties",
-                  onclick: {
-                      move |_| {
-                          editing_material.set(material.clone());
-                          show_editor_dialog.set(true);
-                      }
-                  },
-                  Icon { icon: FaPencil }
-                  "Edit"
-                }
-              }
-              div { class: "flex-fill",
-                Button {
-                  title: "Publish this AdHoc material into the permanent catalog",
-                  variant: ButtonVariant::Success,
-                  onclick: on_publish_adhoc_to_catalog,
-                  Icon { icon: FaCloudArrowUp }
-                  "Publish"
-                }
-              }
-              div {
-                Button {
-                  title: "Replace with an existing material from catalog",
-                  variant: ButtonVariant::Outline,
-                  onclick: move |_| show_catalog_dialog.set(true),
-                  Icon { icon: FaBook }
-                }
-              }
-            }
-          }
+            label { class: "form-label text-secondary", "{label_text}" }
         }
-      }
 
         // Catalog Selection Modal Dialog
         MaterialCatalog { open: show_catalog_dialog, on_select: on_catalog_select }
