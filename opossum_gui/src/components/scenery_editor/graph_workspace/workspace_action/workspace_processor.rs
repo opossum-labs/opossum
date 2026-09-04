@@ -2293,32 +2293,54 @@ async fn process_refresh(
 ) {
     match api::get_document_root_uuid().await {
         Ok(id) => {
-            // Save and restore canvas config before adding elements
-            let saved_editor_area = *workspace.editor_area().read();
-            ws_handler.workspace.clear_workspace();
-            ws_handler.workspace.set_root_scenery_id(id);
-            ws_handler.workspace.set_editor_area(saved_editor_area);
+            let tab_exists = workspace.tabs().read().contains_key(&id);
 
-            if let Ok(hierarchy) = api::get_group_hierarchy(id).await {
-                let name = hierarchy
-                    .last()
-                    .map_or_else(|| "Root Scenery".to_string(), |(_, n)| n.clone());
-                ws_handler.workspace.add_new_group_tab(GraphInfo {
-                    name,
-                    id,
-                    hierarchy,
-                });
+            if tab_exists {
+                // 1. Update scenery display name and hierarchy in case it changed on the backend
+                if let Ok(hierarchy) = api::get_group_hierarchy(id).await {
+                    let name = hierarchy
+                        .last()
+                        .map_or_else(|| "Root Scenery".to_string(), |(_, n)| n.clone());
+                    ws_handler.nodes.set_node_name(name, id, id, false);
+                }
+
+                // 2. Clear only graph store elements (nodes, edges, analyzers)
+                // This keeps EditorState (pan & zoom) completely intact and prevents GraphViewEditor from remounting.
+                ws_handler.nodes.clear_graph_store(id);
+            } else {
+                // Fallback: If the root scenery tab does not exist yet, initialize it cleanly
+                let saved_editor_area = *workspace.editor_area().read();
+                ws_handler.workspace.clear_workspace();
+                ws_handler.workspace.set_root_scenery_id(id);
+                ws_handler.workspace.set_editor_area(saved_editor_area);
+
+                if let Ok(hierarchy) = api::get_group_hierarchy(id).await {
+                    let name = hierarchy
+                        .last()
+                        .map_or_else(|| "Root Scenery".to_string(), |(_, n)| n.clone());
+                    ws_handler.workspace.add_new_group_tab(GraphInfo {
+                        name,
+                        id,
+                        hierarchy,
+                    });
+                }
+                process_get_editor_area(workspace, ws_handler).await;
             }
-            process_get_editor_area(workspace, ws_handler).await;
+
+            // 3. Refill the graph from backend; never recenter if the tab already existed
             process_fill_graph_of_group(
                 root_scenery_id.into(),
                 id,
                 ws_handler,
                 false,
-                true, // should_center
+                !tab_exists,
                 workspace,
             )
             .await;
+
+            // 4. Sync document-wide caches (candidates and gain models) with backend state
+            refresh_amplifier_candidates(ws_handler).await;
+            refresh_active_scenario_gain_models(ws_handler).await;
 
             ws_handler.workspace.set_needs_saving(true);
             *crate::UNDO_REDO_STATUS.write() = (false, false);
