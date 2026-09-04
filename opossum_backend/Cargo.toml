@@ -36,5 +36,7 @@ tokio-stream = "0.1"
 utoipa-actix-web = "0.1"
 utoipa-swagger-ui = { version = "9", features = ["actix-web", "vendored"] }
 tokio = { version = "1", features = ["process"] }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# Add ureq with minimal features for TLS and Serde JSON support:
+ureq = { version = "2.10", default-features = false, features = ["tls", "json"] }
 semver = "1.0"

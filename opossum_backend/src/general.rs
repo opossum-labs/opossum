@@ -1,6 +1,6 @@
 //! General endpoints
 use crate::error::BackEndErrorResponse;
-use actix_web::{Responder, get, web::Json};
+use actix_web::{get, web::Json, web::block, Responder};
 use opossum_core::{
     analyzers::AnalyzerType,
     types::api_types::{NodeType, VersionInfo},
@@ -46,26 +46,26 @@ async fn get_version() -> impl Responder {
     let mut release_url = None;
     let mut update_available = false;
 
-    // Try to call GitHub API
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(2))
-        .build()
-        .unwrap();
-    let res = client
-        .get("https://api.github.com/repos/opossum-labs/opossum/releases/latest")
-        .header("User-Agent", "OPOSSUM-Backend")
-        .send()
-        .await;
+    // Offload the synchronous HTTP call to Actix's thread pool to prevent blocking the async runtime
+    let github_release = block(|| {
+        ureq::get("https://api.github.com/repos/opossum-labs/opossum/releases/latest")
+            .set("User-Agent", "OPOSSUM-Backend")
+            .timeout(std::time::Duration::from_secs(2))
+            .call()
+            .ok()?
+            .into_json::<GitHubRelease>()
+            .ok()
+    })
+    .await
+    .ok()
+    .flatten();
 
-    // If successful, parse the information
-    if let Ok(response) = res
-        && response.status().is_success()
-        && let Ok(release) = response.json::<GitHubRelease>().await
-    {
+    // Process response if request and JSON parsing were successful
+    if let Some(release) = github_release {
         latest_github_version = Some(release.tag_name.clone());
         release_url = Some(release.html_url);
 
-        // Compare versions with semver
+        // Compare local version against remote GitHub version using semver
         if let (Ok(local_ver), Ok(github_ver)) = (
             Version::parse(&backend_version),
             Version::parse(&release.tag_name),
@@ -73,6 +73,7 @@ async fn get_version() -> impl Responder {
             update_available = github_ver > local_ver;
         }
     }
+
     Json(VersionInfo {
         backend_version,
         opossum_version,
@@ -105,6 +106,7 @@ async fn get_node_types() -> Result<Json<Vec<NodeType>>, BackEndErrorResponse> {
     node_types.sort_by_key(|a| a.node_type.to_lowercase());
     Ok(Json(node_types))
 }
+
 /// Return a list of available analyzer types of OPOSSUM
 ///
 /// Return a list of all available analyzer types from the OPOSSUM library.
@@ -125,10 +127,11 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_node_types);
     cfg.service(get_analyzer_types);
 }
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use actix_web::{App, body::to_bytes, dev::Service, http::StatusCode, test};
+    use actix_web::{body::to_bytes, dev::Service, http::StatusCode, test, App};
 
     #[actix_web::test]
     async fn get_hello() {
@@ -139,6 +142,7 @@ mod test {
         let response_body = resp.into_body();
         assert_eq!(to_bytes(response_body).await.unwrap(), "OPOSSUM backend");
     }
+
     #[actix_web::test]
     async fn get_version() {
         let app = test::init_service(App::new().service(super::get_version)).await;
@@ -147,6 +151,7 @@ mod test {
         assert_eq!(resp.status(), StatusCode::OK);
         let _: VersionInfo = test::read_body_json(resp).await;
     }
+
     #[actix_web::test]
     async fn get_node_types() {
         let app = test::init_service(App::new().service(super::get_node_types)).await;
@@ -155,6 +160,7 @@ mod test {
         assert_eq!(resp.status(), StatusCode::OK);
         let _: Vec<NodeType> = test::read_body_json(resp).await;
     }
+
     #[actix_web::test]
     async fn get_analyzer_types() {
         let app = test::init_service(App::new().service(super::get_analyzer_types)).await;
