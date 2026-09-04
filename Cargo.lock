@@ -4522,16 +4522,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ico"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e795dff5605e0f04bff85ca41b51a96b83e80b281e96231bcaaf1ac35103371"
-dependencies = [
- "byteorder",
- "png 0.17.16",
-]
-
-[[package]]
 name = "icu_collections"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6021,7 +6011,7 @@ dependencies = [
  "futures-util",
  "gloo-timers 0.4.0",
  "heck 0.5.0",
- "ico",
+ "image 0.25.10",
  "itertools 0.15.0",
  "log",
  "nalgebra",

@@ -33,7 +33,6 @@ dioxus = { version = "0.7" }
 dioxus-free-icons = { version = "0.10", features = ["font-awesome-solid"] }
 directories = "6"
 futures-util = "0.3"
-ico = "0.5"
 heck = "0.5"
 reqwest = { version = "0.13", default-features = false, features = ["json"] }
 rfd = { version = "0.17" }
@@ -49,6 +48,8 @@ web-time = "1.1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", features = ["process", "time"] }
+
+image = { version = "0.25", default-features = false, features = ["png", "ico"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { version = "1", default-features = false }

@@ -26,14 +26,10 @@ const MDB_ACC_CSS: Asset = asset!("/assets/mdb_accordion.css");
 #[cfg(not(target_arch = "wasm32"))]
 fn read_icon() -> Option<Icon> {
     let icon_bytes: &[u8] = include_bytes!("../../opossum_core/logo/Logo_square.ico");
-    let mut reader = Cursor::new(icon_bytes);
-    let icon_dir = ico::IconDir::read(&mut reader).ok()?;
-    let entry = icon_dir.entries().first()?;
-    let width = entry.width();
-    let height = entry.height();
-    let image = entry.decode().ok()?;
-    let data = image.rgba_data();
-    Icon::from_rgba(data.into(), width, height).ok()
+    let img = image::load_from_memory(icon_bytes).ok()?;
+    let rgba = img.to_rgba8();
+    let (width, height) = rgba.dimensions();
+    Icon::from_rgba(rgba.into_raw(), width, height).ok()
 }
 
 #[cfg(all(not(debug_assertions), not(target_arch = "wasm32")))]
