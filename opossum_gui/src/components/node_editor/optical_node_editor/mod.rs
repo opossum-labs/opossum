@@ -47,8 +47,10 @@ pub fn OpticalNodeEditor(
     let memo_node_alignment = use_memo(move || node_info_sig.read().alignment.unwrap_or_default());
     // Reactive memo checking whether the current node has defined properties
     let memo_has_properties = use_memo(move || !node_properties.read().is_empty());
-    // Reactive memo determining whether port configuration should be shown (hidden for group nodes)
-    let memo_show_port_config = use_memo(move || memo_node_type.read().as_str() != "group");
+    // Reactive memo determining whether port configuration should be shown (hidden for group and reference nodes)
+    let memo_show_port_config = use_memo(move || {
+        memo_node_type.read().as_str() != "group" && memo_node_type.read().as_str() != "reference"
+    });
 
     let resource_future: Resource<(Option<NodeInfo>, Option<Properties>)> =
         use_resource(move || async move {
