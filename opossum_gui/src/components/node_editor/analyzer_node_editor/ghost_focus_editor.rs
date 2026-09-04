@@ -1,6 +1,7 @@
 use crate::components::{
     inputs::material_selector::MaterialSelector,
     node_editor::{
+        accordion::StaticSection,
         analyzer_node_editor::{
             light_data_editor::default_ray_data_source, source_port_card::SourcePortCard,
         },
@@ -68,7 +69,7 @@ pub fn GhostFocusEditor(
     let current_config = ghost_focus_config.read();
 
     rsx! {
-        div { class: "ghost-focus-fields",
+        StaticSection { header: "Ghost Focus",
             FlushableTextInput {
                 id: "ghostFocusMaxBounces".to_string(),
                 label: "Max Bounces".to_string(),
@@ -95,52 +96,48 @@ pub fn GhostFocusEditor(
                 readonly: false,
                 on_change: on_change_ambient_material,
             }
+        }
 
-            div { class: "mt-4 border-top pt-3 text-light",
-                h6 { class: "text-secondary mb-3", "Sources Definitions" }
+        StaticSection { header: "Sources Definitions",
+            if available_sources.is_empty() {
+                div { class: "text-muted small italic", "No Source Ports found." }
+            }
 
-                if available_sources.is_empty() {
-                    div { class: "text-muted small italic", "No Source Ports found." }
-                }
-
-                {
-                    available_sources
-                        .into_iter()
-                        .map(|port| {
-                            let port_uuid = port.uuid;
-                            let source = current_config
-                                .get_source(&port_uuid)
-                                .map_or_else(
-                                    || {
-                                        let default_wvl = crate::APP_CONFIG
-                                            .read()
-                                            .default_wavelength();
-                                        default_ray_data_source(default_wvl)
-                                    },
-                                    |builder| builder.source().clone(),
-                                );
-                            let on_save_source = move |updated_builder| {
-                                let mut updated_config = ghost_focus_config.peek().clone();
-                                updated_config.map_source(port_uuid, updated_builder);
-                                on_change
-                                    .call(NodeChangeEvent {
-                                        node_id,
-                                        action: NodeChangeAction::AnalyzerType(
-                                            AnalyzerType::GhostFocus(updated_config),
-                                        ),
-                                    });
-                            };
-                            rsx! {
-                                SourcePortCard {
-                                    key: "{port_uuid}",
-                                    analyzer_id: node_id,
-                                    port,
-                                    source,
-                                    on_save: on_save_source,
-                                }
+            {
+                available_sources
+                    .into_iter()
+                    .map(|port| {
+                        let port_uuid = port.uuid;
+                        let source = current_config
+                            .get_source(&port_uuid)
+                            .map_or_else(
+                                || {
+                                    let default_wvl = crate::APP_CONFIG.read().default_wavelength();
+                                    default_ray_data_source(default_wvl)
+                                },
+                                |builder| builder.source().clone(),
+                            );
+                        let on_save_source = move |updated_builder| {
+                            let mut updated_config = ghost_focus_config.peek().clone();
+                            updated_config.map_source(port_uuid, updated_builder);
+                            on_change
+                                .call(NodeChangeEvent {
+                                    node_id,
+                                    action: NodeChangeAction::AnalyzerType(
+                                        AnalyzerType::GhostFocus(updated_config),
+                                    ),
+                                });
+                        };
+                        rsx! {
+                            SourcePortCard {
+                                key: "{port_uuid}",
+                                analyzer_id: node_id,
+                                port,
+                                source,
+                                on_save: on_save_source,
                             }
-                        })
-                }
+                        }
+                    })
             }
         }
     }

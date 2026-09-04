@@ -38,6 +38,45 @@ pub fn AccordionItem(
     }
 }
 
+/// A static, always-open configuration section that reuses the node-config accordion look
+/// (bordered card, header bar, lighter body) without any collapse behaviour.
+///
+/// The analyzer sidebar uses this so its configuration reads like the node-config sidebar - grouped
+/// into labelled panels on a lighter background - while staying permanently expanded (the user
+/// never has to click to reveal the settings). Rendering the body as an `.accordion-body` also lets
+/// the shared field-styling rules (dark selects/inputs, spacing) apply exactly as in a real
+/// accordion section.
+///
+/// # Arguments
+/// * `header` - the section title shown in the header bar.
+/// * `children` - the section body content.
+///
+/// # Returns
+/// The rendered section element.
+#[component]
+pub fn StaticSection(header: String, children: Element) -> Element {
+    rsx! {
+        div { class: "accordion-item bg-dark text-light",
+            div { class: "accordion-header",
+                // `.accordion-button-h1` supplies the header background and satisfies the `:has()`
+                // rules that draw the card border and lighter body; `.static-section-header` drops
+                // the collapse affordances (chevron, pointer, focus shadow) so it reads as a plain
+                // header rather than a toggle.
+                // `text-light` is required: without a `.collapsed` class MDB paints an
+                // `.accordion-button` in its blue "active" colour, so match the node-config header
+                // buttons which set `text-light` explicitly.
+                div { class: "accordion-button accordion-button-h1 static-section-header text-light",
+                    "{header}"
+                }
+            }
+            // `show` keeps the body visible; with no collapse trigger it can never be hidden.
+            div { class: "accordion-collapse collapse show bg-dark",
+                div { class: "accordion-body bg-dark", {children} }
+            }
+        }
+    }
+}
+
 #[component]
 pub fn ElementList(element_list: Vec<Element>) -> Element {
     rsx! {

@@ -745,6 +745,18 @@ body {
     color: rgb(235, 235, 235);
 }
 
+/* Static (non-collapsible) analyzer config sections (see `StaticSection` in accordion.rs): reuse
+   MDB's accordion-button layout and the `.accordion-button-h1` background, but strip the collapse
+   affordances so the panel header reads as an always-open card label rather than a clickable
+   toggle. */
+.accordion-button.static-section-header {
+    cursor: default;
+    box-shadow: none !important;
+}
+.accordion-button.static-section-header::after {
+    display: none !important;
+}
+
 /* Status line below the body of an amplifying node. Its height must stay in sync with
    AMP_STATUS_HEIGHT, which is what the canvas geometry (bounding box, auto layout) uses. */
 .node-amp-status {

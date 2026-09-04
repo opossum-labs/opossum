@@ -1,4 +1,5 @@
 use crate::components::node_editor::{
+    accordion::{AccordionItem, StaticSection},
     analyzer_node_editor::light_data_editor::{
         default_energy_data_builder, energy_source_editor::EnergySourceEditor,
     },
@@ -23,29 +24,25 @@ pub fn EnergyEditor(
     info!("🔄 Render: EnergyEditor");
 
     rsx! {
-        div { class: "energy-analyzer-fields",
-            div { class: "mt-2 text-light",
-                h6 { class: "text-secondary mb-3", "Sources Definitions" }
+        StaticSection { header: "Sources Definitions",
+            if available_sources.is_empty() {
+                div { class: "text-muted small italic", "No Source Ports found." }
+            }
 
-                if available_sources.is_empty() {
-                    div { class: "text-muted small italic", "No Source Ports found." }
-                }
-
-                {
-                    available_sources
-                        .into_iter()
-                        .map(|port| {
-                            rsx! {
-                                SourcePortCard {
-                                    key: "{port.uuid}",
-                                    port,
-                                    energy_config,
-                                    on_change,
-                                    analyzer_id: node_id,
-                                }
+            {
+                available_sources
+                    .into_iter()
+                    .map(|port| {
+                        rsx! {
+                            SourcePortCard {
+                                key: "{port.uuid}",
+                                port,
+                                energy_config,
+                                on_change,
+                                analyzer_id: node_id,
                             }
-                        })
-                }
+                        }
+                    })
             }
         }
     }
@@ -58,12 +55,11 @@ fn SourcePortCard(
     on_change: EventHandler<NodeChangeEvent>,
     analyzer_id: Uuid,
 ) -> Element {
-    let mut is_collapsed = use_signal(|| true);
     let port_uuid = port.uuid;
     let port_name = port.name;
 
     // Trigger auto-focus and accordion expansion on undo/redo actions
-    super::use_source_card_focus(analyzer_id, port_uuid, is_collapsed);
+    super::use_source_card_focus(analyzer_id, port_uuid);
 
     let existing_source = energy_config
         .read()
@@ -74,49 +70,38 @@ fn SourcePortCard(
             default_energy_data_builder(default_wvl)
         });
 
+    // The accordion body: the energy source editor for this port.
+    let body = vec![rsx! {
+        EnergySourceEditor {
+            energy_data_builder: existing_source,
+            readonly: false,
+            on_save: move |light_builder| {
+                if let LightDataBuilder::Energy(updated_builder) = light_builder {
+                    let mut updated_config = energy_config.peek().clone();
+                    updated_config.map_source(port_uuid, updated_builder);
+                    on_change
+                        .call(NodeChangeEvent {
+                            node_id: analyzer_id,
+                            action: NodeChangeAction::AnalyzerType(AnalyzerType::Energy(updated_config)),
+                        });
+                }
+            },
+        }
+    }];
+
     rsx! {
+        // Same MDB accordion as the ray-trace/ghost-focus source cards, so every analyzer's
+        // source definitions read alike. Each card is its own accordion group (unique `parent_id`).
         div {
-            class: "card bg-dark border-secondary mb-2",
+            class: "accordion accordion-borderless bg-dark border-start mb-2",
             id: "sourceCard{port_uuid}",
-            div {
-                class: "card-header bg-secondary py-1 px-2 text-light d-flex justify-content-between align-items-center noselect",
-                style: "cursor: pointer;",
-                onclick: move |_| is_collapsed.toggle(),
-
-                span { class: "fw-bold small", "{port_name}" }
-                span { class: "text-muted small",
-                    if is_collapsed() {
-                        "▶"
-                    } else {
-                        "▼"
-                    }
-                }
-            }
-
-            if !is_collapsed() {
-                div {
-                    key: "{analyzer_id}",
-                    class: "card-body p-2 bg-dark text-light",
-
-                    EnergySourceEditor {
-                        energy_data_builder: existing_source,
-                        readonly: false,
-                        on_save: move |light_builder| {
-                            if let LightDataBuilder::Energy(updated_builder) = light_builder {
-                                let mut updated_config = energy_config.peek().clone();
-                                updated_config.map_source(port_uuid, updated_builder);
-
-                                on_change
-                                    .call(NodeChangeEvent {
-                                        node_id: analyzer_id,
-                                        action: NodeChangeAction::AnalyzerType(
-                                            AnalyzerType::Energy(updated_config),
-                                        ),
-                                    });
-                            }
-                        },
-                    }
-                }
+            AccordionItem {
+                elements: body,
+                header: port_name,
+                header_id: "sourceHeading{port_uuid}",
+                parent_id: "sourceCard{port_uuid}",
+                content_id: "sourceCollapse{port_uuid}",
+                level: 2,
             }
         }
     }
