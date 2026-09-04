@@ -49,7 +49,7 @@ use crate::{
     )
 )]
 #[get("/{uuid}/children")]
-async fn get_children(
+pub async fn get_children(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
 ) -> Result<Json<Vec<NodeInfo>>, BackEndErrorResponse> {
@@ -91,7 +91,7 @@ async fn get_children(
     )
 )]
 #[post("/{uuid}/children")]
-async fn post_children(
+pub async fn post_children(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     node_type: web::Json<NewNode>,
@@ -193,7 +193,7 @@ async fn post_children(
 )]
 #[get("/{uuid}")]
 #[allow(clippy::future_not_send)]
-async fn get_node(
+pub async fn get_node(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     req: HttpRequest,
@@ -276,7 +276,7 @@ fn propagate_rename_to_references(
     )
 )]
 #[patch("/{uuid}")]
-async fn patch_node(
+pub async fn patch_node(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     update: web::Json<UpdateNodeRequest>,
@@ -327,7 +327,7 @@ responses(
     (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
 ))]
 #[delete("/{uuid}")]
-async fn delete_node(
+pub async fn delete_node(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
 ) -> Result<Json<DeleteNodeResponse>, BackEndErrorResponse> {
@@ -358,7 +358,7 @@ async fn delete_node(
     )
 )]
 #[post("/delete")]
-async fn delete_nodes(
+pub async fn delete_nodes(
     data: web::Data<AppState>,
     body: web::Json<Vec<Uuid>>,
 ) -> Result<Json<DeleteNodeResponse>, BackEndErrorResponse> {
@@ -638,7 +638,7 @@ responses(
     (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found", content_type="application/json")
 ))]
 #[get("/{uuid}/references")]
-async fn get_reference_nodes(
+pub async fn get_reference_nodes(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
 ) -> Result<Json<HashMap<Uuid, Vec<Uuid>>>, BackEndErrorResponse> {
@@ -682,7 +682,7 @@ async fn get_reference_nodes(
     )
 )]
 #[post("/{uuid}/references")]
-async fn post_reference(
+pub async fn post_reference(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
     ref_node_info: web::Json<NewRefNode>,
@@ -732,7 +732,7 @@ async fn post_reference(
     )
 )]
 #[get("/{uuid}/hierarchy")]
-async fn get_node_hierarchy(
+pub async fn get_node_hierarchy(
     data: web::Data<AppState>,
     path: web::Path<Uuid>,
 ) -> Result<Json<Vec<(Uuid, String)>>, BackEndErrorResponse> {

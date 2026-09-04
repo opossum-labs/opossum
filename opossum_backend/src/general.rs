@@ -1,6 +1,6 @@
 //! General endpoints
 use crate::error::BackEndErrorResponse;
-use actix_web::{get, web::Json, web::block, Responder};
+use actix_web::{Responder, get, web::Json, web::block};
 use opossum_core::{
     analyzers::AnalyzerType,
     types::api_types::{NodeType, VersionInfo},
@@ -131,7 +131,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
 #[cfg(test)]
 mod test {
     use super::*;
-    use actix_web::{body::to_bytes, dev::Service, http::StatusCode, test, App};
+    use actix_web::{App, body::to_bytes, dev::Service, http::StatusCode, test};
 
     #[actix_web::test]
     async fn get_hello() {

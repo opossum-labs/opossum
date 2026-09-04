@@ -29,7 +29,10 @@ utoipa.workspace = true
 uuid.workspace = true
 
 actix-cors = "0.7"
-actix-web = "4.11"
+# actix-web = "4.11"
+# Disable default features to avoid compiling brotli, zstd-sys, and flate2.
+# We explicitly re-enable 'macros' for routing attributes like #[get("/")].
+actix-web = { version = "4", default-features = false, features = ["macros"] }
 futures-util = "0.3"
 parking_lot = "0.12"
 tokio-stream = "0.1"
