@@ -7,18 +7,21 @@ use crate::{
     core_optics::{NodeAttrExt, OpticNode},
 };
 use core::fmt::Debug;
-use std::{
-    fmt::Display,
-    sync::{Arc, Mutex},
-};
+use std::fmt::Display;
+use uuid::Uuid;
 
 /// Marker trait for an optical node that can be analyzed
 pub trait Analyzable:
     OpticNode + AnalysisEnergy + AnalysisRayTrace + AnalysisGhostFocus + Send
 {
-    /// Function necessary for generating deep clones (because of `OpticRef`!)
-    /// This function is normally automatically implemented by the `OpnNode` derive macro.
-    fn clone_analyzable(&self) -> Arc<Mutex<dyn Analyzable>>;
+    /// Function necessary for generating clones of boxed trait objects.
+    /// This function is normally automatically implemented by the `OpmNode` derive macro.
+    fn clone_analyzable(&self) -> Box<dyn Analyzable>;
+
+    /// Returns the target UUID if this node is a reference to another node.
+    fn referenced_node_id(&self) -> Option<Uuid> {
+        None
+    }
 }
 impl Debug for dyn Analyzable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

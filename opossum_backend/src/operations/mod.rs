@@ -8,7 +8,7 @@ mod move_nodes;
 mod paste;
 
 use nalgebra::Point2;
-use opossum_core::{core_optics::NodeAttrExt, utils::LockExt};
+use opossum_core::core_optics::NodeAttrExt;
 use utoipa_actix_web::service_config::ServiceConfig;
 
 // Not named anywhere in this crate's non-test code, but `document.rs`/`nodes/core.rs` test modules
@@ -30,8 +30,7 @@ fn upper_left_corner_of_nodes(
     for node in nodes {
         let pos = match node {
             NodeCacheItem::Optical(optical_node) => {
-                let node = optical_node.optical_ref.lock_opm()?;
-                node.gui_position().unwrap_or_else(Point2::origin)
+                optical_node.gui_position().unwrap_or_else(Point2::origin)
             }
             NodeCacheItem::Analyzer(analyzer_dto) => {
                 // Access info from DTO

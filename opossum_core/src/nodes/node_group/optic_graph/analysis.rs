@@ -10,7 +10,6 @@ use crate::{
     error::{OpmResult, OpossumError},
     light::{LightData, LightResult},
     nodes::NodeGroup,
-    utils::LockExt,
 };
 
 use super::OpticGraph;
@@ -146,23 +145,44 @@ impl OpticGraph {
         let sorted = self.topologically_sorted()?;
         let mut light_result = LightResult::default();
         for idx in sorted {
-            let node = self.node_by_idx(idx)?.optical_ref;
             let node_id = self.node_by_idx(idx)?.uuid()?;
             if self.is_stale_node(node_id)? {
+                let node_name = format!("{}", self.g[idx]);
                 warn!(
-                    "graph contains stale (completely unconnected) node {}. Skipping.",
-                    node.lock_opm()?
+                    "graph contains stale (completely unconnected) node {node_name}. Skipping."
                 );
             } else {
                 let incoming_edges = self.take_incoming(node_id, incoming_data)?;
-                let node_name = format!("{}", node.lock_opm()?);
-                let outgoing_edges =
-                    AnalysisEnergy::analyze(&mut *node.lock_opm()?, incoming_edges, config)
-                        .map_err(|e| {
+                let outgoing_edges = if let Some(target_uuid) = self.g[idx].referenced_node_id() {
+                    let is_inverted = self.g[idx].inverted();
+                    let target_idx = self.node_idx_by_uuid(target_uuid).ok_or_else(|| {
+                        OpossumError::Analysis(format!(
+                            "referenced node with id {target_uuid} not found in graph"
+                        ))
+                    })?;
+                    let target_node = &mut self.g[target_idx];
+                    if is_inverted {
+                        target_node.set_inverted(true).map_err(|_e| {
                             OpossumError::Analysis(format!(
-                                "analysis of node {node_name} failed: {e}"
+                                "referenced node {target_node} cannot be inverted"
                             ))
                         })?;
+                    }
+                    let res = AnalysisEnergy::analyze(&mut **target_node, incoming_edges, config);
+                    if is_inverted {
+                        target_node.set_inverted(false)?;
+                    }
+                    let node_name = format!("{}", target_node);
+                    res.map_err(|e| {
+                        OpossumError::Analysis(format!("analysis of node {node_name} failed: {e}"))
+                    })?
+                } else {
+                    let node = &mut self.g[idx];
+                    let node_name = format!("{}", node);
+                    AnalysisEnergy::analyze(&mut **node, incoming_edges, config).map_err(|e| {
+                        OpossumError::Analysis(format!("analysis of node {node_name} failed: {e}"))
+                    })?
+                };
                 // If node is sink node, rewrite port names according to output mapping
                 if self.is_output_node(node_id)? {
                     let portmap = if self.is_inverted() {
@@ -170,7 +190,6 @@ impl OpticGraph {
                     } else {
                         &self.output_port_map
                     };
-                    let node_id = self.node_by_idx(idx)?.uuid()?;
                     let assigned_ports = portmap.assigned_ports_for_node(node_id);
                     for port in assigned_ports {
                         if let Some(light_data) = outgoing_edges.get(&port.1) {
@@ -189,10 +208,6 @@ impl OpticGraph {
         Ok(light_result)
     }
     /// Returns the (optical) distance to a connected predecessor node.
-    ///
-    /// # Panics
-    ///
-    /// Panics if an error occurs while locking a mutex.
     ///
     /// # Errors
     ///
@@ -244,18 +259,19 @@ impl OpticGraph {
     ///  - the given `incoming_edges` are not of type `LightData::Geometric`.
     ///  - the given `incoming_edges` contain no rays.
     ///  - the resulting isometry is inconsistent with a previously placed node.
-    ///  - the mutex lock failed.
     pub fn set_node_isometry(
-        &self,
+        &mut self,
         incoming_edges: &LightResult,
         node_id: Uuid,
         up_direction: Vector3<f64>,
     ) -> OpmResult<()> {
+        let idx = self.node_idx_by_uuid(node_id).ok_or_else(|| {
+            OpossumError::Analysis(format!("node with id {node_id} not found in graph"))
+        })?;
         for incoming_edge in incoming_edges {
-            let node_ref = self.node(node_id)?;
             let distance_from_predecessor =
                 self.distance_from_predecessor(node_id, incoming_edge.0)?;
-            let mut node = node_ref.optical_ref.lock_opm()?;
+            let node = &mut self.g[idx];
             if let Some(group) = node.as_any_mut().downcast_mut::<NodeGroup>() {
                 group.add_input_port_distance(incoming_edge.0, distance_from_predecessor);
             }
@@ -270,18 +286,16 @@ impl OpticGraph {
                 let node_iso = ray.to_isometry(up_direction);
                 // if a node with more than one input was already placed (in an earlier loop cycle),
                 // check, if the resulting isometry is consistent
-                {
-                    if let Some(iso) = node.isometry() {
-                        if iso != node_iso {
-                            warn!("Node {} cannot be consistently positioned.", node.name());
-                            warn!("Position based on previous input port is: {iso}");
-                            warn!("Position based on this port would be:     {node_iso}");
-                            warn!("Keeping first position");
-                        }
-                    } else {
-                        node.set_isometry(node_iso)?;
-                        drop(node);
+                let node = &mut self.g[idx];
+                if let Some(iso) = node.isometry() {
+                    if iso != node_iso {
+                        warn!("Node {} cannot be consistently positioned.", node.name());
+                        warn!("Position based on previous input port is: {iso}");
+                        warn!("Position based on this port would be:     {node_iso}");
+                        warn!("Keeping first position");
                     }
+                } else {
+                    node.set_isometry(node_iso)?;
                 }
             } else {
                 return Err(OpossumError::Analysis(

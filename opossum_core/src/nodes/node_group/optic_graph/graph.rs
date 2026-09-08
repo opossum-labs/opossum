@@ -43,7 +43,7 @@ impl ConnectionInfo {
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(try_from = "SerializableGraph", into = "SerializableGraph")]
 pub struct OpticGraph {
-    pub(super) g: DiGraph<OpticRef, LightFlow>, // pub(super) makes it visible to other modules in optic_graph
+    pub(crate) g: DiGraph<OpticRef, LightFlow>, // pub(crate) makes it visible across the crate
     pub(super) input_port_map: PortMap,
     pub(super) output_port_map: PortMap,
     is_inverted: bool,

@@ -10,7 +10,6 @@ use actix_web::{HttpRequest, HttpResponse, get, patch, web};
 use opossum_core::{
     prelude::Proptype,
     types::api_types::{ErrorResponse, NodePropertiesResponse},
-    utils::LockExt,
 };
 use uuid::Uuid;
 
@@ -41,7 +40,7 @@ pub async fn get_properties(
     let document = data.document.lock();
 
     let (optic_ref, is_reference) = resolve_reference_chain(&document, uuid)?;
-    let node_attr = optic_ref.optical_ref.lock_opm()?.node_attr().clone();
+    let node_attr = optic_ref.node_attr().clone();
 
     let response_data = NodePropertiesResponse {
         properties: node_attr.properties().clone(),

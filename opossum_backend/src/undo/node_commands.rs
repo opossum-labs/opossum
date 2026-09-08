@@ -11,7 +11,6 @@ use opossum_core::{
         ConnectInfo, DocumentChange, NodeEditorPanel, NodeInfo, UpdateNodeRequest,
         UpdatePortRequest,
     },
-    utils::LockExt,
 };
 use uuid::Uuid;
 
@@ -385,8 +384,7 @@ pub(super) fn describe_node_details_changed(graph_id: Uuid, uuid: Uuid) -> Vec<D
 /// Builds the [`NodeInfo`] DTO for a captured node, mirroring how every other handler in this crate
 /// turns an [`OpticRef`] into the response shape the GUI expects.
 fn node_info(node: &OpticRef) -> Result<NodeInfo, BackEndErrorResponse> {
-    let guard = node.optical_ref.lock_opm()?;
-    Ok(NodeInfo::from_analyzable(&*guard, None))
+    Ok(NodeInfo::from_analyzable(&**node, None))
 }
 
 /// Applies `new`'s populated fields to `node_attr`, mirroring `patch_node`'s existing field-by-field logic.

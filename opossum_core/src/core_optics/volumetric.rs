@@ -532,7 +532,7 @@ mod test {
         },
         percent, reciprocal_centimeter,
         refractive_index::RefrIndexConst,
-        utils::{LockExt, test_helper::test_helper::metered_energy},
+        utils::test_helper::test_helper::metered_energy,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
     use uom::si::{
@@ -1287,10 +1287,9 @@ mod test {
     fn the_volume_capability_matches_the_volume_properties() -> OpmResult<()> {
         for (node_type, _) in node_types() {
             let optic_ref = create_node_ref(node_type)?;
-            let node = optic_ref.optical_ref.lock_opm()?;
-            let is_volumetric = node.as_volume().is_some();
+            let is_volumetric = optic_ref.as_volume().is_some();
             assert_eq!(
-                node.node_attr().get_property(CLEAR_APERTURE).is_ok(),
+                optic_ref.node_attr().get_property(CLEAR_APERTURE).is_ok(),
                 is_volumetric,
                 "node type '{node_type}' declares '{CLEAR_APERTURE}' or presents itself as \
                  volumetric, but not both"
@@ -1317,8 +1316,7 @@ mod test {
         };
         let medium_is_prepared = |model: &NodeGroup, head: Uuid| -> OpmResult<bool> {
             let head_ref = model.graph().node(head)?;
-            let head_node = head_ref.optical_ref.lock_opm()?;
-            Ok(head_node.node_attr().runtime_medium().is_some())
+            Ok(head_ref.node_attr().runtime_medium().is_some())
         };
 
         // Ray trace

@@ -7,7 +7,6 @@ use actix_web::{
 use nalgebra::Point2;
 use opossum_core::{
     core_optics::{OpticRef, node_attr::HasNodeAttr},
-    error::OpossumError,
     gain::PumpScenario,
     nodes::{NodeReference, create_node_ref},
     prelude::{AnalyzerType, OpmDocument},
@@ -15,7 +14,6 @@ use opossum_core::{
         AnalyzerItemDto, ConnectInfo, DeleteNodeResponse, ErrorResponse, NewNode, NewRefNode,
         NodeInfo, UpdateNodeRequest,
     },
-    utils::LockExt,
 };
 use uuid::Uuid;
 
@@ -61,14 +59,9 @@ async fn get_children(
     let nodes_info = scenery.with_group_node(uuid, |g| {
         g.nodes()
             .iter()
-            .map(|n| {
-                let node = n.optical_ref.lock_opm()?; // <- Kein unwrap() mehr!
-                let node_info = NodeInfo::from_analyzable(&*node, None);
-                drop(node);
-                Ok(node_info)
-            })
-            .collect::<Result<Vec<NodeInfo>, OpossumError>>()
-    })??;
+            .map(|n| NodeInfo::from_analyzable(n.as_analyzable(), None))
+            .collect::<Vec<NodeInfo>>()
+    })?;
     Ok(Json(nodes_info))
 }
 
@@ -97,14 +90,11 @@ async fn post_children(
     node_type: web::Json<NewNode>,
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let new_node_info = node_type.into_inner();
-    let new_node_ref = create_node_ref(new_node_info.node_type())?;
-    let mut node = new_node_ref.optical_ref.lock_opm()?;
-    let node_attr = node.node_attr_mut();
-    node_attr.set_gui_position(Some(Point2::new(
+    let mut new_node_ref = create_node_ref(new_node_info.node_type())?;
+    new_node_ref.node_attr_mut().set_gui_position(Some(Point2::new(
         new_node_info.gui_position().0,
         new_node_info.gui_position().1,
     )));
-    drop(node);
 
     let mut document = data.document.lock();
     let uuid = path.into_inner();
@@ -114,12 +104,10 @@ async fn post_children(
 
     // --- AUTOMATICALLY INJECT MAPPINGS INTO ALL ANALYZERS IF NEW NODE IS A SOURCE PORT ---
     let node_type_str = new_node_ref
-        .optical_ref
-        .lock_opm()?
         .node_attr()
         .node_type()
         .to_string();
-    let new_node_uuid = new_node_ref.optical_ref.lock_opm()?.node_attr().uuid();
+    let new_node_uuid = new_node_ref.node_attr().uuid();
 
     // Auto-injecting a source-port mapping mutates each analyzer's config as a side effect - capture the
     // inverse (restore the analyzer's pre-injection config) per changed analyzer, so undoing this add also
@@ -171,9 +159,7 @@ async fn post_children(
     batch.extend(analyzer_inverses);
     data.push_undo(Command::from_vec(batch).expect("batch always has at least remove_node"));
 
-    let node = new_node_ref.optical_ref.lock_opm()?;
-    let node_info = NodeInfo::from_analyzable(&*node, None);
-    drop(node);
+    let node_info = NodeInfo::from_analyzable(&*new_node_ref, None);
     Ok(HttpResponse::Created().json(node_info))
 }
 
@@ -202,9 +188,7 @@ async fn get_node(
     let document = data.document.lock();
     // Retrieve the node info
     let node_ref = document.scenery().node_recursive(uuid)?.0;
-    let node = node_ref.optical_ref.lock_opm()?;
-    let node_info = NodeInfo::from_analyzable(&*node, None);
-    drop(node);
+    let node_info = NodeInfo::from_analyzable(&*node_ref, None);
     drop(document);
     ron_or_json_response(&req, &node_info)
 }
@@ -2207,11 +2191,7 @@ mod test {
                 .with_group_node(root, |g| {
                     g.nodes()
                         .iter()
-                        .filter(|n| {
-                            n.optical_ref
-                                .lock_opm()
-                                .map_or(false, |node| node.node_attr().node_type() == "source port")
-                        })
+                        .filter(|n| n.node_attr().node_type() == "source port")
                         .count()
                 })
                 .unwrap()

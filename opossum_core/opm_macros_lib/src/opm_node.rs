@@ -18,8 +18,8 @@ pub fn impl_derive_opm_node(input: TokenStream) -> TokenStream {
     } else {
         quote! {
             impl Analyzable for #struct_name {
-                fn clone_analyzable(&self) -> std::sync::Arc<std::sync::Mutex<dyn Analyzable>> {
-                    std::sync::Arc::new(std::sync::Mutex::new(self.clone()))
+                fn clone_analyzable(&self) -> Box<dyn Analyzable> {
+                    Box::new(self.clone())
                 }
             }
         }

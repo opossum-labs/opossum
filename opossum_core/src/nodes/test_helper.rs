@@ -16,11 +16,10 @@ pub mod test_helper {
         millimeter, nanometer,
         prelude::Aperture,
         properties::Proptype,
-        utils::{LockExt, geom_transformation::Isometry, test_helper::test_helper::check_logs},
+        utils::{geom_transformation::Isometry, test_helper::test_helper::check_logs},
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::{Point3, Vector3};
-    use std::sync::{Arc, Mutex};
     use uom::si::{energy::joule, f64::Length, length::millimeter};
     pub fn test_inverted<T: Default + OpticNode>() -> OpmResult<()> {
         let mut node = T::default();
@@ -179,8 +178,7 @@ pub mod test_helper {
     {
         let deserialized = load_without_property::<T>(CLEAR_APERTURE)?;
         let clear_aperture = {
-            let node = deserialized.optical_ref.lock_opm()?;
-            let Ok(Proptype::Aperture(shape)) = node.node_attr().get_property(CLEAR_APERTURE)
+            let Ok(Proptype::Aperture(shape)) = deserialized.node_attr().get_property(CLEAR_APERTURE)
             else {
                 panic!("the loaded node has no '{CLEAR_APERTURE}' property holding a shape");
             };
@@ -219,7 +217,7 @@ pub mod test_helper {
     fn load_without_property<T: Default + Analyzable + 'static>(
         property_name: &str,
     ) -> OpmResult<OpticRef> {
-        let optic_ref = OpticRef::new(Arc::new(Mutex::new(T::default())));
+        let optic_ref = OpticRef::new(Box::new(T::default()));
         let serialized =
             ron::to_string(&optic_ref).map_err(|e| OpossumError::Other(e.to_string()))?;
         let without_property = remove_property_entry(&serialized, property_name);

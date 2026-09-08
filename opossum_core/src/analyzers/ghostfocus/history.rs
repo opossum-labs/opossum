@@ -15,7 +15,6 @@ use crate::{
     nodes::OpticGraph,
     prelude::Proptype,
     reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
-    utils::LockExt,
 };
 
 /// Struct to store the node origin uuid and parent ray bundle Uuid of a ray bundle
@@ -195,9 +194,7 @@ impl GhostFocusHistory {
                         report_str += format!("bounce {bounce} at node '").as_str();
                     }
                     if let Ok(opt_ref) = graph.node(node_uuid) {
-                        report_str +=
-                            format!("{}', ", opt_ref.optical_ref.lock_opm().unwrap().name())
-                                .as_str();
+                        report_str += format!("{}', ", opt_ref.name()).as_str();
                     }
                 }
             }

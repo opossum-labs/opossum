@@ -13,7 +13,6 @@ use opossum_core::{
         ConnectInfo, CutNodesResponse, ErrorResponse, MoveNodesRequest, NodeInfo, PositionUpdate,
         RelocatedNode,
     },
-    utils::LockExt,
 };
 use uuid::Uuid;
 
@@ -234,10 +233,7 @@ fn build_relocated_node_infos(
     let mut relocated_nodes = Vec::<RelocatedNode>::new();
     for (id, from_group_id) in relocated_pairs {
         if let Ok((node_ref, _)) = document.scenery().node_recursive(id) {
-            let info = {
-                let node = node_ref.optical_ref.lock_opm()?;
-                NodeInfo::from_analyzable(&*node, None)
-            };
+            let info = NodeInfo::from_analyzable(&*node_ref, None);
             relocated_nodes.push(RelocatedNode {
                 from_group_id,
                 to_group_id: target_group_id,

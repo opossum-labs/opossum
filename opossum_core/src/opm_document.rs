@@ -14,10 +14,7 @@ use crate::{
     nodes::NodeGroup,
     properties::{Proptype, proptype::AssetRef},
     reporting::analysis_report::AnalysisReport,
-    utils::{
-        LockExt,
-        file_utils::{create_f_path, create_file_instance},
-    },
+    utils::file_utils::{create_f_path, create_file_instance},
 };
 use indexmap::IndexMap;
 use log::{info, warn};
@@ -192,33 +189,41 @@ impl OpmDocument {
     }
     /// Replaces all `AssetRef::Id(Uuid)` properties in scene nodes (including all nested
     /// groups) with the full `AssetRef::Inline(Material)` looked up from `embedded_materials`.
-    fn resolve_embedded_materials(&self) -> OpmResult<()> {
-        let all_nodes = self.scenery.collect_all_nodes_recursive()?;
-
-        for node_ref in all_nodes {
-            if let Ok(mut node) = node_ref.optical_ref.lock_opm() {
-                let mut updates = Vec::new();
-
-                for (prop_name, prop) in node.node_attr().properties() {
-                    if let Proptype::Material(AssetRef::Id(id)) = prop.prop() {
-                        let material = self.embedded_materials.get(id).ok_or_else(|| {
-                            OpossumError::OpmDocument(format!(
+    fn resolve_embedded_materials(&mut self) -> OpmResult<()> {
+        let embedded_materials = &self.embedded_materials;
+        let mut err = None;
+        self.scenery.for_each_node_mut(&mut |node_ref| {
+            if err.is_some() {
+                return;
+            }
+            let mut updates = Vec::new();
+            for (prop_name, prop) in node_ref.node_attr().properties() {
+                if let Proptype::Material(AssetRef::Id(id)) = prop.prop() {
+                    let material = match embedded_materials.get(id) {
+                        Some(m) => m,
+                        None => {
+                            err = Some(OpossumError::OpmDocument(format!(
                                 "Embedded material with UUID {id} not found for property '{prop_name}' in node '{}'",
-                                node.node_attr().name()
-                            ))
-                        })?;
-
-                        updates.push((
-                            prop_name.clone(),
-                            Proptype::Material(AssetRef::Inline(material.clone())),
-                        ));
-                    }
-                }
-
-                for (prop_name, new_prop) in updates {
-                    node.node_attr_mut().set_property(&prop_name, new_prop)?;
+                                node_ref.node_attr().name()
+                            )));
+                            return;
+                        }
+                    };
+                    updates.push((
+                        prop_name.clone(),
+                        Proptype::Material(AssetRef::Inline(material.clone())),
+                    ));
                 }
             }
+            for (prop_name, new_prop) in updates {
+                if let Err(e) = node_ref.node_attr_mut().set_property(&prop_name, new_prop) {
+                    err = Some(e);
+                    return;
+                }
+            }
+        });
+        if let Some(e) = err {
+            return Err(e);
         }
         Ok(())
     }
@@ -226,28 +231,31 @@ impl OpmDocument {
     /// Extracts full `Material` structs into `embedded_materials` from all nodes
     /// (including all nested groups) and replaces node properties with explicit `AssetRef::Id(Uuid)`.
     fn prepare_materials_for_serialization(&mut self) -> OpmResult<()> {
-        let all_nodes = self.scenery.collect_all_nodes_recursive()?;
-
-        for node_ref in all_nodes {
-            if let Ok(mut node) = node_ref.optical_ref.lock_opm() {
-                let mut updates = Vec::new();
-
-                for (prop_name, prop) in node.node_attr().properties() {
-                    if let Proptype::Material(AssetRef::Inline(material)) = prop.prop() {
-                        self.embedded_materials
-                            .insert(material.id(), material.clone());
-
-                        updates.push((
-                            prop_name.clone(),
-                            Proptype::Material(AssetRef::Id(material.id())),
-                        ));
-                    }
-                }
-
-                for (prop_name, new_prop) in updates {
-                    node.node_attr_mut().set_property(&prop_name, new_prop)?;
+        let embedded_materials = &mut self.embedded_materials;
+        let mut err = None;
+        self.scenery.for_each_node_mut(&mut |node_ref| {
+            if err.is_some() {
+                return;
+            }
+            let mut updates = Vec::new();
+            for (prop_name, prop) in node_ref.node_attr().properties() {
+                if let Proptype::Material(AssetRef::Inline(material)) = prop.prop() {
+                    embedded_materials.insert(material.id(), material.clone());
+                    updates.push((
+                        prop_name.clone(),
+                        Proptype::Material(AssetRef::Id(material.id())),
+                    ));
                 }
             }
+            for (prop_name, new_prop) in updates {
+                if let Err(e) = node_ref.node_attr_mut().set_property(&prop_name, new_prop) {
+                    err = Some(e);
+                    return;
+                }
+            }
+        });
+        if let Some(e) = err {
+            return Err(e);
         }
         Ok(())
     }
@@ -289,7 +297,7 @@ impl OpmDocument {
         // per-group deserialization (see `OpticGraph::resolve_all_references`); this can't live in
         // `after_deserialization_hook`, which also runs per-node bottom-up during parse (before the whole
         // tree exists) via `OpticRef`'s deserializer.
-        document.scenery.graph().resolve_all_references()?;
+        document.scenery.graph_mut().resolve_all_references()?;
 
         // Resolve embedded material references into full in-memory Material structs
         document.resolve_embedded_materials()?;
@@ -734,9 +742,7 @@ impl OpmDocument {
         }
         // 2. Check optical nodes
         for node_ref in self.scenery.nodes() {
-            if let Ok(node) = node_ref.optical_ref.lock_opm()
-                && node.gui_position().is_none()
-            {
+            if node_ref.gui_position().is_none() {
                 return true;
             }
         }
@@ -1150,10 +1156,7 @@ mod test {
     /// document through its `.opm` string and asserts it reloads with the reference resolving to A.
     #[test]
     fn reference_into_ancestor_round_trips() {
-        use crate::{
-            nodes::{Dummy, NodeReference},
-            utils::LockExt,
-        };
+        use crate::nodes::{Dummy, NodeReference};
 
         let mut document = OpmDocument::default();
         let r_id = {
@@ -1177,7 +1180,7 @@ mod test {
             .scenery()
             .node_recursive(r_id)
             .expect("the reference must still exist after reload");
-        let ports = reference.optical_ref.lock_opm().unwrap().ports();
+        let ports = reference.ports();
         assert!(
             !ports.names(&PortType::Output).is_empty(),
             "the reloaded reference must resolve to A (non-empty mirrored ports)"
@@ -1244,8 +1247,7 @@ mod test {
 
         // Verify that nodes have their full Material struct restored for calculation
         for node_ref in reloaded_doc.scenery().nodes() {
-            let node = node_ref.optical_ref.lock_opm()?;
-            let prop = node.node_attr().get_property(MATERIAL)?;
+            let prop = node_ref.node_attr().get_property(MATERIAL)?;
 
             // Unpack the AssetRef::Inline to verify the material is correctly loaded into RAM
             if let Proptype::Material(AssetRef::Inline(mat)) = prop {
@@ -1424,8 +1426,7 @@ mod test {
         // looks for it. `Volumetric::material` reads `AssetRef::Inline` and nothing else, so a node
         // left holding a bare uuid reference would fail to trace with "cannot read material" - a
         // second, quieter symptom of the same slip.
-        let node_ref = document.scenery().node(lens_id)?;
-        let node = node_ref.optical_ref.lock_opm()?;
+        let node = document.scenery().node(lens_id)?;
         assert!(
             matches!(
                 node.node_attr().get_property(MATERIAL),
@@ -1689,7 +1690,7 @@ mod test {
             "the nested group must survive loading"
         );
         let (input_names, output_names) = {
-            let group_ref = doc.scenery().nodes()[0].optical_ref.lock_opm()?;
+            let group_ref = &doc.scenery().nodes()[0];
             let group = group_ref
                 .as_any()
                 .downcast_ref::<NodeGroup>()
@@ -1840,8 +1841,7 @@ mod test {
 
         // Verify that the focal length property was kept at its default value
         let node_ref = &doc.scenery().nodes()[0];
-        let node = node_ref.optical_ref.lock_opm()?;
-        let focal_length_prop = node.node_attr().get_property("focal length")?;
+        let focal_length_prop = node_ref.node_attr().get_property("focal length")?;
 
         // Ensure it is a valid Length proptype
         assert!(matches!(focal_length_prop, Proptype::Length(_)));
@@ -1898,9 +1898,8 @@ mod test {
         let mut found_restored_material = false;
 
         for node_ref in all_reloaded_nodes {
-            let node = node_ref.optical_ref.lock_opm()?;
             if let Ok(Proptype::Material(AssetRef::Inline(mat))) =
-                node.node_attr().get_property(MATERIAL)
+                node_ref.node_attr().get_property(MATERIAL)
             {
                 assert_eq!(mat.id(), material_id);
                 assert_eq!(mat.name(), "Fused Silica Nested");
@@ -1952,8 +1951,7 @@ mod test {
         );
 
         let node_ref = &doc.scenery().nodes()[0];
-        let node = node_ref.optical_ref.lock_opm()?;
-        assert_eq!(node.node_attr().isometry(), Some(Isometry::identity()));
+        assert_eq!(node_ref.node_attr().isometry(), Some(Isometry::identity()));
 
         Ok(())
     }

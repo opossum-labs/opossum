@@ -3,7 +3,6 @@ use crate::{
     core_optics::{OpticRef, PortType},
     error::{OpmResult, OpossumError},
     nodes::NodeGroup,
-    utils::LockExt,
 };
 use petgraph::{Direction, algo::connected_components, graph::NodeIndex, visit::EdgeRef};
 use uuid::Uuid;
@@ -23,21 +22,25 @@ impl OpticGraph {
     }
     /// Return `true` if the node with the given [`Uuid`] has no incoming connections.
     ///
-    /// This is similiar to `is_stale_node` but only checks for incoming connections.
-    ///
     /// # Errors
     ///
-    /// This function will return an error if the given `node_id` is not found.
-    pub fn has_input_connections(&self, node_id: Uuid) -> OpmResult<bool> {
+    /// This function returns an error if the given `node_id` does not exist in the graph.
+    pub fn has_no_incoming_connections(&self, node_id: Uuid) -> OpmResult<bool> {
         let idx = self
             .node_idx_by_uuid(node_id)
             .ok_or_else(|| OpossumError::Analysis("uuid does not exist".into()))?;
         let neighbors = self.g.neighbors_directed(idx, Direction::Incoming);
-        Ok(neighbors.count() != 0 || self.input_port_map.contains_node(node_id))
+        Ok(neighbors.count() == 0 && !self.input_port_map.contains_node(node_id))
     }
-    /// Return `true` if the node with the given [`Uuid`] has no outgoing connections.
+    /// Return `true` if the node with the given [`Uuid`] has at least one incoming connection.
     ///
-    /// This is similiar to `is_stale_node` but only checks for outgoing connections.
+    /// # Errors
+    ///
+    /// This function returns an error if the given `node_id` does not exist in the graph.
+    pub fn has_input_connections(&self, node_id: Uuid) -> OpmResult<bool> {
+        self.has_no_incoming_connections(node_id).map(|res| !res)
+    }
+    /// Return `true` if the node with the given [`Uuid`] has at least one outgoing connection.
     ///
     /// # Errors
     ///
@@ -49,7 +52,17 @@ impl OpticGraph {
         let neighbors = self.g.neighbors_directed(idx, Direction::Outgoing);
         Ok(neighbors.count() != 0 || self.output_port_map.contains_node(node_id))
     }
-    /// Returns a node with the given [`Uuid`].
+    /// Returns `true` if this [`OpticGraph`] consists of a single connected tree.
+    ///
+    /// The graph is considered single-tree if all nodes are connected (ignoring edge directions).
+    #[must_use]
+    pub fn is_single_tree(&self) -> bool {
+        if self.is_empty() {
+            return true;
+        }
+        connected_components(&self.g) == 1
+    }
+    /// Returns the (optical) node with the given [`Uuid`].
     ///
     /// # Errors
     ///
@@ -79,6 +92,17 @@ impl OpticGraph {
             )),
         }
     }
+    /// Returns a mutable reference to the (optical) node with the given [`Uuid`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the node with the given [`Uuid`] does not exist.
+    pub fn node_mut(&mut self, uuid: Uuid) -> OpmResult<&mut OpticRef> {
+        let idx = self.node_idx_by_uuid(uuid).ok_or_else(|| {
+            OpossumError::OpticScenery("node with given uuid does not exist".into())
+        })?;
+        Ok(&mut self.g[idx])
+    }
     /// Returns a reference to the optical node specified by its [`Uuid`] and the Uuid of the group in which it is contained.
     ///
     /// This function is similar to [`OpticGraph::node`] but also checks recursively for
@@ -92,8 +116,7 @@ impl OpticGraph {
             Ok((node, group_id))
         } else {
             for node_ref in self.g.node_weights() {
-                let mut node = node_ref.optical_ref.lock_opm()?;
-                if let Some(group) = node.as_any_mut().downcast_mut::<NodeGroup>()
+                if let Some(group) = node_ref.as_any().downcast_ref::<NodeGroup>()
                     && let Ok((node, group_id)) = group.node_recursive(uuid)
                 {
                     return Ok((node, group_id));
@@ -103,6 +126,26 @@ impl OpticGraph {
                 "node with given uuid does not exist".into(),
             ))
         }
+    }
+    /// Recursively search for a mutable reference to the node with the given `uuid` in this graph
+    /// and all nested sub-groups.
+    ///
+    /// # Errors
+    /// Returns [`OpossumError::OpticScenery`] if the node does not exist.
+    pub fn node_recursive_mut(&mut self, uuid: Uuid) -> OpmResult<&mut OpticRef> {
+        if let Some(idx) = self.node_idx_by_uuid(uuid) {
+            return Ok(&mut self.g[idx]);
+        }
+        for node in self.g.node_weights_mut() {
+            if let Some(group) = node.as_any_mut().downcast_mut::<NodeGroup>()
+                && let Ok(target) = group.graph_mut().node_recursive_mut(uuid)
+            {
+                return Ok(target);
+            }
+        }
+        Err(OpossumError::OpticScenery(
+            "node with given uuid does not exist".into(),
+        ))
     }
     /// Return a reference to the optical node specified by its node index.
     ///
@@ -305,11 +348,6 @@ impl OpticGraph {
         }
         connections
     }
-    /// Returns the is single tree of this [`OpticGraph`].
-    #[must_use]
-    pub fn is_single_tree(&self) -> bool {
-        connected_components(&self.g) == 1
-    }
     /// Returns the number of nodes in this [`OpticGraph`].
     #[must_use]
     pub fn node_count(&self) -> usize {
@@ -330,8 +368,6 @@ impl OpticGraph {
     pub fn is_incoming_node(&self, node_id: Uuid) -> OpmResult<bool> {
         let nr_of_input_ports = self
             .node(node_id)?
-            .optical_ref
-            .lock_opm()?
             .ports()
             .ports(&PortType::Input)
             .len();
@@ -349,9 +385,8 @@ impl OpticGraph {
     ///
     /// This functions returns na error if
     /// - the given `node_id` does not exist.
-    /// - an error during mutex locking occurs.
     pub fn is_output_node(&self, node_id: Uuid) -> OpmResult<bool> {
-        let ports = self.node(node_id)?.optical_ref.lock_opm()?.ports();
+        let ports = self.node(node_id)?.ports();
         let nr_of_output_ports = ports.ports(&PortType::Output).len();
         let idx = self
             .node_idx_by_uuid(node_id)
@@ -367,16 +402,15 @@ impl OpticGraph {
     ///
     /// # Errors
     ///
-    /// This function returns an error if a mutex lock on a node fails.
+    /// This function returns an error if node access fails.
     pub fn find_source_ports(&self) -> OpmResult<Vec<Uuid>> {
         let mut source_ports = Vec::new();
         for node_ref in self.nodes() {
             let node_id = node_ref.uuid()?;
-            let mut node = node_ref.optical_ref.lock_opm()?;
-            if node.node_attr().node_type() == "source port" {
+            if node_ref.node_attr().node_type() == "source port" {
                 source_ports.push(node_id);
             }
-            if let Some(group) = node.as_any_mut().downcast_mut::<NodeGroup>() {
+            if let Some(group) = node_ref.as_any().downcast_ref::<NodeGroup>() {
                 let sub_ports = group.graph.find_source_ports()?;
                 source_ports.extend(sub_ports);
             }

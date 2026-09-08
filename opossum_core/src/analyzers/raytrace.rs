@@ -408,7 +408,6 @@ mod test {
             analyzers::{Analyzer, raytrace::RayTracingAnalyzer},
             nodes::{ParaxialSurface, RayPropagationVisualizer},
             properties::Proptype,
-            utils::lock_ext::LockExt,
         };
         // Source -> Lens -> Visualizer
         let mut group = NodeGroup::default();
@@ -425,8 +424,7 @@ mod test {
         let analyzer = RayTracingAnalyzer::new(config);
         assert!(analyzer.analyze(&mut group).is_ok());
         let node_ref = group.graph().node(i_det)?;
-        let det_node = node_ref.optical_ref.lock_opm()?;
-        let report = det_node
+        let report = node_ref
             .node_report("test_uuid")?
             .ok_or_else(|| OpossumError::Other("got empty report".into()))?;
         let prop = report.properties().get("Ray plot")?;

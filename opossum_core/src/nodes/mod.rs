@@ -62,7 +62,6 @@ pub use source_helper::{
 pub use source_port::SourcePort;
 pub use spectrometer::{Spectrometer, SpectrometerType};
 pub use spot_diagram::SpotDiagram;
-use std::sync::{Arc, Mutex};
 pub use thin_mirror::ThinMirror;
 pub use wavefront::WaveFront;
 pub use wavefront::wavefront_data::{WaveFrontData, WaveFrontMap};
@@ -74,7 +73,6 @@ use crate::{
     error::{OpmResult, OpossumError},
     geometry::body::{CLEAR_APERTURE, default_clear_aperture},
     properties::validator::Validator,
-    utils::LockExt,
 };
 use std::{collections::HashSet, sync::LazyLock};
 
@@ -84,6 +82,8 @@ use std::{collections::HashSet, sync::LazyLock};
 /// Declaring it from one place keeps the node types that call this in sync with each other, and
 /// they are exactly those implementing [`Volumetric`](crate::core_optics::Volumetric) — which is
 /// what the test in that module checks.
+///
+/// Creates standard volumetric properties for a node.
 ///
 /// # Arguments
 ///
@@ -122,7 +122,7 @@ impl NodeRegistration {
         }
     }
     fn build_node_wrapper<T: Analyzable + Default + 'static>() -> OpticRef {
-        OpticRef::new(Arc::new(Mutex::new(T::default())))
+        OpticRef::new(Box::new(T::default()))
     }
 }
 
@@ -168,10 +168,7 @@ static VOLUME_NODE_TYPES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
         .into_iter()
         .filter(|(node_type, _)| {
             create_node_ref(node_type).is_ok_and(|optic_ref| {
-                optic_ref
-                    .optical_ref
-                    .lock_opm()
-                    .is_ok_and(|node| node.as_volume().is_some())
+                optic_ref.as_volume().is_some()
             })
         })
         .map(|(node_type, _)| node_type)

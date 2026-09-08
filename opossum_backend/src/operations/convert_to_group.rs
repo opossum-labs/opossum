@@ -195,7 +195,7 @@ pub async fn post_convert_nodes_to_group(
 mod test {
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
     use nalgebra::Point2;
-    use opossum_core::{core_optics::node_attr::HasNodeAttr, meter, utils::LockExt};
+    use opossum_core::{core_optics::node_attr::HasNodeAttr, meter};
 
     use super::*;
     use crate::{
@@ -247,7 +247,7 @@ mod test {
                 .node_recursive(ref_r)
                 .expect("the reference node must still exist");
             assert_eq!(parent, root_id, "the reference must stay at the root");
-            let ports = ref_node.optical_ref.lock_opm().unwrap().ports();
+            let ports = ref_node.ports();
             assert!(
                 !ports.names(&PortType::Output).is_empty(),
                 "the reference must still resolve to A (non-empty mirrored ports)"
