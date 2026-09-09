@@ -1094,7 +1094,7 @@ mod test {
         prelude::RayDataSource,
         utils::{LockExt, geom_transformation::Isometry},
     };
-    use num::Zero;
+    use num_traits::Zero;
     #[test]
     fn default() -> OpmResult<()> {
         let node = NodeGroup::default();

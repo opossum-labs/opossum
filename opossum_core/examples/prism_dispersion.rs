@@ -1,5 +1,5 @@
 use nalgebra::Point2;
-use num::Zero;
+use num_traits::Zero;
 use opossum_core::core_optics::NodeAttrExt;
 use opossum_core::prelude::*;
 use opossum_core::{

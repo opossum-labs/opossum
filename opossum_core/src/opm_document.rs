@@ -1957,4 +1957,71 @@ mod test {
 
         Ok(())
     }
+    #[test]
+    fn test_deserialize_node_with_asymmetric_ports() -> OpmResult<()> {
+        // Raw RON model containing a node where one port defines a custom aperture
+        // and the second port has default settings serialized as an empty tuple `()`.
+        let ron_data = r#"#![enable(unwrap_variant_newtypes)]
+(
+    opm_file_version: "0",
+    scenery: {
+        "node_type": "group",
+        "name": "test",
+        "uuid": "a0d4fdf0-75c4-470d-a69e-8e55619fcf8a",
+        "props": {
+            "expand view": Bool(false),
+        },
+        "graph": (
+            nodes: [
+                {
+                    "node_type": "paraxial surface",
+                    "name": "paraxial surface",
+                    "ports": (
+                        inputs: {
+                            "input_1": (
+                                aperture: (
+                                    shape: BinaryCircle(
+                                        radius: 0.025,
+                                    ),
+                                    a_type: Hole,
+                                ),
+                            ),
+                        },
+                        outputs: {
+                            "output_1": (),
+                        },
+                    ),
+                    "uuid": "5de2825b-9c2a-40bd-a87f-2f7a11d8be82",
+                    "props": {
+                        "focal length": Length(0.01),
+                    },
+                },
+            ],
+            edges: [],
+        ),
+    },
+)"#;
+
+        // Capture logs to ensure the lossy deserializer does not drop the node with a warning
+        testing_logger::setup();
+
+        let doc = OpmDocument::from_string(ron_data)?;
+
+        // Assert that the paraxial surface was not dropped by `deserialize_nodes_lossy`
+        assert_eq!(
+            doc.scenery().nodes().len(),
+            1,
+            "Node with asymmetric ports must be successfully loaded and not skipped"
+        );
+
+        // Verify the node exists and its ports are correctly loaded into memory
+        let node_ref = &doc.scenery().nodes()[0];
+        let node = node_ref.optical_ref.lock_opm()?;
+        assert_eq!(node.node_attr().name(), "paraxial surface");
+
+        // Verify that no warning was emitted for skipping the node
+        check_logs(log::Level::Warn, vec![]);
+
+        Ok(())
+    }
 }

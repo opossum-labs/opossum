@@ -31,7 +31,7 @@ mod test {
     use super::*;
     use crate::{error::OpmResult, joule, light::Ray, nanometer};
     use nalgebra::vector;
-    use num::Zero;
+    use num_traits::Zero;
 
     #[test]
     fn from() {

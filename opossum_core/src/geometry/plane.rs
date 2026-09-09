@@ -4,7 +4,7 @@
 use super::geo_surface::GeoSurface;
 use crate::{light::Ray, meter, utils::geom_transformation::Isometry};
 use nalgebra::{Point2, Point3, Vector3};
-use num::Zero;
+use num_traits::Zero;
 use uom::si::f64::Length;
 
 #[derive(Debug, Clone)]

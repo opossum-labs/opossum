@@ -388,7 +388,7 @@ impl OpticGraph {
 mod test {
     use super::*;
     use crate::nodes::{Dummy, NodeGroup};
-    use num::Zero;
+    use num_traits::Zero;
     use uom::si::f64::Length;
     #[test]
     fn node_by_uuid() -> OpmResult<()> {

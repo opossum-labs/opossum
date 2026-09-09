@@ -10,10 +10,12 @@ use crate::{
         node_config_editor::NodeChangeEvent,
         optical_node_editor::properties_editor::on_save_proptype_handler,
     },
+    utils::ToSentenceCase,
 };
 use approx::relative_eq;
 use dioxus::prelude::*;
-use inflector::Inflector;
+
+use heck::ToLowerCamelCase;
 use nalgebra::Vector2;
 use opossum_core::utils::{
     default_from_name::DefaultFromName, geom_transformation::TranslationAxis,
@@ -59,7 +61,7 @@ pub fn Vec2Editor(
     let vec_x_input = InputData::new(
         InputParam::F64(format!("{select_label} x")),
         format!("vec2xProperty{property_key}")
-            .to_camel_case()
+            .to_lower_camel_case()
             .as_str(),
         dummy_legacy_callback,
         on_vec_input_change_str(vec_sig.into(), TranslationAxis::X, on_save),
@@ -72,7 +74,7 @@ pub fn Vec2Editor(
     let vec_y_input = InputData::new(
         InputParam::F64(format!("{select_label} y")),
         format!("vec2yProperty{property_key}")
-            .to_camel_case()
+            .to_lower_camel_case()
             .as_str(),
         dummy_legacy_callback,
         on_vec_input_change_str(vec_sig.into(), TranslationAxis::Y, on_save),
@@ -94,7 +96,7 @@ pub fn Vec2Editor(
 
     rsx! {
         LabeledSelect {
-            id: format!("vec2Property{property_key}").to_camel_case(),
+            id: format!("vec2Property{property_key}").to_lower_camel_case(),
             label: select_label,
             options: select_options_from_enum_iterator(&vec2_select(), None),
             readonly,

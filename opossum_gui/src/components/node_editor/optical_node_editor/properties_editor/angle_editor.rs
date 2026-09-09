@@ -1,12 +1,16 @@
-use crate::components::node_editor::{
-    hooks::use_synced_signal,
-    inputs::input_components::{NodeConfigUnitInput, UnitHandling},
-    node_config_editor::NodeChangeEvent,
-    optical_node_editor::properties_editor::on_save_proptype_handler,
+use crate::{
+    components::node_editor::{
+        hooks::use_synced_signal,
+        inputs::input_components::{NodeConfigUnitInput, UnitHandling},
+        node_config_editor::NodeChangeEvent,
+        optical_node_editor::properties_editor::on_save_proptype_handler,
+    },
+    utils::ToSentenceCase,
 };
 use approx::relative_ne;
 use dioxus::prelude::*;
-use inflector::Inflector;
+
+use heck::ToLowerCamelCase;
 use opossum_core::degree;
 use uom::si::{angle::degree, f64::Angle};
 use uuid::Uuid;
@@ -24,7 +28,7 @@ pub fn AngleEditor(
 
     rsx! {
         NodeConfigUnitInput {
-            id: format!("angleProperty{property_key}").to_camel_case().as_str(),
+            id: format!("angleProperty{property_key}").to_lower_camel_case().as_str(),
             label: property_key.to_sentence_case(),
             value: angle_sig.read().get::<degree>(),
             unit_config: UnitHandling::new("°", true),

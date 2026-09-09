@@ -1,16 +1,13 @@
-//! ![OPOSSUM logo][opossum_logo]
+// Embed the OPOSSUM vector logo directly as inline SVG into the crate documentation
+#![doc = concat!(
+    "<div align=\"center\">\n\n",
+    include_str!("../logo/Logo_text.svg"),
+    "\n\n</div>"
+)]
 //!
 //! This is the documentation for the **OPOSSUM** software package. **OPOSSUM** stands for
 //! **Op**en-source **O**ptics **S**imulation **S**oftware and **U**nified **M**odeler.
 //!
-#![cfg_attr(feature = "doc-images",
-cfg_attr(all(),
-doc = ::embed_doc_image::embed_image!("opossum_logo", "logo/Logo_text.svg")))]
-#![cfg_attr(
-    not(feature = "doc-images"),
-    doc = "**Doc images not enabled**. Compile with feature `doc-images` and Rust version >= 1.54 \
-           to enable."
-)]
 #![allow(clippy::module_name_repetitions)]
 pub mod absorption;
 pub mod analyzers;

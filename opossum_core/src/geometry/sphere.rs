@@ -9,7 +9,7 @@ use crate::{
     utils::geom_transformation::Isometry,
 };
 use nalgebra::{Point2, Point3, Vector3};
-use num::Zero;
+use num_traits::Zero;
 use roots::{Roots, find_roots_quadratic};
 use uom::si::f64::Length;
 

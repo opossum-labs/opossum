@@ -16,7 +16,7 @@ use crate::{
     utils::geom_transformation::Isometry,
 };
 use nalgebra::Point3;
-use num::Zero;
+use num_traits::Zero;
 use opm_macros_lib::OpmNode;
 use uom::si::f64::{Angle, Length};
 

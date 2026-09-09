@@ -24,18 +24,22 @@ log.workspace = true
 nalgebra.workspace = true
 ron.workspace = true
 serde.workspace = true
-serde_json.workspace = true
 uom.workspace = true
 utoipa.workspace = true
 uuid.workspace = true
 
 actix-cors = "0.7"
-actix-web = "4.11"
+# actix-web = "4.11"
+# Disable default features to avoid compiling brotli, zstd-sys, and flate2.
+# We explicitly re-enable 'macros' for routing attributes like #[get("/")].
+actix-web = { version = "4", default-features = false, features = ["macros"] }
 futures-util = "0.3"
 parking_lot = "0.12"
 tokio-stream = "0.1"
 utoipa-actix-web = "0.1"
 utoipa-swagger-ui = { version = "9", features = ["actix-web", "vendored"] }
 tokio = { version = "1", features = ["process"] }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# Add ureq with minimal features for TLS and Serde JSON support:
+ureq = { version = "2.10", default-features = false, features = ["tls", "json"] }
 semver = "1.0"

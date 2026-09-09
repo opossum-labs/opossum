@@ -14,7 +14,7 @@ use crate::components::node_editor::{
     },
 };
 use dioxus::prelude::*;
-use inflector::Inflector;
+use heck::ToLowerCamelCase;
 use opossum_core::{prelude::ApertureShape, utils::default_from_name::DefaultFromName};
 use uuid::Uuid;
 
@@ -102,7 +102,7 @@ pub fn ClearApertureEditor(
     let excluded = excluded.iter().collect::<Vec<_>>();
     rsx! {
         LabeledSelect {
-            id: format!("clearApertureProperty{property_key}").to_camel_case(),
+            id: format!("clearApertureProperty{property_key}").to_lower_camel_case(),
             label: "Clear aperture",
             options: select_options_from_enum_iterator(&*aperture_sig.read(), Some(&excluded)),
             readonly,

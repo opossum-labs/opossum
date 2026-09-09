@@ -1,10 +1,14 @@
-use crate::components::node_editor::{
-    hooks::use_synced_signal, inputs::input_components::FlushableTextInput,
-    node_config_editor::NodeChangeEvent,
-    optical_node_editor::properties_editor::on_save_proptype_handler,
+use crate::{
+    components::node_editor::{
+        hooks::use_synced_signal, inputs::input_components::FlushableTextInput,
+        node_config_editor::NodeChangeEvent,
+        optical_node_editor::properties_editor::on_save_proptype_handler,
+    },
+    utils::ToSentenceCase,
 };
 use dioxus::prelude::*;
-use inflector::Inflector;
+
+use heck::ToLowerCamelCase;
 use uuid::Uuid;
 
 #[component]
@@ -20,7 +24,7 @@ pub fn StringEditor(
 
     rsx! {
         FlushableTextInput {
-            id: format!("stringProperty{property_key}").to_camel_case(),
+            id: format!("stringProperty{property_key}").to_lower_camel_case(),
             label: property_key.to_sentence_case(),
             value: string_sig(),
             on_save,

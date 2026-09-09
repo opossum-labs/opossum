@@ -7,7 +7,7 @@ use crate::{
 
 use super::PositionDistribution;
 use nalgebra::{Point3, point};
-use num::Zero;
+use num_traits::Zero;
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;

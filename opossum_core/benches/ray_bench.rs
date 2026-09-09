@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use nalgebra::{Point3, vector};
-use num::Zero;
+use num_traits::Zero;
 use opossum_core::{
     J_per_cm2, analyzers::propagation_strategy::MissedSurfaceStrategy,
     core_optics::optic_surface::OpticSurface, degree, error::OpossumError, joule, light::Ray,
