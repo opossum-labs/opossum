@@ -9,7 +9,6 @@ use {
     dioxus::desktop::{WindowBuilder, tao::window::Icon},
     directories::ProjectDirs,
     opossum_gui::ProcessHandle,
-    std::io::Cursor,
 };
 
 const MAIN_CSS: Asset = asset!("/assets/main.css");
@@ -25,10 +24,16 @@ const MDB_ACC_CSS: Asset = asset!("/assets/mdb_accordion.css");
 // --- desktop only functions ---
 #[cfg(not(target_arch = "wasm32"))]
 fn read_icon() -> Option<Icon> {
-    let icon_bytes: &[u8] = include_bytes!("../../opossum_core/logo/Logo_square.ico");
-    let img = image::load_from_memory(icon_bytes).ok()?;
+    // Embed standard PNG icon directly into the binary
+    let icon_bytes: &[u8] = include_bytes!("../assets/icons/32x32.png");
+
+    // Decode memory buffer with explicit PNG format
+    let img = image::load_from_memory_with_format(icon_bytes, image::ImageFormat::Png).ok()?;
+
+    // Convert into raw RGBA bytes for Tao
     let rgba = img.to_rgba8();
     let (width, height) = rgba.dimensions();
+
     Icon::from_rgba(rgba.into_raw(), width, height).ok()
 }
 
