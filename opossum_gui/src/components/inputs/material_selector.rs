@@ -46,7 +46,6 @@ pub fn MaterialSelector(
     let on_catalog_select = {
         let on_change = on_change;
         use_callback(move |selected_mat: Material| {
-            info!("Selected material from catalog: {}", selected_mat.name());
             on_change.call(selected_mat);
         })
     };
@@ -56,7 +55,6 @@ pub fn MaterialSelector(
         let on_change = on_change;
         let material = material.clone();
         use_callback(move |_| {
-            info!("Unlinking material '{}' to AdHoc draft...", material.name());
             let adhoc_copy = material.clone_as_adhoc();
             on_change.call(adhoc_copy);
         })
@@ -66,15 +64,9 @@ pub fn MaterialSelector(
     let on_publish_adhoc_to_catalog = {
         let on_change = on_change;
         let mut material = material.clone();
-        use_callback(move |_| {
-            info!(
-                "Publishing AdHoc material '{}' to registry...",
-                material.name()
-            );
-            match registry.write().publish(&mut material) {
-                Ok(_) => on_change.call(material.clone()),
-                Err(err) => log::error!("Failed to publish material: {err}"),
-            }
+        use_callback(move |_| match registry.write().publish(&mut material) {
+            Ok(_) => on_change.call(material.clone()),
+            Err(err) => log::error!("Failed to publish material: {err}"),
         })
     };
 

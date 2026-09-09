@@ -28,7 +28,7 @@ pub fn RayTraceEditor(
     on_change: EventHandler<NodeChangeEvent>,
     available_sources: Vec<SourcePortDto>,
 ) -> Element {
-    info!("🔄 Render: RayTraceEditor");
+    debug!("🔄 Render: RayTraceEditor");
 
     // Stable callback for updating max refractions via reactive signal handle
     let on_save_max_refractions = use_callback(move |val: String| {
@@ -160,7 +160,9 @@ pub fn RayTraceEditor(
                             .get_source(&port_uuid)
                             .map_or_else(
                                 || {
-                                    let default_wvl = crate::APP_CONFIG.read().default_wavelength();
+                                    let default_wvl = crate::APP_CONFIG
+                                        .read()
+                                        .default_wavelength();
                                     default_ray_data_source(default_wvl)
                                 },
                                 |b| b.source().clone(),

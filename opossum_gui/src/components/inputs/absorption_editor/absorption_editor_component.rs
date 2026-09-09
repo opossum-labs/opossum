@@ -32,7 +32,7 @@ pub fn AbsorptionEditor(
     #[props(default = false)]
     readonly: bool,
 ) -> Element {
-    info!("🔄 Render: AbsorptionEditor");
+    debug!("🔄 Render: AbsorptionEditor");
 
     let flush_trigger = use_signal(|| 0usize);
     let dirty_count = use_signal(|| 0usize);

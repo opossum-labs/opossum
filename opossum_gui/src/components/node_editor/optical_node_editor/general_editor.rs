@@ -18,7 +18,7 @@ pub fn GeneralEditor(
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    info!("🔄 Render: GeneralEditor");
+    debug!("🔄 Render: GeneralEditor");
 
     // Stable callback for renaming nodes.
     // Since node_id is passed by value and constant for this component lifecycle,

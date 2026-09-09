@@ -616,7 +616,7 @@ fn CommonAppLayout(
     on_alert_confirm: EventHandler<MouseEvent>,
     on_alert_cancel: EventHandler<MouseEvent>,
 ) -> Element {
-    info!("🔄 Render: App::CommonAppLayout");
+    debug!("🔄 Render: App::CommonAppLayout");
     // --- GUI Layout Drag Logic ---
     let mut root_tab_open = use_signal(|| true);
     let root_tab_open_handler = EventHandler::<bool>::new(move |b| root_tab_open.set(b));

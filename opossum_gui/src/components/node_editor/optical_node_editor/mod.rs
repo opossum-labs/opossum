@@ -32,7 +32,7 @@ pub fn OpticalNodeEditor(
     graph_id: ReadSignal<Uuid>,
     on_change: EventHandler<NodeChangeEvent>,
 ) -> Element {
-    info!("🔄 Render: OpticalNodeEditor");
+    debug!("🔄 Render: OpticalNodeEditor");
 
     // We no longer need a memo to extract the node_id, as it's passed directly.
     let mut node_info_sig = use_signal(NodeInfo::default);
