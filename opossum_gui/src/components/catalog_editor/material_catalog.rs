@@ -124,8 +124,7 @@ pub fn MaterialCatalog(
     let on_material_save =
         use_callback(
             move |()| match registry.write().publish(&mut *material_state.write()) {
-                Ok(saved_path) => {
-                    info!("Successfully published material to {:?}", saved_path);
+                Ok(_) => {
                     on_action.call(MaterialCatalogEvent::MaterialAdded);
                 }
                 Err(e) => {
@@ -159,20 +158,7 @@ pub fn MaterialCatalog(
     // Callback: Delete latest version and update the in-memory cache
     let handle_execute_delete = use_callback(move |target: DeleteTarget| {
         match registry.write().delete_latest_version(target.id) {
-            Ok(Some(new_latest)) => {
-                log::info!(
-                    "Deleted version v{} of '{}'. Reverted to v{}.",
-                    target.latest_version,
-                    target.name,
-                    new_latest
-                );
-                on_action.call(MaterialCatalogEvent::MaterialDeleted);
-            }
-            Ok(None) => {
-                log::info!(
-                    "Deleted final version of '{}'. Material removed from registry.",
-                    target.name
-                );
+            Ok(_) => {
                 on_action.call(MaterialCatalogEvent::MaterialDeleted);
             }
             Err(e) => {

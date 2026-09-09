@@ -55,7 +55,7 @@ pub fn NodeConfigEditor(
     workspace_processor: Coroutine<GraphsWorkspaceAction>,
     active_graph_id: ReadSignal<Uuid>,
 ) -> Element {
-    info!("🔄 Render: NodeConfigEditor");
+    debug!("🔄 Render: NodeConfigEditor");
     let save_manager = use_save_manager();
     let flush_trigger = save_manager.flush_trigger;
     let dirty_count = save_manager.dirty_count;

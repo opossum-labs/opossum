@@ -122,6 +122,9 @@ fn start_backend() -> Result<ProcessHandle, String> {
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
     fn launch_app(backend_handle: ProcessHandle) {
+        // Initialize the Dioxus logger with a default filter of INFO.
+        // This hides debug! and trace! logs during normal development.
+        dioxus::logger::init(dioxus::logger::tracing::Level::INFO).ok();
         println!("Launching GUI...");
         let data_dir = ProjectDirs::from("org", "OpossumLabs", "OpossumGui").map_or_else(
             || std::env::current_dir().unwrap_or_default(),
@@ -172,6 +175,9 @@ fn main() {
 // --- WASM Main ---
 #[cfg(target_arch = "wasm32")]
 fn main() {
+    // Initialize the Dioxus logger with a default filter of INFO.
+    // This hides debug! and trace! logs during normal development.
+    dioxus::logger::init(dioxus::logger::tracing::Level::INFO).ok();
     // simple start for WASM builds (no backend)
     dioxus::launch(MainApp);
 }

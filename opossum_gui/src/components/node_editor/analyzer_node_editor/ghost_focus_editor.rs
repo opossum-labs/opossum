@@ -29,7 +29,7 @@ pub fn GhostFocusEditor(
     on_change: EventHandler<NodeChangeEvent>,
     available_sources: Vec<SourcePortDto>,
 ) -> Element {
-    info!("🔄 Render: GhostFocusEditor");
+    debug!("🔄 Render: GhostFocusEditor");
 
     // Stable callback reading directly from the reactive ReadSignal handle
     let on_save_max_bounces = use_callback(move |val: String| {
@@ -112,7 +112,9 @@ pub fn GhostFocusEditor(
                             .get_source(&port_uuid)
                             .map_or_else(
                                 || {
-                                    let default_wvl = crate::APP_CONFIG.read().default_wavelength();
+                                    let default_wvl = crate::APP_CONFIG
+                                        .read()
+                                        .default_wavelength();
                                     default_ray_data_source(default_wvl)
                                 },
                                 |builder| builder.source().clone(),
