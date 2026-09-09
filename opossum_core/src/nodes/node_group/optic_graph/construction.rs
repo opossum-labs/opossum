@@ -360,10 +360,7 @@ impl OpticGraph {
             .names(&PortType::Output)
             .contains(&src_port.into())
         {
-            let src_ports = source
-                .ports()
-                .names(&PortType::Output)
-                .join(", ");
+            let src_ports = source.ports().names(&PortType::Output).join(", ");
             return Err(OpossumError::OpticScenery(format!(
                 "source node {} does not have an output port {src_port}. Possible values are: {src_ports}",
                 source
@@ -381,10 +378,7 @@ impl OpticGraph {
             .names(&PortType::Input)
             .contains(&target_port.into())
         {
-            let target_ports = target
-                .ports()
-                .names(&PortType::Input)
-                .join(", ");
+            let target_ports = target.ports().names(&PortType::Input).join(", ");
             return Err(OpossumError::OpticScenery(format!(
                 "target node {} does not have an input port {target_port}. Possible values are: {target_ports}",
                 target
@@ -570,12 +564,11 @@ impl OpticGraph {
         for node in self.g.node_weights_mut() {
             let node_to_be_inverted = !node.inverted();
 
-            node.set_inverted(node_to_be_inverted)
-                .map_err(|_| {
-                    OpossumError::OpticGroup(
-                        "group cannot be inverted because it contains a non-invertable node".into(),
-                    )
-                })?;
+            node.set_inverted(node_to_be_inverted).map_err(|_| {
+                OpossumError::OpticGroup(
+                    "group cannot be inverted because it contains a non-invertable node".into(),
+                )
+            })?;
         }
         for edge in self.g.edge_weights_mut() {
             edge.inverse();

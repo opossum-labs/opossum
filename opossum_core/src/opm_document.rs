@@ -2014,8 +2014,7 @@ mod test {
 
         // Verify the node exists and its ports are correctly loaded into memory
         let node_ref = &doc.scenery().nodes()[0];
-        let node = node_ref.optical_ref.lock_opm()?;
-        assert_eq!(node.node_attr().name(), "paraxial surface");
+        assert_eq!(node_ref.node_attr().name(), "paraxial surface");
 
         // Verify that no warning was emitted for skipping the node
         check_logs(log::Level::Warn, vec![]);

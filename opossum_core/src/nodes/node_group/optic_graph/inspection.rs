@@ -366,11 +366,7 @@ impl OpticGraph {
     ///
     /// This function returns an error if the given `node_ide` is not found.
     pub fn is_incoming_node(&self, node_id: Uuid) -> OpmResult<bool> {
-        let nr_of_input_ports = self
-            .node(node_id)?
-            .ports()
-            .ports(&PortType::Input)
-            .len();
+        let nr_of_input_ports = self.node(node_id)?.ports().ports(&PortType::Input).len();
         let idx = self
             .node_idx_by_uuid(node_id)
             .ok_or_else(|| OpossumError::OpticGroup("node_id does not exist".into()))?;

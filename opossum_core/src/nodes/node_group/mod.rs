@@ -1173,10 +1173,7 @@ mod test {
         raytrace_config.map_source(i_s, ray_data_builder.into());
         AnalysisRayTrace::analyze(&mut scenery, LightResult::default(), &raytrace_config)?;
         let uuid = scenery.node(i_e)?.uuid()?.as_simple().to_string();
-        let Some(report) = scenery
-            .node(i_e)?
-            .node_report(&uuid)?
-        else {
+        let Some(report) = scenery.node(i_e)?.node_report(&uuid)? else {
             panic!("Report should not be `None`");
         };
         if let Proptype::Energy(e) = report.properties().get("Energy")? {

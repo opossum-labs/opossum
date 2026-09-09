@@ -178,7 +178,8 @@ pub mod test_helper {
     {
         let deserialized = load_without_property::<T>(CLEAR_APERTURE)?;
         let clear_aperture = {
-            let Ok(Proptype::Aperture(shape)) = deserialized.node_attr().get_property(CLEAR_APERTURE)
+            let Ok(Proptype::Aperture(shape)) =
+                deserialized.node_attr().get_property(CLEAR_APERTURE)
             else {
                 panic!("the loaded node has no '{CLEAR_APERTURE}' property holding a shape");
             };

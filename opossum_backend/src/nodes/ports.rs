@@ -45,11 +45,7 @@ pub async fn get_ports(
     let ports = if document.scenery().node_attr().uuid() == uuid {
         document.scenery().ports()
     } else {
-        document
-            .scenery()
-            .node_recursive(uuid)?
-            .0
-            .ports()
+        document.scenery().node_recursive(uuid)?.0.ports()
     };
 
     let response = NodePortsResponse {

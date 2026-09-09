@@ -46,7 +46,9 @@ impl AnalysisRayTrace for NodeGroup {
                 warn!("graph contains stale (completely unconnected) node {node_info}. Skipping.");
             } else {
                 let incoming_edges = self.graph.take_incoming(node_id, &incoming_data)?;
-                let mut outgoing_edges = if let Some(target_uuid) = self.graph.g[idx].referenced_node_id() {
+                let mut outgoing_edges = if let Some(target_uuid) =
+                    self.graph.g[idx].referenced_node_id()
+                {
                     let is_inverted = self.graph.g[idx].inverted();
                     let target_idx = self.graph.node_idx_by_uuid(target_uuid).ok_or_else(|| {
                         OpossumError::Analysis(format!(
@@ -72,10 +74,9 @@ impl AnalysisRayTrace for NodeGroup {
                 } else {
                     let node = &mut self.graph.g[idx];
                     let node_info = format!("{node}");
-                    AnalysisRayTrace::analyze(&mut **node, incoming_edges, config)
-                        .map_err(|e| {
-                            OpossumError::Analysis(format!("analysis of node {node_info} failed: {e}"))
-                        })?
+                    AnalysisRayTrace::analyze(&mut **node, incoming_edges, config).map_err(|e| {
+                        OpossumError::Analysis(format!("analysis of node {node_info} failed: {e}"))
+                    })?
                 };
                 filter_ray_limits(&mut outgoing_edges, config);
                 // If node is sink node, rewrite port names according to output mapping
@@ -195,12 +196,10 @@ fn calculate_single_node_position(
         let target_node = &mut graph.g[target_idx];
         if is_inverted {
             target_node.set_inverted(true).map_err(|_e| {
-                OpossumError::Analysis(format!(
-                    "referenced node {target_node} cannot be inverted"
-                ))
+                OpossumError::Analysis(format!("referenced node {target_node} cannot be inverted"))
             })?;
         }
-        let res = AnalysisRayTrace::calc_node_positions(&mut **target_node, incoming_edges, config);
+        let res = AnalysisRayTrace::analyze(&mut **target_node, incoming_edges, config);
         if is_inverted {
             target_node.set_inverted(false)?;
         }

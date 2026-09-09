@@ -167,9 +167,7 @@ static VOLUME_NODE_TYPES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     node_types()
         .into_iter()
         .filter(|(node_type, _)| {
-            create_node_ref(node_type).is_ok_and(|optic_ref| {
-                optic_ref.as_volume().is_some()
-            })
+            create_node_ref(node_type).is_ok_and(|optic_ref| optic_ref.as_volume().is_some())
         })
         .map(|(node_type, _)| node_type)
         .collect()

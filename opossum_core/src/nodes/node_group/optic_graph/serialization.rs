@@ -106,17 +106,18 @@ impl TryFrom<SerializableGraph> for OpticGraph {
             // sibling branch that isn't built yet (serde builds inner groups before outer ones). Those are
             // resolved once the whole document exists - see `OpticGraph::resolve_all_references`, driven
             // from `NodeGroup::after_deserialization_hook`.
-            let (is_ref, target_uuid) = if let Some(refr) = g.g[idx].as_any().downcast_ref::<NodeReference>() {
-                let mut target = refr.referenced_uuid();
-                if target.is_nil() {
-                    if let Ok(Proptype::Uuid(uuid)) = refr.properties().get("reference id") {
-                        target = *uuid;
+            let (is_ref, target_uuid) =
+                if let Some(refr) = g.g[idx].as_any().downcast_ref::<NodeReference>() {
+                    let mut target = refr.referenced_uuid();
+                    if target.is_nil() {
+                        if let Ok(Proptype::Uuid(uuid)) = refr.properties().get("reference id") {
+                            target = *uuid;
+                        }
                     }
-                }
-                (true, target)
-            } else {
-                (false, Uuid::nil())
-            };
+                    (true, target)
+                } else {
+                    (false, Uuid::nil())
+                };
             if is_ref && !target_uuid.is_nil() {
                 if let Ok((target_node, _)) = g.node_recursive(target_uuid, Uuid::nil()) {
                     if let Some(refr) = g.g[idx].as_any_mut().downcast_mut::<NodeReference>() {

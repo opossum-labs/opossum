@@ -45,7 +45,9 @@ impl AnalysisGhostFocus for NodeGroup {
                     node_id,
                     &light_rays_to_light_result(current_bouncing_rays.clone()),
                 )?;
-                let mut outgoing_edges = if let Some(target_uuid) = self.graph.g[idx].referenced_node_id() {
+                let mut outgoing_edges = if let Some(target_uuid) =
+                    self.graph.g[idx].referenced_node_id()
+                {
                     let is_inverted = self.graph.g[idx].inverted();
                     let target_idx = self.graph.node_idx_by_uuid(target_uuid).ok_or_else(|| {
                         OpossumError::Analysis(format!(

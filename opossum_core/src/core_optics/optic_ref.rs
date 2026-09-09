@@ -46,7 +46,6 @@ impl OpticRef {
     }
 }
 
-
 impl Clone for OpticRef {
     fn clone(&self) -> Self {
         Self {
@@ -133,7 +132,8 @@ impl<'de> Deserialize<'de> for OpticRef {
         let mut intermediate = OpticRefIntermediate::deserialize(deserializer)?;
 
         let node_type = intermediate.attributes.node_type();
-        let mut node_ref = create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
+        let mut node_ref =
+            create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
 
         // Merge the deserialized properties on top of the node's default properties.
         {
@@ -147,10 +147,7 @@ impl<'de> Deserialize<'de> for OpticRef {
             .map_err(|e| de::Error::custom(e.to_string()))?;
 
         // If the node is a group node, set its graph.
-        if let Some(group_node) = node_ref
-            .as_any_mut()
-            .downcast_mut::<NodeGroup>()
-        {
+        if let Some(group_node) = node_ref.as_any_mut().downcast_mut::<NodeGroup>() {
             group_node.set_graph(intermediate.graph);
         }
         node_ref
@@ -213,10 +210,7 @@ mod test {
     #[test]
     fn debug() {
         assert_eq!(
-            format!(
-                "{:?}",
-                OpticRef::new(Box::new(Dummy::default()))
-            ),
+            format!("{:?}", OpticRef::new(Box::new(Dummy::default()))),
             "OpticRef { optical_ref: 'dummy' (dummy) }"
         );
     }

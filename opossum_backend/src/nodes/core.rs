@@ -91,10 +91,12 @@ pub async fn post_children(
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let new_node_info = node_type.into_inner();
     let mut new_node_ref = create_node_ref(new_node_info.node_type())?;
-    new_node_ref.node_attr_mut().set_gui_position(Some(Point2::new(
-        new_node_info.gui_position().0,
-        new_node_info.gui_position().1,
-    )));
+    new_node_ref
+        .node_attr_mut()
+        .set_gui_position(Some(Point2::new(
+            new_node_info.gui_position().0,
+            new_node_info.gui_position().1,
+        )));
 
     let mut document = data.document.lock();
     let uuid = path.into_inner();
@@ -103,10 +105,7 @@ pub async fn post_children(
     let _ = scenery.with_group_node_mut(uuid, |g| g.add_node_ref(new_node_ref.clone()))??;
 
     // --- AUTOMATICALLY INJECT MAPPINGS INTO ALL ANALYZERS IF NEW NODE IS A SOURCE PORT ---
-    let node_type_str = new_node_ref
-        .node_attr()
-        .node_type()
-        .to_string();
+    let node_type_str = new_node_ref.node_attr().node_type().to_string();
     let new_node_uuid = new_node_ref.node_attr().uuid();
 
     // Auto-injecting a source-port mapping mutates each analyzer's config as a side effect - capture the

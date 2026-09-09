@@ -791,9 +791,7 @@ fn get_shifted_pos_of_ref(
     optic_ref: &OpticRef,
     shift: Point2<f64>,
 ) -> Result<(f64, f64), BackEndErrorResponse> {
-    let old_pos = optic_ref
-        .gui_position()
-        .unwrap_or_else(Point2::origin);
+    let old_pos = optic_ref.gui_position().unwrap_or_else(Point2::origin);
     let new_pos = (old_pos.x + shift.x, old_pos.y + shift.y);
     Ok(new_pos)
 }

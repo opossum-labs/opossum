@@ -148,9 +148,7 @@ impl OpticGraph {
             let node_id = self.node_by_idx(idx)?.uuid()?;
             if self.is_stale_node(node_id)? {
                 let node_name = format!("{}", self.g[idx]);
-                warn!(
-                    "graph contains stale (completely unconnected) node {node_name}. Skipping."
-                );
+                warn!("graph contains stale (completely unconnected) node {node_name}. Skipping.");
             } else {
                 let incoming_edges = self.take_incoming(node_id, incoming_data)?;
                 let outgoing_edges = if let Some(target_uuid) = self.g[idx].referenced_node_id() {
