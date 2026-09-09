@@ -240,7 +240,7 @@ mod test {
     };
     use approx::assert_relative_eq;
     use nalgebra::Vector3;
-    use num::Zero;
+    use num_traits::Zero;
     #[test]
     fn default() -> OpmResult<()> {
         let node = CylindricLens::default();

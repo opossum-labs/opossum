@@ -21,7 +21,7 @@ pub fn EnergyEditor(
     on_change: EventHandler<NodeChangeEvent>,
     available_sources: Vec<SourcePortDto>,
 ) -> Element {
-    info!("🔄 Render: EnergyEditor");
+    debug!("🔄 Render: EnergyEditor");
 
     rsx! {
         StaticSection { header: "Sources Definitions",

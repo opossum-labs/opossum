@@ -5,7 +5,7 @@ use std::{f64::consts::PI, fmt::Display};
 
 use approx::relative_ne;
 use nalgebra::{MatrixXx3, Point3, Rotation3, Vector3, vector};
-use num::{ToPrimitive, Zero};
+use num_traits::{ToPrimitive, Zero};
 use serde::{Deserialize, Serialize};
 use uom::si::{
     energy::joule,

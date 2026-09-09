@@ -3,7 +3,7 @@
 use std::cmp::Ordering;
 
 use approx::{RelativeEq, relative_eq};
-use num::{Float, Num};
+use num_traits::{Float, Num};
 
 use crate::error::{OpmResult, OpossumError};
 

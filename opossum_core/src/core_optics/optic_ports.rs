@@ -23,7 +23,10 @@ use crate::{
     nodes::fluence_detector::Fluence,
     validated, validated_type,
 };
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize, Deserializer, Serialize,
+    de::{self, MapAccess, SeqAccess, Visitor},
+};
 use std::{collections::BTreeMap, fmt::Display};
 use uom::si::radiant_exposure::joule_per_square_centimeter;
 use utoipa::ToSchema;
@@ -55,7 +58,7 @@ pub type ValidatedLidt = validated_type!(Fluence, AllPositive && AllNotNan);
 ///
 /// This struct is purely for configuration (State) and is serialized.
 /// It does NOT contain geometric runtime data like `GeoSurface` or `HitMap`.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq)]
+#[derive(Debug, Clone, Serialize, ToSchema, PartialEq)]
 pub struct PortConfig {
     /// The aperture of the port, defining the spatial transmission.
     #[serde(default, skip_serializing_if = "is_default_aperture")]
@@ -96,6 +99,91 @@ impl Display for PortConfig {
             self.coating,
             self.lidt.get().get::<joule_per_square_centimeter>()
         )
+    }
+}
+impl<'de> Deserialize<'de> for PortConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct PortConfigVisitor;
+
+        impl<'de> Visitor<'de> for PortConfigVisitor {
+            type Value = PortConfig;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("a port config struct or ()")
+            }
+
+            // Handles `Content::Unit` when RON buffers `()` inside untagged enums
+            fn visit_unit<E>(self) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(PortConfig::default())
+            }
+
+            // Handles optional or null values
+            fn visit_none<E>(self) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(PortConfig::default())
+            }
+
+            // Handles empty sequences or tuples like `()`
+            fn visit_seq<A>(self, _seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                Ok(PortConfig::default())
+            }
+
+            // Handles regular field mapping
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut aperture = None;
+                let mut coating = None;
+                let mut lidt = None;
+
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "aperture" => {
+                            if aperture.is_some() {
+                                return Err(de::Error::duplicate_field("aperture"));
+                            }
+                            aperture = Some(map.next_value()?);
+                        }
+                        "coating" => {
+                            if coating.is_some() {
+                                return Err(de::Error::duplicate_field("coating"));
+                            }
+                            coating = Some(map.next_value()?);
+                        }
+                        "lidt" => {
+                            if lidt.is_some() {
+                                return Err(de::Error::duplicate_field("lidt"));
+                            }
+                            lidt = Some(map.next_value()?);
+                        }
+                        _ => {
+                            let _ = map.next_value::<de::IgnoredAny>()?;
+                        }
+                    }
+                }
+
+                let default = PortConfig::default();
+                Ok(PortConfig {
+                    aperture: aperture.unwrap_or(default.aperture),
+                    coating: coating.unwrap_or(default.coating),
+                    lidt: lidt.unwrap_or(default.lidt),
+                })
+            }
+        }
+
+        deserializer.deserialize_any(PortConfigVisitor)
     }
 }
 /// Type of an [`OpticPorts`]
@@ -526,6 +614,40 @@ mod test {
         } else {
             panic!("Coating type is not ConstantR");
         }
+        Ok(())
+    }
+    #[test]
+    fn test_port_config_deserialization_from_unit() -> OpmResult<()> {
+        // 1. Deserializing an empty tuple `()` directly must produce default PortConfig
+        let empty_ron = "()";
+        let config: PortConfig =
+            ron::from_str(empty_ron).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert_eq!(config, PortConfig::default());
+
+        // 2. Deserializing an OpticPorts block where one port is custom and one is default `()`
+        let ports_ron = r#"#![enable(unwrap_variant_newtypes)]
+        (
+            inputs: {
+                "input_1": (
+                    coating: ConstantR(
+                        reflectivity: 1.0,
+                    ),
+                ),
+            },
+            outputs: {
+                "output_1": (),
+            },
+        )"#;
+        let ports: OpticPorts =
+            ron::from_str(ports_ron).map_err(|e| OpossumError::Other(e.to_string()))?;
+
+        assert_eq!(ports.names(&PortType::Input), vec!["input_1".to_string()]);
+        assert_eq!(ports.names(&PortType::Output), vec!["output_1".to_string()]);
+        assert_eq!(
+            ports.ports_raw(&PortType::Output)["output_1"],
+            PortConfig::default()
+        );
+
         Ok(())
     }
 }

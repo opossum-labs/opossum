@@ -196,7 +196,7 @@ mod test {
         nanometer,
         nodes::{EnergyMeter, NodeGroup, SourcePort},
     };
-    use num::Zero;
+    use num_traits::Zero;
     use uom::si::f64::Length;
 
     fn create_scene() -> OpmResult<(NodeGroup, EnergyConfig)> {

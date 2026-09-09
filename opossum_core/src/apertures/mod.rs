@@ -42,7 +42,7 @@ use crate::{
 };
 use core::f64;
 use nalgebra::{Matrix2xX, MatrixXx2, Point2, Point3};
-use num::Zero;
+use num_traits::Zero;
 use opm_macros_lib::EnsureValidated;
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};

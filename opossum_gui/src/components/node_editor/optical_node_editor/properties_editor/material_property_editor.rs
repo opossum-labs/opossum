@@ -61,7 +61,6 @@ pub fn MaterialPropertyEditor(
     let on_catalog_select = {
         let emit_material_change = emit_material_change.clone();
         use_callback(move |selected_mat: Material| {
-            info!("Selected material from catalog: {}", selected_mat.name());
             emit_material_change(selected_mat);
         })
     };
@@ -71,10 +70,6 @@ pub fn MaterialPropertyEditor(
         let emit_material_change = emit_material_change.clone();
         let current_material = current_material.clone();
         use_callback(move |_| {
-            info!(
-                "Unlinking material '{}' to AdHoc draft...",
-                current_material.name()
-            );
             let adhoc_copy = current_material.clone_as_adhoc();
             emit_material_change(adhoc_copy);
         })
@@ -84,16 +79,12 @@ pub fn MaterialPropertyEditor(
     let on_publish_adhoc_to_catalog = {
         let emit_material_change = emit_material_change.clone();
         let mut current_material = current_material.clone();
-        use_callback(move |_| {
-            info!(
-                "Publishing AdHoc material '{}' to registry...",
-                current_material.name()
-            );
-            match registry.write().publish(&mut current_material) {
+        use_callback(
+            move |_| match registry.write().publish(&mut current_material) {
                 Ok(_) => emit_material_change(current_material.clone()),
                 Err(err) => log::error!("Failed to publish: {err}"),
-            }
-        })
+            },
+        )
     };
 
     // Callbacks for inline AdHoc MaterialEditor

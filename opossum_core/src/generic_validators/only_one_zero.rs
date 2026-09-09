@@ -1,6 +1,6 @@
 use crate::impl_validator;
 use nalgebra::Point2;
-use num::Zero;
+use num_traits::Zero;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::{Angle, Length};
 

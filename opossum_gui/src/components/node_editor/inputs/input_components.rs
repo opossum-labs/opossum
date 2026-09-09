@@ -305,7 +305,7 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
 /// Renders a list of input components arranged in two-column grid rows.
 #[component]
 pub fn RowedInputs(inputs: Vec<InputData>) -> Element {
-    info!("🔄 Render: RowedInputs");
+    debug!("🔄 Render: RowedInputs");
 
     rsx! {
         // Standard slice chunks yield sub-slices without any intermediate heap allocation
@@ -644,7 +644,7 @@ pub fn LabeledSelect(
     #[props(default = false)]
     readonly: bool,
 ) -> Element {
-    info!("🔄 Render: LabeledSelect");
+    debug!("🔄 Render: LabeledSelect");
 
     // `bg-dark` is set explicitly so the select keeps a dark field even outside an
     // `.accordion-body` (e.g. the analyzer sidebar, whose sub-editors are loose children of

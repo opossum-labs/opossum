@@ -1,4 +1,4 @@
-use num::Zero;
+use num_traits::Zero;
 use opossum_core::{
     analyzers::energy::EnergyConfig, nodes::ideal_filter::FilterConst, percent, prelude::*,
 };

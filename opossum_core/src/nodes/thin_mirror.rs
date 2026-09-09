@@ -251,7 +251,7 @@ mod test {
         utils::geom_transformation::Isometry,
     };
     use nalgebra::vector;
-    use num::Zero;
+    use num_traits::Zero;
     #[test]
     fn default() {
         let node = ThinMirror::default();

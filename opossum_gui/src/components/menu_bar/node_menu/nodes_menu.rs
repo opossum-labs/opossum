@@ -1,5 +1,5 @@
+use crate::utils::ToSentenceCase;
 use dioxus::prelude::*;
-use inflector::Inflector;
 
 use crate::{OPOSSUM_UI_LOGS, api};
 

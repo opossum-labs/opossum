@@ -9,7 +9,6 @@ use {
     dioxus::desktop::{WindowBuilder, tao::window::Icon},
     directories::ProjectDirs,
     opossum_gui::ProcessHandle,
-    std::io::Cursor,
 };
 
 const MAIN_CSS: Asset = asset!("/assets/main.css");
@@ -25,15 +24,17 @@ const MDB_ACC_CSS: Asset = asset!("/assets/mdb_accordion.css");
 // --- desktop only functions ---
 #[cfg(not(target_arch = "wasm32"))]
 fn read_icon() -> Option<Icon> {
-    let icon_bytes: &[u8] = include_bytes!("../../opossum_core/logo/Logo_square.ico");
-    let mut reader = Cursor::new(icon_bytes);
-    let icon_dir = ico::IconDir::read(&mut reader).ok()?;
-    let entry = icon_dir.entries().first()?;
-    let width = entry.width();
-    let height = entry.height();
-    let image = entry.decode().ok()?;
-    let data = image.rgba_data();
-    Icon::from_rgba(data.into(), width, height).ok()
+    // Embed standard PNG icon directly into the binary
+    let icon_bytes: &[u8] = include_bytes!("../assets/icons/32x32.png");
+
+    // Decode memory buffer with explicit PNG format
+    let img = image::load_from_memory_with_format(icon_bytes, image::ImageFormat::Png).ok()?;
+
+    // Convert into raw RGBA bytes for Tao
+    let rgba = img.to_rgba8();
+    let (width, height) = rgba.dimensions();
+
+    Icon::from_rgba(rgba.into_raw(), width, height).ok()
 }
 
 #[cfg(all(not(debug_assertions), not(target_arch = "wasm32")))]
@@ -121,6 +122,9 @@ fn start_backend() -> Result<ProcessHandle, String> {
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
     fn launch_app(backend_handle: ProcessHandle) {
+        // Initialize the Dioxus logger with a default filter of INFO.
+        // This hides debug! and trace! logs during normal development.
+        dioxus::logger::init(dioxus::logger::tracing::Level::INFO).ok();
         println!("Launching GUI...");
         let data_dir = ProjectDirs::from("org", "OpossumLabs", "OpossumGui").map_or_else(
             || std::env::current_dir().unwrap_or_default(),
@@ -171,6 +175,9 @@ fn main() {
 // --- WASM Main ---
 #[cfg(target_arch = "wasm32")]
 fn main() {
+    // Initialize the Dioxus logger with a default filter of INFO.
+    // This hides debug! and trace! logs during normal development.
+    dioxus::logger::init(dioxus::logger::tracing::Level::INFO).ok();
     // simple start for WASM builds (no backend)
     dioxus::launch(MainApp);
 }

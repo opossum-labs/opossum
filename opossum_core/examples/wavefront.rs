@@ -1,4 +1,4 @@
-use num::Zero;
+use num_traits::Zero;
 use opossum_core::{nodes::round_collimated_ray_builder, prelude::*};
 use std::path::Path;
 use uom::si::f64::Length;

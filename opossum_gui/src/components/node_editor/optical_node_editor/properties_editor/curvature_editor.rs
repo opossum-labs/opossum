@@ -1,15 +1,18 @@
-use crate::components::node_editor::{
-    hooks::use_synced_signal,
-    inputs::{
-        InputData, InputParam,
-        input_components::{InputParamLabeledInput, NodeConfigUnitInput, UnitHandling},
+use crate::{
+    components::node_editor::{
+        hooks::use_synced_signal,
+        inputs::{
+            InputData, InputParam,
+            input_components::{InputParamLabeledInput, NodeConfigUnitInput, UnitHandling},
+        },
+        node_config_editor::{NodeChangeAction, NodeChangeEvent},
     },
-    node_config_editor::{NodeChangeAction, NodeChangeEvent},
+    utils::ToSentenceCase,
 };
 use approx::relative_ne;
 use core::f64;
 use dioxus::prelude::*;
-use inflector::Inflector;
+use heck::ToLowerCamelCase;
 use opossum_core::{meter, prelude::Proptype};
 use uom::si::f64::Length;
 use uuid::Uuid;
@@ -56,7 +59,7 @@ pub fn CurvatureEditor(
         div { class: "row gy-1 gx-2",
             div { class: "col-sm",
                 NodeConfigUnitInput {
-                    id: format!("curvatureProperty{property_key}").to_camel_case().as_str(),
+                    id: format!("curvatureProperty{property_key}").to_lower_camel_case().as_str(),
                     label: property_key.to_sentence_case(),
                     value: curvature_sig.read().value,
                     unit_config: UnitHandling::new("m", true),
@@ -101,7 +104,7 @@ fn CurvatureSelector(
     let checkbox_input = InputData::new(
         InputParam::Bool("Curved".into()),
         format!("curvatureSelectProperty{property_key}")
-            .to_camel_case()
+            .to_lower_camel_case()
             .as_str(),
         legacy_callback,
         dummy_str_callback,

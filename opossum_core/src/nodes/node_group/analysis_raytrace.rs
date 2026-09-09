@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 use log::{info, warn};
 use nalgebra::{Point3, Vector3};
-use num::Zero;
+use num_traits::Zero;
 use petgraph::graph::NodeIndex;
 use uom::si::f64::Length;
 use uuid::Uuid;

@@ -7,7 +7,7 @@ use crate::{
 };
 use itertools::Itertools;
 use nalgebra::{Point2, Point3, Vector2, Vector3};
-use num::ToPrimitive;
+use num_traits::ToPrimitive;
 use plotters::{
     backend::BitMapBackend, chart::ChartBuilder, drawing::IntoDrawingArea, element::BitMapElement,
     style::WHITE,

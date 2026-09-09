@@ -99,7 +99,7 @@ mod test {
     use super::*;
     use crate::millimeter;
     use core::f64;
-    use num::Zero;
+    use num_traits::Zero;
 
     #[test]
     fn new() -> OpmResult<()> {

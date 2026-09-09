@@ -35,7 +35,7 @@ pub fn AlignmentEditor(
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    info!("🔄 Render: AlignmentEditor");
+    debug!("🔄 Render: AlignmentEditor");
     let current_node_id = *node_id.read();
 
     let accordion_content = if current_node_id == Uuid::nil() {
@@ -161,7 +161,7 @@ pub fn PositioningEditor(
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
-    info!("🔄 Render: PositioningEditor");
+    debug!("🔄 Render: PositioningEditor");
     let current_node_id = *node_id.read();
 
     let accordion_content = if current_node_id == Uuid::nil() {
@@ -196,7 +196,7 @@ pub fn PositioningInputs(
     node_id: ReadSignal<Uuid>,
     readonly: bool,
 ) -> Element {
-    info!("🔄 Render: PositioningInputs");
+    debug!("🔄 Render: PositioningInputs");
 
     // Sync the signal using the unwrapped value from the memo
     let mut position_opt_sig = use_synced_signal(*position_opt.read());

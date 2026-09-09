@@ -31,7 +31,7 @@ use crate::{
     },
 };
 use nalgebra::{Vector2, Vector3};
-use num::Float;
+use num_traits::Float;
 use serde::{Deserialize, Serialize};
 use tinytemplate::TinyTemplate;
 use uom::si::{
