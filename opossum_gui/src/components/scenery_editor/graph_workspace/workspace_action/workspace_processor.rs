@@ -2235,7 +2235,7 @@ async fn process_save_root_scenery_to_file(
             // Explicitly annotate 'opm_string: String' to prevent Rust type inference from defaulting to 'str'
             Some(move |opm_string: String| {
                 spawn(async move {
-                    // Call cross-platform helper (writes to disk on Desktop, triggers download/file-picker on WASM)
+                    // Call cross-platform helper (writes to disk on Desktop, triggers download/file-picker on Web)
                     match crate::components::menu_bar::project_helper::save_opm_data(
                         &path,
                         &opm_string,
