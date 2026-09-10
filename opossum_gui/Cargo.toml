@@ -12,10 +12,12 @@ publish = true
 readme = "README.md"
 
 [dependencies]
+# Workspace dependencies
 opossum_core = { workspace = true }
 opm_macros_lib = { workspace = true }
 opossum_registry = { workspace = true }
 
+# Common workspace dependencies
 approx.workspace = true
 chrono.workspace = true
 itertools.workspace = true
@@ -25,35 +27,38 @@ ron.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 strum.workspace = true
-tempfile.workspace = true
 uom.workspace = true
 uuid.workspace = true
 
+# UI and Dioxus ecosystem
 dioxus = { version = "0.7" }
 dioxus-free-icons = { version = "0.10", features = ["font-awesome-solid"] }
-directories = "6"
+dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1", default-features = false }
+
+# Utility libraries shared across platforms
 futures-util = "0.3"
 heck = "0.5"
-reqwest = { version = "0.13", default-features = false, features = ["json"] }
-rfd = { version = "0.17" }
-rust-sugiyama = "0.4"
-dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1", default-features = false }
 regex = "1"
+reqwest = { version = "0.13", default-features = false, features = ["json"] }
+rust-sugiyama = "0.4"
 webbrowser = "1.2.3"
+web-time = "1.1" # Cross-platform Instant and SystemTime replacement
+rfd = { version = "0.17" }
 
-# Add gloo-timers to handle asynchronous delays in WASM
-gloo-timers = { version = "0.4", features = ["futures"] }
-# Zeitmessung (Instant/SystemTime) plattformunabhängig machen
-web-time = "1.1"
+# Desktop-specific dependencies (optional, enabled via "desktop" feature)
+directories = { version = "6", optional = true }
+image = { version = "0.25", default-features = false, features = ["png"], optional = true }
+tempfile = { workspace = true, optional = true }
+
+# Web-specific dependencies (optional, enabled via "web" feature)
+gloo-timers = { version = "0.4", features = ["futures"], optional = true }
+web-sys = { version = "0.3", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", features = ["process", "time"] }
 
-image = { version = "0.25", default-features = false, features = ["png"] }
-
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { version = "1", default-features = false }
-web-sys = "0.3"
 
 # [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # plotly = { version = "0.13.5", features = ["kaleido"] }
@@ -62,7 +67,21 @@ web-sys = "0.3"
 
 [features]
 default = ["desktop"]
-web = ["dioxus/web"]
-desktop = ["dioxus/desktop"]
+
+# Activates Dioxus desktop renderer and native system features
+desktop = [
+    "dioxus/desktop",
+    "dep:directories",
+    "dep:image",
+    "dep:tempfile",
+]
+
+# Activates Dioxus web renderer and browser/wasm bindings
+web = [
+    "dioxus/web",
+    "dep:gloo-timers",
+    "dep:web-sys",
+]
+
+# Mobile platform support
 mobile = ["dioxus/mobile"]
-# server = ["dioxus/server"]

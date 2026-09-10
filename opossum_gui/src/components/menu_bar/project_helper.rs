@@ -1,12 +1,10 @@
-use std::path::{Path, PathBuf};
-
-#[cfg(not(target_arch = "wasm32"))]
 use rfd::AsyncFileDialog;
+use std::path::{Path, PathBuf};
 
 /// Opens a file dialog for selecting an existing OPM file.
 /// Returns `Some(PathBuf)` if a file was selected, or `None` otherwise.
 pub async fn select_open_path() -> Option<PathBuf> {
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(feature = "desktop")]
     {
         let file = AsyncFileDialog::new()
             .set_directory("/")
@@ -17,9 +15,9 @@ pub async fn select_open_path() -> Option<PathBuf> {
 
         file.map(|handle| handle.path().to_path_buf())
     }
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(not(feature = "desktop"))]
     {
-        // Path selection is handled differently in WASM (via direct file inputs),
+        // Path selection is handled differently in Web (via direct file inputs),
         // so this specific dialog helper returns None.
         None
     }
@@ -28,7 +26,7 @@ pub async fn select_open_path() -> Option<PathBuf> {
 /// Opens a file dialog for saving an OPM file on desktop targets.
 /// Returns `Some(PathBuf)` if a destination was chosen, or `None` otherwise.
 pub async fn select_save_path() -> Option<PathBuf> {
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(feature = "desktop")]
     {
         let file = AsyncFileDialog::new()
             .set_directory("/")
@@ -39,7 +37,7 @@ pub async fn select_save_path() -> Option<PathBuf> {
 
         file.map(|handle| handle.path().to_path_buf())
     }
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(not(feature = "desktop"))]
     {
         None
     }
@@ -51,7 +49,7 @@ pub async fn select_folder_path(
     starting_dir: Option<&Path>,
     title: Option<&str>,
 ) -> Option<PathBuf> {
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(feature = "desktop")]
     {
         let mut dialog = AsyncFileDialog::new();
 
@@ -72,7 +70,7 @@ pub async fn select_folder_path(
         let folder = dialog.pick_folder().await;
         folder.map(|handle| handle.path().to_path_buf())
     }
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(not(feature = "desktop"))]
     {
         let _ = starting_dir;
         let _ = title;
@@ -81,16 +79,16 @@ pub async fn select_folder_path(
 }
 
 /// Abstracted method to save OPM content to disk or trigger a browser download
-/// based on the compilation target (Desktop vs. WASM).
+/// based on the compilation target (Desktop vs. Web).
 #[allow(clippy::unused_async)]
 pub async fn save_opm_data(path: &Path, content: &str) -> Result<(), String> {
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(feature = "desktop")]
     {
         // On desktop platforms, write the string directly to the local file system.
         std::fs::write(path, content).map_err(|e| e.to_string())
     }
 
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(not(feature = "desktop"))]
     {
         use dioxus::document::eval;
 

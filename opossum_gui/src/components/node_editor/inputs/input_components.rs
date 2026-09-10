@@ -203,11 +203,11 @@ pub fn LabeledFileInput(
                             }
                             if let Some(handle) = dialog.pick_file().await {
                                 // Extract full file path on desktop targets
-                                #[cfg(not(target_arch = "wasm32"))]
+                                #[cfg(feature = "desktop")]
                                 let selected_path = handle.path().to_string_lossy().to_string();
 
                                 // Extract file name on web targets due to browser sandbox restrictions
-                                #[cfg(target_arch = "wasm32")]
+                                #[cfg(not(feature = "desktop"))]
                                 let selected_path = handle.file_name();
 
                                 // Escape special characters for JS string injection

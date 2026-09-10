@@ -26,12 +26,11 @@ use opossum_core::material::Material;
 use opossum_registry::AssetRegistry;
 use std::path::PathBuf;
 
-#[cfg(not(target_arch = "wasm32"))]
-use crate::{
-    ProcessHandle, SIDEBAR_COLLAPSED, SIDEBAR_WIDTH,
-    components::simulation::simulation_window::SimulationWindow,
-};
-#[cfg(not(target_arch = "wasm32"))]
+use crate::{SIDEBAR_COLLAPSED, SIDEBAR_WIDTH};
+
+#[cfg(feature = "desktop")]
+use crate::{components::simulation::simulation_window::SimulationWindow, platform::ProcessHandle};
+#[cfg(feature = "desktop")]
 use dioxus::desktop::{tao::window::ResizeDirection, use_window};
 
 /// Registers the app's keyboard shortcuts on the `document`, so they fire no matter where DOM focus
@@ -108,14 +107,14 @@ document.addEventListener('keydown', function(e){
 
 #[component]
 pub fn App() -> Element {
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(feature = "desktop")]
     #[allow(unused_variables)]
     let backend_handle = use_context::<ProcessHandle>();
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(feature = "desktop")]
     let window = use_window();
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(feature = "desktop")]
     let window_for_quit = window.clone();
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(feature = "desktop")]
     let mut run_simulation = use_signal(|| false);
 
     let mut backend_status = use_signal(BackendStatus::default);
@@ -226,14 +225,14 @@ pub fn App() -> Element {
             if let Some(path) = model_file_path.read().clone() {
                 node_editor_command_handler.call(Some(NodeEditorCommand::SaveFile(path)));
             } else {
-                #[cfg(not(target_arch = "wasm32"))]
+                #[cfg(feature = "desktop")]
                 spawn(async move {
                     if let Some(path) = select_save_path().await {
                         node_editor_command_handler.call(Some(NodeEditorCommand::SaveFile(path)));
                     }
                 });
 
-                #[cfg(target_arch = "wasm32")]
+                #[cfg(not(feature = "desktop"))]
                 {
                     let default_path = PathBuf::from("project.opm");
                     node_editor_command_handler
@@ -242,14 +241,14 @@ pub fn App() -> Element {
             }
         }
         AppCommand::SaveAs => {
-            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(feature = "desktop")]
             spawn(async move {
                 if let Some(path) = select_save_path().await {
                     node_editor_command_handler.call(Some(NodeEditorCommand::SaveFile(path)));
                 }
             });
 
-            #[cfg(target_arch = "wasm32")]
+            #[cfg(not(feature = "desktop"))]
             {
                 let current_filename = model_file_path
                     .read()
@@ -271,7 +270,7 @@ pub fn App() -> Element {
             if let Err(e) = APP_CONFIG.read().to_file() {
                 eprintln!("Error saving AppConfig on exit: {e}");
             }
-            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(feature = "desktop")]
             {
                 #[cfg(not(debug_assertions))]
                 {
@@ -303,7 +302,7 @@ pub fn App() -> Element {
             node_editor_command_handler.call(Some(NodeEditorCommand::AddAnalyzer(atype)));
         }
         AppCommand::Simulate => {
-            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(feature = "desktop")]
             {
                 run_simulation.set(true);
             }
@@ -455,7 +454,7 @@ pub fn App() -> Element {
         }
     });
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(feature = "desktop")]
     rsx! {
         div { class: "app-container", tabindex: 0, "data-theme": "dark",
             // Keyboard shortcuts are handled by the document-level listener installed above, not here -
@@ -562,7 +561,7 @@ pub fn App() -> Element {
         }
     }
 
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(not(feature = "desktop"))]
     rsx! {
         div { class: "app-container", tabindex: 0,
             CommonAppLayout {

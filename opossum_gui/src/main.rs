@@ -1,213 +1,151 @@
+// src/main.rs
 #![allow(clippy::volatile_composites)]
 
-use dioxus::prelude::*;
-use opossum_gui::App;
+mod api;
+mod app_config;
+mod backend_status;
+mod components;
+mod platform;
+mod utils;
 
-// --- dektop specific imports ---
-#[cfg(not(target_arch = "wasm32"))]
-use {
-    dioxus::desktop::{WindowBuilder, tao::window::Icon},
-    directories::ProjectDirs,
-    opossum_gui::ProcessHandle,
+use api::http_client::HTTPClient;
+use app_config::AppConfig;
+use components::{
+    app::App, context_menu::cx_menu::CxMenu, logger::Logs, scenery_editor::SidebarView,
 };
+use dioxus::{
+    prelude::*,
+    signals::{GlobalSignal, Signal},
+};
+use opossum_core::types::api_types::NodeEditorPanel;
+use std::collections::HashSet;
+use uuid::Uuid;
 
 const MAIN_CSS: Asset = asset!("/assets/main.css");
 const DX_COMPONENT_CSS: Asset = asset!("/assets/dx-components-theme.css");
-// const PLOTLY_JS: Asset = asset!("/assets/plotly.js");
-// const THREE_MOD_JS: Asset = asset!("/assets/three_mod.js");
-// const ORBIT_CTRLS: Asset = asset!("/assets/orbitControls.js");
 const MDB_CSS: Asset = asset!("/assets/mdb.min.css");
 const MDB_JS: Asset = asset!("/assets/mdb.umd.min.js");
 const MDB_SUB_CSS: Asset = asset!("/assets/mdb_submenu.css");
 const MDB_ACC_CSS: Asset = asset!("/assets/mdb_accordion.css");
 
-// --- desktop only functions ---
-#[cfg(not(target_arch = "wasm32"))]
-fn read_icon() -> Option<Icon> {
-    // Embed standard PNG icon directly into the binary
-    let icon_bytes: &[u8] = include_bytes!("../assets/icons/32x32.png");
+static OPOSSUM_UI_LOGS: GlobalSignal<Logs> = Signal::global(Logs::new);
+static HTTP_API_CLIENT: GlobalSignal<HTTPClient> = Signal::global(HTTPClient::new);
+static CONTEXT_MENU: GlobalSignal<Option<CxMenu>> = Signal::global(|| None::<CxMenu>);
+/// Bumped whenever a `DocumentChange` (from undo/redo) touches node/analyzer details that aren't
+/// mirrored into `GraphStore` - the properties panel reads this as an extra, always-changing dependency
+/// so it refetches even when the selected node's identity hasn't changed (which Dioxus's equality-dedup'd
+/// memos would otherwise treat as "nothing to do").
+static NODE_DETAILS_REFRESH: GlobalSignal<usize> = Signal::global(|| 0);
+/// Bumped whenever the document changed in a way that can alter the *set* of amplifying nodes -
+/// every document-mutating workspace action plus loading/clearing a document.
+///
+/// The amplifier overview panel is permanently visible once selected, so unlike the node-editor
+/// panels it is never remounted by a selection change and would otherwise show a stale list after a
+/// delete, paste, group or undo. [`NODE_DETAILS_REFRESH`] alone does not cover those: it is only
+/// raised for property-level edits.
+static AMP_LIST_REFRESH: GlobalSignal<usize> = Signal::global(|| 0);
+/// Bumped whenever the document's set of pump scenarios, or the contents of any one of them,
+/// changed - creating/renaming/deleting a scenario, setting a node's gain model in one, or an
+/// undo/redo touching any of that. Same role as [`AMP_LIST_REFRESH`], for the scenario editor panel.
+static PUMP_SCENARIO_LIST_REFRESH: GlobalSignal<usize> = Signal::global(|| 0);
+/// The pump scenario the canvas amplifier status line currently reflects.
+///
+/// This is a GUI-only choice, not part of the document: it is not saved to the `.opm` file. A node
+/// can belong to several scenarios at once (the analyzer that runs them decides which), but the
+/// canvas can only ever show one status per node - this is the scenario it shows. `None` is only a
+/// legitimate value while the document has no scenario at all - whenever at least one exists,
+/// exactly one is always active, enforced by
+/// [`GraphsWorkspaceAction::EnsureActivePumpScenario`](crate::components::scenery_editor::GraphsWorkspaceAction::EnsureActivePumpScenario)
+/// (sent after loading a document and after every scenario create/delete). Without that invariant a
+/// node configured as `Const` in every scenario could show "None" on the canvas simply because
+/// nothing happened to be selected - which reads as "this node doesn't amplify" even though it does.
+static ACTIVE_PUMP_SCENARIO: GlobalSignal<Option<Uuid>> = Signal::global(|| None);
+/// A local cache of the active pump scenario's gain models (empty if none is active), refreshed
+/// whenever [`ACTIVE_PUMP_SCENARIO`] changes or an undo/redo touches that scenario's contents.
+///
+/// Two things read this: bulk-syncing every currently rendered node's canvas marker in one pass
+/// (`GraphStore::sync_amp_markers`, reached through every open tab) whenever the cache itself is
+/// refreshed, and seeding a *freshly created* node's marker (a node just added, or a group tab
+/// opened for the first time) without a fetch of its own - the node's own id is simply looked up
+/// here synchronously. Neither purpose needs a live subscription to this signal from very many
+/// places, which is why it stays a plain cache rather than something every node component reads
+/// directly every render.
+static ACTIVE_SCENARIO_GAIN_MODELS: GlobalSignal<
+    std::collections::HashMap<Uuid, opossum_core::gain::GainModel>,
+> = Signal::global(std::collections::HashMap::new);
+/// The document-wide amplifier-candidate set (`OpmDocument::amplifier_nodes`) - which nodes are
+/// hardware-marked as amplifiers, independent of any pump scenario.
+///
+/// Unlike [`ACTIVE_SCENARIO_GAIN_MODELS`] this is not a GUI-only choice: it is real document data,
+/// so loading a document refetches it (it does not simply reset to empty) and it is refreshed on
+/// `DocumentChange::AmplifierNodesChanged` (a candidacy toggle, or an undo/redo touching one).
+/// Read the same two ways `ACTIVE_SCENARIO_GAIN_MODELS` is: bulk-syncing every currently rendered
+/// node's canvas flag in one pass (`GraphStore::sync_amplifier_candidates`) whenever the cache is
+/// refreshed, and seeding a freshly created node's flag synchronously right after construction.
+static AMPLIFIER_CANDIDATES: GlobalSignal<HashSet<Uuid>> = Signal::global(HashSet::new);
+/// Which view the sidebar shows, whether it is collapsed to its icon bar, and how wide it is when
+/// expanded.
+///
+/// Global rather than local to the graph editor because four distant places drive the same piece of
+/// UI: the icon bar (click), the resize drag (which lives on the outermost container so it survives
+/// the pointer leaving the sidebar), and the workspace processor, which has to bring the node
+/// properties back into view when an undo/redo jumps to a node - otherwise that change would be
+/// applied silently while another view is showing.
+static SIDEBAR_VIEW: GlobalSignal<SidebarView> = Signal::global(|| SidebarView::NodeProperties);
+static SIDEBAR_COLLAPSED: GlobalSignal<bool> = Signal::global(|| false);
+static SIDEBAR_WIDTH: GlobalSignal<f64> = Signal::global(|| 280.0);
+/// Set from the backend's authoritative `JumpTarget` when an undo/redo focuses a node: the node it
+/// selected and the panel to open once that node's editor has loaded. Consumed (cleared) by whichever
+/// `OpticalNodeEditor`/`PortConfigEditor` instance matches the uuid. `apply_document_changes` sets it
+/// whether or not it had to switch nodes, so an undo of a detail on the already-selected node still opens
+/// its panel.
+static PENDING_PANEL_OPEN: GlobalSignal<Option<(Uuid, NodeEditorPanel)>> = Signal::global(|| None);
+/// Set from the backend's authoritative `JumpTarget` when an undo/redo touches an analyzer's source
+/// mapping: `(analyzer_id, source_port_uuid)`. The analyzer editor has no `NodeEditorPanel`, so this
+/// addresses the specific per-source card directly. Consumed (cleared) by whichever source-port card
+/// matches both ids, which expands and scrolls itself into view. Set whether or not the analyzer had to be
+/// selected, so an undo while the analyzer is already shown still opens the changed card.
+static PENDING_SOURCE_CARD_OPEN: GlobalSignal<Option<(Uuid, Uuid)>> = Signal::global(|| None);
+/// `(can_undo, can_redo)` availability, mirrored from the backend's undo/redo stacks. Every edit path
+/// (canvas coroutine, node editor, viewport gestures) writes this so the Edit menu's Undo/Redo entries
+/// reflect reality; the backend is the source of truth on undo/redo. A global (rather than a
+/// prop-threaded handler) so all edit paths can update it without plumbing.
+static UNDO_REDO_STATUS: GlobalSignal<(bool, bool)> = Signal::global(|| (false, false));
 
-    // Decode memory buffer with explicit PNG format
-    let img = image::load_from_memory_with_format(icon_bytes, image::ImageFormat::Png).ok()?;
-
-    // Convert into raw RGBA bytes for Tao
-    let rgba = img.to_rgba8();
-    let (width, height) = rgba.dimensions();
-
-    Icon::from_rgba(rgba.into_raw(), width, height).ok()
-}
-
-#[cfg(all(not(debug_assertions), not(target_arch = "wasm32")))]
-fn start_backend() -> Result<ProcessHandle, String> {
-    use std::env;
-    use std::io::Read;
-    use std::process::{Command, Stdio}; // Added Stdio for piping
-    use std::thread;
-    use std::time::Duration; // Added Read to extract the string from stderr
-
-    // Safely get the executable path
-    let gui_exe_path =
-        env::current_exe().map_err(|e| format!("Could not get current executable path: {}", e))?;
-
-    let gui_exe_dir = gui_exe_path
-        .parent()
-        .ok_or("Could not get executable directory.")?;
-
-    #[cfg(target_os = "windows")]
-    let backend_path = gui_exe_dir.join("opossum_backend.exe");
-    #[cfg(target_os = "linux")]
-    let backend_path = gui_exe_dir.join("opossum_backend");
-
-    println!("Starting backend server... at {}", backend_path.display());
-
-    // 1. Check if the executable exists
-    if !backend_path.exists() {
-        return Err(format!(
-            "The backend executable was not found.\nPath: {}",
-            backend_path.display()
-        ));
-    }
-
-    let mut command = Command::new(&backend_path);
-
-    // Pipe the standard error output so the frontend can read it!
-    command.stderr(Stdio::piped());
-
-    // Prevent a new console window from opening on Windows
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        command.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    }
-
-    // 2. Attempt to start the process
-    match command.spawn() {
-        Ok(mut child_process) => {
-            // 3. Wait briefly to give the backend time to fail if the port is blocked
-            thread::sleep(Duration::from_millis(200));
-
-            // Check if the process has already exited
-            if let Ok(Some(status)) = child_process.try_wait() {
-                // 4. Extract the exact error message from stderr
-                let mut error_details = String::new();
-                if let Some(mut stderr) = child_process.stderr.take() {
-                    // Ignore read errors here, we just want the string if it exists
-                    let _ = stderr.read_to_string(&mut error_details);
-                }
-
-                // 5. Format the message for the user depending on whether we got a string
-                let error_msg = if error_details.trim().is_empty() {
-                    format!(
-                        "The backend server crashed with Exit Status: {}.\nNo further details were provided.",
-                        status
-                    )
-                } else {
-                    format!(
-                        "The backend server failed to start.\n\nBackend Error:\n{}",
-                        error_details.trim()
-                    )
-                };
-
-                return Err(error_msg);
-            }
-
-            println!("Backend server started with PID: {}", child_process.id());
-            Ok(ProcessHandle::new(child_process))
+pub static APP_CONFIG: GlobalSignal<AppConfig> = Signal::global(|| {
+    AppConfig::from_file().unwrap_or_else(|_| {
+        // Use default if loading fails
+        let default_config = AppConfig::default();
+        // Try to write new config
+        if let Err(e) = default_config.to_file() {
+            eprintln!("Warning: Couldn't write default config: {e}");
         }
-        Err(e) => Err(format!("Failed to execute the backend server: {}", e)),
-    }
-}
+        default_config
+    })
+});
 
-// --- Desktop Main ---
-#[cfg(not(target_arch = "wasm32"))]
 fn main() {
-    fn launch_app(backend_handle: ProcessHandle) {
-        // Initialize the Dioxus logger with a default filter of INFO.
-        // This hides debug! and trace! logs during normal development.
-        dioxus::logger::init(dioxus::logger::tracing::Level::INFO).ok();
-        println!("Launching GUI...");
-        let data_dir = ProjectDirs::from("org", "OpossumLabs", "OpossumGui").map_or_else(
-            || std::env::current_dir().unwrap_or_default(),
-            |proj_dirs| proj_dirs.data_local_dir().to_path_buf(),
-        );
-        let window = WindowBuilder::new()
-            .with_decorations(false)
-            .with_window_icon(read_icon())
-            .with_title("Opossum");
-        dioxus::LaunchBuilder::new()
-            .with_cfg(
-                dioxus::desktop::Config::new()
-                    .with_window(window)
-                    .with_data_directory(data_dir),
-            )
-            .with_context(backend_handle)
-            .launch(MainApp);
-    }
-
-    // Release-Build: start backend and handle potential errors
-    #[cfg(not(debug_assertions))]
-    {
-        match start_backend() {
-            Ok(backend_handle) => {
-                launch_app(backend_handle);
-            }
-            Err(error_message) => {
-                // Show native error dialog using rfd
-                rfd::MessageDialog::new()
-                    .set_title("OPOSSUM - Startup Error")
-                    .set_description(&error_message)
-                    .set_level(rfd::MessageLevel::Error)
-                    .show();
-
-                // Exit the application gracefully with an error code
-                std::process::exit(1);
-            }
-        }
-    }
-
-    // Debug-Build: return dummy handle
-    #[cfg(debug_assertions)]
-    {
-        launch_app(ProcessHandle::default());
-    }
-}
-
-// --- WASM Main ---
-#[cfg(target_arch = "wasm32")]
-fn main() {
-    // Initialize the Dioxus logger with a default filter of INFO.
-    // This hides debug! and trace! logs during normal development.
-    dioxus::logger::init(dioxus::logger::tracing::Level::INFO).ok();
-    // simple start for WASM builds (no backend)
-    dioxus::launch(MainApp);
+    // Launch app using the platform-specific implementation
+    platform::launch(MainApp);
 }
 
 #[component]
 fn MainApp() -> Element {
-    #[cfg(all(not(target_arch = "wasm32"), not(debug_assertions)))]
-    {
-        use crate::dioxus_core::use_drop;
-        let backend_handle = use_context::<ProcessHandle>();
-        use_drop(move || {
-            backend_handle.kill();
-            println!("Stopping app...")
-        });
-    }
     rsx! {
-        document::Stylesheet { href: DX_COMPONENT_CSS }
-        document::Stylesheet { href: MAIN_CSS }
-        document::Stylesheet { href: MDB_CSS }
-        document::Stylesheet { href: MDB_SUB_CSS }
-        document::Stylesheet { href: MDB_ACC_CSS }
-        document::Script { src: MDB_JS }
+        // Encapsulates desktop teardown hooks without polluting UI logic
+        platform::PlatformLifecycle {
+            document::Stylesheet { href: DX_COMPONENT_CSS }
+            document::Stylesheet { href: MAIN_CSS }
+            document::Stylesheet { href: MDB_CSS }
+            document::Stylesheet { href: MDB_SUB_CSS }
+            document::Stylesheet { href: MDB_ACC_CSS }
+            document::Script { src: MDB_JS }
 
-        // Disable the default browser context menu globally, but only in release builds.
-        // Custom Dioxus context menus (e.g., in the Graph Editor) will still work
-        // because preventDefault() only stops the browser's native menu.
-        if !cfg!(debug_assertions) {
-            script { "document.addEventListener('contextmenu', event => event.preventDefault());" }
+            // Disable browser context menu in release mode
+            if !cfg!(debug_assertions) {
+                script { "document.addEventListener('contextmenu', event => event.preventDefault());" }
+            }
+            App {}
         }
-
-        App {}
     }
 }

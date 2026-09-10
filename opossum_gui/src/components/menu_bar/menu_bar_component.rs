@@ -18,7 +18,7 @@ use crate::{
     },
 };
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(feature = "desktop")]
 use crate::components::menu_bar::controls::controls_menu::ControlsMenu;
 
 #[allow(clippy::volatile_composites)]
@@ -119,9 +119,9 @@ pub fn MenuBar(
                                 short_cut_action: ShortCutAction::Settings,
                                 on_click: move |_| on_menu_action.call(AppCommand::Settings),
                             }
-                            // Render divider and Quit item only for non-wasm32 targets
+                            // Render divider and Quit item only for desktop target
                             {
-                                if cfg!(not(target_arch = "wasm32")) {
+                                if cfg!(feature = "desktop") {
                                     rsx! {
                                         li {
                                             hr { class: "dropdown-divider" }
@@ -307,7 +307,7 @@ pub fn MenuBar(
                 let simulate_shortcut = SHORTCUTS
                     .get(&ShortCutAction::Simulate)
                     .map_or(String::new(), |s| format!(" ({s})"));
-                #[cfg(not(target_arch = "wasm32"))]
+                #[cfg(feature = "desktop")]
                 rsx! {
                     div { class: "d-flex align-items-center",
                         button {
@@ -381,7 +381,7 @@ fn MenuListItemShortCut(
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(feature = "desktop")]
 #[component]
 fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Element {
     use dioxus::desktop::use_window;
@@ -423,7 +423,7 @@ fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Ele
     }
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(not(feature = "desktop"))]
 #[component]
 fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Element {
     rsx! {}
