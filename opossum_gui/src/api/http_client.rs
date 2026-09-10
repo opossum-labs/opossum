@@ -28,10 +28,6 @@ impl HTTPClient {
         &self.client
     }
     #[must_use]
-    pub fn base_url(&self) -> &str {
-        &self.base_url
-    }
-    #[must_use]
     pub fn url(&self, route: &str) -> String {
         format!("{}{}", self.base_url, route)
     }
@@ -53,39 +49,6 @@ impl HTTPClient {
         }
     }
 
-    /// Send a POST request to the given route using RON data
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    /// - the request fails (e.g. the route is not reachable)
-    /// - the response cannot be serialized into the expected type
-    pub async fn post_ron<
-        B: Serialize + DeserializeOwned + Clone,
-        R: Serialize + DeserializeOwned,
-    >(
-        &self,
-        route: &str,
-        body: B,
-    ) -> Result<R, String> {
-        if let Ok(serialized) = ron::ser::to_string(&body) {
-            let res = self
-                .client()
-                .post(self.url(route))
-                .header("Content-Type", "application/ron")
-                .body(serialized)
-                .send()
-                .await;
-            if let Ok(response) = res {
-                self.process_response_ron::<R>(response).await
-            } else {
-                Err(format!("Error on post request on route: \"{route}\""))
-            }
-        } else {
-            Err("Error serializing body using ron".to_string())
-        }
-    }
-
     /// Send a POST request to the given route with no body.
     ///
     /// # Errors
@@ -101,20 +64,6 @@ impl HTTPClient {
             self.process_response::<R>(response).await
         } else {
             Err(format!("Error on post request on route: \"{route}\""))
-        }
-    }
-
-    /// Send a POST reqeust to the given route with the provided body.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the request fails or if the response cannot be deserialized into the expected type.
-    pub async fn put_string(&self, route: &str, body: String) -> Result<String, String> {
-        let res = self.client().put(self.url(route)).body(body).send().await;
-        if let Ok(response) = res {
-            self.process_response::<String>(response).await
-        } else {
-            Err(format!("Error on put request on route: \"{route}\""))
         }
     }
     /// Send a PUT request with a raw string body, but expect a JSON response.
@@ -142,26 +91,7 @@ impl HTTPClient {
     /// This function will return an error if
     /// - the request fails (e.g. the route is not reachable)
     /// - the response cannot be deserialized into the expected type
-    pub async fn put<B: Serialize + DeserializeOwned, R: Serialize + DeserializeOwned>(
-        &self,
-        route: &str,
-        body: B,
-    ) -> Result<R, String> {
-        let res = self.client().put(self.url(route)).json(&body).send().await;
-        if let Ok(response) = res {
-            self.process_response::<R>(response).await
-        } else {
-            Err(format!("Error on put request on route: \"{route}\""))
-        }
-    }
-    /// Send a PUT request to the given route with the provided body.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    /// - the request fails (e.g. the route is not reachable)
-    /// - the response cannot be deserialized into the expected type
-    pub async fn put_receive_no_content<B: Serialize + DeserializeOwned>(
+    pub async fn put<B: Serialize + DeserializeOwned>(
         &self,
         route: &str,
         body: B,
