@@ -514,7 +514,7 @@ mod test {
         let app_state = Data::new(AppState::default());
 
         let node_ref = create_node_ref("dummy").unwrap();
-        let node_uuid = node_ref.uuid().unwrap();
+        let node_uuid = node_ref.uuid();
         let root_id = {
             let mut document = app_state.document.lock();
             let root_id = document.scenery().node_attr().uuid();

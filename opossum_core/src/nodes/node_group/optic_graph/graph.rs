@@ -1,5 +1,5 @@
 use super::{super::port_map::PortMap, serialization::SerializableGraph};
-use crate::{core_optics::OpticRef, error::OpmResult, light::LightFlow, prelude::PortType};
+use crate::{core_optics::OpticRef, light::LightFlow, prelude::PortType};
 use petgraph::graph::DiGraph;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -43,7 +43,7 @@ impl ConnectionInfo {
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(try_from = "SerializableGraph", into = "SerializableGraph")]
 pub struct OpticGraph {
-    pub(super) g: DiGraph<OpticRef, LightFlow>, // pub(super) makes it visible to other modules in optic_graph
+    pub(crate) g: DiGraph<OpticRef, LightFlow>, // pub(crate) makes it visible across the crate
     pub(super) input_port_map: PortMap,
     pub(super) output_port_map: PortMap,
     is_inverted: bool,
@@ -81,22 +81,6 @@ impl OpticGraph {
     #[must_use]
     pub fn external_distances(&self) -> &BTreeMap<String, Length> {
         &self.external_distances
-    }
-    /// Creates a deep copy of this optical graph where every contained [`OpticRef`]
-    /// is cloned into a new `Arc<Mutex<dyn Analyzable>>` instance.
-    ///
-    /// # Errors
-    ///
-    /// This function might return an error if underlying `clone_deep()` function return an error.
-    pub fn clone_deep(&self) -> OpmResult<Self> {
-        let mut new_graph = self.clone();
-
-        // Deep-clone all node weights inside petgraph::DiGraph
-        for node_ref in new_graph.g.node_weights_mut() {
-            *node_ref = node_ref.clone_deep()?;
-        }
-
-        Ok(new_graph)
     }
 }
 #[cfg(test)]

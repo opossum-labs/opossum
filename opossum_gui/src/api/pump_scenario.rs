@@ -93,7 +93,7 @@ pub async fn delete_pump_scenario(uuid: Uuid) -> Result<(), String> {
 /// This function will return an error if the request fails or the UUID is not found.
 pub async fn put_pump_scenario_name(uuid: Uuid, name: String) -> Result<(), String> {
     HTTP_API_CLIENT()
-        .put_receive_no_content(&format!("/api/pump_scenarios/{uuid}/name"), name)
+        .put(&format!("/api/pump_scenarios/{uuid}/name"), name)
         .await
 }
 
@@ -110,7 +110,7 @@ pub async fn put_pump_scenario_gain_model(
     gain_model: GainModel,
 ) -> Result<(), String> {
     HTTP_API_CLIENT()
-        .put_receive_no_content(
+        .put(
             &format!("/api/pump_scenarios/{scenario_id}/gain_model"),
             SetScenarioGainModel {
                 node_id,
@@ -135,7 +135,7 @@ pub async fn put_pump_scenario_pump_source(
     pump: PumpSource,
 ) -> Result<(), String> {
     HTTP_API_CLIENT()
-        .put_receive_no_content(
+        .put(
             &format!("/api/pump_scenarios/{scenario_id}/pump_source"),
             SetScenarioPumpSource { node_id, pump },
         )
@@ -160,7 +160,7 @@ pub async fn put_analyzer_pump_scenarios(
     scenarios: Vec<Uuid>,
 ) -> Result<(), String> {
     HTTP_API_CLIENT()
-        .put_receive_no_content(
+        .put(
             &format!("/api/analyzers/{analyzer_id}/pump_scenarios"),
             scenarios,
         )

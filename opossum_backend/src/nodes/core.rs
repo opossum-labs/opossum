@@ -7,7 +7,6 @@ use actix_web::{
 use nalgebra::Point2;
 use opossum_core::{
     core_optics::{OpticRef, node_attr::HasNodeAttr},
-    error::OpossumError,
     gain::PumpScenario,
     nodes::{NodeReference, create_node_ref},
     prelude::{AnalyzerType, OpmDocument},
@@ -15,7 +14,6 @@ use opossum_core::{
         AnalyzerItemDto, ConnectInfo, DeleteNodeResponse, ErrorResponse, NewNode, NewRefNode,
         NodeInfo, UpdateNodeRequest,
     },
-    utils::LockExt,
 };
 use uuid::Uuid;
 
@@ -61,14 +59,9 @@ pub async fn get_children(
     let nodes_info = scenery.with_group_node(uuid, |g| {
         g.nodes()
             .iter()
-            .map(|n| {
-                let node = n.optical_ref.lock_opm()?; // <- Kein unwrap() mehr!
-                let node_info = NodeInfo::from_analyzable(&*node, None);
-                drop(node);
-                Ok(node_info)
-            })
-            .collect::<Result<Vec<NodeInfo>, OpossumError>>()
-    })??;
+            .map(|n| NodeInfo::from_analyzable(n.as_analyzable(), None))
+            .collect::<Vec<NodeInfo>>()
+    })?;
     Ok(Json(nodes_info))
 }
 
@@ -97,14 +90,13 @@ pub async fn post_children(
     node_type: web::Json<NewNode>,
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let new_node_info = node_type.into_inner();
-    let new_node_ref = create_node_ref(new_node_info.node_type())?;
-    let mut node = new_node_ref.optical_ref.lock_opm()?;
-    let node_attr = node.node_attr_mut();
-    node_attr.set_gui_position(Some(Point2::new(
-        new_node_info.gui_position().0,
-        new_node_info.gui_position().1,
-    )));
-    drop(node);
+    let mut new_node_ref = create_node_ref(new_node_info.node_type())?;
+    new_node_ref
+        .node_attr_mut()
+        .set_gui_position(Some(Point2::new(
+            new_node_info.gui_position().0,
+            new_node_info.gui_position().1,
+        )));
 
     let mut document = data.document.lock();
     let uuid = path.into_inner();
@@ -113,13 +105,8 @@ pub async fn post_children(
     let _ = scenery.with_group_node_mut(uuid, |g| g.add_node_ref(new_node_ref.clone()))??;
 
     // --- AUTOMATICALLY INJECT MAPPINGS INTO ALL ANALYZERS IF NEW NODE IS A SOURCE PORT ---
-    let node_type_str = new_node_ref
-        .optical_ref
-        .lock_opm()?
-        .node_attr()
-        .node_type()
-        .to_string();
-    let new_node_uuid = new_node_ref.optical_ref.lock_opm()?.node_attr().uuid();
+    let node_type_str = new_node_ref.node_attr().node_type().to_string();
+    let new_node_uuid = new_node_ref.node_attr().uuid();
 
     // Auto-injecting a source-port mapping mutates each analyzer's config as a side effect - capture the
     // inverse (restore the analyzer's pre-injection config) per changed analyzer, so undoing this add also
@@ -171,9 +158,7 @@ pub async fn post_children(
     batch.extend(analyzer_inverses);
     data.push_undo(Command::from_vec(batch).expect("batch always has at least remove_node"));
 
-    let node = new_node_ref.optical_ref.lock_opm()?;
-    let node_info = NodeInfo::from_analyzable(&*node, None);
-    drop(node);
+    let node_info = NodeInfo::from_analyzable(&*new_node_ref, None);
     Ok(HttpResponse::Created().json(node_info))
 }
 
@@ -202,9 +187,7 @@ pub async fn get_node(
     let document = data.document.lock();
     // Retrieve the node info
     let node_ref = document.scenery().node_recursive(uuid)?.0;
-    let node = node_ref.optical_ref.lock_opm()?;
-    let node_info = NodeInfo::from_analyzable(&*node, None);
-    drop(node);
+    let node_info = NodeInfo::from_analyzable(&*node_ref, None);
     drop(document);
     ron_or_json_response(&req, &node_info)
 }
@@ -494,10 +477,10 @@ fn capture_cascade_connections(
     let mut seen_edges: Vec<ConnectInfo> = connections.clone();
     let mut cascaded: Vec<CascadedNode> = Vec::with_capacity(referring_cascade.len());
     for (member_parent, member_ref) in referring_cascade {
-        let member_conns = member_ref.uuid().ok().map_or_else(Vec::new, |member_uuid| {
-            capture_node_connections(document.scenery(), member_parent, member_uuid)
-                .unwrap_or_default()
-        });
+        // Direct UUID access without intermediate Result unwrapping
+        let member_uuid = member_ref.uuid();
+        let member_conns = capture_node_connections(document.scenery(), member_parent, member_uuid)
+            .unwrap_or_default();
         let deduped: Vec<ConnectInfo> = member_conns
             .into_iter()
             .filter(|conn| !seen_edges.iter().any(|s| same_edge(s, conn)))
@@ -530,13 +513,11 @@ fn teardown_port_cascades_and_delete(
     let mut removed_port_cascades =
         disconnect_exposed_port_cascades_for_node(scenery, parent_group_id, uuid)?;
     for member in cascaded {
-        if let Ok(member_uuid) = member.node.uuid() {
-            removed_port_cascades.extend(disconnect_exposed_port_cascades_for_node(
-                scenery,
-                member.parent_group_id,
-                member_uuid,
-            )?);
-        }
+        removed_port_cascades.extend(disconnect_exposed_port_cascades_for_node(
+            scenery,
+            member.parent_group_id,
+            member.node.uuid(),
+        )?);
     }
     let deleted_nodes = scenery.delete_node(uuid)?;
     Ok((removed_port_cascades, deleted_nodes))
@@ -562,9 +543,10 @@ fn build_delete_inverse(
     let scenario_inverses = prune_pump_scenario_entries(document);
     let amplifier_inverse = prune_amplifier_node_entries(document);
 
+    // Filter cascaded nodes by directly comparing the returned Uuid with deleted_nodes
     let cascaded: Vec<CascadedNode> = cascaded
         .into_iter()
-        .filter(|c| c.node.uuid().is_ok_and(|id| deleted_nodes.contains(&id)))
+        .filter(|c| deleted_nodes.contains(&c.node.uuid()))
         .collect();
     let (disconnected_connections, removed_port_mappings) =
         split_cascades_for_response(removed_port_cascades);
@@ -692,7 +674,7 @@ pub async fn post_reference(
 
     let mut document = data.document.lock();
     let (referring_node, _) = resolve_reference_chain(&document, ref_node_info.referring_node())?;
-    check_reference_target_not_nested(document.scenery(), referring_node.uuid()?, group_uuid)?;
+    check_reference_target_not_nested(document.scenery(), referring_node.uuid(), group_uuid)?;
     let mut node_reference = NodeReference::from_node(&referring_node)?;
 
     node_reference
@@ -1108,6 +1090,7 @@ mod test {
             "undoing the deletion must restore the node's entry in the operating point"
         );
     }
+
     /// Mirrors `test_delete_node_prunes_pump_scenarios_and_undo_restores_them` for the amplifier-
     /// candidate set: deleting a candidate node must drop it from `amplifier_nodes`, and undoing the
     /// deletion must restore its candidacy.
@@ -1149,6 +1132,7 @@ mod test {
             "undoing the deletion must restore the node's candidacy"
         );
     }
+
     /// mirrors `test_undo_group_conversion_restores_internal_and_boundary_connections` in
     /// `document.rs`: converts `{node_a, node_b}` into a group connected to `node_c`, deletes the group
     /// node, undoes the deletion, and asserts both the group and its external connection to `node_c` are
@@ -2096,7 +2080,7 @@ mod test {
             let root_id = document.scenery().node_attr().uuid();
 
             let src_ref = create_node_ref("source port").unwrap();
-            let src_uuid = src_ref.uuid().unwrap();
+            let src_uuid = src_ref.uuid();
             document
                 .scenery_mut()
                 .with_group_node_mut(root_id, |g| g.add_node_ref(src_ref))
@@ -2207,11 +2191,7 @@ mod test {
                 .with_group_node(root, |g| {
                     g.nodes()
                         .iter()
-                        .filter(|n| {
-                            n.optical_ref
-                                .lock_opm()
-                                .map_or(false, |node| node.node_attr().node_type() == "source port")
-                        })
+                        .filter(|n| n.node_attr().node_type() == "source port")
                         .count()
                 })
                 .unwrap()

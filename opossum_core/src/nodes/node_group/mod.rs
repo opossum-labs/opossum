@@ -26,7 +26,6 @@ use crate::{
         node_report::NodeReport,
         report_note::{ReportLevel, ReportNote},
     },
-    utils::LockExt,
 };
 pub use optic_graph::{ConnectionInfo, OpticGraph};
 use serde::{Deserialize, Serialize};
@@ -36,7 +35,6 @@ use std::{
     io::Write,
     path::PathBuf,
     process::Stdio,
-    sync::{Arc, Mutex},
 };
 use uom::si::f64::Length;
 use uuid::Uuid;
@@ -90,11 +88,8 @@ pub struct NodeGroup {
     accumulated_rays: Vec<HashMap<Uuid, Rays>>,
 }
 impl Analyzable for NodeGroup {
-    fn clone_analyzable(&self) -> Arc<Mutex<dyn Analyzable>> {
-        Arc::new(Mutex::new(
-            self.clone_deep()
-                .expect("Failed to deep-clone NodeGroup instance"),
-        ))
+    fn clone_analyzable(&self) -> Box<dyn Analyzable> {
+        Box::new(self.clone())
     }
 }
 impl Default for NodeGroup {
@@ -125,16 +120,6 @@ impl NodeGroup {
         let mut group = Self::default();
         group.node_attr.set_name(name);
         group
-    }
-    /// Creates a deep copy of this [`NodeGroup`] and all contained nodes.
-    ///
-    /// # Errors
-    ///
-    /// This function might return an error if underlying `clone_deep()` function return an error.
-    pub fn clone_deep(&self) -> OpmResult<Self> {
-        let mut new_group = self.clone();
-        new_group.graph = self.graph.clone_deep()?;
-        Ok(new_group)
     }
     /// Add a given [`OpticNode`] to the (sub-)graph of this [`NodeGroup`].
     ///
@@ -170,7 +155,7 @@ impl NodeGroup {
     /// # Returns
     /// The UUID of the added node.
     pub fn add_node_ref(&mut self, node: OpticRef) -> OpmResult<Uuid> {
-        let uuid = node.uuid()?;
+        let uuid = node.uuid();
         self.graph.add_node_ref(node)?;
         // save uuid of node in rays if present
         // self.store_node_uuid_in_rays_bundle(&node.optical_ref.borrow(), idx)?;
@@ -230,13 +215,12 @@ impl NodeGroup {
         let mut result = Vec::new();
 
         for node_ref in self.nodes() {
-            let node = node_ref.optical_ref.lock_opm()?;
-            let uuid = node.node_attr().uuid();
+            let uuid = node_ref.uuid();
 
             result.push(uuid);
 
             // If it is a group -> collect recursively
-            if let Some(group) = node.as_any().downcast_ref::<Self>() {
+            if let Some(group) = node_ref.as_any().downcast_ref::<Self>() {
                 let mut sub_ids = group.collect_all_contained_node_ids_recursive()?;
                 result.append(&mut sub_ids);
             }
@@ -261,16 +245,23 @@ impl NodeGroup {
             // Include the current node reference
             result.push(node_ref.clone());
 
-            let node = node_ref.optical_ref.lock_opm()?;
-
             // If the node is a group, recursively collect all of its nested nodes
-            if let Some(group) = node.as_any().downcast_ref::<Self>() {
+            if let Some(group) = node_ref.as_any().downcast_ref::<Self>() {
                 let mut sub_nodes = group.collect_all_nodes_recursive()?;
                 result.append(&mut sub_nodes);
             }
         }
 
         Ok(result)
+    }
+    /// Executes a closure on every optical node in this group and all nested subgroups recursively.
+    pub fn for_each_node_mut(&mut self, f: &mut impl FnMut(&mut OpticRef)) {
+        for node in self.graph.g.node_weights_mut() {
+            f(node);
+            if let Some(group) = node.as_any_mut().downcast_mut::<Self>() {
+                group.for_each_node_mut(f);
+            }
+        }
     }
     /// Returns the hierarchy of nodes starting from the given node and walking up
     /// through its parent groups until the root is reached.
@@ -313,18 +304,15 @@ impl NodeGroup {
         Ok(group_hierarchy)
     }
 
-    fn store_node_uuid_in_rays_bundle(&self, node_id: Uuid) -> OpmResult<()> {
-        let node_ref = self.graph.node(node_id)?;
-        let node = node_ref.optical_ref.lock_opm()?;
-        let Ok(node_props) = node.node_attr().get_property("light data") else {
+    fn store_node_uuid_in_rays_bundle(&mut self, node_id: Uuid) -> OpmResult<()> {
+        let node_ref = self.graph.node_mut(node_id)?;
+        let Ok(node_props) = node_ref.node_attr().get_property("light data") else {
             return Ok(());
         };
         let node_props = node_props.clone();
-        drop(node);
         if let Proptype::LightData(Some(LightData::Geometric(rays))) = node_props {
             let mut new_rays = rays;
             new_rays.set_node_origin_uuid(node_id);
-            let mut node_ref = node_ref.optical_ref.lock_opm()?;
             node_ref.node_attr_mut().set_property(
                 "light data",
                 LightDataBuilder::Geometric(new_rays.into()).into(),
@@ -341,7 +329,7 @@ impl NodeGroup {
     /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
     pub fn node(&self, node_id: Uuid) -> OpmResult<OpticRef> {
         if node_id == self.node_attr.uuid() {
-            Ok(OpticRef::new(Arc::new(Mutex::new(self.clone()))))
+            Ok(OpticRef::new(Box::new(self.clone())))
         } else {
             self.graph.node(node_id)
         }
@@ -392,22 +380,17 @@ impl NodeGroup {
         if self.node_attr().uuid() == node_id {
             return Ok(f(self));
         }
-        let arc = self.node_recursive(node_id)?.0.optical_ref;
-        let guard = arc.lock_opm()?;
-        let Some(group) = guard.as_any().downcast_ref::<Self>() else {
+        let (node_ref, _) = self.node_recursive(node_id)?;
+        let Some(group) = node_ref.as_any().downcast_ref::<Self>() else {
             return Err(OpossumError::Other("could not cast to NodeGroup".into()));
         };
-        let out = f(group);
-        drop(guard);
-
-        Ok(out)
+        Ok(f(group))
     }
     /// Execute a mutable operation on the `NodeGroup` identified by `node_id`.
     ///
     /// If `node_id` equals this group's own UUID, the closure is invoked directly with
-    /// `&mut self` (no lock is taken). Otherwise, the node is looked up in the graph,
-    /// its internal mutex is locked, and an `&mut NodeGroup` is passed to the closure.
-    /// The lock is held only for the duration of the closure call.
+    /// `&mut self`. Otherwise, the node is looked up recursively in the graph
+    /// and an `&mut NodeGroup` is passed to the closure.
     ///
     /// # Parameters
     /// - `node_id`: UUID of the target optical node.
@@ -417,43 +400,28 @@ impl NodeGroup {
     /// The value produced by `f`, wrapped in `OpmResult<R>`.
     ///
     /// # Errors
-    /// Propagates errors from the underlying lookup and locking:
+    /// Propagates errors from the underlying lookup:
     /// - The node cannot be found in the graph.
     /// - The node is not a group node.
-    /// - The mutex is poisoned (e.g., due to a previous panic while locked).
-    ///
-    /// # Concurrency
-    /// A mutex is only acquired when `node_id != self.uuid()`. Be careful not to call APIs
-    /// within `f` that would attempt to lock the same node again to prevent deadlocks.
-    ///
-    /// # Panic Safety
-    /// If `f` panics while the lock is held, the mutex becomes poisoned; subsequent calls may
-    /// fail with a poisoned-lock error.
     pub fn with_group_node_mut<R>(
         &mut self,
         node_id: Uuid,
         f: impl FnOnce(&mut Self) -> R,
     ) -> OpmResult<R> {
         if self.node_attr().uuid() == node_id {
-            // direct access to self without lock
             return Ok(f(self));
         }
 
-        let arc = self.node_recursive(node_id)?.0.optical_ref;
-        let mut guard = arc.lock_opm()?;
-
-        let Some(group) = guard.as_any_mut().downcast_mut::<Self>() else {
+        let node_ref = self.graph.node_recursive_mut(node_id)?;
+        let Some(group) = node_ref.as_any_mut().downcast_mut::<Self>() else {
             return Err(OpossumError::Other("could not cast to NodeGroup".into()));
         };
-        let out = f(group);
-        drop(guard);
-        Ok(out)
+        Ok(f(group))
     }
 
     /// Execute a mutable operation on the optical node identified by `node_id`.
     ///
-    /// This method locks the node's internal mutex and provides a mutable reference
-    /// to the node (as `&mut dyn Analyzable`) for the duration of the closure `f`.
+    /// Provides a mutable reference to the node (as `&mut dyn Analyzable`) for the duration of the closure `f`.
     ///
     /// # Parameters
     /// - `node_id`: UUID of the target node (can be any node type, not necessarily a group).
@@ -463,34 +431,24 @@ impl NodeGroup {
     /// The value produced by `f`, wrapped in `OpmResult<R>`.
     ///
     /// # Errors
-    /// Returns an error if:
-    /// - The node with `node_id` cannot be found in the graph.
-    /// - The internal mutex is poisoned or cannot be acquired.
-    ///
-    /// # Concurrency
-    /// The lock is only held for the duration of the closure. Avoid calling
-    /// functions inside `f` that would attempt to lock the same node to prevent deadlocks.
-    ///
-    /// # Panic Safety
-    /// If `f` panics while the mutex is held, the mutex may become poisoned;
-    /// subsequent calls to `with_node_mut` may fail with a poisoned-lock error.
+    /// Returns an error if the node with `node_id` cannot be found in the graph.
     pub fn with_node_mut<R>(
         &mut self,
         node_id: Uuid,
         f: impl FnOnce(&mut dyn Analyzable) -> R,
     ) -> OpmResult<R> {
-        let (node_ref, _) = self.node_recursive(node_id)?;
-        let result = f(&mut *node_ref.optical_ref.lock_opm()?);
-
-        Ok(result)
+        if self.node_attr().uuid() == node_id {
+            return Ok(f(self));
+        }
+        let node_ref = self.graph.node_recursive_mut(node_id)?;
+        Ok(f(&mut **node_ref))
     }
 
     /// Execute a mutable operation on the `NodeAttr` of the node identified by `node_id`.
     ///
     /// If `node_id` equals this group's own UUID, the closure is invoked directly with
-    /// `&mut NodeAttr` from `self` (no lock is taken). Otherwise, the node is looked up
-    /// in the graph, its internal mutex is locked, and an `&mut NodeAttr` is passed to
-    /// the closure. The lock is held only for the duration of the closure call.
+    /// `&mut NodeAttr` from `self`. Otherwise, the node is looked up recursively
+    /// in the graph and an `&mut NodeAttr` is passed to the closure.
     ///
     /// # Parameters
     /// - `node_id`: UUID of the target node.
@@ -500,17 +458,8 @@ impl NodeGroup {
     /// The value produced by `f`, wrapped in `OpmResult<R>`.
     ///
     /// # Errors
-    /// Propagates errors from the underlying lookup and locking:
+    /// Propagates errors from the underlying lookup:
     /// - The node cannot be found in the graph.
-    /// - The mutex is poisoned (e.g., due to a previous panic while locked).
-    ///
-    /// # Concurrency
-    /// A mutex is only acquired when `node_id != self.uuid()`. Be careful not to call APIs
-    /// within `f` that would attempt to lock the same node again to prevent deadlocks.
-    ///
-    /// # Panic Safety
-    /// If `f` panics while the lock is held, the mutex becomes poisoned; subsequent calls may
-    /// fail with a poisoned-lock error.
     pub fn with_node_attr_mut<R>(
         &mut self,
         node_id: Uuid,
@@ -519,21 +468,15 @@ impl NodeGroup {
         if self.node_attr().uuid() == node_id {
             return Ok(f(self.node_attr_mut()));
         }
-        let arc = self.node_recursive(node_id)?.0.optical_ref;
-        let mut guard = arc.lock_opm()?;
-        let node_attr = guard.node_attr_mut();
-        let out = f(node_attr);
-        drop(guard);
-
-        Ok(out)
+        let node_ref = self.graph.node_recursive_mut(node_id)?;
+        Ok(f(node_ref.node_attr_mut()))
     }
 
     /// Execute a read-only operation with the `NodeAttr` of the node identified by `node_id`.
     ///
     /// If `node_id` equals this group's own UUID, the closure is invoked directly with
-    /// `&NodeAttr` from `self` (no lock is taken). Otherwise, the node is looked up
-    /// in the graph, its internal mutex is locked, and an `&NodeAttr` is passed to
-    /// the closure. The lock is held only for the duration of the closure call.
+    /// `&NodeAttr` from `self`. Otherwise, the node is looked up recursively in the graph
+    /// and an `&NodeAttr` is passed to the closure.
     ///
     /// # Parameters
     /// - `node_id`: UUID of the target node.
@@ -543,28 +486,14 @@ impl NodeGroup {
     /// The value produced by `f`, wrapped in `OpmResult<R>`.
     ///
     /// # Errors
-    /// Propagates errors from the underlying lookup and locking:
+    /// Propagates errors from the underlying lookup:
     /// - The node cannot be found in the graph.
-    /// - The mutex is poisoned (e.g., due to a previous panic while locked).
-    ///
-    /// # Concurrency
-    /// A mutex is only acquired when `node_id != self.uuid()`. Be careful not to call APIs
-    /// within `f` that would attempt to lock the same node again to prevent deadlocks.
-    ///
-    /// # Panic Safety
-    /// If `f` panics while the lock is held, the mutex becomes poisoned; subsequent calls may
-    /// fail with a poisoned-lock error.
     pub fn with_node_attr<R>(&self, node_id: Uuid, f: impl FnOnce(&NodeAttr) -> R) -> OpmResult<R> {
         if self.node_attr().uuid() == node_id {
             return Ok(f(self.node_attr()));
         }
-        let arc = self.node_recursive(node_id)?.0.optical_ref;
-        let guard = arc.lock_opm()?;
-        let node_attr = guard.node_attr();
-        let out = f(node_attr);
-        drop(guard);
-
-        Ok(out)
+        let (node_ref, _) = self.node_recursive(node_id)?;
+        Ok(f(node_ref.node_attr()))
     }
 
     /// Returns all nodes of this [`NodeGroup`].
@@ -826,18 +755,18 @@ impl NodeGroup {
         let sorted = self.graph.topologically_sorted()?;
         for idx in sorted {
             let node_ref = self.graph.node_by_idx(idx)?;
-            let uuid = node_ref.uuid()?;
+            let uuid = node_ref.uuid();
             if self.graph.is_stale_node(uuid)? {
                 analysis_report.add_note(ReportNote::new(
                     ReportLevel::Warning,
                     &format!(
                         "Node '{}' is unconnected and was skipped during analysis.",
-                        node_ref.optical_ref.lock_opm()?.name()
+                        node_ref.name()
                     ),
                 ));
             } else {
                 let uuid_str = uuid.as_simple().to_string();
-                let node_report = node_ref.optical_ref.lock_opm()?.node_report(&uuid_str)?;
+                let node_report = node_ref.node_report(&uuid_str)?;
                 if let Some(node_report) = node_report {
                     analysis_report.add_node_report(node_report);
                 }
@@ -1000,11 +929,9 @@ impl OpticNode for NodeGroup {
     fn node_report(&self, uuid: &str) -> OpmResult<Option<NodeReport>> {
         let mut group_props = Properties::default();
         for node in self.graph.nodes() {
-            let sub_uuid = node.uuid()?.as_simple().to_string();
-            if let Ok(node_ref) = node.optical_ref.lock_opm()
-                && let Some(node_report) = node_ref.node_report(&sub_uuid)?
-            {
-                let node_name = node_ref.name();
+            let sub_uuid = node.uuid().as_simple().to_string();
+            if let Some(node_report) = node.node_report(&sub_uuid)? {
+                let node_name = node.name();
                 if !(group_props.contains(node_name)) {
                     group_props.create(node_name, "", node_report.into())?;
                 }
@@ -1027,17 +954,14 @@ impl OpticNode for NodeGroup {
         Ok(())
     }
     fn reset_data(&mut self) {
-        let nodes = self.graph.nodes();
-        for node in nodes {
-            if let Ok(mut node) = node.optical_ref.lock_opm() {
-                node.reset_data();
-            }
+        for node in self.graph.g.node_weights_mut() {
+            node.reset_data();
         }
         self.accumulated_rays = Vec::<HashMap<Uuid, Rays>>::new();
     }
     fn prepare_volume(&mut self, strategy: &dyn PropagationStrategy) -> OpmResult<()> {
-        for node in self.graph.nodes() {
-            node.optical_ref.lock_opm()?.prepare_volume(strategy)?;
+        for node in self.graph.g.node_weights_mut() {
+            node.prepare_volume(strategy)?;
         }
         Ok(())
     }
@@ -1092,7 +1016,7 @@ mod test {
         millimeter, nanometer,
         nodes::{Dummy, EnergyMeter, SourcePort, test_helper::test_helper::*},
         prelude::RayDataSource,
-        utils::{LockExt, geom_transformation::Isometry},
+        utils::geom_transformation::Isometry,
     };
     use num_traits::Zero;
     #[test]
@@ -1238,13 +1162,8 @@ mod test {
         raytrace_config.set_min_energy_per_ray(joule!(0.5))?;
         raytrace_config.map_source(i_s, ray_data_builder.into());
         AnalysisRayTrace::analyze(&mut scenery, LightResult::default(), &raytrace_config)?;
-        let uuid = scenery.node(i_e)?.uuid()?.as_simple().to_string();
-        let Some(report) = scenery
-            .node(i_e)?
-            .optical_ref
-            .lock_opm()?
-            .node_report(&uuid)?
-        else {
+        let uuid = scenery.node(i_e)?.uuid().as_simple().to_string();
+        let Some(report) = scenery.node(i_e)?.node_report(&uuid)? else {
             panic!("Report should not be `None`");
         };
         if let Proptype::Energy(e) = report.properties().get("Energy")? {

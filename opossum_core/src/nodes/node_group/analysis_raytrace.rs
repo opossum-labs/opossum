@@ -9,11 +9,11 @@ use uuid::Uuid;
 use super::{NodeGroup, OpticGraph};
 use crate::{
     analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
-    core_optics::{OpticNode, OpticNodeExt, PortType},
+    core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, PortType},
     error::{OpmResult, OpossumError},
     light::{LightData, LightResult},
     radian,
-    utils::{LockExt, geom_transformation::Isometry},
+    utils::geom_transformation::Isometry,
 };
 
 fn filter_ray_limits(light_result: &mut LightResult, r_config: &RayTraceConfig) {
@@ -40,20 +40,44 @@ impl AnalysisRayTrace for NodeGroup {
         let sorted = self.graph.topologically_sorted()?;
         let mut light_result = incoming_data.clone();
         for idx in sorted {
-            let node_ref = self.graph.node_by_idx(idx)?.optical_ref;
-            let node = node_ref.lock_opm()?;
-            let node_info = node.to_string();
-            let node_id = node.node_attr().uuid();
-            drop(node);
+            let node_id = self.graph.g[idx].uuid();
+            let node_info = format!("{}", self.graph.g[idx]);
             if self.graph.is_stale_node(node_id)? {
                 warn!("graph contains stale (completely unconnected) node {node_info}. Skipping.");
             } else {
                 let incoming_edges = self.graph.take_incoming(node_id, &incoming_data)?;
-                let mut outgoing_edges =
-                    AnalysisRayTrace::analyze(&mut *node_ref.lock_opm()?, incoming_edges, config)
-                        .map_err(|e| {
-                        OpossumError::Analysis(format!("analysis of node {node_info} failed: {e}"))
+                let mut outgoing_edges = if let Some(target_uuid) =
+                    self.graph.g[idx].referenced_node_id()
+                {
+                    let is_inverted = self.graph.g[idx].inverted();
+                    let target_idx = self.graph.node_idx_by_uuid(target_uuid).ok_or_else(|| {
+                        OpossumError::Analysis(format!(
+                            "referenced node with id {target_uuid} not found in graph"
+                        ))
                     })?;
+                    let target_node = &mut self.graph.g[target_idx];
+                    if is_inverted {
+                        target_node.set_inverted(true).map_err(|_e| {
+                            OpossumError::Analysis(format!(
+                                "referenced node {target_node} cannot be inverted"
+                            ))
+                        })?;
+                    }
+                    let res = AnalysisRayTrace::analyze(&mut **target_node, incoming_edges, config);
+                    if is_inverted {
+                        target_node.set_inverted(false)?;
+                    }
+                    let node_info = format!("{target_node}");
+                    res.map_err(|e| {
+                        OpossumError::Analysis(format!("analysis of node {node_info} failed: {e}"))
+                    })?
+                } else {
+                    let node = &mut self.graph.g[idx];
+                    let node_info = format!("{node}");
+                    AnalysisRayTrace::analyze(&mut **node, incoming_edges, config).map_err(|e| {
+                        OpossumError::Analysis(format!("analysis of node {node_info} failed: {e}"))
+                    })?
+                };
                 filter_ray_limits(&mut outgoing_edges, config);
                 // If node is sink node, rewrite port names according to output mapping
                 if self.graph.is_output_node(node_id)? {
@@ -80,6 +104,7 @@ impl AnalysisRayTrace for NodeGroup {
         } // revert initial inversion (if necessary)
         Ok(light_result)
     }
+
     fn calc_node_positions(
         &mut self,
         incoming_data: LightResult,
@@ -94,27 +119,17 @@ impl AnalysisRayTrace for NodeGroup {
         let mut up_direction = Vector3::<f64>::y();
 
         for idx in sorted {
-            let node_id = match self.graph.node_by_idx(idx) {
-                Ok(node) => node.uuid()?,
-                Err(_) => Uuid::nil(),
-            };
+            let node_id = self
+                .graph
+                .node_by_idx(idx)
+                .map_or_else(|_| Uuid::nil(), |node| node.uuid());
 
             let has_no_input_connections = !self.graph.has_input_connections(node_id)?;
 
-            let already_placed = self
-                .graph
-                .node_by_idx(idx)?
-                .optical_ref
-                .lock_opm()?
-                .isometry()
-                .is_some();
+            let already_placed = self.graph.g[idx].isometry().is_some();
 
             if has_no_input_connections && !already_placed {
-                let node_info = if let Ok(node) = self.graph.node_by_idx(idx) {
-                    format!("{}", node.optical_ref.lock_opm()?)
-                } else {
-                    "unknown node".into()
-                };
+                let node_info = format!("{}", self.graph.g[idx]);
                 warn!(
                     "{node_info} has no incoming connections and can thus not being placed. Skipping."
                 );
@@ -135,68 +150,88 @@ impl AnalysisRayTrace for NodeGroup {
     }
 }
 
-fn calculate_single_node_position(
+/// Ensures that the node at `node_idx` has a valid spatial isometry assigned.
+///
+/// If unplaced, positions the node either via relative alignment or along
+/// the propagation axis of the incoming beam.
+fn ensure_node_isometry(
     graph: &mut OpticGraph,
     node_idx: NodeIndex,
-    incoming_data: &LightResult,
-    up_direction: &mut Vector3<f64>,
-    config: &RayTraceConfig,
-    light_result: &mut LightResult,
+    incoming_edges: &LightResult,
+    up_direction: &Vector3<f64>,
 ) -> OpmResult<()> {
-    let node_ref = graph.node_by_idx(node_idx)?.optical_ref;
-    let node = node_ref.lock_opm()?;
-    let node_attr = node.node_attr().clone();
-    let node_type = node_attr.node_type();
-    let node_isometry = node_attr.isometry();
-    let node_info = node.to_string();
+    let node_attr = graph.g[node_idx].node_attr().clone();
     let node_id = node_attr.uuid();
-    drop(node);
-    let incoming_edges: LightResult = graph.get_incoming(node_id, incoming_data)?;
-    if node_isometry.is_none() {
-        if let Some((node_id, distance)) = node_attr.get_align_like_node_at_distance() {
-            let align_ref_iso = graph.node(*node_id)?.optical_ref.lock_opm()?.isometry();
-            if let Some(align_ref_iso) = align_ref_iso {
-                let align_iso = Isometry::new(
-                    Point3::new(Length::zero(), Length::zero(), *distance),
-                    radian!(0., 0., 0.),
-                )?;
-                let new_iso = align_ref_iso.append(&align_iso);
-                let mut node = node_ref.lock_opm()?;
-                node.set_isometry(new_iso)?;
-                drop(node);
-            } else {
-                warn!(
-                    "Cannot align node like NodeIdx:{}. Fall back to standard positioning method",
-                    node_idx.index()
-                );
-                graph.set_node_isometry(&incoming_edges, *node_id, *up_direction)?;
-            }
+    let node_info = format!("{}", graph.g[node_idx]);
+
+    if node_attr.isometry().is_some() {
+        info!("Node {node_info} has already been placed. Leaving untouched.");
+        return Ok(());
+    }
+
+    if let Some((align_id, distance)) = node_attr.get_align_like_node_at_distance() {
+        let align_ref_iso = graph.node(*align_id)?.isometry();
+        if let Some(align_ref_iso) = align_ref_iso {
+            let align_iso = Isometry::new(
+                Point3::new(Length::zero(), Length::zero(), *distance),
+                radian!(0., 0., 0.),
+            )?;
+            let new_iso = align_ref_iso.append(&align_iso);
+            graph.g[node_idx].set_isometry(new_iso)?;
         } else {
-            graph.set_node_isometry(&incoming_edges, node_id, *up_direction)?;
+            warn!(
+                "Cannot align node like NodeIdx:{}. Fall back to standard positioning method",
+                node_idx.index()
+            );
+            graph.set_node_isometry(incoming_edges, *align_id, *up_direction)?;
         }
     } else {
-        info!("Node {node_info} has already been placed. Leaving untouched.");
+        graph.set_node_isometry(incoming_edges, node_id, *up_direction)?;
     }
-    let output =
-        AnalysisRayTrace::calc_node_positions(&mut *node_ref.lock_opm()?, incoming_edges, config);
 
-    let outgoing_edges = match output {
-        Ok(edges) => edges,
-        Err(e) => {
-            // Check, if node has following nodes (=not a pure sink)
-            if graph.has_output_connections(node_id)? {
-                return Err(OpossumError::Analysis(format!(
-                    "calculation of optical axis for node {node_info} failed: {e}"
-                )));
-            }
-            // node has no successors => just issue a warning.
-            warn!(
-                "Calculation of optical axis for terminal node {node_info} failed: {e}. Ignoring as it has no successors."
-            );
-            LightResult::default()
+    Ok(())
+}
+
+/// Executes ray-trace calculations to determine node positioning and outgoing beams.
+///
+/// Handles inversion states appropriately if the target node is a reference proxy.
+fn execute_node_calculation(
+    graph: &mut OpticGraph,
+    node_idx: NodeIndex,
+    incoming_edges: LightResult,
+    config: &RayTraceConfig,
+) -> OpmResult<LightResult> {
+    if let Some(target_uuid) = graph.g[node_idx].referenced_node_id() {
+        let is_inverted = graph.g[node_idx].inverted();
+        let target_idx = graph.node_idx_by_uuid(target_uuid).ok_or_else(|| {
+            OpossumError::Analysis(format!(
+                "referenced node with id {target_uuid} not found in graph"
+            ))
+        })?;
+        let target_node = &mut graph.g[target_idx];
+        if is_inverted {
+            target_node.set_inverted(true).map_err(|_e| {
+                OpossumError::Analysis(format!("referenced node {target_node} cannot be inverted"))
+            })?;
         }
-    };
-    // If node is sink node, rewrite port names according to output mapping
+        let res = AnalysisRayTrace::analyze(&mut **target_node, incoming_edges, config);
+        if is_inverted {
+            target_node.set_inverted(false)?;
+        }
+        res
+    } else {
+        let node = &mut graph.g[node_idx];
+        AnalysisRayTrace::calc_node_positions(&mut **node, incoming_edges, config)
+    }
+}
+
+/// Maps outgoing beam data from internal output nodes to external group ports.
+fn record_output_ports(
+    graph: &OpticGraph,
+    node_id: Uuid,
+    outgoing_edges: &LightResult,
+    light_result: &mut LightResult,
+) -> OpmResult<()> {
     if graph.is_output_node(node_id)? {
         let portmap = if graph.is_inverted() {
             graph.port_map(&PortType::Input).clone()
@@ -210,15 +245,84 @@ fn calculate_single_node_position(
             }
         }
     }
+    Ok(())
+}
+
+/// Stores outgoing edge data in the graph and updates the up-direction reference vector.
+fn update_outgoing_edges_and_up_direction(
+    graph: &mut OpticGraph,
+    node_idx: NodeIndex,
+    outgoing_edges: LightResult,
+    up_direction: &mut Vector3<f64>,
+) -> OpmResult<()> {
+    let referenced_id = graph.g[node_idx].referenced_node_id();
+    let fallback_node_type = graph.g[node_idx].node_attr().node_type().to_string();
+
     for outgoing_edge in outgoing_edges {
-        let node = node_ref.lock_opm()?;
-        if node_type == "source" || node_type == "source port" {
-            *up_direction = node.define_up_direction(&outgoing_edge.1)?;
+        if let Some(target_uuid) = referenced_id {
+            let target_idx = graph.node_idx_by_uuid(target_uuid).ok_or_else(|| {
+                OpossumError::Analysis(format!(
+                    "referenced node with id {target_uuid} not found in graph"
+                ))
+            })?;
+            let target = &graph.g[target_idx];
+            if target.node_type() == "source" || target.node_type() == "source port" {
+                *up_direction = target.define_up_direction(&outgoing_edge.1)?;
+            } else {
+                target.calc_new_up_direction(&outgoing_edge.1, up_direction)?;
+            }
         } else {
-            node.calc_new_up_direction(&outgoing_edge.1, up_direction)?;
+            let node = &graph.g[node_idx];
+            if fallback_node_type == "source" || fallback_node_type == "source port" {
+                *up_direction = node.define_up_direction(&outgoing_edge.1)?;
+            } else {
+                node.calc_new_up_direction(&outgoing_edge.1, up_direction)?;
+            }
         }
-        drop(node);
         graph.set_outgoing_edge_data(node_idx, &outgoing_edge.0, outgoing_edge.1);
     }
+    Ok(())
+}
+
+fn calculate_single_node_position(
+    graph: &mut OpticGraph,
+    node_idx: NodeIndex,
+    incoming_data: &LightResult,
+    up_direction: &mut Vector3<f64>,
+    config: &RayTraceConfig,
+    light_result: &mut LightResult,
+) -> OpmResult<()> {
+    let node_id = graph.g[node_idx].uuid();
+    let node_info = format!("{}", graph.g[node_idx]);
+    let incoming_edges: LightResult = graph.get_incoming(node_id, incoming_data)?;
+
+    // 1. Position the node if not already placed
+    ensure_node_isometry(graph, node_idx, &incoming_edges, up_direction)?;
+
+    // 2. Compute the optical calculation / ray tracing
+    let output = execute_node_calculation(graph, node_idx, incoming_edges, config);
+
+    // 3. Handle potential calculation errors on non-terminal vs terminal nodes
+    let outgoing_edges = match output {
+        Ok(edges) => edges,
+        Err(e) => {
+            if graph.has_output_connections(node_id)? {
+                return Err(OpossumError::Analysis(format!(
+                    "calculation of optical axis for node {node_info} failed: {e}"
+                )));
+            }
+            warn!(
+                "Calculation of optical axis for terminal node {node_info} failed: {e}. Ignoring as it has no successors."
+            );
+            LightResult::default()
+        }
+    };
+
+    // 4. Map output ports for group-level sinks
+    record_output_ports(graph, node_id, &outgoing_edges, light_result)?;
+
+    // 5. Propagate outgoing beam data and adjust the up vector
+    update_outgoing_edges_and_up_direction(graph, node_idx, outgoing_edges, up_direction)?;
+
     Ok(())
 }

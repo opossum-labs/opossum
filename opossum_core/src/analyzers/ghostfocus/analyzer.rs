@@ -17,7 +17,6 @@ use crate::{
     prelude::{OpticNode, Properties, Proptype, RayTraceConfig},
     properties::proptype::{count_str, format_value_with_prefix},
     reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
-    utils::LockExt,
 };
 
 /// Analyzer for ghost focus simulation
@@ -43,21 +42,17 @@ impl GhostFocusAnalyzer {
         analysis_report: &mut AnalysisReport,
     ) -> OpmResult<()> {
         for node_ref in group.graph().nodes() {
-            let node = node_ref.optical_ref.lock_opm()?;
-            if let Some(g) = node.as_any().downcast_ref::<NodeGroup>() {
+            if let Some(g) = node_ref.as_any().downcast_ref::<NodeGroup>() {
                 self.node_group_report(g, analysis_report)?;
             } else {
-                let node_name = &node.name().to_string();
-                let hit_maps = node.hit_maps();
-                drop(node);
+                let node_name = &node_ref.name().to_string();
+                let hit_maps = node_ref.hit_maps();
                 for hit_map in &hit_maps {
                     let critical_positions = hit_map.1.critical_fluences();
-                    let node = node_ref.optical_ref.lock_opm()?;
-                    let lidt = *node
+                    let lidt = *node_ref
                         .get_optic_surface(hit_map.0)
                         .expect("OpticSurface not found!")
                         .lidt();
-                    drop(node);
                     if !critical_positions.is_empty() {
                         for (i, (rays_uuid, (fluence, hist_idx, bounce))) in
                             critical_positions.iter().enumerate()
@@ -317,7 +312,6 @@ mod test_ghost_analysis_nested_groups_inversion {
             AnalyzerType, CollimatedSrc, OpmDocument, PortType, RayDataSource, RefrIndexConst,
         },
         radian,
-        utils::LockExt,
     };
     use uuid::Uuid;
 
@@ -482,13 +476,12 @@ mod test_ghost_analysis_nested_groups_inversion {
 
     fn check_not_inverted(group: &NodeGroup) -> bool {
         for opt_ref in group.graph().nodes() {
-            let node = opt_ref.optical_ref.lock_opm().expect("error getting lock");
-            if let Some(g) = node.as_any().downcast_ref::<NodeGroup>() {
+            if let Some(g) = opt_ref.as_any().downcast_ref::<NodeGroup>() {
                 if !check_not_inverted(g) {
                     return false;
                 }
             }
-            if node.inverted() {
+            if opt_ref.inverted() {
                 return false;
             }
         }

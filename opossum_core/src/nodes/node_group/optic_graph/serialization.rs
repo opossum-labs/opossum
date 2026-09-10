@@ -4,7 +4,6 @@ use crate::{
     error::{OpmResult, OpossumError},
     nodes::{NodeGroup, NodeReference},
     properties::Proptype,
-    utils::LockExt,
 };
 use log::warn;
 use serde::{Deserialize, Serialize};
@@ -98,15 +97,39 @@ impl TryFrom<SerializableGraph> for OpticGraph {
 
     fn try_from(temp_graph: SerializableGraph) -> Result<Self, Self::Error> {
         let mut g = Self::default();
-        for node in &temp_graph.nodes {
-            g.g.add_node(node.clone());
+        for node in temp_graph.nodes {
+            g.g.add_node(node);
         }
-        for node_ref in &temp_graph.nodes {
+        let node_indices = g.g.node_indices().collect::<Vec<_>>();
+        for idx in node_indices {
             // Tolerant (`strict = false`): a reference nested here may point at a node in an ancestor or
             // sibling branch that isn't built yet (serde builds inner groups before outer ones). Those are
             // resolved once the whole document exists - see `OpticGraph::resolve_all_references`, driven
             // from `NodeGroup::after_deserialization_hook`.
-            assign_reference_to_ref_node(node_ref, &g, false)?;
+            let (is_ref, target_uuid) = g.g[idx]
+                .as_any()
+                .downcast_ref::<NodeReference>()
+                .map_or_else(
+                    || (false, Uuid::nil()),
+                    |refr| {
+                        let mut target = refr.referenced_uuid();
+                        if target.is_nil()
+                            && let Ok(Proptype::Uuid(uuid)) = refr.properties().get("reference id")
+                        {
+                            target = *uuid;
+                        }
+                        (true, target)
+                    },
+                );
+            if is_ref
+                && !target_uuid.is_nil()
+                && let Ok((target_node, _)) = g.node_recursive(target_uuid, Uuid::nil())
+                && let Some(refr) = g.g[idx].as_any_mut().downcast_mut::<NodeReference>()
+            {
+                let ref_name = format!("ref ({})", target_node.name());
+                refr.assign_reference(&target_node)?;
+                refr.node_attr_mut().set_name(&ref_name);
+            }
         }
         for edge in &temp_graph.edges {
             // Log a warning and skip connection if node UUIDs or ports are invalid
@@ -129,62 +152,6 @@ impl TryFrom<SerializableGraph> for OpticGraph {
     }
 }
 
-/// Resolves the reference `node_ref` (if it is one) against `graph`, pointing it at its target and
-/// refreshing its `ref (...)` name.
-///
-/// `graph.node_recursive` searches `graph` and all its nested subgroups, so passing the *root* graph
-/// resolves a reference to a target anywhere in the scenery (up, down, or sideways). `strict` controls the
-/// not-found behaviour: `false` (per-group, mid-deserialization) skips silently, because the target may
-/// live in an ancestor/sibling not built yet and will be resolved by the whole-scenery pass; `true`
-/// (that whole-scenery pass) errors, since by then a missing target is genuinely dangling.
-///
-/// # Errors
-///
-/// Returns an error if a lock can't be acquired, or (only when `strict`) the target isn't found anywhere.
-fn assign_reference_to_ref_node(
-    node_ref: &OpticRef,
-    graph: &OpticGraph,
-    strict: bool,
-) -> OpmResult<()> {
-    // Read the referenced uuid, then release the lock *before* searching the graph below - the recursive
-    // lookup locks every node it visits (to descend into groups), which would deadlock against a lock held
-    // on this same reference node. The lock guard is a temporary here (not a named binding), so it is
-    // dropped at the end of this `match`, before the search.
-    let referenced_uuid = match node_ref
-        .optical_ref
-        .lock_opm()?
-        .as_any()
-        .downcast_ref::<NodeReference>()
-    {
-        Some(ref_node) => match ref_node.properties().get("reference id") {
-            Ok(Proptype::Uuid(uuid)) => *uuid,
-            _ => Uuid::nil(),
-        },
-        None => return Ok(()), // not a reference node - nothing to assign
-    };
-    // `node_recursive` tries this level first (so intra-group references are unchanged), then descends into
-    // subgroups. The group-id it also returns is unused here.
-    let Ok((reference_node, _)) = graph.node_recursive(referenced_uuid, Uuid::nil()) else {
-        if strict {
-            return Err(OpossumError::Other(
-                "reference node found, which does not reference anything".into(),
-            ));
-        }
-        return Ok(()); // deferred to the whole-scenery pass (see `resolve_all_references`)
-    };
-    let ref_name = format!("ref ({})", reference_node.optical_ref.lock_opm()?.name());
-    if let Some(ref_node) = node_ref
-        .optical_ref
-        .lock_opm()?
-        .as_any_mut()
-        .downcast_mut::<NodeReference>()
-    {
-        ref_node.assign_reference(&reference_node)?;
-        ref_node.node_attr_mut().set_name(&ref_name);
-    }
-    Ok(())
-}
-
 impl OpticGraph {
     /// Resolves every reference node in this graph and all nested subgroups against `self` as the search
     /// root, erroring on any whose target isn't anywhere in the tree. Run once after the whole document has
@@ -194,35 +161,40 @@ impl OpticGraph {
     ///
     /// # Errors
     ///
-    /// Returns an error if a contained node can't be locked, or a reference's target isn't found anywhere.
-    pub(crate) fn resolve_all_references(&self) -> OpmResult<()> {
+    /// Returns an error if a reference's target isn't found anywhere.
+    pub(crate) fn resolve_all_references(&mut self) -> OpmResult<()> {
         let mut references = Vec::new();
-        self.collect_reference_nodes(&mut references)?;
-        // Resolve after collection, so no per-node lock is held across `node_recursive`'s own whole-tree
-        // walk (which would deadlock against it).
-        for reference in &references {
-            assign_reference_to_ref_node(reference, self, true)?;
+        self.collect_reference_node_ids(&mut references)?;
+        for (ref_uuid, target_uuid) in references {
+            let Ok((target_node, _)) = self.node_recursive(target_uuid, Uuid::nil()) else {
+                return Err(OpossumError::Other(
+                    "reference node found, which does not reference anything".into(),
+                ));
+            };
+            let ref_node = self.node_recursive_mut(ref_uuid)?;
+            if let Some(r) = ref_node.as_any_mut().downcast_mut::<NodeReference>() {
+                let ref_name = format!("ref ({})", target_node.name());
+                r.assign_reference(&target_node)?;
+                r.node_attr_mut().set_name(&ref_name);
+            }
         }
         Ok(())
     }
 
-    /// Collects every reference node in this graph and, recursively, in all nested subgroups. Locks are
-    /// only held briefly per node (never across the resolution above), so the subsequent whole-tree
-    /// searches can't deadlock against a lock held here.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if a contained node can't be locked.
-    // The single `node` guard is used by both branches; the group branch must keep it locked across its
-    // recursion (which borrows the locked node), so it can't be tightened as the lint wants.
-    #[allow(clippy::significant_drop_tightening)]
-    fn collect_reference_nodes(&self, out: &mut Vec<OpticRef>) -> OpmResult<()> {
+    /// Collects the UUID and referenced UUID of every reference node in this graph and, recursively,
+    /// in all nested subgroups.
+    fn collect_reference_node_ids(&self, out: &mut Vec<(Uuid, Uuid)>) -> OpmResult<()> {
         for node_ref in self.nodes() {
-            let node = node_ref.optical_ref.lock_opm()?;
-            if node.as_any().downcast_ref::<NodeReference>().is_some() {
-                out.push(node_ref.clone());
-            } else if let Some(group) = node.as_any().downcast_ref::<NodeGroup>() {
-                group.graph().collect_reference_nodes(out)?;
+            if let Some(refr) = node_ref.as_any().downcast_ref::<NodeReference>() {
+                let mut target_uuid = refr.referenced_uuid();
+                if target_uuid.is_nil()
+                    && let Ok(Proptype::Uuid(uuid)) = refr.properties().get("reference id")
+                {
+                    target_uuid = *uuid;
+                }
+                out.push((node_ref.uuid(), target_uuid));
+            } else if let Some(group) = node_ref.as_any().downcast_ref::<NodeGroup>() {
+                group.graph().collect_reference_node_ids(out)?;
             }
         }
         Ok(())
@@ -305,7 +277,7 @@ mod test {
             ron::from_str(&serialized).expect("a reference into a nested group must reload");
 
         let ref_node = deserialized.node(r_id).unwrap();
-        let ports = ref_node.optical_ref.lock_opm().unwrap().ports();
+        let ports = ref_node.ports();
         assert!(
             !ports.names(&PortType::Output).is_empty(),
             "the reloaded reference must resolve to A (non-empty mirrored ports)"
@@ -347,7 +319,7 @@ mod test {
             "the nested group must survive the round-trip"
         );
         let (input_names, output_names) = {
-            let group_ref = deserialized.nodes()[0].optical_ref.lock_opm().unwrap();
+            let group_ref = &deserialized.nodes()[0];
             let group = group_ref.as_any().downcast_ref::<NodeGroup>().unwrap();
             (
                 group.graph().port_map(&PortType::Input).port_names(),

@@ -8,7 +8,6 @@ use crate::{
         LightData, LightRays, Rays,
         light_result::{light_rays_to_light_result, light_result_to_light_rays},
     },
-    utils::LockExt,
 };
 use log::warn;
 
@@ -37,11 +36,8 @@ impl AnalysisGhostFocus for NodeGroup {
         }
         let sorted = self.graph.topologically_sorted()?;
         for idx in sorted {
-            let node_ref = self.graph.node_by_idx(idx)?.optical_ref;
-            let node = node_ref.lock_opm()?;
-            let node_id = node.node_attr().uuid();
-            let node_info = node.to_string();
-            drop(node);
+            let node_id = self.graph.g[idx].uuid();
+            let node_info = format!("{}", self.graph.g[idx]);
             if self.graph.is_stale_node(node_id)? {
                 warn!("graph contains stale (completely unconnected) node {node_info}. Skipping.");
             } else {
@@ -49,16 +45,51 @@ impl AnalysisGhostFocus for NodeGroup {
                     node_id,
                     &light_rays_to_light_result(current_bouncing_rays.clone()),
                 )?;
-                let mut outgoing_edges = AnalysisGhostFocus::analyze(
-                    &mut *node_ref.lock_opm()?,
-                    light_result_to_light_rays(incoming_edges)?,
-                    config,
-                    ray_collection,
-                    bounce_lvl,
-                )
-                .map_err(|e| {
-                    OpossumError::Analysis(format!("analysis of node {node_info} failed: {e}"))
-                })?;
+                let mut outgoing_edges = if let Some(target_uuid) =
+                    self.graph.g[idx].referenced_node_id()
+                {
+                    let is_inverted = self.graph.g[idx].inverted();
+                    let target_idx = self.graph.node_idx_by_uuid(target_uuid).ok_or_else(|| {
+                        OpossumError::Analysis(format!(
+                            "referenced node with id {target_uuid} not found in graph"
+                        ))
+                    })?;
+                    let target_node = &mut self.graph.g[target_idx];
+                    if is_inverted {
+                        target_node.set_inverted(true).map_err(|_e| {
+                            OpossumError::Analysis(format!(
+                                "referenced node {target_node} cannot be inverted"
+                            ))
+                        })?;
+                    }
+                    let res = AnalysisGhostFocus::analyze(
+                        &mut **target_node,
+                        light_result_to_light_rays(incoming_edges)?,
+                        config,
+                        ray_collection,
+                        bounce_lvl,
+                    );
+                    if is_inverted {
+                        target_node.set_inverted(false)?;
+                    }
+                    let node_info = format!("{target_node}");
+                    res.map_err(|e| {
+                        OpossumError::Analysis(format!("analysis of node {node_info} failed: {e}"))
+                    })?
+                } else {
+                    let node = &mut self.graph.g[idx];
+                    let node_info = format!("{node}");
+                    AnalysisGhostFocus::analyze(
+                        &mut **node,
+                        light_result_to_light_rays(incoming_edges)?,
+                        config,
+                        ray_collection,
+                        bounce_lvl,
+                    )
+                    .map_err(|e| {
+                        OpossumError::Analysis(format!("analysis of node {node_info} failed: {e}"))
+                    })?
+                };
                 filter_ray_limits(&mut outgoing_edges, config);
 
                 current_bouncing_rays.clone_from(&outgoing_edges);

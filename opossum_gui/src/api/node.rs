@@ -436,7 +436,7 @@ pub async fn get_amplifier_candidates() -> Result<Vec<Uuid>, String> {
 /// This function will return an error if the request fails or the `node_id` was not found.
 pub async fn put_node_is_amplifier(node_id: Uuid, is_amplifier: bool) -> Result<(), String> {
     HTTP_API_CLIENT()
-        .put_receive_no_content(&format!("/api/nodes/{node_id}/is_amplifier"), is_amplifier)
+        .put(&format!("/api/nodes/{node_id}/is_amplifier"), is_amplifier)
         .await
 }
 
