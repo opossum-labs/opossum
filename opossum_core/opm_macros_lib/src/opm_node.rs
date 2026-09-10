@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{parse_macro_input, AttrStyle, ItemStruct, LitStr};
+use syn::{AttrStyle, ItemStruct, LitStr, parse_macro_input};
 
 pub fn impl_derive_opm_node(input: TokenStream) -> TokenStream {
     let struct_input = parse_macro_input!(input as ItemStruct);

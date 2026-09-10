@@ -1,8 +1,8 @@
-//! Endpoints for the document-wide list of [`PumpScenario`]s - the operating points a model can be
-//! analyzed in (see `opossum_core::gain::scenario` for the concept). Mirrors `analyzers.rs`'s
-//! structure: list/get/create/delete plus field-level patches, all going through
-//! [`Command::PatchPumpScenario`] for the parts that only ever replace the scenario wholesale
-//! (rename, set a node's gain model or pump source).
+//! Endpoints for the document-wide list of [`PumpScenario`](opossum_core::gain::PumpScenario)s -
+//! the operating points a model can be analyzed in (see `opossum_core::gain::scenario` for the
+//! concept). Mirrors `analyzers.rs`'s structure: list/get/create/delete plus field-level patches,
+//! all going through [`Command::PatchPumpScenario`] for the parts that only ever replace the
+//! scenario wholesale (rename, set a node's gain model or pump source).
 use actix_web::{HttpRequest, HttpResponse, delete, get, post, put, web};
 use opossum_core::{
     core_optics::{NodeAttr, NodeAttrExt},

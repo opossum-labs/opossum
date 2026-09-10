@@ -135,8 +135,8 @@ pub struct SeveredLinksOutcome {
     /// [`Command::AddEdge`](crate::undo::Command::AddEdge) each).
     pub removed_connections: Vec<(Uuid, ConnectInfo)>,
     /// The outward port-map chains torn down - flattened for the GUI response via
-    /// [`split_cascades_for_response`] and turned into the undo restore via
-    /// `Command::from(&PortMapCascadeRemoval)`.
+    /// [`split_cascades_for_response`](crate::helper_functions::split_cascades_for_response) and turned
+    /// into the undo restore via `Command::from(&PortMapCascadeRemoval)`.
     pub cascades: Vec<PortMapCascadeRemoval>,
     /// Groups whose port maps changed (every cascade level's group plus `group_id` itself), so the GUI
     /// re-fetches their exposed ports.
@@ -226,8 +226,8 @@ pub struct CutRelocationOutcome {
     /// on undo (one [`Command::AddEdge`](crate::undo::Command::AddEdge) each).
     pub removed_connections: Vec<(Uuid, ConnectInfo)>,
     /// The outward port-map chains torn down - flattened for the GUI response via
-    /// [`split_cascades_for_response`] and turned into the undo restore via
-    /// `Command::from(&PortMapCascadeRemoval)`.
+    /// [`split_cascades_for_response`](crate::helper_functions::split_cascades_for_response) and turned
+    /// into the undo restore via `Command::from(&PortMapCascadeRemoval)`.
     pub cascades: Vec<PortMapCascadeRemoval>,
     /// Groups whose port maps changed (every cascade level's group plus `from_group_id`), so the GUI
     /// re-fetches their exposed ports.

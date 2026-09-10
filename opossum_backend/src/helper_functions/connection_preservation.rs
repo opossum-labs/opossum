@@ -30,8 +30,9 @@ enum PreExistingMappingConsumer {
 
 /// Walks outward from `from_group_id`'s own port-map entry (`external_name`, `port_type`) to find
 /// whatever ultimately consumes it, for [`disconnect_moved_node_connections`]. Read-only - unlike
-/// [`remove_port_map_cascade`], this has no "current level's own entry" to remove first, since
-/// `from_group_id`'s entry is exactly what the caller is about to act on based on the result.
+/// [`remove_port_map_cascade`](crate::helper_functions::remove_port_map_cascade), this has no
+/// "current level's own entry" to remove first, since `from_group_id`'s entry is exactly what the
+/// caller is about to act on based on the result.
 ///
 /// Per level: a live connection at the current group's immediate parent wins outright
 /// ([`PreExistingMappingConsumer::LiveEdge`]). Otherwise, if the current group's export is itself
@@ -47,8 +48,9 @@ enum PreExistingMappingConsumer {
 /// again from inside it) can leave a pre-existing mapping chained through 2+ levels before this
 /// ever runs, not just the single level a single drag-and-drop move produces.
 ///
-/// Always terminates and never revisits a group, for the same reason [`remove_port_map_cascade`]
-/// does: containment is a strict tree, so each step (moving to the current group's own parent)
+/// Always terminates and never revisits a group, for the same reason
+/// [`remove_port_map_cascade`](crate::helper_functions::remove_port_map_cascade) does: containment
+/// is a strict tree, so each step (moving to the current group's own parent)
 /// strictly decreases distance-to-root.
 ///
 /// # Errors
