@@ -324,58 +324,26 @@ impl OpmDocument {
         })?;
         Ok(())
     }
-    /// Creates a complete deep copy of the document and all scene nodes.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if nested components cannot be cloned deeply.
-    pub fn clone_deep(&self) -> OpmResult<Self> {
-        Ok(Self {
-            opm_file_version: self.opm_file_version.clone(),
-            scenery: self.scenery.clone_deep()?,
-            analyzers: self.analyzers.clone(),
-            embedded_materials: self.embedded_materials.clone(),
-            pump_scenarios: self.pump_scenarios.clone(),
-            amplifier_nodes: self.amplifier_nodes.clone(),
-        })
-    }
     /// Generates the RON string content representation of this [`OpmDocument`].
     ///
-    /// Extracts embedded materials and replaces node material properties with UUID references,
-    /// then puts the materials back, so that writing a document leaves it exactly as it was.
-    ///
-    /// **The clone below is not a copy of the nodes.** An [`OpticRef`](crate::core_optics::OpticRef)
-    /// is an `Arc<Mutex<..>>`, so a cloned document shares its very nodes with the original, and
-    /// rewriting their material property reaches straight through into this document. Only
-    /// `embedded_materials` — a plain map — is genuinely cloned. Leaving it at that emptied the
-    /// live document of its materials while filling a table nobody kept: the next write then found
-    /// nothing left to embed and produced a file whose references resolved to nothing, and every
-    /// volume node in the running session lost the material its analysis reads.
-    ///
-    /// Hence the restore, which runs whatever the serialization did.
+    /// Extracts embedded materials and replaces node material properties with UUID references.
+    /// Because [`OpticRef`](crate::core_optics::OpticRef) owns an independent `Box<dyn Analyzable>`,
+    /// cloning the document provides full value isolation, leaving `&self` completely untouched.
     ///
     /// # Errors
-    /// Returns an [`OpossumError`] if serialization fails.
+    /// Returns an [`OpossumError`] if material extraction or RON serialization fails.
     pub fn to_opm_file_string(&self) -> OpmResult<String> {
-        // Create a temporary mutable clone for serialization preparation
-        let mut doc_to_serialize = self.clone_deep()?;
-        let prepared = doc_to_serialize.prepare_materials_for_serialization();
+        // Create an isolated clone for serialization preparation.
+        let mut doc_to_serialize = self.clone();
+        doc_to_serialize.prepare_materials_for_serialization()?;
 
         let config = PrettyConfig::new()
             .extensions(Extensions::UNWRAP_VARIANT_NEWTYPES)
             .new_line("\n");
 
-        let serialized = prepared.and_then(|()| {
-            ron::ser::to_string_pretty(&doc_to_serialize, config).map_err(|e| {
-                OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}"))
-            })
-        });
-
-        // Give the shared nodes their inline materials back before returning - including on the
-        // failure paths, which would otherwise leave the live document stripped.
-        doc_to_serialize.resolve_embedded_materials()?;
-
-        serialized
+        ron::ser::to_string_pretty(&doc_to_serialize, config).map_err(|e| {
+            OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}"))
+        })
     }
     /// Returns the list of analyzers of this [`OpmDocument`].
     #[must_use]

@@ -121,16 +121,6 @@ impl NodeGroup {
         group.node_attr.set_name(name);
         group
     }
-    /// Creates a deep copy of this [`NodeGroup`] and all contained nodes.
-    ///
-    /// # Errors
-    ///
-    /// This function might return an error if underlying `clone_deep()` function return an error.
-    pub fn clone_deep(&self) -> OpmResult<Self> {
-        let mut new_group = self.clone();
-        new_group.graph = self.graph.clone_deep()?;
-        Ok(new_group)
-    }
     /// Add a given [`OpticNode`] to the (sub-)graph of this [`NodeGroup`].
     ///
     /// This command just adds an [`OpticNode`] but does not connect it to existing nodes in the (sub-)graph. The given node is
