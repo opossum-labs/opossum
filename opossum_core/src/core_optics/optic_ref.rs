@@ -10,7 +10,6 @@ use uuid::Uuid;
 use crate::{
     analyzers::Analyzable,
     core_optics::{NodeAttr, NodeAttrExt, node_attr::HasNodeAttr},
-    error::OpmResult,
     nodes::{NodeGroup, OpticGraph, create_node_ref},
 };
 
@@ -25,18 +24,17 @@ pub struct OpticRef {
 
 impl OpticRef {
     /// Creates a new [`OpticRef`].
+    #[must_use]
     pub fn new(node: Box<dyn Analyzable>) -> Self {
         Self { optical_ref: node }
     }
     /// Returns the [`Uuid`] of the node, reference to by this [`OpticRef`].
-    pub fn uuid(&self) -> OpmResult<Uuid> {
-        Ok(self.optical_ref.node_attr().uuid())
-    }
-    /// Creates a deep copy of this optic reference with a fresh, independent node instance.
-    pub fn clone_deep(&self) -> OpmResult<Self> {
-        Ok(self.clone())
+    #[must_use]
+    pub fn uuid(&self) -> Uuid {
+        self.optical_ref.node_attr().uuid()
     }
     /// Returns a reference to the inner [`Analyzable`].
+    #[must_use]
     pub fn as_analyzable(&self) -> &dyn Analyzable {
         &*self.optical_ref
     }
@@ -174,7 +172,7 @@ mod test {
         let mut dummy = Dummy::default();
         dummy.node_attr_mut().set_uuid(uuid);
         let optic_ref = OpticRef::new(Box::new(dummy));
-        assert_eq!(optic_ref.uuid()?, uuid);
+        assert_eq!(optic_ref.uuid(), uuid);
         Ok(())
     }
 
@@ -199,7 +197,7 @@ mod test {
             OpossumError::OpmDocument(format!("Error parsing opm file string: {e}"))
         })?;
         assert_eq!(
-            optic_ref.uuid()?,
+            optic_ref.uuid(),
             uuid!("a2534789-ec98-4e9b-a1da-315a59d9da43")
         );
         assert_eq!(optic_ref.node_type(), "dummy");

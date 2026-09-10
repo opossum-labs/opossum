@@ -199,16 +199,13 @@ impl OpmDocument {
             let mut updates = Vec::new();
             for (prop_name, prop) in node_ref.node_attr().properties() {
                 if let Proptype::Material(AssetRef::Id(id)) = prop.prop() {
-                    let material = match embedded_materials.get(id) {
-                        Some(m) => m,
-                        None => {
-                            err = Some(OpossumError::OpmDocument(format!(
-                                "Embedded material with UUID {id} not found for property '{prop_name}' in node '{}'",
-                                node_ref.node_attr().name()
-                            )));
-                            return;
-                        }
-                    };
+                    let Some(material) = embedded_materials.get(id) else {
+                             err = Some(OpossumError::OpmDocument(format!(
+                                 "Embedded material with UUID {id} not found for property '{prop_name}' in node '{}'",
+                                 node_ref.node_attr().name()
+                             )));
+                             return;
+                         };
                     updates.push((
                         prop_name.clone(),
                         Proptype::Material(AssetRef::Inline(material.clone())),

@@ -93,9 +93,8 @@ impl OpticGraph {
 
         // Deep-clone all node weights inside petgraph::DiGraph
         for node_ref in new_graph.g.node_weights_mut() {
-            *node_ref = node_ref.clone_deep()?;
+            *node_ref = node_ref.clone();
         }
-
         Ok(new_graph)
     }
 }

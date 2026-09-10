@@ -74,7 +74,8 @@ impl Default for NodeReference {
 
 impl NodeReference {
     /// Return the [`Uuid`] of the referenced optical node.
-    pub fn referenced_uuid(&self) -> Uuid {
+    #[must_use]
+    pub const fn referenced_uuid(&self) -> Uuid {
         self.referenced_uuid
     }
 
@@ -108,7 +109,7 @@ impl NodeReference {
     ///
     /// This function could return an error if an internal `reference_id` property cannot be assigned.
     pub fn assign_reference(&mut self, node: &OpticRef) -> OpmResult<()> {
-        let target_uuid = node.uuid()?;
+        let target_uuid = node.uuid();
         self.referenced_uuid = target_uuid;
         self.node_attr_mut()
             .set_property("reference id", Proptype::Uuid(target_uuid))?;

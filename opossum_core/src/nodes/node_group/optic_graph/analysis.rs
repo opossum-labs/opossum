@@ -145,7 +145,7 @@ impl OpticGraph {
         let sorted = self.topologically_sorted()?;
         let mut light_result = LightResult::default();
         for idx in sorted {
-            let node_id = self.node_by_idx(idx)?.uuid()?;
+            let node_id = self.node_by_idx(idx)?.uuid();
             if self.is_stale_node(node_id)? {
                 let node_name = format!("{}", self.g[idx]);
                 warn!("graph contains stale (completely unconnected) node {node_name}. Skipping.");
@@ -170,13 +170,13 @@ impl OpticGraph {
                     if is_inverted {
                         target_node.set_inverted(false)?;
                     }
-                    let node_name = format!("{}", target_node);
+                    let node_name = format!("{target_node}");
                     res.map_err(|e| {
                         OpossumError::Analysis(format!("analysis of node {node_name} failed: {e}"))
                     })?
                 } else {
                     let node = &mut self.g[idx];
-                    let node_name = format!("{}", node);
+                    let node_name = format!("{node}");
                     AnalysisEnergy::analyze(&mut **node, incoming_edges, config).map_err(|e| {
                         OpossumError::Analysis(format!("analysis of node {node_name} failed: {e}"))
                     })?
@@ -210,6 +210,7 @@ impl OpticGraph {
     /// # Errors
     ///
     /// This function will return an error if
+    /// - the node with the given `node_id` does not exist in the graph.
     /// - there is no connecting edge from a predecessor.
     /// - the length cannot be determined (e.g. predecessor node has no fixed isometry set).
     pub fn distance_from_predecessor(&self, node_id: Uuid, port_name: &str) -> OpmResult<Length> {
@@ -219,9 +220,20 @@ impl OpticGraph {
             &self.input_port_map
         };
         if let Some(external_port_name) = portmap.external_port_name(node_id, port_name) {
-            self.external_distances().get(&external_port_name).map_or_else(|| Err(OpossumError::Analysis(format!("did not find distance from predecessor to target port '{port_name}' because it's not in the list of external distances"))), |length| Ok(*length))
+            self.external_distances().get(&external_port_name).map_or_else(
+                || {
+                    Err(OpossumError::Analysis(format!(
+                        "did not find distance from predecessor to target port '{port_name}' because it's not in the list of external distances"
+                    )))
+                },
+                |length| Ok(*length),
+            )
         } else {
-            let idx = self.node_idx_by_uuid(node_id).unwrap();
+            // Safely resolve the node index or propagate an analysis error
+            let idx = self.node_idx_by_uuid(node_id).ok_or_else(|| {
+                OpossumError::Analysis(format!("node with id {node_id} not found in graph"))
+            })?;
+
             let neighbors = self
                 .g
                 .neighbors_directed(idx, petgraph::Direction::Incoming);

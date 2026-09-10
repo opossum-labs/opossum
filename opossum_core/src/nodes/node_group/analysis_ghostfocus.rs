@@ -36,7 +36,7 @@ impl AnalysisGhostFocus for NodeGroup {
         }
         let sorted = self.graph.topologically_sorted()?;
         for idx in sorted {
-            let node_id = self.graph.g[idx].uuid()?;
+            let node_id = self.graph.g[idx].uuid();
             let node_info = format!("{}", self.graph.g[idx]);
             if self.graph.is_stale_node(node_id)? {
                 warn!("graph contains stale (completely unconnected) node {node_info}. Skipping.");

@@ -165,7 +165,7 @@ impl OpticGraph {
             while let Some(node_idx) = self.find_first_node_with_uuid(current_id_to_check) {
                 // Avoid redundant node lookup by caching node_ref
                 let node_ref = self.node_by_idx(node_idx)?;
-                let actual_node_id = node_ref.uuid()?;
+                let actual_node_id = node_ref.uuid();
 
                 if let Some(group) = node_ref.as_any().downcast_ref::<NodeGroup>()
                     && let Ok(sub_ids) = group.collect_all_contained_node_ids_recursive()
@@ -245,15 +245,14 @@ impl OpticGraph {
     fn find_first_node_with_uuid(&self, node_id: Uuid) -> Option<NodeIndex> {
         for node_idx in self.g.node_indices() {
             let node_ref = self.node_by_idx(node_idx).ok()?;
-            if node_ref.uuid().ok()? == node_id {
+            if node_ref.uuid() == node_id {
                 return Some(node_idx);
             }
-            if node_ref.node_type() == "reference" {
-                if let Some(ref_id) = node_ref.referenced_node_id() {
-                    if ref_id == node_id {
-                        return Some(node_idx);
-                    }
-                }
+            if node_ref.node_type() == "reference"
+                && let Some(ref_id) = node_ref.referenced_node_id()
+                && ref_id == node_id
+            {
+                return Some(node_idx);
             }
         }
         None
@@ -279,7 +278,7 @@ impl OpticGraph {
         let mut nodes_indices = HashMap::<Uuid, Vec<Uuid>>::new();
         for node_idx in self.g.node_indices() {
             let node_ref = self.node_by_idx(node_idx)?;
-            if node_ref.uuid()? == node_id {
+            if node_ref.uuid() == node_id {
                 nodes_indices.entry(group_id).or_default().push(node_id);
             }
             if let Some(group) = node_ref.as_any().downcast_ref::<NodeGroup>() {
@@ -290,15 +289,14 @@ impl OpticGraph {
                     nodes_indices.entry(gid).or_default().extend(ref_nodes);
                 }
             }
-            if node_ref.node_type() == "reference" {
-                if let Some(ref_id) = node_ref.referenced_node_id() {
-                    if ref_id == node_id {
-                        nodes_indices
-                            .entry(group_id)
-                            .or_default()
-                            .push(node_ref.uuid()?);
-                    }
-                }
+            if node_ref.node_type() == "reference"
+                && let Some(ref_id) = node_ref.referenced_node_id()
+                && ref_id == node_id
+            {
+                nodes_indices
+                    .entry(group_id)
+                    .or_default()
+                    .push(node_ref.uuid());
             }
         }
         Ok(nodes_indices)
@@ -362,8 +360,7 @@ impl OpticGraph {
         {
             let src_ports = source.ports().names(&PortType::Output).join(", ");
             return Err(OpossumError::OpticScenery(format!(
-                "source node {} does not have an output port {src_port}. Possible values are: {src_ports}",
-                source
+                "source node {source} does not have an output port {src_port}. Possible values are: {src_ports}"
             )));
         }
         let target_node = self.node_idx_by_uuid(target_id).ok_or_else(|| {
@@ -380,20 +377,17 @@ impl OpticGraph {
         {
             let target_ports = target.ports().names(&PortType::Input).join(", ");
             return Err(OpossumError::OpticScenery(format!(
-                "target node {} does not have an input port {target_port}. Possible values are: {target_ports}",
-                target
+                "target node {target} does not have an input port {target_port}. Possible values are: {target_ports}"
             )));
         }
         if self.src_node_port_exists(src_node, src_port) {
             return Err(OpossumError::OpticScenery(format!(
-                "src node <{}> with port <{src_port}> is already connected",
-                source
+                "src node <{source}> with port <{src_port}> is already connected"
             )));
         }
         if self.target_node_port_exists(target_node, target_port) {
             return Err(OpossumError::OpticScenery(format!(
-                "target node {} with port <{target_port}> is already connected",
-                target
+                "target node {target} with port <{target_port}> is already connected",
             )));
         }
         let src_name = source.name().to_string();
@@ -440,8 +434,7 @@ impl OpticGraph {
         } else {
             let node_ref = self.node(src_id)?;
             Err(OpossumError::OpticScenery(format!(
-                "source node {} with port <{src_port}> is not connected",
-                node_ref
+                "source node {node_ref} with port <{src_port}> is not connected"
             )))
         }
     }
@@ -474,8 +467,7 @@ impl OpticGraph {
         } else {
             let node_ref = self.node(src_id)?;
             Err(OpossumError::OpticScenery(format!(
-                "source node {} with port <{src_port}> is not connected",
-                node_ref
+                "source node {node_ref} with port <{src_port}> is not connected"
             )))
         }
     }
@@ -522,7 +514,7 @@ impl OpticGraph {
                         self.connect_nodes(
                             node_id,
                             output_port,
-                            target_node.uuid()?,
+                            target_node.uuid(),
                             outgoing_edge.3.target_port(),
                             *outgoing_edge.3.distance(),
                         )?;
@@ -536,7 +528,7 @@ impl OpticGraph {
                         )
                     {
                         self.connect_nodes(
-                            src_node.uuid()?,
+                            src_node.uuid(),
                             incoming_edge.3.src_port(),
                             node_id,
                             input_port,

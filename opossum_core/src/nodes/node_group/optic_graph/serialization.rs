@@ -106,26 +106,29 @@ impl TryFrom<SerializableGraph> for OpticGraph {
             // sibling branch that isn't built yet (serde builds inner groups before outer ones). Those are
             // resolved once the whole document exists - see `OpticGraph::resolve_all_references`, driven
             // from `NodeGroup::after_deserialization_hook`.
-            let (is_ref, target_uuid) =
-                if let Some(refr) = g.g[idx].as_any().downcast_ref::<NodeReference>() {
-                    let mut target = refr.referenced_uuid();
-                    if target.is_nil() {
-                        if let Ok(Proptype::Uuid(uuid)) = refr.properties().get("reference id") {
+            let (is_ref, target_uuid) = g.g[idx]
+                .as_any()
+                .downcast_ref::<NodeReference>()
+                .map_or_else(
+                    || (false, Uuid::nil()),
+                    |refr| {
+                        let mut target = refr.referenced_uuid();
+                        if target.is_nil()
+                            && let Ok(Proptype::Uuid(uuid)) = refr.properties().get("reference id")
+                        {
                             target = *uuid;
                         }
-                    }
-                    (true, target)
-                } else {
-                    (false, Uuid::nil())
-                };
-            if is_ref && !target_uuid.is_nil() {
-                if let Ok((target_node, _)) = g.node_recursive(target_uuid, Uuid::nil()) {
-                    if let Some(refr) = g.g[idx].as_any_mut().downcast_mut::<NodeReference>() {
-                        let ref_name = format!("ref ({})", target_node.name());
-                        refr.assign_reference(&target_node)?;
-                        refr.node_attr_mut().set_name(&ref_name);
-                    }
-                }
+                        (true, target)
+                    },
+                );
+            if is_ref
+                && !target_uuid.is_nil()
+                && let Ok((target_node, _)) = g.node_recursive(target_uuid, Uuid::nil())
+                && let Some(refr) = g.g[idx].as_any_mut().downcast_mut::<NodeReference>()
+            {
+                let ref_name = format!("ref ({})", target_node.name());
+                refr.assign_reference(&target_node)?;
+                refr.node_attr_mut().set_name(&ref_name);
             }
         }
         for edge in &temp_graph.edges {
@@ -184,12 +187,12 @@ impl OpticGraph {
         for node_ref in self.nodes() {
             if let Some(refr) = node_ref.as_any().downcast_ref::<NodeReference>() {
                 let mut target_uuid = refr.referenced_uuid();
-                if target_uuid.is_nil() {
-                    if let Ok(Proptype::Uuid(uuid)) = refr.properties().get("reference id") {
-                        target_uuid = *uuid;
-                    }
+                if target_uuid.is_nil()
+                    && let Ok(Proptype::Uuid(uuid)) = refr.properties().get("reference id")
+                {
+                    target_uuid = *uuid;
                 }
-                out.push((node_ref.uuid()?, target_uuid));
+                out.push((node_ref.uuid(), target_uuid));
             } else if let Some(group) = node_ref.as_any().downcast_ref::<NodeGroup>() {
                 group.graph().collect_reference_node_ids(out)?;
             }
