@@ -261,6 +261,7 @@ pub fn show_intro() {
 mod test {
     use super::*;
     use std::io::BufReader;
+
     #[test]
     fn file_path_is_valid_test() {
         let path_valid = Path::new("./files_for_testing/opm/opticscenery.opm");
@@ -270,12 +271,13 @@ mod test {
         let path_not_opm = Path::new("./files_for_testing/opm/is_not_a_opm.txt");
         let path_is_dir = Path::new("./files_for_testing/opm/");
 
-        assert_eq!(file_path_is_valid(path_valid), true);
-        assert_eq!(file_path_is_valid(path_inexistent_file), false);
-        assert_eq!(file_path_is_valid(path_inexistent_dir), false);
-        assert_eq!(file_path_is_valid(path_not_opm), false);
-        assert_eq!(file_path_is_valid(path_is_dir), false);
+        assert!(file_path_is_valid(path_valid));
+        assert!(!file_path_is_valid(path_inexistent_file));
+        assert!(!file_path_is_valid(path_inexistent_dir));
+        assert!(!file_path_is_valid(path_not_opm));
+        assert!(!file_path_is_valid(path_is_dir));
     }
+
     #[test]
     fn eval_file_path_input_test() {
         let path_valid = "./files_for_testing/opm/opticscenery.opm";
@@ -293,6 +295,7 @@ mod test {
         assert_eq!(eval_file_path_input(path_not_opm), None);
         assert_eq!(eval_file_path_input(path_is_dir), None);
     }
+
     #[test]
     fn eval_report_directory_input_test() {
         let dir_valid = "./files_for_testing/opm";
@@ -307,6 +310,7 @@ mod test {
             Some(PathBuf::from(dir_valid))
         );
     }
+
     #[test]
     fn get_parent_dir_test() -> OpmResult<()> {
         let path_valid = "./files_for_testing/opm/my_file.opm".to_owned();
@@ -316,6 +320,7 @@ mod test {
         );
         Ok(())
     }
+
     #[test]
     fn create_prompt_str_test() -> OpmResult<()> {
         assert_eq!(
@@ -329,10 +334,13 @@ mod test {
         assert!(create_prompt_str("invalid_flag", "").is_err());
         Ok(())
     }
+
     #[test]
     fn intro_test() {
         let intro = create_intro();
-        assert_eq!(intro, "                                                            .:^
+        assert_eq!(
+            intro,
+            "                                                            .:^
                                              ::   ......:::^^^^:.. .:.
                     :!?Y55YJ?!^.          ..:^^^^^^^^^^^^^^^^^^^^^^^^^^:..
                  .5#&&&&&&&&&&&&#P7.  .:^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^:..     :!J5PGGBBGPY!:
@@ -373,8 +381,10 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
                                                      5BBP!^:^7GBB!
                                                       ^JPBBBBG5?.
 
-                          Opossum - Open-source Optics Simulation System and Unified Modeler                           \n")
+                          Opossum - Open-source Optics Simulation System and Unified Modeler                           \n"
+        );
     }
+
     #[test]
     fn try_from_args_test() -> OpmResult<()> {
         let path_valid = "./files_for_testing/opm/opticscenery.opm".to_owned();
@@ -402,7 +412,7 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
         };
 
         let args = Args {
-            file_path: PathBuf::from(path_valid.clone()),
+            file_path: PathBuf::from(path_valid),
             report_directory: PathBuf::from("./files_for_testing/"),
             show_logo: true,
         };
@@ -417,6 +427,8 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
         let report_directory_path1 = b"./files_for_testing/\r\n";
 
         let mut writer = Vec::new();
+
+        // Test reading valid file path from argument
         let mut reader = BufReader::new(&correct_file_path[..]);
         let file_path1 = get_args(
             eval_file_path_input,
@@ -425,23 +437,34 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
             &mut reader,
             &mut writer,
         )?;
-        let file_path_str1 = file_path1.to_str().unwrap();
-        assert_eq!(file_path_str1, "./files_for_testing/opm/opticscenery.opm");
+        assert_eq!(
+            file_path1,
+            Path::new("./files_for_testing/opm/opticscenery.opm")
+        );
 
+        // Test invalid file path falling back to interactive reader input
         let mut reader = BufReader::new(&correct_file_path[..]);
-        get_args(
+        let file_path2 = get_args(
             eval_file_path_input,
             Some("./files_for_testing/opm/not_an_opticscenery.opm"),
             "f",
             &mut reader,
             &mut writer,
-        )
-        .unwrap();
+        )?;
+        assert_eq!(
+            file_path2,
+            Path::new("./files_for_testing/opm/opticscenery.opm")
+        );
+
+        // Test missing file path prompted via reader
         let mut reader = BufReader::new(&correct_file_path[..]);
         let file_path3 = get_args(eval_file_path_input, None, "f", &mut reader, &mut writer)?;
-        let file_path_str3 = file_path3.to_str().unwrap();
-        assert_eq!(file_path_str3, "./files_for_testing/opm/opticscenery.opm");
+        assert_eq!(
+            file_path3,
+            Path::new("./files_for_testing/opm/opticscenery.opm")
+        );
 
+        // Test missing report directory prompted via reader
         let mut reader = BufReader::new(&report_directory_path1[..]);
         let report_path1 = get_args(
             eval_report_directory_input,
@@ -449,11 +472,10 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
             "r",
             &mut reader,
             &mut writer,
-        )
-        .unwrap();
-        let report_path_str1 = report_path1.to_str().unwrap();
-        assert_eq!(report_path_str1, "./files_for_testing/");
+        )?;
+        assert_eq!(report_path1, Path::new("./files_for_testing/"));
 
+        // Test valid report directory from argument
         let mut reader = BufReader::new(&report_directory_path1[..]);
         let report_path2 = get_args(
             eval_report_directory_input,
@@ -462,9 +484,9 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
             &mut reader,
             &mut writer,
         )?;
-        let report_path_str2 = report_path2.to_str().unwrap();
-        assert_eq!(report_path_str2, "./files_for_testing/");
+        assert_eq!(report_path2, Path::new("./files_for_testing/"));
 
+        // Test creating a previously non-existent report directory
         let mut reader = BufReader::new(&report_directory_path1[..]);
         let report_path3 = get_args(
             eval_report_directory_input,
@@ -473,14 +495,18 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
             &mut reader,
             &mut writer,
         )?;
-        let report_path_str3 = report_path3.to_str().unwrap();
-        assert_eq!(report_path_str3, "./files_for_not_testing/");
-        std::fs::remove_dir("./files_for_not_testing/").unwrap();
+        assert_eq!(report_path3, Path::new("./files_for_not_testing/"));
+
+        // Clean up temporary test directory
+        std::fs::remove_dir("./files_for_not_testing/").map_err(|e| {
+            OpossumError::Console(format!("Failed to clean up test directory: {e}"))
+        })?;
+
         Ok(())
     }
 
     #[test]
-    fn parser_test() {
+    fn parser_test() -> OpmResult<()> {
         let arg_vec = vec![
             "opossum",
             "-f",
@@ -489,10 +515,16 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
             "./files_for_testing/",
         ];
         let part_args = PartialArgs::parse_from(arg_vec);
-        let fpath = part_args.file_path.unwrap();
-        let r_dir = part_args.report_directory.unwrap();
+
+        let fpath = part_args
+            .file_path
+            .ok_or_else(|| OpossumError::Console("Missing file path in parsed arguments".into()))?;
+        let r_dir = part_args.report_directory.ok_or_else(|| {
+            OpossumError::Console("Missing report directory in parsed arguments".into())
+        })?;
 
         assert_eq!(fpath, "./files_for_testing/opm/opticscenery.opm");
         assert_eq!(r_dir, "./files_for_testing/");
+        Ok(())
     }
 }

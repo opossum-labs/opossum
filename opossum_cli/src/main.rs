@@ -7,7 +7,7 @@ use opossum_core::{
     error::{OpmResult, OpossumError},
     opm_document::OpmDocument,
 };
-use std::{env, path::Path};
+use std::{env, path::Path, process::ExitCode};
 mod console;
 use crate::console::{Args, PartialArgs};
 
@@ -15,6 +15,7 @@ fn read_and_parse_model(path: &Path) -> OpmResult<OpmDocument> {
     info!("Reading model...");
     OpmDocument::from_file(path)
 }
+
 fn opossum() -> OpmResult<()> {
     // by default, log everything from level `info` and up.
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
@@ -24,25 +25,34 @@ fn opossum() -> OpmResult<()> {
             .map_err(|e| OpossumError::Console(format!("Error getting work directory: {e}")))?
             .display()
     );
+
     // parse CLI arguments
     let opossum_args = Args::try_from(PartialArgs::parse())?;
 
     // read scenery model from file and deserialize it
     let mut document = read_and_parse_model(&opossum_args.file_path)?;
-    // create the dot file of the scenery
-    //recreate_data_dir(&opossum_args.report_directory)?;
+
+    // create the dot file of the scenery (non-critical: only logs a warning on failure)
     document
         .create_dot_file(&opossum_args.report_directory)
         .unwrap_or_else(|e| warn!("{e}"));
+
     let reports = document.analyze()?;
     for (report_nr, report) in reports.iter().enumerate() {
         report.save(&opossum_args.report_directory, report_nr)?;
     }
     Ok(())
 }
+
 /// OPOSSUM main function
 ///
-/// This function is only a wrapper for the `opossum()` function and does general error handling.
-fn main() {
-    opossum().unwrap_or_else(|e| error!("{e}"));
+/// This function wraps `opossum()`, logs any top-level error,
+/// and returns an exit code indicating success or failure.
+fn main() -> ExitCode {
+    if let Err(e) = opossum() {
+        error!("{e}");
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
 }

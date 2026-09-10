@@ -267,13 +267,14 @@ mod tests {
     }
 
     #[test]
-    fn test_load_nonexistent_asset_returns_error() {
-        let temp_dir = TempDir::new().unwrap();
+    fn test_load_nonexistent_asset_returns_error() -> OpmResult<()> {
+        let temp_dir = TempDir::new().map_err(|e| OpossumError::Registry(e.to_string()))?;
         let loader = AssetLoader::new(temp_dir.path());
         let id = Uuid::new_v4();
 
         let result: OpmResult<Material> = loader.load(id, Some(1));
         assert!(result.is_err());
+        Ok(())
     }
 
     #[test]

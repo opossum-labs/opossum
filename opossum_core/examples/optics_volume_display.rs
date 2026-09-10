@@ -23,12 +23,10 @@ fn main() -> OpmResult<()> {
     //     vec![&cylinder, &sphere1, &sphere2],
     //     Some(SDFOperation::Intersection),
     // )
-    // .unwrap();
     // let sdf_collection2 = SDFCollection::new(
     //     vec![&optical_table, &sdf_collection],
     //     Some(SDFOperation::Union),
     // )
-    // .unwrap();
 
     // let now = Instant::now();
     // let image = sdf_collection2
@@ -40,12 +38,10 @@ fn main() -> OpmResult<()> {
     //         Some(Vector3::y()),
     //         (256, 256),
     //     )
-    //     .unwrap();
 
     // let fpath = "./opossum_core/playground/.render_test.png";
     // sdf_collection2
     //     .plot_image(&image, (256, 256), fpath)
-    //     .unwrap();
 
     // let elapsed_time = now.elapsed();
     // println!(
