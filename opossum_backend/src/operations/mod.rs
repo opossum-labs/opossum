@@ -17,14 +17,12 @@ use utoipa_actix_web::service_config::ServiceConfig;
 #[allow(unused_imports)]
 pub use convert_to_group::post_convert_nodes_to_group;
 
-use crate::{app_state::NodeCacheItem, error::BackEndErrorResponse};
+use crate::app_state::NodeCacheItem;
 
 /// The top-left corner of the given cached nodes' current GUI positions - the anchor a paste/cut
 /// shifts the pasted-in copies relative to. Shared by [`paste::post_paste_nodes`] and
 /// [`cut::post_cut_nodes`].
-fn upper_left_corner_of_nodes(
-    nodes: &[NodeCacheItem],
-) -> Result<Point2<f64>, BackEndErrorResponse> {
+fn upper_left_corner_of_nodes(nodes: &[NodeCacheItem]) -> Point2<f64> {
     let mut corner = Point2::new(f64::INFINITY, f64::INFINITY);
 
     for node in nodes {
@@ -44,8 +42,7 @@ fn upper_left_corner_of_nodes(
         corner.x = corner.x.min(pos.x);
         corner.y = corner.y.min(pos.y);
     }
-
-    Ok(corner)
+    corner
 }
 
 pub fn config(cfg: &mut ServiceConfig<'_>) {

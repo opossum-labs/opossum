@@ -411,12 +411,11 @@ fn collect_nodes_recursive<T>(
                 // Extract everything needed further down - whether the child is a group is
                 // read here too: asking `with_group_node` afterwards would re-walk the whole
                 // document from the root for every single child.
-                let selected = (
+                (
                     node_attr.uuid(),
                     node_attr.node_type() == GROUP_NODE_TYPE,
                     select(node_attr),
-                );
-                selected
+                )
             })
             .collect::<Vec<(Uuid, bool, Option<T>)>>()
     });

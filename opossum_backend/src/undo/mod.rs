@@ -253,7 +253,7 @@ impl Command {
                 source_port: None,
             }),
             Self::AddNode(cmd) | Self::RemoveNode(cmd) => Some(
-                JumpTarget::new_from_graph_and_node_id(cmd.parent_group_id, cmd.node.uuid().ok()?),
+                JumpTarget::new_from_graph_and_node_id(cmd.parent_group_id, cmd.node.uuid()),
             ),
             Self::AddEdge(cmd) | Self::RemoveEdge(cmd) => {
                 Some(JumpTarget::new_from_graph_id(cmd.group_id))
@@ -310,8 +310,8 @@ impl Command {
     /// ([`Self::AddNode`]/[`Self::RemoveNode`] and batches containing them) are fallible.
     pub fn describe(&self) -> Result<Vec<DocumentChange>, BackEndErrorResponse> {
         Ok(match self {
-            Self::AddNode(cmd) => node_commands::describe_add_node(cmd)?,
-            Self::RemoveNode(cmd) => node_commands::describe_remove_node(cmd)?,
+            Self::AddNode(cmd) => node_commands::describe_add_node(cmd),
+            Self::RemoveNode(cmd) => node_commands::describe_remove_node(cmd),
             Self::PatchNode(cmd) => node_commands::describe_patch_node(cmd),
             Self::PatchProperty(PatchProperty {
                 uuid,
@@ -406,7 +406,7 @@ impl Command {
                 group_commands::describe_group_structure_change(
                     parent_group_id,
                     affected_groups,
-                    group.uuid().ok(),
+                    Some(group.uuid()),
                 )
             }
             Self::SetViewport(cmd) => viewport_commands::describe_set_viewport(cmd),
@@ -551,7 +551,10 @@ fn refresh_changes(ids: impl IntoIterator<Item = Uuid>) -> Vec<DocumentChange> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use opossum_core::types::api_types::{UpdateNodeRequest, Viewport};
+    use opossum_core::{
+        error::OpmResult,
+        types::api_types::{UpdateNodeRequest, Viewport},
+    };
     use uuid::Uuid;
 
     /// The rollback backup is a whole-document serialize, so it must be taken only where a multi-step
@@ -672,13 +675,13 @@ mod test {
     /// A `Batch`'s focus is its highest-priority sub-command (a node selection beats a bare edge tab), so a
     /// paste (add node + reconnect edges) focuses the pasted node.
     #[test]
-    fn batch_jump_target_prefers_the_node_over_the_edge() {
+    fn batch_jump_target_prefers_the_node_over_the_edge() -> OpmResult<()> {
         use opossum_core::{nodes::create_node_ref, types::api_types::ConnectInfo};
 
         let root = Uuid::new_v4();
         let graph = Uuid::new_v4();
-        let node_ref = create_node_ref("dummy").unwrap();
-        let node_id = node_ref.uuid().unwrap();
+        let node_ref = create_node_ref("dummy")?;
+        let node_id = node_ref.uuid();
         let jump = Command::Batch(vec![
             Command::AddNode(NodeSnapshot {
                 parent_group_id: graph,
@@ -705,6 +708,7 @@ mod test {
             Some(node_id),
             "the batch should focus the added node, not the edge's tab"
         );
+        Ok(())
     }
 
     /// The analyzer editor has no `NodeEditorPanel`, so an undo/redo of an analyzer source-mapping change is

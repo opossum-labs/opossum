@@ -477,10 +477,10 @@ fn capture_cascade_connections(
     let mut seen_edges: Vec<ConnectInfo> = connections.clone();
     let mut cascaded: Vec<CascadedNode> = Vec::with_capacity(referring_cascade.len());
     for (member_parent, member_ref) in referring_cascade {
-        let member_conns = member_ref.uuid().ok().map_or_else(Vec::new, |member_uuid| {
-            capture_node_connections(document.scenery(), member_parent, member_uuid)
-                .unwrap_or_default()
-        });
+        // Direct UUID access without intermediate Result unwrapping
+        let member_uuid = member_ref.uuid();
+        let member_conns = capture_node_connections(document.scenery(), member_parent, member_uuid)
+            .unwrap_or_default();
         let deduped: Vec<ConnectInfo> = member_conns
             .into_iter()
             .filter(|conn| !seen_edges.iter().any(|s| same_edge(s, conn)))
@@ -513,13 +513,11 @@ fn teardown_port_cascades_and_delete(
     let mut removed_port_cascades =
         disconnect_exposed_port_cascades_for_node(scenery, parent_group_id, uuid)?;
     for member in cascaded {
-        if let Ok(member_uuid) = member.node.uuid() {
-            removed_port_cascades.extend(disconnect_exposed_port_cascades_for_node(
-                scenery,
-                member.parent_group_id,
-                member_uuid,
-            )?);
-        }
+        removed_port_cascades.extend(disconnect_exposed_port_cascades_for_node(
+            scenery,
+            member.parent_group_id,
+            member.node.uuid(),
+        )?);
     }
     let deleted_nodes = scenery.delete_node(uuid)?;
     Ok((removed_port_cascades, deleted_nodes))
@@ -545,9 +543,10 @@ fn build_delete_inverse(
     let scenario_inverses = prune_pump_scenario_entries(document);
     let amplifier_inverse = prune_amplifier_node_entries(document);
 
+    // Filter cascaded nodes by directly comparing the returned Uuid with deleted_nodes
     let cascaded: Vec<CascadedNode> = cascaded
         .into_iter()
-        .filter(|c| c.node.uuid().is_ok_and(|id| deleted_nodes.contains(&id)))
+        .filter(|c| deleted_nodes.contains(&c.node.uuid()))
         .collect();
     let (disconnected_connections, removed_port_mappings) =
         split_cascades_for_response(removed_port_cascades);
@@ -675,7 +674,7 @@ pub async fn post_reference(
 
     let mut document = data.document.lock();
     let (referring_node, _) = resolve_reference_chain(&document, ref_node_info.referring_node())?;
-    check_reference_target_not_nested(document.scenery(), referring_node.uuid()?, group_uuid)?;
+    check_reference_target_not_nested(document.scenery(), referring_node.uuid(), group_uuid)?;
     let mut node_reference = NodeReference::from_node(&referring_node)?;
 
     node_reference
@@ -1091,6 +1090,7 @@ mod test {
             "undoing the deletion must restore the node's entry in the operating point"
         );
     }
+
     /// Mirrors `test_delete_node_prunes_pump_scenarios_and_undo_restores_them` for the amplifier-
     /// candidate set: deleting a candidate node must drop it from `amplifier_nodes`, and undoing the
     /// deletion must restore its candidacy.
@@ -1132,6 +1132,7 @@ mod test {
             "undoing the deletion must restore the node's candidacy"
         );
     }
+
     /// mirrors `test_undo_group_conversion_restores_internal_and_boundary_connections` in
     /// `document.rs`: converts `{node_a, node_b}` into a group connected to `node_c`, deletes the group
     /// node, undoes the deletion, and asserts both the group and its external connection to `node_c` are
@@ -2079,7 +2080,7 @@ mod test {
             let root_id = document.scenery().node_attr().uuid();
 
             let src_ref = create_node_ref("source port").unwrap();
-            let src_uuid = src_ref.uuid().unwrap();
+            let src_uuid = src_ref.uuid();
             document
                 .scenery_mut()
                 .with_group_node_mut(root_id, |g| g.add_node_ref(src_ref))

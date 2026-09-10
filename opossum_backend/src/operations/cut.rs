@@ -229,7 +229,7 @@ fn build_relocated_node_infos(
     document: &OpmDocument,
     target_group_id: Uuid,
     relocated_pairs: Vec<(Uuid, Uuid)>,
-) -> Result<Vec<RelocatedNode>, BackEndErrorResponse> {
+) -> Vec<RelocatedNode> {
     let mut relocated_nodes = Vec::<RelocatedNode>::new();
     for (id, from_group_id) in relocated_pairs {
         if let Ok((node_ref, _)) = document.scenery().node_recursive(id) {
@@ -241,7 +241,7 @@ fn build_relocated_node_infos(
             });
         }
     }
-    Ok(relocated_nodes)
+    relocated_nodes
 }
 
 /// Cut the copy cache into a group as a UUID-preserving *move* that severs the cut nodes' links to
@@ -292,13 +292,13 @@ pub(super) async fn post_cut_nodes(
     // Drain the copy cache (a cut is one-shot). Compute the paste shift from the cached nodes' current
     // top-left corner before draining them out.
     let mut cache = data.node_copy_cache.lock();
-    let min_pos = upper_left_corner_of_nodes(&cache)?;
+    let min_pos = upper_left_corner_of_nodes(&cache);
     let shift = Point2::new(pos.0 - min_pos.x, pos.1 - min_pos.y);
     let mut optical_ids = Vec::<Uuid>::new();
     let mut analyzer_ids = Vec::<Uuid>::new();
     for item in cache.drain(..) {
         match item {
-            NodeCacheItem::Optical(optic_ref) => optical_ids.push(optic_ref.uuid()?),
+            NodeCacheItem::Optical(optic_ref) => optical_ids.push(optic_ref.uuid()),
             NodeCacheItem::Analyzer(dto) => analyzer_ids.push(dto.id),
         }
     }
@@ -330,7 +330,7 @@ pub(super) async fn post_cut_nodes(
     )?;
 
     // Now that positions are final, capture each relocated node's `NodeInfo` for the target tab.
-    let relocated_nodes = build_relocated_node_infos(&document, target_group_id, relocated_pairs)?;
+    let relocated_nodes = build_relocated_node_infos(&document, target_group_id, relocated_pairs);
 
     // One undo step for the whole gesture, ordered so each step's prerequisites already exist when it
     // runs (`Command::Batch` applies in order): first the relocate-back moves (every cut node returns to
@@ -546,17 +546,13 @@ mod test {
             .to_request();
         assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
 
+        // Directly query nodes by checking their UUIDs without intermediate Result conversions
         let node_a_in = |group: Uuid| {
             app_state
                 .document
                 .lock()
                 .scenery()
-                .with_group_node(group, |g| {
-                    g.nodes()
-                        .iter()
-                        .filter_map(|n| n.uuid().ok())
-                        .any(|id| id == node_a)
-                })
+                .with_group_node(group, |g| g.nodes().iter().any(|n| n.uuid() == node_a))
                 .unwrap()
         };
 

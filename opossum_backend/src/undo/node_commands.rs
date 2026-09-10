@@ -130,9 +130,7 @@ pub(super) fn apply_add_node(
 /// # Errors
 ///
 /// Returns an error if building a [`NodeInfo`] for `node` or any cascaded node fails.
-pub(super) fn describe_add_node(
-    cmd: &NodeSnapshot,
-) -> Result<Vec<DocumentChange>, BackEndErrorResponse> {
+pub(super) fn describe_add_node(cmd: &NodeSnapshot) -> Vec<DocumentChange> {
     let NodeSnapshot {
         parent_group_id,
         node,
@@ -141,12 +139,12 @@ pub(super) fn describe_add_node(
     } = cmd;
     let mut changes = vec![DocumentChange::NodeAdded {
         graph_id: *parent_group_id,
-        node: Box::new(node_info(node)?),
+        node: Box::new(node_info(node)),
     }];
     for member in cascaded {
         changes.push(DocumentChange::NodeAdded {
             graph_id: member.parent_group_id,
-            node: Box::new(node_info(&member.node)?),
+            node: Box::new(node_info(&member.node)),
         });
     }
     for conn in connections {
@@ -163,7 +161,7 @@ pub(super) fn describe_add_node(
             });
         }
     }
-    Ok(changes)
+    changes
 }
 
 /// Removes the node identified by `cmd.node`'s own uuid from the graph (cascading to reference nodes that
@@ -183,7 +181,7 @@ pub(super) fn apply_remove_node(
         cascaded,
         connections,
     } = cmd;
-    let uuid = node.uuid()?;
+    let uuid = node.uuid();
     document.scenery_mut().delete_node(uuid)?;
     Ok(Command::AddNode(NodeSnapshot {
         parent_group_id,
@@ -198,9 +196,7 @@ pub(super) fn apply_remove_node(
 /// # Errors
 ///
 /// Returns an error if `node`'s or any cascaded node's uuid can't be resolved.
-pub(super) fn describe_remove_node(
-    cmd: &NodeSnapshot,
-) -> Result<Vec<DocumentChange>, BackEndErrorResponse> {
+pub(super) fn describe_remove_node(cmd: &NodeSnapshot) -> Vec<DocumentChange> {
     let NodeSnapshot {
         parent_group_id,
         node,
@@ -209,12 +205,12 @@ pub(super) fn describe_remove_node(
     } = cmd;
     let mut changes = vec![DocumentChange::NodeRemoved {
         graph_id: *parent_group_id,
-        uuid: node.uuid()?,
+        uuid: node.uuid(),
     }];
     for member in cascaded {
         changes.push(DocumentChange::NodeRemoved {
             graph_id: member.parent_group_id,
-            uuid: member.node.uuid()?,
+            uuid: member.node.uuid(),
         });
     }
     for conn in connections {
@@ -231,7 +227,7 @@ pub(super) fn describe_remove_node(
             });
         }
     }
-    Ok(changes)
+    changes
 }
 
 /// Applies `cmd.new`'s populated fields to the node's standard properties, returning the
@@ -383,8 +379,8 @@ pub(super) fn describe_node_details_changed(graph_id: Uuid, uuid: Uuid) -> Vec<D
 
 /// Builds the [`NodeInfo`] DTO for a captured node, mirroring how every other handler in this crate
 /// turns an [`OpticRef`] into the response shape the GUI expects.
-fn node_info(node: &OpticRef) -> Result<NodeInfo, BackEndErrorResponse> {
-    Ok(NodeInfo::from_analyzable(&**node, None))
+fn node_info(node: &OpticRef) -> NodeInfo {
+    NodeInfo::from_analyzable(&**node, None)
 }
 
 /// Applies `new`'s populated fields to `node_attr`, mirroring `patch_node`'s existing field-by-field logic.

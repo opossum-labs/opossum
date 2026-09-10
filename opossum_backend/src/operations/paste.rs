@@ -272,11 +272,9 @@ fn build_paste_undo_batch(
             }
         }
         let mut cascaded = cascaded_references(document, paste_group_id, &top_level_ids);
-        let folded_ids: HashSet<Uuid> = cascaded
-            .values()
-            .flatten()
-            .filter_map(|c| c.node.uuid().ok())
-            .collect();
+        // Direct UUID access: each node's UUID is now directly available as Uuid
+        let folded_ids: HashSet<Uuid> =
+            cascaded.values().flatten().map(|c| c.node.uuid()).collect();
         for info in infos {
             if folded_ids.contains(&info.uuid()) {
                 continue;
@@ -390,7 +388,7 @@ pub(super) async fn post_paste_nodes(
     let paste_in_scenery = data.document.lock().scenery().node_attr().uuid() == paste_group_id;
 
     let copied_nodes = data.node_copy_cache.lock();
-    let min_pos = upper_left_corner_of_nodes(&copied_nodes)?;
+    let min_pos = upper_left_corner_of_nodes(&copied_nodes);
     drop(copied_nodes);
     let shift = Point2::new(node_pos.0 - min_pos.x, node_pos.1 - min_pos.y);
 
@@ -406,10 +404,8 @@ pub(super) async fn post_paste_nodes(
     }
 
     let mut document = data.document.lock();
-    let root_ids: Vec<Uuid> = copied_optical_nodes
-        .iter()
-        .filter_map(|r| r.uuid().ok())
-        .collect();
+    // Directly collect root UUIDs since node.uuid() now returns Uuid directly
+    let root_ids: Vec<Uuid> = copied_optical_nodes.iter().map(OpticRef::uuid).collect();
     validate_relocated_references(document.scenery(), &root_ids, paste_group_id)?;
 
     let PastedNodes {
@@ -618,7 +614,7 @@ fn collect_optical_nodes_to_copy_recursive(
         (HashMap::<Uuid, Vec<ConnectionInfo>>::new(), is_root_group),
     );
     for node in copied_optical_nodes {
-        let node_id = node.uuid()?;
+        let node_id = node.uuid();
 
         let group_nodes_opt = {
             // Attempt to downcast the node reference to a NodeGroup
@@ -717,13 +713,13 @@ fn collect_optical_node_to_copy(
 ) -> Result<OpticRef, BackEndErrorResponse> {
     let (mut new_node_ref, old_node_id) = copy_from_optic_ref(scenery, optic_ref)?;
 
-    let new_pos = get_shifted_pos_of_ref(optic_ref, shift)?;
+    let new_pos = get_shifted_pos_of_ref(optic_ref, shift);
 
     new_node_ref
         .node_attr_mut()
         .set_gui_position(Some(Point2::new(new_pos.0, new_pos.1)));
 
-    node_id_link.insert(old_node_id, new_node_ref.uuid()?);
+    node_id_link.insert(old_node_id, new_node_ref.uuid());
 
     let parent_group_id = parent_group_id_or_self(scenery, old_node_id)?;
 
@@ -787,13 +783,9 @@ fn copy_from_optic_ref(
     Ok((new_node_ref, old_node_id))
 }
 
-fn get_shifted_pos_of_ref(
-    optic_ref: &OpticRef,
-    shift: Point2<f64>,
-) -> Result<(f64, f64), BackEndErrorResponse> {
+fn get_shifted_pos_of_ref(optic_ref: &OpticRef, shift: Point2<f64>) -> (f64, f64) {
     let old_pos = optic_ref.gui_position().unwrap_or_else(Point2::origin);
-    let new_pos = (old_pos.x + shift.x, old_pos.y + shift.y);
-    Ok(new_pos)
+    (old_pos.x + shift.x, old_pos.y + shift.y)
 }
 
 #[cfg(test)]
@@ -878,7 +870,7 @@ mod test {
                 .with_group_node(root_id, |g| {
                     g.nodes()
                         .iter()
-                        .filter_map(|n| n.uuid().ok())
+                        .map(|n| n.uuid())
                         .find(|id| *id != group_id)
                 })
                 .unwrap()
@@ -989,7 +981,7 @@ mod test {
                 .with_group_node(root_id, |g| {
                     g.nodes()
                         .iter()
-                        .filter_map(|n| n.uuid().ok())
+                        .map(|n| n.uuid())
                         .filter(|id| *id != group_id)
                         .collect::<Vec<_>>()
                 })
@@ -1083,10 +1075,7 @@ mod test {
                 .lock()
                 .scenery()
                 .with_group_node(root_id, |g| {
-                    g.nodes()
-                        .iter()
-                        .filter_map(|n| n.uuid().ok())
-                        .find(|id| *id != node_a)
+                    g.nodes().iter().map(|n| n.uuid()).find(|id| *id != node_a)
                 })
                 .unwrap()
                 .expect("the reference node must exist"),
@@ -1113,7 +1102,7 @@ mod test {
                 .with_group_node(root_id, |g| {
                     g.nodes()
                         .iter()
-                        .filter_map(|n| n.uuid().ok())
+                        .map(|n| n.uuid())
                         .filter(|id| !nodes_to_copy.contains(id))
                         .collect::<Vec<_>>()
                 })
@@ -1266,10 +1255,7 @@ mod test {
             document
                 .scenery()
                 .with_group_node(root_id, |g| {
-                    g.nodes()
-                        .iter()
-                        .filter_map(|n| n.uuid().ok())
-                        .find(|id| *id != g1_id)
+                    g.nodes().iter().map(|n| n.uuid()).find(|id| *id != g1_id)
                 })
                 .unwrap()
                 .expect("a pasted duplicate of G1 must exist")

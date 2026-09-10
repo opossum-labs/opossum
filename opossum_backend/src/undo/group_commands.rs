@@ -198,7 +198,7 @@ pub(super) fn apply_insert_group(
     // Remove the flat members without cascading references: re-forming the group is a relocation, so an
     // external reference to a member must survive and follow it into the re-created group.
     remove_relocated_nodes(document.scenery_mut(), parent_group_id, &member_ids)?;
-    let group_id = group.uuid()?;
+    let group_id = group.uuid();
     document
         .scenery_mut()
         .with_group_node_mut(parent_group_id, |g| g.add_node_ref(group.clone()))??;
@@ -241,7 +241,7 @@ pub(super) fn apply_extract_group(
         rerouted_mappings,
         affected_groups,
     } = cmd;
-    let group_id = group.uuid()?;
+    let group_id = group.uuid();
     // Remove the group node without cascading references: dissolving it is a relocation of its members
     // back out to the parent, so an external reference to a member must survive. This still strips the
     // parent's own port-map entry pointing at the group (see `remove_node_no_cascade`), which the
