@@ -97,12 +97,12 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
         let generation = *debounce_gen.peek() + 1;
         debounce_gen.set(generation);
         spawn(async move {
-            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(feature = "desktop")]
             {
                 // Native platform (Desktop): use tokio
                 tokio::time::sleep(std::time::Duration::from_millis(120)).await;
             }
-            #[cfg(target_arch = "wasm32")]
+            #[cfg(not(feature = "desktop"))]
             {
                 // Web platform (WASM): use gloo_timers
                 gloo_timers::future::sleep(std::time::Duration::from_millis(120)).await;

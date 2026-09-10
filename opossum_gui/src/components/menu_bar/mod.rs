@@ -1,4 +1,4 @@
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(feature = "desktop")]
 pub mod controls;
 pub mod help;
 pub mod menu_bar_component;
