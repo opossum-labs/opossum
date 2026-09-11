@@ -13,6 +13,8 @@ For what the settings mean, see [Pump scenarios](../reference/pump_scenarios.md)
 **1. Mark the component as an amplifier.** Right-click the lens, wedge or cylindric lens on the
 canvas and choose **As amplifier**. The entry only appears on components that enclose a volume of
 material. **As passive optic** in the same menu takes the marking back.
+![Amplifier_1](../images/Amplifier_1.png)
+![Amplifier_2](../images/Amplifier_2.png)
 
 If the document has no pump scenario yet, one is created automatically — a marked component with
 nowhere to configure it would be a dead end.
@@ -23,6 +25,9 @@ already open collapses the sidebar again.)
 
 **3. Create the operating points you need.** Type a name into the **New scenario name** field and
 press **Add**. Repeat for a second scenario, for instance `full power` and `half power`.
+![Amplifier_3](../images/Amplifier_3.png)
+![Amplifier_4](../images/Amplifier_4.png)
+
 
 Clicking a scenario card makes it the *active* one. That choice only affects what the canvas shows;
 it does not decide what is analyzed.
@@ -31,18 +36,22 @@ it does not decide what is analyzed.
 in the document gets a row there, whether or not it amplifies in this particular scenario. Per row:
 
 - **Gain model** — choose `Const`.
+![Amplifier_5](../images/Amplifier_5.png)
 - The **gain factor** field appears next to it. Enter the energy gain of that component in this
   scenario, e.g. `5` in `full power` and `2.5` in `half power`.
-
+ ![Amplifier_6](../images/Amplifier_6.png) 
+  
 The factor is set per scenario, so editing one scenario never changes another. A component left at
 `None` stays passive in that scenario.
 
 **5. Tell the analysis which scenarios to run.** Select the analyzer node. In the node editor, tick
 the scenarios under **Pump scenarios**. One report is produced per ticked scenario. Ticking nothing
 runs the model once, passively.
+![Amplifier_7](../images/Amplifier_7.png)
 
 **6. Simulate.** Press the green **Simulate** button as usual. The reports are named after the
 scenario they belong to (`Energy Analysis - full power`), so they can be told apart directly.
+![Amplifier_8](../images/Amplifier_8.png)
 
 On the canvas, a marked component shows `amp: <model>` in its footer — the gain model it runs with
 *in the active scenario*. Switching the active scenario switches what is shown there.
