@@ -91,6 +91,7 @@ pub fn Node(
 
     // Construct the deterministic test ID for Playwright (e.g., "node-1", "node-2")
     let test_id = format!("node-{}", node.node_index());
+    info!("Node type: {:?}", node.node_type().symbol_id());
 
     rsx! {
         div {
