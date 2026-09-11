@@ -15,6 +15,7 @@
     - [OpticScenery](./concepts/background/opticscenery.md)
     - [OpticNode](./concepts/background/opticnode.md)
     - [OpticAnalyzer](./concepts/background/opticanalyzer.md)
+    - [Material Ctalogue](./concepts/material_catalogue.md)
     - [Existing software](./concepts/background/existing_software.md)
     - [Project plan](./concepts/background/plan.md)
     - [Funding & Acknowledgments](./concepts/background/funding.md)
