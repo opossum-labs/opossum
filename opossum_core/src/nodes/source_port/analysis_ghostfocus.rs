@@ -30,6 +30,9 @@ impl AnalysisGhostFocus for SourcePort {
                 .clone()
                 .build()?;
 
+            // Set ambient refractive index for initial ghost focus rays
+            rays.set_refractive_index(config.ambient_material().refractive_index_type())?;
+
             let iso = self.effective_surface_iso("output_1")?;
             rays = rays.transformed_by_iso(&iso);
 

@@ -56,9 +56,7 @@ impl NodeType {
                 Some(name.replace(' ', "_"))
             }
             // Analyzer nodes can return None or a dedicated shared symbol ID
-            Self::Analyzer(name) => {
-                Some(name.to_string().replace(' ', "_"))
-            }
+            Self::Analyzer(name) => Some(name.to_string().replace(' ', "_")),
         }
     }
 }
