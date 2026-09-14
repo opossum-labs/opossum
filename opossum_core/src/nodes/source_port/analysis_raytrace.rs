@@ -1,7 +1,7 @@
 use log::info;
 
 use crate::{
-    analyzers::raytrace::AnalysisRayTrace,
+    analyzers::{propagation_strategy::PropagationStrategy, raytrace::AnalysisRayTrace},
     core_optics::{NodeAttrExt, OpticNodeExt, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
     joule,
@@ -28,6 +28,9 @@ impl AnalysisRayTrace for SourcePort {
             })?
             .clone()
             .build()?;
+
+        // Apply the ambient refractive index to all newly created rays
+        rays.set_refractive_index(&config.ambient_refractive_index())?;
 
         if let Ok(iso) = self.effective_surface_iso("output_1") {
             rays = rays.transformed_by_iso(&iso);
@@ -59,13 +62,24 @@ impl AnalysisRayTrace for SourcePort {
         let ray_data_builder = config.get_source(&self.node_attr().uuid()).ok_or_else(|| {
             OpossumError::Analysis(format!("No source data found in analyzer for {self}"))
         })?;
-        let rays = ray_data_builder.build()?;
+        let mut rays = ray_data_builder.build()?;
+
+        // Ensure rays have the ambient refractive index set
+        rays.set_refractive_index(config.ambient_material().refractive_index_type())?;
+
         let mut axis_ray = ray_data_builder.alignment_wavelength().map_or_else(|| {
                      info!(
                          "No alignment wavelength defined, using energy-weighted central wavelength for alignment"
                      );
                      rays.get_optical_axis_ray()
                  }, |alignment_wvl| Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), alignment_wvl, joule!(1.0)))?;
+
+        // Explicitly assign the ambient refractive index for the axis ray at its specific wavelength
+        let ambient_n = config
+            .ambient_refractive_index()
+            .get_refractive_index(axis_ray.wavelength())?;
+        axis_ray.set_refractive_index(ambient_n)?;
+
         let iso = self.effective_surface_iso("output_1")?;
         axis_ray = axis_ray.transformed_ray(&iso);
         let rays = Rays::from(axis_ray);
@@ -178,6 +192,38 @@ mod test {
             "Rays were not clipped by the aperture! Check if the correct port string is used."
         );
 
+        Ok(())
+    }
+    #[test]
+    fn analyze_raytrace_ambient_medium() -> OpmResult<()> {
+        let mut node = SourcePort::default();
+
+        let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
+            Hexapolar::new(millimeter!(5.), 1)?.into(),
+            UniformDist::new(joule!(1.))?.into(),
+            LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+        ));
+        let ray_data_builder = RayDataBuilder::from(ray_data_source);
+
+        let mut config = RayTraceConfig::default();
+        let ambient_index = 1.45;
+        let ambient_mat = crate::material::Material::new_draft(
+            "ambient",
+            None,
+            None,
+            crate::refractive_index::RefrIndexConst::new(ambient_index)?.into(),
+        );
+        config.set_ambient_material(ambient_mat);
+        config.map_source(node.node_attr().uuid(), ray_data_builder);
+
+        let output = AnalysisRayTrace::analyze(&mut node, LightResult::default(), &config)?;
+        let LightData::Geometric(rays) = output.get("output_1").unwrap().clone() else {
+            panic!("Expected LightData::Geometric");
+        };
+
+        for ray in &rays {
+            approx::assert_relative_eq!(ray.refractive_index(), ambient_index, epsilon = 1e-12);
+        }
         Ok(())
     }
 }

@@ -1481,7 +1481,12 @@ impl Rays {
                 "could not determine wavelength for axis ray".into(),
             ));
         };
-        Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), wvl, joule!(1.0))
+        let mut ray = Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), wvl, joule!(1.0))?;
+        // Inherit the refractive index from the ray bundle if available
+        if let Some(first_valid) = self.ray_bundle.iter().find(|r| r.valid()) {
+            ray.set_refractive_index(first_valid.refractive_index())?;
+        }
+        Ok(ray)
     }
     /// Return a ray bundle transformed by a given [`Isometry`].
     #[must_use]

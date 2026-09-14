@@ -1081,4 +1081,49 @@ mod test {
         }
         Ok(())
     }
+    #[test]
+    fn analyze_lens_matching_ambient_medium() -> OpmResult<()> {
+        let n_match = 1.5;
+        let mat = Material::new_draft(
+            "matching_material",
+            None,
+            None,
+            RefrIndexConst::new(n_match)?.into(),
+        );
+
+        let mut node = Lens::new(
+            "test_lens",
+            millimeter!(100.0),
+            millimeter!(-100.0),
+            millimeter!(10.0),
+            mat.clone(),
+        )?;
+        node.set_isometry(Isometry::identity())?;
+
+        let mut config = RayTraceConfig::default();
+        config.set_ambient_material(mat);
+
+        // Create rays propagating in the ambient medium
+        let mut rays = Rays::new_uniform_collimated(
+            nanometer!(1000.0),
+            joule!(1.0),
+            &Hexapolar::new(millimeter!(10.0), 3)?,
+        )?;
+        rays.set_refractive_index(&config.ambient_material().refractive_index_type())?;
+
+        let mut incoming_data = LightResult::default();
+        incoming_data.insert("input_1".into(), LightData::Geometric(rays));
+
+        let output = AnalysisRayTrace::analyze(&mut node, incoming_data, &config)?;
+        if let Some(LightData::Geometric(output_rays)) = output.get("output_1") {
+            for ray in output_rays {
+                // Direction must remain undisturbed along the optical axis
+                approx::assert_relative_eq!(ray.direction(), Vector3::z(), epsilon = 1e-12);
+                approx::assert_relative_eq!(ray.refractive_index(), n_match, epsilon = 1e-12);
+            }
+        } else {
+            panic!("Expected LightData::Geometric at output_1");
+        }
+        Ok(())
+    }
 }
