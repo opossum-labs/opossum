@@ -201,13 +201,45 @@ mod test {
     #[test]
     fn save() -> OpmResult<()> {
         let mut document =
-            OpmDocument::from_file(&Path::new("./files_for_testing/opm/opticscenery.opm"))?;
+            OpmDocument::from_file(Path::new("./files_for_testing/opm/opticscenery.opm"))?;
         let reports = document.analyze()?;
+        let report = &reports[0];
+
+        let temp_dir = tempfile::tempdir()
+            .map_err(|e| OpossumError::Other(format!("Failed to create temp dir: {e}")))?;
+
+        let non_existent_path = temp_dir.path().join("missing_folder").join("nested");
         assert!(
-            reports[0]
-                .save(&Path::new("./files_for_testing/report/_not_valid/"), 0)
-                .is_err()
+            report.save(&non_existent_path, 0).is_err(),
+            "Saving to an invalid directory path must return an error"
         );
+
+        let valid_target = temp_dir.path();
+        report.save(valid_target, 0)?;
+
+        let ron_file = valid_target.join("report_0.ron");
+        let html_file = valid_target.join("report_0.html");
+        let data_dir = valid_target.join("data_0");
+
+        assert!(ron_file.is_file(), "Expected 'report_0.ron' to be created");
+        assert!(
+            html_file.is_file(),
+            "Expected 'report_0.html' to be created"
+        );
+        assert!(
+            data_dir.is_dir(),
+            "Expected 'data_0' directory to be created"
+        );
+
+        let ron_len = std::fs::metadata(&ron_file)
+            .map_err(|e| OpossumError::Other(format!("Failed to read metadata: {e}")))?
+            .len();
+        assert!(ron_len > 0, "Generated 'report_0.ron' file is empty");
+        let html_len = std::fs::metadata(&html_file)
+            .map_err(|e| OpossumError::Other(format!("Failed to read metadata: {e}")))?
+            .len();
+        assert!(html_len > 0, "Generated 'report_0.html' file is empty");
+
         Ok(())
     }
     #[test]
