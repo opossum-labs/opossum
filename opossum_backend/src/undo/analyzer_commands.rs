@@ -109,7 +109,11 @@ pub(super) fn apply_patch_analyzer_name(
 ) -> Result<Command, BackEndErrorResponse> {
     let PatchAnalyzerName { id, old, new } = cmd;
     let analyzer_info = analyzer_mut_or_404(document, id)?;
-    analyzer_info.set_name(&new);
+
+    // Use set_name_str to convert the string slice into Option<String>
+    // and normalize empty strings to None automatically
+    analyzer_info.set_name_str(&new);
+
     Ok(Command::PatchAnalyzerName(PatchAnalyzerName {
         id,
         old: new,

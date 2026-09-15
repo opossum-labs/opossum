@@ -119,7 +119,9 @@ pub fn AnalyzerNodeEditor(
             let available_sources = available_sources.clone();
             let pump_scenarios = pump_scenarios.clone();
             let selected_scenarios = analyzer_info.pump_scenarios().to_vec();
-            let analyzer_name = analyzer_info.name().to_string();
+
+            // Extract the user-defined name or fall back to an empty string if None
+            let analyzer_name = analyzer_info.name().unwrap_or_default().to_string();
 
             let on_name_save = use_callback(move |new_name: String| {
                 on_change.call(NodeChangeEvent {
@@ -151,7 +153,7 @@ pub fn AnalyzerNodeEditor(
                                 value: analyzer_name,
                                 container_class: "form-floating border-start".to_string(),
                                 input_class: "form-control bg-dark text-light form-control-sm noselect"
-                                                                    .to_string(),
+                                                                                                    .to_string(),
                                 label_class: "form-label text-secondary".to_string(),
                                 readonly: false,
                                 on_save: on_name_save,

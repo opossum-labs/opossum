@@ -49,14 +49,10 @@ impl NodeType {
     /// Resolves the SVG symbol ID directly from the node type variant.
     /// Replaces spaces with underscores to form a clean, URL-safe SVG identifier.
     #[must_use]
-    pub fn symbol_id(&self) -> Option<String> {
+    pub fn symbol_id(&self) -> String {
         match self {
-            Self::Optical(name) => {
-                // E.g. "parabolic mirror" -> "parabolic_mirror"
-                Some(name.replace(' ', "_"))
-            }
-            // Analyzer nodes can return None or a dedicated shared symbol ID
-            Self::Analyzer(name) => Some(name.to_string().replace(' ', "_")),
+            Self::Optical(name) => name.replace(' ', "_"),
+            Self::Analyzer(name) => name.to_string().replace(' ', "_"),
         }
     }
 }
@@ -308,8 +304,12 @@ impl From<&AnalyzerItemDto> for NodeElement {
             .gui_position()
             .map_or_else(Point2D::zero, |p| Point2D::new(p.x, p.y));
 
+        // Store only the custom name (or empty string if None) so that
+        // NodeElement::name() dynamically falls back to the analyzer type.
+        let custom_name = dto.info.name().unwrap_or_default().to_string();
+
         Self::new(
-            dto.info.display_name(),
+            custom_name,
             NodeType::Analyzer(Box::new(dto.info.analyzer_type().clone())),
             dto.id,
             position,

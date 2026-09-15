@@ -36,8 +36,8 @@ use ron::{extensions::Extensions, ser::PrettyConfig};
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct AnalyzerInfo {
     analyzer_type: AnalyzerType,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     gui_position: Option<(f64, f64)>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -55,11 +55,36 @@ impl AnalyzerInfo {
     pub fn new(analyzer_type: AnalyzerType, gui_position: Point2<f64>) -> Self {
         Self {
             analyzer_type,
-            name: String::new(),
+            name: None,
             gui_position: Some((gui_position.x, gui_position.y)),
             pump_scenarios: Vec::new(),
             default_wavelength: None,
         }
+    }
+    /// Returns the user-assigned name of this [`AnalyzerInfo`], if set.
+    #[must_use]
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    /// Sets the user-assigned name of this [`AnalyzerInfo`].
+    ///
+    /// Empty or whitespace-only strings are normalized to `None`.
+    pub fn set_name(&mut self, name: Option<String>) {
+        self.name = name.filter(|n| !n.trim().is_empty());
+    }
+
+    /// Convenience helper to set the name directly from a string slice.
+    pub fn set_name_str(&mut self, name: &str) {
+        self.set_name(Some(name.to_string()));
+    }
+
+    /// Returns the user-assigned name if set, otherwise falls back to the analyzer type label.
+    #[must_use]
+    pub fn display_name(&self) -> String {
+        self.name
+            .clone()
+            .unwrap_or_else(|| self.analyzer_type.to_string())
     }
     /// Returns the default wavelength of this analyzer, if configured.
     #[must_use]
@@ -109,31 +134,6 @@ impl AnalyzerInfo {
     pub fn set_gui_position(&mut self, gui_position: Option<Point2<f64>>) {
         self.gui_position = gui_position.map(|gp| (gp.x, gp.y));
     }
-    /// Returns the user-assigned name of this [`AnalyzerInfo`], or an empty string if none was set.
-    #[must_use]
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-    /// Sets the user-assigned name of this [`AnalyzerInfo`].
-    ///
-    /// # Arguments
-    ///
-    /// * `name` - the new name; an empty string clears the name.
-    pub fn set_name(&mut self, name: &str) {
-        self.name = name.to_string();
-    }
-    /// Returns the user-assigned name if set, otherwise falls back to the analyzer type label.
-    ///
-    /// Use this wherever a display label is needed rather than the raw stored name, so unnamed
-    /// analyzers continue to show their type (`"Energy"`, `"RayTrace"`, …) rather than an empty string.
-    #[must_use]
-    pub fn display_name(&self) -> String {
-        if self.name.is_empty() {
-            self.analyzer_type.to_string()
-        } else {
-            self.name.clone()
-        }
-    }
     /// Returns a reference to the analyzer type of this [`AnalyzerInfo`].
     #[must_use]
     pub const fn analyzer_type(&self) -> &AnalyzerType {
@@ -178,6 +178,16 @@ impl Default for OpmDocument {
         }
     }
 }
+
+/// Internal description of a single planned analysis run.
+#[derive(Debug, Clone)]
+struct AnalysisRun {
+    analyzer_nr: usize,
+    analyzer_type: AnalyzerType,
+    scenario_name: Option<String>,
+    analyzer_name: Option<String>,
+}
+
 impl OpmDocument {
     /// Creates a new [`OpmDocument`].
     #[must_use]
@@ -373,11 +383,12 @@ impl OpmDocument {
         )
     }
     /// Add an analyzer to this [`OpmDocument`].
+    /// Add an analyzer to this [`OpmDocument`].
     pub fn add_analyzer(&mut self, analyzer_type: AnalyzerType) -> Uuid {
         let id = Uuid::new_v4();
         let analyzer_info = AnalyzerInfo {
             analyzer_type,
-            name: String::new(),
+            name: None,
             gui_position: None,
             pump_scenarios: Vec::new(),
             default_wavelength: None,
@@ -385,6 +396,7 @@ impl OpmDocument {
         self.analyzers.insert(id, analyzer_info);
         id
     }
+
     /// Add an analyzer (with a GUI position) to this [`OpmDocument`].
     pub fn add_analyzer_with_position(
         &mut self,
@@ -394,7 +406,7 @@ impl OpmDocument {
         let id = Uuid::new_v4();
         let analyzer_info = AnalyzerInfo {
             analyzer_type,
-            name: String::new(),
+            name: None,
             gui_position,
             pump_scenarios: Vec::new(),
             default_wavelength: None,
@@ -604,7 +616,13 @@ impl OpmDocument {
         }
         let runs = self.analysis_runs()?;
         let mut reports = vec![];
-        for (analyzer_nr, analyzer_type, scenario_name) in runs {
+        for AnalysisRun {
+            analyzer_nr,
+            analyzer_type,
+            scenario_name,
+            analyzer_name,
+        } in runs
+        {
             let analyzer_box = inventory::iter::<AnalyzerRegistration>
                 .into_iter()
                 .find_map(|reg| (reg.builder)(&analyzer_type))
@@ -614,21 +632,33 @@ impl OpmDocument {
                     ))
                 })?;
             let analyzer: &dyn Analyzer = &*analyzer_box;
-            match &scenario_name {
-                Some(name) => info!("Analysis #{analyzer_nr}, pump scenario '{name}'"),
-                None => info!("Analysis #{analyzer_nr}"),
+
+            match (&analyzer_name, &scenario_name) {
+                (Some(name), Some(scenario)) => {
+                    info!("Analysis #{analyzer_nr} '{name}', pump scenario '{scenario}'");
+                }
+                (Some(name), None) => {
+                    info!("Analysis #{analyzer_nr} '{name}'");
+                }
+                (None, Some(scenario)) => {
+                    info!("Analysis #{analyzer_nr}, pump scenario '{scenario}'");
+                }
+                (None, None) => {
+                    info!("Analysis #{analyzer_nr}");
+                }
             }
+
             analyzer.analyze(&mut self.scenery)?;
             info!("Generating report #{analyzer_nr}");
             let mut report = analyzer.report(&self.scenery)?;
             if let Some(name) = &scenario_name {
-                // The operating point belongs on the report the same way the kind of analysis does:
-                // it is what distinguishes two otherwise identical reports of the same model.
                 report.set_analysis_type(&format!("{} - {name}", report.analysis_type()));
             }
+            if let Some(name) = analyzer_name {
+                report.set_analyzer_name(Some(name));
+            }
             reports.push(report);
-            // Every run starts from the same state, so this has to happen between two scenarios of
-            // one analyzer just as much as between two analyzers.
+
             self.scenery.clear_edges();
             self.scenery.reset_data();
         }
@@ -651,11 +681,18 @@ impl OpmDocument {
     ///
     /// This function returns an error if an analyzer refers to a [`PumpScenario`] that does not
     /// exist in this document.
-    fn analysis_runs(&self) -> OpmResult<Vec<(usize, AnalyzerType, Option<String>)>> {
+    fn analysis_runs(&self) -> OpmResult<Vec<AnalysisRun>> {
         let mut runs = Vec::new();
         for (analyzer_nr, (_, analyzer_info)) in self.analyzers.iter().enumerate() {
+            let analyzer_name = analyzer_info.name().map(ToString::to_string);
+
             if analyzer_info.pump_scenarios.is_empty() {
-                runs.push((analyzer_nr, analyzer_info.analyzer_type.clone(), None));
+                runs.push(AnalysisRun {
+                    analyzer_nr,
+                    analyzer_type: analyzer_info.analyzer_type.clone(),
+                    scenario_name: None,
+                    analyzer_name,
+                });
                 continue;
             }
             for scenario_id in &analyzer_info.pump_scenarios {
@@ -665,19 +702,19 @@ impl OpmDocument {
                          which does not exist"
                     ))
                 })?;
-                // The operating point rides along in the analyzer's own configuration, which is
-                // what reaches the components during the run.
                 let mut analyzer_type = analyzer_info.analyzer_type.clone();
                 analyzer_type.set_active_pump_scenario(Some(scenario.clone()));
-                runs.push((
+                runs.push(AnalysisRun {
                     analyzer_nr,
                     analyzer_type,
-                    Some(scenario.name().to_string()),
-                ));
+                    scenario_name: Some(scenario.name().to_string()),
+                    analyzer_name: analyzer_name.clone(),
+                });
             }
         }
         Ok(runs)
     }
+
     /// Returns a mutable reference to the analyzers of this [`OpmDocument`].
     pub const fn analyzers_mut(&mut self) -> &mut IndexMap<Uuid, AnalyzerInfo> {
         &mut self.analyzers
@@ -1984,6 +2021,47 @@ mod test {
         // Verify that no warning was emitted for skipping the node
         check_logs(log::Level::Warn, vec![]);
 
+        Ok(())
+    }
+    #[test]
+    fn analyzer_info_name_handling() {
+        let mut info = AnalyzerInfo::new(
+            AnalyzerType::Energy(EnergyConfig::default()),
+            Point2::new(0.0, 0.0),
+        );
+        assert_eq!(info.name(), None);
+        assert_eq!(info.display_name(), "Energy");
+
+        // Set using Option<String>
+        info.set_name(Some("Main Measurement".to_string()));
+        assert_eq!(info.name(), Some("Main Measurement"));
+        assert_eq!(info.display_name(), "Main Measurement");
+
+        // Set using convenience method
+        info.set_name_str("Second Run");
+        assert_eq!(info.name(), Some("Second Run"));
+
+        // Whitespace-only should normalize to None
+        info.set_name_str("   ");
+        assert_eq!(info.name(), None);
+        assert_eq!(info.display_name(), "Energy");
+
+        // Explicit None clears
+        info.set_name(None);
+        assert_eq!(info.name(), None);
+    }
+
+    #[test]
+    fn analyzer_name_propagates_to_analysis_report() -> OpmResult<()> {
+        let (mut document, analyzer_id) = document_with_one_analyzer()?;
+        document
+            .analyzer_mut(analyzer_id)
+            .expect("the analyzer just added must be there")
+            .set_name_str("Diagnostic Trace");
+
+        let reports = document.analyze()?;
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].analyzer_name(), Some("Diagnostic Trace"));
         Ok(())
     }
 }
