@@ -1,6 +1,6 @@
 # Summary
 
-- [Start](./concepts/compass.md)
+- [Start](./compass.md)
 - [Concepts](./concepts/concepts.md)
   - [Introduction](./concepts/intro.md)
   - [Modeling optical systems](./concepts/optical_graph.md)
