@@ -44,6 +44,7 @@ pub struct HtmlReport {
     analysis_timestamp: String,
     analysis_type: String,
     description: String,
+    pub analyzer_name: Option<String>,
     node_reports: Vec<HtmlNodeReport>,
     notes: Vec<HtmlReportNote>,
 }
@@ -54,6 +55,7 @@ impl HtmlReport {
         analysis_timestamp: String,
         analysis_type: String,
         description: String,
+        analyzer_name: Option<String>,
         node_reports: Vec<HtmlNodeReport>,
         notes: Vec<HtmlReportNote>,
     ) -> Self {
@@ -62,6 +64,7 @@ impl HtmlReport {
             analysis_timestamp,
             analysis_type,
             description,
+            analyzer_name,
             node_reports,
             notes,
         }
@@ -71,6 +74,7 @@ impl HtmlReport {
     /// # Errors
     ///
     /// This function returns an error if the provided [`AnalysisReport`] has an empty scenery.
+    /// Creates a new [`HtmlReport`] from an [`AnalysisReport`].
     pub fn from_analysis_report(report: &AnalysisReport, report_number: usize) -> OpmResult<Self> {
         let Some(scenery) = &report.scenery() else {
             return Err(OpossumError::Other("no scenery found".into()));
@@ -89,6 +93,7 @@ impl HtmlReport {
                 .to_string(),
             report.analysis_type().to_string(),
             scenery.node_attr().name().to_string(),
+            report.analyzer_name().map(ToString::to_string),
             html_node_reports,
             report
                 .notes()

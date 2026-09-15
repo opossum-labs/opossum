@@ -18,6 +18,8 @@ pub struct AnalysisReport {
     opossum_version: String,
     analysis_timestamp: DateTime<Local>,
     analysis_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    analyzer_name: Option<String>,
     scenery: Option<NodeGroup>,
     node_reports: Vec<NodeReport>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
@@ -29,6 +31,7 @@ impl Default for AnalysisReport {
             opossum_version: get_version(),
             analysis_timestamp: Local::now(),
             analysis_type: String::default(),
+            analyzer_name: None,
             scenery: None,
             node_reports: Vec::default(),
             notes: Vec::default(),
@@ -43,10 +46,24 @@ impl AnalysisReport {
             opossum_version,
             analysis_timestamp,
             analysis_type: String::default(),
+            analyzer_name: None,
             scenery: None,
             node_reports: Vec::default(),
             notes: Vec::default(),
         }
+    }
+
+    /// Returns the user-assigned analyzer name of this [`AnalysisReport`], if set.
+    #[must_use]
+    pub fn analyzer_name(&self) -> Option<&str> {
+        self.analyzer_name.as_deref()
+    }
+
+    /// Sets the analyzer name of this [`AnalysisReport`].
+    ///
+    /// Empty strings are automatically normalized to `None`.
+    pub fn set_analyzer_name(&mut self, analyzer_name: Option<String>) {
+        self.analyzer_name = analyzer_name.filter(|name| !name.trim().is_empty());
     }
     /// Add an [`NodeGroup`] to this [`AnalysisReport`].
     ///
@@ -184,13 +201,60 @@ mod test {
     #[test]
     fn save() -> OpmResult<()> {
         let mut document =
-            OpmDocument::from_file(&Path::new("./files_for_testing/opm/opticscenery.opm"))?;
+            OpmDocument::from_file(Path::new("./files_for_testing/opm/opticscenery.opm"))?;
         let reports = document.analyze()?;
+        let report = &reports[0];
+
+        let temp_dir = tempfile::tempdir()
+            .map_err(|e| OpossumError::Other(format!("Failed to create temp dir: {e}")))?;
+
+        let non_existent_path = temp_dir.path().join("missing_folder").join("nested");
         assert!(
-            reports[0]
-                .save(&Path::new("./files_for_testing/report/_not_valid/"), 0)
-                .is_err()
+            report.save(&non_existent_path, 0).is_err(),
+            "Saving to an invalid directory path must return an error"
         );
+
+        let valid_target = temp_dir.path();
+        report.save(valid_target, 0)?;
+
+        let ron_file = valid_target.join("report_0.ron");
+        let html_file = valid_target.join("report_0.html");
+        let data_dir = valid_target.join("data_0");
+
+        assert!(ron_file.is_file(), "Expected 'report_0.ron' to be created");
+        assert!(
+            html_file.is_file(),
+            "Expected 'report_0.html' to be created"
+        );
+        assert!(
+            data_dir.is_dir(),
+            "Expected 'data_0' directory to be created"
+        );
+
+        let ron_len = std::fs::metadata(&ron_file)
+            .map_err(|e| OpossumError::Other(format!("Failed to read metadata: {e}")))?
+            .len();
+        assert!(ron_len > 0, "Generated 'report_0.ron' file is empty");
+        let html_len = std::fs::metadata(&html_file)
+            .map_err(|e| OpossumError::Other(format!("Failed to read metadata: {e}")))?
+            .len();
+        assert!(html_len > 0, "Generated 'report_0.html' file is empty");
+
         Ok(())
+    }
+    #[test]
+    fn analyzer_name() {
+        let mut report = AnalysisReport::default();
+        assert_eq!(report.analyzer_name(), None);
+
+        report.set_analyzer_name(Some("Main Raytracer".to_string()));
+        assert_eq!(report.analyzer_name(), Some("Main Raytracer"));
+
+        // Empty strings should be normalized to None
+        report.set_analyzer_name(Some("   ".to_string()));
+        assert_eq!(report.analyzer_name(), None);
+
+        report.set_analyzer_name(None);
+        assert_eq!(report.analyzer_name(), None);
     }
 }

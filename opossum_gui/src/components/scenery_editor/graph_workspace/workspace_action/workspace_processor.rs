@@ -1011,11 +1011,10 @@ async fn apply_document_changes(
                     analyzer.id,
                     *root_graph_id.read(),
                 );
-                // Restore the user-assigned name when undoing a delete: add_analyzer_node uses the
-                // type label by default, so a second pass is needed when the analyzer had a name.
-                if !analyzer.info.name().is_empty() {
+                // Restore the custom name when undoing a deletion if one was set
+                if let Some(name) = analyzer.info.name() {
                     ws_handler.nodes.set_node_name(
-                        analyzer.info.display_name(),
+                        name.to_string(),
                         analyzer.id,
                         *root_graph_id.read(),
                         false,
