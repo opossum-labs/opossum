@@ -2155,37 +2155,75 @@ async fn process_load_from_file(
         }
     };
 
-    match api::put_document(opm_string).await {
-        Ok(response) => {
-            process_add_root_scenery_tab(workspace, ws_handler, response.name).await;
-            set_file_path_handler.call(Some(path));
-
-            // Populate the real candidate set from the just-loaded document *before* any node is
-            // constructed below - freshly constructed nodes seed their canvas flag from this cache
-            // synchronously, so it must already hold the loaded document's data by then.
-            eval_action_run(
-                api::get_amplifier_candidates().await,
-                Some(|candidates: Vec<Uuid>| {
-                    *crate::AMPLIFIER_CANDIDATES.write() = candidates.into_iter().collect();
-                }),
-            );
-
-            let scenery_id = *scenery_id_sig.read();
-
-            process_fill_graph_of_group(
-                scenery_id_sig.into(),
-                scenery_id,
-                ws_handler,
-                response.needs_autolayout,
-                true,
-                workspace, // <-- Workspace durchreichen
-            )
-            .await;
-        }
+    // Determine document metadata depending on whether the import succeeded completely
+    // or loaded partially with non-critical node errors.
+    let (doc_name, needs_autolayout) = match api::put_document(opm_string).await {
+        Ok(response) => (response.name, response.needs_autolayout),
         Err(err_str) => {
+            // Log the parsing/validation error encountered during file load
             OPOSSUM_UI_LOGS.write().add_log(&err_str);
+
+            // Even on error, the parser is fault-tolerant and may have loaded a partial model.
+            // Check if the backend has an initialized root scenery available.
+            match api::get_document_root_uuid().await {
+                Ok(root_id) if !root_id.is_nil() => {
+                    // Try to resolve the existing scenery name from the backend hierarchy,
+                    // otherwise fall back to the filename stem.
+                    let fallback_name = path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("Root Scenery")
+                        .to_string();
+
+                    let resolved_name =
+                        if let Ok(hierarchy) = api::get_group_hierarchy(root_id).await {
+                            hierarchy
+                                .last()
+                                .map(|(_, n)| n.clone())
+                                .filter(|n| !n.is_empty())
+                                .unwrap_or(fallback_name)
+                        } else {
+                            fallback_name
+                        };
+
+                    (resolved_name, false)
+                }
+                _ => {
+                    // Total load failure: no valid document root exists on the backend
+                    return;
+                }
+            }
         }
+    };
+
+    // Initialize root scenery tab and update the document path
+    process_add_root_scenery_tab(workspace, ws_handler, doc_name).await;
+    set_file_path_handler.call(Some(path));
+
+    // Populate the real candidate set from the just-loaded document *before* any node is
+    // constructed below - freshly constructed nodes seed their canvas flag from this cache
+    // synchronously, so it must already hold the loaded document's data by then.
+    eval_action_run(
+        api::get_amplifier_candidates().await,
+        Some(|candidates: Vec<Uuid>| {
+            *crate::AMPLIFIER_CANDIDATES.write() = candidates.into_iter().collect();
+        }),
+    );
+
+    let scenery_id = *scenery_id_sig.read();
+    if scenery_id.is_nil() {
+        return;
     }
+
+    process_fill_graph_of_group(
+        scenery_id_sig.into(),
+        scenery_id,
+        ws_handler,
+        needs_autolayout,
+        true,
+        workspace,
+    )
+    .await;
 }
 
 async fn process_delete_root_scenery(
