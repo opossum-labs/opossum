@@ -4,7 +4,8 @@ pub mod fluence_data;
 
 use crate::{
     analyzers::{
-        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+        AnalyzerKind, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
+        raytrace::AnalysisRayTrace,
     },
     core_optics::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt,
@@ -14,7 +15,7 @@ use crate::{
     light::LightData,
     nodes::NodeRegistration,
     properties::{Properties, Proptype},
-    reporting::node_report::NodeReport,
+    reporting::node_report::{NodeReport, NodeReportResult},
 };
 use log::warn;
 use opm_macros_lib::OpmNode;
@@ -90,12 +91,19 @@ impl OpticNode for FluenceDetector {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
     }
-    fn node_report(&self, uuid: &str) -> OpmResult<Option<NodeReport>> {
+    fn node_report(&self, uuid: &str, analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
+        if analyzer == AnalyzerKind::Energy {
+            return Ok(NodeReportResult::incompatible_warning(format!(
+                "Node '{}' ({}): A fluence map can only be calculated during a ray tracing or ghostfocus analysis.",
+                self.name(),
+                self.node_type()
+            )));
+        }
         let mut props = Properties::default();
         let hit_maps = self.hit_maps();
         let Some(hit_map) = hit_maps.get("input_1") else {
             warn!("could not get surface hitmap using default");
-            return Ok(None);
+            return Ok(NodeReportResult::None);
         };
 
         let mut consolidated_hit_map = hit_map.clone();
@@ -104,7 +112,7 @@ impl OpticNode for FluenceDetector {
         let Ok(Proptype::FluenceEstimator(estimator)) =
             self.node_attr.get_property("fluence estimator")
         else {
-            return Ok(None);
+            return Ok(NodeReportResult::None);
         };
 
         let fl_data = consolidated_hit_map.calc_fluence_map((95, 83), estimator);
@@ -146,7 +154,7 @@ impl OpticNode for FluenceDetector {
                 )
                 ?;
         }
-        Ok(Some(NodeReport::new(
+        Ok(NodeReportResult::Report(NodeReport::new(
             self.node_type(),
             self.name(),
             uuid,

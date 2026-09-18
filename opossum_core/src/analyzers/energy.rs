@@ -116,7 +116,7 @@ impl Analyzer for EnergyAnalyzer {
         Ok(())
     }
     fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport> {
-        let mut report = scenery.toplevel_report()?;
+        let mut report = scenery.toplevel_report(super::AnalyzerKind::Energy)?;
         report.set_analysis_type("Energy Analysis");
         Ok(report)
     }

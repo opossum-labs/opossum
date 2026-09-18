@@ -1,4 +1,5 @@
 use opossum_core::{
+    analyzers::AnalyzerKind,
     nodes::{Dummy, NodeGroup},
     reporting::report_note::ReportLevel,
 };
@@ -24,7 +25,9 @@ fn test_unconnected_node_reporting() {
     // Dummy nodes are not sources.
 
     // Let's add a Source node to make it more realistic, but maybe sticking to Dummies is enough to trigger "unconnected".
-    let report = scenery.toplevel_report().expect("Analysis failed");
+    let report = scenery
+        .toplevel_report(AnalyzerKind::Energy)
+        .expect("Analysis failed");
 
     // 4. Verify Notes
     let notes = report.notes();

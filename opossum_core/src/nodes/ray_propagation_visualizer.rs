@@ -14,6 +14,7 @@ use uom::si::{
 
 use crate::{
     analyzers::{
+        AnalyzerKind,
         energy::{AnalysisEnergy, EnergyConfig},
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
@@ -25,7 +26,7 @@ use crate::{
     nodes::NodeRegistration,
     properties::{Properties, Proptype, validator::Validator},
     reporting::{
-        node_report::NodeReport,
+        node_report::{NodeReport, NodeReportResult},
         plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
         report_note::{ReportLevel, ReportNote},
     },
@@ -110,7 +111,15 @@ impl OpticNode for RayPropagationVisualizer {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
     }
-    fn node_report(&self, uuid: &str) -> OpmResult<Option<NodeReport>> {
+    fn node_report(&self, uuid: &str, analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
+        if analyzer == AnalyzerKind::Energy {
+            return Ok(NodeReportResult::incompatible_warning(format!(
+                "Node '{}' ({}): A propagation plot can only be calculated during a ray tracing or ghostfocus analysis.",
+                self.name(),
+                self.node_type()
+            )));
+        }
+
         let mut props = Properties::default();
         let mut report =
             NodeReport::new(self.node_type(), self.name(), uuid, Properties::default());
@@ -131,7 +140,6 @@ impl OpticNode for RayPropagationVisualizer {
                 Proptype::RayPositionHistory(ray_position_histories),
             )?;
 
-            // Re-create report with properties if any were added
             report = NodeReport::new(self.node_type(), self.name(), uuid, props);
 
             if self.apodization_warning {
@@ -140,16 +148,9 @@ impl OpticNode for RayPropagationVisualizer {
                     "Rays have been apodized at input aperture. Results might not be accurate.",
                 ));
             }
-        } else if let Some(LightData::Energy(_)) = data {
-            // In the else-if case, props is empty, so we can just use the empty report created earlier?
-            // Actually, the original code created a "Warning" property in props.
-            // We want to add a note instead.
-            report.add_note(ReportNote::new(
-                ReportLevel::Warning,
-                 "A propagation plot can only be calculated during a ray tracing or ghostfocus analysis.",
-             ));
         }
-        Ok(Some(report))
+
+        Ok(NodeReportResult::Report(report))
     }
     fn set_light_data(&mut self, new_data: Option<LightData>) {
         self.light_data = new_data;
@@ -488,7 +489,8 @@ mod test {
     #[test]
     fn report() -> OpmResult<()> {
         let mut fd = RayPropagationVisualizer::default();
-        let Some(node_report) = fd.node_report("")? else {
+        let NodeReportResult::Report(node_report) = fd.node_report("", AnalyzerKind::RayTrace)?
+        else {
             panic!("Report should not be `None`");
         };
         assert_eq!(node_report.node_type(), "ray propagation");
@@ -497,7 +499,8 @@ mod test {
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 0);
         fd.light_data = Some(LightData::Geometric(Rays::default()));
-        let Some(node_report) = fd.node_report("")? else {
+        let NodeReportResult::Report(node_report) = fd.node_report("", AnalyzerKind::RayTrace)?
+        else {
             panic!("Report should not be `None`");
         };
         assert!(!node_report.properties().contains("Ray plot"));
@@ -506,7 +509,8 @@ mod test {
             joule!(1.0),
             &Hexapolar::new(millimeter!(1.), 1)?,
         )?));
-        let Some(node_report) = fd.node_report("")? else {
+        let NodeReportResult::Report(node_report) = fd.node_report("", AnalyzerKind::RayTrace)?
+        else {
             panic!("Report should not be `None`");
         };
         assert!(node_report.properties().contains("Ray plot"));
@@ -517,7 +521,8 @@ mod test {
 
         // Test Apodization Warning
         fd.set_apodization_warning(true);
-        let Some(node_report) = fd.node_report("")? else {
+        let NodeReportResult::Report(node_report) = fd.node_report("", AnalyzerKind::RayTrace)?
+        else {
             panic!("Report should not be `None`");
         };
         assert_eq!(node_report.notes().len(), 1);
@@ -530,16 +535,13 @@ mod test {
         // Test Energy Data Warning
         fd.set_apodization_warning(false);
         fd.light_data = Some(LightData::Energy(crate::light::Spectrum::default()));
-        let Some(node_report) = fd.node_report("")? else {
+        let NodeReportResult::Incompatible(report_note) =
+            fd.node_report("", AnalyzerKind::Energy)?
+        else {
             panic!("Report should not be `None`");
         };
-        assert_eq!(node_report.notes().len(), 1);
-        assert_eq!(
-            node_report.notes()[0].level,
-            crate::reporting::report_note::ReportLevel::Warning
-        );
         assert!(
-            node_report.notes()[0]
+            report_note
                 .message
                 .contains("propagation plot can only be calculated")
         );

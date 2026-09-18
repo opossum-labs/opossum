@@ -4,6 +4,7 @@ pub mod wavefront_data;
 
 use crate::{
     analyzers::{
+        AnalyzerKind,
         energy::{AnalysisEnergy, EnergyConfig},
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
@@ -14,7 +15,7 @@ use crate::{
     light::{LightData, LightResult},
     nodes::NodeRegistration,
     properties::{Properties, Proptype},
-    reporting::node_report::NodeReport,
+    reporting::node_report::{NodeReport, NodeReportResult},
     utils::geom_transformation::Isometry,
 };
 use log::warn;
@@ -124,7 +125,14 @@ impl OpticNode for WaveFront {
         )?;
         Ok(())
     }
-    fn node_report(&self, uuid: &str) -> OpmResult<Option<NodeReport>> {
+    fn node_report(&self, uuid: &str, analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
+        if analyzer == AnalyzerKind::Energy {
+            return Ok(NodeReportResult::incompatible_warning(format!(
+                "Node '{}' ({}): A wavefront plot can only be calculated during a ray tracing or ghostfocus analysis.",
+                self.name(),
+                self.node_type()
+            )));
+        }
         let mut props = Properties::default();
         let data = &self.light_data;
         if let Some(LightData::Geometric(rays)) = data {
@@ -194,16 +202,13 @@ impl OpticNode for WaveFront {
                 )
                 ?;
             }
-
-            Ok(Some(NodeReport::new(
-                self.node_type(),
-                self.name(),
-                uuid,
-                props,
-            )))
-        } else {
-            Ok(None)
         }
+        Ok(NodeReportResult::Report(NodeReport::new(
+            self.node_type(),
+            self.name(),
+            uuid,
+            props,
+        )))
     }
     fn set_light_data(&mut self, ld: Option<LightData>) {
         self.light_data = ld;
@@ -335,15 +340,19 @@ mod test {
     #[test]
     fn report() -> OpmResult<()> {
         let mut wf = WaveFront::default();
-        assert!(wf.node_report("")?.is_none());
-        wf.light_data = Some(LightData::Geometric(Rays::default()));
-        assert!(wf.node_report("")?.is_some());
+        assert!(matches!(
+            wf.node_report("", AnalyzerKind::Energy)?,
+            NodeReportResult::Incompatible(_)
+        ));
         wf.light_data = Some(LightData::Geometric(Rays::new_uniform_collimated(
             nanometer!(1053.0),
             joule!(1.0),
             &Hexapolar::new(millimeter!(1.), 1)?,
         )?));
-        let node_report = wf.node_report("")?.unwrap();
+        let NodeReportResult::Report(node_report) = wf.node_report("", AnalyzerKind::RayTrace)?
+        else {
+            panic!("Wrong report variant");
+        };
         assert_eq!(node_report.node_type(), "wavefront monitor");
         assert_eq!(node_report.name(), "wavefront monitor");
         let props = node_report.properties();

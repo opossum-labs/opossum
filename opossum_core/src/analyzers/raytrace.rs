@@ -253,7 +253,7 @@ impl Analyzer for RayTracingAnalyzer {
         Ok(())
     }
     fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport> {
-        let mut report = scenery.toplevel_report()?;
+        let mut report = scenery.toplevel_report(super::AnalyzerKind::RayTrace)?;
         report.set_analysis_type("Ray Tracing Analysis");
         Ok(report)
     }
@@ -303,6 +303,7 @@ mod test {
     use crate::{
         joule, millimeter,
         nodes::{Dummy, ParaxialSurface, SourcePort, round_collimated_ray_builder},
+        reporting::node_report::NodeReportResult,
         utils::test_helper::test_helper::check_logs,
     };
     #[test]
@@ -424,9 +425,13 @@ mod test {
         let analyzer = RayTracingAnalyzer::new(config);
         assert!(analyzer.analyze(&mut group).is_ok());
         let node_ref = group.graph().node(i_det)?;
-        let report = node_ref
-            .node_report("test_uuid")?
-            .ok_or_else(|| OpossumError::Other("got empty report".into()))?;
+        let NodeReportResult::Report(report) =
+            node_ref.node_report("test_uuid", crate::analyzers::AnalyzerKind::RayTrace)?
+        else {
+            return Err(OpossumError::Analysis(
+                "Should be NodeReportResult::Report".to_string(),
+            ));
+        };
         let prop = report.properties().get("Ray plot")?;
         if let Proptype::RayPositionHistory(hist) = prop {
             assert!(
