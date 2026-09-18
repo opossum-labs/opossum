@@ -1,24 +1,45 @@
-//! Example: Kepler Telescope with Chromatic Effects
+//! Kepler Telescope with Chromatic Effects Example
 //!
-//! This example demonstrates how to build a Kepler telescope using spherical lenses
-//! and simulate chromatic effects using multiple wavelengths.
+//! This example builds a Kepler telescope using spherical lenses and runs
+//! a ray-tracing analysis with multiple wavelengths to observe chromatic
+//! effects.
 //!
-//! Key concepts demonstrated:
-//! - Wavelength-dependent refractive index (Schott model)
-//! - Multi-wavelength ray generation (chromatism)
-//! - Grid-based ray distribution
-//! - Optical system assembly and propagation
-//! - Ray tracing analysis and export
+//! System Overview
+//! 1. One collimated line ray source
+//! 2. A wavelength-dependent refractive index material (Schott model)
+//! 3. Two spherical lenses ("75 mm lens" and "50 mm lens") using that
+//!    material
+//! 4. A circular aperture on the first lens's input
+//! 5. A ray propagation visualizer after the second lens
+//! 6. A ray-tracing analyzer configured for two wavelengths
 //!
-//! Overall structure of the system:
-//! 1. Create a scene (NodeGroup)
-//! 2. Add a light source
-//! 3. Define refractive index material model
-//! 4. Create optical elements (lenses and aperture)
-//! 5. Add elements into the scene
-//! 6. Connect elements using distances
-//! 7. Configure multi-wavelength ray tracing
-//! 8. Run analysis and save output
+//! The beam is defined by:
+//! - a grid-based spatial ray distribution
+//! - a uniform energy distribution of 1 joule per ray
+//! - two wavelengths: 1000 nm and 350 nm
+//!
+//! This example demonstrates:
+//! - Defining a wavelength-dependent refractive index material and using it
+//!   to build spherical lenses
+//! - Building an optical system from spherical lenses and an aperture
+//! - Connecting components with fixed propagation distances
+//! - Generating rays at multiple wavelengths to observe chromatic effects
+//! - Configuring a ray-tracing analyzer and saving the system as an
+//!   `.opm` document
+//!
+//! Imports:
+//! - `opossum_core::prelude::*` — optical components, analyzers, unit
+//!   macros, and document types
+//! - `opossum_core::core_optics::{NodeAttrExt, OpticNodeExt}` — extension
+//!   traits for setting node names and properties
+//! - `opossum_core::distributions::{energy::UniformDist, position::Grid,
+//!   spectral::LaserLines}` — beam energy, spatial, and spectral
+//!   distributions
+//! - `nalgebra::Point2` — used to define grid coordinates
+//! - `num_traits::Zero` — used to construct a zero-length value
+//! - `uom::si::f64::Length` — length type used in the grid distribution
+//! - `std::{env, path::Path}` — used to find the output directory and save
+//!   the `.opm` file
 use nalgebra::Point2;
 use num_traits::Zero;
 use opossum_core::core_optics::{NodeAttrExt, OpticNodeExt};
@@ -52,8 +73,7 @@ fn main() -> OpmResult<()> {
         7.52649555E-005,
         nanometer!(300.0)..nanometer!(2000.0),
     )?;
-    // Create the first spherical lens with modified curvature.
-    // This helps emphasize chromatic effects.
+    // Create the first spherical lens with a curvature of 130.0 mm / -130.0 mm.
     let mut lens1 = Lens::new(
         "75 mm lens",
         millimeter!(130.0),

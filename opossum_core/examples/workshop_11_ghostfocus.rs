@@ -10,17 +10,7 @@
 //! 4. A GhostFocus analyzer configured for multiple reflection events
 //! 5. Serialization of the complete optical system for later visualization
 //!    and analysis
-//!
-//! Principles and Objectives
-//! Ghost reflections are unintended optical paths produced by partial
-//! reflections at optical surfaces such as lenses or windows. These
-//! secondary beams can propagate through the optical system, creating
-//! stray light, image artifacts, or localized intensity hotspots.
-//!
-//! This example demonstrates how to build an optical system suitable for
-//! GhostFocus analysis by assigning optical properties to each
-//! component and defining a physical laser source.
-//!
+//! 
 //! The simulated beam is defined by:
 //! - a hexagonally sampled collimated beam,
 //! - a two-dimensional Gaussian energy distribution

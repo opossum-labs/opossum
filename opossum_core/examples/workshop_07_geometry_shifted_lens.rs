@@ -1,30 +1,46 @@
 //! Geometry Shifted Lens Example
 //!
 //! This example demonstrates a two-lens optical system using `opossum_core`,
-//! where the first lens is decentered (shifted along the y-axis).
-//! Rays from a collimated source propagate through the shifted lens system
-//! and are analyzed using ray visualization and wavefront detection.
+//! where the first lens is decentered along the y-axis.
+//! A collimated ray source propagates through the shifted lens system
+//! and is analyzed using ray propagation visualization and a wavefront node.
 //!
 //! System Overview
-//! 1. Collimated line ray source
-//! 2. First lens shifted along the y-axis
-//! 3. Second lens aligned with the optical axis
-//! 4. Ray propagation visualizer
-//! 5. Wavefront detector
+//! 1. One collimated line ray source
+//! 2. One decentered 75 mm lens
+//! 3. One 50 mm lens
+//! 4. One ray propagation visualizer
+//! 5. One wavefront node after the optical system
+//! 6. One ray-tracing analyzer
 //!
-//! Distances between components are specified in millimeters.
+//! The first lens is decentered by 5 mm along the y-axis.
+//! Both lenses use HZF52 refractive index data over the wavelength range
+//! from 300 nm to 2000 nm.
 //!
-//! Principles and Objectives
+//! The simulated beam is defined by:
+//! - a collimated line ray distribution
+//! - a beam width of 40 mm
+//! - an energy of 1 joule per ray
+//! - 9 rays in total
 //!
-//! Lens decentering changes how rays propagate through an optical system.
-//! This setup lets you:
-//! - Observe the effect of a shifted lens on ray propagation.
-//! - Understand optical misalignment in lens systems.
-//! - Visualize beam deviation after passing through lenses.
-//! - Analyze the resulting wavefront after propagation.
+//! This example demonstrates:
+//! - Defining wavelength-dependent refractive index data for HZF52 glass
+//! - Creating a spherical lens with a specified decenter
+//! - Applying a circular aperture to a lens
+//! - Connecting optical components with fixed propagation distances
+//! - Configuring a ray propagation visualizer
+//! - Adding a wavefront node to the optical system
+//! - Configuring a ray-tracing analyzer
+//! - Saving the complete optical system as an `.opm` document
 //!
-//! Import `opossum_core` modules:
-//! - `prelude::*` brings in core optical system types, unit macros (e.g. millimeter!, nanometer!, joule!), and optical building blocks (sources, lenses, detectors, wavefront)
+//! Imports:
+//! - `opossum_core::prelude::*` provides optical components, analyzers,
+//!   unit macros, and document types
+//! - `opossum_core::core_optics::{NodeAttrExt, OpticNodeExt}` provides
+//!   optical node extension traits
+//! - `std::{env, path::Path}` is used to determine the output directory
+//!   and save the generated `.opm` file
+//! 
 use opossum_core::{
     core_optics::{NodeAttrExt, OpticNodeExt},
     prelude::*,
@@ -49,7 +65,7 @@ fn main() -> OpmResult<()> {
         nanometer!(300.0)..nanometer!(2000.0),
     )?;
     // Create the first lens with:
-    // - 75 mm focal geometry
+    // - the optical geometry defined by the specified radii of curvature
     // - 10 mm thickness
     // - HZF52 refractive index
     //
@@ -63,7 +79,7 @@ fn main() -> OpmResult<()> {
         &refr_index_hzf52,
     )?
     .with_decenter(millimeter!(0.0, 5.0, 0.0))?;
-    // Define a circular aperture with 25 mm radius
+    // Define a circular aperture with a value of 25 mm
     let aperture = Aperture::new_circle(
         millimeter!(25.0),
         ApertureType::Hole,
@@ -89,7 +105,7 @@ fn main() -> OpmResult<()> {
     ray_prop_vis.set_property("ray transparency", 1.0.into())?;
     // Add the ray visualizer to the system
     let i_sd3 = scenery.add_node(ray_prop_vis)?;
-    // Create a wavefront detector after the telescope system
+    // Create a wavefront node after the optical system
     let i_sd4 = scenery.add_node(WaveFront::new("wavefront after telescope")?)?;
     // Connect source → shifted lens
     scenery.connect_nodes(i_src, "output_1", i_pl1, "input_1", millimeter!(20.0))?;
@@ -97,7 +113,7 @@ fn main() -> OpmResult<()> {
     scenery.connect_nodes(i_pl1, "output_1", i_pl2, "input_1", millimeter!(125.0))?;
     // Connect second lens → ray visualizer
     scenery.connect_nodes(i_pl2, "output_1", i_sd3, "input_1", millimeter!(50.0))?;
-    // Connect ray visualizer → wavefront detector
+    // Connect ray visualizer → wavefront node
     scenery.connect_nodes(i_sd3, "output_1", i_sd4, "input_1", millimeter!(10.0))?;
     // Create a document object for ray tracing
     let mut doc = OpmDocument::new(scenery);

@@ -1,7 +1,9 @@
 //! Reference Node Optical System Example
+//!
 //! This example demonstrates an optical system in `opossum_core` where a lens
-//! is referenced through a `NodeReference`, then inverted to enable reverse propagation through the reference node.
-//! A point ray source with structured spatial sampling is used.
+//! is referenced through a `NodeReference`, then inverted to enable reverse
+//! propagation through the reference node. A point ray source with structured
+//! spatial sampling is used.
 //!
 //! System Overview
 //! 1. Grid-sampled point ray source
@@ -9,29 +11,37 @@
 //! 3. Thin mirror with a 0.5° tilt angle
 //! 4. NodeReference linked to the first lens, with inverted propagation enabled
 //! 5. Ray propagation visualizer
+//! 6. Point-source ray-tracing configuration
+//! 7. Ray-tracing analyzer
+//!
 //! Distances between components are specified in millimeters.
 //!
-//! Principles and Objectives
-//! The system uses a simulation graph that includes a `NodeReference` node.
-//! It also demonstrates inversion of the reference node to route rays back through the original optical element.
-//! This setup lets you:
-//! - Use NodeReference to reference an existing optical node in the system graph
-//! - Invert propagation direction through a referenced optical element
-//! - Combine lens, mirror, and reference node in a single optical graph path with reversed propagation through the reference node
-//! - Generate rays using structured spatial, energy, and spectral definitions
+//! This example demonstrates:
+//! - Use of `NodeReference` to reference an existing optical node
+//! - Inversion of propagation direction through a referenced optical element
+//! - Combination of a lens, mirror, and reference node in a single optical path
+//! - Generation of rays using structured spatial, energy, and spectral definitions
+//! - Configuration of a ray-tracing analyzer
+//! - Saving the complete optical system as an `.opm` document
 //!
-//! Import `opossum_core` modules:
-//! - `prelude::*` provides core optical system types, unit macros (millimeter!, degree!, nanometer!, joule!), and optical components (sources, lenses, mirrors, detectors)
-//! - Distribution modules define ray generation using spatial grid (`Grid`), energy distribution (`UniformDist`), and spectral lines (`LaserLines`)
-//!
-//! External crates:
-//! - `nalgebra::Point2` used to define 2D coordinates for constructing the spatial emission grid
+//! Imports:
+//! - `nalgebra::Point2` is used to define 2D coordinates for constructing
+//!   the spatial emission grid
+//! - `opossum_core::core_optics::NodeAttrExt` provides optical node
+//!   extension functionality
+//! - `opossum_core::distributions::*` provides spatial, energy, and spectral
+//!   distributions for ray generation
+//! - `opossum_core::prelude::*` provides core optical system types, unit
+//!   macros, and optical components
+//! - `std::{env, path::Path}` is used to determine the output directory
+//!   and save the generated `.opm` file
 use nalgebra::Point2;
 use opossum_core::core_optics::NodeAttrExt;
 use opossum_core::distributions::{energy::UniformDist, position::Grid, spectral::LaserLines};
 use opossum_core::prelude::*;
 use std::env;
 use std::path::Path;
+
 // Entry point for the simulation; returns `OpmResult<()>` for safe execution
 fn main() -> OpmResult<()> {
     // Create a default optical system container
