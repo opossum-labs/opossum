@@ -32,7 +32,6 @@ use log::warn;
 use nalgebra::{DVector, MatrixXx2};
 use opm_macros_lib::OpmNode;
 use plotters::style::RGBAColor;
-use serde::{Deserialize, Serialize};
 use uom::si::{
     f64::Length,
     length::{meter, nanometer},
@@ -58,7 +57,7 @@ inventory::submit! {
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
-#[derive(OpmNode, Serialize, Deserialize, Clone, Debug)]
+#[derive(OpmNode, Clone, Debug)]
 #[opm_node("darkorange")]
 pub struct SpotDiagram {
     light_data: Option<LightData>,
@@ -106,8 +105,8 @@ impl OpticNode for SpotDiagram {
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }
+
     fn node_report(&self, uuid: &str, analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
-        // 1. Guard against incompatible analyzer types
         if analyzer == AnalyzerKind::Energy {
             return Ok(NodeReportResult::incompatible_warning(format!(
                 "Node '{}' ({}): A spot diagram can only be displayed for a ray tracing or ghostfocus analysis.",
@@ -116,18 +115,29 @@ impl OpticNode for SpotDiagram {
             )));
         }
 
-        // 2. Build report for supported analyzers (RayTrace, GhostFocus)
         let mut props = Properties::default();
-        let data = &self.light_data;
-        let mut report = if let Some(LightData::Geometric(rays)) = data {
-            let mut transformed_rays = Rays::default();
+        let mut report = if let Some(LightData::Geometric(rays)) = &self.light_data {
+            // Dynamically resolve active input port to support inverted state
+            let input_port = self
+                .ports()
+                .names(&PortType::Input)
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "input_1".to_string());
+
             let iso = self
-                .effective_surface_iso("input_1")
+                .effective_surface_iso(&input_port)
                 .unwrap_or_else(|_| Isometry::identity());
+
+            let mut transformed_rays = Rays::default();
             for ray in rays {
                 transformed_rays.add_ray(ray.inverse_transformed_ray(&iso));
             }
-            if let Some(hit_map) = self.get_optic_surface("input_1").map(OpticSurface::hit_map) {
+
+            if let Some(hit_map) = self
+                .get_optic_surface(&input_port)
+                .map(OpticSurface::hit_map)
+            {
                 props.create("Spot diagram", "2D spot diagram", hit_map.clone().into())?;
             }
             if let Some(c) = transformed_rays.energy_weighted_centroid() {
@@ -136,7 +146,6 @@ impl OpticNode for SpotDiagram {
                     "x position of energy-weighted centroid",
                     c.x.into(),
                 )?;
-
                 props.create(
                     "centroid y",
                     "y position of energy-weighted centroid",
@@ -167,9 +176,11 @@ impl OpticNode for SpotDiagram {
 
         Ok(NodeReportResult::Report(report))
     }
+
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
     }
+
     fn set_light_data(&mut self, ld: Option<LightData>) {
         self.light_data = ld;
     }
@@ -212,121 +223,129 @@ impl Plottable for SpotDiagram {
         plt_type: &mut PlotType,
         legend: bool,
     ) -> OpmResult<Option<Vec<PlotSeries>>> {
-        let data = &self.light_data;
-        match data {
-            Some(LightData::Geometric(rays)) => {
-                let (split_rays_bundles, wavelengths) =
-                    rays.split_ray_bundle_by_wavelength(nanometer!(0.2), true)?;
-                let num_series = split_rays_bundles.len();
-                let use_colorbar = if num_series > 5 {
-                    plt_type.set_plot_param(&PlotArgs::CBarLabel("wavelength (nm)".into()))?;
-                    plt_type.set_plot_param(&PlotArgs::PlotSize((970, 800)))?;
-                    plt_type.set_plot_param(&PlotArgs::ZLim(AxLims::new(
-                        wavelengths[0].get::<nanometer>(),
-                        wavelengths[num_series - 1].get::<nanometer>(),
-                    )))?;
-                    true
-                } else {
-                    false
-                };
-                let mut plt_series = Vec::<PlotSeries>::with_capacity(num_series);
+        let Some(LightData::Geometric(rays)) = &self.light_data else {
+            return Ok(None);
+        };
 
-                let color_grad = colorous::TURBO;
-                let wvl_range = if num_series == 1 {
-                    1.
-                } else {
-                    (wavelengths[num_series - 1] * 2. - wavelengths[0] * 2.).get::<nanometer>()
-                };
+        let (split_rays_bundles, wavelengths) =
+            rays.split_ray_bundle_by_wavelength(nanometer!(0.2), true)?;
+        let num_series = split_rays_bundles.len();
 
-                //ray plot series
-                let mut x_max = f64::NEG_INFINITY;
-                let mut y_max = f64::NEG_INFINITY;
+        let use_colorbar = if num_series > 5 {
+            plt_type.set_plot_param(&PlotArgs::CBarLabel("wavelength (nm)".into()))?;
+            plt_type.set_plot_param(&PlotArgs::PlotSize((970, 800)))?;
+            plt_type.set_plot_param(&PlotArgs::ZLim(AxLims::new(
+                wavelengths[0].get::<nanometer>(),
+                wavelengths[num_series - 1].get::<nanometer>(),
+            )))?;
+            true
+        } else {
+            false
+        };
 
-                let mut xy_pos_series = Vec::<MatrixXx2<Length>>::with_capacity(num_series);
-                for ray_bundle in &split_rays_bundles {
-                    let iso = self.effective_surface_iso("input_1")?;
-                    let xy_pos = ray_bundle.get_xy_rays_pos(true, &iso);
-                    x_max = xy_pos
-                        .column(0)
-                        .iter()
-                        .map(uom::si::f64::Length::get::<meter>)
-                        .fold(x_max, |arg0, x| if x.abs() > arg0 { x.abs() } else { arg0 });
-                    y_max = xy_pos
-                        .column(1)
-                        .iter()
-                        .map(uom::si::f64::Length::get::<meter>)
-                        .fold(y_max, |arg0, y| if y.abs() > arg0 { y.abs() } else { arg0 });
-                    xy_pos_series.push(xy_pos);
-                }
+        // Resolve input port and calculate transformation isometry once upfront
+        let input_port = self
+            .ports()
+            .names(&PortType::Input)
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "input_1".to_string());
+        let iso = self.effective_surface_iso(&input_port)?;
 
-                let min_window = wavelengths[0].get::<meter>() / 2.;
-                x_max = x_max.max(min_window);
-                y_max = y_max.max(min_window);
+        let color_grad = colorous::TURBO;
+        let wvl_span = (wavelengths[num_series - 1] - wavelengths[0]).get::<nanometer>();
+        let wvl_range = if num_series <= 1 || wvl_span.abs() < f64::EPSILON {
+            1.0
+        } else {
+            wvl_span * 2.0
+        };
 
-                let x_exponent = get_exponent_for_base_unit_in_e3_steps(x_max);
-                let y_exponent = get_exponent_for_base_unit_in_e3_steps(y_max);
-                let y_prefix = get_prefix_for_base_unit(y_max);
-                let x_prefix = get_prefix_for_base_unit(x_max);
+        let mut x_max = f64::NEG_INFINITY;
+        let mut y_max = f64::NEG_INFINITY;
+        let mut xy_pos_series = Vec::<MatrixXx2<Length>>::with_capacity(num_series);
 
-                plt_type.set_plot_param(&PlotArgs::YLabel(format!("y in {y_prefix}m")))?;
-                plt_type.set_plot_param(&PlotArgs::XLabel(format!("x in {x_prefix}m")))?;
+        for ray_bundle in &split_rays_bundles {
+            let xy_pos = ray_bundle.get_xy_rays_pos(true, &iso);
+            x_max = xy_pos
+                .column(0)
+                .iter()
+                .map(Length::get::<meter>)
+                .fold(x_max, |acc, x| acc.max(x.abs()));
+            y_max = xy_pos
+                .column(1)
+                .iter()
+                .map(Length::get::<meter>)
+                .fold(y_max, |acc, y| acc.max(y.abs()));
+            xy_pos_series.push(xy_pos);
+        }
 
-                for (idx, xy_pos) in xy_pos_series.iter().enumerate() {
-                    let grad_val =
-                        0.42 + (wavelengths[idx] - wavelengths[0]).get::<nanometer>() / wvl_range;
-                    let rgbcolor = color_grad.eval_continuous(grad_val);
-                    let x_vals = xy_pos
-                        .column(0)
-                        .iter()
-                        .map(|x| get_unit_value_as_length_with_format_by_exponent(*x, x_exponent))
-                        .collect::<Vec<f64>>();
-                    let y_vals = xy_pos
-                        .column(1)
-                        .iter()
-                        .map(|y| get_unit_value_as_length_with_format_by_exponent(*y, y_exponent))
-                        .collect::<Vec<f64>>();
+        let min_window = wavelengths[0].get::<meter>() / 2.0;
+        x_max = x_max.max(min_window);
+        y_max = y_max.max(min_window);
 
-                    let data = PlotData::Dim2 {
-                        xy_data: MatrixXx2::from_columns(&[
-                            DVector::from_vec(x_vals),
-                            DVector::from_vec(y_vals),
-                        ]),
-                    };
-                    let series_label = if legend && !use_colorbar {
-                        Some(format!("{:.1} nm", wavelengths[idx].get::<nanometer>()))
-                    } else {
-                        None
-                    };
-                    plt_series.push(PlotSeries::new(
-                        &data,
-                        RGBAColor(rgbcolor.r, rgbcolor.g, rgbcolor.b, 1.),
-                        series_label,
-                    ));
-                }
-                x_max *= f64::powi(10., -x_exponent);
-                y_max *= f64::powi(10., -y_exponent);
+        let x_exponent = get_exponent_for_base_unit_in_e3_steps(x_max);
+        let y_exponent = get_exponent_for_base_unit_in_e3_steps(y_max);
+        let x_prefix = get_prefix_for_base_unit(x_max);
+        let y_prefix = get_prefix_for_base_unit(y_max);
 
-                plt_type.set_plot_param(&PlotArgs::XLim(AxLims::new(-x_max * 1.1, 1.1 * x_max)))?;
-                plt_type.set_plot_param(&PlotArgs::YLim(AxLims::new(-y_max * 1.1, 1.1 * y_max)))?;
+        plt_type.set_plot_param(&PlotArgs::XLabel(format!("x in {x_prefix}m")))?;
+        plt_type.set_plot_param(&PlotArgs::YLabel(format!("y in {y_prefix}m")))?;
 
-                //aperture / shape plot series
-                if let Ok(Proptype::Bool(plot_aperture)) = self.properties().get("plot_aperture")
-                    && *plot_aperture
-                    && let Some(aperture) = self.ports().aperture(&PortType::Input, "input_1")
-                {
-                    let plt_series_opt = aperture.get_plot_series(
-                        &mut PlotType::Line2D(PlotParameters::default()),
-                        legend,
-                    )?;
-                    if let Some(aperture_plt_series) = plt_series_opt {
-                        plt_series.extend(aperture_plt_series);
-                    }
-                }
-                match plt_type {
-                    PlotType::Scatter2D(_) => Ok(Some(plt_series)),
-                    _ => Ok(None),
-                }
+        let mut plt_series = Vec::<PlotSeries>::with_capacity(num_series);
+
+        for (idx, xy_pos) in xy_pos_series.iter().enumerate() {
+            let grad_val =
+                0.42 + (wavelengths[idx] - wavelengths[0]).get::<nanometer>() / wvl_range;
+            let rgbcolor = color_grad.eval_continuous(grad_val);
+            let x_vals = xy_pos
+                .column(0)
+                .iter()
+                .map(|x| get_unit_value_as_length_with_format_by_exponent(*x, x_exponent))
+                .collect::<Vec<f64>>();
+            let y_vals = xy_pos
+                .column(1)
+                .iter()
+                .map(|y| get_unit_value_as_length_with_format_by_exponent(*y, y_exponent))
+                .collect::<Vec<f64>>();
+
+            let data = PlotData::Dim2 {
+                xy_data: MatrixXx2::from_columns(&[
+                    DVector::from_vec(x_vals),
+                    DVector::from_vec(y_vals),
+                ]),
+            };
+            let series_label = if legend && !use_colorbar {
+                Some(format!("{:.1} nm", wavelengths[idx].get::<nanometer>()))
+            } else {
+                None
+            };
+            plt_series.push(PlotSeries::new(
+                &data,
+                RGBAColor(rgbcolor.r, rgbcolor.g, rgbcolor.b, 1.0),
+                series_label,
+            ));
+        }
+
+        x_max *= f64::powi(10.0, -x_exponent);
+        y_max *= f64::powi(10.0, -y_exponent);
+
+        plt_type.set_plot_param(&PlotArgs::XLim(AxLims::new(-x_max * 1.1, 1.1 * x_max)))?;
+        plt_type.set_plot_param(&PlotArgs::YLim(AxLims::new(-y_max * 1.1, 1.1 * y_max)))?;
+
+        // Render aperture contour if requested and available
+        if let Ok(Proptype::Bool(plot_aperture)) = self.properties().get("plot aperture")
+            && *plot_aperture
+            && let Some(aperture) = self.ports().aperture(&PortType::Input, &input_port)
+        {
+            let plt_series_opt = aperture
+                .get_plot_series(&mut PlotType::Line2D(PlotParameters::default()), legend)?;
+            if let Some(aperture_plt_series) = plt_series_opt {
+                plt_series.extend(aperture_plt_series);
             }
+        }
+
+        match plt_type {
+            PlotType::Scatter2D(_) => Ok(Some(plt_series)),
             _ => Ok(None),
         }
     }
