@@ -149,12 +149,8 @@ impl AnalysisRayTrace for NodeGroup {
         Ok(light_result)
     }
 }
-
-/// Ensures that the node at `node_idx` has a valid spatial isometry assigned.
-///
-/// If unplaced, positions the node either via relative alignment or along
-/// the propagation axis of the incoming beam.
-fn ensure_node_isometry(
+/// Helper function to position an individual node either via alignment or incoming beam.
+fn position_node(
     graph: &mut OpticGraph,
     node_idx: NodeIndex,
     incoming_edges: &LightResult,
@@ -162,12 +158,6 @@ fn ensure_node_isometry(
 ) -> OpmResult<()> {
     let node_attr = graph.g[node_idx].node_attr().clone();
     let node_id = node_attr.uuid();
-    let node_info = format!("{}", graph.g[node_idx]);
-
-    if node_attr.isometry().is_some() {
-        info!("Node {node_info} has already been placed. Leaving untouched.");
-        return Ok(());
-    }
 
     if let Some((align_id, distance)) = node_attr.get_align_like_node_at_distance() {
         let align_ref_iso = graph.node(*align_id)?.isometry();
@@ -188,6 +178,62 @@ fn ensure_node_isometry(
     } else {
         graph.set_node_isometry(incoming_edges, node_id, *up_direction)?;
     }
+
+    Ok(())
+}
+/// Ensures that the node at `node_idx` has a valid spatial isometry assigned.
+///
+/// Supports both forward and backward node references by synchronizing the spatial
+/// isometry bidirectionally between reference proxies and their target components.
+fn ensure_node_isometry(
+    graph: &mut OpticGraph,
+    node_idx: NodeIndex,
+    incoming_edges: &LightResult,
+    up_direction: &Vector3<f64>,
+) -> OpmResult<()> {
+    let node_attr = graph.g[node_idx].node_attr().clone();
+    let node_info = format!("{}", graph.g[node_idx]);
+
+    // Fast-path: Node has already been placed in a previous step
+    if node_attr.isometry().is_some() {
+        info!("Node {node_info} has already been placed. Leaving untouched.");
+        return Ok(());
+    }
+
+    // Check if current node is a reference proxy
+    if let Some(target_uuid) = graph.g[node_idx].referenced_node_id() {
+        let target_idx = graph.node_idx_by_uuid(target_uuid).ok_or_else(|| {
+            OpossumError::Analysis(format!(
+                "referenced node with id {target_uuid} not found in graph"
+            ))
+        })?;
+
+        // Case 1: Backward reference (target node was already placed earlier)
+        if let Some(target_iso) = graph.g[target_idx].isometry() {
+            info!("Target node for reference {node_info} is already placed. Adopting isometry.");
+            graph.g[node_idx].set_isometry(target_iso)?;
+            return Ok(());
+        }
+
+        // Case 2: Forward reference (reference is encountered before the target node)
+        // Position the reference node using incoming beam data
+        position_node(graph, node_idx, incoming_edges, up_direction)?;
+
+        // Propagate the calculated isometry to the target node so its surfaces are updated
+        if let Some(calculated_iso) = graph.g[node_idx].isometry() {
+            let target_node = &mut graph.g[target_idx];
+            info!(
+                "Forward reference {node_info} positioned target node {}.",
+                target_node.name()
+            );
+            target_node.set_isometry(calculated_iso)?;
+        }
+
+        return Ok(());
+    }
+
+    // Standard node positioning
+    position_node(graph, node_idx, incoming_edges, up_direction)?;
 
     Ok(())
 }
