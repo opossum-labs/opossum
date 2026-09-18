@@ -9,7 +9,7 @@ mod analysis_raytrace;
 mod optic_graph;
 pub mod port_map;
 use crate::{
-    analyzers::propagation_strategy::PropagationStrategy,
+    analyzers::{AnalyzerKind, propagation_strategy::PropagationStrategy},
     core_optics::{
         NodeAttr, NodeAttrExt, OpticNode, OpticPorts, OpticRef, PortType, node_attr::HasNodeAttr,
     },
@@ -23,7 +23,7 @@ use crate::{
     reporting::{
         Dottable,
         analysis_report::AnalysisReport,
-        node_report::NodeReport,
+        node_report::{NodeReport, NodeReportResult},
         report_note::{ReportLevel, ReportNote},
     },
 };
@@ -742,7 +742,7 @@ impl NodeGroup {
     /// the given report folder is used for the individual nodes to export specific result files.
     /// # Errors
     /// This function will return an error if the individual export function of a node fails.
-    pub fn toplevel_report(&self) -> OpmResult<AnalysisReport> {
+    pub fn toplevel_report(&self, analyzer: AnalyzerKind) -> OpmResult<AnalysisReport> {
         let mut analysis_report = AnalysisReport::default();
         analysis_report.add_scenery(self);
 
@@ -766,9 +766,14 @@ impl NodeGroup {
                 ));
             } else {
                 let uuid_str = uuid.as_simple().to_string();
-                let node_report = node_ref.node_report(&uuid_str)?;
-                if let Some(node_report) = node_report {
-                    analysis_report.add_node_report(node_report);
+                match node_ref.node_report(&uuid_str, analyzer)? {
+                    NodeReportResult::Report(node_report) => {
+                        analysis_report.add_node_report(node_report);
+                    }
+                    NodeReportResult::Incompatible(note) => {
+                        analysis_report.add_note(note);
+                    }
+                    NodeReportResult::None => {}
                 }
             }
         }
@@ -926,21 +931,21 @@ impl OpticNode for NodeGroup {
         self.graph.set_is_inverted(self.node_attr.inverted());
         Ok(())
     }
-    fn node_report(&self, uuid: &str) -> OpmResult<Option<NodeReport>> {
+    fn node_report(&self, uuid: &str, analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
         let mut group_props = Properties::default();
         for node in self.graph.nodes() {
             let sub_uuid = node.uuid().as_simple().to_string();
-            if let Some(node_report) = node.node_report(&sub_uuid)? {
+            if let NodeReportResult::Report(node_report) = node.node_report(&sub_uuid, analyzer)? {
                 let node_name = node.name();
-                if !(group_props.contains(node_name)) {
+                if !group_props.contains(node_name) {
                     group_props.create(node_name, "", node_report.into())?;
                 }
             }
         }
         if group_props.is_empty() {
-            Ok(None)
+            Ok(NodeReportResult::None)
         } else {
-            Ok(Some(NodeReport::new(
+            Ok(NodeReportResult::Report(NodeReport::new(
                 self.node_type(),
                 self.name(),
                 uuid,
@@ -1096,7 +1101,7 @@ mod test {
     fn report() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
         scenery.add_node(Dummy::default())?;
-        let report = scenery.toplevel_report()?;
+        let report = scenery.toplevel_report(AnalyzerKind::Energy)?;
         assert!(
             ron::ser::to_string_pretty(&report, ron::ser::PrettyConfig::new().new_line("\n"))
                 .is_ok()
@@ -1112,7 +1117,7 @@ mod test {
             LightResult::default(),
             &EnergyConfig::default(),
         )?;
-        scenery.toplevel_report()?;
+        scenery.toplevel_report(AnalyzerKind::Energy)?;
         Ok(())
     }
     #[test]
@@ -1163,8 +1168,11 @@ mod test {
         raytrace_config.map_source(i_s, ray_data_builder.into());
         AnalysisRayTrace::analyze(&mut scenery, LightResult::default(), &raytrace_config)?;
         let uuid = scenery.node(i_e)?.uuid().as_simple().to_string();
-        let Some(report) = scenery.node(i_e)?.node_report(&uuid)? else {
-            panic!("Report should not be `None`");
+        let NodeReportResult::Report(report) = scenery
+            .node(i_e)?
+            .node_report(&uuid, AnalyzerKind::RayTrace)?
+        else {
+            panic!("NodeReportResult should be `Report`");
         };
         if let Proptype::Energy(e) = report.properties().get("Energy")? {
             assert_eq!(e, &joule!(1.0));

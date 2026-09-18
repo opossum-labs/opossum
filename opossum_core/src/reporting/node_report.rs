@@ -4,7 +4,7 @@ use std::path::Path;
 use crate::{
     error::OpmResult,
     properties::{Properties, Proptype},
-    reporting::report_note::ReportNote,
+    reporting::report_note::{ReportLevel, ReportNote},
 };
 use serde::{Deserialize, Serialize};
 
@@ -90,6 +90,37 @@ impl NodeReport {
 impl From<NodeReport> for Proptype {
     fn from(value: NodeReport) -> Self {
         Self::NodeReport(value)
+    }
+}
+
+/// Result of generating a report for an optical node.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum NodeReportResult {
+    /// The node produced a valid report to be displayed.
+    Report(NodeReport),
+    /// The node is incompatible with the current analyzer and emits a top-level note.
+    Incompatible(ReportNote),
+    /// The node does not generate a report.
+    None,
+}
+
+impl NodeReportResult {
+    /// Convenience helper to construct an incompatible warning note directly.
+    #[must_use]
+    pub fn incompatible_warning(message: impl Into<String>) -> Self {
+        Self::Incompatible(ReportNote::new(ReportLevel::Warning, &message.into()))
+    }
+}
+
+impl From<NodeReport> for NodeReportResult {
+    fn from(report: NodeReport) -> Self {
+        Self::Report(report)
+    }
+}
+
+impl From<Option<NodeReport>> for NodeReportResult {
+    fn from(opt: Option<NodeReport>) -> Self {
+        opt.map_or_else(|| Self::None, Self::Report)
     }
 }
 

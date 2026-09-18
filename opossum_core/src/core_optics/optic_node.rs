@@ -5,14 +5,15 @@ use nalgebra::Point3;
 use uom::si::f64::{Angle, Length};
 use uuid::Uuid;
 
-use crate::core_optics::{NodeAttrExt, OpticPorts};
 use crate::{
-    analyzers::{Analyzable, propagation_strategy::PropagationStrategy},
-    core_optics::{PortType, node_attr::HasNodeAttr, volumetric::Volumetric},
+    analyzers::{Analyzable, AnalyzerKind, propagation_strategy::PropagationStrategy},
+    core_optics::{
+        NodeAttrExt, OpticPorts, PortType, node_attr::HasNodeAttr, volumetric::Volumetric,
+    },
     error::OpmResult,
     light::LightData,
     nodes::fluence_detector::Fluence,
-    reporting::{Dottable, node_report::NodeReport},
+    reporting::{Dottable, node_report::NodeReportResult},
     utils::geom_transformation::Isometry,
 };
 use std::any::Any;
@@ -147,17 +148,16 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     fn as_volume(&self) -> Option<&dyn Volumetric> {
         None
     }
-    /// Return [`NodeReport`] of the current state of this [`OpticNode`].
+    /// Return [`NodeReportResult`] of the current state of this [`OpticNode`].
     ///
-    /// This function must be overridden for generating output in the analysis report. Mainly
-    /// detector nodes use this feature. By default `None` is returned, signalling that a node does not
-    /// provide a report at all.
+    /// Override this function in detector nodes to provide analysis output.
+    /// By default, [`NodeReportResult::None`] is returned.
     ///
     /// # Errors
     ///
-    /// This function might return an error if the concrete implementations fail.
-    fn node_report(&self, _uuid: &str) -> OpmResult<Option<NodeReport>> {
-        Ok(None)
+    /// Returns an error if the concrete report calculation fails.
+    fn node_report(&self, _uuid: &str, _analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
+        Ok(NodeReportResult::None)
     }
 }
 /// Helper trait for optical elements that can be locally aligned

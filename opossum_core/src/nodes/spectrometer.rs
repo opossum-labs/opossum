@@ -6,7 +6,8 @@ use uom::si::length::nanometer;
 
 use crate::{
     analyzers::{
-        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+        AnalyzerKind, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
+        raytrace::AnalysisRayTrace,
     },
     core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt},
     error::OpmResult,
@@ -14,7 +15,7 @@ use crate::{
     nanometer,
     nodes::NodeRegistration,
     properties::{Properties, Proptype},
-    reporting::node_report::NodeReport,
+    reporting::node_report::{NodeReport, NodeReportResult},
 };
 use std::fmt::{Debug, Display};
 
@@ -165,7 +166,7 @@ impl OpticNode for Spectrometer {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
     }
-    fn node_report(&self, uuid: &str) -> OpmResult<Option<NodeReport>> {
+    fn node_report(&self, uuid: &str, _analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
         let mut props = Properties::default();
         if let Some(spectrum) = self.get_spectrum() {
             props.create("Spectrum", "Output spectrum", spectrum.into())?;
@@ -184,7 +185,7 @@ impl OpticNode for Spectrometer {
             }
         }
 
-        Ok(Some(NodeReport::new(
+        Ok(NodeReportResult::Report(NodeReport::new(
             self.node_type(),
             self.name(),
             uuid,
@@ -346,7 +347,8 @@ mod test {
     #[test]
     fn report() -> OpmResult<()> {
         let mut sd = Spectrometer::default();
-        let Some(node_report) = sd.node_report("")? else {
+        let NodeReportResult::Report(node_report) = sd.node_report("", AnalyzerKind::Energy)?
+        else {
             panic!("Node report should not be `None`");
         };
         assert_eq!(node_report.node_type(), "spectrometer");
@@ -359,7 +361,8 @@ mod test {
             joule!(1.0),
             &Hexapolar::new(Length::zero(), 1)?,
         )?));
-        let Some(node_report) = sd.node_report("")? else {
+        let NodeReportResult::Report(node_report) = sd.node_report("", AnalyzerKind::RayTrace)?
+        else {
             panic!("Node report should not be `None`");
         };
         let node_props = node_report.properties();

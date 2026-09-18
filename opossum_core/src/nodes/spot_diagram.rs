@@ -1,6 +1,7 @@
 #![warn(missing_docs)]
 use crate::{
     analyzers::{
+        AnalyzerKind,
         energy::{AnalysisEnergy, EnergyConfig},
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
@@ -14,7 +15,7 @@ use crate::{
     nodes::NodeRegistration,
     properties::{Properties, Proptype},
     reporting::{
-        node_report::NodeReport,
+        node_report::{NodeReport, NodeReportResult},
         plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
         report_note::{ReportLevel, ReportNote},
     },
@@ -105,7 +106,17 @@ impl OpticNode for SpotDiagram {
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }
-    fn node_report(&self, uuid: &str) -> OpmResult<Option<NodeReport>> {
+    fn node_report(&self, uuid: &str, analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
+        // 1. Guard against incompatible analyzer types
+        if analyzer == AnalyzerKind::Energy {
+            return Ok(NodeReportResult::incompatible_warning(format!(
+                "Node '{}' ({}): A spot diagram can only be displayed for a ray tracing or ghostfocus analysis.",
+                self.name(),
+                self.node_type()
+            )));
+        }
+
+        // 2. Build report for supported analyzers (RayTrace, GhostFocus)
         let mut props = Properties::default();
         let data = &self.light_data;
         let mut report = if let Some(LightData::Geometric(rays)) = data {
@@ -144,21 +155,17 @@ impl OpticNode for SpotDiagram {
             }
             NodeReport::new(self.node_type(), self.name(), uuid, props)
         } else {
-            let mut report =
-                NodeReport::new(self.node_type(), self.name(), uuid, Properties::default());
-            report.add_note(ReportNote::new(
-                ReportLevel::Warning,
-                "A spot diagram can only be displayed for a ray tracing or ghostfocus analysis.",
-            ));
-            report
+            NodeReport::new(self.node_type(), self.name(), uuid, Properties::default())
         };
+
         if self.apodization_warning {
             report.add_note(ReportNote::new(
                 ReportLevel::Warning,
                 "Rays have been apodized at input aperture. Results might not be accurate.",
             ));
         }
-        Ok(Some(report))
+
+        Ok(NodeReportResult::Report(report))
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
@@ -454,8 +461,9 @@ mod test {
     #[test]
     fn report() -> OpmResult<()> {
         let mut sd = SpotDiagram::default();
-        let Some(node_report) = sd.node_report("")? else {
-            panic!("Node report should not be `None`");
+        let res = sd.node_report("", AnalyzerKind::RayTrace)?;
+        let NodeReportResult::Report(node_report) = res else {
+            panic!("Node report should be `Report` variant");
         };
         assert_eq!(node_report.node_type(), "spot diagram");
         assert_eq!(node_report.name(), "spot diagram");
@@ -463,8 +471,9 @@ mod test {
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 0);
         sd.light_data = Some(LightData::Geometric(Rays::default()));
-        let Some(node_report) = sd.node_report("")? else {
-            panic!("Node report should not be `None`");
+        let NodeReportResult::Report(node_report) = sd.node_report("", AnalyzerKind::RayTrace)?
+        else {
+            panic!("Node report should be `Report` variant");
         };
         assert!(node_report.properties().contains("Spot diagram"));
         sd.light_data = Some(LightData::Geometric(Rays::new_uniform_collimated(
@@ -472,16 +481,18 @@ mod test {
             joule!(1.0),
             &Hexapolar::new(Length::zero(), 1)?,
         )?));
-        let Some(node_report) = sd.node_report("")? else {
-            panic!("Node report should not be `None`");
+        let NodeReportResult::Report(node_report) = sd.node_report("", AnalyzerKind::RayTrace)?
+        else {
+            panic!("Node report should be `Report` variant");
         };
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 5);
 
         sd.set_apodization_warning(true);
-        let Some(node_report) = sd.node_report("")? else {
-            panic!("Node report should not be `None`");
+        let NodeReportResult::Report(node_report) = sd.node_report("", AnalyzerKind::RayTrace)?
+        else {
+            panic!("Node report should be `Report` variant");
         };
         let notes = node_report.notes();
         assert_eq!(notes.len(), 1);
@@ -532,8 +543,9 @@ mod test {
 
         AnalysisRayTrace::analyze(&mut sd, incoming_data, &analyzer)?;
 
-        let Some(node_report) = sd.node_report("")? else {
-            panic!("Node report should not be `None`");
+        let NodeReportResult::Report(node_report) = sd.node_report("", AnalyzerKind::RayTrace)?
+        else {
+            panic!("Node report should be `Report` variant");
         };
         let node_props = node_report.properties(); // Returns &Properties
 
@@ -572,21 +584,29 @@ mod test {
         let mut config = EnergyConfig::default();
         config.map_source(i_src, EnergyDataBuilder::default());
         doc.add_analyzer(AnalyzerType::Energy(config));
+
         let reports = doc.analyze()?;
-        let Some(report) = reports.first() else {
-            panic!("No report found");
-        };
-        let Some(node_report) = report.node_reports().first() else {
-            panic!("No node report found.")
-        };
-        let Some(note) = node_report.notes().first() else {
-            panic!("SpotDiagram has no note in its report");
-        };
-        assert_eq!(note.level, ReportLevel::Warning);
-        assert_eq!(
-            note.message,
-            "A spot diagram can only be displayed for a ray tracing or ghostfocus analysis."
+        let report = reports.first().expect("No report found");
+
+        // 1. The incompatible detector should NOT have generated a NodeReport
+        assert!(
+            report.node_reports().is_empty(),
+            "Incompatible detector nodes must not generate a NodeReport"
         );
+
+        // 2. The warning must appear at the top-level in AnalysisReport::notes
+        let note = report
+            .notes()
+            .first()
+            .expect("Expected top-level warning note in AnalysisReport");
+
+        assert_eq!(note.level, ReportLevel::Warning);
+        assert!(
+            note.message
+                .contains("A spot diagram can only be displayed")
+        );
+        assert!(note.message.contains("spot diagram"));
+
         Ok(())
     }
 }

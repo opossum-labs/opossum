@@ -124,8 +124,11 @@ impl OpticNode for Dummy {
 mod test {
     use super::*;
     use crate::{
-        analyzers::energy::EnergyConfig, core_optics::PortType, light::LightData,
-        light::spectrum_helper::create_he_ne_spec, nodes::test_helper::test_helper::*,
+        analyzers::energy::EnergyConfig,
+        core_optics::PortType,
+        light::{LightData, spectrum_helper::create_he_ne_spec},
+        nodes::test_helper::test_helper::*,
+        reporting::node_report::NodeReportResult,
     };
     #[test]
     fn default() {
@@ -166,8 +169,8 @@ mod test {
     }
     #[test]
     fn report() -> OpmResult<()> {
-        let report = Dummy::default().node_report("123")?;
-        assert!(report.is_none());
+        let report = Dummy::default().node_report("123", crate::analyzers::AnalyzerKind::Energy)?;
+        assert!(matches!(report, NodeReportResult::None));
         Ok(())
     }
     #[test]

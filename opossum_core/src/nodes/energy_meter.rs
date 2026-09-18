@@ -1,7 +1,8 @@
 #![warn(missing_docs)]
 use crate::{
     analyzers::{
-        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+        AnalyzerKind, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
+        raytrace::AnalysisRayTrace,
     },
     core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt},
     error::OpmResult,
@@ -9,7 +10,7 @@ use crate::{
     light::LightData,
     nodes::NodeRegistration,
     properties::{Properties, Proptype},
-    reporting::node_report::NodeReport,
+    reporting::node_report::{NodeReport, NodeReportResult},
 };
 use log::warn;
 use opm_macros_lib::OpmNode;
@@ -132,7 +133,7 @@ impl OpticNode for EnergyMeter {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
     }
-    fn node_report(&self, uuid: &str) -> OpmResult<Option<NodeReport>> {
+    fn node_report(&self, uuid: &str, _analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
         let energy = self
             .light_data
             .as_ref()
@@ -166,7 +167,7 @@ impl OpticNode for EnergyMeter {
                 "Rays have been apodized at input aperture. Results might not be accurate.".into(),
             )?;
         }
-        Ok(Some(NodeReport::new(
+        Ok(NodeReportResult::Report(NodeReport::new(
             self.node_type(),
             self.name(),
             uuid,
@@ -301,7 +302,8 @@ mod test {
     #[test]
     fn report() -> OpmResult<()> {
         let mut meter = EnergyMeter::default();
-        let Some(report) = meter.node_report("123")? else {
+        let NodeReportResult::Report(report) = meter.node_report("123", AnalyzerKind::Energy)?
+        else {
             panic!("Report should not be `None`");
         };
         assert_eq!(report.name(), "energy meter");
@@ -322,7 +324,8 @@ mod test {
         let input_data = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("input_1".into(), input_data.clone());
         AnalysisEnergy::analyze(&mut meter, input, &EnergyConfig::default())?;
-        let Some(report) = meter.node_report("123")? else {
+        let NodeReportResult::Report(report) = meter.node_report("123", AnalyzerKind::RayTrace)?
+        else {
             panic!("Report should not be `None`");
         };
         if let Ok(Proptype::Energy(e)) = report.properties().get("Energy") {
