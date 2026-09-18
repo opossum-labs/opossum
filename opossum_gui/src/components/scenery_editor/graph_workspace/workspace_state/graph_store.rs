@@ -416,12 +416,27 @@ impl GraphStore {
         if self.nodes.is_empty() {
             return Rect::new(Point2D::zero(), Size2D::zero());
         }
-        // Use the first node to initialize the bounding box
-        let mut rect = self.nodes.iter().next().unwrap().1.get_bounding_box();
+        let mut node_boxes =
+            self.nodes.values().map(|node| {
+                let node_id = node.id();
+                let has_mapped_input = !self.mapped_ports.is_empty()
+                    && node.input_ports().iter().any(|port_name| {
+                        self.mapped_ports.contains_port_of_node(node_id, port_name)
+                    });
+                let has_mapped_output = !self.mapped_ports.is_empty()
+                    && node.output_ports().iter().any(|port_name| {
+                        self.mapped_ports.contains_port_of_node(node_id, port_name)
+                    });
 
-        // Iterate over the rest of the nodes to expand the bounding box
-        for node in self.nodes.values().skip(1) {
-            rect = rect.union(&node.get_bounding_box());
+                node.get_bounding_box_with_mapped_ports(has_mapped_input, has_mapped_output)
+            });
+
+        // Initialize with the first node's bounding box
+        let mut rect = node_boxes.next().unwrap();
+
+        // Iterate over the rest of the nodes to expand the combined bounding box
+        for node_rect in node_boxes {
+            rect = rect.union(&node_rect);
         }
         rect
     }
