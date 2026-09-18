@@ -99,7 +99,7 @@ fn main() -> OpmResult<()> {
         "output_1",
         detectors,
         "input_1",
-        millimeter!(0.),
+        millimeter!(5.0),
     )?;
 
     let mut doc = OpmDocument::new(scenery);
@@ -311,7 +311,7 @@ fn main() -> OpmResult<()> {
         UniformDist::new(joule!(1.))?.into(),
         Gaussian::new(
             (nanometer!(1054.), nanometer!(1068.)),
-            1,
+            10,
             nanometer!(1054.),
             nanometer!(8.),
             1.,
@@ -327,7 +327,7 @@ fn main() -> OpmResult<()> {
         "Lens 1",
         millimeter!(515.1),
         millimeter!(f64::INFINITY),
-        millimeter!(2.1),
+        millimeter!(3.0),
         &nbk7,
     )?)?;
     let mir_1 =
