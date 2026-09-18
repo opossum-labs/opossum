@@ -17,16 +17,13 @@ pub fn folded_martinez_longer_f(
             .with_rot_from_littrow(alignment_wvl, degree!(-4.))?,
     )?;
     // focal length = 996.7 mm (Thorlabs LA1779-B)
-    let lens1 = cb.add_node(
-        Lens::new(
-            "Lens 1",
-            millimeter!(1250.),
-            millimeter!(f64::INFINITY),
-            millimeter!(4.),
-            refr_index.into(),
-        )?
-        .with_decenter(centimeter!(0., 0., 0.))?,
-    )?;
+    let lens1 = cb.add_node(Lens::new(
+        "Lens 1",
+        millimeter!(1250.),
+        millimeter!(f64::INFINITY),
+        millimeter!(10.),
+        refr_index.into(),
+    )?)?;
 
     let mir_1 = cb
         .add_node(ThinMirror::new("mirr").align_like_node_at_distance(lens1, telescope_distance))?;

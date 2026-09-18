@@ -22,7 +22,7 @@ pub fn folded_martinez(
             "Lens 1",
             millimeter!(515.1),
             millimeter!(f64::INFINITY),
-            millimeter!(2.1),
+            millimeter!(5.0),
             refr_index.into(),
         )?
         .with_decenter(centimeter!(0., 0., 0.))?,
@@ -74,15 +74,6 @@ pub fn folded_martinez(
     )?;
     cb.connect_nodes(g1ref1, "input_1", retro_mir1, "input_1", telescope_distance)?;
     cb.connect_nodes(retro_mir1, "output_1", g1ref2, "input_1", millimeter!(10.0))?;
-
-    // // cb.connect_nodes(
-    // //     retro_mir1,
-    // //     "output_1",
-    // //     retro_mir2,
-    // //     "input_1",
-    // //     millimeter!(5.0),
-    // // )?;
-    // // cb.connect_nodes(retro_mir2, "output_1", g1ref2, "input_1", millimeter!(10.0))?;
 
     //third grating pass pass up to 0° mirror
     cb.connect_nodes(
