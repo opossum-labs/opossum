@@ -360,7 +360,12 @@ pub async fn put_analyzer_name(
     let new = body.into_inner();
     let mut document = data.document.lock();
 
-    let old = analyzer_mut_or_404(&mut document, uuid)?.name().to_string();
+    // Safely extract the previous name or default to an empty string if None
+    let old = analyzer_mut_or_404(&mut document, uuid)?
+        .name()
+        .unwrap_or_default()
+        .to_string();
+
     let command = Command::PatchAnalyzerName(PatchAnalyzerName { id: uuid, old, new });
     apply_and_push_undo(&data, document, command, true)
 }
@@ -535,6 +540,7 @@ mod test {
             .to_request();
         let resp = app.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+        // Verify that the getter returns Some(&str)
         assert_eq!(
             app_state
                 .document
@@ -542,10 +548,10 @@ mod test {
                 .analyzer(analyzer_id)
                 .unwrap()
                 .name(),
-            "Diagnostic Energy Analyzer"
+            Some("Diagnostic Energy Analyzer")
         );
 
-        // Undo reverts the name
+        // Undo reverts the name to None
         let req = test::TestRequest::post().uri("/undo").to_request();
         let resp = app.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
@@ -556,7 +562,7 @@ mod test {
                 .analyzer(analyzer_id)
                 .unwrap()
                 .name(),
-            ""
+            None
         );
 
         // Renaming an unknown UUID returns 404

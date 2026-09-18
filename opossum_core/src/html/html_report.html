@@ -43,6 +43,11 @@
             <img src="scenery.svg" class="img-fluid" style="max-height: 600pt; break-after:all;"
               alt="Optical scene diagram" />
           </div>
+          {{ if analyzer_name }}
+          <div class="text-center my-3">
+            <h4 class="text-secondary">{analyzer_name}</h4>
+          </div>
+          {{ endif }}
           {{ for note in notes }}
           <div class="alert {note.css_class}" role="alert">
             {note.message}

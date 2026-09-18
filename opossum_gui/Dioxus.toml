@@ -31,7 +31,9 @@ resources = [
     "../target/opm_examples/workshop_08_reference_node.opm",
     "../target/opm_examples/workshop_09_phelix.opm",
     "../target/opm_examples/workshop_10_multi_path.opm",
-    "../target/opm_examples/workshop_11_ghostfocus.opm"
+    "../target/opm_examples/workshop_11_ghostfocus.opm",
+    "../target/opm_examples/amplifier_const_gain_chain.opm",
+    "../target:opm_examples/amplifier_gaussian_pump_fluence.opm"
 ]
 
 # Sidecar binaries staged inside the workspace target directory (Workaround for Dioxus bundling)

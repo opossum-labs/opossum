@@ -138,6 +138,7 @@ impl Analyzer for GhostFocusAnalyzer {
         // ports, but without a pump scenario (is_positioning_run = true).
         let mut raytrace_config = RayTraceConfig::default();
         raytrace_config.set_source_map(self.config.source_map().clone());
+        raytrace_config.set_ambient_material(self.config.ambient_material().clone());
         raytrace_config.set_positioning_run(true);
         AnalysisRayTrace::calc_node_positions(scenery, LightResult::default(), &raytrace_config)?;
         scenery.reset_data();

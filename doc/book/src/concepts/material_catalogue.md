@@ -30,8 +30,6 @@ A material selected from the catalogue can also be **detached from the library a
 
 Materials in the catalogue can have different versions. If changes are made to the properties of the first version of a material, the changes can be published as the second version.
 
-The version information was introduced to allow optical models to refer to a specific version of a material definition. This way, (community) updates to the material catalogue do not break older models. In the future there will be a mechanism to optionally update material references in optical nodes to the most up to date catalogue version.
-
-Once the new version has been published, the older version cannot be used or accessed.
+The version information was introduced to allow optical models to refer to a specific (older) version of a material definition. This way, (community) updates to the material catalogue do not break older models. In the future there will be a mechanism to optionally update material references in optical nodes to the most up to date catalogue version.
 
 The version that is currently being used in the GUI does not change automatically when a new version is published. The version already being used in the GUI remains unchanged unless the user intentionally changes it to the newly published version.
