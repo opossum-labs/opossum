@@ -9,6 +9,7 @@
   - [Position distributions](./concepts/position_distributions.md)
   - [Energy distributions](./concepts/energy_distributions.md)
   - [Fluence calculcations](./concepts/fluence.md)
+  - [Material Catalogue](./concepts/material_catalogue.md)
   - [Project background](./concepts/background.md)
     - [Goals](./concepts/background/goals.md)
     - [Software architecture](./concepts/background/architecture.md)

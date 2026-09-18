@@ -2,6 +2,8 @@
 
 The Material Catalogue provides a library for managing materials. A material can be added to the library using the green **Add New Material** button on the right side of the Material Catalogue. The catalogue contains the material's name, manufacturer, description, refractive index (nd), latest version, and available actions. It also provides **Search Name / Manufacturer**, **Min nd**, and **Max nd** for finding and filtering materials.
 
+n_d refers to the refractive index of an optical material measured at the yellow sodium D-line wavelength of approximately 587.56 nm.
+
 ## Adding materials to the catalogue
 
 A new material can be added to the library by pressing the green **Add New Material** button on the right side of the Material Catalogue. When adding a material, a name and refractive index can be provided. If no name is given, the material is assigned the default name **New Material**.
@@ -27,6 +29,8 @@ A material selected from the catalogue can also be **detached from the library a
 ## Material versions
 
 Materials in the catalogue can have different versions. If changes are made to the properties of the first version of a material, the changes can be published as the second version.
+
+The version information was introduced to allow optical models to refer to a specific version of a material definition. This way, (community) updates to the material catalogue do not break older models. In the future there will be a mechanism to optionally update material references in optical nodes to the most up to date catalogue version.
 
 Once the new version has been published, the older version cannot be used or accessed.
 
