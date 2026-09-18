@@ -1,24 +1,43 @@
-//! Example: Kepler Paraxial Telescope Setup
+//! Kepler Paraxial Telescope Example
 //!
-//! This example demonstrates how to build a simple paraxial optical system
-//! using the opossum_core framework. It creates a Kepler-type telescope
-//! consisting of two lenses, defines a light source, connects components,
-//! and runs a ray trace analysis.
+//! This example builds a simple paraxial optical system and runs a
+//! ray-tracing analysis on it, using a collimated line source.
 //!
-//! Overall structure of the system:
-//! 1. Create a scene (NodeGroup)
-//! 2. Add a light source
-//! 3. Create optical elements (lenses and aperture)
-//! 4. Add elements into the scene
-//! 5. Connect elements using distances
-//! 6. Configure ray tracing
-//! 7. Run analysis and save output
+//! System Overview
+//! 1. One collimated line ray source
+//! 2. Two paraxial lenses ("75 mm lens" and "50 mm lens")
+//! 3. A circular aperture on the first lens's input
+//! 4. A ray propagation visualizer after the second lens
+//! 5. A ray-tracing analyzer for the source beam
+//! 6. Saving the optical system to a file for later use
+//!
+//! The beam is defined by:
+//! - a collimated line ray distribution
+//! - a beam width of 45 mm
+//! - an energy of 1 joule per ray
+//! - 9 rays in total
+//!
+//! This example demonstrates:
+//! - Building an optical system from paraxial lenses and an aperture
+//! - Connecting components with fixed propagation distances
+//! - Attaching a visualizer to inspect ray paths
+//! - Setting up a collimated line ray source for ray tracing
+//! - Configuring a ray-tracing analyzer
+//! - Saving the system as an `.opm` document
+//!
+//! Imports:
+//! - `opossum_core::prelude::*` — optical components, analyzers, unit
+//!   macros, and document types
+//! - `opossum_core::core_optics::{NodeAttrExt, OpticNodeExt}` — extension
+//!   traits for setting node names and properties
+//! - `std::{env, path::Path}` — used to find the output directory and save
+//!   the `.opm` file
 use opossum_core::{
     core_optics::{NodeAttrExt, OpticNodeExt},
     prelude::*,
 };
 use std::{env, path::Path};
-/// Main entry point of the example.
+/// Entry point of the example.
 ///
 /// This function builds the optical system step by step:
 /// - defines components (source, lenses, visualizer)
@@ -37,8 +56,9 @@ fn main() -> OpmResult<()> {
     // This lens is part of the Kepler telescope setup.
     let mut lens1 = ParaxialSurface::new("75 mm lens", millimeter!(75.0))?;
     let aperture = Aperture::new_circle(millimeter!(25.0), ApertureType::Hole, None)?;
-    // Add the first lens into the optical scene.
+    // Attach the aperture to the first lens input.
     lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
+    // Add the first lens into the optical scene.
     let i_pl1 = scenery.add_node(lens1)?;
     // Create the second lens with a focal length of 50 mm.
     // Together with the first lens, it forms a Kepler telescope system.

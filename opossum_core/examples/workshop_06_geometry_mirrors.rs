@@ -1,30 +1,38 @@
 //! Geometry Mirror System Example
 //!
 //! This example demonstrates a simple two-mirror optical system using
-//! `opossum_core`. Rays from a collimated source reflect from tilted mirrors
-//! and are visualized after propagation.
+//! `opossum_core`. A collimated ray source is reflected by two tilted mirrors,
+//! including a curved mirror, and the resulting ray propagation is visualized.
 //!
 //! System Overview
-//! 1. Collimated line ray source
-//! 2. Flat mirror with partial reflectivity
-//! 3. Curved mirror tilted in the opposite direction
-//! 4. Ray propagation visualizer
+//! 1. One collimated line ray source
+//! 2. One flat mirror with 50% constant reflectivity
+//! 3. One curved mirror with opposite tilt
+//! 4. One ray propagation visualizer
+//! 5. A ray-tracing analyzer
+//! 6. Serialization of the complete optical system for later visualization
+//!    and analysis
 //!
-//! Distances between components are specified in millimeters.
+//! This example demonstrates:
+//! - How to create and configure flat and curved mirrors
+//! - How to set mirror tilt angles
+//! - How to assign a constant-reflectivity coating to a mirror
+//! - How to define mirror curvature
+//! - How to connect optical components with physical propagation distances
+//! - How to configure a ray propagation visualizer
+//! - How to configure a ray-tracing analyzer
+//! - How to save the complete optical system as an `.opm` document
 //!
-//! Principles and Objectives
-//!
-//! Mirrors redirect light depending on their tilt and curvature.
-//! This setup lets you:
-//! - Observe how tilted mirrors steer rays.
-//! - Understand how curved mirrors affect propagation.
-//! - Visualize ray reflection and beam direction.
-//! - Learn how optical nodes are connected in OPOSSUM.
-//!
-//! Import `opossum_core` modules:
-//! - `CoatingType` for mirror reflectivity properties
-//! - `prelude::*` brings in core optical system types and helpers
-//!
+//! Imports:
+//! - `opossum_core::coatings::CoatingConstantR` provides the
+//!   constant-reflectivity coating model
+//! - `opossum_core::core_optics::{NodeAttrExt, OpticNodeExt}` provides
+//!   optical node extension traits
+//! - `opossum_core::{percent, prelude::*}` provides the percent macro,
+//!   optical components, analyzers, unit macros, and document types
+//! - `std::{env, path::Path}` is used to determine the output directory
+//!   and save the generated `.opm` file
+
 use opossum_core::coatings::CoatingConstantR;
 use opossum_core::core_optics::{NodeAttrExt, OpticNodeExt};
 use opossum_core::{percent, prelude::*};
@@ -33,59 +41,55 @@ use std::env;
 use std::path::Path;
 // Entry point for the program; returns `OpmResult<()>` to handle errors
 fn main() -> OpmResult<()> {
-    // Create a new optical system container named "Geometry, mirror system"
+    // 1. Define the collimated line ray source.
     let mut scenery = NodeGroup::new("Geometry, mirror system");
-    // Add a source node representing a collimated line ray source
     let i_src = scenery.add_node(SourcePort::new("collimated line ray source"))?;
-    // Create the first mirror tilted by 22.5 degrees
+    // 2. Define the first flat mirror with a tilt of 22.5 degrees.
+    // Assign a constant-reflectivity coating with 50% reflectivity.
     let mut mirror1 = ThinMirror::new("mirror 1").with_tilt(degree!(22.5, 0.0, 0.0))?;
-    // Apply a partially reflective coating with 50% reflectivity
     mirror1.set_coating(
         &PortType::Input,
         "input_1",
         &CoatingConstantR::new(percent!(50.0))?.into(),
     )?;
-    // Add the first mirror to the optical system
+    // Add the first mirror to the optical system.
     let i_m1 = scenery.add_node(mirror1)?;
-    // Create the second mirror with curvature and opposite tilt
+    // 3. Define the second mirror with a curvature of -100 mm
+    // and a tilt of -22.5 degrees.
     let i_m2 = scenery.add_node(
         ThinMirror::new("mirror 2")
             .with_curvature(millimeter!(-100.0))?
             .with_tilt(degree!(-22.5, 0.0, 0.0))?,
     )?;
-    // Create a ray propagation visualizer
+    // 4. Define the ray propagation visualizer.
     let mut ray_prop_vis = RayPropagationVisualizer::default();
-    // Set ray transparency property for clear visualization
     ray_prop_vis.set_property("ray transparency", 1.0.into())?;
-    // Add the visualizer to the system
     let i_prop_vis = scenery.add_node(ray_prop_vis)?;
-    // Connect source → mirror 1
+
+    // 5. Connect the optical components.
+    // The optical path is:
+    // collimated source → mirror 1 → mirror 2 → ray propagation visualizer.
     scenery.connect_nodes(i_src, "output_1", i_m1, "input_1", millimeter!(100.0))?;
-    // Connect mirror 1 → mirror 2
     scenery.connect_nodes(i_m1, "output_1", i_m2, "input_1", millimeter!(100.0))?;
-    // Connect mirror 2 → ray visualizer
     scenery.connect_nodes(i_m2, "output_1", i_prop_vis, "input_1", millimeter!(80.0))?;
-    // Create a document object for ray tracing
+
+    // 6. Configure the ray-tracing analysis.
     let mut doc = OpmDocument::new(scenery);
-    // Default configuration for ray tracing
     let mut config = RayTraceConfig::default();
-    // Define a collimated line ray source:
-    // - 20 mm beam width
-    // - 1 Joule energy
-    // - 9 rays
+    // Define a collimated line ray source with a 20 mm beam width,
+    // 1 joule of energy per ray, and 9 rays.
     config.map_source(
         i_src,
         collimated_line_ray_builder(millimeter!(20.0), joule!(1.0), 9)?,
     );
-    // Add ray tracing analysis to the document
+    // Add the ray-tracing analyzer to the document.
     doc.add_analyzer(AnalyzerType::RayTrace(config));
 
-    // Read the output directory from the environment, fallback to playground
+    // Read the output directory from the environment, fallback to playground.
     let out_dir = env::var("OPOSSUM_EXAMPLES_OUT_DIR")
         .unwrap_or_else(|_| "./opossum_core/playground".to_string());
     let out_path = Path::new(&out_dir).join("workshop_06_geometry_mirrors.opm");
 
-    // Save the complete optical system to a file.
-    // This file can be reopened in the framework for visualization or analysis.
+    // Save the complete optical system and its analyzer as an OPM file.
     doc.save_to_file(&out_path)
 }
