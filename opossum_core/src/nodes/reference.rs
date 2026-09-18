@@ -181,10 +181,19 @@ impl AnalysisRayTrace for NodeReference {
 }
 #[cfg(test)]
 mod test {
+    use tempfile::NamedTempFile;
+
     use super::*;
     use crate::{
+        analyzers::AnalyzerType,
         core_optics::PortType,
-        nodes::{Dummy, NodeGroup, test_helper::test_helper::*},
+        joule, millimeter,
+        nodes::{
+            Dummy, Lens, NodeGroup, RayPropagationVisualizer, SourcePort, ThinMirror,
+            collimated_line_ray_builder, test_helper::test_helper::*,
+        },
+        opm_document::OpmDocument,
+        refractive_index::RefrIndexConst,
     };
 
     #[test]
@@ -260,6 +269,92 @@ mod test {
         node.set_inverted(true.into())?;
         assert_eq!(node.ports().names(&PortType::Input), vec!["output_1"]);
         assert_eq!(node.ports().names(&PortType::Output), vec!["input_1"]);
+        Ok(())
+    }
+    #[test]
+    fn forward_reference_end_to_end_raytrace_and_serialization() -> OpmResult<()> {
+        let mut scenery = NodeGroup::new("Forward Reference Scenery");
+
+        // 1. Add SourcePort
+        let src_id = scenery.add_node(SourcePort::default())?;
+
+        // 2. Add real Lens (unplaced, without initial isometry)
+        let refr_index = RefrIndexConst::new(1.5068)?;
+        let lens = Lens::new(
+            "Target Lens",
+            millimeter!(150.0),
+            millimeter!(-150.0),
+            millimeter!(4.0),
+            &refr_index,
+        )?;
+        let real_lens_id = scenery.add_node(lens)?;
+
+        // Ensure the real lens is not positioned yet
+        assert!(scenery.node(real_lens_id)?.isometry().is_none());
+
+        // 3. Add NodeReference pointing to the unplaced lens
+        let lens_proxy = NodeReference::from_node(&scenery.node(real_lens_id)?)?;
+        let ref_id = scenery.add_node(lens_proxy)?;
+
+        // 4. Add auxiliary components
+        let mirror_id = scenery.add_node(ThinMirror::default())?;
+        let visualizer_id = scenery.add_node(RayPropagationVisualizer::new("visualizer", None)?)?;
+
+        // 5. Build topology: Source -> Reference -> Mirror -> Real Lens -> Visualizer
+        scenery.connect_nodes(src_id, "output_1", ref_id, "input_1", millimeter!(50.0))?;
+        scenery.connect_nodes(ref_id, "output_1", mirror_id, "input_1", millimeter!(40.0))?;
+        scenery.connect_nodes(
+            mirror_id,
+            "output_1",
+            real_lens_id,
+            "input_1",
+            millimeter!(40.0),
+        )?;
+        scenery.connect_nodes(
+            real_lens_id,
+            "output_1",
+            visualizer_id,
+            "input_1",
+            millimeter!(50.0),
+        )?;
+
+        // 6. Create document and configure RayTrace analyzer
+        let mut doc = OpmDocument::new(scenery);
+        let ray_builder = collimated_line_ray_builder(millimeter!(10.0), joule!(1.0), 3)?;
+        let mut config = RayTraceConfig::default();
+        config.map_source(src_id, ray_builder);
+        doc.add_analyzer(AnalyzerType::RayTrace(config));
+
+        // 7. Verify save and reload functionality before analysis
+        let temp_file = NamedTempFile::new()
+            .map_err(|e| OpossumError::OpmDocument(format!("Temp file error: {e}")))?;
+        doc.save_to_file(temp_file.path())?;
+
+        let mut reloaded_doc = OpmDocument::from_file(temp_file.path())?;
+
+        // 8. Run analysis on the reloaded document
+        testing_logger::setup();
+        reloaded_doc.analyze()?;
+
+        // 9. Assertions:
+        // A) The real lens must now have a valid isometry
+        let real_lens_iso = reloaded_doc.scenery().node(real_lens_id)?.isometry();
+        assert!(
+            real_lens_iso.is_some(),
+            "The real lens should have received an isometry from the forward reference"
+        );
+
+        // B) The forward reference proxy must share the exact same isometry
+        let ref_iso = reloaded_doc.scenery().node(ref_id)?.isometry();
+        assert!(
+            ref_iso.is_some(),
+            "The reference node must have a valid isometry assigned"
+        );
+        assert_eq!(
+            ref_iso, real_lens_iso,
+            "Reference and real lens must occupy the exact same spatial location"
+        );
+
         Ok(())
     }
 }
