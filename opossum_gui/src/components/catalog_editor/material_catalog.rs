@@ -13,9 +13,10 @@ use crate::components::{
 use dioxus::prelude::*;
 use dioxus_free_icons::{
     Icon,
-    icons::fa_solid_icons::{FaCheck, FaPencil, FaPlus, FaTrash},
+    icons::fa_solid_icons::{FaArrowsRotate, FaCheck, FaPencil, FaPlus, FaTrash},
 };
 use dioxus_primitives::alert_dialog::AlertDialogContent;
+use super::CatalogSynchronizer;
 use opossum_core::{material::Material, refractive_index::RefrIndexSellmeier1};
 use opossum_registry::{
     AssetRegistry,
@@ -80,6 +81,7 @@ pub fn MaterialCatalog(
     let mut material_state = use_signal(Material::default);
     let mut show_delete_dialog = use_signal(|| false);
     let mut pending_delete = use_signal(|| Option::<DeleteTarget>::None);
+    let mut show_synchronizer = use_signal(|| false);
 
     // Search and filter inputs
     let mut search_text = use_signal(String::new);
@@ -198,11 +200,20 @@ pub fn MaterialCatalog(
                         }
                         if !is_select_mode {
                             CardAction {
-                                Button {
-                                    variant: ButtonVariant::Success,
-                                    onclick: on_create_new,
-                                    Icon { icon: FaPlus }
-                                    "New Material"
+                                div { class: "d-flex gap-2",
+                                    Button {
+                                        title: "Compare and synchronize model assets with the catalog",
+                                        variant: ButtonVariant::Outline,
+                                        onclick: move |_| show_synchronizer.set(true),
+                                        Icon { icon: FaArrowsRotate }
+                                        "Sync with Model"
+                                    }
+                                    Button {
+                                        variant: ButtonVariant::Success,
+                                        onclick: on_create_new,
+                                        Icon { icon: FaPlus }
+                                        "New Material"
+                                    }
                                 }
                             }
                         }
@@ -409,5 +420,6 @@ pub fn MaterialCatalog(
                 }
             }
         }
+        CatalogSynchronizer { open: show_synchronizer }
     }
 }
