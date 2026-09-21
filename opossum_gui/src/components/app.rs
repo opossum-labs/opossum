@@ -4,7 +4,7 @@ use crate::{
     api::get_api_welcome,
     backend_status::BackendStatus,
     components::{
-        catalog_editor::MaterialCatalog,
+        catalog_editor::{CatalogSynchronizer, MaterialCatalog},
         context_menu::cx_menu::{ContextMenu, CxtCommand},
         logger::logger_component::Logger,
         menu_bar::{
@@ -209,6 +209,7 @@ pub fn App() -> Element {
     let mut show_alert = use_signal(|| false);
     let mut show_settings = use_signal(|| false);
     let mut show_material_catalog = use_signal(|| false);
+    let mut show_catalog_synchronizer = use_signal(|| false);
 
     let mut execute_immediate = move |cmd: AppCommand| match cmd {
         AppCommand::NewProject => {
@@ -309,6 +310,9 @@ pub fn App() -> Element {
         }
         AppCommand::OpenMaterialCatalog => {
             show_material_catalog.set(true);
+        }
+        AppCommand::OpenCatalogSynchronizer => {
+            show_catalog_synchronizer.set(true);
         }
     };
 
@@ -554,6 +558,7 @@ pub fn App() -> Element {
         SimulationWindow { show_simulation: run_simulation, model_file_path }
         SettingsDialog { open: show_settings }
         MaterialCatalog { open: show_material_catalog }
+        CatalogSynchronizer { open: show_catalog_synchronizer }
         // Invisible master sprite containing all icon definitions
         div {
             style: "position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none;",
@@ -585,6 +590,7 @@ pub fn App() -> Element {
             }
         }
         SettingsDialog { open: show_settings }
+        CatalogSynchronizer { open: show_catalog_synchronizer }
     }
 }
 

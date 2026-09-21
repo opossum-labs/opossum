@@ -25,3 +25,5 @@ gix = { version = "0.87.1", default-features = false, features = [
     "worktree-mutation",
     "revision"
 ] }
+# Enable TLS support for gix HTTP transport via reqwest feature unification
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls"] }

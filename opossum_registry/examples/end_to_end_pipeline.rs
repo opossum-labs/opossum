@@ -205,7 +205,7 @@ fn main() -> OpmResult<()> {
     let temp_registry_dir = TempDir::new().expect("Failed to create temp registry dir");
 
     let sync = RegistrySync::new(temp_registry_dir.path(), &remote_url);
-    sync.init_or_clone()?;
+    sync.ensure_repository_initialized()?;
 
     // Initialize the unified AssetRegistry (builds in-memory index automatically)
     let mut registry = AssetRegistry::<Material>::new(temp_registry_dir.path())?;

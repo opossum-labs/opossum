@@ -42,6 +42,7 @@ pub enum AppCommand {
     Simulate,
     Settings,
     OpenMaterialCatalog,
+    OpenCatalogSynchronizer,
 }
 
 #[component]
@@ -271,7 +272,18 @@ pub fn MenuBar(
                                 }
                             }
                             li {
-                                a { class: "dropdown-item", role: "button", "Coating catalog" }
+                                a { class: "dropdown-item text-muted disabled", role: "button", "Coating catalog" }
+                            }
+                            li {
+                                hr { class: "dropdown-divider" }
+                            }
+                            li {
+                                a {
+                                    class: "dropdown-item",
+                                    role: "button",
+                                    onclick: move |_| on_menu_action.call(AppCommand::OpenCatalogSynchronizer),
+                                    "Synchronize catalogs..."
+                                }
                             }
                         }
                     }
