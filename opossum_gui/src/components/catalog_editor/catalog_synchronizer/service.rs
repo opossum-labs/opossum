@@ -126,7 +126,8 @@ pub fn sync_git_catalog(
 
     let sync_task = std::thread::spawn(move || {
         let sync = RegistrySync::new(&cat_path_buf, &remote_url_str);
-        sync.init_or_clone().and_then(|()| sync.pull_updates())
+        sync.ensure_repository_initialized()
+            .and_then(|()| sync.pull_updates())
     });
 
     match sync_task.join() {
