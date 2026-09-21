@@ -22,7 +22,16 @@ impl<T: IndexableAsset> AssetRegistry<T> {
     /// # Errors
     /// Returns an error if directory traversal or index population fails.
     pub fn new(root_path: impl Into<PathBuf>) -> OpmResult<Self> {
-        let loader = AssetLoader::new(root_path);
+        let root = root_path.into();
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            // Automatically initialize new repository or convert existing folder
+            let sync = crate::sync::RegistrySync::new(&root, "");
+            sync.ensure_repository_initialized()?;
+        }
+
+        let loader = AssetLoader::new(&root);
         let mut index = AssetIndex::new();
         index.build_from_loader(&loader)?;
 
@@ -57,10 +66,11 @@ impl<T: IndexableAsset> AssetRegistry<T> {
         self.index.build_from_loader(&self.loader)
     }
 
-    /// Publishes an asset draft to disk and updates the in-memory cache in O(1).
+    /// Publishes an asset draft to disk, updates the in-memory cache,
+    /// and automatically commits changes to Git if initialized.
     ///
     /// # Errors
-    /// Returns an error if disk serialization or writing fails.
+    /// Returns an error if disk writing, index updating, or Git commit fails.
     pub fn publish(&mut self, asset: &mut T) -> OpmResult<PathBuf> {
         // 1. Persist to disk using loader (updates asset version in-place)
         let file_path = self.loader.publish(asset)?;
@@ -70,6 +80,20 @@ impl<T: IndexableAsset> AssetRegistry<T> {
 
         // 3. Immediately update the in-memory index cache (O(1))
         self.index.update_entry(asset, versions);
+
+        // 4. Automatically commit to local Git repository if initialized
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if self.root_path().join(".git").exists() {
+                let msg = format!(
+                    "Publish {} '{}' (v{})",
+                    T::relative_subfolder(),
+                    asset.name(),
+                    asset.version()
+                );
+                crate::sync::commit_asset_file(self.root_path(), &file_path, &msg)?;
+            }
+        }
 
         Ok(file_path)
     }

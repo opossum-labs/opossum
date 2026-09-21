@@ -1,3 +1,4 @@
+use super::CatalogSynchronizer;
 use crate::components::{
     asset_editor::material_editor::{MaterialChangeEvent, MaterialEditor},
     primitives::{
@@ -16,7 +17,6 @@ use dioxus_free_icons::{
     icons::fa_solid_icons::{FaArrowsRotate, FaCheck, FaPencil, FaPlus, FaTrash},
 };
 use dioxus_primitives::alert_dialog::AlertDialogContent;
-use super::CatalogSynchronizer;
 use opossum_core::{material::Material, refractive_index::RefrIndexSellmeier1};
 use opossum_registry::{
     AssetRegistry,
