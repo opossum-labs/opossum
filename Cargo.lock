@@ -5780,6 +5780,7 @@ name = "opossum_backend"
 version = "0.8.0"
 dependencies = [
  "actix-cors",
+ "actix-http",
  "actix-web",
  "futures-util",
  "log",
@@ -5789,6 +5790,7 @@ dependencies = [
  "ron",
  "semver",
  "serde",
+ "serde_json",
  "tokio",
  "tokio-stream",
  "uom",
