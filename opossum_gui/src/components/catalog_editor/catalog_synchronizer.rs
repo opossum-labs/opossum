@@ -590,7 +590,11 @@ pub fn CatalogSynchronizer(
                                 disabled: is_scanning(),
                                 onclick: move |_| scan_model(),
                                 Icon { icon: FaArrowsRotate }
-                                if is_scanning() { "Scanning..." } else { "Refresh" }
+                                if is_scanning() {
+                                    "Scanning..."
+                                } else {
+                                    "Refresh"
+                                }
                             }
                         }
                     }
@@ -673,7 +677,9 @@ pub fn CatalogSynchronizer(
                         div { class: "row mb-3 g-2 align-items-center",
                             // Category Selector
                             div { class: "col-auto",
-                                div { class: "btn-group btn-group-sm", role: "group",
+                                div {
+                                    class: "btn-group btn-group-sm",
+                                    role: "group",
                                     button {
                                         r#type: "button",
                                         class: if selected_category().is_none() { "btn btn-primary" } else { "btn btn-outline-secondary" },
@@ -719,9 +725,13 @@ pub fn CatalogSynchronizer(
                                         selected_status_filter.set(val);
                                     },
                                     option { value: "all", "All Statuses" }
-                                    option { value: "needs_action", "Needs Action ({outdated_count + missing_regular_count + adhoc_count})" }
+                                    option { value: "needs_action",
+                                        "Needs Action ({outdated_count + missing_regular_count + adhoc_count})"
+                                    }
                                     option { value: "outdated", "Outdated in Model ({outdated_count})" }
-                                    option { value: "missing", "Missing in Catalog ({missing_regular_count + adhoc_count})" }
+                                    option { value: "missing",
+                                        "Missing in Catalog ({missing_regular_count + adhoc_count})"
+                                    }
                                     option { value: "adhoc", "Ad-Hoc Drafts ({adhoc_count})" }
                                     option { value: "uptodate", "Up to date" }
                                 }
@@ -786,7 +796,9 @@ pub fn CatalogSynchronizer(
                                                 td { class: "fw-bold", "{row.name}" }
                                                 // Category
                                                 td {
-                                                    span { class: "badge bg-dark", "{row.category.label()}" }
+                                                    span { class: "badge bg-dark",
+                                                        "{row.category.label()}"
+                                                    }
                                                 }
                                                 // Manufacturer
                                                 td { class: "text-muted",
@@ -795,23 +807,35 @@ pub fn CatalogSynchronizer(
                                                 // Model Version
                                                 td {
                                                     if row.model_version == 0 {
-                                                        span { class: "badge bg-warning text-dark", "v0 (Ad-Hoc)" }
+                                                        span { class: "badge bg-warning text-dark",
+                                                            "v0 (Ad-Hoc)"
+                                                        }
                                                     } else {
-                                                        span { class: "badge bg-secondary", "v{row.model_version}" }
+                                                        span { class: "badge bg-secondary",
+                                                            "v{row.model_version}"
+                                                        }
                                                     }
                                                 }
                                                 // Catalog Version
                                                 td {
                                                     if let Some(v) = row.catalog_version {
-                                                        span { class: "badge bg-info text-dark", "v{v}" }
+                                                        span { class: "badge bg-info text-dark",
+                                                            "v{v}"
+                                                        }
                                                     } else {
                                                         span { class: "text-muted", "-" }
                                                     }
                                                 }
                                                 // Used in Nodes
                                                 td {
-                                                    div { class: "small text-truncate", style: "max-width: 14rem;",
-                                                        title: row.used_by_nodes.iter().map(|u| u.node_name.as_str()).collect::<Vec<_>>().join(", "),
+                                                    div {
+                                                        class: "small text-truncate",
+                                                        style: "max-width: 14rem;",
+                                                        title: row.used_by_nodes
+                                                            .iter()
+                                                            .map(|u| u.node_name.as_str())
+                                                            .collect::<Vec<_>>()
+                                                            .join(", "),
                                                         "{row.used_by_nodes.iter().map(|u| u.node_name.as_str()).collect::<Vec<_>>().join(\", \")}"
                                                     }
                                                 }
@@ -843,9 +867,7 @@ pub fn CatalogSynchronizer(
                                                             }
                                                         },
                                                         AssetSyncStatus::ModelNewer => rsx! {
-                                                            span { class: "badge bg-info text-dark",
-                                                                "Model newer"
-                                                            }
+                                                            span { class: "badge bg-info text-dark", "Model newer" }
                                                         },
                                                     }
                                                 }
@@ -874,7 +896,7 @@ pub fn CatalogSynchronizer(
                                                                     size: ButtonSize::Sm,
                                                                     onclick: move |_| import_regular_to_catalog.call(row_clone.clone()),
                                                                     Icon { icon: FaPlus }
-                                                                    "In Katalog übernehmen"
+                                                                    "Add to Catalog"
                                                                 }
                                                             }
                                                         }
@@ -893,7 +915,7 @@ pub fn CatalogSynchronizer(
                                                                         }
                                                                     },
                                                                     Icon { icon: FaPlus }
-                                                                    "Im Editor anlegen"
+                                                                    "Add to Catalog"
                                                                 }
                                                             }
                                                         }
@@ -912,7 +934,7 @@ pub fn CatalogSynchronizer(
                                                                     size: ButtonSize::Sm,
                                                                     onclick: move |_| import_regular_to_catalog.call(row_clone.clone()),
                                                                     Icon { icon: FaCloudArrowUp }
-                                                                    "In Katalog speichern"
+                                                                    "Update Catalog Item"
                                                                 }
                                                             }
                                                         }
@@ -941,10 +963,7 @@ pub fn CatalogSynchronizer(
                 }
             }
             AlertDialogActions {
-                AlertDialogCancel {
-                    on_click: move |_| open.set(false),
-                    "Close"
-                }
+                AlertDialogCancel { on_click: move |_| open.set(false), "Close" }
             }
         }
 
