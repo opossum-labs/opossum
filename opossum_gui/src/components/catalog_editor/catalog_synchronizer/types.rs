@@ -1,4 +1,3 @@
-use dioxus::prelude::*;
 use opossum_core::material::Material;
 use uuid::Uuid;
 
@@ -6,11 +5,12 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AssetCategory {
     Material,
+    #[expect(dead_code)]
     Coating,
 }
 
 impl AssetCategory {
-    pub const fn label(&self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::Material => "Material",
             Self::Coating => "Coating",

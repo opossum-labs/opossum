@@ -116,7 +116,7 @@ pub async fn update_material_in_nodes(
 
 /// Executes a Git pull on a background thread and rebuilds the catalog index.
 #[cfg(not(target_arch = "wasm32"))]
-pub async fn sync_git_catalog(
+pub fn sync_git_catalog(
     catalog_dir: &Path,
     remote_url: &str,
     registry: &mut AssetRegistry<Material>,

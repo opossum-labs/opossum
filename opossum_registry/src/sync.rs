@@ -1,5 +1,6 @@
 use opossum_core::error::{OpmResult, OpossumError};
 use std::{
+    fmt::Write,
     fs,
     path::{Path, PathBuf},
     sync::atomic::AtomicBool,
@@ -44,6 +45,15 @@ impl RegistrySync {
     ///
     /// Asset subdirectories (e.g. `materials/`, `coatings/`) are created on-demand
     /// by `AssetLoader::publish` only when assets of that category are first added.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if
+    ///
+    /// - the catalog root folder cannot be created
+    /// - an existing repository could not be opened
+    /// - the git repository initialization and/or commit failed
+    ///
     pub fn ensure_repository_initialized(&self) -> OpmResult<()> {
         if !self.local_path.exists() {
             fs::create_dir_all(&self.local_path).map_err(|e| {
@@ -108,6 +118,7 @@ impl RegistrySync {
 
                 let commit = Commit {
                     tree: tree_oid,
+                    #[allow(clippy::default_trait_access)]
                     parents: Default::default(),
                     author,
                     committer,
@@ -158,6 +169,14 @@ impl RegistrySync {
     ///
     /// If the remote section is missing, it appends the origin remote and branch configuration.
     /// If the remote already exists but the URL changed in settings, it updates the URL line.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if
+    ///
+    /// - the remote URL is empty
+    /// - the git configuration has not been found
+    /// - the git configuration could not be read or written
     pub fn ensure_remote_configured(&self) -> OpmResult<()> {
         let trimmed_url = self.remote_url.trim();
         if trimmed_url.is_empty() {
@@ -181,24 +200,7 @@ impl RegistrySync {
             ))
         })?;
 
-        if !content.contains("[remote \"origin\"]") {
-            // Append origin remote and default tracking branch configuration
-            let mut updated = content;
-            if !updated.ends_with('\n') {
-                updated.push('\n');
-            }
-            updated.push_str(&format!(
-                "[remote \"origin\"]\n\turl = {}\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n[branch \"{}\"]\n\tremote = origin\n\tmerge = refs/heads/{}\n",
-                trimmed_url, DEFAULT_BRANCH, DEFAULT_BRANCH
-            ));
-
-            fs::write(&config_path, updated).map_err(|e| {
-                OpossumError::Registry(format!(
-                    "Failed to write remote configuration to {}: {e}",
-                    config_path.display()
-                ))
-            })?;
-        } else {
+        if content.contains("[remote \"origin\"]") {
             // Ensure the URL matches the latest configuration in case it was modified
             let lines: Vec<&str> = content.lines().collect();
             let mut updated_lines = Vec::new();
@@ -229,6 +231,23 @@ impl RegistrySync {
                     ))
                 })?;
             }
+        } else {
+            // Append origin remote and default tracking branch configuration
+            let mut updated = content;
+            if !updated.ends_with('\n') {
+                updated.push('\n');
+            }
+            let _ = write!(
+                updated,
+                "[remote \"origin\"]\n\turl = {trimmed_url}\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n[branch \"{DEFAULT_BRANCH}\"]\n\tremote = origin\n\tmerge = refs/heads/{DEFAULT_BRANCH}\n"
+            );
+
+            fs::write(&config_path, updated).map_err(|e| {
+                OpossumError::Registry(format!(
+                    "Failed to write remote configuration to {}: {e}",
+                    config_path.display()
+                ))
+            })?;
         }
 
         Ok(())
@@ -265,14 +284,14 @@ impl RegistrySync {
     /// Sets up the [remote "origin"] section in .git/config.
     fn configure_remote_origin(local_path: &Path, remote_url: &str) {
         let config_path = local_path.join(".git").join("config");
-        if let Ok(mut content) = fs::read_to_string(&config_path) {
-            if !content.contains("[remote \"origin\"]") {
-                content.push_str(&format!(
-                    "\n[remote \"origin\"]\n\turl = {}\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n[branch \"{}\"]\n\tremote = origin\n\tmerge = refs/heads/{}\n",
-                    remote_url, DEFAULT_BRANCH, DEFAULT_BRANCH
-                ));
-                let _ = fs::write(&config_path, content);
-            }
+        if let Ok(mut content) = fs::read_to_string(&config_path)
+            && !content.contains("[remote \"origin\"]")
+        {
+            let _ = write!(
+                content,
+                "\n[remote \"origin\"]\n\turl = {remote_url}\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n[branch \"{DEFAULT_BRANCH}\"]\n\tremote = origin\n\tmerge = refs/heads/{DEFAULT_BRANCH}\n",
+            );
+            let _ = fs::write(&config_path, content);
         }
     }
     /// Ensures the local repository exists.
@@ -358,10 +377,7 @@ impl RegistrySync {
         if !path.exists() {
             return true;
         }
-        match fs::read_dir(path) {
-            Ok(mut entries) => entries.next().is_none(),
-            Err(_) => false,
-        }
+        fs::read_dir(path).is_ok_and(|mut entries| entries.next().is_none())
     }
 
     /// Executes a clean clone into a specific directory path.
@@ -392,7 +408,7 @@ impl RegistrySync {
         repo: &gix::Repository,
         commit_id: impl Into<gix::ObjectId>,
     ) -> OpmResult<()> {
-        let commit_oid: gix::ObjectId = commit_id.into();
+        let commit_old_id: gix::ObjectId = commit_id.into();
         let should_interrupt = AtomicBool::new(false);
 
         let worktree = repo.worktree().ok_or_else(|| {
@@ -402,7 +418,7 @@ impl RegistrySync {
 
         // Query the repository for the object corresponding to the commit ID
         let tree_id = repo
-            .find_object(commit_oid)
+            .find_object(commit_old_id)
             .map_err(|e| OpossumError::Registry(format!("Failed to load commit object: {e}")))?
             .peel_to_tree()
             .map_err(|e| OpossumError::Registry(format!("Failed to peel tree: {e}")))?
@@ -562,13 +578,8 @@ impl RegistrySync {
             if !p.exists() {
                 return false;
             }
-            if let Ok(mut read) = fs::read_dir(p) {
-                read.next().is_some()
-            } else {
-                false
-            }
+            fs::read_dir(p).is_ok_and(|mut read| read.next().is_some())
         };
-
         check_folder("materials") || check_folder("coatings")
     }
 
@@ -664,6 +675,10 @@ impl RegistrySync {
 /// Reads author information from Git config (.gitconfig) with fallback to default values,
 /// creates the Git tree hierarchy for the asset path, writes the commit object,
 /// updates `refs/heads/main`, and synchronizes the Git index.
+///
+/// # Errors
+///
+/// This function returns an error if an underlying git operation fails.
 pub fn commit_asset_file(
     repo_root: &Path,
     file_path: &Path,
@@ -758,12 +773,10 @@ pub fn commit_asset_file(
     repo.reference(
         local_ref_name.as_str(),
         commit_id,
-        match parent_commit_id {
-            Some(prev_id) => {
-                gix::refs::transaction::PreviousValue::MustExistAndMatch(prev_id.into())
-            }
-            None => gix::refs::transaction::PreviousValue::MustNotExist,
-        },
+        parent_commit_id.map_or(
+            gix::refs::transaction::PreviousValue::MustNotExist,
+            |prev_id| gix::refs::transaction::PreviousValue::MustExistAndMatch(prev_id.into()),
+        ),
         "registry: automated asset commit",
     )
     .map_err(|e| {
@@ -870,7 +883,7 @@ fn format_error_chain(context: &str, err: &dyn std::error::Error) -> String {
     let mut current_source = err.source();
 
     while let Some(source) = current_source {
-        message.push_str(&format!(" -> Caused by: {source}"));
+        let _ = write!(message, " -> Caused by: {source}");
         current_source = source.source();
     }
 

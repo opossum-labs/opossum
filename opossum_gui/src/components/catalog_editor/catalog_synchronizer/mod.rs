@@ -68,7 +68,8 @@ pub fn CatalogSynchronizer(
             is_scanning.set(true);
             error_message.set(None);
 
-            let reg = registry.read();
+            // Clone registry value so no GenerationalRef is held across the await point
+            let reg = registry.cloned();
             match service::fetch_and_scan_model(&reg).await {
                 Ok(computed_rows) => rows.set(computed_rows),
                 Err(err) => error_message.set(Some(err)),
@@ -171,7 +172,7 @@ pub fn CatalogSynchronizer(
     });
 
     // Action: Batch update all outdated materials
-    let update_all_outdated = move |_| {
+    let update_all_outdated = move |()| {
         let current_rows = rows.read().clone();
         spawn(async move {
             let outdated_rows: Vec<_> = current_rows
@@ -185,13 +186,14 @@ pub fn CatalogSynchronizer(
 
             let mut updated_count = 0;
             for row in outdated_rows {
-                if let Ok(latest_mat) = registry.read().load(row.id, None) {
-                    if service::update_material_in_nodes(&latest_mat, &row.used_by_nodes)
+                // Load material synchronously first so the GenerationalRef is dropped before the await point
+                let load_result = registry.read().load(row.id, None);
+                if let Ok(latest_mat) = load_result
+                    && service::update_material_in_nodes(&latest_mat, &row.used_by_nodes)
                         .await
                         .is_ok()
-                    {
-                        updated_count += 1;
-                    }
+                {
+                    updated_count += 1;
                 }
             }
 
@@ -204,7 +206,7 @@ pub fn CatalogSynchronizer(
     };
 
     // Action: Batch import all regular missing materials
-    let import_all_missing = move |_| {
+    let import_all_missing = move |()| {
         let mut registry = registry;
         let mut imported = 0;
         let missing_rows: Vec<_> = rows
@@ -235,7 +237,7 @@ pub fn CatalogSynchronizer(
     };
 
     // Action: Trigger Git sync
-    let run_git_sync = move |_| {
+    let run_git_sync = move |()| {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let config = APP_CONFIG.read();
@@ -254,8 +256,7 @@ pub fn CatalogSynchronizer(
 
             spawn(async move {
                 let mut reg = registry;
-                let outcome =
-                    service::sync_git_catalog(&cat_path, &remote_url, &mut reg.write()).await;
+                let outcome = service::sync_git_catalog(&cat_path, &remote_url, &mut reg.write());
                 is_git_syncing.set(false);
                 git_sync_result.set(Some(outcome));
                 scan_model();
@@ -377,7 +378,7 @@ pub fn CatalogSynchronizer(
                         CatalogTable {
                             rows: filtered_rows.read().clone(),
                             total_model_assets: rows.read().len(),
-                            on_update_in_model: move |row| update_material_in_model(row),
+                            on_update_in_model: update_material_in_model,
                             on_import_to_catalog: move |row| import_regular_to_catalog.call(row),
                             on_edit_adhoc: move |row: AssetSyncRow| {
                                 if let Some(mat) = &row.material {
