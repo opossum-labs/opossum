@@ -16,20 +16,6 @@
 //! 7. Ray propagation visualizer for inspecting ray trajectories
 //! Distances between connected components are specified in millimeters.
 //!
-//! Principles and Objectives
-//! This example demonstrates:
-//! - Construction of large optical systems using hierarchical `NodeGroup` structures
-//! - Beam transport using paraxial optical elements
-//! - Beam steering using tilted mirrors
-//! - Reuse of existing optical nodes using `NodeReference`
-//! - Reverse propagation through existing optical elements using inverted references
-//! - Multi-pass amplifier construction without duplicating optical geometry
-//! - Ray-tracing analysis for imaging and collimation studies
-//!
-//! The amplifier section is implemented as a reusable optical subgraph.
-//! An inverted `NodeReference` is used to propagate rays backward through the
-//! same amplifier chain after reflection from a steering mirror.
-//!
 //! Import `opossum_core` modules:
 //! - `prelude::*` provides optical system infrastructure, analyzers,
 //!   unit macros, and optical components
