@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    core_optics::{NodeAttr, OpticNodeExt},
+    core_optics::{NodeAttr, OpticNodeExt, node_attr::NodePositioning},
     error::OpmResult,
     geometry::{Plane, geo_surface::GeoSurfaceRef},
     nodes::NodeRegistration,
@@ -38,7 +38,8 @@ impl Default for SourcePort {
         let node_attr = NodeAttr::new("source port");
 
         let mut src = Self { node_attr };
-        src.set_isometry(Isometry::identity()).unwrap();
+        src.set_positioning(NodePositioning::Absolute(Isometry::identity()))
+            .unwrap();
         src.update_surfaces().unwrap();
         src
     }
@@ -93,7 +94,10 @@ mod test {
         let node = SourcePort::default();
         assert_eq!(node.name(), "source port");
         assert_eq!(node.node_type(), "source port");
-        assert_eq!(node.isometry(), Some(Isometry::identity()));
+        assert_eq!(
+            node.positioning(),
+            &NodePositioning::Absolute(Isometry::identity())
+        );
         assert_eq!(node.node_attr().inverted(), false);
         assert_eq!(node.node_color(), "slateblue");
     }

@@ -153,7 +153,7 @@ mod test {
     use super::*;
     use crate::{
         analyzers::RayTraceConfig,
-        core_optics::{NodeAttrExt, PortType},
+        core_optics::{NodeAttrExt, PortType, node_attr::NodePositioning},
         degree, joule,
         light::{Ray, Rays},
         millimeter, nanometer,
@@ -242,10 +242,10 @@ mod test {
     #[test]
     fn analyze_geometric_ok() -> OpmResult<()> {
         let mut node = ParaxialSurface::default();
-        node.set_isometry(Isometry::new(
+        node.set_positioning(NodePositioning::Absolute(Isometry::new(
             millimeter!(0.0, 0.0, 10.0),
             degree!(0.0, 0.0, 0.0),
-        )?)?;
+        )?))?;
         let mut rays = Rays::default();
         let mut initial_ray =
             Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))?;
@@ -274,10 +274,10 @@ mod test {
     #[test]
     fn test_shifted_x() -> OpmResult<()> {
         let mut node = ParaxialSurface::new("test", millimeter!(10.))?;
-        node.set_isometry(Isometry::new(
+        node.set_positioning(NodePositioning::Absolute(Isometry::new(
             millimeter!(10.0, 0.0, 10.0),
             degree!(0.0, 0.0, 0.0),
-        )?)?;
+        )?))?;
         let rays = Rays::from(Ray::new_collimated(
             millimeter!(0.0, 0.0, 0.0),
             nanometer!(1000.0),
@@ -300,10 +300,10 @@ mod test {
     #[test]
     fn test_shifted_y() -> OpmResult<()> {
         let mut node = ParaxialSurface::new("test", millimeter!(10.))?;
-        node.set_isometry(Isometry::new(
+        node.set_positioning(NodePositioning::Absolute(Isometry::new(
             millimeter!(0.0, 10.0, 10.0),
             degree!(0.0, 0.0, 0.0),
-        )?)?;
+        )?))?;
         let rays = Rays::from(Ray::new_collimated(
             millimeter!(0.0, 0.0, 0.0),
             nanometer!(1000.0),
@@ -327,10 +327,10 @@ mod test {
     #[test]
     fn test_rotated_y() -> OpmResult<()> {
         let mut node = ParaxialSurface::new("test", millimeter!(10.))?;
-        node.set_isometry(Isometry::new(
+        node.set_positioning(NodePositioning::Absolute(Isometry::new(
             millimeter!(0.0, 0.0, 10.0),
             degree!(45.0, 0.0, 0.0),
-        )?)?;
+        )?))?;
         let rays = Rays::from(Ray::new_collimated(
             millimeter!(0.0, 10.0 / f64::sqrt(2.), 0.0),
             nanometer!(1000.0),
@@ -356,10 +356,10 @@ mod test {
     #[test]
     fn test_rotated_x() -> OpmResult<()> {
         let mut node = ParaxialSurface::new("test", millimeter!(10.))?;
-        node.set_isometry(Isometry::new(
+        node.set_positioning(NodePositioning::Absolute(Isometry::new(
             millimeter!(0.0, 0.0, 10.0),
             degree!(0.0, 45.0, 0.0),
-        )?)?;
+        )?))?;
         let rays = Rays::from(Ray::new_collimated(
             millimeter!(-10.0 / f64::sqrt(2.), 0.0, 0.0),
             nanometer!(1000.0),

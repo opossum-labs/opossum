@@ -10,7 +10,7 @@
 //! 4. A GhostFocus analyzer configured for multiple reflection events
 //! 5. Serialization of the complete optical system for later visualization
 //!    and analysis
-//! 
+//!
 //! The simulated beam is defined by:
 //! - a hexagonally sampled collimated beam,
 //! - a two-dimensional Gaussian energy distribution

@@ -159,12 +159,10 @@ impl<T: ?Sized + HasNodeAttr> NodeAttrExt for T {
 
     fn set_node_attr(&mut self, node_attributes: NodeAttr) -> OpmResult<()> {
         let node_attr_mut = self.node_attr_mut();
-        if let Some(iso) = node_attributes.isometry() {
-            node_attr_mut.set_isometry(iso);
-        }
         if let Some(alignment) = node_attributes.alignment() {
             node_attr_mut.set_alignment(*alignment);
         }
+        node_attr_mut.set_positioning(*node_attributes.positioning());
         node_attr_mut.set_name(node_attributes.name());
         node_attr_mut.set_inverted(node_attributes.inverted());
         if let Some((node_idx, distance)) = node_attributes.get_align_like_node_at_distance() {

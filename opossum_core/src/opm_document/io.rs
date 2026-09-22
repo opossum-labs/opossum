@@ -196,7 +196,7 @@ mod tests {
             Analyzer, AnalyzerType, GhostFocusConfig, RayTraceConfig,
             ghostfocus::GhostFocusAnalyzer, raytrace::RayTracingAnalyzer,
         },
-        core_optics::{Alignable, OpticNode, PortType},
+        core_optics::{Alignable, OpticNode, PortType, node_attr::NodePositioning},
         degree,
         gain::{ConstGain, GainModel},
         joule,
@@ -209,7 +209,7 @@ mod tests {
             collimated_line_ray_builder, round_collimated_ray_builder,
         },
         refractive_index::RefrIndexConst,
-        utils::{geom_transformation::Isometry, test_helper::test_helper::check_logs},
+        utils::test_helper::test_helper::check_logs,
     };
     use std::path::PathBuf;
     use tempfile::NamedTempFile;
@@ -818,7 +818,10 @@ mod tests {
         );
 
         let node_ref = &doc.scenery().nodes()[0];
-        assert_eq!(node_ref.node_attr().isometry(), Some(Isometry::identity()));
+        assert_eq!(
+            node_ref.node_attr().positioning(),
+            &NodePositioning::Automatic(None)
+        );
 
         Ok(())
     }

@@ -136,7 +136,7 @@ mod test {
     use super::*;
     use crate::{
         analyzers::energy::EnergyConfig,
-        core_optics::PortType,
+        core_optics::{PortType, node_attr::NodePositioning},
         joule,
         light::{LightData, Ray, Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer,
@@ -240,7 +240,7 @@ mod test {
     #[test]
     fn analyze_raytrace_without_aperture() -> OpmResult<()> {
         let mut dummy = Dummy::default();
-        dummy.set_isometry(Isometry::identity())?;
+        dummy.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let ray = Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1064.0), joule!(1.0))?;
         let rays = Rays::from(ray);
 
@@ -262,7 +262,7 @@ mod test {
     #[test]
     fn analyze_raytrace_inverted() -> OpmResult<()> {
         let mut dummy = Dummy::default();
-        dummy.set_isometry(Isometry::identity())?;
+        dummy.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         dummy.set_inverted(true)?;
 
         let ray = Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1064.0), joule!(1.0))?;

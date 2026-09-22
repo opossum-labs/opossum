@@ -21,12 +21,14 @@ use std::error::Error;
 #[actix_web::main]
 async fn main() -> core::result::Result<(), impl Error> {
     let args: Vec<String> = std::env::args().collect();
-    let debug_payload = args.iter().any(|arg| arg == "--debug-payload" || arg == "-d");
+    let debug_payload = args
+        .iter()
+        .any(|arg| arg == "--debug-payload" || arg == "-d");
 
     if debug_payload {
         println!("[OPOSSUM] Detailed payload debugging enabled (--debug-payload).");
     }
 
     let config = server::ServerConfig { debug_payload };
-    server::start_with_config(config).await
+    server::start_with_config(&config).await
 }

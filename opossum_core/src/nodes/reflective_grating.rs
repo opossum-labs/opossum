@@ -270,7 +270,7 @@ mod test {
     use super::*;
     use crate::{
         analyzers::{RayTraceConfig, energy::EnergyConfig},
-        core_optics::PortType,
+        core_optics::{PortType, node_attr::NodePositioning},
         degree, joule,
         light::{Ray, Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer,
@@ -443,7 +443,7 @@ mod test {
     fn analyze_geometric_littrow_ok() -> OpmResult<()> {
         let mut node =
             ReflectiveGrating::default().with_rot_from_littrow(nanometer!(1000.), degree!(0.))?;
-        node.set_isometry(Isometry::new(millimeter!(0., 0., 0.), degree!(0., 0., 0.))?)?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let mut input = LightResult::default();
         let rays = Rays::from(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0))?);
         let input_light = LightData::Geometric(rays);
@@ -468,7 +468,7 @@ mod test {
         let angle_from_littrow = degree!(1.);
         let mut node =
             ReflectiveGrating::default().with_rot_from_littrow(wvl, angle_from_littrow)?;
-        node.set_isometry(Isometry::new(millimeter!(0., 0., 0.), degree!(0., 0., 0.))?)?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let mut input = LightResult::default();
         let rays = Rays::from(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0))?);
         let input_light = LightData::Geometric(rays);

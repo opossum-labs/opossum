@@ -3,7 +3,7 @@
 //! This module provides common attributes and utilities for optical nodes, such as [`Properties`], geometric data (isometries), and GUI positioning.
 //! These attributes are shared across different types of optical nodes in the system.
 use nalgebra::Point2;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::BTreeMap;
 use uom::si::f64::Length;
 use uuid::Uuid;
@@ -80,6 +80,90 @@ where
     Ok(sanitize_filename(&s))
 }
 
+/// Defines the positioning strategy of an optical node.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum NodePositioning {
+    /// Fixed user-defined absolute position in 3D space.
+    Absolute(Isometry),
+    /// Automatically aligned along the optical axis.
+    ///
+    /// The inner option stores the calculated geometry from a positioning run.
+    /// - `None`: Not yet calculated for the current configuration.
+    /// - `Some(isometry)`: Calculated in a previous alignment pass.
+    Automatic(Option<Isometry>),
+}
+
+impl Default for NodePositioning {
+    fn default() -> Self {
+        Self::Automatic(None)
+    }
+}
+
+impl NodePositioning {
+    /// Returns the effective isometry, whether absolute or calculated by an automatic run.
+    #[must_use]
+    pub const fn effective_position(&self) -> Option<&Isometry> {
+        match self {
+            Self::Absolute(iso) => Some(iso),
+            Self::Automatic(cached) => cached.as_ref(),
+        }
+    }
+
+    /// Returns `true` if this node uses automatic positioning.
+    #[must_use]
+    pub const fn is_automatic(&self) -> bool {
+        matches!(self, Self::Automatic(_))
+    }
+
+    /// Sets the cached runtime isometry if the node is in automatic mode.
+    ///
+    /// Does nothing if the node is configured as absolute.
+    pub const fn set_cached_isometry(&mut self, iso: Isometry) {
+        if let Self::Automatic(cached) = self {
+            *cached = Some(iso);
+        }
+    }
+
+    /// Clears the cached runtime isometry, resetting it to `Automatic(None)`.
+    pub const fn clear_cache(&mut self) {
+        if let Self::Automatic(cached) = self {
+            *cached = None;
+        }
+    }
+}
+
+// Internal proxy for serialization to ensure runtime cache is never written to disk.
+#[derive(Serialize, Deserialize)]
+enum PositioningSerdeProxy {
+    Absolute(Isometry),
+    Automatic,
+}
+
+impl Serialize for NodePositioning {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let proxy = match self {
+            Self::Absolute(iso) => PositioningSerdeProxy::Absolute(*iso),
+            Self::Automatic(_) => PositioningSerdeProxy::Automatic,
+        };
+        proxy.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for NodePositioning {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match PositioningSerdeProxy::deserialize(deserializer)? {
+            PositioningSerdeProxy::Absolute(iso) => Ok(Self::Absolute(iso)),
+            PositioningSerdeProxy::Automatic => Ok(Self::Automatic(None)),
+        }
+    }
+}
+
 /// Struct for storing common attributes of optical nodes.
 ///
 /// `NodeAttr` encapsulates metadata and configuration for an optical node, including its type, name, ports, unique identifier,
@@ -100,8 +184,9 @@ pub struct NodeAttr {
     uuid: Uuid,
     #[serde(default, skip_serializing_if = "Properties::is_empty")]
     props: Properties,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    isometry: Option<Isometry>,
+    /// 3D placement mode (Absolute or Automatic).
+    #[serde(default, skip_serializing_if = "NodePositioning::is_automatic")]
+    positioning: NodePositioning,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     inverted: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -141,7 +226,7 @@ impl NodeAttr {
             ports: OpticPorts::default(),
             runtime_surfaces: RuntimeSurfaces::default(),
             runtime_medium: None,
-            isometry: None,
+            positioning: NodePositioning::Automatic(None),
             inverted: false,
             alignment: None,
             align_like_node_at_distance: None,
@@ -249,19 +334,23 @@ impl NodeAttr {
             Err(OpossumError::Other("not a bool property".into()))
         }
     }
-    /// Sets the isometry of this [`NodeAttr`].
-    pub const fn set_isometry(&mut self, isometry: Isometry) {
-        self.isometry = Some(isometry);
-    }
-
-    /// Sets the isometry option of this [`NodeAttr`].
-    pub const fn set_isometry_option(&mut self, isometry_opt: Option<Isometry>) {
-        self.isometry = isometry_opt;
-    }
-    /// Returns a reference to the isometry of this [`NodeAttr`].
+    /// Returns the current positioning configuration.
     #[must_use]
-    pub const fn isometry(&self) -> Option<Isometry> {
-        self.isometry
+    pub const fn positioning(&self) -> &NodePositioning {
+        &self.positioning
+    }
+    /// Returns a mutable reference to the positioning configuration.
+    pub const fn positioning_mut(&mut self) -> &mut NodePositioning {
+        &mut self.positioning
+    }
+    /// Sets the positioning strategy.
+    pub const fn set_positioning(&mut self, positioning: NodePositioning) {
+        self.positioning = positioning;
+    }
+    /// Convenience getter for the effective isometry.
+    #[must_use]
+    pub const fn effective_position(&self) -> Option<&Isometry> {
+        self.positioning.effective_position()
     }
     /// Returns the local alignment isometry of a node (if any).
     #[must_use]
@@ -298,7 +387,6 @@ impl NodeAttr {
     pub const fn raw_ports(&self) -> &OpticPorts {
         &self.ports
     }
-
     /// Returns a mutable reference to the optic ports of this [`NodeAttr`].
     ///
     /// **Warning**: See [`raw_ports()`](NodeAttr::raw_ports). Use
@@ -316,7 +404,6 @@ impl NodeAttr {
     pub const fn runtime_surfaces_mut(&mut self) -> &mut RuntimeSurfaces {
         &mut self.runtime_surfaces
     }
-
     /// Returns a reference to the runtime surfaces.
     #[must_use]
     pub const fn runtime_surfaces(&self) -> &RuntimeSurfaces {

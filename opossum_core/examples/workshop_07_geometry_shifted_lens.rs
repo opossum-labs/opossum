@@ -40,7 +40,7 @@
 //!   optical node extension traits
 //! - `std::{env, path::Path}` is used to determine the output directory
 //!   and save the generated `.opm` file
-//! 
+//!
 use opossum_core::{
     core_optics::{NodeAttrExt, OpticNodeExt},
     prelude::*,

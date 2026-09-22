@@ -5,12 +5,14 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticPorts, OpticRef, node_attr::HasNodeAttr},
+    core_optics::{
+        NodeAttr, NodeAttrExt, OpticNode, OpticPorts, OpticRef,
+        node_attr::{HasNodeAttr, NodePositioning},
+    },
     error::{OpmResult, OpossumError},
     light::LightResult,
     nodes::NodeRegistration,
     properties::Proptype,
-    utils::geom_transformation::Isometry,
 };
 use opm_macros_lib::OpmNode;
 use uuid::Uuid;
@@ -95,9 +97,7 @@ impl NodeReference {
         let ref_name = format!("ref ({})", node.name());
         refr.node_attr.set_name(&ref_name);
         refr.ports = node.ports();
-        if let Some(iso) = node.isometry() {
-            refr.node_attr_mut().set_isometry(iso);
-        }
+        refr.node_attr_mut().set_positioning(*node.positioning());
         Ok(refr)
     }
 
@@ -116,9 +116,7 @@ impl NodeReference {
         let ref_name = format!("ref ({})", node.name());
         self.node_attr.set_name(&ref_name);
         self.ports = node.ports();
-        if let Some(iso) = node.isometry() {
-            self.node_attr_mut().set_isometry(iso);
-        }
+        self.node_attr_mut().set_positioning(*node.positioning());
         Ok(())
     }
 
@@ -136,19 +134,13 @@ impl OpticNode for NodeReference {
         }
         ports
     }
-
-    fn isometry(&self) -> Option<Isometry> {
-        self.node_attr().isometry()
+    fn positioning(&self) -> &NodePositioning {
+        self.node_attr().positioning()
     }
-
-    fn set_isometry(
-        &mut self,
-        isometry: crate::utils::geom_transformation::Isometry,
-    ) -> OpmResult<()> {
-        self.node_attr_mut().set_isometry(isometry);
+    fn set_positioning(&mut self, positioning: NodePositioning) -> OpmResult<()> {
+        self.node_attr_mut().set_positioning(positioning);
         Ok(())
     }
-
     fn update_surfaces(&mut self) -> OpmResult<()> {
         Ok(())
     }
@@ -290,7 +282,10 @@ mod test {
         let real_lens_id = scenery.add_node(lens)?;
 
         // Ensure the real lens is not positioned yet
-        assert!(scenery.node(real_lens_id)?.isometry().is_none());
+        assert_eq!(
+            scenery.node(real_lens_id)?.positioning(),
+            &NodePositioning::Automatic(None)
+        );
 
         // 3. Add NodeReference pointing to the unplaced lens
         let lens_proxy = NodeReference::from_node(&scenery.node(real_lens_id)?)?;
@@ -337,19 +332,11 @@ mod test {
         reloaded_doc.analyze()?;
 
         // 9. Assertions:
-        // A) The real lens must now have a valid isometry
-        let real_lens_iso = reloaded_doc.scenery().node(real_lens_id)?.isometry();
-        assert!(
-            real_lens_iso.is_some(),
-            "The real lens should have received an isometry from the forward reference"
-        );
-
-        // B) The forward reference proxy must share the exact same isometry
-        let ref_iso = reloaded_doc.scenery().node(ref_id)?.isometry();
-        assert!(
-            ref_iso.is_some(),
-            "The reference node must have a valid isometry assigned"
-        );
+        // The real lens must now have a valid isometry
+        let real_lens = reloaded_doc.scenery().node(real_lens_id)?;
+        let real_lens_iso = real_lens.positioning();
+        let ref_node = reloaded_doc.scenery().node(ref_id)?;
+        let ref_iso = ref_node.positioning();
         assert_eq!(
             ref_iso, real_lens_iso,
             "Reference and real lens must occupy the exact same spatial location"

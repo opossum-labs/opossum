@@ -207,7 +207,7 @@ pub(crate) fn single_io_port_names<T: ?Sized + OpticNode>(node: &T) -> OpmResult
 
 impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNodeExt for T {
     fn effective_node_iso(&self) -> Option<Isometry> {
-        self.isometry().as_ref().and_then(|iso| {
+        self.positioning().effective_position().and_then(|iso| {
             self.node_attr()
                 .alignment()
                 .as_ref()

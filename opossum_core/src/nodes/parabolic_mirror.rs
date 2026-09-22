@@ -484,7 +484,7 @@ mod test {
             ghostfocus::AnalysisGhostFocus,
             raytrace::AnalysisRayTrace,
         },
-        core_optics::OpticNode,
+        core_optics::{OpticNode, node_attr::NodePositioning},
         degree,
         distributions::position::Hexapolar,
         error::OpmResult,
@@ -931,7 +931,7 @@ mod test {
     #[test]
     fn analysis_raytrace() -> OpmResult<()> {
         let mut node = ParabolicMirror::default();
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),
@@ -1041,7 +1041,9 @@ mod test {
     #[test]
     fn analysis_ghost_focus() -> OpmResult<()> {
         let mut node = ParabolicMirror::default();
-        node.set_isometry(Isometry::new_along_z(millimeter!(10.0))?)?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::new_along_z(
+            millimeter!(10.0),
+        )?))?;
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),
@@ -1063,7 +1065,7 @@ mod test {
     #[test]
     fn calc_node_position() -> OpmResult<()> {
         let mut node = ParabolicMirror::default();
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.),
             joule!(1.),

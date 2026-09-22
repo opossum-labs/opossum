@@ -736,7 +736,7 @@ mod test {
     use opossum_core::{
         millimeter,
         nodes::Dummy,
-        types::api_types::{NodeEditorPanel, UndoRedoResponse},
+        types::api_types::{NodeEditorPanel, PositioningRequest, UndoRedoResponse},
         utils::geom_transformation::Isometry,
     };
 
@@ -887,7 +887,7 @@ mod test {
         );
 
         let body = patch_and_undo!(UpdateNodeRequest {
-            isometry: Some(Some(iso)),
+            positioning: Some(PositioningRequest::Absolute(iso)),
             ..Default::default()
         });
         assert_eq!(
@@ -907,7 +907,7 @@ mod test {
         );
 
         let body = patch_and_undo!(UpdateNodeRequest {
-            isometry: Some(Some(iso)),
+            positioning: Some(PositioningRequest::Absolute(iso)),
             alignment: Some(Some(iso)),
             ..Default::default()
         });

@@ -318,7 +318,7 @@ mod test {
             raytrace::AnalysisRayTrace,
         },
         apertures::ApertureShape,
-        core_optics::NodeAttrExt,
+        core_optics::{NodeAttrExt, node_attr::NodePositioning},
         distributions::position::Hexapolar,
         joule,
         light::{LightData, LightResult, Rays},
@@ -529,7 +529,9 @@ mod test {
             millimeter!(10.0),
             &RefrIndexConst::new(2.0)?,
         )?;
-        node.set_isometry(Isometry::new_along_z(millimeter!(10.0))?)?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::new_along_z(
+            millimeter!(10.0),
+        )?))?;
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
@@ -559,7 +561,7 @@ mod test {
             millimeter!(10.0),
             &RefrIndexConst::new(1.0)?,
         )?;
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
@@ -592,7 +594,7 @@ mod test {
             millimeter!(10.0),
             RefrIndexConst::new(1.5)?,
         )?;
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         test_volume_propagation_regression(
             &mut node,
             &[
@@ -646,7 +648,7 @@ mod test {
             center_thickness,
             RefrIndexConst::new(1.5)?,
         )?;
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let path_length = path_length_through(&node, ray_position)?;
         // Both surfaces recede by the same sag, so the volume is two sags thinner at that height.
         let sag = curvature - (curvature * curvature - ray_height * ray_height).sqrt();
@@ -1098,7 +1100,7 @@ mod test {
             millimeter!(10.0),
             mat.clone(),
         )?;
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
 
         let mut config = RayTraceConfig::default();
         config.set_ambient_material(mat);

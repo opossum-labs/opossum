@@ -8,7 +8,9 @@ use uuid::Uuid;
 use crate::{
     analyzers::{Analyzable, AnalyzerKind, propagation_strategy::PropagationStrategy},
     core_optics::{
-        NodeAttrExt, OpticPorts, PortType, node_attr::HasNodeAttr, volumetric::Volumetric,
+        NodeAttrExt, OpticPorts, PortType,
+        node_attr::{HasNodeAttr, NodePositioning},
+        volumetric::Volumetric,
     },
     error::OpmResult,
     light::LightData,
@@ -45,8 +47,8 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     ///
     /// # Errors
     /// This function errors if the `update_surfaces` function fails
-    fn set_isometry(&mut self, isometry: Isometry) -> OpmResult<()> {
-        self.node_attr_mut().set_isometry(isometry);
+    fn set_positioning(&mut self, positioning: NodePositioning) -> OpmResult<()> {
+        self.node_attr_mut().set_positioning(positioning);
         self.update_surfaces()
     }
     /// Reset internal data (e.g. internal state of detector nodes)
@@ -118,8 +120,8 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
         ports
     }
     /// Return the (base) [`Isometry`] of this optical node.
-    fn isometry(&self) -> Option<Isometry> {
-        self.node_attr().isometry()
+    fn positioning(&self) -> &NodePositioning {
+        self.node_attr().positioning()
     }
     /// Set this [`OpticNode`] as inverted.
     ///
@@ -168,8 +170,8 @@ pub trait Alignable: OpticNode + Sized {
     /// This function will return an error if the given `decenter` values are not finite.
     fn with_decenter(mut self, decenter: Point3<Length>) -> OpmResult<Self> {
         let old_rotation = self
-            .isometry()
-            .as_ref()
+            .positioning()
+            .effective_position()
             .map_or_else(Point3::origin, Isometry::rotation);
         let translation_iso = Isometry::new(decenter, old_rotation)?;
         self.node_attr_mut().set_alignment(translation_iso);
@@ -181,8 +183,8 @@ pub trait Alignable: OpticNode + Sized {
     /// This function will return an error if the given `decenter` values are not finite.
     fn with_tilt(mut self, tilt: Point3<Angle>) -> OpmResult<Self> {
         let old_translation = self
-            .isometry()
-            .as_ref()
+            .positioning()
+            .effective_position()
             .map_or_else(Point3::origin, Isometry::translation);
         let rotation_iso = Isometry::new(old_translation, tilt)?;
         self.node_attr_mut().set_alignment(rotation_iso);
@@ -264,7 +266,7 @@ mod tests {
         let decenter = millimeter!(1.0, 2.0, 3.0);
         let tilt = degree!(0.0, 0.0, 0.0);
         let iso = Isometry::new(decenter, tilt)?;
-        node.set_isometry(iso)?;
+        node.set_positioning(NodePositioning::Absolute(iso))?;
         let local_trans = millimeter!(4.0, 5.0, 6.0);
         node.set_alignment(local_trans, degree!(0.0, 0.0, 0.0))?;
         let iso = node.effective_node_iso().ok_or(OpossumError::OpmDocument(
@@ -295,7 +297,7 @@ mod tests {
             OpossumError::Other("no effective node iso defined".to_string()),
         );
 
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         assert_err(
             node.effective_surface_iso("wrong"),
             OpossumError::Other("no surface with name wrong defined".to_string()),

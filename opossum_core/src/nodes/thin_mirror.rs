@@ -242,10 +242,9 @@ mod test {
     use super::*;
     use crate::{
         analyzers::{RayTraceConfig, energy::EnergyConfig},
-        core_optics::PortType,
+        core_optics::{PortType, node_attr::NodePositioning},
         degree, joule,
-        light::spectrum_helper::create_he_ne_spec,
-        light::{Ray, Rays},
+        light::{Ray, Rays, spectrum_helper::create_he_ne_spec},
         nanometer,
         nodes::test_helper::test_helper::*,
         utils::geom_transformation::Isometry,
@@ -362,11 +361,10 @@ mod test {
     #[test]
     fn analyze_geometric_ok() -> OpmResult<()> {
         let mut node = ThinMirror::default();
-
-        node.set_isometry(Isometry::new(
+        node.set_positioning(NodePositioning::Absolute(Isometry::new(
             millimeter!(0.0, 0.0, 10.0),
             degree!(0.0, 0.0, 0.0),
-        )?)?;
+        )?))?;
         let mut input = LightResult::default();
         let rays = Rays::from(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0))?);
         let input_light = LightData::Geometric(rays);

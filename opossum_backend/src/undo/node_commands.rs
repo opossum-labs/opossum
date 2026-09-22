@@ -3,13 +3,13 @@
 //! [`Command::PatchPort`].
 use nalgebra::Point2;
 use opossum_core::{
-    core_optics::{NodeAttr, OpticRef},
+    core_optics::{NodeAttr, OpticRef, node_attr::NodePositioning},
     error::OpossumError,
     opm_document::OpmDocument,
     prelude::{PortType, Proptype},
     types::api_types::{
-        ConnectInfo, DocumentChange, NodeEditorPanel, NodeInfo, UpdateNodeRequest,
-        UpdatePortRequest,
+        ConnectInfo, DocumentChange, NodeEditorPanel, NodeInfo, PositioningRequest,
+        UpdateNodeRequest, UpdatePortRequest,
     },
 };
 use uuid::Uuid;
@@ -265,7 +265,7 @@ pub(super) fn apply_patch_node(
 pub(super) const fn panel_for_update(new: &UpdateNodeRequest) -> Option<NodeEditorPanel> {
     if new.alignment.is_some() {
         Some(NodeEditorPanel::Alignment)
-    } else if new.isometry.is_some() {
+    } else if new.positioning.is_some() {
         Some(NodeEditorPanel::Positioning)
     } else if new.name.is_some() || new.inverted.is_some() {
         Some(NodeEditorPanel::General)
@@ -383,7 +383,7 @@ fn node_info(node: &OpticRef) -> NodeInfo {
     NodeInfo::from_analyzable(&**node, None)
 }
 
-/// Applies `new`'s populated fields to `node_attr`, mirroring `patch_node`'s existing field-by-field logic.
+/// Applies `new`'s populated fields to `node_attr`, converting API DTO types to internal domain types.
 fn apply_node_request(node_attr: &mut NodeAttr, new: &UpdateNodeRequest) {
     if let Some(name) = &new.name {
         node_attr.set_name(name);
@@ -391,8 +391,13 @@ fn apply_node_request(node_attr: &mut NodeAttr, new: &UpdateNodeRequest) {
     if let Some(inverted) = new.inverted {
         node_attr.set_inverted(inverted);
     }
-    if let Some(iso_opt) = new.isometry {
-        node_attr.set_isometry_option(iso_opt);
+    if let Some(positioning_req) = &new.positioning {
+        // Map the API PositioningRequest to internal NodePositioning
+        let domain_positioning = match positioning_req {
+            PositioningRequest::Absolute(iso) => NodePositioning::Absolute(*iso),
+            PositioningRequest::Automatic => NodePositioning::Automatic(None),
+        };
+        node_attr.set_positioning(domain_positioning);
     }
     if let Some(align_opt) = new.alignment {
         node_attr.set_alignment_option(align_opt);
@@ -412,7 +417,14 @@ pub fn capture_old_node_request(
     UpdateNodeRequest {
         name: new.name.as_ref().map(|_| node_attr.name().to_string()),
         inverted: new.inverted.map(|_| node_attr.inverted()),
-        isometry: new.isometry.map(|_| node_attr.isometry()),
+        // Map internal NodePositioning back to PositioningRequest DTO for the undo command
+        positioning: new
+            .positioning
+            .as_ref()
+            .map(|_| match node_attr.positioning() {
+                NodePositioning::Absolute(iso) => PositioningRequest::Absolute(*iso),
+                NodePositioning::Automatic(_) => PositioningRequest::Automatic,
+            }),
         alignment: new.alignment.map(|_| *node_attr.alignment()),
         gui_position: new
             .gui_position

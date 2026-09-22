@@ -39,14 +39,14 @@ fn create_banner(title: &str, color: &str) -> String {
     let padded_title = if title.is_empty() {
         String::new()
     } else {
-        format!(" {} ", title)
+        format!(" {title} ")
     };
-    let centered = format!("{:=^width$}", padded_title, width = BANNER_WIDTH);
-    format!("{}{}{}", color, centered, colors::RESET)
+    let centered = format!("{padded_title:=^BANNER_WIDTH$}");
+    format!("{color}{centered}{}", colors::RESET)
 }
 
 /// Returns an ANSI color string matching the HTTP method semantics.
-fn method_color(method: &Method) -> &'static str {
+const fn method_color(method: &Method) -> &'static str {
     match *method {
         Method::GET => colors::BOLD_CYAN,
         Method::POST => colors::BOLD_GREEN,
@@ -85,14 +85,12 @@ pub fn format_payload(bytes: &[u8]) -> String {
     }
 
     // 1. Attempt JSON pretty-printing
-    if (text.starts_with('{') && text.ends_with('}'))
-        || (text.starts_with('[') && text.ends_with(']'))
+    if ((text.starts_with('{') && text.ends_with('}'))
+        || (text.starts_with('[') && text.ends_with(']')))
+        && let Ok(json_val) = serde_json::from_str::<serde_json::Value>(text)
+        && let Ok(pretty) = serde_json::to_string_pretty(&json_val)
     {
-        if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(text) {
-            if let Ok(pretty) = serde_json::to_string_pretty(&json_val) {
-                return pretty;
-            }
-        }
+        return pretty;
     }
 
     // 2. Attempt RON pretty-printing
@@ -195,18 +193,18 @@ where
             println!("{}", create_banner(&req_title, colors::BOLD_CYAN));
             println!("--> {m_color}{method}{reset} {path}", reset = colors::RESET);
 
-            if !req_body.is_empty() {
+            if req_body.is_empty() {
+                println!(
+                    "--> {dim}Payload: <empty>{reset}",
+                    dim = colors::DIM,
+                    reset = colors::RESET
+                );
+            } else {
                 println!(
                     "--> {dim}Payload:{reset}\n{payload}",
                     dim = colors::DIM,
                     reset = colors::RESET,
                     payload = format_payload(&req_body)
-                );
-            } else {
-                println!(
-                    "--> {dim}Payload: <empty>{reset}",
-                    dim = colors::DIM,
-                    reset = colors::RESET
                 );
             }
 
@@ -264,18 +262,18 @@ where
                 s_color = status_color(status),
                 reset = colors::RESET
             );
-            if !res_bytes.is_empty() {
+            if res_bytes.is_empty() {
+                println!(
+                    "<-- {dim}Payload: <empty>{reset}",
+                    dim = colors::DIM,
+                    reset = colors::RESET
+                );
+            } else {
                 println!(
                     "<-- {dim}Payload:{reset}\n{payload}",
                     dim = colors::DIM,
                     reset = colors::RESET,
                     payload = format_payload(&res_bytes)
-                );
-            } else {
-                println!(
-                    "<-- {dim}Payload: <empty>{reset}",
-                    dim = colors::DIM,
-                    reset = colors::RESET
                 );
             }
             // Closing line with identical length plus an empty line for readability

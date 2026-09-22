@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::{
     analyzers::energy::{AnalysisEnergy, EnergyConfig},
-    core_optics::NodeAttrExt,
+    core_optics::{NodeAttrExt, node_attr::NodePositioning},
     error::{OpmResult, OpossumError},
     light::{LightData, LightResult},
     nodes::NodeGroup,
@@ -297,15 +297,15 @@ impl OpticGraph {
                 // if a node with more than one input was already placed (in an earlier loop cycle),
                 // check, if the resulting isometry is consistent
                 let node = &mut self.g[idx];
-                if let Some(iso) = node.isometry() {
-                    if iso != node_iso {
+                if let Some(iso) = node.positioning().effective_position() {
+                    if iso != &node_iso {
                         warn!("Node {} cannot be consistently positioned.", node.name());
                         warn!("Position based on previous input port is: {iso}");
                         warn!("Position based on this port would be:     {node_iso}");
                         warn!("Keeping first position");
                     }
                 } else {
-                    node.set_isometry(node_iso)?;
+                    node.set_positioning(NodePositioning::Automatic(Some(node_iso)))?;
                 }
             } else {
                 return Err(OpossumError::Analysis(
@@ -383,16 +383,16 @@ mod test {
     fn analyze_subtree_warning() -> OpmResult<()> {
         let mut graph = OpticGraph::default();
         let mut dummy = Dummy::default();
-        dummy.set_isometry(Isometry::identity())?;
+        dummy.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let d1 = graph.add_node(dummy)?;
         let mut dummy = Dummy::default();
-        dummy.set_isometry(Isometry::identity())?;
+        dummy.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let d2 = graph.add_node(dummy)?;
         let mut dummy = Dummy::default();
-        dummy.set_isometry(Isometry::identity())?;
+        dummy.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let d3 = graph.add_node(dummy)?;
         let mut dummy = Dummy::default();
-        dummy.set_isometry(Isometry::identity())?;
+        dummy.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let d4 = graph.add_node(dummy)?;
         graph.connect_nodes(d1, "output_1", d2, "input_1", Length::zero())?;
         graph.connect_nodes(d3, "output_1", d4, "input_1", Length::zero())?;
@@ -410,7 +410,7 @@ mod test {
     fn analyze_stale_node() -> OpmResult<()> {
         let mut graph = OpticGraph::default();
         let mut dummy = Dummy::default();
-        dummy.set_isometry(Isometry::identity())?;
+        dummy.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let d1 = graph.add_node(dummy)?;
         let _ = graph.add_node(Dummy::new("stale node"))?;
         graph.map_port(d1, &PortType::Input, "input_1", "input_1")?;

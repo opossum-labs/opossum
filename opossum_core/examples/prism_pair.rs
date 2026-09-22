@@ -1,5 +1,7 @@
 use opossum_core::{
-    core_optics::NodeAttrExt, prelude::*, refractive_index::RefrIndexConst,
+    core_optics::{NodeAttrExt, node_attr::NodePositioning},
+    prelude::*,
+    refractive_index::RefrIndexConst,
     utils::geom_transformation::Isometry,
 };
 use std::path::Path;
@@ -21,8 +23,10 @@ fn main() -> OpmResult<()> {
         degree!(-30.0),
         &RefrIndexConst::new(1.5068)?,
     )?;
-    let iso = Isometry::new(millimeter!(0.0, 20.0, 110.0), degree!(30.0, 0.0, 0.0))?;
-    prism2.set_isometry(iso)?;
+    prism2.set_positioning(NodePositioning::Absolute(Isometry::new(
+        millimeter!(0.0, 20.0, 110.0),
+        degree!(30.0, 0.0, 0.0),
+    )?))?;
     let p2 = scenery.add_node(prism2)?;
 
     let mut rpv = RayPropagationVisualizer::default();

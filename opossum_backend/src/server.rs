@@ -2,9 +2,10 @@
 
 use actix_cors::Cors;
 use actix_web::{
+    App, HttpResponse, HttpServer,
     dev::Server,
     middleware::{Condition, Logger},
-    web, App, HttpResponse, HttpServer,
+    web,
 };
 use std::net::Ipv4Addr;
 use utoipa::OpenApi;
@@ -12,8 +13,8 @@ use utoipa_actix_web::AppExt;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
-    app_state::AppState, error::BackEndErrorResponse, pages, payload_logger::PayloadLogger,
-    routes, sse_logger::init_logger,
+    app_state::AppState, error::BackEndErrorResponse, pages, payload_logger::PayloadLogger, routes,
+    sse_logger::init_logger,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -26,7 +27,7 @@ async fn not_found() -> HttpResponse {
     BackEndErrorResponse::not_found().error_response()
 }
 
-pub fn start_with_config(config: ServerConfig) -> Server {
+pub fn start_with_config(config: &ServerConfig) -> Server {
     #[derive(OpenApi)]
     #[openapi(
         info(
@@ -78,8 +79,6 @@ pub fn start_with_config(config: ServerConfig) -> Server {
     let srv = HttpServer::new({
         let app_state = app_state.clone();
         let debug_payload = config.debug_payload;
-        let payload_logger = payload_logger.clone();
-
         move || {
             let cors = Cors::default()
                 .allow_any_origin()

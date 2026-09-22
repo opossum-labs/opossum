@@ -544,7 +544,7 @@ mod test {
     use super::*;
     use crate::{
         apertures::{Aperture, ApertureType},
-        core_optics::{OpticNode, volumetric::Volumetric},
+        core_optics::{OpticNode, node_attr::NodePositioning, volumetric::Volumetric},
         degree,
         geometry::{Plane, body::SurfaceBoundedBody, geo_surface::GeoSurfaceRef},
         millimeter,
@@ -756,7 +756,7 @@ mod test {
         // The whole point of the exercise: the domain comes from a real component, through the
         // body its own surfaces and clear aperture enclose.
         let mut lens = Lens::default();
-        lens.set_isometry(Isometry::identity())?;
+        lens.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let body = lens.volume_body()?;
         let field = InversionField::from_body(&body, (9, 9, 5))?;
         assert_eq!(field.dimensions(), (9, 9, 5));

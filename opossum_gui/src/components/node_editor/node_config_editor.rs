@@ -7,6 +7,7 @@ use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use futures_util::StreamExt;
 use opossum_core::core_optics::PortType;
+use opossum_core::core_optics::node_attr::NodePositioning;
 use opossum_core::prelude::{AnalyzerType, Isometry, Proptype};
 use opossum_core::types::api_types::UpdatePortRequest;
 use uuid::Uuid;
@@ -26,7 +27,7 @@ pub enum NodeChangeAction {
         graph_id: Uuid,
     },
     Property(String, Proptype),
-    Isometry(Option<Isometry>),
+    Isometry(NodePositioning),
     AnalyzerType(AnalyzerType),
     /// The pump scenarios an analyzer is run in, in the given order - one report per entry, and a
     /// single passive run when empty.

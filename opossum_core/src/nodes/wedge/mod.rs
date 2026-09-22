@@ -194,7 +194,7 @@ mod test {
             energy::{AnalysisEnergy, EnergyConfig},
             raytrace::AnalysisRayTrace,
         },
-        core_optics::{NodeAttrExt, PortType},
+        core_optics::{NodeAttrExt, PortType, node_attr::NodePositioning},
         degree, joule,
         light::{LightData, LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
         nanometer,
@@ -415,10 +415,10 @@ mod test {
     #[test]
     fn analyze_geometric_ok() -> OpmResult<()> {
         let mut node = Wedge::default();
-        node.set_isometry(Isometry::new(
+        node.set_positioning(NodePositioning::Absolute(Isometry::new(
             millimeter!(0.0, 0.0, 10.0),
             degree!(0.0, 0.0, 0.0),
-        )?)?;
+        )?))?;
         let mut input = LightResult::default();
         let rays = Rays::from(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0))?);
         let input_light = LightData::Geometric(rays);
@@ -448,7 +448,7 @@ mod test {
             degree!(5.0),
             RefrIndexConst::new(1.5)?,
         )?;
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         test_volume_propagation_regression(
             &mut node,
             &[
@@ -508,7 +508,7 @@ mod test {
             degree!(5.0),
             RefrIndexConst::new(1.5)?,
         )?;
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let above = path_length_through(&node, millimeter!(0.0, 5.0, 0.0))?;
         let below = path_length_through(&node, millimeter!(0.0, -5.0, 0.0))?;
         assert!(
