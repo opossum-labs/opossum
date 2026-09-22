@@ -3,8 +3,6 @@
 //! Provides non-overridable helper methods for querying and updating node attributes
 //! on any type that implements [`HasNodeAttr`].
 
-use std::collections::HashMap;
-use nalgebra::Point2;
 use crate::{
     core_optics::{
         NodeAttr, OpticPorts, hit_map::HitMap, node_attr::HasNodeAttr, optic_surface::OpticSurface,
@@ -14,6 +12,8 @@ use crate::{
     properties::{Properties, Proptype},
     utils::geom_transformation::Isometry,
 };
+use nalgebra::Point2;
+use std::collections::HashMap;
 
 /// Extension trait providing standardized, non-overridable methods
 /// for checking and manipulating core node attributes.
