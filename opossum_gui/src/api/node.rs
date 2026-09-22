@@ -450,9 +450,8 @@ pub async fn remove_port_map(
         PortType::Output => "Output",
     };
     HTTP_API_CLIENT()
-        .delete::<(), RemovePortMapResponse>(
-            &format!("/api/nodes/{group_id}/port_mappings?external_port_name={group_port_name}&port_type={port_type_str}"),
-            (),
+        .delete::<RemovePortMapResponse>(
+            &format!("/api/nodes/{group_id}/port_mappings?external_port_name={group_port_name}&port_type={port_type_str}")
         )
         .await
 }

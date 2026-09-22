@@ -2,18 +2,25 @@
 
 use actix_http::h1;
 use actix_web::{
-    Error, HttpMessage, HttpResponse, body::{BoxBody, MessageBody, to_bytes}, dev::{Service, ServiceRequest, ServiceResponse, Transform, forward_ready}, http::{Method, StatusCode, header}, web::BytesMut,
+    Error, HttpMessage, HttpResponse,
+    body::{BoxBody, MessageBody, to_bytes},
+    dev::{Service, ServiceRequest, ServiceResponse, Transform, forward_ready},
+    http::{Method, StatusCode, header},
+    web::BytesMut,
 };
-use futures_util::future::{ready, LocalBoxFuture, Ready};
 use futures_util::StreamExt;
+use futures_util::future::{LocalBoxFuture, Ready, ready};
 use std::{
     rc::Rc,
     sync::{
-        atomic::{AtomicU64, Ordering},
         Arc,
+        atomic::{AtomicU64, Ordering},
     },
 };
 use tokio::sync::Mutex;
+
+/// Standard banner display width in terminal characters
+const BANNER_WIDTH: usize = 76;
 
 /// ANSI terminal color definitions
 mod colors {
@@ -25,7 +32,17 @@ mod colors {
     pub const BOLD_GREEN: &str = "\x1b[1;32m";
     pub const BOLD_YELLOW: &str = "\x1b[1;33m";
     pub const BOLD_RED: &str = "\x1b[1;31m";
-    pub const GRAY: &str = "\x1b[90m";
+}
+
+/// Helper function to center a title between '=' characters with consistent width and ANSI coloring.
+fn create_banner(title: &str, color: &str) -> String {
+    let padded_title = if title.is_empty() {
+        String::new()
+    } else {
+        format!(" {} ", title)
+    };
+    let centered = format!("{:=^width$}", padded_title, width = BANNER_WIDTH);
+    format!("{}{}{}", color, centered, colors::RESET)
 }
 
 /// Returns an ANSI color string matching the HTTP method semantics.
@@ -155,7 +172,7 @@ where
         let counter = Arc::clone(&self.counter);
 
         Box::pin(async move {
-            // Acquire lock: guarantees strictly sequential execution
+            // Acquire sequential lock across all incoming requests
             let _guard = lock.lock().await;
             let req_id = counter.fetch_add(1, Ordering::Relaxed);
 
@@ -172,17 +189,12 @@ where
 
             let req_body = payload_bytes.freeze();
 
-            // 2. Print formatted incoming request
+            // 2. Print formatted incoming request header
             let m_color = method_color(&method);
-            println!(
-                "{cyan}================ [DEBUG: INCOMING REQUEST #{req_id}] ================{reset}",
-                cyan = colors::BOLD_CYAN,
-                reset = colors::RESET
-            );
-            println!(
-                "--> {m_color}{method}{reset} {path}",
-                reset = colors::RESET
-            );
+            let req_title = format!("DEBUG: INCOMING REQUEST #{req_id}");
+            println!("{}", create_banner(&req_title, colors::BOLD_CYAN));
+            println!("--> {m_color}{method}{reset} {path}", reset = colors::RESET);
+
             if !req_body.is_empty() {
                 println!(
                     "--> {dim}Payload:{reset}\n{payload}",
@@ -197,11 +209,6 @@ where
                     reset = colors::RESET
                 );
             }
-            println!(
-                "{gray}---------------------------------------------------------------------{reset}",
-                gray = colors::GRAY,
-                reset = colors::RESET
-            );
 
             // 3. Reconstruct the request payload stream for downstream handlers
             let (_, mut new_payload) = h1::Payload::create(true);
@@ -223,22 +230,16 @@ where
                 .and_then(|h| h.to_str().ok())
                 .is_some_and(|ct| ct.contains("text/event-stream"));
 
+            let resp_title = format!("DEBUG: OUTGOING RESPONSE #{req_id}");
+
             if is_sse {
-                println!(
-                    "{magenta}================ [DEBUG: OUTGOING RESPONSE #{req_id}] ================{reset}",
-                    magenta = colors::BOLD_MAGENTA,
-                    reset = colors::RESET
-                );
+                println!("{}", create_banner(&resp_title, colors::BOLD_MAGENTA));
                 println!(
                     "<-- {s_color}{status}{reset} for {m_color}{method}{reset} {path} [SSE Stream Active]",
                     s_color = status_color(status),
                     reset = colors::RESET
                 );
-                println!(
-                    "{magenta}====================================================================={reset}",
-                    magenta = colors::BOLD_MAGENTA,
-                    reset = colors::RESET
-                );
+                println!("{}\n", create_banner("", colors::BOLD_MAGENTA));
 
                 let mut new_res = HttpResponse::new(status);
                 *new_res.headers_mut() = res_head.headers().clone();
@@ -257,11 +258,7 @@ where
             };
 
             // 8. Print formatted outgoing response
-            println!(
-                "{magenta}================ [DEBUG: OUTGOING RESPONSE #{req_id}] ================{reset}",
-                magenta = colors::BOLD_MAGENTA,
-                reset = colors::RESET
-            );
+            println!("{}", create_banner(&resp_title, colors::BOLD_MAGENTA));
             println!(
                 "<-- {s_color}{status}{reset} for {m_color}{method}{reset} {path}",
                 s_color = status_color(status),
@@ -281,11 +278,8 @@ where
                     reset = colors::RESET
                 );
             }
-            println!(
-                "{magenta}====================================================================={reset}",
-                magenta = colors::BOLD_MAGENTA,
-                reset = colors::RESET
-            );
+            // Closing line with identical length plus an empty line for readability
+            println!("{}\n", create_banner("", colors::BOLD_MAGENTA));
 
             // 9. Reconstruct the response with a boxed body
             let mut new_res = HttpResponse::new(status);

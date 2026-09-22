@@ -13,7 +13,7 @@ use crate::HTTP_API_CLIENT;
 /// - the request fails (e.g. the scenery is not valid)
 pub async fn delete_document() -> Result<String, String> {
     HTTP_API_CLIENT()
-        .delete::<String, String>("/api/document", String::new())
+        .delete::<String>("/api/document")
         .await
 }
 pub async fn get_document_root_uuid() -> Result<Uuid, String> {

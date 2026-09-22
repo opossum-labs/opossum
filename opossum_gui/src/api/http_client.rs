@@ -204,15 +204,13 @@ impl HTTPClient {
     ///
     /// - the request fails (e.g. the route is not reachable)
     /// - the response cannot be deserialized into the expected type
-    pub async fn delete<B: Serialize + DeserializeOwned, R: Serialize + DeserializeOwned>(
+    pub async fn delete<R: Serialize + DeserializeOwned>(
         &self,
         route: &str,
-        body: B,
     ) -> Result<R, String> {
         let res = self
             .client()
             .delete(self.url(route))
-            .json(&body)
             .send()
             .await;
         if let Ok(response) = res {
