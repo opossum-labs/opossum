@@ -242,7 +242,7 @@ mod test {
     use super::*;
     use crate::{
         analyzers::RayTraceConfig,
-        core_optics::PortType,
+        core_optics::{PortType, node_attr::NodePositioning},
         distributions::position::Hexapolar,
         joule,
         light::{Rays, spectrum_helper::create_he_ne_spec},
@@ -301,7 +301,7 @@ mod test {
     #[test]
     fn analyze_ok() -> OpmResult<()> {
         let mut node = WaveFront::default();
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(Rays::new_uniform_collimated(
             nanometer!(1053.0),

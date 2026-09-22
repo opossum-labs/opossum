@@ -14,6 +14,7 @@ use crate::{
 use approx::relative_ne;
 use dioxus::prelude::*;
 use opossum_core::{
+    core_optics::node_attr::NodePositioning,
     degree, meter,
     prelude::{Isometry, Properties},
     types::api_types::NodeEditorPanel,
@@ -157,19 +158,18 @@ pub fn AlignmentInputs(
 #[component]
 pub fn PositioningEditor(
     node_id: ReadSignal<Uuid>,
-    position_opt: ReadSignal<Option<Isometry>>,
+    position: ReadSignal<NodePositioning>,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
 ) -> Element {
     debug!("🔄 Render: PositioningEditor");
     let current_node_id = *node_id.read();
-
     let accordion_content = if current_node_id == Uuid::nil() {
         vec![]
     } else {
         vec![rsx! {
             PositioningInputs {
-                position_opt,
+                position,
                 on_change,
                 node_id,
                 readonly,
@@ -191,58 +191,83 @@ pub fn PositioningEditor(
 
 #[component]
 pub fn PositioningInputs(
-    position_opt: ReadSignal<Option<Isometry>>, // Now receives a Memo instead of raw Option<Isometry>
+    position: ReadSignal<NodePositioning>,
     on_change: EventHandler<NodeChangeEvent>,
     node_id: ReadSignal<Uuid>,
     readonly: bool,
 ) -> Element {
     debug!("🔄 Render: PositioningInputs");
 
-    // Sync the signal using the unwrapped value from the memo
-    let mut position_opt_sig = use_synced_signal(*position_opt.read());
-    let position_memo = use_memo(move || position_opt_sig.read().unwrap_or_default());
-    let mut last_absolute_position = use_signal(|| position_opt.peek().unwrap_or_default());
+    // Synchronize local state whenever the external ReadSignal updates
+    let mut positioning_sig = use_synced_signal(*position.read());
 
+    // Extract the effective isometry for display purposes
+    let initial_isometry = match *position.peek() {
+        NodePositioning::Absolute(iso) => iso,
+        NodePositioning::Automatic(cached) => cached.unwrap_or_default(),
+    };
+    let mut last_absolute_position = use_signal(|| initial_isometry);
+
+    // Update last known isometry whenever an absolute or cached automatic position is available
     use_effect(move || {
-        if let Some(abs_pos) = *position_opt_sig.read()
-            && *last_absolute_position.peek() != abs_pos
+        let current_pos = *positioning_sig.read();
+        if let Some(iso) = current_pos.effective_position()
+            && *last_absolute_position.peek() != *iso
         {
-            last_absolute_position.set(abs_pos);
+            last_absolute_position.set(*iso);
         }
     });
 
-    let is_absolute = position_opt_sig.read().is_some();
+    // Determine current strategy states
+    let current_pos_val = positioning_sig.read();
+    let is_absolute = matches!(*current_pos_val, NodePositioning::Absolute(_));
+    let has_cached_auto = matches!(*current_pos_val, NodePositioning::Automatic(Some(_)));
 
-    // Stable save callback for positioning updates
-    let on_save = use_callback(move |new_iso_opt: Option<Isometry>| {
-        if let Some(abs) = new_iso_opt {
-            last_absolute_position.set(abs);
+    // Memoize the isometry passed to rotation and translation inputs
+    let position_memo = use_memo(move || {
+        positioning_sig
+            .read()
+            .effective_position()
+            .copied()
+            .unwrap_or_else(|| *last_absolute_position.read())
+    });
+
+    // Stable save callback dispatching changes to the parent handler
+    let on_save = use_callback(move |new_positioning: NodePositioning| {
+        if let NodePositioning::Absolute(iso) = new_positioning {
+            last_absolute_position.set(iso);
         }
-        position_opt_sig.set(new_iso_opt);
+        positioning_sig.set(new_positioning);
         on_change.call(NodeChangeEvent {
             node_id: *node_id.peek(),
-            action: NodeChangeAction::Isometry(new_iso_opt),
+            action: NodeChangeAction::Isometry(new_positioning),
         });
     });
 
-    // Stable strategy change callback - Uses peek() to avoid active borrow locks
+    // Strategy selector callback switching between Automatic and Absolute modes
     let on_strategy_change = use_callback(move |e: Event<FormData>| {
-        if e.data.value() == "Relative" {
-            on_save(None);
+        let selected_val = e.data.value();
+        if selected_val == "Automatic" {
+            // Reset back to uncalculated/default automatic positioning
+            on_save(NodePositioning::Automatic(None));
         } else {
             let abs_pos = *last_absolute_position.peek();
-            on_save(Some(abs_pos));
+            on_save(NodePositioning::Absolute(abs_pos));
         }
     });
 
-    // Stable rotation callback
+    // Rotation change handler updating the absolute isometry
     let on_rotation_change = use_callback(move |(new_rot, axis): (Angle, RotationAxis)| {
-        let current_iso = position_opt_sig.peek().unwrap_or_default();
+        let current_iso = positioning_sig
+            .peek()
+            .effective_position()
+            .copied()
+            .unwrap_or_default();
         let old_angle = current_iso.rotation_of_axis(axis);
         if relative_ne!(old_angle.get::<degree>(), new_rot.get::<degree>()) {
             let mut new_iso = current_iso;
             if new_iso.set_rotation_of_axis(axis, new_rot).is_ok() {
-                on_save(Some(new_iso));
+                on_save(NodePositioning::Absolute(new_iso));
             } else {
                 OPOSSUM_UI_LOGS
                     .write()
@@ -251,15 +276,19 @@ pub fn PositioningInputs(
         }
     });
 
-    // Stable translation callback
+    // Translation change handler updating the absolute isometry
     let on_translation_change =
         use_callback(move |(new_trans, axis): (Length, TranslationAxis)| {
-            let current_iso = position_opt_sig.peek().unwrap_or_default();
+            let current_iso = positioning_sig
+                .peek()
+                .effective_position()
+                .copied()
+                .unwrap_or_default();
             let old_trans = current_iso.translation_of_axis(axis);
             if relative_ne!(old_trans.value, new_trans.value, epsilon = 0.0) {
                 let mut new_iso = current_iso;
                 if new_iso.set_translation_of_axis(axis, new_trans).is_ok() {
-                    on_save(Some(new_iso));
+                    on_save(NodePositioning::Absolute(new_iso));
                 } else {
                     OPOSSUM_UI_LOGS.write().add_log(&format!(
                         "Failed to set position translation for axis {axis}!"
@@ -268,11 +297,11 @@ pub fn PositioningInputs(
             }
         });
 
-    // Memoize the options so LabeledSelect props remain strictly identical
+    // Memoize options to keep LabeledSelect properties stable across renders
     let strategy_options = use_memo(move || {
-        let is_abs = position_opt_sig.read().is_some();
+        let is_abs = matches!(*positioning_sig.read(), NodePositioning::Absolute(_));
         vec![
-            (!is_abs, "Relative".to_owned()),
+            (!is_abs, "Automatic".to_owned()),
             (is_abs, "Absolute".to_owned()),
         ]
     });
@@ -287,24 +316,29 @@ pub fn PositioningInputs(
         }
     }];
 
-    if is_absolute {
+    // Render inputs if absolute, or show them as grayed out (readonly) if automatic has a cached position
+    if is_absolute || has_cached_auto {
+        // If it's automatic with a cached position, force readonly to true so it appears grayed out
+        let inputs_readonly = readonly || has_cached_auto;
+
         element_list.push(rsx! {
             RotationAlignmentInputs {
                 alignment: position_memo,
                 axes_skip: None,
                 on_new_rotation: on_rotation_change,
                 node_id,
-                readonly,
+                readonly: inputs_readonly,
             }
             TranslationAlignmentInputs {
                 alignment: position_memo,
                 axes_skip: None,
                 on_new_translation: on_translation_change,
                 node_id,
-                readonly,
+                readonly: inputs_readonly,
             }
         });
     }
+
     rsx! {
         ElementList { element_list }
     }

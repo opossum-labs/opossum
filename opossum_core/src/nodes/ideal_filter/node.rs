@@ -235,6 +235,7 @@ impl AnalysisRayTrace for IdealFilter {
 mod test {
     use super::*;
     use crate::{
+        core_optics::node_attr::NodePositioning,
         distributions::position::Hexapolar,
         joule,
         light::spectrum_helper::create_he_ne_spec,
@@ -383,7 +384,7 @@ mod test {
             "test",
             &FilterTypeBuilder::Constant(FilterConst::new(percent!(30.0))?),
         )?;
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let mut input = LightResult::default();
         let input_light = LightData::Geometric(Rays::new_uniform_collimated(
             nanometer!(1054.0),

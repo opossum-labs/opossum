@@ -516,7 +516,10 @@ mod test {
             raytrace::{AnalysisRayTrace, RayTracingAnalyzer},
         },
         coatings::CoatingConstantR,
-        core_optics::{Alignable, PortType, node_attr::HasNodeAttr},
+        core_optics::{
+            Alignable, PortType,
+            node_attr::{HasNodeAttr, NodePositioning},
+        },
         degree,
         gain::{ConstGain, GainModel, MonochromaticSmallSignalGain, PumpScenario, PumpSource},
         joule,
@@ -548,7 +551,7 @@ mod test {
     /// Returns an error if the lens cannot be placed.
     fn placed_lens() -> OpmResult<Lens> {
         let mut lens = Lens::default();
-        lens.set_isometry(Isometry::identity())?;
+        lens.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         Ok(lens)
     }
     /// An operating point in which the node with the given [`Uuid`] amplifies by a constant factor.
@@ -1098,7 +1101,7 @@ mod test {
     #[test]
     fn a_small_signal_scenario_amplifies_by_exp_of_the_path() -> OpmResult<()> {
         let mut head = amplifier_head()?;
-        head.set_isometry(Isometry::identity())?;
+        head.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let node_id = head.node_attr().uuid();
         // Passive without a scenario, so the two runs differ by nothing but the operating point.
         assert_relative_eq!(
@@ -1131,7 +1134,7 @@ mod test {
     fn prepare_volume_uses_current_position_not_a_cached_body() -> OpmResult<()> {
         let mut head = amplifier_head()?;
         // Start with the head at identity.
-        head.set_isometry(Isometry::identity())?;
+        head.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let node_id = head.node_attr().uuid();
 
         // Seed a body at the current (identity) position, simulating what
@@ -1140,10 +1143,10 @@ mod test {
         head.node_attr_mut().set_runtime_medium(identity_body, None);
 
         // Move the head 500 mm along z — what `calc_node_positions` does after deserialization.
-        head.set_isometry(Isometry::new(
+        head.set_positioning(NodePositioning::Absolute(Isometry::new(
             millimeter!(0.0, 0.0, 500.0),
             degree!(0.0, 0.0, 0.0),
-        )?)?;
+        )?))?;
         // Simulate `reset_data`: clear only the inversion, leave the (stale, identity) body.
         head.node_attr_mut().clear_runtime_inversion();
 
@@ -1171,7 +1174,7 @@ mod test {
     #[test]
     fn a_small_signal_head_is_passive_without_a_pump() -> OpmResult<()> {
         let mut head = amplifier_head()?;
-        head.set_isometry(Isometry::identity())?;
+        head.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let mut config = RayTraceConfig::default();
         config.set_active_pump_scenario(Some(scenario_with_model(
             head.node_attr().uuid(),
@@ -1195,7 +1198,7 @@ mod test {
     #[test]
     fn an_energy_flow_refuses_a_path_dependent_model() -> OpmResult<()> {
         let mut head = amplifier_head()?;
-        head.set_isometry(Isometry::identity())?;
+        head.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let mut config = EnergyConfig::default();
         config.set_active_pump_scenario(Some(scenario_with_small_signal(head.node_attr().uuid())?));
         head.prepare_volume(&config)?;
@@ -1405,7 +1408,7 @@ mod test {
             millimeter!(HEAD_THICKNESS),
             material,
         )?;
-        head.set_isometry(Isometry::identity())?;
+        head.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         Ok(head)
     }
     /// The [`head_with_absorption`] whose host material follows the constant Lambert-Beer law with

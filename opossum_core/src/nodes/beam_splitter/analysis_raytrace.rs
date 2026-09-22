@@ -100,7 +100,7 @@ mod test {
 
     use crate::{
         analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
-        core_optics::OpticNode,
+        core_optics::{OpticNode, node_attr::NodePositioning},
         error::OpmResult,
         joule,
         light::{LightData, LightResult, Ray, Rays},
@@ -124,7 +124,7 @@ mod test {
     #[test]
     fn analyze_one_input() -> OpmResult<()> {
         let mut node = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6))?;
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let mut input = LightResult::default();
         let rays = Rays::from(Ray::new_collimated(
             millimeter!(0., 0., 0.),
@@ -152,7 +152,7 @@ mod test {
     #[test]
     fn analyze_two_input() -> OpmResult<()> {
         let mut node = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6))?;
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let mut input = LightResult::default();
         let rays = Rays::from(Ray::new_collimated(
             millimeter!(0., 0., -10.),
@@ -188,7 +188,7 @@ mod test {
     #[test]
     fn analyze_inverse() -> OpmResult<()> {
         let mut node = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6))?;
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         node.set_inverted(true)?;
         let mut input = LightResult::default();
         let rays = Rays::from(Ray::new_collimated(

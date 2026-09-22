@@ -43,7 +43,7 @@ pub fn OpticalNodeEditor(
     let memo_node_name = use_memo(move || node_info_sig.read().name.clone());
     let memo_node_type = use_memo(move || node_info_sig.read().node_type.clone());
     let memo_node_inverted = use_memo(move || node_info_sig.read().inverted);
-    let memo_node_isometry = use_memo(move || node_info_sig.read().isometry);
+    let memo_node_pos = use_memo(move || node_info_sig.read().positioning);
     let memo_node_alignment = use_memo(move || node_info_sig.read().alignment.unwrap_or_default());
     // Reactive memo checking whether the current node has defined properties
     let memo_has_properties = use_memo(move || !node_properties.read().is_empty());
@@ -162,7 +162,7 @@ pub fn OpticalNodeEditor(
                     }
                     PositioningEditor {
                         node_id,
-                        position_opt: memo_node_isometry,
+                        position: memo_node_pos,
                         on_change,
                         readonly: readonly(),
                     }

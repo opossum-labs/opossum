@@ -29,7 +29,8 @@ utoipa.workspace = true
 uuid.workspace = true
 
 actix-cors = "0.7"
-# actix-web = "4.11"
+actix-http = "3"
+serde_json ="1"
 # Disable default features to avoid compiling brotli, zstd-sys, and flate2.
 # We explicitly re-enable 'macros' for routing attributes like #[get("/")].
 actix-web = { version = "4", default-features = false, features = ["macros"] }

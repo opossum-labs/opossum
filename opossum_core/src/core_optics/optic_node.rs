@@ -1,5 +1,8 @@
 #![warn(missing_docs)]
-//! Contains the basic trait representing an optical element
+//! Contains the basic trait representing an optical element.
+
+use std::any::Any;
+
 use log::warn;
 use nalgebra::Point3;
 use uom::si::f64::{Angle, Length};
@@ -8,7 +11,9 @@ use uuid::Uuid;
 use crate::{
     analyzers::{Analyzable, AnalyzerKind, propagation_strategy::PropagationStrategy},
     core_optics::{
-        NodeAttrExt, OpticPorts, PortType, node_attr::HasNodeAttr, volumetric::Volumetric,
+        NodeAttrExt, OpticPorts, PortType,
+        node_attr::{HasNodeAttr, NodePositioning},
+        volumetric::Volumetric,
     },
     error::OpmResult,
     light::LightData,
@@ -16,9 +21,9 @@ use crate::{
     reporting::{Dottable, node_report::NodeReportResult},
     utils::geom_transformation::Isometry,
 };
-use std::any::Any;
 
 /// Helper trait for dynamic downcasting of optical nodes.
+///
 /// This trait is automatically implemented by the `#[derive(OpmNode)]` macro.
 pub trait OpticNodeAny {
     /// Returns an immutable reference to `Any` for downcasting.
@@ -30,7 +35,7 @@ pub trait OpticNodeAny {
 
 /// This is the basic trait that must be implemented by all concrete optical components.
 pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
-    /// Sets the apodization warning on nodes that have that attribute
+    /// Sets the apodization warning on nodes that have that attribute.
     fn set_apodization_warning(&mut self, _apodized: bool) {
         warn!(
             "\"set_apodization_warning\" is not implemented for '{}' ({})",
@@ -38,35 +43,54 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
             self.node_type()
         );
     }
+
     /// Hook to store light data during analysis.
-    /// Overridden by detector nodes to capture passing data for reports.
+    ///
+    /// Overridden by detector nodes to capture passing light data for reports.
     fn set_light_data(&mut self, _ld: Option<LightData>) {}
-    /// Set the (base) [`Isometry`] (position and angle) of this optical node.
+
+    /// Sets the 3D positioning strategy of this optical node and updates optical surfaces.
     ///
     /// # Errors
-    /// This function errors if the `update_surfaces` function fails
-    fn set_isometry(&mut self, isometry: Isometry) -> OpmResult<()> {
-        self.node_attr_mut().set_isometry(isometry);
+    ///
+    /// This function returns an error if the [`update_surfaces`](OpticNode::update_surfaces) function fails.
+    fn set_positioning(&mut self, positioning: NodePositioning) -> OpmResult<()> {
+        self.node_attr_mut().set_positioning(positioning);
         self.update_surfaces()
     }
-    /// Reset internal data (e.g. internal state of detector nodes)
+
+    /// Caches a calculated runtime isometry if this node is in automatic positioning mode,
+    /// and updates optical surfaces accordingly.
+    ///
+    /// Does nothing if the node is configured with an absolute position.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the [`update_surfaces`](OpticNode::update_surfaces) function fails.
+    fn set_cached_isometry(&mut self, iso: Isometry) -> OpmResult<()> {
+        self.node_attr_mut().set_cached_isometry(iso);
+        self.update_surfaces()
+    }
+
+    /// Resets internal data (e.g., captured light data in detectors and runtime medium states).
     fn reset_data(&mut self) {
         self.set_light_data(None);
         self.reset_optic_surfaces();
         self.node_attr_mut().clear_runtime_inversion();
     }
+
     /// Prepare this node's medium before the first ray is traced (Phase A).
     ///
     /// Derives the node's [`SurfaceBoundedBody`](crate::geometry::body::SurfaceBoundedBody) from the
-    /// **current** node isometry and stores it in [`NodeAttr`](crate::core_optics::node_attr::NodeAttr)'s `runtime_medium` slot so that
-    /// [`Volumetric::propagate_inside_medium`] (Phase B) can read it without rebuilding per ray pass. If the operating point provides a gain
-    /// model that reads the inversion, the [`InversionField`](crate::gain::InversionField) is built
-    /// from the pump configuration and stored alongside the body; otherwise the inversion slot is
-    /// `None`.
+    /// **current** node isometry and stores it in [`NodeAttr`](crate::core_optics::node_attr::NodeAttr)'s
+    /// `runtime_medium` slot so that [`Volumetric::propagate_inside_medium`] (Phase B) can read it without
+    /// rebuilding per ray pass. If the operating point provides a gain model that reads the inversion, the
+    /// [`InversionField`](crate::gain::InversionField) is built from the pump configuration and stored
+    /// alongside the body; otherwise the inversion slot is `None`.
     ///
-    /// The body is always re-derived on every call, so geometry edits (e.g. changed centre
-    /// thickness) and repositioning by the analyzer's `calc_node_positions` are picked up
-    /// correctly. Non-volume nodes return immediately without touching the medium slot.
+    /// The body is always re-derived on every call, so geometry edits (e.g. changed centre thickness)
+    /// and repositioning by the analyzer's `calc_node_positions` are picked up correctly. Non-volume nodes
+    /// return immediately without touching the medium slot.
     ///
     /// [`NodeGroup`](crate::nodes::NodeGroup) overrides this to recurse into every child node.
     ///
@@ -91,25 +115,29 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
         Ok(())
     }
 
-    /// This function is called right after a node has been deserialized (e.g. read from a file). By default, this
-    /// function does nothing and returns no error.
+    /// Hook invoked immediately after deserialization (e.g. when loaded from an `.opm` file).
     ///
-    /// Currently this function is needed for group nodes whose internal graph structure must be synchronized with the
-    /// graph stored in their properties.
+    /// By default, this function triggers [`update_surfaces`](OpticNode::update_surfaces) to reconstruct
+    /// the runtime surface geometry.
     ///
     /// # Errors
-    /// This function will return an error if the overwritten function generates an error.
+    ///
+    /// Returns an error if reconstructing the optical surfaces fails.
     fn after_deserialization_hook(&mut self) -> OpmResult<()> {
         self.update_surfaces()?;
         Ok(())
     }
-    /// Updates the surfaces of this node after deserialization
+
+    /// Updates the optical surfaces of this node according to its current geometry and positioning.
     ///
     /// # Errors
     ///
-    /// This function might return an error in a non-default implementation
+    /// Returns an error if geometry evaluation or surface construction fails.
     fn update_surfaces(&mut self) -> OpmResult<()>;
-    /// Return the available (input & output) ports of this [`OpticNode`].
+
+    /// Return the effective (input & output) ports of this [`OpticNode`].
+    ///
+    /// Accounts for node inversion if the node is configured in reverse orientation.
     fn ports(&self) -> OpticPorts {
         let mut ports = self.node_attr().raw_ports().clone();
         if self.node_attr().inverted() {
@@ -117,37 +145,38 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
         }
         ports
     }
-    /// Return the (base) [`Isometry`] of this optical node.
-    fn isometry(&self) -> Option<Isometry> {
-        self.node_attr().isometry()
+
+    /// Return the 3D positioning strategy of this optical node.
+    fn positioning(&self) -> &NodePositioning {
+        self.node_attr().positioning()
     }
-    /// Set this [`OpticNode`] as inverted.
+
+    /// Convenience getter for the effective isometry (absolute or cached automatic).
+    fn effective_position(&self) -> Option<&Isometry> {
+        self.node_attr().effective_position()
+    }
+
+    /// Sets whether this [`OpticNode`] is inverted in the optical path.
     ///
-    /// This flag signifies that the [`OpticNode`] should be propagated in reverse order. This function normally simply sets the
-    /// `inverted` property. For [`NodeGroup`](crate::nodes::NodeGroup) it also sets the `inverted` flag of the underlying `OpticGraph`.
+    /// Inversion signifies that light propagates through this element in reverse order.
     ///
     /// # Errors
-    /// This function returns an error, if the node cannot be inverted. This is the case, if
-    ///   - it is a source node
-    ///   - it is a group node containing a non-invertable node (e.g. a source)
+    ///
+    /// Returns an error if the node cannot be inverted (e.g., source nodes or groups containing sources).
     fn set_inverted(&mut self, inverted: bool) -> OpmResult<()> {
         self.node_attr_mut().set_inverted(inverted);
         Ok(())
     }
-    /// Return this node as a [`Volumetric`] one, if it encloses a volume of material.
-    ///
-    /// This is the one question that answers "may this component amplify, absorb, or otherwise act
-    /// on light along a path *inside* it" — and it is asked of the node itself rather than of its
-    /// type name, because that is all a caller holding a `dyn Analyzable` still has. Every node
-    /// answers it; only those implementing [`Volumetric`] answer with `Some`, which they do by
-    /// overriding this method with `Some(self)`.
+
+    /// Return this node as a [`Volumetric`] element, if it encloses a volume of material.
     ///
     /// # Returns
     ///
-    /// The node as a [`Volumetric`], or `None` if it has no volume.
+    /// `Some(&dyn Volumetric)` if the element represents a medium, or `None` otherwise.
     fn as_volume(&self) -> Option<&dyn Volumetric> {
         None
     }
+
     /// Return [`NodeReportResult`] of the current state of this [`OpticNode`].
     ///
     /// Override this function in detector nodes to provide analysis output.
@@ -160,40 +189,47 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
         Ok(NodeReportResult::None)
     }
 }
-/// Helper trait for optical elements that can be locally aligned
+
+/// Helper trait for optical elements that can be locally aligned.
 pub trait Alignable: OpticNode + Sized {
     /// Locally decenter an optical element.
     ///
     /// # Errors
-    /// This function will return an error if the given `decenter` values are not finite.
+    ///
+    /// This function returns an error if the given `decenter` coordinates contain non-finite values.
     fn with_decenter(mut self, decenter: Point3<Length>) -> OpmResult<Self> {
         let old_rotation = self
-            .isometry()
-            .as_ref()
+            .positioning()
+            .effective_position()
             .map_or_else(Point3::origin, Isometry::rotation);
         let translation_iso = Isometry::new(decenter, old_rotation)?;
         self.node_attr_mut().set_alignment(translation_iso);
         Ok(self)
     }
+
     /// Locally tilt an optical element.
     ///
     /// # Errors
-    /// This function will return an error if the given `decenter` values are not finite.
+    ///
+    /// This function returns an error if the given `tilt` angles contain non-finite values.
     fn with_tilt(mut self, tilt: Point3<Angle>) -> OpmResult<Self> {
         let old_translation = self
-            .isometry()
-            .as_ref()
+            .positioning()
+            .effective_position()
             .map_or_else(Point3::origin, Isometry::translation);
         let rotation_iso = Isometry::new(old_translation, tilt)?;
         self.node_attr_mut().set_alignment(rotation_iso);
         Ok(self)
     }
+
     /// Aligns this optical element with respect to another optical element.
-    /// Specifically, the center (optical) axes of these to nodes are set on top of each other and the anchor points are separated by a given distance
-    /// This helper function allows, e.g., to build a folded telescope (lens + 0° mirror) when the alignment beams propagate off-center through the lens.
-    /// Remark: if this function is used, the distance specified at the `connect_nodes` function is ignored
+    ///
+    /// Specifically, the center (optical) axes of these two nodes are aligned and their anchor points
+    /// are separated by a given distance.
+    ///
     /// # Returns
-    /// This function returns the original Node with updated alignment settings.
+    ///
+    /// This function returns the original node with updated alignment settings.
     #[must_use]
     fn align_like_node_at_distance(mut self, node_id: Uuid, distance: Length) -> Self {
         self.node_attr_mut()
@@ -202,13 +238,14 @@ pub trait Alignable: OpticNode + Sized {
     }
 }
 
-///trait to define an LIDT for a node
+/// Trait to define a Laser-Induced Damage Threshold (LIDT) for a node.
 pub trait LIDT: OpticNode + Analyzable + Sized {
-    /// Sets an LIDT value for all surfaces of this node
+    /// Sets an LIDT value for all ports of this node.
     ///
     /// # Errors
     ///
-    /// This function returns an error if the given LIDT is negative or NaN.
+    /// This function returns an error if the given LIDT is negative or NaN,
+    /// or if updating runtime surfaces fails.
     fn with_lidt(mut self, lidt: Fluence) -> OpmResult<Self> {
         let mut ports = self.ports();
         let in_ports = ports.names(&PortType::Input);
@@ -222,10 +259,11 @@ pub trait LIDT: OpticNode + Analyzable + Sized {
         }
 
         self.node_attr_mut().set_ports(ports);
-        self.update_surfaces()?; // Wichtig: Damit die Runtime-Surfaces das Update mitbekommen
+        self.update_surfaces()?; // Required to propagate the port update to runtime surfaces
         Ok(self)
     }
 }
+
 #[cfg(test)]
 mod tests {
     use approx::assert_abs_diff_eq;
@@ -258,18 +296,19 @@ mod tests {
         assert_abs_diff_eq!(alignment.rotation().z.value, tilt.z.value);
         Ok(())
     }
+
     #[test]
     fn effective_node_iso() -> OpmResult<()> {
         let mut node = Dummy::default();
         let decenter = millimeter!(1.0, 2.0, 3.0);
         let tilt = degree!(0.0, 0.0, 0.0);
         let iso = Isometry::new(decenter, tilt)?;
-        node.set_isometry(iso)?;
+        node.set_positioning(NodePositioning::Absolute(iso))?;
         let local_trans = millimeter!(4.0, 5.0, 6.0);
         node.set_alignment(local_trans, degree!(0.0, 0.0, 0.0))?;
-        let iso = node.effective_node_iso().ok_or(OpossumError::OpmDocument(
-            "Error getting effective iso".to_string(),
-        ))?;
+        let iso = node
+            .effective_node_iso()
+            .ok_or_else(|| OpossumError::OpmDocument("Error getting effective iso".to_string()))?;
         assert_abs_diff_eq!(
             iso.translation().x.value,
             decenter.x.value + local_trans.x.value
@@ -284,6 +323,7 @@ mod tests {
         );
         Ok(())
     }
+
     #[test]
     fn effective_surface_iso() -> OpmResult<()> {
         let mut node = Dummy::default();
@@ -295,7 +335,7 @@ mod tests {
             OpossumError::Other("no effective node iso defined".to_string()),
         );
 
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         assert_err(
             node.effective_surface_iso("wrong"),
             OpossumError::Other("no surface with name wrong defined".to_string()),

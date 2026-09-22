@@ -13,6 +13,7 @@ use crate::{
     coatings::CoatingType,
     core_optics::{
         NodeAttrExt,
+        node_attr::NodePositioning,
         optic_ports::{PortConfig, ValidatedLidt},
     },
     gain::{GainModel, PumpConfig, PumpScenario, PumpSource},
@@ -119,7 +120,7 @@ pub struct NodeInfo {
     pub gui_position: Option<(f64, f64)>,
     /// Global 3D position and rotation
     #[schema(value_type = Option<Object>)]
-    pub isometry: Option<Isometry>,
+    pub positioning: NodePositioning,
     /// Local alignment (decenter and tilt)
     #[schema(value_type = Option<Object>)]
     pub alignment: Option<Isometry>,
@@ -143,7 +144,7 @@ impl NodeInfo {
             input_ports: node.ports().names(&PortType::Input),
             output_ports: node.ports().names(&PortType::Output),
             gui_position: gui_position.unwrap_or_else(|| node.gui_position().map(|p| (p.x, p.y))),
-            isometry: node.isometry(),
+            positioning: *node.positioning(),
             alignment: node.alignment(),
         }
     }
@@ -237,6 +238,15 @@ impl NewRefNode {
         self.referring_node
     }
 }
+/// Request payload to update node positioning.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq)]
+pub enum PositioningRequest {
+    /// Fix node to a static 3D pose.
+    #[schema(value_type = Object)]
+    Absolute(Isometry),
+    /// Set to automatic calculation along the optical axis.
+    Automatic,
+}
 
 /// Request payload for partial updates of a node's properties
 #[derive(Debug, Default, Serialize, Deserialize, ToSchema, Clone)]
@@ -253,8 +263,8 @@ pub struct UpdateNodeRequest {
 
     /// The new base isometry (position and rotation in 3D space)
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[schema(value_type = Option<Object>)]
-    pub isometry: Option<Option<Isometry>>, // Option<Option> allows explicitly setting null!
+    #[schema(value_type = Option<PositioningRequest>)]
+    pub positioning: Option<PositioningRequest>, // Option<Option> allows explicitly setting null!
 
     /// The new alignment isometry (local decenter and tilt)
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -1015,7 +1015,7 @@ mod test {
             energy::{AnalysisEnergy, EnergyConfig},
             raytrace::AnalysisRayTrace,
         },
-        core_optics::OpticNode,
+        core_optics::{OpticNode, node_attr::NodePositioning},
         joule,
         light::{LightResult, Ray, Rays},
         millimeter, nanometer,
@@ -1160,7 +1160,7 @@ mod test {
         let i_s = scenery.add_node(SourcePort::default())?;
 
         let mut em = EnergyMeter::default();
-        em.set_isometry(Isometry::identity())?;
+        em.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let i_e = scenery.add_node(em)?;
         scenery.connect_nodes(i_s, "output_1", i_e, "input_1", Length::zero())?;
         let mut raytrace_config = RayTraceConfig::default();

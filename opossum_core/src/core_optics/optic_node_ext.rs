@@ -1,3 +1,8 @@
+use std::sync::{Arc, Mutex};
+
+use nalgebra::Vector3;
+use uom::si::f64::{Angle, Length};
+
 use crate::{
     analyzers::propagation_strategy::PropagationStrategy,
     apertures::Aperture,
@@ -10,78 +15,94 @@ use crate::{
     refractive_index::RefractiveIndexType,
     utils::geom_transformation::Isometry,
 };
-use nalgebra::Vector3;
-use std::sync::{Arc, Mutex};
-use uom::si::f64::{Angle, Length};
 
 /// Extension trait providing advanced physical propagation routines, coordinate
 /// transformations, and property distribution that are uniform across all nodes.
 pub trait OpticNodeExt {
     /// Return the effective input isometry of this optical node.
     ///
-    /// The effective input isometry is the base isometry modified by the local alignment isometry (if any).
+    /// The effective input isometry is the effective base positioning (either absolute or cached automatic)
+    /// modified by the local alignment isometry (if present). Returns `None` if the node has not yet been placed.
     fn effective_node_iso(&self) -> Option<Isometry>;
+
     /// Return the effective input isometry of an [`OpticSurface`](crate::core_optics::optic_surface::OpticSurface).
     ///
     /// The effective input isometry is the base isometry modified by the local alignment isometry (if any) and the anchor point isometry.  
     ///
     /// # Errors
-    /// This function errors if
-    /// - no effective node isometry is defined  
+    ///
+    /// This function returns an error if:
+    /// - no effective node isometry is defined
     /// - the surface with the specified name cannot be found
     fn effective_surface_iso(&self, surf_name: &str) -> OpmResult<Isometry>;
-    /// Set local alignment (decenter, tilt) of an optical node.
+
+    /// Set local alignment (decenter, tilt) of an optical node and update its optical surfaces.
     ///
     /// # Errors
     ///
-    /// This function will return an error if the `alignment` property cannot be set.
+    /// This function returns an error if constructing the alignment isometry fails or if `update_surfaces` fails.
     fn set_alignment(
         &mut self,
         decenter: nalgebra::Point3<Length>,
         tilt: nalgebra::Point3<Angle>,
     ) -> OpmResult<()>;
+
+    /// Clears any local alignment (decenter, tilt) and updates optical surfaces.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if `update_surfaces` fails.
+    fn clear_alignment(&mut self) -> OpmResult<()>;
+
     /// Set an [`Aperture`] for a given port name.
     ///
     /// # Errors
-    /// This function will return an error if the port name does not exist.
+    ///
+    /// This function returns an error if the port name does not exist.
     fn set_aperture(
         &mut self,
         port_type: &PortType,
         port_name: &str,
         aperture: &Aperture,
     ) -> OpmResult<()>;
+
     /// Set a coating for a given port name.
     ///
     /// # Errors
     ///
-    /// This function will return an error if the port name does not exist.
+    /// This function returns an error if the port name does not exist.
     fn set_coating(
         &mut self,
         port_type: &PortType,
         port_name: &str,
         coating: &CoatingType,
     ) -> OpmResult<()>;
+
     /// Set the LIDT for a given port name.
     ///
     /// # Errors
-    /// This function will return an error if the port name does not exist.
+    ///
+    /// This function returns an error if the port name does not exist.
     fn set_lidt(&mut self, port_type: &PortType, port_name: &str, lidt: Fluence) -> OpmResult<()>;
 
-    /// Update the surfaces of nodes with a single interacting surface. E.g. detectors
+    /// Update the surfaces of nodes with a single interacting surface (e.g. detectors or dummy nodes).
+    ///
     /// # Errors
-    /// This function errors if the function `OpticNode::update_surface` fails
+    ///
+    /// This function returns an error if `update_surface` fails.
     fn update_flat_single_surfaces(&mut self) -> OpmResult<()>;
 
-    /// Updates a single surface of this node
+    /// Updates a single surface of this node.
     ///
-    /// # Attributes
-    /// `surf_name`: name of the surface,
-    /// `geo_surface`: the geometric surface [`GeoSurfaceRef`],
-    /// `anchor_point_iso`: the isometry of the geometrical anchor point,
-    /// `port_type`: the port type of this surface
+    /// # Parameters
+    /// * `surf_name`: Name of the surface.
+    /// * `geo_surface`: The geometric surface reference [`GeoSurfaceRef`].
+    /// * `anchor_point_iso`: The isometry of the geometrical anchor point.
+    /// * `port_type`: The port type (`Input` or `Output`) of this surface.
     ///
     /// # Errors
-    /// This function errors if `add_optic_surface` fails
+    ///
+    /// This function returns an error if surface creation or registration fails.
     fn update_surface(
         &mut self,
         surf_name: &str,
@@ -89,23 +110,29 @@ pub trait OpticNodeExt {
         anchor_point_iso: Isometry,
         port_type: &PortType,
     ) -> OpmResult<()>;
-    /// define the up-direction of this lightdata's first ray which is needed to create an isometry from this ray.
+
+    /// Defines the up-direction of this light data's first ray, needed to create an isometry from this ray.
+    ///
     /// This function should only be used during the node positioning process, and only for source nodes.
     ///
     /// # Errors
     ///
-    /// which one?
+    /// Returns an error if `ray_data` is not geometric light data or contains no rays.
     fn define_up_direction(&self, ray_data: &LightData) -> OpmResult<Vector3<f64>>;
-    /// Modifies the current up-direction of a ray, stored in lightdata, which is needed to create an isometry from this ray.
+
+    /// Modifies the current up-direction of a ray, stored in light data, which is needed to create an isometry from this ray.
+    ///
     /// This function should only be used during the node positioning process.
     ///
     /// # Errors
-    /// This function errors if the the lightdata is not geometric
+    ///
+    /// This function returns an error if the light data is not geometric.
     fn calc_new_up_direction(
         &self,
         ray_data: &LightData,
         up_direction: &mut Vector3<f64>,
     ) -> OpmResult<()>;
+
     /// Finds a surface by its name and guides the ray bundle through it.
     ///
     /// This function handles the boilerplate of retrieving the correct surface, calculating
@@ -114,8 +141,8 @@ pub trait OpticNodeExt {
     ///
     /// # Errors
     ///
-    /// This function errors if the specified surface cannot be found, if the geometric propagation fails,
-    /// or if the strategy-specific hooks (e.g., fluence evaluation) fail.
+    /// This function returns an error if the specified surface cannot be found, if geometric propagation fails,
+    /// or if strategy-specific hooks (e.g., fluence evaluation) fail.
     fn pass_through_surface_generic(
         &mut self,
         optic_surf_name: &str,
@@ -125,14 +152,15 @@ pub trait OpticNodeExt {
         backward: bool,
         refraction_intended: bool,
     ) -> OpmResult<()>;
+
     /// A unified helper function to analyze optical nodes that feature a single interacting surface.
     ///
     /// This function simplifies the implementation of the analysis traits (`Energy`, `RayTrace`, `GhostFocus`)
     /// for simple transmissive nodes like detectors, monitors, or dummy nodes. It automatically:
-    /// 1. Extracts the incoming light from the first input port.
-    /// 2. Propagates the light through the specified surface using the given [`PropagationStrategy`].
-    /// 3. Triggers the internal `set_light_data` hook so detector nodes can store the results for reporting.
-    /// 4. Packages the processed light data and maps it to the first output port.
+    /// 1. Extracts incoming light from the single input port.
+    /// 2. Propagates light through the specified surface using the given [`PropagationStrategy`].
+    /// 3. Triggers the internal `set_light_data` hook so detector nodes can store results for reporting.
+    /// 4. Packages the processed light data and maps it to the single output port.
     ///
     /// # Parameters
     /// * `incoming_data`: The [`LightResult`] arriving at the node's input port.
@@ -141,8 +169,8 @@ pub trait OpticNodeExt {
     /// * `refri_after_surf`: An optional refractive index after the surface. Usually `None` for non-refracting detectors.
     ///
     /// # Errors
-    /// This function returns an error if the specified optical surface cannot be found or if the underlying
-    /// geometric surface propagation fails.
+    ///
+    /// This function returns an error if the specified optical surface cannot be found or if geometric surface propagation fails.
     fn unified_analyze_single_surface_node(
         &mut self,
         incoming_data: LightResult,
@@ -159,17 +187,11 @@ pub trait OpticNodeExt {
 ///
 /// A node with several inputs or outputs has to decide for itself which port feeds which - there is
 /// no general answer, and picking one silently would be wrong rather than merely imprecise. Note
-/// that "first" would not even mean "first declared": [`OpticPorts`] stores its ports in a
-/// `BTreeMap`, so any such pick would follow the alphabetical order of the port names. Multi-port
-/// nodes therefore implement `analyze` themselves and address their ports by name - see
+/// that "first" would not even mean "first declared": [`OpticPorts`](crate::core_optics::OpticPorts)
+/// stores its ports in a `BTreeMap`, so any such pick would follow the alphabetical order of the port names.
+/// Multi-port nodes therefore implement `analyze` themselves and address their ports by name - see
 /// [`BeamSplitter`](crate::nodes::BeamSplitter), which additionally swaps them when inverted. This
 /// function refuses those nodes instead of guessing.
-///
-/// **Still to be built:** this is the wrong place for that decision in the long run. How many ports
-/// a node has is a static property of its type, so "exactly one in, one out" should be declared
-/// once where the node type is registered and checked when the model is built - not re-discovered
-/// on every analysis call, and not only for the nodes that happen to reach this helper. Until that
-/// exists, the check lives here, where at least no caller of these helpers can skip it.
 ///
 /// # Arguments
 ///
@@ -207,11 +229,11 @@ pub(crate) fn single_io_port_names<T: ?Sized + OpticNode>(node: &T) -> OpmResult
 
 impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNodeExt for T {
     fn effective_node_iso(&self) -> Option<Isometry> {
-        self.isometry().as_ref().and_then(|iso| {
+        self.effective_position().map(|iso| {
             self.node_attr()
                 .alignment()
                 .as_ref()
-                .map_or_else(|| Some(*iso), |local_iso| Some(iso.append(local_iso)))
+                .map_or(*iso, |local_iso| iso.append(local_iso))
         })
     }
 
@@ -232,6 +254,11 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
     ) -> OpmResult<()> {
         let align = Isometry::new(decenter, tilt)?;
         self.node_attr_mut().set_alignment(align);
+        self.update_surfaces()
+    }
+
+    fn clear_alignment(&mut self) -> OpmResult<()> {
+        self.node_attr_mut().set_alignment_option(None);
         self.update_surfaces()
     }
 
@@ -451,8 +478,46 @@ mod test {
     use super::*;
     use crate::{
         analyzers::RayTraceConfig,
+        core_optics::node_attr::{HasNodeAttr, NodePositioning},
+        degree, millimeter,
         nodes::{BeamSplitter, Dummy},
     };
+    use approx::assert_abs_diff_eq;
+
+    #[test]
+    fn effective_node_iso_and_clear_alignment() -> OpmResult<()> {
+        let mut node = Dummy::default();
+
+        // Initially Automatic(None), so effective_node_iso must be None
+        assert_eq!(node.effective_node_iso(), None);
+
+        // Set absolute position
+        let base_pos = millimeter!(10.0, 20.0, 30.0);
+        let base_rot = degree!(0.0, 0.0, 0.0);
+        let base_iso = Isometry::new(base_pos, base_rot)?;
+        node.set_positioning(NodePositioning::Absolute(base_iso))?;
+
+        assert_eq!(node.effective_node_iso(), Some(base_iso));
+
+        // Add local alignment
+        let align_trans = millimeter!(1.0, 2.0, 3.0);
+        let align_rot = degree!(0.0, 0.0, 0.0);
+        node.set_alignment(align_trans, align_rot)?;
+
+        let eff_iso = node
+            .effective_node_iso()
+            .expect("must have effective isometry");
+        assert_abs_diff_eq!(eff_iso.translation().x.value, 11.0e-3);
+        assert_abs_diff_eq!(eff_iso.translation().y.value, 22.0e-3);
+        assert_abs_diff_eq!(eff_iso.translation().z.value, 33.0e-3);
+
+        // Clear local alignment
+        node.clear_alignment()?;
+        assert_eq!(node.effective_node_iso(), Some(base_iso));
+        assert!(node.node_attr().alignment().is_none());
+
+        Ok(())
+    }
 
     /// A beam splitter has two inputs and two outputs, and which one feeds which is its own
     /// decision - that is why it implements `analyze` itself. Reaching one of the unified helpers

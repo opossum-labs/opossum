@@ -7,7 +7,10 @@ pub mod test_helper {
             raytrace::AnalysisRayTrace,
         },
         apertures::{ApertureShape, ApertureType, CircleShape, GaussianShape},
-        core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, OpticRef, PortType, Volumetric},
+        core_optics::{
+            NodeAttrExt, OpticNode, OpticNodeExt, OpticRef, PortType, Volumetric,
+            node_attr::NodePositioning,
+        },
         distributions::position::Hexapolar,
         error::{OpmResult, OpossumError},
         geometry::body::{Body, CLEAR_APERTURE, default_clear_aperture},
@@ -84,7 +87,7 @@ pub mod test_helper {
     pub fn test_analyze_apodization_warning<T: Default + AnalysisRayTrace>() -> OpmResult<()> {
         testing_logger::setup();
         let mut node = T::default();
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let config = CircleShape::new(millimeter!(1.0))?;
         node.set_aperture(
             &PortType::Input,
@@ -249,7 +252,7 @@ pub mod test_helper {
     /// through the volume, or if the derived geometry does not match the property.
     pub fn test_volume_body<T: Default + Volumetric>() -> OpmResult<()> {
         let mut node = T::default();
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let center_thickness = center_thickness_of(&node);
         let on_axis = millimeter!(0.0, 0.0, 0.0);
         assert_abs_diff_eq!(
@@ -318,7 +321,7 @@ pub mod test_helper {
     /// clear aperture.
     pub fn test_clear_aperture<T: Default + Volumetric>() -> OpmResult<()> {
         let mut node = T::default();
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let mid_thickness = center_thickness_of(&node) * 0.5;
         let point_at = |radius: Length| Point3::new(radius, millimeter!(0.0), mid_thickness);
         // the default extent is a circle of 12.5 mm radius

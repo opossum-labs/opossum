@@ -355,7 +355,10 @@ impl Plottable for SpotDiagram {
 mod test {
     use super::*;
     use crate::{
-        core_optics::{PortType, node_attr::HasNodeAttr},
+        core_optics::{
+            PortType,
+            node_attr::{HasNodeAttr, NodePositioning},
+        },
         distributions::position::Hexapolar,
         joule,
         light::{Rays, light_result::LightRays, spectrum_helper::create_he_ne_spec},
@@ -458,7 +461,7 @@ mod test {
     #[test]
     fn analyze_ghostfocus_ok() -> OpmResult<()> {
         let mut node = SpotDiagram::default();
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let mut input = LightRays::default();
         let light_rays = Rays::default();
         input.insert("input_1".into(), vec![light_rays.clone()]);
@@ -539,7 +542,8 @@ mod test {
         )?;
 
         sd.set_aperture(&PortType::Input, "input_1", &aperture)?;
-        sd.node_attr_mut().set_isometry(Isometry::identity());
+        sd.node_attr_mut()
+            .set_positioning(NodePositioning::Absolute(Isometry::identity()));
 
         let mut rays = Rays::from(Ray::new(
             Point3::new(millimeter!(0.0), millimeter!(0.0), millimeter!(-1.0)),

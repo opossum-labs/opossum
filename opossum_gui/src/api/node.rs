@@ -1,12 +1,13 @@
 use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_core::{
+    core_optics::node_attr::NodePositioning,
     prelude::*,
     types::api_types::{
         AddPortMappingRequest, ConnectInfo, ConvertToGroupRequest, ConvertToGroupResponse,
         CutNodesResponse, DeleteNodeResponse, MoveNodesRequest, MoveNodesResponse, NewNode,
         NewRefNode, NodeInfo, NodePortsResponse, NodePropertiesResponse, PasteNodesResponse,
-        PortMappingsResponse, PortNamesResponse, RemovePortMapResponse, UpdateConnectionRequest,
-        UpdateNodeRequest, UpdatePortRequest,
+        PortMappingsResponse, PortNamesResponse, PositioningRequest, RemovePortMapResponse,
+        UpdateConnectionRequest, UpdateNodeRequest, UpdatePortRequest,
     },
 };
 use std::collections::{HashMap, HashSet};
@@ -358,9 +359,16 @@ pub async fn update_node_property(
 /// - The HTTP request fails to reach the server (e.g., network issues).
 /// - The server responds with an error status code (e.g., 4xx or 5xx).
 /// - Serialization of the [`Isometry`] payload fails before sending.
-pub async fn update_node_isometry(node_id: Uuid, iso: Option<Isometry>) -> Result<(), String> {
+pub async fn update_node_isometry(
+    node_id: Uuid,
+    positioning: NodePositioning,
+) -> Result<(), String> {
+    let positioning_req = match positioning {
+        NodePositioning::Absolute(pos) => PositioningRequest::Absolute(pos),
+        NodePositioning::Automatic(_) => PositioningRequest::Automatic,
+    };
     let update_node_request = UpdateNodeRequest {
-        isometry: Some(iso),
+        positioning: Some(positioning_req),
         ..Default::default()
     };
     HTTP_API_CLIENT()
@@ -450,9 +458,8 @@ pub async fn remove_port_map(
         PortType::Output => "Output",
     };
     HTTP_API_CLIENT()
-        .delete::<(), RemovePortMapResponse>(
-            &format!("/api/nodes/{group_id}/port_mappings?external_port_name={group_port_name}&port_type={port_type_str}"),
-            (),
+        .delete::<RemovePortMapResponse>(
+            &format!("/api/nodes/{group_id}/port_mappings?external_port_name={group_port_name}&port_type={port_type_str}")
         )
         .await
 }
