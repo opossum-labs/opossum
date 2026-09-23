@@ -51,23 +51,16 @@ Place a `.glb` file at `examples/assets/sample.glb` before starting (see
 `examples/assets/README.md` for sources). The demo works without a sample model but
 shows a notice and disables the Add button.
 
-## Acceptance test script (manual)
+## Documentation
 
-After starting the demo:
-
-1. Click **Add** → model appears. Rotate and zoom into a distinctive oblique view.
-2. Click **Add** again → second model appears; **the view must not move**.
-3. Click **Remove last** → one model disappears; **view stays**.
-4. Click **Replace first** → first model with a new transform; **view stays**.
-5. Click **Toggle visibility** → model becomes invisible/visible; **view stays**.
-6. Click on a model → correct ID + `mesh_name` in the panel, BoxHelper appears.
-   Click empty space → `id: None`. **Drag** (orbit) → *no* pick event.
-7. Resize the window → image stays undistorted (tests `ResizeObserver`).
-8. Click **Fit view** → camera frames visible models. **Reset camera** → returns to
-   initial pose.
-9. 20× add/remove alternating → memory in DevTools stays flat (disposal test).
-10. Desktop only: type an absolute path to a `.glb` in the input field → loads as bytes
-    source.
+- **Handbook** — the step-by-step guide in [`docs/book`](docs/book). Build it with
+  `mdbook serve docs/book`, or read the markdown under [`docs/book/src`](docs/book/src).
+  It covers using the component, the Rust ↔ JS op protocol, the three.js renderer, and
+  the invariants to respect when changing any of it.
+- **API docs** — `cargo doc -p dioxus_glb_viewer --no-deps --open`.
+- **Manual acceptance run** — the canonical step-by-step list lives in the handbook, under
+  [Testing and checks](docs/book/src/testing.md). Work through it after any change to
+  `viewer.js` or to the RSX in `viewer.rs`: neither has automated coverage.
 
 ## Architecture
 
