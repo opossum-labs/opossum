@@ -1,0 +1,5 @@
+[application]
+name = "dioxus_glb_viewer"
+
+[web.app]
+title = "dioxus_glb_viewer Demo"

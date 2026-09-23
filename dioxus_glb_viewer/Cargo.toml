@@ -1,0 +1,32 @@
+[package]
+name        = "dioxus_glb_viewer"
+version     = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "A Dioxus component that renders glTF-binary (.glb) models with three.js, with orbit navigation and click-picking"
+keywords    = ["dioxus", "threejs", "gltf", "glb", "3d"]
+categories  = ["gui", "rendering"]
+readme      = "README.md"
+publish     = false
+
+[dependencies]
+# Deliberately without a renderer feature: this crate only uses dioxus::prelude,
+# document::eval, and asset!(), all of which are in the `lib` feature.
+# The host decides between desktop and web.
+dioxus    = { version = "0.7", default-features = false, features = ["lib"] }
+serde     = { workspace = true }
+serde_json = { workspace = true }
+base64    = "0.22"
+
+[features]
+default = []
+# Renderer features exist ONLY to let examples/demo.rs launch.
+# Library consumers never enable them.
+desktop = ["dioxus/desktop", "dioxus/launch"]
+web     = ["dioxus/web",     "dioxus/launch"]
+
+[[example]]
+name = "demo"
+required-features = ["desktop"]
