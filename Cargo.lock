@@ -2204,6 +2204,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus_glb_viewer"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "dioxus",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "directories"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

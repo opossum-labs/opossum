@@ -16,6 +16,9 @@ members = [
     "opossum_cli",
     "opossum_backend",
     "opossum_gui",
+    # A standalone Dioxus/three.js viewer component (no opossum dependency). It inherits
+    # `edition` and `serde` from this workspace, so it must be a member to resolve at all.
+    "dioxus_glb_viewer",
     "opossum_core/opm_macros_lib",
     "xtask",
     "opossum_registry",
