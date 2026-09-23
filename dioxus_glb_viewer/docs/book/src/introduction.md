@@ -13,13 +13,17 @@ It is a **viewer** component, not a geometry or asset crate.
   according to a transform you give, report clicks back to Rust with your own object
   ids, and release every GPU resource again when a model goes away.
 - It **does not** produce, tessellate or validate geometry. It does not own selection
-  state: a click is *reported*, and you decide what it means. And it knows nothing about
-  OPOSSUM — the crate has no dependency on any `opossum_*` crate, carries its own
-  version (`0.1.0`, not the workspace version) and is `publish = false`.
+  state: a click is *reported*, and you decide what it means.
 
-That split is what makes the crate reusable: the same component renders a lens exported
-by `optoscene` and a sample model downloaded from the Khronos asset repository, because
-to the viewer both are just bytes.
+That split is what makes the crate reusable: the same component renders a mesh your own
+exporter produced and a sample model downloaded from the Khronos asset repository,
+because to the viewer both are just bytes.
+
+## Origin
+
+The crate was written for [OPOSSUM](https://github.com/opossum-labs/opossum), an optics
+simulation project that needed to show optical setups as real 3D geometry rather than 2D
+plots.
 
 ## Conventions
 
@@ -43,8 +47,9 @@ to the viewer both are just bytes.
 The component is agnostic about where the bytes come from. `GlbSource::Url` covers
 HTTP endpoints and models bundled with the app through `manganis`; `GlbSource::Bytes`
 covers everything else, which on the desktop includes every file on disk, because
-wry/`WebView`2 cannot load `file://` URLs. In the OPOSSUM project the bytes are produced
-by `optoscene` and served over the backend, but nothing in this crate assumes that.
+wry/`WebView`2 cannot load `file://` URLs. Whether those bytes came off a disk, out of an
+HTTP endpoint, or straight from an exporter running in your own process is not the
+component's concern.
 
 ## Crate layout
 
