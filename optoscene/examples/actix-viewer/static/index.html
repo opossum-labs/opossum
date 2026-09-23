@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>optoscene viewer</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #101014;
+        color: #d8d8e0;
+        font: 13px/1.5 system-ui, sans-serif;
+        overflow: hidden;
+      }
+      #info {
+        position: fixed;
+        top: 8px;
+        left: 10px;
+        z-index: 10;
+        pointer-events: none;
+        text-shadow: 0 1px 2px #000;
+      }
+      #info b {
+        color: #7cc0ff;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+    <!-- three.js as ES modules from a CDN, pinned to a fixed version. -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="info">
+      <b>optoscene viewer</b> — drag to orbit, scroll to zoom. Watch the console
+      for streamed messages.
+    </div>
+    <script type="module" src="/viewer.js"></script>
+  </body>
+</html>

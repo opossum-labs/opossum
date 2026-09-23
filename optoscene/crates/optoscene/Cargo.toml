@@ -1,0 +1,39 @@
+[package]
+name = "optoscene"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "glTF/GLB export for the 3D visualization of optical systems"
+
+[features]
+default = []
+# Enables the streaming frame format and the `diff` module.
+protocol = ["dep:optoscene-protocol"]
+# Makes the test geometries available to examples and downstream crates.
+fixtures = []
+
+[dependencies]
+nalgebra.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+optoscene-protocol = { workspace = true, optional = true }
+
+[dev-dependencies]
+gltf.workspace = true
+
+[[example]]
+name = "export_basic"
+required-features = ["fixtures"]
+
+[[example]]
+name = "export_rays"
+required-features = ["fixtures"]
+
+[[test]]
+name = "rays"
+required-features = ["fixtures"]
+
+[[test]]
+name = "diff"
+required-features = ["protocol"]
