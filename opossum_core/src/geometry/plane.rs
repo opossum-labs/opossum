@@ -80,6 +80,10 @@ impl GeoSurface for Plane {
         // arbitrarily far out.
         Some(Length::zero())
     }
+    fn local_normal_at(&self, _transversal_position: &Point2<Length>) -> Option<Vector3<f64>> {
+        // The local surface *is* the xy plane, so it faces along +z everywhere alike.
+        Some(Vector3::z())
+    }
     fn is_behind_do(&self, point: &Point3<Length>) -> bool {
         // The local surface is the xy plane at z = 0.
         point.z >= Length::zero()

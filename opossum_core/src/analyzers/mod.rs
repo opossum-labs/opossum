@@ -109,6 +109,34 @@ impl AnalyzerType {
             Self::GhostFocus(config) => config.set_active_pump_scenario(pump_scenario),
         }
     }
+    /// Return the configuration this analyzer places the nodes of a model with.
+    ///
+    /// Where a component ends up depends on the light that reaches it — an off-axis source, a
+    /// different alignment wavelength or another ambient medium all move it. Anything that needs to
+    /// know where the components of a model are, rather than to run the analysis itself, asks here
+    /// instead of assembling a configuration of its own, so that a drawing of the setup shows the
+    /// same geometry the analysis worked on.
+    ///
+    /// # Returns
+    ///
+    /// The configuration for the positioning run, or `None` for an analyzer that does not place
+    /// anything: an energy analysis carries no geometry at all.
+    #[must_use]
+    pub fn positioning_config(&self) -> Option<RayTraceConfig> {
+        match self {
+            Self::Energy(_) => None,
+            Self::RayTrace(config) => Some(config.for_positioning()),
+            Self::GhostFocus(config) => {
+                // A ghost focus analysis places its nodes with a plain ray trace and takes only the
+                // sources across: the bounce limits and the ambient medium of the ghost focus run
+                // describe the parasitic passes, not the alignment.
+                let mut positioning = RayTraceConfig::default();
+                positioning.set_source_map(config.source_map().clone());
+                positioning.set_positioning_run(true);
+                Some(positioning)
+            }
+        }
+    }
     /// Returns the corresponding [`AnalyzerKind`] for this analyzer configuration.
     #[must_use]
     pub const fn kind(&self) -> AnalyzerKind {
@@ -132,6 +160,7 @@ impl Display for AnalyzerType {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::light::lightdata::ray_data_builder::RayDataBuilder;
     #[test]
     fn display() {
         assert_eq!(
@@ -146,6 +175,47 @@ mod test {
             format!("{}", AnalyzerType::GhostFocus(GhostFocusConfig::default())),
             "GhostFocus"
         );
+    }
+    /// Only an analysis that traces light through space can say where anything is.
+    #[test]
+    fn only_the_geometric_analyses_place_anything() {
+        assert!(
+            AnalyzerType::Energy(EnergyConfig::default())
+                .positioning_config()
+                .is_none()
+        );
+        assert!(
+            AnalyzerType::RayTrace(RayTraceConfig::default())
+                .positioning_config()
+                .is_some()
+        );
+        assert!(
+            AnalyzerType::GhostFocus(GhostFocusConfig::default())
+                .positioning_config()
+                .is_some()
+        );
+    }
+    /// The sources have to come across into the positioning run, which has nothing to start the
+    /// optical axis from without them.
+    #[test]
+    fn a_positioning_config_keeps_the_sources() {
+        let source = uuid::Uuid::new_v4();
+        let mut ray_trace = RayTraceConfig::default();
+        ray_trace.map_source(source, RayDataBuilder::default());
+        let mut ghost_focus = GhostFocusConfig::default();
+        ghost_focus.map_source(source, RayDataBuilder::default());
+        for analyzer in [
+            AnalyzerType::RayTrace(ray_trace),
+            AnalyzerType::GhostFocus(ghost_focus),
+        ] {
+            let config = analyzer
+                .positioning_config()
+                .expect("both of these place their nodes");
+            assert!(
+                config.get_source(&source).is_some(),
+                "the {analyzer} analysis lost its sources on the way"
+            );
+        }
     }
     #[test]
     fn debug() {

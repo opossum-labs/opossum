@@ -4,8 +4,13 @@
 //! points etc. and an enum containing the concrete surface types.
 
 use super::Plane;
-use crate::{light::Ray, utils::geom_transformation::Isometry};
-use nalgebra::{Point2, Point3, Vector3};
+use crate::{
+    error::{OpmResult, OpossumError},
+    light::Ray,
+    utils::geom_transformation::Isometry,
+};
+use nalgebra::{Point2, Point3, Vector2, Vector3};
+use num_traits::Zero;
 use std::{
     fmt::Debug,
     sync::{Arc, Mutex},
@@ -111,6 +116,30 @@ pub trait GeoSurface: Send + Sync + Debug {
     /// [`Sphere`](super::Sphere) or [`Cylinder`](super::Cylinder) ends where its radius of curvature
     /// does.
     fn local_z_at(&self, transversal_position: &Point2<Length>) -> Option<Length>;
+    /// Return the normal of this [`GeoSurface`] above a given transversal position, in the
+    /// surface's own local frame.
+    ///
+    /// The counterpart to [`local_z_at`](GeoSurface::local_z_at): that one states *where* the
+    /// surface lies above a transversal position, this one states *which way it faces* there. Both
+    /// are read off the shape of the surface itself rather than from a ray meeting it —
+    /// [`calc_intersect_and_normal`](GeoSurface::calc_intersect_and_normal) only promises a normal
+    /// pointing against the ray, which is a property of that ray and not of the surface.
+    ///
+    /// The normal is normalized and never points away from local +z, so it is the outward normal of
+    /// a body this surface bounds from below and the inward one of a body it bounds from above. A
+    /// curved surface tilts its normal away from +z towards the rim, and exactly at the rim, where
+    /// the surface has turned by a right angle, the normal is purely transversal.
+    ///
+    /// # Arguments
+    ///
+    /// - `transversal_position`: the position in the local xy plane to look above, given in the
+    ///   local frame of this surface.
+    ///
+    /// # Returns
+    ///
+    /// The unit normal above the given position, or `None` wherever
+    /// [`local_z_at`](GeoSurface::local_z_at) finds no surface either.
+    fn local_normal_at(&self, transversal_position: &Point2<Length>) -> Option<Vector3<f64>>;
     /// Returns the [`Isometry`] of this [`GeoSurface`].
     fn isometry(&self) -> &Isometry;
     /// Set the [`Isometry`] of this [`GeoSurface`].
@@ -167,6 +196,203 @@ pub(super) fn curved_local_z(distance_from_axis: f64, radius: f64) -> Option<f64
     (half_chord_squared >= 0.0).then(|| -radius.signum() * half_chord_squared.sqrt())
 }
 
+/// Determine the local normal of a curved surface above a given transversal position.
+///
+/// Shared by the surfaces whose local frame is centered on their center of curvature
+/// ([`Sphere`](super::Sphere), [`Cylinder`](super::Cylinder)) — the same pair, and for the same
+/// reason, as [`curved_local_z`]: they differ only in which transversal directions bend the
+/// surface. The normal runs along the line from the center of curvature to the surface point, which
+/// dividing by the *signed* radius turns towards local +z for either sign of the curvature: a
+/// convex surface has its center behind it, a concave one in front of it.
+///
+/// # Arguments
+///
+/// - `curving`: the transversal position in the directions the surface curves in, in meter — both
+///   components for a [`Sphere`](super::Sphere), the x offset alone for a
+///   [`Cylinder`](super::Cylinder), whose axis does not curve
+/// - `radius`: the signed radius of curvature, in meter
+///
+/// # Returns
+///
+/// The unit normal pointing towards local +z, or `None` beyond the radius of curvature, where
+/// [`curved_local_z`] finds no surface either.
+pub(super) fn curved_local_normal(curving: Vector2<f64>, radius: f64) -> Option<Vector3<f64>> {
+    let local_z = curved_local_z(curving.norm(), radius)?;
+    Some(Vector3::new(
+        -curving.x / radius,
+        -curving.y / radius,
+        -local_z / radius,
+    ))
+}
+
+/// How a [`GeoSurface`] stands in a frame that is not its own.
+///
+/// A surface carries its own placement, but everything built *from* surfaces — the extent of a
+/// body, a mesh laid over one — is expressed in the frame of the component instead, which need not
+/// agree with it: a wedge tilts its exit surface against the body it bounds, and a decentered lens
+/// shifts both of its surfaces sideways. This does that translation once, together with the checks
+/// that decide whether the surface can bound that frame at all.
+pub(super) struct SurfacePlacement<'a> {
+    surface: &'a dyn GeoSurface,
+    relative: Isometry,
+    axis: Vector3<f64>,
+    tilt: f64,
+    vertex: Length,
+}
+
+/// How far a surface may be out of square with its frame before that counts as a tilt, given as
+/// the sine of the angle between the two axes.
+///
+/// Composing a frame with its own inverse does not come out exactly, so a surface placed square in
+/// its node still reports a tilt of a few floating point epsilons — which would otherwise turn
+/// every curved surface in a node that is merely rotated into an unsupported one. The threshold
+/// sits far above that noise and far below any angle a component is built with: a wedge is turned
+/// by degrees, not by billionths of one. The same slack decides when a surface is so nearly
+/// parallel to the frame's axis that it no longer bounds anything along it.
+const ALIGNMENT_TOLERANCE: f64 = 1e-9;
+
+impl<'a> SurfacePlacement<'a> {
+    /// Work out how `surface` stands in `frame`.
+    ///
+    /// # Arguments
+    ///
+    /// - `surface`: the surface to place
+    /// - `frame`: the frame to measure it against, usually that of an optical node
+    ///
+    /// # Returns
+    ///
+    /// The placement, from which the surface can be asked where it lies above a position of the
+    /// frame.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the surface runs parallel to the frame's axis, so that it
+    /// never crosses it and cannot bound anything along it, or if the surface has no vertex.
+    pub(super) fn new(surface: &'a dyn GeoSurface, frame: &Isometry) -> OpmResult<Self> {
+        let relative = Isometry::new_from_transform(
+            frame.get_inv_transform() * surface.isometry().get_transform(),
+        );
+        // The frame's own z axis, written in the surface's frame: dotted with a point of the
+        // surface it yields that point's longitudinal position in the frame. Its transversal part
+        // states how far the surface is tilted against the frame, its z part how much of the
+        // surface's own sag survives into the frame's z.
+        let axis = relative.inverse_transform_vector_f64(&Vector3::z());
+        if axis.z.abs() <= ALIGNMENT_TOLERANCE {
+            return Err(OpossumError::Other(format!(
+                "the '{}' surface runs parallel to the frame's axis and does not bound it",
+                surface.name()
+            )));
+        }
+        let vertex = surface.local_z_at(&Point2::origin()).ok_or_else(|| {
+            OpossumError::Other(format!(
+                "the '{}' surface has no vertex to measure its sag from",
+                surface.name()
+            ))
+        })?;
+        Ok(Self {
+            surface,
+            relative,
+            tilt: axis.x.hypot(axis.y),
+            axis,
+            vertex,
+        })
+    }
+    /// Maps a point of the surface's own frame into the frame it was measured against.
+    pub(super) const fn relative(&self) -> &Isometry {
+        &self.relative
+    }
+    /// How far the surface is tilted against the frame's axis, as the sine of that angle.
+    pub(super) const fn tilt(&self) -> f64 {
+        self.tilt
+    }
+    /// Whether the surface is turned against the frame's axis at all, rather than square to it.
+    ///
+    /// See [`ALIGNMENT_TOLERANCE`] for why this is not simply `tilt() > 0.0`.
+    pub(super) fn is_tilted(&self) -> bool {
+        self.tilt > ALIGNMENT_TOLERANCE
+    }
+    /// How much of the surface's own sag survives into the frame's z, as the cosine of the tilt.
+    ///
+    /// Negative if the surface sits the other way round in this frame.
+    pub(super) fn alignment(&self) -> f64 {
+        self.axis.z
+    }
+    /// The surface's own anchor point, in the surface's frame.
+    pub(super) const fn vertex(&self) -> Length {
+        self.vertex
+    }
+    /// The point of the surface above a transversal position of the frame, and the way it faces
+    /// there — both in the frame's coordinates.
+    ///
+    /// "Above" is along the frame's axis: the point where a line through the given transversal
+    /// position, parallel to that axis, meets the surface. Finding it means walking along that line
+    /// until the surface's own transversal plane is reached, which is exact in the two cases that
+    /// occur: for a surface parallel to the frame the walk does not move transversally at all, so
+    /// any sag above the position found is the answer; for a flat one there is no sag to miss. A
+    /// surface both tilted *and* curved would be met somewhere the walk does not reach, and is
+    /// turned away — the same limit the extent of a body is subject to, and no node builds such a
+    /// surface.
+    ///
+    /// The normal is turned towards the frame's +z, so it is the outward normal of a body this
+    /// surface bounds from below and the inward one of a body it bounds from above.
+    ///
+    /// # Arguments
+    ///
+    /// - `transversal_position`: the position in the frame's xy plane to look above
+    ///
+    /// # Returns
+    ///
+    /// The point of the surface and its unit normal, both in the frame's coordinates.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the surface does not reach that far out, or if it is both
+    /// curved and tilted against the frame.
+    pub(super) fn above(
+        &self,
+        transversal_position: &Point2<Length>,
+    ) -> OpmResult<(Point3<Length>, Vector3<f64>)> {
+        let start = self.relative.inverse_transform_point(&Point3::new(
+            transversal_position.x,
+            transversal_position.y,
+            Length::zero(),
+        ));
+        let along = -start.z / self.alignment();
+        let local = Point2::new(start.x + along * self.axis.x, start.y + along * self.axis.y);
+        let out_of_reach = || {
+            OpossumError::Other(format!(
+                "the '{}' surface does not reach as far out as {transversal_position:?}",
+                self.surface.name()
+            ))
+        };
+        let surface_z = self.surface.local_z_at(&local).ok_or_else(out_of_reach)?;
+        if self.is_tilted() && surface_z != self.vertex {
+            return Err(OpossumError::Other(format!(
+                "the curved '{}' surface tilted against the frame it is measured in is not \
+                 supported",
+                self.surface.name()
+            )));
+        }
+        let normal = self.relative.transform_vector_f64(
+            &self
+                .surface
+                .local_normal_at(&local)
+                .ok_or_else(out_of_reach)?,
+        );
+        Ok((
+            self.relative
+                .transform_point(&Point3::new(local.x, local.y, surface_z)),
+            // The surface may sit the other way round in this frame, in which case its own +z is
+            // the frame's -z and the normal has to be turned around to keep the promise above.
+            if self.alignment().is_sign_negative() {
+                -normal
+            } else {
+                normal
+            },
+        ))
+    }
+}
+
 /// Reference for a [`GeoSurface`].
 ///
 /// This struct is necessary in order to implement a Default trait on a `Arc<Mutex<GeoSurface>>`.
@@ -181,3 +407,185 @@ impl Default for GeoSurfaceRef {
 
 #[cfg(test)]
 mod test_geo_surface_ref {}
+
+#[cfg(test)]
+mod test_local_normal {
+    use super::*;
+    use crate::{
+        error::OpmResult,
+        geometry::{Cylinder, Parabola, Sphere},
+        joule, meter, nanometer,
+    };
+    use approx::assert_abs_diff_eq;
+
+    /// Half the width of the central difference the tangents are taken over, in meter.
+    const STEP: f64 = 1e-6;
+
+    /// A handful of transversal positions out to `reach` meters, to ask a surface about.
+    fn transversal_grid(reach: f64) -> Vec<Point2<Length>> {
+        vec![
+            meter!(0.0, 0.0),
+            meter!(reach, 0.0),
+            meter!(-reach, 0.0),
+            meter!(0.0, reach),
+            meter!(0.0, -reach),
+            meter!(reach / 2., -reach / 2.),
+        ]
+    }
+
+    /// A tangent of the surface at `position`, taken as a central difference of
+    /// [`GeoSurface::local_z_at`] along `step`.
+    fn central_tangent(
+        surface: &dyn GeoSurface,
+        position: &Point2<Length>,
+        step: Vector2<f64>,
+    ) -> Vector3<f64> {
+        let local_z = |side: f64| {
+            surface
+                .local_z_at(&Point2::new(
+                    position.x + meter!(side * step.x),
+                    position.y + meter!(side * step.y),
+                ))
+                .expect("the surface reaches a small step away as well")
+                .value
+        };
+        Vector3::new(2. * step.x, 2. * step.y, local_z(1.) - local_z(-1.))
+    }
+
+    /// Check everything [`GeoSurface::local_normal_at`] promises, at positions the surface reaches
+    /// and has not yet turned so far that a finite difference along it becomes unreliable.
+    fn check_normal_contract(surface: &dyn GeoSurface, positions: &[Point2<Length>]) {
+        let name = surface.name();
+        for position in positions {
+            let normal = surface
+                .local_normal_at(position)
+                .expect("the surface reaches this position");
+            assert_abs_diff_eq!(normal.norm(), 1.0, epsilon = 1e-12);
+            assert!(
+                normal.z > 0.0,
+                "the normal of '{name}' at {position:?} must face +z, got {normal:?}"
+            );
+            // The normal has to stand on the surface: walking along the surface in either
+            // transversal direction must not get one anywhere along the normal.
+            for step in [Vector2::new(STEP, 0.0), Vector2::new(0.0, STEP)] {
+                let tangent = central_tangent(surface, position, step).normalize();
+                assert_abs_diff_eq!(normal.dot(&tangent), 0.0, epsilon = 1e-8);
+            }
+            // A ray meeting the same spot has to find the same normal — save for which way it is
+            // turned, the very thing that makes it useless for describing a surface.
+            let ray = Ray::new_collimated(
+                Point3::new(position.x, position.y, meter!(-1.0)),
+                nanometer!(1053.0),
+                joule!(1.0),
+            )
+            .expect("a collimated ray along +z");
+            let (hit, from_ray) = surface
+                .calc_intersect_and_normal_do(&ray)
+                .expect("the ray meets the surface");
+            assert_abs_diff_eq!(
+                hit.z.value,
+                surface
+                    .local_z_at(position)
+                    .expect("the surface reaches this position")
+                    .value,
+                epsilon = 1e-9
+            );
+            assert_abs_diff_eq!(normal.dot(&from_ray).abs(), 1.0, epsilon = 1e-9);
+        }
+    }
+
+    #[test]
+    fn the_normal_of_a_plane_follows_the_contract() {
+        check_normal_contract(&Plane::default(), &transversal_grid(0.05));
+    }
+
+    #[test]
+    fn the_normal_of_a_sphere_follows_the_contract() -> OpmResult<()> {
+        for radius in [meter!(0.1), meter!(-0.1)] {
+            check_normal_contract(
+                &Sphere::new(radius, Isometry::identity())?,
+                &transversal_grid(0.08),
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn the_normal_of_a_cylinder_follows_the_contract() -> OpmResult<()> {
+        for radius in [meter!(0.1), meter!(-0.1)] {
+            let cylinder = Cylinder::new(radius, Isometry::identity())?;
+            check_normal_contract(&cylinder, &transversal_grid(0.08));
+            // The axis runs along y, so however far along it one goes, the normal stays in the
+            // xz plane.
+            for along_axis in [meter!(0.0, 0.5), meter!(0.04, -2.0)] {
+                let normal = cylinder
+                    .local_normal_at(&along_axis)
+                    .expect("a cylinder reaches arbitrarily far along its axis");
+                assert_abs_diff_eq!(normal.y, 0.0, epsilon = 1e-15);
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn the_normal_of_a_parabola_follows_the_contract() -> OpmResult<()> {
+        for focal_length in [meter!(0.1), meter!(-0.1)] {
+            check_normal_contract(
+                &Parabola::new(focal_length, Isometry::identity())?,
+                &transversal_grid(0.05),
+            );
+        }
+        Ok(())
+    }
+
+    /// Towards the rim a curved surface turns over until it stands upright, and its normal tips out
+    /// of the axis with it — by exactly the angle the surface has turned through, `asin(d/R)`.
+    ///
+    /// Note that the rim itself is not asked about: there the surface stands upright, and whether
+    /// that last point still belongs to it is a question floating point cannot settle — see
+    /// [`curved_local_z`], whose fused multiply-add lands a hair either side of zero.
+    #[test]
+    fn the_normal_tips_over_towards_the_rim() -> OpmResult<()> {
+        let radius = 0.1;
+        for surface in [
+            Box::new(Sphere::new(meter!(radius), Isometry::identity())?) as Box<dyn GeoSurface>,
+            Box::new(Cylinder::new(meter!(radius), Isometry::identity())?),
+        ] {
+            for distance in [0.0, 0.05, 0.0999] {
+                let normal = surface
+                    .local_normal_at(&meter!(distance, 0.0))
+                    .expect("this is still short of the rim");
+                assert_abs_diff_eq!(normal.norm(), 1.0, epsilon = 1e-12);
+                // sin and cos of that angle, stated directly rather than through an inverse
+                // trigonometric function, which is ill-conditioned near the axis.
+                assert_abs_diff_eq!(normal.x, -distance / radius, epsilon = 1e-12);
+                assert_abs_diff_eq!(
+                    normal.z,
+                    (distance / radius)
+                        .mul_add(-(distance / radius), 1.0)
+                        .sqrt(),
+                    epsilon = 1e-12
+                );
+            }
+        }
+        Ok(())
+    }
+
+    /// Beyond its radius of curvature a surface has curved back on itself. Neither its position nor
+    /// its normal is defined there, and the two have to agree on where that starts.
+    #[test]
+    fn a_curved_surface_has_no_normal_beyond_its_rim() -> OpmResult<()> {
+        let radius = meter!(0.1);
+        for surface in [
+            Box::new(Sphere::new(radius, Isometry::identity())?) as Box<dyn GeoSurface>,
+            Box::new(Cylinder::new(radius, Isometry::identity())?),
+        ] {
+            // Only x is offset: a cylinder still reaches arbitrarily far along its y axis.
+            for beyond in [meter!(0.11, 0.0), meter!(-0.2, 0.0)] {
+                assert!(surface.local_z_at(&beyond).is_none());
+                assert!(surface.local_normal_at(&beyond).is_none());
+            }
+        }
+        Ok(())
+    }
+}

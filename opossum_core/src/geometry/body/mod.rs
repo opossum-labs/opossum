@@ -19,16 +19,20 @@
 //! softening, inverting or omitting the transmission edge says nothing about where the material
 //! ends.
 
+mod mesh;
+
+pub use mesh::BodyMesh;
+
 use crate::{
     apertures::{ApertureShape, CircleShape},
     error::{OpmResult, OpossumError},
-    geometry::geo_surface::GeoSurfaceRef,
+    geometry::geo_surface::{GeoSurfaceRef, SurfacePlacement},
     light::Ray,
     meter, millimeter,
     types::validated_type_definitions::ValidatedCrossSection,
     utils::{LockExt, geom_transformation::Isometry, math_utils::distance_3d_point},
 };
-use nalgebra::{Point2, Point3, Vector3};
+use nalgebra::{Point2, Point3};
 use num_traits::Zero;
 use std::{fmt::Debug, ops::Range};
 use uom::si::f64::Length;
@@ -377,6 +381,9 @@ impl SurfaceBoundedBody {
     /// This function returns an error if the surface's mutex cannot be locked, if the surface runs
     /// parallel to the body's axis, if it does not reach as far out as the cross section, or if it
     /// is both curved and tilted against the body.
+    // The lock cannot be released any earlier: the placement borrows the surface for as long as it
+    // lives, so the suggested `drop` does not compile.
+    #[allow(clippy::significant_drop_tightening)]
     fn surface_z_range(
         &self,
         surface: &GeoSurfaceRef,
@@ -386,22 +393,10 @@ impl SurfaceBoundedBody {
         // released again before the result is assembled.
         let (anchor, from_tilt, sag_span) = {
             let surface = surface.0.lock_opm()?;
-            let relative = Isometry::new_from_transform(
-                self.isometry.get_inv_transform() * surface.isometry().get_transform(),
-            );
-            // The body's own z axis, written in the surface's frame: dotted with a point of the
-            // surface it yields that point's longitudinal position in the body. Its transversal
-            // part states how far the surface is tilted against the body, its z part how much of
-            // the surface's own sag survives into the body's z.
-            let body_axis = relative.inverse_transform_vector_f64(&Vector3::z());
-            let tilt = body_axis.x.hypot(body_axis.y);
-            let alignment = body_axis.z;
-            if alignment == 0.0 {
-                return Err(OpossumError::Other(format!(
-                    "the '{}' surface runs parallel to the body's axis and does not bound it",
-                    surface.name()
-                )));
-            }
+            // How the surface stands in the body's frame is the same question a mesh laid over it
+            // asks, so both read it off the same placement.
+            let placement = SurfacePlacement::new(&*surface, &self.isometry)?;
+            let (alignment, vertex) = (placement.alignment(), placement.vertex());
             // A tilted surface has to be looked at further out to still span the cross section.
             let reach = transversal_reach / alignment.abs();
             let out_of_reach = || {
@@ -410,9 +405,6 @@ impl SurfaceBoundedBody {
                     surface.name()
                 ))
             };
-            let vertex = surface
-                .local_z_at(&Point2::origin())
-                .ok_or_else(out_of_reach)?;
             // The sag grows monotonically with the distance from the axis for every surface
             // modelled here, so its extremes over the cross section are attained at the rim. Both
             // axes are sampled because a Cylinder is curved along one of them only.
@@ -428,21 +420,23 @@ impl SurfaceBoundedBody {
                 lowest_sag = Length::min(lowest_sag, sag);
                 highest_sag = Length::max(highest_sag, sag);
             }
-            if tilt > 0.0 && (lowest_sag != Length::zero() || highest_sag != Length::zero()) {
+            if placement.is_tilted()
+                && (lowest_sag != Length::zero() || highest_sag != Length::zero())
+            {
                 return Err(OpossumError::Other(format!(
                     "the extent of a body bounded by the curved '{}' surface tilted against it is \
                      not supported",
                     surface.name()
                 )));
             }
-            drop(surface);
-            let anchor = relative
+            let anchor = placement
+                .relative()
                 .transform_point(&Point3::new(Length::zero(), Length::zero(), vertex))
                 .z;
             let (one_sag, other_sag) = (lowest_sag * alignment, highest_sag * alignment);
             (
                 anchor,
-                reach * tilt,
+                reach * placement.tilt(),
                 Length::min(one_sag, other_sag)..Length::max(one_sag, other_sag),
             )
         };
@@ -574,6 +568,7 @@ mod test {
         degree,
         geometry::{Cylinder, Plane, Sphere, geo_surface::GeoSurface},
         joule, millimeter, nanometer,
+        utils::test_helper::test_helper::somewhere_else,
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::Vector3;
@@ -798,6 +793,40 @@ mod test {
         assert_spans(&bounds.x_range(), -10.0, 10.0);
         assert_spans(&bounds.y_range(), -10.0, 10.0);
         assert_spans(&bounds.z_range(), 0.0, 10.0);
+        Ok(())
+    }
+    /// A lens is bounded by two curved surfaces, and placing it anywhere but the origin must not
+    /// turn it into one that is curved *and* tilted.
+    ///
+    /// Composing a frame with its own inverse does not come out exactly, so a surface sitting
+    /// square in its body still reports a tilt of a few floating point epsilons — which used to be
+    /// taken for a real one and left every lens in a turned body without an extent at all.
+    #[test]
+    fn bounding_box_of_a_lens_in_a_turned_body() -> OpmResult<()> {
+        let placed_lens = |placement: &Isometry| -> OpmResult<SurfaceBoundedBody> {
+            let surface_at = |radius: Length, z: Length| -> OpmResult<GeoSurfaceRef> {
+                let mut surface = Sphere::new(radius, Isometry::identity())?;
+                surface.set_isometry(placement.append(&Isometry::new_along_z(z)?));
+                Ok(GeoSurfaceRef(Arc::new(Mutex::new(surface))))
+            };
+            Ok(SurfaceBoundedBody::new(
+                surface_at(millimeter!(50.0), millimeter!(0.0))?,
+                surface_at(millimeter!(-50.0), millimeter!(10.0))?,
+                circular_cross_section(millimeter!(10.0))?,
+                *placement,
+            ))
+        };
+        let at_origin = placed_lens(&Isometry::identity())?.bounding_box()?;
+        let turned = placed_lens(&somewhere_else()?)?.bounding_box()?;
+        // The box is stated in the body's own frame, so turning the body must not change it at all.
+        for (here, there) in [
+            (at_origin.x_range(), turned.x_range()),
+            (at_origin.y_range(), turned.y_range()),
+            (at_origin.z_range(), turned.z_range()),
+        ] {
+            assert_abs_diff_eq!(here.start.value, there.start.value, epsilon = 1e-12);
+            assert_abs_diff_eq!(here.end.value, there.end.value, epsilon = 1e-12);
+        }
         Ok(())
     }
     #[test]

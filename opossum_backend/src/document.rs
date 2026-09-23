@@ -3,6 +3,7 @@ use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
     helper_functions::{analyzer_mut_or_404, parent_group_id_or_self},
+    scene_export::scene_of,
     sse_logger::SENDER,
     undo::{Command, PatchNode, RepositionAnalyzer, SetViewport, capture_old_node_request},
 };
@@ -14,18 +15,31 @@ use futures_util::StreamExt;
 use log::{error, info, warn};
 use opossum_core::{
     core_optics::node_attr::HasNodeAttr,
+    error::OpossumError,
+    material::default_reference_wavelength,
     opm_document::OpmDocument,
     types::api_types::{
         DocumentChange, ErrorResponse, JumpTarget, LoadDocumentResponse, PositionUpdate,
         UndoRedoResponse, UpdateNodeRequest, ViewportChangeRequest,
     },
 };
+use serde::Deserialize;
 use std::{path::PathBuf, str::FromStr};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
+use utoipa::IntoParams;
 use utoipa_actix_web::service_config::ServiceConfig;
+use uuid::Uuid;
 
 const RON_MEDIA_TYPE: &str = "application/ron";
+const GLB_MEDIA_TYPE: &str = "model/gltf-binary";
+
+/// Which analyzer a 3D view of the model should follow.
+#[derive(Debug, Deserialize, IntoParams)]
+struct SceneQuery {
+    /// Uuid of the analyzer to take the placement from, or none to use the only one there is.
+    analyzer: Option<Uuid>,
+}
 
 /// Delete the current document and create new (empty) one
 #[utoipa::path(responses((status = NO_CONTENT, description = "document deleted and new one sucessfully created")), tag="document")]
@@ -62,8 +76,41 @@ async fn get_document(data: web::Data<AppState>) -> Result<impl Responder, BackE
         .content_type(RON_MEDIA_TYPE)
         .body(document.to_opm_file_string()?))
 }
+/// Get the model as a 3D scene
+///
+/// This function returns every component of the current document that encloses a volume as a
+/// binary glTF (GLB) file, ready to be opened in any glTF viewer.
+///
+/// The components of a model only have a place in space once its optical axis has been traced, so
+/// that run happens here — on a copy, leaving the document itself untouched. Which analyzer the
+/// axis is traced after can be named with the `analyzer` parameter; without it, the only analyzer
+/// that places anything is used, and a model with several has to be told which one to follow.
+#[utoipa::path(tag = "document",
+    params(SceneQuery),
+    responses(
+        (status = 200, description = "glTF binary of the model", body = Vec<u8>,
+            content_type = GLB_MEDIA_TYPE),
+        (status = 400, description = "the model could not be drawn", body = ErrorResponse)
+    )
+)]
+#[get("/scene.glb")]
+async fn get_scene(
+    data: web::Data<AppState>,
+    query: web::Query<SceneQuery>,
+) -> Result<impl Responder, BackEndErrorResponse> {
+    // Only the copy needs the live model. Meshing it is by far the longer half of the work, and
+    // holding the document across that would block every other edit for as long as it takes.
+    let placed = {
+        let document = data.document.lock();
+        document.positioned_copy(query.analyzer)?
+    };
+    let glb = scene_of(&placed, default_reference_wavelength())?
+        .to_glb()
+        .map_err(|e| OpossumError::Other(format!("the scene could not be written: {e}")))?;
+    Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
+}
 #[utoipa::path(
-    tag = "document", 
+    tag = "document",
     request_body(
         content = String,
         description = "OPM file as string",
@@ -469,6 +516,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(delete_document);
 
     cfg.service(get_root_uuid);
+    cfg.service(get_scene);
 
     cfg.service(undo_document);
     cfg.service(redo_document);
@@ -1418,6 +1466,80 @@ mod test {
 
         let root_uuid: uuid::Uuid = test::read_body_json(resp).await;
         assert_eq!(root_uuid, expected_uuid);
+    }
+
+    /// A backend state holding a model with a single lens in it — enough to draw.
+    fn state_with_a_lens() -> Data<AppState> {
+        let mut scenery = opossum_core::nodes::NodeGroup::default();
+        scenery
+            .add_node(opossum_core::nodes::Lens::default())
+            .unwrap();
+        let app_state = Data::new(AppState::default());
+        *app_state.document.lock() = OpmDocument::new(scenery);
+        app_state
+    }
+
+    /// Ask a state for its 3D view.
+    async fn request_scene(
+        app_state: &Data<AppState>,
+        query: &str,
+    ) -> actix_web::dev::ServiceResponse {
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(web::scope("/document").service(get_scene)),
+        )
+        .await;
+        let req = test::TestRequest::get()
+            .uri(&format!("/document/scene.glb{query}"))
+            .to_request();
+        app.call(req).await.unwrap()
+    }
+
+    /// The 3D view of a model is a plain glTF binary, so that any viewer can open it.
+    #[actix_web::test]
+    async fn the_scene_of_a_model_is_a_gltf_binary() {
+        let resp = request_scene(&state_with_a_lens(), "").await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers()
+                .get(actix_web::http::header::CONTENT_TYPE)
+                .unwrap(),
+            GLB_MEDIA_TYPE
+        );
+        let body = test::read_body(resp).await;
+        assert!(body.starts_with(b"glTF"));
+    }
+
+    /// A model with nothing in it has nothing to show. That is an empty file, not a refusal.
+    #[actix_web::test]
+    async fn the_scene_of_an_empty_model_is_still_a_file() {
+        let resp = request_scene(&Data::new(AppState::default()), "").await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = test::read_body(resp).await;
+        assert!(body.starts_with(b"glTF"));
+    }
+
+    /// Two analyses can place the same model differently, so which one a view follows has to be
+    /// said rather than guessed at.
+    #[actix_web::test]
+    async fn a_model_analyzed_several_ways_needs_the_analyzer_named() {
+        use opossum_core::analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig};
+
+        let app_state = state_with_a_lens();
+        let named = {
+            let mut document = app_state.document.lock();
+            document.add_analyzer(AnalyzerType::GhostFocus(GhostFocusConfig::default()));
+            document.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()))
+        };
+
+        let resp = request_scene(&app_state, "").await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        let resp = request_scene(&app_state, &format!("?analyzer={named}")).await;
+        assert_eq!(resp.status(), StatusCode::OK);
     }
 
     #[actix_web::test]

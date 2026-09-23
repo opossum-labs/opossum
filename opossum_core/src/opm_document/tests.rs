@@ -1,10 +1,13 @@
 use super::*;
 use crate::{
-    analyzers::{AnalyzerType, RayTraceConfig, energy::EnergyConfig},
+    analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig, energy::EnergyConfig},
     core_optics::node_attr::HasNodeAttr,
     gain::{ConstGain, GainModel},
-    nodes::Lens,
+    light::lightdata::ray_data_builder::RayDataBuilder,
+    millimeter,
+    nodes::{Dummy, Lens, SourcePort},
 };
+use approx::assert_relative_eq;
 
 #[test]
 fn new() {
@@ -226,4 +229,126 @@ fn remove_analyzer() {
     assert!(document.remove_analyzer(Uuid::nil()).is_err());
     assert!(document.remove_analyzer(uuid2).is_ok());
     assert!(document.analyzers.is_empty());
+}
+
+/// A source port, a component 100 mm along and another 50 mm behind that.
+///
+/// The components are [`Dummy`]s, which have no thickness of their own, so the placements the
+/// positioning run arrives at are exactly the distances the connections state.
+fn lined_up_model() -> OpmResult<(OpmDocument, Uuid, Uuid, Uuid)> {
+    let mut scenery = NodeGroup::default();
+    let source = scenery.add_node(SourcePort::default())?;
+    let first = scenery.add_node(Dummy::default())?;
+    let second = scenery.add_node(Dummy::default())?;
+    scenery.connect_nodes(source, "output_1", first, "input_1", millimeter!(100.0))?;
+    scenery.connect_nodes(first, "output_1", second, "input_1", millimeter!(50.0))?;
+    Ok((OpmDocument::new(scenery), source, first, second))
+}
+
+/// Where along the optical axis a node of the given document sits, in meter.
+fn placed_at(document: &OpmDocument, node_id: Uuid) -> OpmResult<f64> {
+    let (node_ref, _) = document.scenery().node_recursive(node_id)?;
+    let placement = node_ref.node_attr().effective_position();
+    Ok(placement
+        .expect("this node was expected to be placed")
+        .translation()
+        .z
+        .value)
+}
+
+fn is_placed(document: &OpmDocument, node_id: Uuid) -> OpmResult<bool> {
+    let (node_ref, _) = document.scenery().node_recursive(node_id)?;
+    Ok(node_ref.node_attr().effective_position().is_some())
+}
+
+/// A placement is saved with the model and a later run leaves an already placed node alone, so
+/// drawing a setup must not reach back into the document it was asked about.
+#[test]
+fn a_positioned_copy_leaves_the_document_it_came_from_alone() -> OpmResult<()> {
+    let (mut document, source, first, second) = lined_up_model()?;
+    let mut config = RayTraceConfig::default();
+    config.map_source(source, RayDataBuilder::default());
+    document.add_analyzer(AnalyzerType::RayTrace(config));
+    let before = document.to_opm_file_string()?;
+
+    let placed = document.positioned_copy(None)?;
+
+    assert_eq!(document.to_opm_file_string()?, before);
+    assert!(!is_placed(&document, first)?);
+    assert!(!is_placed(&document, second)?);
+    // The distances of the connections, measured from the source port in the origin.
+    assert_relative_eq!(placed_at(&placed, first)?, 0.1, epsilon = 1e-12);
+    assert_relative_eq!(placed_at(&placed, second)?, 0.15, epsilon = 1e-12);
+    Ok(())
+}
+
+/// Without an analyzer there is no source data, but the model still says where its own light
+/// comes in — default rays from there are enough to lay the setup out.
+#[test]
+fn a_model_without_an_analyzer_is_placed_from_its_own_source_ports() -> OpmResult<()> {
+    let (document, _, first, second) = lined_up_model()?;
+    let placed = document.positioned_copy(None)?;
+    assert_relative_eq!(placed_at(&placed, first)?, 0.1, epsilon = 1e-12);
+    assert_relative_eq!(placed_at(&placed, second)?, 0.15, epsilon = 1e-12);
+    assert_eq!(placed.scenery().find_source_ports()?.len(), 1);
+    Ok(())
+}
+
+/// A model that was never analyzed may mark no source at all. Rather than leaving it unplaced,
+/// one is put in front of it — in the copy only.
+#[test]
+fn a_model_without_a_source_is_placed_from_its_first_component() -> OpmResult<()> {
+    let mut scenery = NodeGroup::default();
+    let first = scenery.add_node(Dummy::default())?;
+    let second = scenery.add_node(Dummy::default())?;
+    scenery.connect_nodes(first, "output_1", second, "input_1", millimeter!(50.0))?;
+    let document = OpmDocument::new(scenery);
+
+    let placed = document.positioned_copy(None)?;
+
+    assert_relative_eq!(placed_at(&placed, first)?, 0.0, epsilon = 1e-12);
+    assert_relative_eq!(placed_at(&placed, second)?, 0.05, epsilon = 1e-12);
+    assert_eq!(placed.scenery().find_source_ports()?.len(), 1);
+    assert!(document.scenery().find_source_ports()?.is_empty());
+    Ok(())
+}
+
+/// Two analyses can place the same model differently — another source, another alignment
+/// wavelength — so which one a drawing follows has to be said rather than guessed.
+#[test]
+fn a_model_analyzed_several_ways_has_to_be_told_which_one_to_draw() -> OpmResult<()> {
+    let (mut document, source, first, _) = lined_up_model()?;
+    let mut config = RayTraceConfig::default();
+    config.map_source(source, RayDataBuilder::default());
+    let ray_trace = document.add_analyzer(AnalyzerType::RayTrace(config));
+    document.add_analyzer(AnalyzerType::GhostFocus(GhostFocusConfig::default()));
+
+    assert!(document.positioned_copy(None).is_err());
+
+    let placed = document.positioned_copy(Some(ray_trace))?;
+    assert_relative_eq!(placed_at(&placed, first)?, 0.1, epsilon = 1e-12);
+    Ok(())
+}
+
+/// A model with nothing in it places nothing. That is an empty answer, not a failure — a view
+/// of an empty document should come out empty rather than refuse.
+#[test]
+fn an_empty_model_is_placed_without_complaint() -> OpmResult<()> {
+    let placed = OpmDocument::default().positioned_copy(None)?;
+    assert_eq!(placed.scenery().nr_of_nodes(), 0);
+    Ok(())
+}
+
+/// An energy analysis knows nothing of geometry, so it can neither be drawn after nor stand in
+/// the way of the sources the model brings itself.
+#[test]
+fn an_energy_analysis_places_nothing() -> OpmResult<()> {
+    let (mut document, _, first, _) = lined_up_model()?;
+    let energy = document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()));
+
+    assert!(document.positioned_copy(Some(energy)).is_err());
+
+    let placed = document.positioned_copy(None)?;
+    assert_relative_eq!(placed_at(&placed, first)?, 0.1, epsilon = 1e-12);
+    Ok(())
 }

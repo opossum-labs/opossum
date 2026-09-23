@@ -12,6 +12,7 @@ mod pages;
 mod payload_logger;
 mod pump_scenarios;
 mod routes;
+mod scene_export;
 mod server;
 mod sse_logger;
 mod undo;

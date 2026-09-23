@@ -4,9 +4,9 @@ use uuid::Uuid;
 
 use super::{GhostFocusConfig, GhostFocusHistory};
 use crate::{
-    analyzers::{Analyzer, raytrace::AnalysisRayTrace},
+    analyzers::{Analyzer, AnalyzerType, raytrace::AnalysisRayTrace},
     core_optics::{NodeAttrExt, OpticNodeExt, node_attr::HasNodeAttr},
-    error::OpmResult,
+    error::{OpmResult, OpossumError},
     light::{
         Rays,
         light_result::{
@@ -14,7 +14,7 @@ use crate::{
         },
     },
     nodes::NodeGroup,
-    prelude::{OpticNode, Properties, Proptype, RayTraceConfig},
+    prelude::{OpticNode, Properties, Proptype},
     properties::proptype::{count_str, format_value_with_prefix},
     reporting::{analysis_report::AnalysisReport, node_report::NodeReport},
 };
@@ -134,12 +134,13 @@ impl Analyzer for GhostFocusAnalyzer {
         };
         info!("Calculate node positions of scenery{scenery_name}.");
 
-        // Build a positioning config with the source map so AnalysisRayTrace can find the source
-        // ports, but without a pump scenario (is_positioning_run = true).
-        let mut raytrace_config = RayTraceConfig::default();
-        raytrace_config.set_source_map(self.config.source_map().clone());
-        raytrace_config.set_ambient_material(self.config.ambient_material().clone());
-        raytrace_config.set_positioning_run(true);
+        // Asked for rather than assembled here, so that whatever draws this setup places its
+        // components exactly where this analysis does.
+        let raytrace_config = AnalyzerType::GhostFocus(self.config.clone())
+            .positioning_config()
+            .ok_or_else(|| {
+                OpossumError::Analysis("a ghost focus analysis has to place its nodes".into())
+            })?;
         AnalysisRayTrace::calc_node_positions(scenery, LightResult::default(), &raytrace_config)?;
         scenery.reset_data();
         scenery.prepare_volume(self.config())?;

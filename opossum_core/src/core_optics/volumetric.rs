@@ -1300,6 +1300,31 @@ mod test {
         }
         Ok(())
     }
+    /// Every node that presents itself as [`Volumetric`] can also be drawn as a solid.
+    ///
+    /// A node type is registered once and then shows up in the 3D view without anything being added
+    /// for it, so whether its default geometry can actually be meshed has to be settled here rather
+    /// than found out later by a viewer left with a hole in the scene.
+    #[test]
+    fn every_volume_node_can_be_meshed_in_its_default_state() -> OpmResult<()> {
+        for (node_type, _) in node_types() {
+            let optic_ref = create_node_ref(node_type)?;
+            let Some(volume) = optic_ref.as_volume() else {
+                continue;
+            };
+            let body = volume.volume_body()?;
+            let mesh = body.triangulate(32).map_err(|e| {
+                OpossumError::Other(format!("node type '{node_type}' cannot be meshed: {e}"))
+            })?;
+            for face in mesh.faces() {
+                assert!(
+                    !face.triangles().is_empty(),
+                    "a face of node type '{node_type}' came out without any triangles"
+                );
+            }
+        }
+        Ok(())
+    }
     /// Phase A: every analyzer installs a prepared medium before the first ray is traced.
     ///
     /// The medium is installed on the node's `NodeAttr` slot rather than passed per call, so an

@@ -12,6 +12,7 @@
 //! domain volumetric quantities are defined on.
 
 mod cylinder;
+mod mesh;
 mod parabola;
 mod plane;
 mod sphere;
@@ -20,6 +21,7 @@ pub mod body;
 pub mod geo_surface;
 
 pub use cylinder::Cylinder;
+pub use mesh::SurfaceMesh;
 pub use parabola::Parabola;
 pub use plane::Plane;
 pub use sphere::Sphere;

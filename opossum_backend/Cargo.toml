@@ -44,3 +44,10 @@ tokio = { version = "1", features = ["process"] }
 # Add ureq with minimal features for TLS and Serde JSON support:
 ureq = { version = "2.10", default-features = false, features = ["tls", "json"] }
 semver = "1.0"
+# Local path for now: `optoscene` is its own workspace next to this one and is not in this
+# repository yet. Once it has a repository of its own, only this one line changes into a git
+# dependency - see `optoscene_plan.md`.
+optoscene = { path = "../optoscene/crates/optoscene" }
+
+[dev-dependencies]
+serde_json.workspace = true

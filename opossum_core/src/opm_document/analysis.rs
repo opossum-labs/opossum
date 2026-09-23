@@ -2,12 +2,16 @@
 
 use super::OpmDocument;
 use crate::{
-    analyzers::{Analyzer, AnalyzerRegistration, AnalyzerType},
+    analyzers::{
+        Analyzer, AnalyzerRegistration, AnalyzerType, RayTraceConfig, raytrace::AnalysisRayTrace,
+    },
     core_optics::OpticNode,
     error::{OpmResult, OpossumError},
+    light::{light_result::LightResult, lightdata::ray_data_builder::RayDataBuilder},
     reporting::analysis_report::AnalysisReport,
 };
 use log::info;
+use uuid::Uuid;
 
 /// Internal description of a single planned analysis run.
 #[derive(Debug, Clone)]
@@ -87,6 +91,108 @@ impl OpmDocument {
         }
 
         Ok(reports)
+    }
+
+    /// Return a copy of this document whose nodes have been placed in space.
+    ///
+    /// A model states what is connected to what and how far apart, not where anything is: a node
+    /// only learns its own placement from a positioning run, which traces the optical axis from a
+    /// source through the setup. Anything that has to draw a setup — rather than analyze it — needs
+    /// that run to have happened.
+    ///
+    /// It happens on a copy, and that is the point of this method. A placement is written into the
+    /// node itself and saved with the document, and a later run leaves an already placed node
+    /// alone; running one on the live document would therefore freeze whatever the drawing happened
+    /// to be asked for into the model itself. The copy is taken through the file format, which is
+    /// the only copy that is genuinely independent — [`clone_deep`](OpmDocument::clone_deep) leaves
+    /// the references of the copy pointing at the nodes of the original.
+    ///
+    /// Which source the axis starts from comes from an analyzer, because that is where source data
+    /// lives; see [`AnalyzerType::positioning_config`]. A model with no analyzer that places
+    /// anything is placed from its own source ports with default ray data, and one without even
+    /// those gets a source port put in front of its first component, so that a setup which was
+    /// never analyzed can still be looked at.
+    ///
+    /// # Arguments
+    ///
+    /// - `analyzer_id`: the analyzer to take the sources from, or `None` to pick the only one that
+    ///   places anything
+    ///
+    /// # Returns
+    ///
+    /// An independent copy of this document with its nodes placed.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the copy cannot be made, if the named analyzer does not
+    /// exist or does not place anything, if no analyzer was named and several place something, or
+    /// if the positioning run itself fails.
+    pub fn positioned_copy(&self, analyzer_id: Option<Uuid>) -> OpmResult<Self> {
+        let mut copy = Self::from_string(&self.to_opm_file_string()?)?;
+        let config = if let Some(id) = analyzer_id {
+            let analyzer = copy.analyzer(id)?;
+            analyzer
+                .analyzer_type()
+                .positioning_config()
+                .ok_or_else(|| {
+                    OpossumError::OpmDocument(format!(
+                        "the '{}' analyzer does not place the nodes of a model and cannot be used \
+                         to draw it",
+                        analyzer.display_name()
+                    ))
+                })?
+        } else {
+            let mut placing = copy
+                .analyzers
+                .values()
+                .filter_map(|info| info.analyzer_type().positioning_config());
+            match (placing.next(), placing.next()) {
+                (Some(only), None) => only,
+                (Some(_), Some(_)) => {
+                    return Err(OpossumError::OpmDocument(
+                        "this model is analyzed several ways, each of which may place its nodes \
+                         differently — name the analyzer to draw it after"
+                            .into(),
+                    ));
+                }
+                // Nothing analyzes this model geometrically, so there is no source data to go by.
+                // Default rays from wherever the model marks its sources still say where everything
+                // sits relative to everything else.
+                _ => copy.default_positioning_config()?,
+            }
+        };
+        AnalysisRayTrace::calc_node_positions(&mut copy.scenery, LightResult::default(), &config)?;
+        copy.scenery.reset_data();
+        Ok(copy)
+    }
+
+    /// Build a positioning configuration for a model no analyzer places.
+    ///
+    /// Every source port of the model is given default ray data. A model that has none at all gets
+    /// one put in front of the first component whose input is still free, at no distance, so that
+    /// the setup is drawn starting from that component rather than not at all.
+    ///
+    /// # Returns
+    ///
+    /// A configuration covering every source port of the model.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the source ports cannot be found, or if a model that has
+    /// components but no source port has nothing to put one in front of.
+    fn default_positioning_config(&mut self) -> OpmResult<RayTraceConfig> {
+        let mut config = RayTraceConfig::default();
+        config.set_positioning_run(true);
+        let mut source_ports = self.scenery.find_source_ports()?;
+        // An empty model places nothing, which is not a failure — and there would be nothing to put
+        // a source port in front of either.
+        if source_ports.is_empty() && self.scenery.nr_of_nodes() > 0 {
+            source_ports.push(self.scenery.prepend_source_port()?);
+        }
+        for source_port in source_ports {
+            config.map_source(source_port, RayDataBuilder::default());
+        }
+        Ok(config)
     }
 
     /// Expands the analyzers of this [`OpmDocument`] into individual executable runs.

@@ -133,6 +133,14 @@ impl GeoSurface for Parabola {
         let (x, y) = (transversal_position.x.value, transversal_position.y.value);
         Some(meter!(x.mul_add(x, y * y) / (4. * self.focal_length.value)))
     }
+    fn local_normal_at(&self, transversal_position: &Point2<Length>) -> Option<Vector3<f64>> {
+        // The local surface is x^2 + y^2 - 4*f*z = 0, whose gradient (-2x, -2y, 4f) is normal to
+        // it — halved here, which changes nothing once it is normalized. That gradient points
+        // towards -z for a negative focal length, so the sign of f turns it back.
+        let (x, y) = (transversal_position.x.value, transversal_position.y.value);
+        let focal_length = self.focal_length.value;
+        Some(vector![-x, -y, 2. * focal_length].normalize() * focal_length.signum())
+    }
     fn is_behind_do(&self, point: &Point3<Length>) -> bool {
         self.local_z_at(&Point2::new(point.x, point.y))
             .is_some_and(|sag| point.z >= sag)

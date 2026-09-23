@@ -18,7 +18,7 @@ use crate::{
         Rays,
         lightdata::{LightData, light_data_builder::LightDataBuilder},
     },
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, SourcePort},
     properties::{Properties, Proptype},
     reporting::{
         Dottable,
@@ -27,6 +27,7 @@ use crate::{
         report_note::{ReportLevel, ReportNote},
     },
 };
+use num_traits::Zero;
 pub use optic_graph::{ConnectionInfo, OpticGraph};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -908,6 +909,56 @@ impl NodeGroup {
     /// This function will return an error if the resources could not be locked.
     pub fn find_source_ports(&self) -> OpmResult<Vec<Uuid>> {
         self.graph.find_source_ports()
+    }
+    /// Put a source port in front of the first component this graph leaves unfed.
+    ///
+    /// A model states the distances between its components, not where any of them is; the optical
+    /// axis has to start somewhere for that to become a placement. A model that was never analyzed
+    /// may have no source port at all, and rather than leaving the whole setup unplaced, one is
+    /// added here. It sits directly on the component it feeds, so that component ends up in the
+    /// origin and everything else follows from the distances.
+    ///
+    /// # Returns
+    ///
+    /// The [`Uuid`] of the added source port.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if a contained node cannot be locked, if no component has a
+    /// free input to start the optical axis at, or if the two cannot be connected.
+    ///
+    /// Deliberately not part of the crate's public surface: this exists so a model that was never
+    /// analyzed can still be *drawn*, and nothing outside should be able to slip a synthetic source
+    /// into a real document.
+    pub(crate) fn prepend_source_port(&mut self) -> OpmResult<Uuid> {
+        let mut unfed = None;
+        for node_ref in self.nodes() {
+            let node_id = node_ref.uuid();
+            // A node without an input port cannot be fed at all, which is how the source ports
+            // already in the graph are passed over.
+            let first_input = node_ref.ports().names(&PortType::Input).into_iter().next();
+            let Some(first_input) = first_input else {
+                continue;
+            };
+            if !self.graph.has_input_connections(node_id)? {
+                unfed = Some((node_id, first_input));
+                break;
+            }
+        }
+        let Some((node_id, input_port)) = unfed else {
+            return Err(OpossumError::OpticScenery(
+                "there is no component with a free input to start the optical axis at".into(),
+            ));
+        };
+        let source_port = self.add_node(SourcePort::default())?;
+        self.connect_nodes(
+            source_port,
+            "output_1",
+            node_id,
+            &input_port,
+            Length::zero(),
+        )?;
+        Ok(source_port)
     }
 }
 
