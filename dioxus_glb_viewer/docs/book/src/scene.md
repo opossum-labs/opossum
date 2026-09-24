@@ -92,6 +92,7 @@ Scene-wide settings. The prop is optional; leaving it out uses these defaults.
 | `fit_on_first_load` | Frame the scene on the first successful load. | `true` |
 | `initial_camera` | Camera position before the first auto-fit. | `[5.0, 3.0, 5.0]` |
 | `initial_target` | Camera target before the first auto-fit. | `[0.0, 0.0, 0.0]` |
+| `environment` | Surroundings the scene is lit and reflected by (`None` or `Room`). | `None` |
 | `fov_degrees` | Vertical field of view. | `50.0` |
 
 Colour values are handed to `new THREE.Color(...)`, so they must be something three.js
@@ -107,6 +108,7 @@ the camera**. They do not all apply at the same moment, though:
 | Field | Applied |
 |---|---|
 | `background`, `grid`, `ambient_intensity`, `directional_intensity`, `selection_color` | Immediately, on every change. |
+| `environment` | Immediately, but asynchronously: the map is imported and rendered on first use. |
 | `initial_camera`, `initial_target` | On the next `reset_camera()` call. |
 | `fit_on_first_load` | Checked on every successful load, until an auto-fit has actually happened once. |
 | `fov_degrees` | **Read once, when the viewer boots.** Later changes are ignored. |

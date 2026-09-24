@@ -135,6 +135,34 @@ removed), and the colour of existing selection boxes. It does **not** touch the 
 which is why `fov_degrees` changes have no effect after boot, as
 [the options table](./scene.md#when-option-changes-take-effect) records.
 
+### The environment map
+
+`environment` is the one option that cannot be applied synchronously, and the only one that
+exists for a reason of physics rather than taste.
+
+glTF exports a refractive material as `KHR_materials_transmission`, which three.js renders by
+showing what lies *behind* the surface. With nothing around the scene there is nothing behind it,
+so the material renders **black** — a lens looks like a hole rather than like glass. Metals have
+the same problem more mildly: with nothing to reflect they read as flat grey.
+
+`Environment::Room` fixes that by rendering three.js's `RoomEnvironment` — a small grey room with
+a few bright panels — through a `PMREMGenerator` into a prefiltered cube texture, and assigning it
+to `scene.environment`. The room is neutral on purpose: it gives glass something to refract without
+tinting the model.
+
+Both the module import and the render-to-cubemap happen on **first use**, not at boot, so a viewer
+that never asks for an environment pays for neither. That also means the map appears a frame or two
+after the option changes.
+
+Two things the implementation has to get right, both of them consequences of that `await`:
+
+- The viewer may have been disposed while the import was in flight, and a second `set_options` may
+  have overtaken this one. The generated texture is therefore discarded unless it is still the one
+  being asked for.
+- `PMREMGenerator` and the room scene are scaffolding: both are disposed immediately, and only the
+  cube texture survives the call. The texture itself is disposed when the environment changes again
+  and when the viewer shuts down.
+
 ## Releasing resources
 
 WebGL resources are not garbage collected. Every geometry, material and texture has to be

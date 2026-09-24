@@ -22,6 +22,7 @@ File: `three-0.174.0.tgz` (sha1: see `npm pack --dry-run three@0.174.0`)
 | `examples/jsm/controls/OrbitControls.js` | `package/examples/jsm/controls/OrbitControls.js` |
 | `examples/jsm/loaders/GLTFLoader.js` | `package/examples/jsm/loaders/GLTFLoader.js` |
 | `examples/jsm/utils/BufferGeometryUtils.js` | `package/examples/jsm/utils/BufferGeometryUtils.js` |
+| `examples/jsm/environments/RoomEnvironment.js` | `package/examples/jsm/environments/RoomEnvironment.js` |
 
 ## Why exactly these files?
 
@@ -31,6 +32,9 @@ File: `three-0.174.0.tgz` (sha1: see `npm pack --dry-run three@0.174.0`)
   internally by `GLTFLoader.js`
   (`import { toTrianglesDrawMode } from '../utils/BufferGeometryUtils.js'`).
   All are addressed via `three/addons/...` (through the importmap).
+- `RoomEnvironment.js` builds the small lit room that `PMREMGenerator` turns into an environment
+  map. Transmissive glass (`KHR_materials_transmission`) has nothing to refract without one and
+  renders black, so a viewer that shows optics needs it.
 
 ## Why a folder asset (not individual `asset!()` calls)?
 
@@ -61,8 +65,13 @@ cp extracted/package/build/three.core.js   assets/three/three.core.js
 cp extracted/package/examples/jsm/controls/OrbitControls.js    assets/three/examples/jsm/controls/
 cp extracted/package/examples/jsm/loaders/GLTFLoader.js         assets/three/examples/jsm/loaders/
 cp extracted/package/examples/jsm/utils/BufferGeometryUtils.js  assets/three/examples/jsm/utils/
+cp extracted/package/examples/jsm/environments/RoomEnvironment.js assets/three/examples/jsm/environments/
 
-# 5. Update the version line in VENDORING.md and commit
+# 5. Rewrite the bare 'three' import in every add-on to the relative build. Without this the
+#    browser cannot resolve it: there is no importmap, viewer.js is handed an explicit base instead.
+sed -i "s|^} from 'three';$|} from '../../../three.module.js';|" assets/three/examples/jsm/*/*.js
+
+# 6. Update the version line in VENDORING.md and commit
 ```
 
 ## Licence

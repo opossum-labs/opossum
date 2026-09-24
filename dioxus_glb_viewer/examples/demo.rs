@@ -20,12 +20,14 @@
 //! 8. Resize the window → image stays undistorted (ResizeObserver).
 //! 9. 20× add/remove alternating → memory in DevTools stays flat (disposal test).
 //! 10. Desktop only: type an absolute path into the input field → loads as bytes source.
+//! 11. Load a model with a glass material and click "Toggle
+//!     environment" → the glass turns from black to refracting; **view stays**.
 
 #![allow(non_snake_case)]
 
 use dioxus::prelude::*;
 use dioxus_glb_viewer::{
-    GlbObject, GlbSource, GlbViewer, PickEvent, Transform, ViewerEvent, ViewerOptions,
+    Environment, GlbObject, GlbSource, GlbViewer, PickEvent, Transform, ViewerEvent, ViewerOptions,
     use_glb_viewer_handle,
 };
 
@@ -44,6 +46,11 @@ fn App() -> Element {
     let mut last_pick = use_signal(|| None::<PickEvent>);
     let mut event_log = use_signal(Vec::<String>::new);
     let mut counter = use_signal(|| 0usize);
+    let mut options = use_signal(|| ViewerOptions {
+        background: "#1a1a2e".into(),
+        fit_on_first_load: true,
+        ..ViewerOptions::default()
+    });
     let viewer_handle = use_glb_viewer_handle();
 
     // ── Helper: build a GlbObject with an incrementing ID ────────────────────
@@ -145,6 +152,19 @@ fn App() -> Element {
                         onclick: move |_| { viewer_handle.clear_scene(); objects.write().clear(); },
                         "Clear all"
                     }
+                    button {
+                        style: button_style(true),
+                        onclick: move |_| {
+                            // Without an environment, transmissive glass renders black - toggle
+                            // this on a model with a glass material to see the difference.
+                            let mut opts = options.write();
+                            opts.environment = match opts.environment {
+                                Environment::None => Environment::Room,
+                                Environment::Room => Environment::None,
+                            };
+                        },
+                        "Toggle environment"
+                    }
                 }
 
                 // ── Desktop: load an arbitrary GLB file by path ───────────────
@@ -224,11 +244,7 @@ fn App() -> Element {
                 style: "flex:1; height:100%;",
                 objects,
                 handle: viewer_handle,
-                options: use_signal(|| ViewerOptions {
-                    background: "#1a1a2e".into(),
-                    fit_on_first_load: true,
-                    ..ViewerOptions::default()
-                }),
+                options,
                 on_pick: move |p: PickEvent| {
                     // Selection lives in the caller's model — the component only reports the click.
                     let hit_id = p.id.clone();

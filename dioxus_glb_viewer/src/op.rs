@@ -129,7 +129,7 @@ impl Serialize for Transform {
 
 impl Serialize for ViewerOptions {
     fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        let mut st = s.serialize_struct("ViewerOptions", 9)?;
+        let mut st = s.serialize_struct("ViewerOptions", 10)?;
         st.serialize_field("background", &self.background)?;
         st.serialize_field("grid", &self.grid)?;
         st.serialize_field("ambient_intensity", &self.ambient_intensity)?;
@@ -138,7 +138,59 @@ impl Serialize for ViewerOptions {
         st.serialize_field("fit_on_first_load", &self.fit_on_first_load)?;
         st.serialize_field("initial_camera", &self.initial_camera)?;
         st.serialize_field("initial_target", &self.initial_target)?;
+        st.serialize_field("environment", &self.environment)?;
         st.serialize_field("fov_degrees", &self.fov_degrees)?;
         st.end()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::Environment;
+
+    /// Every field of [`ViewerOptions`] has to reach `viewer.js`. The `Serialize` impl above is
+    /// written out by hand and states its own field count, so a field added to the struct is
+    /// silently dropped from the wire unless it is added here as well — and an option that never
+    /// arrives looks exactly like an option the renderer ignores. This is what notices.
+    #[test]
+    fn viewer_options_put_every_field_on_the_wire() {
+        let json = serde_json::to_value(ViewerOptions::default()).expect("options serialise");
+        let mut keys: Vec<&str> = json
+            .as_object()
+            .expect("options are a JSON object")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        keys.sort_unstable();
+        assert_eq!(
+            keys,
+            [
+                "ambient_intensity",
+                "background",
+                "directional_intensity",
+                "environment",
+                "fit_on_first_load",
+                "fov_degrees",
+                "grid",
+                "initial_camera",
+                "initial_target",
+                "selection_color",
+            ]
+        );
+    }
+
+    /// `viewer.js` switches on these exact strings, so renaming a variant silently turns the
+    /// environment off rather than failing.
+    #[test]
+    fn environment_serialises_as_the_names_the_renderer_switches_on() {
+        assert_eq!(
+            serde_json::to_value(Environment::None).expect("serialises"),
+            "none"
+        );
+        assert_eq!(
+            serde_json::to_value(Environment::Room).expect("serialises"),
+            "room"
+        );
     }
 }

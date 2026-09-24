@@ -1,5 +1,6 @@
 //! Types for the scene description passed to [`crate::GlbViewer`].
 
+use serde::Serialize;
 use std::sync::Arc;
 
 // ─── GlbObject ───────────────────────────────────────────────────────────────
@@ -96,6 +97,32 @@ impl Default for Transform {
     }
 }
 
+// ─── Environment ─────────────────────────────────────────────────────────────
+
+/// The surroundings a scene is lit and reflected by.
+///
+/// This is not decoration. glTF's `KHR_materials_transmission` — what a refractive material is
+/// exported as — renders what is *behind* the surface, and with nothing around the scene there is
+/// nothing to refract: the material comes out black. A lens therefore needs an environment to look
+/// like glass rather than like a hole.
+///
+/// Mirrors and other metallic materials have the same problem in a milder form: without an
+/// environment they reflect nothing and read as flat grey.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Environment {
+    /// No environment map. Transmissive and metallic materials render black.
+    ///
+    /// The default, because it is what the renderer did before this option existed and because
+    /// generating the map costs a little time and memory at start-up.
+    #[default]
+    None,
+    /// A small neutral room, the three.js `RoomEnvironment`.
+    ///
+    /// Grey walls with a few bright panels — enough for glass to refract something and for metal to
+    /// have highlights, without tinting the model any particular colour.
+    Room,
+}
 // ─── ViewerOptions ───────────────────────────────────────────────────────────
 
 /// Scene-wide settings for the viewer.
@@ -121,6 +148,11 @@ pub struct ViewerOptions {
     pub initial_camera: [f32; 3],
     /// Initial camera target before the first auto-fit (X, Y, Z in world coordinates).
     pub initial_target: [f32; 3],
+    /// The surroundings the scene is lit and reflected by.
+    ///
+    /// Needed for refractive and metallic materials to render as anything but black; see
+    /// [`Environment`].
+    pub environment: Environment,
     /// Vertical field of view in degrees.
     pub fov_degrees: f32,
 }
@@ -136,6 +168,7 @@ impl Default for ViewerOptions {
             fit_on_first_load: true,
             initial_camera: [5.0, 3.0, 5.0],
             initial_target: [0.0, 0.0, 0.0],
+            environment: Environment::default(),
             fov_degrees: 50.0,
         }
     }

@@ -58,6 +58,7 @@ nothing.
 | `fit_on_first_load` | `true` |
 | `initial_camera` | `[5.0, 3.0, 5.0]` |
 | `initial_target` | `[0.0, 0.0, 0.0]` |
+| `environment` | `None` |
 | `fov_degrees` | `50.0` |
 
 Only some of these apply live; see [when option changes take

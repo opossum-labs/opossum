@@ -306,14 +306,47 @@ export async function createViewer(canvasId, options, send, threeBase) {
         }
     }
 
+    // ── Environment ───────────────────────────────────────────────────────────
+    // Transmissive glass (KHR_materials_transmission) renders what is behind the surface, so with
+    // nothing around the scene there is nothing to refract and the material comes out black. The
+    // map is built only when one is asked for: a viewer that never wants it pays neither the
+    // import nor the render-to-cubemap.
+    let environmentKind = 'none';
+    let environmentMap  = null;
+
+    async function applyEnvironment(kind) {
+        if (kind === environmentKind) return;
+        environmentKind = kind;
+
+        if (environmentMap) { environmentMap.dispose(); environmentMap = null; }
+        if (kind !== 'room') { scene.environment = null; return; }
+
+        const { RoomEnvironment } =
+            await import(threeBase + '/examples/jsm/environments/RoomEnvironment.js');
+        const pmrem = new THREE.PMREMGenerator(renderer);
+        const room  = new RoomEnvironment();
+        const map   = pmrem.fromScene(room).texture;
+        // Generator and room were scaffolding; only the cube texture outlives this call.
+        pmrem.dispose();
+        room.dispose();
+
+        // The import was awaited, so the viewer may have been torn down in the meantime - and a
+        // second call may have overtaken this one. Either way this map is no longer the wanted one.
+        if (disposed || environmentKind !== kind) { map.dispose(); return; }
+        environmentMap = map;
+        scene.environment = map;
+    }
+
     // ── Options ───────────────────────────────────────────────────────────────
     let currentOptions = options;
+    void applyEnvironment(options.environment);
 
     function applyOptions(opts) {
         currentOptions = opts;
         scene.background = new THREE.Color(opts.background);
         ambient.intensity = opts.ambient_intensity;
         sun.intensity     = opts.directional_intensity;
+        void applyEnvironment(opts.environment);
         // Grid: add/remove based on flag
         if (opts.grid && !grid) {
             grid = new THREE.GridHelper(20, 20);
@@ -399,6 +432,8 @@ export async function createViewer(canvasId, options, send, threeBase) {
         controls.dispose();
         for (const id of [...objects.keys()]) removeObject(id);
         if (grid) { scene.remove(grid); grid.geometry.dispose(); grid.material.dispose(); grid = null; }
+        if (environmentMap) { environmentMap.dispose(); environmentMap = null; }
+        scene.environment = null;
         scene.clear();
         renderer.dispose();
         // Explicitly release the WebGL context (browsers cap at ~16 simultaneous contexts)

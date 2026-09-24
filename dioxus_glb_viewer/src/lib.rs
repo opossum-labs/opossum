@@ -55,5 +55,5 @@ mod viewer;
 mod wire;
 
 pub use event::{PickEvent, ViewerEvent};
-pub use model::{GlbObject, GlbSource, Transform, ViewerOptions};
+pub use model::{Environment, GlbObject, GlbSource, Transform, ViewerOptions};
 pub use viewer::{GlbViewer, ViewerHandle, use_glb_viewer_handle};
