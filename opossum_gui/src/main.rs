@@ -94,6 +94,13 @@ static AMPLIFIER_CANDIDATES: GlobalSignal<HashSet<Uuid>> = Signal::global(HashSe
 static SIDEBAR_VIEW: GlobalSignal<SidebarView> = Signal::global(|| SidebarView::NodeProperties);
 static SIDEBAR_COLLAPSED: GlobalSignal<bool> = Signal::global(|| false);
 static SIDEBAR_WIDTH: GlobalSignal<f64> = Signal::global(|| 280.0);
+/// Whether the 3D view of the model is open as a tab beside the graphs.
+///
+/// Global for the same reason as [`SIDEBAR_VIEW`]: the menu bar opens it and the tab's own close
+/// button shuts it, and those two sit on opposite sides of the component tree. It is deliberately
+/// *not* part of the graph workspace state — that state is a map of graphs, and the 3D view is not
+/// a graph. Which tab is currently in front stays local to the graph editor.
+static SCENE_VIEW_OPEN: GlobalSignal<bool> = Signal::global(|| false);
 /// Set from the backend's authoritative `JumpTarget` when an undo/redo focuses a node: the node it
 /// selected and the panel to open once that node's editor has loaded. Consumed (cleared) by whichever
 /// `OpticalNodeEditor`/`PortConfigEditor` instance matches the uuid. `apply_document_changes` sets it

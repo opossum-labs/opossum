@@ -1,4 +1,5 @@
 use crate::components::app::SIDEBAR_SWITCHER_WIDTH;
+use crate::components::scene_view::SceneView;
 use crate::components::{
     node_editor::{NodeConfigEditor, PumpScenarioEditor},
     scenery_editor::{
@@ -14,11 +15,17 @@ use crate::components::{
         },
     },
 };
-use crate::{SIDEBAR_COLLAPSED, SIDEBAR_VIEW, SIDEBAR_WIDTH};
+use crate::{SCENE_VIEW_OPEN, SIDEBAR_COLLAPSED, SIDEBAR_VIEW, SIDEBAR_WIDTH};
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use dioxus_primitives::tabs::{TabList, TabTrigger, Tabs};
 use std::path::PathBuf;
 use uuid::Uuid;
+
+/// The value the tab bar identifies the 3D view by.
+///
+/// Every other tab is named by the uuid of the graph it shows; this one is not a graph, so it needs
+/// a name that no uuid can collide with.
+const SCENE_TAB_VALUE: &str = "scene-3d";
 
 #[component]
 pub fn GraphEditor(
@@ -51,6 +58,12 @@ pub fn GraphEditor(
     );
 
     let active_tab = use_memo(move || *workspace.active_tab().read());
+
+    // Which tab is in front is this editor's own business, unlike whether the 3D view exists at all
+    // - that is driven from the menu bar, so it lives in [`SCENE_VIEW_OPEN`].
+    let mut scene_tab_active = use_signal(|| false);
+    // Opening the view from the menu brings it to the front, and closing it hands the graph back.
+    use_effect(move || scene_tab_active.set(SCENE_VIEW_OPEN()));
 
     use_effect(move || {
         node_editor_command(
@@ -183,9 +196,12 @@ pub fn GraphEditor(
 
                 Tabs {
                     class: "editor-tabs",
-                    value: active_tab().as_simple().to_string(),
+                    value: if scene_tab_active() { SCENE_TAB_VALUE.to_string() } else { active_tab().as_simple().to_string() },
                     on_value_change: move |v: String| {
-                        if let Ok(new_id) = Uuid::parse_str(&v) {
+                        if v == SCENE_TAB_VALUE {
+                            scene_tab_active.set(true);
+                        } else if let Ok(new_id) = Uuid::parse_str(&v) {
+                            scene_tab_active.set(false);
                             workspace_processor.send(GraphsWorkspaceAction::SetActiveTab(new_id));
                         }
                     },
@@ -219,6 +235,24 @@ pub fn GraphEditor(
                                         }
                                     }
                                 }
+                                if SCENE_VIEW_OPEN() {
+                                    TabTrigger {
+                                        key: "{SCENE_TAB_VALUE}",
+                                        value: SCENE_TAB_VALUE.to_string(),
+                                        index: tab_order.len(),
+                                        class: if scene_tab_active() { "editor-tab active-tab" } else { "editor-tab" },
+                                        div { class: "tab-inner",
+                                            span { "3D View" }
+                                            button {
+                                                class: "tab-close",
+                                                onclick: move |e: MouseEvent| {
+                                                    e.stop_propagation();
+                                                    *SCENE_VIEW_OPEN.write() = false;
+                                                },
+                                            }
+                                        }
+                                    }
+                                }
                                 div { class: "editor-tab-filler" }
                             }
                             div {
@@ -244,6 +278,19 @@ pub fn GraphEditor(
                                                 shift_pressed,
                                             }
                                         }
+                                    }
+                                }
+                                // Hidden rather than unmounted while another tab is in front: taking
+                                // the canvas out of the document would drop the WebGL context and
+                                // with it the camera the user set up. Closing the tab does unmount
+                                // it, which is when letting go of the context is the right thing.
+                                if SCENE_VIEW_OPEN() {
+                                    div {
+                                        role: "tabpanel",
+                                        class: "tab-content",
+                                        "data-state": if scene_tab_active() { "active" } else { "inactive" },
+                                        hidden: !scene_tab_active(),
+                                        SceneView {}
                                     }
                                 }
                             }

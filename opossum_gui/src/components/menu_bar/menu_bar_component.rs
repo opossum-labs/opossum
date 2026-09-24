@@ -7,6 +7,7 @@ use opossum_core::prelude::*;
 use std::path::PathBuf;
 
 use crate::{
+    SCENE_VIEW_OPEN,
     backend_status::BackendStatus,
     components::{
         menu_bar::{
@@ -41,6 +42,7 @@ pub enum AppCommand {
     Quit,
     Simulate,
     Settings,
+    ToggleSceneView,
     OpenMaterialCatalog,
     OpenCatalogSynchronizer,
 }
@@ -249,6 +251,14 @@ pub fn MenuBar(
                                 short_cut_action: ShortCutAction::AutoLayout,
                                 disabled: !is_connected,
                                 on_click: move |_| on_menu_action.call(AppCommand::AutoLayout),
+                            }
+                            li {
+                                a {
+                                    class: "dropdown-item",
+                                    role: "button",
+                                    onclick: move |_| on_menu_action.call(AppCommand::ToggleSceneView),
+                                    if SCENE_VIEW_OPEN() { "Close 3D View" } else { "3D View" }
+                                }
                             }
                         }
                     }
