@@ -97,6 +97,82 @@ impl Default for Transform {
     }
 }
 
+impl Transform {
+    /// Build a transform from a position and a rotation given as a quaternion.
+    ///
+    /// glTF states rotations as quaternions, and so does most 3D maths — but
+    /// [`Self::rotation_euler_xyz`] is Euler angles in three.js's order, and Euler angles mean
+    /// nothing without knowing that order. Which order this component uses is *this crate's*
+    /// business, so the conversion lives here rather than in every caller that happens to hold a
+    /// quaternion.
+    ///
+    /// The decomposition is not unique, and at a quarter turn about Y the X and Z axes line up and
+    /// the split between them becomes arbitrary. The angles that come out are then only one of
+    /// several valid answers, but they always rebuild the rotation that went in — which is the only
+    /// thing the renderer is asked to reproduce.
+    ///
+    /// # Arguments
+    ///
+    /// - `position`: translation in world coordinates
+    /// - `rotation`: a unit quaternion in the order `(x, y, z, w)`
+    ///
+    /// # Returns
+    ///
+    /// The transform, with unit scale.
+    #[must_use]
+    pub fn from_quaternion(position: [f32; 3], rotation: [f32; 4]) -> Self {
+        Self {
+            position,
+            rotation_euler_xyz: euler_xyz_of(rotation),
+            scale: [1.0, 1.0, 1.0],
+        }
+    }
+}
+
+/// The Euler angles, in three.js's default XYZ order, of a rotation given as a quaternion.
+///
+/// This reproduces `THREE.Euler.setFromRotationMatrix(m, 'XYZ')` element for element, working from
+/// the rotation matrix the quaternion describes. That order composes as `R = Rx * Ry * Rz`; other
+/// engines pick other orders, which is exactly why the angles alone are not a portable way to state
+/// a rotation.
+// Written as the textbook quaternion-to-matrix formula rather than as fused multiply-adds. The
+// accuracy clippy is after is not worth anything here - the angles feed a renderer - while being
+// able to check these nine entries against a reference by eye very much is.
+#[allow(clippy::suboptimal_flops)]
+fn euler_xyz_of(rotation: [f32; 4]) -> [f32; 3] {
+    let [qx, qy, qz, qw] = rotation;
+    // The rotation matrix of a unit quaternion, in the same element order three.js reads it in:
+    // `m[row][column]`.
+    let m = [
+        [
+            1.0 - 2.0 * (qy * qy + qz * qz),
+            2.0 * (qx * qy - qz * qw),
+            2.0 * (qx * qz + qy * qw),
+        ],
+        [
+            2.0 * (qx * qy + qz * qw),
+            1.0 - 2.0 * (qx * qx + qz * qz),
+            2.0 * (qy * qz - qx * qw),
+        ],
+        [
+            2.0 * (qx * qz - qy * qw),
+            2.0 * (qy * qz + qx * qw),
+            1.0 - 2.0 * (qx * qx + qy * qy),
+        ],
+    ];
+
+    let about_y = m[0][2].clamp(-1.0, 1.0).asin();
+    // Past this the Y rotation is so close to a quarter turn that the other two axes have collapsed
+    // onto each other. Pinning Z and giving X the whole remainder keeps the rotation right; three.js
+    // uses the same threshold and the same fallback.
+    let (about_x, about_z) = if m[0][2].abs() < 0.999_999_9 {
+        ((-m[1][2]).atan2(m[2][2]), (-m[0][1]).atan2(m[0][0]))
+    } else {
+        (m[2][1].atan2(m[1][1]), 0.0)
+    };
+    [about_x, about_y, about_z]
+}
+
 // ─── Environment ─────────────────────────────────────────────────────────────
 
 /// The surroundings a scene is lit and reflected by.
@@ -203,6 +279,82 @@ mod tests {
         let url = GlbSource::Url("x".into());
         let bytes: Arc<[u8]> = Arc::from(b"x".as_slice());
         assert_ne!(url, GlbSource::Bytes(bytes));
+    }
+
+    /// Compose a quaternion from Euler XYZ angles exactly as `THREE.Quaternion.setFromEuler` does,
+    /// so the conversion is checked against the convention it has to agree with rather than against
+    /// itself.
+    // Transcribed from `THREE.Quaternion.setFromEuler`; rewriting it as fused multiply-adds would
+    // make it unrecognisable against the source it has to match.
+    #[allow(clippy::suboptimal_flops)]
+    fn quaternion_of_euler_xyz(angles: [f32; 3]) -> [f32; 4] {
+        let (s1, c1) = (angles[0] * 0.5).sin_cos();
+        let (s2, c2) = (angles[1] * 0.5).sin_cos();
+        let (s3, c3) = (angles[2] * 0.5).sin_cos();
+        [
+            s1 * c2 * c3 + c1 * s2 * s3,
+            c1 * s2 * c3 - s1 * c2 * s3,
+            c1 * c2 * s3 + s1 * s2 * c3,
+            c1 * c2 * c3 - s1 * s2 * s3,
+        ]
+    }
+
+    /// The angles have to rebuild the rotation they came from. Comparing the angles themselves would
+    /// be the wrong test: the decomposition is not unique, and reproducing the rotation is the only
+    /// thing that decides what ends up on screen. Two unit quaternions describe the same rotation
+    /// when they agree up to sign, so the magnitude of their dot product is what is checked.
+    fn assert_round_trips(angles: [f32; 3], what: &str) {
+        let wanted = quaternion_of_euler_xyz(angles);
+        let rebuilt = quaternion_of_euler_xyz(euler_xyz_of(wanted));
+        let alignment = wanted
+            .iter()
+            .zip(rebuilt)
+            .map(|(l, r)| l * r)
+            .sum::<f32>()
+            .abs();
+        assert!(
+            (alignment - 1.0).abs() < 1e-4,
+            "{what}: the angles rebuild a different rotation ({wanted:?} vs {rebuilt:?})"
+        );
+    }
+
+    #[test]
+    fn a_turn_about_each_single_axis_round_trips() {
+        for turn in [0.3_f32, -1.2, core::f32::consts::FRAC_PI_2, 2.9] {
+            assert_round_trips([turn, 0.0, 0.0], "a turn about x");
+            assert_round_trips([0.0, turn, 0.0], "a turn about y");
+            assert_round_trips([0.0, 0.0, turn], "a turn about z");
+        }
+    }
+
+    #[test]
+    fn a_turn_about_several_axes_at_once_round_trips() {
+        assert_round_trips([0.4, -0.9, 1.7], "a rotation about all three axes");
+        assert_round_trips([-2.1, 0.5, 0.8], "another rotation about all three axes");
+    }
+
+    /// A mirror folding the beam by ninety degrees sits exactly on the singularity of the XYZ
+    /// decomposition, and it is one of the most ordinary things in an optical setup - so the case
+    /// that is easiest to get wrong is also the one most likely to occur.
+    #[test]
+    fn a_quarter_turn_about_y_round_trips_although_the_angles_are_ambiguous() {
+        for sign in [1.0_f32, -1.0] {
+            let quarter = sign * core::f32::consts::FRAC_PI_2;
+            assert_round_trips([0.0, quarter, 0.0], "a folding mirror at a quarter turn");
+            assert_round_trips(
+                [0.6, quarter, 0.0],
+                "a quarter turn about y, tilted about x",
+            );
+        }
+    }
+
+    /// A component that never moved must produce no update at all, and the viewer's diff compares
+    /// transforms by value - so the identity has to come out as exactly zero, not as some other set
+    /// of angles that happens to compose to it.
+    #[test]
+    fn no_rotation_is_no_rotation() {
+        let transform = Transform::from_quaternion([0.0; 3], [0.0, 0.0, 0.0, 1.0]);
+        assert_eq!(transform, Transform::default());
     }
 
     #[test]

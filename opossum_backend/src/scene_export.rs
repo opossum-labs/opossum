@@ -225,63 +225,36 @@ pub fn glb_of_node(node: &dyn Volumetric, wavelength: Length) -> OpmResult<Vec<u
 ///
 /// # Returns
 ///
-/// One entry per drawable component, with positions relative to the manifest's own origin.
+/// One entry per drawable component, in world coordinates.
 ///
 /// # Errors
 ///
 /// This function returns an error if the nodes cannot be walked.
+// Placement is narrowed to `f32` on the way out. Nothing is computed from it - it positions a
+// picture - and `f32` still resolves a metre to well under a micrometre; see
+// [`SceneNodeEntry::position`].
+#[allow(clippy::cast_possible_truncation)]
 pub fn manifest_of(placed: &OpmDocument, wavelength: Length) -> OpmResult<SceneManifest> {
     let mut nodes = Vec::new();
     for_each_drawable(placed, |node, body| {
         let placement = body.isometry().get_transform();
+        let position = placement.translation.vector;
         let rotation = placement.rotation.quaternion();
         nodes.push(SceneNodeEntry {
             uid: node.node_attr().uuid(),
             name: node.name().to_string(),
             geometry: geometry_of(node, body, wavelength)?,
-            position: placement.translation.vector.into(),
-            rotation: [rotation.i, rotation.j, rotation.k, rotation.w],
+            position: [position.x as f32, position.y as f32, position.z as f32],
+            rotation: [
+                rotation.i as f32,
+                rotation.j as f32,
+                rotation.k as f32,
+                rotation.w as f32,
+            ],
         });
         Ok(())
     })?;
-    let origin = center_of(&nodes);
-    for node in &mut nodes {
-        node.position = [
-            node.position[0] - origin[0],
-            node.position[1] - origin[1],
-            node.position[2] - origin[2],
-        ];
-    }
-    Ok(SceneManifest { origin, nodes })
-}
-
-/// The center of the axis-aligned box around a set of component positions.
-///
-/// Positions are handed to a viewer relative to this point, because a renderer works in `f32` and a
-/// setup far from the coordinate origin would lose precision there. It moves when the extent of the
-/// setup changes, which costs every component a new placement but never a new mesh — the geometry
-/// files do not know about it.
-///
-/// # Returns
-///
-/// The center, or the coordinate origin if there are no components.
-fn center_of(nodes: &[SceneNodeEntry]) -> [f64; 3] {
-    let mut min = [f64::INFINITY; 3];
-    let mut max = [f64::NEG_INFINITY; 3];
-    for node in nodes {
-        for axis in 0..3 {
-            min[axis] = min[axis].min(node.position[axis]);
-            max[axis] = max[axis].max(node.position[axis]);
-        }
-    }
-    if nodes.is_empty() {
-        return [0.0; 3];
-    }
-    [
-        f64::midpoint(min[0], max[0]),
-        f64::midpoint(min[1], max[1]),
-        f64::midpoint(min[2], max[2]),
-    ]
+    Ok(SceneManifest { nodes })
 }
 
 /// What a component looks like, as a short string that changes when its shape or material does.
@@ -637,7 +610,7 @@ mod test {
         );
         let travelled = (0..3)
             .map(|axis| (before.position[axis] - moved.position[axis]).abs())
-            .fold(0.0_f64, f64::max);
+            .fold(0.0_f32, f32::max);
         assert!(
             travelled > 1e-6,
             "the component was supposed to have moved, but shifted by {travelled} m"

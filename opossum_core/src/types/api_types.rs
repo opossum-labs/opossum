@@ -992,10 +992,21 @@ pub struct SceneNodeEntry {
     /// untouched: the mesh is held in the component's own frame, the placement travels beside it in
     /// [`Self::position`] and [`Self::rotation`].
     pub geometry: String,
-    /// The component's position in metres, relative to [`SceneManifest::origin`].
-    pub position: [f64; 3],
+    /// Where the component sits, in metres.
+    ///
+    /// `f32`, because this is what a 3D view draws with and nothing is computed from it. Its
+    /// relative precision is about 1 part in 10 million, so a component ten metres down the beam
+    /// line is placed to roughly a micrometre — far below anything a picture of the setup can show.
+    /// An optical calculation would ask the model, not this.
+    pub position: [f32; 3],
     /// The component's rotation, as a quaternion in the order `(x, y, z, w)`.
-    pub rotation: [f64; 4],
+    ///
+    /// A quaternion rather than Euler angles on purpose. Euler angles need an order to mean
+    /// anything, and every renderer picks its own — three.js composes XYZ, Babylon.js YXZ — so
+    /// stating them here would bake one renderer's convention into a type the whole workspace
+    /// shares. A quaternion is unambiguous and has no singularities; converting it is the job of
+    /// whoever knows which renderer is on the other end.
+    pub rotation: [f32; 4],
 }
 
 /// Every drawable component of a model, with its placement but without its geometry.
@@ -1005,12 +1016,6 @@ pub struct SceneNodeEntry {
 /// their mesh fetched afterwards.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default, ToSchema)]
 pub struct SceneManifest {
-    /// The point every position is given relative to, in metres.
-    ///
-    /// Optical setups can sit far from the coordinate origin, where `f32` — what a renderer works
-    /// in — runs out of precision. Positions are handed out relative to this point so the numbers a
-    /// viewer receives stay small.
-    pub origin: [f64; 3],
     /// One entry per component that encloses a volume, in the order the model walks them.
     pub nodes: Vec<SceneNodeEntry>,
 }
