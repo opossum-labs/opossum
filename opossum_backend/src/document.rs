@@ -151,10 +151,15 @@ async fn get_scene_manifest(
 /// origin rather than where the setup puts it. Where it belongs is stated by `/scene/manifest`
 /// instead, which is what lets a viewer move a component without fetching its geometry again.
 ///
-/// Because of that, no positioning run happens here: what a component looks like does not depend on
-/// where it ended up.
+/// The shape is taken from the same placed copy the manifest is built from, and that matters even
+/// though the placement itself is thrown away here: a component's surfaces are rebuilt by
+/// `update_surfaces()`, which patching a property does not run, so the live document can still hold
+/// the shape a lens had *before* its thickness was changed. Reading both endpoints off the same copy
+/// is what keeps the hash the manifest reports and the bytes served here from disagreeing - and a
+/// disagreement is invisible: the viewer refetches, receives the old mesh and appears to ignore the
+/// edit.
 #[utoipa::path(tag = "document",
-    params(("uid" = Uuid, Path, description = "Uuid of the component to draw")),
+    params(("uid" = Uuid, Path, description = "Uuid of the component to draw"), SceneQuery),
     responses(
         (status = 200, description = "glTF binary of the component", body = Vec<u8>,
             content_type = GLB_MEDIA_TYPE),
@@ -166,16 +171,19 @@ async fn get_scene_manifest(
 async fn get_scene_node(
     data: web::Data<AppState>,
     uid: web::Path<Uuid>,
+    query: web::Query<SceneQuery>,
 ) -> Result<impl Responder, BackEndErrorResponse> {
-    // The node is a handle of its own, so the lock is gone again before the meshing starts.
-    let node_ref = {
+    // Same split as the other two: only the copy needs the live model, and the meshing that follows
+    // must not block every other edit for as long as it takes.
+    let placed = {
         let document = data.document.lock();
-        document
-            .scenery()
-            .node_recursive(uid.into_inner())
-            .map_err(|_| BackEndErrorResponse::not_found())?
-            .0
+        document.positioned_copy(query.analyzer)?
     };
+    let node_ref = placed
+        .scenery()
+        .node_recursive(uid.into_inner())
+        .map_err(|_| BackEndErrorResponse::not_found())?
+        .0;
     let volume = node_ref
         .as_volume()
         .ok_or_else(BackEndErrorResponse::not_found)?;

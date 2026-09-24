@@ -172,8 +172,13 @@ fn add_volume_at(
 ///
 /// The component sits at the coordinate origin rather than where the setup puts it, and that is
 /// what makes the file worth fetching on its own: a component that merely moved keeps its file, and
-/// a viewer places it from the manifest instead of asking for its mesh again. It also means this
-/// needs no positioning run — what a component looks like does not depend on where it ended up.
+/// a viewer places it from the manifest instead of asking for its mesh again.
+///
+/// The placement is discarded, but the node still has to come from the same placed copy
+/// [`manifest_of`] walks. A component's shape is read off the surfaces `update_surfaces()` builds,
+/// and patching a property does not run it, so a node taken from the live document can still carry
+/// the shape it had before the edit. Reading both off the same copy is what keeps the hash and the
+/// bytes from disagreeing.
 ///
 /// # Arguments
 ///
@@ -422,6 +427,7 @@ mod test {
         millimeter,
         nodes::{CylindricLens, EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort, Wedge},
     };
+    use uuid::Uuid;
 
     /// A model holding one of everything: three components that enclose a volume, a source port and
     /// a detector that do not, and a reference, which is the same lens passed through a second time
@@ -668,6 +674,52 @@ mod test {
 
         assert_eq!(manifest.nodes.len(), drawn.len());
         Ok(())
+    }
+
+    /// The file a component's endpoint serves has to follow an edit to that component's shape.
+    ///
+    /// The trap this pins down: a property is patched straight onto the live document, but the
+    /// surfaces a volume is derived from are rebuilt by `update_surfaces()`, which that patch does
+    /// not run. Deriving geometry from the live document therefore yields the *old* shape, while the
+    /// manifest - built from a `positioned_copy`, and so from a document that was serialized and
+    /// read back - reports a new hash. The viewer then dutifully refetches and gets the old mesh
+    /// back, and changing a lens thickness appears to do nothing at all.
+    #[test]
+    fn reshaping_a_component_changes_the_file_its_endpoint_serves() -> OpmResult<()> {
+        let mut document = two_lenses(millimeter!(100.0))?;
+        let lens = document
+            .scenery()
+            .collect_all_nodes_recursive()?
+            .into_iter()
+            .find(|node| node.as_volume().is_some())
+            .expect("a model with lenses has something to draw")
+            .node_attr()
+            .uuid();
+        let before = served_geometry_of(&document, lens)?;
+
+        document.scenery_mut().with_node_attr_mut(lens, |attr| {
+            attr.set_property("center thickness", millimeter!(40.0).into())
+        })??;
+
+        assert_ne!(
+            before,
+            served_geometry_of(&document, lens)?,
+            "the component's endpoint kept serving its old shape after the property changed"
+        );
+        Ok(())
+    }
+
+    /// The bytes `GET /scene/node/{uid}.glb` would answer with for one component of a document.
+    fn served_geometry_of(document: &OpmDocument, uid: Uuid) -> OpmResult<Vec<u8>> {
+        let placed = document.positioned_copy(None)?;
+        let node = placed
+            .scenery()
+            .collect_all_nodes_recursive()?
+            .into_iter()
+            .find(|node| node.node_attr().uuid() == uid)
+            .expect("the component is in the model");
+        let volume = node.as_volume().expect("the component encloses a volume");
+        glb_of_node(volume, default_reference_wavelength())
     }
 
     /// A component's own file holds it at the origin: that is what lets the same file serve the
