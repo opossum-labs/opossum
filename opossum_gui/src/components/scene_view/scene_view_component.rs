@@ -6,8 +6,23 @@ use dioxus_glb_viewer::{
 };
 
 use crate::{
-    HTTP_API_CLIENT, OPOSSUM_UI_LOGS, api, api::eval_action_run, components::scene_view::objects_of,
+    HTTP_API_CLIENT, OPOSSUM_UI_LOGS, SCENE_REVISION, api, api::eval_action_run,
+    components::scene_view::objects_of,
 };
+
+/// How long the view waits for the edits to stop before asking for the model again.
+///
+/// Long enough that holding a spinner or dragging a value through a range costs one fetch rather
+/// than dozens, short enough that a single deliberate edit still feels immediate.
+const SETTLE: std::time::Duration = std::time::Duration::from_millis(300);
+
+/// Wait out [`SETTLE`], on whichever platform this is.
+async fn debounce() {
+    #[cfg(feature = "desktop")]
+    tokio::time::sleep(SETTLE).await;
+    #[cfg(not(feature = "desktop"))]
+    gloo_timers::future::sleep(SETTLE).await;
+}
 
 /// Show the model's components in three dimensions.
 ///
@@ -22,7 +37,6 @@ use crate::{
 pub fn SceneView() -> Element {
     let mut objects = use_signal(Vec::<GlbObject>::new);
     let viewer_handle = use_glb_viewer_handle();
-    let mut reloads = use_signal(|| 0_usize);
 
     let options = use_signal(|| ViewerOptions {
         // Without this, every lens renders black: glass refracts its surroundings, and an empty
@@ -36,17 +50,34 @@ pub fn SceneView() -> Element {
         ..ViewerOptions::default()
     });
 
-    // Reading `reloads` inside is what makes the button work: the future re-runs whenever it
-    // changes, and once on mount so the tab is never shown empty.
-    use_future(move || async move {
-        reloads();
-        let manifest = api::get_scene_manifest(None).await;
-        eval_action_run(
-            manifest,
-            Some(move |manifest| {
-                objects.set(objects_of(&manifest, HTTP_API_CLIENT().base_url()));
-            }),
-        );
+    // Reading `SCENE_REVISION` inside is what keeps the view live: the resource re-runs on every
+    // model change, and once on mount so the tab is never shown empty. It only exists while the tab
+    // is open, so a closed 3D view costs the backend nothing at all.
+    let mut manifest = use_resource(move || async move {
+        SCENE_REVISION();
+        // A burst of edits - dragging a value through a range, or a paste that touches several
+        // nodes - would otherwise re-mesh the whole model once per step. Restarting the resource
+        // drops the sleeping future, so only the last edit of a burst survives to fetch anything.
+        // The first load is not delayed: there is nothing on screen yet to keep steady.
+        if !objects.peek().is_empty() {
+            debounce().await;
+        }
+        api::get_scene_manifest(None).await
+    });
+
+    use_effect(move || {
+        if let Some(fetched) = &*manifest.read() {
+            // Cloned out of the resource before the callback runs, so the borrow is not held across
+            // the write to `objects`.
+            eval_action_run(
+                fetched.clone(),
+                Some(move |fetched| {
+                    // Handing over a whole new list is the point: the viewer compares it against
+                    // what it already draws and moves, reloads or removes only what differs.
+                    objects.set(objects_of(&fetched, HTTP_API_CLIENT().base_url()));
+                }),
+            );
+        }
     });
 
     rsx! {
@@ -54,7 +85,7 @@ pub fn SceneView() -> Element {
             div { class: "scene-view-toolbar",
                 button {
                     class: "btn btn-sm btn-outline-light",
-                    onclick: move |_| *reloads.write() += 1,
+                    onclick: move |_| manifest.restart(),
                     "Refresh"
                 }
                 button {

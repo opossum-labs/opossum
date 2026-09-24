@@ -288,6 +288,12 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                         if is_rename {
                             *crate::AMP_LIST_REFRESH.write() += 1;
                         }
+                        // This is the path a distance or a lens radius travels, so it is the one a
+                        // 3D view has to follow above all others - it is what the view is opened
+                        // for. Raised for every property rather than only the geometric ones: which
+                        // of them reach the shape is the node's business, not this panel's, and the
+                        // manifest answers "did anything actually change" on its own.
+                        *crate::SCENE_REVISION.write() += 1;
                         // The edit pushed an undo entry on the backend; reflect that in the Edit menu.
                         *crate::UNDO_REDO_STATUS.write() = (true, false);
                     }

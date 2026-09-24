@@ -59,6 +59,8 @@ pub fn use_workspace_processor(
                 // true, can_redo false). Capture that classification before `action` is consumed and
                 // reflect it after processing, so the Edit menu's Undo/Redo enabled-state stays correct.
                 let was_document_edit = is_document_edit_action(&action);
+                // Captured here for the same reason as above: `action` is about to be consumed.
+                let changed_the_scene = changes_the_scene(&action);
                 match action {
                     GraphsWorkspaceAction::LoadFromFile(path) => {
                         // A freshly loaded document's scenario ids have nothing to do with whatever
@@ -89,6 +91,8 @@ pub fn use_workspace_processor(
                         *crate::UNDO_REDO_STATUS.write() = (false, false);
                         *crate::AMP_LIST_REFRESH.write() += 1;
                         *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
+                        // A different document altogether - whatever the 3D view shows is gone.
+                        *crate::SCENE_REVISION.write() += 1;
                     }
                     GraphsWorkspaceAction::SaveToFile(path) => {
                         process_save_root_scenery_to_file(
@@ -116,6 +120,8 @@ pub fn use_workspace_processor(
                         *crate::UNDO_REDO_STATUS.write() = (false, false);
                         *crate::AMP_LIST_REFRESH.write() += 1;
                         *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
+                        // A different document altogether - whatever the 3D view shows is gone.
+                        *crate::SCENE_REVISION.write() += 1;
                     }
                     GraphsWorkspaceAction::ResetAndInitializeRootScenery { name } => {
                         process_reset_and_initialize_root_scenery(
@@ -561,6 +567,9 @@ pub fn use_workspace_processor(
                     // scenario named, for instance, changes what an already-expanded card shows.
                     *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
                 }
+                if changed_the_scene {
+                    *crate::SCENE_REVISION.write() += 1;
+                }
             }
         }
     })
@@ -605,6 +614,24 @@ fn push_viewport_change(before: Viewport, after: Viewport, merge_into_previous: 
 /// backend). Used to keep [`crate::UNDO_REDO_STATUS`] correct after edits. Viewport gestures mark it at
 /// their own push point ([`push_viewport_change`]); `InvertNode`/`SetNodeName` are GUI mirrors whose
 /// real edit is marked in the node editor - so both are excluded here.
+/// Whether processing this action can change what a 3D view of the model shows.
+///
+/// Every document edit except the two that only rearrange the *diagram*. Where a node sits on the
+/// canvas has nothing to do with where its component sits in space, so re-deriving the scene for a
+/// node drag or an auto-layout would make the two most frequent edits the most expensive ones -
+/// each one costs the backend a full re-meshing of the model.
+///
+/// Stated as the exceptions rather than as a second list, so a new document-mutating action is
+/// counted here by default: being refreshed needlessly is a waste, being missed is a stale picture.
+const fn changes_the_scene(action: &GraphsWorkspaceAction) -> bool {
+    is_document_edit_action(action)
+        && !matches!(
+            action,
+            GraphsWorkspaceAction::SyncNodePositions { .. }
+                | GraphsWorkspaceAction::OptimizeLayout { .. }
+        )
+}
+
 const fn is_document_edit_action(action: &GraphsWorkspaceAction) -> bool {
     matches!(
         action,
@@ -867,6 +894,9 @@ fn handle_undo_redo_response(
 ) {
     *crate::UNDO_REDO_STATUS.write() = (r.can_undo, r.can_redo);
     ws_handler.workspace.set_needs_saving(true);
+    // Undoing or redoing can put a component back, take it away or move it, and none of that goes
+    // through the action classification above - the edit being reversed already happened.
+    *crate::SCENE_REVISION.write() += 1;
     spawn(apply_document_changes(
         r.changes,
         r.jump,

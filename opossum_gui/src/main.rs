@@ -94,6 +94,19 @@ static AMPLIFIER_CANDIDATES: GlobalSignal<HashSet<Uuid>> = Signal::global(HashSe
 static SIDEBAR_VIEW: GlobalSignal<SidebarView> = Signal::global(|| SidebarView::NodeProperties);
 static SIDEBAR_COLLAPSED: GlobalSignal<bool> = Signal::global(|| false);
 static SIDEBAR_WIDTH: GlobalSignal<f64> = Signal::global(|| 280.0);
+/// Bumped whenever the document changed in a way that can alter what the 3D view shows - a
+/// component added, removed, moved, reshaped, or given a different material.
+///
+/// Model edits reach the GUI through two separate paths and this has to cover both: the structural
+/// ones go through the workspace processor, while changing a property of a node - a lens radius, or
+/// the distance to the next component - is sent straight from the node editor and never becomes a
+/// workspace action at all. The second path is the one that matters most here, because adjusting
+/// distances is exactly what a 3D view is opened for.
+///
+/// Deliberately *not* raised for edits that only move nodes around the diagram: where a node sits on
+/// the canvas says nothing about where its component sits in space, and re-meshing the model for a
+/// drag would make the most frequent edit the most expensive one.
+static SCENE_REVISION: GlobalSignal<usize> = Signal::global(|| 0);
 /// Whether the 3D view of the model is open as a tab beside the graphs.
 ///
 /// Global for the same reason as [`SIDEBAR_VIEW`]: the menu bar opens it and the tab's own close
