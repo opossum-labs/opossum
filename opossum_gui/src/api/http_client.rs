@@ -31,6 +31,14 @@ impl HTTPClient {
     pub fn url(&self, route: &str) -> String {
         format!("{}{}", self.base_url, route)
     }
+    /// The root every route hangs off, e.g. `http://localhost:8001`.
+    ///
+    /// Handed out for the cases where a URL is not fetched here but by something else - the webview
+    /// loading 3D geometry, say - so that the address of the backend stays stated in one place.
+    #[must_use]
+    pub fn base_url(&self) -> &str {
+        &self.base_url
+    }
     /// Send a POST reqeust to the given route with the provided body.
     ///
     /// # Errors

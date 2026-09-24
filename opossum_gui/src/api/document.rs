@@ -1,5 +1,6 @@
 use opossum_core::types::api_types::{
-    LoadDocumentResponse, PositionUpdate, UndoRedoResponse, Viewport, ViewportChangeRequest,
+    LoadDocumentResponse, PositionUpdate, SceneManifest, UndoRedoResponse, Viewport,
+    ViewportChangeRequest,
 };
 use uuid::Uuid;
 
@@ -95,4 +96,52 @@ pub async fn post_viewport_change(
             },
         )
         .await
+}
+
+/// Ask for the list of drawable components of the current model, with their placement.
+///
+/// This is the cheap half of the 3D view and the one that is refetched whenever the model changes;
+/// the geometry of a component is fetched separately, and only when its `geometry` hash says its
+/// shape actually changed. See [`crate::components::scene_view::objects_of`].
+///
+/// # Arguments
+///
+/// - `analyzer`: which analyzer's positioning run to take the placement from, or `None` when the
+///   model has only one and it need not be named
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the model cannot be placed (e.g. it has several analyzers and none was named)
+/// - a component cannot be meshed
+pub async fn get_scene_manifest(analyzer: Option<Uuid>) -> Result<SceneManifest, String> {
+    let route = analyzer.map_or_else(
+        || "/api/document/scene/manifest".to_owned(),
+        |id| format!("/api/document/scene/manifest?analyzer={id}"),
+    );
+    HTTP_API_CLIENT().get(&route).await
+}
+
+/// The URL the 3D viewer fetches one component's geometry from.
+///
+/// The `geometry` hash rides along as a query parameter, which is what makes the URL change exactly
+/// when the component's shape does. The viewer compares sources by value and reloads a model only
+/// when its URL changed, so a component that merely moved keeps this URL and is never refetched.
+///
+/// The base is a parameter rather than read from [`crate::HTTP_API_CLIENT`] here, because this URL
+/// is not fetched by us: the webview loads it. That keeps the route a plain function of its inputs,
+/// callable from anywhere, rather than something that only works inside a running Dioxus runtime.
+///
+/// # Arguments
+///
+/// - `base_url`: the backend's root, from [`crate::api::http_client::HTTPClient::base_url`]
+/// - `uid`: the component's node uuid
+/// - `geometry`: the component's geometry hash, from its [`SceneManifest`] entry
+///
+/// # Returns
+///
+/// An absolute URL the webview can fetch.
+#[must_use]
+pub fn scene_node_url(base_url: &str, uid: Uuid, geometry: &str) -> String {
+    format!("{base_url}/api/document/scene/node/{uid}.glb?v={geometry}")
 }
