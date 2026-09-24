@@ -101,7 +101,10 @@ pub fn SceneView() -> Element {
                 span { class: "scene-view-count", "{objects.read().len()} components" }
             }
             GlbViewer {
-                style: "flex:1; min-height:0;",
+                // `.dxglb-root` brings `height: 100%`, which in this column would mean the full
+                // panel height *plus* the toolbar above it. A flex basis of zero takes the height
+                // from the flexbox instead, which is the only one that knows what is left over.
+                style: "flex: 1 1 0; min-height: 0; height: auto;",
                 objects,
                 handle: viewer_handle,
                 options,

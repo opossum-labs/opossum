@@ -27,6 +27,48 @@ use uuid::Uuid;
 /// a name that no uuid can collide with.
 const SCENE_TAB_VALUE: &str = "scene-3d";
 
+/// One entry of the editor's tab bar.
+///
+/// A view type, deliberately not a key of [`GraphsWorkspaceState`]. The store is a map of graphs and
+/// stays that way: its `active_tab` answers "which graph is being edited", which is what its several
+/// dozen readers - the properties panel, the selection, undo targets - actually want, and what must
+/// *not* change just because someone looks at the 3D view for a moment.
+///
+/// What this type adds is the other question, "which tab is in front", and having it as one value
+/// is what lets every panel derive its visibility from a single comparison. Before, the graph panels
+/// hid on `active_tab` while the 3D panel hid on a flag of its own, so with the 3D view in front the
+/// last graph stayed visible beside it.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TabKey {
+    /// The graph with this uuid.
+    Graph(Uuid),
+    /// The 3D view of the model.
+    Scene,
+}
+
+impl TabKey {
+    /// The string the tab bar identifies this tab by.
+    fn value(self) -> String {
+        match self {
+            Self::Graph(id) => id.as_simple().to_string(),
+            Self::Scene => SCENE_TAB_VALUE.to_owned(),
+        }
+    }
+
+    /// Read back what [`Self::value`] wrote.
+    ///
+    /// # Returns
+    ///
+    /// The tab, or `None` for a value from neither of the two shapes.
+    fn parse(value: &str) -> Option<Self> {
+        if value == SCENE_TAB_VALUE {
+            Some(Self::Scene)
+        } else {
+            Uuid::parse_str(value).ok().map(Self::Graph)
+        }
+    }
+}
+
 #[component]
 pub fn GraphEditor(
     command: ReadSignal<Option<NodeEditorCommand>>,
@@ -61,9 +103,45 @@ pub fn GraphEditor(
 
     // Which tab is in front is this editor's own business, unlike whether the 3D view exists at all
     // - that is driven from the menu bar, so it lives in [`SCENE_VIEW_OPEN`].
-    let mut scene_tab_active = use_signal(|| false);
-    // Opening the view from the menu brings it to the front, and closing it hands the graph back.
-    use_effect(move || scene_tab_active.set(SCENE_VIEW_OPEN()));
+    let mut scene_in_front = use_signal(|| false);
+
+    // Derived, never stored. Storing a `TabKey` and setting `active_tab` from it would let the two
+    // drift apart the moment anything else changes the active tab - opening a group by double-click,
+    // an undo jumping to a node, the fallback when a tab is closed - because none of those places
+    // knows about this signal.
+    let shown = use_memo(move || {
+        if scene_in_front() {
+            TabKey::Scene
+        } else {
+            TabKey::Graph(active_tab())
+        }
+    });
+
+    // The one effect, and it runs in the safe direction: from the active graph to the flag, never
+    // back. Whatever brings a graph forward therefore brings it into view as well, including code
+    // that knows nothing about the 3D view.
+    use_effect(move || {
+        active_tab();
+        scene_in_front.set(false);
+    });
+
+    // Opening the view from the menu brings it to the front; closing it hands the graph back.
+    use_effect(move || scene_in_front.set(SCENE_VIEW_OPEN()));
+
+    // Read once, ahead of the markup. Binding it inside the `rsx!` instead would make the whole tab
+    // area an interpolated node, and Dioxus is then entitled to rebuild that subtree rather than
+    // patch it - which for the 3D panel means a new canvas, a new WebGL context and a camera back at
+    // its starting pose (see `dioxus_glb_viewer`'s invariants).
+    let tab_order = use_memo(move || workspace.tab_order().read().clone());
+
+    // Both kinds of tab in one list, so the bar is built from a single sequence.
+    let tabs = use_memo(move || {
+        tab_order()
+            .into_iter()
+            .map(TabKey::Graph)
+            .chain(SCENE_VIEW_OPEN().then_some(TabKey::Scene))
+            .collect::<Vec<_>>()
+    });
 
     use_effect(move || {
         node_editor_command(
@@ -196,52 +274,41 @@ pub fn GraphEditor(
 
                 Tabs {
                     class: "editor-tabs",
-                    value: if scene_tab_active() { SCENE_TAB_VALUE.to_string() } else { active_tab().as_simple().to_string() },
-                    on_value_change: move |v: String| {
-                        if v == SCENE_TAB_VALUE {
-                            scene_tab_active.set(true);
-                        } else if let Ok(new_id) = Uuid::parse_str(&v) {
-                            scene_tab_active.set(false);
-                            workspace_processor.send(GraphsWorkspaceAction::SetActiveTab(new_id));
+                    value: shown().value(),
+                    on_value_change: move |value: String| {
+                        match TabKey::parse(&value) {
+                            Some(TabKey::Scene) => scene_in_front.set(true),
+                            Some(TabKey::Graph(id)) => {
+                                scene_in_front.set(false);
+                                workspace_processor.send(GraphsWorkspaceAction::SetActiveTab(id));
+                            }
+                            None => {}
                         }
                     },
-                    {
-                        let tab_order = workspace.tab_order().read().clone();
-                        rsx! {
-                            TabList { class: "editor-tab-list",
-                                for (i , id) in tab_order.iter().enumerate() {
-                                    if let Some(graph_state) = workspace.tabs().get(*id) {
-                                        TabTrigger {
-                                            key: "{id.as_simple().to_string()}",
-                                            value: id.as_simple().to_string(),
-                                            index: i,
-                                            class: if active_tab() == *id { "editor-tab active-tab" } else { "editor-tab" },
-                                            div { class: "tab-inner",
-                                                span { {graph_state.graph_info().read().name.clone()} }
-                                                if *id != root_graph_id() {
-                                                    button {
-                                                        class: "tab-close",
-                                                        onclick: {
-                                                            let id_copy = *id;
-                                                            move |e: MouseEvent| {
-                                                                e.stop_propagation();
-                                                                workspace_processor.send(GraphsWorkspaceAction::RemoveTabs(vec![id_copy]));
-                                                            }
-                                                        },
-
-                                                    }
+                    TabList { class: "editor-tab-list",
+                        for (index , key) in tabs().into_iter().enumerate() {
+                            TabTrigger {
+                                key: "{key.value()}",
+                                value: key.value(),
+                                index,
+                                class: if shown() == key { "editor-tab active-tab" } else { "editor-tab" },
+                                div { class: "tab-inner",
+                                    match key {
+                                        TabKey::Graph(id) => rsx! {
+                                            span {
+                                                {workspace.tabs().get(id).map(|graph| graph.graph_info().read().name.clone()).unwrap_or_default()}
+                                            }
+                                            if id != root_graph_id() {
+                                                button {
+                                                    class: "tab-close",
+                                                    onclick: move |e: MouseEvent| {
+                                                        e.stop_propagation();
+                                                        workspace_processor.send(GraphsWorkspaceAction::RemoveTabs(vec![id]));
+                                                    },
                                                 }
                                             }
-                                        }
-                                    }
-                                }
-                                if SCENE_VIEW_OPEN() {
-                                    TabTrigger {
-                                        key: "{SCENE_TAB_VALUE}",
-                                        value: SCENE_TAB_VALUE.to_string(),
-                                        index: tab_order.len(),
-                                        class: if scene_tab_active() { "editor-tab active-tab" } else { "editor-tab" },
-                                        div { class: "tab-inner",
+                                        },
+                                        TabKey::Scene => rsx! {
                                             span { "3D View" }
                                             button {
                                                 class: "tab-close",
@@ -250,49 +317,54 @@ pub fn GraphEditor(
                                                     *SCENE_VIEW_OPEN.write() = false;
                                                 },
                                             }
-                                        }
+                                        },
                                     }
                                 }
-                                div { class: "editor-tab-filler" }
                             }
+                        }
+                        div { class: "editor-tab-filler" }
+                    }
+                    div {
+                        id: "graphEditorContentContainer",
+                        class: "graph-editor-tab-content",
+                        onresize: move |_| workspace_processor.send(GraphsWorkspaceAction::GetEditorArea),
+                        for id in tab_order().into_iter() {
+                            if let Some(graph_state) = workspace.tabs().get(id) {
+                                div {
+                                    key: "{id.as_simple().to_string()}",
+                                    role: "tabpanel",
+                                    class: "tab-content",
+                                    "data-state": if shown() == TabKey::Graph(id) { "active" } else { "inactive" },
+                                    hidden: shown() != TabKey::Graph(id),
+                                    GraphViewEditor {
+                                        model_modified_sig,
+                                        model_modified_handler,
+                                        model_file_path,
+                                        model_file_path_handler,
+                                        current_mouse_pos: current_mouse_in_editor_pos,
+                                        graph_state,
+                                        ctrl_pressed,
+                                        shift_pressed,
+                                    }
+                                }
+                            }
+                        }
+                        // Deliberately outside the loop above, although its `hidden` comes from the
+                        // same [`shown`]: a keyed list entry may be moved or recreated when tabs are
+                        // opened and closed, and recreating this one would take the canvas - with its
+                        // WebGL context and the camera the user set up - down with it. Here its place
+                        // in the tree never moves.
+                        //
+                        // Hidden rather than unmounted while a graph is in front, for the same reason.
+                        // Closing the tab does unmount it, which is when letting the context go is
+                        // what was asked for.
+                        if SCENE_VIEW_OPEN() {
                             div {
-                                id: "graphEditorContentContainer",
-                                class: "graph-editor-tab-content",
-                                onresize: move |_| workspace_processor.send(GraphsWorkspaceAction::GetEditorArea),
-                                for (_i , id) in tab_order.iter().enumerate() {
-                                    if let Some(graph_state) = workspace.tabs().get(*id) {
-                                        div {
-                                            key: "{id.as_simple().to_string()}",
-                                            role: "tabpanel",
-                                            class: "tab-content",
-                                            "data-state": if active_tab() == *id { "active" } else { "inactive" },
-                                            hidden: active_tab() != *id,
-                                            GraphViewEditor {
-                                                model_modified_sig,
-                                                model_modified_handler,
-                                                model_file_path,
-                                                model_file_path_handler,
-                                                current_mouse_pos: current_mouse_in_editor_pos,
-                                                graph_state,
-                                                ctrl_pressed,
-                                                shift_pressed,
-                                            }
-                                        }
-                                    }
-                                }
-                                // Hidden rather than unmounted while another tab is in front: taking
-                                // the canvas out of the document would drop the WebGL context and
-                                // with it the camera the user set up. Closing the tab does unmount
-                                // it, which is when letting go of the context is the right thing.
-                                if SCENE_VIEW_OPEN() {
-                                    div {
-                                        role: "tabpanel",
-                                        class: "tab-content",
-                                        "data-state": if scene_tab_active() { "active" } else { "inactive" },
-                                        hidden: !scene_tab_active(),
-                                        SceneView {}
-                                    }
-                                }
+                                role: "tabpanel",
+                                class: "tab-content",
+                                "data-state": if shown() == TabKey::Scene { "active" } else { "inactive" },
+                                hidden: shown() != TabKey::Scene,
+                                SceneView {}
                             }
                         }
                     }
