@@ -174,11 +174,9 @@ fn add_volume_at(
 /// what makes the file worth fetching on its own: a component that merely moved keeps its file, and
 /// a viewer places it from the manifest instead of asking for its mesh again.
 ///
-/// The placement is discarded, but the node still has to come from the same placed copy
-/// [`manifest_of`] walks. A component's shape is read off the surfaces `update_surfaces()` builds,
-/// and patching a property does not run it, so a node taken from the live document can still carry
-/// the shape it had before the edit. Reading both off the same copy is what keeps the hash and the
-/// bytes from disagreeing.
+/// It also needs no positioning run — what a component looks like does not depend on where it ended
+/// up. The caller does have to hand over a node whose surfaces match its properties, which is not a
+/// given: patching a property does not rebuild them (see `known_issue_update_surfaces.md`).
 ///
 /// # Arguments
 ///
@@ -709,15 +707,56 @@ mod test {
         Ok(())
     }
 
-    /// The bytes `GET /scene/node/{uid}.glb` would answer with for one component of a document.
-    fn served_geometry_of(document: &OpmDocument, uid: Uuid) -> OpmResult<Vec<u8>> {
-        let placed = document.positioned_copy(None)?;
-        let node = placed
+    /// Refreshing a component's own copy has to draw the same thing as placing the whole model.
+    ///
+    /// The manifest hashes the shape it finds in a placed copy, while the component's endpoint
+    /// serves the shape it derives on its own. If the two derivations disagreed by so much as a
+    /// rounding step, every manifest would report a hash for bytes nobody serves, and the viewer
+    /// would refetch a component that never stops looking changed.
+    #[test]
+    fn a_refreshed_component_draws_the_same_as_a_placed_one() -> OpmResult<()> {
+        let document = two_lenses(millimeter!(100.0))?;
+        let lens = document
             .scenery()
             .collect_all_nodes_recursive()?
             .into_iter()
-            .find(|node| node.node_attr().uuid() == uid)
-            .expect("the component is in the model");
+            .find(|node| node.as_volume().is_some())
+            .expect("a model with lenses has something to draw")
+            .node_attr()
+            .uuid();
+
+        let placed = document.positioned_copy(None)?;
+        let from_placed = glb_of_node(
+            placed
+                .scenery()
+                .node_recursive(lens)?
+                .0
+                .as_volume()
+                .expect("the component encloses a volume"),
+            default_reference_wavelength(),
+        )?;
+
+        // The lookup hands out a deep clone, so refreshing it leaves the document alone.
+        let mut own_copy = document.scenery().node_recursive(lens)?.0;
+        own_copy.update_surfaces()?;
+        let from_refreshed = glb_of_node(
+            own_copy
+                .as_volume()
+                .expect("the component encloses a volume"),
+            default_reference_wavelength(),
+        )?;
+
+        assert_eq!(
+            from_placed, from_refreshed,
+            "placing the model and refreshing one component produce different geometry"
+        );
+        Ok(())
+    }
+
+    /// The bytes `GET /scene/node/{uid}.glb` would answer with for one component of a document.
+    fn served_geometry_of(document: &OpmDocument, uid: Uuid) -> OpmResult<Vec<u8>> {
+        let mut node = document.scenery().node_recursive(uid)?.0;
+        node.update_surfaces()?;
         let volume = node.as_volume().expect("the component encloses a volume");
         glb_of_node(volume, default_reference_wavelength())
     }

@@ -65,13 +65,17 @@ Pinned by `reshaping_a_component_changes_the_file_its_endpoint_serves` in
 
 ## The workaround in place
 
-`get_scene_node` (`opossum_backend/src/document.rs`) now reads from the same `positioned_copy` the
-manifest uses. The placement is still discarded — the point is only that both endpoints see the same
-document state, so the hash and the bytes cannot disagree.
+`get_scene_node` (`opossum_backend/src/document.rs`) calls `update_surfaces()` on the node before
+deriving its geometry. This is free of side effects: `OpticGraph::node` hands out a **deep clone**
+(`opossum_core/src/nodes/node_group/optic_graph/inspection.rs:80`, via `OpticRef`'s
+`clone_analyzable`), so the refresh reaches only that copy and never the live document.
 
-Its cost: one full document round-trip per component fetch. One on a shape change, but *N* when a
-model with *N* components is first opened. If that becomes noticeable, either cache the placed copy
-per document revision in `AppState`, or fix the root cause below and let the endpoint be cheap again.
+That the cheap refresh is equivalent to the expensive route is pinned by
+`a_refreshed_component_draws_the_same_as_a_placed_one` in `opossum_backend/src/scene_export.rs`:
+placing the whole model and refreshing one component produce byte-identical geometry.
+
+The workaround is local to this one endpoint. Every other reader of `volume_body()` that has not
+gone through a run still sees whatever the last refresh left behind.
 
 ## Two ways out
 

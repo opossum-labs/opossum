@@ -151,15 +151,10 @@ async fn get_scene_manifest(
 /// origin rather than where the setup puts it. Where it belongs is stated by `/scene/manifest`
 /// instead, which is what lets a viewer move a component without fetching its geometry again.
 ///
-/// The shape is taken from the same placed copy the manifest is built from, and that matters even
-/// though the placement itself is thrown away here: a component's surfaces are rebuilt by
-/// `update_surfaces()`, which patching a property does not run, so the live document can still hold
-/// the shape a lens had *before* its thickness was changed. Reading both endpoints off the same copy
-/// is what keeps the hash the manifest reports and the bytes served here from disagreeing - and a
-/// disagreement is invisible: the viewer refetches, receives the old mesh and appears to ignore the
-/// edit.
+/// No positioning run happens here: what a component looks like does not depend on where it ended
+/// up. Its surfaces do have to be rebuilt first, though — see below.
 #[utoipa::path(tag = "document",
-    params(("uid" = Uuid, Path, description = "Uuid of the component to draw"), SceneQuery),
+    params(("uid" = Uuid, Path, description = "Uuid of the component to draw")),
     responses(
         (status = 200, description = "glTF binary of the component", body = Vec<u8>,
             content_type = GLB_MEDIA_TYPE),
@@ -171,20 +166,25 @@ async fn get_scene_manifest(
 async fn get_scene_node(
     data: web::Data<AppState>,
     uid: web::Path<Uuid>,
-    query: web::Query<SceneQuery>,
 ) -> Result<impl Responder, BackEndErrorResponse> {
-    // Same split as the other two: only the copy needs the live model, and the meshing that follows
-    // must not block every other edit for as long as it takes.
-    let placed = {
+    // The lookup hands out a deep clone of the node, so the lock is gone again before the meshing
+    // starts - and whatever is done to the copy below reaches nothing else.
+    let mut node = {
         let document = data.document.lock();
-        document.positioned_copy(query.analyzer)?
+        document
+            .scenery()
+            .node_recursive(uid.into_inner())
+            .map_err(|_| BackEndErrorResponse::not_found())?
+            .0
     };
-    let node_ref = placed
-        .scenery()
-        .node_recursive(uid.into_inner())
-        .map_err(|_| BackEndErrorResponse::not_found())?
-        .0;
-    let volume = node_ref
+    // A component's shape is read off the surfaces `update_surfaces()` builds from its properties,
+    // and patching a property does not run it (see `known_issue_update_surfaces.md`). Without this
+    // the endpoint would keep serving the shape a lens had *before* its thickness was changed, while
+    // the manifest - built from a placed copy, which is rebuilt on deserialization - already reports
+    // a new hash for it. The viewer would refetch, receive the old mesh, and appear to ignore the
+    // edit entirely.
+    node.update_surfaces()?;
+    let volume = node
         .as_volume()
         .ok_or_else(BackEndErrorResponse::not_found)?;
     let glb = glb_of_node(volume, default_reference_wavelength())?;
