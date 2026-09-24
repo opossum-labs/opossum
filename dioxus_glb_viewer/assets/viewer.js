@@ -49,6 +49,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.set(...options.initial_target);
     controls.enableDamping = false;
+    controls.zoomSpeed = 2.0;
     controls.update();
 
     // ── Lights ──────────────────────────────────────────────────────────────
