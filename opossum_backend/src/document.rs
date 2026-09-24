@@ -3,7 +3,7 @@ use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
     helper_functions::{analyzer_mut_or_404, parent_group_id_or_self},
-    scene_export::scene_of,
+    scene_export::{glb_of_node, manifest_of, scene_of},
     sse_logger::SENDER,
     undo::{Command, PatchNode, RepositionAnalyzer, SetViewport, capture_old_node_request},
 };
@@ -20,7 +20,7 @@ use opossum_core::{
     opm_document::OpmDocument,
     types::api_types::{
         DocumentChange, ErrorResponse, JumpTarget, LoadDocumentResponse, PositionUpdate,
-        UndoRedoResponse, UpdateNodeRequest, ViewportChangeRequest,
+        SceneManifest, UndoRedoResponse, UpdateNodeRequest, ViewportChangeRequest,
     },
 };
 use serde::Deserialize;
@@ -107,6 +107,79 @@ async fn get_scene(
     let glb = scene_of(&placed, default_reference_wavelength())?
         .to_glb()
         .map_err(|e| OpossumError::Other(format!("the scene could not be written: {e}")))?;
+    Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
+}
+
+/// List the components of the model with their placement, without their geometry
+///
+/// This function returns one entry per component that encloses a volume, holding where the
+/// component sits and a hash of what it looks like — but not the geometry itself, which is fetched
+/// per component from `/scene/node/{uid}.glb`.
+///
+/// Splitting the two apart is what makes a live 3D view cheap. A viewer that already shows the
+/// model compares this list against what it has: a component whose hash is unchanged only needs its
+/// new placement applied, however far it moved, and only one that really changed shape is fetched
+/// again.
+///
+/// As with `/scene.glb`, the components only have a place in space once the optical axis has been
+/// traced, so that run happens here on a copy, and the `analyzer` parameter picks which analyzer to
+/// follow when the model has more than one.
+#[utoipa::path(tag = "document",
+    params(SceneQuery),
+    responses(
+        (status = 200, description = "the drawable components of the model", body = SceneManifest),
+        (status = 400, description = "the model could not be drawn", body = ErrorResponse)
+    )
+)]
+#[get("/scene/manifest")]
+async fn get_scene_manifest(
+    data: web::Data<AppState>,
+    query: web::Query<SceneQuery>,
+) -> Result<impl Responder, BackEndErrorResponse> {
+    // Same split as `get_scene`: only the copy needs the live model, and the meshing that follows
+    // must not block every other edit for as long as it takes.
+    let placed = {
+        let document = data.document.lock();
+        document.positioned_copy(query.analyzer)?
+    };
+    Ok(Json(manifest_of(&placed, default_reference_wavelength())?))
+}
+
+/// Get one component of the model as a 3D scene
+///
+/// This function returns a single component as a binary glTF (GLB) file, held at the coordinate
+/// origin rather than where the setup puts it. Where it belongs is stated by `/scene/manifest`
+/// instead, which is what lets a viewer move a component without fetching its geometry again.
+///
+/// Because of that, no positioning run happens here: what a component looks like does not depend on
+/// where it ended up.
+#[utoipa::path(tag = "document",
+    params(("uid" = Uuid, Path, description = "Uuid of the component to draw")),
+    responses(
+        (status = 200, description = "glTF binary of the component", body = Vec<u8>,
+            content_type = GLB_MEDIA_TYPE),
+        (status = 404, description = "no component of that uuid encloses a volume", body = ErrorResponse),
+        (status = 400, description = "the component could not be drawn", body = ErrorResponse)
+    )
+)]
+#[get("/scene/node/{uid}.glb")]
+async fn get_scene_node(
+    data: web::Data<AppState>,
+    uid: web::Path<Uuid>,
+) -> Result<impl Responder, BackEndErrorResponse> {
+    // The node is a handle of its own, so the lock is gone again before the meshing starts.
+    let node_ref = {
+        let document = data.document.lock();
+        document
+            .scenery()
+            .node_recursive(uid.into_inner())
+            .map_err(|_| BackEndErrorResponse::not_found())?
+            .0
+    };
+    let volume = node_ref
+        .as_volume()
+        .ok_or_else(BackEndErrorResponse::not_found)?;
+    let glb = glb_of_node(volume, default_reference_wavelength())?;
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
 #[utoipa::path(
@@ -517,6 +590,8 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
 
     cfg.service(get_root_uuid);
     cfg.service(get_scene);
+    cfg.service(get_scene_manifest);
+    cfg.service(get_scene_node);
 
     cfg.service(undo_document);
     cfg.service(redo_document);
@@ -1540,6 +1615,115 @@ mod test {
 
         let resp = request_scene(&app_state, &format!("?analyzer={named}")).await;
         assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    /// Ask a state for the list of its drawable components.
+    async fn request_manifest(app_state: &Data<AppState>) -> actix_web::dev::ServiceResponse {
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(web::scope("/document").service(get_scene_manifest)),
+        )
+        .await;
+        let req = test::TestRequest::get()
+            .uri("/document/scene/manifest")
+            .to_request();
+        app.call(req).await.unwrap()
+    }
+
+    /// Ask a state for one component's geometry.
+    async fn request_scene_node(
+        app_state: &Data<AppState>,
+        uid: Uuid,
+    ) -> actix_web::dev::ServiceResponse {
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(web::scope("/document").service(get_scene_node)),
+        )
+        .await;
+        let req = test::TestRequest::get()
+            .uri(&format!("/document/scene/node/{uid}.glb"))
+            .to_request();
+        app.call(req).await.unwrap()
+    }
+
+    /// The manifest names every component that can be drawn, and names it by its node uuid - that
+    /// is what lets a click in the 3D view point back at a node in the graph.
+    #[actix_web::test]
+    async fn the_manifest_lists_each_drawable_component_by_its_uuid() {
+        let app_state = state_with_a_lens();
+        let lens = app_state
+            .document
+            .lock()
+            .scenery()
+            .collect_all_nodes_recursive()
+            .unwrap()[0]
+            .node_attr()
+            .uuid();
+
+        let resp = request_manifest(&app_state).await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        let manifest: SceneManifest = test::read_body_json(resp).await;
+        assert_eq!(manifest.nodes.len(), 1);
+        assert_eq!(manifest.nodes[0].uid, lens);
+        assert!(!manifest.nodes[0].geometry.is_empty());
+    }
+
+    /// A model with nothing to draw still answers with a list, an empty one.
+    #[actix_web::test]
+    async fn the_manifest_of_an_empty_model_is_empty() {
+        let resp = request_manifest(&Data::new(AppState::default())).await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        let manifest: SceneManifest = test::read_body_json(resp).await;
+        assert!(manifest.nodes.is_empty());
+    }
+
+    /// Every component the manifest names has to be fetchable, or a viewer would be left asking for
+    /// something that does not exist.
+    #[actix_web::test]
+    async fn a_component_named_by_the_manifest_is_served_as_a_gltf_binary() {
+        let app_state = state_with_a_lens();
+        let manifest: SceneManifest =
+            test::read_body_json(request_manifest(&app_state).await).await;
+
+        let resp = request_scene_node(&app_state, manifest.nodes[0].uid).await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers()
+                .get(actix_web::http::header::CONTENT_TYPE)
+                .unwrap(),
+            GLB_MEDIA_TYPE
+        );
+        let body = test::read_body(resp).await;
+        assert!(body.starts_with(b"glTF"));
+    }
+
+    /// A uuid that is not in the model at all.
+    #[actix_web::test]
+    async fn an_unknown_component_is_not_found() {
+        let resp = request_scene_node(&state_with_a_lens(), Uuid::new_v4()).await;
+
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    /// A node that exists but encloses no volume has no geometry to hand out - a detector is a
+    /// node, not a shape.
+    #[actix_web::test]
+    async fn a_component_without_a_volume_is_not_found() {
+        let mut scenery = opossum_core::nodes::NodeGroup::default();
+        let detector = scenery
+            .add_node(opossum_core::nodes::EnergyMeter::default())
+            .unwrap();
+        let app_state = Data::new(AppState::default());
+        *app_state.document.lock() = OpmDocument::new(scenery);
+
+        let resp = request_scene_node(&app_state, detector).await;
+
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     }
 
     #[actix_web::test]

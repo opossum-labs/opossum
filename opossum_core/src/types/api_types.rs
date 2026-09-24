@@ -974,3 +974,43 @@ pub struct UndoRedoResponse {
     pub can_undo: bool,
     pub can_redo: bool,
 }
+
+/// One drawable component of a model, as the 3D scene manifest lists it.
+///
+/// The geometry itself is deliberately not part of this: it is fetched per component, which is what
+/// lets a component that merely moved be updated without transferring its mesh again.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, ToSchema)]
+pub struct SceneNodeEntry {
+    /// The component's node UUID, which is also the `uid` written into the glTF `extras`.
+    pub uid: Uuid,
+    /// The component's name, for labelling it in a viewer.
+    pub name: String,
+    /// A hash over the component's mesh and material.
+    ///
+    /// Two entries carrying the same hash have byte-identical geometry, and an entry whose hash has
+    /// not changed since the previous manifest needs no new mesh. Moving a component leaves it
+    /// untouched: the mesh is held in the component's own frame, the placement travels beside it in
+    /// [`Self::position`] and [`Self::rotation`].
+    pub geometry: String,
+    /// The component's position in metres, relative to [`SceneManifest::origin`].
+    pub position: [f64; 3],
+    /// The component's rotation, as a quaternion in the order `(x, y, z, w)`.
+    pub rotation: [f64; 4],
+}
+
+/// Every drawable component of a model, with its placement but without its geometry.
+///
+/// This is the cheap half of a 3D view. A viewer fetches it whenever the model changed and compares
+/// it against what it already shows, so that only the components that really changed shape have
+/// their mesh fetched afterwards.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default, ToSchema)]
+pub struct SceneManifest {
+    /// The point every position is given relative to, in metres.
+    ///
+    /// Optical setups can sit far from the coordinate origin, where `f32` — what a renderer works
+    /// in — runs out of precision. Positions are handed out relative to this point so the numbers a
+    /// viewer receives stay small.
+    pub origin: [f64; 3],
+    /// One entry per component that encloses a volume, in the order the model walks them.
+    pub nodes: Vec<SceneNodeEntry>,
+}
