@@ -86,5 +86,8 @@ drawn as a faint, translucent plane. A detector is drawn as a plain, matte surfa
 distinct from glass and from a mirror, so a setup reads at a glance which components measure the
 light rather than shape or redirect it.
 
+Unlike a lens or a wedge, these components have no second surface of their own to keep facing the
+camera, so each is drawn from both sides at once and stays visible however far you orbit around it.
+
 The reference grid is off: an optical setup is centimetres to metres across, and a grid sized for a
 general-purpose 3D scene would swamp it rather than give it a floor.

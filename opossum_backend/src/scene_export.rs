@@ -234,8 +234,15 @@ fn add_volume_at(
 /// Add one component that is a single optical surface to a scene, placed where the caller says.
 ///
 /// The single-surface counterpart of [`add_volume_at`]: a mirror, a grating, a filter or a detector
-/// has no second surface and no medium between them, so its mesh becomes a [`TriMesh`] of exactly
-/// one patch rather than three.
+/// has no second surface and no medium between them, so its mesh becomes a [`TriMesh`] built from
+/// [`Planar::surface_mesh`] rather than a volume's `triangulate`.
+///
+/// It is drawn as **two** patches, one the mirror image of the other (see [`SurfaceMesh::flipped`]),
+/// facing opposite ways. A volume's mesh is a closed shell with an outside and an inside, so one
+/// patch always faces the camera; a single surface has no "inside" to hide behind, and without a
+/// second, oppositely-facing patch it would vanish the moment the camera crossed to its back -
+/// `optoscene`'s `Mirror` and `Opaque` presets do not ask the renderer to draw both faces of one
+/// patch (unlike `Translucent`, which does), so the geometry has to supply both itself.
 ///
 /// # Arguments
 ///
@@ -256,7 +263,10 @@ fn add_surface_at(
     let material = scene.add_material(surface_material_of(node.surface_kind()));
     let mesh_id = scene
         .add_mesh(TriMesh {
-            patches: vec![patch_of(mesh, material)],
+            patches: vec![
+                patch_of(mesh, material),
+                patch_of(&mesh.clone().flipped(), material),
+            ],
         })
         .map_err(|e| {
             OpossumError::Other(format!("the mesh of '{}' was rejected: {e}", node.name()))
@@ -759,6 +769,35 @@ mod test {
         assert!(
             material_names.contains(&"opaque"),
             "the detector was not drawn as a plain opaque surface: {material_names:?}"
+        );
+        Ok(())
+    }
+
+    /// A surface node is meshed as two patches facing opposite ways, so it stays visible when the
+    /// camera crosses to its back - unlike a volume's closed shell, it has no far side of its own to
+    /// keep facing the camera.
+    #[test]
+    fn a_surface_is_meshed_to_be_visible_from_either_side() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let mirror = scenery.add_node(ThinMirror::default())?;
+        scenery.connect_nodes(source, "output_1", mirror, "input_1", millimeter!(50.0))?;
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(source, RayDataBuilder::default());
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+
+        let scene = exported(&document)?;
+        let drawn = drawn_components(&scene);
+        assert_eq!(drawn.len(), 1);
+        let mesh_index = drawn[0]["mesh"].as_u64().expect("the mirror has a mesh");
+        let primitives = scene["meshes"][mesh_index as usize]["primitives"]
+            .as_array()
+            .expect("a mesh has primitives");
+        assert_eq!(
+            primitives.len(),
+            2,
+            "a surface node must draw both faces, not just the one `Planar::surface_mesh` returns"
         );
         Ok(())
     }
