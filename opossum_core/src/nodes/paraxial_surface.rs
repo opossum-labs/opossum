@@ -5,11 +5,11 @@ use crate::{
         GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType},
+    core_optics::{NodeAttr, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind},
     error::{OpmResult, OpossumError},
     light::{LightData, LightRays, LightResult, Rays},
     millimeter,
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, create_surface_properties},
     properties::{Proptype, validator::Validator},
 };
 use log::warn;
@@ -61,6 +61,7 @@ impl Default for ParaxialSurface {
                 millimeter!(10.0).into(),
             )
             .unwrap();
+        create_surface_properties(&mut node_attr).unwrap();
         let mut ps = Self { node_attr };
         ps.update_surfaces().unwrap();
         ps
@@ -81,7 +82,15 @@ impl ParaxialSurface {
         Ok(parsurf)
     }
 }
+impl Planar for ParaxialSurface {
+    fn surface_kind(&self) -> SurfaceKind {
+        SurfaceKind::Transmissive
+    }
+}
 impl OpticNode for ParaxialSurface {
+    fn as_surface(&self) -> Option<&dyn Planar> {
+        Some(self)
+    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
     }

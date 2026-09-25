@@ -5,14 +5,15 @@ use crate::{
     },
     coatings::CoatingConstantR,
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, node_attr::HasNodeAttr,
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind,
+        node_attr::HasNodeAttr,
     },
     degree,
     error::{OpmResult, OpossumError},
     geometry::{Parabola, geo_surface::GeoSurfaceRef},
     light::{LightData, LightRays, LightResult, Rays},
     meter,
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, create_surface_properties},
     percent,
     properties::{Proptype, validator::Validator},
     radian,
@@ -95,6 +96,7 @@ impl Default for ParabolicMirror {
                 Vector2::new(1., 0.).into(),
             )
             .unwrap();
+        create_surface_properties(&mut node_attr).unwrap();
 
         let mut parabola = Self { node_attr };
         parabola.update_surfaces().unwrap();
@@ -357,7 +359,15 @@ impl ParabolicMirror {
     }
 }
 
+impl Planar for ParabolicMirror {
+    fn surface_kind(&self) -> SurfaceKind {
+        SurfaceKind::Reflective
+    }
+}
 impl OpticNode for ParabolicMirror {
+    fn as_surface(&self) -> Option<&dyn Planar> {
+        Some(self)
+    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
         let anchor_point_iso = self.calc_off_axis_isometry()?;

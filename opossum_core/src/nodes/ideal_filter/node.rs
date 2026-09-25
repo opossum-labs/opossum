@@ -7,13 +7,16 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, NodeAttrExt, OpticNodeExt},
+    core_optics::{NodeAttr, NodeAttrExt, OpticNodeExt, Planar, SurfaceKind},
     error::{OpmResult, OpossumError},
     light::{
         LightData, LightRays, LightResult, Rays,
         light_result::{light_rays_to_light_result, light_result_to_light_rays},
     },
-    nodes::{FilterType, NodeRegistration, ideal_filter::filter_types::FilterConst},
+    nodes::{
+        FilterType, NodeRegistration, create_surface_properties,
+        ideal_filter::filter_types::FilterConst,
+    },
     prelude::{FilterTypeBuilder, GhostFocusConfig, OpticNode, PortType, Proptype, RayTraceConfig},
     properties::validator::Validator,
 };
@@ -52,6 +55,7 @@ impl Default for IdealFilter {
                 FilterTypeBuilder::default().into(),
             )
             .unwrap();
+        create_surface_properties(&mut node_attr).unwrap();
         let mut idf = Self { node_attr };
         idf.update_surfaces().unwrap();
         idf
@@ -127,7 +131,15 @@ impl IdealFilter {
             })
     }
 }
+impl Planar for IdealFilter {
+    fn surface_kind(&self) -> SurfaceKind {
+        SurfaceKind::Transmissive
+    }
+}
 impl OpticNode for IdealFilter {
+    fn as_surface(&self) -> Option<&dyn Planar> {
+        Some(self)
+    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
     }

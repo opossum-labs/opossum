@@ -7,7 +7,7 @@
 use log::warn;
 use nalgebra::{Isometry3, Point3};
 use opossum_core::{
-    core_optics::{NodeAttrExt, volumetric::Volumetric},
+    core_optics::{NodeAttrExt, OpticNodeExt, SurfaceKind, planar::Planar, volumetric::Volumetric},
     error::{OpmResult, OpossumError},
     geometry::{
         SurfaceMesh,
@@ -15,6 +15,7 @@ use opossum_core::{
     },
     opm_document::OpmDocument,
     types::api_types::{SceneManifest, SceneNodeEntry},
+    utils::geom_transformation::Isometry,
 };
 use optoscene::{
     Layer, Material, MaterialId, Scene, SceneNode, SceneOptions, SurfacePatch, TriMesh,
@@ -38,13 +39,31 @@ const GLASS_COLOUR: [f32; 3] = [0.9, 0.95, 1.0];
 /// Drawing the component in plain glass says more than leaving it out of the scene.
 const FALLBACK_REFRACTIVE_INDEX: f64 = 1.5;
 
-/// Build a 3D scene of every component of a model that encloses a volume.
+/// The colour a reflective surface (a mirror, a grating, a beam splitter's plate) is drawn in.
+const MIRROR_COLOUR: [f32; 3] = [0.9, 0.9, 0.92];
+
+/// How rough a reflective surface is drawn - low, so it reflects sharply rather than looking frosted.
+const MIRROR_ROUGHNESS: f32 = 0.05;
+
+/// The colour a transmissive surface (an idealised filter or paraxial element) is drawn in, with an
+/// alpha low enough to read as see-through rather than solid.
+const TRANSMISSIVE_COLOUR: [f32; 4] = [0.85, 0.9, 0.85, 0.4];
+
+/// The colour a detector's surface is drawn in - distinct from glass and from a mirror, so a setup
+/// reads at a glance which components measure the light rather than shape it.
+const DETECTOR_COLOUR: [f32; 4] = [0.25, 0.25, 0.28, 1.0];
+
+/// How rough a detector's surface is drawn - a plain, non-reflective sensor face.
+const DETECTOR_ROUGHNESS: f32 = 0.7;
+
+/// Build a 3D scene of every component of a model that encloses a volume or is one optical surface.
 ///
-/// Every node that encloses a volume is meshed and put into the scene. Components without a volume
-/// are passed over: a detector has no shape of its own yet, and a node reference is not a second
-/// component but the same one passed through again. A component that cannot be meshed is reported
-/// and skipped rather than failing the whole scene, so one unusual lens does not cost the view of
-/// the rest of the setup.
+/// Every node that encloses a volume, or is a single surface (a mirror, a grating, a filter, a
+/// detector, ...), is meshed and put into the scene. Every other component is passed over: a node
+/// reference is not a second component but the same one passed through again, a source port is
+/// where light begins rather than a thing, and a group is the nodes it contains, not a component of
+/// its own. A component that cannot be meshed is reported and skipped rather than failing the whole
+/// scene, so one unusual lens does not cost the view of the rest of the setup.
 ///
 /// The model has to be placed already — a component only learns where it is from a positioning run,
 /// see [`OpmDocument::positioned_copy`]. Placing it is kept out of here on purpose: that half needs
@@ -54,7 +73,7 @@ const FALLBACK_REFRACTIVE_INDEX: f64 = 1.5;
 /// # Arguments
 ///
 /// - `placed`: a model whose nodes carry their placement
-/// - `wavelength`: the wavelength the glass is given its refractive index at
+/// - `wavelength`: the wavelength the glass of a volume node is given its refractive index at
 ///
 /// # Returns
 ///
@@ -65,34 +84,65 @@ const FALLBACK_REFRACTIVE_INDEX: f64 = 1.5;
 /// This function returns an error if the nodes cannot be walked.
 pub fn scene_of(placed: &OpmDocument, wavelength: Length) -> OpmResult<Scene> {
     let mut scene = Scene::new(SceneOptions::default());
-    for_each_drawable(placed, |node, body| {
-        add_volume_at(
+    for_each_drawable(placed, |drawn| match drawn {
+        Drawn::Volume(node, body) => add_volume_at(
             &mut scene,
             node,
-            body,
+            &body,
             wavelength,
             body.isometry().get_transform(),
-        )
+        ),
+        Drawn::Surface(node, mesh) => add_surface_at(
+            &mut scene,
+            node,
+            &mesh,
+            node.effective_node_iso()
+                .unwrap_or_else(Isometry::identity)
+                .get_transform(),
+        ),
     })?;
     Ok(scene)
 }
 
-/// Walk a model and hand every component that can be drawn, with its volume, to `draw`.
+/// Which drawable capability a node presents, before its shape is derived.
+///
+/// A node answers `as_volume`/`as_surface` for itself (see [`Volumetric`] and [`Planar`]); this is
+/// only the two-armed choice between them, made once per node so [`for_each_drawable`] does not ask
+/// twice. [`Drawn`] is the sibling that also carries the derived shape, handed to the caller.
+enum Drawable<'a> {
+    /// The node encloses a volume of material.
+    Volume(&'a dyn Volumetric),
+    /// The node is one optical surface.
+    Surface(&'a dyn Planar),
+}
+
+/// A drawable component together with its derived shape, as [`for_each_drawable`] hands it to its
+/// caller.
+enum Drawn<'a> {
+    /// Encloses a volume of material, with the volume already derived.
+    Volume(&'a dyn Volumetric, SurfaceBoundedBody),
+    /// Is one optical surface, with the surface already meshed.
+    Surface(&'a dyn Planar, SurfaceMesh),
+}
+
+/// Walk a model and hand every component that can be drawn, with its shape, to `draw`.
 ///
 /// Which components a 3D view shows is one decision, and it is made here rather than twice: the
 /// scene and the manifest that lists it have to agree on the set, or a viewer would be told about
-/// components it can never fetch. Components without a volume are passed over - a detector has no
-/// shape of its own yet, and a node reference is not a second component but the same one passed
-/// through again. A component that cannot be drawn is reported and skipped rather than failing the
-/// whole walk, so one unusual lens does not cost the view of the rest of the setup.
+/// components it can never fetch. A component that is neither a volume nor a surface is passed
+/// over - a node reference is not a second component but the same one passed through again, a
+/// source port is where light begins rather than a thing, and a group is the nodes it contains, not
+/// a component of its own. A component that cannot be drawn is reported and skipped rather than
+/// failing the whole walk, so one unusual component does not cost the view of the rest of the setup.
 ///
-/// The volume is derived once here and handed over, because deriving it copies the node's whole
-/// port set (see [`Volumetric::volume_body`]) and both callers need it.
+/// The shape is derived once here and handed over as [`Drawn`], because deriving it copies the
+/// node's whole port set (see [`Volumetric::volume_body`] and [`Planar::surface_mesh`]) and every
+/// caller needs it.
 ///
 /// # Arguments
 ///
 /// - `placed`: a model whose nodes carry their placement
-/// - `draw`: called once per drawable component with the component and its volume
+/// - `draw`: called once per drawable component with the component and its shape
 ///
 /// # Errors
 ///
@@ -100,17 +150,28 @@ pub fn scene_of(placed: &OpmDocument, wavelength: Length) -> OpmResult<Scene> {
 /// and skipped, not returned.
 fn for_each_drawable<F>(placed: &OpmDocument, mut draw: F) -> OpmResult<()>
 where
-    F: FnMut(&dyn Volumetric, &SurfaceBoundedBody) -> OpmResult<()>,
+    F: FnMut(Drawn<'_>) -> OpmResult<()>,
 {
     for node_ref in placed.scenery().collect_all_nodes_recursive()? {
-        let Some(volume) = node_ref.as_volume() else {
+        let drawable = if let Some(volume) = node_ref.as_volume() {
+            Drawable::Volume(volume)
+        } else if let Some(surface) = node_ref.as_surface() {
+            Drawable::Surface(surface)
+        } else {
             continue;
         };
         if node_ref.node_attr().effective_position().is_none() {
             warn!("{node_ref} has no place in the setup and is left out of the scene");
             continue;
         }
-        let drawn = volume.volume_body().and_then(|body| draw(volume, &body));
+        let drawn = match drawable {
+            Drawable::Volume(volume) => volume
+                .volume_body()
+                .and_then(|body| draw(Drawn::Volume(volume, body))),
+            Drawable::Surface(surface) => surface
+                .surface_mesh(RIM_SEGMENTS)
+                .and_then(|mesh| draw(Drawn::Surface(surface, mesh))),
+        };
         if let Err(e) = drawn {
             warn!("{node_ref} cannot be drawn and is left out of the scene: {e}");
         }
@@ -170,7 +231,79 @@ fn add_volume_at(
     Ok(())
 }
 
-/// Build the glTF binary of a single component, in the component's own frame.
+/// Add one component that is a single optical surface to a scene, placed where the caller says.
+///
+/// The single-surface counterpart of [`add_volume_at`]: a mirror, a grating, a filter or a detector
+/// has no second surface and no medium between them, so its mesh becomes a [`TriMesh`] of exactly
+/// one patch rather than three.
+///
+/// # Arguments
+///
+/// - `scene`: the scene to add to
+/// - `node`: the component to draw
+/// - `mesh`: the component's meshed surface, already derived
+/// - `placement`: where to put the component
+///
+/// # Errors
+///
+/// This function returns an error if `optoscene` rejects the resulting geometry.
+fn add_surface_at(
+    scene: &mut Scene,
+    node: &dyn Planar,
+    mesh: &SurfaceMesh,
+    placement: Isometry3<f64>,
+) -> OpmResult<()> {
+    let material = scene.add_material(surface_material_of(node.surface_kind()));
+    let mesh_id = scene
+        .add_mesh(TriMesh {
+            patches: vec![patch_of(mesh, material)],
+        })
+        .map_err(|e| {
+            OpossumError::Other(format!("the mesh of '{}' was rejected: {e}", node.name()))
+        })?;
+    scene
+        .add_node(SceneNode {
+            uid: node.node_attr().uuid().to_string(),
+            name: node.name().to_string(),
+            mesh: Some(mesh_id),
+            transform: placement,
+            layer: Layer::Optics,
+            data: None,
+        })
+        .map_err(|e| OpossumError::Other(format!("'{}' could not be placed: {e}", node.name())))?;
+    Ok(())
+}
+
+/// Describe a [`Planar`] node's surface, as far as a renderer needs it.
+///
+/// Unlike [`glass_of`], this is infallible and takes no wavelength: none of the three materials a
+/// [`SurfaceKind`] maps to carry a refractive index.
+///
+/// # Arguments
+///
+/// - `kind`: how the node's surface should be drawn
+///
+/// # Returns
+///
+/// The material a renderer should draw the surface in.
+fn surface_material_of(kind: SurfaceKind) -> Material {
+    match kind {
+        SurfaceKind::Reflective => Material::Mirror {
+            color: MIRROR_COLOUR,
+            roughness: MIRROR_ROUGHNESS,
+        },
+        SurfaceKind::Transmissive => Material::Translucent {
+            color: TRANSMISSIVE_COLOUR,
+        },
+        SurfaceKind::Detector => Material::Opaque {
+            color: DETECTOR_COLOUR,
+            metallic: 0.0,
+            roughness: DETECTOR_ROUGHNESS,
+        },
+    }
+}
+
+/// Build the glTF binary of a single volume component, in the component's own frame.
 ///
 /// The component sits at the coordinate origin rather than where the setup puts it, and that is
 /// what makes the file worth fetching on its own: a component that merely moved keeps its file, and
@@ -213,6 +346,40 @@ pub fn glb_of_node(node: &dyn Volumetric, wavelength: Length) -> OpmResult<Vec<u
         .map_err(|e| OpossumError::Other(format!("the scene could not be written: {e}")))
 }
 
+/// Build the glTF binary of a single surface component, in the component's own frame.
+///
+/// The [`Planar`] counterpart of [`glb_of_node`] - see there for why the component sits at the
+/// coordinate origin and needs no positioning run. Unlike it, this takes no wavelength: none of the
+/// materials [`surface_material_of`] produces carry a refractive index.
+///
+/// # Arguments
+///
+/// - `node`: the component to draw
+///
+/// # Returns
+///
+/// The GLB bytes of a scene holding nothing but this component.
+///
+/// # Errors
+///
+/// This function returns an error if the component's surface cannot be meshed, or if the scene
+/// cannot be written.
+pub fn glb_of_surface_node(node: &dyn Planar) -> OpmResult<Vec<u8>> {
+    let mut scene = Scene::new(SceneOptions {
+        origin: Some(Point3::origin()),
+        ..SceneOptions::default()
+    });
+    add_surface_at(
+        &mut scene,
+        node,
+        &node.surface_mesh(RIM_SEGMENTS)?,
+        Isometry3::identity(),
+    )?;
+    scene
+        .to_glb()
+        .map_err(|e| OpossumError::Other(format!("the scene could not be written: {e}")))
+}
+
 /// List every drawable component of a model with its placement, but without its geometry.
 ///
 /// This is the half of a 3D view that is cheap to repeat. A viewer asks for it whenever the model
@@ -241,16 +408,30 @@ pub fn glb_of_node(node: &dyn Volumetric, wavelength: Length) -> OpmResult<Vec<u
 #[allow(clippy::cast_possible_truncation)]
 pub fn manifest_of(placed: &OpmDocument, wavelength: Length) -> OpmResult<SceneManifest> {
     let mut nodes = Vec::new();
-    for_each_drawable(placed, |node, body| {
-        let placement = body.isometry().get_transform();
-        let position = placement.translation.vector;
-        let rotation = placement.rotation.quaternion();
-        let uid = node.node_attr().uuid();
+    for_each_drawable(placed, |drawn| {
+        let (uid, name, geometry, transform) = match drawn {
+            Drawn::Volume(node, body) => (
+                node.node_attr().uuid(),
+                node.name().to_string(),
+                geometry_of(node, &body, wavelength)?,
+                body.isometry().get_transform(),
+            ),
+            Drawn::Surface(node, mesh) => (
+                node.node_attr().uuid(),
+                node.name().to_string(),
+                surface_geometry_of(node, &mesh)?,
+                node.effective_node_iso()
+                    .unwrap_or_else(Isometry::identity)
+                    .get_transform(),
+            ),
+        };
+        let position = transform.translation.vector;
+        let rotation = transform.rotation.quaternion();
         nodes.push(SceneNodeEntry {
             uid,
             group: parent_group_id_or_self(placed.scenery(), uid)?,
-            name: node.name().to_string(),
-            geometry: geometry_of(node, body, wavelength)?,
+            name,
+            geometry,
             position: [position.x as f32, position.y as f32, position.z as f32],
             rotation: [
                 rotation.i as f32,
@@ -293,23 +474,31 @@ fn geometry_of(
     let mesh = body.triangulate(RIM_SEGMENTS)?;
     let mut hash = Fnv1a::new();
     for face in mesh.faces() {
-        for point in face.points() {
-            hash.write_f64(point.x.value);
-            hash.write_f64(point.y.value);
-            hash.write_f64(point.z.value);
-        }
-        for normal in face.normals() {
-            hash.write_f64(normal.x);
-            hash.write_f64(normal.y);
-            hash.write_f64(normal.z);
-        }
-        for triangle in face.triangles() {
-            for corner in triangle {
-                hash.write(&corner.to_le_bytes());
-            }
-        }
+        hash.write_mesh(face);
     }
     hash.write_material(&glass_of(node, body, wavelength)?);
+    Ok(hash.finish())
+}
+
+/// The [`Planar`] counterpart of [`geometry_of`].
+///
+/// # Arguments
+///
+/// - `node`: the component whose looks are wanted
+/// - `mesh`: its meshed surface, already derived
+///
+/// # Returns
+///
+/// A hexadecimal digest of the component's mesh and material.
+///
+/// # Errors
+///
+/// This function never actually fails - [`surface_material_of`] is infallible - but returns
+/// `OpmResult` to read the same as [`geometry_of`] at the one call site both are used from.
+fn surface_geometry_of(node: &dyn Planar, mesh: &SurfaceMesh) -> OpmResult<String> {
+    let mut hash = Fnv1a::new();
+    hash.write_mesh(mesh);
+    hash.write_material(&surface_material_of(node.surface_kind()));
     Ok(hash.finish())
 }
 
@@ -338,6 +527,25 @@ impl Fnv1a {
     /// Fold a number into the hash, little-endian so the result does not depend on the machine.
     fn write_f64(&mut self, value: f64) {
         self.write(&value.to_le_bytes());
+    }
+
+    /// Fold one meshed face's points, normals and triangles into the hash.
+    fn write_mesh(&mut self, mesh: &SurfaceMesh) {
+        for point in mesh.points() {
+            self.write_f64(point.x.value);
+            self.write_f64(point.y.value);
+            self.write_f64(point.z.value);
+        }
+        for normal in mesh.normals() {
+            self.write_f64(normal.x);
+            self.write_f64(normal.y);
+            self.write_f64(normal.z);
+        }
+        for triangle in mesh.triangles() {
+            for corner in triangle {
+                self.write(&corner.to_le_bytes());
+            }
+        }
     }
 
     /// Fold a material into the hash.
@@ -424,16 +632,22 @@ mod test {
     use super::*;
     use opossum_core::{
         analyzers::{AnalyzerType, RayTraceConfig},
+        apertures::{ApertureShape, CircleShape},
+        core_optics::{OpticNode, node_attr::NodePositioning},
+        geometry::body::CLEAR_APERTURE,
         light::lightdata::ray_data_builder::RayDataBuilder,
         material::default_reference_wavelength,
         millimeter,
-        nodes::{CylindricLens, EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort, Wedge},
+        nodes::{
+            CylindricLens, EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort, ThinMirror,
+            Wedge,
+        },
     };
     use uuid::Uuid;
 
-    /// A model holding one of everything: three components that enclose a volume, a source port and
-    /// a detector that do not, and a reference, which is the same lens passed through a second time
-    /// rather than another component.
+    /// A model holding one of everything: three components that enclose a volume, one that is a
+    /// single surface (a detector), a source port that is neither, and a reference, which is the
+    /// same lens passed through a second time rather than another component.
     fn a_bit_of_everything() -> OpmResult<OpmDocument> {
         let mut scenery = NodeGroup::default();
         let source = scenery.add_node(SourcePort::default())?;
@@ -490,14 +704,15 @@ mod test {
             .collect()
     }
 
-    /// Only what encloses a volume is drawn. A source port and a detector have no shape of their
-    /// own, and a reference is the very lens already in the scene, met a second time.
+    /// Only what encloses a volume or is one optical surface is drawn. A source port has no shape
+    /// of its own, and a reference is the very lens already in the scene, met a second time.
     #[test]
-    fn only_the_components_with_a_volume_are_drawn() -> OpmResult<()> {
+    fn only_the_volumes_and_surfaces_are_drawn() -> OpmResult<()> {
         let document = a_bit_of_everything()?;
         let scene = exported(&document)?;
         let drawn = drawn_components(&scene);
-        assert_eq!(drawn.len(), 3);
+        // The lens, the wedge and the cylindric lens enclose a volume; the detector is one surface.
+        assert_eq!(drawn.len(), 4);
         // Every one of them names the component it stands for, so a viewer can point back at it.
         for component in drawn {
             let uid = component["extras"]["uid"]
@@ -511,6 +726,82 @@ mod test {
                 "the scene names a component the model does not have: {uid}"
             );
         }
+        Ok(())
+    }
+
+    /// A mirror is drawn reflective and a detector is drawn as a plain opaque surface - the two
+    /// categories the plan calls for, told apart in the exported glTF by the material name
+    /// `optoscene` gives each preset (`"mirror"`, `"opaque"`).
+    #[test]
+    fn a_mirror_and_a_detector_get_reflective_and_opaque_materials() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let mirror = scenery.add_node(ThinMirror::default())?;
+        let detector = scenery.add_node(EnergyMeter::default())?;
+        scenery.connect_nodes(source, "output_1", mirror, "input_1", millimeter!(50.0))?;
+        scenery.connect_nodes(mirror, "output_1", detector, "input_1", millimeter!(50.0))?;
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(source, RayDataBuilder::default());
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+
+        let scene = exported(&document)?;
+        let material_names: Vec<&str> = scene["materials"]
+            .as_array()
+            .expect("a scene has materials")
+            .iter()
+            .map(|material| material["name"].as_str().expect("a named material"))
+            .collect();
+        assert!(
+            material_names.contains(&"mirror"),
+            "the mirror was not drawn reflective: {material_names:?}"
+        );
+        assert!(
+            material_names.contains(&"opaque"),
+            "the detector was not drawn as a plain opaque surface: {material_names:?}"
+        );
+        Ok(())
+    }
+
+    /// The single-component endpoint works for a surface node exactly as it does for a volume one.
+    #[test]
+    fn a_surface_nodes_own_file_is_a_valid_glb() -> OpmResult<()> {
+        let mut mirror = ThinMirror::default();
+        mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        let surface = mirror.as_surface().expect("a mirror is one surface");
+        let glb = glb_of_surface_node(surface)?;
+        assert!(glb.starts_with(b"glTF"));
+        Ok(())
+    }
+
+    /// The manifest's geometry hash for a surface node reacts to its clear aperture exactly as a
+    /// volume node's does to its curvature or thickness - the other half of the property this
+    /// module reads to mesh a surface at all.
+    #[test]
+    fn changing_a_surfaces_aperture_changes_its_geometry() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let mirror = scenery.add_node(ThinMirror::default())?;
+        scenery.connect_nodes(source, "output_1", mirror, "input_1", millimeter!(50.0))?;
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(source, RayDataBuilder::default());
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+
+        let before = manifest(&document)?;
+        assert_eq!(before.nodes.len(), 1);
+
+        let smaller: ApertureShape = CircleShape::new(millimeter!(5.0))?.into();
+        document.scenery_mut().with_node_attr_mut(mirror, |attr| {
+            attr.set_property(CLEAR_APERTURE, smaller.into())
+        })??;
+
+        let after = manifest(&document)?;
+        assert_eq!(after.nodes.len(), 1);
+        assert_ne!(
+            before.nodes[0].geometry, after.nodes[0].geometry,
+            "shrinking the mirror's clear aperture did not change its reported geometry"
+        );
         Ok(())
     }
 
@@ -554,14 +845,25 @@ mod test {
     }
 
     /// Glass is only glass to a renderer if it carries an index of refraction.
+    ///
+    /// `a_bit_of_everything`'s scene now also draws a detector, whose material is a plain opaque
+    /// one and rightly carries no index of refraction at all - this only inspects the materials
+    /// that state one in the first place, and separately pins down that there is at least one.
     #[test]
     fn glass_is_exported_with_its_refractive_index() -> OpmResult<()> {
         let document = a_bit_of_everything()?;
         let scene = exported(&document)?;
-        for material in scene["materials"]
+        let materials_with_ior: Vec<_> = scene["materials"]
             .as_array()
             .expect("a scene has materials")
-        {
+            .iter()
+            .filter(|material| !material["extensions"]["KHR_materials_ior"].is_null())
+            .collect();
+        assert!(
+            !materials_with_ior.is_empty(),
+            "the scene has three glass components, but none stated a refractive index"
+        );
+        for material in materials_with_ior {
             let ior = &material["extensions"]["KHR_materials_ior"]["ior"];
             assert!(
                 ior.as_f64().is_some_and(|index| index >= 1.0),

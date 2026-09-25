@@ -9,11 +9,11 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType},
+    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind},
     error::{OpmResult, OpossumError},
     geometry::geo_surface::GeoSurfaceRef,
     light::{LightData, LightResult},
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, create_surface_properties},
     properties::{Properties, Proptype},
     reporting::node_report::{NodeReport, NodeReportResult},
     utils::geom_transformation::Isometry,
@@ -64,6 +64,7 @@ impl Default for WaveFront {
                 false.into(),
             )
             .unwrap();
+        create_surface_properties(&mut node_attr).unwrap();
         let mut wf = Self {
             light_data: None,
             node_attr,
@@ -98,7 +99,15 @@ impl WaveFront {
     }
 }
 
+impl Planar for WaveFront {
+    fn surface_kind(&self) -> SurfaceKind {
+        SurfaceKind::Detector
+    }
+}
 impl OpticNode for WaveFront {
+    fn as_surface(&self) -> Option<&dyn Planar> {
+        Some(self)
+    }
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }

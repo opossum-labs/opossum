@@ -1281,21 +1281,28 @@ mod test {
         }
         Ok(())
     }
-    /// Only the nodes that really enclose a medium may present themselves as [`Volumetric`].
+    /// Only the nodes that really enclose a medium or are one optical surface may present
+    /// themselves as [`Volumetric`] or [`Planar`].
     ///
-    /// "Node with a volume" is stated twice: by this capability and by the transversal extent of
-    /// its medium ([`CLEAR_APERTURE`]), a property such a node carries. Both have to mean the same
-    /// set of node types, otherwise a node ends up with a body whose extent is undefined.
+    /// "Node with a transversal extent" is stated twice: by one of these two capabilities and by
+    /// the [`CLEAR_APERTURE`] property such a node carries. Both have to mean the same set of node
+    /// types, otherwise a node ends up with an extent that is undefined, and no node may claim both
+    /// capabilities at once - a lens is not also its own mirror.
     #[test]
-    fn the_volume_capability_matches_the_volume_properties() -> OpmResult<()> {
+    fn the_clear_aperture_property_matches_exactly_the_volume_and_surface_nodes() -> OpmResult<()> {
         for (node_type, _) in node_types() {
             let optic_ref = create_node_ref(node_type)?;
             let is_volumetric = optic_ref.as_volume().is_some();
+            let is_planar = optic_ref.as_surface().is_some();
+            assert!(
+                !(is_volumetric && is_planar),
+                "node type '{node_type}' presents itself as both volumetric and planar"
+            );
             assert_eq!(
                 optic_ref.node_attr().get_property(CLEAR_APERTURE).is_ok(),
-                is_volumetric,
+                is_volumetric || is_planar,
                 "node type '{node_type}' declares '{CLEAR_APERTURE}' or presents itself as \
-                 volumetric, but not both"
+                 volumetric or planar, but not both"
             );
         }
         Ok(())
@@ -1322,6 +1329,24 @@ mod test {
                     "a face of node type '{node_type}' came out without any triangles"
                 );
             }
+        }
+        Ok(())
+    }
+    /// The [`Planar`] counterpart of [`every_volume_node_can_be_meshed_in_its_default_state`].
+    #[test]
+    fn every_surface_node_can_be_meshed_in_its_default_state() -> OpmResult<()> {
+        for (node_type, _) in node_types() {
+            let optic_ref = create_node_ref(node_type)?;
+            let Some(surface) = optic_ref.as_surface() else {
+                continue;
+            };
+            let mesh = surface.surface_mesh(32).map_err(|e| {
+                OpossumError::Other(format!("node type '{node_type}' cannot be meshed: {e}"))
+            })?;
+            assert!(
+                !mesh.triangles().is_empty(),
+                "the surface of node type '{node_type}' came out without any triangles"
+            );
         }
         Ok(())
     }

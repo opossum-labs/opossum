@@ -13,6 +13,7 @@ use crate::{
     core_optics::{
         NodeAttrExt, OpticPorts, PortType,
         node_attr::{HasNodeAttr, NodePositioning},
+        planar::Planar,
         volumetric::Volumetric,
     },
     error::OpmResult,
@@ -174,6 +175,16 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     ///
     /// `Some(&dyn Volumetric)` if the element represents a medium, or `None` otherwise.
     fn as_volume(&self) -> Option<&dyn Volumetric> {
+        None
+    }
+
+    /// Return this node as a [`Planar`] element, if it is one optical surface rather than a body of
+    /// material.
+    ///
+    /// # Returns
+    ///
+    /// `Some(&dyn Planar)` if the element is a single surface, or `None` otherwise.
+    fn as_surface(&self) -> Option<&dyn Planar> {
         None
     }
 

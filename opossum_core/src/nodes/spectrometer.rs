@@ -8,10 +8,10 @@ use crate::{
         AnalyzerKind, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt},
+    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, SurfaceKind},
     error::OpmResult,
     light::{LightData, Rays, Spectrum},
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, create_surface_properties},
     properties::{Properties, Proptype},
     reporting::node_report::{NodeReport, NodeReportResult},
 };
@@ -79,6 +79,7 @@ impl Default for Spectrometer {
                 SpectrometerType::Ideal.into(),
             )
             .unwrap();
+        create_surface_properties(&mut node_attr).unwrap();
         let mut spect = Self {
             light_data: None,
             node_attr,
@@ -153,7 +154,15 @@ impl Spectrometer {
             })
     }
 }
+impl Planar for Spectrometer {
+    fn surface_kind(&self) -> SurfaceKind {
+        SurfaceKind::Detector
+    }
+}
 impl OpticNode for Spectrometer {
+    fn as_surface(&self) -> Option<&dyn Planar> {
+        Some(self)
+    }
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }

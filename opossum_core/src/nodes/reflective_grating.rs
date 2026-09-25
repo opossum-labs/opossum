@@ -6,11 +6,12 @@ use crate::{
         propagation_strategy::MissedSurfaceStrategy, raytrace::AnalysisRayTrace,
     },
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, node_attr::HasNodeAttr,
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind,
+        node_attr::HasNodeAttr,
     },
     error::{OpmResult, OpossumError},
     light::{LightData, LightRays, LightResult, Rays},
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, create_surface_properties},
     num_per_mm,
     properties::{Proptype, validator::Validator},
     radian,
@@ -79,6 +80,7 @@ impl Default for ReflectiveGrating {
                 (-1).into(),
             )
             .unwrap();
+        create_surface_properties(&mut node_attr).unwrap();
         let mut g = Self { node_attr };
         g.update_surfaces().unwrap();
         g
@@ -259,7 +261,15 @@ impl AnalysisRayTrace for ReflectiveGrating {
     }
 }
 
+impl Planar for ReflectiveGrating {
+    fn surface_kind(&self) -> SurfaceKind {
+        SurfaceKind::Reflective
+    }
+}
 impl OpticNode for ReflectiveGrating {
+    fn as_surface(&self) -> Option<&dyn Planar> {
+        Some(self)
+    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
     }

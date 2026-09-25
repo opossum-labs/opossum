@@ -18,11 +18,12 @@ The entry needs a connected backend: the view asks the backend for the model as 
 
 ## What is drawn
 
-Every component that **encloses a volume** — lenses, wedges, cylindric lenses. Components with no
-shape of their own are left out: a detector or an energy meter measures light without occupying
-space, a source port is where light begins rather than a thing, and a reference node is the same
-component passed through a second time rather than a second component. The count in the toolbar tells
-you how many are drawn.
+Every component that **encloses a volume** — lenses, wedges, cylindric lenses — and every component
+that is **one optical surface** — mirrors (flat and parabolic), gratings, beam splitters, filters,
+paraxial surfaces, and the detectors (energy meter, fluence detector, spot diagram, wavefront
+monitor, spectrometer). Components with no shape of their own are still left out: a source port is
+where light begins rather than a thing, and a reference node is the same component passed through a
+second time rather than a second component. The count in the toolbar tells you how many are drawn.
 
 A component only knows where it is once the optical axis has been traced, so the model needs an
 analyzer that places its nodes — a ray trace. Without one there is nothing to place, and the view
@@ -79,6 +80,11 @@ That index is always taken at **1053 nm**, the design wavelength of the laser sy
 built around. A drawing has to pick some colour of light to render glass at, and this one does not
 follow the analyzer or the default wavelength in the settings. A material that cannot state an index
 at 1053 nm is drawn as plain glass, and the substitution is noted in the log.
+
+A mirror, a grating and a beam splitter are drawn reflective. A filter or a paraxial surface is
+drawn as a faint, translucent plane. A detector is drawn as a plain, matte surface, deliberately
+distinct from glass and from a mirror, so a setup reads at a glance which components measure the
+light rather than shape or redirect it.
 
 The reference grid is off: an optical setup is centimetres to metres across, and a grid sized for a
 general-purpose 3D scene would swamp it rather than give it a floor.

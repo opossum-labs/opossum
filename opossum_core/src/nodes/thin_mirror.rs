@@ -7,13 +7,14 @@ use crate::{
     },
     coatings::CoatingConstantR,
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, node_attr::HasNodeAttr,
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind,
+        node_attr::HasNodeAttr,
     },
     error::{OpmResult, OpossumError},
     geometry::{Plane, Sphere, geo_surface::GeoSurfaceRef},
     light::{LightData, LightResult, Rays, light_result::LightRays},
     meter, millimeter,
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, create_surface_properties},
     percent,
     properties::{Proptype, validator::Validator},
     radian,
@@ -64,6 +65,7 @@ impl Default for ThinMirror {
                 Proptype::Curvature(millimeter!(f64::INFINITY)),
             )
             .unwrap();
+        create_surface_properties(&mut node_attr).unwrap();
 
         let mut m = Self { node_attr };
         m.update_surfaces().unwrap();
@@ -111,7 +113,15 @@ impl ThinMirror {
         Ok(self)
     }
 }
+impl Planar for ThinMirror {
+    fn surface_kind(&self) -> SurfaceKind {
+        SurfaceKind::Reflective
+    }
+}
 impl OpticNode for ThinMirror {
+    fn as_surface(&self) -> Option<&dyn Planar> {
+        Some(self)
+    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
         let Ok(Proptype::Curvature(curvature)) = self.node_attr.get_property("curvature") else {

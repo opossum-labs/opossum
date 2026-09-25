@@ -3,7 +3,7 @@ use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
     helper_functions::{analyzer_mut_or_404, parent_group_id_or_self},
-    scene_export::{glb_of_node, manifest_of, scene_of},
+    scene_export::{glb_of_node, glb_of_surface_node, manifest_of, scene_of},
     sse_logger::SENDER,
     undo::{Command, PatchNode, RepositionAnalyzer, SetViewport, capture_old_node_request},
 };
@@ -158,7 +158,7 @@ async fn get_scene_manifest(
     responses(
         (status = 200, description = "glTF binary of the component", body = Vec<u8>,
             content_type = GLB_MEDIA_TYPE),
-        (status = 404, description = "no component of that uuid encloses a volume", body = ErrorResponse),
+        (status = 404, description = "no component of that uuid encloses a volume or is one optical surface", body = ErrorResponse),
         (status = 400, description = "the component could not be drawn", body = ErrorResponse)
     )
 )]
@@ -184,10 +184,13 @@ async fn get_scene_node(
     // a new hash for it. The viewer would refetch, receive the old mesh, and appear to ignore the
     // edit entirely.
     node.update_surfaces()?;
-    let volume = node
-        .as_volume()
-        .ok_or_else(BackEndErrorResponse::not_found)?;
-    let glb = glb_of_node(volume, default_reference_wavelength())?;
+    let glb = if let Some(volume) = node.as_volume() {
+        glb_of_node(volume, default_reference_wavelength())?
+    } else if let Some(surface) = node.as_surface() {
+        glb_of_surface_node(surface)?
+    } else {
+        return Err(BackEndErrorResponse::not_found());
+    };
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
 #[utoipa::path(
@@ -1718,18 +1721,19 @@ mod test {
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     }
 
-    /// A node that exists but encloses no volume has no geometry to hand out - a detector is a
-    /// node, not a shape.
+    /// A node that exists but is neither a volume nor a surface has no geometry to hand out - a
+    /// source port is where light begins, not a shape. A detector, by contrast, *is* one surface and
+    /// is served just like a mirror or a lens (see `scene_export`'s own tests for that path).
     #[actix_web::test]
-    async fn a_component_without_a_volume_is_not_found() {
+    async fn a_component_with_no_shape_is_not_found() {
         let mut scenery = opossum_core::nodes::NodeGroup::default();
-        let detector = scenery
-            .add_node(opossum_core::nodes::EnergyMeter::default())
+        let source = scenery
+            .add_node(opossum_core::nodes::SourcePort::default())
             .unwrap();
         let app_state = Data::new(AppState::default());
         *app_state.document.lock() = OpmDocument::new(scenery);
 
-        let resp = request_scene_node(&app_state, detector).await;
+        let resp = request_scene_node(&app_state, source).await;
 
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     }

@@ -12,11 +12,13 @@ use crate::{
         AnalyzerKind, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, node_attr::HasNodeAttr},
+    core_optics::{
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, SurfaceKind, node_attr::HasNodeAttr,
+    },
     error::OpmResult,
     joule,
     light::LightData,
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, create_surface_properties},
     properties::{Properties, Proptype},
     reporting::{
         node_report::{NodeReport, NodeReportResult},
@@ -99,6 +101,8 @@ impl Default for EnergyMeter {
                 Metertype::default().into(),
             )
             .expect("Hardcoded property creation must not fail");
+        create_surface_properties(&mut node_attr)
+            .expect("Hardcoded property creation must not fail");
         let mut em = Self {
             light_data: None,
             node_attr,
@@ -180,7 +184,15 @@ impl EnergyMeter {
     }
 }
 
+impl Planar for EnergyMeter {
+    fn surface_kind(&self) -> SurfaceKind {
+        SurfaceKind::Detector
+    }
+}
 impl OpticNode for EnergyMeter {
+    fn as_surface(&self) -> Option<&dyn Planar> {
+        Some(self)
+    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.update_flat_single_surfaces()
     }

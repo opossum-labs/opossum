@@ -8,12 +8,12 @@ use crate::{
         raytrace::AnalysisRayTrace,
     },
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt,
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, SurfaceKind,
         hit_map::fluence_estimator::FluenceEstimator,
     },
     error::OpmResult,
     light::LightData,
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, create_surface_properties},
     properties::{Properties, Proptype},
     reporting::node_report::{NodeReport, NodeReportResult},
 };
@@ -64,6 +64,7 @@ impl Default for FluenceDetector {
                 FluenceEstimator::Voronoi.into(),
             )
             .unwrap();
+        create_surface_properties(&mut node_attr).unwrap();
         let mut fld = Self {
             node_attr,
             apodization_warning: false,
@@ -84,7 +85,15 @@ impl FluenceDetector {
         fld
     }
 }
+impl Planar for FluenceDetector {
+    fn surface_kind(&self) -> SurfaceKind {
+        SurfaceKind::Detector
+    }
+}
 impl OpticNode for FluenceDetector {
+    fn as_surface(&self) -> Option<&dyn Planar> {
+        Some(self)
+    }
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }

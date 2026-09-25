@@ -6,14 +6,14 @@ mod analysis_raytrace;
 
 use crate::{
     analyzers::{AnalyzerType, propagation_strategy::MissedSurfaceStrategy},
-    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType},
+    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind},
     error::{OpmResult, OpossumError},
     geometry::{Plane, geo_surface::GeoSurfaceRef},
     light::{
         LightData, Rays,
         spectrum::{Spectrum, merge_spectra},
     },
-    nodes::{NodeRegistration, ideal_filter::SpectralFilterBuilder},
+    nodes::{NodeRegistration, create_surface_properties, ideal_filter::SpectralFilterBuilder},
     properties::{Proptype, validator::Validator},
     utils::{default_from_name::DefaultFromName, geom_transformation::Isometry},
 };
@@ -164,6 +164,7 @@ impl Default for BeamSplitter {
                 SplittingConfigBuilder::FixedRatio(0.5).into(),
             )
             .unwrap();
+        create_surface_properties(&mut node_attr).unwrap();
         let mut bs = Self { node_attr };
         bs.update_surfaces().unwrap();
         bs
@@ -379,7 +380,15 @@ impl BeamSplitter {
         ))
     }
 }
+impl Planar for BeamSplitter {
+    fn surface_kind(&self) -> SurfaceKind {
+        SurfaceKind::Reflective
+    }
+}
 impl OpticNode for BeamSplitter {
+    fn as_surface(&self) -> Option<&dyn Planar> {
+        Some(self)
+    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
 

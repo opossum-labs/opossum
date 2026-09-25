@@ -7,12 +7,13 @@ use crate::{
         raytrace::AnalysisRayTrace,
     },
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, optic_surface::OpticSurface,
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind,
+        optic_surface::OpticSurface,
     },
     error::OpmResult,
     light::{LightData, LightResult, Rays},
     nanometer,
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, create_surface_properties},
     properties::{Properties, Proptype},
     reporting::{
         node_report::{NodeReport, NodeReportResult},
@@ -76,6 +77,8 @@ impl Default for SpotDiagram {
                 false.into(),
             )
             .expect("Hardcoded property creation must not fail");
+        create_surface_properties(&mut node_attr)
+            .expect("Hardcoded property creation must not fail");
         let mut sd = Self {
             light_data: None,
             node_attr,
@@ -101,7 +104,15 @@ impl SpotDiagram {
         Ok(sd)
     }
 }
+impl Planar for SpotDiagram {
+    fn surface_kind(&self) -> SurfaceKind {
+        SurfaceKind::Detector
+    }
+}
 impl OpticNode for SpotDiagram {
+    fn as_surface(&self) -> Option<&dyn Planar> {
+        Some(self)
+    }
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }

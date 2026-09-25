@@ -80,8 +80,8 @@ use std::{collections::HashSet, sync::LazyLock};
 /// transversally ([`CLEAR_APERTURE`]).
 ///
 /// Declaring it from one place keeps the node types that call this in sync with each other, and
-/// they are exactly those implementing [`Volumetric`](crate::core_optics::Volumetric) — which is
-/// what the test in that module checks.
+/// together with [`create_surface_properties`] they are exactly the node types that declare
+/// [`CLEAR_APERTURE`] at all — which is what the test in `volumetric.rs` checks.
 ///
 /// Creates standard volumetric properties for a node.
 ///
@@ -96,6 +96,32 @@ pub fn create_volume_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
     node_attr.create_property_with_validator(
         CLEAR_APERTURE,
         "transversal extent of the medium",
+        Validator::ApertureDelimitsRegion,
+        default_clear_aperture().into(),
+    )
+}
+
+/// Declare the property every node that is one optical surface carries: how far that surface
+/// extends transversally ([`CLEAR_APERTURE`]).
+///
+/// The sibling of [`create_volume_properties`] for nodes implementing
+/// [`Planar`](crate::core_optics::Planar) instead of
+/// [`Volumetric`](crate::core_optics::Volumetric) - a mirror or a detector has no second surface to
+/// bound a medium between, but its one surface still needs a transversal extent to be drawn or
+/// hit-tested at all, and it is declared under the very same property name so the two capabilities
+/// share one meaning for it.
+///
+/// # Arguments
+///
+/// * `node_attr` - the attributes of the node under construction.
+///
+/// # Errors
+///
+/// This function returns an error if the property is already declared.
+pub fn create_surface_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
+    node_attr.create_property_with_validator(
+        CLEAR_APERTURE,
+        "transversal extent of the surface",
         Validator::ApertureDelimitsRegion,
         default_clear_aperture().into(),
     )
