@@ -6,8 +6,8 @@ use crate::{
         propagation_strategy::MissedSurfaceStrategy, raytrace::AnalysisRayTrace,
     },
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind,
-        node_attr::HasNodeAttr,
+        Appearance, NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, PortType,
+        SurfaceFinish, SurfaceKind, node_attr::HasNodeAttr,
     },
     error::{OpmResult, OpossumError},
     light::{LightData, LightRays, LightResult, Rays},
@@ -265,6 +265,20 @@ impl Planar for ReflectiveGrating {
     fn surface_kind(&self) -> SurfaceKind {
         SurfaceKind::Reflective
     }
+
+    /// Override the default appearance to show iridescent diffraction colours.
+    ///
+    /// A grating is physically [`SurfaceKind::Reflective`] (it redirects light), but its
+    /// distinctive look — the rainbow pattern caused by its periodic structure — is captured by
+    /// [`SurfaceFinish::Iridescent`]. The two are independent: changing `appearance` here does not
+    /// affect any ray-tracing result; it only changes how the grating is drawn in the 3-D view.
+    fn appearance(&self) -> Appearance {
+        Appearance {
+            color: [0.85, 0.85, 0.9, 1.0],
+            roughness: 0.15,
+            finish: SurfaceFinish::Iridescent,
+        }
+    }
 }
 impl OpticNode for ReflectiveGrating {
     fn as_surface(&self) -> Option<&dyn Planar> {
@@ -280,7 +294,7 @@ mod test {
     use super::*;
     use crate::{
         analyzers::{RayTraceConfig, energy::EnergyConfig},
-        core_optics::{PortType, node_attr::NodePositioning},
+        core_optics::{PortType, SurfaceFinish, node_attr::NodePositioning},
         degree, joule,
         light::{Ray, Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer,
@@ -498,5 +512,25 @@ mod test {
             assert!(false, "could not get LightData");
         }
         Ok(())
+    }
+
+    /// A `ReflectiveGrating` overrides the default appearance with an iridescent finish.
+    ///
+    /// The grating is physically reflective (its `surface_kind()` is `Reflective`) but the
+    /// visual finish is `Iridescent`, reflecting its diffraction-colour appearance.
+    #[test]
+    fn grating_appearance_is_iridescent() {
+        let grating = ReflectiveGrating::default();
+        assert_eq!(
+            grating.appearance().finish,
+            SurfaceFinish::Iridescent,
+            "a ReflectiveGrating must report SurfaceFinish::Iridescent"
+        );
+        // Physics (surface_kind) must remain Reflective regardless of the cosmetic override.
+        assert_eq!(
+            grating.surface_kind(),
+            SurfaceKind::Reflective,
+            "the physical surface_kind must still be Reflective"
+        );
     }
 }

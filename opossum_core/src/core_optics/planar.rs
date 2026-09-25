@@ -15,7 +15,7 @@
 
 use crate::{
     apertures::{Aperture, ApertureType},
-    core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, PortType},
+    core_optics::{Appearance, NodeAttrExt, OpticNode, OpticNodeExt, PortType, SurfaceFinish},
     error::{OpmResult, OpossumError},
     geometry::{SurfaceMesh, body::CLEAR_APERTURE},
     properties::Proptype,
@@ -39,6 +39,44 @@ pub trait Planar: OpticNode {
     /// kind of surface to look at, and the compiler makes sure a new [`Planar`] node type has to
     /// decide which it is instead of silently falling back to some default.
     fn surface_kind(&self) -> SurfaceKind;
+
+    /// The cosmetic appearance of this surface for 3-D rendering.
+    ///
+    /// This method has a default implementation derived from [`Planar::surface_kind`], whereas
+    /// `surface_kind` itself has no default.  The asymmetry is deliberate:
+    ///
+    /// * `surface_kind` governs analysers and must be answered explicitly by every new
+    ///   implementor so the compiler forces the decision.
+    /// * `appearance` is purely cosmetic — a wrong value only looks wrong in the rendered scene
+    ///   and never miscomputes anything — so a sensible default based on `surface_kind` is safe.
+    ///
+    /// Override this method only when a node needs a non-standard look.  For example, a
+    /// [`ReflectiveGrating`](crate::nodes::ReflectiveGrating) is physically
+    /// [`SurfaceKind::Reflective`] but looks
+    /// [`SurfaceFinish::Iridescent`](crate::core_optics::SurfaceFinish::Iridescent).
+    ///
+    /// # Returns
+    ///
+    /// An [`Appearance`] derived from the node's [`SurfaceKind`], or a node-specific override.
+    fn appearance(&self) -> Appearance {
+        match self.surface_kind() {
+            SurfaceKind::Reflective => Appearance {
+                color: [0.9, 0.9, 0.92, 1.0],
+                roughness: 0.05,
+                finish: SurfaceFinish::Reflective,
+            },
+            SurfaceKind::Transmissive => Appearance {
+                color: [0.85, 0.9, 0.85, 0.4],
+                roughness: 0.5,
+                finish: SurfaceFinish::Transmissive,
+            },
+            SurfaceKind::Detector => Appearance {
+                color: [0.25, 0.25, 0.28, 1.0],
+                roughness: 0.7,
+                finish: SurfaceFinish::Opaque,
+            },
+        }
+    }
 
     /// Mesh this node's one surface over its [`CLEAR_APERTURE`].
     ///
@@ -117,7 +155,8 @@ pub enum SurfaceKind {
 mod test {
     use super::*;
     use crate::{
-        core_optics::node_attr::NodePositioning, nodes::ThinMirror,
+        core_optics::node_attr::NodePositioning,
+        nodes::{EnergyMeter, IdealFilter, ThinMirror},
         utils::geom_transformation::Isometry,
     };
 
@@ -163,5 +202,56 @@ mod test {
             "the surface mesh must be independent of the node's placement"
         );
         Ok(())
+    }
+
+    /// A `ThinMirror` (physically Reflective) gets a Reflective finish by default.
+    #[test]
+    fn reflective_surface_kind_gives_reflective_finish() {
+        let mirror = ThinMirror::default();
+        let app = mirror.appearance();
+        assert_eq!(
+            app.finish,
+            SurfaceFinish::Reflective,
+            "a ThinMirror must default to SurfaceFinish::Reflective"
+        );
+        assert_eq!(
+            app.color,
+            [0.9, 0.9, 0.92, 1.0_f32],
+            "reflective surface colour mismatch"
+        );
+    }
+
+    /// An `IdealFilter` (physically Transmissive) gets a Transmissive finish by default.
+    #[test]
+    fn transmissive_surface_kind_gives_transmissive_finish() {
+        let filter = IdealFilter::default();
+        let app = filter.appearance();
+        assert_eq!(
+            app.finish,
+            SurfaceFinish::Transmissive,
+            "an IdealFilter must default to SurfaceFinish::Transmissive"
+        );
+        assert_eq!(
+            app.color,
+            [0.85, 0.9, 0.85, 0.4_f32],
+            "transmissive surface colour mismatch"
+        );
+    }
+
+    /// An `EnergyMeter` (physically Detector) gets an Opaque finish by default.
+    #[test]
+    fn detector_surface_kind_gives_opaque_finish() {
+        let meter = EnergyMeter::default();
+        let app = meter.appearance();
+        assert_eq!(
+            app.finish,
+            SurfaceFinish::Opaque,
+            "an EnergyMeter must default to SurfaceFinish::Opaque"
+        );
+        assert_eq!(
+            app.color,
+            [0.25, 0.25, 0.28, 1.0_f32],
+            "detector surface colour mismatch"
+        );
     }
 }

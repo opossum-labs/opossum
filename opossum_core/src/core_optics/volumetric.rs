@@ -70,6 +70,22 @@ pub trait Volumetric: OpticNode {
         };
         Ok(material.clone())
     }
+
+    /// The base RGB colour used when rendering the glass body of this volume node.
+    ///
+    /// Returns a linear RGB triple (components in \[0, 1\]) that represents a neutral,
+    /// slightly blue-tinted glass tint. This is the cosmetic default for all volume nodes and
+    /// corresponds to the `GLASS_COLOUR` constant that the renderer uses; a node type may
+    /// override it to signal a differently tinted medium (e.g. a coloured filter glass or a
+    /// rare-earth-doped crystal).
+    ///
+    /// # Returns
+    ///
+    /// A `[f32; 3]` linear RGB colour triple.
+    fn glass_color(&self) -> [f32; 3] {
+        [0.9, 0.95, 1.0]
+    }
+
     /// Return the volume enclosed by the two surfaces of this node as a
     /// [`Body`](crate::geometry::body::Body).
     ///
@@ -1556,5 +1572,19 @@ mod test {
             epsilon = 1e-12
         );
         Ok(())
+    }
+
+    /// The default `glass_color` for a `Lens` is the neutral glass tint [0.9, 0.95, 1.0].
+    ///
+    /// This pins the value that the renderer's `GLASS_COLOUR` constant previously hard-coded; any
+    /// future change to the default must update this test consciously.
+    #[test]
+    fn glass_color_returns_neutral_glass_tint() {
+        let lens = Lens::default();
+        assert_eq!(
+            lens.glass_color(),
+            [0.9_f32, 0.95, 1.0],
+            "default glass_color must be the neutral glass tint [0.9, 0.95, 1.0]"
+        );
     }
 }
