@@ -3,9 +3,10 @@
 
 use crate::{
     analyzers::energy::AnalysisEnergy,
+    apertures::ApertureShape,
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType, Volumetric},
     error::{OpmResult, OpossumError},
-    geometry::{Plane, Sphere, geo_surface::GeoSurfaceRef},
+    geometry::{Plane, Sphere, body::CLEAR_APERTURE, geo_surface::GeoSurfaceRef},
     material::{MATERIAL, Material},
     meter, millimeter,
     nodes::{NodeRegistration, create_volume_properties},
@@ -236,6 +237,7 @@ impl OpticNode for Lens {
         else {
             return Err(OpossumError::Analysis("cannot read front curvature".into()));
         };
+        check_curvature_fits_circular_aperture(*front_curvature, &self.node_attr, "front")?;
         let (front_geosurface, anchor_point_iso_front) = if front_curvature.is_infinite() {
             (
                 GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso)))),
@@ -262,6 +264,7 @@ impl OpticNode for Lens {
         else {
             return Err(OpossumError::Analysis("cannot read rear curvature".into()));
         };
+        check_curvature_fits_circular_aperture(*rear_curvature, &self.node_attr, "rear")?;
         let Ok(Proptype::Length(center_thickness)) =
             self.node_attr.get_property("center thickness")
         else {
@@ -299,6 +302,61 @@ impl OpticNode for Lens {
         )
     }
 }
+
+/// Reject a curvature radius that cannot span its own clear aperture.
+///
+/// A spherical surface curves back on itself at its own radius of curvature - beyond that distance
+/// from the axis it no longer lies above the transversal plane at all (see
+/// [`curved_local_z`](crate::geometry::geo_surface)'s doc comment). A curvature radius smaller in
+/// magnitude than the clear aperture's radius therefore describes a surface that cannot reach the
+/// rim of its own aperture: not a shape that merely fails to mesh later, but one that was never
+/// geometrically possible. Equality is allowed - a curvature radius exactly equal to the aperture
+/// radius is a hemisphere, the tightest valid case, and `curved_local_z`'s own tolerance is what
+/// lets that exact case actually be meshed.
+///
+/// Checked here, as the first thing [`Lens::update_surfaces`] does with each curvature, rather than
+/// expressed as a [`Validator`]: `Validator::validate` sees only the one property being set, never a
+/// sibling one, so a curvature-versus-aperture comparison cannot be written as one. Only a circular
+/// clear aperture is checked, which is the case this exists for - see `known_issue_update_surfaces.md`
+/// and C1 of the plan this belongs to, both about exactly this scenario - and the only
+/// [`ApertureShape`] with a single radius to compare against; a non-circular clear aperture is left
+/// to fail at meshing time as before.
+///
+/// # Arguments
+///
+/// * `curvature` - the front or rear curvature radius, as read from the node's properties.
+/// * `node_attr` - the node's attributes, to read the clear aperture from.
+/// * `surface_name` - `"front"` or `"rear"`, to name the offending surface in the error.
+///
+/// # Errors
+///
+/// Returns an error if the clear aperture is circular and `curvature`'s magnitude is smaller than
+/// its radius.
+fn check_curvature_fits_circular_aperture(
+    curvature: Length,
+    node_attr: &NodeAttr,
+    surface_name: &str,
+) -> OpmResult<()> {
+    if curvature.is_infinite() {
+        // Flat - every clear aperture fits under a plane.
+        return Ok(());
+    }
+    let Ok(Proptype::Aperture(ApertureShape::BinaryCircle(circle))) =
+        node_attr.get_property(CLEAR_APERTURE)
+    else {
+        return Ok(());
+    };
+    let aperture_radius = circle.radius();
+    if curvature.abs() < aperture_radius {
+        return Err(OpossumError::Properties(format!(
+            "the {surface_name} curvature radius ({curvature:?}) is smaller than the clear \
+             aperture radius ({aperture_radius:?}): the surface cannot reach the rim of its own \
+             aperture"
+        )));
+    }
+    Ok(())
+}
+
 impl AnalysisEnergy for Lens {}
 // impl SDF for Lens
 // {
@@ -317,7 +375,7 @@ mod test {
             energy::{AnalysisEnergy, EnergyConfig},
             raytrace::AnalysisRayTrace,
         },
-        apertures::ApertureShape,
+        apertures::{ApertureShape, CircleShape},
         core_optics::{NodeAttrExt, node_attr::NodePositioning},
         distributions::position::Hexapolar,
         joule,
@@ -1126,6 +1184,56 @@ mod test {
         } else {
             panic!("Expected LightData::Geometric at output_1");
         }
+        Ok(())
+    }
+
+    /// A lens whose curvature radius exactly equals its clear aperture radius is a hemisphere - the
+    /// tightest a spherical surface can be without folding back past its own equator. Geometrically
+    /// this is exactly valid (the sag at the rim is the radius itself, the surface just reaches flat
+    /// tangent to the aperture plane there), so this pins down whether it can actually be meshed, or
+    /// whether the floating-point boundary in `curved_local_z` rejects it as "not reaching as far
+    /// out as" the aperture. See `known_issue_update_surfaces.md`'s sibling investigation notes.
+    #[test]
+    fn a_hemisphere_lens_can_be_meshed() -> OpmResult<()> {
+        let hemisphere_radius = millimeter!(25.0);
+        let aperture: Proptype = ApertureShape::from(CircleShape::new(hemisphere_radius)?).into();
+
+        // Plano-convex: one flat face, one exact hemisphere - the centre thickness has to reach
+        // that one sag (25 mm) or the hemisphere's rim would poke out past the flat face.
+        let mut plano_convex = Lens::new(
+            "plano-convex hemisphere",
+            millimeter!(f64::INFINITY),
+            -hemisphere_radius,
+            hemisphere_radius,
+            RefrIndexConst::new(1.5)?,
+        )?;
+        plano_convex
+            .node_attr
+            .set_property("clear aperture", aperture.clone())?;
+        plano_convex
+            .as_volume()
+            .expect("a lens is volumetric")
+            .volume_body()?
+            .triangulate(64)?;
+
+        // Bi-convex: both faces an exact hemisphere, so the centre thickness must reach both sags
+        // (25 mm each) or the two surfaces would cross inside the lens.
+        let mut bi_convex = Lens::new(
+            "bi-convex hemisphere",
+            hemisphere_radius,
+            -hemisphere_radius,
+            millimeter!(50.0),
+            RefrIndexConst::new(1.5)?,
+        )?;
+        bi_convex
+            .node_attr
+            .set_property("clear aperture", aperture)?;
+        bi_convex
+            .as_volume()
+            .expect("a lens is volumetric")
+            .volume_body()?
+            .triangulate(64)?;
+
         Ok(())
     }
 }
