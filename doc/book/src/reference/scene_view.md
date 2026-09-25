@@ -41,8 +41,10 @@ Rays are not drawn yet.
 | Drag with the right mouse button | Pan |
 | Click a component | Select it; a box is drawn around it |
 | Click empty space | Clear the selection |
+| Click a gizmo axis | Snap the camera to look straight along that axis |
 
-Dragging never selects, so orbiting past a component does not pick it up by accident.
+Dragging never selects, so orbiting past a component does not pick it up by accident. The optical
+table is not selectable: clicking it clears the selection, the same as clicking empty space.
 
 ## The toolbar
 
@@ -51,9 +53,12 @@ Dragging never selects, so orbiting past a component does not pick it up by acci
 | **Refresh** | Ask the backend for the model again, at once |
 | **Fit view** | Frame everything that is drawn |
 | **Reset camera** | Return the camera to its starting pose |
+| **Table** | Show or hide the optical table |
+| **Axes** | Show or hide the corner orientation gizmo |
 
-These three are the only things that move the camera. Nothing that happens to the *model* does —
-see below.
+Refresh, Fit view, and Reset camera move the camera, and so does clicking a gizmo axis in the
+viewport. Table and Axes are visibility toggles and do not move the camera. Nothing that happens to
+the *model* moves it either — see below.
 
 ## When the view updates itself
 
@@ -64,7 +69,7 @@ edits is collected so that holding a spinner costs one update rather than dozens
 Two things are worth knowing about how it updates:
 
 - **The camera never moves by itself.** Whatever changes in the model, the view you set up stays.
-  Only the three toolbar buttons move the camera.
+  Only the toolbar buttons and clicking a gizmo axis move the camera.
 - **Moving nodes around the graph canvas changes nothing here**, and neither does Auto Layout. Where a
   node sits on the diagram has nothing to do with where its component sits in space.
 
@@ -81,7 +86,8 @@ built around. A drawing has to pick some colour of light to render glass at, and
 follow the analyzer or the default wavelength in the settings. A material that cannot state an index
 at 1053 nm is drawn as plain glass, and the substitution is noted in the log.
 
-A mirror, a grating and a beam splitter are drawn reflective. A filter or a paraxial surface is
+A mirror and a beam splitter are drawn reflective; a grating is drawn with an iridescent,
+diffraction-coloured sheen that marks it at a glance as the component that spreads light by wavelength. A filter or a paraxial surface is
 drawn as a faint, translucent plane. A detector is drawn as a plain, matte surface, deliberately
 distinct from glass and from a mirror, so a setup reads at a glance which components measure the
 light rather than shape or redirect it.
@@ -89,5 +95,14 @@ light rather than shape or redirect it.
 Unlike a lens or a wedge, these components have no second surface of their own to keep facing the
 camera, so each is drawn from both sides at once and stays visible however far you orbit around it.
 
-The reference grid is off: an optical setup is centimetres to metres across, and a grid sized for a
-general-purpose 3D scene would swamp it rather than give it a floor.
+## The optical table and orientation
+
+Beneath the setup sits an **optical table**: a dark breadboard plate with a regular raster of holes
+spaced 2.5 cm apart, like a real optical bench. The table sits just below the beam — the optical axis
+runs at the components' centre height, and the table is below it — giving the scene a floor and an
+immediate sense of scale. It replaces the old generic reference grid, which would swamp a
+centimetre-to-metre setup rather than frame it. Show or hide it with the **Table** button in the toolbar.
+
+In one corner of the view a small **orientation gizmo** shows which way x, y, and z point. It keeps
+you from losing your bearings while orbiting. Click one of its axes to snap the camera to look
+straight along that direction; show or hide it with the **Axes** button in the toolbar.
