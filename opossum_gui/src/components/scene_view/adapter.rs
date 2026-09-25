@@ -12,15 +12,28 @@
 //! That split is also what makes updates cheap. The viewer diffs the list it is handed and sends
 //! only what changed, so as long as a component keeps its `id` and its source URL, moving it costs
 //! a transform and no geometry at all.
+//!
+//! The one thing the view adds of its own is the optical table under the setup, see
+//! [`table_ground`]. It is presentation only, so it lives here rather than in the model.
 
-use dioxus_glb_viewer::{GlbObject, GlbSource, PickEvent, Transform};
+// The prelude, not just `Asset` and `asset!`: the macro expands to a path through `manganis`, which
+// only the prelude brings into scope.
+use dioxus::prelude::*;
+use dioxus_glb_viewer::{GlbObject, GlbSource, Ground, PickEvent, Transform};
 use opossum_core::types::api_types::SceneManifest;
 use uuid::Uuid;
 
-use crate::{
-    api::{scene_aux_url, scene_node_url},
-    components::scenery_editor::GraphsWorkspaceAction,
-};
+use crate::{api::scene_node_url, components::scenery_editor::GraphsWorkspaceAction};
+
+/// One cell of the optical table's hole raster, tiled across the floor of the 3D view.
+#[allow(clippy::volatile_composites)]
+const TABLE_TILE: Asset = asset!("/assets/optical_table_tile.png");
+/// Height of the table surface, in metres. The beam runs at y = 0 through the components' centres,
+/// so the table sits below it like a real bench and does not cut through the optics.
+const TABLE_HEIGHT_M: f32 = -0.075;
+/// Spacing of the table's holes, in metres - the common 25 mm breadboard raster. One copy of
+/// [`TABLE_TILE`] holds one hole.
+const TABLE_PITCH_M: f32 = 0.025;
 
 /// Describe a model's components the way the 3D viewer wants them.
 ///
@@ -53,30 +66,20 @@ pub fn objects_of(manifest: &SceneManifest, base_url: &str) -> Vec<GlbObject> {
         .collect()
 }
 
-/// Build the auxiliary optical table object for the 3D viewer.
+/// Describe the optical table under the setup as the 3D viewer's ground.
 ///
-/// The table is a static textured breadboard ground plane served by the backend at a fixed URL. It
-/// is not a model component and has no node uuid, so it can never be selected or revealed in the
-/// graph: its id uses the `"aux:"` prefix to distinguish it from all node ids, which are UUIDs.
-///
-/// The object is rebuilt on every manifest refresh so that its visibility follows `visible` exactly,
-/// without the viewer needing to know what an "aux" object is.
-///
-/// # Arguments
-///
-/// - `base_url`: the backend's root, from [`crate::api::http_client::HTTPClient::base_url`]
-/// - `visible`: whether the table should currently be shown in the 3D view
+/// The viewer tiles the hole image across a floor that reaches to the horizon. It is not a
+/// component of the model: the viewer never frames it on "Fit view" and a click never hits it.
 ///
 /// # Returns
 ///
-/// A [`GlbObject`] whose id is `"aux:table"` and whose source is the aux endpoint URL.
-pub fn aux_table_object(base_url: &str, visible: bool) -> GlbObject {
-    GlbObject {
-        id: "aux:table".to_string(),
-        source: GlbSource::Url(scene_aux_url(base_url)),
-        transform: Transform::default(),
-        visible,
-        selected: false,
+/// The ground: the table's hole tile, repeated every [`TABLE_PITCH_M`], at [`TABLE_HEIGHT_M`].
+pub fn table_ground() -> Ground {
+    Ground {
+        height: TABLE_HEIGHT_M,
+        // An asset of this application, so the webview loads it from its own origin.
+        tile_url: TABLE_TILE.to_string(),
+        tile_size: TABLE_PITCH_M,
     }
 }
 
@@ -218,42 +221,14 @@ mod tests {
         assert_eq!(objects[1].id, second.to_string());
     }
 
-    /// The aux table object has the expected id and a URL source pointing at the aux endpoint.
+    /// The table has to sit below the beam, or it cuts through every component centred on it - and
+    /// the viewer refuses a tile size that is not positive, which would leave no floor at all.
     #[test]
-    fn aux_table_object_has_correct_id_and_url() {
-        let obj = aux_table_object("http://localhost:8001", true);
-        assert_eq!(obj.id, "aux:table");
-        assert!(obj.visible);
-        assert!(!obj.selected);
-        let GlbSource::Url(url) = &obj.source else {
-            panic!("aux table must be fetched from a URL, not carried as bytes");
-        };
-        assert!(
-            url.ends_with("scene/aux.glb"),
-            "{url} does not end with scene/aux.glb"
-        );
-    }
-
-    /// Clicking the aux table must not reveal any node: its id is not a UUID, so
-    /// `reveal_action_for_pick` falls through to `None` before even consulting the manifest.
-    #[test]
-    fn picking_aux_table_reveals_nothing() {
-        let manifest = SceneManifest {
-            nodes: vec![entry(Uuid::new_v4())],
-            skipped: vec![],
-        };
-        let pick_event = PickEvent {
-            id: Some("aux:table".to_string()),
-            mesh_name: None,
-            point: None,
-            shift: false,
-            ctrl: false,
-            alt: false,
-        };
-        assert!(
-            reveal_action_for_pick(&pick_event, &manifest).is_none(),
-            "clicking the aux table must not reveal a node"
-        );
+    fn the_table_lies_below_the_beam_with_a_usable_tile() {
+        let ground = table_ground();
+        assert!(ground.height < 0.0, "table at {} m", ground.height);
+        assert!(ground.tile_size > 0.0, "tile size {} m", ground.tile_size);
+        assert!(!ground.tile_url.is_empty());
     }
 
     /// A hit reveals the node in the graph the manifest says it actually lives in, and never brings

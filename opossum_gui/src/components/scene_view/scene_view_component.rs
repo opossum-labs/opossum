@@ -9,7 +9,7 @@ use crate::{
     HTTP_API_CLIENT, OPOSSUM_UI_LOGS, SCENE_REVISION, api,
     api::eval_action_run,
     components::{
-        scene_view::{aux_table_object, objects_of, reveal_action_for_pick},
+        scene_view::{objects_of, reveal_action_for_pick, table_ground},
         scenery_editor::GraphsWorkspaceAction,
     },
 };
@@ -44,7 +44,7 @@ pub fn SceneView() -> Element {
     let viewer_handle = use_glb_viewer_handle();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
 
-    // Whether the optical table ground plane is shown. Toggled from the toolbar.
+    // Whether the optical table under the setup is shown. Mirrors `options.ground`.
     let mut show_table = use_signal(|| true);
     // Whether the corner orientation gizmo is shown. Mirrors `options.orientation_gizmo`.
     let mut show_axes = use_signal(|| true);
@@ -60,6 +60,8 @@ pub fn SceneView() -> Element {
         fit_on_first_load: true,
         // Show a corner gizmo so the user always knows which way is up in the 3D view.
         orientation_gizmo: true,
+        // The optical table as a floor reaching to the horizon; see `table_ground`.
+        ground: show_table.peek().then(table_ground),
         ..ViewerOptions::default()
     });
 
@@ -87,15 +89,7 @@ pub fn SceneView() -> Element {
                 Some(move |fetched| {
                     // Handing over a whole new list is the point: the viewer compares it against
                     // what it already draws and moves, reloads or removes only what differs.
-                    // Owned so the temporary guard from `HTTP_API_CLIENT()` can be dropped
-                    // before the guard from the second call at the aux line.
-                    let base_url = HTTP_API_CLIENT().base_url().to_owned();
-                    let mut new_objects = objects_of(&fetched, &base_url);
-                    // The aux table is appended after the model objects so it never displaces one.
-                    // Reading `show_table()` here subscribes to it: toggling the signal re-runs
-                    // this effect and rebuilds the list with the updated visibility.
-                    new_objects.push(aux_table_object(&base_url, show_table()));
-                    objects.set(new_objects);
+                    objects.set(objects_of(&fetched, HTTP_API_CLIENT().base_url()));
                     skipped_count.set(fetched.skipped.len());
                     for s in &fetched.skipped {
                         OPOSSUM_UI_LOGS.write().add_log(&format!(
@@ -133,16 +127,9 @@ pub fn SceneView() -> Element {
                         "btn btn-sm btn-outline-light"
                     },
                     onclick: move |_| {
-                        show_table.toggle();
-                        // Flip the aux object's visibility immediately so the viewer does not
-                        // wait for the next manifest refresh; the effect will confirm it on its
-                        // next run as well.
-                        let visible = show_table();
-                        for o in objects.write().iter_mut() {
-                            if o.id == "aux:table" {
-                                o.visible = visible;
-                            }
-                        }
+                        let v = !show_table();
+                        show_table.set(v);
+                        options.write().ground = v.then(table_ground);
                     },
                     "Table"
                 }
@@ -177,11 +164,10 @@ pub fn SceneView() -> Element {
                 options,
                 on_pick: move |picked: PickEvent| {
                     // Selection lives with the caller, not with the viewer: it only reports the
-                    // click. Clicking empty space clears it. Aux objects (ids starting with
-                    // "aux:") are never model nodes and must never receive a selection box.
+                    // click. Clicking empty space - or the table, which the viewer never reports as
+                    // a hit - clears it.
                     for object in objects.write().iter_mut() {
-                        object.selected =
-                            !object.id.starts_with("aux:") && Some(&object.id) == picked.id.as_ref();
+                        object.selected = Some(&object.id) == picked.id.as_ref();
                     }
                     // A hit also opens the component's properties, without leaving the 3D view -
                     // see `reveal_action_for_pick`. Looked up in the manifest last fetched rather
