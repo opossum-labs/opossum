@@ -121,6 +121,47 @@ fn iridescent_material_carries_the_iridescence_extension() {
 }
 
 #[test]
+fn textured_material_exports_image_sampler_and_texcoords() {
+    let mut scene = Scene::new(SceneOptions::default());
+    let textured = scene.add_material(Material::Textured {
+        // Arbitrary bytes: the exporter embeds them verbatim and never decodes them.
+        image_png: vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
+        tint: [1.0, 1.0, 1.0, 1.0],
+        metallic: 0.0,
+        roughness: 0.8,
+        uv_scale: 40.0,
+    });
+    let mesh = scene.add_mesh(centered_quad(textured)).unwrap();
+    add_optics_node(&mut scene, "table", mesh);
+
+    let json = glb_json(&scene.to_glb().unwrap());
+
+    // The only material points at the only texture through baseColorTexture.
+    assert_eq!(
+        json["materials"][0]["pbrMetallicRoughness"]["baseColorTexture"]["index"], 0,
+        "the textured material must reference the exported texture"
+    );
+
+    // That texture binds the only image and the only sampler, which repeats.
+    assert_eq!(json["textures"][0]["source"], 0);
+    assert_eq!(json["textures"][0]["sampler"], 0);
+    assert_eq!(json["images"][0]["mimeType"], "image/png");
+    assert_eq!(json["samplers"][0]["wrapS"], 10497);
+    assert_eq!(json["samplers"][0]["wrapT"], 10497);
+
+    // The primitive carries generated texture coordinates.
+    assert!(
+        json["meshes"][0]["primitives"][0]["attributes"]
+            .get("TEXCOORD_0")
+            .is_some(),
+        "a textured primitive must carry a TEXCOORD_0 attribute"
+    );
+
+    // Textures are core glTF, so nothing must be required for a viewer to load the mesh.
+    assert!(json.get("extensionsRequired").is_none());
+}
+
+#[test]
 fn identical_meshes_are_instanced() {
     let mut scene = Scene::new(SceneOptions::default());
     let material = opaque(&mut scene);

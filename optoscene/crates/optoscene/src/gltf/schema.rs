@@ -23,6 +23,12 @@ pub struct Root {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub materials: Vec<Material>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub textures: Vec<Texture>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub images: Vec<Image>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub samplers: Vec<Sampler>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub accessors: Vec<Accessor>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub buffer_views: Vec<BufferView>,
@@ -103,6 +109,8 @@ pub struct Attributes {
     pub normal: Option<usize>,
     #[serde(rename = "COLOR_0", skip_serializing_if = "Option::is_none")]
     pub color_0: Option<usize>,
+    #[serde(rename = "TEXCOORD_0", skip_serializing_if = "Option::is_none")]
+    pub texcoord_0: Option<usize>,
 }
 
 /// A typed view into a buffer view.
@@ -164,9 +172,47 @@ pub struct PbrMetallicRoughness {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_color_factor: Option<[f32; 4]>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_color_texture: Option<TextureInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub metallic_factor: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub roughness_factor: Option<f32>,
+}
+
+/// A reference from a material to a [`Texture`], with its texture-coordinate set.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TextureInfo {
+    pub index: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tex_coord: Option<usize>,
+}
+
+/// A texture: an [`Image`] sampled with a [`Sampler`].
+#[derive(Serialize)]
+pub struct Texture {
+    pub source: usize,
+    pub sampler: usize,
+}
+
+/// An image, stored as a buffer view of embedded bytes with its media type.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Image {
+    pub buffer_view: usize,
+    pub mime_type: String,
+}
+
+/// A texture sampler (wrap modes and filters).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Sampler {
+    pub wrap_s: u32,
+    pub wrap_t: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mag_filter: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_filter: Option<u32>,
 }
 
 /// The `KHR_materials_*` extensions carried by a material.
@@ -263,3 +309,9 @@ pub const TARGET_ARRAY_BUFFER: u32 = 34962;
 pub const TARGET_ELEMENT_ARRAY_BUFFER: u32 = 34963;
 /// glTF primitive mode: line list.
 pub const MODE_LINES: u32 = 1;
+/// glTF sampler wrap mode: repeat.
+pub const WRAP_REPEAT: u32 = 10497;
+/// glTF sampler filter: linear.
+pub const FILTER_LINEAR: u32 = 9729;
+/// glTF sampler minification filter: linear with linear mipmapping.
+pub const FILTER_LINEAR_MIPMAP_LINEAR: u32 = 9987;

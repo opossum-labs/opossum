@@ -603,6 +603,26 @@ impl Fnv1a {
             }
             return;
         }
+        // Textured carries image bytes plus five numbers, so it too is folded in on its own path.
+        if let Material::Textured {
+            image_png,
+            tint,
+            metallic,
+            roughness,
+            uv_scale,
+        } = material
+        {
+            self.write(&[6]);
+            self.write(image_png);
+            for value in tint
+                .iter()
+                .copied()
+                .chain([*metallic, *roughness, *uv_scale])
+            {
+                self.write(&value.to_le_bytes());
+            }
+            return;
+        }
         let (tag, color, numbers): (u8, &[f32], [f32; 2]) = match material {
             Material::Glass {
                 color,
@@ -617,9 +637,9 @@ impl Fnv1a {
             } => (2, color, [*metallic, *roughness]),
             Material::Unlit { color } => (3, color, [0.0; 2]),
             Material::Translucent { color } => (4, color, [0.0; 2]),
-            // Handled above by the early return; this arm keeps the match exhaustive, so a future
+            // Handled above by the early returns; these arms keep the match exhaustive, so a future
             // material variant still fails to compile here rather than colliding hashes.
-            Material::Iridescent { .. } => return,
+            Material::Iridescent { .. } | Material::Textured { .. } => return,
         };
         self.write(&[tag]);
         for value in color.iter().chain(numbers.iter()) {

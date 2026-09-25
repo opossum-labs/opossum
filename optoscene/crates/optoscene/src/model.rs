@@ -137,6 +137,25 @@ pub enum Material {
         /// Linear RGBA color.
         color: [f32; 4],
     },
+    /// Opaque PBR material whose base colour is a repeating texture.
+    ///
+    /// The texture coordinates are not supplied per vertex; the exporter derives them by a planar
+    /// projection of each vertex's local `x`/`z` onto `u`/`v` scaled by `uv_scale`, with the
+    /// sampler set to repeat. This is deliberately the only thing texture support is for here — a
+    /// flat, tiled surface such as an optical-table ground plane — rather than general UV mapping.
+    Textured {
+        /// PNG bytes of the base-colour texture, embedded verbatim into the glTF.
+        image_png: Vec<u8>,
+        /// Linear RGBA factor multiplied with the sampled texture colour.
+        tint: [f32; 4],
+        /// Metallic factor in `[0, 1]`.
+        metallic: f32,
+        /// Surface roughness in `[0, 1]`.
+        roughness: f32,
+        /// Texture-coordinate scale: `u = x * uv_scale`, `v = z * uv_scale` (in local units), so
+        /// one tile spans `1 / uv_scale` metres.
+        uv_scale: f32,
+    },
     /// Iridescent PBR material; thin-film interference produces
     /// viewing-angle-dependent colour shifts (`KHR_materials_iridescence`).
     Iridescent {

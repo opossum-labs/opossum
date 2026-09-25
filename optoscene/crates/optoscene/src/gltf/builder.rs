@@ -81,21 +81,21 @@ pub fn build_selected(
             }
         }
     }
-    // Emit referenced materials in insertion order; remember the id remapping.
-    let mut material_map = vec![None; scene.materials().len()];
-    for (index, used) in material_used.iter().enumerate() {
-        if *used {
-            let gltf_index = root.materials.len();
-            root.materials
-                .push(map_material(&scene.materials()[index], &mut used_ext));
-            material_map[index] = Some(gltf_index);
-        }
-    }
+    // Emit referenced materials in insertion order; remember the id remapping and, per material, the
+    // scale a textured one projects its patches' texture coordinates with (see `emit_materials`).
+    let (material_map, uv_scales) =
+        emit_materials(scene, &material_used, &mut used_ext, &mut root, &mut bin);
     // Emit referenced meshes in insertion order; remember the id remapping.
     let mut mesh_map = vec![None; scene.meshes().len()];
     for (index, used) in mesh_used.iter().enumerate() {
         if *used {
-            let gltf_mesh = build_mesh(&scene.meshes()[index], &material_map, &mut root, &mut bin)?;
+            let gltf_mesh = build_mesh(
+                &scene.meshes()[index],
+                &material_map,
+                &uv_scales,
+                &mut root,
+                &mut bin,
+            )?;
             let gltf_index = root.meshes.len();
             root.meshes.push(gltf_mesh);
             mesh_map[index] = Some(gltf_index);
@@ -152,10 +152,37 @@ pub fn build_selected(
     Ok((root, bin))
 }
 
+/// Emits the referenced materials in insertion order.
+///
+/// Returns the scene-index → glTF-index remapping and, per scene material, the texture-coordinate
+/// projection scale of a [`Material::Textured`] (see [`map_material`]), which the meshes need to
+/// generate a `TEXCOORD_0` attribute for their textured patches.
+fn emit_materials(
+    scene: &Scene,
+    material_used: &[bool],
+    used_ext: &mut UsedExtensions,
+    root: &mut schema::Root,
+    bin: &mut Vec<u8>,
+) -> (Vec<Option<usize>>, Vec<Option<f32>>) {
+    let mut material_map = vec![None; scene.materials().len()];
+    let mut uv_scales: Vec<Option<f32>> = vec![None; scene.materials().len()];
+    for (index, used) in material_used.iter().enumerate() {
+        if *used {
+            let gltf_index = root.materials.len();
+            let (material, uv_scale) = map_material(&scene.materials()[index], used_ext, root, bin);
+            root.materials.push(material);
+            uv_scales[index] = uv_scale;
+            material_map[index] = Some(gltf_index);
+        }
+    }
+    (material_map, uv_scales)
+}
+
 /// Builds a glTF mesh from a stored mesh (triangles or lines).
 fn build_mesh(
     stored: &StoredMesh,
     material_map: &[Option<usize>],
+    uv_scales: &[Option<f32>],
     root: &mut schema::Root,
     bin: &mut Vec<u8>,
 ) -> Result<schema::Mesh, Error> {
@@ -163,7 +190,7 @@ fn build_mesh(
         StoredMesh::Tri(mesh) => {
             let mut primitives = Vec::with_capacity(mesh.patches.len());
             for patch in &mesh.patches {
-                primitives.push(build_primitive(patch, material_map, root, bin)?);
+                primitives.push(build_primitive(patch, material_map, uv_scales, root, bin)?);
             }
             primitives
         }
@@ -179,6 +206,7 @@ fn build_mesh(
 fn build_primitive(
     patch: &SurfacePatch,
     material_map: &[Option<usize>],
+    uv_scales: &[Option<f32>],
     root: &mut schema::Root,
     bin: &mut Vec<u8>,
 ) -> Result<schema::Primitive, Error> {
@@ -191,6 +219,13 @@ fn build_primitive(
         .colors
         .as_ref()
         .map(|colors| write_colors(colors, root, bin));
+    // A textured material carries no per-vertex UVs; its coordinates are projected from each
+    // vertex's local x/z (see `Material::Textured`).
+    let texcoord_0 = uv_scales
+        .get(patch.material.index())
+        .copied()
+        .flatten()
+        .map(|uv_scale| write_projected_uvs(&patch.positions, uv_scale, root, bin));
     let flat: Vec<u32> = patch.indices.iter().flatten().copied().collect();
     let indices = write_indices(&flat, patch.positions.len(), root, bin);
 
@@ -199,6 +234,7 @@ fn build_primitive(
             position: Some(position),
             normal,
             color_0,
+            texcoord_0,
         },
         indices: Some(indices),
         material: material_map.get(patch.material.index()).copied().flatten(),
@@ -222,6 +258,7 @@ fn build_line_primitive(
             position: Some(position),
             normal: None,
             color_0: None,
+            texcoord_0: None,
         },
         indices: Some(indices),
         material: material_map.get(lines.material.index()).copied().flatten(),
@@ -316,6 +353,62 @@ fn write_colors(colors: &[[f32; 4]], root: &mut schema::Root, bin: &mut Vec<u8>)
     )
 }
 
+/// Writes planar texture coordinates projected from each vertex's local `x`/`z`
+/// (`u = x * uv_scale`, `v = z * uv_scale`) and returns the accessor index.
+fn write_projected_uvs(
+    positions: &[Point3<f64>],
+    uv_scale: f32,
+    root: &mut schema::Root,
+    bin: &mut Vec<u8>,
+) -> usize {
+    let offset = align_to_four(bin);
+    for p in positions {
+        bin.extend_from_slice(&(to_f32(p.x) * uv_scale).to_le_bytes());
+        bin.extend_from_slice(&(to_f32(p.z) * uv_scale).to_le_bytes());
+    }
+    let view = push_buffer_view(
+        root,
+        offset,
+        positions.len() * 8,
+        Some(schema::TARGET_ARRAY_BUFFER),
+    );
+    push_accessor(
+        root,
+        view,
+        schema::COMPONENT_FLOAT,
+        positions.len(),
+        "VEC2",
+        None,
+    )
+}
+
+/// Embeds a PNG image and a repeating sampler, returning the index of the
+/// [`schema::Texture`] that binds them.
+fn embed_texture(image_png: &[u8], root: &mut schema::Root, bin: &mut Vec<u8>) -> usize {
+    let offset = align_to_four(bin);
+    bin.extend_from_slice(image_png);
+    // An image buffer view carries no `target`: it is neither vertex nor index data.
+    let view = push_buffer_view(root, offset, image_png.len(), None);
+    let image = root.images.len();
+    root.images.push(schema::Image {
+        buffer_view: view,
+        mime_type: "image/png".to_string(),
+    });
+    let sampler = root.samplers.len();
+    root.samplers.push(schema::Sampler {
+        wrap_s: schema::WRAP_REPEAT,
+        wrap_t: schema::WRAP_REPEAT,
+        mag_filter: Some(schema::FILTER_LINEAR),
+        min_filter: Some(schema::FILTER_LINEAR_MIPMAP_LINEAR),
+    });
+    let texture = root.textures.len();
+    root.textures.push(schema::Texture {
+        source: image,
+        sampler,
+    });
+    texture
+}
+
 /// Writes a flat index buffer (u16 if the mesh fits, else u32) and returns the
 /// accessor index.
 #[allow(clippy::cast_possible_truncation)]
@@ -389,10 +482,18 @@ fn node_extras(node: &SceneNode) -> serde_json::Value {
 }
 
 /// Maps a preset material to a glTF material, recording used extensions.
+///
+/// Also returns the texture-coordinate projection scale for a [`Material::Textured`] (see there)
+/// so its meshes can be given a generated `TEXCOORD_0`; every other preset returns `None`.
 // A per-variant dispatch: every arm builds a `schema::Material` inline, so the length is the
 // number of material presets rather than a sign the function does too much.
 #[allow(clippy::too_many_lines)]
-fn map_material(material: &Material, used: &mut UsedExtensions) -> schema::Material {
+fn map_material(
+    material: &Material,
+    used: &mut UsedExtensions,
+    root: &mut schema::Root,
+    bin: &mut Vec<u8>,
+) -> (schema::Material, Option<f32>) {
     match material {
         Material::Glass {
             color,
@@ -402,12 +503,13 @@ fn map_material(material: &Material, used: &mut UsedExtensions) -> schema::Mater
             used.transmission = true;
             used.ior = true;
             used.volume = true;
-            schema::Material {
+            let material = schema::Material {
                 name: Some("glass".to_string()),
                 pbr_metallic_roughness: Some(schema::PbrMetallicRoughness {
                     base_color_factor: Some(rgb_opaque(*color)),
                     metallic_factor: Some(0.0),
                     roughness_factor: Some(0.05),
+                    ..schema::PbrMetallicRoughness::default()
                 }),
                 extensions: Some(schema::MaterialExtensions {
                     transmission: Some(schema::Transmission {
@@ -421,33 +523,42 @@ fn map_material(material: &Material, used: &mut UsedExtensions) -> schema::Mater
                     iridescence: None,
                 }),
                 ..schema::Material::default()
-            }
+            };
+            (material, None)
         }
-        Material::Mirror { color, roughness } => schema::Material {
-            name: Some("mirror".to_string()),
-            pbr_metallic_roughness: Some(schema::PbrMetallicRoughness {
-                base_color_factor: Some(rgb_opaque(*color)),
-                metallic_factor: Some(1.0),
-                roughness_factor: Some(*roughness),
-            }),
-            ..schema::Material::default()
-        },
+        Material::Mirror { color, roughness } => {
+            let material = schema::Material {
+                name: Some("mirror".to_string()),
+                pbr_metallic_roughness: Some(schema::PbrMetallicRoughness {
+                    base_color_factor: Some(rgb_opaque(*color)),
+                    metallic_factor: Some(1.0),
+                    roughness_factor: Some(*roughness),
+                    ..schema::PbrMetallicRoughness::default()
+                }),
+                ..schema::Material::default()
+            };
+            (material, None)
+        }
         Material::Opaque {
             color,
             metallic,
             roughness,
-        } => schema::Material {
-            name: Some("opaque".to_string()),
-            pbr_metallic_roughness: Some(schema::PbrMetallicRoughness {
-                base_color_factor: Some(*color),
-                metallic_factor: Some(*metallic),
-                roughness_factor: Some(*roughness),
-            }),
-            ..schema::Material::default()
-        },
+        } => {
+            let material = schema::Material {
+                name: Some("opaque".to_string()),
+                pbr_metallic_roughness: Some(schema::PbrMetallicRoughness {
+                    base_color_factor: Some(*color),
+                    metallic_factor: Some(*metallic),
+                    roughness_factor: Some(*roughness),
+                    ..schema::PbrMetallicRoughness::default()
+                }),
+                ..schema::Material::default()
+            };
+            (material, None)
+        }
         Material::Unlit { color } => {
             used.unlit = true;
-            schema::Material {
+            let material = schema::Material {
                 name: Some("unlit".to_string()),
                 pbr_metallic_roughness: Some(schema::PbrMetallicRoughness {
                     base_color_factor: Some(*color),
@@ -459,19 +570,24 @@ fn map_material(material: &Material, used: &mut UsedExtensions) -> schema::Mater
                     ..schema::MaterialExtensions::default()
                 }),
                 ..schema::Material::default()
-            }
+            };
+            (material, None)
         }
-        Material::Translucent { color } => schema::Material {
-            name: Some("translucent".to_string()),
-            pbr_metallic_roughness: Some(schema::PbrMetallicRoughness {
-                base_color_factor: Some(*color),
-                metallic_factor: Some(0.0),
-                roughness_factor: Some(0.5),
-            }),
-            alpha_mode: Some("BLEND".to_string()),
-            double_sided: true,
-            extensions: None,
-        },
+        Material::Translucent { color } => {
+            let material = schema::Material {
+                name: Some("translucent".to_string()),
+                pbr_metallic_roughness: Some(schema::PbrMetallicRoughness {
+                    base_color_factor: Some(*color),
+                    metallic_factor: Some(0.0),
+                    roughness_factor: Some(0.5),
+                    ..schema::PbrMetallicRoughness::default()
+                }),
+                alpha_mode: Some("BLEND".to_string()),
+                double_sided: true,
+                extensions: None,
+            };
+            (material, None)
+        }
         Material::Iridescent {
             color,
             roughness,
@@ -481,7 +597,7 @@ fn map_material(material: &Material, used: &mut UsedExtensions) -> schema::Mater
             iridescence_thickness_max,
         } => {
             used.iridescence = true;
-            schema::Material {
+            let material = schema::Material {
                 name: Some("iridescent".to_string()),
                 // A reflective (metallic) base so the thin-film colour shift reads as a sheen on
                 // a mirror-like surface rather than as a tint on a matte one.
@@ -489,6 +605,7 @@ fn map_material(material: &Material, used: &mut UsedExtensions) -> schema::Mater
                     base_color_factor: Some(rgb_opaque(*color)),
                     metallic_factor: Some(1.0),
                     roughness_factor: Some(*roughness),
+                    ..schema::PbrMetallicRoughness::default()
                 }),
                 extensions: Some(schema::MaterialExtensions {
                     iridescence: Some(schema::Iridescence {
@@ -500,7 +617,31 @@ fn map_material(material: &Material, used: &mut UsedExtensions) -> schema::Mater
                     ..schema::MaterialExtensions::default()
                 }),
                 ..schema::Material::default()
-            }
+            };
+            (material, None)
+        }
+        Material::Textured {
+            image_png,
+            tint,
+            metallic,
+            roughness,
+            uv_scale,
+        } => {
+            let texture = embed_texture(image_png, root, bin);
+            let material = schema::Material {
+                name: Some("textured".to_string()),
+                pbr_metallic_roughness: Some(schema::PbrMetallicRoughness {
+                    base_color_factor: Some(*tint),
+                    base_color_texture: Some(schema::TextureInfo {
+                        index: texture,
+                        tex_coord: Some(0),
+                    }),
+                    metallic_factor: Some(*metallic),
+                    roughness_factor: Some(*roughness),
+                }),
+                ..schema::Material::default()
+            };
+            (material, Some(*uv_scale))
         }
     }
 }

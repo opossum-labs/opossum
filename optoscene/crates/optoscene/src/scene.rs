@@ -678,6 +678,20 @@ fn material_hash(material: &Material) -> u64 {
             hasher.write_u32(iridescence_thickness_min.to_bits());
             hasher.write_u32(iridescence_thickness_max.to_bits());
         }
+        Material::Textured {
+            image_png,
+            tint,
+            metallic,
+            roughness,
+            uv_scale,
+        } => {
+            hasher.write_u8(6);
+            hasher.write(image_png);
+            hash_f32_slice(&mut hasher, tint);
+            hasher.write_u32(metallic.to_bits());
+            hasher.write_u32(roughness.to_bits());
+            hasher.write_u32(uv_scale.to_bits());
+        }
     }
     hasher.finish()
 }
