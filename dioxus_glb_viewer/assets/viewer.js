@@ -126,6 +126,139 @@ export async function createViewer(canvasId, options, send, threeBase) {
         }
     }
 
+    // ── Ground (optional, host-supplied) ────────────────────────────────────
+    // A floor that reaches to the horizon. The host supplies the image, the size of one copy of it
+    // in the world and the height; the viewer only tiles it. It is one plane, resized with the
+    // zoom and moved under the camera target every frame (see updateGround), with a radial fade so
+    // its rim is never seen.
+    //
+    // Deliberately NOT an entry of `objects`: fitView() and picking look only there, so the ground
+    // is never framed and never hit.
+    //
+    // Known limitation: the ground is transparent (for the fade), and three.js renders only opaque
+    // objects into the buffer transmissive glass refracts, so the floor is not seen through a lens.
+
+    /** Half the plane's width, as a multiple of the camera's distance to its target. */
+    const GROUND_REACH = 20;
+    /** The plane is never narrower than this many tiles, however close the camera gets. */
+    const GROUND_MIN_TILES = 64;
+    /** Fraction of the plane's half-width that stays fully opaque before the fade begins. */
+    const GROUND_FADE_START = 0.6;
+
+    /** { mesh, map, fade, url, tile, height } while a ground is shown, else null. */
+    let ground = null;
+
+    /**
+     * Shows, moves, replaces or removes the ground to match `spec`.
+     *
+     * `set_options` arrives on every option change, so a spec that only differs in height moves
+     * the existing plane rather than fetching its image again.
+     *
+     * @param {object|null} spec - `{ height, tile_url, tile_size }` from Rust, or null for no ground.
+     */
+    function applyGround(spec) {
+        const usable = !!spec && Number.isFinite(spec.tile_size) && spec.tile_size > 0
+            && Number.isFinite(spec.height);
+        if (spec && !usable) {
+            send({ event: 'error',
+                   message: 'Ground not drawn: its tile size must be a positive number and its '
+                          + 'height a finite one' });
+        }
+        if (!usable) { disposeGround(); return; }
+        if (ground && ground.url === spec.tile_url && ground.tile === spec.tile_size) {
+            ground.height = spec.height; // updateGround() applies it on the next frame
+            return;
+        }
+        disposeGround();
+
+        const map = new THREE.TextureLoader().load(spec.tile_url, undefined, undefined, () => {
+            send({ event: 'error', message: 'Could not load the ground image ' + spec.tile_url });
+        });
+        map.colorSpace = THREE.SRGBColorSpace;
+        map.wrapS = THREE.RepeatWrapping;
+        map.wrapT = THREE.RepeatWrapping;
+        // Seen at a grazing angle almost everywhere, so anisotropic filtering is what keeps the
+        // near floor sharp and the far floor free of moiré.
+        map.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+        const fade = groundFade();
+        const material = new THREE.MeshStandardMaterial({
+            map,
+            // Each map has its own UV transform, so the fade spans the plane once while the image
+            // repeats across it.
+            alphaMap: fade,
+            transparent: true,
+            roughness: 0.9,
+            metalness: 0.0,
+        });
+        // Unit square in XZ facing +y; updateGround() scales it. Seen from above only, so orbiting
+        // below the floor still shows the scene.
+        const geometry = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+        const mesh = new THREE.Mesh(geometry, material);
+        // Drawn first among the transparent objects, so they blend over the floor and not under it.
+        mesh.renderOrder = -1;
+        scene.add(mesh);
+        ground = { mesh, map, fade, url: spec.tile_url, tile: spec.tile_size, height: spec.height };
+        updateGround();
+    }
+
+    /**
+     * Resizes the ground with the zoom and moves it under the camera target. Called every frame.
+     *
+     * The plane is an even number of tiles wide and its centre sits on a whole tile, so the
+     * image's origin always falls on a tile corner: the plane moves, the pattern stays put.
+     */
+    function updateGround() {
+        if (!ground) return;
+        const tile = ground.tile;
+        const wanted = Math.min(
+            Math.max(camera.position.distanceTo(controls.target) * GROUND_REACH * 2,
+                     GROUND_MIN_TILES * tile),
+            camera.far,
+        );
+        const tiles = 2 * Math.ceil(wanted / (2 * tile));
+        ground.mesh.scale.set(tiles * tile, 1, tiles * tile);
+        ground.map.repeat.set(tiles, tiles);
+        ground.mesh.position.set(
+            Math.round(controls.target.x / tile) * tile,
+            ground.height,
+            Math.round(controls.target.z / tile) * tile,
+        );
+    }
+
+    /** Removes the ground and releases its GPU resources. */
+    function disposeGround() {
+        if (!ground) return;
+        scene.remove(ground.mesh);
+        ground.mesh.geometry.dispose();
+        ground.mesh.material.dispose();
+        ground.map.dispose();
+        ground.fade.dispose();
+        ground = null;
+    }
+
+    /**
+     * Builds the alpha ramp that dissolves the ground into the background towards its rim:
+     * opaque out to GROUND_FADE_START of the half-width, transparent at the rim and beyond.
+     *
+     * @returns {THREE.CanvasTexture}
+     */
+    function groundFade() {
+        const size = 256;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const context = canvas.getContext('2d');
+        const r = size / 2;
+        const gradient = context.createRadialGradient(r, r, 0, r, r, r);
+        gradient.addColorStop(0, '#ffffff');
+        gradient.addColorStop(GROUND_FADE_START, '#ffffff');
+        gradient.addColorStop(1, '#000000');
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, size, size);
+        return new THREE.CanvasTexture(canvas);
+    }
+
     // AbortController for all DOM listeners (ac.abort() removes them all at once)
     const ac = new AbortController();
 
@@ -152,6 +285,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
         if (!canvas.isConnected) { dispose(); return; }
         if (needsResize) resize();
         controls.update(); // needed for enableDamping
+        updateGround();
         renderer.render(scene, camera);
         // Overlay the orientation gizmo after the main scene is rendered.
         // autoClear must be false so the gizmo's internal renderer.render() does not
@@ -194,8 +328,8 @@ export async function createViewer(canvasId, options, send, threeBase) {
         );
         raycaster.setFromCamera(ndc, camera);
 
-        // Only raycast against model roots (NOT scene.children, because GridHelper is also
-        // raycastable and would produce hits without a glbId).
+        // Only raycast against model roots (NOT scene.children, because GridHelper and the ground
+        // are also raycastable and would produce hits without a glbId).
         const roots = [];
         for (const entry of objects.values()) {
             if (entry.root.visible) roots.push(entry.root);
@@ -282,7 +416,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
         objects.delete(id);
     }
 
-    /** Frames all visible models. MOVES THE CAMERA. */
+    /** Frames all visible models - never the grid or the ground, which are not in `objects`. MOVES THE CAMERA. */
     function fitView() {
         const box = new THREE.Box3();
         for (const entry of objects.values()) {
@@ -398,6 +532,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
     let currentOptions = options;
     void applyEnvironment(options.environment);
     void ensureGizmo(options.orientation_gizmo);
+    applyGround(options.ground);
 
     function applyOptions(opts) {
         currentOptions = opts;
@@ -417,6 +552,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
         }
         // Orientation gizmo: create/destroy live when the option is toggled.
         void ensureGizmo(opts.orientation_gizmo);
+        applyGround(opts.ground);
         // Selection colour: update existing helpers
         for (const entry of objects.values()) {
             if (entry.helper) {
@@ -493,6 +629,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
         for (const id of [...objects.keys()]) removeObject(id);
         if (grid) { scene.remove(grid); grid.geometry.dispose(); grid.material.dispose(); grid = null; }
         if (viewHelper) { viewHelper.dispose(); viewHelper = null; }
+        disposeGround();
         if (environmentMap) { environmentMap.dispose(); environmentMap = null; }
         scene.environment = null;
         scene.clear();

@@ -199,6 +199,28 @@ pub enum Environment {
     /// have highlights, without tinting the model any particular colour.
     Room,
 }
+// ─── Ground ──────────────────────────────────────────────────────────────────
+
+/// A flat floor under the scene that reaches to the horizon.
+///
+/// The viewer knows nothing about what the floor shows: the host hands it an image and says how
+/// large one copy of it is in the world, and the viewer tiles it. It is drawn as a plane that
+/// follows the camera — moved in whole tiles, so the pattern stays fixed in the world — and fades
+/// into the background towards its rim, so it never shows an edge.
+///
+/// The ground is not a model. [`ViewerHandle::fit_view`](crate::ViewerHandle::fit_view) does not
+/// frame it, and a click never hits it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Ground {
+    /// Height of the floor (world y).
+    pub height: f32,
+    /// URL of the image tiled across the floor. The webview fetches it itself, like a model URL.
+    pub tile_url: String,
+    /// Edge length of one copy of the image, in world units. Must be positive and finite; a ground
+    /// with any other tile size is not drawn and reported as an error instead.
+    pub tile_size: f32,
+}
+
 // ─── ViewerOptions ───────────────────────────────────────────────────────────
 
 /// Scene-wide settings for the viewer.
@@ -238,6 +260,8 @@ pub struct ViewerOptions {
     /// to `false` so that viewers that do not need the gizmo pay neither the import cost nor
     /// the per-frame overlay render.
     pub orientation_gizmo: bool,
+    /// A floor under the scene that reaches to the horizon, or `None` for no floor. See [`Ground`].
+    pub ground: Option<Ground>,
 }
 
 impl Default for ViewerOptions {
@@ -254,6 +278,7 @@ impl Default for ViewerOptions {
             environment: Environment::default(),
             fov_degrees: 50.0,
             orientation_gizmo: false,
+            ground: None,
         }
     }
 }

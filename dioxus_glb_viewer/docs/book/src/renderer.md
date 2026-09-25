@@ -131,7 +131,7 @@ them.
 
 `set_options` replaces the stored options and applies the ones that can change at runtime:
 background colour, both light intensities, the grid (added or removed, and disposed when
-removed), and the colour of existing selection boxes. It does **not** touch the camera —
+removed), the orientation gizmo, the ground, and the colour of existing selection boxes. It does **not** touch the camera —
 which is why `fov_degrees` changes have no effect after boot, as
 [the options table](./scene.md#when-option-changes-take-effect) records.
 
@@ -162,6 +162,28 @@ Two things the implementation has to get right, both of them consequences of tha
 - `PMREMGenerator` and the room scene are scaffolding: both are disposed immediately, and only the
   cube texture survives the call. The texture itself is disposed when the environment changes again
   and when the viewer shuts down.
+
+### The ground
+
+`ground` draws a floor that reaches to the horizon. The viewer knows nothing about what it shows:
+the host supplies an image, the size of one copy of it in the world, and the height, and the viewer
+tiles it.
+
+A truly infinite plane cannot be drawn, so the floor is one plane that keeps up with the camera.
+Every frame it is resized with the zoom — twenty times the camera's distance to its target on
+either side, and never narrower than 64 tiles — and moved under the camera target. It only ever
+moves in whole tiles and is always an even number of tiles wide, so the image's origin stays on a
+tile corner: the plane moves, but the pattern stays fixed in the world. Towards its rim the floor
+fades into the background through a radial alpha map, so its edge is never seen.
+
+- The ground is **not** an entry of the object list. `fit_view` frames only the objects and picking
+  only tests them, so the floor is never framed and never hit.
+- `set_options` arrives on every option change. A new `height` only moves the plane; only a new
+  `tile_url` or `tile_size` fetches the image again.
+- A tile size that is not a positive number, or an image that fails to load, is reported as an
+  `error` event rather than drawn.
+- The floor is transparent (for the fade), and three.js renders only opaque objects into the buffer
+  that transmissive glass refracts, so the floor is not seen through a lens.
 
 ## Releasing resources
 
@@ -194,7 +216,7 @@ scene and forgets it.
 3. Disconnect the `ResizeObserver` and abort the `AbortController`, removing every DOM
    listener at once.
 4. Dispose the controls.
-5. Remove and dispose every model, then the grid.
+5. Remove and dispose every model, then the grid, the gizmo and the ground.
 6. Clear the scene and dispose the renderer.
 7. **Force the WebGL context loss.** Browsers allow only a limited number of live contexts
    — roughly sixteen — and waiting for the garbage collector to release one is not good

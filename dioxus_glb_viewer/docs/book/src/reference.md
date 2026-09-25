@@ -15,7 +15,8 @@ cargo doc -p dioxus_glb_viewer --no-deps --open
 | `GlbObject` | One model: `id`, `source`, `transform`, `visible`, `selected`. |
 | `GlbSource` | `Url(String)` or `Bytes(Arc<[u8]>)`. `Url` compares by content, `Bytes` by pointer. |
 | `Transform` | `position`, `rotation_euler_xyz` (radians, Euler XYZ), `scale`. `Default` is the identity. |
-| `ViewerOptions` | Eleven scene-wide settings; `Default` gives a usable dark scene with a grid. |
+| `ViewerOptions` | Twelve scene-wide settings; `Default` gives a usable dark scene with a grid. |
+| `Ground` | A floor reaching to the horizon: `height`, `tile_url`, `tile_size` (world units per copy of the image). |
 | `PickEvent` | `id`, `mesh_name`, `point`, `shift`, `ctrl`, `alt`. |
 | `ViewerEvent` | `Ready`, `Loaded`, `LoadError`, `Error`. `#[non_exhaustive]`. |
 | `ViewerHandle` | `Copy` handle for the camera operations. |
@@ -61,6 +62,7 @@ nothing.
 | `environment` | `None` |
 | `fov_degrees` | `50.0` |
 | `orientation_gizmo` | `false` |
+| `ground` | `None` |
 
 Only some of these apply live; see [when option changes take
 effect](./scene.md#when-option-changes-take-effect).

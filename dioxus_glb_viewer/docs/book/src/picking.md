@@ -55,8 +55,8 @@ of the canvas and is easy to mistake for a camera problem.
 The raycast runs against the **roots of visible objects only**, recursing into their
 children. That has three consequences:
 
-- The reference grid is **never** a hit. `GridHelper` is raycastable, so including the
-  whole scene would yield hits that belong to no object at all.
+- The reference grid and the ground are **never** a hit. Both are raycastable, so including
+  the whole scene would yield hits that belong to no object at all.
 - An object with `visible: false` cannot be picked. Hiding something also takes it out of
   reach of the cursor.
 - Only the **nearest** intersection is reported. There is no way to pick through a model

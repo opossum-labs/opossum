@@ -3,7 +3,7 @@
 //! **Rust → JS** — Ops are sent as JSON over `document::eval` (`serde` tag = `"op"`).
 //! **JS → Rust** — Events arrive via `dioxus.send(...)` (tag = `"event"`).
 
-use crate::model::{Transform, ViewerOptions};
+use crate::model::{Ground, Transform, ViewerOptions};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -144,8 +144,9 @@ impl Serialize for ViewerOptions {
             environment,
             fov_degrees,
             orientation_gizmo,
+            ground,
         } = self;
-        let mut st = s.serialize_struct("ViewerOptions", 11)?;
+        let mut st = s.serialize_struct("ViewerOptions", 12)?;
         st.serialize_field("background", background)?;
         st.serialize_field("grid", grid)?;
         st.serialize_field("ambient_intensity", ambient_intensity)?;
@@ -157,6 +158,23 @@ impl Serialize for ViewerOptions {
         st.serialize_field("environment", environment)?;
         st.serialize_field("fov_degrees", fov_degrees)?;
         st.serialize_field("orientation_gizmo", orientation_gizmo)?;
+        st.serialize_field("ground", ground)?;
+        st.end()
+    }
+}
+
+impl Serialize for Ground {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        // Exhaustive for the same reason as `ViewerOptions` above.
+        let Self {
+            height,
+            tile_url,
+            tile_size,
+        } = self;
+        let mut st = s.serialize_struct("Ground", 3)?;
+        st.serialize_field("height", height)?;
+        st.serialize_field("tile_url", tile_url)?;
+        st.serialize_field("tile_size", tile_size)?;
         st.end()
     }
 }
@@ -190,6 +208,7 @@ mod tests {
                 "fit_on_first_load",
                 "fov_degrees",
                 "grid",
+                "ground",
                 "initial_camera",
                 "initial_target",
                 "orientation_gizmo",
@@ -210,6 +229,32 @@ mod tests {
         };
         let json = serde_json::to_value(opts).expect("options serialise");
         assert_eq!(json["orientation_gizmo"], true);
+    }
+
+    /// `viewer.js` takes `null` for "no floor"; a missing key would mean the same by accident.
+    #[test]
+    fn there_is_no_ground_by_default() {
+        let json = serde_json::to_value(ViewerOptions::default()).expect("options serialise");
+        assert!(json["ground"].is_null(), "{json}");
+    }
+
+    /// `viewer.js` reads the floor by these exact names, and a misspelt one would leave the floor
+    /// silently undrawn.
+    #[test]
+    fn a_ground_puts_its_fields_on_the_wire_by_name() {
+        let opts = ViewerOptions {
+            ground: Some(Ground {
+                height: -0.075,
+                tile_url: "http://x/tile.png".into(),
+                tile_size: 0.025,
+            }),
+            ..ViewerOptions::default()
+        };
+        let json = serde_json::to_value(opts).expect("options serialise");
+        let ground = &json["ground"];
+        assert_eq!(ground["tile_url"], "http://x/tile.png");
+        assert!((ground["height"].as_f64().expect("a number") + 0.075).abs() < 1e-6);
+        assert!((ground["tile_size"].as_f64().expect("a number") - 0.025).abs() < 1e-6);
     }
 
     /// `viewer.js` switches on these exact strings, so renaming a variant silently turns the

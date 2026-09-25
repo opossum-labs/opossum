@@ -95,6 +95,7 @@ Scene-wide settings. The prop is optional; leaving it out uses these defaults.
 | `environment` | Surroundings the scene is lit and reflected by (`None` or `Room`). | `None` |
 | `fov_degrees` | Vertical field of view. | `50.0` |
 | `orientation_gizmo` | Show a corner orientation gizmo (three.js `ViewHelper`) in the bottom-right corner. Coloured axes reflect the current camera orientation; clicking an axis snaps the camera to that view. | `false` |
+| `ground` | A floor reaching to the horizon: an image tiled at a given height (`Ground { height, tile_url, tile_size }`). Never framed by `fit_view`, never hit by a click. See [the ground](./renderer.md#the-ground). | `None` |
 
 Colour values are handed to `new THREE.Color(...)`, so they must be something three.js
 can parse: `"#1e1e1e"`, `"rgb(30,30,30)"`, or a CSS colour name. A *transparent*
@@ -110,6 +111,8 @@ the camera**. They do not all apply at the same moment, though:
 |---|---|
 | `background`, `grid`, `ambient_intensity`, `directional_intensity`, `selection_color` | Immediately, on every change. |
 | `environment` | Immediately, but asynchronously: the map is imported and rendered on first use. |
+| `orientation_gizmo` | Immediately, but asynchronously: the gizmo is imported on first use. |
+| `ground` | Immediately. A new `height` moves the floor; a new `tile_url` or `tile_size` fetches the image again, which then appears once it has loaded. |
 | `initial_camera`, `initial_target` | On the next `reset_camera()` call. |
 | `fit_on_first_load` | Checked on every successful load, until an auto-fit has actually happened once. |
 | `fov_degrees` | **Read once, when the viewer boots.** Later changes are ignored. |
