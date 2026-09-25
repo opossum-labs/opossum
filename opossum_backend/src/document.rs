@@ -3,7 +3,7 @@ use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
     helper_functions::{analyzer_mut_or_404, parent_group_id_or_self},
-    scene_export::{glb_of_node, glb_of_surface_node, manifest_of, scene_of},
+    scene_export::{glb_of_node, glb_of_surface_node, manifest_of, optical_table_glb, scene_of},
     sse_logger::SENDER,
     undo::{Command, PatchNode, RepositionAnalyzer, SetViewport, capture_old_node_request},
 };
@@ -193,6 +193,26 @@ async fn get_scene_node(
     };
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
+
+/// Get the optical-table ground plane as a 3D scene
+///
+/// This function returns a static textured breadboard ground plane as a binary glTF (GLB) file.
+/// It is model-independent: the same file serves as an orientation aid for any model and does not
+/// require an optical-axis positioning run. The table sits 75 mm below the beam axis (y = −0.075 m)
+/// and spans 2 m × 2 m with a 25 mm hole raster.
+#[utoipa::path(tag = "document",
+    responses(
+        (status = 200, description = "glTF binary of the optical-table ground plane", body = Vec<u8>,
+            content_type = GLB_MEDIA_TYPE),
+        (status = 400, description = "the optical table could not be built", body = ErrorResponse)
+    )
+)]
+#[get("/scene/aux.glb")]
+async fn get_scene_aux_glb() -> Result<impl Responder, BackEndErrorResponse> {
+    let glb = optical_table_glb()?;
+    Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
+}
+
 #[utoipa::path(
     tag = "document",
     request_body(
@@ -603,6 +623,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_scene);
     cfg.service(get_scene_manifest);
     cfg.service(get_scene_node);
+    cfg.service(get_scene_aux_glb);
 
     cfg.service(undo_document);
     cfg.service(redo_document);
@@ -1822,6 +1843,23 @@ mod test {
             app_state.document.lock().scenery().node_attr().name(),
             "group"
         );
+    }
+
+    /// The optical-table auxiliary endpoint is model-independent and always returns a valid glTF
+    /// binary, even before any model has been loaded.
+    #[actix_web::test]
+    async fn the_aux_glb_is_a_gltf_binary() {
+        let app = test::init_service(
+            App::new().service(web::scope("/document").service(get_scene_aux_glb)),
+        )
+        .await;
+        let req = test::TestRequest::get()
+            .uri("/document/scene/aux.glb")
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = test::read_body(resp).await;
+        assert!(body.starts_with(b"glTF"));
     }
 
     #[actix_web::test]

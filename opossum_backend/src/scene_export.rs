@@ -38,6 +38,43 @@ const RIM_SEGMENTS: usize = 64;
 /// Drawing the component in plain glass says more than leaving it out of the scene.
 const FALLBACK_REFRACTIVE_INDEX: f64 = 1.5;
 
+/// Hole spacing of the optical table, in metres (25 mm breadboard raster).
+const OPTICAL_TABLE_PITCH_M: f64 = 0.025;
+/// Side length of the (square) optical table, in metres.
+const OPTICAL_TABLE_SIZE_M: f64 = 2.0;
+/// Height of the table surface, in metres. The optical axis (beam) is at y = 0, and components
+/// are centred on it, so the table sits below the beam like a real bench (beam ~75 mm up).
+const OPTICAL_TABLE_HEIGHT_M: f64 = -0.075;
+
+/// Build the GLB of the optical-table ground plane (an auxiliary orientation aid, independent of
+/// the model).
+///
+/// The table is a square textured breadboard, tiled with holes every [`OPTICAL_TABLE_PITCH_M`]
+/// metres, centred at the origin, at `y = `[`OPTICAL_TABLE_HEIGHT_M`]`. It is model-independent
+/// and needs no positioning run — the same file serves every model regardless of what is in it.
+///
+/// # Returns
+///
+/// The GLB bytes of a scene holding nothing but the optical table ground plane.
+///
+/// # Errors
+///
+/// This function returns an error if the table geometry cannot be built or if the scene cannot be
+/// serialised.
+pub fn optical_table_glb() -> OpmResult<Vec<u8>> {
+    let mut scene = Scene::new(SceneOptions::default());
+    scene
+        .add_optical_table(
+            OPTICAL_TABLE_PITCH_M,
+            OPTICAL_TABLE_SIZE_M,
+            OPTICAL_TABLE_HEIGHT_M,
+        )
+        .map_err(|e| OpossumError::Other(format!("the optical table could not be built: {e}")))?;
+    scene
+        .to_glb()
+        .map_err(|e| OpossumError::Other(format!("the scene could not be written: {e}")))
+}
+
 /// Build a 3D scene of every component of a model that encloses a volume or is one optical surface.
 ///
 /// Every node that encloses a volume, or is a single surface (a mirror, a grating, a filter, a
