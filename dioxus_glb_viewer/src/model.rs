@@ -231,6 +231,13 @@ pub struct ViewerOptions {
     pub environment: Environment,
     /// Vertical field of view in degrees.
     pub fov_degrees: f32,
+    /// Whether a corner orientation gizmo (`ViewHelper`) is shown.
+    ///
+    /// The gizmo renders in the bottom-right corner of the canvas and shows the current camera
+    /// orientation as coloured axes. Clicking an axis snaps the camera to that view. Defaults
+    /// to `false` so that viewers that do not need the gizmo pay neither the import cost nor
+    /// the per-frame overlay render.
+    pub orientation_gizmo: bool,
 }
 
 impl Default for ViewerOptions {
@@ -246,6 +253,7 @@ impl Default for ViewerOptions {
             initial_target: [0.0, 0.0, 0.0],
             environment: Environment::default(),
             fov_degrees: 50.0,
+            orientation_gizmo: false,
         }
     }
 }

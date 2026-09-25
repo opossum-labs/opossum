@@ -23,6 +23,7 @@ File: `three-0.174.0.tgz` (sha1: see `npm pack --dry-run three@0.174.0`)
 | `examples/jsm/loaders/GLTFLoader.js` | `package/examples/jsm/loaders/GLTFLoader.js` |
 | `examples/jsm/utils/BufferGeometryUtils.js` | `package/examples/jsm/utils/BufferGeometryUtils.js` |
 | `examples/jsm/environments/RoomEnvironment.js` | `package/examples/jsm/environments/RoomEnvironment.js` |
+| `examples/jsm/helpers/ViewHelper.js` | `package/examples/jsm/helpers/ViewHelper.js` |
 
 ## Why exactly these files?
 
@@ -35,6 +36,10 @@ File: `three-0.174.0.tgz` (sha1: see `npm pack --dry-run three@0.174.0`)
 - `RoomEnvironment.js` builds the small lit room that `PMREMGenerator` turns into an environment
   map. Transmissive glass (`KHR_materials_transmission`) has nothing to refract without one and
   renders black, so a viewer that shows optics needs it.
+- `ViewHelper.js` is the corner orientation gizmo: a small axis widget in a screen corner that
+  shows which way x/y/z point and snaps the camera to an axis when clicked. It imports only
+  three-core types, so it needs no further add-ons. Its bare `from 'three'` import is rewritten to
+  the relative build like the other add-ons (see step 5 of the upgrade recipe).
 
 ## Why a folder asset (not individual `asset!()` calls)?
 
@@ -66,6 +71,7 @@ cp extracted/package/examples/jsm/controls/OrbitControls.js    assets/three/exam
 cp extracted/package/examples/jsm/loaders/GLTFLoader.js         assets/three/examples/jsm/loaders/
 cp extracted/package/examples/jsm/utils/BufferGeometryUtils.js  assets/three/examples/jsm/utils/
 cp extracted/package/examples/jsm/environments/RoomEnvironment.js assets/three/examples/jsm/environments/
+cp extracted/package/examples/jsm/helpers/ViewHelper.js            assets/three/examples/jsm/helpers/
 
 # 5. Rewrite the bare 'three' import in every add-on to the relative build. Without this the
 #    browser cannot resolve it: there is no importmap, viewer.js is handed an explicit base instead.

@@ -83,6 +83,30 @@ export async function createViewer(canvasId, options, send, threeBase) {
     let needsResize   = true;
     let disposed      = false;
 
+    // ── Orientation gizmo (ViewHelper) ───────────────────────────────────────
+    const clock = new THREE.Clock();
+    let viewHelper = null;
+
+    /**
+     * Lazily creates or disposes the ViewHelper depending on `enabled`.
+     * The import is deferred so viewers that never enable the gizmo pay no cost.
+     *
+     * @param {boolean} enabled - Whether the gizmo should be active.
+     */
+    async function ensureGizmo(enabled) {
+        if (enabled && !viewHelper) {
+            const { ViewHelper } =
+                await import(threeBase + '/examples/jsm/helpers/ViewHelper.js');
+            // The viewer may have been torn down (or disabled again) while we awaited.
+            if (disposed || !currentOptions.orientation_gizmo) return;
+            viewHelper = new ViewHelper(camera, renderer.domElement);
+            viewHelper.center = controls.target;
+        } else if (!enabled && viewHelper) {
+            viewHelper.dispose();
+            viewHelper = null;
+        }
+    }
+
     // AbortController for all DOM listeners (ac.abort() removes them all at once)
     const ac = new AbortController();
 
@@ -110,6 +134,16 @@ export async function createViewer(canvasId, options, send, threeBase) {
         if (needsResize) resize();
         controls.update(); // needed for enableDamping
         renderer.render(scene, camera);
+        // Overlay the orientation gizmo after the main scene is rendered.
+        // autoClear must be false so the gizmo's internal renderer.render() does not
+        // wipe the frame; ViewHelper saves/restores the viewport itself.
+        if (viewHelper) {
+            const delta = clock.getDelta();
+            if (viewHelper.animating) viewHelper.update(delta);
+            renderer.autoClear = false;
+            viewHelper.render(renderer);
+            renderer.autoClear = true;
+        }
     });
 
     // ── Picking ───────────────────────────────────────────────────────────────
@@ -129,6 +163,9 @@ export async function createViewer(canvasId, options, send, threeBase) {
         // Distance threshold 4 px: orbit drags are not a pick.
         // Time threshold intentionally NOT used — a slow deliberate click is a click.
         if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 4) return;
+
+        // Let the gizmo consume axis clicks before scene picking.
+        if (viewHelper && viewHelper.handleClick(e)) return;
 
         // NDC from CSS box (not canvas.width): at devicePixelRatio != 1 the values would otherwise be wrong.
         const rect = canvas.getBoundingClientRect();
@@ -341,6 +378,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
     // ── Options ───────────────────────────────────────────────────────────────
     let currentOptions = options;
     void applyEnvironment(options.environment);
+    void ensureGizmo(options.orientation_gizmo);
 
     function applyOptions(opts) {
         currentOptions = opts;
@@ -358,6 +396,8 @@ export async function createViewer(canvasId, options, send, threeBase) {
             grid.material.dispose();
             grid = null;
         }
+        // Orientation gizmo: create/destroy live when the option is toggled.
+        void ensureGizmo(opts.orientation_gizmo);
         // Selection colour: update existing helpers
         for (const entry of objects.values()) {
             if (entry.helper) {
@@ -433,6 +473,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
         controls.dispose();
         for (const id of [...objects.keys()]) removeObject(id);
         if (grid) { scene.remove(grid); grid.geometry.dispose(); grid.material.dispose(); grid = null; }
+        if (viewHelper) { viewHelper.dispose(); viewHelper = null; }
         if (environmentMap) { environmentMap.dispose(); environmentMap = null; }
         scene.environment = null;
         scene.clear();
