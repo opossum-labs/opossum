@@ -145,3 +145,21 @@ pub async fn get_scene_manifest(analyzer: Option<Uuid>) -> Result<SceneManifest,
 pub fn scene_node_url(base_url: &str, uid: Uuid, geometry: &str) -> String {
     format!("{base_url}/api/document/scene/node/{uid}.glb?v={geometry}")
 }
+
+/// The URL the 3D viewer fetches the optical table (the textured breadboard ground plane) from.
+///
+/// Unlike component geometry, the table is a single static mesh that never changes per-model: its
+/// URL is therefore parameter-free. The base is a parameter for the same reason as in
+/// [`scene_node_url`]: this URL is loaded by the webview, not fetched by us.
+///
+/// # Arguments
+///
+/// - `base_url`: the backend's root, from [`crate::api::http_client::HTTPClient::base_url`]
+///
+/// # Returns
+///
+/// An absolute URL the webview can fetch.
+#[must_use]
+pub fn scene_aux_url(base_url: &str) -> String {
+    format!("{base_url}/api/document/scene/aux.glb")
+}

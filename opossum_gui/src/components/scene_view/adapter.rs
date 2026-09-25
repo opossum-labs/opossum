@@ -17,7 +17,10 @@ use dioxus_glb_viewer::{GlbObject, GlbSource, PickEvent, Transform};
 use opossum_core::types::api_types::SceneManifest;
 use uuid::Uuid;
 
-use crate::{api::scene_node_url, components::scenery_editor::GraphsWorkspaceAction};
+use crate::{
+    api::{scene_aux_url, scene_node_url},
+    components::scenery_editor::GraphsWorkspaceAction,
+};
 
 /// Describe a model's components the way the 3D viewer wants them.
 ///
@@ -48,6 +51,33 @@ pub fn objects_of(manifest: &SceneManifest, base_url: &str) -> Vec<GlbObject> {
             selected: false,
         })
         .collect()
+}
+
+/// Build the auxiliary optical table object for the 3D viewer.
+///
+/// The table is a static textured breadboard ground plane served by the backend at a fixed URL. It
+/// is not a model component and has no node uuid, so it can never be selected or revealed in the
+/// graph: its id uses the `"aux:"` prefix to distinguish it from all node ids, which are UUIDs.
+///
+/// The object is rebuilt on every manifest refresh so that its visibility follows `visible` exactly,
+/// without the viewer needing to know what an "aux" object is.
+///
+/// # Arguments
+///
+/// - `base_url`: the backend's root, from [`crate::api::http_client::HTTPClient::base_url`]
+/// - `visible`: whether the table should currently be shown in the 3D view
+///
+/// # Returns
+///
+/// A [`GlbObject`] whose id is `"aux:table"` and whose source is the aux endpoint URL.
+pub fn aux_table_object(base_url: &str, visible: bool) -> GlbObject {
+    GlbObject {
+        id: "aux:table".to_string(),
+        source: GlbSource::Url(scene_aux_url(base_url)),
+        transform: Transform::default(),
+        visible,
+        selected: false,
+    }
 }
 
 /// Turn a click in the 3D view into the action that reveals the node it hit.
@@ -116,6 +146,7 @@ mod tests {
         let uid = Uuid::new_v4();
         let manifest = SceneManifest {
             nodes: vec![entry(uid)],
+            skipped: vec![],
         };
 
         let objects = objects_of(&manifest, "http://localhost:8001");
@@ -144,6 +175,7 @@ mod tests {
     fn a_components_placement_is_passed_through_unchanged() {
         let manifest = SceneManifest {
             nodes: vec![entry(Uuid::new_v4())],
+            skipped: vec![],
         };
 
         let objects = objects_of(&manifest, "http://localhost:8001");
@@ -176,6 +208,7 @@ mod tests {
         let second = Uuid::new_v4();
         let manifest = SceneManifest {
             nodes: vec![entry(first), entry(second)],
+            skipped: vec![],
         };
 
         let objects = objects_of(&manifest, "http://localhost:8001");
@@ -183,6 +216,44 @@ mod tests {
         assert_eq!(objects.len(), 2);
         assert_eq!(objects[0].id, first.to_string());
         assert_eq!(objects[1].id, second.to_string());
+    }
+
+    /// The aux table object has the expected id and a URL source pointing at the aux endpoint.
+    #[test]
+    fn aux_table_object_has_correct_id_and_url() {
+        let obj = aux_table_object("http://localhost:8001", true);
+        assert_eq!(obj.id, "aux:table");
+        assert!(obj.visible);
+        assert!(!obj.selected);
+        let GlbSource::Url(url) = &obj.source else {
+            panic!("aux table must be fetched from a URL, not carried as bytes");
+        };
+        assert!(
+            url.ends_with("scene/aux.glb"),
+            "{url} does not end with scene/aux.glb"
+        );
+    }
+
+    /// Clicking the aux table must not reveal any node: its id is not a UUID, so
+    /// `reveal_action_for_pick` falls through to `None` before even consulting the manifest.
+    #[test]
+    fn picking_aux_table_reveals_nothing() {
+        let manifest = SceneManifest {
+            nodes: vec![entry(Uuid::new_v4())],
+            skipped: vec![],
+        };
+        let pick_event = PickEvent {
+            id: Some("aux:table".to_string()),
+            mesh_name: None,
+            point: None,
+            shift: false,
+            ctrl: false,
+            alt: false,
+        };
+        assert!(
+            reveal_action_for_pick(&pick_event, &manifest).is_none(),
+            "clicking the aux table must not reveal a node"
+        );
     }
 
     /// A hit reveals the node in the graph the manifest says it actually lives in, and never brings
@@ -193,6 +264,7 @@ mod tests {
         let uid = Uuid::new_v4();
         let manifest = SceneManifest {
             nodes: vec![entry(uid)],
+            skipped: vec![],
         };
 
         let action = reveal_action_for_pick(&pick(Some(uid)), &manifest)
@@ -219,6 +291,7 @@ mod tests {
     fn a_miss_reveals_nothing() {
         let manifest = SceneManifest {
             nodes: vec![entry(Uuid::new_v4())],
+            skipped: vec![],
         };
 
         assert!(reveal_action_for_pick(&pick(None), &manifest).is_none());
@@ -230,6 +303,7 @@ mod tests {
     fn a_stale_id_reveals_nothing() {
         let manifest = SceneManifest {
             nodes: vec![entry(Uuid::new_v4())],
+            skipped: vec![],
         };
 
         assert!(reveal_action_for_pick(&pick(Some(Uuid::new_v4())), &manifest).is_none());

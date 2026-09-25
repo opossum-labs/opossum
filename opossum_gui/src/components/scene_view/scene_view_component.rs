@@ -9,7 +9,7 @@ use crate::{
     HTTP_API_CLIENT, OPOSSUM_UI_LOGS, SCENE_REVISION, api,
     api::eval_action_run,
     components::{
-        scene_view::{objects_of, reveal_action_for_pick},
+        scene_view::{aux_table_object, objects_of, reveal_action_for_pick},
         scenery_editor::GraphsWorkspaceAction,
     },
 };
@@ -44,7 +44,12 @@ pub fn SceneView() -> Element {
     let viewer_handle = use_glb_viewer_handle();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
 
-    let options = use_signal(|| ViewerOptions {
+    // Whether the optical table ground plane is shown. Toggled from the toolbar.
+    let mut show_table = use_signal(|| true);
+    // Whether the corner orientation gizmo is shown. Mirrors `options.orientation_gizmo`.
+    let mut show_axes = use_signal(|| true);
+
+    let mut options = use_signal(|| ViewerOptions {
         // Without this, every lens renders black: glass refracts its surroundings, and an empty
         // scene has none. See `dioxus_glb_viewer`'s `Environment`.
         environment: Environment::Room,
@@ -53,6 +58,8 @@ pub fn SceneView() -> Element {
         // units wide - it would swamp the setup rather than give it a floor.
         grid: false,
         fit_on_first_load: true,
+        // Show a corner gizmo so the user always knows which way is up in the 3D view.
+        orientation_gizmo: true,
         ..ViewerOptions::default()
     });
 
@@ -80,7 +87,15 @@ pub fn SceneView() -> Element {
                 Some(move |fetched| {
                     // Handing over a whole new list is the point: the viewer compares it against
                     // what it already draws and moves, reloads or removes only what differs.
-                    objects.set(objects_of(&fetched, HTTP_API_CLIENT().base_url()));
+                    // Owned so the temporary guard from `HTTP_API_CLIENT()` can be dropped
+                    // before the guard from the second call at the aux line.
+                    let base_url = HTTP_API_CLIENT().base_url().to_owned();
+                    let mut new_objects = objects_of(&fetched, &base_url);
+                    // The aux table is appended after the model objects so it never displaces one.
+                    // Reading `show_table()` here subscribes to it: toggling the signal re-runs
+                    // this effect and rebuilds the list with the updated visibility.
+                    new_objects.push(aux_table_object(&base_url, show_table()));
+                    objects.set(new_objects);
                     skipped_count.set(fetched.skipped.len());
                     for s in &fetched.skipped {
                         OPOSSUM_UI_LOGS.write().add_log(&format!(
@@ -111,6 +126,39 @@ pub fn SceneView() -> Element {
                     onclick: move |_| viewer_handle.reset_camera(),
                     "Reset camera"
                 }
+                button {
+                    class: if show_table() {
+                        "btn btn-sm btn-outline-light active"
+                    } else {
+                        "btn btn-sm btn-outline-light"
+                    },
+                    onclick: move |_| {
+                        show_table.toggle();
+                        // Flip the aux object's visibility immediately so the viewer does not
+                        // wait for the next manifest refresh; the effect will confirm it on its
+                        // next run as well.
+                        let visible = show_table();
+                        for o in objects.write().iter_mut() {
+                            if o.id == "aux:table" {
+                                o.visible = visible;
+                            }
+                        }
+                    },
+                    "Table"
+                }
+                button {
+                    class: if show_axes() {
+                        "btn btn-sm btn-outline-light active"
+                    } else {
+                        "btn btn-sm btn-outline-light"
+                    },
+                    onclick: move |_| {
+                        let v = !show_axes();
+                        show_axes.set(v);
+                        options.write().orientation_gizmo = v;
+                    },
+                    "Axes"
+                }
                 if *skipped_count.read() > 0 {
                     span {
                         class: "scene-view-skipped",
@@ -129,9 +177,11 @@ pub fn SceneView() -> Element {
                 options,
                 on_pick: move |picked: PickEvent| {
                     // Selection lives with the caller, not with the viewer: it only reports the
-                    // click. Clicking empty space clears it.
+                    // click. Clicking empty space clears it. Aux objects (ids starting with
+                    // "aux:") are never model nodes and must never receive a selection box.
                     for object in objects.write().iter_mut() {
-                        object.selected = Some(&object.id) == picked.id.as_ref();
+                        object.selected =
+                            !object.id.starts_with("aux:") && Some(&object.id) == picked.id.as_ref();
                     }
                     // A hit also opens the component's properties, without leaving the 3D view -
                     // see `reveal_action_for_pick`. Looked up in the manifest last fetched rather
