@@ -6,8 +6,12 @@ use dioxus_glb_viewer::{
 };
 
 use crate::{
-    HTTP_API_CLIENT, OPOSSUM_UI_LOGS, SCENE_REVISION, api, api::eval_action_run,
-    components::scene_view::objects_of,
+    HTTP_API_CLIENT, OPOSSUM_UI_LOGS, SCENE_REVISION, api,
+    api::eval_action_run,
+    components::{
+        scene_view::{objects_of, reveal_action_for_pick},
+        scenery_editor::GraphsWorkspaceAction,
+    },
 };
 
 /// How long the view waits for the edits to stop before asking for the model again.
@@ -37,6 +41,7 @@ async fn debounce() {
 pub fn SceneView() -> Element {
     let mut objects = use_signal(Vec::<GlbObject>::new);
     let viewer_handle = use_glb_viewer_handle();
+    let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
 
     let options = use_signal(|| ViewerOptions {
         // Without this, every lens renders black: glass refracts its surroundings, and an empty
@@ -113,6 +118,14 @@ pub fn SceneView() -> Element {
                     // click. Clicking empty space clears it.
                     for object in objects.write().iter_mut() {
                         object.selected = Some(&object.id) == picked.id.as_ref();
+                    }
+                    // A hit also opens the component's properties, without leaving the 3D view -
+                    // see `reveal_action_for_pick`. Looked up in the manifest last fetched rather
+                    // than awaiting a fresh one, so the click responds immediately.
+                    if let Some(Ok(fetched)) = &*manifest.read()
+                        && let Some(action) = reveal_action_for_pick(&picked, fetched)
+                    {
+                        workspace_processor.send(action);
                     }
                 },
                 on_event: move |event: ViewerEvent| {

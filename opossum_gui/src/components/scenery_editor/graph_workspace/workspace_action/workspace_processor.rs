@@ -518,12 +518,32 @@ pub fn use_workspace_processor(
                         )
                         .await;
                     }
-                    GraphsWorkspaceAction::RevealNode { node_id, graph_id } => {
+                    GraphsWorkspaceAction::RevealNode {
+                        node_id,
+                        graph_id,
+                        bring_to_front,
+                    } => {
+                        // `ensure_tab_active` is about to change `active_tab` exactly when this
+                        // check is true (it is the same condition it uses internally) - arm the
+                        // flag only then, so `GraphEditor`'s effect always finds a matching
+                        // `active_tab` change to consume it against and it can never leak into an
+                        // unrelated later tab switch.
+                        if !bring_to_front && *workspace.active_tab().read() != graph_id {
+                            *crate::KEEP_SCENE_IN_FRONT.write() = true;
+                        }
                         ensure_tab_active(graph_id, workspace_handlers, root_graph_id, workspace)
                             .await;
                         workspace_handlers
                             .nodes
                             .set_node_active(graph_id, node_id, true, 0);
+                        if !bring_to_front {
+                            // A 3D-view pick has to actually show the properties it reveals -
+                            // selecting the node alone leaves the sidebar on whatever it already
+                            // showed. `ensure_tab_active`'s tab switch does the equivalent for the
+                            // canvas already; this is that step for the sidebar.
+                            *crate::SIDEBAR_VIEW.write() = SidebarView::NodeProperties;
+                            *crate::SIDEBAR_COLLAPSED.write() = false;
+                        }
                     }
                     GraphsWorkspaceAction::GetEditorArea => {
                         process_get_editor_area(workspace, workspace_handlers).await;

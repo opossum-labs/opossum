@@ -21,6 +21,8 @@ use optoscene::{
 };
 use uom::si::f64::Length;
 
+use crate::helper_functions::parent_group_id_or_self;
+
 /// How finely the rim of a clear aperture is sampled.
 ///
 /// The count carries through the whole mesh: it sets how round a lens looks and, through the
@@ -243,8 +245,10 @@ pub fn manifest_of(placed: &OpmDocument, wavelength: Length) -> OpmResult<SceneM
         let placement = body.isometry().get_transform();
         let position = placement.translation.vector;
         let rotation = placement.rotation.quaternion();
+        let uid = node.node_attr().uuid();
         nodes.push(SceneNodeEntry {
-            uid: node.node_attr().uuid(),
+            uid,
+            group: parent_group_id_or_self(placed.scenery(), uid)?,
             name: node.name().to_string(),
             geometry: geometry_of(node, body, wavelength)?,
             position: [position.x as f32, position.y as f32, position.z as f32],
@@ -656,6 +660,33 @@ mod test {
 
         assert_eq!(manifest.nodes.len(), 2);
         assert_eq!(manifest.nodes[0].geometry, manifest.nodes[1].geometry);
+        Ok(())
+    }
+
+    /// A component inside a nested group is listed with that group's uuid, not the root's. The 3D
+    /// view needs the exact graph a click has to reveal the node in, and a subgroup is the case
+    /// `parent_group_id_or_self` has to recurse for rather than answering with the root.
+    #[test]
+    fn a_component_inside_a_group_is_listed_with_that_group() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+
+        let mut inner = NodeGroup::new("inner");
+        let lens = inner.add_node(Lens::default())?;
+        inner.map_input_port(lens, "input_1", "input_1")?;
+        inner.map_output_port(lens, "output_1", "output_1")?;
+        let group_id = scenery.add_node(inner)?;
+
+        scenery.connect_nodes(source, "output_1", group_id, "input_1", millimeter!(50.0))?;
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(source, RayDataBuilder::default());
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+
+        let manifest = manifest(&document)?;
+
+        assert_eq!(manifest.nodes.len(), 1);
+        assert_eq!(manifest.nodes[0].group, group_id);
         Ok(())
     }
 

@@ -13,10 +13,11 @@
 //! only what changed, so as long as a component keeps its `id` and its source URL, moving it costs
 //! a transform and no geometry at all.
 
-use dioxus_glb_viewer::{GlbObject, GlbSource, Transform};
+use dioxus_glb_viewer::{GlbObject, GlbSource, PickEvent, Transform};
 use opossum_core::types::api_types::SceneManifest;
+use uuid::Uuid;
 
-use crate::api::scene_node_url;
+use crate::{api::scene_node_url, components::scenery_editor::GraphsWorkspaceAction};
 
 /// Describe a model's components the way the 3D viewer wants them.
 ///
@@ -49,20 +50,62 @@ pub fn objects_of(manifest: &SceneManifest, base_url: &str) -> Vec<GlbObject> {
         .collect()
 }
 
+/// Turn a click in the 3D view into the action that reveals the node it hit.
+///
+/// The pick only reports which object was hit; the graph it lives in comes from looking the uid
+/// back up in the manifest, which is where the backend filled it in during the same walk that
+/// found the component in the first place. The action never brings the node's graph tab to the
+/// front - the whole point of clicking in the 3D view is to keep looking at it.
+///
+/// # Arguments
+///
+/// - `picked`: what the viewer reported for the click
+/// - `manifest`: the components of the model, as the backend listed them
+///
+/// # Returns
+///
+/// The action that selects the node and opens its properties, or `None` for a miss, or a pick
+/// whose id the manifest no longer lists (a stale click racing a refresh).
+pub fn reveal_action_for_pick(
+    picked: &PickEvent,
+    manifest: &SceneManifest,
+) -> Option<GraphsWorkspaceAction> {
+    let uid: Uuid = picked.id.as_ref()?.parse().ok()?;
+    let group = manifest.nodes.iter().find(|node| node.uid == uid)?.group;
+    Some(GraphsWorkspaceAction::RevealNode {
+        node_id: uid,
+        graph_id: group,
+        bring_to_front: false,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use opossum_core::types::api_types::SceneNodeEntry;
-    use uuid::Uuid;
 
     /// One component, as the backend would list it.
     fn entry(uid: Uuid) -> SceneNodeEntry {
         SceneNodeEntry {
             uid,
+            group: Uuid::new_v4(),
             name: "lens".to_owned(),
             geometry: "deadbeefdeadbeef".to_owned(),
             position: [0.0, 0.0, 0.25],
             rotation: [0.0, 0.0, 0.0, 1.0],
+        }
+    }
+
+    /// A pick, the way `dioxus_glb_viewer` reports it. Only `id` matters to
+    /// [`reveal_action_for_pick`]; the rest is never read.
+    fn pick(id: Option<Uuid>) -> PickEvent {
+        PickEvent {
+            id: id.map(|uid| uid.to_string()),
+            mesh_name: None,
+            point: None,
+            shift: false,
+            ctrl: false,
+            alt: false,
         }
     }
 
@@ -140,5 +183,55 @@ mod tests {
         assert_eq!(objects.len(), 2);
         assert_eq!(objects[0].id, first.to_string());
         assert_eq!(objects[1].id, second.to_string());
+    }
+
+    /// A hit reveals the node in the graph the manifest says it actually lives in, and never brings
+    /// that graph's tab in front of the 3D view - the whole point of clicking there in the first
+    /// place.
+    #[test]
+    fn a_hit_reveals_the_node_without_leaving_the_3d_view() {
+        let uid = Uuid::new_v4();
+        let manifest = SceneManifest {
+            nodes: vec![entry(uid)],
+        };
+
+        let action = reveal_action_for_pick(&pick(Some(uid)), &manifest)
+            .expect("a hit on a listed component reveals it");
+
+        let GraphsWorkspaceAction::RevealNode {
+            node_id,
+            graph_id,
+            bring_to_front,
+        } = action
+        else {
+            panic!("a 3D pick must reveal the node it hit, not any other action");
+        };
+        assert_eq!(node_id, uid);
+        assert_eq!(graph_id, manifest.nodes[0].group);
+        assert!(
+            !bring_to_front,
+            "a 3D pick must not bring the graph tab in front of the 3D view"
+        );
+    }
+
+    /// Clicking empty space reports no id and must reveal nothing.
+    #[test]
+    fn a_miss_reveals_nothing() {
+        let manifest = SceneManifest {
+            nodes: vec![entry(Uuid::new_v4())],
+        };
+
+        assert!(reveal_action_for_pick(&pick(None), &manifest).is_none());
+    }
+
+    /// A click can race a manifest refresh and report an id the manifest just stopped listing; that
+    /// must not be turned into an action for a node that may not even exist any more.
+    #[test]
+    fn a_stale_id_reveals_nothing() {
+        let manifest = SceneManifest {
+            nodes: vec![entry(Uuid::new_v4())],
+        };
+
+        assert!(reveal_action_for_pick(&pick(Some(Uuid::new_v4())), &manifest).is_none());
     }
 }

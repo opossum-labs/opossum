@@ -114,6 +114,11 @@ static SCENE_REVISION: GlobalSignal<usize> = Signal::global(|| 0);
 /// *not* part of the graph workspace state — that state is a map of graphs, and the 3D view is not
 /// a graph. Which tab is currently in front stays local to the graph editor.
 static SCENE_VIEW_OPEN: GlobalSignal<bool> = Signal::global(|| false);
+/// Set right before a `RevealNode` action whose `bring_to_front` is `false` changes `active_tab`
+/// (a 3D view pick), so `GraphEditor`'s effect that otherwise brings a graph's tab to the front
+/// whenever `active_tab` changes can skip that step this one time. Consumed (cleared) by that
+/// effect - see `GraphEditor`'s `shown` memo and the effect above it.
+static KEEP_SCENE_IN_FRONT: GlobalSignal<bool> = Signal::global(|| false);
 /// Set from the backend's authoritative `JumpTarget` when an undo/redo focuses a node: the node it
 /// selected and the panel to open once that node's editor has loaded. Consumed (cleared) by whichever
 /// `OpticalNodeEditor`/`PortConfigEditor` instance matches the uuid. `apply_document_changes` sets it

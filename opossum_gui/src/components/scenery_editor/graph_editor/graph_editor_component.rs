@@ -15,7 +15,7 @@ use crate::components::{
         },
     },
 };
-use crate::{SCENE_VIEW_OPEN, SIDEBAR_COLLAPSED, SIDEBAR_VIEW, SIDEBAR_WIDTH};
+use crate::{KEEP_SCENE_IN_FRONT, SCENE_VIEW_OPEN, SIDEBAR_COLLAPSED, SIDEBAR_VIEW, SIDEBAR_WIDTH};
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use dioxus_primitives::tabs::{TabList, TabTrigger, Tabs};
 use std::path::PathBuf;
@@ -120,9 +120,20 @@ pub fn GraphEditor(
     // The one effect, and it runs in the safe direction: from the active graph to the flag, never
     // back. Whatever brings a graph forward therefore brings it into view as well, including code
     // that knows nothing about the 3D view.
+    //
+    // `KEEP_SCENE_IN_FRONT` is the one deliberate exception: a 3D view pick changes `active_tab` too
+    // (see `GraphsWorkspaceAction::RevealNode`'s `bring_to_front: false` path), so that the
+    // properties sidebar - which reads the selection off `active_tab` - shows the revealed node, but
+    // the whole point of that click was to keep looking at the 3D view. `.peek()` reads it without
+    // subscribing, so this effect still runs only on an `active_tab` change, never on the flag by
+    // itself.
     use_effect(move || {
         active_tab();
-        scene_in_front.set(false);
+        if *KEEP_SCENE_IN_FRONT.peek() {
+            *KEEP_SCENE_IN_FRONT.write() = false;
+        } else {
+            scene_in_front.set(false);
+        }
     });
 
     // Opening the view from the menu brings it to the front; closing it hands the graph back.

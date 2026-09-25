@@ -983,6 +983,12 @@ pub struct UndoRedoResponse {
 pub struct SceneNodeEntry {
     /// The component's node UUID, which is also the `uid` written into the glTF `extras`.
     pub uid: Uuid,
+    /// The UUID of the graph that directly contains the component.
+    ///
+    /// Lets a viewer reveal a clicked component in the graph editor without having to ask the
+    /// backend where it lives: the manifest already learns this from the same walk that finds the
+    /// component in the first place.
+    pub group: Uuid,
     /// The component's name, for labelling it in a viewer.
     pub name: String,
     /// A hash over the component's mesh and material.

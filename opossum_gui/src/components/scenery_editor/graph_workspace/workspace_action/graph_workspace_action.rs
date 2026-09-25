@@ -400,13 +400,21 @@ pub enum GraphsWorkspaceAction {
     },
 
     /// Brings a node into view: makes its graph the active tab (opening it first if needed) and
-    /// selects it. Used by the amplifier overview to take the user to a listed node, which may sit
-    /// in a group whose tab isn't even open.
+    /// selects it. Used by the amplifier overview to take the user to a listed node, and by a 3D
+    /// view pick, which may both sit in a group whose tab isn't even open.
     RevealNode {
         /// The ID of the node to reveal.
         node_id: Uuid,
         /// The ID of the graph containing the node.
         graph_id: Uuid,
+        /// Whether to also bring the node's graph tab to the front.
+        ///
+        /// `true` for the amplifier overview's "reveal": the sidebar stays on the pump scenario
+        /// list, so jumping the canvas to the node is the whole point. `false` for a 3D view pick:
+        /// the 3D tab already shows where the component is, so bringing the graph forward would
+        /// undo the very thing the click was for - the node is selected and the properties sidebar
+        /// switches to it instead (see `workspace_processor`'s handling of this action).
+        bring_to_front: bool,
     },
 
     /// Undoes the last checkpointed document edit.

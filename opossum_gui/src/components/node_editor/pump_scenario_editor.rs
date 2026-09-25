@@ -401,6 +401,7 @@ fn ScenarioAmplifiers(scenario_id: Uuid) -> Element {
                                 .send(GraphsWorkspaceAction::RevealNode {
                                     node_id,
                                     graph_id,
+                                    bring_to_front: true,
                                 });
                         },
                     }
