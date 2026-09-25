@@ -329,6 +329,12 @@ fn record_output_ports(
 }
 
 /// Stores outgoing edge data in the graph and updates the up-direction reference vector.
+///
+/// # Errors
+///
+/// This function returns an error if a referenced node cannot be found, if the up-direction cannot
+/// be derived from an outgoing beam, or if an outgoing beam holds no rays at all: the optical axis
+/// ends at this node then, and nothing connected after it can be placed.
 fn update_outgoing_edges_and_up_direction(
     graph: &mut OpticGraph,
     node_idx: NodeIndex,
@@ -339,6 +345,17 @@ fn update_outgoing_edges_and_up_direction(
     let fallback_node_type = graph.g[node_idx].node_attr().node_type().to_string();
 
     for outgoing_edge in outgoing_edges {
+        // Checked here rather than left to the up-direction calculation below, which could only
+        // report an empty bundle - not where the optical axis was lost.
+        if let LightData::Geometric(rays) = &outgoing_edge.1
+            && rays.nr_of_rays(false) == 0
+        {
+            return Err(OpossumError::Analysis(format!(
+                "no light leaves {} at port '{}': the optical axis ends there, so the components \
+                 after it cannot be placed",
+                graph.g[node_idx], outgoing_edge.0
+            )));
+        }
         if let Some(target_uuid) = referenced_id {
             let target_idx = graph.node_idx_by_uuid(target_uuid).ok_or_else(|| {
                 OpossumError::Analysis(format!(

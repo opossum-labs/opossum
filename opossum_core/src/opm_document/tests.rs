@@ -1,11 +1,17 @@
 use super::*;
 use crate::{
-    analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig, energy::EnergyConfig},
+    analyzers::{
+        AnalyzerType, GhostFocusConfig, RayTraceConfig, energy::EnergyConfig,
+        raytrace::AnalysisRayTrace,
+    },
     core_optics::node_attr::HasNodeAttr,
     gain::{ConstGain, GainModel},
-    light::lightdata::ray_data_builder::RayDataBuilder,
+    joule,
+    light::{LightResult, lightdata::ray_data_builder::RayDataBuilder},
     millimeter,
-    nodes::{Dummy, Lens, SourcePort},
+    nodes::{
+        Dummy, Lens, ReflectiveGrating, SourcePort, ThinMirror, round_collimated_ray_builder,
+    },
 };
 use approx::assert_relative_eq;
 
@@ -350,5 +356,88 @@ fn an_energy_analysis_places_nothing() -> OpmResult<()> {
 
     let placed = document.positioned_copy(None)?;
     assert_relative_eq!(placed_at(&placed, first)?, 0.1, epsilon = 1e-12);
+    Ok(())
+}
+
+/// A source port, an untilted default grating 50 mm along and, if asked for, a mirror 50 mm after
+/// that.
+///
+/// Untilted, the grating's order -1 does not propagate at 1000 nm (|m·λ·g| = 1.74 > 1), so the
+/// optical axis ends at the grating.
+fn source_then_untilted_grating(mirror_after: bool) -> OpmResult<(NodeGroup, Uuid, Uuid)> {
+    let mut scenery = NodeGroup::default();
+    let source = scenery.add_node(SourcePort::default())?;
+    let grating = scenery.add_node(ReflectiveGrating::default())?;
+    scenery.connect_nodes(source, "output_1", grating, "input_1", millimeter!(50.0))?;
+    if mirror_after {
+        let mirror = scenery.add_node(ThinMirror::default())?;
+        scenery.connect_nodes(grating, "output_1", mirror, "input_1", millimeter!(50.0))?;
+    }
+    Ok((scenery, source, grating))
+}
+
+/// A ray-trace configuration feeding the given source port a single ray at 1000 nm.
+fn single_ray_config(source: Uuid) -> OpmResult<RayTraceConfig> {
+    let mut config = RayTraceConfig::default();
+    config.map_source(
+        source,
+        round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 0)?,
+    );
+    Ok(config)
+}
+
+/// An untilted grating swallows the optical axis, so the mirror after it cannot be placed. That has
+/// to stop the run - but with a message that names the grating and says how to tilt it, rather than
+/// the bare "empty ray bundle, cannot define up-direction" it used to be.
+#[test]
+fn positioning_stops_at_an_evanescent_grating_with_a_clear_error() -> OpmResult<()> {
+    let (scenery, source, _) = source_then_untilted_grating(true)?;
+    let mut document = OpmDocument::new(scenery);
+    document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
+
+    let Err(error) = document.positioned_copy(None) else {
+        panic!("the mirror after the grating cannot be placed");
+    };
+    let error = error.to_string();
+
+    assert!(error.contains("'reflective grating'"), "{error}");
+    assert!(error.contains("evanescent"), "{error}");
+    assert!(error.contains("Littrow angle of -60.46°"), "{error}");
+    Ok(())
+}
+
+/// With nothing after it, a grating that swallows the optical axis leaves nothing unplaced, while
+/// the light does reach the grating itself - so the run finishes and the grating can be drawn. Its
+/// empty outgoing bundle used to fail the whole run.
+#[test]
+fn a_terminal_evanescent_grating_is_still_placed() -> OpmResult<()> {
+    let (scenery, source, grating) = source_then_untilted_grating(false)?;
+    let mut document = OpmDocument::new(scenery);
+    document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
+
+    let placed = document.positioned_copy(None)?;
+
+    assert!(is_placed(&placed, grating)?);
+    Ok(())
+}
+
+/// Any node that lets no light out ends the optical axis, not only a grating. A run that is not
+/// flagged as positioning skips the grating's own check and hands its empty bundle on, which shows
+/// that the graph walk itself says where the axis was lost.
+#[test]
+fn an_empty_outgoing_bundle_names_the_node_and_port() -> OpmResult<()> {
+    let (mut scenery, source, _) = source_then_untilted_grating(true)?;
+
+    let Err(error) = AnalysisRayTrace::calc_node_positions(
+        &mut scenery,
+        LightResult::default(),
+        &single_ray_config(source)?,
+    ) else {
+        panic!("the mirror after the grating cannot be placed");
+    };
+    let error = error.to_string();
+
+    assert!(error.contains("no light leaves"), "{error}");
+    assert!(error.contains("'output_1'"), "{error}");
     Ok(())
 }
