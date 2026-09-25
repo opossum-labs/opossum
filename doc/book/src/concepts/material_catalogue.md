@@ -33,3 +33,20 @@ Materials in the catalogue can have different versions. If changes are made to t
 The version information was introduced to allow optical models to refer to a specific (older) version of a material definition. This way, (community) updates to the material catalogue do not break older models. In the future there will be a mechanism to optionally update material references in optical nodes to the most up to date catalogue version.
 
 The version that is currently being used in the GUI does not change automatically when a new version is published. The version already being used in the GUI remains unchanged unless the user intentionally changes it to the newly published version.
+
+## Asset Catalog Synchronization
+
+The **Asset Catalog Synchronization** feature allows the material versions used in an Opossum model to be synchronized with the corresponding versions available in the Material Catalogue.
+
+When a new material or a new version of an existing material is added to the catalogue, the model can be synchronized with the updated catalogue information. The synchronization functionality is available near **Add New Material**.
+
+Synchronization can be performed in both directions:
+
+- **Catalogue → Model:** The material used in the model can be updated to a corresponding version available in the catalogue.
+- **Model → Catalogue:** The catalogue can be synchronized with the material version defined in the model.
+
+This allows users to explicitly manage differences between the material version referenced by a model and the version available in the catalogue, rather than changing the material reference automatically when a new catalogue version is published.
+
+Opossum also provides a shared opossum Catalog, which serves as the standard asset catalogue for Opossum.
+
+The catalogue can be updated from the shared repository using **Pull Updates from Git** on the main Opossum page. This retrieves the latest catalogue updates and makes newly added materials and material versions available for synchronization with models.
