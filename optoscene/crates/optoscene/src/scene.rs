@@ -6,7 +6,7 @@ use std::hash::Hasher;
 use std::io::Write;
 use std::path::Path;
 
-use nalgebra::{Isometry3, Point3, UnitQuaternion, Vector3};
+use nalgebra::{Isometry3, Point3, UnitQuaternion};
 
 use crate::error::Error;
 use crate::gltf::{builder, container};
@@ -166,100 +166,6 @@ impl Scene {
         self.node_lookup.insert(node.uid.clone(), index);
         self.nodes.push(node);
         Ok(())
-    }
-
-    /// Adds a flat square breadboard ground plane to the scene.
-    ///
-    /// Builds a square optical table of side `size` metres in the x–z plane,
-    /// centred at the world origin in x and z and lifted to `y = height`.
-    /// The surface is tiled with the built-in breadboard texture, scaled so
-    /// that one hole repeats every `pitch` metres. Two back-to-back patches
-    /// (top-facing with normal +y, bottom-facing with normal −y) are written
-    /// so the table is visible from both above and below; they share the same
-    /// textured material. Mesh geometry is built in local coordinates at y = 0
-    /// and the node transform carries the height offset.
-    ///
-    /// The node is placed on [`Layer::Aux`] with uid `"optical_table"` and
-    /// name `"optical table"`.
-    ///
-    /// # Arguments
-    /// * `pitch` — hole spacing in metres (e.g. `0.025` for 25 mm). Must be
-    ///   finite and strictly positive.
-    /// * `size` — side length of the square table in metres. Must be finite
-    ///   and strictly positive.
-    /// * `height` — y-coordinate of the table surface in metres. May be any
-    ///   finite value.
-    ///
-    /// # Errors
-    /// Returns [`Error::InvalidMesh`] if `pitch` or `size` is not finite or
-    /// not strictly positive.
-    /// Returns [`Error::DuplicateUid`] if a node with uid `"optical_table"`
-    /// has already been added to the scene.
-    #[allow(clippy::cast_possible_truncation)]
-    pub fn add_optical_table(&mut self, pitch: f64, size: f64, height: f64) -> Result<(), Error> {
-        if !pitch.is_finite() || pitch <= 0.0 {
-            return Err(Error::InvalidMesh(
-                "optical table pitch must be finite and strictly positive".to_string(),
-            ));
-        }
-        if !size.is_finite() || size <= 0.0 {
-            return Err(Error::InvalidMesh(
-                "optical table size must be finite and strictly positive".to_string(),
-            ));
-        }
-
-        let mat = self.add_material(Material::Textured {
-            image_png: include_bytes!("assets/optical_table_tile.png").to_vec(),
-            tint: [1.0, 1.0, 1.0, 1.0],
-            metallic: 0.3,
-            roughness: 0.6,
-            uv_scale: (1.0 / pitch) as f32,
-        });
-
-        let half = size / 2.0;
-        // Vertex layout (local y = 0):
-        //   0: (-half, 0, -half)   1: (half, 0, -half)
-        //   3: (-half, 0,  half)   2: (half, 0,  half)
-        let positions = vec![
-            Point3::new(-half, 0.0, -half),
-            Point3::new(half, 0.0, -half),
-            Point3::new(half, 0.0, half),
-            Point3::new(-half, 0.0, half),
-        ];
-
-        // Top patch: normal +y, CCW winding seen from above (+y).
-        // (v1-v0) × (v2-v0) = (half*2,0,0)×(half*2,0,half*2) → (0, +y, 0) ✓
-        let top_patch = SurfacePatch {
-            name: Some("top".to_string()),
-            positions: positions.clone(),
-            normals: Some(vec![Vector3::y(); 4]),
-            colors: None,
-            indices: vec![[0, 2, 1], [0, 3, 2]],
-            material: mat,
-        };
-
-        // Bottom patch: normal −y, reversed winding.
-        let bottom_patch = SurfacePatch {
-            name: Some("bottom".to_string()),
-            positions,
-            normals: Some(vec![-Vector3::y(); 4]),
-            colors: None,
-            indices: vec![[0, 1, 2], [0, 2, 3]],
-            material: mat,
-        };
-
-        let mesh_id = self.add_mesh(TriMesh {
-            patches: vec![top_patch, bottom_patch],
-        })?;
-
-        self.add_node(SceneNode {
-            uid: "optical_table".to_string(),
-            name: "optical table".to_string(),
-            mesh: Some(mesh_id),
-            transform: Isometry3::translation(0.0, height, 0.0),
-            layer: Layer::Aux,
-            data: None,
-        })
     }
 
     /// Adds the line and (optional) envelope nodes for a ray trace to the

@@ -9,9 +9,7 @@ use crate::{
     joule,
     light::{LightResult, lightdata::ray_data_builder::RayDataBuilder},
     millimeter,
-    nodes::{
-        Dummy, Lens, ReflectiveGrating, SourcePort, ThinMirror, round_collimated_ray_builder,
-    },
+    nodes::{Dummy, Lens, ReflectiveGrating, SourcePort, ThinMirror, round_collimated_ray_builder},
 };
 use approx::assert_relative_eq;
 

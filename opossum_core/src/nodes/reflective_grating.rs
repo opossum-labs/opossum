@@ -2,7 +2,9 @@
 //! Infinitely thin mirror with spherical or flat surface
 use crate::{
     analyzers::{
-        GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
+        GhostFocusConfig, RayTraceConfig,
+        energy::AnalysisEnergy,
+        ghostfocus::AnalysisGhostFocus,
         propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
         raytrace::AnalysisRayTrace,
     },

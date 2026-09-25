@@ -296,66 +296,6 @@ fn glb_with_vertices(count: usize) -> Vec<u8> {
 }
 
 #[test]
-fn add_optical_table_exports_textured_aux_node() {
-    let mut scene = Scene::new(SceneOptions {
-        origin: Some(Point3::origin()),
-        ..SceneOptions::default()
-    });
-    scene
-        .add_optical_table(0.025, 2.0, -0.075)
-        .expect("optical table added");
-
-    let json = glb_json(&scene.to_glb().unwrap());
-
-    // The scene must carry at least one texture and one image.
-    assert!(
-        json.get("textures")
-            .and_then(Value::as_array)
-            .is_some_and(|a| !a.is_empty()),
-        "exported glTF must have at least one texture"
-    );
-    assert!(
-        json.get("images")
-            .and_then(Value::as_array)
-            .is_some_and(|a| !a.is_empty()),
-        "exported glTF must have at least one image"
-    );
-
-    // The material must reference a baseColorTexture.
-    assert!(
-        json["materials"][0]["pbrMetallicRoughness"]["baseColorTexture"]
-            .get("index")
-            .is_some(),
-        "material must have a baseColorTexture"
-    );
-
-    // At least one primitive must carry TEXCOORD_0.
-    let has_texcoord = json["meshes"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .flat_map(|m| m["primitives"].as_array().unwrap().iter())
-        .any(|p| p["attributes"].get("TEXCOORD_0").is_some());
-    assert!(has_texcoord, "a primitive must carry TEXCOORD_0");
-
-    // The optical-table node must sit on the aux layer.
-    let table_node = json["nodes"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|n| {
-            n.get("extras")
-                .and_then(|e| e.get("uid"))
-                .is_some_and(|uid| uid == "optical_table")
-        })
-        .expect("optical_table node must be present");
-    assert_eq!(
-        table_node["extras"]["layer"], "aux",
-        "optical_table node must be on the aux layer"
-    );
-}
-
-#[test]
 fn layer_to_glb_excludes_other_layers() {
     let mut scene = Scene::new(SceneOptions {
         origin: Some(Point3::origin()),
