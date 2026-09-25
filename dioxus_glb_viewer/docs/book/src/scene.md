@@ -94,6 +94,7 @@ Scene-wide settings. The prop is optional; leaving it out uses these defaults.
 | `initial_target` | Camera target before the first auto-fit. | `[0.0, 0.0, 0.0]` |
 | `environment` | Surroundings the scene is lit and reflected by (`None` or `Room`). | `None` |
 | `fov_degrees` | Vertical field of view. | `50.0` |
+| `orientation_gizmo` | Show a corner orientation gizmo (three.js `ViewHelper`) in the bottom-right corner. Coloured axes reflect the current camera orientation; clicking an axis snaps the camera to that view. | `false` |
 
 Colour values are handed to `new THREE.Color(...)`, so they must be something three.js
 can parse: `"#1e1e1e"`, `"rgb(30,30,30)"`, or a CSS colour name. A *transparent*

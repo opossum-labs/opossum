@@ -91,16 +91,35 @@ export async function createViewer(canvasId, options, send, threeBase) {
      * Lazily creates or disposes the ViewHelper depending on `enabled`.
      * The import is deferred so viewers that never enable the gizmo pay no cost.
      *
+     * Race guard: both the boot path and the first `set_options` op may call
+     * ensureGizmo(true) while the dynamic import is still in flight.  After the
+     * await, we check `viewHelper` again — if the other concurrent call already
+     * constructed it we return immediately instead of constructing a second one
+     * (which would overwrite the first and leak its GPU resources).
+     *
+     * Errors from the import or construction are caught and forwarded to Rust via
+     * the `send` callback as a `{ event: 'error', message }` payload, matching the
+     * shape already used by other error paths in the boot script.
+     *
      * @param {boolean} enabled - Whether the gizmo should be active.
      */
     async function ensureGizmo(enabled) {
         if (enabled && !viewHelper) {
-            const { ViewHelper } =
-                await import(threeBase + '/examples/jsm/helpers/ViewHelper.js');
-            // The viewer may have been torn down (or disabled again) while we awaited.
-            if (disposed || !currentOptions.orientation_gizmo) return;
-            viewHelper = new ViewHelper(camera, renderer.domElement);
-            viewHelper.center = controls.target;
+            try {
+                const { ViewHelper } =
+                    await import(threeBase + '/examples/jsm/helpers/ViewHelper.js');
+                // The viewer may have been torn down (or disabled again) while we awaited.
+                // Also guard against a concurrent ensureGizmo(true) that finished first.
+                if (disposed || !currentOptions.orientation_gizmo || viewHelper) return;
+                viewHelper = new ViewHelper(camera, renderer.domElement);
+                viewHelper.center = controls.target;
+            } catch (e) {
+                send({
+                    event: 'error',
+                    message: 'Could not create the orientation gizmo: ' +
+                        String((e && e.message) || e),
+                });
+            }
         } else if (!enabled && viewHelper) {
             viewHelper.dispose();
             viewHelper = null;

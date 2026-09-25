@@ -129,17 +129,34 @@ impl Serialize for Transform {
 
 impl Serialize for ViewerOptions {
     fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        let mut st = s.serialize_struct("ViewerOptions", 10)?;
-        st.serialize_field("background", &self.background)?;
-        st.serialize_field("grid", &self.grid)?;
-        st.serialize_field("ambient_intensity", &self.ambient_intensity)?;
-        st.serialize_field("directional_intensity", &self.directional_intensity)?;
-        st.serialize_field("selection_color", &self.selection_color)?;
-        st.serialize_field("fit_on_first_load", &self.fit_on_first_load)?;
-        st.serialize_field("initial_camera", &self.initial_camera)?;
-        st.serialize_field("initial_target", &self.initial_target)?;
-        st.serialize_field("environment", &self.environment)?;
-        st.serialize_field("fov_degrees", &self.fov_degrees)?;
+        // Destructure exhaustively (no `..`) so that a new field added to the struct causes a
+        // compile error here until it is also emitted on the wire.  The compiler becomes the guard
+        // that `viewer_options_put_every_field_on_the_wire` would otherwise miss.
+        let Self {
+            background,
+            grid,
+            ambient_intensity,
+            directional_intensity,
+            selection_color,
+            fit_on_first_load,
+            initial_camera,
+            initial_target,
+            environment,
+            fov_degrees,
+            orientation_gizmo,
+        } = self;
+        let mut st = s.serialize_struct("ViewerOptions", 11)?;
+        st.serialize_field("background", background)?;
+        st.serialize_field("grid", grid)?;
+        st.serialize_field("ambient_intensity", ambient_intensity)?;
+        st.serialize_field("directional_intensity", directional_intensity)?;
+        st.serialize_field("selection_color", selection_color)?;
+        st.serialize_field("fit_on_first_load", fit_on_first_load)?;
+        st.serialize_field("initial_camera", initial_camera)?;
+        st.serialize_field("initial_target", initial_target)?;
+        st.serialize_field("environment", environment)?;
+        st.serialize_field("fov_degrees", fov_degrees)?;
+        st.serialize_field("orientation_gizmo", orientation_gizmo)?;
         st.end()
     }
 }
@@ -175,9 +192,24 @@ mod tests {
                 "grid",
                 "initial_camera",
                 "initial_target",
+                "orientation_gizmo",
                 "selection_color",
             ]
         );
+    }
+
+    /// `orientation_gizmo` was missing from the hand-written `Serialize` impl when it was first
+    /// added to the struct, so `viewer.js` read `undefined` and never created the `ViewHelper`.
+    /// This test exists so the same regression cannot recur silently: it serialises
+    /// `ViewerOptions` with the gizmo enabled and asserts the JSON value is exactly `true`.
+    #[test]
+    fn the_orientation_gizmo_reaches_the_wire() {
+        let opts = ViewerOptions {
+            orientation_gizmo: true,
+            ..ViewerOptions::default()
+        };
+        let json = serde_json::to_value(opts).expect("options serialise");
+        assert_eq!(json["orientation_gizmo"], true);
     }
 
     /// `viewer.js` switches on these exact strings, so renaming a variant silently turns the
