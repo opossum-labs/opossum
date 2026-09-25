@@ -174,6 +174,24 @@ pub(super) const fn is_behind_curvature(distance_from_center: f64, radius: f64) 
     }
 }
 
+/// How far `half_chord_squared` may dip below zero in [`curved_local_z`] before a position genuinely
+/// counts as beyond the surface's curvature, rather than merely landing there because of rounding.
+///
+/// A hemisphere — curvature radius equal to the aperture radius — is the tightest a spherical or
+/// cylindrical surface can be without folding back on itself, and geometrically valid: at the rim,
+/// `distance_from_axis` equals `radius` exactly and the sag is zero. But `distance_from_axis` is
+/// usually not `radius` bit-for-bit there: it comes from sampling the aperture's outline (points on
+/// a circle of that radius, reconstructed through trigonometric functions), whose own rounding can
+/// place a rim point a few floating point epsilons beyond it. Squaring that in `half_chord_squared`
+/// then yields a result that is negative although the true value is zero, and the surface would
+/// reject the very rim of a valid hemisphere as unreachable.
+///
+/// Relative to `radius²` rather than an absolute distance, so the same tolerance holds whether the
+/// surface is measured in micrometres or metres — the same reasoning as [`ALIGNMENT_TOLERANCE`].
+/// The value sits far above the rounding this exists for (a few times [`f64::EPSILON`]) and far
+/// below any curvature-versus-aperture mismatch a real component would be built with.
+const CURVATURE_RIM_TOLERANCE: f64 = 1e-9;
+
 /// Determine the local z position of a curved surface above a given transversal distance from its
 /// axis.
 ///
@@ -181,6 +199,10 @@ pub(super) const fn is_behind_curvature(distance_from_center: f64, radius: f64) 
 /// ([`Sphere`](super::Sphere), [`Cylinder`](super::Cylinder)) — the same pair, and for the same
 /// reason, as [`is_behind_curvature`]: they differ only in how that distance is measured. The
 /// vertex, at distance zero, therefore lies at `-radius` for either sign of the curvature.
+///
+/// A `distance_from_axis` up to [`CURVATURE_RIM_TOLERANCE`] beyond `radius` is treated as exactly
+/// `radius` (see there) — the rim of an exact hemisphere, not a surface asked about a point it
+/// cannot reach.
 ///
 /// # Arguments
 ///
@@ -193,7 +215,14 @@ pub(super) const fn is_behind_curvature(distance_from_center: f64, radius: f64) 
 /// the surface has already curved back on itself and no longer lies above the transversal plane.
 pub(super) fn curved_local_z(distance_from_axis: f64, radius: f64) -> Option<f64> {
     let half_chord_squared = radius.mul_add(radius, -(distance_from_axis * distance_from_axis));
-    (half_chord_squared >= 0.0).then(|| -radius.signum() * half_chord_squared.sqrt())
+    let clamped = if half_chord_squared < 0.0
+        && half_chord_squared >= -CURVATURE_RIM_TOLERANCE * radius * radius
+    {
+        0.0
+    } else {
+        half_chord_squared
+    };
+    (clamped >= 0.0).then(|| -radius.signum() * clamped.sqrt())
 }
 
 /// Determine the local normal of a curved surface above a given transversal position.
@@ -407,6 +436,62 @@ impl Default for GeoSurfaceRef {
 
 #[cfg(test)]
 mod test_geo_surface_ref {}
+
+#[cfg(test)]
+mod test_curved_local_z {
+    use super::*;
+
+    /// Exactly at the radius, a curved surface has curved all the way back onto the transversal
+    /// plane it started from: the rim of a hemisphere, sag zero.
+    #[test]
+    fn exactly_at_the_radius_is_the_rim_with_zero_sag() {
+        for radius in [0.025_f64, -0.025] {
+            assert_eq!(
+                curved_local_z(radius.abs(), radius),
+                Some(0.0),
+                "radius {radius}"
+            );
+        }
+    }
+
+    /// A distance a few floating point epsilons beyond the radius still counts as the rim - this is
+    /// the whole reason [`CURVATURE_RIM_TOLERANCE`] exists: a hemisphere's aperture radius and
+    /// curvature radius are set as two independent properties, and even when a user sets them to the
+    /// same nominal value, the aperture is reached through a trigonometric sampling of its outline
+    /// while the curvature radius is used as given - so the two rarely agree bit-for-bit even where
+    /// they are mathematically equal.
+    #[test]
+    fn a_touch_beyond_the_radius_within_tolerance_still_reaches() {
+        let radius = 0.025;
+        // A tenth of the tolerance, so the test sits comfortably inside the allowed band rather
+        // than on its own edge, where the arithmetic that builds `just_past` would be exposed to
+        // exactly the kind of rounding this test is about.
+        let just_past = radius * (1.0 + CURVATURE_RIM_TOLERANCE / 10.0);
+        assert_eq!(curved_local_z(just_past, radius), Some(0.0));
+        assert_eq!(curved_local_z(just_past, -radius), Some(0.0));
+    }
+
+    /// A distance genuinely beyond the radius - orders of magnitude past anything rounding could
+    /// produce - still does not reach: the tolerance is not a loosening of the check, only a
+    /// narrow allowance for where the surface already is.
+    #[test]
+    fn well_beyond_the_radius_does_not_reach() {
+        let radius = 0.025;
+        let far_past = radius * 1.01;
+        assert_eq!(curved_local_z(far_past, radius), None);
+        assert_eq!(curved_local_z(far_past, -radius), None);
+    }
+
+    /// Comfortably inside the radius, the tolerance changes nothing: the sag is the same value the
+    /// plain formula would give.
+    #[test]
+    fn well_inside_the_radius_is_unaffected() {
+        let radius: f64 = 0.025;
+        let inside: f64 = 0.015;
+        let expected = -radius.signum() * radius.mul_add(radius, -(inside * inside)).sqrt();
+        assert_eq!(curved_local_z(inside, radius), Some(expected));
+    }
+}
 
 #[cfg(test)]
 mod test_local_normal {

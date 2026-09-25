@@ -59,6 +59,20 @@ impl BodyMesh {
 /// keeps both of its normals and stays sharp.
 const SMOOTH_ENOUGH_TO_ROUND: f64 = 0.866; // cos(30°)
 
+/// How far `exit_point.z` may sit below `entrance_point.z` in [`SurfaceBoundedBody::triangulate`]'s
+/// crossing check before the two surfaces genuinely cross, rather than merely meeting.
+///
+/// The two surfaces are allowed to touch — a lens whose centre thickness is exactly twice the sag of
+/// two hemispherical faces meeting at the rim is a complete ball, not an error, and the check below
+/// uses strict `<` rather than `<=` for exactly that case. But `entrance_point.z` and `exit_point.z`
+/// reach that shared value through independent chains of floating point operations (each surface has
+/// its own anchor isometry, composed and applied separately), so where they are mathematically equal
+/// they need not agree bit-for-bit. Scaled by the larger of the two magnitudes rather than fixed, so
+/// the same relative slack applies whether the body is measured in micrometres or metres - the same
+/// reasoning `geo_surface.rs`'s `CURVATURE_RIM_TOLERANCE` uses for the single-surface case this is
+/// the two-surface counterpart of.
+const SURFACE_TOUCHING_TOLERANCE: f64 = 1e-9;
+
 impl SurfaceBoundedBody {
     /// Build a closed triangle mesh of this body.
     ///
@@ -88,7 +102,9 @@ impl SurfaceBoundedBody {
         // Both surfaces were sampled above the very same positions, so whether they cross can be
         // read off point by point rather than guessed at from their rims.
         for (entrance_point, exit_point) in entrance.points().iter().zip(exit.points()) {
-            if exit_point.z < entrance_point.z {
+            let (entrance_z, exit_z) = (entrance_point.z.value, exit_point.z.value);
+            let tolerance = SURFACE_TOUCHING_TOLERANCE * entrance_z.abs().max(exit_z.abs());
+            if exit_z < entrance_z - tolerance {
                 return Err(OpossumError::Other(format!(
                     "the two surfaces of the body cross {:?} from its axis, so it encloses nothing \
                      there",
@@ -457,6 +473,32 @@ mod test {
             placement,
         );
         assert!(too_thin.triangulate(SEGMENTS).is_err());
+        Ok(())
+    }
+
+    /// The tightest a body can be without its surfaces crossing: two hemispheres meeting exactly at
+    /// the rim of the aperture, centre thickness equal to twice the sag (25 mm each). Geometrically
+    /// this is a complete ball, not an error, so it pins down [`SURFACE_TOUCHING_TOLERANCE`] the way
+    /// `geo_surface::test_curved_local_z` pins down the single-surface tolerance it complements -
+    /// mirrored at the node level by `nodes::lens::test::a_hemisphere_lens_can_be_meshed`.
+    #[test]
+    fn two_hemispheres_meeting_exactly_at_the_rim_are_not_a_crossing() -> OpmResult<()> {
+        let placement = Isometry::identity();
+        let ball = SurfaceBoundedBody::new(
+            placed(
+                Sphere::new(millimeter!(25.0), Isometry::identity())?,
+                &placement,
+                millimeter!(0.0),
+            )?,
+            placed(
+                Sphere::new(millimeter!(-25.0), Isometry::identity())?,
+                &placement,
+                millimeter!(50.0),
+            )?,
+            circle(25.0)?,
+            placement,
+        );
+        ball.triangulate(SEGMENTS)?;
         Ok(())
     }
 }
