@@ -389,6 +389,9 @@ fn node_extras(node: &SceneNode) -> serde_json::Value {
 }
 
 /// Maps a preset material to a glTF material, recording used extensions.
+// A per-variant dispatch: every arm builds a `schema::Material` inline, so the length is the
+// number of material presets rather than a sign the function does too much.
+#[allow(clippy::too_many_lines)]
 fn map_material(material: &Material, used: &mut UsedExtensions) -> schema::Material {
     match material {
         Material::Glass {
@@ -415,6 +418,7 @@ fn map_material(material: &Material, used: &mut UsedExtensions) -> schema::Mater
                         thickness_factor: *thickness,
                     }),
                     unlit: None,
+                    iridescence: None,
                 }),
                 ..schema::Material::default()
             }
@@ -468,6 +472,36 @@ fn map_material(material: &Material, used: &mut UsedExtensions) -> schema::Mater
             double_sided: true,
             extensions: None,
         },
+        Material::Iridescent {
+            color,
+            roughness,
+            iridescence,
+            iridescence_ior,
+            iridescence_thickness_min,
+            iridescence_thickness_max,
+        } => {
+            used.iridescence = true;
+            schema::Material {
+                name: Some("iridescent".to_string()),
+                // A reflective (metallic) base so the thin-film colour shift reads as a sheen on
+                // a mirror-like surface rather than as a tint on a matte one.
+                pbr_metallic_roughness: Some(schema::PbrMetallicRoughness {
+                    base_color_factor: Some(rgb_opaque(*color)),
+                    metallic_factor: Some(1.0),
+                    roughness_factor: Some(*roughness),
+                }),
+                extensions: Some(schema::MaterialExtensions {
+                    iridescence: Some(schema::Iridescence {
+                        iridescence_factor: *iridescence,
+                        iridescence_ior: *iridescence_ior,
+                        iridescence_thickness_minimum: *iridescence_thickness_min,
+                        iridescence_thickness_maximum: *iridescence_thickness_max,
+                    }),
+                    ..schema::MaterialExtensions::default()
+                }),
+                ..schema::Material::default()
+            }
+        }
     }
 }
 
@@ -547,6 +581,7 @@ struct UsedExtensions {
     ior: bool,
     volume: bool,
     unlit: bool,
+    iridescence: bool,
 }
 
 impl UsedExtensions {
@@ -564,6 +599,9 @@ impl UsedExtensions {
         }
         if self.unlit {
             list.push(schema::EXT_UNLIT.to_string());
+        }
+        if self.iridescence {
+            list.push(schema::EXT_IRIDESCENCE.to_string());
         }
         list
     }

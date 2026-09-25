@@ -189,6 +189,11 @@ pub struct MaterialExtensions {
         skip_serializing_if = "Option::is_none"
     )]
     pub unlit: Option<Unlit>,
+    #[serde(
+        rename = "KHR_materials_iridescence",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub iridescence: Option<Iridescence>,
 }
 
 /// `KHR_materials_transmission`.
@@ -215,6 +220,20 @@ pub struct Volume {
 #[derive(Serialize)]
 pub struct Unlit {}
 
+/// `KHR_materials_iridescence`. Thicknesses are in nanometres.
+///
+/// The `iridescence` field prefixes are the glTF property names (`iridescenceFactor`, ...), so
+/// they cannot be shortened without diverging from the spec.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(clippy::struct_field_names)]
+pub struct Iridescence {
+    pub iridescence_factor: f32,
+    pub iridescence_ior: f32,
+    pub iridescence_thickness_minimum: f32,
+    pub iridescence_thickness_maximum: f32,
+}
+
 /// Extension identifiers, in the order they are listed in `extensionsUsed`.
 pub const EXT_TRANSMISSION: &str = "KHR_materials_transmission";
 /// The `KHR_materials_ior` identifier.
@@ -223,6 +242,8 @@ pub const EXT_IOR: &str = "KHR_materials_ior";
 pub const EXT_VOLUME: &str = "KHR_materials_volume";
 /// The `KHR_materials_unlit` identifier.
 pub const EXT_UNLIT: &str = "KHR_materials_unlit";
+/// The `KHR_materials_iridescence` identifier.
+pub const EXT_IRIDESCENCE: &str = "KHR_materials_iridescence";
 
 /// Returns `true` if the boolean is `false` (for `skip_serializing_if`).
 #[allow(clippy::trivially_copy_pass_by_ref)]

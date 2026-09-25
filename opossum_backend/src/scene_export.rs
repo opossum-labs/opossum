@@ -580,6 +580,29 @@ impl Fnv1a {
     /// Written out variant by variant on purpose: were `optoscene` to grow another material, this
     /// stops compiling rather than quietly giving two different materials the same hash.
     fn write_material(&mut self, material: &Material) {
+        // Iridescent carries five numbers, more than the uniform (color, [f32; 2]) shape the
+        // other variants share below, so it is folded in on its own path.
+        if let Material::Iridescent {
+            color,
+            roughness,
+            iridescence,
+            iridescence_ior,
+            iridescence_thickness_min,
+            iridescence_thickness_max,
+        } = material
+        {
+            self.write(&[5]);
+            for value in color.iter().copied().chain([
+                *roughness,
+                *iridescence,
+                *iridescence_ior,
+                *iridescence_thickness_min,
+                *iridescence_thickness_max,
+            ]) {
+                self.write(&value.to_le_bytes());
+            }
+            return;
+        }
         let (tag, color, numbers): (u8, &[f32], [f32; 2]) = match material {
             Material::Glass {
                 color,
@@ -594,6 +617,9 @@ impl Fnv1a {
             } => (2, color, [*metallic, *roughness]),
             Material::Unlit { color } => (3, color, [0.0; 2]),
             Material::Translucent { color } => (4, color, [0.0; 2]),
+            // Handled above by the early return; this arm keeps the match exhaustive, so a future
+            // material variant still fails to compile here rather than colliding hashes.
+            Material::Iridescent { .. } => return,
         };
         self.write(&[tag]);
         for value in color.iter().chain(numbers.iter()) {

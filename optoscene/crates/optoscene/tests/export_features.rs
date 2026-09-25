@@ -88,6 +88,39 @@ fn glass_material_has_all_extensions() {
 }
 
 #[test]
+fn iridescent_material_carries_the_iridescence_extension() {
+    let mut scene = Scene::new(SceneOptions::default());
+    let iridescent = scene.add_material(Material::Iridescent {
+        color: [0.8, 0.8, 0.85],
+        roughness: 0.1,
+        iridescence: 1.0,
+        iridescence_ior: 1.3,
+        iridescence_thickness_min: 100.0,
+        iridescence_thickness_max: 400.0,
+    });
+    let mesh = scene.add_mesh(centered_quad(iridescent)).unwrap();
+    add_optics_node(&mut scene, "grating", mesh);
+
+    let json = glb_json(&scene.to_glb().unwrap());
+    let extension = &json["materials"][0]["extensions"]["KHR_materials_iridescence"];
+    assert_eq!(extension["iridescenceFactor"], 1.0);
+    assert_eq!(extension["iridescenceIor"], 1.3);
+    assert_eq!(extension["iridescenceThicknessMinimum"], 100.0);
+    assert_eq!(extension["iridescenceThicknessMaximum"], 400.0);
+
+    let lists_iridescence = json["extensionsUsed"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(Value::as_str)
+        .any(|ext| ext == "KHR_materials_iridescence");
+    assert!(lists_iridescence, "iridescence missing from extensionsUsed");
+
+    // The extension must not be required, so viewers that do not know it still load the mesh.
+    assert!(json.get("extensionsRequired").is_none());
+}
+
+#[test]
 fn identical_meshes_are_instanced() {
     let mut scene = Scene::new(SceneOptions::default());
     let material = opaque(&mut scene);

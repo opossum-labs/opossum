@@ -662,6 +662,22 @@ fn material_hash(material: &Material) -> u64 {
             hasher.write_u8(4);
             hash_f32_slice(&mut hasher, color);
         }
+        Material::Iridescent {
+            color,
+            roughness,
+            iridescence,
+            iridescence_ior,
+            iridescence_thickness_min,
+            iridescence_thickness_max,
+        } => {
+            hasher.write_u8(5);
+            hash_f32_slice(&mut hasher, color);
+            hasher.write_u32(roughness.to_bits());
+            hasher.write_u32(iridescence.to_bits());
+            hasher.write_u32(iridescence_ior.to_bits());
+            hasher.write_u32(iridescence_thickness_min.to_bits());
+            hasher.write_u32(iridescence_thickness_max.to_bits());
+        }
     }
     hasher.finish()
 }

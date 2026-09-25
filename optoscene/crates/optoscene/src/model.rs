@@ -137,6 +137,26 @@ pub enum Material {
         /// Linear RGBA color.
         color: [f32; 4],
     },
+    /// Iridescent PBR material; thin-film interference produces
+    /// viewing-angle-dependent colour shifts (`KHR_materials_iridescence`).
+    Iridescent {
+        /// Linear RGB base colour.
+        color: [f32; 3],
+        /// Surface roughness in `[0, 1]`.
+        roughness: f32,
+        /// Iridescence strength in `[0, 1]`
+        /// (`KHR_materials_iridescence` `iridescenceFactor`).
+        iridescence: f32,
+        /// Refractive index of the thin film
+        /// (`KHR_materials_iridescence` `iridescenceIor`).
+        iridescence_ior: f32,
+        /// Minimum thin-film thickness in nanometres
+        /// (`KHR_materials_iridescence` `iridescenceThicknessMinimum`).
+        iridescence_thickness_min: f32,
+        /// Maximum thin-film thickness in nanometres
+        /// (`KHR_materials_iridescence` `iridescenceThicknessMaximum`).
+        iridescence_thickness_max: f32,
+    },
 }
 
 /// A placed instance of a mesh.
