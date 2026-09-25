@@ -7,7 +7,10 @@
 use log::warn;
 use nalgebra::{Isometry3, Point3};
 use opossum_core::{
-    core_optics::{NodeAttrExt, OpticNodeExt, SurfaceKind, planar::Planar, volumetric::Volumetric},
+    core_optics::{
+        Appearance, NodeAttrExt, OpticNodeExt, SurfaceFinish, planar::Planar,
+        volumetric::Volumetric,
+    },
     error::{OpmResult, OpossumError},
     geometry::{
         SurfaceMesh,
@@ -30,31 +33,10 @@ use crate::helper_functions::parent_group_id_or_self;
 /// triangle size limit, how closely the surfaces themselves are followed.
 const RIM_SEGMENTS: usize = 64;
 
-/// The colour glass is drawn in — a barely tinted white, so that what shapes it is the refraction
-/// rather than the colour.
-const GLASS_COLOUR: [f32; 3] = [0.9, 0.95, 1.0];
-
 /// The refractive index used for a material that cannot state one at the asked wavelength.
 ///
 /// Drawing the component in plain glass says more than leaving it out of the scene.
 const FALLBACK_REFRACTIVE_INDEX: f64 = 1.5;
-
-/// The colour a reflective surface (a mirror, a grating, a beam splitter's plate) is drawn in.
-const MIRROR_COLOUR: [f32; 3] = [0.9, 0.9, 0.92];
-
-/// How rough a reflective surface is drawn - low, so it reflects sharply rather than looking frosted.
-const MIRROR_ROUGHNESS: f32 = 0.05;
-
-/// The colour a transmissive surface (an idealised filter or paraxial element) is drawn in, with an
-/// alpha low enough to read as see-through rather than solid.
-const TRANSMISSIVE_COLOUR: [f32; 4] = [0.85, 0.9, 0.85, 0.4];
-
-/// The colour a detector's surface is drawn in - distinct from glass and from a mirror, so a setup
-/// reads at a glance which components measure the light rather than shape it.
-const DETECTOR_COLOUR: [f32; 4] = [0.25, 0.25, 0.28, 1.0];
-
-/// How rough a detector's surface is drawn - a plain, non-reflective sensor face.
-const DETECTOR_ROUGHNESS: f32 = 0.7;
 
 /// Build a 3D scene of every component of a model that encloses a volume or is one optical surface.
 ///
@@ -277,7 +259,7 @@ fn add_surface_at(
     mesh: &SurfaceMesh,
     placement: Isometry3<f64>,
 ) -> OpmResult<()> {
-    let material = scene.add_material(surface_material_of(node.surface_kind()));
+    let material = scene.add_material(material_of(node.appearance()));
     let mesh_id = scene
         .add_mesh(TriMesh {
             patches: vec![
@@ -301,31 +283,46 @@ fn add_surface_at(
     Ok(())
 }
 
-/// Describe a [`Planar`] node's surface, as far as a renderer needs it.
+/// Map a core [`Appearance`] to the closest [`optoscene::Material`] preset.
 ///
-/// Unlike [`glass_of`], this is infallible and takes no wavelength: none of the three materials a
-/// [`SurfaceKind`] maps to carry a refractive index.
+/// This is infallible and takes no wavelength: none of the resulting materials carry a refractive
+/// index. It replaces the former `surface_material_of` that worked from a coarser
+/// [`SurfaceKind`](opossum_core::core_optics::SurfaceKind) and hard-coded colour constants;
+/// the colour and roughness now come directly from the [`Appearance`] the node reports.
 ///
 /// # Arguments
 ///
-/// - `kind`: how the node's surface should be drawn
+/// - `appearance`: the cosmetic description a [`Planar`] node provides via
+///   [`Planar::appearance`]
 ///
 /// # Returns
 ///
-/// The material a renderer should draw the surface in.
-fn surface_material_of(kind: SurfaceKind) -> Material {
-    match kind {
-        SurfaceKind::Reflective => Material::Mirror {
-            color: MIRROR_COLOUR,
-            roughness: MIRROR_ROUGHNESS,
+/// The [`Material`] a renderer should draw the surface in.
+fn material_of(appearance: Appearance) -> Material {
+    let c = appearance.color;
+    let rgb = [c[0], c[1], c[2]];
+    match appearance.finish {
+        SurfaceFinish::Reflective => Material::Mirror {
+            color: rgb,
+            roughness: appearance.roughness,
         },
-        SurfaceKind::Transmissive => Material::Translucent {
-            color: TRANSMISSIVE_COLOUR,
+        SurfaceFinish::Transmissive => Material::Translucent {
+            color: appearance.color,
         },
-        SurfaceKind::Detector => Material::Opaque {
-            color: DETECTOR_COLOUR,
+        SurfaceFinish::Opaque => Material::Opaque {
+            color: appearance.color,
             metallic: 0.0,
-            roughness: DETECTOR_ROUGHNESS,
+            roughness: appearance.roughness,
+        },
+        // `Appearance` is renderer-agnostic and carries no thin-film parameters, so the
+        // backend supplies sensible defaults here.
+        SurfaceFinish::Iridescent => Material::Iridescent {
+            color: rgb,
+            roughness: appearance.roughness,
+            iridescence: 1.0,
+            iridescence_ior: 1.3,
+            iridescence_thickness_min: 100.0,
+            iridescence_thickness_max: 400.0,
         },
     }
 }
@@ -377,7 +374,7 @@ pub fn glb_of_node(node: &dyn Volumetric, wavelength: Length) -> OpmResult<Vec<u
 ///
 /// The [`Planar`] counterpart of [`glb_of_node`] - see there for why the component sits at the
 /// coordinate origin and needs no positioning run. Unlike it, this takes no wavelength: none of the
-/// materials [`surface_material_of`] produces carry a refractive index.
+/// materials [`material_of`] produces carry a refractive index.
 ///
 /// # Arguments
 ///
@@ -520,12 +517,12 @@ fn geometry_of(
 ///
 /// # Errors
 ///
-/// This function never actually fails - [`surface_material_of`] is infallible - but returns
+/// This function never actually fails — [`material_of`] is infallible — but returns
 /// `OpmResult` to read the same as [`geometry_of`] at the one call site both are used from.
 fn surface_geometry_of(node: &dyn Planar, mesh: &SurfaceMesh) -> OpmResult<String> {
     let mut hash = Fnv1a::new();
     hash.write_mesh(mesh);
-    hash.write_material(&surface_material_of(node.surface_kind()));
+    hash.write_material(&material_of(node.appearance()));
     Ok(hash.finish())
 }
 
@@ -678,7 +675,7 @@ fn glass_of(node: &dyn Volumetric, body: &impl Body, wavelength: Length) -> OpmR
     });
     let thickness = body.bounding_box()?.z_range();
     Ok(Material::Glass {
-        color: GLASS_COLOUR,
+        color: node.glass_color(),
         ior: ior as f32,
         thickness: (thickness.end - thickness.start).value as f32,
     })
@@ -707,13 +704,15 @@ mod test {
         analyzers::{AnalyzerType, RayTraceConfig},
         apertures::{ApertureShape, CircleShape},
         core_optics::{OpticNode, node_attr::NodePositioning},
+        degree,
         geometry::body::CLEAR_APERTURE,
+        joule,
         light::lightdata::ray_data_builder::RayDataBuilder,
         material::default_reference_wavelength,
-        millimeter,
+        millimeter, nanometer,
         nodes::{
-            CylindricLens, EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort, ThinMirror,
-            Wedge,
+            CylindricLens, EnergyMeter, Lens, NodeGroup, NodeReference, ReflectiveGrating,
+            SourcePort, ThinMirror, Wedge, round_collimated_ray_builder,
         },
     };
     use uuid::Uuid;
@@ -832,6 +831,52 @@ mod test {
         assert!(
             material_names.contains(&"opaque"),
             "the detector was not drawn as a plain opaque surface: {material_names:?}"
+        );
+        Ok(())
+    }
+
+    /// A reflective grating overrides its default appearance to look iridescent, and the exported
+    /// glTF must therefore carry the `KHR_materials_iridescence` extension.
+    #[test]
+    fn a_grating_is_drawn_iridescent() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        // The default grating (1740 lines/mm, order -1) diffracts 1000 nm light at its Littrow
+        // angle; orient it exactly at Littrow (zero degrees off) for that wavelength so the order
+        // is a valid, non-evanescent reflection and the grating is placed and drawn. The source
+        // emits 1000 nm to match (`round_collimated_ray_builder`).
+        let grating =
+            ReflectiveGrating::default().with_rot_from_littrow(nanometer!(1000.0), degree!(0.0))?;
+        let grating = scenery.add_node(grating)?;
+        scenery.connect_nodes(source, "output_1", grating, "input_1", millimeter!(50.0))?;
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        // The grating needs actual rays to define its diffraction up-direction; use a small
+        // collimated bundle rather than the empty default builder.
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 1)?,
+        );
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+
+        let scene = exported(&document)?;
+        let material_names: Vec<&str> = scene["materials"]
+            .as_array()
+            .expect("a scene has materials")
+            .iter()
+            .map(|material| material["name"].as_str().expect("a named material"))
+            .collect();
+        assert!(
+            material_names.contains(&"iridescent"),
+            "the grating was not drawn iridescent: {material_names:?}"
+        );
+        assert!(
+            scene["extensionsUsed"]
+                .as_array()
+                .expect("the extensions are listed")
+                .iter()
+                .any(|used| used == "KHR_materials_iridescence"),
+            "KHR_materials_iridescence was not declared in extensionsUsed"
         );
         Ok(())
     }
