@@ -14,7 +14,7 @@ use opossum_core::{
         body::{Body, SurfaceBoundedBody},
     },
     opm_document::OpmDocument,
-    types::api_types::{SceneManifest, SceneNodeEntry},
+    types::api_types::{SceneManifest, SceneNodeEntry, SkippedSceneNode},
     utils::geom_transformation::Isometry,
 };
 use optoscene::{
@@ -144,14 +144,21 @@ enum Drawn<'a> {
 /// - `placed`: a model whose nodes carry their placement
 /// - `draw`: called once per drawable component with the component and its shape
 ///
+/// # Returns
+///
+/// The list of drawable components that were skipped, each with a reason. A caller that builds
+/// the scene for export does not need this; a caller that builds the manifest hands it to the
+/// viewer so the user can see which components are missing and why.
+///
 /// # Errors
 ///
 /// This function returns an error if the nodes cannot be walked. An error from `draw` is reported
 /// and skipped, not returned.
-fn for_each_drawable<F>(placed: &OpmDocument, mut draw: F) -> OpmResult<()>
+fn for_each_drawable<F>(placed: &OpmDocument, mut draw: F) -> OpmResult<Vec<SkippedSceneNode>>
 where
     F: FnMut(Drawn<'_>) -> OpmResult<()>,
 {
+    let mut skipped = Vec::new();
     for node_ref in placed.scenery().collect_all_nodes_recursive()? {
         let drawable = if let Some(volume) = node_ref.as_volume() {
             Drawable::Volume(volume)
@@ -162,6 +169,11 @@ where
         };
         if node_ref.node_attr().effective_position().is_none() {
             warn!("{node_ref} has no place in the setup and is left out of the scene");
+            skipped.push(SkippedSceneNode {
+                uid: node_ref.uuid(),
+                name: node_ref.name().to_string(),
+                reason: "has no place in the setup".to_string(),
+            });
             continue;
         }
         let drawn = match drawable {
@@ -174,9 +186,14 @@ where
         };
         if let Err(e) = drawn {
             warn!("{node_ref} cannot be drawn and is left out of the scene: {e}");
+            skipped.push(SkippedSceneNode {
+                uid: node_ref.uuid(),
+                name: node_ref.name().to_string(),
+                reason: e.to_string(),
+            });
         }
     }
-    Ok(())
+    Ok(skipped)
 }
 
 /// Add one component that encloses a volume to a scene, placed where the caller says.
@@ -418,7 +435,7 @@ pub fn glb_of_surface_node(node: &dyn Planar) -> OpmResult<Vec<u8>> {
 #[allow(clippy::cast_possible_truncation)]
 pub fn manifest_of(placed: &OpmDocument, wavelength: Length) -> OpmResult<SceneManifest> {
     let mut nodes = Vec::new();
-    for_each_drawable(placed, |drawn| {
+    let skipped = for_each_drawable(placed, |drawn| {
         let (uid, name, geometry, transform) = match drawn {
             Drawn::Volume(node, body) => (
                 node.node_attr().uuid(),
@@ -452,7 +469,7 @@ pub fn manifest_of(placed: &OpmDocument, wavelength: Length) -> OpmResult<SceneM
         });
         Ok(())
     })?;
-    Ok(SceneManifest { nodes })
+    Ok(SceneManifest { nodes, skipped })
 }
 
 /// What a component looks like, as a short string that changes when its shape or material does.
@@ -1028,6 +1045,37 @@ mod test {
 
         assert_eq!(manifest.nodes.len(), 1);
         assert_eq!(manifest.nodes[0].group, group_id);
+        Ok(())
+    }
+
+    /// A drawable component that was not positioned (not connected to any source) is listed in
+    /// `skipped` rather than silently absent, so the user knows which component is missing and why.
+    #[test]
+    fn a_drawable_component_without_placement_is_listed_as_skipped() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let connected = scenery.add_node(Lens::default())?;
+        let unconnected = scenery.add_node(Lens::default())?;
+        scenery.connect_nodes(source, "output_1", connected, "input_1", millimeter!(50.0))?;
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(source, RayDataBuilder::default());
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+
+        let m = manifest(&document)?;
+
+        assert_eq!(m.nodes.len(), 1, "only the connected lens is drawn");
+        assert_eq!(
+            m.skipped.len(),
+            1,
+            "the unconnected lens is reported as skipped"
+        );
+        assert_eq!(m.skipped[0].uid, unconnected);
+        assert!(
+            m.skipped[0].reason.contains("no place"),
+            "the reason should mention placement: '{}'",
+            m.skipped[0].reason
+        );
         Ok(())
     }
 

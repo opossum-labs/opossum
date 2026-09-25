@@ -40,6 +40,7 @@ async fn debounce() {
 #[component]
 pub fn SceneView() -> Element {
     let mut objects = use_signal(Vec::<GlbObject>::new);
+    let mut skipped_count = use_signal(|| 0_usize);
     let viewer_handle = use_glb_viewer_handle();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
 
@@ -80,6 +81,13 @@ pub fn SceneView() -> Element {
                     // Handing over a whole new list is the point: the viewer compares it against
                     // what it already draws and moves, reloads or removes only what differs.
                     objects.set(objects_of(&fetched, HTTP_API_CLIENT().base_url()));
+                    skipped_count.set(fetched.skipped.len());
+                    for s in &fetched.skipped {
+                        OPOSSUM_UI_LOGS.write().add_log(&format!(
+                            "3D view: '{}' could not be drawn: {}",
+                            s.name, s.reason
+                        ));
+                    }
                 }),
             );
         }
@@ -102,6 +110,12 @@ pub fn SceneView() -> Element {
                     class: "btn btn-sm btn-outline-light",
                     onclick: move |_| viewer_handle.reset_camera(),
                     "Reset camera"
+                }
+                if *skipped_count.read() > 0 {
+                    span {
+                        class: "scene-view-skipped",
+                        "{skipped_count} component(s) could not be drawn \u{2013} see logs"
+                    }
                 }
                 span { class: "scene-view-count", "{objects.read().len()} components" }
             }

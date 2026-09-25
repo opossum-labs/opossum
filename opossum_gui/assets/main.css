@@ -240,6 +240,11 @@ body {
     border-bottom: 1px solid #1a1a1a;
 }
 
+.scene-view-skipped {
+    color: #f0a500;
+    font-size: 0.85rem;
+}
+
 .scene-view-count {
     margin-left: auto;
     color: #9e9e9e;

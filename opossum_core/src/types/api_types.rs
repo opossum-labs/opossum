@@ -1015,6 +1015,22 @@ pub struct SceneNodeEntry {
     pub rotation: [f32; 4],
 }
 
+/// A drawable component that was left out of the scene, with a reason.
+///
+/// A component is skipped when it is drawable but cannot be placed (has no positioning result)
+/// or when its shape cannot be built (meshing failed, invalid geometry). The reason is what
+/// the backend would otherwise only log to the server console, carried here so a viewer can
+/// display it to the user rather than silently showing an incomplete scene.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, ToSchema)]
+pub struct SkippedSceneNode {
+    /// The component's node UUID.
+    pub uid: Uuid,
+    /// The component's name, for labelling it in error messages.
+    pub name: String,
+    /// Why the component was left out of the scene.
+    pub reason: String,
+}
+
 /// Every drawable component of a model, with its placement but without its geometry.
 ///
 /// This is the cheap half of a 3D view. A viewer fetches it whenever the model changed and compares
@@ -1022,6 +1038,12 @@ pub struct SceneNodeEntry {
 /// their mesh fetched afterwards.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default, ToSchema)]
 pub struct SceneManifest {
-    /// One entry per component that encloses a volume, in the order the model walks them.
+    /// One entry per component that can be drawn, in the order the model walks them.
     pub nodes: Vec<SceneNodeEntry>,
+    /// Components that were drawable but could not be added to the scene, with a reason for each.
+    ///
+    /// A viewer can show these to tell the user which components are missing and why, rather than
+    /// leaving them to wonder why part of the setup is not shown.
+    #[serde(default)]
+    pub skipped: Vec<SkippedSceneNode>,
 }
