@@ -409,7 +409,7 @@ pub fn glb_of_surface_node(node: &dyn Planar) -> OpmResult<Vec<u8>> {
 
 /// The colour the optical axis is drawn in: a bright purple that stands apart from the wavelength
 /// colours real rays are drawn in and from the grey and glass tones of the components.
-pub const AXIS_COLOR: [f32; 4] = [183./255., 17./255., 1., 1.0];
+pub const AXIS_COLOR: [f32; 4] = [183. / 255., 17. / 255., 1., 1.0];
 
 /// Build the glTF binary of ray bundles, drawn as lines along the paths the rays took.
 ///

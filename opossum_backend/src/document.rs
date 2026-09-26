@@ -41,6 +41,21 @@ struct SceneQuery {
     analyzer: Option<Uuid>,
 }
 
+/// How many rays per source `/scene/rays.glb` draws unless asked for another number.
+const DEFAULT_DISPLAY_RAYS: usize = 500;
+/// The most rays per source `/scene/rays.glb` draws, whatever is asked for: a mistyped number must
+/// not keep the server tracing for minutes.
+const MAX_DISPLAY_RAYS: usize = 5000;
+
+/// Which analyzer's light a 3D view of the model should draw, and how much of it.
+#[derive(Debug, Deserialize, IntoParams)]
+struct RaysQuery {
+    /// Uuid of the analyzer to take the sources from, or none to use the only one there is.
+    analyzer: Option<Uuid>,
+    /// The most rays drawn per source (default 500, at most 5000).
+    max_rays: Option<usize>,
+}
+
 /// Delete the current document and create new (empty) one
 #[utoipa::path(responses((status = NO_CONTENT, description = "document deleted and new one sucessfully created")), tag="document")]
 #[delete("")]
@@ -224,6 +239,49 @@ async fn get_scene_axis(
     };
     // One ray per source: nothing to thin out.
     let glb = rays_glb(&axes, Some(AXIS_COLOR), usize::MAX)?;
+    Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
+}
+
+/// Get the light of the model's sources as a 3D scene
+///
+/// This function traces the sources an analyzer defines through the model and returns the rays'
+/// paths as lines in a binary glTF (GLB) file, in the same world coordinates `/scene/manifest`
+/// places the components in. Each line is coloured by its wavelength. Rays an aperture stops are
+/// drawn up to where they stop.
+///
+/// Each source is thinned to at most `max_rays` rays before the trace, spread evenly over its
+/// cross section, so a source of millions of rays costs no more than one of a few hundred. Only the
+/// primary path is traced; a ghost focus analyzer contributes its sources, not its reflections.
+/// Without an analyzer that defines sources the file is empty. The trace runs on a copy, off the
+/// request thread, and the `analyzer` parameter picks which analyzer's sources to follow exactly
+/// as for `/scene.glb`.
+#[utoipa::path(tag = "document",
+    params(RaysQuery),
+    responses(
+        (status = 200, description = "glTF binary of the traced rays", body = Vec<u8>,
+            content_type = GLB_MEDIA_TYPE),
+        (status = 400, description = "the rays could not be traced", body = ErrorResponse)
+    )
+)]
+#[get("/scene/rays.glb")]
+async fn get_scene_rays(
+    data: web::Data<AppState>,
+    query: web::Query<RaysQuery>,
+) -> Result<impl Responder, BackEndErrorResponse> {
+    let max_rays = query
+        .max_rays
+        .unwrap_or(DEFAULT_DISPLAY_RAYS)
+        .min(MAX_DISPLAY_RAYS);
+    let analyzer = query.analyzer;
+    // The trace is the long part, so it must hold neither the document nor the request thread. The
+    // model is taken as its file, the only copy that shares nothing with the live document.
+    let model = data.document.lock().to_opm_file_string()?;
+    let glb = web::block(move || {
+        let rays = OpmDocument::from_string(&model)?.traced_rays(analyzer, max_rays)?;
+        rays_glb(&rays, None, max_rays)
+    })
+    .await
+    .map_err(|e| OpossumError::Other(format!("the rays could not be traced: {e}")))??;
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
 
@@ -638,6 +696,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_scene_manifest);
     cfg.service(get_scene_node);
     cfg.service(get_scene_axis);
+    cfg.service(get_scene_rays);
 
     cfg.service(undo_document);
     cfg.service(redo_document);
@@ -1694,6 +1753,97 @@ mod test {
                 .any(|window| window == br#""mode":1"#),
             "the axis is drawn as LINES"
         );
+    }
+
+    /// Ask a state for the traced rays of its model.
+    async fn request_rays(
+        app_state: &Data<AppState>,
+        query: &str,
+    ) -> actix_web::dev::ServiceResponse {
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(web::scope("/document").service(get_scene_rays)),
+        )
+        .await;
+        let req = test::TestRequest::get()
+            .uri(&format!("/document/scene/rays.glb{query}"))
+            .to_request();
+        app.call(req).await.unwrap()
+    }
+
+    /// A source of 721 rays in front of a lens, traced by a ray-trace analyzer.
+    fn state_with_a_traced_source() -> Data<AppState> {
+        use opossum_core::{
+            analyzers::{AnalyzerType, RayTraceConfig},
+            joule, millimeter,
+            nodes::{Lens, NodeGroup, SourcePort, round_collimated_ray_builder},
+        };
+
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default()).unwrap();
+        let lens = scenery.add_node(Lens::default()).unwrap();
+        scenery
+            .connect_nodes(source, "output_1", lens, "input_1", millimeter!(100.0))
+            .unwrap();
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 15).unwrap(),
+        );
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+        let app_state = Data::new(AppState::default());
+        *app_state.document.lock() = document;
+        app_state
+    }
+
+    /// Whether a GLB holds a line primitive.
+    fn holds_lines(glb: &[u8]) -> bool {
+        glb.windows(br#""mode":1"#.len())
+            .any(|window| window == br#""mode":1"#)
+    }
+
+    /// An analyzer's source is traced through the model and drawn as lines, thinned to the number
+    /// asked for.
+    #[actix_web::test]
+    async fn the_rays_of_a_source_are_drawn_as_lines() {
+        let app_state = state_with_a_traced_source();
+        for query in ["", "?max_rays=50", "?max_rays=100000"] {
+            let resp = request_rays(&app_state, query).await;
+
+            assert_eq!(resp.status(), StatusCode::OK, "{query}");
+            let body = test::read_body(resp).await;
+            assert!(body.starts_with(b"glTF"), "{query}");
+            assert!(holds_lines(&body), "{query}");
+        }
+    }
+
+    /// Without an analyzer there is no light of the setup's own to draw: an empty file, not an
+    /// error, so the view simply shows none.
+    #[actix_web::test]
+    async fn a_model_nobody_analyzes_has_no_rays_to_draw() {
+        let resp = request_rays(&state_with_a_lens(), "").await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = test::read_body(resp).await;
+        assert!(body.starts_with(b"glTF"));
+        assert!(!holds_lines(&body));
+    }
+
+    /// The rays follow an analyzer's sources, so a model analyzed several ways has to say which.
+    #[actix_web::test]
+    async fn the_rays_of_a_model_analyzed_several_ways_need_the_analyzer_named() {
+        use opossum_core::analyzers::{AnalyzerType, GhostFocusConfig};
+
+        let app_state = state_with_a_traced_source();
+        app_state
+            .document
+            .lock()
+            .add_analyzer(AnalyzerType::GhostFocus(GhostFocusConfig::default()));
+
+        let resp = request_rays(&app_state, "").await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
     /// The axis follows an analyzer's sources, so it asks for the analyzer to be named exactly
