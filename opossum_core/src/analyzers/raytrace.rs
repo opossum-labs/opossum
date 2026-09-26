@@ -135,6 +135,11 @@ impl RayTraceConfig {
     pub fn map_source(&mut self, uuid: Uuid, builder: RayDataBuilder) -> bool {
         self.source_map.insert(uuid, builder).is_some()
     }
+    /// Returns the ray data builders of all sources, keyed by the UUID of their source port.
+    #[must_use]
+    pub const fn source_map(&self) -> &HashMap<Uuid, RayDataBuilder> {
+        &self.source_map
+    }
     /// Returns a reference to the ray data builder mapped to the given source UUID, if any.
     #[must_use]
     pub fn get_source(&self, uuid: &Uuid) -> Option<&RayDataBuilder> {

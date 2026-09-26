@@ -3,11 +3,16 @@
 use super::OpmDocument;
 use crate::{
     analyzers::{
-        Analyzer, AnalyzerRegistration, AnalyzerType, RayTraceConfig, raytrace::AnalysisRayTrace,
+        Analyzer, AnalyzerRegistration, AnalyzerType, RayTraceConfig,
+        raytrace::{AnalysisRayTrace, RayTracingAnalyzer},
     },
     core_optics::OpticNode,
     error::{OpmResult, OpossumError},
-    light::{Rays, light_result::LightResult, lightdata::ray_data_builder::RayDataBuilder},
+    light::{
+        Rays,
+        light_result::LightResult,
+        lightdata::{ray_data_builder::RayDataBuilder, ray_data_source::RayDataSource},
+    },
     reporting::analysis_report::AnalysisReport,
 };
 use log::info;
@@ -166,6 +171,60 @@ impl OpmDocument {
         Ok(copy.scenery.ray_ends().into_iter().cloned().collect())
     }
 
+    /// Returns the rays of the model's sources, traced through it, for drawing them.
+    ///
+    /// The sources are the ones the analyzer defines, and the model is placed exactly as
+    /// [`positioned_copy`](OpmDocument::positioned_copy) places it, so the rays run through the
+    /// components where the 3D view shows them. Each source is thinned to at most `max_rays` rays
+    /// first (see [`Rays::thinned`]), which keeps the trace cheap however many rays the source
+    /// holds. Only the primary path is traced: a ghost focus analyzer contributes its sources, not
+    /// its reflections. As everywhere else, this runs on a copy and leaves the model untouched.
+    ///
+    /// # Arguments
+    ///
+    /// - `analyzer_id`: the analyzer to take the sources from, or `None` to pick the only one that
+    ///   places anything
+    /// - `max_rays`: the most rays traced per source
+    ///
+    /// # Returns
+    ///
+    /// One bundle per open output port the light reaches, each ray carrying its path in global
+    /// coordinates; rays stopped on the way are included up to where they stopped. Empty if no
+    /// analyzer defines sources: default rays would only show something that is not the setup's
+    /// own light.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error in the same cases as
+    /// [`positioned_copy`](OpmDocument::positioned_copy), or if a source cannot be built or the
+    /// trace fails.
+    pub fn traced_rays(&self, analyzer_id: Option<Uuid>, max_rays: usize) -> OpmResult<Vec<Rays>> {
+        let mut copy = Self::from_string(&self.to_opm_file_string()?)?;
+        let Some(placing) = copy.analyzer_ray_config(analyzer_id)? else {
+            return Ok(Vec::new());
+        };
+        // Placed from the full sources first, exactly as the components are drawn: the trace below
+        // leaves placed nodes where they are, so the thinned sources cannot move anything.
+        AnalysisRayTrace::calc_node_positions(&mut copy.scenery, LightResult::default(), &placing)?;
+        copy.scenery.reset_data();
+
+        let mut config = placing;
+        config.set_positioning_run(false);
+        // The copy was just read from file, so it holds no ray ends yet.
+        config.set_collect_ray_ends(true);
+        let thinned = config
+            .source_map()
+            .iter()
+            .map(|(source, builder)| {
+                let rays = builder.build()?.thinned(max_rays);
+                Ok((*source, RayDataBuilder::from(RayDataSource::Raw(rays))))
+            })
+            .collect::<OpmResult<_>>()?;
+        config.set_source_map(thinned);
+        RayTracingAnalyzer::new(config).analyze(&mut copy.scenery)?;
+        Ok(copy.scenery.ray_ends().into_iter().cloned().collect())
+    }
+
     /// Returns the configuration a positioning run of this model starts from.
     ///
     /// # Arguments
@@ -183,11 +242,36 @@ impl OpmDocument {
     /// anything, if no analyzer was named and several place something, or if the default
     /// configuration cannot be built.
     fn placing_config(&mut self, analyzer_id: Option<Uuid>) -> OpmResult<RayTraceConfig> {
+        // If nothing analyzes this model geometrically, there is no source data to go by. Default
+        // rays from wherever the model marks its sources still say where everything sits relative
+        // to everything else.
+        self.analyzer_ray_config(analyzer_id)?
+            .map_or_else(|| self.default_positioning_config(), Ok)
+    }
+
+    /// Returns the ray-trace configuration of the analyzer that places this model, if one does.
+    ///
+    /// # Arguments
+    ///
+    /// - `analyzer_id`: the analyzer to take the configuration from, or `None` to pick the only one
+    ///   that places anything
+    ///
+    /// # Returns
+    ///
+    /// The analyzer's configuration for a positioning run, with its sources, or `None` if no
+    /// analyzer was named and none places anything.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the named analyzer does not exist or does not place
+    /// anything, or if no analyzer was named and several place something.
+    fn analyzer_ray_config(&self, analyzer_id: Option<Uuid>) -> OpmResult<Option<RayTraceConfig>> {
         if let Some(id) = analyzer_id {
             let analyzer = self.analyzer(id)?;
             return analyzer
                 .analyzer_type()
                 .positioning_config()
+                .map(Some)
                 .ok_or_else(|| {
                     OpossumError::OpmDocument(format!(
                         "the '{}' analyzer does not place the nodes of a model and cannot be used \
@@ -201,16 +285,13 @@ impl OpmDocument {
             .values()
             .filter_map(|info| info.analyzer_type().positioning_config());
         match (placing.next(), placing.next()) {
-            (Some(only), None) => Ok(only),
+            (only, None) => Ok(only),
             (Some(_), Some(_)) => Err(OpossumError::OpmDocument(
                 "this model is analyzed several ways, each of which may place its nodes \
                  differently — name the analyzer to draw it after"
                     .into(),
             )),
-            // Nothing analyzes this model geometrically, so there is no source data to go by.
-            // Default rays from wherever the model marks its sources still say where everything
-            // sits relative to everything else.
-            _ => self.default_positioning_config(),
+            (None, Some(_)) => Ok(None),
         }
     }
 
@@ -296,16 +377,19 @@ mod tests {
     use super::*;
     use crate::{
         analyzers::{AnalyzerType, energy::EnergyConfig},
+        apertures::{Aperture, ApertureType},
+        core_optics::{OpticNodeExt, PortType},
         gain::{ConstGain, GainModel},
         joule,
         light::Ray,
         light::lightdata::energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
         millimeter, nanometer,
-        nodes::{EnergyMeter, Lens, NodeGroup, SourcePort},
+        nodes::{Dummy, EnergyMeter, Lens, NodeGroup, SourcePort, round_collimated_ray_builder},
         utils::geom_transformation::Isometry,
         utils::test_helper::test_helper::metered_energy,
     };
     use approx::assert_relative_eq;
+    use uom::si::{f64::Length, length::millimeter};
     use uuid::Uuid;
 
     /// Helper to assemble a minimal document with one source, one meter, and an energy analyzer.
@@ -507,6 +591,61 @@ mod tests {
                 .with_node_attr(first, |attr| attr.effective_position().is_none())?,
             "the model itself stays unplaced"
         );
+        Ok(())
+    }
+
+    /// Without an analyzer there is no light of the setup's own to show.
+    #[test]
+    fn a_model_nobody_analyzes_traces_no_rays() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let lens = scenery.add_node(Lens::default())?;
+        scenery.connect_nodes(source, "output_1", lens, "input_1", millimeter!(100.0))?;
+        assert!(OpmDocument::new(scenery).traced_rays(None, 100)?.is_empty());
+        Ok(())
+    }
+
+    /// A source of 721 rays behind an aperture that only lets the core through: at most the
+    /// asked number is traced, and the rays the aperture stops end there.
+    #[test]
+    fn the_traced_rays_are_thinned_and_end_where_they_are_stopped() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let mut aperture = Dummy::default();
+        aperture.set_aperture(
+            &PortType::Input,
+            "input_1",
+            &Aperture::new_circle(millimeter!(2.0), ApertureType::Hole, None)?,
+        )?;
+        let aperture = scenery.add_node(aperture)?;
+        let screen = scenery.add_node(Dummy::default())?;
+        scenery.connect_nodes(source, "output_1", aperture, "input_1", millimeter!(50.0))?;
+        scenery.connect_nodes(aperture, "output_1", screen, "input_1", millimeter!(50.0))?;
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 15)?,
+        );
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+
+        let ends = document.traced_rays(None, 100)?;
+        assert_eq!(ends.len(), 1, "one open output");
+        let rays = &ends[0];
+        assert!(rays.nr_of_rays(false) <= 100);
+        // How far along the axis the rays that were or were not stopped got, at most.
+        let reach = |valid: bool| {
+            rays.iter()
+                .filter(|ray| ray.valid() == valid)
+                .map(|ray| ray.position().z)
+                .fold(None, |far: Option<Length>, z| {
+                    Some(far.map_or(z, |far| far.max(z)))
+                })
+        };
+        let stopped = reach(false).expect("the aperture stops the outer rays");
+        let passed = reach(true).expect("the aperture passes the core");
+        assert_relative_eq!(stopped.get::<millimeter>(), 50.0, epsilon = 1e-9);
+        assert_relative_eq!(passed.get::<millimeter>(), 100.0, epsilon = 1e-9);
         Ok(())
     }
 }
