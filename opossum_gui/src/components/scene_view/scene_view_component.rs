@@ -53,7 +53,7 @@ pub fn SceneView() -> Element {
         // Without this, every lens renders black: glass refracts its surroundings, and an empty
         // scene has none. See `dioxus_glb_viewer`'s `Environment`.
         environment: Environment::Room,
-        background: "#1a1a2e".into(),
+        background: "#435d7a".into(),
         // The model is metres across and sits near the origin, while the default grid is twenty
         // units wide - it would swamp the setup rather than give it a floor.
         grid: false,
@@ -164,10 +164,11 @@ pub fn SceneView() -> Element {
                 options,
                 on_pick: move |picked: PickEvent| {
                     // Selection lives with the caller, not with the viewer: it only reports the
-                    // click. Clicking empty space - or the table, which the viewer never reports as
-                    // a hit - clears it.
+                    // click. Clicking empty space clears it. Aux objects (ids starting with
+                    // "aux:") are never model nodes and must never receive a selection box.
                     for object in objects.write().iter_mut() {
-                        object.selected = Some(&object.id) == picked.id.as_ref();
+                        object.selected =
+                            !object.id.starts_with("aux:") && Some(&object.id) == picked.id.as_ref();
                     }
                     // A hit also opens the component's properties, without leaving the 3D view -
                     // see `reveal_action_for_pick`. Looked up in the manifest last fetched rather

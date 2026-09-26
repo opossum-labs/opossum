@@ -267,10 +267,10 @@ pub struct ViewerOptions {
 impl Default for ViewerOptions {
     fn default() -> Self {
         Self {
-            background: "#6c6c6c".into(),
+            background: "#1e1e1e".into(),
             grid: true,
             ambient_intensity: 0.8,
-            directional_intensity: 3.,
+            directional_intensity: 1.2,
             selection_color: "#00aaff".into(),
             fit_on_first_load: true,
             initial_camera: [0.5, 0.3, 0.5],
