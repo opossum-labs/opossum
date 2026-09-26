@@ -30,6 +30,12 @@ analyzer that places its nodes — a ray trace. Without one there is nothing to 
 stays empty. Components the trace does not reach are reported in the log and left out rather than
 stopping the rest of the setup from being drawn.
 
+If the optical axis ends *at* a component that still has others after it, those cannot be placed,
+and the view cannot be drawn at all. The log says where the axis ended. The usual cause is a
+**grating that is not tilted**: its diffraction order then does not propagate at the source's
+wavelength, and the message names the Littrow angle to tilt the grating by. A grating with nothing
+after it is drawn either way.
+
 Rays are not drawn yet.
 
 ## Navigating
@@ -51,7 +57,7 @@ table is not selectable: clicking it clears the selection, the same as clicking 
 | Button | Effect |
 | :--- | :--- |
 | **Refresh** | Ask the backend for the model again, at once |
-| **Fit view** | Frame everything that is drawn |
+| **Fit view** | Frame all components (the optical table is not included) |
 | **Reset camera** | Return the camera to its starting pose |
 | **Table** | Show or hide the optical table |
 | **Axes** | Show or hide the corner orientation gizmo |
@@ -97,12 +103,17 @@ camera, so each is drawn from both sides at once and stays visible however far y
 
 ## The optical table and orientation
 
-Beneath the setup sits an **optical table**: a dark breadboard plate with a regular raster of holes
-spaced 2.5 cm apart, like a real optical bench. The table sits just below the beam — the optical axis
-runs at the components' centre height, and the table is below it — giving the scene a floor and an
-immediate sense of scale. It replaces the old generic reference grid, which would swamp a
-centimetre-to-metre setup rather than frame it. Show or hide it with the **Table** button in the toolbar.
+Beneath the setup sits an **optical table**: a dark breadboard surface with a regular raster of holes
+spaced 2.5 cm apart, like a real optical bench. It lies **7.5 cm below the beam** — the optical axis
+runs through the components' centres — so it gives the scene a floor and an immediate sense of scale
+without cutting through the optics. It replaces the old generic reference grid, which would swamp a
+centimetre-to-metre setup rather than frame it.
 
-In one corner of the view a small **orientation gizmo** shows which way x, y, and z point. It keeps
-you from losing your bearings while orbiting. Click one of its axes to snap the camera to look
-straight along that direction; show or hide it with the **Axes** button in the toolbar.
+The table has no edge: it reaches to the horizon wherever you move the camera and fades into the
+background in the distance. It is scenery, not part of the model — **Fit view** frames only the
+components, and clicking the table clears the selection. Seen through a lens, the table does not
+show. Show or hide it with the **Table** button in the toolbar.
+
+In the bottom-right corner of the view a small **orientation gizmo** shows which way x, y, and z
+point. It keeps you from losing your bearings while orbiting. Click one of its axes to snap the camera
+to look straight along that direction; show or hide it with the **Axes** button in the toolbar.
