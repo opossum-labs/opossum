@@ -37,6 +37,10 @@ export async function createViewer(canvasId, options, send, threeBase) {
 
     // ── Renderer ────────────────────────────────────────────────────────────
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.shadowMap.enabled = true;
+    // Soft edges: the shadow frustum is fitted tightly to the scene (see updateShadowCamera),
+    // so plain PCF would otherwise show the shadow map's texels as a hard, blocky rim.
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.setPixelRatio(Math.min(typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1, 2));
 
     // ── Scene, camera, controls ─────────────────────────────────────────────
@@ -56,7 +60,17 @@ export async function createViewer(canvasId, options, send, threeBase) {
     const ambient = new THREE.AmbientLight(0xffffff, options.ambient_intensity);
     const sun     = new THREE.DirectionalLight(0xffffff, options.directional_intensity);
     sun.position.set(1, 2, 1.5);
-    scene.add(ambient, sun);
+
+    sun.castShadow = true;
+    // Adjust shadow quality/resolution
+    sun.shadow.mapSize.width = 1024;  // default is 512
+    sun.shadow.mapSize.height = 1024;
+    sun.shadow.bias = -0.0005;       // reduces shadow artifacts
+
+    // updateShadowCamera() aims the sun at the scene centre; its target must be in the graph
+    // for its world matrix (and thus the light direction) to update. The (1,2,1.5) position
+    // above is the fallback direction used until the first model fixes the frustum.
+    scene.add(ambient, sun, sun.target);
 
     // ── Grid ────────────────────────────────────────────────────────────────
     let grid = null;
@@ -82,6 +96,10 @@ export async function createViewer(canvasId, options, send, threeBase) {
     let hasAutoFitted = false;
     let needsResize   = true;
     let disposed      = false;
+    // Set whenever the set of visible models changes; consumed once per frame in the RAF loop to
+    // refit the sun's shadow frustum. A flag (not a per-frame recompute) keeps the Box3 pass off
+    // the hot path when nothing moved.
+    let shadowCameraDirty = true;
 
     // ── Orientation gizmo (ViewHelper) ───────────────────────────────────────
     const clock = new THREE.Clock();
@@ -133,7 +151,8 @@ export async function createViewer(canvasId, options, send, threeBase) {
     // its rim is never seen.
     //
     // Deliberately NOT an entry of `objects`: fitView() and picking look only there, so the ground
-    // is never framed and never hit.
+    // is never framed and never hit. It does receive the models' shadows (receiveShadow), which
+    // the sun casts once updateShadowCamera() has fitted its frustum to the scene.
     //
     // Known limitation: the ground is transparent (for the fade), and three.js renders only opaque
     // objects into the buffer transmissive glass refracts, so the floor is not seen through a lens.
@@ -164,9 +183,10 @@ export async function createViewer(canvasId, options, send, threeBase) {
                    message: 'Ground not drawn: its tile size must be a positive number and its '
                           + 'height a finite one' });
         }
-        if (!usable) { disposeGround(); return; }
+        if (!usable) { disposeGround(); shadowCameraDirty = true; return; }
         if (ground && ground.url === spec.tile_url && ground.tile === spec.tile_size) {
             ground.height = spec.height; // updateGround() applies it on the next frame
+            shadowCameraDirty = true;    // the ground plane's height feeds the shadow frustum's depth
             return;
         }
         disposeGround();
@@ -195,11 +215,15 @@ export async function createViewer(canvasId, options, send, threeBase) {
         // below the floor still shows the scene.
         const geometry = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
         const mesh = new THREE.Mesh(geometry, material);
+        // Catch the optics' shadows. They fall in the opaque centre under the models; at the
+        // faded rim the shadow vanishes together with the floor, which is exactly right.
+        mesh.receiveShadow = true;
         // Drawn first among the transparent objects, so they blend over the floor and not under it.
         mesh.renderOrder = -1;
         scene.add(mesh);
         ground = { mesh, map, fade, url: spec.tile_url, tile: spec.tile_size, height: spec.height };
         updateGround();
+        shadowCameraDirty = true; // a new ground plane changes where shadows land
     }
 
     /**
@@ -286,6 +310,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
         if (needsResize) resize();
         controls.update(); // needed for enableDamping
         updateGround();
+        if (shadowCameraDirty) { updateShadowCamera(); shadowCameraDirty = false; }
         renderer.render(scene, camera);
         // Overlay the orientation gizmo after the main scene is rendered.
         // autoClear must be false so the gizmo's internal renderer.render() does not
@@ -414,14 +439,26 @@ export async function createViewer(canvasId, options, send, threeBase) {
         scene.remove(entry.root);
         disposeSceneGraph(entry.root);
         objects.delete(id);
+        shadowCameraDirty = true; // the scene bounds shrank
     }
 
-    /** Frames all visible models - never the grid or the ground, which are not in `objects`. MOVES THE CAMERA. */
-    function fitView() {
+    /**
+     * Bounding box of all visible models - never the grid or the ground, which are not in
+     * `objects`. May be empty (no visible model); callers check with `.isEmpty()`.
+     *
+     * @returns {THREE.Box3}
+     */
+    function sceneBounds() {
         const box = new THREE.Box3();
         for (const entry of objects.values()) {
             if (entry.root.visible) box.expandByObject(entry.root);
         }
+        return box;
+    }
+
+    /** Frames all visible models - never the grid or the ground, which are not in `objects`. MOVES THE CAMERA. */
+    function fitView() {
+        const box = sceneBounds();
         if (box.isEmpty()) return;
         const center = box.getCenter(new THREE.Vector3());
         const size   = box.getSize(new THREE.Vector3());
@@ -438,6 +475,46 @@ export async function createViewer(canvasId, options, send, threeBase) {
         if (!currentOptions.fit_on_first_load || hasAutoFitted) return;
         hasAutoFitted = true;
         fitView();
+    }
+
+    /** Direction the sunlight comes from, kept fixed (matches the original sun.position). */
+    const SUN_DIR = new THREE.Vector3(1, 2, 1.5).normalize();
+    const shadowSphere = new THREE.Sphere();
+
+    /**
+     * Aims the sun at the scene centre and shrinks its orthographic shadow frustum to just
+     * enclose the models AND the ground patch their shadows fall on, so the 1024² shadow map is
+     * spent on the optics and not on empty space. Does nothing while no model is visible, leaving
+     * the fallback sun.position in place.
+     *
+     * The frustum's width only needs to cover the models: a caster and its shadow are colinear
+     * with the light, so they project to the same spot in the shadow map. Its DEPTH, however, must
+     * reach past the models down to the ground — otherwise the ground lies behind the far plane
+     * and the shadow is clipped (a small model then shows no shadow at all, a large one a shadow
+     * cut off in a straight line).
+     */
+    function updateShadowCamera() {
+        const box = sceneBounds();
+        if (box.isEmpty()) return;
+        box.getBoundingSphere(shadowSphere);
+        const center = shadowSphere.center;
+        const r    = Math.max(shadowSphere.radius, 1e-3);
+        // Where shadows land: the ground plane if there is one, else the lowest model surface.
+        const groundY = ground ? ground.height : box.min.y;
+        // Distance along the light ray from the scene centre down to that plane. Colinear with the
+        // light, so it adds only depth (never width) to what the shadow camera must cover.
+        const drop   = Math.max((center.y - groundY) / SUN_DIR.y, 0);
+        const margin = r * 0.1 + 1e-3;
+        const dist   = r * 4;
+        sun.position.copy(center).addScaledVector(SUN_DIR, dist);
+        sun.target.position.copy(center);
+        sun.target.updateMatrixWorld();
+        const cam = sun.shadow.camera;
+        cam.left = -r - margin; cam.right = r + margin;
+        cam.top  =  r + margin; cam.bottom = -r - margin;
+        cam.near = Math.max(dist - r - margin, 0.01);
+        cam.far  = dist + r + drop + margin;
+        cam.updateProjectionMatrix();
     }
 
     // ── Base64 → ArrayBuffer ─────────────────────────────────────────────────
@@ -465,11 +542,17 @@ export async function createViewer(canvasId, options, send, threeBase) {
             }
             const root = gltf.scene;
             root.userData.glbId = op.id;
+            // Every mesh both casts and receives: the models shadow the ground and each other.
+            // GLTFLoader leaves both flags false, so they must be set here on the fresh graph.
+            root.traverse((o) => {
+                if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
+            });
             applyTransform(root, op.transform);
             root.visible = op.visible;
             scene.add(root);
             objects.set(op.id, { root, helper: null });
             if (op.selected) setSelected(op.id, true);
+            shadowCameraDirty = true; // a new model changes the scene bounds
             send({ event: 'loaded', id: op.id });
             maybeAutoFit();
         };
@@ -578,12 +661,16 @@ export async function createViewer(canvasId, options, send, threeBase) {
                 if (entry) {
                     applyTransform(entry.root, op.transform);
                     if (entry.helper) entry.helper.update();
+                    shadowCameraDirty = true; // a moved model changes the scene bounds
                 }
                 break;
             }
             case 'set_visible': {
                 const entry = objects.get(op.id);
-                if (entry) entry.root.visible = op.visible;
+                if (entry) {
+                    entry.root.visible = op.visible;
+                    shadowCameraDirty = true; // (un)hiding a model changes the visible bounds
+                }
                 break;
             }
             case 'set_selected':
