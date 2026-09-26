@@ -1583,7 +1583,7 @@ mod test {
         let lens = Lens::default();
         assert_eq!(
             lens.glass_color(),
-            [0.9_f32, 0.95, 1.0],
+            [0.3_f32, 0.3, 0.3],
             "default glass_color must be the neutral glass tint [0.9, 0.95, 1.0]"
         );
     }

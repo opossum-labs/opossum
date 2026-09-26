@@ -87,6 +87,8 @@ pub struct NodeGroup {
     input_port_distances: BTreeMap<String, Length>,
     #[serde(skip)]
     accumulated_rays: Vec<HashMap<Uuid, Rays>>,
+    #[serde(skip)]
+    ray_ends: Vec<Rays>,
 }
 impl Analyzable for NodeGroup {
     fn clone_analyzable(&self) -> Box<dyn Analyzable> {
@@ -108,6 +110,7 @@ impl Default for NodeGroup {
             input_port_distances: BTreeMap::default(),
             node_attr,
             accumulated_rays: Vec::<HashMap<Uuid, Rays>>::new(),
+            ray_ends: Vec::<Rays>::new(),
         }
     }
 }
@@ -864,6 +867,35 @@ impl NodeGroup {
             .map_err(|e| OpossumError::Other(format!("conversion to image failed: {e}")))?;
         Ok(svg_string)
     }
+    /// Returns the ray bundles that exited this group through unconnected, unmapped output ports.
+    ///
+    /// Bundles are only collected by walks
+    /// ([`analyze`](crate::analyzers::raytrace::AnalysisRayTrace::analyze) or
+    /// [`calc_node_positions`](crate::analyzers::raytrace::AnalysisRayTrace::calc_node_positions))
+    /// run with [`RayTraceConfig::collect_ray_ends`](crate::analyzers::RayTraceConfig::collect_ray_ends)
+    /// set; otherwise this list stays empty. Every such walk *appends*: a group that light passes
+    /// twice in one run (e.g. via two references) keeps the ends of both passes. Set the flag only
+    /// on a fresh copy of a model, e.g. one created from its file string — the list is never
+    /// saved, so such a copy starts empty.
+    ///
+    /// The returned list contains this group's own ray ends first, followed by the ray ends of
+    /// nested [`NodeGroup`] nodes in node-index order.  An inner group contributes its ends
+    /// only when its output ports are **not** mapped to the parent's external output ports; a
+    /// mapped port's data flows out through the parent chain and is **not** duplicated here.
+    ///
+    /// **Limitation**: light that enters a node with no output port at all is not recorded —
+    /// the last propagation leg to that absorbing node is missing from this list.
+    #[must_use]
+    pub fn ray_ends(&self) -> Vec<&Rays> {
+        let mut result: Vec<&Rays> = self.ray_ends.iter().collect();
+        for node_ref in self.nodes() {
+            if let Some(group) = node_ref.as_any().downcast_ref::<Self>() {
+                result.extend(group.ray_ends());
+            }
+        }
+        result
+    }
+
     /// Returns a reference to the accumulated rays of this [`NodeGroup`].
     ///
     /// This function returns a bundle of all rays that propagated in a group after a ghost focus analysis.

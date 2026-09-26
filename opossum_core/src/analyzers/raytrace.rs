@@ -51,6 +51,11 @@ pub struct RayTraceConfig {
     /// not been prepared yet and gain models must skip amplification. Not saved to file.
     #[serde(skip)]
     positioning_run: bool,
+    /// When set, [`NodeGroup`] instances keep the ray bundles that exit through unconnected,
+    /// unmapped output ports (see [`NodeGroup::ray_ends`]). Used only by visualization on
+    /// throwaway copies; not saved to disk.
+    #[serde(skip)]
+    collect_ray_ends: bool,
 }
 impl Default for RayTraceConfig {
     /// Create a default config for a ray tracing analysis with the following parameters:
@@ -69,6 +74,7 @@ impl Default for RayTraceConfig {
             ambient_material: Material::vacuum(),
             active_pump_scenario: ActiveScenario::default(),
             positioning_run: false,
+            collect_ray_ends: false,
         }
     }
 }
@@ -183,11 +189,31 @@ impl RayTraceConfig {
     pub const fn set_positioning_run(&mut self, positioning_run: bool) {
         self.positioning_run = positioning_run;
     }
+    /// Sets whether [`NodeGroup`] instances should collect ray bundles that exit through
+    /// unconnected, unmapped output ports.
+    ///
+    /// When set to `true`, every walk run with this config appends those bundles to
+    /// [`NodeGroup::ray_ends`]; nothing clears them. Set it only on a fresh copy of a model (e.g.
+    /// one created from its file string), which starts with no ray ends. When `false` (the
+    /// default) the bundles are discarded and no extra memory is allocated — normal simulations
+    /// are completely unaffected.
+    pub const fn set_collect_ray_ends(&mut self, collect: bool) {
+        self.collect_ray_ends = collect;
+    }
+    /// Returns whether ray bundles at unconnected, unmapped output ports are collected.
+    ///
+    /// See [`set_collect_ray_ends`](Self::set_collect_ray_ends) for details.
+    #[must_use]
+    pub const fn collect_ray_ends(&self) -> bool {
+        self.collect_ray_ends
+    }
     /// Return a config suitable for the geometry-positioning run.
     ///
     /// Copies the source map and scalar settings from `self` but drops the `active_pump_scenario`
     /// (to avoid cloning a potentially large [`PumpScenario`]) and sets `positioning_run = true`
-    /// so that gain models know no medium has been prepared yet.
+    /// so that gain models know no medium has been prepared yet.  `collect_ray_ends` is
+    /// explicitly set to `false`: a positioning run must not also collect the ray ends of the
+    /// analysis walk it precedes.
     #[must_use]
     pub fn for_positioning(&self) -> Self {
         Self {
@@ -199,6 +225,7 @@ impl RayTraceConfig {
             active_pump_scenario: ActiveScenario::default(),
             ambient_material: self.ambient_material().clone(),
             positioning_run: true,
+            collect_ray_ends: false,
         }
     }
 }
@@ -343,7 +370,7 @@ mod test {
     fn config_debug() {
         assert_eq!(
             format!("{:?}", RayTraceConfig::default()),
-            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop, source_map: {}, ambient_material: Material { header: AssetHeader { schema_version: 1, id: 00000000-0000-0000-0000-000000000000, version: 0, name: \"vacuum\", manufacturer: None, description: None }, optical: OpticalProperties { refractive_index: Const(RefrIndexConst { refractive_index: Validated { value: 1.0, validator: AndValidator { v1: AllFinite, v2: StaticInRange { _marker: PhantomData<(f64, opossum_core::refractive_index::refr_index_const::RefIndBounds)> }, _marker: PhantomData<f64> } } }), absorption: None }, thermal: None, mechanical: None }, active_pump_scenario: ActiveScenario(None), positioning_run: false }"
+            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop, source_map: {}, ambient_material: Material { header: AssetHeader { schema_version: 1, id: 00000000-0000-0000-0000-000000000000, version: 0, name: \"vacuum\", manufacturer: None, description: None }, optical: OpticalProperties { refractive_index: Const(RefrIndexConst { refractive_index: Validated { value: 1.0, validator: AndValidator { v1: AllFinite, v2: StaticInRange { _marker: PhantomData<(f64, opossum_core::refractive_index::refr_index_const::RefIndBounds)> }, _marker: PhantomData<f64> } } }), absorption: None }, thermal: None, mechanical: None }, active_pump_scenario: ActiveScenario(None), positioning_run: false, collect_ray_ends: false }"
         );
     }
     #[test]
