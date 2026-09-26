@@ -3,7 +3,7 @@ use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
     helper_functions::{analyzer_mut_or_404, parent_group_id_or_self},
-    scene_export::{glb_of_node, glb_of_surface_node, manifest_of, scene_of},
+    scene_export::{AXIS_COLOR, glb_of_node, glb_of_surface_node, manifest_of, rays_glb, scene_of},
     sse_logger::SENDER,
     undo::{Command, PatchNode, RepositionAnalyzer, SetViewport, capture_old_node_request},
 };
@@ -191,6 +191,39 @@ async fn get_scene_node(
     } else {
         return Err(BackEndErrorResponse::not_found());
     };
+    Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
+}
+
+/// Get the optical axis of the model as a 3D scene
+///
+/// This function returns the path the optical axis takes through the model as lines in a binary
+/// glTF (GLB) file, in the same world coordinates `/scene/manifest` places the components in. It is
+/// the path the positioning run follows, one ray per source, so it shows how the setup is built up
+/// and why each component sits where it does.
+///
+/// The axis is traced on a copy, leaving the document itself untouched, and the `analyzer`
+/// parameter picks which analyzer's sources to follow exactly as for `/scene.glb`. The axis is
+/// drawn up to every open output port it reaches; light that ends in a component without any
+/// output port is not drawn into it.
+#[utoipa::path(tag = "document",
+    params(SceneQuery),
+    responses(
+        (status = 200, description = "glTF binary of the optical axis", body = Vec<u8>,
+            content_type = GLB_MEDIA_TYPE),
+        (status = 400, description = "the axis could not be traced", body = ErrorResponse)
+    )
+)]
+#[get("/scene/axis.glb")]
+async fn get_scene_axis(
+    data: web::Data<AppState>,
+    query: web::Query<SceneQuery>,
+) -> Result<impl Responder, BackEndErrorResponse> {
+    let axes = {
+        let document = data.document.lock();
+        document.positioning_rays(query.analyzer)?
+    };
+    // One ray per source: nothing to thin out.
+    let glb = rays_glb(&axes, Some(AXIS_COLOR), usize::MAX)?;
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
 
@@ -604,6 +637,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_scene);
     cfg.service(get_scene_manifest);
     cfg.service(get_scene_node);
+    cfg.service(get_scene_axis);
 
     cfg.service(undo_document);
     cfg.service(redo_document);
@@ -1626,6 +1660,59 @@ mod test {
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 
         let resp = request_scene(&app_state, &format!("?analyzer={named}")).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    /// Ask a state for the optical axis of its model.
+    async fn request_axis(
+        app_state: &Data<AppState>,
+        query: &str,
+    ) -> actix_web::dev::ServiceResponse {
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(web::scope("/document").service(get_scene_axis)),
+        )
+        .await;
+        let req = test::TestRequest::get()
+            .uri(&format!("/document/scene/axis.glb{query}"))
+            .to_request();
+        app.call(req).await.unwrap()
+    }
+
+    /// A lens nobody analyzed still has an axis: a source is put in front of it, and the axis runs
+    /// through the lens to its open output.
+    #[actix_web::test]
+    async fn the_axis_of_a_model_is_drawn_as_lines() {
+        let resp = request_axis(&state_with_a_lens(), "").await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = test::read_body(resp).await;
+        assert!(body.starts_with(b"glTF"));
+        assert!(
+            body.windows(br#""mode":1"#.len())
+                .any(|window| window == br#""mode":1"#),
+            "the axis is drawn as LINES"
+        );
+    }
+
+    /// The axis follows an analyzer's sources, so it asks for the analyzer to be named exactly
+    /// when the scene itself does.
+    #[actix_web::test]
+    async fn the_axis_of_a_model_analyzed_several_ways_needs_the_analyzer_named() {
+        use opossum_core::analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig};
+
+        let app_state = state_with_a_lens();
+        let named = {
+            let mut document = app_state.document.lock();
+            document.add_analyzer(AnalyzerType::GhostFocus(GhostFocusConfig::default()));
+            document.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()))
+        };
+
+        let resp = request_axis(&app_state, "").await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        let resp = request_axis(&app_state, &format!("?analyzer={named}")).await;
         assert_eq!(resp.status(), StatusCode::OK);
     }
 
