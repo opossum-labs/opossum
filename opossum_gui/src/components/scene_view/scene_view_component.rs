@@ -9,7 +9,10 @@ use crate::{
     HTTP_API_CLIENT, OPOSSUM_UI_LOGS, SCENE_REVISION, api,
     api::eval_action_run,
     components::{
-        scene_view::{objects_of, reveal_action_for_pick, table_ground},
+        scene_view::{
+            AXIS_OBJECT_ID, is_ray_object, objects_of, ray_object, reveal_action_for_pick,
+            table_ground,
+        },
         scenery_editor::GraphsWorkspaceAction,
     },
 };
@@ -48,6 +51,11 @@ pub fn SceneView() -> Element {
     let mut show_table = use_signal(|| true);
     // Whether the corner orientation gizmo is shown. Mirrors `options.orientation_gizmo`.
     let mut show_axes = use_signal(|| true);
+    // Whether the optical axis is shown. Mirrors the `visible` flag of the axis object.
+    let mut show_beam_axis = use_signal(|| true);
+    // How often the model has been fetched. The axis URL carries it, so every fetch of the
+    // components fetches the axis again too; see `api::scene_axis_url`.
+    let mut fetches = use_signal(|| 0_usize);
 
     let mut options = use_signal(|| ViewerOptions {
         // Without this, every lens renders black: glass refracts its surroundings, and an empty
@@ -62,6 +70,8 @@ pub fn SceneView() -> Element {
         orientation_gizmo: true,
         // The optical table as a floor reaching to the horizon; see `table_ground`.
         ground: show_table.peek().then(table_ground),
+        // Drawn light - the optical axis - is a line; at one pixel it disappears against the table.
+        line_width: 3.0,
         ..ViewerOptions::default()
     });
 
@@ -89,7 +99,16 @@ pub fn SceneView() -> Element {
                 Some(move |fetched| {
                     // Handing over a whole new list is the point: the viewer compares it against
                     // what it already draws and moves, reloads or removes only what differs.
-                    objects.set(objects_of(&fetched, HTTP_API_CLIENT().base_url()));
+                    let base_url = HTTP_API_CLIENT().base_url().to_owned();
+                    let fetch = *fetches.peek() + 1;
+                    fetches.set(fetch);
+                    let mut list = objects_of(&fetched, &base_url);
+                    list.push(ray_object(
+                        AXIS_OBJECT_ID,
+                        api::scene_axis_url(&base_url, fetch),
+                        *show_beam_axis.peek(),
+                    ));
+                    objects.set(list);
                     skipped_count.set(fetched.skipped.len());
                     for s in &fetched.skipped {
                         OPOSSUM_UI_LOGS.write().add_log(&format!(
@@ -146,13 +165,32 @@ pub fn SceneView() -> Element {
                     },
                     "Axes"
                 }
+                button {
+                    class: if show_beam_axis() {
+                        "btn btn-sm btn-outline-light active"
+                    } else {
+                        "btn btn-sm btn-outline-light"
+                    },
+                    onclick: move |_| {
+                        let v = !show_beam_axis();
+                        show_beam_axis.set(v);
+                        for object in objects.write().iter_mut() {
+                            if object.id == AXIS_OBJECT_ID {
+                                object.visible = v;
+                            }
+                        }
+                    },
+                    "Beam axis"
+                }
                 if *skipped_count.read() > 0 {
                     span {
                         class: "scene-view-skipped",
                         "{skipped_count} component(s) could not be drawn \u{2013} see logs"
                     }
                 }
-                span { class: "scene-view-count", "{objects.read().len()} components" }
+                span { class: "scene-view-count",
+                    "{objects.read().iter().filter(|o| !is_ray_object(&o.id)).count()} components"
+                }
             }
             GlbViewer {
                 // `.dxglb-root` brings `height: 100%`, which in this column would mean the full
@@ -164,11 +202,11 @@ pub fn SceneView() -> Element {
                 options,
                 on_pick: move |picked: PickEvent| {
                     // Selection lives with the caller, not with the viewer: it only reports the
-                    // click. Clicking empty space clears it. Aux objects (ids starting with
-                    // "aux:") are never model nodes and must never receive a selection box.
+                    // click. Clicking empty space clears it. Drawn rays are never model nodes and
+                    // must never receive a selection box.
                     for object in objects.write().iter_mut() {
                         object.selected =
-                            !object.id.starts_with("aux:") && Some(&object.id) == picked.id.as_ref();
+                            !is_ray_object(&object.id) && Some(&object.id) == picked.id.as_ref();
                     }
                     // A hit also opens the component's properties, without leaving the 3D view -
                     // see `reveal_action_for_pick`. Looked up in the manifest last fetched rather

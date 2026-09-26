@@ -14,7 +14,9 @@
 //! a transform and no geometry at all.
 //!
 //! The one thing the view adds of its own is the optical table under the setup, see
-//! [`table_ground`]. It is presentation only, so it lives here rather than in the model.
+//! [`table_ground`]. It is presentation only, so it lives here rather than in the model. Drawn
+//! light - the optical axis - comes from the backend like the components, but as objects of its own
+//! that are no node of the graph; see [`ray_object`].
 
 // The prelude, not just `Asset` and `asset!`: the macro expands to a path through `manganis`, which
 // only the prelude brings into scope.
@@ -64,6 +66,49 @@ pub fn objects_of(manifest: &SceneManifest, base_url: &str) -> Vec<GlbObject> {
             selected: false,
         })
         .collect()
+}
+
+/// The object id of the optical axis in the 3D view.
+pub const AXIS_OBJECT_ID: &str = "rays:axis";
+
+/// Whether an object of the 3D view is drawn light rather than a component of the model.
+///
+/// Ray objects share the `rays:` prefix. They are no node of the graph, so a click never selects
+/// them and they do not count as components.
+///
+/// # Arguments
+///
+/// - `id`: the object's id
+///
+/// # Returns
+///
+/// `true` for a ray object.
+pub fn is_ray_object(id: &str) -> bool {
+    id.starts_with("rays:")
+}
+
+/// Describe drawn light - the optical axis, say - as an object of the 3D view.
+///
+/// The backend delivers ray paths in world coordinates, the same frame the manifest places the
+/// components in, so the object keeps the identity transform.
+///
+/// # Arguments
+///
+/// - `id`: the object's id, starting with `rays:` (see [`is_ray_object`])
+/// - `url`: where the webview fetches the rays from
+/// - `visible`: whether the rays are shown
+///
+/// # Returns
+///
+/// The object, unselected.
+pub fn ray_object(id: &str, url: String, visible: bool) -> GlbObject {
+    GlbObject {
+        id: id.to_owned(),
+        source: GlbSource::Url(url),
+        transform: Transform::default(),
+        visible,
+        selected: false,
+    }
 }
 
 /// Describe the optical table under the setup as the 3D viewer's ground.
@@ -282,5 +327,36 @@ mod tests {
         };
 
         assert!(reveal_action_for_pick(&pick(Some(Uuid::new_v4())), &manifest).is_none());
+    }
+
+    /// The axis arrives in world coordinates, so it is not moved, and it is told apart from the
+    /// components by its id alone.
+    #[test]
+    fn the_axis_is_a_ray_object_left_where_it_is() {
+        let axis = ray_object(
+            AXIS_OBJECT_ID,
+            "http://localhost/axis.glb".to_owned(),
+            false,
+        );
+
+        assert!(is_ray_object(&axis.id));
+        assert_eq!(axis.transform, Transform::default());
+        assert!(!axis.visible && !axis.selected);
+        assert!(
+            !is_ray_object(&Uuid::new_v4().to_string()),
+            "a component is no ray object"
+        );
+    }
+
+    /// The viewer reloads an object exactly when its URL changes, so the axis URL has to change
+    /// with every fetch of the model.
+    #[test]
+    fn every_fetch_gives_the_axis_a_new_url() {
+        let base = "http://localhost:8001";
+        assert_ne!(
+            crate::api::scene_axis_url(base, 1),
+            crate::api::scene_axis_url(base, 2)
+        );
+        assert!(crate::api::scene_axis_url(base, 1).starts_with(base));
     }
 }

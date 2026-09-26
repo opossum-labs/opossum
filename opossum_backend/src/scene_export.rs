@@ -407,9 +407,9 @@ pub fn glb_of_surface_node(node: &dyn Planar) -> OpmResult<Vec<u8>> {
         .map_err(|e| OpossumError::Other(format!("the scene could not be written: {e}")))
 }
 
-/// The colour the optical axis is drawn in: a warm amber that stands apart from the wavelength
+/// The colour the optical axis is drawn in: a bright purple that stands apart from the wavelength
 /// colours real rays are drawn in and from the grey and glass tones of the components.
-pub const AXIS_COLOR: [f32; 4] = [1.0, 0.75, 0.1, 1.0];
+pub const AXIS_COLOR: [f32; 4] = [183./255., 17./255., 1., 1.0];
 
 /// Build the glTF binary of ray bundles, drawn as lines along the paths the rays took.
 ///

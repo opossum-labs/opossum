@@ -3,5 +3,7 @@
 mod adapter;
 mod scene_view_component;
 
-pub use adapter::{objects_of, reveal_action_for_pick, table_ground};
+pub use adapter::{
+    AXIS_OBJECT_ID, is_ray_object, objects_of, ray_object, reveal_action_for_pick, table_ground,
+};
 pub use scene_view_component::SceneView;

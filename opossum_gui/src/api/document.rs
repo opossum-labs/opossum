@@ -145,3 +145,23 @@ pub async fn get_scene_manifest(analyzer: Option<Uuid>) -> Result<SceneManifest,
 pub fn scene_node_url(base_url: &str, uid: Uuid, geometry: &str) -> String {
     format!("{base_url}/api/document/scene/node/{uid}.glb?v={geometry}")
 }
+
+/// The URL the 3D viewer fetches the model's optical axis from.
+///
+/// Unlike a component, the axis has no hash to say whether it changed: any edit can reroute it.
+/// So the URL carries a counter of how often the view has fetched the model instead, and a new
+/// value makes the viewer, which reloads an object exactly when its URL changes, fetch the axis
+/// again along with every refresh of the components.
+///
+/// # Arguments
+///
+/// - `base_url`: the backend's root, from [`crate::api::http_client::HTTPClient::base_url`]
+/// - `fetch`: how many times the view has fetched the model so far
+///
+/// # Returns
+///
+/// An absolute URL the webview can fetch.
+#[must_use]
+pub fn scene_axis_url(base_url: &str, fetch: usize) -> String {
+    format!("{base_url}/api/document/scene/axis.glb?v={fetch}")
+}
