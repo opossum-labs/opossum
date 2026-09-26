@@ -64,6 +64,7 @@ pub fn objects_of(manifest: &SceneManifest, base_url: &str) -> Vec<GlbObject> {
             visible: true,
             // Selection lives with whoever handles the clicks, not with the geometry.
             selected: false,
+            opacity: 1.0,
         })
         .collect()
 }
@@ -108,6 +109,7 @@ pub fn ray_object(id: &str, url: String, visible: bool) -> GlbObject {
         transform: Transform::default(),
         visible,
         selected: false,
+        opacity: 1.0,
     }
 }
 

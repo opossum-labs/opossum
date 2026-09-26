@@ -623,11 +623,43 @@ export async function createViewer(canvasId, options, send, threeBase) {
             // and it casts no shadow - its quads would throw wide smears onto the ground.
             fat.raycast = () => {};
             fat.castShadow = false;
+            // Keep what the file gave the line, so a later opacity change still scales that and
+            // not the value an earlier change left behind (see setOpacity).
+            if (src.userData.ownOpacity) {
+                fat.material.userData.ownOpacity = src.userData.ownOpacity;
+            }
             line.parent.add(fat);
             line.parent.remove(line);
             line.geometry.dispose();
             src.dispose();
         }
+    }
+
+    // ── Opacity ───────────────────────────────────────────────────────────────
+    /**
+     * Draws every material under `root` at `factor` times its own opacity.
+     *
+     * What the file gave a material - opacity, transparency, depth writing - is remembered on
+     * first use, so the factor always scales the original and 1 restores it exactly. Below 1 a
+     * material stops writing depth: overlapping translucent lines would otherwise hide each other
+     * in draw order instead of adding up.
+     */
+    function setOpacity(root, factor) {
+        root.traverse((o) => {
+            if (!o.material) return;
+            for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+                m.userData.ownOpacity ??= {
+                    opacity: m.opacity, transparent: m.transparent, depthWrite: m.depthWrite,
+                };
+                const own = m.userData.ownOpacity;
+                const transparent = own.transparent || factor < 1;
+                // Switching transparency changes the shader program, which only a recompile does.
+                if (m.transparent !== transparent) m.needsUpdate = true;
+                m.transparent = transparent;
+                m.opacity     = own.opacity * factor;
+                m.depthWrite  = factor < 1 ? false : own.depthWrite;
+            }
+        });
     }
 
     // ── Load logic with generation counter ────────────────────────────────────
@@ -664,6 +696,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
             });
             applyTransform(root, op.transform);
             root.visible = op.visible;
+            setOpacity(root, op.opacity);
             scene.add(root);
             objects.set(op.id, { root, helper: null });
             if (op.selected) setSelected(op.id, true);
@@ -800,6 +833,11 @@ export async function createViewer(canvasId, options, send, threeBase) {
             case 'set_selected':
                 setSelected(op.id, op.selected);
                 break;
+            case 'set_opacity': {
+                const entry = objects.get(op.id);
+                if (entry) setOpacity(entry.root, op.opacity);
+                break;
+            }
             case 'set_options':
                 applyOptions(op.options);
                 break;

@@ -95,7 +95,7 @@ otherwise ignored, so a newer Rust side talking to an older module degrades rath
 breaks.
 
 One thing runs through the whole dispatcher: **an op naming an id the renderer does not
-have is silently ignored.** `set_transform`, `set_visible` and `set_selected` all look up
+have is silently ignored.** `set_transform`, `set_visible`, `set_selected` and `set_opacity` all look up
 the object first and return if it is missing. That is what makes the
 [`clear_scene` trap](./camera.md#the-clear_scene-trap) behave the way it does.
 

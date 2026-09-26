@@ -12,7 +12,7 @@ cargo doc -p dioxus_glb_viewer --no-deps --open
 | Type | Summary |
 |---|---|
 | `GlbViewer` | The component. Renders `.glb` models in a canvas. |
-| `GlbObject` | One model: `id`, `source`, `transform`, `visible`, `selected`. |
+| `GlbObject` | One model: `id`, `source`, `transform`, `visible`, `selected`, `opacity`. |
 | `GlbSource` | `Url(String)` or `Bytes(Arc<[u8]>)`. `Url` compares by content, `Bytes` by pointer. |
 | `Transform` | `position`, `rotation_euler_xyz` (radians, Euler XYZ), `scale`. `Default` is the identity. |
 | `ViewerOptions` | Twelve scene-wide settings; `Default` gives a usable dark scene with a grid. |
@@ -72,7 +72,7 @@ effect](./scene.md#when-option-changes-take-effect).
 
 | Tag | Emitted by |
 |---|---|
-| `add`, `reload`, `remove`, `set_transform`, `set_visible`, `set_selected` | the diff |
+| `add`, `reload`, `remove`, `set_transform`, `set_visible`, `set_selected`, `set_opacity` | the diff |
 | `set_options` | the options effect |
 | `fit_view`, `reset_camera`, `clear` | `ViewerHandle` |
 | `destroy` | unmount |

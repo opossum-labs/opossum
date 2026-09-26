@@ -68,6 +68,7 @@ fn App() -> Element {
             },
             visible: true,
             selected: false,
+            opacity: 1.0,
         })
     };
 
@@ -193,6 +194,7 @@ fn App() -> Element {
                                         },
                                         visible: true,
                                         selected: false,
+                                        opacity: 1.0,
                                     });
                                     *counter.write() += 1;
                                 }

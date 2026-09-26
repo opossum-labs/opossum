@@ -24,16 +24,18 @@ pub enum Op {
         transform: Transform,
         visible: bool,
         selected: bool,
+        opacity: f32,
     },
     /// Dispose the existing model and replace it with a new source.
-    /// Transform/visibility/selection travel in the same op so the new model never
-    /// appears for a frame in the wrong pose.
+    /// Transform/visibility/selection/opacity travel in the same op so the new model never
+    /// appears for a frame in the wrong pose or style.
     Reload {
         id: String,
         source: WireSource,
         transform: Transform,
         visible: bool,
         selected: bool,
+        opacity: f32,
     },
     /// Remove a model from the scene and release its GPU resources.
     Remove { id: String },
@@ -43,6 +45,8 @@ pub enum Op {
     SetVisible { id: String, visible: bool },
     /// Toggle the selection highlight (`BoxHelper`) on or off.
     SetSelected { id: String, selected: bool },
+    /// Change how opaque a model is drawn (see [`crate::GlbObject::opacity`]).
+    SetOpacity { id: String, opacity: f32 },
     /// Update scene-wide options (background, lights, grid, …). None of these options
     /// touch the camera.
     SetOptions { options: ViewerOptions },
@@ -239,6 +243,19 @@ mod tests {
         };
         let json = serde_json::to_value(opts).expect("options serialise");
         assert_eq!(json["orientation_gizmo"], true);
+    }
+
+    /// `viewer.js` dispatches on the `op` tag and reads `id` and `opacity`.
+    #[test]
+    fn set_opacity_reaches_the_wire_as_viewer_js_reads_it() {
+        let json = serde_json::to_value(Op::SetOpacity {
+            id: "a".into(),
+            opacity: 0.5,
+        })
+        .expect("ops serialise");
+        assert_eq!(json["op"], "set_opacity");
+        assert_eq!(json["id"], "a");
+        assert_eq!(json["opacity"], 0.5);
     }
 
     /// `viewer.js` takes `null` for "no floor"; a missing key would mean the same by accident.

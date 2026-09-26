@@ -28,6 +28,8 @@ pub struct GlbObject {
     pub visible: bool,
     /// Whether the object is highlighted as selected (with a `THREE.BoxHelper`).
     pub selected: bool,
+    /// How opaque the object is drawn, from `0.0` (invisible) to `1.0` (as the file has it).
+    pub opacity: f32,
 }
 
 // ─── GlbSource ───────────────────────────────────────────────────────────────

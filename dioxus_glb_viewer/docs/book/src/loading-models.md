@@ -37,6 +37,7 @@ match std::fs::read(&path) {
             transform: Transform::default(),
             visible: true,
             selected: false,
+            opacity: 1.0,
         });
     }
     Err(e) => { /* report to the user — the viewer never sees this */ }

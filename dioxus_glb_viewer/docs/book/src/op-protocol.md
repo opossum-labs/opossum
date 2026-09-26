@@ -18,12 +18,13 @@ object carries its payload.
 
 | Op | Tag | Payload |
 |---|---|---|
-| `Add` | `add` | `id`, `source`, `transform`, `visible`, `selected` |
+| `Add` | `add` | `id`, `source`, `transform`, `visible`, `selected`, `opacity` |
 | `Reload` | `reload` | same as `Add` |
 | `Remove` | `remove` | `id` |
 | `SetTransform` | `set_transform` | `id`, `transform` |
 | `SetVisible` | `set_visible` | `id`, `visible` |
 | `SetSelected` | `set_selected` | `id`, `selected` |
+| `SetOpacity` | `set_opacity` | `id`, `opacity` |
 | `SetOptions` | `set_options` | `options` |
 | `FitView` | `fit_view` | — |
 | `ResetCamera` | `reset_camera` | — |
@@ -32,8 +33,8 @@ object carries its payload.
 | `BytesBegin` | `bytes_begin` | `key`, `chunks` |
 | `BytesChunk` | `bytes_chunk` | `key`, `seq`, `b64` |
 
-`Add` and `Reload` carry transform, visibility and selection rather than leaving them to
-follow-up ops. That is what stops a freshly loaded model from being visible for one frame
+`Add` and `Reload` carry transform, visibility, selection and opacity rather than leaving
+them to follow-up ops. That is what stops a freshly loaded model from being visible for one frame
 in the previous pose.
 
 ### Where each op comes from
@@ -43,7 +44,7 @@ by convention:
 
 | Producer | Ops it can emit |
 |---|---|
-| `diff` | `Add`, `Reload`, `Remove`, `SetTransform`, `SetVisible`, `SetSelected` |
+| `diff` | `Add`, `Reload`, `Remove`, `SetTransform`, `SetVisible`, `SetSelected`, `SetOpacity` |
 | The options effect | `SetOptions` |
 | `ViewerHandle` | `FitView`, `ResetCamera`, `Clear` |
 | `use_drop` on unmount | `Destroy` |

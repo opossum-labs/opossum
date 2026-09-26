@@ -29,6 +29,7 @@
 //!             transform: Transform::default(),
 //!             visible: true,
 //!             selected: false,
+//!             opacity: 1.0,
 //!         }]
 //!     });
 //!     rsx! {

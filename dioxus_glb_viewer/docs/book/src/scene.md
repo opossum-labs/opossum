@@ -25,6 +25,7 @@ One model in the scene.
 | `transform` | `Transform` | Placement in world coordinates. |
 | `visible` | `bool` | Hidden objects stay in the scene graph. |
 | `selected` | `bool` | Draws a `THREE.BoxHelper` around the object. |
+| `opacity` | `f32` | `0.0`–`1.0`, scaling the opacity the file gave each material; `1.0` draws the model as it is. |
 
 The `id` is what [`PickEvent`](./picking.md) reports back, and it is how the diff
 recognises an object across renders: a stable `id` whose `transform` changed produces a
@@ -127,10 +128,11 @@ This is the whole contract between your list and the renderer:
 |---|---|
 | A new `id` appears | The model is loaded and added. |
 | An `id` disappears | The model is removed and its GPU resources are freed. |
-| `source` differs (per the rules above) | The old model is disposed and the new one loaded, with transform, visibility and selection applied in the same step. |
+| `source` differs (per the rules above) | The old model is disposed and the new one loaded, with transform, visibility, selection and opacity applied in the same step. |
 | `transform` differs | Position, rotation and scale are updated in place. No reload. |
 | `visible` differs | The object is hidden or shown; it stays in the scene graph. |
 | `selected` differs | The selection `BoxHelper` is added or removed. |
+| `opacity` differs | The model's materials are restyled in place. No reload. Below `1.0` they stop writing depth, so overlapping translucent parts add up rather than hide each other. |
 | Only the **order** of entries differs | Nothing at all. Order carries no meaning. |
 | Nothing differs | Nothing is sent. |
 

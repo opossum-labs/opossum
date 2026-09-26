@@ -74,12 +74,13 @@ pub fn diff(
                     transform: want.transform,
                     visible: want.visible,
                     selected: want.selected,
+                    opacity: want.opacity,
                 });
                 applied.insert((*id).to_owned(), (*want).clone());
             }
             Some(have) if have.source != want.source => {
                 // Source changed → Reload (disposes the old model and reloads).
-                // Transform/visible/selected travel in the same op so the new model
+                // Transform/visible/selected/opacity travel in the same op so the new model
                 // never appears for a frame in the wrong pose.
                 ops.push(Op::Reload {
                     id: (*id).to_owned(),
@@ -87,6 +88,7 @@ pub fn diff(
                     transform: want.transform,
                     visible: want.visible,
                     selected: want.selected,
+                    opacity: want.opacity,
                 });
                 applied.insert((*id).to_owned(), (*want).clone());
             }
@@ -109,6 +111,12 @@ pub fn diff(
                     ops.push(Op::SetSelected {
                         id: (*id).to_owned(),
                         selected: want.selected,
+                    });
+                }
+                if have.opacity.to_bits() != want.opacity.to_bits() {
+                    ops.push(Op::SetOpacity {
+                        id: (*id).to_owned(),
+                        opacity: want.opacity,
                     });
                 }
                 if ops.len() != prev_len {
@@ -161,6 +169,7 @@ mod tests {
             transform: Transform::default(),
             visible: true,
             selected: false,
+            opacity: 1.0,
         }
     }
 
@@ -242,6 +251,39 @@ mod tests {
         let ops = diff(&mut applied, &[changed], &mut dupes);
         assert_eq!(ops.len(), 1);
         assert!(matches!(&ops[0], Op::SetSelected { id, selected: true } if id == "a"));
+    }
+
+    /// Restyling a model must never fetch it again: only the opacity travels.
+    #[test]
+    fn opacity_only_change() {
+        let o = obj("a", url("http://x/a.glb"));
+        let mut applied: BTreeMap<String, GlbObject> = [("a".to_owned(), o.clone())].into();
+        let mut changed = o;
+        changed.opacity = 0.4;
+        let mut dupes = Vec::new();
+        let ops = diff(&mut applied, std::slice::from_ref(&changed), &mut dupes);
+        assert_eq!(ops.len(), 1);
+        assert!(
+            matches!(&ops[0], Op::SetOpacity { id, opacity } if id == "a" && opacity.to_bits() == 0.4_f32.to_bits())
+        );
+        // Handing over the same list again changes nothing.
+        assert!(diff(&mut applied, &[changed], &mut dupes).is_empty());
+    }
+
+    /// A reloaded model comes back in the opacity it is meant to have, not fully opaque first.
+    #[test]
+    fn a_reload_carries_the_opacity() {
+        let mut o = obj("a", url("http://x/a.glb"));
+        o.opacity = 0.5;
+        let mut applied: BTreeMap<String, GlbObject> = [("a".to_owned(), o.clone())].into();
+        let mut changed = o;
+        changed.source = url("http://x/b.glb");
+        let mut dupes = Vec::new();
+        let ops = diff(&mut applied, &[changed], &mut dupes);
+        assert_eq!(ops.len(), 1);
+        assert!(
+            matches!(&ops[0], Op::Reload { opacity, .. } if opacity.to_bits() == 0.5_f32.to_bits())
+        );
     }
 
     #[test]

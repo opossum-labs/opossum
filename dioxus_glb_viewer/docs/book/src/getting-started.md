@@ -54,6 +54,7 @@ fn Scene3d() -> Element {
             transform: Transform::default(),   // origin, unrotated, unscaled
             visible: true,
             selected: false,
+            opacity: 1.0,
         }]
     });
 
