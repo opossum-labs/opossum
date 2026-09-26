@@ -7,7 +7,7 @@ use crate::{
     },
     core_optics::OpticNode,
     error::{OpmResult, OpossumError},
-    light::{light_result::LightResult, lightdata::ray_data_builder::RayDataBuilder},
+    light::{Rays, light_result::LightResult, lightdata::ray_data_builder::RayDataBuilder},
     reporting::analysis_report::AnalysisReport,
 };
 use log::info;
@@ -129,9 +129,63 @@ impl OpmDocument {
     /// if the positioning run itself fails.
     pub fn positioned_copy(&self, analyzer_id: Option<Uuid>) -> OpmResult<Self> {
         let mut copy = Self::from_string(&self.to_opm_file_string()?)?;
-        let config = if let Some(id) = analyzer_id {
-            let analyzer = copy.analyzer(id)?;
-            analyzer
+        let config = copy.placing_config(analyzer_id)?;
+        AnalysisRayTrace::calc_node_positions(&mut copy.scenery, LightResult::default(), &config)?;
+        copy.scenery.reset_data();
+        Ok(copy)
+    }
+
+    /// Returns the paths the optical axis takes through this model when it is placed.
+    ///
+    /// The positioning run behind [`positioned_copy`](OpmDocument::positioned_copy) follows one
+    /// ray per source — the optical axis — through the setup and places every component where
+    /// that ray meets it. The ray bundles that leave the model through an open output port carry
+    /// the whole path back to their source, which shows how the setup is built up. The run happens
+    /// on a copy for the same reason as there, so the model itself is left untouched.
+    ///
+    /// # Arguments
+    ///
+    /// - `analyzer_id`: the analyzer to take the sources from, or `None` to pick the only one that
+    ///   places anything — chosen exactly as for [`positioned_copy`](OpmDocument::positioned_copy)
+    ///
+    /// # Returns
+    ///
+    /// One bundle per open output port the axis reaches, each ray carrying its position history in
+    /// global coordinates. Light that ends in a component without any output port is missing.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error in the same cases as
+    /// [`positioned_copy`](OpmDocument::positioned_copy).
+    pub fn positioning_rays(&self, analyzer_id: Option<Uuid>) -> OpmResult<Vec<Rays>> {
+        let mut copy = Self::from_string(&self.to_opm_file_string()?)?;
+        let mut config = copy.placing_config(analyzer_id)?;
+        // The copy was just read from file, so it holds no ray ends yet.
+        config.set_collect_ray_ends(true);
+        AnalysisRayTrace::calc_node_positions(&mut copy.scenery, LightResult::default(), &config)?;
+        Ok(copy.scenery.ray_ends().into_iter().cloned().collect())
+    }
+
+    /// Returns the configuration a positioning run of this model starts from.
+    ///
+    /// # Arguments
+    ///
+    /// - `analyzer_id`: the analyzer to take the sources from, or `None` to pick the only one that
+    ///   places anything, falling back to default rays from the model's own source ports
+    ///
+    /// # Returns
+    ///
+    /// The ray-trace configuration whose sources the positioning run follows.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the named analyzer does not exist or does not place
+    /// anything, if no analyzer was named and several place something, or if the default
+    /// configuration cannot be built.
+    fn placing_config(&mut self, analyzer_id: Option<Uuid>) -> OpmResult<RayTraceConfig> {
+        if let Some(id) = analyzer_id {
+            let analyzer = self.analyzer(id)?;
+            return analyzer
                 .analyzer_type()
                 .positioning_config()
                 .ok_or_else(|| {
@@ -140,30 +194,24 @@ impl OpmDocument {
                          to draw it",
                         analyzer.display_name()
                     ))
-                })?
-        } else {
-            let mut placing = copy
-                .analyzers
-                .values()
-                .filter_map(|info| info.analyzer_type().positioning_config());
-            match (placing.next(), placing.next()) {
-                (Some(only), None) => only,
-                (Some(_), Some(_)) => {
-                    return Err(OpossumError::OpmDocument(
-                        "this model is analyzed several ways, each of which may place its nodes \
-                         differently — name the analyzer to draw it after"
-                            .into(),
-                    ));
-                }
-                // Nothing analyzes this model geometrically, so there is no source data to go by.
-                // Default rays from wherever the model marks its sources still say where everything
-                // sits relative to everything else.
-                _ => copy.default_positioning_config()?,
-            }
-        };
-        AnalysisRayTrace::calc_node_positions(&mut copy.scenery, LightResult::default(), &config)?;
-        copy.scenery.reset_data();
-        Ok(copy)
+                });
+        }
+        let mut placing = self
+            .analyzers
+            .values()
+            .filter_map(|info| info.analyzer_type().positioning_config());
+        match (placing.next(), placing.next()) {
+            (Some(only), None) => Ok(only),
+            (Some(_), Some(_)) => Err(OpossumError::OpmDocument(
+                "this model is analyzed several ways, each of which may place its nodes \
+                 differently — name the analyzer to draw it after"
+                    .into(),
+            )),
+            // Nothing analyzes this model geometrically, so there is no source data to go by.
+            // Default rays from wherever the model marks its sources still say where everything
+            // sits relative to everything else.
+            _ => self.default_positioning_config(),
+        }
     }
 
     /// Build a positioning configuration for a model no analyzer places.
@@ -250,9 +298,11 @@ mod tests {
         analyzers::{AnalyzerType, energy::EnergyConfig},
         gain::{ConstGain, GainModel},
         joule,
+        light::Ray,
         light::lightdata::energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
         millimeter, nanometer,
         nodes::{EnergyMeter, Lens, NodeGroup, SourcePort},
+        utils::geom_transformation::Isometry,
         utils::test_helper::test_helper::metered_energy,
     };
     use approx::assert_relative_eq;
@@ -413,6 +463,50 @@ mod tests {
         let reports = document.analyze()?;
         assert_eq!(reports.len(), 1);
         assert_eq!(reports[0].analyzer_name(), Some("Diagnostic Trace"));
+        Ok(())
+    }
+
+    /// The optical axis of a source followed by two lenses, the last one's output left open.
+    #[test]
+    fn the_optical_axis_runs_through_every_placed_component() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let first = scenery.add_node(Lens::default())?;
+        let second = scenery.add_node(Lens::default())?;
+        scenery.connect_nodes(source, "output_1", first, "input_1", millimeter!(100.0))?;
+        scenery.connect_nodes(first, "output_1", second, "input_1", millimeter!(50.0))?;
+        let document = OpmDocument::new(scenery);
+
+        let axes = document.positioning_rays(None)?;
+        assert_eq!(axes.len(), 1, "one open output, so one end");
+        assert_eq!(axes[0].nr_of_rays(true), 1, "the axis is a single ray");
+        let path = axes[0]
+            .iter()
+            .next()
+            .map(Ray::position_history_with_current)
+            .ok_or_else(|| OpossumError::Other("no axis ray".into()))?;
+
+        let placed = document.positioned_copy(None)?;
+        for lens in [first, second] {
+            let position = placed
+                .scenery()
+                .with_node_attr(lens, |attr| {
+                    attr.effective_position().map(Isometry::translation)
+                })?
+                .ok_or_else(|| OpossumError::Other("lens was not placed".into()))?;
+            let on_path = path.row_iter().any(|point| {
+                (point[0] - position.x).abs() < millimeter!(1e-6)
+                    && (point[1] - position.y).abs() < millimeter!(1e-6)
+                    && (point[2] - position.z).abs() < millimeter!(1e-6)
+            });
+            assert!(on_path, "the axis passes the lens at {position:?}");
+        }
+        assert!(
+            document
+                .scenery()
+                .with_node_attr(first, |attr| attr.effective_position().is_none())?,
+            "the model itself stays unplaced"
+        );
         Ok(())
     }
 }
