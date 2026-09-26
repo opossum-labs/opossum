@@ -53,12 +53,16 @@ of the canvas and is easy to mistake for a camera problem.
 ## What can be hit
 
 The raycast runs against the **roots of visible objects only**, recursing into their
-children. That has three consequences:
+children, and skips line and point primitives. That has four consequences:
 
 - The reference grid and the ground are **never** a hit. Both are raycastable, so including
   the whole scene would yield hits that belong to no object at all.
 - An object with `visible: false` cannot be picked. Hiding something also takes it out of
   reach of the cursor.
+- Lines and points (glTF modes `LINES`, `LINE_STRIP`, `POINTS` — ray paths, say) are
+  **never** a hit. They are annotations drawn over the models, and three.js would otherwise
+  hit a line from up to one world unit away, so a drawn path would swallow nearly every
+  click on the model behind it. A click on a line picks whatever surface lies behind it.
 - Only the **nearest** intersection is reported. There is no way to pick through a model
   to something behind it.
 

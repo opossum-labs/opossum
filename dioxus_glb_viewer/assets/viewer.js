@@ -381,7 +381,12 @@ export async function createViewer(canvasId, options, send, threeBase) {
         for (const entry of objects.values()) {
             if (entry.root.visible) roots.push(entry.root);
         }
-        const hit = raycaster.intersectObjects(roots, true)[0];
+        // Lines and points are annotations (rays, paths), not objects: they are never picked. three.js
+        // hits a line within `params.Line.threshold` world units (1 by default), so a drawn ray would
+        // otherwise swallow nearly every click on whatever sits behind it.
+        const hit = raycaster
+            .intersectObjects(roots, true)
+            .find((h) => !h.object.isLine && !h.object.isPoints);
 
         if (hit) {
             send({
