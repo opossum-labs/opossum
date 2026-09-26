@@ -154,8 +154,10 @@ export async function createViewer(canvasId, options, send, threeBase) {
     // is never framed and never hit. It does receive the models' shadows (receiveShadow), which
     // the sun casts once updateShadowCamera() has fitted its frustum to the scene.
     //
-    // Known limitation: the ground is transparent (for the fade), and three.js renders only opaque
-    // objects into the buffer transmissive glass refracts, so the floor is not seen through a lens.
+    // The plane is opaque and its rim fade is a colour blend towards the background done in-shader
+    // (fadeGroundMaterial), NOT an alpha fade. That matters because three.js renders only opaque
+    // objects into the buffer transmissive glass refracts: a transparent floor would vanish from
+    // it and not be seen through a lens, an opaque one is.
 
     /** Half the plane's width, as a multiple of the camera's distance to its target. */
     const GROUND_REACH = 20;
@@ -164,7 +166,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
     /** Fraction of the plane's half-width that stays fully opaque before the fade begins. */
     const GROUND_FADE_START = 0.6;
 
-    /** { mesh, map, fade, url, tile, height } while a ground is shown, else null. */
+    /** { mesh, map, url, tile, height } while a ground is shown, else null. */
     let ground = null;
 
     /**
@@ -201,27 +203,25 @@ export async function createViewer(canvasId, options, send, threeBase) {
         // near floor sharp and the far floor free of moiré.
         map.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
-        const fade = groundFade();
+        // Opaque, so the plane is written into the buffer that transmissive glass refracts and the
+        // table is therefore seen through a lens. The rim fade is done in-shader (fadeGroundMaterial)
+        // by blending the colour towards the background, not by turning the plane transparent, which
+        // would drop it from that buffer again.
         const material = new THREE.MeshStandardMaterial({
             map,
-            // Each map has its own UV transform, so the fade spans the plane once while the image
-            // repeats across it.
-            alphaMap: fade,
-            transparent: true,
             roughness: 0.9,
             metalness: 0.0,
         });
+        fadeGroundMaterial(material);
         // Unit square in XZ facing +y; updateGround() scales it. Seen from above only, so orbiting
         // below the floor still shows the scene.
         const geometry = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
         const mesh = new THREE.Mesh(geometry, material);
-        // Catch the optics' shadows. They fall in the opaque centre under the models; at the
-        // faded rim the shadow vanishes together with the floor, which is exactly right.
+        // Catch the optics' shadows. They fall in the centre under the models; at the faded rim the
+        // shadow blends away together with the floor, which is exactly right.
         mesh.receiveShadow = true;
-        // Drawn first among the transparent objects, so they blend over the floor and not under it.
-        mesh.renderOrder = -1;
         scene.add(mesh);
-        ground = { mesh, map, fade, url: spec.tile_url, tile: spec.tile_size, height: spec.height };
+        ground = { mesh, map, url: spec.tile_url, tile: spec.tile_size, height: spec.height };
         updateGround();
         shadowCameraDirty = true; // a new ground plane changes where shadows land
     }
@@ -257,30 +257,52 @@ export async function createViewer(canvasId, options, send, threeBase) {
         ground.mesh.geometry.dispose();
         ground.mesh.material.dispose();
         ground.map.dispose();
-        ground.fade.dispose();
         ground = null;
     }
 
     /**
-     * Builds the alpha ramp that dissolves the ground into the background towards its rim:
-     * opaque out to GROUND_FADE_START of the half-width, transparent at the rim and beyond.
+     * Patches a ground material so its colour fades into the background towards the plane's rim:
+     * untouched out to GROUND_FADE_START of the half-width, fully the background colour at the rim
+     * and beyond. This keeps the material opaque (unlike an alpha fade), which is what lets the
+     * floor be seen through transmissive glass.
      *
-     * @returns {THREE.CanvasTexture}
+     * The radial factor is computed from the plane's own local coordinates (±0.5), so it is
+     * independent of the zoom-driven scale and of the texture's tiling. The blend runs just before
+     * tone mapping, where `gl_FragColor` is still linear, so at the rim the pixel equals the
+     * background colour exactly (uFadeColor is the linear scene.background).
+     *
+     * The compiled shader is stored on `material.userData.groundShader` so applyOptions can keep
+     * uFadeColor in step with a later background change.
+     *
+     * @param {THREE.MeshStandardMaterial} material - the ground material to patch in place.
      */
-    function groundFade() {
-        const size = 256;
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const context = canvas.getContext('2d');
-        const r = size / 2;
-        const gradient = context.createRadialGradient(r, r, 0, r, r, r);
-        gradient.addColorStop(0, '#ffffff');
-        gradient.addColorStop(GROUND_FADE_START, '#ffffff');
-        gradient.addColorStop(1, '#000000');
-        context.fillStyle = gradient;
-        context.fillRect(0, 0, size, size);
-        return new THREE.CanvasTexture(canvas);
+    function fadeGroundMaterial(material) {
+        material.onBeforeCompile = (shader) => {
+            shader.uniforms.uFadeColor = {
+                value: (scene.background && scene.background.isColor)
+                    ? scene.background.clone()
+                    : new THREE.Color(0x000000),
+            };
+            shader.uniforms.uFadeStart = { value: GROUND_FADE_START };
+            // Carry the plane's local XZ (±0.5) to the fragment stage. The plane is only four
+            // vertices, so the radius must be taken PER FRAGMENT here, not per vertex — a per-vertex
+            // radius is 0.707 at every corner and would interpolate to a constant, fading the whole
+            // floor. Local position interpolates linearly across the flat quad, so length() in the
+            // fragment recovers the true radial distance.
+            shader.vertexShader = 'varying vec2 vGroundXZ;\n' + shader.vertexShader.replace(
+                '#include <begin_vertex>',
+                '#include <begin_vertex>\n    vGroundXZ = position.xz;',
+            );
+            shader.fragmentShader =
+                'uniform vec3 uFadeColor;\nuniform float uFadeStart;\nvarying vec2 vGroundXZ;\n'
+                + shader.fragmentShader.replace(
+                    '#include <tonemapping_fragment>',
+                    'gl_FragColor.rgb = mix(gl_FragColor.rgb, uFadeColor, '
+                        + 'smoothstep(uFadeStart, 1.0, length(vGroundXZ) * 2.0));'
+                        + '\n\t#include <tonemapping_fragment>',
+                );
+            material.userData.groundShader = shader;
+        };
     }
 
     // AbortController for all DOM listeners (ac.abort() removes them all at once)
@@ -620,6 +642,12 @@ export async function createViewer(canvasId, options, send, threeBase) {
     function applyOptions(opts) {
         currentOptions = opts;
         scene.background = new THREE.Color(opts.background);
+        // The ground fades to the background at its rim; keep that colour in step. The shader is
+        // absent until the material first compiles, so this only updates a ground already drawn.
+        const groundShader = ground && ground.mesh.material.userData.groundShader;
+        if (groundShader && scene.background.isColor) {
+            groundShader.uniforms.uFadeColor.value.copy(scene.background);
+        }
         ambient.intensity = opts.ambient_intensity;
         sun.intensity     = opts.directional_intensity;
         void applyEnvironment(opts.environment);

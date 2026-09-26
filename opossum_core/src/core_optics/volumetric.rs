@@ -83,7 +83,7 @@ pub trait Volumetric: OpticNode {
     ///
     /// A `[f32; 3]` linear RGB colour triple.
     fn glass_color(&self) -> [f32; 3] {
-        [0.9, 0.95, 1.0]
+        [0.3, 0.3, 0.3]
     }
 
     /// Return the volume enclosed by the two surfaces of this node as a
