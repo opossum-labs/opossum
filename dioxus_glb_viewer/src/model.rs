@@ -262,6 +262,12 @@ pub struct ViewerOptions {
     pub orientation_gizmo: bool,
     /// A floor under the scene that reaches to the horizon, or `None` for no floor. See [`Ground`].
     pub ground: Option<Ground>,
+    /// Width of line primitives (glTF `LINES`), in screen pixels.
+    ///
+    /// WebGL draws lines one pixel wide whatever is asked for, so a width above `1.0` has lines
+    /// redrawn as three.js fat lines, which keep their pixel width at any zoom. At the default
+    /// `1.0` lines are drawn exactly as the file holds them and the add-on is never loaded.
+    pub line_width: f32,
 }
 
 impl Default for ViewerOptions {
@@ -279,6 +285,7 @@ impl Default for ViewerOptions {
             fov_degrees: 50.0,
             orientation_gizmo: false,
             ground: None,
+            line_width: 1.0,
         }
     }
 }

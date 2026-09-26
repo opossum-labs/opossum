@@ -63,6 +63,7 @@ children, and skips line and point primitives. That has four consequences:
   **never** a hit. They are annotations drawn over the models, and three.js would otherwise
   hit a line from up to one world unit away, so a drawn path would swallow nearly every
   click on the model behind it. A click on a line picks whatever surface lies behind it.
+  This holds for lines widened by `line_width` too, although those are drawn as meshes.
 - Only the **nearest** intersection is reported. There is no way to pick through a model
   to something behind it.
 

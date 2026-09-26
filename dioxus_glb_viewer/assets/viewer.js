@@ -555,24 +555,112 @@ export async function createViewer(canvasId, options, send, threeBase) {
         return out.buffer;
     }
 
+    // ── Fat lines ─────────────────────────────────────────────────────────────
+    // WebGL draws GL_LINES exactly one pixel wide on most platforms (ANGLE on Windows ignores
+    // `linewidth`), and glTF has no line width at all. A wider line is therefore drawn as the
+    // three.js "fat line" add-on instead: LineSegments2 renders each segment as a screen-space quad
+    // of `line_width` pixels. The add-on is imported only once a line actually has to be widened.
+    let fatLineModules = null;
+
+    function loadFatLineModules() {
+        if (!fatLineModules) {
+            fatLineModules = Promise.all([
+                import(threeBase + '/examples/jsm/lines/LineSegments2.js'),
+                import(threeBase + '/examples/jsm/lines/LineSegmentsGeometry.js'),
+                import(threeBase + '/examples/jsm/lines/LineMaterial.js'),
+            ]);
+        }
+        return fatLineModules;
+    }
+
+    /**
+     * Brings every line under `root` to the current `line_width`.
+     *
+     * Lines already widened get the new width. Plain lines are replaced by fat lines once the width
+     * exceeds one pixel; at one pixel they are left as they are, so a viewer that never asks for
+     * wider lines draws exactly what the file holds and never loads the add-on.
+     */
+    async function thickenLines(root) {
+        const width = currentOptions.line_width;
+        const plain = [];
+        root.traverse((o) => {
+            if (o.isLineSegments2) o.material.linewidth = width;
+            else if (o.isLineSegments) plain.push(o);
+        });
+        if (width <= 1 || plain.length === 0) return;
+
+        const [{ LineSegments2 }, { LineSegmentsGeometry }, { LineMaterial }] =
+            await loadFatLineModules();
+        for (const line of plain) {
+            if (!line.parent) continue;
+            // Resolve the index (glTF lines are indexed) into one position pair per segment.
+            const pos   = line.geometry.attributes.position;
+            const index = line.geometry.index;
+            const count = index ? index.count : pos.count;
+            const flat  = new Float32Array(count * 3);
+            for (let i = 0; i < count; i++) {
+                const v = index ? index.getX(i) : i;
+                flat[3 * i]     = pos.getX(v);
+                flat[3 * i + 1] = pos.getY(v);
+                flat[3 * i + 2] = pos.getZ(v);
+            }
+            const src = line.material;
+            const fat = new LineSegments2(
+                new LineSegmentsGeometry().setPositions(flat),
+                new LineMaterial({
+                    color:       src.color.clone(),
+                    linewidth:   width,
+                    transparent: src.transparent,
+                    opacity:     src.opacity,
+                    depthWrite:  src.depthWrite,
+                }),
+            );
+            fat.name = line.name;
+            fat.position.copy(line.position);
+            fat.quaternion.copy(line.quaternion);
+            fat.scale.copy(line.scale);
+            // A fat line is a mesh, but still an annotation: never picked (see the click handler),
+            // and it casts no shadow - its quads would throw wide smears onto the ground.
+            fat.raycast = () => {};
+            fat.castShadow = false;
+            line.parent.add(fat);
+            line.parent.remove(line);
+            line.geometry.dispose();
+            src.dispose();
+        }
+    }
+
     // ── Load logic with generation counter ────────────────────────────────────
     function load(op) {
         const gen = (generations.get(op.id) || 0) + 1;
         generations.set(op.id, gen);
         removeObject(op.id);
 
-        const onLoad = (gltf) => {
+        const onLoad = async (gltf) => {
             if (generations.get(op.id) !== gen) {
                 // A newer request has overtaken this load — release GPU resources.
                 disposeSceneGraph(gltf.scene);
                 return;
             }
             const root = gltf.scene;
+            try {
+                await thickenLines(root);
+            } catch (e) {
+                // The lines stay one pixel wide; the model itself is still worth showing.
+                send({ event: 'error',
+                       message: `lines could not be widened: ${(e && e.message) || e}` });
+            }
+            // The add-on import is awaited above, so a newer request may have overtaken us since.
+            if (generations.get(op.id) !== gen) {
+                disposeSceneGraph(root);
+                return;
+            }
             root.userData.glbId = op.id;
             // Every mesh both casts and receives: the models shadow the ground and each other.
             // GLTFLoader leaves both flags false, so they must be set here on the fresh graph.
+            // Fat lines are meshes too, but annotations, and keep the flags thickenLines gave them.
             root.traverse((o) => {
-                if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
+                if (o.isMesh && !o.isLineSegments2) { o.castShadow = true; o.receiveShadow = true; }
             });
             applyTransform(root, op.transform);
             root.visible = op.visible;
@@ -674,6 +762,9 @@ export async function createViewer(canvasId, options, send, threeBase) {
             if (entry.helper) {
                 entry.helper.material.color.set(opts.selection_color);
             }
+            // Line width applies to models already on screen too.
+            thickenLines(entry.root).catch((e) => send({ event: 'error',
+                message: `lines could not be widened: ${(e && e.message) || e}` }));
         }
     }
 

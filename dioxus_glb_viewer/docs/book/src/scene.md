@@ -96,6 +96,7 @@ Scene-wide settings. The prop is optional; leaving it out uses these defaults.
 | `fov_degrees` | Vertical field of view. | `50.0` |
 | `orientation_gizmo` | Show a corner orientation gizmo (three.js `ViewHelper`) in the bottom-right corner. Coloured axes reflect the current camera orientation; clicking an axis snaps the camera to that view. | `false` |
 | `ground` | A floor reaching to the horizon: an image tiled at a given height (`Ground { height, tile_url, tile_size }`). Never framed by `fit_view`, never hit by a click. See [the ground](./renderer.md#the-ground). | `None` |
+| `line_width` | Width of line primitives (glTF `LINES`) in screen pixels. WebGL draws lines one pixel wide whatever is asked for, so above `1.0` lines are redrawn as three.js fat lines (`LineSegments2`), which keep their pixel width at any zoom, cast no shadow and are never hit by a click. | `1.0` |
 
 Colour values are handed to `new THREE.Color(...)`, so they must be something three.js
 can parse: `"#1e1e1e"`, `"rgb(30,30,30)"`, or a CSS colour name. A *transparent*
@@ -112,6 +113,7 @@ the camera**. They do not all apply at the same moment, though:
 | `background`, `grid`, `ambient_intensity`, `directional_intensity`, `selection_color` | Immediately, on every change. |
 | `environment` | Immediately, but asynchronously: the map is imported and rendered on first use. |
 | `orientation_gizmo` | Immediately, but asynchronously: the gizmo is imported on first use. |
+| `line_width` | Immediately, for the models on screen and every one loaded later. Widening past one pixel imports the fat-line add-on on first use, so that step is asynchronous. |
 | `ground` | Immediately. A new `height` moves the floor; a new `tile_url` or `tile_size` fetches the image again, which then appears once it has loaded. |
 | `initial_camera`, `initial_target` | On the next `reset_camera()` call. |
 | `fit_on_first_load` | Checked on every successful load, until an auto-fit has actually happened once. |

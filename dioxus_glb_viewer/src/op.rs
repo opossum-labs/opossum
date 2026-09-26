@@ -145,8 +145,9 @@ impl Serialize for ViewerOptions {
             fov_degrees,
             orientation_gizmo,
             ground,
+            line_width,
         } = self;
-        let mut st = s.serialize_struct("ViewerOptions", 12)?;
+        let mut st = s.serialize_struct("ViewerOptions", 13)?;
         st.serialize_field("background", background)?;
         st.serialize_field("grid", grid)?;
         st.serialize_field("ambient_intensity", ambient_intensity)?;
@@ -159,6 +160,7 @@ impl Serialize for ViewerOptions {
         st.serialize_field("fov_degrees", fov_degrees)?;
         st.serialize_field("orientation_gizmo", orientation_gizmo)?;
         st.serialize_field("ground", ground)?;
+        st.serialize_field("line_width", line_width)?;
         st.end()
     }
 }
@@ -211,10 +213,18 @@ mod tests {
                 "ground",
                 "initial_camera",
                 "initial_target",
+                "line_width",
                 "orientation_gizmo",
                 "selection_color",
             ]
         );
+    }
+
+    /// `viewer.js` widens lines only above one pixel, so the default must arrive as exactly that.
+    #[test]
+    fn lines_are_one_pixel_wide_by_default() {
+        let json = serde_json::to_value(ViewerOptions::default()).expect("options serialise");
+        assert_eq!(json["line_width"], 1.0);
     }
 
     /// `orientation_gizmo` was missing from the hand-written `Serialize` impl when it was first

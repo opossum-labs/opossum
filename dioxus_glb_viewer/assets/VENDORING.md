@@ -24,6 +24,9 @@ File: `three-0.174.0.tgz` (sha1: see `npm pack --dry-run three@0.174.0`)
 | `examples/jsm/utils/BufferGeometryUtils.js` | `package/examples/jsm/utils/BufferGeometryUtils.js` |
 | `examples/jsm/environments/RoomEnvironment.js` | `package/examples/jsm/environments/RoomEnvironment.js` |
 | `examples/jsm/helpers/ViewHelper.js` | `package/examples/jsm/helpers/ViewHelper.js` |
+| `examples/jsm/lines/LineSegments2.js` | `package/examples/jsm/lines/LineSegments2.js` |
+| `examples/jsm/lines/LineSegmentsGeometry.js` | `package/examples/jsm/lines/LineSegmentsGeometry.js` |
+| `examples/jsm/lines/LineMaterial.js` | `package/examples/jsm/lines/LineMaterial.js` |
 
 ## Why exactly these files?
 
@@ -40,6 +43,11 @@ File: `three-0.174.0.tgz` (sha1: see `npm pack --dry-run three@0.174.0`)
   shows which way x/y/z point and snaps the camera to an axis when clicked. It imports only
   three-core types, so it needs no further add-ons. Its bare `from 'three'` import is rewritten to
   the relative build like the other add-ons (see step 5 of the upgrade recipe).
+- `LineSegments2.js`, `LineSegmentsGeometry.js` and `LineMaterial.js` are the "fat line" add-on
+  behind `ViewerOptions::line_width`. WebGL draws `GL_LINES` one pixel wide on most platforms
+  whatever `linewidth` says, so wider lines have to be drawn as screen-space quads.
+  `LineSegments2.js` imports the other two by relative path; all three import only three-core
+  types, rewritten to the relative build like the other add-ons.
 
 ## Why a folder asset (not individual `asset!()` calls)?
 
@@ -72,6 +80,9 @@ cp extracted/package/examples/jsm/loaders/GLTFLoader.js         assets/three/exa
 cp extracted/package/examples/jsm/utils/BufferGeometryUtils.js  assets/three/examples/jsm/utils/
 cp extracted/package/examples/jsm/environments/RoomEnvironment.js assets/three/examples/jsm/environments/
 cp extracted/package/examples/jsm/helpers/ViewHelper.js            assets/three/examples/jsm/helpers/
+cp extracted/package/examples/jsm/lines/LineSegments2.js           assets/three/examples/jsm/lines/
+cp extracted/package/examples/jsm/lines/LineSegmentsGeometry.js    assets/three/examples/jsm/lines/
+cp extracted/package/examples/jsm/lines/LineMaterial.js            assets/three/examples/jsm/lines/
 
 # 5. Rewrite the bare 'three' import in every add-on to the relative build. Without this the
 #    browser cannot resolve it: there is no importmap, viewer.js is handed an explicit base instead.
