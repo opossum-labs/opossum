@@ -82,13 +82,17 @@ Lines keep their width on screen however far you zoom in or out.
 | Drag with the left mouse button | Orbit around the point the camera looks at |
 | Mouse wheel | Zoom in and out |
 | Drag with the right mouse button | Pan |
-| Click a component | Select it; a box is drawn around it |
+| Click a component | Select it; a box is drawn snugly around it |
 | Click empty space | Clear the selection |
 | Click a gizmo axis | Snap the camera to look straight along that axis |
 
 Dragging never selects, so orbiting past a component does not pick it up by accident. The optical
 table is not selectable: clicking it clears the selection, the same as clicking empty space. Neither
 are the axis and the rays: a click on a line selects the component behind it.
+
+The selection box is tilted along with the component it marks, rather than kept square to the room.
+On a tilted mirror or grating that is the difference between a box the size of the component and one
+reaching well past it, so the box shows which component is meant even in a crowded setup.
 
 ## The toolbar
 
