@@ -36,7 +36,44 @@ and the view cannot be drawn at all. The log says where the axis ended. The usua
 wavelength, and the message names the Littrow angle to tilt the grating by. A grating with nothing
 after it is drawn either way.
 
-Rays are not drawn yet.
+## Light: the optical axis and the rays
+
+Two kinds of light can be drawn over the components, each switched on and off in the toolbar.
+
+**The optical axis** (**Beam axis**, on by default) is the path the positioning run follows: one ray
+per source, the one every component is placed on. It is drawn as a purple line from each source
+through the components to wherever the axis leaves the setup, and shows how the setup is built up —
+why a component sits where it does, which way a fold turns. A model without an analyzer is placed
+from default rays, and its axis is drawn from those.
+
+**The rays** (**Rays**, off by default) are the light of the sources an analyzer defines, traced
+through the setup like a ray trace does. They show what the axis alone cannot: how a bundle widens
+and focuses, where an aperture clips it, where a beam splitter divides it. Each ray is coloured by
+its wavelength; infrared light, which has no colour of its own, is drawn red, and ultraviolet light
+violet. A ray stopped by an aperture ends where it is stopped.
+
+A few things to know about the rays:
+
+- **They are a picture, not the analysis.** A source may hold far more rays than can be drawn, so
+  each source is thinned first to at most **max. rays** (500 by default, at most 5000), spread evenly
+  over the bundle's cross section with its outermost rays kept, so the drawn bundle has the true
+  width. A source with fewer rays is drawn in full. The energies of the rays play no part in the
+  picture.
+- **Only the primary path is drawn.** A ghost focus analyzer contributes its sources, but not its
+  reflections.
+- **They need an analyzer with sources.** Without one there is no light of the setup's own to draw,
+  and the Rays button shows nothing. A model analyzed in several ways cannot be drawn at all, since
+  each analyzer may place it differently.
+- **They cost a trace.** While Rays is on, every change to the model traces the sources again. Turn
+  it off when you do not need it; while it is off nothing is traced.
+- Light that ends in a component without an output is drawn up to the component before it, not into
+  it.
+
+**opacity** sets how opaque the axis and the rays are drawn, from barely visible to solid. It only
+changes the picture; nothing is traced again. Dense bundles read better when they are partly
+transparent.
+
+Lines keep their width on screen however far you zoom in or out.
 
 ## Navigating
 
@@ -50,7 +87,8 @@ Rays are not drawn yet.
 | Click a gizmo axis | Snap the camera to look straight along that axis |
 
 Dragging never selects, so orbiting past a component does not pick it up by accident. The optical
-table is not selectable: clicking it clears the selection, the same as clicking empty space.
+table is not selectable: clicking it clears the selection, the same as clicking empty space. Neither
+are the axis and the rays: a click on a line selects the component behind it.
 
 ## The toolbar
 
@@ -61,16 +99,24 @@ table is not selectable: clicking it clears the selection, the same as clicking 
 | **Reset camera** | Return the camera to its starting pose |
 | **Table** | Show or hide the optical table |
 | **Axes** | Show or hide the corner orientation gizmo |
+| **Beam axis** | Show or hide the optical axis |
+| **Rays** | Show or hide the traced rays of the analyzer's sources |
+| **max. rays** | The most rays drawn per source; takes effect on Enter or when leaving the field |
+| **opacity** | How opaque the axis and the rays are drawn |
+
+See [Light: the optical axis and the rays](#light-the-optical-axis-and-the-rays) for what the last
+four show.
 
 Refresh, Fit view, and Reset camera move the camera, and so does clicking a gizmo axis in the
-viewport. Table and Axes are visibility toggles and do not move the camera. Nothing that happens to
+viewport. Table, Axes, Beam axis and Rays are visibility toggles and do not move the camera. Nothing that happens to
 the *model* moves it either — see below.
 
 ## When the view updates itself
 
 The view follows the model on its own. Adding or deleting a component, changing a distance, changing
 a lens radius or thickness, grouping, pasting, undo and redo all reach it within a moment; a burst of
-edits is collected so that holding a spinner costs one update rather than dozens.
+edits is collected so that holding a spinner costs one update rather than dozens. The optical axis
+and, while shown, the rays follow along with the components.
 
 Two things are worth knowing about how it updates:
 

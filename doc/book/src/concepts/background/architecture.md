@@ -46,6 +46,13 @@ whenever the model changes; it says which components exist, what each one looks 
 where it sits. A component's geometry is fetched separately, and only when that hash says its shape
 really changed. Moving a lens therefore costs a new position and no geometry at all.
 
+Drawn light takes the same way with two endpoints of its own, one for the optical axis and one for
+the rays of the analyzer's sources. Both are traced on a copy of the model, and the core hands back
+the ray bundles that leave the setup, each ray carrying the whole path it took. Keeping those
+bundles is an opt-in of the ray-trace configuration that only these copies switch on, so a real
+analysis never pays for it. The backend turns the paths into glTF lines in world coordinates, which
+the viewer draws over the components as they are, without moving them.
+
 `optoscene` does bring a streaming protocol of its own, which computes the minimal set of update
 messages between two scenes. OPOSSUM does not use it. The viewer already performs the same kind of
 comparison on the object list it is handed, at the same granularity, so decoding those messages would
