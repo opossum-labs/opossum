@@ -47,9 +47,6 @@ pub fn SceneView() -> Element {
     let viewer_handle = use_glb_viewer_handle();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
 
-    // What is shown and how, set from the 3D View menu. Read once here, so the whole component
-    // follows a change to it.
-    let controls = SCENE_VIEW_CONTROLS();
     // How often the model has been fetched. The axis URL carries it, so every fetch of the
     // components fetches the axis again too; see `api::scene_axis_url`.
     let mut fetches = use_signal(|| 0_usize);
@@ -187,108 +184,9 @@ pub fn SceneView() -> Element {
 
     rsx! {
         div { class: "scene-view",
-            div { class: "scene-view-toolbar",
-                button {
-                    class: "btn btn-sm btn-outline-light",
-                    onclick: move |_| *SCENE_VIEW_REQUEST.write() = Some(SceneViewRequest::Refresh),
-                    "Refresh"
-                }
-                button {
-                    class: "btn btn-sm btn-outline-light",
-                    onclick: move |_| *SCENE_VIEW_REQUEST.write() = Some(SceneViewRequest::FitView),
-                    "Fit view"
-                }
-                button {
-                    class: "btn btn-sm btn-outline-light",
-                    onclick: move |_| {
-                        *SCENE_VIEW_REQUEST.write() = Some(SceneViewRequest::ResetCamera);
-                    },
-                    "Reset camera"
-                }
-                button {
-                    class: if controls.table {
-                        "btn btn-sm btn-outline-light active"
-                    } else {
-                        "btn btn-sm btn-outline-light"
-                    },
-                    onclick: move |_| {
-                        let mut controls = SCENE_VIEW_CONTROLS.write();
-                        controls.table = !controls.table;
-                    },
-                    "Table"
-                }
-                button {
-                    class: if controls.axes {
-                        "btn btn-sm btn-outline-light active"
-                    } else {
-                        "btn btn-sm btn-outline-light"
-                    },
-                    onclick: move |_| {
-                        let mut controls = SCENE_VIEW_CONTROLS.write();
-                        controls.axes = !controls.axes;
-                    },
-                    "Axes"
-                }
-                button {
-                    class: if controls.beam_axis {
-                        "btn btn-sm btn-outline-light active"
-                    } else {
-                        "btn btn-sm btn-outline-light"
-                    },
-                    onclick: move |_| {
-                        let mut controls = SCENE_VIEW_CONTROLS.write();
-                        controls.beam_axis = !controls.beam_axis;
-                    },
-                    "Beam axis"
-                }
-                button {
-                    class: if controls.rays {
-                        "btn btn-sm btn-outline-light active"
-                    } else {
-                        "btn btn-sm btn-outline-light"
-                    },
-                    onclick: move |_| {
-                        let mut controls = SCENE_VIEW_CONTROLS.write();
-                        controls.rays = !controls.rays;
-                    },
-                    "Rays"
-                }
-                label { class: "scene-view-control",
-                    "max. rays"
-                    input {
-                        r#type: "number",
-                        class: "form-control form-control-sm bg-dark text-light",
-                        style: "width: 5.5rem;",
-                        min: "1",
-                        step: "50",
-                        value: "{controls.max_rays}",
-                        // On commit (Enter or leaving the field), not per keystroke: every new
-                        // number is a new trace.
-                        onchange: move |e| {
-                            if let Ok(n) = e.value().parse::<usize>() {
-                                SCENE_VIEW_CONTROLS.write().max_rays = n.max(1);
-                            }
-                        },
-                    }
-                }
-                label { class: "scene-view-control",
-                    "opacity"
-                    input {
-                        r#type: "range",
-                        class: "form-range",
-                        style: "width: 6rem;",
-                        min: "0",
-                        max: "1",
-                        step: "0.05",
-                        value: "{controls.opacity}",
-                        // Only restyles what is on screen: nothing is fetched or traced again.
-                        oninput: move |e| {
-                            if let Ok(v) = e.value().parse::<f32>() {
-                                SCENE_VIEW_CONTROLS.write().opacity = v;
-                            }
-                        },
-                    }
-                }
+            // What the view has to say about itself, now that everything it can be told sits in the
+            // 3D View menu: what was left out, and how much is drawn.
+            div { class: "scene-view-status",
                 if *skipped_count.read() > 0 {
                     span {
                         class: "scene-view-skipped",
@@ -301,8 +199,9 @@ pub fn SceneView() -> Element {
             }
             GlbViewer {
                 // `.dxglb-root` brings `height: 100%`, which in this column would mean the full
-                // panel height *plus* the toolbar above it. A flex basis of zero takes the height
-                // from the flexbox instead, which is the only one that knows what is left over.
+                // panel height *plus* the status strip above it. A flex basis of zero takes the
+                // height from the flexbox instead, which is the only one that knows what is left
+                // over.
                 style: "flex: 1 1 0; min-height: 0; height: auto;",
                 objects,
                 handle: viewer_handle,

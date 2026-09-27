@@ -7,13 +7,13 @@ use opossum_core::prelude::*;
 use std::path::PathBuf;
 
 use crate::{
-    SCENE_VIEW_OPEN,
     backend_status::BackendStatus,
     components::{
         menu_bar::{
             file_path_display::FilePathDisplay,
             help::about::About,
             node_menu::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},
+            scene_view_menu::SceneViewMenu,
         },
         short_cuts::{SHORTCUTS, ShortCutAction},
     },
@@ -252,16 +252,10 @@ pub fn MenuBar(
                                 disabled: !is_connected,
                                 on_click: move |_| on_menu_action.call(AppCommand::AutoLayout),
                             }
-                            li {
-                                a {
-                                    class: "dropdown-item",
-                                    role: "button",
-                                    onclick: move |_| on_menu_action.call(AppCommand::ToggleSceneView),
-                                    if SCENE_VIEW_OPEN() { "Close 3D View" } else { "3D View" }
-                                }
-                            }
                         }
                     }
+                    // --- 3D View Menu ---
+                    SceneViewMenu { on_menu_action, is_connected }
                     // --- Catalogs Menu ---
                     li { class: "nav-item dropdown",
                         a {
