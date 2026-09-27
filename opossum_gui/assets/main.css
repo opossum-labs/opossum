@@ -262,6 +262,29 @@ body {
     grid-row: 1 / span 2;
 }
 
+/* An invisible bar across the whole grid, there only to be measured: its width is the width both
+   panes share. */
+.editor-split-gauge {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    align-self: start;
+    height: 0;
+    pointer-events: none;
+}
+
+/* While the handle between the panes is dragged: the resize cursor everywhere the pointer goes, no
+   text selection, and the panels out of the way - neither a graph nor the 3D view reacts to a
+   pointer merely passing over it, and the moves still reach the listeners around them. */
+.resizing,
+.resizing * {
+    cursor: ew-resize !important;
+    user-select: none;
+}
+
+.resizing .editor-split > [role="tabpanel"] {
+    pointer-events: none;
+}
+
 /* The 3D view fills its tab: a toolbar of its own height, and the canvas taking everything left.
    The canvas measures itself against this container, so the container needs a definite height -
    an automatic one collapses it to zero and shows a blank area with no error anywhere. */

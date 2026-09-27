@@ -62,6 +62,15 @@ pub fn GraphEditor(
     // The active graph as of the last run of the effect below, which needs it to tell whether the
     // active graph changed and which pane a newly opened tab was opened from.
     let mut last_active = use_signal(|| None::<Uuid>);
+    // The width both panes share, kept up to date by the grid's gauge element: dragging the handle
+    // has to turn a pointer position into a share of it.
+    let mut split_width = use_signal(|| 0.0_f64);
+    // The handle between the panes is dragged the way the sidebar's is (see `CommonAppLayout`):
+    // `Some((pointer x, left pane width))` at the moment the drag started, `None` while not
+    // dragging. The width asked for is derived from those two on every move rather than
+    // accumulated, so dragging past a pane's minimum and back picks up again the moment the pointer
+    // returns, instead of wherever the clamped width had got stuck.
+    let mut split_drag = use_signal(|| None::<(f64, f64)>);
 
     // Read once, ahead of the markup. Binding it inside the `rsx!` instead would make the whole tab
     // area an interpolated node, and Dioxus is then entitled to rebuild that subtree rather than
@@ -205,15 +214,22 @@ pub fn GraphEditor(
     );
     let onkeyuphandler = use_on_key_up(ctrl_pressed, shift_pressed);
 
-    // A graph that changes panes may keep its size - both panes are equally wide - and then its
-    // view's own `onresize` never fires, leaving it converting pointer positions against the pane it
-    // left. So every graph in front is measured again whenever the layout changes.
-    use_effect(move || {
+    // The tab each pane shows, left then right. A memo of its own so that what depends on it changes
+    // only when a tab comes forward or changes panes - not on every step of a drag of the handle
+    // between the panes, which changes the layout too.
+    let pane_fronts = use_memo(move || {
         let current = layout();
         let open = tabs();
         let active = active_tab();
-        for side in [Side::Left, Side::Right] {
-            if let Some(TabKey::Graph(id)) = current.shown(side, &open, active) {
+        [Side::Left, Side::Right].map(|side| current.shown(side, &open, active))
+    });
+
+    // A graph that changes panes may keep its size - both panes can be equally wide - and then its
+    // view's own `onresize` never fires, leaving it converting pointer positions against the pane it
+    // left. So every graph in front is measured again whenever that changes.
+    use_effect(move || {
+        for front in pane_fronts() {
+            if let Some(TabKey::Graph(id)) = front {
                 workspace_processor.send(GraphsWorkspaceAction::GetEditorArea(id));
             }
         }
@@ -229,17 +245,43 @@ pub fn GraphEditor(
     } else {
         vec![Side::Left]
     };
-    // The tab each pane shows: a panel is visible exactly when it is one of these.
-    let fronts: Vec<TabKey> = panes
-        .iter()
-        .filter_map(|side| current.shown(*side, &open, active))
-        .collect();
+    // A panel is visible exactly when it is one of these.
+    let fronts: Vec<TabKey> = pane_fronts().into_iter().flatten().collect();
     // The pane holding the graph the sidebar edits. Marked only while split - with a single pane
     // there is nothing to tell apart.
     let focused_pane = split.then(|| current.side_of(TabKey::Graph(active)));
+    let grid_columns = current.grid_columns(&open);
+
+    // Ends a drag of the handle between the panes. Written only while one is running, so the
+    // countless mouse-ups and leaves of normal work do not re-render the editor.
+    let mut end_split_drag = move || {
+        if split_drag.peek().is_some() {
+            split_drag.set(None);
+        }
+    };
 
     rsx! {
-        div { class: "row main-content-row",
+        div {
+            class: if split_drag().is_some() { "row main-content-row resizing" } else { "row main-content-row" },
+            // The move and release listeners of the pane handle sit out here, like the sidebar's,
+            // so the drag survives the pointer leaving the narrow handle - over either pane, or the
+            // sidebar. Leaving this row altogether ends it.
+            onmousemove: move |e: MouseEvent| {
+                if let Some((start_x, start_width)) = *split_drag.peek() {
+                    let mut next = layout.peek().clone();
+                    next.set_left_width(
+                        start_width + e.client_coordinates().x - start_x,
+                        *split_width.peek(),
+                    );
+                    // Written only on an actual change, which is none at all while a pane sits at
+                    // its minimum width.
+                    if next != *layout.peek() {
+                        layout.set(next);
+                    }
+                }
+            },
+            onmouseup: move |_| end_split_drag(),
+            onmouseleave: move |_| end_split_drag(),
             div {
                 class: "sidebar d-flex",
                 // Collapsed, the bar is only as wide as its icons; expanded, its width is whatever
@@ -300,7 +342,21 @@ pub fn GraphEditor(
                 // its WebGL context and camera.
                 div {
                     class: "editor-split",
-                    style: if split { "grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);" } else { "grid-template-columns: minmax(0, 1fr);" },
+                    style: "grid-template-columns: {grid_columns};",
+                    // Measures the width both panes share: an empty element spanning the whole grid,
+                    // rather than an `onresize` on the grid itself. Dioxus desktop 0.7 reports every
+                    // `resize` as bubbling, so a listener on the grid would also receive the size of
+                    // each graph view inside it - and a drag of the handle would then scale the
+                    // pointer's movement by one pane's width instead of both panes', overshooting
+                    // and swinging back and forth. With no children, nothing can bubble into this.
+                    div {
+                        class: "editor-split-gauge",
+                        onresize: move |e: ResizeEvent| {
+                            if let Ok(size) = e.get_border_box_size() {
+                                split_width.set(size.width);
+                            }
+                        },
+                    }
                     for side in panes {
                         {
                             let pane_tabs = current.tabs_on(side, &open);
@@ -391,7 +447,15 @@ pub fn GraphEditor(
                         }
                     }
                     if split {
-                        div { class: "resizer width_resizer editor-splitter" }
+                        div {
+                            class: "resizer width_resizer editor-splitter",
+                            onmousedown: move |e: MouseEvent| {
+                                // Start from the width the left pane actually has on screen, so
+                                // the handle follows the pointer from the first pixel.
+                                let left_width = layout.peek().ratio() * *split_width.peek();
+                                split_drag.set(Some((e.client_coordinates().x, left_width)));
+                            },
+                        }
                     }
                     for id in tab_order().into_iter() {
                         if let Some(graph_state) = workspace.tabs().get(id) {

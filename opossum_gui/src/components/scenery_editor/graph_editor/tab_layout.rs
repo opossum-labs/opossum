@@ -10,6 +10,9 @@ use uuid::Uuid;
 /// a name that no uuid can collide with.
 const SCENE_TAB_VALUE: &str = "scene-3d";
 
+/// The narrowest either pane may be dragged, in pixels - enough for a tab and the pane's button.
+const MIN_PANE_WIDTH: f64 = 200.0;
+
 /// One entry of the editor's tab bar.
 ///
 /// A view type, deliberately not a key of `GraphsWorkspaceState`. The store is a map of graphs and
@@ -83,7 +86,7 @@ impl Side {
 /// Every method takes the tabs that are currently open, in tab-bar order, rather than keeping its
 /// own copy: the graphs are owned by the workspace store and the 3D view by `SCENE_VIEW_OPEN`, and a
 /// second list here would only be one more thing to drift out of step with them.
-#[derive(Clone, PartialEq, Debug, Default)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct TabLayout {
     /// The pane of every tab placed so far, in the order they were placed. A tab not listed has not
     /// been seen yet; see [`Self::sync`].
@@ -92,6 +95,21 @@ pub struct TabLayout {
     front_left: Option<TabKey>,
     /// The tab last brought to the front of the right pane.
     front_right: Option<TabKey>,
+    /// The left pane's share of the width while split. A share rather than a width in pixels, so
+    /// both panes keep their proportions when the window is resized. Kept while the editor is not
+    /// split, so splitting it again brings back the widths it had.
+    ratio: f64,
+}
+
+impl Default for TabLayout {
+    fn default() -> Self {
+        Self {
+            sides: Vec::new(),
+            front_left: None,
+            front_right: None,
+            ratio: 0.5,
+        }
+    }
 }
 
 impl TabLayout {
@@ -206,6 +224,54 @@ impl TabLayout {
         }
         self.unsplit_if_one_sided(open);
         self.bring_to_front(tab);
+    }
+
+    /// The left pane's share of the width while split.
+    pub const fn ratio(&self) -> f64 {
+        self.ratio
+    }
+
+    /// Resize the panes so the left one is `requested` pixels wide, as far as both stay usable.
+    ///
+    /// # Arguments
+    ///
+    /// * `requested` - the width the left pane is asked to have, in pixels.
+    /// * `available` - the width both panes share, in pixels.
+    ///
+    /// Each pane keeps at least `MIN_PANE_WIDTH`; asked for less, the left pane stops there rather
+    /// than collapsing. Too narrow for both minimums, or given a width that is not a number, the
+    /// panes are split evenly.
+    pub fn set_left_width(&mut self, requested: f64, available: f64) {
+        self.ratio = if requested.is_finite()
+            && available.is_finite()
+            && available >= 2.0 * MIN_PANE_WIDTH
+        {
+            requested.clamp(MIN_PANE_WIDTH, available - MIN_PANE_WIDTH) / available
+        } else {
+            0.5
+        };
+    }
+
+    /// The editor grid's `grid-template-columns` for this layout.
+    ///
+    /// # Arguments
+    ///
+    /// * `open` - every open tab.
+    ///
+    /// # Returns
+    ///
+    /// One column while the editor is not split; while it is, the two panes in their share of the
+    /// width with a column for the handle between them.
+    pub fn grid_columns(&self, open: &[TabKey]) -> String {
+        if self.is_split(open) {
+            format!(
+                "minmax(0, {}fr) auto minmax(0, {}fr)",
+                self.ratio,
+                1.0 - self.ratio
+            )
+        } else {
+            "minmax(0, 1fr)".to_owned()
+        }
     }
 
     /// Put every tab back into the left pane if one of the two panes holds no open tab - an empty
@@ -361,6 +427,48 @@ mod tests {
     fn a_pane_without_tabs_shows_nothing() {
         let layout = TabLayout::default();
         assert_eq!(layout.shown(Side::Right, &[graph(1)], graph_id(1)), None);
+    }
+
+    #[test]
+    fn the_panes_start_out_equally_wide() {
+        assert!((TabLayout::default().ratio() - 0.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn the_left_pane_follows_the_requested_width() {
+        let mut layout = TabLayout::default();
+        layout.set_left_width(300.0, 1000.0);
+        assert!((layout.ratio() - 0.3).abs() < 1e-12);
+    }
+
+    #[test]
+    fn neither_pane_gets_narrower_than_the_minimum() {
+        let mut layout = TabLayout::default();
+        layout.set_left_width(50.0, 1000.0);
+        assert!((layout.ratio() - MIN_PANE_WIDTH / 1000.0).abs() < 1e-12);
+        layout.set_left_width(990.0, 1000.0);
+        assert!((layout.ratio() - (1000.0 - MIN_PANE_WIDTH) / 1000.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn too_narrow_for_both_minimums_splits_evenly() {
+        let mut layout = TabLayout::default();
+        layout.set_left_width(300.0, 1000.0);
+        layout.set_left_width(100.0, 2.0 * MIN_PANE_WIDTH - 1.0);
+        assert!((layout.ratio() - 0.5).abs() < f64::EPSILON);
+        layout.set_left_width(f64::NAN, 1000.0);
+        assert!((layout.ratio() - 0.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn the_grid_has_a_handle_column_only_while_split() {
+        let (mut layout, open) = split(&[graph(1)], &[TabKey::Scene]);
+        layout.set_left_width(250.0, 1000.0);
+        assert_eq!(
+            layout.grid_columns(&open),
+            "minmax(0, 0.25fr) auto minmax(0, 0.75fr)"
+        );
+        assert_eq!(layout.grid_columns(&[graph(1)]), "minmax(0, 1fr)");
     }
 
     fn graph_id(n: u128) -> Uuid {
