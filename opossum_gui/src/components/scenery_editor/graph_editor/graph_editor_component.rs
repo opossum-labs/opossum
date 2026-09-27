@@ -1,6 +1,7 @@
 use crate::components::app::SIDEBAR_SWITCHER_WIDTH;
 use crate::components::scene_view::SceneView;
 use crate::components::{
+    context_menu::cx_menu::CxMenu,
     node_editor::{NodeConfigEditor, PumpScenarioEditor},
     scenery_editor::{
         DragStatus, NodeEditorCommand, SelectedNode,
@@ -16,7 +17,10 @@ use crate::components::{
         },
     },
 };
-use crate::{KEEP_SCENE_IN_FRONT, SCENE_VIEW_OPEN, SIDEBAR_COLLAPSED, SIDEBAR_VIEW, SIDEBAR_WIDTH};
+use crate::{
+    CONTEXT_MENU, KEEP_SCENE_IN_FRONT, SCENE_VIEW_OPEN, SIDEBAR_COLLAPSED, SIDEBAR_VIEW,
+    SIDEBAR_WIDTH,
+};
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use dioxus_free_icons::{Icon, icons::fa_solid_icons::FaArrowRightArrowLeft};
 use dioxus_primitives::tabs::{TabList, TabTrigger, Tabs};
@@ -139,6 +143,16 @@ pub fn GraphEditor(
             workspace_processor.send(GraphsWorkspaceAction::SetActiveTab(id));
         }
     };
+
+    // The same move from a tab's context menu: the tab right-clicked and the pane it is to go to,
+    // set when the menu opens and carried out by its entry. One callback for every menu, rather
+    // than a new one per right-click that would live as long as this editor does.
+    let mut tab_menu_target = use_signal(|| None::<(TabKey, Side)>);
+    let move_from_tab_menu = use_callback(move |()| {
+        if let Some((tab, side)) = *tab_menu_target.peek() {
+            move_tab(tab, side);
+        }
+    });
 
     use_effect(move || {
         node_editor_command(
@@ -282,6 +296,14 @@ pub fn GraphEditor(
             },
             onmouseup: move |_| end_split_drag(),
             onmouseleave: move |_| end_split_drag(),
+            // Any press in the sidebar or the editor closes an open context menu - a tab's, say,
+            // when another tab is clicked next. The graph's own presses stop here before
+            // reaching this, and close it themselves.
+            onmousedown: move |_| {
+                if CONTEXT_MENU.peek().is_some() {
+                    *CONTEXT_MENU.write() = None;
+                }
+            },
             div {
                 class: "sidebar d-flex",
                 // Collapsed, the bar is only as wide as its icons; expanded, its width is whatever
@@ -363,7 +385,8 @@ pub fn GraphEditor(
                             let front = current.shown(side, &open, active);
                             // Moving the only tab of an unsplit editor would empty the pane it came
                             // from, which closes that pane again - the click would do nothing.
-                            let can_move = front.is_some() && (split || pane_tabs.len() > 1);
+                            let can_move = split || pane_tabs.len() > 1;
+                            let move_label = side.move_label(split);
                             let focused = focused_pane == Some(side);
                             rsx! {
                                 Tabs {
@@ -393,7 +416,22 @@ pub fn GraphEditor(
                                                     (true, false) => "editor-tab active-tab",
                                                     (false, _) => "editor-tab",
                                                 },
-                                                div { class: "tab-inner",
+                                                div {
+                                                    class: "tab-inner",
+                                                    oncontextmenu: move |e: MouseEvent| {
+                                                        e.prevent_default();
+                                                        if !can_move {
+                                                            return;
+                                                        }
+                                                        tab_menu_target.set(Some((key, side.other())));
+                                                        let mut menu = CxMenu::new(
+                                                            e.page_coordinates().x,
+                                                            e.page_coordinates().y,
+                                                            vec![],
+                                                        );
+                                                        menu.add_view_entry(move_label.to_owned(), move_from_tab_menu);
+                                                        *CONTEXT_MENU.write() = Some(menu);
+                                                    },
                                                     match key {
                                                         TabKey::Graph(id) => rsx! {
                                                             span {
@@ -427,8 +465,8 @@ pub fn GraphEditor(
                                         button {
                                             class: "editor-tab-move",
                                             r#type: "button",
-                                            title: if side == Side::Left { "Move this tab to the right" } else { "Move this tab to the left" },
-                                            disabled: !can_move,
+                                            title: move_label,
+                                            disabled: !can_move || front.is_none(),
                                             onclick: move |_| {
                                                 if let Some(tab) = front {
                                                     move_tab(tab, side.other());

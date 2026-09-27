@@ -36,11 +36,21 @@ pub enum CxtCommand {
     },
 }
 
+/// What a context menu entry does when clicked.
+#[derive(Debug, Clone, PartialEq)]
+pub enum MenuAction {
+    /// A command on the document, handed to the app, which routes it to whatever carries it out.
+    Command(CxtCommand),
+    /// A change to the view only, carried out on the spot by the component that opened the menu -
+    /// how the editor's tabs are arranged, say, which is nothing the app routes anywhere.
+    View(Callback),
+}
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct CxMenu {
     pub x: f64,
     pub y: f64,
-    pub entries: Vec<(String, CxtCommand)>,
+    pub entries: Vec<(String, MenuAction)>,
 }
 impl CxMenu {
     #[must_use]
@@ -52,12 +62,29 @@ impl CxMenu {
         2.
     }
     #[must_use]
-    pub const fn new(x: f64, y: f64, entries: Vec<(String, CxtCommand)>) -> Self {
-        Self { x, y, entries }
+    pub fn new(x: f64, y: f64, entries: Vec<(String, CxtCommand)>) -> Self {
+        Self {
+            x,
+            y,
+            entries: entries
+                .into_iter()
+                .map(|(label, command)| (label, MenuAction::Command(command)))
+                .collect(),
+        }
     }
 
-    pub fn add_entry(&mut self, entry: (String, CxtCommand)) {
-        self.entries.push(entry);
+    pub fn add_entry(&mut self, (label, command): (String, CxtCommand)) {
+        self.entries.push((label, MenuAction::Command(command)));
+    }
+
+    /// Add an entry that changes only the view.
+    ///
+    /// # Arguments
+    ///
+    /// * `label` - the entry's text.
+    /// * `action` - run when the entry is clicked, right where the menu was opened from.
+    pub fn add_view_entry(&mut self, label: String, action: Callback) {
+        self.entries.push((label, MenuAction::View(action)));
     }
 }
 
@@ -74,12 +101,15 @@ pub fn ContextMenu(cxt_command_handler: EventHandler<Option<CxtCommand>>) -> Ele
                 id: "context-menu",
                 style: "top: {y}px; left: {x}px; width: {width}px; padding: {padding}px;",
 
-                for (index , (label , cmd)) in cx_menu.entries.into_iter().enumerate() {
+                for (index , (label , action)) in cx_menu.entries.into_iter().enumerate() {
                     MenuItem {
                         key: "{index}",
                         class: "context-menu-item",
                         onclick: move |_| {
-                            cxt_command_handler.call(Some(cmd.clone()));
+                            match &action {
+                                MenuAction::Command(cmd) => cxt_command_handler.call(Some(cmd.clone())),
+                                MenuAction::View(run) => run.call(()),
+                            }
                             *CONTEXT_MENU.write() = None;
                         },
                         "{label}"

@@ -79,6 +79,20 @@ impl Side {
             Self::Right => 3,
         }
     }
+
+    /// What moving a tab out of this pane is called, in the tab's context menu and on the button
+    /// that does the same.
+    ///
+    /// # Arguments
+    ///
+    /// * `split` - whether the editor is split; if not, the move is what splits it.
+    pub const fn move_label(self, split: bool) -> &'static str {
+        match (split, self) {
+            (false, _) => "Split right",
+            (true, Self::Left) => "Move to right pane",
+            (true, Self::Right) => "Move to left pane",
+        }
+    }
 }
 
 /// How the open tabs are distributed over the editor's panes, and what each pane shows.
