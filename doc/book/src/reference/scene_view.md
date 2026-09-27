@@ -8,13 +8,15 @@ round you had in mind.
 
 ## Opening and closing it
 
-Open it from the top navigation bar: **Layout** → **3D View**. It appears as a further tab beside the
-tab of the graph you are working on and comes to the front straight away.
+Open it from the top navigation bar: **3D View** → **Show 3D view**. It appears as a further tab
+beside the tab of the graph you are working on and comes to the front straight away.
 
-The same menu entry then reads **Close 3D View**, and the tab carries the usual close button. Closing
-it frees the graphics resources it holds, so leave it closed when you are not looking at it.
+A check mark marks that entry for as long as the view is open; choosing it again closes the view, and
+the tab carries the usual close button too. Closing it frees the graphics resources it holds, so
+leave it closed when you are not looking at it.
 
-The entry needs a connected backend: the view asks the backend for the model as soon as it opens.
+The entry needs a connected backend: the view asks the backend for the model as soon as it opens. The
+rest of the menu belongs to a view that is open and stays greyed out until it is.
 
 ## Side by side with the graph
 
@@ -54,7 +56,8 @@ that is **one optical surface** — mirrors (flat and parabolic), gratings, beam
 paraxial surfaces, and the detectors (energy meter, fluence detector, spot diagram, wavefront
 monitor, spectrometer). Components with no shape of their own are still left out: a source port is
 where light begins rather than a thing, and a reference node is the same component passed through a
-second time rather than a second component. The count in the toolbar tells you how many are drawn.
+second time rather than a second component. The count in the view's status line tells you how many are
+drawn.
 
 A component only knows where it is once the optical axis has been traced, so the model needs an
 analyzer that places its nodes — a ray trace. Without one there is nothing to place, and the view
@@ -69,7 +72,7 @@ after it is drawn either way.
 
 ## Light: the optical axis and the rays
 
-Two kinds of light can be drawn over the components, each switched on and off in the toolbar.
+Two kinds of light can be drawn over the components, each switched on and off in the **3D View** menu.
 
 **The optical axis** (**Beam axis**, on by default) is the path the positioning run follows: one ray
 per source, the one every component is placed on. It is drawn as a purple line from each source
@@ -93,7 +96,7 @@ A few things to know about the rays:
 - **Only the primary path is drawn.** A ghost focus analyzer contributes its sources, but not its
   reflections.
 - **They need an analyzer with sources.** Without one there is no light of the setup's own to draw,
-  and the Rays button shows nothing. A model analyzed in several ways cannot be drawn at all, since
+  and the **Rays** entry shows nothing. A model analyzed in several ways cannot be drawn at all, since
   each analyzer may place it differently.
 - **They cost a trace.** While Rays is on, every change to the model traces the sources again. Turn
   it off when you do not need it; while it is off nothing is traced.
@@ -125,10 +128,15 @@ The selection box is tilted along with the component it marks, rather than kept 
 On a tilted mirror or grating that is the difference between a box the size of the component and one
 reaching well past it, so the box shows which component is meant even in a crowded setup.
 
-## The toolbar
+## The 3D View menu
 
-| Button | Effect |
+Everything the view can be told sits in the **3D View** menu in the top navigation bar. The view
+itself keeps only a status line above the picture, with the count of drawn components and a note about
+any that had to be left out.
+
+| Entry | Effect |
 | :--- | :--- |
+| **Show 3D view** | Open the view, or close it again; check-marked while it is open |
 | **Refresh** | Ask the backend for the model again, at once |
 | **Fit view** | Frame all components (the optical table is not included) |
 | **Reset camera** | Return the camera to its starting pose |
@@ -141,6 +149,15 @@ reaching well past it, so the box shows which component is meant even in a crowd
 
 See [Light: the optical axis and the rays](#light-the-optical-axis-and-the-rays) for what the last
 four show.
+
+Three things are worth knowing about the menu itself:
+
+- **It stays open while you change things.** A setup is usually judged by trying a few of these in a
+  row — show the rays, fade them, then frame them — so the menu only closes on a click outside it.
+  The four toggles carry a check mark while they are on.
+- **Everything below the first entry needs an open view** and is greyed out until there is one.
+- **What the view shows is remembered.** Close the view and open it again and the toggles, the ray
+  count and the opacity are as you left them. The camera is not — see below.
 
 Refresh, Fit view, and Reset camera move the camera, and so does clicking a gizmo axis in the
 viewport. Table, Axes, Beam axis and Rays are visibility toggles and do not move the camera. Nothing that happens to
@@ -156,12 +173,14 @@ and, while shown, the rays follow along with the components.
 Two things are worth knowing about how it updates:
 
 - **The camera never moves by itself.** Whatever changes in the model, the view you set up stays.
-  Only the toolbar buttons and clicking a gizmo axis move the camera.
+  Only **Refresh**, **Fit view** and **Reset camera** in the menu, and clicking a gizmo axis, move the
+  camera.
 - **Moving nodes around the graph canvas changes nothing here**, and neither does Auto Layout. Where a
   node sits on the diagram has nothing to do with where its component sits in space.
 
 Switching to a graph tab and back leaves the camera exactly where you left it, and so does moving the
-view to the other pane. Closing the view and opening it again does not: that builds it up afresh.
+view to the other pane. Closing the view and opening it again does not: that builds it up afresh. What
+it *shows* is kept either way — that lives with the menu, not with the picture.
 
 ## Appearance
 
@@ -199,8 +218,8 @@ centimetre-to-metre setup rather than frame it.
 The table has no edge: it reaches to the horizon wherever you move the camera and fades into the
 background in the distance. It is scenery, not part of the model — **Fit view** frames only the
 components, and clicking the table clears the selection. Seen through a lens, the table does not
-show. Show or hide it with the **Table** button in the toolbar.
+show. Show or hide it with **Table** in the **3D View** menu.
 
 In the bottom-right corner of the view a small **orientation gizmo** shows which way x, y, and z
 point. It keeps you from losing your bearings while orbiting. Click one of its axes to snap the camera
-to look straight along that direction; show or hide it with the **Axes** button in the toolbar.
+to look straight along that direction; show or hide it with **Axes** in the **3D View** menu.
