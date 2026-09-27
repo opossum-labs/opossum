@@ -1,4 +1,4 @@
-use super::{Shape, resample_ring};
+use super::{Bounded, Shape, resample_ring};
 use crate::{
     error::{OpmResult, OpossumError},
     millimeter,
@@ -122,7 +122,8 @@ impl PolygonShape {
         self.points.remove(index)?;
         Ok(())
     }
-
+}
+impl Bounded for PolygonShape {
     /// Return the edge of this polygon as a counter-clockwise ring of about `segments` points.
     ///
     /// Every corner is part of it, and a polygon given clockwise is turned around; see
@@ -131,7 +132,7 @@ impl PolygonShape {
     /// # Errors
     ///
     /// This function returns an error if the corners enclose no area, i.e. all lie on one line.
-    pub(super) fn outline_points(&self, segments: usize) -> OpmResult<Vec<Point2<Length>>> {
+    fn outline_points(&self, segments: usize) -> OpmResult<Vec<Point2<Length>>> {
         resample_ring(self.points(), segments)
     }
 }

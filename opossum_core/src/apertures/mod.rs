@@ -217,7 +217,13 @@ impl Aperture {
                 "an outline of {segments} points encloses nothing, at least 3 are needed"
             )));
         }
-        let outline = self.shape.outline_points(segments)?;
+        let bounded = self.shape.as_bounded().ok_or_else(|| {
+            OpossumError::Other(format!(
+                "an aperture of shape '{}' has no closed outline",
+                self.shape
+            ))
+        })?;
+        let outline = bounded.outline_points(segments)?;
         let Some(iso) = &self.isometry else {
             return Ok(outline);
         };
@@ -449,16 +455,17 @@ impl ApertureShape {
     }
     /// Check whether this shape has a hard edge, i.e. transmits either fully or not at all.
     ///
+    /// Derived from [`Self::as_bounded`] rather than spelled out: having a hard edge and being able
+    /// to state where that edge runs are the same property, so they are read off the same match and
+    /// cannot disagree.
+    ///
     /// # Returns
     ///
     /// `true` for the binary shapes, `false` for [`ApertureShape::Open`],
     /// [`ApertureShape::Gaussian`] and [`ApertureShape::Stack`].
     #[must_use]
     pub const fn is_binary(&self) -> bool {
-        matches!(
-            self,
-            Self::BinaryCircle(_) | Self::BinaryRectangle(_) | Self::BinaryPolygon(_)
-        )
+        self.as_bounded().is_some()
     }
     /// Return one instance of every shape that does **not** delimit a region.
     ///
@@ -497,24 +504,29 @@ impl ApertureShape {
                 .fold(1.0, |acc, ap| acc * ap.apodize(point)),
         }
     }
-    /// Return the edge of this shape as a closed, counter-clockwise polygon in its own frame.
+    /// Return this shape as a [`Bounded`] one, or `None` if it has no closed edge.
     ///
-    /// See [`Aperture::outline_points`], which wraps this and adds the aperture's isometry.
+    /// **The one place a variant of this enum is named outside its own module.** Everything a shape
+    /// answers about where it ends is asked of the [`Bounded`] capability and therefore lives with
+    /// the shape, so a shape added later does not edit the aperture machinery every component
+    /// shares.
     ///
-    /// # Errors
+    /// The match stays exhaustive: a variant added later has to appear here, and the trait it then
+    /// has to implement has no default methods, so the compiler still walks it through every
+    /// question rather than answering any of them silently.
     ///
-    /// This function returns an error for every shape without a closed edge, and if the shape
-    /// encloses no area.
-    fn outline_points(&self, segments: usize) -> OpmResult<Vec<Point2<Length>>> {
+    /// # Returns
+    ///
+    /// The shape behind this variant, or `None` for the shapes without an edge to walk.
+    #[must_use]
+    pub const fn as_bounded(&self) -> Option<&dyn Bounded> {
         match self {
-            Self::BinaryCircle(shape) => shape.outline_points(segments),
-            Self::BinaryRectangle(shape) => shape.outline_points(segments),
-            Self::BinaryPolygon(shape) => shape.outline_points(segments),
             // Open transmits everywhere and Gaussian attenuates everywhere, so neither has an edge
             // to walk; a Stack may be made of both and has no single outline either.
-            shape => Err(OpossumError::Other(format!(
-                "an aperture of shape '{shape}' has no closed outline"
-            ))),
+            Self::Open | Self::Gaussian(_) | Self::Stack(_) => None,
+            Self::BinaryCircle(shape) => Some(shape),
+            Self::BinaryRectangle(shape) => Some(shape),
+            Self::BinaryPolygon(shape) => Some(shape),
         }
     }
 }
@@ -621,6 +633,38 @@ impl From<ApertureShape> for Proptype {
 pub trait Shape {
     /// Calculate the transmission factor (always treated as aperture type `hole`).
     fn transmission_factor(&self, point: &Point3<Length>) -> f64;
+}
+
+/// Capability of an [`ApertureShape`] that encloses a well-defined region.
+///
+/// Where [`Shape`] states how much light passes at a single point, this states where the inside
+/// *ends*. Only a shape with a hard edge can answer that, which is why this is a capability an
+/// [`ApertureShape`] either has or has not — asked for with
+/// [`as_bounded`](ApertureShape::as_bounded) — rather than a question every shape has to field.
+///
+/// Like [`Shape`], this works in the shape's own frame and applies no validation: the aperture's
+/// isometry and the contract on the number of segments both live on [`Aperture`], which is what
+/// callers outside this module should be using.
+///
+/// The trait deliberately has **no default methods**. A shape added later must answer every
+/// question here itself, and a default would silently answer for it.
+pub trait Bounded {
+    /// Return the edge of this shape as a closed, counter-clockwise polygon in its own frame.
+    ///
+    /// See [`Aperture::outline_points`], which wraps this and adds the aperture's isometry.
+    ///
+    /// # Arguments
+    ///
+    /// - `segments`: the number of outline points to aim for
+    ///
+    /// # Returns
+    ///
+    /// The outline points in counter-clockwise order, without a repeated first point.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the shape encloses no area.
+    fn outline_points(&self, segments: usize) -> OpmResult<Vec<Point2<Length>>>;
 }
 
 impl Plottable for Aperture {
@@ -1128,6 +1172,33 @@ mod test {
             );
         }
         Ok(())
+    }
+
+    /// Which shapes can state where they end, spelled out here independently of the single match in
+    /// [`ApertureShape::as_bounded`]. A variant added later has to land on one side of that match or
+    /// the other, and this test fails until that choice is made here as well — deliberately, rather
+    /// than by whichever arm happened to catch it.
+    #[test]
+    fn only_the_binary_shapes_are_bounded() {
+        for shape in ApertureShape::iter() {
+            let delimits = matches!(
+                shape,
+                ApertureShape::BinaryCircle(_)
+                    | ApertureShape::BinaryRectangle(_)
+                    | ApertureShape::BinaryPolygon(_)
+            );
+            assert_eq!(
+                shape.as_bounded().is_some(),
+                delimits,
+                "'{shape}' is handed out as bounded against expectation"
+            );
+            // The two questions are one property, so they must never come apart.
+            assert_eq!(
+                shape.is_binary(),
+                delimits,
+                "'{shape}' is classified as binary against expectation"
+            );
+        }
     }
 
     #[test]

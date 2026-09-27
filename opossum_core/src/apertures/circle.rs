@@ -1,4 +1,4 @@
-use super::Shape;
+use super::{Bounded, Shape};
 use crate::{
     error::{OpmResult, OpossumError},
     meter,
@@ -53,7 +53,8 @@ impl CircleShape {
         self.radius.set(radius)?;
         Ok(())
     }
-
+}
+impl Bounded for CircleShape {
     /// Return `segments` points evenly spaced on this circle, counter-clockwise.
     ///
     /// See [`Aperture::outline_points`](crate::apertures::Aperture::outline_points).
@@ -62,7 +63,7 @@ impl CircleShape {
     ///
     /// This function returns an error if the radius is zero — such a circle is a single point and
     /// has no outline — or if more points are asked for than can be sampled.
-    pub(super) fn outline_points(self, segments: usize) -> OpmResult<Vec<Point2<Length>>> {
+    fn outline_points(&self, segments: usize) -> OpmResult<Vec<Point2<Length>>> {
         let radius = self.radius().get::<meter>();
         if radius == 0.0 {
             return Err(OpossumError::Other(
