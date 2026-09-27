@@ -147,6 +147,12 @@ light rather than shape or redirect it.
 Unlike a lens or a wedge, these components have no second surface of their own to keep facing the
 camera, so each is drawn from both sides at once and stays visible however far you orbit around it.
 
+Every component is drawn slightly see-through, so a component sitting behind another optic stays
+visible rather than being hidden by it. This is deliberate: glass shows only solid surroundings
+through it — another lens in front would otherwise blot out whatever is behind — so drawing the
+components a little transparent lets them show through one another and keeps the whole setup
+readable from any angle.
+
 ## The optical table and orientation
 
 Beneath the setup sits an **optical table**: a dark breadboard surface with a regular raster of holes

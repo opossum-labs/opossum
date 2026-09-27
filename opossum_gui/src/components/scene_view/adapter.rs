@@ -36,12 +36,20 @@ const TABLE_HEIGHT_M: f32 = -0.075;
 /// Spacing of the table's holes, in metres - the common 25 mm breadboard raster. One copy of
 /// [`TABLE_TILE`] holds one hole.
 const TABLE_PITCH_M: f32 = 0.025;
+/// How opaque a component is drawn, `0.0`–`1.0`. Below 1.0 so an optic behind another optic stays
+/// visible: a transmissive lens only ever reveals *opaque* geometry behind it (a three.js
+/// limitation - see the 3D-view handbook), so every component is drawn slightly see-through and
+/// blends over the ones behind it instead of hiding them. See `dioxus_glb_viewer`'s `set_opacity`.
+const COMPONENT_OPACITY: f32 = 0.7;
 
 /// Describe a model's components the way the 3D viewer wants them.
 ///
 /// The node uuid becomes the object id, which is what a click in the 3D view reports back and what
 /// ties it to a node in the graph. The geometry is referenced by URL rather than sent along: the
 /// webview fetches it itself, so meshes never travel through the JavaScript bridge.
+///
+/// Every component is drawn at [`COMPONENT_OPACITY`], slightly see-through, so an optic behind
+/// another optic stays visible rather than being hidden by transmissive glass in front of it.
 ///
 /// # Arguments
 ///
@@ -64,7 +72,7 @@ pub fn objects_of(manifest: &SceneManifest, base_url: &str) -> Vec<GlbObject> {
             visible: true,
             // Selection lives with whoever handles the clicks, not with the geometry.
             selected: false,
-            opacity: 1.0,
+            opacity: COMPONENT_OPACITY,
         })
         .collect()
 }
@@ -208,6 +216,10 @@ mod tests {
         assert_eq!(objects[0].id, uid.to_string());
         assert!(objects[0].visible);
         assert!(!objects[0].selected);
+        assert!(
+            objects[0].opacity < 1.0,
+            "components are drawn slightly see-through so optics behind them stay visible"
+        );
         let GlbSource::Url(url) = &objects[0].source else {
             panic!("a component's geometry is fetched by url, not carried as bytes");
         };
