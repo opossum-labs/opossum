@@ -24,7 +24,7 @@ One model in the scene.
 | `source` | `GlbSource` | Where the `.glb` bytes come from. |
 | `transform` | `Transform` | Placement in world coordinates. |
 | `visible` | `bool` | Hidden objects stay in the scene graph. |
-| `selected` | `bool` | Draws a `THREE.BoxHelper` around the object. |
+| `selected` | `bool` | Draws a wireframe box around the object, turned with it rather than fitted to the world axes. |
 | `opacity` | `f32` | `0.0`–`1.0`, scaling the opacity the file gave each material; `1.0` draws the model as it is. |
 
 The `id` is what [`PickEvent`](./picking.md) reports back, and it is how the diff
@@ -89,7 +89,7 @@ Scene-wide settings. The prop is optional; leaving it out uses these defaults.
 | `grid` | Show the reference grid (a `GridHelper` of size 20 with 20 divisions). | `true` |
 | `ambient_intensity` | Ambient light intensity (0.0–2.0). | `0.8` |
 | `directional_intensity` | Main directional light intensity. | `1.2` |
-| `selection_color` | Colour of the selection `BoxHelper`. | `"#00aaff"` |
+| `selection_color` | Colour of the selection outline. | `"#00aaff"` |
 | `fit_on_first_load` | Frame the scene on the first successful load. | `true` |
 | `initial_camera` | Camera position before the first auto-fit. | `[5.0, 3.0, 5.0]` |
 | `initial_target` | Camera target before the first auto-fit. | `[0.0, 0.0, 0.0]` |
@@ -131,7 +131,7 @@ This is the whole contract between your list and the renderer:
 | `source` differs (per the rules above) | The old model is disposed and the new one loaded, with transform, visibility, selection and opacity applied in the same step. |
 | `transform` differs | Position, rotation and scale are updated in place. No reload. |
 | `visible` differs | The object is hidden or shown; it stays in the scene graph. |
-| `selected` differs | The selection `BoxHelper` is added or removed. |
+| `selected` differs | The selection outline is added or removed. |
 | `opacity` differs | The model's materials are restyled in place. No reload. Below `1.0` they stop writing depth, so overlapping translucent parts add up rather than hide each other. |
 | Only the **order** of entries differs | Nothing at all. Order carries no meaning. |
 | Nothing differs | Nothing is sent. |

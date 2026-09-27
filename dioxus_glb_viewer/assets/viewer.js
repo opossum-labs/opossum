@@ -86,7 +86,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
     const raycaster = new THREE.Raycaster();
 
     // ── Instance state ──────────────────────────────────────────────────────
-    /** id -> { root: THREE.Group, helper: THREE.BoxHelper|null } */
+    /** id -> { root: THREE.Group, helper: THREE.LineSegments|null } — see `setSelected` */
     const objects      = new Map();
     /** id -> generation counter (prevents stale load callbacks) */
     const generations  = new Map();
@@ -420,12 +420,89 @@ export async function createViewer(canvasId, options, send, threeBase) {
         root.scale.set(...t.scale);
     }
 
+    /**
+     * Axis-aligned box around a model's geometry, in the MODEL'S OWN frame.
+     *
+     * `THREE.Box3.setFromObject` (and `THREE.BoxHelper` with it) fits the box to the world axes,
+     * which for a tilted component is far larger than the component itself — a grating turned 45°
+     * gets a box reaching 41% too far. Measuring in the model's own frame instead gives the box the
+     * component deserves; the caller turns it back with the model's world matrix.
+     *
+     * @param {THREE.Object3D} root - The model root to measure.
+     * @returns {THREE.Box3} The box in `root`'s local frame; empty if the model holds no geometry.
+     */
+    function localBounds(root) {
+        root.updateWorldMatrix(true, true);
+        const toLocal = new THREE.Matrix4().copy(root.matrixWorld).invert();
+        const relative = new THREE.Matrix4();
+        const corner = new THREE.Vector3();
+        const box = new THREE.Box3();
+        root.traverse((o) => {
+            if (!o.isMesh || !o.geometry) return;
+            if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+            const bounds = o.geometry.boundingBox;
+            if (!bounds) return;
+            // Each mesh sits somewhere below the root, so its own geometry is carried up into the
+            // root's frame rather than read off as it is.
+            relative.multiplyMatrices(toLocal, o.matrixWorld);
+            for (let i = 0; i < 8; i++) {
+                // Bit 0/1/2 of `i` picks min or max on x/y/z, which walks all eight corners.
+                corner.set(
+                    i & 1 ? bounds.max.x : bounds.min.x,
+                    i & 2 ? bounds.max.y : bounds.min.y,
+                    i & 4 ? bounds.max.z : bounds.min.z,
+                );
+                box.expandByPoint(corner.applyMatrix4(relative));
+            }
+        });
+        return box;
+    }
+
+    /**
+     * Wireframe outline of a box, drawn with a transform the caller sets itself.
+     *
+     * `matrixAutoUpdate` is off: the outline holds a box in a model's own frame and is moved by
+     * copying that model's world matrix into `matrix`, so turning or moving the model never rebuilds
+     * the geometry.
+     *
+     * @param {THREE.Box3} box - The box to outline, in the model's local frame.
+     * @param {THREE.Color} color - Colour of the lines.
+     * @returns {THREE.LineSegments} The outline, not yet added to the scene.
+     */
+    function boxOutline(box, color) {
+        const corners = [];
+        for (let i = 0; i < 8; i++) {
+            corners.push(
+                i & 1 ? box.max.x : box.min.x,
+                i & 2 ? box.max.y : box.min.y,
+                i & 4 ? box.max.z : box.min.z,
+            );
+        }
+        // The twelve edges as index pairs: corners differing in exactly one of the three bits.
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(corners, 3));
+        geometry.setIndex([0, 1, 2, 3, 4, 5, 6, 7, 0, 2, 1, 3, 4, 6, 5, 7, 0, 4, 1, 5, 2, 6, 3, 7]);
+        const outline = new THREE.LineSegments(
+            geometry,
+            new THREE.LineBasicMaterial({ color, toneMapped: false }),
+        );
+        outline.matrixAutoUpdate = false;
+        return outline;
+    }
+
     function setSelected(id, selected) {
         const entry = objects.get(id);
         if (!entry) return;
         if (selected) {
             if (!entry.helper) {
-                const h = new THREE.BoxHelper(entry.root, new THREE.Color(currentOptions.selection_color));
+                const box = localBounds(entry.root);
+                // A model without geometry has nothing to outline; leave it unmarked rather than
+                // drawing a degenerate box at the origin.
+                if (box.isEmpty()) return;
+                const h = boxOutline(box, new THREE.Color(currentOptions.selection_color));
+                h.matrix.copy(entry.root.matrixWorld);
+                // Kept beside the model rather than inside it: as a child it would be faded by
+                // `setOpacity` along with the component and counted into `sceneBounds`.
                 scene.add(h);
                 entry.helper = h;
             }
@@ -817,7 +894,13 @@ export async function createViewer(canvasId, options, send, threeBase) {
                 const entry = objects.get(op.id);
                 if (entry) {
                     applyTransform(entry.root, op.transform);
-                    if (entry.helper) entry.helper.update();
+                    if (entry.helper) {
+                        // The outline holds the box in the model's own frame, so following the model
+                        // is a matrix copy — no refit of the geometry, and the box stays as tight as
+                        // it was however the model is turned.
+                        entry.root.updateWorldMatrix(true, false);
+                        entry.helper.matrix.copy(entry.root.matrixWorld);
+                    }
                     shadowCameraDirty = true; // a moved model changes the scene bounds
                 }
                 break;

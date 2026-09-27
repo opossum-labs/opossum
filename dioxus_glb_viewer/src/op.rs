@@ -43,7 +43,7 @@ pub enum Op {
     SetTransform { id: String, transform: Transform },
     /// Change the visibility of a model (it stays in the scene graph).
     SetVisible { id: String, visible: bool },
-    /// Toggle the selection highlight (`BoxHelper`) on or off.
+    /// Toggle the selection highlight (a wireframe box around the model) on or off.
     SetSelected { id: String, selected: bool },
     /// Change how opaque a model is drawn (see [`crate::GlbObject::opacity`]).
     SetOpacity { id: String, opacity: f32 },

@@ -122,10 +122,22 @@ Base64 decoding uses `Uint8Array.fromBase64` where the engine has it, and falls 
 
 ### Selection highlights
 
-A selection is a `THREE.BoxHelper` around the model's group, created on demand in the
-current `selection_color` and destroyed on deselect — geometry and material both disposed.
-Changing `selection_color` recolours the existing helpers in place rather than rebuilding
-them.
+A selection is a wireframe box around the model's geometry, created on demand in the current
+`selection_color` and destroyed on deselect — geometry and material both disposed. Changing
+`selection_color` recolours the existing outlines in place rather than rebuilding them.
+
+The box is measured in the **model's own frame**, not the world's. `THREE.BoxHelper` (and
+`Box3.setFromObject` under it) fits the world axes, which for a tilted model is far bigger than the
+model — a component turned 45° gets a box reaching some 41% too far. `localBounds` therefore carries
+each mesh's own bounding box up into the root's frame, and the outline is drawn from that box with
+`matrixAutoUpdate` off, holding a copy of the model's world matrix. So it is turned with the model
+and hugs it whichever way it stands, and a `set_transform` only copies that matrix again instead of
+refitting anything.
+
+The outline is added to the scene **beside** the model rather than as a child of it. As a child it
+would be faded by `setOpacity` along with the component — which matters, since components are drawn
+slightly see-through — and would be counted into `sceneBounds`, moving the camera on "fit view". It
+is never picked either way, because picking already discards line hits.
 
 ### Options
 

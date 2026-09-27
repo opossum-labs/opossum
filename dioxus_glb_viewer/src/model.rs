@@ -26,7 +26,8 @@ pub struct GlbObject {
     pub transform: Transform,
     /// Whether the object is visible. Invisible objects remain in the scene graph.
     pub visible: bool,
-    /// Whether the object is highlighted as selected (with a `THREE.BoxHelper`).
+    /// Whether the object is highlighted as selected (with a wireframe box around its geometry,
+    /// turned with the object rather than fitted to the world axes).
     pub selected: bool,
     /// How opaque the object is drawn, from `0.0` (invisible) to `1.0` (as the file has it).
     pub opacity: f32,
@@ -239,7 +240,7 @@ pub struct ViewerOptions {
     pub ambient_intensity: f32,
     /// Main (directional) light intensity (default 1.2).
     pub directional_intensity: f32,
-    /// CSS colour of the selection `BoxHelper` (e.g. `"#00aaff"`).
+    /// CSS colour of the selection outline (e.g. `"#00aaff"`).
     pub selection_color: String,
     /// Whether the scene is automatically framed on the **first** successful model load.
     /// All later adds/removes/replaces leave the camera exactly where the user put it.

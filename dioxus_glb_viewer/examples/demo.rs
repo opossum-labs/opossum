@@ -15,7 +15,8 @@
 //! 4. Click "Remove last" → one model disappears; **view stays**.
 //! 5. Click "Replace first" → first model with a new transform; **view stays**.
 //! 6. Click "Toggle visibility" → model becomes invisible/visible; **view stays**.
-//! 7. Click on a model → correct ID + `mesh_name` in the panel, BoxHelper appears.
+//! 7. Click on a model → correct ID + `mesh_name` in the panel, selection box appears. On a tilted
+//!    model it must hug the geometry and be turned with it, not axis-aligned to the world.
 //!    Click empty space → `id: None`. **Drag** (orbit) → *no* pick event.
 //! 8. Resize the window → image stays undistorted (ResizeObserver).
 //! 9. 20× add/remove alternating → memory in DevTools stays flat (disposal test).
