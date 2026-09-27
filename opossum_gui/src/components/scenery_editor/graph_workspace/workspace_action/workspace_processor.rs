@@ -549,8 +549,8 @@ pub fn use_workspace_processor(
                             *crate::SIDEBAR_COLLAPSED.write() = false;
                         }
                     }
-                    GraphsWorkspaceAction::GetEditorArea => {
-                        process_get_editor_area(workspace, workspace_handlers).await;
+                    GraphsWorkspaceAction::GetEditorArea(graph_id) => {
+                        process_get_editor_area(workspace_handlers, graph_id).await;
                     }
                     GraphsWorkspaceAction::Undo => {
                         eval_action_run(
@@ -1199,11 +1199,18 @@ async fn ensure_tab_active(
     }
 }
 
-async fn process_get_editor_area(
-    workspace: ReadStore<GraphsWorkspaceState>,
-    ws_handler: WorkSpaceSignalHandlers,
-) {
-    let element_id = format!("editor_{}", workspace.active_tab().read().as_simple());
+/// Measures where the canvas of `graph_id` sits in the window and stores it for that graph.
+///
+/// # Arguments
+///
+/// * `ws_handler` - the handlers the measurement is stored through.
+/// * `graph_id` - the graph whose canvas (the element `editor_<id>`) is measured.
+///
+/// A graph whose tab is hidden measures as an empty rectangle; that result is dropped rather than
+/// stored, so the graph keeps the rectangle it had while it was last on screen. Its view measures
+/// itself again as soon as it is shown, because showing it resizes it.
+async fn process_get_editor_area(ws_handler: WorkSpaceSignalHandlers, graph_id: Uuid) {
+    let element_id = format!("editor_{}", graph_id.as_simple());
     let js = format!(
         r"
         let el = document.getElementById('{element_id}');
@@ -1230,7 +1237,11 @@ async fn process_get_editor_area(
         )
     {
         let editor_area = Rect::new(Point2D::new(x, y), Size2D::new(width, height));
-        ws_handler.workspace.set_editor_area(editor_area);
+        if !editor_area.is_empty() {
+            ws_handler
+                .workspace
+                .set_graph_editor_area(graph_id, editor_area);
+        }
     }
 }
 
@@ -1705,7 +1716,7 @@ async fn process_add_analyzer(
 
         let zoom = *editor_state.zoom().peek();
         let shift = *editor_state.shift().peek();
-        let center = workspace.get_view_port_center();
+        let center = workspace.get_view_port_center(graph_id);
 
         let proposed_pos = ((center.x - shift.x) / zoom, (center.y - shift.y) / zoom);
 
@@ -1769,7 +1780,7 @@ async fn process_add_optic_node(
         let zoom = *editor_state.zoom().peek();
 
         let shift = *editor_state.shift().peek();
-        let center = workspace.get_view_port_center();
+        let center = workspace.get_view_port_center(graph_id);
         let proposed_pos = (
             (center.x - shift.x - NODE_WIDTH / 2.) / zoom,
             (center.y - shift.y - DEFAULT_NODE_HEIGHT / 2.0) / zoom,
@@ -2415,7 +2426,7 @@ async fn process_refresh(
                         hierarchy,
                     });
                 }
-                process_get_editor_area(workspace, ws_handler).await;
+                process_get_editor_area(ws_handler, id).await;
             }
 
             // 3. Refill the graph from backend; never recenter if the tab already existed

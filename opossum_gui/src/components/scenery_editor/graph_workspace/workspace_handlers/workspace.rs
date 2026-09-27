@@ -33,6 +33,7 @@ pub struct WorkspaceHandlers {
     set_drop_in_group: EventHandler<Option<(Uuid, usize)>>,
     set_selection_box: EventHandler<Option<Rect<f64>>>,
     set_editor_area: EventHandler<Rect<f64>>,
+    set_graph_editor_area: EventHandler<(Uuid, Rect<f64>)>,
     clear_selected_nodes: EventHandler<Uuid>,
     #[allow(clippy::type_complexity)]
     apply_drag: EventHandler<(Uuid, Point2D<f64>, f64, Point2D<f64>)>,
@@ -55,6 +56,7 @@ impl WorkspaceHandlers {
             set_drop_in_group: set_drop_in_group_handler(workspace),
             set_selection_box: set_selection_box_handler(workspace),
             set_editor_area: set_editor_area_handler(workspace),
+            set_graph_editor_area: set_graph_editor_area_handler(workspace),
             clear_selected_nodes: clear_selected_nodes_handler(workspace),
             apply_drag: apply_drag_handler(workspace),
             set_nodes_cut: set_nodes_cut_handler(workspace),
@@ -78,6 +80,18 @@ impl WorkspaceHandlers {
     }
     pub fn set_editor_area(&self, editor_area: Rect<f64>) {
         self.set_editor_area.call(editor_area);
+    }
+    /// Store a fresh measurement of where `graph_id`'s canvas sits in the window.
+    ///
+    /// # Arguments
+    ///
+    /// * `graph_id` - the graph that was measured.
+    /// * `editor_area` - its canvas' rectangle in client coordinates.
+    ///
+    /// The measurement also becomes the workspace-wide fallback that graphs not yet measured are
+    /// placed by (see `editor_area_of`).
+    pub fn set_graph_editor_area(&self, graph_id: Uuid, editor_area: Rect<f64>) {
+        self.set_graph_editor_area.call((graph_id, editor_area));
     }
     pub fn set_selection_box(&self, selection_box: Option<Rect<f64>>) {
         self.set_selection_box.call(selection_box);
@@ -186,7 +200,7 @@ fn apply_drag_handler(
                 }
 
                 DragStatus::ArmedSelection(start) => {
-                    let editor_origin = workspace.editor_area().read().origin;
+                    let editor_origin = workspace.editor_area_of(graph_id).origin;
 
                     let graph_pos = Point2D::new(
                         (mouse_to_graph_shift.x - editor_origin.x) / current_zoom,
@@ -206,7 +220,7 @@ fn apply_drag_handler(
                     workspace.drag_status().set(DragStatus::SelectionBox(rect));
                 }
                 DragStatus::SelectionBox(rect) => {
-                    let editor_origin = workspace.editor_area().read().origin;
+                    let editor_origin = workspace.editor_area_of(graph_id).origin;
 
                     let graph_pos = Point2D::new(
                         (mouse_to_graph_shift.x - editor_origin.x) / current_zoom,
@@ -247,6 +261,17 @@ fn clear_selected_nodes_handler(workspace: Store<GraphsWorkspaceState>) -> Event
 
 fn set_editor_area_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandler<Rect<f64>> {
     EventHandler::new(move |editor_area| {
+        workspace.editor_area().set(editor_area);
+    })
+}
+
+fn set_graph_editor_area_handler(
+    workspace: Store<GraphsWorkspaceState>,
+) -> EventHandler<(Uuid, Rect<f64>)> {
+    EventHandler::new(move |(graph_id, editor_area): (Uuid, Rect<f64>)| {
+        with_editor_state(workspace, graph_id, false, |e| {
+            e.area().set(editor_area);
+        });
         workspace.editor_area().set(editor_area);
     })
 }
@@ -312,8 +337,15 @@ fn add_new_group_tab_handler(workspace: Store<GraphsWorkspaceState>) -> EventHan
         // subgroup a node was dragged into before it was ever opened) - don't blow that away, the
         // caller always follows up with a full refetch anyway, which reconciles either way.
         if !workspace.tabs().read().contains_key(&id) {
-            let graph_state =
-                GraphState::new(GraphStore::default(), EditorState::default(), graph_info);
+            // Until its view has measured itself, assume the new graph sits exactly where the one it
+            // is opened from does - it is about to take that graph's place on screen, and the
+            // centering its view does on mount needs a canvas size before the first measurement.
+            let opener_area = workspace.editor_area_of(*workspace.active_tab().read());
+            let graph_state = GraphState::new(
+                GraphStore::default(),
+                EditorState::with_area(opener_area),
+                graph_info,
+            );
             workspace.tabs().write().insert(id, graph_state);
         }
         if !workspace.tab_order().read().contains(&id) {

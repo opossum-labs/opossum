@@ -12,6 +12,7 @@ use crate::{
         graph_workspace::{
             DragStatus, EditorStateStoreExt, GraphStateStoreExt, GraphStoreStoreExt,
             GraphsWorkspaceAction, GraphsWorkspaceState, GraphsWorkspaceStateStoreExt,
+            GraphsWorkspaceStateStoreImplExt,
         },
     },
 };
@@ -37,10 +38,14 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
     let mut latest = use_signal(|| None::<Viewport>);
     let mut debounce_gen = use_signal(|| 0u64);
 
+    // The graph under the pointer, which is not necessarily the active one: with two graphs on
+    // screen, scrolling over the other one zooms that one.
+    let graph_id = graph_state.graph_info().read().id;
+
     move |wheel_event| {
         let current_graph_zoom = *editor_status.zoom().read();
         let current_graph_shift = *editor_status.shift().read();
-        let rect = *workspace.editor_area().read();
+        let rect = workspace.editor_area_of(graph_id);
         let client_pos = wheel_event.data.client_coordinates();
         let mouse_pos = Point2D::new(client_pos.x - rect.min_x(), client_pos.y - rect.min_y());
         let mouse_on_graph_x = (mouse_pos.x - current_graph_shift.x) / current_graph_zoom;
@@ -53,8 +58,6 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
         };
         let new_shift_x = mouse_on_graph_x.mul_add(-new_graph_zoom, mouse_pos.x);
         let new_shift_y = mouse_on_graph_y.mul_add(-new_graph_zoom, mouse_pos.y);
-
-        let graph_id = *workspace.active_tab().read();
 
         let before = Viewport {
             graph_id,
@@ -153,7 +156,7 @@ pub fn use_on_mouse_down(
                     let mouse_pos =
                         Point2D::new(event.client_coordinates().x, event.client_coordinates().y);
 
-                    let editor_origin = workspace.editor_area().read().origin;
+                    let editor_origin = workspace.editor_area_of(graph_id).origin;
                     let current_shift = *editor_status.shift().read();
                     let current_zoom = *editor_status.zoom().read();
 
@@ -181,7 +184,6 @@ pub fn use_on_mouse_down(
                     if let Some(t0) = t0_opt
                         && now.duration_since(t0) < dc_time
                     {
-                        let graph_id = *workspace.active_tab().read();
                         workspace_processor.send(GraphsWorkspaceAction::CenterGraph {
                             graph_id,
                             save_changes: true,
@@ -286,7 +288,7 @@ pub fn use_on_key_down(
                     && !modifiers.shift()
                     && event.data().key() == Key::Character("v".to_string())
                 {
-                    let rect = *workspace.editor_area().read();
+                    let rect = workspace.editor_area_of(active_graph);
                     let mouse = *mouse_pos.read();
                     if mouse.x > rect.min_x()
                         && mouse.x < rect.max_x()

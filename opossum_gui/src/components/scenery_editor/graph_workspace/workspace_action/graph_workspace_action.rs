@@ -130,8 +130,8 @@ pub enum GraphsWorkspaceAction {
         edge_in_creation: Option<EdgeCreation>,
     },
 
-    /// Requests the editor area dimensions or layout.
-    GetEditorArea,
+    /// Measures where the canvas of the graph with this id sits in the window.
+    GetEditorArea(Uuid),
 
     /// Loads a graph workspace from a file.
     LoadFromFile(PathBuf),

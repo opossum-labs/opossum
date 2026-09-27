@@ -6,7 +6,10 @@ use crate::components::scenery_editor::{
         BreadCrumbs,
         hooks::{use_drag, use_drag_end, use_on_mouse_down, use_zoom},
     },
-    graph_workspace::{GraphState, GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceAction},
+    graph_workspace::{
+        GraphState, GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceAction,
+        GraphsWorkspaceStateStoreImplExt,
+    },
     node::Node,
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
@@ -64,7 +67,7 @@ pub fn GraphViewEditor(
     let zoom = use_memo(move || *editor_state.zoom().read());
 
     let mouse_pos_in_editor = use_memo(move || {
-        let editor_origin = workspace.editor_area().peek().origin;
+        let editor_origin = workspace.editor_area_of(graph_id).origin;
         Point2D::new(
             (current_mouse_pos.read().x - editor_origin.x - shift.peek().x) / *zoom.peek(),
             (current_mouse_pos.read().y - editor_origin.y - shift.peek().y) / *zoom.peek(),
@@ -124,7 +127,12 @@ pub fn GraphViewEditor(
     let bread_crumbs = graph_state.graph_info().read().hierarchy.clone();
 
     rsx! {
-        div { class: "graph-view-container",
+        div {
+            class: "graph-view-container",
+            // A drag belongs to the view it started in and ends where that view ends. With two graphs
+            // side by side, carrying on past this edge would put the pointer over the other graph,
+            // whose own `onmousemove` would then drag *its* selection.
+            onmouseleave: use_drag_end(workspace, None),
 
             BreadCrumbs {
                 bread_crumbs,
@@ -140,6 +148,12 @@ pub fn GraphViewEditor(
                 class: "graph-editor",
                 id: format!("editor_{}", graph_id.as_simple()),
                 draggable: false,
+                // Every view keeps its own on-screen rectangle up to date. This fires on any size
+                // change, and also when a hidden tab is brought forward, since that resizes it from
+                // nothing.
+                onresize: move |_| {
+                    workspace_processor.send(GraphsWorkspaceAction::GetEditorArea(graph_id));
+                },
 
                 onwheel: onwheel_handler,
                 onmousedown: onmousedown_handler,
