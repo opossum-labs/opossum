@@ -2,9 +2,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1120" height="470" viewBox="0 0 1120 470"
      font-family="Helvetica, Arial, sans-serif">
   <title>How a model reaches the 3D view</title>
-  <desc>The model is meshed in the backend and travels over two HTTP endpoints to the viewer
-        component. optoscene and dioxus_glb_viewer have no dependency on each other; the GUI is the
-        only seam between them.</desc>
+  <desc>The model is meshed and its light traced in the backend, and travels over four HTTP endpoints
+        to the viewer component: the manifest and one geometry file per component, plus the optical
+        axis and the traced rays as lines. optoscene and dioxus_glb_viewer have no dependency on each
+        other; the GUI is the only seam between them.</desc>
 
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
@@ -33,42 +34,56 @@
   <line x1="240" y1="89" x2="312" y2="89" stroke="#4a5568" marker-end="url(#arrow)"/>
   <line x1="542" y1="89" x2="614" y2="89" stroke="#4a5568" marker-end="url(#arrow)"/>
 
-  <!-- ── the two endpoints ────────────────────────────────────────────────── -->
-  <line x1="300" y1="142" x2="300" y2="180" stroke="#4a5568" marker-end="url(#arrow)"/>
-  <line x1="660" y1="142" x2="660" y2="180" stroke="#4a5568" marker-end="url(#arrow)"/>
+  <!-- ── the four endpoints ───────────────────────────────────────────────── -->
+  <line x1="134" y1="142" x2="134" y2="180" stroke="#4a5568" marker-end="url(#arrow)"/>
+  <line x1="364" y1="142" x2="364" y2="180" stroke="#4a5568" marker-end="url(#arrow)"/>
+  <line x1="594" y1="142" x2="594" y2="180" stroke="#4a5568" marker-end="url(#arrow)"/>
+  <line x1="824" y1="142" x2="824" y2="180" stroke="#4a5568" marker-end="url(#arrow)"/>
 
-  <rect x="110" y="180" width="380" height="56" rx="6" fill="#fefcbf" stroke="#b7791f"/>
-  <text x="300" y="203" font-size="13" text-anchor="middle" fill="#1a202c">GET /api/document/scene/manifest</text>
-  <text x="300" y="222" font-size="11" text-anchor="middle" fill="#744210">uid, name, geometry hash, position, rotation</text>
+  <rect x="24" y="180" width="220" height="56" rx="6" fill="#fefcbf" stroke="#b7791f"/>
+  <text x="134" y="203" font-size="13" text-anchor="middle" fill="#1a202c">GET &#8230;/scene/manifest</text>
+  <text x="134" y="222" font-size="11" text-anchor="middle" fill="#744210">uid, geometry hash, placement</text>
 
-  <rect x="500" y="180" width="380" height="56" rx="6" fill="#fefcbf" stroke="#b7791f"/>
-  <text x="690" y="203" font-size="13" text-anchor="middle" fill="#1a202c">GET /api/document/scene/node/{uid}.glb</text>
-  <text x="690" y="222" font-size="11" text-anchor="middle" fill="#744210">one component, in its own frame</text>
+  <rect x="254" y="180" width="220" height="56" rx="6" fill="#fefcbf" stroke="#b7791f"/>
+  <text x="364" y="203" font-size="13" text-anchor="middle" fill="#1a202c">GET &#8230;/scene/node/{uid}.glb</text>
+  <text x="364" y="222" font-size="11" text-anchor="middle" fill="#744210">one component, in its own frame</text>
+
+  <rect x="484" y="180" width="220" height="56" rx="6" fill="#fefcbf" stroke="#b7791f"/>
+  <text x="594" y="203" font-size="13" text-anchor="middle" fill="#1a202c">GET &#8230;/scene/axis.glb</text>
+  <text x="594" y="222" font-size="11" text-anchor="middle" fill="#744210">optical axis, as lines</text>
+
+  <rect x="714" y="180" width="220" height="56" rx="6" fill="#fefcbf" stroke="#b7791f"/>
+  <text x="824" y="203" font-size="13" text-anchor="middle" fill="#1a202c">GET &#8230;/scene/rays.glb</text>
+  <text x="824" y="222" font-size="11" text-anchor="middle" fill="#744210">traced source rays, as lines</text>
 
   <!-- ── the HTTP boundary ────────────────────────────────────────────────── -->
-  <line x1="24" y1="262" x2="930" y2="262" stroke="#a0aec0" stroke-dasharray="4 4"/>
-  <text x="930" y="257" font-size="11" text-anchor="end" fill="#718096">HTTP</text>
+  <line x1="24" y1="262" x2="934" y2="262" stroke="#a0aec0" stroke-dasharray="4 4"/>
+  <text x="934" y="257" font-size="11" text-anchor="end" fill="#718096">HTTP, under /api/document</text>
 
   <!-- ── the GUI and the viewer ───────────────────────────────────────────── -->
   <rect x="24" y="288" width="472" height="118" rx="8"
         fill="none" stroke="#a0aec0" stroke-dasharray="6 4"/>
   <text x="38" y="308" font-size="12" fill="#718096">opossum_gui</text>
 
-  <rect x="80" y="322" width="360" height="62" rx="6" fill="#c6f6d5" stroke="#276749"/>
-  <text x="260" y="346" font-size="14" text-anchor="middle" fill="#1a202c">objects_of()</text>
+  <rect x="60" y="322" width="400" height="62" rx="6" fill="#c6f6d5" stroke="#276749"/>
+  <text x="260" y="346" font-size="14" text-anchor="middle" fill="#1a202c">objects_of(), ray_object()</text>
   <text x="260" y="366" font-size="12" text-anchor="middle" fill="#276749">the only seam between the two crates</text>
 
   <rect x="620" y="322" width="260" height="62" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
   <text x="750" y="346" font-size="14" text-anchor="middle" fill="#1a202c">dioxus_glb_viewer</text>
   <text x="750" y="366" font-size="12" text-anchor="middle" fill="#4a5568">GlbViewer, three.js</text>
 
-  <line x1="300" y1="236" x2="300" y2="316" stroke="#4a5568" marker-end="url(#arrow)"/>
-  <line x1="440" y1="353" x2="614" y2="353" stroke="#4a5568" marker-end="url(#arrow)"/>
-  <text x="527" y="345" font-size="11" text-anchor="middle" fill="#4a5568">Vec&lt;GlbObject&gt;</text>
+  <line x1="134" y1="236" x2="134" y2="316" stroke="#4a5568" marker-end="url(#arrow)"/>
+  <line x1="460" y1="353" x2="614" y2="353" stroke="#4a5568" marker-end="url(#arrow)"/>
+  <text x="537" y="345" font-size="11" text-anchor="middle" fill="#4a5568">Vec&lt;GlbObject&gt;</text>
 
-  <path d="M 700 236 L 700 282 L 750 282 L 750 316"
-        fill="none" stroke="#4a5568" marker-end="url(#arrow)"/>
-  <text x="762" y="286" font-size="11" fill="#4a5568">fetched by the webview itself</text>
+  <!-- The three files are fetched by the webview directly, never through the GUI. -->
+  <line x1="364" y1="236" x2="364" y2="282" stroke="#4a5568"/>
+  <line x1="594" y1="236" x2="594" y2="282" stroke="#4a5568"/>
+  <line x1="824" y1="236" x2="824" y2="282" stroke="#4a5568"/>
+  <line x1="364" y1="282" x2="824" y2="282" stroke="#4a5568"/>
+  <line x1="750" y1="282" x2="750" y2="316" stroke="#4a5568" marker-end="url(#arrow)"/>
+  <text x="762" y="302" font-size="11" fill="#4a5568">fetched by the webview itself</text>
 
   <!-- ── what is deliberately absent: the link that is not there ──────────── -->
   <path d="M 822 89 L 980 89 L 980 353 L 886 353"
