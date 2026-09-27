@@ -10,8 +10,8 @@ use crate::{
     api::eval_action_run,
     components::{
         scene_view::{
-            AXIS_OBJECT_ID, RAYS_OBJECT_ID, is_ray_object, objects_of, ray_object,
-            reveal_action_for_pick, table_ground,
+            AXIS_OBJECT_ID, RAYS_OBJECT_ID, action_for_pick, is_ray_object, objects_of, ray_object,
+            table_ground,
         },
         scenery_editor::GraphsWorkspaceAction,
     },
@@ -297,11 +297,13 @@ pub fn SceneView() -> Element {
                         object.selected =
                             !is_ray_object(&object.id) && Some(&object.id) == picked.id.as_ref();
                     }
-                    // A hit also opens the component's properties, without leaving the 3D view -
-                    // see `reveal_action_for_pick`. Looked up in the manifest last fetched rather
-                    // than awaiting a fresh one, so the click responds immediately.
+                    // Mirror the 2D canvas: a hit opens the component's properties without leaving
+                    // the 3D view, and a click on empty space clears the selection so the
+                    // properties sidebar deselects too - not just the 3D box. See `action_for_pick`.
+                    // Looked up in the manifest last fetched rather than awaiting a fresh one, so
+                    // the click responds immediately.
                     if let Some(Ok(fetched)) = &*manifest.read()
-                        && let Some(action) = reveal_action_for_pick(&picked, fetched)
+                        && let Some(action) = action_for_pick(&picked, fetched)
                     {
                         workspace_processor.send(action);
                     }

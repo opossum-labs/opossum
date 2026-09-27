@@ -17,6 +17,9 @@ pub enum GraphsWorkspaceAction {
         /// The ID of the graph.
         graph_id: Uuid,
     },
+    /// Clears the selection in whichever tab is currently active. Used by the 3D view, which -
+    /// unlike the graph canvas - does not know which tab that is; the processor resolves it.
+    ClearSelectedNodesInActiveTab,
     /// Atomically resets backend leftovers and initializes the new root scenery tab.
     /// This prevents intermediate store clears and reduces startup re-renders.
     ResetAndInitializeRootScenery {

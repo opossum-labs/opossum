@@ -391,6 +391,10 @@ pub fn use_workspace_processor(
                     GraphsWorkspaceAction::ClearSelectedNodes { graph_id } => {
                         workspace_handlers.workspace.clear_selected_nodes(graph_id);
                     }
+                    GraphsWorkspaceAction::ClearSelectedNodesInActiveTab => {
+                        let graph_id = *workspace.active_tab().read();
+                        workspace_handlers.workspace.clear_selected_nodes(graph_id);
+                    }
                     GraphsWorkspaceAction::SetEdgeInCreation {
                         graph_id,
                         edge_in_creation,

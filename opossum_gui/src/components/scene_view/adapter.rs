@@ -170,6 +170,34 @@ pub fn reveal_action_for_pick(
     })
 }
 
+/// Turn a click in the 3D view into the action it should trigger.
+///
+/// This mirrors the 2D graph canvas: a hit reveals the node it landed on (as
+/// `reveal_action_for_pick` does), and a click on empty space clears the selection so the
+/// properties sidebar deselects too, not just the 3D selection box.
+///
+/// # Arguments
+///
+/// - `picked`: what the viewer reported for the click
+/// - `manifest`: the components of the model, as the backend listed them
+///
+/// # Returns
+///
+/// [`GraphsWorkspaceAction::RevealNode`] for a hit, [`GraphsWorkspaceAction::ClearSelectedNodesInActiveTab`]
+/// for a click on empty space, or `None` for a pick whose id the manifest no longer lists (a stale
+/// click racing a refresh), which must leave the selection untouched.
+pub fn action_for_pick(
+    picked: &PickEvent,
+    manifest: &SceneManifest,
+) -> Option<GraphsWorkspaceAction> {
+    match picked.id {
+        // A click on empty space: clear the selection, mirroring the 2D canvas.
+        None => Some(GraphsWorkspaceAction::ClearSelectedNodesInActiveTab),
+        // A hit reveals the node; a stale id (no longer in the manifest) triggers nothing.
+        Some(_) => reveal_action_for_pick(picked, manifest),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -344,6 +372,56 @@ mod tests {
         };
 
         assert!(reveal_action_for_pick(&pick(Some(Uuid::new_v4())), &manifest).is_none());
+    }
+
+    /// A click on empty space clears the selection, so the properties sidebar deselects too and not
+    /// just the 3D box. This is the bug the wrapper fixes: a miss used to trigger no action at all.
+    #[test]
+    fn a_miss_clears_the_selection_in_the_active_tab() {
+        let manifest = SceneManifest {
+            nodes: vec![entry(Uuid::new_v4())],
+            skipped: vec![],
+        };
+
+        assert!(
+            matches!(
+                action_for_pick(&pick(None), &manifest),
+                Some(GraphsWorkspaceAction::ClearSelectedNodesInActiveTab)
+            ),
+            "an empty-space click must clear the selection"
+        );
+    }
+
+    /// A hit reveals the node it landed on, exactly as [`reveal_action_for_pick`] does.
+    #[test]
+    fn a_hit_reveals_the_node_through_action_for_pick() {
+        let uid = Uuid::new_v4();
+        let manifest = SceneManifest {
+            nodes: vec![entry(uid)],
+            skipped: vec![],
+        };
+
+        let Some(GraphsWorkspaceAction::RevealNode { node_id, .. }) =
+            action_for_pick(&pick(Some(uid)), &manifest)
+        else {
+            panic!("a hit must reveal the node it landed on");
+        };
+        assert_eq!(node_id, uid);
+    }
+
+    /// A stale hit (an id the manifest no longer lists) must leave the selection untouched, not
+    /// clear it: it was an attempt to hit a component, not a click on empty space.
+    #[test]
+    fn a_stale_hit_does_not_clear_the_selection() {
+        let manifest = SceneManifest {
+            nodes: vec![entry(Uuid::new_v4())],
+            skipped: vec![],
+        };
+
+        assert!(
+            action_for_pick(&pick(Some(Uuid::new_v4())), &manifest).is_none(),
+            "a stale hit must not be turned into a clear-selection action"
+        );
     }
 
     /// The axis arrives in world coordinates, so it is not moved, and it is told apart from the
