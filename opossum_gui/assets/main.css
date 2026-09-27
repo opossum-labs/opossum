@@ -302,6 +302,44 @@ body {
     pointer-events: none;
 }
 
+/* While a tab is dragged to another pane: the grabbing hand everywhere, and the panels out of the way
+   as during a resize - the drop zones above them take the pointer instead. */
+.tab-dragging,
+.tab-dragging * {
+    cursor: grabbing !important;
+    user-select: none;
+}
+
+.tab-dragging .editor-split > [role="tabpanel"] {
+    pointer-events: none;
+}
+
+/* Where a dragged tab can be dropped: invisible until the pointer is over it, then tinted with the
+   same blue that marks the focused pane. */
+.tab-drop-zone {
+    z-index: 3;
+}
+
+.tab-drop-zone.hovered {
+    background-color: rgba(55, 148, 255, 0.18);
+    box-shadow: inset 0 0 0 1px rgba(55, 148, 255, 0.6);
+}
+
+/* The label following a dragged tab. */
+.tab-drag-ghost {
+    position: fixed;
+    z-index: 1000;
+    pointer-events: none;
+    padding: 4px 10px;
+    font-size: 13px;
+    color: #cccccc;
+    background-color: #363636;
+    border: 1px solid rgb(71, 71, 71);
+    border-radius: 3px;
+    box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.3);
+    white-space: nowrap;
+}
+
 /* The 3D view fills its tab: a toolbar of its own height, and the canvas taking everything left.
    The canvas measures itself against this container, so the container needs a definite height -
    an automatic one collapses it to zero and shows a blank area with no error anywhere. */

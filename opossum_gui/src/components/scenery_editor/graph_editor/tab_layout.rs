@@ -2,6 +2,7 @@
 //!
 //! Plain data with no signals in it, so the rules below can be tested without a running app.
 //! `GraphEditor` holds one [`TabLayout`] in a signal and renders from it.
+use dioxus::html::geometry::euclid::default::Point2D;
 use uuid::Uuid;
 
 /// The value the tab bar identifies the 3D view by.
@@ -12,6 +13,9 @@ const SCENE_TAB_VALUE: &str = "scene-3d";
 
 /// The narrowest either pane may be dragged, in pixels - enough for a tab and the pane's button.
 const MIN_PANE_WIDTH: f64 = 200.0;
+
+/// How far, in pixels, a pressed tab has to travel before it counts as dragged rather than clicked.
+const TAB_DRAG_THRESHOLD: f64 = 4.0;
 
 /// One entry of the editor's tab bar.
 ///
@@ -92,6 +96,70 @@ impl Side {
             (true, Self::Left) => "Move to right pane",
             (true, Self::Right) => "Move to left pane",
         }
+    }
+}
+
+/// Where a tab can be dropped.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum DropTarget {
+    /// Into the pane on this side of a split editor.
+    Pane(Side),
+    /// Into a new pane on this side, splitting an editor that is not split yet.
+    Split(Side),
+}
+
+impl DropTarget {
+    /// Where the drop zone for this target sits in the editor's grid, as an inline style: the whole
+    /// column of a pane, tab bar included, or one half of the unsplit editor's content.
+    pub fn zone_style(self) -> String {
+        match self {
+            Self::Pane(side) => {
+                format!("grid-column: {}; grid-row: 1 / span 2;", side.grid_column())
+            }
+            Self::Split(Side::Left) => {
+                "grid-column: 1; grid-row: 2; justify-self: start; width: 50%;".to_owned()
+            }
+            Self::Split(Side::Right) => {
+                "grid-column: 1; grid-row: 2; justify-self: end; width: 50%;".to_owned()
+            }
+        }
+    }
+}
+
+/// A tab held down with the mouse, which becomes a drag once it has travelled far enough.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct TabDrag {
+    /// The tab held.
+    pub tab: TabKey,
+    /// Where it was pressed, in client coordinates.
+    start: Point2D<f64>,
+    /// Where the pointer is now, in client coordinates.
+    pub pointer: Point2D<f64>,
+    /// Whether it has travelled far enough to be a drag, rather than the start of a click.
+    started: bool,
+}
+
+impl TabDrag {
+    /// A tab just pressed at `at`, not yet dragged.
+    pub const fn new(tab: TabKey, at: Point2D<f64>) -> Self {
+        Self {
+            tab,
+            start: at,
+            pointer: at,
+            started: false,
+        }
+    }
+
+    /// Follow the pointer to `at`. Once the tab has travelled past a few pixels it is being dragged,
+    /// and it stays dragged even if the pointer returns to where it started.
+    pub fn move_to(&mut self, at: Point2D<f64>) {
+        self.pointer = at;
+        self.started = self.started || (at - self.start).length() > TAB_DRAG_THRESHOLD;
+    }
+
+    /// Whether the tab is being dragged, rather than only pressed.
+    pub const fn is_started(&self) -> bool {
+        self.started
     }
 }
 
@@ -221,6 +289,62 @@ impl TabLayout {
         *self.front_mut(self.side_of(tab)) = Some(tab);
     }
 
+    /// Where `tab` can be dropped, given how the editor is laid out now.
+    ///
+    /// # Arguments
+    ///
+    /// * `tab` - the tab being dragged.
+    /// * `open` - every open tab.
+    ///
+    /// # Returns
+    ///
+    /// For a split editor, the pane `tab` is not in. For an editor that is not split, a new pane
+    /// on either side - unless `tab` is the only tab, which would leave nothing behind to split from.
+    pub fn drop_targets(&self, tab: TabKey, open: &[TabKey]) -> Vec<DropTarget> {
+        if self.is_split(open) {
+            vec![DropTarget::Pane(self.side_of(tab).other())]
+        } else if open.len() > 1 {
+            vec![
+                DropTarget::Split(Side::Left),
+                DropTarget::Split(Side::Right),
+            ]
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Put `tab` where it was dropped, and show it there.
+    ///
+    /// # Arguments
+    ///
+    /// * `tab` - the tab dropped.
+    /// * `target` - where it was dropped.
+    /// * `open` - every open tab.
+    ///
+    /// Dropping a tab into the pane it already sits in changes nothing. Splitting to the left keeps
+    /// `tab` where it is and moves every other tab into the new right pane, so that `tab` ends up
+    /// alone on the left, as asked.
+    pub fn drop(&mut self, tab: TabKey, target: DropTarget, open: &[TabKey]) {
+        match target {
+            DropTarget::Pane(side) if side == self.side_of(tab) => {}
+            DropTarget::Pane(side) | DropTarget::Split(side @ Side::Right) => {
+                self.move_tab(tab, side, open);
+            }
+            DropTarget::Split(Side::Left) => {
+                for entry in &mut self.sides {
+                    entry.1 = if entry.0 == tab {
+                        Side::Left
+                    } else {
+                        Side::Right
+                    };
+                }
+                self.front_right = self.front_left.filter(|front| *front != tab);
+                self.unsplit_if_one_sided(open);
+                self.bring_to_front(tab);
+            }
+        }
+    }
+
     /// Move `tab` to the pane `side` and show it there.
     ///
     /// # Arguments
@@ -231,7 +355,7 @@ impl TabLayout {
     ///
     /// Moving the last tab out of a pane closes that pane; the tab then ends up in front of the one
     /// remaining pane.
-    pub fn move_tab(&mut self, tab: TabKey, side: Side, open: &[TabKey]) {
+    fn move_tab(&mut self, tab: TabKey, side: Side, open: &[TabKey]) {
         match self.sides.iter_mut().find(|(t, _)| *t == tab) {
             Some(entry) => entry.1 = side,
             None => self.sides.push((tab, side)),
@@ -386,12 +510,18 @@ mod tests {
 
         layout.move_tab(TabKey::Scene, Side::Right, &open);
         assert!(layout.is_split(&open));
-        assert_eq!(layout.shown(Side::Right, &open, graph_id(1)), Some(TabKey::Scene));
+        assert_eq!(
+            layout.shown(Side::Right, &open, graph_id(1)),
+            Some(TabKey::Scene)
+        );
         assert_eq!(layout.shown(Side::Left, &open, graph_id(1)), Some(graph(1)));
 
         layout.move_tab(TabKey::Scene, Side::Left, &open);
         assert!(!layout.is_split(&open));
-        assert_eq!(layout.shown(Side::Left, &open, graph_id(1)), Some(TabKey::Scene));
+        assert_eq!(
+            layout.shown(Side::Left, &open, graph_id(1)),
+            Some(TabKey::Scene)
+        );
     }
 
     #[test]
@@ -425,7 +555,10 @@ mod tests {
         // A front tab that was closed is skipped.
         let without_3: Vec<TabKey> = open.iter().copied().filter(|t| *t != graph(3)).collect();
         layout.sync(&without_3, Side::Left);
-        assert_eq!(layout.shown(Side::Left, &without_3, graph_id(2)), Some(graph(2)));
+        assert_eq!(
+            layout.shown(Side::Left, &without_3, graph_id(2)),
+            Some(graph(2))
+        );
     }
 
     #[test]
@@ -434,7 +567,10 @@ mod tests {
         layout.bring_to_front(graph(2));
         layout.bring_to_front(TabKey::Scene);
         assert_eq!(layout.shown(Side::Left, &open, graph_id(3)), Some(graph(2)));
-        assert_eq!(layout.shown(Side::Right, &open, graph_id(3)), Some(TabKey::Scene));
+        assert_eq!(
+            layout.shown(Side::Right, &open, graph_id(3)),
+            Some(TabKey::Scene)
+        );
     }
 
     #[test]
@@ -468,7 +604,7 @@ mod tests {
     fn too_narrow_for_both_minimums_splits_evenly() {
         let mut layout = TabLayout::default();
         layout.set_left_width(300.0, 1000.0);
-        layout.set_left_width(100.0, 2.0 * MIN_PANE_WIDTH - 1.0);
+        layout.set_left_width(100.0, MIN_PANE_WIDTH + MIN_PANE_WIDTH - 1.0);
         assert!((layout.ratio() - 0.5).abs() < f64::EPSILON);
         layout.set_left_width(f64::NAN, 1000.0);
         assert!((layout.ratio() - 0.5).abs() < f64::EPSILON);
@@ -483,6 +619,113 @@ mod tests {
             "minmax(0, 0.25fr) auto minmax(0, 0.75fr)"
         );
         assert_eq!(layout.grid_columns(&[graph(1)]), "minmax(0, 1fr)");
+    }
+
+    #[test]
+    fn a_split_editor_offers_the_other_pane_as_drop_target() {
+        let (layout, open) = split(&[graph(1)], &[graph(2), TabKey::Scene]);
+        assert_eq!(
+            layout.drop_targets(graph(1), &open),
+            vec![DropTarget::Pane(Side::Right)]
+        );
+        assert_eq!(
+            layout.drop_targets(TabKey::Scene, &open),
+            vec![DropTarget::Pane(Side::Left)]
+        );
+    }
+
+    #[test]
+    fn an_unsplit_editor_offers_a_new_pane_on_either_side_unless_the_tab_is_alone() {
+        let mut layout = TabLayout::default();
+        let open = vec![graph(1), TabKey::Scene];
+        layout.sync(&open, Side::Left);
+        assert_eq!(
+            layout.drop_targets(TabKey::Scene, &open),
+            vec![
+                DropTarget::Split(Side::Left),
+                DropTarget::Split(Side::Right)
+            ]
+        );
+        assert!(layout.drop_targets(graph(1), &[graph(1)]).is_empty());
+    }
+
+    #[test]
+    fn splitting_right_moves_the_tab_into_a_new_right_pane() {
+        let mut layout = TabLayout::default();
+        let open = vec![graph(1), graph(2), TabKey::Scene];
+        layout.sync(&open, Side::Left);
+        layout.drop(TabKey::Scene, DropTarget::Split(Side::Right), &open);
+        assert_eq!(layout.tabs_on(Side::Left, &open), vec![graph(1), graph(2)]);
+        assert_eq!(layout.tabs_on(Side::Right, &open), vec![TabKey::Scene]);
+        assert_eq!(
+            layout.shown(Side::Right, &open, graph_id(1)),
+            Some(TabKey::Scene)
+        );
+    }
+
+    #[test]
+    fn splitting_left_leaves_the_tab_alone_on_the_left() {
+        let mut layout = TabLayout::default();
+        let open = vec![graph(1), graph(2), TabKey::Scene];
+        layout.sync(&open, Side::Left);
+        layout.bring_to_front(graph(2));
+        layout.drop(TabKey::Scene, DropTarget::Split(Side::Left), &open);
+        assert_eq!(layout.tabs_on(Side::Left, &open), vec![TabKey::Scene]);
+        assert_eq!(layout.tabs_on(Side::Right, &open), vec![graph(1), graph(2)]);
+        assert_eq!(
+            layout.shown(Side::Left, &open, graph_id(1)),
+            Some(TabKey::Scene)
+        );
+        // The other tabs carry on showing what the pane showed before.
+        assert_eq!(
+            layout.shown(Side::Right, &open, graph_id(1)),
+            Some(graph(2))
+        );
+    }
+
+    #[test]
+    fn dropping_into_the_other_pane_moves_the_tab_there() {
+        let (mut layout, open) = split(&[graph(1), graph(2)], &[TabKey::Scene]);
+        layout.drop(graph(2), DropTarget::Pane(Side::Right), &open);
+        assert_eq!(
+            layout.tabs_on(Side::Right, &open),
+            vec![graph(2), TabKey::Scene]
+        );
+        assert_eq!(
+            layout.shown(Side::Right, &open, graph_id(1)),
+            Some(graph(2))
+        );
+    }
+
+    #[test]
+    fn dropping_into_its_own_pane_changes_nothing() {
+        let (mut layout, open) = split(&[graph(1), graph(2)], &[TabKey::Scene]);
+        let before = layout.clone();
+        layout.drop(graph(2), DropTarget::Pane(Side::Left), &open);
+        assert_eq!(layout, before);
+    }
+
+    #[test]
+    fn dragging_the_last_tab_out_of_a_pane_unsplits() {
+        let (mut layout, open) = split(&[graph(1)], &[TabKey::Scene]);
+        layout.drop(TabKey::Scene, DropTarget::Pane(Side::Left), &open);
+        assert!(!layout.is_split(&open));
+        assert_eq!(
+            layout.shown(Side::Left, &open, graph_id(1)),
+            Some(TabKey::Scene)
+        );
+    }
+
+    #[test]
+    fn a_pressed_tab_becomes_a_drag_only_past_the_threshold_and_stays_one() {
+        let mut drag = TabDrag::new(TabKey::Scene, Point2D::new(100.0, 10.0));
+        drag.move_to(Point2D::new(102.0, 12.0));
+        assert!(!drag.is_started());
+        drag.move_to(Point2D::new(110.0, 10.0));
+        assert!(drag.is_started());
+        drag.move_to(Point2D::new(100.0, 10.0));
+        assert!(drag.is_started());
+        assert_eq!(drag.pointer, Point2D::new(100.0, 10.0));
     }
 
     fn graph_id(n: u128) -> Uuid {

@@ -8,7 +8,7 @@ use crate::components::{
         graph_editor::{
             GraphViewEditor,
             hooks::{use_drag_end, use_on_key_down, use_on_key_up},
-            tab_layout::{Side, TabKey, TabLayout},
+            tab_layout::{DropTarget, Side, TabDrag, TabKey, TabLayout},
         },
         graph_workspace::{
             GraphStateStoreExt, GraphsWorkspaceAction, GraphsWorkspaceState,
@@ -21,7 +21,10 @@ use crate::{
     CONTEXT_MENU, KEEP_SCENE_IN_FRONT, SCENE_VIEW_OPEN, SIDEBAR_COLLAPSED, SIDEBAR_VIEW,
     SIDEBAR_WIDTH,
 };
-use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
+use dioxus::{
+    html::{geometry::euclid::default::Point2D, input_data::MouseButton},
+    prelude::*,
+};
 use dioxus_free_icons::{Icon, icons::fa_solid_icons::FaArrowRightArrowLeft};
 use dioxus_primitives::tabs::{TabList, TabTrigger, Tabs};
 use std::path::PathBuf;
@@ -122,8 +125,8 @@ pub fn GraphEditor(
                 *KEEP_SCENE_IN_FRONT.write() = false;
             }
             let graph = TabKey::Graph(active);
-            let covers_scene = open.contains(&TabKey::Scene)
-                && next.side_of(graph) == next.side_of(TabKey::Scene);
+            let covers_scene =
+                open.contains(&TabKey::Scene) && next.side_of(graph) == next.side_of(TabKey::Scene);
             if !(keep_scene && covers_scene) {
                 next.bring_to_front(graph);
             }
@@ -134,11 +137,12 @@ pub fn GraphEditor(
         }
     });
 
-    // Move a tab to the other pane, from the button at the end of each tab bar. A moved graph also
-    // becomes the one being edited: it is now in front, and a graph in front of the pane that holds
-    // the active graph would otherwise hide the very graph the sidebar is showing.
-    let mut move_tab = move |tab: TabKey, side: Side| {
-        layout.write().move_tab(tab, side, &tabs.peek());
+    // Put a tab into another pane - from the button at the end of each tab bar, a tab's context
+    // menu, or dropping a dragged tab. A moved graph also becomes the one being edited: it is now in
+    // front, and a graph in front of the pane that holds the active graph would otherwise hide the
+    // very graph the sidebar is showing.
+    let mut place_tab = move |tab: TabKey, target: DropTarget| {
+        layout.write().drop(tab, target, &tabs.peek());
         if let TabKey::Graph(id) = tab {
             workspace_processor.send(GraphsWorkspaceAction::SetActiveTab(id));
         }
@@ -150,9 +154,34 @@ pub fn GraphEditor(
     let mut tab_menu_target = use_signal(|| None::<(TabKey, Side)>);
     let move_from_tab_menu = use_callback(move |()| {
         if let Some((tab, side)) = *tab_menu_target.peek() {
-            move_tab(tab, side);
+            place_tab(tab, DropTarget::Pane(side));
         }
     });
+
+    // A tab held down with the mouse on its way to another pane, and the drop zone it is over. The
+    // markup only reads `dragged_tab`, which changes when a drag starts and ends - not on every move
+    // of the pointer, which only the ghost label following it has to know about.
+    let mut tab_drag = use_signal(|| None::<TabDrag>);
+    let mut drop_target = use_signal(|| None::<DropTarget>);
+    let dragged_tab = use_memo(move || tab_drag().filter(TabDrag::is_started).map(|drag| drag.tab));
+    // Ends a tab drag, dropping the tab if `drop` is set and it is over a drop zone. Written only
+    // while one is running, like the pane handle's drag.
+    let mut end_tab_drag = move |drop: bool| {
+        let Some(drag) = *tab_drag.peek() else {
+            return;
+        };
+        let target = *drop_target.peek();
+        tab_drag.set(None);
+        if target.is_some() {
+            drop_target.set(None);
+        }
+        if drop
+            && drag.is_started()
+            && let Some(target) = target
+        {
+            place_tab(drag.tab, target);
+        }
+    };
 
     use_effect(move || {
         node_editor_command(
@@ -265,6 +294,22 @@ pub fn GraphEditor(
     // there is nothing to tell apart.
     let focused_pane = split.then(|| current.side_of(TabKey::Graph(active)));
     let grid_columns = current.grid_columns(&open);
+    let row_class = if split_drag().is_some() {
+        "row main-content-row resizing"
+    } else if dragged_tab().is_some() {
+        "row main-content-row tab-dragging"
+    } else {
+        "row main-content-row"
+    };
+    // The text a tab carries, in its tab bar and on the label following it while it is dragged.
+    let tab_label = move |tab: TabKey| match tab {
+        TabKey::Graph(id) => workspace
+            .tabs()
+            .get(id)
+            .map(|graph| graph.graph_info().read().name.clone())
+            .unwrap_or_default(),
+        TabKey::Scene => "3D View".to_owned(),
+    };
 
     // Ends a drag of the handle between the panes. Written only while one is running, so the
     // countless mouse-ups and leaves of normal work do not re-render the editor.
@@ -276,11 +321,16 @@ pub fn GraphEditor(
 
     rsx! {
         div {
-            class: if split_drag().is_some() { "row main-content-row resizing" } else { "row main-content-row" },
-            // The move and release listeners of the pane handle sit out here, like the sidebar's,
-            // so the drag survives the pointer leaving the narrow handle - over either pane, or the
-            // sidebar. Leaving this row altogether ends it.
+            class: row_class,
+            // The move and release listeners of both drags - the pane handle's and a tab's - sit
+            // out here, like the sidebar's, so a drag survives the pointer leaving the element it
+            // started on: the narrow handle, or the tab. Leaving this row altogether ends it.
             onmousemove: move |e: MouseEvent| {
+                let held = *tab_drag.peek();
+                if let Some(mut drag) = held {
+                    drag.move_to(Point2D::new(e.client_coordinates().x, e.client_coordinates().y));
+                    tab_drag.set(Some(drag));
+                }
                 if let Some((start_x, start_width)) = *split_drag.peek() {
                     let mut next = layout.peek().clone();
                     next.set_left_width(
@@ -294,8 +344,14 @@ pub fn GraphEditor(
                     }
                 }
             },
-            onmouseup: move |_| end_split_drag(),
-            onmouseleave: move |_| end_split_drag(),
+            onmouseup: move |_| {
+                end_split_drag();
+                end_tab_drag(true);
+            },
+            onmouseleave: move |_| {
+                end_split_drag();
+                end_tab_drag(false);
+            },
             // Any press in the sidebar or the editor closes an open context menu - a tab's, say,
             // when another tab is clicked next. The graph's own presses stop here before
             // reaching this, and close it themselves.
@@ -418,6 +474,18 @@ pub fn GraphEditor(
                                                 },
                                                 div {
                                                     class: "tab-inner",
+                                                    // Pressing a tab may be the start of dragging it to
+                                                    // another pane; it only becomes one once the pointer
+                                                    // has travelled a few pixels, so a click stays a click.
+                                                    onmousedown: move |e: MouseEvent| {
+                                                        if e.trigger_button() == Some(MouseButton::Primary) {
+                                                            let at = Point2D::new(
+                                                                e.client_coordinates().x,
+                                                                e.client_coordinates().y,
+                                                            );
+                                                            tab_drag.set(Some(TabDrag::new(key, at)));
+                                                        }
+                                                    },
                                                     oncontextmenu: move |e: MouseEvent| {
                                                         e.prevent_default();
                                                         if !can_move {
@@ -434,9 +502,7 @@ pub fn GraphEditor(
                                                     },
                                                     match key {
                                                         TabKey::Graph(id) => rsx! {
-                                                            span {
-                                                                {workspace.tabs().get(id).map(|graph| graph.graph_info().read().name.clone()).unwrap_or_default()}
-                                                            }
+                                                            span { {tab_label(key)} }
                                                             if id != root_graph_id() {
                                                                 button {
                                                                     class: "tab-close",
@@ -448,7 +514,7 @@ pub fn GraphEditor(
                                                             }
                                                         },
                                                         TabKey::Scene => rsx! {
-                                                            span { "3D View" }
+                                                            span { {tab_label(key)} }
                                                             button {
                                                                 class: "tab-close",
                                                                 onclick: move |e: MouseEvent| {
@@ -469,7 +535,7 @@ pub fn GraphEditor(
                                             disabled: !can_move || front.is_none(),
                                             onclick: move |_| {
                                                 if let Some(tab) = front {
-                                                    move_tab(tab, side.other());
+                                                    place_tab(tab, DropTarget::Pane(side.other()));
                                                 }
                                             },
                                             Icon {
@@ -546,8 +612,55 @@ pub fn GraphEditor(
                             SceneView {}
                         }
                     }
+                    // Where a dragged tab can go, over the panels so neither a graph nor the 3D view
+                    // takes the pointer for its own. Their enter and leave stop here: Dioxus desktop
+                    // bubbles those too, and a zone's leave reaching this row's `onmouseleave` would
+                    // end the drag the moment the pointer left a zone.
+                    if let Some(dragged) = dragged_tab() {
+                        for target in current.drop_targets(dragged, &open) {
+                            div {
+                                key: "{target:?}",
+                                class: if drop_target() == Some(target) { "tab-drop-zone hovered" } else { "tab-drop-zone" },
+                                style: target.zone_style(),
+                                onmouseenter: move |e: MouseEvent| {
+                                    e.stop_propagation();
+                                    drop_target.set(Some(target));
+                                },
+                                onmouseleave: move |e: MouseEvent| {
+                                    e.stop_propagation();
+                                    if *drop_target.peek() == Some(target) {
+                                        drop_target.set(None);
+                                    }
+                                },
+                            }
+                        }
+                    }
+                }
+                // In here rather than directly in the row: Bootstrap's `.row > *` gives every child
+                // of a row the row's full width, which would stretch the label across the window.
+                TabDragGhost {
+                    drag: tab_drag,
+                    label: dragged_tab().map(tab_label).unwrap_or_default(),
                 }
             }
+        }
+    }
+}
+
+/// The label of a tab being dragged, following the pointer.
+///
+/// A component of its own so that only it re-renders on every move of the pointer, not the whole
+/// editor.
+#[component]
+fn TabDragGhost(drag: ReadSignal<Option<TabDrag>>, label: String) -> Element {
+    let Some(drag) = drag().filter(TabDrag::is_started) else {
+        return rsx! {};
+    };
+    rsx! {
+        div {
+            class: "tab-drag-ghost",
+            style: "left: {drag.pointer.x + 14.0}px; top: {drag.pointer.y + 10.0}px;",
+            "{label}"
         }
     }
 }
