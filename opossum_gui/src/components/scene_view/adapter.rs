@@ -71,6 +71,8 @@ pub fn objects_of(manifest: &SceneManifest, base_url: &str) -> Vec<GlbObject> {
 
 /// The object id of the optical axis in the 3D view.
 pub const AXIS_OBJECT_ID: &str = "rays:axis";
+/// The object id of the light of the model's sources in the 3D view.
+pub const RAYS_OBJECT_ID: &str = "rays:trace";
 
 /// Whether an object of the 3D view is drawn light rather than a component of the model.
 ///
@@ -98,18 +100,19 @@ pub fn is_ray_object(id: &str) -> bool {
 /// - `id`: the object's id, starting with `rays:` (see [`is_ray_object`])
 /// - `url`: where the webview fetches the rays from
 /// - `visible`: whether the rays are shown
+/// - `opacity`: how opaque the rays are drawn, `0.0` to `1.0`
 ///
 /// # Returns
 ///
 /// The object, unselected.
-pub fn ray_object(id: &str, url: String, visible: bool) -> GlbObject {
+pub fn ray_object(id: &str, url: String, visible: bool, opacity: f32) -> GlbObject {
     GlbObject {
         id: id.to_owned(),
         source: GlbSource::Url(url),
         transform: Transform::default(),
         visible,
         selected: false,
-        opacity: 1.0,
+        opacity,
     }
 }
 
@@ -339,11 +342,14 @@ mod tests {
             AXIS_OBJECT_ID,
             "http://localhost/axis.glb".to_owned(),
             false,
+            0.25,
         );
 
         assert!(is_ray_object(&axis.id));
+        assert!(is_ray_object(RAYS_OBJECT_ID));
         assert_eq!(axis.transform, Transform::default());
         assert!(!axis.visible && !axis.selected);
+        assert_eq!(axis.opacity.to_bits(), 0.25_f32.to_bits());
         assert!(
             !is_ray_object(&Uuid::new_v4().to_string()),
             "a component is no ray object"
@@ -360,5 +366,19 @@ mod tests {
             crate::api::scene_axis_url(base, 2)
         );
         assert!(crate::api::scene_axis_url(base, 1).starts_with(base));
+    }
+
+    /// A new number of rays has to be a new URL, or the viewer would keep showing the old rays.
+    #[test]
+    fn a_new_ray_count_gives_the_rays_a_new_url() {
+        let base = "http://localhost:8001";
+        assert_ne!(
+            crate::api::scene_rays_url(base, 1, 500),
+            crate::api::scene_rays_url(base, 1, 50)
+        );
+        assert_ne!(
+            crate::api::scene_rays_url(base, 1, 500),
+            crate::api::scene_rays_url(base, 2, 500)
+        );
     }
 }

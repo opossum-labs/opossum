@@ -441,11 +441,6 @@ pub fn rays_glb(bundles: &[Rays], color: Option<[f32; 4]>, max_lines: usize) -> 
         origin: Some(Point3::origin()),
         ..SceneOptions::default()
     });
-    let style = RayStyle {
-        max_lines,
-        line_color: color,
-        ..RayStyle::default()
-    };
     for (bundle_nr, bundle) in bundles.iter().enumerate() {
         if bundle.nr_of_rays(false) == 0 {
             continue;
@@ -457,6 +452,11 @@ pub fn rays_glb(bundles: &[Rays], color: Option<[f32; 4]>, max_lines: usize) -> 
             if trace.stations.len() < 2 {
                 continue;
             }
+            let style = RayStyle {
+                max_lines,
+                line_color: color.or_else(|| invisible_light_color(wavelength)),
+                ..RayStyle::default()
+            };
             scene
                 .add_ray_trace(&trace, &style)
                 .map_err(|e| OpossumError::Other(format!("the rays could not be drawn: {e}")))?;
@@ -465,6 +465,38 @@ pub fn rays_glb(bundles: &[Rays], color: Option<[f32; 4]>, max_lines: usize) -> 
     scene
         .to_glb()
         .map_err(|e| OpossumError::Other(format!("the scene could not be written: {e}")))
+}
+
+/// The colour infrared light is drawn in: a deep red, next to the visible end of the spectrum it
+/// lies beyond.
+const INFRARED_COLOR: [f32; 4] = [0.8, 0.05, 0.05, 1.0];
+/// The colour ultraviolet light is drawn in: a violet, next to the visible end of the spectrum it
+/// lies beyond.
+const ULTRAVIOLET_COLOR: [f32; 4] = [0.45, 0.1, 0.9, 1.0];
+
+/// The colour light of a wavelength the eye cannot see is drawn in.
+///
+/// Visible light is coloured by `optoscene` after its wavelength. Beyond the visible range it
+/// falls back to one magenta for everything, which would make an infrared laser look like the
+/// optical axis; so infrared and ultraviolet light get colours of their own here, taken from the
+/// end of the spectrum each lies beyond.
+///
+/// # Arguments
+///
+/// - `wavelength`: the vacuum wavelength of the light
+///
+/// # Returns
+///
+/// The colour for infrared or ultraviolet light, or `None` for visible light.
+fn invisible_light_color(wavelength: Length) -> Option<[f32; 4]> {
+    let nm = wavelength.get::<uom::si::length::nanometer>();
+    if nm > 780.0 {
+        Some(INFRARED_COLOR)
+    } else if nm < 380.0 {
+        Some(ULTRAVIOLET_COLOR)
+    } else {
+        None
+    }
 }
 
 /// Lay the position histories of a bundle out as the stations of an `optoscene` ray trace.
@@ -1439,6 +1471,37 @@ mod test {
             index_count,
             2 * (1 + 2),
             "one leg for the first ray, two for the second"
+        );
+        Ok(())
+    }
+
+    /// An infrared laser is drawn red, not in the magenta that would make it look like the axis;
+    /// visible light keeps its spectral colour.
+    #[test]
+    fn infrared_rays_are_drawn_red() -> OpmResult<()> {
+        let color_of = |wavelength| -> OpmResult<serde_json::Value> {
+            let mut ray = Ray::origin_along_z(wavelength, joule!(1.0))?;
+            ray.propagate(millimeter!(10.0))?;
+            let mut bundle = Rays::default();
+            bundle.add_ray(ray);
+            let scene = glb_json(&rays_glb(&[bundle], None, 10)?);
+            Ok(scene["materials"][0]["pbrMetallicRoughness"]["baseColorFactor"].clone())
+        };
+        let infrared = color_of(nanometer!(1053.0))?;
+        let red: Vec<f64> = INFRARED_COLOR.iter().map(|c| f64::from(*c)).collect();
+        let drawn: Vec<f64> = infrared
+            .as_array()
+            .expect("a line has a colour")
+            .iter()
+            .map(|c| c.as_f64().unwrap_or(f64::NAN))
+            .collect();
+        for (d, r) in drawn.iter().zip(&red) {
+            assert!((d - r).abs() < 1e-6, "infrared drawn as {infrared}");
+        }
+        assert_ne!(
+            color_of(nanometer!(550.0))?,
+            infrared,
+            "visible light keeps its colour"
         );
         Ok(())
     }

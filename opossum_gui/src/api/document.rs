@@ -165,3 +165,23 @@ pub fn scene_node_url(base_url: &str, uid: Uuid, geometry: &str) -> String {
 pub fn scene_axis_url(base_url: &str, fetch: usize) -> String {
     format!("{base_url}/api/document/scene/axis.glb?v={fetch}")
 }
+
+/// The URL the 3D viewer fetches the light of the model's sources from.
+///
+/// Versioned by the fetch counter exactly like [`scene_axis_url`], and additionally by how many
+/// rays per source are asked for, so a new number is a new URL and the viewer fetches the rays
+/// again.
+///
+/// # Arguments
+///
+/// - `base_url`: the backend's root, from [`crate::api::http_client::HTTPClient::base_url`]
+/// - `fetch`: how many times the view has fetched the model so far
+/// - `max_rays`: the most rays drawn per source; the backend caps it
+///
+/// # Returns
+///
+/// An absolute URL the webview can fetch.
+#[must_use]
+pub fn scene_rays_url(base_url: &str, fetch: usize, max_rays: usize) -> String {
+    format!("{base_url}/api/document/scene/rays.glb?max_rays={max_rays}&v={fetch}")
+}

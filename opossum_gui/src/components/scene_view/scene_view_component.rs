@@ -10,8 +10,8 @@ use crate::{
     api::eval_action_run,
     components::{
         scene_view::{
-            AXIS_OBJECT_ID, is_ray_object, objects_of, ray_object, reveal_action_for_pick,
-            table_ground,
+            AXIS_OBJECT_ID, RAYS_OBJECT_ID, is_ray_object, objects_of, ray_object,
+            reveal_action_for_pick, table_ground,
         },
         scenery_editor::GraphsWorkspaceAction,
     },
@@ -56,6 +56,27 @@ pub fn SceneView() -> Element {
     // How often the model has been fetched. The axis URL carries it, so every fetch of the
     // components fetches the axis again too; see `api::scene_axis_url`.
     let mut fetches = use_signal(|| 0_usize);
+    // Whether the light of the model's sources is shown. Off by default: unlike the axis it costs a
+    // real trace on every model change. While off, the rays object is not in the list at all, so
+    // nothing is fetched for it.
+    let mut show_rays = use_signal(|| false);
+    // How opaque the drawn light - axis and rays alike - is.
+    let mut ray_opacity = use_signal(|| 0.6_f32);
+    // The most rays drawn per source; the backend caps it.
+    let mut max_rays = use_signal(|| 500_usize);
+    // The rays object as the current fetch, ray count and opacity describe it.
+    let rays_object = move || {
+        ray_object(
+            RAYS_OBJECT_ID,
+            api::scene_rays_url(
+                HTTP_API_CLIENT().base_url(),
+                *fetches.peek(),
+                *max_rays.peek(),
+            ),
+            true,
+            *ray_opacity.peek(),
+        )
+    };
 
     let mut options = use_signal(|| ViewerOptions {
         // Without this, every lens renders black: glass refracts its surroundings, and an empty
@@ -107,7 +128,11 @@ pub fn SceneView() -> Element {
                         AXIS_OBJECT_ID,
                         api::scene_axis_url(&base_url, fetch),
                         *show_beam_axis.peek(),
+                        *ray_opacity.peek(),
                     ));
+                    if *show_rays.peek() {
+                        list.push(rays_object());
+                    }
                     objects.set(list);
                     skipped_count.set(fetched.skipped.len());
                     for s in &fetched.skipped {
@@ -181,6 +206,70 @@ pub fn SceneView() -> Element {
                         }
                     },
                     "Beam axis"
+                }
+                button {
+                    class: if show_rays() {
+                        "btn btn-sm btn-outline-light active"
+                    } else {
+                        "btn btn-sm btn-outline-light"
+                    },
+                    onclick: move |_| {
+                        let v = !show_rays();
+                        show_rays.set(v);
+                        let mut list = objects.write();
+                        if v {
+                            list.push(rays_object());
+                        } else {
+                            list.retain(|object| object.id != RAYS_OBJECT_ID);
+                        }
+                    },
+                    "Rays"
+                }
+                label { class: "scene-view-control",
+                    "max. rays"
+                    input {
+                        r#type: "number",
+                        class: "form-control form-control-sm bg-dark text-light",
+                        style: "width: 5.5rem;",
+                        min: "1",
+                        step: "50",
+                        value: "{max_rays}",
+                        // On commit (Enter or leaving the field), not per keystroke: every new
+                        // number is a new trace.
+                        onchange: move |e| {
+                            if let Ok(n) = e.value().parse::<usize>() {
+                                max_rays.set(n.max(1));
+                                for object in objects.write().iter_mut() {
+                                    if object.id == RAYS_OBJECT_ID {
+                                        *object = rays_object();
+                                    }
+                                }
+                            }
+                        },
+                    }
+                }
+                label { class: "scene-view-control",
+                    "opacity"
+                    input {
+                        r#type: "range",
+                        class: "form-range",
+                        style: "width: 6rem;",
+                        min: "0.05",
+                        max: "1",
+                        step: "0.05",
+                        value: "{ray_opacity}",
+                        // Only restyles what is on screen: nothing is fetched or traced again.
+                        oninput: move |e| {
+                            if let Ok(v) = e.value().parse::<f32>() {
+                                ray_opacity.set(v);
+                                for object in objects.write().iter_mut() {
+                                    if is_ray_object(&object.id) {
+                                        object.opacity = v;
+                                    }
+                                }
+                            }
+                        },
+                    }
                 }
                 if *skipped_count.read() > 0 {
                     span {

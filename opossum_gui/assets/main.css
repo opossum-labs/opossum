@@ -251,6 +251,17 @@ body {
     font-size: 0.85rem;
 }
 
+/* A labelled input in the 3D view's toolbar: label text and control side by side. */
+.scene-view-control {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0;
+    color: #d0d0d0;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
 
 
 .context-menu-item {
