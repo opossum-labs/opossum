@@ -107,6 +107,37 @@ body {
     border-bottom: 1px solid rgb(71, 71, 71);
 }
 
+/* While the editor is split, the front tab of the pane whose graph the sidebar edits. */
+.editor-tab.focused-pane {
+    box-shadow: inset 0 1px 0 #3794ff;
+}
+
+/* "Move this tab to the other pane", at the end of each pane's tab bar. */
+.editor-tab-move {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: none;
+    border-bottom: 1px solid rgb(71, 71, 71);
+    background: none;
+    color: #969696;
+    cursor: pointer;
+}
+
+.editor-tab-move:hover:not(:disabled) {
+    color: rgb(212, 212, 212);
+    background-color: rgb(92, 92, 92);
+}
+
+.editor-tab-move:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
 
 .tab-container{
         border-bottom: 1px solid rgb(71, 71, 71);
@@ -174,21 +205,13 @@ body {
 }
 
 .graph-editor-container,
-.graph-editor-tab-content,
 .graph-editor,
 .graph-view-container,
 .tab-content {
     display: flex;
-    flex-grow: 1; 
+    flex-grow: 1;
     min-height: 0;
-    min-width: 0;  
-}
-
-.graph-editor-tab-content{
-    position: relative;
-    padding: 0;
-    overflow: hidden;
-    outline: none;
+    min-width: 0;
 }
 
 .graph-editor {
@@ -204,19 +227,39 @@ body {
     cursor:default!important;
 }
 
-.editor-tabs {
-    display: flex;
-    flex-direction: column;
+/* The editor's panes: a row of tab bars above a row of panels. The columns come from the component -
+   one pane, or two with the handle between them in a column of its own - and so does each bar's and
+   panel's column. */
+.editor-split {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
     height: 100%;
     flex: 1;
     min-height: 0;
-
+    min-width: 0;
+    position: relative;
+    overflow: hidden;
+    outline: none;
 }
 
-.editor-tabs > [role="tabpanel"] {
-    flex: 1;
+/* One pane's tab bar. `min-width: 0` lets it scroll instead of widening its column. */
+.editor-tabs {
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.editor-split > [role="tabpanel"] {
+    grid-row: 2;
     display: flex;
     min-height: 0;
+    min-width: 0;
+}
+
+.editor-splitter {
+    grid-column: 2;
+    grid-row: 1 / span 2;
 }
 
 /* The 3D view fills its tab: a toolbar of its own height, and the canvas taking everything left.
