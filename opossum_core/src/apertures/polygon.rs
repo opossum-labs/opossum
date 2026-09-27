@@ -1,9 +1,10 @@
-use super::{Bounded, Shape, resample_ring};
+use super::{Bounded, Shape, resample_ring, transformed};
 use crate::{
     error::{OpmResult, OpossumError},
     millimeter,
     prelude::ApertureShape,
     types::validated_type_definitions::ValidatedPolygonPoints2D,
+    utils::geom_transformation::Isometry,
 };
 use earcutr::earcut;
 use nalgebra::{Point2, Point3};
@@ -134,6 +135,14 @@ impl Bounded for PolygonShape {
     /// This function returns an error if the corners enclose no area, i.e. all lie on one line.
     fn outline_points(&self, segments: usize) -> OpmResult<Vec<Point2<Length>>> {
         resample_ring(self.points(), segments)
+    }
+
+    fn extreme_points(&self, iso: Option<&Isometry>) -> Vec<Point2<Length>> {
+        // A polygon reaches farthest out at its corners, wherever it is turned to.
+        self.points()
+            .iter()
+            .map(|corner| transformed(*corner, iso))
+            .collect()
     }
 }
 impl Shape for PolygonShape {

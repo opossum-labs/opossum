@@ -286,73 +286,6 @@ impl SurfaceBoundedBody {
             .map(|(point, _)| point)
             .filter(|point| self.is_within_cross_section(point)))
     }
-    /// Return the points the transversal cross section of this body reaches farthest in, in the
-    /// body's own frame.
-    ///
-    /// Both the axis-aligned transversal bounds and the largest distance from the body's axis follow
-    /// from these points. They are not a tessellation of the outline: a circle is described by four
-    /// points plus, if it is shifted off the axis, the single point of it lying farthest out — a
-    /// direction none of the axis-aligned extremes points in.
-    ///
-    /// # Returns
-    ///
-    /// The extreme points of the cross section, with the isometry of its
-    /// [`Aperture`](crate::apertures::Aperture) already applied.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the cross section is not one of the binary shapes. Since
-    /// [`ValidatedCrossSection`] admits nothing else, that cannot happen for a body built through
-    /// its constructor.
-    fn cross_section_outline(&self) -> OpmResult<Vec<Point2<Length>>> {
-        let cross_section = self.cross_section.get();
-        let transform = |point: Point2<Length>| {
-            cross_section.isometry().map_or(point, |iso| {
-                let transformed =
-                    iso.transform_point(&Point3::new(point.x, point.y, Length::zero()));
-                Point2::new(transformed.x, transformed.y)
-            })
-        };
-        match cross_section.shape() {
-            ApertureShape::BinaryCircle(circle) => {
-                // A circle is indifferent to the rotation of its aperture, so only its center
-                // moves. The axis-aligned bounds follow from that center alone, while the point
-                // farthest from the body's axis lies on the far side of the shifted circle.
-                let center = transform(Point2::origin());
-                let radius = circle.radius();
-                let mut outline = vec![
-                    Point2::new(center.x + radius, center.y),
-                    Point2::new(center.x - radius, center.y),
-                    Point2::new(center.x, center.y + radius),
-                    Point2::new(center.x, center.y - radius),
-                ];
-                let shift = center.x.value.hypot(center.y.value);
-                if shift > 0.0 {
-                    let stretch = 1.0 + radius.value / shift;
-                    outline.push(Point2::new(center.x * stretch, center.y * stretch));
-                }
-                Ok(outline)
-            }
-            ApertureShape::BinaryRectangle(rectangle) => {
-                let half_width = rectangle.width() / 2.0;
-                let half_height = rectangle.height() / 2.0;
-                Ok([
-                    Point2::new(half_width, half_height),
-                    Point2::new(-half_width, half_height),
-                    Point2::new(-half_width, -half_height),
-                    Point2::new(half_width, -half_height),
-                ]
-                .map(transform)
-                .to_vec())
-            }
-            ApertureShape::BinaryPolygon(polygon) => {
-                Ok(polygon.points().iter().map(|p| transform(*p)).collect())
-            }
-            shape => Err(OpossumError::Other(format!(
-                "the extent of a body bounded by a '{shape}' cross section is undefined"
-            ))),
-        }
-    }
     /// Return the range of longitudinal positions one of the bounding surfaces spans over the cross
     /// section of this body, in the body's own frame.
     ///
@@ -507,7 +440,10 @@ impl Body for SurfaceBoundedBody {
         Ok(Some(distance_3d_point(&first_point, &last_point)))
     }
     fn bounding_box(&self) -> OpmResult<BoundingBox> {
-        let outline = self.cross_section_outline()?;
+        // Which points the cross section reaches farthest out in is its own business, so it is asked
+        // rather than taken apart here. The isometry of the cross section is already applied, so the
+        // points are in the body's frame — see `Aperture::extreme_points`.
+        let outline = self.cross_section.get().extreme_points()?;
         let (Some(x_range), Some(y_range)) = (
             span(outline.iter().map(|point| point.x)),
             span(outline.iter().map(|point| point.y)),

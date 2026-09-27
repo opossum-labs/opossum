@@ -156,6 +156,17 @@ Diese Datei ins Repo-Root, wie `optoscene_plan.md` es vorlebt. Kein Code.
 Bisher gibt es nur Extrempunkte für die Bounding Box, und Rechteck-Ecken werden an zwei Stellen ad hoc
 nachgerechnet.
 
+**Nachtrag:** Die hier benannte Doppelung ist erst später aufgelöst worden. `outline_points` allein hat sie
+nicht beseitigt — `SurfaceBoundedBody::cross_section_outline` hat die Kreis- und Rechteck-Extrema weiter in
+einem eigenen `match` über `ApertureShape` nachgerechnet. Beide Fragen liegen jetzt auf dem Trait
+`apertures::Bounded` (`outline_points` und `extreme_points`), das über
+`ApertureShape::as_bounded() -> Option<&dyn Bounded>` erreicht wird; `is_binary` wird aus demselben Accessor
+abgeleitet. Damit gibt es die Formgeometrie nur noch einmal, und `cross_section_outline` ist eine Delegation.
+Eine Feinheit dabei: `extreme_points` bekommt die Isometrie **hereingegeben**, statt sie wie bei
+`outline_points` nachträglich auf das Ergebnis anzuwenden — welche Punkte eines Kreises entlang einer Achse am
+weitesten außen liegen, hängt davon ab, welche Achsen gemeint sind, sonst schrumpft die Bounding Box bei
+gedrehter Apertur.
+
 **Was:** `Aperture::outline_points(segments) -> OpmResult<Vec<Point2<Length>>>` in `apertures/mod.rs`: der
 geschlossene Rand als Polygon, gegen den Uhrzeigersinn, ohne Wiederholung des ersten Punkts, mit angewandter
 Isometrie der Apertur.

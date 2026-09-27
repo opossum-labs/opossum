@@ -223,19 +223,43 @@ impl Aperture {
                 self.shape
             ))
         })?;
-        let outline = bounded.outline_points(segments)?;
-        let Some(iso) = &self.isometry else {
-            return Ok(outline);
-        };
-        // The isometry shifts within the xy plane and turns about z, so it maps the outline onto
-        // another outline of the same orientation — the points can simply be carried through it.
-        Ok(outline
+        // The outline is a set of points on the edge, so carrying each of them through the isometry
+        // gives the edge of the placed shape.
+        Ok(bounded
+            .outline_points(segments)?
             .into_iter()
-            .map(|point| {
-                let moved = iso.transform_point(&Point3::new(point.x, point.y, Length::zero()));
-                Point2::new(moved.x, moved.y)
-            })
+            .map(|point| transformed(point, self.isometry.as_ref()))
             .collect())
+    }
+
+    /// Return the points the edge of this [`Aperture`] reaches farthest out in.
+    ///
+    /// Where [`outline_points`](Aperture::outline_points) walks the whole edge, this states only how
+    /// far it reaches: both the axis-aligned extent and the largest distance from the origin follow
+    /// from these points. They are not a tessellation of the edge — a circle is described by four
+    /// points plus, if it is shifted off the origin, the single point of it lying farthest out, a
+    /// direction none of the axis-aligned extremes points in.
+    ///
+    /// The aperture's isometry is already applied, but by the shape rather than to the result, since
+    /// which points lie farthest out along an axis depends on the frame those axes belong to — see
+    /// [`Bounded::extreme_points`].
+    ///
+    /// # Returns
+    ///
+    /// The extreme points of this aperture's edge.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error for every shape without a closed edge
+    /// ([`ApertureShape::Open`], [`ApertureShape::Gaussian`] and [`ApertureShape::Stack`]).
+    pub(crate) fn extreme_points(&self) -> OpmResult<Vec<Point2<Length>>> {
+        let bounded = self.shape.as_bounded().ok_or_else(|| {
+            OpossumError::Other(format!(
+                "the extent of an aperture of shape '{}' is undefined",
+                self.shape
+            ))
+        })?;
+        Ok(bounded.extreme_points(self.isometry.as_ref()))
     }
 
     /// Returns a reference to the shape of this [`Aperture`].
@@ -531,6 +555,18 @@ impl ApertureShape {
     }
 }
 
+/// Carry a point of a shape's own frame through the isometry of the [`Aperture`] holding it.
+///
+/// The isometry shifts within the xy plane and turns about z, so a point of the shape maps onto a
+/// point of the placed shape and nothing else has to be accounted for. `None` leaves the point
+/// where it is, which is what an aperture at the identity stores.
+fn transformed(point: Point2<Length>, iso: Option<&Isometry>) -> Point2<Length> {
+    iso.map_or(point, |iso| {
+        let moved = iso.transform_point(&Point3::new(point.x, point.y, Length::zero()));
+        Point2::new(moved.x, moved.y)
+    })
+}
+
 /// The length of the edge leaving the ring's `from`th point, in meter.
 fn ring_edge_length(ring: &[Point2<Length>], from: usize) -> f64 {
     distance_2d_point(&ring[(from + 1) % ring.len()], &ring[from]).value
@@ -665,6 +701,27 @@ pub trait Bounded {
     ///
     /// This function returns an error if the shape encloses no area.
     fn outline_points(&self, segments: usize) -> OpmResult<Vec<Point2<Length>>>;
+
+    /// Return the points this shape reaches farthest out in, in the frame `iso` places it in.
+    ///
+    /// See [`Aperture::extreme_points`], which wraps this. The result is not a tessellation of the
+    /// edge: it holds only what decides how far the shape reaches, which for a circle is four points
+    /// plus, if it is shifted off the origin, the one point of it lying farthest out.
+    ///
+    /// Unlike [`outline_points`](Bounded::outline_points), the frame is handed in rather than applied
+    /// to the result afterwards. An outline is a set of points *on* the edge, so carrying each of
+    /// them through the isometry gives the edge of the placed shape. The extremes of the extent do
+    /// not behave that way: which points of a circle lie farthest out along an axis depends on the
+    /// frame those axes belong to, so turning the shape's own extremes would understate its reach.
+    ///
+    /// # Arguments
+    ///
+    /// - `iso`: the isometry placing this shape, or `None` if it sits at the origin unturned
+    ///
+    /// # Returns
+    ///
+    /// The extreme points of this shape's edge, in the frame `iso` places it in.
+    fn extreme_points(&self, iso: Option<&Isometry>) -> Vec<Point2<Length>>;
 }
 
 impl Plottable for Aperture {
@@ -789,7 +846,7 @@ impl Plottable for Aperture {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{meter, millimeter, utils::test_helper::test_helper::l_shape_corners};
+    use crate::{degree, meter, millimeter, utils::test_helper::test_helper::l_shape_corners};
     use approx::assert_abs_diff_eq;
     #[test]
     fn default() {
@@ -1171,6 +1228,63 @@ mod test {
                 "'{shape}' has no edge, so it must not yield an outline"
             );
         }
+        Ok(())
+    }
+
+    /// A circle is the one shape whose extent cannot be turned after the fact: which of its points
+    /// lie farthest out along an axis depends on which axes are meant. Carrying the shape's own
+    /// extremes through the isometry instead would shrink the extent by up to `1 - cos(45°)` of the
+    /// radius and let a medium reach outside its own bounding box.
+    #[test]
+    fn a_turned_circle_keeps_its_full_extent() -> OpmResult<()> {
+        let radius = millimeter!(12.5);
+        let (shift_x, shift_y) = (millimeter!(5.0), millimeter!(-3.0));
+        let mut aperture = Aperture::new_circle(radius, ApertureType::Hole, None)?;
+        // A rotation about z on top of the shift. A circle is indifferent to being turned, so its
+        // extent has to come out exactly as it would without the rotation.
+        aperture.set_isometry(Isometry::new(
+            millimeter!(5.0, -3.0, 0.0),
+            degree!(0.0, 0.0, 30.0),
+        )?);
+        let extremes = aperture.extreme_points()?;
+
+        let reduce =
+            |pick: fn(f64, f64) -> f64, start: f64, axis: fn(&Point2<Length>) -> Length| {
+                extremes
+                    .iter()
+                    .fold(start, |acc, point| pick(acc, axis(point).value))
+            };
+        assert_abs_diff_eq!(
+            reduce(f64::max, f64::NEG_INFINITY, |p| p.x),
+            (shift_x + radius).value,
+            epsilon = 1e-12
+        );
+        assert_abs_diff_eq!(
+            reduce(f64::min, f64::INFINITY, |p| p.x),
+            (shift_x - radius).value,
+            epsilon = 1e-12
+        );
+        assert_abs_diff_eq!(
+            reduce(f64::max, f64::NEG_INFINITY, |p| p.y),
+            (shift_y + radius).value,
+            epsilon = 1e-12
+        );
+        assert_abs_diff_eq!(
+            reduce(f64::min, f64::INFINITY, |p| p.y),
+            (shift_y - radius).value,
+            epsilon = 1e-12
+        );
+
+        // The farthest point from the origin is what a body reads its transversal reach off, and it
+        // lies on the far side of the shifted circle rather than on any axis.
+        let reach = extremes.iter().fold(0.0_f64, |reach, point| {
+            reach.max(point.x.value.hypot(point.y.value))
+        });
+        assert_abs_diff_eq!(
+            reach,
+            shift_x.value.hypot(shift_y.value) + radius.value,
+            epsilon = 1e-12
+        );
         Ok(())
     }
 
