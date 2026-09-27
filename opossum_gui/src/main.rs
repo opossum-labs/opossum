@@ -11,7 +11,11 @@ mod utils;
 use api::http_client::HTTPClient;
 use app_config::AppConfig;
 use components::{
-    app::App, context_menu::cx_menu::CxMenu, logger::Logs, scenery_editor::SidebarView,
+    app::App,
+    context_menu::cx_menu::CxMenu,
+    logger::Logs,
+    scene_view::{SceneViewControls, SceneViewRequest},
+    scenery_editor::SidebarView,
 };
 use dioxus::{
     prelude::*,
@@ -115,6 +119,23 @@ static SCENE_REVISION: GlobalSignal<usize> = Signal::global(|| 0);
 /// a graph. Which pane it sits in and which tab is in front stay local to the graph editor (its
 /// `TabLayout`).
 static SCENE_VIEW_OPEN: GlobalSignal<bool> = Signal::global(|| false);
+/// What the 3D view shows: the optical table, the orientation gizmo, the optical axis, the rays, and
+/// how the light among those is drawn.
+///
+/// Global for the same reason as [`SCENE_VIEW_OPEN`], and set from the same place: the 3D View menu
+/// in the menu bar writes it, the view reads it and applies whatever changed to its viewer options
+/// and its object list. Keeping it out of the view component is also what lets the settings outlive a
+/// closed view - the view itself is unmounted with its tab, so anything it held locally would be back
+/// at its default the next time it is opened.
+static SCENE_VIEW_CONTROLS: GlobalSignal<SceneViewControls> =
+    Signal::global(SceneViewControls::default);
+/// A one-off request to the 3D view - refresh the model, frame the components, put the camera back -
+/// set by the 3D View menu and consumed (cleared) by the view's effect that carries it out.
+///
+/// Unlike [`SCENE_VIEW_CONTROLS`] these are not states that can be mirrored: each one needs something
+/// only the view itself holds, its model resource or its viewer handle, so a caller outside can do no
+/// more than ask. `None` whenever nothing has been asked for, which is nearly always.
+static SCENE_VIEW_REQUEST: GlobalSignal<Option<SceneViewRequest>> = Signal::global(|| None);
 /// Set right before a `RevealNode` action whose `bring_to_front` is `false` changes `active_tab`
 /// (a 3D view pick), so `GraphEditor`'s effect that otherwise brings a graph's tab to the front
 /// whenever `active_tab` changes can skip that step this one time - where the graph would cover the

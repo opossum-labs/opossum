@@ -6,12 +6,12 @@ use dioxus_glb_viewer::{
 };
 
 use crate::{
-    HTTP_API_CLIENT, OPOSSUM_UI_LOGS, SCENE_REVISION, api,
+    HTTP_API_CLIENT, OPOSSUM_UI_LOGS, SCENE_REVISION, SCENE_VIEW_CONTROLS, SCENE_VIEW_REQUEST, api,
     api::eval_action_run,
     components::{
         scene_view::{
-            AXIS_OBJECT_ID, RAYS_OBJECT_ID, action_for_pick, is_ray_object, objects_of, ray_object,
-            table_ground,
+            AXIS_OBJECT_ID, RAYS_OBJECT_ID, SceneViewRequest, action_for_pick, is_ray_object,
+            objects_of, ray_object, table_ground,
         },
         scenery_editor::GraphsWorkspaceAction,
     },
@@ -47,34 +47,24 @@ pub fn SceneView() -> Element {
     let viewer_handle = use_glb_viewer_handle();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
 
-    // Whether the optical table under the setup is shown. Mirrors `options.ground`.
-    let mut show_table = use_signal(|| true);
-    // Whether the corner orientation gizmo is shown. Mirrors `options.orientation_gizmo`.
-    let mut show_axes = use_signal(|| true);
-    // Whether the optical axis is shown. Mirrors the `visible` flag of the axis object.
-    let mut show_beam_axis = use_signal(|| true);
+    // What is shown and how, set from the 3D View menu. Read once here, so the whole component
+    // follows a change to it.
+    let controls = SCENE_VIEW_CONTROLS();
     // How often the model has been fetched. The axis URL carries it, so every fetch of the
     // components fetches the axis again too; see `api::scene_axis_url`.
     let mut fetches = use_signal(|| 0_usize);
-    // Whether the light of the model's sources is shown. Off by default: unlike the axis it costs a
-    // real trace on every model change. While off, the rays object is not in the list at all, so
-    // nothing is fetched for it.
-    let mut show_rays = use_signal(|| false);
-    // How opaque the drawn light - axis and rays alike - is.
-    let mut ray_opacity = use_signal(|| 0.6_f32);
-    // The most rays drawn per source; the backend caps it.
-    let mut max_rays = use_signal(|| 500_usize);
-    // The rays object as the current fetch, ray count and opacity describe it.
+    // The rays object as the current fetch and the menu's ray count and opacity describe it.
     let rays_object = move || {
+        let controls = *SCENE_VIEW_CONTROLS.peek();
         ray_object(
             RAYS_OBJECT_ID,
             api::scene_rays_url(
                 HTTP_API_CLIENT().base_url(),
                 *fetches.peek(),
-                *max_rays.peek(),
+                controls.max_rays,
             ),
             true,
-            *ray_opacity.peek(),
+            controls.opacity,
         )
     };
 
@@ -88,9 +78,9 @@ pub fn SceneView() -> Element {
         grid: false,
         fit_on_first_load: true,
         // Show a corner gizmo so the user always knows which way is up in the 3D view.
-        orientation_gizmo: true,
+        orientation_gizmo: SCENE_VIEW_CONTROLS.peek().axes,
         // The optical table as a floor reaching to the horizon; see `table_ground`.
-        ground: show_table.peek().then(table_ground),
+        ground: SCENE_VIEW_CONTROLS.peek().table.then(table_ground),
         // Drawn light - the optical axis - is a line; at one pixel it disappears against the table.
         line_width: 3.0,
         ..ViewerOptions::default()
@@ -123,14 +113,15 @@ pub fn SceneView() -> Element {
                     let base_url = HTTP_API_CLIENT().base_url().to_owned();
                     let fetch = *fetches.peek() + 1;
                     fetches.set(fetch);
+                    let controls = *SCENE_VIEW_CONTROLS.peek();
                     let mut list = objects_of(&fetched, &base_url);
                     list.push(ray_object(
                         AXIS_OBJECT_ID,
                         api::scene_axis_url(&base_url, fetch),
-                        *show_beam_axis.peek(),
-                        *ray_opacity.peek(),
+                        controls.beam_axis,
+                        controls.opacity,
                     ));
-                    if *show_rays.peek() {
+                    if controls.rays {
                         list.push(rays_object());
                     }
                     objects.set(list);
@@ -146,82 +137,119 @@ pub fn SceneView() -> Element {
         }
     });
 
+    // The one place the menu's settings reach the view. Both signals are written only where they
+    // really differ: a write of `options` resends the whole scene's options to the renderer, and a
+    // write of `objects` re-renders the viewer to compute a diff that would come out empty.
+    use_effect(move || {
+        let controls = SCENE_VIEW_CONTROLS();
+        let ground = controls.table.then(table_ground);
+        let differs = {
+            let options = options.peek();
+            options.ground != ground || options.orientation_gizmo != controls.axes
+        };
+        if differs {
+            let mut options = options.write();
+            options.ground = ground;
+            options.orientation_gizmo = controls.axes;
+        }
+        // Built from the list on screen rather than from the manifest: which components are drawn is
+        // whatever the last fetch produced, and only the light over them is the menu's business. The
+        // rays object is dropped and rebuilt so that a changed ray count comes out as a new URL.
+        let mut list = objects.peek().clone();
+        list.retain(|object| object.id != RAYS_OBJECT_ID);
+        for object in &mut list {
+            if object.id == AXIS_OBJECT_ID {
+                object.visible = controls.beam_axis;
+                object.opacity = controls.opacity;
+            }
+        }
+        if controls.rays {
+            list.push(rays_object());
+        }
+        if list != *objects.peek() {
+            objects.set(list);
+        }
+    });
+
+    // Carrying out what the menu asked for once. The slot is cleared before the request is acted on,
+    // so a request is never carried out twice, and the borrow taken to read it is long gone by then.
+    use_effect(move || {
+        let Some(request) = *SCENE_VIEW_REQUEST.read() else {
+            return;
+        };
+        *SCENE_VIEW_REQUEST.write() = None;
+        match request {
+            SceneViewRequest::Refresh => manifest.restart(),
+            SceneViewRequest::FitView => viewer_handle.fit_view(),
+            SceneViewRequest::ResetCamera => viewer_handle.reset_camera(),
+        }
+    });
+
     rsx! {
         div { class: "scene-view",
             div { class: "scene-view-toolbar",
                 button {
                     class: "btn btn-sm btn-outline-light",
-                    onclick: move |_| manifest.restart(),
+                    onclick: move |_| *SCENE_VIEW_REQUEST.write() = Some(SceneViewRequest::Refresh),
                     "Refresh"
                 }
                 button {
                     class: "btn btn-sm btn-outline-light",
-                    onclick: move |_| viewer_handle.fit_view(),
+                    onclick: move |_| *SCENE_VIEW_REQUEST.write() = Some(SceneViewRequest::FitView),
                     "Fit view"
                 }
                 button {
                     class: "btn btn-sm btn-outline-light",
-                    onclick: move |_| viewer_handle.reset_camera(),
+                    onclick: move |_| {
+                        *SCENE_VIEW_REQUEST.write() = Some(SceneViewRequest::ResetCamera);
+                    },
                     "Reset camera"
                 }
                 button {
-                    class: if show_table() {
+                    class: if controls.table {
                         "btn btn-sm btn-outline-light active"
                     } else {
                         "btn btn-sm btn-outline-light"
                     },
                     onclick: move |_| {
-                        let v = !show_table();
-                        show_table.set(v);
-                        options.write().ground = v.then(table_ground);
+                        let mut controls = SCENE_VIEW_CONTROLS.write();
+                        controls.table = !controls.table;
                     },
                     "Table"
                 }
                 button {
-                    class: if show_axes() {
+                    class: if controls.axes {
                         "btn btn-sm btn-outline-light active"
                     } else {
                         "btn btn-sm btn-outline-light"
                     },
                     onclick: move |_| {
-                        let v = !show_axes();
-                        show_axes.set(v);
-                        options.write().orientation_gizmo = v;
+                        let mut controls = SCENE_VIEW_CONTROLS.write();
+                        controls.axes = !controls.axes;
                     },
                     "Axes"
                 }
                 button {
-                    class: if show_beam_axis() {
+                    class: if controls.beam_axis {
                         "btn btn-sm btn-outline-light active"
                     } else {
                         "btn btn-sm btn-outline-light"
                     },
                     onclick: move |_| {
-                        let v = !show_beam_axis();
-                        show_beam_axis.set(v);
-                        for object in objects.write().iter_mut() {
-                            if object.id == AXIS_OBJECT_ID {
-                                object.visible = v;
-                            }
-                        }
+                        let mut controls = SCENE_VIEW_CONTROLS.write();
+                        controls.beam_axis = !controls.beam_axis;
                     },
                     "Beam axis"
                 }
                 button {
-                    class: if show_rays() {
+                    class: if controls.rays {
                         "btn btn-sm btn-outline-light active"
                     } else {
                         "btn btn-sm btn-outline-light"
                     },
                     onclick: move |_| {
-                        let v = !show_rays();
-                        show_rays.set(v);
-                        let mut list = objects.write();
-                        if v {
-                            list.push(rays_object());
-                        } else {
-                            list.retain(|object| object.id != RAYS_OBJECT_ID);
-                        }
+                        let mut controls = SCENE_VIEW_CONTROLS.write();
+                        controls.rays = !controls.rays;
                     },
                     "Rays"
                 }
@@ -233,17 +261,12 @@ pub fn SceneView() -> Element {
                         style: "width: 5.5rem;",
                         min: "1",
                         step: "50",
-                        value: "{max_rays}",
+                        value: "{controls.max_rays}",
                         // On commit (Enter or leaving the field), not per keystroke: every new
                         // number is a new trace.
                         onchange: move |e| {
                             if let Ok(n) = e.value().parse::<usize>() {
-                                max_rays.set(n.max(1));
-                                for object in objects.write().iter_mut() {
-                                    if object.id == RAYS_OBJECT_ID {
-                                        *object = rays_object();
-                                    }
-                                }
+                                SCENE_VIEW_CONTROLS.write().max_rays = n.max(1);
                             }
                         },
                     }
@@ -254,19 +277,14 @@ pub fn SceneView() -> Element {
                         r#type: "range",
                         class: "form-range",
                         style: "width: 6rem;",
-                        min: "0.05",
+                        min: "0",
                         max: "1",
                         step: "0.05",
-                        value: "{ray_opacity}",
+                        value: "{controls.opacity}",
                         // Only restyles what is on screen: nothing is fetched or traced again.
                         oninput: move |e| {
                             if let Ok(v) = e.value().parse::<f32>() {
-                                ray_opacity.set(v);
-                                for object in objects.write().iter_mut() {
-                                    if is_ray_object(&object.id) {
-                                        object.opacity = v;
-                                    }
-                                }
+                                SCENE_VIEW_CONTROLS.write().opacity = v;
                             }
                         },
                     }
