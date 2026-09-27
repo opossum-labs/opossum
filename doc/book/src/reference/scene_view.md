@@ -103,9 +103,15 @@ A few things to know about the rays:
 - Light that ends in a component without an output is drawn up to the component before it, not into
   it.
 
-**opacity** sets how opaque the axis and the rays are drawn, from barely visible to solid. It only
-changes the picture; nothing is traced again. Dense bundles read better when they are partly
-transparent.
+**ray opacity** sets how opaque the rays are drawn, from solid down to invisible. It only changes the
+picture; nothing is traced again. Dense bundles read better when they are partly transparent, which is
+why the slider starts well below solid — and at the bottom of its range the rays disappear entirely,
+leaving the components and the axis on their own without turning **Rays** off and paying for a trace
+again later.
+
+The optical axis is never faded: it is drawn solid whatever the slider says. It is one line per
+source, not a bundle, and it is the line every component is placed on — the one thing in the picture
+that should still be legible once a wide bundle has been faded back.
 
 Lines keep their width on screen however far you zoom in or out.
 
@@ -145,7 +151,7 @@ any that had to be left out.
 | **Beam axis** | Show or hide the optical axis |
 | **Rays** | Show or hide the traced rays of the analyzer's sources |
 | **max. rays** | The most rays drawn per source; takes effect on Enter or when leaving the field |
-| **opacity** | How opaque the axis and the rays are drawn |
+| **ray opacity** | How opaque the rays are drawn; the axis is always solid |
 
 See [Light: the optical axis and the rays](#light-the-optical-axis-and-the-rays) for what the last
 four show.

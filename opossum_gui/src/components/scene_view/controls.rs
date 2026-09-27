@@ -28,8 +28,9 @@ pub struct SceneViewControls {
     /// The most rays drawn per source; the backend caps it. A new number is a new trace, which is why
     /// the control that sets it commits on Enter rather than per keystroke.
     pub max_rays: usize,
-    /// How opaque the drawn light - axis and rays alike - is. Faint by default, because a dense
-    /// bundle reads as a solid block at full opacity; `0.0` draws no light at all.
+    /// How opaque the drawn rays are. Faint by default, because a dense bundle reads as a solid block
+    /// at full opacity; `0.0` draws no rays at all. The optical axis is not affected - it is always
+    /// drawn solid, being the one line every component is placed on.
     pub opacity: f32,
 }
 

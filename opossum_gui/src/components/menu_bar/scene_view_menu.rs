@@ -138,7 +138,7 @@ pub fn SceneViewMenu(on_menu_action: EventHandler<AppCommand>, is_connected: boo
                 }
                 li { class: "dropdown-item-text",
                     label { class: control_class,
-                        "opacity"
+                        "ray opacity"
                         input {
                             r#type: "range",
                             class: "form-range",

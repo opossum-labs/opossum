@@ -116,7 +116,10 @@ pub fn SceneView() -> Element {
                         AXIS_OBJECT_ID,
                         api::scene_axis_url(&base_url, fetch),
                         controls.beam_axis,
-                        controls.opacity,
+                        // Always solid, whatever the rays are set to: the axis is the single line the
+                        // whole setup is built on, and it is one line per source rather than a bundle
+                        // that needs thinning out to be read.
+                        1.0,
                     ));
                     if controls.rays {
                         list.push(rays_object());
@@ -151,13 +154,13 @@ pub fn SceneView() -> Element {
         }
         // Built from the list on screen rather than from the manifest: which components are drawn is
         // whatever the last fetch produced, and only the light over them is the menu's business. The
-        // rays object is dropped and rebuilt so that a changed ray count comes out as a new URL.
+        // rays object is dropped and rebuilt so that a changed ray count comes out as a new URL, and
+        // with it the opacity - which is the rays' alone, the axis staying solid.
         let mut list = objects.peek().clone();
         list.retain(|object| object.id != RAYS_OBJECT_ID);
         for object in &mut list {
             if object.id == AXIS_OBJECT_ID {
                 object.visible = controls.beam_axis;
-                object.opacity = controls.opacity;
             }
         }
         if controls.rays {
