@@ -9,12 +9,43 @@ round you had in mind.
 ## Opening and closing it
 
 Open it from the top navigation bar: **Layout** → **3D View**. It appears as a further tab beside the
-graph tabs and comes to the front straight away.
+tab of the graph you are working on and comes to the front straight away.
 
 The same menu entry then reads **Close 3D View**, and the tab carries the usual close button. Closing
 it frees the graphics resources it holds, so leave it closed when you are not looking at it.
 
 The entry needs a connected backend: the view asks the backend for the model as soon as it opens.
+
+## Side by side with the graph
+
+The editor can be split into two panes next to each other, each with its own tab bar. With the graph
+in one and the 3D view in the other, you can change a distance and watch the component move, without
+switching tabs.
+
+There are three ways to move a tab into the other pane:
+
+- **Drag the tab.** While the editor is not split, drop it on the right half of the view: it opens in
+  a new pane on the right. Dropped on the left half, it stays on the left on its own and the other
+  tabs move to the right. Once the editor is split, drop the tab anywhere over the other pane. The
+  area it would land in lights up; letting go anywhere else leaves everything as it was.
+- **Right-click the tab** and choose **Split right**, or, once split, **Move to right pane** /
+  **Move to left pane**.
+- **Click ⇄** at the right end of a tab bar. It moves the tab that is in front of that pane.
+
+Drag the line between the two panes to share out the width, the same way as the sidebar next to them.
+Neither pane can be made narrower than 200 pixels, and when the window is resized both keep their
+share. A pane closes as soon as its last tab has left it — moved over, or closed — and the editor is
+then one pane again.
+
+Graph tabs can be split the same way, for instance with the whole setup on the left and one group on
+the right. The properties sidebar always shows the graph you last clicked into. While the editor is
+split, a thin blue line on that graph's tab shows which of the two it is.
+
+While the 3D view has a pane to itself, **clicking a component** in it brings the graph that contains
+the component to the front of the other pane, and the sidebar shows the component's properties; the
+3D view stays where it is. Moving the 3D view to the other pane keeps the camera where it was. Opening
+it always puts it next to the graph you are working on, even if it was in the other pane when it was
+last closed.
 
 ## What is drawn
 
@@ -129,8 +160,8 @@ Two things are worth knowing about how it updates:
 - **Moving nodes around the graph canvas changes nothing here**, and neither does Auto Layout. Where a
   node sits on the diagram has nothing to do with where its component sits in space.
 
-Switching to a graph tab and back leaves the camera exactly where you left it. Closing the view and
-opening it again does not: that builds it up afresh.
+Switching to a graph tab and back leaves the camera exactly where you left it, and so does moving the
+view to the other pane. Closing the view and opening it again does not: that builds it up afresh.
 
 ## Appearance
 
