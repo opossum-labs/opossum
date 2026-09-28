@@ -25,6 +25,7 @@ pub enum Op {
         visible: bool,
         selected: bool,
         opacity: f32,
+        overlay: bool,
     },
     /// Dispose the existing model and replace it with a new source.
     /// Transform/visibility/selection/opacity travel in the same op so the new model never
@@ -36,6 +37,7 @@ pub enum Op {
         visible: bool,
         selected: bool,
         opacity: f32,
+        overlay: bool,
     },
     /// Remove a model from the scene and release its GPU resources.
     Remove { id: String },

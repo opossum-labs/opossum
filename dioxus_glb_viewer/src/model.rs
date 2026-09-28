@@ -31,6 +31,12 @@ pub struct GlbObject {
     pub selected: bool,
     /// How opaque the object is drawn, from `0.0` (invisible) to `1.0` (as the file has it).
     pub opacity: f32,
+    /// Whether this object is an annotation overlay (e.g. the optical axis or traced rays).
+    ///
+    /// When `true`, all materials are moved to the transparent render pass
+    /// (`material.transparent = true`, `depthWrite = false`) so they are never captured in
+    /// Three.js's glass-transmission buffer and never appear refracted through lenses.
+    pub overlay: bool,
 }
 
 // ─── GlbSource ───────────────────────────────────────────────────────────────

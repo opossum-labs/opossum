@@ -101,6 +101,7 @@ mod tests {
             visible: true,
             selected: false,
             opacity: 1.0,
+            overlay: false,
         }
     }
 
@@ -115,6 +116,7 @@ mod tests {
             visible: true,
             selected: false,
             opacity: 1.0,
+            overlay: false,
         }
     }
 
@@ -126,6 +128,7 @@ mod tests {
             visible: true,
             selected: false,
             opacity: 1.0,
+            overlay: false,
         }
     }
 

@@ -535,9 +535,7 @@ mod tests {
             assert_eq!(
                 si_prefix_from_exponent(exp),
                 expected,
-                "Exponent {} should map to '{}'",
-                exp,
-                expected
+                "Exponent {exp} should map to '{expected}'"
             );
         }
     }
@@ -550,8 +548,7 @@ mod tests {
             assert_eq!(
                 si_prefix_from_exponent(exp),
                 "",
-                "Exponent {} should return empty string",
-                exp
+                "Exponent {exp} should return empty string"
             );
         }
     }
@@ -569,9 +566,7 @@ mod tests {
             assert_eq!(
                 si_prefix_from_exponent(exp),
                 expected,
-                "Exponent {} edge case should return '{}'",
-                exp,
-                expected
+                "Exponent {exp} edge case should return '{expected}'"
             );
         }
     }
@@ -606,9 +601,7 @@ mod tests {
             assert_eq!(
                 si_prefix_to_exponent(prefix, reciprocal),
                 expected,
-                "Prefix '{}' with reciprocal={} failed",
-                prefix,
-                reciprocal
+                "Prefix '{prefix}' with reciprocal={reciprocal} failed"
             );
         }
     }
@@ -630,11 +623,10 @@ mod tests {
             let result = parse_unit_input_strict(input, base_unit)?;
             assert_eq!(
                 result.0,
-                expected_value.replace(",", "."),
-                "Input '{}'",
-                input
+                expected_value.replace(',', "."),
+                "Input '{input}'"
             );
-            assert_eq!(result.1, expected_prefix, "Input '{}'", input);
+            assert_eq!(result.1, expected_prefix, "Input '{input}'");
         }
         Ok(())
     }
@@ -652,8 +644,8 @@ mod tests {
 
         for (input, expected_value, expected_prefix) in cases {
             let result = parse_unit_input_strict(input, base_unit)?;
-            assert_eq!(result.0, expected_value, "Input '{}'", input);
-            assert_eq!(result.1, expected_prefix, "Input '{}'", input);
+            assert_eq!(result.0, expected_value, "Input '{input}'");
+            assert_eq!(result.1, expected_prefix, "Input '{input}'");
         }
         Ok(())
     }
@@ -671,8 +663,8 @@ mod tests {
 
         for (input, expected_value, base_unit) in cases {
             let result = parse_unit_input_strict(input, base_unit)?;
-            assert_eq!(result.0, expected_value, "Input '{}'", input);
-            assert_eq!(result.1, "", "Input '{}'", input); // no prefix
+            assert_eq!(result.0, expected_value, "Input '{input}'");
+            assert_eq!(result.1, "", "Input '{input}'");
         }
         Ok(())
     }
@@ -691,8 +683,8 @@ mod tests {
 
         for (input, expected_value, base_unit, expected_prefix) in cases {
             let result = parse_unit_input_strict(input, base_unit)?;
-            assert_eq!(result.0, expected_value, "Input '{}'", input);
-            assert_eq!(result.1, expected_prefix, "Input '{}'", input);
+            assert_eq!(result.0, expected_value, "Input '{input}'");
+            assert_eq!(result.1, expected_prefix, "Input '{input}'");
         }
         Ok(())
     }
@@ -716,8 +708,7 @@ mod tests {
         for input in invalid_cases {
             assert!(
                 parse_unit_input_strict(input, base_unit).is_err(),
-                "Input '{}' should fail strict parsing",
-                input
+                "Input '{input}' should fail strict parsing"
             );
         }
     }
@@ -730,14 +721,12 @@ mod tests {
             assert_eq!(
                 si_prefix_to_exponent(prefix, false),
                 0,
-                "Unknown prefix '{}' should return 0",
-                prefix
+                "Unknown prefix '{prefix}' should return 0"
             );
             assert_eq!(
                 si_prefix_to_exponent(prefix, true),
                 0,
-                "Unknown prefix '{}' with reciprocal should return 0",
-                prefix
+                "Unknown prefix '{prefix}' with reciprocal should return 0"
             );
         }
     }
@@ -772,9 +761,7 @@ mod tests {
             assert_eq!(
                 si_prefix_to_exponent(prefix, reciprocal),
                 expected,
-                "Prefix '{}' with reciprocal={} failed",
-                prefix,
-                reciprocal
+                "Prefix '{prefix}' with reciprocal={reciprocal} failed"
             );
         }
     }
@@ -784,7 +771,7 @@ mod tests {
         // Anything smaller than 1e-60 should return 0
         let small_values = vec![0.0, 1e-100, 1e-61];
         for &x in &small_values {
-            assert_eq!(get_exponent(x), 0, "x = {} should return 0", x);
+            assert_eq!(get_exponent(x), 0, "x = {x} should return 0");
         }
     }
 
@@ -801,7 +788,7 @@ mod tests {
         ];
 
         for (x, expected) in cases {
-            assert_eq!(get_exponent(x), expected, "x = {}", x);
+            assert_eq!(get_exponent(x), expected, "x = {x}");
         }
     }
 
@@ -816,7 +803,7 @@ mod tests {
         ];
 
         for (x, expected) in cases {
-            assert_eq!(get_exponent(x), expected, "x = {}", x);
+            assert_eq!(get_exponent(x), expected, "x = {x}");
         }
     }
 
@@ -835,7 +822,7 @@ mod tests {
         ];
 
         for (x, expected) in cases {
-            assert_eq!(get_exponent(x), expected, "x = {}", x);
+            assert_eq!(get_exponent(x), expected, "x = {x}");
         }
     }
 
@@ -844,7 +831,7 @@ mod tests {
         let cases = vec![(1e15, 15), (5e18, 18), (7e21, 21), (9e24, 24), (1e30, 30)];
 
         for (x, expected) in cases {
-            assert_eq!(get_exponent(x), expected, "x = {}", x);
+            assert_eq!(get_exponent(x), expected, "x = {x}");
         }
     }
 
@@ -860,9 +847,8 @@ mod tests {
             let result = parse_exp_input_strict(input)?;
             assert_eq!(
                 result,
-                input.trim().replace(",", "."),
-                "Input '{}' should parse strictly",
-                input
+                input.trim().replace(',', "."),
+                "Input '{input}' should parse strictly"
             );
         }
         Ok(())
@@ -878,8 +864,7 @@ mod tests {
         for input in invalid_cases {
             assert!(
                 parse_exp_input_strict(input).is_err(),
-                "Input '{}' should fail strict parsing",
-                input
+                "Input '{input}' should fail strict parsing"
             );
         }
     }
@@ -890,7 +875,7 @@ mod tests {
 
         for input in edge_cases {
             let result = parse_exp_input_strict(input)?;
-            assert_eq!(result, input, "Edge case '{}' should parse strictly", input);
+            assert_eq!(result, input, "Edge case '{input}' should parse strictly");
         }
         Ok(())
     }
@@ -908,7 +893,7 @@ mod tests {
 
         for (x, reciprocal, expected) in cases {
             let result = format_si_notation(x, reciprocal);
-            assert_eq!(result, expected, "x={} reciprocal={}", x, reciprocal);
+            assert_eq!(result, expected, "x={x} reciprocal={reciprocal}");
         }
     }
 
@@ -924,7 +909,7 @@ mod tests {
 
         for (x, reciprocal, expected) in cases {
             let result = format_si_notation(x, reciprocal);
-            assert_eq!(result, expected, "x={} reciprocal={}", x, reciprocal);
+            assert_eq!(result, expected, "x={x} reciprocal={reciprocal}");
         }
     }
 
@@ -959,7 +944,7 @@ mod tests {
 
         for (x, reciprocal, expected) in cases {
             let result = format_si_notation(x, reciprocal);
-            assert_eq!(result, expected, "x={} reciprocal={}", x, reciprocal);
+            assert_eq!(result, expected, "x={x} reciprocal={reciprocal}");
         }
     }
 }

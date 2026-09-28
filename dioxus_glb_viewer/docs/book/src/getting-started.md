@@ -55,6 +55,7 @@ fn Scene3d() -> Element {
             visible: true,
             selected: false,
             opacity: 1.0,
+            overlay: false,                    // true only for annotation lines (axis, rays)
         }]
     });
 

@@ -26,6 +26,7 @@ One model in the scene.
 | `visible` | `bool` | Hidden objects stay in the scene graph. |
 | `selected` | `bool` | Draws a wireframe box around the object, turned with it rather than fitted to the world axes. |
 | `opacity` | `f32` | `0.0`–`1.0`, scaling the opacity the file gave each material; `1.0` draws the model as it is. |
+| `overlay` | `bool` | Marks an annotation (e.g. a line): its materials render in the transparent pass with depth testing off, so a transmissive lens never refracts them into ghost copies. |
 
 The `id` is what [`PickEvent`](./picking.md) reports back, and it is how the diff
 recognises an object across renders: a stable `id` whose `transform` changed produces a
@@ -128,7 +129,7 @@ This is the whole contract between your list and the renderer:
 |---|---|
 | A new `id` appears | The model is loaded and added. |
 | An `id` disappears | The model is removed and its GPU resources are freed. |
-| `source` differs (per the rules above) | The old model is disposed and the new one loaded, with transform, visibility, selection and opacity applied in the same step. |
+| `source` or `overlay` differs (per the rules above) | The old model is disposed and the new one loaded, with transform, visibility, selection, opacity and overlay applied in the same step. |
 | `transform` differs | Position, rotation and scale are updated in place. No reload. |
 | `visible` differs | The object is hidden or shown; it stays in the scene graph. |
 | `selected` differs | The selection outline is added or removed. |

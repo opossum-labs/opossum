@@ -38,6 +38,7 @@ match std::fs::read(&path) {
             visible: true,
             selected: false,
             opacity: 1.0,
+            overlay: false,
         });
     }
     Err(e) => { /* report to the user — the viewer never sees this */ }

@@ -75,11 +75,13 @@ pub fn diff(
                     visible: want.visible,
                     selected: want.selected,
                     opacity: want.opacity,
+                    overlay: want.overlay,
                 });
                 applied.insert((*id).to_owned(), (*want).clone());
             }
-            Some(have) if have.source != want.source => {
-                // Source changed → Reload (disposes the old model and reloads).
+            Some(have) if have.source != want.source || have.overlay != want.overlay => {
+                // Source or overlay changed → Reload (disposes the old model and reloads so
+                // the overlay material settings are re-applied at load time).
                 // Transform/visible/selected/opacity travel in the same op so the new model
                 // never appears for a frame in the wrong pose.
                 ops.push(Op::Reload {
@@ -89,6 +91,7 @@ pub fn diff(
                     visible: want.visible,
                     selected: want.selected,
                     opacity: want.opacity,
+                    overlay: want.overlay,
                 });
                 applied.insert((*id).to_owned(), (*want).clone());
             }
@@ -170,6 +173,7 @@ mod tests {
             visible: true,
             selected: false,
             opacity: 1.0,
+            overlay: false,
         }
     }
 

@@ -18,7 +18,7 @@ object carries its payload.
 
 | Op | Tag | Payload |
 |---|---|---|
-| `Add` | `add` | `id`, `source`, `transform`, `visible`, `selected`, `opacity` |
+| `Add` | `add` | `id`, `source`, `transform`, `visible`, `selected`, `opacity`, `overlay` |
 | `Reload` | `reload` | same as `Add` |
 | `Remove` | `remove` | `id` |
 | `SetTransform` | `set_transform` | `id`, `transform` |
@@ -33,9 +33,10 @@ object carries its payload.
 | `BytesBegin` | `bytes_begin` | `key`, `chunks` |
 | `BytesChunk` | `bytes_chunk` | `key`, `seq`, `b64` |
 
-`Add` and `Reload` carry transform, visibility, selection and opacity rather than leaving
+`Add` and `Reload` carry transform, visibility, selection, opacity and overlay rather than leaving
 them to follow-up ops. That is what stops a freshly loaded model from being visible for one frame
-in the previous pose.
+in the previous pose. A changed `overlay` reloads for the same reason a changed `source` does: the
+overlay state is applied to the materials at load time.
 
 ### Where each op comes from
 

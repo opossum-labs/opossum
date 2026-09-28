@@ -75,6 +75,8 @@ pub fn objects_of(manifest: &SceneManifest, base_url: &str) -> Vec<GlbObject> {
             // Selection lives with whoever handles the clicks, not with the geometry.
             selected: false,
             opacity: COMPONENT_OPACITY,
+            // A real component, drawn as the file has it - not an annotation overlay.
+            overlay: false,
         })
         .collect()
 }
@@ -126,6 +128,9 @@ pub fn apply_node_selection(objects: &mut [GlbObject], selected: &HashSet<Uuid>)
 /// The backend delivers ray paths in world coordinates, the same frame the manifest places the
 /// components in, so the object keeps the identity transform.
 ///
+/// Drawn as an overlay: its lines render in the transparent pass so a lens's glass never refracts
+/// them into ghost copies (see [`GlbObject::overlay`]).
+///
 /// # Arguments
 ///
 /// - `id`: the object's id, starting with `rays:` (see [`is_ray_object`])
@@ -144,6 +149,7 @@ pub fn ray_object(id: &str, url: String, visible: bool, opacity: f32) -> GlbObje
         visible,
         selected: false,
         opacity,
+        overlay: true,
     }
 }
 

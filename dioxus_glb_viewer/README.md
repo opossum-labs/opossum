@@ -30,6 +30,7 @@ fn App() -> Element {
             visible: true,
             selected: false,
             opacity: 1.0,
+            overlay: false,
         }]
     });
     rsx! {

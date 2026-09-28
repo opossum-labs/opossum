@@ -484,7 +484,12 @@ export async function createViewer(canvasId, options, send, threeBase) {
         geometry.setIndex([0, 1, 2, 3, 4, 5, 6, 7, 0, 2, 1, 3, 4, 6, 5, 7, 0, 4, 1, 5, 2, 6, 3, 7]);
         const outline = new THREE.LineSegments(
             geometry,
-            new THREE.LineBasicMaterial({ color, toneMapped: false }),
+            // transparent keeps the outline out of the glass-transmission buffer (so a lens never
+            // refracts it into ghosts); no depth write/test draws it over the glass rather than
+            // being clipped by a lens surface bulging in front of the selected node.
+            new THREE.LineBasicMaterial({
+                color, toneMapped: false, transparent: true, depthWrite: false, depthTest: false,
+            }),
         );
         outline.matrixAutoUpdate = false;
         return outline;
@@ -712,29 +717,53 @@ export async function createViewer(canvasId, options, send, threeBase) {
         }
     }
 
+    // ── Overlay ───────────────────────────────────────────────────────────────
+    /**
+     * Marks every material under `root` as an annotation overlay (or clears the mark).
+     *
+     * An overlay material is forced into the transparent render pass by `setOpacity`, so it draws
+     * after the glass-transmission buffer is captured and never appears refracted through a lens.
+     * The flag is stored on the material and read back by `setOpacity`, which owns the actual
+     * `transparent`/`depthWrite` state - this only records the intent. Call it before `setOpacity`.
+     */
+    function setOverlay(root, overlay) {
+        root.traverse((o) => {
+            if (!o.material) return;
+            for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+                m.userData.overlay = overlay;
+            }
+        });
+    }
+
     // ── Opacity ───────────────────────────────────────────────────────────────
     /**
      * Draws every material under `root` at `factor` times its own opacity.
      *
-     * What the file gave a material - opacity, transparency, depth writing - is remembered on
-     * first use, so the factor always scales the original and 1 restores it exactly. Below 1 a
-     * material stops writing depth: overlapping translucent lines would otherwise hide each other
-     * in draw order instead of adding up.
+     * What the file gave a material - opacity, transparency, depth writing and testing - is
+     * remembered on first use, so the factor always scales the original and 1 restores it exactly.
+     * Below 1 a material stops writing depth: overlapping translucent lines would otherwise hide
+     * each other in draw order instead of adding up. An overlay material (see `setOverlay`) is kept
+     * transparent at any opacity - so it stays out of the glass-transmission buffer and is never
+     * refracted - and has depth testing off too, so it draws over a lens rather than being clipped
+     * by the glass surface bulging in front of it.
      */
     function setOpacity(root, factor) {
         root.traverse((o) => {
             if (!o.material) return;
             for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
                 m.userData.ownOpacity ??= {
-                    opacity: m.opacity, transparent: m.transparent, depthWrite: m.depthWrite,
+                    opacity: m.opacity, transparent: m.transparent,
+                    depthWrite: m.depthWrite, depthTest: m.depthTest,
                 };
                 const own = m.userData.ownOpacity;
-                const transparent = own.transparent || factor < 1;
+                const overlay = m.userData.overlay ?? false;
+                const transparent = own.transparent || factor < 1 || overlay;
                 // Switching transparency changes the shader program, which only a recompile does.
                 if (m.transparent !== transparent) m.needsUpdate = true;
                 m.transparent = transparent;
                 m.opacity     = own.opacity * factor;
-                m.depthWrite  = factor < 1 ? false : own.depthWrite;
+                m.depthWrite  = (factor < 1 || overlay) ? false : own.depthWrite;
+                m.depthTest   = overlay ? false : own.depthTest;
             }
         });
     }
@@ -773,6 +802,8 @@ export async function createViewer(canvasId, options, send, threeBase) {
             });
             applyTransform(root, op.transform);
             root.visible = op.visible;
+            // Before setOpacity: it reads the overlay mark to decide the transparent/depth state.
+            setOverlay(root, op.overlay ?? false);
             setOpacity(root, op.opacity);
             scene.add(root);
             objects.set(op.id, { root, helper: null });
