@@ -134,6 +134,11 @@ The selection box is tilted along with the component it marks, rather than kept 
 On a tilted mirror or grating that is the difference between a box the size of the component and one
 reaching well past it, so the box shows which component is meant even in a crowded setup.
 
+The graph and the 3D view share their selection both ways. Clicking a component here selects it in
+the graph — and selecting one or more nodes in the graph canvas draws the box around the same
+components here. Like the properties sidebar, the 3D view follows the graph you last clicked into, so
+it boxes whatever that graph has selected.
+
 ### Keyboard shortcuts
 
 Click anywhere in the view once to give it focus, and these keys stand in for the matching **3D View**

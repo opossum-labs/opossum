@@ -1021,7 +1021,7 @@ pub struct SceneNodeEntry {
 /// or when its shape cannot be built (meshing failed, invalid geometry). The reason is what
 /// the backend would otherwise only log to the server console, carried here so a viewer can
 /// display it to the user rather than silently showing an incomplete scene.
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, ToSchema, Eq)]
 pub struct SkippedSceneNode {
     /// The component's node UUID.
     pub uid: Uuid,
