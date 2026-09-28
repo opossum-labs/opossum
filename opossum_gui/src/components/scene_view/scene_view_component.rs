@@ -10,8 +10,8 @@ use crate::{
     api::eval_action_run,
     components::{
         scene_view::{
-            AXIS_OBJECT_ID, RAYS_OBJECT_ID, SceneViewRequest, action_for_pick, is_ray_object,
-            objects_of, ray_object, table_ground,
+            AXIS_OBJECT_ID, RAYS_OBJECT_ID, SceneShortcut, SceneViewRequest, action_for_pick,
+            is_ray_object, objects_of, ray_object, table_ground,
         },
         scenery_editor::GraphsWorkspaceAction,
     },
@@ -46,6 +46,9 @@ pub fn SceneView() -> Element {
     let mut skipped_count = use_signal(|| 0_usize);
     let viewer_handle = use_glb_viewer_handle();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
+    // The 3D view's own keyboard shortcuts act only while its viewport holds focus, so the container
+    // below is made focusable and its handle kept here to focus it on a click - see its `onkeydown`.
+    let mut viewport = use_signal(|| None::<std::rc::Rc<MountedData>>);
 
     // How often the model has been fetched. The axis URL carries it, so every fetch of the
     // components fetches the axis again too; see `api::scene_axis_url`.
@@ -186,7 +189,64 @@ pub fn SceneView() -> Element {
     });
 
     rsx! {
-        div { class: "scene-view",
+        div {
+            class: "scene-view",
+            // The view's keyboard shortcuts - Fit, Reset, and the four visibility toggles - act only
+            // while this container is focused, so it is made focusable and refocused on every click
+            // into it: a click to orbit is enough to be "in" the view. They are kept off the global
+            // shortcut listener on purpose - those bare letters must stay free for whatever panel
+            // holds focus elsewhere.
+            tabindex: 0,
+            onmounted: move |evt| viewport.set(Some(evt.data())),
+            onmousedown: move |_| {
+                if let Some(node) = viewport() {
+                    spawn(async move {
+                        let _ = node.set_focus(true).await;
+                    });
+                }
+            },
+            onkeydown: move |evt| {
+                let modifiers = evt.modifiers();
+                // Bare keys only: a combo with Ctrl/Cmd/Alt/Shift is either a global shortcut or none
+                // of ours, and an auto-repeat while a key is held would flip a toggle on and off.
+                if modifiers.ctrl() || modifiers.meta() || modifiers.alt() || modifiers.shift()
+                    || evt.is_auto_repeating()
+                {
+                    return;
+                }
+                if let Key::Character(character) = evt.key()
+                    && let Some(shortcut) = SceneShortcut::from_key(&character)
+                {
+                    // Suppress the browser default and the bubble only for a key we act on, so an
+                    // unbound key still reaches whatever else might want it.
+                    evt.prevent_default();
+                    evt.stop_propagation();
+                    match shortcut {
+                        SceneShortcut::Fit => {
+                            *SCENE_VIEW_REQUEST.write() = Some(SceneViewRequest::FitView);
+                        }
+                        SceneShortcut::Reset => {
+                            *SCENE_VIEW_REQUEST.write() = Some(SceneViewRequest::ResetCamera);
+                        }
+                        SceneShortcut::Table => {
+                            let mut controls = SCENE_VIEW_CONTROLS.write();
+                            controls.table = !controls.table;
+                        }
+                        SceneShortcut::Axes => {
+                            let mut controls = SCENE_VIEW_CONTROLS.write();
+                            controls.axes = !controls.axes;
+                        }
+                        SceneShortcut::Beam => {
+                            let mut controls = SCENE_VIEW_CONTROLS.write();
+                            controls.beam_axis = !controls.beam_axis;
+                        }
+                        SceneShortcut::Rays => {
+                            let mut controls = SCENE_VIEW_CONTROLS.write();
+                            controls.rays = !controls.rays;
+                        }
+                    }
+                }
+            },
             // What the view has to say about itself, now that everything it can be told sits in the
             // 3D View menu: what was left out, and how much is drawn.
             div { class: "scene-view-status",

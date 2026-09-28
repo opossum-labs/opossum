@@ -60,3 +60,56 @@ pub enum SceneViewRequest {
     /// Return the camera to its starting pose.
     ResetCamera,
 }
+
+/// A key the 3D view acts on while its viewport holds focus, paired with the action it triggers.
+///
+/// The view's keys are deliberately local to it - they fire only while the viewport is focused, so
+/// they must not join the global
+/// [`SHORTCUTS`](crate::components::short_cuts::SHORTCUTS) table, which feeds a document-wide listener
+/// that would steal the same letters from every other panel. This type is the single place that pairs
+/// a key with its action; the view's key handler reads it, and the 3D View menu will show the key
+/// beside the matching entry. Each variant is one of the actions the menu already offers - two that
+/// move the camera ([`SceneViewRequest`]) and four that flip a switch in [`SceneViewControls`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SceneShortcut {
+    /// Frame all components - the menu's **Fit view**.
+    Fit,
+    /// Return the camera to its starting pose - the menu's **Reset camera**.
+    Reset,
+    /// Show or hide the optical table - the menu's **Table**.
+    Table,
+    /// Show or hide the orientation gizmo - the menu's **Axes**.
+    Axes,
+    /// Show or hide the optical axis - the menu's **Beam axis**.
+    Beam,
+    /// Show or hide the traced rays - the menu's **Rays**.
+    Rays,
+}
+
+impl SceneShortcut {
+    /// The shortcut a printable key selects, if any.
+    ///
+    /// `Rays` is on `L` (for *light*) rather than its own initial, because `R` is kept for `Reset` -
+    /// the action reached for more often.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The character the key produced, as the browser reports it (e.g. `"f"`). Matched
+    ///   case-insensitively, so a held Shift or Caps Lock does not change the outcome.
+    ///
+    /// # Returns
+    ///
+    /// The matching shortcut, or `None` for a key that is not bound.
+    #[must_use]
+    pub fn from_key(key: &str) -> Option<Self> {
+        match key.to_ascii_lowercase().as_str() {
+            "f" => Some(Self::Fit),
+            "r" => Some(Self::Reset),
+            "t" => Some(Self::Table),
+            "a" => Some(Self::Axes),
+            "b" => Some(Self::Beam),
+            "l" => Some(Self::Rays),
+            _ => None,
+        }
+    }
+}
