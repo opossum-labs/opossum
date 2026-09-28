@@ -195,6 +195,13 @@ inventory::submit! {
 #[opm_node("lightpink")]
 /// An ideal beamsplitter node with a given splitting ratio.
 ///
+/// The splitting surface is the plane of the node. Its transmission is given by the
+/// [`SplittingConfig`]; the surface reflects the rest. The coatings of the ports are not used for
+/// the split. In ray tracing, the transmitted light keeps its direction while the reflected light
+/// is mirrored about the splitting surface. Hence, the beam splitter has to be tilted via its
+/// alignment (e.g. by 45°) to send the reflected light sideways; an untilted beam splitter reflects
+/// it back onto the incoming beam.
+///
 /// ## Optical Ports
 ///   - Inputs
 ///     - `input_1`
@@ -325,7 +332,28 @@ impl BeamSplitter {
         Ok((out1_data, out2_data))
     }
     /// Processes rays arriving at a single input port.
-    /// This includes refraction, apodization, and splitting.
+    ///
+    /// The rays are split on the splitting surface of this port: the transmitted part keeps its
+    /// direction, the reflected part is mirrored about the surface normal. Afterwards, the input
+    /// aperture is applied to both parts.
+    ///
+    /// # Arguments
+    ///
+    /// * `input` - the light arriving at the port, if any.
+    /// * `port_name` - the name of the input port (and its surface).
+    /// * `splitting_config` - the [`SplittingConfig`] defining the transmission of the splitting surface.
+    /// * `missed_surface_strategy` - what happens to rays that do not hit the splitting surface.
+    ///
+    /// # Returns
+    ///
+    /// The transmitted and the reflected rays, in that order. Both are empty if there is no input.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if
+    ///   - the input is not [`LightData::Geometric`].
+    ///   - the surface or the aperture of the port cannot be found.
+    ///   - the splitting of the rays or the apodization fails.
     fn process_input_port(
         &mut self,
         input: Option<&LightData>,
@@ -337,27 +365,27 @@ impl BeamSplitter {
             match light_data {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
-                    // Refract rays on the input surface
-                    if let Some(surf) = self.get_optic_surface_mut(port_name) {
-                        rays.refract_on_surface(surf, None, true, &missed_surface_strategy)?;
+                    // Split rays on the input surface
+                    let mut reflected = if let Some(surf) = self.get_optic_surface_mut(port_name) {
+                        rays.split_on_surface(surf, splitting_config, &missed_surface_strategy)?
                     } else {
                         return Err(OpossumError::OpticPort(format!(
                             "Input optic surface not found for port '{port_name}'"
                         )));
-                    }
+                    };
 
-                    // Apply the input aperture
+                    // Apply the input aperture to both parts. They sit at the same points on the
+                    // surface, so this equals apodizing the rays before splitting them.
                     if let Some(aperture) = self.ports().aperture(&PortType::Input, port_name) {
-                        rays.apodize(aperture, &self.effective_surface_iso(port_name)?)?;
+                        let iso = self.effective_surface_iso(port_name)?;
+                        rays.apodize(aperture, &iso)?;
+                        reflected.apodize(aperture, &iso)?;
                     } else {
                         return Err(OpossumError::OpticPort(format!(
                             "Input aperture not found for port '{port_name}'"
                         )));
                     }
-
-                    // Split the rays and return both parts
-                    let split_rays = rays.split(splitting_config)?;
-                    Ok((rays, split_rays))
+                    Ok((rays, reflected))
                 }
                 _ => Err(OpossumError::Analysis(format!(
                     "Expected LightData::Geometric at port '{port_name}'"
@@ -533,7 +561,7 @@ mod test {
         let spectrum: Spectrum = EdgeFilter::new(
             EdgeFilterType::ShortPass,
             nanometer!(1000.0),
-            (0.)..(1.),
+            0.0..1.0,
             None,
             nanometer!(500.0)..nanometer!(1500.0),
             nanometer!(1.0),
@@ -543,7 +571,7 @@ mod test {
     }
     #[test]
     fn splitting_config_transmission() -> OpmResult<()> {
-        assert_eq!(
+        assert_abs_diff_eq!(
             SplittingConfig::Ratio(0.6).transmission(nanometer!(1000.0))?,
             0.6
         );
@@ -558,8 +586,8 @@ mod test {
                 .is_err()
         );
         let config = short_pass_config()?;
-        assert_eq!(config.transmission(nanometer!(999.0))?, 1.0);
-        assert_eq!(config.transmission(nanometer!(1001.0))?, 0.0);
+        assert_abs_diff_eq!(config.transmission(nanometer!(999.0))?, 1.0);
+        assert_abs_diff_eq!(config.transmission(nanometer!(1001.0))?, 0.0);
         assert!(config.transmission(nanometer!(1501.0)).is_err());
         Ok(())
     }
@@ -571,11 +599,7 @@ mod test {
             panic!("expected a constant reflectivity coating");
         };
         assert_abs_diff_eq!(coating.reflectivity().get::<ratio>(), 0.4);
-        assert!(
-            short_pass_config()?
-                .coating(nanometer!(1501.0))
-                .is_err()
-        );
+        assert!(short_pass_config()?.coating(nanometer!(1501.0)).is_err());
         Ok(())
     }
 }

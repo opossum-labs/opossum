@@ -543,7 +543,7 @@ impl Ray {
         n2: Option<f64>,
         missed_surface_strategy: &MissedSurfaceStrategy,
     ) -> OpmResult<(Option<Self>, Option<HitPoint>)> {
-        self.refract_on_surface_with_coating(os, os.coating(), n2, missed_surface_strategy)
+        self.refract_on_surface_with_coating(os, os.coating(), n2, *missed_surface_strategy)
     }
     /// Refract the [`Ray`] on a given [`OpticSurface`] as [`refract_on_surface`](Self::refract_on_surface)
     /// does, but with the given coating instead of the coating of the surface.
@@ -571,7 +571,7 @@ impl Ray {
         os: &OpticSurface,
         coating: &CoatingType,
         n2: Option<f64>,
-        missed_surface_strategy: &MissedSurfaceStrategy,
+        missed_surface_strategy: MissedSurfaceStrategy,
     ) -> OpmResult<(Option<Self>, Option<HitPoint>)> {
         let n_refri_2 = n2.unwrap_or_else(|| self.refractive_index());
         if n_refri_2 < 1.0 || !n_refri_2.is_finite() {

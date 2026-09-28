@@ -944,7 +944,7 @@ impl Rays {
         self.interact_with_surface(
             surface,
             refractive_index,
-            missed_surface_strategy,
+            *missed_surface_strategy,
             &reflected_part,
         )
     }
@@ -987,7 +987,7 @@ impl Rays {
         self.interact_with_surface(
             surface,
             None,
-            missed_surface_strategy,
+            *missed_surface_strategy,
             &ReflectedPart::Branch(config),
         )
     }
@@ -1018,7 +1018,7 @@ impl Rays {
         &mut self,
         surface: &mut OpticSurface,
         refractive_index: Option<&RefractiveIndexType>,
-        missed_surface_strategy: &MissedSurfaceStrategy,
+        missed_surface_strategy: MissedSurfaceStrategy,
         reflected_part: &ReflectedPart<'_>,
     ) -> OpmResult<Self> {
         let mut valid_rays_found = false;
@@ -2549,7 +2549,7 @@ mod test {
         let spectrum: Spectrum = EdgeFilter::new(
             EdgeFilterType::ShortPass,
             nanometer!(1000.0),
-            (0.)..(1.),
+            0.0..1.0,
             None,
             nanometer!(500.0)..nanometer!(1500.0),
             nanometer!(1.0),
