@@ -1185,7 +1185,12 @@ async fn ensure_tab_active(
     if *workspace.active_tab().read() == graph_id {
         return;
     }
-    if workspace.tabs().contains_key(&graph_id) {
+    // Judge "already open" by tab-bar visibility, not data existence: a group can be silently
+    // seeded into `tabs()` by `ensure_group_tab` (e.g. when two nodes are grouped) without ever
+    // being added to `tab_order`, and `set_active_tab` alone would then point `active_tab` at a tab
+    // the tab bar never renders - so the group would never visibly open. Route that case through
+    // `process_open_group_tab`, which adds it to `tab_order` and fills it. Mirrors `OpenGroupTab`.
+    if workspace.tab_order().read().contains(&graph_id) {
         ws_handler.workspace.set_active_tab(graph_id);
     } else if let Ok(group_info) = api::get_node_info(graph_id).await {
         process_open_group_tab(
