@@ -18,6 +18,8 @@
 //! light - the optical axis - comes from the backend like the components, but as objects of its own
 //! that are no node of the graph; see [`ray_object`].
 
+use std::collections::HashSet;
+
 // The prelude, not just `Asset` and `asset!`: the macro expands to a path through `manganis`, which
 // only the prelude brings into scope.
 use dioxus::prelude::*;
@@ -96,6 +98,27 @@ pub const RAYS_OBJECT_ID: &str = "rays:trace";
 /// `true` for a ray object.
 pub fn is_ray_object(id: &str) -> bool {
     id.starts_with("rays:")
+}
+
+/// Mark each component object selected exactly when its node is in `selected`.
+///
+/// This is how the graph's selection reaches the 3D view: an object's id is its node's uuid
+/// stringified (see [`objects_of`]), so an object is boxed when that uuid is in the set and cleared
+/// when it is not. Ray objects (the `rays:` prefix, see [`is_ray_object`]) are never a node of the
+/// graph and never receive a selection box.
+///
+/// # Arguments
+///
+/// - `objects`: the 3D view's object list, whose `selected` flags are set in place
+/// - `selected`: the ids of the nodes selected in the graph
+pub fn apply_node_selection(objects: &mut [GlbObject], selected: &HashSet<Uuid>) {
+    for object in objects.iter_mut() {
+        object.selected = !is_ray_object(&object.id)
+            && object
+                .id
+                .parse::<Uuid>()
+                .is_ok_and(|uid| selected.contains(&uid));
+    }
 }
 
 /// Describe drawn light - the optical axis, say - as an object of the 3D view.
@@ -309,6 +332,41 @@ mod tests {
         assert_eq!(objects.len(), 2);
         assert_eq!(objects[0].id, first.to_string());
         assert_eq!(objects[1].id, second.to_string());
+    }
+
+    /// The graph's selection reaches the 3D view by uuid: a component whose node is selected is
+    /// boxed, one whose node is not is cleared, and a ray object is never boxed even when the set
+    /// is non-empty. Clearing the selection clears every box.
+    #[test]
+    fn node_selection_boxes_the_selected_components_and_never_the_rays() {
+        let selected = Uuid::new_v4();
+        let unselected = Uuid::new_v4();
+        let manifest = SceneManifest {
+            nodes: vec![entry(selected), entry(unselected)],
+            skipped: vec![],
+        };
+        let mut objects = objects_of(&manifest, "http://localhost:8001");
+        objects.push(ray_object(
+            AXIS_OBJECT_ID,
+            "http://localhost/axis.glb".to_owned(),
+            true,
+            1.0,
+        ));
+
+        apply_node_selection(&mut objects, &HashSet::from([selected]));
+
+        assert!(objects[0].selected, "the selected node must be boxed");
+        assert!(!objects[1].selected, "an unselected node must not be boxed");
+        assert!(
+            !objects[2].selected,
+            "a ray object is no node of the graph and must never be boxed"
+        );
+
+        apply_node_selection(&mut objects, &HashSet::new());
+        assert!(
+            objects.iter().all(|object| !object.selected),
+            "clearing the selection must clear every box"
+        );
     }
 
     /// The table has to sit below the beam, or it cuts through every component centred on it - and

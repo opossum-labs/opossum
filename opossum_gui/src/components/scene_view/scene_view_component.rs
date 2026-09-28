@@ -1,5 +1,7 @@
 //! The 3D view of the current model.
 
+use std::collections::HashSet;
+
 use dioxus::prelude::*;
 use dioxus_glb_viewer::{
     Environment, GlbObject, GlbViewer, PickEvent, ViewerEvent, ViewerOptions, use_glb_viewer_handle,
@@ -11,9 +13,12 @@ use crate::{
     components::{
         scene_view::{
             AXIS_OBJECT_ID, RAYS_OBJECT_ID, SceneShortcut, SceneViewRequest, action_for_pick,
-            is_ray_object, objects_of, ray_object, table_ground,
+            apply_node_selection, is_ray_object, objects_of, ray_object, table_ground,
         },
-        scenery_editor::GraphsWorkspaceAction,
+        scenery_editor::{
+            GraphStateStoreExt, GraphsWorkspaceAction, GraphsWorkspaceState,
+            GraphsWorkspaceStateStoreExt,
+        },
     },
 };
 
@@ -46,6 +51,21 @@ pub fn SceneView() -> Element {
     let mut skipped_count = use_signal(|| 0_usize);
     let viewer_handle = use_glb_viewer_handle();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
+    // The graph editor provides its workspace store to this whole subtree, so the 3D view can read
+    // which nodes are selected in the graph and box the same ones - the reverse of what `on_pick`
+    // does. See `graph_editor_component`'s `use_context_provider`.
+    let workspace = use_context::<ReadStore<GraphsWorkspaceState>>();
+    // The nodes selected in the active graph tab, deduped: this recomputes on any change to the
+    // active tab's store but only notifies when the selected set itself differs, so dragging a node
+    // does not re-run the selection effect below. Mirrors `graph_editor_component`'s
+    // `selected_nodes_memo`, and tracks only the active tab just as the properties sidebar does.
+    let selected_ids = use_memo(move || {
+        let active = *workspace.active_tab().read();
+        workspace
+            .tabs()
+            .get(active)
+            .map_or_else(HashSet::new, |g| g.graph_store().read().selected_node_ids())
+    });
     // The 3D view's own keyboard shortcuts act only while its viewport holds focus, so the container
     // below is made focusable and its handle kept here to focus it on a click - see its `onkeydown`.
     let mut viewport = use_signal(|| None::<std::rc::Rc<MountedData>>);
@@ -127,6 +147,11 @@ pub fn SceneView() -> Element {
                     if controls.rays {
                         list.push(rays_object());
                     }
+                    // Box whatever the graph has selected right now, so the selection box survives a
+                    // model refetch while a node stays selected. Read by `peek`, so this effect stays
+                    // tied to the manifest alone and a mere selection change never triggers a refetch.
+                    let selected = selected_ids.peek();
+                    apply_node_selection(&mut list, &selected);
                     objects.set(list);
                     skipped_count.set(fetched.skipped.len());
                     for s in &fetched.skipped {
@@ -169,6 +194,20 @@ pub fn SceneView() -> Element {
         if controls.rays {
             list.push(rays_object());
         }
+        if list != *objects.peek() {
+            objects.set(list);
+        }
+    });
+
+    // Reflect the graph's selection into the 3D box - the reverse of `on_pick`. The selection is
+    // read reactively and the object list by peek, so this re-runs when the selection changes but
+    // not when it writes the list back; the equality guard means an unchanged selection costs the
+    // viewer no update. A model refetch bakes the selection in itself (see the rebuild effect
+    // above), so this effect only carries a selection change made without one.
+    use_effect(move || {
+        let selected = selected_ids();
+        let mut list = objects.peek().clone();
+        apply_node_selection(&mut list, &selected);
         if list != *objects.peek() {
             objects.set(list);
         }
