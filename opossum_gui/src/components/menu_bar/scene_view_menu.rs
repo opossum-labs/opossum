@@ -5,7 +5,10 @@ use dioxus_free_icons::{Icon, icons::fa_solid_icons::FaCheck};
 
 use crate::{
     SCENE_VIEW_CONTROLS, SCENE_VIEW_OPEN, SCENE_VIEW_REQUEST,
-    components::{menu_bar::menu_bar_component::AppCommand, scene_view::SceneViewRequest},
+    components::{
+        menu_bar::menu_bar_component::AppCommand,
+        scene_view::{SceneShortcut, SceneViewRequest},
+    },
 };
 
 /// Everything the 3D view can be told, in one menu: whether it is open at all, what it shows, and
@@ -64,11 +67,13 @@ pub fn SceneViewMenu(on_menu_action: EventHandler<AppCommand>, is_connected: boo
                 SceneViewMenuEntry {
                     label: "Fit view",
                     disabled: !open,
+                    shortcut: SceneShortcut::Fit.key_hint(),
                     on_click: move |()| *SCENE_VIEW_REQUEST.write() = Some(SceneViewRequest::FitView),
                 }
                 SceneViewMenuEntry {
                     label: "Reset camera",
                     disabled: !open,
+                    shortcut: SceneShortcut::Reset.key_hint(),
                     on_click: move |()| {
                         *SCENE_VIEW_REQUEST.write() = Some(SceneViewRequest::ResetCamera);
                     },
@@ -80,6 +85,7 @@ pub fn SceneViewMenu(on_menu_action: EventHandler<AppCommand>, is_connected: boo
                     label: "Table",
                     checked: controls.table,
                     disabled: !open,
+                    shortcut: SceneShortcut::Table.key_hint(),
                     on_click: move |()| {
                         let mut controls = SCENE_VIEW_CONTROLS.write();
                         controls.table = !controls.table;
@@ -89,6 +95,7 @@ pub fn SceneViewMenu(on_menu_action: EventHandler<AppCommand>, is_connected: boo
                     label: "Axes",
                     checked: controls.axes,
                     disabled: !open,
+                    shortcut: SceneShortcut::Axes.key_hint(),
                     on_click: move |()| {
                         let mut controls = SCENE_VIEW_CONTROLS.write();
                         controls.axes = !controls.axes;
@@ -98,6 +105,7 @@ pub fn SceneViewMenu(on_menu_action: EventHandler<AppCommand>, is_connected: boo
                     label: "Beam axis",
                     checked: controls.beam_axis,
                     disabled: !open,
+                    shortcut: SceneShortcut::Beam.key_hint(),
                     on_click: move |()| {
                         let mut controls = SCENE_VIEW_CONTROLS.write();
                         controls.beam_axis = !controls.beam_axis;
@@ -107,6 +115,7 @@ pub fn SceneViewMenu(on_menu_action: EventHandler<AppCommand>, is_connected: boo
                     label: "Rays",
                     checked: controls.rays,
                     disabled: !open,
+                    shortcut: SceneShortcut::Rays.key_hint(),
                     on_click: move |()| {
                         let mut controls = SCENE_VIEW_CONTROLS.write();
                         controls.rays = !controls.rays;
@@ -166,8 +175,8 @@ pub fn SceneViewMenu(on_menu_action: EventHandler<AppCommand>, is_connected: boo
 /// greyed-out state the whole menu takes on while the view is closed.
 ///
 /// Its own component rather than `MenuListItemShortCut`, which takes its label and its hint from a
-/// `ShortCutAction` - none of these entries has a shortcut, and none of the existing entries shows
-/// state.
+/// `ShortCutAction` in the global registry - the 3D view's keys are local to it and deliberately kept
+/// out of that registry, and none of the existing entries shows state.
 ///
 /// # Arguments
 ///
@@ -175,12 +184,15 @@ pub fn SceneViewMenu(on_menu_action: EventHandler<AppCommand>, is_connected: boo
 /// * `on_click` - Called on a click, unless the entry is disabled.
 /// * `checked`  - Whether to draw the check mark. Left off for the entries that are actions.
 /// * `disabled` - Whether the entry is greyed out and inert.
+/// * `shortcut` - The key that triggers the same action from the focused viewport, shown muted on the
+///   right. Left off for the entries with no key of their own.
 #[component]
 fn SceneViewMenuEntry(
     label: String,
     on_click: EventHandler<()>,
     #[props(default)] checked: bool,
     #[props(default)] disabled: bool,
+    #[props(default)] shortcut: Option<&'static str>,
 ) -> Element {
     rsx! {
         li {
@@ -194,8 +206,13 @@ fn SceneViewMenuEntry(
                     }
                 },
                 {label}
-                if checked {
-                    Icon { width: 12, height: 12, icon: FaCheck }
+                span { class: "d-flex align-items-center gap-2 ms-4",
+                    if let Some(key) = shortcut {
+                        span { class: "text-muted", {key} }
+                    }
+                    if checked {
+                        Icon { width: 12, height: 12, icon: FaCheck }
+                    }
                 }
             }
         }

@@ -112,4 +112,24 @@ impl SceneShortcut {
             _ => None,
         }
     }
+
+    /// The key label shown beside this shortcut's entry in the 3D View menu, e.g. `"F"`.
+    ///
+    /// The inverse of [`from_key`](Self::from_key) for the exact character it reports, so the menu
+    /// hint and the key the handler acts on can never drift apart.
+    ///
+    /// # Returns
+    ///
+    /// The single upper-case letter that triggers this shortcut.
+    #[must_use]
+    pub const fn key_hint(self) -> &'static str {
+        match self {
+            Self::Fit => "F",
+            Self::Reset => "R",
+            Self::Table => "T",
+            Self::Axes => "A",
+            Self::Beam => "B",
+            Self::Rays => "L",
+        }
+    }
 }

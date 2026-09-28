@@ -134,6 +134,25 @@ The selection box is tilted along with the component it marks, rather than kept 
 On a tilted mirror or grating that is the difference between a box the size of the component and one
 reaching well past it, so the box shows which component is meant even in a crowded setup.
 
+### Keyboard shortcuts
+
+Click anywhere in the view once to give it focus, and these keys stand in for the **3D View** menu
+entries of the same name, so you can frame, reset and toggle without leaving the viewport:
+
+| Key | Effect |
+| :--- | :--- |
+| `F` | Fit view — frame all components |
+| `R` | Reset camera |
+| `T` | Show or hide the optical table |
+| `A` | Show or hide the orientation gizmo |
+| `B` | Show or hide the optical axis |
+| `L` | Show or hide the traced rays |
+
+They act only while the viewport is focused, so the same letters typed in the graph or the properties
+sidebar are never caught by them. Only bare keys count: holding Ctrl, Cmd, Alt or Shift leaves them to
+whatever else the combination belongs to. `L` rather than `R` toggles the rays, because `R` is kept
+for resetting the camera. Each key is also shown beside its entry in the menu.
+
 ## The 3D View menu
 
 Everything the view can be told sits in the **3D View** menu in the top navigation bar. The view
@@ -154,7 +173,8 @@ any that had to be left out.
 | **ray opacity** | How opaque the rays are drawn; the axis is always solid |
 
 See [Light: the optical axis and the rays](#light-the-optical-axis-and-the-rays) for what the last
-four show.
+four show. Fit view, Reset camera and the four toggles also carry a keyboard shortcut, shown beside
+the entry — see [Keyboard shortcuts](#keyboard-shortcuts).
 
 Three things are worth knowing about the menu itself:
 
