@@ -58,13 +58,3 @@ pub async fn get_analyzer_types() -> Result<Vec<AnalyzerType>, String> {
 // // pub async fn analyze(client: &HTTPClient) -> Result<Vec<AnalysisReport>, String> {
 // //     client.get::<Vec<AnalysisReport>>("/api/analyze").await
 // // }
-
-/// Send a request to shutdown the backend server.
-///
-/// This function shuts down the backend server. No further communication is possible after this call.
-#[allow(dead_code)]
-pub async fn post_terminate() {
-    let _ = HTTP_API_CLIENT()
-        .post::<String, String>("/api/terminate", String::new())
-        .await;
-}
