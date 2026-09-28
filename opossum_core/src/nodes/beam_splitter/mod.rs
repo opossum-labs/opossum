@@ -6,6 +6,7 @@ mod analysis_raytrace;
 
 use crate::{
     analyzers::{AnalyzerType, propagation_strategy::MissedSurfaceStrategy},
+    coatings::{CoatingConstantR, CoatingType},
     core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType},
     error::{OpmResult, OpossumError},
     geometry::{Plane, geo_surface::GeoSurfaceRef},
@@ -24,6 +25,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 use strum::{EnumIter, IntoEnumIterator};
+use uom::si::{
+    f64::{Length, Ratio},
+    ratio::ratio,
+};
 
 /// Config data builder for a [`BeamSplitter`].
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
@@ -109,6 +114,61 @@ impl SplittingConfig {
             Self::Ratio(r) => (0.0..=1.0).contains(r),
             Self::Spectrum(s) => s.is_transmission_spectrum(),
         }
+    }
+    /// Returns the transmission of this [`SplittingConfig`] at a given wavelength.
+    ///
+    /// The transmission is the part of the energy that remains in the initial beam. For
+    /// [`SplittingConfig::Ratio`] it is the ratio itself, for [`SplittingConfig::Spectrum`] it is the
+    /// spectrum value at the given wavelength.
+    ///
+    /// # Arguments
+    ///
+    /// * `wavelength` - the wavelength of the light to be split.
+    ///
+    /// # Returns
+    ///
+    /// The transmission in the range `(0.0..=1.0)`.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the wavelength is outside the given spectrum or the
+    /// transmission is outside the interval `[0.0..1.0]`.
+    pub fn transmission(&self, wavelength: Length) -> OpmResult<f64> {
+        let transmission = match self {
+            Self::Ratio(r) => *r,
+            Self::Spectrum(spectrum) => spectrum.get_value(&wavelength).ok_or_else(|| {
+                OpossumError::Spectrum(
+                    "ray splitting failed. wavelength outside given spectrum".into(),
+                )
+            })?,
+        };
+        if !(0.0..=1.0).contains(&transmission) {
+            return Err(OpossumError::Other(
+                "splitting_ratio must be within [0.0;1.0]".into(),
+            ));
+        }
+        Ok(transmission)
+    }
+    /// Returns the coating of a splitting surface with this [`SplittingConfig`] at a given wavelength.
+    ///
+    /// The splitting surface reflects everything that it does not transmit, so the returned
+    /// coating has a constant reflectivity of `1 - transmission`.
+    ///
+    /// # Arguments
+    ///
+    /// * `wavelength` - the wavelength of the light hitting the splitting surface.
+    ///
+    /// # Returns
+    ///
+    /// A [`CoatingType::ConstantR`] with the reflectivity of the splitting surface.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the transmission cannot be determined (see
+    /// [`transmission`](Self::transmission)).
+    pub fn coating(&self, wavelength: Length) -> OpmResult<CoatingType> {
+        let reflectivity = Ratio::new::<ratio>(1.0 - self.transmission(wavelength)?);
+        Ok(CoatingType::ConstantR(CoatingConstantR::new(reflectivity)?))
     }
 }
 
@@ -411,8 +471,13 @@ mod test {
     use super::*;
     use crate::{
         core_optics::{NodeAttrExt, PortType},
-        nodes::test_helper::test_helper::*,
+        nanometer,
+        nodes::{
+            ideal_filter::{EdgeFilter, EdgeFilterType},
+            test_helper::test_helper::*,
+        },
     };
+    use approx::assert_abs_diff_eq;
     #[test]
     fn default() -> OpmResult<()> {
         let node = BeamSplitter::default();
@@ -463,5 +528,54 @@ mod test {
     #[test]
     fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<BeamSplitter>()
+    }
+    fn short_pass_config() -> OpmResult<SplittingConfig> {
+        let spectrum: Spectrum = EdgeFilter::new(
+            EdgeFilterType::ShortPass,
+            nanometer!(1000.0),
+            (0.)..(1.),
+            None,
+            nanometer!(500.0)..nanometer!(1500.0),
+            nanometer!(1.0),
+        )?
+        .into();
+        Ok(SplittingConfig::Spectrum(spectrum))
+    }
+    #[test]
+    fn splitting_config_transmission() -> OpmResult<()> {
+        assert_eq!(
+            SplittingConfig::Ratio(0.6).transmission(nanometer!(1000.0))?,
+            0.6
+        );
+        assert!(
+            SplittingConfig::Ratio(1.1)
+                .transmission(nanometer!(1000.0))
+                .is_err()
+        );
+        assert!(
+            SplittingConfig::Ratio(-0.1)
+                .transmission(nanometer!(1000.0))
+                .is_err()
+        );
+        let config = short_pass_config()?;
+        assert_eq!(config.transmission(nanometer!(999.0))?, 1.0);
+        assert_eq!(config.transmission(nanometer!(1001.0))?, 0.0);
+        assert!(config.transmission(nanometer!(1501.0)).is_err());
+        Ok(())
+    }
+    #[test]
+    fn splitting_config_coating() -> OpmResult<()> {
+        let CoatingType::ConstantR(coating) =
+            SplittingConfig::Ratio(0.6).coating(nanometer!(1000.0))?
+        else {
+            panic!("expected a constant reflectivity coating");
+        };
+        assert_abs_diff_eq!(coating.reflectivity().get::<ratio>(), 0.4);
+        assert!(
+            short_pass_config()?
+                .coating(nanometer!(1501.0))
+                .is_err()
+        );
+        Ok(())
     }
 }
