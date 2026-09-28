@@ -282,7 +282,7 @@ impl Default for ViewerOptions {
             directional_intensity: 1.2,
             selection_color: "#00aaff".into(),
             fit_on_first_load: true,
-            initial_camera: [0.5, 0.3, 0.5],
+            initial_camera: [0.3, 0.3, 0.0],
             initial_target: [0.0, 0.0, 0.0],
             environment: Environment::default(),
             fov_degrees: 50.0,
