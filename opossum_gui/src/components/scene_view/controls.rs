@@ -78,9 +78,9 @@ pub enum SceneShortcut {
     Reset,
     /// Show or hide the optical table - the menu's **Table**.
     Table,
-    /// Show or hide the orientation gizmo - the menu's **Axes**.
+    /// Show or hide the orientation gizmo - the menu's **World axes**.
     Axes,
-    /// Show or hide the optical axis - the menu's **Beam axis**.
+    /// Show or hide the optical axis - the menu's **Optical axis**.
     Beam,
     /// Show or hide the traced rays - the menu's **Rays**.
     Rays,

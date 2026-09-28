@@ -1,7 +1,6 @@
 //! The **3D View** menu in the top navigation bar.
 
 use dioxus::prelude::*;
-use dioxus_free_icons::{Icon, icons::fa_solid_icons::FaCheck};
 
 use crate::{
     SCENE_VIEW_CONTROLS, SCENE_VIEW_OPEN, SCENE_VIEW_REQUEST,
@@ -51,8 +50,8 @@ pub fn SceneViewMenu(on_menu_action: EventHandler<AppCommand>, is_connected: boo
             }
             ul { class: "dropdown-menu",
                 SceneViewMenuEntry {
-                    label: "Show 3D view",
-                    checked: open,
+                    label: "3D view",
+                    shown: Some(open),
                     disabled: !is_connected,
                     on_click: move |()| on_menu_action.call(AppCommand::ToggleSceneView),
                 }
@@ -83,7 +82,7 @@ pub fn SceneViewMenu(on_menu_action: EventHandler<AppCommand>, is_connected: boo
                 }
                 SceneViewMenuEntry {
                     label: "Table",
-                    checked: controls.table,
+                    shown: Some(controls.table),
                     disabled: !open,
                     shortcut: SceneShortcut::Table.key_hint(),
                     on_click: move |()| {
@@ -92,8 +91,8 @@ pub fn SceneViewMenu(on_menu_action: EventHandler<AppCommand>, is_connected: boo
                     },
                 }
                 SceneViewMenuEntry {
-                    label: "Axes",
-                    checked: controls.axes,
+                    label: "World axes",
+                    shown: Some(controls.axes),
                     disabled: !open,
                     shortcut: SceneShortcut::Axes.key_hint(),
                     on_click: move |()| {
@@ -102,8 +101,8 @@ pub fn SceneViewMenu(on_menu_action: EventHandler<AppCommand>, is_connected: boo
                     },
                 }
                 SceneViewMenuEntry {
-                    label: "Beam axis",
-                    checked: controls.beam_axis,
+                    label: "Optical axis",
+                    shown: Some(controls.beam_axis),
                     disabled: !open,
                     shortcut: SceneShortcut::Beam.key_hint(),
                     on_click: move |()| {
@@ -113,7 +112,7 @@ pub fn SceneViewMenu(on_menu_action: EventHandler<AppCommand>, is_connected: boo
                 }
                 SceneViewMenuEntry {
                     label: "Rays",
-                    checked: controls.rays,
+                    shown: Some(controls.rays),
                     disabled: !open,
                     shortcut: SceneShortcut::Rays.key_hint(),
                     on_click: move |()| {
@@ -171,18 +170,24 @@ pub fn SceneViewMenu(on_menu_action: EventHandler<AppCommand>, is_connected: boo
     }
 }
 
-/// One entry of the 3D View menu: a label, a check mark while whatever it switches is on, and the
-/// greyed-out state the whole menu takes on while the view is closed.
+/// One entry of the 3D View menu: an action or a toggle, the key that also triggers it from the
+/// focused viewport, and the greyed-out state the whole menu takes on while the view is closed.
 ///
 /// Its own component rather than `MenuListItemShortCut`, which takes its label and its hint from a
 /// `ShortCutAction` in the global registry - the 3D view's keys are local to it and deliberately kept
-/// out of that registry, and none of the existing entries shows state.
+/// out of that registry.
+///
+/// A toggle names its state in its own wording rather than with a check mark: `shown` puts **Hide**
+/// in front of the label while what it switches is on and **Show** while it is off, so the entry
+/// always says what a click would do.
 ///
 /// # Arguments
 ///
-/// * `label`    - The entry's text.
+/// * `label`    - The entry's text for an action, or the noun a toggle's **Show**/**Hide** goes in
+///   front of.
 /// * `on_click` - Called on a click, unless the entry is disabled.
-/// * `checked`  - Whether to draw the check mark. Left off for the entries that are actions.
+/// * `shown`    - `Some(true)`/`Some(false)` marks a toggle and says whether what it switches is on;
+///   `None` (the default) is a plain action whose label is shown as is.
 /// * `disabled` - Whether the entry is greyed out and inert.
 /// * `shortcut` - The key that triggers the same action from the focused viewport, shown muted on the
 ///   right. Left off for the entries with no key of their own.
@@ -190,10 +195,15 @@ pub fn SceneViewMenu(on_menu_action: EventHandler<AppCommand>, is_connected: boo
 fn SceneViewMenuEntry(
     label: String,
     on_click: EventHandler<()>,
-    #[props(default)] checked: bool,
+    #[props(default)] shown: Option<bool>,
     #[props(default)] disabled: bool,
     #[props(default)] shortcut: Option<&'static str>,
 ) -> Element {
+    let text = match shown {
+        Some(true) => format!("Hide {label}"),
+        Some(false) => format!("Show {label}"),
+        None => label,
+    };
     rsx! {
         li {
             a {
@@ -205,14 +215,9 @@ fn SceneViewMenuEntry(
                         on_click.call(());
                     }
                 },
-                {label}
-                span { class: "d-flex align-items-center gap-2 ms-4",
-                    if let Some(key) = shortcut {
-                        span { class: "text-muted", {key} }
-                    }
-                    if checked {
-                        Icon { width: 12, height: 12, icon: FaCheck }
-                    }
+                {text}
+                if let Some(key) = shortcut {
+                    span { class: "text-muted ms-4", {key} }
                 }
             }
         }

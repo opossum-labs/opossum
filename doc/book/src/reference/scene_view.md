@@ -11,8 +11,8 @@ round you had in mind.
 Open it from the top navigation bar: **3D View** → **Show 3D view**. It appears as a further tab
 beside the tab of the graph you are working on and comes to the front straight away.
 
-A check mark marks that entry for as long as the view is open; choosing it again closes the view, and
-the tab carries the usual close button too. Closing it frees the graphics resources it holds, so
+The entry reads **Hide 3D view** for as long as the view is open; choosing it again closes the view,
+and the tab carries the usual close button too. Closing it frees the graphics resources it holds, so
 leave it closed when you are not looking at it.
 
 The entry needs a connected backend: the view asks the backend for the model as soon as it opens. The
@@ -74,7 +74,7 @@ after it is drawn either way.
 
 Two kinds of light can be drawn over the components, each switched on and off in the **3D View** menu.
 
-**The optical axis** (**Beam axis**, on by default) is the path the positioning run follows: one ray
+**The optical axis** (**Optical axis** in the menu, on by default) is the path the positioning run follows: one ray
 per source, the one every component is placed on. It is drawn as a purple line from each source
 through the components to wherever the axis leaves the setup, and shows how the setup is built up —
 why a component sits where it does, which way a fold turns. A model without an analyzer is placed
@@ -136,8 +136,8 @@ reaching well past it, so the box shows which component is meant even in a crowd
 
 ### Keyboard shortcuts
 
-Click anywhere in the view once to give it focus, and these keys stand in for the **3D View** menu
-entries of the same name, so you can frame, reset and toggle without leaving the viewport:
+Click anywhere in the view once to give it focus, and these keys stand in for the matching **3D View**
+menu entries, so you can frame, reset and toggle without leaving the viewport:
 
 | Key | Effect |
 | :--- | :--- |
@@ -161,14 +161,14 @@ any that had to be left out.
 
 | Entry | Effect |
 | :--- | :--- |
-| **Show 3D view** | Open the view, or close it again; check-marked while it is open |
+| **Show / Hide 3D view** | Open the view, or close it again |
 | **Refresh** | Ask the backend for the model again, at once |
 | **Fit view** | Frame all components (the optical table is not included) |
 | **Reset camera** | Return the camera to its starting pose |
-| **Table** | Show or hide the optical table |
-| **Axes** | Show or hide the corner orientation gizmo |
-| **Beam axis** | Show or hide the optical axis |
-| **Rays** | Show or hide the traced rays of the analyzer's sources |
+| **Show / Hide Table** | Show or hide the optical table |
+| **Show / Hide World axes** | Show or hide the corner orientation gizmo |
+| **Show / Hide Optical axis** | Show or hide the optical axis |
+| **Show / Hide Rays** | Show or hide the traced rays of the analyzer's sources |
 | **max. rays** | The most rays drawn per source; takes effect on Enter or when leaving the field |
 | **ray opacity** | How opaque the rays are drawn; the axis is always solid |
 
@@ -180,14 +180,15 @@ Three things are worth knowing about the menu itself:
 
 - **It stays open while you change things.** A setup is usually judged by trying a few of these in a
   row — show the rays, fade them, then frame them — so the menu only closes on a click outside it.
-  The four toggles carry a check mark while they are on.
+  Each toggle's entry reads **Hide …** while what it switches is on and **Show …** while it is off, so
+  it always names what a click would do.
 - **Everything below the first entry needs an open view** and is greyed out until there is one.
 - **What the view shows is remembered.** Close the view and open it again and the toggles, the ray
   count and the opacity are as you left them. The camera is not — see below.
 
 Refresh, Fit view, and Reset camera move the camera, and so does clicking a gizmo axis in the
-viewport. Table, Axes, Beam axis and Rays are visibility toggles and do not move the camera. Nothing that happens to
-the *model* moves it either — see below.
+viewport. Table, World axes, Optical axis and Rays are visibility toggles and do not move the camera.
+Nothing that happens to the *model* moves it either — see below.
 
 ## When the view updates itself
 
@@ -244,8 +245,9 @@ centimetre-to-metre setup rather than frame it.
 The table has no edge: it reaches to the horizon wherever you move the camera and fades into the
 background in the distance. It is scenery, not part of the model — **Fit view** frames only the
 components, and clicking the table clears the selection. Seen through a lens, the table does not
-show. Show or hide it with **Table** in the **3D View** menu.
+show. Show or hide it with the **Table** entry in the **3D View** menu.
 
 In the bottom-right corner of the view a small **orientation gizmo** shows which way x, y, and z
 point. It keeps you from losing your bearings while orbiting. Click one of its axes to snap the camera
-to look straight along that direction; show or hide it with **Axes** in the **3D View** menu.
+to look straight along that direction; show or hide it with the **World axes** entry in the **3D
+View** menu.
