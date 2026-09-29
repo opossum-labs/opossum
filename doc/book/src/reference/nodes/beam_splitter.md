@@ -10,6 +10,16 @@ For ray tracing, the beam splitter acts as a thin splitting surface lying in the
 
 Like a mirror, a beam splitter with an alignment of 0° therefore reflects the light directly back towards the source. To deflect the reflected beam by 90°, rotate the beam splitter in the `Node Editor` panel under the `Alignment` section, e.g. by setting the **Roll Angle** to **45°**.
 
+## Positioning
+
+During the alignment run (which precedes ray tracing and ghost-focus analysis), the beam splitter is placed from the optical axis of one of its inputs, and that axis is then split onto the two outputs so the following nodes can be placed in turn.
+
+**Which input places the splitter.** If `input_1` carries the optical axis it is used; otherwise `input_2` is used. A beam splitter can therefore be positioned from either input on its own — connecting only `input_2` works just as well as connecting only `input_1`.
+
+**Where the second input's beam comes from.** Both inputs share the same splitting surface. Because a beam entering `input_2` passes straight through to `out2_trans2_refl1`, its optical axis must arrive travelling in the direction that leaves `out2` — the mirror image, on the splitting surface, of the `input_1` axis. For an untilted beam splitter (0°) this is the direction straight back towards a source on the opposite side; for one rolled to fold the beam by 90°, it is the folded (sideways) direction. The up direction is mirrored to match, so both inputs share a consistent frame.
+
+**Both inputs connected.** When both inputs carry an axis, the splitter is placed from `input_1` — deterministically, regardless of the order in which the two arms happen to be traced — and the axis reaching `input_2` is then checked against that placement. If the two do not agree (different direction, wrong distance along the axis, or a sideways miss), OPOSSUM keeps the placement from `input_1` and logs a warning describing the deviation and the exact position and direction the `input_2` beam would need to be consistent. See [Geometry → Beam Combiners and Parallel Paths](../../concepts/geometry.md#beam-combiners-and-parallel-paths) for the details and for the case of two independent sources.
+
 ## Ports
 
 ### Inputs

@@ -13,6 +13,7 @@ use crate::{
     nodes::NodeGroup,
     picojoule,
     reporting::analysis_report::AnalysisReport,
+    utils::geom_transformation::Isometry,
 };
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
@@ -326,6 +327,26 @@ pub trait AnalysisRayTrace: OpticNode {
         } else {
             self.analyze(incoming_data, config)
         }
+    }
+    /// Return the local frame from which the optical axis enters the given input port.
+    ///
+    /// During the positioning run the node's isometry is derived from the observed world frame `W`
+    /// of the entering axis ray as `F = W ∘ L⁻¹`, where `L` is this frame. An ordinary node's axis
+    /// enters along local +z through the local origin, so `L` is the identity and `F = W`. A node
+    /// whose inputs do not share that convention overrides this — see
+    /// [`BeamSplitter`](crate::nodes::BeamSplitter), whose second input arrives mirrored on the
+    /// splitting plane.
+    ///
+    /// # Arguments
+    ///
+    /// * `port_name` - the input port the axis enters.
+    ///
+    /// # Returns
+    ///
+    /// The local entrance frame; the identity for every ordinary node.
+    fn axis_entrance_frame(&self, port_name: &str) -> Isometry {
+        let _ = port_name;
+        Isometry::identity()
     }
 }
 
