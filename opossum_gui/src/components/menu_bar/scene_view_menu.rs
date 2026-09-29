@@ -151,9 +151,9 @@ pub fn SceneViewMenu(on_menu_action: EventHandler<AppCommand>, is_connected: boo
                             r#type: "range",
                             class: "form-range",
                             style: "width: 6rem;",
-                            min: "0",
+                            min: "0.01",
                             max: "1",
-                            step: "0.05",
+                            step: "0.01",
                             disabled: !open,
                             value: "{controls.opacity}",
                             // Only restyles what is on screen: nothing is fetched or traced again.
