@@ -1,3 +1,11 @@
+warning: unused import: `opossum_core::generic_validators::ValidateTrait`
+ --> tests/fail/invalid_validate_struct.rs:2:5
+  |
+2 | use opossum_core::generic_validators::ValidateTrait;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
 error[E0277]: the trait bound `Validated<std::string::String, AllNotEmpty>: ValidateTrait` is not satisfied
   --> tests/fail/invalid_validate_struct.rs:10:13
    |

@@ -15,6 +15,7 @@ use uom::si::{
 
 use crate::{
     analyzers::propagation_strategy::MissedSurfaceStrategy,
+    coatings::CoatingType,
     core_optics::{
         hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint},
         optic_surface::OpticSurface,
@@ -542,6 +543,36 @@ impl Ray {
         n2: Option<f64>,
         missed_surface_strategy: &MissedSurfaceStrategy,
     ) -> OpmResult<(Option<Self>, Option<HitPoint>)> {
+        self.refract_on_surface_with_coating(os, os.coating(), n2, *missed_surface_strategy)
+    }
+    /// Refract the [`Ray`] on a given [`OpticSurface`] as [`refract_on_surface`](Self::refract_on_surface)
+    /// does, but with the given coating instead of the coating of the surface.
+    ///
+    /// This allows a surface to split light by a coating that is not (yet) stored on the surface itself,
+    /// e.g. the splitting surface of a [`BeamSplitter`](crate::nodes::BeamSplitter), whose reflectivity
+    /// follows from its [`SplittingConfig`].
+    ///
+    /// # Arguments
+    ///
+    /// * `os` - the surface the ray is refracted on.
+    /// * `coating` - the coating determining the energies of the refracted and the reflected ray.
+    /// * `n2` - the refractive index behind the surface. `None` keeps the refractive index of the ray.
+    /// * `missed_surface_strategy` - what happens to the ray if it does not hit the surface.
+    ///
+    /// # Returns
+    ///
+    /// The reflected [`Ray`] (if any) and the [`HitPoint`] on the surface (if any).
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the given refractive index `n2` if <1.0 or not finite.
+    pub(crate) fn refract_on_surface_with_coating(
+        &mut self,
+        os: &OpticSurface,
+        coating: &CoatingType,
+        n2: Option<f64>,
+        missed_surface_strategy: MissedSurfaceStrategy,
+    ) -> OpmResult<(Option<Self>, Option<HitPoint>)> {
         let n_refri_2 = n2.unwrap_or_else(|| self.refractive_index());
         if n_refri_2 < 1.0 || !n_refri_2.is_finite() {
             return Err(OpossumError::Other(
@@ -571,9 +602,7 @@ impl Ray {
             if dis.is_sign_positive() {
                 let mut reflected_ray = self.clone();
                 // handle energy (due to coating)
-                let reflectivity =
-                    os.coating()
-                        .calc_reflectivity(self, surface_normal, n_refri_2)?;
+                let reflectivity = coating.calc_reflectivity(self, surface_normal, n_refri_2)?;
                 let input_energy = self.energy();
                 let refract_dir = mu * (n.cross(&(-1.0 * n.cross(&s1))))
                     - n * f64::sqrt((mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0));
@@ -706,21 +735,7 @@ impl Ray {
     /// This function will return an error if `splitting_ratio` is outside the interval [0.0..1.0] or the wavelength of the ray is outside the given
     /// spectrum.
     pub fn split(&mut self, config: &SplittingConfig) -> OpmResult<Self> {
-        let splitting_ratio = match config {
-            SplittingConfig::Ratio(ratio) => *ratio,
-            SplittingConfig::Spectrum(spectrum) => {
-                (*spectrum).get_value(&self.wvl).ok_or_else(|| {
-                    OpossumError::Spectrum(
-                        "ray splitting failed. wavelength outside given spectrum".into(),
-                    )
-                })?
-            }
-        };
-        if !(0.0..=1.0).contains(&splitting_ratio) {
-            return Err(OpossumError::Other(
-                "splitting_ratio must be within [0.0;1.0]".into(),
-            ));
-        }
+        let splitting_ratio = config.transmission(self.wvl)?;
         let mut split_ray = self.clone();
         self.e *= splitting_ratio;
         split_ray.e *= 1.0 - splitting_ratio;
