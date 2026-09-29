@@ -1,7 +1,11 @@
 use log::warn;
 use nalgebra::Vector3;
 use petgraph::{Direction, algo::toposort, graph::NodeIndex, visit::EdgeRef};
-use uom::si::f64::Length;
+use uom::si::{
+    angle::degree,
+    f64::Length,
+    length::{meter, millimeter},
+};
 use uuid::Uuid;
 
 use crate::{
@@ -9,11 +13,63 @@ use crate::{
     core_optics::{NodeAttrExt, PortType, node_attr::NodePositioning},
     error::{OpmResult, OpossumError},
     light::{LightData, LightResult},
+    nanometer,
     nodes::NodeGroup,
-    utils::geom_transformation::Isometry,
+    radian,
+    utils::geom_transformation::{AxisMismatch, Isometry},
 };
 
 use super::OpticGraph;
+
+/// Logs an actionable warning that the axis reaching `port` is inconsistent with the node's placement.
+///
+/// Reports the angular deviation, how far the beam arrives off along and across the axis (with the
+/// connection length that would fix the axial part), and the pose the beam at `port` would need at
+/// its predecessor to be consistent. For a directly connected source that pose is the absolute
+/// position and direction to give that source. The node keeps the placement it already has.
+fn warn_inconsistent_axis(
+    node_name: &str,
+    primary_port: Option<&str>,
+    port: &str,
+    distance: Length,
+    expected_entrance: &Isometry,
+    mismatch: &AxisMismatch,
+) {
+    let placed_from = primary_port.map_or_else(
+        || "its fixed position".to_owned(),
+        |p| format!("input port '{p}'"),
+    );
+    let direction = expected_entrance.transform_vector_f64(&Vector3::z());
+    let origin = expected_entrance.translation();
+    let corrected = distance - mismatch.axial;
+    // Point on the predecessor from which the axis must start to reach the node consistently.
+    let d = distance.get::<meter>();
+    let start_x = (origin.x.get::<meter>() - d * direction.x) * 1.0e3;
+    let start_y = (origin.y.get::<meter>() - d * direction.y) * 1.0e3;
+    let start_z = (origin.z.get::<meter>() - d * direction.z) * 1.0e3;
+    warn!(
+        "Node '{node_name}' is placed from {placed_from}, but the beam reaching input port '{port}' is not consistent with that placement:"
+    );
+    warn!(
+        "  - its direction differs by {:.4}°",
+        mismatch.angle.get::<degree>()
+    );
+    warn!(
+        "  - it arrives {:.3} mm off along the axis (connection length should be {:.3} mm instead of {:.3} mm)",
+        mismatch.axial.get::<millimeter>(),
+        corrected.get::<millimeter>(),
+        distance.get::<millimeter>()
+    );
+    warn!(
+        "  - it misses the axis sideways by {:.3} mm",
+        mismatch.lateral.get::<millimeter>()
+    );
+    warn!(
+        "  - to be consistent, the beam at '{port}' must start at ({start_x:.3}, {start_y:.3}, {start_z:.3}) mm and travel along ({:.4}, {:.4}, {:.4})",
+        direction.x, direction.y, direction.z
+    );
+    warn!("  keeping the placement from {placed_from}.");
+}
 
 impl OpticGraph {
     /// Returns the incoming data of a node in this [`OpticGraph`].
@@ -263,13 +319,17 @@ impl OpticGraph {
     }
     /// Sets the node isometry of this [`OpticGraph`].
     ///
+    /// The node is placed from the first connected input port (in the ports' deterministic declared
+    /// order) that carries axis data. Every further connected port is only checked against that
+    /// placement: an inconsistent one is reported as a warning (with a suggested fix), not an error,
+    /// and the placement is kept.
+    ///
     /// # Errors
     ///
     /// This function will return an error if
     ///  - the given `node_id` was not found in the graph.
     ///  - the given `incoming_edges` are not of type `LightData::Geometric`.
     ///  - the given `incoming_edges` contain no rays.
-    ///  - the resulting isometry is inconsistent with a previously placed node.
     pub fn set_node_isometry(
         &mut self,
         incoming_edges: &LightResult,
@@ -279,9 +339,15 @@ impl OpticGraph {
         let idx = self.node_idx_by_uuid(node_id).ok_or_else(|| {
             OpossumError::Analysis(format!("node with id {node_id} not found in graph"))
         })?;
+        // Tolerances that only absorb floating-point noise; any larger deviation is a real
+        // inconsistency between two inputs and is reported.
+        let angle_tolerance = radian!(1.0e-9);
+        let position_tolerance = nanometer!(1.0);
+        // The port that placed the node, for the "keeping the placement from ..." hint. `None` means
+        // the node was already placed before this call (e.g. an absolute position).
+        let mut primary_port: Option<String> = None;
         // Iterate the input ports in their (deterministic) declared order, not in the incoming
-        // data's hash order, so the node is always placed from the same port. The node is placed
-        // from the first port carrying axis data; later connected ports only check consistency.
+        // data's hash order, so the node is always placed from the same port.
         let input_ports = self.g[idx].ports().names(&PortType::Input);
         for port_name in input_ports {
             let Some(incoming) = incoming_edges.get(&port_name) else {
@@ -304,27 +370,40 @@ impl OpticGraph {
             };
             let mut ray = ray.to_owned();
             ray.propagate(distance_from_predecessor)?;
-            // The node frame `F` satisfies `F ∘ L = W`: the world frame `W` of the entering axis ray
-            // equals the port's local entrance frame `L` placed in the world. Hence `F = W ∘ L⁻¹`.
-            // `L` is the identity for ordinary ports (so `F = W`) and mirrored for a beam splitter's
-            // second input.
             let world_frame = ray.to_isometry(up_direction);
             let entrance_frame = self.axis_entrance_frame_of(node_id, &port_name);
-            let node_iso = world_frame.append(&Isometry::new_from_transform(
-                entrance_frame.get_inv_transform(),
-            ));
-            // if a node with more than one input was already placed (in an earlier loop cycle),
-            // check, if the resulting isometry is consistent
-            let node = &mut self.g[idx];
-            if let Some(iso) = node.positioning().effective_position() {
-                if iso != &node_iso {
-                    warn!("Node {} cannot be consistently positioned.", node.name());
-                    warn!("Position based on previous input port is: {iso}");
-                    warn!("Position based on this port would be:     {node_iso}");
-                    warn!("Keeping first position");
+            match self.g[idx].positioning().effective_position().copied() {
+                // Node already placed: check this input's axis against the placement. The axis should
+                // reach the port's entrance frame `F ∘ L` placed in the world; compare it with the
+                // ray actually arriving there.
+                Some(placed_iso) => {
+                    let expected_entrance = placed_iso.append(&entrance_frame);
+                    if let Some(mismatch) = expected_entrance.axis_mismatch(
+                        &world_frame,
+                        angle_tolerance,
+                        position_tolerance,
+                    ) {
+                        warn_inconsistent_axis(
+                            self.g[idx].name(),
+                            primary_port.as_deref(),
+                            &port_name,
+                            distance_from_predecessor,
+                            &expected_entrance,
+                            &mismatch,
+                        );
+                    }
                 }
-            } else {
-                node.set_positioning(NodePositioning::Automatic(Some(node_iso)))?;
+                // Node not yet placed: its frame `F` satisfies `F ∘ L = W` (the world frame `W` of the
+                // entering axis ray equals the port's local entrance frame `L` placed in the world),
+                // hence `F = W ∘ L⁻¹`. `L` is the identity for ordinary ports (so `F = W`) and mirrored
+                // for a beam splitter's second input.
+                None => {
+                    let node_iso = world_frame.append(&Isometry::new_from_transform(
+                        entrance_frame.get_inv_transform(),
+                    ));
+                    self.g[idx].set_positioning(NodePositioning::Automatic(Some(node_iso)))?;
+                    primary_port = Some(port_name.clone());
+                }
             }
         }
         Ok(())

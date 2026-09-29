@@ -205,7 +205,7 @@ mod test {
         light::{LightData, LightResult, Ray, Rays},
         millimeter, nanometer,
         nodes::{
-            BeamSplitter, Dummy, NodeGroup, SourcePort, SplittingConfigBuilder,
+            BeamSplitter, Dummy, NodeGroup, NodeReference, SourcePort, SplittingConfigBuilder,
             round_collimated_ray_builder,
         },
         prelude::{AnalyzerType, OpmDocument},
@@ -642,6 +642,149 @@ mod test {
             node.axis_entrance_frame("out1_trans1_refl2"),
             Isometry::identity()
         );
+        Ok(())
+    }
+    /// Two sources feeding an untilted combiner, with the second placed at the pose the axis
+    /// requires, position the combiner without any warning.
+    #[test]
+    fn two_input_combiner_consistent_gives_no_warning() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let src1 = scenery.add_node(SourcePort::new("s1"))?;
+        let mut s2 = SourcePort::new("s2");
+        // The consistent pose for input_2 of an untilted combiner 100 mm behind each source: on the
+        // axis at 200 mm, facing back along −z (turned 180° about y).
+        s2.set_positioning(NodePositioning::Absolute(Isometry::new(
+            millimeter!(0., 0., 200.),
+            degree!(0., 180., 0.),
+        )?))?;
+        let src2 = scenery.add_node(s2)?;
+        let bs = scenery.add_node(BeamSplitter::new(
+            "bs",
+            &SplittingConfigBuilder::FixedRatio(0.5),
+        )?)?;
+        scenery.connect_nodes(src1, "output_1", bs, "input_1", millimeter!(100.0))?;
+        scenery.connect_nodes(src2, "output_1", bs, "input_2", millimeter!(100.0))?;
+
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            src1,
+            round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1)?,
+        );
+        config.map_source(
+            src2,
+            round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1)?,
+        );
+
+        testing_logger::setup();
+        AnalysisRayTrace::calc_node_positions(
+            &mut scenery,
+            LightResult::default(),
+            &config.for_positioning(),
+        )?;
+        testing_logger::validate(|logs| {
+            let warnings: Vec<&str> = logs
+                .iter()
+                .filter(|l| l.level == log::Level::Warn)
+                .map(|l| l.body.as_str())
+                .collect();
+            assert!(warnings.is_empty(), "unexpected warnings: {warnings:?}");
+        });
+        let (bs_pos, _) = placed(&scenery, bs);
+        assert_abs_diff_eq!(bs_pos, mm(0., 0., 100.), epsilon = 1e-9);
+        Ok(())
+    }
+    /// Two sources both at the origin feeding a combiner are inconsistent: the combiner is placed
+    /// from `input_1`, and the warning names `input_2` and the pose its source would need.
+    #[test]
+    fn two_sources_at_origin_warn_with_suggested_start() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let src1 = scenery.add_node(SourcePort::new("s1"))?;
+        let src2 = scenery.add_node(SourcePort::new("s2"))?;
+        let bs = scenery.add_node(BeamSplitter::new(
+            "bs",
+            &SplittingConfigBuilder::FixedRatio(0.5),
+        )?)?;
+        scenery.connect_nodes(src1, "output_1", bs, "input_1", millimeter!(100.0))?;
+        scenery.connect_nodes(src2, "output_1", bs, "input_2", millimeter!(100.0))?;
+
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            src1,
+            round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1)?,
+        );
+        config.map_source(
+            src2,
+            round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1)?,
+        );
+
+        testing_logger::setup();
+        AnalysisRayTrace::calc_node_positions(
+            &mut scenery,
+            LightResult::default(),
+            &config.for_positioning(),
+        )?;
+        testing_logger::validate(|logs| {
+            let warnings = logs
+                .iter()
+                .filter(|l| l.level == log::Level::Warn)
+                .map(|l| l.body.clone())
+                .collect::<Vec<_>>()
+                .join("\n");
+            assert!(warnings.contains("input_2"), "warnings: {warnings}");
+            assert!(warnings.contains("180.0"), "warnings: {warnings}");
+            assert!(warnings.contains("must start at"), "warnings: {warnings}");
+            assert!(warnings.contains("200.000"), "warnings: {warnings}");
+        });
+        // The combiner is placed from input_1 (source on the axis at 100 mm), not from input_2.
+        let (bs_pos, _) = placed(&scenery, bs);
+        assert_abs_diff_eq!(bs_pos, mm(0., 0., 100.), epsilon = 1e-9);
+        Ok(())
+    }
+    /// A forward reference to a tilted beam splitter, fed via its second input, is positioned using
+    /// the target's mirrored entrance frame.
+    ///
+    /// The reference is placed before its target (a forward reference), so its placement runs through
+    /// `set_node_isometry`, which must ask the referenced beam splitter for the `input_2` entrance
+    /// frame. If that delegation were missing, the reference would be placed as for an ordinary first
+    /// input (facing +z) instead of the mirrored +x, so the facing direction distinguishes the two.
+    #[test]
+    fn forward_reference_to_beam_splitter_via_input_2_uses_mirrored_frame() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let src = scenery.add_node(SourcePort::default())?;
+        let mut bs = BeamSplitter::new("bs", &SplittingConfigBuilder::FixedRatio(0.5))?;
+        bs.set_alignment(millimeter!(0., 0., 0.), degree!(0., 45., 0.))?;
+        let bs = scenery.add_node(bs)?;
+        // The reference is added after the (still unplaced) beam splitter and sits before it in the
+        // beam path, so it is a forward reference: it is positioned first and then places the target.
+        let bs_ref = NodeReference::from_node(&scenery.node(bs)?)?;
+        let bs_ref = scenery.add_node(bs_ref)?;
+        let dummy = scenery.add_node(Dummy::new("out"))?;
+        scenery.connect_nodes(src, "output_1", bs_ref, "input_2", millimeter!(100.0))?;
+        scenery.connect_nodes(
+            bs_ref,
+            "out2_trans2_refl1",
+            bs,
+            "input_1",
+            millimeter!(50.0),
+        )?;
+        scenery.connect_nodes(bs, "out1_trans1_refl2", dummy, "input_1", millimeter!(50.0))?;
+
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            src,
+            round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1)?,
+        );
+        AnalysisRayTrace::calc_node_positions(
+            &mut scenery,
+            LightResult::default(),
+            &config.for_positioning(),
+        )?;
+
+        // The reference sits on the source axis at 100 mm and faces +x, the mirrored-frame signature
+        // of a beam splitter fed via input_2 (an ordinary first input would leave it facing +z).
+        let (ref_pos, ref_dir) = placed(&scenery, bs_ref);
+        assert_abs_diff_eq!(ref_pos, mm(0., 0., 100.), epsilon = 1e-9);
+        assert_abs_diff_eq!(ref_dir, Vector3::x(), epsilon = 1e-9);
         Ok(())
     }
 }
