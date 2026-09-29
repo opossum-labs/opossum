@@ -128,7 +128,7 @@ mod test {
         light::{LightData, LightResult, Ray, Rays},
         millimeter, nanometer,
         nodes::{
-            BeamSplitter, NodeGroup, SourcePort, SplittingConfigBuilder,
+            BeamSplitter, Dummy, NodeGroup, SourcePort, SplittingConfigBuilder,
             round_collimated_ray_builder,
         },
         prelude::{AnalyzerType, OpmDocument},
@@ -332,6 +332,82 @@ mod test {
         );
         document.add_analyzer(AnalyzerType::RayTrace(config));
         document.analyze()?;
+        Ok(())
+    }
+    /// Pins today's group-level positioning through a beam splitter's first input.
+    ///
+    /// A source emits along +z into a 45°-tilted beam splitter 100 mm away; a dummy sits 50 mm
+    /// behind each output. This captures the positions and facing directions that placement
+    /// produces via `input_1`, so a later change to the placement or the axis split shows up here.
+    #[test]
+    fn pin_group_positioning_via_input_1() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let src = scenery.add_node(SourcePort::default())?;
+        let mut bs = BeamSplitter::new("bs", &SplittingConfigBuilder::FixedRatio(0.5))?;
+        bs.set_alignment(millimeter!(0., 0., 0.), degree!(0., 45., 0.))?;
+        let bs = scenery.add_node(bs)?;
+        let transmitted = scenery.add_node(Dummy::new("transmitted"))?;
+        let reflected = scenery.add_node(Dummy::new("reflected"))?;
+        scenery.connect_nodes(src, "output_1", bs, "input_1", millimeter!(100.0))?;
+        scenery.connect_nodes(
+            bs,
+            "out1_trans1_refl2",
+            transmitted,
+            "input_1",
+            millimeter!(50.0),
+        )?;
+        scenery.connect_nodes(
+            bs,
+            "out2_trans2_refl1",
+            reflected,
+            "input_1",
+            millimeter!(50.0),
+        )?;
+
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            src,
+            round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1)?,
+        );
+        AnalysisRayTrace::calc_node_positions(
+            &mut scenery,
+            LightResult::default(),
+            &config.for_positioning(),
+        )?;
+
+        // Placement isometry (without local alignment) and the world direction the node faces.
+        let placed = |uuid| -> (Vector3<f64>, Vector3<f64>) {
+            let iso = scenery
+                .node(uuid)
+                .unwrap()
+                .effective_position()
+                .cloned()
+                .expect("node was not placed");
+            let t = iso.translation();
+            (
+                Vector3::new(t.x.value, t.y.value, t.z.value),
+                iso.transform_vector_f64(&Vector3::z()),
+            )
+        };
+        let mm = |x: f64, y: f64, z: f64| {
+            Vector3::new(
+                millimeter!(x).value,
+                millimeter!(y).value,
+                millimeter!(z).value,
+            )
+        };
+
+        let (bs_pos, bs_dir) = placed(bs);
+        assert_abs_diff_eq!(bs_pos, mm(0., 0., 100.), epsilon = 1e-9);
+        assert_abs_diff_eq!(bs_dir, Vector3::z(), epsilon = 1e-9);
+
+        let (trans_pos, trans_dir) = placed(transmitted);
+        assert_abs_diff_eq!(trans_pos, mm(0., 0., 150.), epsilon = 1e-9);
+        assert_abs_diff_eq!(trans_dir, Vector3::z(), epsilon = 1e-9);
+
+        let (refl_pos, refl_dir) = placed(reflected);
+        assert_abs_diff_eq!(refl_pos, mm(-50., 0., 100.), epsilon = 1e-9);
+        assert_abs_diff_eq!(refl_dir, -Vector3::x(), epsilon = 1e-9);
         Ok(())
     }
 }
