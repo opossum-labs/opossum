@@ -95,11 +95,16 @@ Issues often arise when combining parallel beam paths of unequal lengths, such a
 **The Conflict:**
 OPOSSUM must decide where to place the Beam Combiner in 3D space. The logic is as follows:
 
-1. **First Pass:** OPOSSUM traces the first arm and places the Beam Combiner at 100 mm.
-2. **Second Pass:** OPOSSUM traces the second arm. Since the Combiner is already placed, it cannot be moved.
-3. **Validation:** The software checks if the second arm's geometry is consistent with the existing placement. Since 200 mm $\neq$ 100 mm, the validation fails.
+1. **Placement:** The Beam Combiner is placed from the beam reaching its **first input** (`input_1`) — deterministically, independently of the order in which the two arms happen to be traced. Here that puts it at the end of the 100 mm Arm 1.
+2. **Consistency check:** The axis reaching the **second input** (`input_2`) is then checked against that placement. Since Arm 2 is 200 mm long, its beam does not meet the Combiner where Arm 1 placed it.
 
-**Result:** OPOSSUM retains the position from the first path and issues a **warning**. You must manually verify warnings in split-path setups.
+**Result:** OPOSSUM keeps the placement from `input_1` and issues a **warning**. The warning does more than flag the problem: it reports how far the second beam is off (in direction, in distance along the axis, and as a sideways miss), the connection length that would remove the along-axis error, and the exact position and direction the second arm would need at its predecessor to be consistent. Use it to correct the offending connection distance or alignment; you must verify warnings in split-path setups.
+
+### Two Sources on One Combiner
+
+A beam combiner can also be fed by two independent sources rather than by two arms of one split beam. Every source is placed at the global origin by default, so two sources both start at `(0, 0, 0)` — which is almost never what a real two-arm setup looks like, and the combiner's consistency check (above) will warn.
+
+To resolve this, give the **second** source an absolute position: in the `Node Editor`, set its `Position` property to `absolute` (see [Absolute Placement](#absolute-placement)). You do not have to work out the pose by hand — the combiner's warning prints the exact start point and direction the `input_2` beam needs; enter those as the second source's absolute position and orientation. The first source stays at the origin as the anchor of the system.
 
 ### Misaligned Absolute Components
 
