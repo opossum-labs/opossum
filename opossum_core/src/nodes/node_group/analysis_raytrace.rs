@@ -1,4 +1,5 @@
 #![warn(missing_docs)]
+
 use log::{info, warn};
 use nalgebra::{Point3, Vector3};
 use num_traits::Zero;
@@ -7,6 +8,9 @@ use uom::si::f64::Length;
 use uuid::Uuid;
 
 use super::{NodeGroup, OpticGraph};
+// IMPORT THE NEW GUARD HERE
+use super::optic_graph::InvertGraphGuard;
+
 use crate::{
     analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
     core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, PortType, node_attr::NodePositioning},
@@ -31,61 +35,77 @@ impl AnalysisRayTrace for NodeGroup {
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        if self.graph.is_inverted() {
-            self.graph.invert_graph()?;
-        }
-        if !self.graph.is_single_tree() {
+        let is_inverted = self.graph.is_inverted();
+
+        // Initialize the RAII guard. This safely handles graph inversion and reverts it
+        // when the guard goes out of scope (even on early returns via '?').
+        let mut guard = InvertGraphGuard::new(&mut self.graph, is_inverted)?;
+
+        if !guard.is_single_tree() {
             warn!("group contains unconnected sub-trees. Analysis might not be complete.");
         }
-        let sorted = self.graph.topologically_sorted()?;
+
+        let sorted = guard.topologically_sorted()?;
         let mut light_result = incoming_data.clone();
+
         for idx in sorted {
-            let node_id = self.graph.g[idx].uuid();
-            let node_info = format!("{}", self.graph.g[idx]);
-            if self.graph.is_stale_node(node_id)? {
+            let node_id = guard.g[idx].uuid();
+            let node_info = format!("{}", guard.g[idx]);
+
+            if guard.is_stale_node(node_id)? {
                 warn!("graph contains stale (completely unconnected) node {node_info}. Skipping.");
             } else {
-                let incoming_edges = self.graph.take_incoming(node_id, &incoming_data)?;
+                let incoming_edges = guard.take_incoming(node_id, &incoming_data)?;
+
                 let mut outgoing_edges = if let Some(target_uuid) =
-                    self.graph.g[idx].referenced_node_id()
+                    guard.g[idx].referenced_node_id()
                 {
-                    let is_inverted = self.graph.g[idx].inverted();
-                    let target_idx = self.graph.node_idx_by_uuid(target_uuid).ok_or_else(|| {
+                    // Rename variable to target_is_inverted to avoid confusion
+                    let target_is_inverted = guard.g[idx].inverted();
+                    let target_idx = guard.node_idx_by_uuid(target_uuid).ok_or_else(|| {
                         OpossumError::Analysis(format!(
                             "referenced node with id {target_uuid} not found in graph"
                         ))
                     })?;
-                    let target_node = &mut self.graph.g[target_idx];
-                    if is_inverted {
+
+                    let target_node = &mut guard.g[target_idx];
+
+                    if target_is_inverted {
                         target_node.set_inverted(true).map_err(|_e| {
                             OpossumError::Analysis(format!(
                                 "referenced node {target_node} cannot be inverted"
                             ))
                         })?;
                     }
+
                     let res = AnalysisRayTrace::analyze(&mut **target_node, incoming_edges, config);
-                    if is_inverted {
+
+                    if target_is_inverted {
                         target_node.set_inverted(false)?;
                     }
+
                     let node_info = format!("{target_node}");
                     res.map_err(|e| {
                         OpossumError::Analysis(format!("analysis of node {node_info} failed: {e}"))
                     })?
                 } else {
-                    let node = &mut self.graph.g[idx];
+                    let node = &mut guard.g[idx];
                     let node_info = format!("{node}");
                     AnalysisRayTrace::analyze(&mut **node, incoming_edges, config).map_err(|e| {
                         OpossumError::Analysis(format!("analysis of node {node_info} failed: {e}"))
                     })?
                 };
+
                 filter_ray_limits(&mut outgoing_edges, config);
+
                 // If node is sink node, rewrite port names according to output mapping
-                if self.graph.is_output_node(node_id)? {
-                    let portmap = if self.graph.is_inverted() {
-                        self.graph.port_map(&PortType::Input).clone()
+                if guard.is_output_node(node_id)? {
+                    let portmap = if guard.is_inverted() {
+                        guard.port_map(&PortType::Input).clone()
                     } else {
-                        self.graph.port_map(&PortType::Output).clone()
+                        guard.port_map(&PortType::Output).clone()
                     };
+
                     let assigned_ports = portmap.assigned_ports_for_node(node_id);
                     for port in assigned_ports {
                         if let Some(light_data) = outgoing_edges.get(&port.1) {
@@ -93,15 +113,14 @@ impl AnalysisRayTrace for NodeGroup {
                         }
                     }
                 }
+
                 for outgoing_edge in outgoing_edges {
-                    self.graph
-                        .set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
+                    guard.set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
                 }
             }
         }
-        if self.graph.is_inverted() {
-            self.graph.invert_graph()?;
-        } // revert initial inversion (if necessary)
+
+        // Manual un-inversion is completely removed here, relying fully on the guard's drop.
         Ok(light_result)
     }
 
@@ -123,7 +142,6 @@ impl AnalysisRayTrace for NodeGroup {
                 .graph
                 .node_by_idx(idx)
                 .map_or_else(|_| Uuid::nil(), |node| node.uuid());
-
             let has_no_input_connections = !self.graph.has_input_connections(node_id)?;
 
             // A node is considered already placed if it either has an explicit absolute pose
@@ -179,6 +197,7 @@ fn position_node(
                 radian!(0., 0., 0.),
             )?;
             let new_iso = align_ref_iso.append(&align_iso);
+
             graph.g[node_idx].set_positioning(NodePositioning::Automatic(Some(new_iso)))?;
         } else {
             warn!(
@@ -190,7 +209,6 @@ fn position_node(
     } else {
         graph.set_node_isometry(incoming_edges, node_id, *up_direction)?;
     }
-
     Ok(())
 }
 
@@ -262,13 +280,11 @@ fn ensure_node_isometry(
             );
             target_node.set_positioning(NodePositioning::Automatic(Some(calculated_iso)))?;
         }
-
         return Ok(());
     }
 
     // Standard node positioning
     position_node(graph, node_idx, incoming_edges, up_direction)?;
-
     Ok(())
 }
 
@@ -289,12 +305,15 @@ fn execute_node_calculation(
             ))
         })?;
         let target_node = &mut graph.g[target_idx];
+
         if is_inverted {
             target_node.set_inverted(true).map_err(|_e| {
                 OpossumError::Analysis(format!("referenced node {target_node} cannot be inverted"))
             })?;
         }
+
         let res = AnalysisRayTrace::analyze(&mut **target_node, incoming_edges, config);
+
         if is_inverted {
             target_node.set_inverted(false)?;
         }
@@ -318,6 +337,7 @@ fn record_output_ports(
         } else {
             graph.port_map(&PortType::Output).clone()
         };
+
         let assigned_ports = portmap.assigned_ports_for_node(node_id);
         for port in assigned_ports {
             if let Some(light_data) = outgoing_edges.get(&port.1) {

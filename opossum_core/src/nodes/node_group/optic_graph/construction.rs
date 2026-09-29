@@ -41,13 +41,13 @@ impl OpticGraph {
             ));
         }
         let node_id = node.node_attr().uuid();
-        // Ensure UUID does not already exist in the graph
-        if self.node_idx_by_uuid(node_id).is_some() {
+        if self.uuid_to_idx.contains_key(&node_id) {
             return Err(OpossumError::OpticGroup(format!(
                 "node with uuid {node_id} already exists"
             )));
         }
-        self.g.add_node(OpticRef::new(Box::new(node)));
+        let idx = self.g.add_node(OpticRef::new(Box::new(node)));
+        self.uuid_to_idx.insert(node_id, idx);
         Ok(node_id)
     }
 
@@ -64,7 +64,10 @@ impl OpticGraph {
                 "cannot add nodes if group is set as inverted".into(),
             ));
         }
-        Ok(self.g.add_node(node))
+        let node_id = node.uuid();
+        let idx = self.g.add_node(node);
+        self.uuid_to_idx.insert(node_id, idx);
+        Ok(idx)
     }
     /// Recursively cleans up connections (edges) and port mappings that refer to
     /// ports that no longer exist on their target or source nodes.
@@ -258,6 +261,7 @@ impl OpticGraph {
 
                 // 3. Remove node from graph and port maps
                 self.g.remove_node(node_idx);
+                self.uuid_to_idx.remove(&actual_node_id);
                 self.input_port_map.remove_all_from_uuid(actual_node_id);
                 self.output_port_map.remove_all_from_uuid(actual_node_id);
 
@@ -319,7 +323,7 @@ impl OpticGraph {
             OpossumError::OpticScenery("node with given uuid does not exist".into())
         })?;
         self.g.remove_node(node_idx);
-        // Drop any port mapping that exposed one of this node's ports - same cleanup `delete_node` does.
+        self.uuid_to_idx.remove(&node_id);
         self.input_port_map.remove_all_from_uuid(node_id);
         self.output_port_map.remove_all_from_uuid(node_id);
         Ok(())

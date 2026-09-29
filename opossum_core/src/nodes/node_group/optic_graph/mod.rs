@@ -8,4 +8,5 @@ mod inspection;
 mod serialization;
 mod visualization;
 
+pub(crate) use analysis::InvertGraphGuard;
 pub use graph::{ConnectionInfo, OpticGraph};

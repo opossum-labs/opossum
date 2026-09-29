@@ -98,7 +98,9 @@ impl TryFrom<SerializableGraph> for OpticGraph {
     fn try_from(temp_graph: SerializableGraph) -> Result<Self, Self::Error> {
         let mut g = Self::default();
         for node in temp_graph.nodes {
-            g.g.add_node(node);
+            let uuid = node.uuid();
+            let idx = g.g.add_node(node);
+            g.uuid_to_idx.insert(uuid, idx);
         }
         let node_indices = g.g.node_indices().collect::<Vec<_>>();
         for idx in node_indices {
