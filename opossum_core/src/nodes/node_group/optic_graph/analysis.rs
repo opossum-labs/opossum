@@ -1,13 +1,16 @@
 use log::{error, warn};
 use nalgebra::Vector3;
 use petgraph::{Direction, algo::toposort, graph::NodeIndex, visit::EdgeRef};
-use std::ops::{Deref, DerefMut};
+use std::{
+    collections::HashMap,
+    ops::{Deref, DerefMut},
+};
 use uom::si::f64::Length;
 use uuid::Uuid;
 
 use crate::{
     analyzers::energy::{AnalysisEnergy, EnergyConfig},
-    core_optics::{NodeAttrExt, node_attr::NodePositioning},
+    core_optics::{NodeAttrExt, OpticRef, node_attr::NodePositioning},
     error::{OpmResult, OpossumError},
     light::{LightData, LightResult},
     nodes::NodeGroup,
@@ -16,17 +19,18 @@ use crate::{
 use super::OpticGraph;
 
 /// A guard that safely manages the inversion state of an `OpticGraph`.
-/// 
-/// If the graph requires inversion for an analysis pass, this guard applies it
-/// upon creation and guarantees that the graph is reverted when the guard goes 
-/// out of scope (e.g., on successful return or early error exits via `?`).
-pub(crate) struct InvertGraphGuard<'a> {
+pub struct InvertGraphGuard<'a> {
     graph: &'a mut OpticGraph,
     needs_revert: bool,
 }
 
 impl<'a> InvertGraphGuard<'a> {
     /// Creates a new guard, inverting the graph if `invert` is true.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`OpossumError::OpticGroup`] if inverting the graph fails
+    /// (e.g. if the graph contains a non-invertible node).
     pub(crate) fn new(graph: &'a mut OpticGraph, invert: bool) -> OpmResult<Self> {
         if invert {
             graph.invert_graph()?;
@@ -38,19 +42,17 @@ impl<'a> InvertGraphGuard<'a> {
     }
 }
 
-// Automatically reverts graph inversion when the guard goes out of scope
-impl<'a> Drop for InvertGraphGuard<'a> {
+impl Drop for InvertGraphGuard<'_> {
     fn drop(&mut self) {
-        if self.needs_revert {
-            if let Err(e) = self.graph.invert_graph() {
-                error!("Critical: Failed to revert graph inversion during cleanup: {e}");
-            }
+        if self.needs_revert
+            && let Err(e) = self.graph.invert_graph()
+        {
+            error!("Critical: Failed to revert graph inversion during cleanup: {e}");
         }
     }
 }
 
-// Implementing Deref allows us to call OpticGraph methods directly on the guard.
-impl<'a> Deref for InvertGraphGuard<'a> {
+impl Deref for InvertGraphGuard<'_> {
     type Target = OpticGraph;
 
     fn deref(&self) -> &Self::Target {
@@ -58,14 +60,95 @@ impl<'a> Deref for InvertGraphGuard<'a> {
     }
 }
 
-// Implementing DerefMut allows mutable access to OpticGraph methods directly on the guard.
-impl<'a> DerefMut for InvertGraphGuard<'a> {
+impl DerefMut for InvertGraphGuard<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.graph
     }
 }
 
 impl OpticGraph {
+    /// Evaluates an analysis action on the node at `idx`.
+    ///
+    /// If the node is a reference proxy (`referenced_node_id` is present), this method
+    /// looks up the target node, handles temporary inversion if required, executes `action`,
+    /// reverts the inversion, and attaches proper error context.
+    /// If the node is a standard node, `action` is executed directly.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`OpossumError::Analysis`] if:
+    /// - A referenced node with the target UUID is not found in the graph.
+    /// - A referenced node cannot be inverted or reverted.
+    /// - The analysis `action` closure fails on the target node.
+    pub fn evaluate_node_or_reference<F, R>(&mut self, idx: NodeIndex, action: F) -> OpmResult<R>
+    where
+        F: FnOnce(&mut OpticRef) -> OpmResult<R>,
+    {
+        if let Some(target_uuid) = self.g[idx].referenced_node_id() {
+            let target_is_inverted = self.g[idx].inverted();
+            let target_idx = self.node_idx_by_uuid(target_uuid).ok_or_else(|| {
+                OpossumError::Analysis(format!(
+                    "referenced node with id {target_uuid} not found in graph"
+                ))
+            })?;
+
+            let target_node = &mut self.g[target_idx];
+            if target_is_inverted {
+                target_node.set_inverted(true).map_err(|_e| {
+                    OpossumError::Analysis(format!(
+                        "referenced node {target_node} cannot be inverted"
+                    ))
+                })?;
+            }
+
+            let res = action(target_node);
+
+            if target_is_inverted {
+                target_node.set_inverted(false)?;
+            }
+
+            let node_name = format!("{target_node}");
+            res.map_err(|e| {
+                OpossumError::Analysis(format!("analysis of node {node_name} failed: {e}"))
+            })
+        } else {
+            let node = &mut self.g[idx];
+            let node_name = format!("{node}");
+            action(node).map_err(|e| {
+                OpossumError::Analysis(format!("analysis of node {node_name} failed: {e}"))
+            })
+        }
+    }
+
+    /// If `node_id` is an output node of the group, maps its outgoing data to the
+    /// external group port names and inserts them into `group_output`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if determining whether the node is an output node
+    /// fails (e.g. if the node with the given `node_id` does not exist).
+    pub fn collect_group_output_ports<V: Clone>(
+        &self,
+        node_id: Uuid,
+        outgoing_edges: &HashMap<String, V>,
+        group_output: &mut HashMap<String, V>,
+    ) -> OpmResult<()> {
+        if self.is_output_node(node_id)? {
+            let portmap = if self.is_inverted() {
+                &self.input_port_map
+            } else {
+                &self.output_port_map
+            };
+
+            for (ext_port, int_port) in portmap.assigned_ports_for_node(node_id) {
+                if let Some(data) = outgoing_edges.get(&int_port) {
+                    group_output.insert(ext_port, data.clone());
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Returns the incoming data of a node in this [`OpticGraph`].
     ///
     /// This function returns the incoming data of a node with the given [`Uuid`]. If the node is an external node, the
@@ -73,7 +156,7 @@ impl OpticGraph {
     ///
     /// # Errors
     ///
-    /// This functions returns an error if the given `node_id` does not exist.
+    /// Returns an error if the given `node_id` does not exist in the graph.
     pub fn get_incoming(
         &self,
         node_id: Uuid,
@@ -88,7 +171,6 @@ impl OpticGraph {
 
             let mut mapped_light_result = LightResult::default();
 
-            // map group-external data and add
             for incoming in incoming_data {
                 if let Some(mapping) = portmap.get(incoming.0)
                     && node_id == mapping.0
@@ -97,7 +179,6 @@ impl OpticGraph {
                 }
             }
 
-            // add group internal data
             for edge in self.incoming_edges(node_id) {
                 mapped_light_result.insert(edge.0.clone(), edge.1.clone());
             }
@@ -111,11 +192,11 @@ impl OpticGraph {
     /// Moves out the incoming data of a node in this [`OpticGraph`].
     ///
     /// This function returns the incoming data of a node with the given [`Uuid`]. If the node is an external node, the
-    /// incoming data is mapped to the internal node names. This function is similar to `get_incoming` but it has move semantic.
+    /// incoming data is mapped to the internal node names. This function is similar to `get_incoming` but it has move semantics.
     ///
     /// # Errors
     ///
-    /// This functions returns an error if the given `node_id` does not exist.
+    /// Returns an error if the given `node_id` does not exist in the graph.
     pub fn take_incoming(
         &mut self,
         node_id: Uuid,
@@ -130,8 +211,6 @@ impl OpticGraph {
 
             let mut mapped_light_result = LightResult::default();
 
-            // For external data we still to clone (since it might be reused)
-            // Maybe we can optimize that later
             for incoming in incoming_data {
                 if let Some(mapping) = portmap.get(incoming.0)
                     && node_id == mapping.0
@@ -151,7 +230,6 @@ impl OpticGraph {
         }
     }
 
-    // helper function: Move data out of an edge
     fn take_incoming_edges(&mut self, node_id: Uuid) -> LightResult {
         let node_idx = self.node_idx_by_uuid(node_id).unwrap();
         let mut edges_data = LightResult::new();
@@ -180,11 +258,12 @@ impl OpticGraph {
         }
     }
 
-    /// Returns the topologically sorted of this [`OpticGraph`].
+    /// Returns the topologically sorted indices of this [`OpticGraph`].
     ///
     /// # Errors
     ///
-    /// This function will return an error if .
+    /// Returns an [`OpossumError::Analysis`] if topological sorting fails because
+    /// the graph contains directed cycles.
     pub fn topologically_sorted(&self) -> OpmResult<Vec<NodeIndex>> {
         toposort(&self.g, None)
             .map_err(|_| OpossumError::Analysis("topological sort failed".into()))
@@ -194,15 +273,19 @@ impl OpticGraph {
     ///
     /// # Errors
     ///
-    /// This function will return an error if .
+    /// Returns an error if:
+    /// - Inverting the graph fails.
+    /// - Topological sorting of the graph fails due to cyclic connections.
+    /// - Resolving a node index to its UUID fails.
+    /// - Checking connectivity status (`is_stale_node`, `is_incoming_node`, or `is_output_node`) fails.
+    /// - Retrieving incoming light data for a node fails.
+    /// - Analysis of any individual or referenced node fails.
     pub fn analyze_energy(
         &mut self,
         incoming_data: &LightResult,
         config: &EnergyConfig,
     ) -> OpmResult<LightResult> {
         let is_inverted = self.is_inverted();
-        // Initialize the RAII guard. This will invert the graph if necessary 
-        // and safely revert it upon scope exit via Drop.
         let mut guard = InvertGraphGuard::new(self, is_inverted)?;
 
         if !guard.is_single_tree() {
@@ -221,56 +304,13 @@ impl OpticGraph {
             } else {
                 let incoming_edges = guard.take_incoming(node_id, incoming_data)?;
 
-                let outgoing_edges = if let Some(target_uuid) = guard.g[idx].referenced_node_id() {
-                    let target_is_inverted = guard.g[idx].inverted();
-                    let target_idx = guard.node_idx_by_uuid(target_uuid).ok_or_else(|| {
-                        OpossumError::Analysis(format!(
-                            "referenced node with id {target_uuid} not found in graph"
-                        ))
-                    })?;
+                // Using the unified helper for node / reference evaluation
+                let outgoing_edges = guard.evaluate_node_or_reference(idx, |node| {
+                    AnalysisEnergy::analyze(&mut **node, incoming_edges, config)
+                })?;
 
-                    let target_node = &mut guard.g[target_idx];
-                    if target_is_inverted {
-                        target_node.set_inverted(true).map_err(|_e| {
-                            OpossumError::Analysis(format!(
-                                "referenced node {target_node} cannot be inverted"
-                            ))
-                        })?;
-                    }
-
-                    let res = AnalysisEnergy::analyze(&mut **target_node, incoming_edges, config);
-
-                    if target_is_inverted {
-                        target_node.set_inverted(false)?;
-                    }
-
-                    let node_name = format!("{target_node}");
-                    res.map_err(|e| {
-                        OpossumError::Analysis(format!("analysis of node {node_name} failed: {e}"))
-                    })?
-                } else {
-                    let node = &mut guard.g[idx];
-                    let node_name = format!("{node}");
-                    AnalysisEnergy::analyze(&mut **node, incoming_edges, config).map_err(|e| {
-                        OpossumError::Analysis(format!("analysis of node {node_name} failed: {e}"))
-                    })?
-                };
-
-                // If node is sink node, rewrite port names according to output mapping
-                if guard.is_output_node(node_id)? {
-                    let portmap = if guard.is_inverted() {
-                        &guard.input_port_map
-                    } else {
-                        &guard.output_port_map
-                    };
-
-                    let assigned_ports = portmap.assigned_ports_for_node(node_id);
-                    for port in assigned_ports {
-                        if let Some(light_data) = outgoing_edges.get(&port.1) {
-                            light_result.insert(port.0, light_data.clone());
-                        }
-                    }
-                }
+                // Using the unified helper for group port mapping
+                guard.collect_group_output_ports(node_id, &outgoing_edges, &mut light_result)?;
 
                 for outgoing_edge in outgoing_edges {
                     guard.set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
@@ -278,7 +318,6 @@ impl OpticGraph {
             }
         }
 
-        // The InvertGraphGuard automatically reverts inversion upon drop here
         Ok(light_result)
     }
 
@@ -286,10 +325,11 @@ impl OpticGraph {
     ///
     /// # Errors
     ///
-    /// This function will return an error if
-    /// - the node with the given `node_id` does not exist in the graph.
-    /// - there is no connecting edge from a predecessor.
-    /// - the length cannot be determined (e.g. predecessor node has no fixed isometry set).
+    /// Returns an [`OpossumError::Analysis`] if:
+    /// - The target port is mapped externally, but its distance is not present in the external distances map.
+    /// - The node with the given `node_id` does not exist in the graph.
+    /// - No connecting edge exists from any predecessor node.
+    /// - No connecting predecessor edge targets the specified `port_name`.
     pub fn distance_from_predecessor(&self, node_id: Uuid, port_name: &str) -> OpmResult<Length> {
         let portmap = if self.is_inverted() {
             &self.output_port_map
@@ -307,7 +347,6 @@ impl OpticGraph {
                 |length| Ok(*length),
             )
         } else {
-            // Safely resolve the node index or propagate an analysis error
             let idx = self.node_idx_by_uuid(node_id).ok_or_else(|| {
                 OpossumError::Analysis(format!("node with id {node_id} not found in graph"))
             })?;
@@ -345,11 +384,12 @@ impl OpticGraph {
     ///
     /// # Errors
     ///
-    /// This function will return an error if
-    ///  - the given `node_id` was not found in the graph.
-    ///  - the given `incoming_edges` are not of type `LightData::Geometric`.
-    ///  - the given `incoming_edges` contain no rays.
-    ///  - the resulting isometry is inconsistent with a previously placed node.
+    /// Returns an [`OpossumError::Analysis`] if:
+    /// - The node with the given `node_id` is not found in the graph.
+    /// - Determining the distance from the predecessor node fails.
+    /// - The incoming light data is not of type [`LightData::Geometric`].
+    /// - The incoming ray bundle contains no rays.
+    /// - Ray propagation across the distance fails.
     pub fn set_node_isometry(
         &mut self,
         incoming_edges: &LightResult,
@@ -380,10 +420,7 @@ impl OpticGraph {
                 ray.propagate(distance_from_predecessor)?;
                 let node_iso = ray.to_isometry(up_direction);
 
-                // if a node with more than one input was already placed (in an earlier loop cycle),
-                // check, if the resulting isometry is consistent
                 let node = &mut self.g[idx];
-
                 if let Some(iso) = node.positioning().effective_position() {
                     if iso != &node_iso {
                         warn!("Node {} cannot be consistently positioned.", node.name());
@@ -404,7 +441,7 @@ impl OpticGraph {
     }
 
     /// Sets the outgoing edge data of this [`OpticGraph`].
-    /// Returns true if data has been passed on, false otherwise
+    /// Returns `None` if data has been assigned to an edge, or `Some(data)` if no matching edge was found.
     pub fn set_outgoing_edge_data(
         &mut self,
         idx: NodeIndex,

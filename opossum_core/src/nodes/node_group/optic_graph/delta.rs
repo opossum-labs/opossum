@@ -1,3 +1,32 @@
+#![warn(missing_docs)]
+//! # Optical Graph Mutation Deltas and Undo Records
+//!
+//! This module defines the transactional change records ([`GraphDelta`]) used to represent
+//! mutations within an [`OpticGraph`](super::OpticGraph) and hierarchical
+//! [`NodeGroup`](crate::nodes::NodeGroup) structures.
+//!
+//! ## Core Architecture
+//!
+//! Whenever an operation modifies the topology or configuration of an optical graph
+//! (such as adding/removing nodes, establishing or severing connections, adjusting
+//! optical distances, or updating external port exposures), a corresponding [`GraphDelta`]
+//! is generated. This delta captures all necessary state snapshots and metadata required
+//! to reverse the operation via `NodeGroup::apply_undo`.
+//!
+//! ## Key Components
+//!
+//! * [`GraphDelta`]: The unified enum describing individual or composite state transitions
+//!   across graph hierarchies.
+//! * [`GraphDeletionDelta`]: A multi-entity delta capturing the full cascade of a node deletion,
+//!   including nested nodes, referencing proxy nodes, severed connections, and invalidated port mappings.
+//! * [`DeletedNodeRecord`]: Snapshot of a removed [`OpticRef`] paired with its owning group UUID.
+//! * [`RemovedConnectionRecord`]: Snapshot of a severed optical connection ([`ConnectionInfo`]).
+//! * [`RemovedPortMapping`]: Metadata tracking external input or output port mappings that were
+//!   displaced or removed.
+//!
+//! All types implement [`Serialize`] and [`Deserialize`] to support undo-stack persistence,
+//! serialization, and RPC transport between crates.
+
 use crate::{
     core_optics::{OpticRef, PortType},
     nodes::node_group::ConnectionInfo,
@@ -54,7 +83,7 @@ pub struct GraphDeletionDelta {
 
 impl GraphDeletionDelta {
     /// Merge another deletion delta into this one.
-    pub fn merge(&mut self, other: GraphDeletionDelta) {
+    pub fn merge(&mut self, other: Self) {
         self.deleted_nodes.extend(other.deleted_nodes);
         self.removed_connections.extend(other.removed_connections);
         self.removed_port_mappings
@@ -108,5 +137,5 @@ pub enum GraphDelta {
     /// A group port mapping was removed.
     PortUnmapped(RemovedPortMapping),
     /// An atomic composite of multiple graph deltas.
-    Composite(Vec<GraphDelta>),
+    Composite(Vec<Self>),
 }

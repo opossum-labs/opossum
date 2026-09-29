@@ -18,11 +18,16 @@ use opossum_core::{
 use uuid::Uuid;
 
 use crate::{
-    analyzers::{create_default_energy_builder, create_default_ray_builder}, app_state::AppState, error::BackEndErrorResponse, helper_functions::{
-        apply_and_push_undo, check_reference_target_not_nested, is_reference_target, parent_group_id_or_self, resolve_reference_chain, ron_or_json_response,
-    }, undo::{
-       Command, NodeSnapshot, PatchAmplifierNodes, PatchAnalyzer, PatchNode,
-        PatchPumpScenario, capture_old_node_request,
+    analyzers::{create_default_energy_builder, create_default_ray_builder},
+    app_state::AppState,
+    error::BackEndErrorResponse,
+    helper_functions::{
+        apply_and_push_undo, check_reference_target_not_nested, is_reference_target,
+        parent_group_id_or_self, resolve_reference_chain, ron_or_json_response,
+    },
+    undo::{
+        Command, NodeSnapshot, PatchAmplifierNodes, PatchAnalyzer, PatchNode, PatchPumpScenario,
+        capture_old_node_request,
     },
 };
 

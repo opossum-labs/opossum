@@ -3,7 +3,12 @@
 //! [`Command::PatchPort`].
 use nalgebra::Point2;
 use opossum_core::{
-    core_optics::{NodeAttr, OpticRef, node_attr::NodePositioning}, error::OpossumError, nodes::GraphDelta, opm_document::OpmDocument, prelude::{PortType, Proptype}, types::api_types::{
+    core_optics::{NodeAttr, OpticRef, node_attr::NodePositioning},
+    error::OpossumError,
+    nodes::GraphDelta,
+    opm_document::OpmDocument,
+    prelude::{PortType, Proptype},
+    types::api_types::{
         ConnectInfo, DocumentChange, NodeEditorPanel, NodeInfo, PositioningRequest,
         UpdateNodeRequest, UpdatePortRequest,
     },

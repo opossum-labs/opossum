@@ -244,7 +244,10 @@ impl Command {
                         .iter()
                         .find(|record| record.node.uuid() == target_id)
                         .map_or(root_id, |record| record.parent_group_id);
-                    Some(JumpTarget::new_from_graph_and_node_id(parent_group_id, target_id))
+                    Some(JumpTarget::new_from_graph_and_node_id(
+                        parent_group_id,
+                        target_id,
+                    ))
                 } else {
                     Some(JumpTarget::new_from_graph_id(root_id))
                 }
@@ -372,25 +375,21 @@ impl Command {
                 parent_group_id,
                 affected_groups,
                 ..
-            }) => {
-                group_commands::describe_group_structure_change(
-                    parent_group_id,
-                    affected_groups,
-                    None,
-                )
-            }
+            }) => group_commands::describe_group_structure_change(
+                parent_group_id,
+                affected_groups,
+                None,
+            ),
             Self::ExtractGroup(GroupConversion {
                 parent_group_id,
                 affected_groups,
                 group,
                 ..
-            }) => {
-                group_commands::describe_group_structure_change(
-                    parent_group_id,
-                    affected_groups,
-                    Some(group.uuid()),
-                )
-            }
+            }) => group_commands::describe_group_structure_change(
+                parent_group_id,
+                affected_groups,
+                Some(group.uuid()),
+            ),
             Self::SetViewport(cmd) => viewport_commands::describe_set_viewport(cmd),
             Self::Batch(commands) => {
                 let mut changes = Vec::new();
