@@ -972,7 +972,7 @@ impl NodeGroup {
     }
 
     /// Reverts a multi-entity deletion by re-inserting nodes, port mappings, and edges in phased order.
-    pub fn revert_deletion(&mut self, delta: &GraphDeletionDelta) -> OpmResult<()> {
+    fn revert_deletion(&mut self, delta: &GraphDeletionDelta) -> OpmResult<()> {
         let current_group_id = self.node_attr().uuid();
 
         // Phase 1: Re-insert all nodes into their original parent groups
