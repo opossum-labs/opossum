@@ -499,6 +499,66 @@ impl Isometry {
             .map(|p| self.inverse_transform_vector_f64(p))
             .collect::<Vec<Vector3<f64>>>()
     }
+    /// Compares the optical axis of `self` (the expected axis) with that of `other` (the actual axis).
+    ///
+    /// Each axis is the isometry's origin together with its local +z direction. The comparison
+    /// ignores roll (rotation about the axis), which does not affect where the axis runs.
+    ///
+    /// # Arguments
+    ///
+    /// * `other` - the actual axis to compare against this expected one.
+    /// * `angle_tolerance` - largest angular deviation still counted as a match.
+    /// * `position_tolerance` - largest positional deviation (axial or lateral) still counted as a match.
+    ///
+    /// # Returns
+    ///
+    /// `None` if both deviations are within the tolerances, otherwise the [`AxisMismatch`].
+    #[must_use]
+    pub fn axis_mismatch(
+        &self,
+        other: &Self,
+        angle_tolerance: Angle,
+        position_tolerance: Length,
+    ) -> Option<AxisMismatch> {
+        let expected_dir = self.transform_vector_f64(&Vector3::z());
+        let actual_dir = other.transform_vector_f64(&Vector3::z());
+        let angle = radian!(expected_dir.angle(&actual_dir));
+        let expected_o = self.translation();
+        let actual_o = other.translation();
+        let delta = Vector3::new(
+            (actual_o.x - expected_o.x).get::<meter>(),
+            (actual_o.y - expected_o.y).get::<meter>(),
+            (actual_o.z - expected_o.z).get::<meter>(),
+        );
+        let axial = delta.dot(&expected_dir);
+        let lateral = (delta - axial * expected_dir).norm();
+        if angle <= angle_tolerance
+            && meter!(axial).abs() <= position_tolerance
+            && meter!(lateral) <= position_tolerance
+        {
+            None
+        } else {
+            Some(AxisMismatch {
+                angle,
+                axial: meter!(axial),
+                lateral: meter!(lateral),
+            })
+        }
+    }
+}
+
+/// The mismatch of an optical axis (origin and local +z direction) from an expected one.
+///
+/// Produced by [`Isometry::axis_mismatch`]; all three components are zero for coinciding axes.
+#[derive(Debug, Clone, Copy)]
+pub struct AxisMismatch {
+    /// Angle between the two axis directions.
+    pub angle: Angle,
+    /// Signed offset of the actual origin from the expected one along the expected axis direction
+    /// (positive when the actual origin lies further along the axis).
+    pub axial: Length,
+    /// Distance of the actual origin from the expected axis line (the sideways miss).
+    pub lateral: Length,
 }
 
 mod transform_serde {
@@ -891,7 +951,7 @@ mod test {
     use core::f64;
 
     use super::*;
-    use crate::millimeter;
+    use crate::{millimeter, nanometer, radian};
     use approx::{assert_abs_diff_eq, assert_relative_eq};
     use assert_matches::assert_matches;
     #[test]
@@ -915,6 +975,64 @@ mod test {
             assert!(Isometry::new(millimeter!(0., 0., 0.), degree!(0., *val, 0.)).is_err());
             assert!(Isometry::new(millimeter!(0., 0., 0.), degree!(0., 0., *val)).is_err());
         }
+    }
+    #[test]
+    fn axis_mismatch_identical_axes_is_none() -> OpmResult<()> {
+        let iso = Isometry::new(millimeter!(1., 2., 3.), degree!(10., 20., 30.))?;
+        assert!(
+            iso.axis_mismatch(&iso, radian!(1.0e-9), nanometer!(1.0))
+                .is_none()
+        );
+        Ok(())
+    }
+    #[test]
+    fn axis_mismatch_within_tolerance_is_none() -> OpmResult<()> {
+        let expected = Isometry::identity();
+        // 0.5 nm along the axis, below the 1 nm tolerance.
+        let actual = Isometry::new(nanometer!(0., 0., 0.5), degree!(0., 0., 0.))?;
+        assert!(
+            expected
+                .axis_mismatch(&actual, radian!(1.0e-9), nanometer!(1.0))
+                .is_none()
+        );
+        Ok(())
+    }
+    #[test]
+    fn axis_mismatch_pure_axial_offset() -> OpmResult<()> {
+        let expected = Isometry::identity();
+        let actual = Isometry::new(millimeter!(0., 0., 5.), degree!(0., 0., 0.))?;
+        let mismatch = expected
+            .axis_mismatch(&actual, radian!(1.0e-9), nanometer!(1.0))
+            .expect("axes differ");
+        // `.value` is the raw SI value: meters for lengths, radians for angles.
+        assert_abs_diff_eq!(mismatch.axial.value, 0.005, epsilon = 1e-12);
+        assert_abs_diff_eq!(mismatch.lateral.value, 0.0, epsilon = 1e-12);
+        assert_abs_diff_eq!(mismatch.angle.value, 0.0, epsilon = 1e-12);
+        Ok(())
+    }
+    #[test]
+    fn axis_mismatch_pure_lateral_offset() -> OpmResult<()> {
+        let expected = Isometry::identity();
+        let actual = Isometry::new(millimeter!(4., 0., 0.), degree!(0., 0., 0.))?;
+        let mismatch = expected
+            .axis_mismatch(&actual, radian!(1.0e-9), nanometer!(1.0))
+            .expect("axes differ");
+        assert_abs_diff_eq!(mismatch.axial.value, 0.0, epsilon = 1e-12);
+        assert_abs_diff_eq!(mismatch.lateral.value, 0.004, epsilon = 1e-12);
+        assert_abs_diff_eq!(mismatch.angle.value, 0.0, epsilon = 1e-12);
+        Ok(())
+    }
+    #[test]
+    fn axis_mismatch_pure_angular_offset() -> OpmResult<()> {
+        let expected = Isometry::identity();
+        let actual = Isometry::new(millimeter!(0., 0., 0.), degree!(0., 30., 0.))?;
+        let mismatch = expected
+            .axis_mismatch(&actual, radian!(1.0e-9), nanometer!(1.0))
+            .expect("axes differ");
+        assert_abs_diff_eq!(mismatch.angle.value, 30_f64.to_radians(), epsilon = 1e-9);
+        assert_abs_diff_eq!(mismatch.axial.value, 0.0, epsilon = 1e-12);
+        assert_abs_diff_eq!(mismatch.lateral.value, 0.0, epsilon = 1e-12);
+        Ok(())
     }
     #[test]
     fn new_along_z() -> OpmResult<()> {
