@@ -6,10 +6,11 @@ use uuid::Uuid;
 
 use crate::{
     analyzers::energy::{AnalysisEnergy, EnergyConfig},
-    core_optics::{NodeAttrExt, node_attr::NodePositioning},
+    core_optics::{NodeAttrExt, PortType, node_attr::NodePositioning},
     error::{OpmResult, OpossumError},
     light::{LightData, LightResult},
     nodes::NodeGroup,
+    utils::geom_transformation::Isometry,
 };
 
 use super::OpticGraph;
@@ -278,42 +279,73 @@ impl OpticGraph {
         let idx = self.node_idx_by_uuid(node_id).ok_or_else(|| {
             OpossumError::Analysis(format!("node with id {node_id} not found in graph"))
         })?;
-        for incoming_edge in incoming_edges {
-            let distance_from_predecessor =
-                self.distance_from_predecessor(node_id, incoming_edge.0)?;
+        // Iterate the input ports in their (deterministic) declared order, not in the incoming
+        // data's hash order, so the node is always placed from the same port. The node is placed
+        // from the first port carrying axis data; later connected ports only check consistency.
+        let input_ports = self.g[idx].ports().names(&PortType::Input);
+        for port_name in input_ports {
+            let Some(incoming) = incoming_edges.get(&port_name) else {
+                continue;
+            };
+            let distance_from_predecessor = self.distance_from_predecessor(node_id, &port_name)?;
             let node = &mut self.g[idx];
             if let Some(group) = node.as_any_mut().downcast_mut::<NodeGroup>() {
-                group.add_input_port_distance(incoming_edge.0, distance_from_predecessor);
+                group.add_input_port_distance(&port_name, distance_from_predecessor);
             }
-            let LightData::Geometric(rays) = incoming_edge.1 else {
+            let LightData::Geometric(rays) = incoming else {
                 return Err(OpossumError::Analysis(
                     "expected LightData::Geometric at input port".into(),
                 ));
             };
-            if let Some(ray) = rays.into_iter().next() {
-                let mut ray = ray.to_owned();
-                ray.propagate(distance_from_predecessor)?;
-                let node_iso = ray.to_isometry(up_direction);
-                // if a node with more than one input was already placed (in an earlier loop cycle),
-                // check, if the resulting isometry is consistent
-                let node = &mut self.g[idx];
-                if let Some(iso) = node.positioning().effective_position() {
-                    if iso != &node_iso {
-                        warn!("Node {} cannot be consistently positioned.", node.name());
-                        warn!("Position based on previous input port is: {iso}");
-                        warn!("Position based on this port would be:     {node_iso}");
-                        warn!("Keeping first position");
-                    }
-                } else {
-                    node.set_positioning(NodePositioning::Automatic(Some(node_iso)))?;
-                }
-            } else {
+            let Some(ray) = rays.into_iter().next() else {
                 return Err(OpossumError::Analysis(
                     "no rays in this ray bundle. cannot position nodes".into(),
                 ));
+            };
+            let mut ray = ray.to_owned();
+            ray.propagate(distance_from_predecessor)?;
+            // The node frame `F` satisfies `F ∘ L = W`: the world frame `W` of the entering axis ray
+            // equals the port's local entrance frame `L` placed in the world. Hence `F = W ∘ L⁻¹`.
+            // `L` is the identity for ordinary ports (so `F = W`) and mirrored for a beam splitter's
+            // second input.
+            let world_frame = ray.to_isometry(up_direction);
+            let entrance_frame = self.axis_entrance_frame_of(node_id, &port_name);
+            let node_iso = world_frame.append(&Isometry::new_from_transform(
+                entrance_frame.get_inv_transform(),
+            ));
+            // if a node with more than one input was already placed (in an earlier loop cycle),
+            // check, if the resulting isometry is consistent
+            let node = &mut self.g[idx];
+            if let Some(iso) = node.positioning().effective_position() {
+                if iso != &node_iso {
+                    warn!("Node {} cannot be consistently positioned.", node.name());
+                    warn!("Position based on previous input port is: {iso}");
+                    warn!("Position based on this port would be:     {node_iso}");
+                    warn!("Keeping first position");
+                }
+            } else {
+                node.set_positioning(NodePositioning::Automatic(Some(node_iso)))?;
             }
         }
         Ok(())
+    }
+    /// Returns the axis entrance frame of input port `port_name` of the node `node_id`.
+    ///
+    /// This is the local frame from which the optical axis enters the port (see
+    /// [`AnalysisRayTrace::axis_entrance_frame`]). It is the identity for ordinary single-input
+    /// nodes. For a reference proxy the referenced target answers, since the proxy has no geometry
+    /// of its own. Returns the identity if the node cannot be found.
+    fn axis_entrance_frame_of(&self, node_id: Uuid, port_name: &str) -> Isometry {
+        let Some(idx) = self.node_idx_by_uuid(node_id) else {
+            return Isometry::identity();
+        };
+        let node = &self.g[idx];
+        if let Some(target_uuid) = node.referenced_node_id()
+            && let Some(target_idx) = self.node_idx_by_uuid(target_uuid)
+        {
+            return self.g[target_idx].axis_entrance_frame(port_name);
+        }
+        node.axis_entrance_frame(port_name)
     }
     /// Sets the outgoing edge data of this [`OpticGraph`].
     /// Returns true if data has been passed on, false otherwise
