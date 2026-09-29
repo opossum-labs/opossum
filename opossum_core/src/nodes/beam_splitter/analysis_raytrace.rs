@@ -5,7 +5,7 @@ use crate::{
     light::{LightData, LightResult},
 };
 
-use super::BeamSplitter;
+use super::{BeamSplitter, SplittingConfig};
 
 impl AnalysisRayTrace for BeamSplitter {
     fn analyze(
@@ -38,6 +38,25 @@ impl AnalysisRayTrace for BeamSplitter {
             Ok(LightResult::default())
         }
     }
+    /// Calculates the outgoing axis rays of this [`BeamSplitter`] for positioning the following nodes.
+    ///
+    /// The axis rays arriving at the first input are split on the splitting surface. The transmitted
+    /// rays position the nodes behind the first output, the reflected rays the nodes behind the second
+    /// output (swapped, if the beam splitter is inverted).
+    ///
+    /// # Arguments
+    ///
+    /// * `incoming_data` - the axis rays arriving at the input ports.
+    /// * `config` - the ray tracing configuration.
+    ///
+    /// # Returns
+    ///
+    /// The axis rays leaving both output ports.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if there are no geometric axis rays at the first input or
+    /// the splitting surface cannot be found.
     fn calc_node_positions(
         &mut self,
         incoming_data: LightResult,
@@ -48,27 +67,28 @@ impl AnalysisRayTrace for BeamSplitter {
         } else {
             ("input_1", "input_2")
         };
-        //todo: generally bullshit
-        let refraction_intended = true;
+        // Positioning is purely geometric. A fixed 50:50 split leaves energy in both branches, so
+        // neither is invalidated by an energy threshold downstream, and no alignment wavelength has
+        // to lie inside a splitting spectrum.
+        let positioning_config = SplittingConfig::Ratio(0.5);
         let in1 = incoming_data.get(input_port1);
         // todo: do this also for in2 and check for position inconsistencies....
-        let out_rays = if let Some(input_1) = in1 {
+        let (transmitted_rays, reflected_rays) = if let Some(input_1) = in1 {
             match input_1 {
                 LightData::Geometric(r) => {
                     let mut rays = r.clone();
-                    if let Some(surf) = self.get_optic_surface_mut(input_port1) {
-                        rays.refract_on_surface(
+                    let reflected = if let Some(surf) = self.get_optic_surface_mut(input_port1) {
+                        rays.split_on_surface(
                             surf,
-                            None,
-                            refraction_intended,
+                            &positioning_config,
                             config.missed_surface_strategy(),
-                        )?;
+                        )?
                     } else {
                         return Err(OpossumError::OpticPort(
                             "input optic surface not found".into(),
                         ));
-                    }
-                    rays
+                    };
+                    (rays, reflected)
                 }
                 _ => {
                     return Err(OpossumError::Analysis(
@@ -87,8 +107,8 @@ impl AnalysisRayTrace for BeamSplitter {
             ("out1_trans1_refl2", "out2_trans2_refl1")
         };
         let light_result = LightResult::from([
-            (target1.into(), LightData::Geometric(out_rays.clone())),
-            (target2.into(), LightData::Geometric(out_rays)),
+            (target1.into(), LightData::Geometric(transmitted_rays)),
+            (target2.into(), LightData::Geometric(reflected_rays)),
         ]);
         Ok(light_result)
     }
@@ -97,10 +117,12 @@ impl AnalysisRayTrace for BeamSplitter {
 #[cfg(test)]
 mod test {
     use approx::assert_abs_diff_eq;
+    use nalgebra::Vector3;
 
     use crate::{
         analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
-        core_optics::{OpticNode, node_attr::NodePositioning},
+        core_optics::{OpticNode, OpticNodeExt, node_attr::NodePositioning},
+        degree,
         error::OpmResult,
         joule,
         light::{LightData, LightResult, Ray, Rays},
@@ -218,6 +240,83 @@ mod test {
                 0.0
             };
         assert_abs_diff_eq!(energy_output2, &0.7);
+        Ok(())
+    }
+    /// A 60:40 beam splitter at the origin, tilted by 45° about the y axis.
+    fn tilted_beam_splitter() -> OpmResult<BeamSplitter> {
+        let mut node = BeamSplitter::new("test", &SplittingConfigBuilder::FixedRatio(0.6))?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        node.set_alignment(millimeter!(0., 0., 0.), degree!(0., 45., 0.))?;
+        Ok(node)
+    }
+    /// A single collimated ray along the z axis, arriving at the given port.
+    fn ray_along_z_at(port: &str) -> OpmResult<LightResult> {
+        let rays = Rays::from(Ray::new_collimated(
+            millimeter!(0., 0., -10.),
+            nanometer!(1053.0),
+            joule!(1.0),
+        )?);
+        Ok(LightResult::from([(
+            port.into(),
+            LightData::Geometric(rays),
+        )]))
+    }
+    fn output_rays(output: &LightResult, port: &str) -> Rays {
+        let Some(LightData::Geometric(rays)) = output.get(port) else {
+            panic!("expected rays at port {port}");
+        };
+        rays.clone()
+    }
+    /// Asserts that the rays leaving `transmitted_port` still travel along z, while the rays leaving
+    /// `reflected_port` travel perpendicular to it, as reflected by a surface tilted by 45°.
+    fn assert_separated(output: &LightResult, transmitted_port: &str, reflected_port: &str) {
+        let transmitted = output_rays(output, transmitted_port);
+        let reflected = output_rays(output, reflected_port);
+        let transmitted_dir = transmitted.iter().next().unwrap().direction();
+        let reflected_dir = reflected.iter().next().unwrap().direction();
+        assert_abs_diff_eq!(transmitted_dir, Vector3::z(), epsilon = 1e-12);
+        assert_abs_diff_eq!(reflected_dir.x.abs(), 1.0, epsilon = 1e-12);
+        assert_abs_diff_eq!(reflected_dir.z, 0.0, epsilon = 1e-12);
+    }
+    #[test]
+    fn analyze_tilted_separates_outputs() -> OpmResult<()> {
+        let mut node = tilted_beam_splitter()?;
+        let output = AnalysisRayTrace::analyze(
+            &mut node,
+            ray_along_z_at("input_1")?,
+            &RayTraceConfig::default(),
+        )?;
+        assert_separated(&output, "out1_trans1_refl2", "out2_trans2_refl1");
+        let energy = |port| {
+            output_rays(&output, port)
+                .total_energy()
+                .get::<uom::si::energy::joule>()
+        };
+        assert_abs_diff_eq!(energy("out1_trans1_refl2"), 0.6);
+        assert_abs_diff_eq!(energy("out2_trans2_refl1"), 0.4);
+        Ok(())
+    }
+    #[test]
+    fn calc_node_positions_tilted_reflects_out2() -> OpmResult<()> {
+        let mut node = tilted_beam_splitter()?;
+        let output = AnalysisRayTrace::calc_node_positions(
+            &mut node,
+            ray_along_z_at("input_1")?,
+            &RayTraceConfig::default(),
+        )?;
+        assert_separated(&output, "out1_trans1_refl2", "out2_trans2_refl1");
+        Ok(())
+    }
+    #[test]
+    fn calc_node_positions_tilted_inverted() -> OpmResult<()> {
+        let mut node = tilted_beam_splitter()?;
+        node.set_inverted(true)?;
+        let output = AnalysisRayTrace::calc_node_positions(
+            &mut node,
+            ray_along_z_at("out1_trans1_refl2")?,
+            &RayTraceConfig::default(),
+        )?;
+        assert_separated(&output, "input_1", "input_2");
         Ok(())
     }
     #[test]
