@@ -8,7 +8,7 @@ use nalgebra::Point2;
 use opossum_core::{
     core_optics::{OpticRef, node_attr::HasNodeAttr},
     gain::PumpScenario,
-    nodes::{NodeReference, create_node_ref},
+    nodes::{GraphDelta, NodeReference, create_node_ref},
     prelude::{AnalyzerType, OpmDocument},
     types::api_types::{
         AnalyzerItemDto, ConnectInfo, DeleteNodeResponse, ErrorResponse, NewNode, NewRefNode,
@@ -519,7 +519,20 @@ fn teardown_port_cascades_and_delete(
             member.node.uuid(),
         )?);
     }
-    let deleted_nodes = scenery.delete_node(uuid)?;
+    let delta = scenery.delete_node(uuid)?;
+    let deleted_nodes = match delta {
+        GraphDelta::NodeDeleted(deletion_delta) => {
+            let mut ids: Vec<Uuid> = deletion_delta
+                .deleted_nodes
+                .iter()
+                .map(|rec| rec.node.uuid())
+                .collect();
+            ids.sort();
+            ids.dedup();
+            ids
+        }
+        _ => vec![uuid],
+    };
     Ok((removed_port_cascades, deleted_nodes))
 }
 

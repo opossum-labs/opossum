@@ -3,10 +3,15 @@ use std::collections::{HashMap, HashSet};
 use super::graph::OpticGraph;
 use crate::{
     analyzers::Analyzable,
-    core_optics::{NodeAttrExt, OpticRef},
+    core_optics::{NodeAttrExt, OpticRef, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
     light::LightFlow,
-    nodes::NodeGroup,
+    nodes::{
+        ConnectionInfo, NodeGroup,
+        node_group::optic_graph::delta::{
+            DeletedNodeRecord, GraphDeletionDelta, RemovedConnectionRecord, RemovedPortMapping,
+        },
+    },
     prelude::PortType,
 };
 use petgraph::{
@@ -63,52 +68,76 @@ impl OpticGraph {
     }
     /// Recursively cleans up connections (edges) and port mappings that refer to
     /// ports that no longer exist on their target or source nodes.
-    fn cleanup_orphan_connections_and_mappings(&mut self) -> OpmResult<()> {
-        // 1. Recursively clean up sub-groups first so their `ports()` are up-to-date
+    fn cleanup_orphan_connections_and_mappings(
+        &mut self,
+        group_id: Uuid,
+        delta: &mut GraphDeletionDelta,
+    ) -> OpmResult<()> {
+        // 1. Recursively clean up sub-groups first so their ports() are up-to-date
         for node_ref in self.g.node_weights_mut() {
             if let Some(group) = node_ref.as_any_mut().downcast_mut::<NodeGroup>() {
-                group.graph.cleanup_orphan_connections_and_mappings()?;
+                let sub_group_id = group.node_attr_mut().uuid();
+                group
+                    .graph_mut()
+                    .cleanup_orphan_connections_and_mappings(sub_group_id, delta)?;
             }
         }
 
-        // 2. Clean up input port mappings pointing to invalid ports or missing nodes
+        // 2. Clean up input port mappings
         let mut input_mappings_to_remove = Vec::new();
         for (ext_name, (target_id, target_port)) in &self.input_port_map {
             if let Ok(target_ref) = self.node(*target_id) {
                 let valid_ports = target_ref.ports().names(&PortType::Input);
                 if !valid_ports.contains(target_port) {
-                    input_mappings_to_remove.push(ext_name.clone());
+                    input_mappings_to_remove.push((
+                        ext_name.clone(),
+                        *target_id,
+                        target_port.clone(),
+                    ));
                 }
             } else {
-                input_mappings_to_remove.push(ext_name.clone());
+                input_mappings_to_remove.push((ext_name.clone(), *target_id, target_port.clone()));
             }
         }
-        for key in input_mappings_to_remove {
+        for (key, target_id, target_port) in input_mappings_to_remove {
             self.input_port_map.remove_key(&key);
+            delta.removed_port_mappings.push(RemovedPortMapping {
+                group_id,
+                port_type: PortType::Input,
+                external_name: key,
+                internal_node_id: target_id,
+                internal_port_name: target_port,
+            });
         }
 
-        // 3. Clean up output port mappings pointing to invalid ports or missing nodes
+        // 3. Clean up output port mappings
         let mut output_mappings_to_remove = Vec::new();
         for (ext_name, (src_id, src_port)) in &self.output_port_map {
             if let Ok(src_ref) = self.node(*src_id) {
                 let valid_ports = src_ref.ports().names(&PortType::Output);
                 if !valid_ports.contains(src_port) {
-                    output_mappings_to_remove.push(ext_name.clone());
+                    output_mappings_to_remove.push((ext_name.clone(), *src_id, src_port.clone()));
                 }
             } else {
-                output_mappings_to_remove.push(ext_name.clone());
+                output_mappings_to_remove.push((ext_name.clone(), *src_id, src_port.clone()));
             }
         }
-        for key in output_mappings_to_remove {
+        for (key, src_id, src_port) in output_mappings_to_remove {
             self.output_port_map.remove_key(&key);
+            delta.removed_port_mappings.push(RemovedPortMapping {
+                group_id,
+                port_type: PortType::Output,
+                external_name: key,
+                internal_node_id: src_id,
+                internal_port_name: src_port,
+            });
         }
 
-        // 4. Clean up edges in this graph where source or target port is no longer valid
+        // 4. Clean up invalid edges in this graph
         let mut edges_to_remove = Vec::new();
         for edge_ref in self.g.edge_references() {
             let src_node_ref = &self.g[edge_ref.source()];
             let target_node_ref = &self.g[edge_ref.target()];
-
             let src_port = edge_ref.weight().src_port();
             let target_port = edge_ref.weight().target_port();
 
@@ -117,7 +146,6 @@ impl OpticGraph {
                 .names(&PortType::Output)
                 .iter()
                 .any(|p| p == src_port);
-
             let target_valid = target_node_ref
                 .ports()
                 .names(&PortType::Input)
@@ -125,17 +153,28 @@ impl OpticGraph {
                 .any(|p| p == target_port);
 
             if !src_valid || !target_valid {
-                edges_to_remove.push(edge_ref.id());
+                edges_to_remove.push((
+                    edge_ref.id(),
+                    ConnectionInfo {
+                        src_id: src_node_ref.uuid(),
+                        src_port: src_port.to_string(),
+                        target_id: target_node_ref.uuid(),
+                        target_port: target_port.to_string(),
+                        distance: *edge_ref.weight().distance(),
+                    },
+                ));
             }
         }
-
-        for edge_idx in edges_to_remove {
+        for (edge_idx, conn_info) in edges_to_remove {
             self.g.remove_edge(edge_idx);
+            delta.removed_connections.push(RemovedConnectionRecord {
+                parent_group_id: group_id,
+                connection: conn_info,
+            });
         }
 
         Ok(())
     }
-
     /// Delete a node from this [`OpticGraph`].
     ///
     /// Deletes a node with the given [`Uuid`] from the graph. All edges connected to this node will be removed as well.
@@ -148,13 +187,22 @@ impl OpticGraph {
     /// This function will return an error if
     /// - the node with the given [`Uuid`] does not exist.
     /// - the graph is set as `inverted`.
-    pub fn delete_node(&mut self, node_id: Uuid) -> OpmResult<Vec<Uuid>> {
+    pub fn delete_node_with_delta(
+        &mut self,
+        node_id: Uuid,
+        current_group_id: Uuid,
+    ) -> OpmResult<GraphDeletionDelta> {
         if self.is_inverted() {
             return Err(OpossumError::OpticGroup(
                 "cannot delete nodes if group is set as inverted".into(),
             ));
         }
-        let mut nodes_deleted = vec![];
+
+        let mut delta = GraphDeletionDelta {
+            target_node_id: node_id,
+            ..Default::default()
+        };
+
         let mut deletion_queue = vec![node_id];
         let mut processed_uuids = HashSet::new();
 
@@ -162,51 +210,90 @@ impl OpticGraph {
             if !processed_uuids.insert(current_id_to_check) {
                 continue;
             }
+
             while let Some(node_idx) = self.find_first_node_with_uuid(current_id_to_check) {
-                // Avoid redundant node lookup by caching node_ref
                 let node_ref = self.node_by_idx(node_idx)?;
                 let actual_node_id = node_ref.uuid();
 
+                // If deleting a group, cascade reference search to its internal nodes
                 if let Some(group) = node_ref.as_any().downcast_ref::<NodeGroup>()
                     && let Ok(sub_ids) = group.collect_all_contained_node_ids_recursive()
                 {
                     for id in sub_ids {
                         deletion_queue.push(id);
-                        nodes_deleted.push(id);
                     }
                 }
 
+                // 1. Snapshot all incident connections before removing the node
+                for conn in self.get_connection_info_of_node(actual_node_id) {
+                    delta.removed_connections.push(RemovedConnectionRecord {
+                        parent_group_id: current_group_id,
+                        connection: conn,
+                    });
+                }
+
+                // 2. Snapshot all active port mappings for this node
+                for (ext_port, int_port) in
+                    self.input_port_map.assigned_ports_for_node(actual_node_id)
+                {
+                    delta.removed_port_mappings.push(RemovedPortMapping {
+                        group_id: current_group_id,
+                        port_type: PortType::Input,
+                        external_name: ext_port,
+                        internal_node_id: actual_node_id,
+                        internal_port_name: int_port,
+                    });
+                }
+                for (ext_port, int_port) in
+                    self.output_port_map.assigned_ports_for_node(actual_node_id)
+                {
+                    delta.removed_port_mappings.push(RemovedPortMapping {
+                        group_id: current_group_id,
+                        port_type: PortType::Output,
+                        external_name: ext_port,
+                        internal_node_id: actual_node_id,
+                        internal_port_name: int_port,
+                    });
+                }
+
+                // 3. Remove node from graph and port maps
                 self.g.remove_node(node_idx);
                 self.input_port_map.remove_all_from_uuid(actual_node_id);
                 self.output_port_map.remove_all_from_uuid(actual_node_id);
 
-                if !nodes_deleted.contains(&actual_node_id) {
-                    nodes_deleted.push(actual_node_id);
-                }
+                // 4. Save node snapshot
+                delta.deleted_nodes.push(DeletedNodeRecord {
+                    parent_group_id: current_group_id,
+                    node: node_ref,
+                });
+
                 deletion_queue.push(actual_node_id);
             }
         }
 
+        // Recurse into nested sub-groups
         for node_ref in self.g.node_weights_mut() {
-            if let Some(group) = node_ref.as_any_mut().downcast_mut::<NodeGroup>()
-                && let Ok(deleted_nodes_in_group) = group.graph.delete_node(node_id)
-            {
-                nodes_deleted.extend(deleted_nodes_in_group);
+            if let Some(group) = node_ref.as_any_mut().downcast_mut::<NodeGroup>() {
+                let sub_group_id = group.node_attr().uuid();
+                if let Ok(sub_delta) = group
+                    .graph_mut()
+                    .delete_node_with_delta(node_id, sub_group_id)
+                {
+                    delta.merge(sub_delta);
+                }
             }
         }
-        if nodes_deleted.is_empty() {
+
+        if delta.deleted_nodes.is_empty() {
             return Err(OpossumError::OpticScenery(
                 "node with given uuid does not exist".into(),
             ));
         }
 
-        nodes_deleted.sort();
-        nodes_deleted.dedup();
+        // Clean up connections or mappings orphaned by this deletion
+        self.cleanup_orphan_connections_and_mappings(current_group_id, &mut delta)?;
 
-        // Perform cascading cleanup of orphaned connections and port mappings
-        self.cleanup_orphan_connections_and_mappings()?;
-
-        Ok(nodes_deleted)
+        Ok(delta)
     }
     /// Remove a single node from this [`OpticGraph`] **without** cascading to reference nodes.
     ///

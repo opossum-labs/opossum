@@ -2,6 +2,7 @@
 
 mod analysis;
 mod construction;
+pub mod delta;
 mod graph;
 mod inspection;
 mod serialization;

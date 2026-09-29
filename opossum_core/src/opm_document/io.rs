@@ -282,19 +282,17 @@ mod tests {
     }
 
     #[test]
-    fn reference_into_ancestor_round_trips() {
+    fn reference_into_ancestor_round_trips() -> OpmResult<()> {
         use crate::nodes::NodeReference;
 
         let mut document = OpmDocument::default();
         let r_id = {
             let scenery = document.scenery_mut();
-            let a_id = scenery.add_node(Dummy::default()).unwrap();
-            let a_ref = scenery.node_recursive(a_id).unwrap().0;
+            let a_id = scenery.add_node(Dummy::default())?;
+            let a_ref = scenery.node_recursive(a_id)?.0;
             let mut g = NodeGroup::new("G");
-            let r_id = g
-                .add_node(NodeReference::from_node(&a_ref).unwrap())
-                .unwrap();
-            scenery.add_node(g).unwrap();
+            let r_id = g.add_node(NodeReference::from_node(&a_ref)?)?;
+            scenery.add_node(g)?;
             r_id
         };
 
@@ -311,6 +309,7 @@ mod tests {
             !ports.names(&PortType::Output).is_empty(),
             "the reloaded reference must resolve to A (non-empty mirrored ports)"
         );
+        Ok(())
     }
 
     #[test]

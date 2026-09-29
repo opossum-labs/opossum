@@ -163,9 +163,10 @@ pub fn map_port(
     external_name: &str,
 ) -> OpmResult<()> {
     match port_type {
-        PortType::Input => g.map_input_port(node_id, internal_name, external_name),
-        PortType::Output => g.map_output_port(node_id, internal_name, external_name),
-    }
+        PortType::Input => g.map_input_port(node_id, internal_name, external_name)?,
+        PortType::Output => g.map_output_port(node_id, internal_name, external_name)?,
+    };
+    Ok(())
 }
 
 /// Returns `uuid`'s parent group id, or `uuid` itself if it names the scenery root - which has no

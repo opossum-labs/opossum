@@ -6,7 +6,7 @@ use opm_macros_lib::OpmNode;
 mod analysis_energy;
 mod analysis_ghostfocus;
 mod analysis_raytrace;
-mod optic_graph;
+pub mod optic_graph;
 pub mod port_map;
 use crate::{
     analyzers::{AnalyzerKind, propagation_strategy::PropagationStrategy},
@@ -18,7 +18,10 @@ use crate::{
         Rays,
         lightdata::{LightData, light_data_builder::LightDataBuilder},
     },
-    nodes::NodeRegistration,
+    nodes::{
+        NodeRegistration,
+        node_group::optic_graph::delta::{GraphDeletionDelta, GraphDelta, RemovedPortMapping},
+    },
     properties::{Properties, Proptype},
     reporting::{
         Dottable,
@@ -123,20 +126,35 @@ impl NodeGroup {
     }
     /// Add a given [`OpticNode`] to the (sub-)graph of this [`NodeGroup`].
     ///
-    /// This command just adds an [`OpticNode`] but does not connect it to existing nodes in the (sub-)graph. The given node is
-    /// consumed (owned) by the [`NodeGroup`]. This function returns a unique id [`Uuid`] as to the element in the scenery.
-    /// This reference must be used later on for connecting nodes (see `connect_nodes` function).
+    /// This is the standard convenience method that returns only the node's [`Uuid`].
+    /// It maintains full backward compatibility with existing tests, documentation,
+    /// and examples.
     ///
     /// # Errors
-    /// An error is returned if the [`NodeGroup`] is set as inverted (which would lead to strange behaviour).
-    ///
-    /// # Panics
-    /// This function panics if the property `graph` can not be updated. Produces an error of type [`OpossumError::Properties`]
+    /// Returns an error if the group is set as inverted or the node already exists.
     pub fn add_node<T: Analyzable + Clone + 'static>(&mut self, node: T) -> OpmResult<Uuid> {
+        self.add_node_with_delta(node).map(|(node_id, _)| node_id)
+    }
+
+    /// Add a given [`OpticNode`] to the (sub-)graph and return its [`Uuid`] along with
+    /// a [`GraphDelta`] for transactional undo tracking.
+    ///
+    /// # Returns
+    /// A tuple containing the new node's [`Uuid`] and the corresponding [`GraphDelta::NodeAdded`].
+    ///
+    /// # Errors
+    /// Returns an error if the group is set as inverted or the node already exists.
+    pub fn add_node_with_delta<T: Analyzable + Clone + 'static>(
+        &mut self,
+        node: T,
+    ) -> OpmResult<(Uuid, GraphDelta)> {
+        let group_id = self.node_attr().uuid();
         let node_id = self.graph.add_node(node)?;
-        // save uuid of node in rays if present
         self.store_node_uuid_in_rays_bundle(node_id)?;
-        Ok(node_id)
+
+        let delta = GraphDelta::NodeAdded { group_id, node_id };
+
+        Ok((node_id, delta))
     }
     /// Adds a node to the graph by reference.
     ///
@@ -155,30 +173,41 @@ impl NodeGroup {
     /// # Returns
     /// The UUID of the added node.
     pub fn add_node_ref(&mut self, node: OpticRef) -> OpmResult<Uuid> {
+        self.add_node_ref_with_delta(node)
+            .map(|(node_id, _)| node_id)
+    }
+    /// Adds a node to the graph by reference and returns its [`Uuid`] along with
+    /// a [`GraphDelta`] for transactional undo tracking.
+    ///
+    /// # Errors
+    /// Returns an error if the group is set as inverted.
+    pub fn add_node_ref_with_delta(&mut self, node: OpticRef) -> OpmResult<(Uuid, GraphDelta)> {
+        let group_id = self.node_attr().uuid();
         let uuid = node.uuid();
         self.graph.add_node_ref(node)?;
-        // save uuid of node in rays if present
-        // self.store_node_uuid_in_rays_bundle(&node.optical_ref.borrow(), idx)?;
-        Ok(uuid)
+
+        let delta = GraphDelta::NodeAdded {
+            group_id,
+            node_id: uuid,
+        };
+
+        Ok((uuid, delta))
     }
     /// Delete a node from the graph.
     ///
-    /// This function deletes a node from the graph. The node is identified by its [`Uuid`]. It also
-    /// removes [`NodeReference`](crate::nodes::NodeReference)s the reference the node with the given [`Uuid`].
+    /// Deletes a node with the given [`Uuid`] and cascades through all connected edges,
+    /// nested nodes (if deleting a group), reference nodes, and port mappings.
     ///
-    /// The function returns a vector of [`Uuid`]s of the nodes that were deleted. It's a vector because it
-    /// contains the original `node_id` and all ids of the possible
-    /// [`NodeReference`](crate::nodes::NodeReference)s that were deleted.
+    /// # Returns
+    /// A [`GraphDelta::NodeDeleted`] containing all removed entities for undo restoration.
     ///
     /// # Errors
-    ///
-    /// This function will return an error if
-    /// - the node does not exist.
-    /// - the graph is inverted.
-    pub fn delete_node(&mut self, node_id: Uuid) -> OpmResult<Vec<Uuid>> {
-        self.graph.delete_node(node_id)
+    /// Returns an error if the node does not exist or the graph is inverted.
+    pub fn delete_node(&mut self, node_id: Uuid) -> OpmResult<GraphDelta> {
+        let group_id = self.node_attr().uuid();
+        let deletion_delta = self.graph.delete_node_with_delta(node_id, group_id)?;
+        Ok(GraphDelta::NodeDeleted(deletion_delta))
     }
-
     /// Remove a single node from the graph **without** cascading to reference nodes.
     ///
     /// Forwards to [`OpticGraph::remove_node_no_cascade`]; see there for why relocations
@@ -511,19 +540,16 @@ impl NodeGroup {
     pub fn nr_of_nodes(&self) -> usize {
         self.graph.node_count()
     }
-    ///  Connect (already existing) optical nodes within this [`NodeGroup`].
+    /// Connect two optical nodes within this [`NodeGroup`].
     ///
-    /// This function connects two optical nodes (referenced by their [`Uuid`]) with their respective port names
-    /// and their geometrical distance (= propagation length) to each other thus extending the optical network.
-    /// **Note**: The connection of two internal nodes might affect external port mappings (see [`map_input_port`](NodeGroup::map_input_port())
-    /// & [`map_output_port`](NodeGroup::map_output_port()) functions). In this case no longer valid mappings will be deleted.
+    /// Connects an output port of `src_id` to an input port of `target_id`.
+    /// Any port mappings previously assigned to these ports are recorded as displaced.
+    ///
+    /// # Returns
+    /// A [`GraphDelta::NodesConnected`] containing connection metadata and displaced port mappings.
     ///
     /// # Errors
-    /// This function returns an [`OpossumError::OpticScenery`] if
-    ///   - the group is set as `inverted`. Connecting subnodes of an inverted group node would result in strange behaviour.
-    ///   - the source node / port or target node / port does not exist.
-    ///   - the source node / port or target node / port is already connected.
-    ///   - the node connection would form a loop in the graph.
+    /// Returns an error if the ports are invalid, already connected, or form a cycle.
     pub fn connect_nodes(
         &mut self,
         src_id: Uuid,
@@ -531,104 +557,230 @@ impl NodeGroup {
         target_id: Uuid,
         target_port: &str,
         distance: Length,
-    ) -> OpmResult<()> {
+    ) -> OpmResult<GraphDelta> {
         if !self
             .graph()
             .port_map(&PortType::Input)
             .assigned_ports_for_node(target_id)
             .is_empty()
         {
-            Err(OpossumError::OpticPort(format!(
+            return Err(OpossumError::OpticPort(format!(
                 "Cannot connect node, as port '{target_port}' of node {} is already mapped!",
                 target_id.as_simple()
-            )))
-        } else if !self
+            )));
+        }
+        if !self
             .graph()
             .port_map(&PortType::Output)
             .assigned_ports_for_node(src_id)
             .is_empty()
         {
-            Err(OpossumError::OpticPort(format!(
+            return Err(OpossumError::OpticPort(format!(
                 "Cannot connect node, as port '{src_port}' of node {} is already mapped!",
                 src_id.as_simple()
-            )))
-        } else {
-            self.graph
-                .connect_nodes(src_id, src_port, target_id, target_port, distance)
+            )));
         }
+
+        let group_id = self.node_attr().uuid();
+
+        // Capture port mappings that will be displaced by this connection
+        let mut displaced_port_mappings = Vec::new();
+        if let Some(ext_name) = self
+            .graph()
+            .port_map(&PortType::Output)
+            .external_port_name(src_id, src_port)
+        {
+            displaced_port_mappings.push(RemovedPortMapping {
+                group_id,
+                port_type: PortType::Output,
+                external_name: ext_name,
+                internal_node_id: src_id,
+                internal_port_name: src_port.to_string(),
+            });
+        }
+        if let Some(ext_name) = self
+            .graph()
+            .port_map(&PortType::Input)
+            .external_port_name(target_id, target_port)
+        {
+            displaced_port_mappings.push(RemovedPortMapping {
+                group_id,
+                port_type: PortType::Input,
+                external_name: ext_name,
+                internal_node_id: target_id,
+                internal_port_name: target_port.to_string(),
+            });
+        }
+
+        self.graph
+            .connect_nodes(src_id, src_port, target_id, target_port, distance)?;
+
+        let connection = ConnectionInfo {
+            src_id,
+            src_port: src_port.to_string(),
+            target_id,
+            target_port: target_port.to_string(),
+            distance,
+        };
+
+        Ok(GraphDelta::NodesConnected {
+            group_id,
+            connection,
+            displaced_port_mappings,
+        })
     }
     /// Disconnect two optical nodes within this [`NodeGroup`].
     ///
-    /// This function deletes the connection between two nodes, referenced by the [`Uuid`] of the
-    /// source node and the name of the source port. **Note**: It's not necessary to specify the target node,
-    /// as the connection is uniquely identified by the source node and the source port.
+    /// # Returns
+    /// A [`GraphDelta::NodesDisconnected`] storing the severed connection information.
     ///
     /// # Errors
-    ///
-    /// This function will return an error if
-    ///  - the node with the given [`Uuid`] does not exist.
-    ///  - the node's given port is not connected.
-    pub fn disconnect_nodes(&mut self, src_id: Uuid, src_port: &str) -> OpmResult<()> {
-        self.graph.disconnect_nodes(src_id, src_port)
+    /// Returns an error if the node or connection does not exist.
+    pub fn disconnect_nodes(&mut self, src_id: Uuid, src_port: &str) -> OpmResult<GraphDelta> {
+        let group_id = self.node_attr().uuid();
+
+        // Retrieve existing connection details before removing the edge
+        let connection = self
+            .graph
+            .get_outgoing_connection_info_of_node(src_id)
+            .into_iter()
+            .find(|conn| conn.src_port == src_port)
+            .ok_or_else(|| {
+                OpossumError::OpticScenery(format!(
+                    "source node {src_id} with port <{src_port}> is not connected"
+                ))
+            })?;
+
+        self.graph.disconnect_nodes(src_id, src_port)?;
+
+        Ok(GraphDelta::NodesDisconnected {
+            group_id,
+            connection,
+        })
     }
     /// Update the distance of an already existing connection.
     ///
-    /// # Errors
+    /// # Returns
+    /// A [`GraphDelta::ConnectionDistanceChanged`] containing previous and updated distances.
     ///
-    /// This function will return an error if the connection cannot be found.
+    /// # Errors
+    /// Returns an error if the connection does not exist.
     pub fn update_connection_distance(
         &mut self,
         src_id: Uuid,
         src_port: &str,
         distance: Length,
-    ) -> OpmResult<()> {
+    ) -> OpmResult<GraphDelta> {
+        let group_id = self.node_attr().uuid();
+
+        let connection = self
+            .graph
+            .get_outgoing_connection_info_of_node(src_id)
+            .into_iter()
+            .find(|conn| conn.src_port == src_port)
+            .ok_or_else(|| {
+                OpossumError::OpticScenery(format!(
+                    "source node {src_id} with port <{src_port}> is not connected"
+                ))
+            })?;
+
+        let old_distance = connection.distance;
         self.graph
-            .update_connection_distance(src_id, src_port, distance)
+            .update_connection_distance(src_id, src_port, distance)?;
+
+        Ok(GraphDelta::ConnectionDistanceChanged {
+            group_id,
+            src_id,
+            src_port: src_port.to_string(),
+            old_distance,
+            new_distance: distance,
+        })
     }
     /// Map an input port of an internal node to an external port of the group.
     ///
-    /// In oder to use a [`NodeGroup`] from the outside, internal nodes / ports must be mapped to be visible. The
-    /// corresponding [`ports`](NodeGroup::ports()) function only returns ports that have been mapped before.
+    /// # Returns
+    /// A [`GraphDelta::PortMapped`] with full mapping specifications.
+    ///
     /// # Errors
-    /// This function will return an error if
-    ///   - an external input port name has already been assigned.
-    ///   - the `input_node` / `internal_name` does not exist.
-    ///   - the specified `input_node` is not an input node of the group (i.e. fully connected to other internal nodes).
-    ///   - the `input_node` has an input port with the specified `internal_name` but is already internally connected.
+    /// Returns an error if the external port is already assigned or internal port is invalid.
     pub fn map_input_port(
         &mut self,
         input_node: Uuid,
         internal_name: &str,
         external_name: &str,
-    ) -> OpmResult<()> {
+    ) -> OpmResult<GraphDelta> {
+        let group_id = self.node_attr().uuid();
         self.graph
-            .map_port(input_node, &PortType::Input, internal_name, external_name)
+            .map_port(input_node, &PortType::Input, internal_name, external_name)?;
+
+        Ok(GraphDelta::PortMapped(RemovedPortMapping {
+            group_id,
+            port_type: PortType::Input,
+            external_name: external_name.to_string(),
+            internal_node_id: input_node,
+            internal_port_name: internal_name.to_string(),
+        }))
     }
     /// Map an output port of an internal node to an external port of the group.
     ///
-    /// In oder to use a [`NodeGroup`] from the outside, internal nodes / ports must be mapped to be visible. The
-    /// corresponding [`ports`](NodeGroup::ports()) function only returns ports that have been mapped before.
+    /// # Returns
+    /// A [`GraphDelta::PortMapped`] with full mapping specifications.
+    ///
     /// # Errors
-    /// This function will return an error if
-    ///   - an external output port name has already been assigned.
-    ///   - the `output_node` / `internal_name` does not exist.
-    ///   - the specified `output_node` is not an output node of the group (i.e. fully connected to other internal nodes).
-    ///   - the `output_node` has an output port with the specified `internal_name` but is already internally connected.
+    /// Returns an error if the external port is already assigned or internal port is invalid.
     pub fn map_output_port(
         &mut self,
         output_node: Uuid,
         internal_name: &str,
         external_name: &str,
-    ) -> OpmResult<()> {
+    ) -> OpmResult<GraphDelta> {
+        let group_id = self.node_attr().uuid();
         self.graph
-            .map_port(output_node, &PortType::Output, internal_name, external_name)
+            .map_port(output_node, &PortType::Output, internal_name, external_name)?;
+
+        Ok(GraphDelta::PortMapped(RemovedPortMapping {
+            group_id,
+            port_type: PortType::Output,
+            external_name: external_name.to_string(),
+            internal_node_id: output_node,
+            internal_port_name: internal_name.to_string(),
+        }))
     }
 
-    /// Remove a port mapping
+    /// Remove a port mapping and return a [`GraphDelta`] for undo support.
     ///
-    /// Returns true if successful
-    pub fn remove_mapped_port(&mut self, external_name: &str, port_type: PortType) -> bool {
-        self.graph.remove_mapped_port(external_name, port_type)
+    /// # Returns
+    /// A [`GraphDelta::PortUnmapped`] detailing the removed mapping.
+    ///
+    /// # Errors
+    /// Returns an error if the port mapping does not exist.
+    pub fn remove_mapped_port(
+        &mut self,
+        external_name: &str,
+        port_type: PortType,
+    ) -> OpmResult<GraphDelta> {
+        let group_id = self.node_attr().uuid();
+
+        let (target_id, target_port) = self
+            .graph
+            .port_map(&port_type)
+            .get(external_name)
+            .cloned()
+            .ok_or_else(|| {
+                OpossumError::OpticPort(format!(
+                    "port mapping '{external_name}' not found for removal"
+                ))
+            })?;
+
+        self.graph.remove_mapped_port(external_name, port_type);
+
+        Ok(GraphDelta::PortUnmapped(RemovedPortMapping {
+            group_id,
+            port_type,
+            external_name: external_name.to_string(),
+            internal_node_id: target_id,
+            internal_port_name: target_port,
+        }))
     }
 
     /// Defines and returns the node/port identifier to connect the edges in the dot format
@@ -658,6 +810,231 @@ impl NodeGroup {
         } else {
             Ok(format!("{node_id}:{port_name}"))
         }
+    }
+    /// Central undo dispatcher: reverses any graph mutation described by a [`GraphDelta`].
+    ///
+    /// Handles single-node adjustments, connection lifecycles, port mapping changes,
+    /// deep cascading deletions, and composite sequences recursively across group hierarchies.
+    ///
+    /// # Errors
+    /// Returns an error if any restoration phase encounters an invalid node ID, port, or graph cycle.
+    pub fn apply_undo(&mut self, delta: &GraphDelta) -> OpmResult<()> {
+        let current_group_id = self.node_attr().uuid();
+
+        match delta {
+            GraphDelta::NodeAdded { group_id, node_id } => {
+                // Remove newly added node without cascading
+                if *group_id == current_group_id {
+                    self.graph.remove_node_no_cascade(*node_id)?;
+                } else {
+                    self.with_group_node_mut(*group_id, |group| {
+                        group.graph_mut().remove_node_no_cascade(*node_id)
+                    })??;
+                }
+            }
+
+            GraphDelta::NodeDeleted(deletion_delta) => {
+                // Revert deep deletion across all phases
+                self.revert_deletion(deletion_delta)?;
+            }
+
+            GraphDelta::NodesConnected {
+                group_id,
+                connection,
+                displaced_port_mappings,
+            } => {
+                // 1. Sever the connection that was created
+                if *group_id == current_group_id {
+                    self.graph
+                        .disconnect_nodes(connection.src_id, &connection.src_port)?;
+                } else {
+                    self.with_group_node_mut(*group_id, |group| {
+                        group
+                            .graph_mut()
+                            .disconnect_nodes(connection.src_id, &connection.src_port)
+                    })??;
+                }
+
+                // 2. Restore any port mappings that were displaced
+                for mapping in displaced_port_mappings {
+                    if mapping.group_id == current_group_id {
+                        self.graph.map_port(
+                            mapping.internal_node_id,
+                            &mapping.port_type,
+                            &mapping.internal_port_name,
+                            &mapping.external_name,
+                        )?;
+                    } else {
+                        self.with_group_node_mut(mapping.group_id, |group| {
+                            group.graph_mut().map_port(
+                                mapping.internal_node_id,
+                                &mapping.port_type,
+                                &mapping.internal_port_name,
+                                &mapping.external_name,
+                            )
+                        })??;
+                    }
+                }
+            }
+
+            GraphDelta::NodesDisconnected {
+                group_id,
+                connection,
+            } => {
+                // Re-establish connection
+                if *group_id == current_group_id {
+                    self.graph.connect_nodes(
+                        connection.src_id,
+                        &connection.src_port,
+                        connection.target_id,
+                        &connection.target_port,
+                        connection.distance,
+                    )?;
+                } else {
+                    self.with_group_node_mut(*group_id, |group| {
+                        group.graph_mut().connect_nodes(
+                            connection.src_id,
+                            &connection.src_port,
+                            connection.target_id,
+                            &connection.target_port,
+                            connection.distance,
+                        )
+                    })??;
+                }
+            }
+
+            GraphDelta::ConnectionDistanceChanged {
+                group_id,
+                src_id,
+                src_port,
+                old_distance,
+                ..
+            } => {
+                // Restore original distance
+                if *group_id == current_group_id {
+                    self.graph
+                        .update_connection_distance(*src_id, src_port, *old_distance)?;
+                } else {
+                    self.with_group_node_mut(*group_id, |group| {
+                        group.graph_mut().update_connection_distance(
+                            *src_id,
+                            src_port,
+                            *old_distance,
+                        )
+                    })??;
+                }
+            }
+
+            GraphDelta::PortMapped(mapping) => {
+                // Revert mapping by removing external port
+                if mapping.group_id == current_group_id {
+                    self.graph
+                        .remove_mapped_port(&mapping.external_name, mapping.port_type);
+                } else {
+                    self.with_group_node_mut(mapping.group_id, |group| {
+                        group
+                            .graph_mut()
+                            .remove_mapped_port(&mapping.external_name, mapping.port_type);
+                    })?;
+                }
+            }
+
+            GraphDelta::PortUnmapped(mapping) => {
+                // Re-add port mapping
+                if mapping.group_id == current_group_id {
+                    self.graph.map_port(
+                        mapping.internal_node_id,
+                        &mapping.port_type,
+                        &mapping.internal_port_name,
+                        &mapping.external_name,
+                    )?;
+                } else {
+                    self.with_group_node_mut(mapping.group_id, |group| {
+                        group.graph_mut().map_port(
+                            mapping.internal_node_id,
+                            &mapping.port_type,
+                            &mapping.internal_port_name,
+                            &mapping.external_name,
+                        )
+                    })??;
+                }
+            }
+
+            GraphDelta::Composite(deltas) => {
+                // Execute sub-deltas in reverse chronological order
+                for sub_delta in deltas.iter().rev() {
+                    self.apply_undo(sub_delta)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Reverts a multi-entity deletion by re-inserting nodes, port mappings, and edges in phased order.
+    pub fn revert_deletion(&mut self, delta: &GraphDeletionDelta) -> OpmResult<()> {
+        let current_group_id = self.node_attr().uuid();
+
+        // Phase 1: Re-insert all nodes into their original parent groups
+        for record in &delta.deleted_nodes {
+            if record.parent_group_id == current_group_id {
+                self.graph.add_node_ref(record.node.clone())?;
+            } else {
+                self.with_group_node_mut(record.parent_group_id, |group| {
+                    group.graph_mut().add_node_ref(record.node.clone())
+                })??;
+            }
+        }
+
+        // Phase 2: Re-resolve references across all hierarchy levels
+        self.graph.resolve_all_references()?;
+
+        // Phase 3: Restore exposed port mappings
+        for mapping in &delta.removed_port_mappings {
+            if mapping.group_id == current_group_id {
+                self.graph.map_port(
+                    mapping.internal_node_id,
+                    &mapping.port_type,
+                    &mapping.internal_port_name,
+                    &mapping.external_name,
+                )?;
+            } else {
+                self.with_group_node_mut(mapping.group_id, |group| {
+                    group.graph_mut().map_port(
+                        mapping.internal_node_id,
+                        &mapping.port_type,
+                        &mapping.internal_port_name,
+                        &mapping.external_name,
+                    )
+                })??;
+            }
+        }
+
+        // Phase 4: Reconnect edges
+        for conn_rec in &delta.removed_connections {
+            let conn = &conn_rec.connection;
+            if conn_rec.parent_group_id == current_group_id {
+                self.graph.connect_nodes(
+                    conn.src_id,
+                    &conn.src_port,
+                    conn.target_id,
+                    &conn.target_port,
+                    conn.distance,
+                )?;
+            } else {
+                self.with_group_node_mut(conn_rec.parent_group_id, |group| {
+                    group.graph_mut().connect_nodes(
+                        conn.src_id,
+                        &conn.src_port,
+                        conn.target_id,
+                        &conn.target_port,
+                        conn.distance,
+                    )
+                })??;
+            }
+        }
+
+        Ok(())
     }
     /// Returns the expansion flag of this [`NodeGroup`].
     ///   
@@ -1190,6 +1567,7 @@ mod test {
     fn delete_mapped_node_cleans_up_outer_connections() -> OpmResult<()> {
         // 1. Create top-level (outer) group and internal (inner) group
         let mut outer_group = NodeGroup::new("outer_group");
+        let outer_id = outer_group.node_attr().uuid();
         let mut inner_group = NodeGroup::new("inner_group");
 
         // 2. Add an optical node inside the inner group
@@ -1212,25 +1590,94 @@ mod test {
             "Outer group should have exactly 1 connection before node deletion"
         );
 
-        // 6. Delete the inside node from the outer group
-        let deleted_nodes = outer_group.delete_node(n_inside)?;
+        // 6. Delete the inside node from the outer group and capture the delta
+        let delta = outer_group.delete_node(n_inside)?;
 
-        // 7. Assertions:
-        // Verify that n_inside was returned in the list of deleted node UUIDs
-        assert!(
-            deleted_nodes.contains(&n_inside),
-            "Deleted node list should contain n_inside"
-        );
-
-        // Verify that the connection in outer_group was cleaned up because the mapped port no longer exists
+        // 7. Verify that outer_group cleaned up its connection due to orphaned ports
         assert_eq!(
             outer_group.connections().len(),
             0,
             "Outer group connections should be cleaned up after deleting a mapped node inside a subgroup"
         );
 
+        // 8. Assertions on the deletion delta:
+        // Extract inner GraphDeletionDelta from the GraphDelta enum
+        let GraphDelta::NodeDeleted(deletion_delta) = &delta else {
+            panic!("Expected GraphDelta::NodeDeleted variant from delete_node");
+        };
+
+        // Verify target UUID
+        assert_eq!(
+            deletion_delta.target_node_id, n_inside,
+            "Target node ID in delta must match the deleted node UUID"
+        );
+
+        // Verify deleted node record contains n_inside and parent_group_id is inner_id
+        assert_eq!(
+            deletion_delta.deleted_nodes.len(),
+            1,
+            "Exactly one node record should be captured in delta"
+        );
+        assert_eq!(
+            deletion_delta.deleted_nodes[0].node.uuid(),
+            n_inside,
+            "Deleted node record UUID must match n_inside"
+        );
+        assert_eq!(
+            deletion_delta.deleted_nodes[0].parent_group_id, inner_id,
+            "Parent group of deleted node must be inner_group"
+        );
+
+        // Verify removed port mapping inside inner_group
+        assert_eq!(
+            deletion_delta.removed_port_mappings.len(),
+            1,
+            "Exactly one removed port mapping should be recorded"
+        );
+        let port_mapping = &deletion_delta.removed_port_mappings[0];
+        assert_eq!(port_mapping.group_id, inner_id);
+        assert_eq!(port_mapping.port_type, PortType::Output);
+        assert_eq!(port_mapping.external_name, "ext_out");
+        assert_eq!(port_mapping.internal_node_id, n_inside);
+        assert_eq!(port_mapping.internal_port_name, "output_1");
+
+        // Verify removed connection record belongs to outer_group
+        assert_eq!(
+            deletion_delta.removed_connections.len(),
+            1,
+            "Exactly one removed outer connection should be recorded"
+        );
+        let conn_record = &deletion_delta.removed_connections[0];
+        assert_eq!(conn_record.parent_group_id, outer_id);
+        assert_eq!(conn_record.connection.src_id, inner_id);
+        assert_eq!(conn_record.connection.src_port, "ext_out");
+        assert_eq!(conn_record.connection.target_id, n_outside);
+        assert_eq!(conn_record.connection.target_port, "input_1");
+
+        // 9. Revert the deletion using the central apply_undo method and verify complete restoration
+        outer_group.apply_undo(&delta)?;
+
+        // Verify the node inside inner_group exists again
+        assert!(
+            outer_group.exists(n_inside),
+            "Inside node must exist in outer_group hierarchy after apply_undo"
+        );
+
+        // Verify the outer connection is restored
+        assert_eq!(
+            outer_group.connections().len(),
+            1,
+            "Outer group connection must be restored after apply_undo"
+        );
+        let restored_conn = &outer_group.connections()[0];
+        assert_eq!(restored_conn.src_id, inner_id);
+        assert_eq!(restored_conn.src_port, "ext_out");
+        assert_eq!(restored_conn.target_id, n_outside);
+        assert_eq!(restored_conn.target_port, "input_1");
+
         Ok(())
     }
+
     #[test]
     fn delete_mapped_node_cleans_up_nested_outer_connections() -> OpmResult<()> {
         // 1. Setup a 3-level hierarchy: top_group -> mid_group -> inner_group
@@ -1253,14 +1700,36 @@ mod test {
 
         assert_eq!(top_group.connections().len(), 1);
 
-        // 5. Delete the innermost node from the top-level group
-        top_group.delete_node(n_inside)?;
+        // 5. Delete the innermost node from the top-level group and capture delta
+        let delta = top_group.delete_node(n_inside)?;
 
         // 6. Assertions: connections at top_group level must be cleaned up
         assert_eq!(
             top_group.connections().len(),
             0,
             "Cascading cleanup failed to remove top-level connection"
+        );
+
+        // 7. Verify delta captures mappings and connections across hierarchy levels
+        let GraphDelta::NodeDeleted(deletion_delta) = &delta else {
+            panic!("Expected GraphDelta::NodeDeleted variant from delete_node");
+        };
+
+        assert_eq!(deletion_delta.deleted_nodes.len(), 1);
+        assert_eq!(deletion_delta.removed_connections.len(), 1);
+        assert_eq!(deletion_delta.removed_port_mappings.len(), 2); // ext_inner and ext_mid
+
+        // 8. Revert and verify full 3-level reconstruction via apply_undo
+        top_group.apply_undo(&delta)?;
+
+        assert_eq!(
+            top_group.connections().len(),
+            1,
+            "Top-level connection must be restored after multi-level apply_undo"
+        );
+        assert!(
+            top_group.exists(n_inside),
+            "Innermost node must exist again after multi-level apply_undo"
         );
 
         Ok(())
