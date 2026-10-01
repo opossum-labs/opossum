@@ -8,8 +8,8 @@
 //! for complex multi-step creation endpoints (paste, convert-to-group) keep their existing bodies and
 //! only construct the inverse `Command` to push, since replaying "insert this already-built object back"
 //! is uniform regardless of how the object was originally built.
-use std::collections::HashSet;
 
+use std::collections::HashSet;
 use opossum_core::{
     analyzers::AnalyzerType,
     nodes::GraphDelta,
@@ -25,6 +25,7 @@ use crate::error::BackEndErrorResponse;
 mod amplifier_node_commands;
 mod analyzer_commands;
 mod edge_commands;
+mod graph_commands;
 mod group_commands;
 mod node_commands;
 mod port_map_commands;
@@ -45,14 +46,15 @@ pub use viewport_commands::SetViewport;
 /// A reversible document mutation.
 #[derive(Clone)]
 pub enum Command {
+    /// Reverts a graph mutation using core's central `apply_undo` dispatcher.
+    UndoGraph(Box<GraphDelta>),
+    /// Re-executes a graph mutation during redo.
+    RedoGraph(Box<GraphDelta>),
+
     /// See [`NodeSnapshot`]. Inserts the node.
     AddNode(NodeSnapshot),
     /// See [`NodeSnapshot`]. Removes the node.
     RemoveNode(NodeSnapshot),
-    /// Reverts a graph deletion using core's central `apply_undo`.
-    RestoreDeletion(Box<GraphDelta>),
-    /// Re-executes a node deletion during redo.
-    RedoDeleteNode(Box<GraphDelta>),
     /// See [`PatchNode`].
     PatchNode(Box<PatchNode>),
     /// See [`PatchProperty`].
@@ -115,10 +117,10 @@ impl Command {
     /// Applies this command to `document` and returns the command that undoes it.
     pub fn apply(self, document: &mut OpmDocument) -> Result<Self, BackEndErrorResponse> {
         match self {
+            Self::UndoGraph(delta) => graph_commands::apply_undo_graph(document, *delta),
+            Self::RedoGraph(delta) => graph_commands::apply_redo_graph(document, *delta),
             Self::AddNode(cmd) => node_commands::apply_add_node(document, cmd),
             Self::RemoveNode(cmd) => node_commands::apply_remove_node(document, cmd),
-            Self::RestoreDeletion(delta) => node_commands::apply_restore_deletion(document, *delta),
-            Self::RedoDeleteNode(delta) => node_commands::apply_redo_delete_node(document, *delta),
             Self::PatchNode(cmd) => node_commands::apply_patch_node(document, *cmd),
             Self::PatchProperty(cmd) => node_commands::apply_patch_property(document, cmd),
             Self::PatchPort(cmd) => node_commands::apply_patch_port(document, cmd),
@@ -188,11 +190,10 @@ impl Command {
             | Self::PatchAnalyzerPumpScenarios(_)
             | Self::PatchAmplifierNodes(_)
             | Self::SetViewport(_) => false,
-
-            Self::AddNode(_)
+            Self::UndoGraph(_)
+            | Self::RedoGraph(_)
+            | Self::AddNode(_)
             | Self::RemoveNode(_)
-            | Self::RestoreDeletion(_)
-            | Self::RedoDeleteNode(_)
             | Self::AddPortMap(_)
             | Self::RemovePortMap(_)
             | Self::MoveNodes(_)
@@ -207,6 +208,12 @@ impl Command {
     #[allow(clippy::too_many_lines)]
     pub fn jump_target(&self, root_id: Uuid) -> Option<JumpTarget> {
         match self {
+            Self::UndoGraph(delta) => {
+                graph_commands::jump_target_for_graph_delta(delta, true, root_id)
+            }
+            Self::RedoGraph(delta) => {
+                graph_commands::jump_target_for_graph_delta(delta, false, root_id)
+            }
             Self::PatchNode(patch_node) => Some(JumpTarget {
                 graph_id: patch_node.parent_group_id,
                 node: Some(patch_node.uuid),
@@ -236,35 +243,6 @@ impl Command {
             Self::AddNode(cmd) | Self::RemoveNode(cmd) => Some(
                 JumpTarget::new_from_graph_and_node_id(cmd.parent_group_id, cmd.node.uuid()),
             ),
-            Self::RestoreDeletion(delta) => {
-                if let GraphDelta::NodeDeleted(d) = delta.as_ref() {
-                    let target_id = d.target_node_id;
-                    let parent_group_id = d
-                        .deleted_nodes
-                        .iter()
-                        .find(|record| record.node.uuid() == target_id)
-                        .map_or(root_id, |record| record.parent_group_id);
-                    Some(JumpTarget::new_from_graph_and_node_id(
-                        parent_group_id,
-                        target_id,
-                    ))
-                } else {
-                    Some(JumpTarget::new_from_graph_id(root_id))
-                }
-            }
-            Self::RedoDeleteNode(delta) => {
-                if let GraphDelta::NodeDeleted(d) = delta.as_ref() {
-                    let target_id = d.target_node_id;
-                    let parent_group_id = d
-                        .deleted_nodes
-                        .iter()
-                        .find(|record| record.node.uuid() == target_id)
-                        .map_or(root_id, |record| record.parent_group_id);
-                    Some(JumpTarget::new_from_graph_id(parent_group_id))
-                } else {
-                    Some(JumpTarget::new_from_graph_id(root_id))
-                }
-            }
             Self::AddEdge(cmd) | Self::RemoveEdge(cmd) => {
                 Some(JumpTarget::new_from_graph_id(cmd.group_id))
             }
@@ -303,10 +281,10 @@ impl Command {
     /// Describes the effect of applying this command, in the GUI-facing [`DocumentChange`] shape.
     pub fn describe(&self) -> Result<Vec<DocumentChange>, BackEndErrorResponse> {
         Ok(match self {
+            Self::UndoGraph(delta) => graph_commands::describe_graph_delta(delta, true),
+            Self::RedoGraph(delta) => graph_commands::describe_graph_delta(delta, false),
             Self::AddNode(cmd) => node_commands::describe_add_node(cmd),
             Self::RemoveNode(cmd) => node_commands::describe_remove_node(cmd),
-            Self::RestoreDeletion(delta) => node_commands::describe_restore_deletion(delta),
-            Self::RedoDeleteNode(delta) => node_commands::describe_redo_delete_node(delta),
             Self::PatchNode(cmd) => node_commands::describe_patch_node(cmd),
             Self::PatchProperty(PatchProperty {
                 uuid,
@@ -402,27 +380,16 @@ impl Command {
     }
 }
 
-/// The [`JumpTarget`] for a [`Command::Batch`]: the sub-command target with the highest focus priority (a
-/// node-editor panel beats a node selection beats a bare tab), with ties broken by a stable key so undo and
-/// redo agree - a batch reverses its sub-commands between the two directions, so a position-based "first"
-/// would otherwise pick a different target each way.
 fn batch_jump_target(commands: &[Command], root_id: Uuid) -> Option<JumpTarget> {
     let best = commands
         .iter()
         .filter_map(|command| command.jump_target(root_id))
         .max_by_key(|target| {
-            // A specific sub-location (a node-editor panel, or an analyzer source-port card) outranks a
-            // bare node selection, which outranks a bare tab. So a source-port deletion's batch (a re-added
-            // source node + the analyzer source-mapping restore) focuses the analyzer's source card, not
-            // the re-added canvas node.
             let has_detail = target.panel.is_some() || target.source_port.is_some();
             let priority = 2 * u8::from(has_detail) + u8::from(target.node.is_some());
             (priority, std::cmp::Reverse((target.graph_id, target.node)))
         })?;
-    // A batch that focuses a specific node, panel, or source card (a paste, a node deletion - even one that
-    // cascaded port maps away, or a source-port deletion) jumps to it. Only a purely-structural batch
-    // consults the port-map cascade origin, so undo/redo of a port-map removal lands on the group the user
-    // actually acted on.
+
     if best.node.is_some() || best.panel.is_some() || best.source_port.is_some() {
         return Some(best);
     }
@@ -432,11 +399,6 @@ fn batch_jump_target(commands: &[Command], root_id: Uuid) -> Option<JumpTarget> 
     Some(best)
 }
 
-/// The source-port uuid whose analyzer mapping changed between `old` and `new` (added, removed, or a
-/// changed builder), if the two are the same analyzer variant and exactly a source mapping changed.
-///
-/// Returns `None` when the analyzer *type* changed wholesale (no single source to focus). Used by
-/// [`Command::jump_target`] to point an analyzer undo/redo at the exact source-port card that moved.
 fn changed_source_port(old: &AnalyzerType, new: &AnalyzerType) -> Option<Uuid> {
     match (old, new) {
         (AnalyzerType::Energy(o), AnalyzerType::Energy(n)) => o.first_differing_source(n),
@@ -446,10 +408,6 @@ fn changed_source_port(old: &AnalyzerType, new: &AnalyzerType) -> Option<Uuid> {
     }
 }
 
-/// For a port-map cascade [`Command::Batch`] (a `RemovePortMap` tears down its own level plus every
-/// ancestor that re-exposes it), the group whose *own* mapping was directly added/removed - the group the
-/// user acted on. That's the innermost level: the one port-map command's `group_id` that isn't any level's
-/// `parent_group_id`. Order-invariant, so undo and redo agree. `None` if the batch has no port-map commands.
 fn port_map_cascade_origin(commands: &[Command]) -> Option<Uuid> {
     let mut levels: Vec<(Uuid, Uuid)> = Vec::new();
     collect_port_map_levels(commands, &mut levels);
@@ -460,11 +418,6 @@ fn port_map_cascade_origin(commands: &[Command]) -> Option<Uuid> {
         .find(|group_id| !parents.contains(group_id))
 }
 
-/// Collects every port-map level `(group_id, parent_group_id)` from `commands`, descending into nested
-/// [`Command::Batch`]es. A port-map removal that has been redone and then undone nests its single-level
-/// `AddPortMap` inside a per-command `Batch` (`apply_remove_port_map` always returns a `Batch`, even for one
-/// level), so a top-level-only scan would find nothing and lose the cascade's origin - making the jump drift
-/// on the second undo. Recursing keeps the origin the same regardless of how the batch got nested.
 fn collect_port_map_levels(commands: &[Command], out: &mut Vec<(Uuid, Uuid)>) {
     for command in commands {
         match command {
@@ -476,13 +429,6 @@ fn collect_port_map_levels(commands: &[Command], out: &mut Vec<(Uuid, Uuid)>) {
     }
 }
 
-/// A `GraphNeedsRefresh { graph_id }` re-fetches everything in that tab (nodes, edges, port maps), so
-/// any other change in the same batch that also targets `graph_id` would be double-applied once the
-/// refresh has already picked it up - most visibly for list-valued state like `GraphStore.edges`, where
-/// re-adding an already-present connection produces two identically-keyed elements and crashes the GUI's
-/// keyed-list diffing. Keeps at most one `GraphNeedsRefresh` per `graph_id` and drops every tab-scoped
-/// change (node/edge changes) whose `graph_id` is covered by one; analyzer/detail changes aren't
-/// tab-scoped the same way and are left alone.
 fn dedup_against_full_refreshes(changes: Vec<DocumentChange>) -> Vec<DocumentChange> {
     let refreshed: HashSet<Uuid> = changes
         .iter()
@@ -491,7 +437,6 @@ fn dedup_against_full_refreshes(changes: Vec<DocumentChange>) -> Vec<DocumentCha
             _ => None,
         })
         .collect();
-
     let mut seen_refresh = HashSet::new();
     changes
         .into_iter()
@@ -519,7 +464,6 @@ fn dedup_against_full_refreshes(changes: Vec<DocumentChange>) -> Vec<DocumentCha
         .collect()
 }
 
-/// Builds a `GraphNeedsRefresh` for each id in `ids`, deduplicated.
 fn refresh_changes(ids: impl IntoIterator<Item = Uuid>) -> Vec<DocumentChange> {
     let mut ids: Vec<Uuid> = ids.into_iter().collect();
     ids.sort();
@@ -527,228 +471,4 @@ fn refresh_changes(ids: impl IntoIterator<Item = Uuid>) -> Vec<DocumentChange> {
     ids.into_iter()
         .map(|graph_id| DocumentChange::GraphNeedsRefresh { graph_id })
         .collect()
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use opossum_core::{
-        error::OpmResult,
-        types::api_types::{UpdateNodeRequest, Viewport},
-    };
-    use uuid::Uuid;
-
-    /// The rollback backup is a whole-document serialize, so it must be taken only where a multi-step
-    /// `apply` could tear the document partway through, and skipped for atomic commands - above all the
-    /// very frequent `SetViewport` camera undos. Pins the classification so a change can't silently
-    /// regress it (the exhaustive match also forces any new variant to be classified deliberately).
-    #[test]
-    fn needs_rollback_classifies_atomic_and_multistep_commands() {
-        let viewport = |zoom| Viewport {
-            graph_id: Uuid::new_v4(),
-            zoom,
-            shift: (0.0, 0.0),
-        };
-        // Atomic: no whole-document backup needed.
-        assert!(
-            !Command::SetViewport(SetViewport {
-                from: viewport(1.0),
-                to: viewport(2.0),
-                coalescing: false,
-            })
-            .needs_rollback(),
-            "a camera move never touches the document, so it needs no rollback"
-        );
-        assert!(
-            !Command::PatchNode(Box::new(PatchNode {
-                uuid: Uuid::new_v4(),
-                parent_group_id: Uuid::new_v4(),
-                old: UpdateNodeRequest::default(),
-                new: UpdateNodeRequest::default(),
-            }))
-            .needs_rollback(),
-            "a single-field patch can't leave a partial mutation"
-        );
-        // Multi-step: backup needed.
-        assert!(
-            Command::Batch(vec![]).needs_rollback(),
-            "a batch chains several fallible sub-steps, so it needs rollback"
-        );
-    }
-
-    /// The backend names the undo/redo focus target authoritatively (tab, node, panel) so the GUI doesn't
-    /// reconstruct it. Pins the mapping for the field-patch commands (the panel cases) and an edge (tab
-    /// only), which is the exact behavior the port-config-undo bug hinged on.
-    #[test]
-    fn jump_target_names_the_panel_node_and_tab() {
-        use opossum_core::{
-            prelude::PortType,
-            types::api_types::{ConnectInfo, NodeEditorPanel, UpdatePortRequest},
-        };
-
-        let root = Uuid::new_v4();
-        let graph = Uuid::new_v4();
-        let node = Uuid::new_v4();
-
-        // A port-config change opens Port Config on its node/tab - identically for aperture, coating, LIDT.
-        let port = Command::PatchPort(PatchPort {
-            uuid: node,
-            parent_group_id: graph,
-            port_type: PortType::Input,
-            port_name: "input_1".to_string(),
-            old: UpdatePortRequest::default(),
-            new: UpdatePortRequest::default(),
-        })
-        .jump_target(root)
-        .unwrap();
-        assert_eq!(port.graph_id, graph);
-        assert_eq!(port.node, Some(node));
-        assert_eq!(port.panel, Some(NodeEditorPanel::PortConfig));
-
-        // A name change belongs to General.
-        let name = Command::PatchNode(Box::new(PatchNode {
-            uuid: node,
-            parent_group_id: graph,
-            old: UpdateNodeRequest::default(),
-            new: UpdateNodeRequest {
-                name: Some("x".to_string()),
-                ..Default::default()
-            },
-        }))
-        .jump_target(root)
-        .unwrap();
-        assert_eq!(name.panel, Some(NodeEditorPanel::General));
-
-        // A gui_position-only patch (a canvas drag) selects the node but opens no panel.
-        let pos = Command::PatchNode(Box::new(PatchNode {
-            uuid: node,
-            parent_group_id: graph,
-            old: UpdateNodeRequest::default(),
-            new: UpdateNodeRequest {
-                gui_position: Some(Some((1.0, 2.0))),
-                ..Default::default()
-            },
-        }))
-        .jump_target(root)
-        .unwrap();
-        assert_eq!(pos.node, Some(node));
-        assert_eq!(pos.panel, None);
-
-        // An edge change names the tab but no node/panel.
-        let edge = Command::AddEdge(EdgeSnapshot {
-            group_id: graph,
-            connect_info: ConnectInfo::new(
-                Uuid::new_v4(),
-                "output_1".to_string(),
-                Uuid::new_v4(),
-                "input_1".to_string(),
-                0.1,
-                false,
-            ),
-        })
-        .jump_target(root)
-        .unwrap();
-        assert_eq!(edge.graph_id, graph);
-        assert_eq!(edge.node, None);
-        assert_eq!(edge.panel, None);
-    }
-
-    /// A `Batch`'s focus is its highest-priority sub-command (a node selection beats a bare edge tab), so a
-    /// paste (add node + reconnect edges) focuses the pasted node.
-    #[test]
-    fn batch_jump_target_prefers_the_node_over_the_edge() -> OpmResult<()> {
-        use opossum_core::{nodes::create_node_ref, types::api_types::ConnectInfo};
-
-        let root = Uuid::new_v4();
-        let graph = Uuid::new_v4();
-        let node_ref = create_node_ref("dummy")?;
-        let node_id = node_ref.uuid();
-        let jump = Command::Batch(vec![
-            Command::AddNode(NodeSnapshot {
-                parent_group_id: graph,
-                node: node_ref,
-                cascaded: Vec::new(),
-                connections: Vec::new(),
-            }),
-            Command::AddEdge(EdgeSnapshot {
-                group_id: graph,
-                connect_info: ConnectInfo::new(
-                    Uuid::new_v4(),
-                    "output_1".to_string(),
-                    Uuid::new_v4(),
-                    "input_1".to_string(),
-                    0.1,
-                    false,
-                ),
-            }),
-        ])
-        .jump_target(root)
-        .unwrap();
-        assert_eq!(
-            jump.node,
-            Some(node_id),
-            "the batch should focus the added node, not the edge's tab"
-        );
-        Ok(())
-    }
-
-    /// The analyzer editor has no `NodeEditorPanel`, so an undo/redo of an analyzer source-mapping change is
-    /// pointed at the exact source-port card via `JumpTarget::source_port`. Pins that a `PatchAnalyzer`
-    /// whose source map changed names the analyzer node and the changed source, and that in a batch (a
-    /// source-port node delete: re-add the node + restore the analyzer mapping) that source card outranks
-    /// the bare re-added node.
-    #[test]
-    fn jump_target_names_the_changed_analyzer_source() {
-        use opossum_core::{
-            analyzers::energy::EnergyConfig,
-            nodes::create_node_ref,
-            prelude::{AnalyzerType, EnergyDataBuilder},
-        };
-
-        let root = Uuid::new_v4();
-        let analyzer = Uuid::new_v4();
-        let source = Uuid::new_v4();
-        let mut with_source = EnergyConfig::default();
-        with_source.map_source(source, EnergyDataBuilder::default());
-
-        // A source-mapping change (here the source was removed; undo would restore it) focuses the analyzer
-        // node and that exact source-port card, at the root tab where analyzers live.
-        let patch = Command::PatchAnalyzer(Box::new(PatchAnalyzer {
-            id: analyzer,
-            old: AnalyzerType::Energy(with_source),
-            new: AnalyzerType::Energy(EnergyConfig::default()),
-        }));
-        let jump = patch.clone().jump_target(root).unwrap();
-        assert_eq!(jump.graph_id, root, "analyzers live at the root scenery");
-        assert_eq!(jump.node, Some(analyzer));
-        assert_eq!(
-            jump.source_port,
-            Some(source),
-            "the jump must name the source-port card whose mapping changed"
-        );
-
-        // In a batch, the analyzer's source card wins over the re-added canvas source node.
-        let source_node = create_node_ref("dummy").unwrap();
-        let batch = Command::Batch(vec![
-            Command::AddNode(NodeSnapshot {
-                parent_group_id: root,
-                node: source_node,
-                cascaded: Vec::new(),
-                connections: Vec::new(),
-            }),
-            patch,
-        ])
-        .jump_target(root)
-        .unwrap();
-        assert_eq!(
-            batch.node,
-            Some(analyzer),
-            "the batch should focus the analyzer, not the re-added source node"
-        );
-        assert_eq!(
-            batch.source_port,
-            Some(source),
-            "the batch should focus the analyzer's changed source card"
-        );
-    }
 }

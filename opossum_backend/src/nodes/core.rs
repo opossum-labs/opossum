@@ -26,7 +26,7 @@ use crate::{
         parent_group_id_or_self, resolve_reference_chain, ron_or_json_response,
     },
     undo::{
-        Command, NodeSnapshot, PatchAmplifierNodes, PatchAnalyzer, PatchNode, PatchPumpScenario,
+        Command, PatchAmplifierNodes, PatchAnalyzer, PatchNode, PatchPumpScenario,
         capture_old_node_request,
     },
 };
@@ -100,25 +100,22 @@ pub async fn post_children(
     let uuid = path.into_inner();
     let scenery = document.scenery_mut();
 
-    let _ = scenery.with_group_node_mut(uuid, |g| g.add_node_ref(new_node_ref.clone()))??;
+    // Use add_node_ref_with_delta to directly obtain GraphDelta::NodeAdded
+    let (_, delta) = scenery
+        .with_group_node_mut(uuid, |g| g.add_node_ref_with_delta(new_node_ref.clone()))??;
 
     // --- AUTOMATICALLY INJECT MAPPINGS INTO ALL ANALYZERS IF NEW NODE IS A SOURCE PORT ---
     let node_type_str = new_node_ref.node_attr().node_type().to_string();
     let new_node_uuid = new_node_ref.node_attr().uuid();
 
-    // Auto-injecting a source-port mapping mutates each analyzer's config as a side effect - capture the
-    // inverse (restore the analyzer's pre-injection config) per changed analyzer, so undoing this add also
-    // strips the mappings it injected instead of leaving them dangling on a removed node.
     let mut analyzer_inverses: Vec<Command> = Vec::new();
     if node_type_str == "source port" {
         let analyzer_keys: Vec<Uuid> = document.analyzers().keys().copied().collect();
         for az_uuid in analyzer_keys {
             if let Some(analyzer_info) = document.analyzer_mut(az_uuid) {
-                // Read the analyzer's own persisted default wavelength
                 let default_wvl = analyzer_info.default_wavelength();
                 let old_type = analyzer_info.analyzer_type().clone();
                 let mut a_type = old_type.clone();
-
                 match &mut a_type {
                     AnalyzerType::Energy(cfg) => {
                         cfg.map_source(new_node_uuid, create_default_energy_builder(default_wvl));
@@ -130,7 +127,6 @@ pub async fn post_children(
                         cfg.map_source(new_node_uuid, create_default_ray_builder(default_wvl));
                     }
                 }
-
                 if a_type != old_type {
                     analyzer_info.set_analyzer_type(&a_type);
                     analyzer_inverses.push(Command::PatchAnalyzer(Box::new(PatchAnalyzer {
@@ -142,16 +138,9 @@ pub async fn post_children(
             }
         }
     }
-
     drop(document);
 
-    let remove_node = Command::RemoveNode(NodeSnapshot {
-        parent_group_id: uuid,
-        node: new_node_ref.clone(),
-        cascaded: Vec::new(),
-        connections: Vec::new(),
-    });
-    // One add = one undo step: removing the node and restoring every analyzer it touched.
+    let remove_node = Command::UndoGraph(Box::new(delta));
     let mut batch = vec![remove_node];
     batch.extend(analyzer_inverses);
     data.push_undo(Command::from_vec(batch).expect("batch always has at least remove_node"));
@@ -463,11 +452,10 @@ fn delete_node_capturing(
 
     // 5. Build undo command: RestoreDeletion wraps GraphDelta,
     // followed by document-level entities (analyzers, pump scenarios, amplifiers)
-    let mut inverse = vec![Command::RestoreDeletion(Box::new(delta))];
+    let mut inverse = vec![Command::UndoGraph(Box::new(delta))];
     inverse.extend(analyzer_inverses);
     inverse.extend(scenario_inverses);
     inverse.extend(amplifier_inverse);
-
     Ok((inverse, response))
 }
 
@@ -544,21 +532,13 @@ pub async fn post_reference(
             ref_node_info.gui_position().1,
         )));
 
-    let new_ref_uuid = document
+    let (_, delta) = document
         .scenery_mut()
-        .with_group_node_mut(group_uuid, |g| g.add_node(node_reference.clone()))??;
-
-    // Capture the inserted reference node's live `OpticRef` so undo can restore it exactly, mirroring
-    // `post_children`. A reference node has neither a cascade nor its own connections at creation time,
-    // so both are empty; its *deletion* is already covered symmetrically by `delete_node`'s `AddNode`.
-    let node_ref = document.scenery().node_recursive(new_ref_uuid)?.0;
+        .with_group_node_mut(group_uuid, |g| {
+            g.add_node_with_delta(node_reference.clone())
+        })??;
     drop(document);
-    data.push_undo(Command::RemoveNode(NodeSnapshot {
-        parent_group_id: group_uuid,
-        node: node_ref,
-        cascaded: Vec::new(),
-        connections: Vec::new(),
-    }));
+    data.push_undo(Command::UndoGraph(Box::new(delta)));
 
     let node_info = NodeInfo::from_analyzable(&node_reference, None);
     Ok(HttpResponse::Created().json(node_info))
