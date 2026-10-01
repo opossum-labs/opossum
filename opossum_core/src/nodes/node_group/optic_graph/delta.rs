@@ -100,6 +100,8 @@ pub enum GraphDelta {
         group_id: Uuid,
         /// UUID of the newly added node.
         node_id: Uuid,
+        /// Full snapshot of the optical node at the time of addition.
+        node: OpticRef,
     },
     /// A node was deleted (along with cascading edges, references, and mappings).
     NodeDeleted(GraphDeletionDelta),

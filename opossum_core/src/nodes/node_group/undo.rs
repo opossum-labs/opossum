@@ -39,7 +39,9 @@ impl NodeGroup {
     /// Returns an error if any restoration phase encounters an invalid node ID, port, or graph cycle.
     pub fn apply_undo(&mut self, delta: &GraphDelta) -> OpmResult<()> {
         match delta {
-            GraphDelta::NodeAdded { group_id, node_id } => {
+            GraphDelta::NodeAdded {
+                group_id, node_id, ..
+            } => {
                 self.with_target_group_graph_mut(*group_id, |g| {
                     g.remove_node_no_cascade(*node_id)
                 })?;

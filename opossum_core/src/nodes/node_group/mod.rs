@@ -112,8 +112,13 @@ impl NodeGroup {
         let group_id = self.node_attr().uuid();
         let node_id = self.graph.add_node(node)?;
         self.store_node_uuid_in_rays_bundle(node_id)?;
+        let node_ref = self.graph.node(node_id)?;
 
-        let delta = GraphDelta::NodeAdded { group_id, node_id };
+        let delta = GraphDelta::NodeAdded {
+            group_id,
+            node_id,
+            node: node_ref,
+        };
         Ok((node_id, delta))
     }
 
@@ -134,11 +139,12 @@ impl NodeGroup {
     pub fn add_node_ref_with_delta(&mut self, node: OpticRef) -> OpmResult<(Uuid, GraphDelta)> {
         let group_id = self.node_attr().uuid();
         let uuid = node.uuid();
-        self.graph.add_node_ref(node)?;
+        self.graph.add_node_ref(node.clone())?;
 
         let delta = GraphDelta::NodeAdded {
             group_id,
             node_id: uuid,
+            node,
         };
         Ok((uuid, delta))
     }
