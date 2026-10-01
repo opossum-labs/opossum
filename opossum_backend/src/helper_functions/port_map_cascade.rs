@@ -164,10 +164,10 @@ pub fn remove_port_map_cascade(
             scenery.with_group_node_mut(cur_group, |g| {
                 let hit = g.graph().port_map(&port_type).get(&cur_name).cloned();
                 if hit.is_some() {
-                    g.remove_mapped_port(&cur_name, port_type);
+                    let _ = g.remove_mapped_port(&cur_name, port_type)?;
                 }
-                hit
-            })?
+                Ok::<_, OpossumError>(hit)
+            })??
         else {
             if levels.is_empty() {
                 return Ok(None);
