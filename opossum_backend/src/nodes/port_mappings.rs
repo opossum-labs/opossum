@@ -14,9 +14,7 @@ use opossum_core::{
 use uuid::Uuid;
 
 use crate::{
-    app_state::AppState,
-    error::BackEndErrorResponse,
-    helper_functions::remove_port_map_cascade,
+    app_state::AppState, error::BackEndErrorResponse, helper_functions::remove_port_map_cascade,
     undo::Command,
 };
 
@@ -136,7 +134,8 @@ pub async fn remove_port_map(
         return Ok(HttpResponse::Ok().json(response));
     };
 
-    data.push_undo(Command::from(&cascade));
+    // Store the composite graph delta directly on the undo stack
+    data.push_undo(Command::UndoGraph(Box::new(cascade.delta)));
 
     let removed_port_mappings = cascade
         .levels

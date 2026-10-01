@@ -8,7 +8,8 @@ use nalgebra::Point2;
 use opossum_core::{
     core_optics::{NodeAttrExt, OpticRef, node_attr::HasNodeAttr},
     error::OpossumError,
-    nodes::{ConnectionInfo, NodeGroup, NodeReference, create_node_ref},
+    meter,
+    nodes::{ConnectionInfo, GraphDelta, NodeGroup, NodeReference, create_node_ref},
     opm_document::{AnalyzerInfo, OpmDocument},
     prelude::{OpticNode, PortMap, PortType, Proptype},
     types::api_types::{AnalyzerItemDto, ConnectInfo, ErrorResponse, NodeInfo, PasteNodesResponse},
@@ -23,9 +24,7 @@ use crate::{
         build_connect_info, capture_node_connections, map_port, parent_group_id_or_self,
         validate_relocated_references,
     },
-    undo::{
-        CascadedNode, Command, EdgeSnapshot, NodeSnapshot, PatchAmplifierNodes, PatchPumpScenario,
-    },
+    undo::{CascadedNode, Command, NodeSnapshot, PatchAmplifierNodes, PatchPumpScenario},
 };
 
 /// The pasted-in node/connection info [`insert_copied_nodes`] hands back to [`post_paste_nodes`].
@@ -265,10 +264,17 @@ fn build_paste_undo_batch(
                 &mut seen_mutual,
             );
             for c in mutual {
-                removals.push(Command::RemoveEdge(EdgeSnapshot {
+                removals.push(Command::UndoGraph(Box::new(GraphDelta::NodesConnected {
                     group_id: paste_group_id,
-                    connect_info: c,
-                }));
+                    connection: ConnectionInfo {
+                        src_id: c.src_uuid(),
+                        src_port: c.src_port().to_string(),
+                        target_id: c.target_uuid(),
+                        target_port: c.target_port().to_string(),
+                        distance: meter!(c.distance()),
+                    },
+                    displaced_port_mappings: Vec::new(),
+                })));
             }
         }
         let mut cascaded = cascaded_references(document, paste_group_id, &top_level_ids);

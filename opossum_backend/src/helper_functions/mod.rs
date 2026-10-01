@@ -26,10 +26,7 @@ pub use graph_lookup::{
     validate_relocated_references,
 };
 pub use handler_support::{analyzer_mut_or_404, apply_and_push_undo, pump_scenario_mut_or_404};
-pub use port_map_cascade::{
-    PortMapCascadeRemoval, RemovedPortMapLevel, remove_port_map_cascade,
-    split_cascades_for_response,
-};
+pub use port_map_cascade::{remove_port_map_cascade, split_cascades_for_response};
 pub use relocation::{
     relocate_nodes_in_document, relocate_nodes_severing_external_links, remove_relocated_nodes,
     sever_external_links,

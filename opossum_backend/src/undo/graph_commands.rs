@@ -3,7 +3,8 @@
 use opossum_core::{
     core_optics::OpticRef,
     nodes::{
-        GraphDelta, node_group::optic_graph::delta::{GraphDeletionDelta, RemovedPortMapping},
+        GraphDelta,
+        node_group::optic_graph::delta::{GraphDeletionDelta, RemovedPortMapping},
     },
     opm_document::OpmDocument,
     prelude::PortType,
@@ -12,7 +13,7 @@ use opossum_core::{
 use uuid::Uuid;
 
 use super::Command;
-use crate::error::BackEndErrorResponse;
+use crate::{error::BackEndErrorResponse, helper_functions::parent_group_id_or_self};
 
 /// Helper function to convert an [`OpticRef`] into the [`NodeInfo`] expected by GUI updates.
 fn node_info(node: &OpticRef) -> NodeInfo {
@@ -51,59 +52,43 @@ pub(super) fn apply_redo_graph(
     delta: GraphDelta,
 ) -> Result<Command, BackEndErrorResponse> {
     let fresh_delta = match delta {
-        GraphDelta::NodeAdded {
-            group_id, node, ..
-        } => {
+        GraphDelta::NodeAdded { group_id, node, .. } => {
             let (_, d) = document
                 .scenery_mut()
                 .with_group_node_mut(group_id, |g| g.add_node_ref_with_delta(node))??;
             d
         }
-        GraphDelta::NodeDeleted(deletion_delta) => {
-            document
-                .scenery_mut()
-                .delete_node(deletion_delta.target_node_id)?
-        }
+        GraphDelta::NodeDeleted(deletion_delta) => document
+            .scenery_mut()
+            .delete_node(deletion_delta.target_node_id)?,
         GraphDelta::NodesConnected {
             group_id,
             connection,
             ..
-        } => {
-            document
-                .scenery_mut()
-                .with_group_node_mut(group_id, |g| {
-                    g.connect_nodes(
-                        connection.src_id,
-                        &connection.src_port,
-                        connection.target_id,
-                        &connection.target_port,
-                        connection.distance,
-                    )
-                })??
-        }
+        } => document.scenery_mut().with_group_node_mut(group_id, |g| {
+            g.connect_nodes(
+                connection.src_id,
+                &connection.src_port,
+                connection.target_id,
+                &connection.target_port,
+                connection.distance,
+            )
+        })??,
         GraphDelta::NodesDisconnected {
             group_id,
             connection,
-        } => {
-            document
-                .scenery_mut()
-                .with_group_node_mut(group_id, |g| {
-                    g.disconnect_nodes(connection.src_id, &connection.src_port)
-                })??
-        }
+        } => document.scenery_mut().with_group_node_mut(group_id, |g| {
+            g.disconnect_nodes(connection.src_id, &connection.src_port)
+        })??,
         GraphDelta::ConnectionDistanceChanged {
             group_id,
             src_id,
             src_port,
             new_distance,
             ..
-        } => {
-            document
-                .scenery_mut()
-                .with_group_node_mut(group_id, |g| {
-                    g.update_connection_distance(src_id, &src_port, new_distance)
-                })??
-        }
+        } => document.scenery_mut().with_group_node_mut(group_id, |g| {
+            g.update_connection_distance(src_id, &src_port, new_distance)
+        })??,
         GraphDelta::PortMapped(mapping) => {
             document
                 .scenery_mut()
@@ -120,17 +105,14 @@ pub(super) fn apply_redo_graph(
                     ),
                 })??
         }
-        GraphDelta::PortUnmapped(mapping) => {
-            document
-                .scenery_mut()
-                .with_group_node_mut(mapping.group_id, |g| {
-                    g.remove_mapped_port(&mapping.external_name, mapping.port_type)
-                })??
-        }
+        GraphDelta::PortUnmapped(mapping) => document
+            .scenery_mut()
+            .with_group_node_mut(mapping.group_id, |g| {
+                g.remove_mapped_port(&mapping.external_name, mapping.port_type)
+            })??,
         GraphDelta::Composite(sub_deltas) => {
             let mut fresh_sub_deltas = Vec::with_capacity(sub_deltas.len());
             for sub in sub_deltas {
-                // Re-execute each sub-step and collect the fresh deltas
                 let sub_cmd = apply_redo_graph(document, sub)?;
                 if let Command::UndoGraph(boxed_fresh) = sub_cmd {
                     fresh_sub_deltas.push(*boxed_fresh);
@@ -144,7 +126,11 @@ pub(super) fn apply_redo_graph(
 }
 
 /// Describes the effect of a [`GraphDelta`] on the canvas as [`DocumentChange`] events.
-pub(super) fn describe_graph_delta(delta: &GraphDelta, is_undo: bool) -> Vec<DocumentChange> {
+pub(super) fn describe_graph_delta(
+    delta: &GraphDelta,
+    is_undo: bool,
+    document: &OpmDocument,
+) -> Vec<DocumentChange> {
     match delta {
         GraphDelta::NodeAdded {
             group_id,
@@ -188,7 +174,6 @@ pub(super) fn describe_graph_delta(delta: &GraphDelta, is_undo: bool) -> Vec<Doc
                 }]
             };
 
-            // Displaced port mappings require tab refreshes in both directions
             for mapping in displaced_port_mappings {
                 changes.push(DocumentChange::GraphNeedsRefresh {
                     graph_id: mapping.group_id,
@@ -219,20 +204,26 @@ pub(super) fn describe_graph_delta(delta: &GraphDelta, is_undo: bool) -> Vec<Doc
             }]
         }
         GraphDelta::PortMapped(mapping) | GraphDelta::PortUnmapped(mapping) => {
-            vec![DocumentChange::GraphNeedsRefresh {
-                graph_id: mapping.group_id,
-            }]
+            let parent_id = parent_group_id_or_self(document.scenery(), mapping.group_id)
+                .unwrap_or(mapping.group_id);
+            vec![
+                DocumentChange::GraphNeedsRefresh {
+                    graph_id: mapping.group_id,
+                },
+                DocumentChange::GraphNeedsRefresh {
+                    graph_id: parent_id,
+                },
+            ]
         }
         GraphDelta::Composite(deltas) => {
             let mut changes = Vec::new();
             if is_undo {
-                // Reversed iteration order for undo
                 for sub in deltas.iter().rev() {
-                    changes.extend(describe_graph_delta(sub, is_undo));
+                    changes.extend(describe_graph_delta(sub, is_undo, document));
                 }
             } else {
                 for sub in deltas {
-                    changes.extend(describe_graph_delta(sub, is_undo));
+                    changes.extend(describe_graph_delta(sub, is_undo, document));
                 }
             }
             changes
@@ -240,11 +231,9 @@ pub(super) fn describe_graph_delta(delta: &GraphDelta, is_undo: bool) -> Vec<Doc
     }
 }
 
-/// Helper to generate changes when a deleted subgraph is restored (undo).
 fn describe_restored_deletion(deletion_delta: &GraphDeletionDelta) -> Vec<DocumentChange> {
     let mut changes = Vec::new();
 
-    // 1. Restored nodes
     for record in &deletion_delta.deleted_nodes {
         changes.push(DocumentChange::NodeAdded {
             graph_id: record.parent_group_id,
@@ -252,7 +241,6 @@ fn describe_restored_deletion(deletion_delta: &GraphDeletionDelta) -> Vec<Docume
         });
     }
 
-    // 2. Restored connections
     for conn_rec in &deletion_delta.removed_connections {
         let is_ref = deletion_delta.deleted_nodes.iter().any(|r| {
             r.node.uuid() == conn_rec.connection.target_id
@@ -265,7 +253,6 @@ fn describe_restored_deletion(deletion_delta: &GraphDeletionDelta) -> Vec<Docume
         });
     }
 
-    // 3. Port map tabs refresh
     for mapping in &deletion_delta.removed_port_mappings {
         changes.push(DocumentChange::GraphNeedsRefresh {
             graph_id: mapping.group_id,
@@ -275,11 +262,9 @@ fn describe_restored_deletion(deletion_delta: &GraphDeletionDelta) -> Vec<Docume
     changes
 }
 
-/// Helper to generate changes when a deletion is re-executed (redo).
 fn describe_reapplied_deletion(deletion_delta: &GraphDeletionDelta) -> Vec<DocumentChange> {
     let mut changes = Vec::new();
 
-    // 1. Removed nodes
     for record in &deletion_delta.deleted_nodes {
         changes.push(DocumentChange::NodeRemoved {
             graph_id: record.parent_group_id,
@@ -287,7 +272,6 @@ fn describe_reapplied_deletion(deletion_delta: &GraphDeletionDelta) -> Vec<Docum
         });
     }
 
-    // 2. Removed connections
     for conn_rec in &deletion_delta.removed_connections {
         let is_ref = deletion_delta.deleted_nodes.iter().any(|r| {
             r.node.uuid() == conn_rec.connection.target_id
@@ -300,7 +284,6 @@ fn describe_reapplied_deletion(deletion_delta: &GraphDeletionDelta) -> Vec<Docum
         });
     }
 
-    // 3. Port map tabs refresh
     for mapping in &deletion_delta.removed_port_mappings {
         changes.push(DocumentChange::GraphNeedsRefresh {
             graph_id: mapping.group_id,
@@ -353,8 +336,22 @@ pub(super) fn jump_target_for_graph_delta(
         | GraphDelta::PortUnmapped(RemovedPortMapping { group_id, .. }) => {
             Some(JumpTarget::new_from_graph_id(*group_id))
         }
-        GraphDelta::Composite(deltas) => deltas
-            .first()
-            .and_then(|d| jump_target_for_graph_delta(d, is_undo, root_id)),
+        GraphDelta::Composite(deltas) => {
+            // Focus on the innermost port mapping (the cascade origin) if present
+            deltas
+                .iter()
+                .rev()
+                .find_map(|d| match d {
+                    GraphDelta::PortMapped(m) | GraphDelta::PortUnmapped(m) => {
+                        Some(JumpTarget::new_from_graph_id(m.group_id))
+                    }
+                    _ => None,
+                })
+                .or_else(|| {
+                    deltas
+                        .first()
+                        .and_then(|d| jump_target_for_graph_delta(d, is_undo, root_id))
+                })
+        }
     }
 }
