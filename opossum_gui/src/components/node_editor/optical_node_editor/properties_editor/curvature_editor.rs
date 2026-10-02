@@ -10,7 +10,6 @@ use crate::{
     utils::ToSentenceCase,
 };
 use approx::relative_ne;
-use core::f64;
 use dioxus::prelude::*;
 use heck::ToLowerCamelCase;
 use opossum_core::{meter, prelude::Proptype};

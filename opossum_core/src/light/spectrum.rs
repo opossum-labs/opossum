@@ -810,7 +810,7 @@ mod test {
         light::spectrum_helper::{
             create_he_ne_spec, create_nd_glass_spec, create_nir_spec, create_visible_spec,
         },
-        utils::test_helper::test_helper::check_logs,
+        utils::test_helper::helper::check_logs,
     };
     use approx::{AbsDiffEq, assert_abs_diff_eq, assert_relative_eq};
     use tempfile::NamedTempFile;
@@ -859,7 +859,7 @@ mod test {
         assert!(
             lambdas
                 .into_iter()
-                .zip(vec![500.0E-3, 501.0E-3, 502.0E-3, 503.0E-3, 504.0E-3, 505.0E-3].iter())
+                .zip([500.0E-3, 501.0E-3, 502.0E-3, 503.0E-3, 504.0E-3, 505.0E-3].iter())
                 .all(|x| x.0.abs_diff_eq(x.1, f64::EPSILON))
         );
         let datas = s.data_vec();
@@ -867,7 +867,7 @@ mod test {
             datas
                 .into_iter()
                 .zip(
-                    vec![
+                    [
                         5.0E-01, 4.981E-01, 4.982E-01, 4.984E-01, 4.996E-01, 5.010E-01
                     ]
                     .iter()
@@ -1081,14 +1081,14 @@ mod test {
     #[test]
     fn set_single_peak() -> OpmResult<()> {
         let mut s = prep()?;
-        assert_eq!(s.add_single_peak(micrometer!(2.0), 1.0).is_ok(), true);
+        assert!(s.add_single_peak(micrometer!(2.0), 1.0).is_ok());
         assert_eq!(s.data[2].1, 2.0);
         Ok(())
     }
     #[test]
     fn set_single_peak_interpolated() -> OpmResult<()> {
         let mut s = prep()?;
-        assert_eq!(s.add_single_peak(micrometer!(2.25), 1.0).is_ok(), true);
+        assert!(s.add_single_peak(micrometer!(2.25), 1.0).is_ok());
         assert_eq!(s.data[2].1, 1.0);
         assert_eq!(s.data[3].1, 1.0);
         Ok(())
@@ -1113,7 +1113,7 @@ mod test {
     #[test]
     fn set_single_peak_lower_bound() -> OpmResult<()> {
         let mut s = prep()?;
-        assert_eq!(s.add_single_peak(micrometer!(1.0), 1.0).is_ok(), true);
+        assert!(s.add_single_peak(micrometer!(1.0), 1.0).is_ok());
         assert_eq!(s.data[0].1, 2.0);
         Ok(())
     }

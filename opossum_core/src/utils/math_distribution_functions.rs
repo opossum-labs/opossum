@@ -226,7 +226,7 @@ mod test {
     }
     #[test]
     fn ellipse_wrong() {
-        for val in vec![f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        for val in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
             assert!(ellipse((val, 0.0), (0.0, 0.0), 1).is_err());
             assert!(ellipse((val, 0.0), (0.0, 0.0), 1).is_err());
             assert!(ellipse((val, 0.0), (0.0, 0.0), 1).is_err());

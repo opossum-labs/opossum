@@ -125,7 +125,6 @@ impl From<Hexapolar> for super::PosDistType {
 mod test {
     use super::*;
     use crate::millimeter;
-    use std::u8;
     #[test]
     fn new_wrong() {
         assert!(Hexapolar::new(millimeter!(-0.1), 1).is_err());

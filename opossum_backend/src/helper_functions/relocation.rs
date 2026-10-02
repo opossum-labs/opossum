@@ -1,5 +1,8 @@
 use opossum_core::{
-    core_optics::OpticRef, error::OpmResult, nodes::NodeGroup, opm_document::OpmDocument,
+    core_optics::OpticRef,
+    error::OpmResult,
+    nodes::{GraphDelta, NodeGroup},
+    opm_document::OpmDocument,
     types::api_types::ConnectInfo,
 };
 use uuid::Uuid;
@@ -145,6 +148,7 @@ pub struct SeveredLinksOutcome {
     /// function; a caller that relocates the nodes elsewhere must re-create these at the destination to
     /// keep them alive.
     pub inside: Vec<ConnectInfo>,
+    pub severed_delta: GraphDelta,
 }
 
 /// Severs every link a set of co-parented nodes has to something *outside* that set, within
@@ -182,17 +186,17 @@ pub fn sever_external_links(
         .scenery()
         .with_group_node(group_id, NodeGroup::connections)?;
     let split = split_sort_connections_from_document(document, &connections, node_ids);
-
     let mut removed_connections = Vec::new();
+    let mut edge_deltas = Vec::new();
+
     for conn in split.input.iter().chain(&split.output) {
-        document.scenery_mut().with_group_node_mut(group_id, |g| {
+        let delta = document.scenery_mut().with_group_node_mut(group_id, |g| {
             g.disconnect_nodes(conn.src_uuid(), conn.src_port())
         })??;
+        edge_deltas.push(delta);
         removed_connections.push((group_id, conn.clone()));
     }
 
-    // Cascade-tear-down each node's outward-exposed port-map chains (removes `group_id`'s own entry,
-    // walks through any re-exporting ancestor, and disconnects the terminal edge).
     let mut cascades = Vec::new();
     for id in node_ids {
         cascades.extend(disconnect_exposed_port_cascades_for_node(
@@ -215,6 +219,7 @@ pub fn sever_external_links(
         cascades,
         port_map_groups_changed,
         inside: split.inside,
+        severed_delta: GraphDelta::Composite(edge_deltas),
     })
 }
 
@@ -282,6 +287,7 @@ pub fn relocate_nodes_severing_external_links(
         cascades,
         port_map_groups_changed,
         inside,
+        severed_delta: _,
     } = sever_external_links(document, from_group_id, node_ids)?;
 
     // Relocate the now-boundary-free nodes: same live `OpticRef`s (uuid preserved, references survive),

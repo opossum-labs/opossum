@@ -314,7 +314,7 @@ impl WaveFrontMap {
 
         // Subtract the pure tilt from the data
         for i in 0..n {
-            self.opd[i] -= tilt_x * self.x[i] + tilt_y * self.y[i];
+            self.opd[i] -= f64::mul_add(tilt_y, self.y[i], tilt_x * self.x[i]);
         }
 
         // Recalculate PtV and RMS since the data has changed

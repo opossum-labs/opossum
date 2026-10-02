@@ -18,7 +18,6 @@ use crate::{
     radian,
     utils::geom_transformation::Isometry,
 };
-use core::f64;
 use nalgebra::{Isometry3, Point3, Vector2, Vector3, vector};
 use opm_macros_lib::OpmNode;
 use std::sync::{Arc, Mutex};
@@ -477,6 +476,8 @@ impl AnalysisRayTrace for ParabolicMirror {
 
 #[cfg(test)]
 mod test {
+    use std::f64::consts::FRAC_1_SQRT_2;
+
     use crate::{
         analyzers::{
             GhostFocusConfig, RayTraceConfig,
@@ -499,7 +500,6 @@ mod test {
         utils::geom_transformation::Isometry,
     };
     use approx::assert_relative_eq;
-    use core::f64;
     use nalgebra::{Matrix4, Vector2};
     #[test]
     fn default() -> OpmResult<()> {
@@ -815,13 +815,13 @@ mod test {
             1.,
             -0.,
             -0.,
-            -0.7071067811865475,
+            -FRAC_1_SQRT_2,
             -0.,
-            -0.7071067811865476,
+            -FRAC_1_SQRT_2,
             -0.6035533905932736,
-            -0.7071067811865476,
+            -FRAC_1_SQRT_2,
             0.,
-            0.7071067811865475,
+            FRAC_1_SQRT_2,
             -0.3964466094067264,
             0.,
             0.,
@@ -859,7 +859,7 @@ mod test {
         let Proptype::Angle(angle) = parabola.node_attr.get_property("off-axis angle")? else {
             panic!()
         };
-        assert_relative_eq!(angle.value, 45. / 180. * f64::consts::PI);
+        assert_relative_eq!(angle.value, 45. / 180. * std::f64::consts::PI);
         Ok(())
     }
     #[test]

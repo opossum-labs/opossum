@@ -7,6 +7,7 @@ use actix_web::{
 use nalgebra::Point2;
 use opossum_core::{
     core_optics::node_attr::HasNodeAttr,
+    nodes::GraphDelta,
     opm_document::OpmDocument,
     prelude::PortType,
     types::api_types::{
@@ -25,7 +26,7 @@ use crate::{
         lowest_common_ancestor_group, relocate_nodes_severing_external_links, sever_external_links,
         split_cascades_for_response,
     },
-    undo::{Command, EdgeSnapshot, MoveNodes},
+    undo::{Command, MoveNodes},
 };
 
 /// Resolves each of `optical_ids`' current parent group in `document`, keyed by that group regardless
@@ -66,9 +67,7 @@ struct SeverOrRelocateOutcome {
 /// GUI-facing side effects and one inverse `MoveNodes` per relocated source group.
 ///
 /// # Errors
-///
-/// Returns an error if a sever/relocate step fails (e.g. an attempt to move a group into its own
-/// descendant, which leaves the destination unreachable once the group is detached from its source).
+/// Returns an error if a sever/relocate step fails.
 fn sever_or_relocate_sources(
     document: &mut OpmDocument,
     target_group_id: Uuid,
@@ -82,25 +81,23 @@ fn sever_or_relocate_sources(
     let mut removed_port_mappings = Vec::<(Uuid, Uuid, String, PortType)>::new();
     let mut sources: Vec<Uuid> = groups_by_parent.keys().copied().collect();
     sources.sort();
+
     for source in sources {
         let Some(ids) = groups_by_parent.remove(&source) else {
             continue;
         };
+
         if source == target_group_id {
-            // Already in the target group: no relocation, just sever links to nodes outside the cut set
-            // (including any port-map chain the node itself exposes) - the common "cut and paste in the
-            // same scenery" case, minus the bug of keeping links to uncut siblings.
             let outcome = sever_external_links(document, source, &ids)?;
             let (cascade_connections, cascade_port_mappings) =
                 split_cascades_for_response(&outcome.cascades);
 
-            restore_commands.extend(outcome.removed_connections.iter().map(|(group_id, c)| {
-                Command::AddEdge(EdgeSnapshot {
-                    group_id: *group_id,
-                    connect_info: c.clone(),
-                })
-            }));
-            restore_commands.extend(outcome.cascades.iter().map(Command::from));
+            // Push severed boundary connections as UndoGraph
+            restore_commands.push(Command::UndoGraph(Box::new(outcome.severed_delta)));
+            // Push each cascade delta as UndoGraph
+            for cascade in &outcome.cascades {
+                restore_commands.push(Command::UndoGraph(Box::new(cascade.delta.clone())));
+            }
 
             removed_connections.extend(outcome.removed_connections);
             removed_connections.extend(cascade_connections);
@@ -108,24 +105,31 @@ fn sever_or_relocate_sources(
             port_map_groups_changed.extend(outcome.port_map_groups_changed);
             continue;
         }
-        // A cut relocates each node preserving its uuid, severing the connections and port mappings it
-        // carried to anything left behind (rather than rerouting them, as a drag-and-drop move does), but
-        // keeping links to other nodes cut in the same gesture.
+
+        // Cross-group relocation branch:
         let outcome =
             relocate_nodes_severing_external_links(document, source, target_group_id, &ids)?;
         let (cascade_connections, cascade_port_mappings) =
             split_cascades_for_response(&outcome.cascades);
 
-        // Undo restores the torn-down links, but only once the nodes are back in `source` (see the undo
-        // batch assembly in `post_cut_nodes`): re-add every direct edge, then replay each port-map
-        // cascade (one innermost-first `AddPortMap` chain + terminal `AddEdge` per cascade).
+        // Undo restores the torn-down links via UndoGraph
         restore_commands.extend(outcome.removed_connections.iter().map(|(group_id, c)| {
-            Command::AddEdge(EdgeSnapshot {
+            Command::UndoGraph(Box::new(GraphDelta::NodesDisconnected {
                 group_id: *group_id,
-                connect_info: c.clone(),
-            })
+                connection: opossum_core::nodes::ConnectionInfo {
+                    src_id: c.src_uuid(),
+                    src_port: c.src_port().to_string(),
+                    target_id: c.target_uuid(),
+                    target_port: c.target_port().to_string(),
+                    distance: opossum_core::meter!(c.distance()),
+                },
+            }))
         }));
-        restore_commands.extend(outcome.cascades.iter().map(Command::from));
+
+        // Push each cascade delta as UndoGraph (replaces old Command::from)
+        for cascade in &outcome.cascades {
+            restore_commands.push(Command::UndoGraph(Box::new(cascade.delta.clone())));
+        }
 
         removed_connections.extend(outcome.removed_connections);
         removed_connections.extend(cascade_connections);
@@ -138,6 +142,7 @@ fn sever_or_relocate_sources(
         affected.sort();
         affected.dedup();
         port_map_groups_changed.extend(affected.iter().copied());
+
         move_inverses.push(Command::MoveNodes(MoveNodes {
             request: MoveNodesRequest {
                 source_group_id: target_group_id,
@@ -147,10 +152,12 @@ fn sever_or_relocate_sources(
             affected_groups: affected,
             focus_group_id,
         }));
+
         for id in ids {
             relocated_pairs.push((id, source));
         }
     }
+
     port_map_groups_changed.sort();
     port_map_groups_changed.dedup();
 
@@ -420,7 +427,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/cut_nodes")
-            .set_json(&(root_id, (500.0, 500.0)))
+            .set_json((root_id, (500.0, 500.0)))
             .to_request();
         assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
 
@@ -542,7 +549,7 @@ mod test {
         // Cut A out of the group and into the root scenery.
         let req = test::TestRequest::post()
             .uri("/cut_nodes")
-            .set_json(&(root_id, (500.0, 500.0)))
+            .set_json((root_id, (500.0, 500.0)))
             .to_request();
         assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
 
@@ -685,7 +692,7 @@ mod test {
         // Cut B out of the group into the root. Before the fix this 400'd; it must now succeed.
         let req = test::TestRequest::post()
             .uri("/cut_nodes")
-            .set_json(&(root_id, (500.0, 500.0)))
+            .set_json((root_id, (500.0, 500.0)))
             .to_request();
         assert_eq!(
             app.call(req).await.unwrap().status(),
@@ -867,7 +874,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/cut_nodes")
-            .set_json(&(root_id, (500.0, 500.0)))
+            .set_json((root_id, (500.0, 500.0)))
             .to_request();
         assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
 
@@ -951,7 +958,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/cut_nodes")
-            .set_json(&(root_id, (500.0, 500.0)))
+            .set_json((root_id, (500.0, 500.0)))
             .to_request();
         assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
 
@@ -1096,7 +1103,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/cut_nodes")
-            .set_json(&(group_id, (50.0, 50.0)))
+            .set_json((group_id, (50.0, 50.0)))
             .to_request();
         assert_eq!(
             app.call(req).await.unwrap().status(),
@@ -1171,7 +1178,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/cut_nodes")
-            .set_json(&(g_id, (50.0, 50.0)))
+            .set_json((g_id, (50.0, 50.0)))
             .to_request();
         assert_eq!(
             app.call(req).await.unwrap().status(),
@@ -1231,7 +1238,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/cut_nodes")
-            .set_json(&(g2_id, (50.0, 50.0)))
+            .set_json((g2_id, (50.0, 50.0)))
             .to_request();
         assert_eq!(
             app.call(req).await.unwrap().status(),
@@ -1281,7 +1288,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/cut_nodes")
-            .set_json(&(dest_id, (50.0, 50.0)))
+            .set_json((dest_id, (50.0, 50.0)))
             .to_request();
         assert_eq!(
             app.call(req).await.unwrap().status(),

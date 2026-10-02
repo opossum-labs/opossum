@@ -2,12 +2,16 @@
 //! # Node groups
 //!
 //! A node group is a special type of optical node that can contain other optical nodes (including other groups) and connections between them. It allows to build up complex optical systems in a hierarchical way. The internal structure of a node group can be hidden or shown in the dot format by setting the `expand view` property of the group node. To use a node group from the outside, internal nodes / ports must be mapped to be visible (see [`map_input_port`](NodeGroup::map_input_port()) & [`map_output_port`](NodeGroup::map_output_port()) functions).
+
 use opm_macros_lib::OpmNode;
 mod analysis_energy;
 mod analysis_ghostfocus;
 mod analysis_raytrace;
-mod optic_graph;
+pub mod optic_graph;
 pub mod port_map;
+mod undo;
+mod visualization;
+
 use crate::{
     analyzers::{AnalyzerKind, propagation_strategy::PropagationStrategy},
     core_optics::{
@@ -18,10 +22,12 @@ use crate::{
         Rays,
         lightdata::{LightData, light_data_builder::LightDataBuilder},
     },
-    nodes::NodeRegistration,
+    nodes::{
+        NodeRegistration,
+        node_group::optic_graph::delta::{GraphDelta, RemovedPortMapping},
+    },
     properties::{Properties, Proptype},
     reporting::{
-        Dottable,
         analysis_report::AnalysisReport,
         node_report::{NodeReport, NodeReportResult},
         report_note::{ReportLevel, ReportNote},
@@ -29,54 +35,18 @@ use crate::{
 };
 pub use optic_graph::{ConnectionInfo, OpticGraph};
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{BTreeMap, HashMap},
-    fs::{self, File},
-    io::Write,
-    path::PathBuf,
-    process::Stdio,
-};
+use std::collections::{BTreeMap, HashMap};
 use uom::si::f64::Length;
 use uuid::Uuid;
 
 inventory::submit! {
     NodeRegistration::new::<NodeGroup>("group", "group node containing other nodes or groups")
 }
+
 #[derive(OpmNode, Debug, Clone, Serialize, Deserialize)]
 #[manual_analyzable]
 /// The basic building block of an optical system. It represents a group of other optical
 /// nodes ([`OpticNode`]s) arranged in a (sub)graph.
-///
-/// # Example
-///
-/// ```rust
-/// use opossum_core::prelude::*;
-///
-/// fn main() -> OpmResult<()> {
-///   let mut scenery = NodeGroup::new("OpticScenery demo");
-///   let node1 = scenery.add_node(Dummy::new("dummy1"))?;
-///   let node2 = scenery.add_node(Dummy::new("dummy2"))?;
-///   scenery.connect_nodes(node1, "output_1", node2, "input_1", millimeter!(100.0))?;
-///   Ok(())
-/// }
-///
-/// ```
-/// All unconnected input and output ports of this subgraph could be used as ports of
-/// this [`NodeGroup`]. For this, port mapping is neccessary (see below).
-///
-/// ## Optical Ports
-///   - Inputs
-///     - defined by [`map_input_port`](NodeGroup::map_input_port()) function.
-///   - Outputs
-///     - defined by [`map_output_port`](NodeGroup::map_output_port()) function.
-///
-/// ## Properties
-///   - `name`
-///   - `inverted`
-///   - `expand view`
-///
-/// **Note**: The group node does currently ignore all [`Aperture`](crate::apertures::Aperture) definitions on its publicly
-/// mapped input and output ports.
 pub struct NodeGroup {
     #[serde(flatten)]
     node_attr: NodeAttr,
@@ -87,11 +57,13 @@ pub struct NodeGroup {
     #[serde(skip)]
     accumulated_rays: Vec<HashMap<Uuid, Rays>>,
 }
+
 impl Analyzable for NodeGroup {
     fn clone_analyzable(&self) -> Box<dyn Analyzable> {
         Box::new(self.clone())
     }
 }
+
 impl Default for NodeGroup {
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("group");
@@ -113,147 +85,121 @@ impl Default for NodeGroup {
 
 impl NodeGroup {
     /// Creates a new [`NodeGroup`].
-    /// # Attributes
-    /// * `name`: name of the  [`NodeGroup`]
     #[must_use]
     pub fn new(name: &str) -> Self {
         let mut group = Self::default();
         group.node_attr.set_name(name);
         group
     }
+
     /// Add a given [`OpticNode`] to the (sub-)graph of this [`NodeGroup`].
     ///
-    /// This command just adds an [`OpticNode`] but does not connect it to existing nodes in the (sub-)graph. The given node is
-    /// consumed (owned) by the [`NodeGroup`]. This function returns a unique id [`Uuid`] as to the element in the scenery.
-    /// This reference must be used later on for connecting nodes (see `connect_nodes` function).
-    ///
     /// # Errors
-    /// An error is returned if the [`NodeGroup`] is set as inverted (which would lead to strange behaviour).
-    ///
-    /// # Panics
-    /// This function panics if the property `graph` can not be updated. Produces an error of type [`OpossumError::Properties`]
+    /// Returns an error if the group is set as inverted or the node already exists.
     pub fn add_node<T: Analyzable + Clone + 'static>(&mut self, node: T) -> OpmResult<Uuid> {
-        let node_id = self.graph.add_node(node)?;
-        // save uuid of node in rays if present
-        self.store_node_uuid_in_rays_bundle(node_id)?;
-        Ok(node_id)
-    }
-    /// Adds a node to the graph by reference.
-    ///
-    /// This command adds an [`OpticNode`] by reference but does not connect it to existing nodes in the (sub-)graph. The given node is
-    /// consumed (owned) by the [`NodeGroup`]. This function returns the UUID of the node.
-    ///
-    /// # Errors
-    /// An error is returned if the [`NodeGroup`] is set as inverted (which would lead to strange behaviour).
-    ///
-    /// # Panics
-    /// This function panics if the property `graph` cannot be updated. Produces an error of type [`OpossumError::Properties`]
-    ///
-    /// # Parameters
-    /// - `node`: The node to be added by reference.
-    ///
-    /// # Returns
-    /// The UUID of the added node.
-    pub fn add_node_ref(&mut self, node: OpticRef) -> OpmResult<Uuid> {
-        let uuid = node.uuid();
-        self.graph.add_node_ref(node)?;
-        // save uuid of node in rays if present
-        // self.store_node_uuid_in_rays_bundle(&node.optical_ref.borrow(), idx)?;
-        Ok(uuid)
-    }
-    /// Delete a node from the graph.
-    ///
-    /// This function deletes a node from the graph. The node is identified by its [`Uuid`]. It also
-    /// removes [`NodeReference`](crate::nodes::NodeReference)s the reference the node with the given [`Uuid`].
-    ///
-    /// The function returns a vector of [`Uuid`]s of the nodes that were deleted. It's a vector because it
-    /// contains the original `node_id` and all ids of the possible
-    /// [`NodeReference`](crate::nodes::NodeReference)s that were deleted.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    /// - the node does not exist.
-    /// - the graph is inverted.
-    pub fn delete_node(&mut self, node_id: Uuid) -> OpmResult<Vec<Uuid>> {
-        self.graph.delete_node(node_id)
+        self.add_node_with_delta(node).map(|(node_id, _)| node_id)
     }
 
-    /// Remove a single node from the graph **without** cascading to reference nodes.
-    ///
-    /// Forwards to [`OpticGraph::remove_node_no_cascade`]; see there for why relocations
-    /// (group / move / convert) use this instead of [`delete_node`](Self::delete_node).
+    /// Add a given [`OpticNode`] to the (sub-)graph and return its [`Uuid`] along with
+    /// a [`GraphDelta`] for transactional undo tracking.
     ///
     /// # Errors
+    /// Returns an error if the group is set as inverted or the node already exists.
+    pub fn add_node_with_delta<T: Analyzable + Clone + 'static>(
+        &mut self,
+        node: T,
+    ) -> OpmResult<(Uuid, GraphDelta)> {
+        let group_id = self.node_attr().uuid();
+        let node_id = self.graph.add_node(node)?;
+        self.store_node_uuid_in_rays_bundle(node_id)?;
+        let node_ref = self.graph.node(node_id)?;
+
+        let delta = GraphDelta::NodeAdded {
+            group_id,
+            node_id,
+            node: node_ref,
+        };
+        Ok((node_id, delta))
+    }
+
+    /// Adds a node to the graph by reference.
     ///
-    /// Returns an error if the group is inverted, or no node with exactly `node_id` exists in the graph.
+    /// # Errors
+    /// Returns an error if the group is set as inverted.
+    pub fn add_node_ref(&mut self, node: OpticRef) -> OpmResult<Uuid> {
+        self.add_node_ref_with_delta(node)
+            .map(|(node_id, _)| node_id)
+    }
+
+    /// Adds a node to the graph by reference and returns its [`Uuid`] along with
+    /// a [`GraphDelta`] for transactional undo tracking.
+    ///
+    /// # Errors
+    /// Returns an error if the group is set as inverted.
+    pub fn add_node_ref_with_delta(&mut self, node: OpticRef) -> OpmResult<(Uuid, GraphDelta)> {
+        let group_id = self.node_attr().uuid();
+        let uuid = node.uuid();
+        self.graph.add_node_ref(node.clone())?;
+
+        let delta = GraphDelta::NodeAdded {
+            group_id,
+            node_id: uuid,
+            node,
+        };
+        Ok((uuid, delta))
+    }
+
+    /// Delete a node from the graph.
+    ///
+    /// # Errors
+    /// Returns an error if the node does not exist or the graph is inverted.
+    pub fn delete_node(&mut self, node_id: Uuid) -> OpmResult<GraphDelta> {
+        let group_id = self.node_attr().uuid();
+        let deletion_delta = self.graph.delete_node_with_delta(node_id, group_id)?;
+        Ok(GraphDelta::NodeDeleted(deletion_delta))
+    }
+
+    /// Remove a single node from the graph without cascading to reference nodes.
+    ///
+    /// # Errors
+    /// Returns an error if the group is inverted or the node does not exist.
     pub fn remove_node_no_cascade(&mut self, node_id: Uuid) -> OpmResult<()> {
         self.graph.remove_node_no_cascade(node_id)
     }
 
-    /// Recursively collects the UUIDs of all nodes contained in this graph,
-    /// including nodes inside nested group nodes.
-    ///
-    /// This function traverses the graph hierarchy depth-first and returns
-    /// the UUID of every node that is structurally contained within this graph.
-    /// If a node is a group, all nodes inside its internal graph are collected
-    /// recursively.
-    ///
-    /// The returned list:
-    /// - Includes all directly contained nodes
-    /// - Includes all nodes inside nested groups (at any depth)
-    /// - Does NOT include the UUID of any parent or owning node outside this graph
-    /// - Does NOT perform any deduplication (UUIDs are assumed to be unique by design)
-    ///
-    /// This is primarily intended for operations where structural containment
-    /// matters (e.g., cascading deletions of group nodes).
+    /// Recursively collects the UUIDs of all nodes contained in this graph.
     ///
     /// # Errors
-    ///
     /// Returns an error if acquiring a lock on any contained node fails.
     pub fn collect_all_contained_node_ids_recursive(&self) -> OpmResult<Vec<Uuid>> {
         let mut result = Vec::new();
-
         for node_ref in self.nodes() {
             let uuid = node_ref.uuid();
-
             result.push(uuid);
-
-            // If it is a group -> collect recursively
             if let Some(group) = node_ref.as_any().downcast_ref::<Self>() {
                 let mut sub_ids = group.collect_all_contained_node_ids_recursive()?;
                 result.append(&mut sub_ids);
             }
         }
-
         Ok(result)
     }
-    /// Recursively collects all optical node references contained in this graph,
-    /// including nodes inside nested groups at any hierarchy depth.
-    ///
-    /// The returned list includes:
-    /// - Directly contained nodes
-    /// - Nodes within nested subgroups
-    /// - The nested group nodes themselves
+
+    /// Recursively collects all optical node references contained in this graph.
     ///
     /// # Errors
     /// Returns an error if acquiring a lock on any contained node fails.
     pub fn collect_all_nodes_recursive(&self) -> OpmResult<Vec<OpticRef>> {
         let mut result = Vec::new();
-
         for node_ref in self.nodes() {
-            // Include the current node reference
             result.push(node_ref.clone());
-
-            // If the node is a group, recursively collect all of its nested nodes
             if let Some(group) = node_ref.as_any().downcast_ref::<Self>() {
                 let mut sub_nodes = group.collect_all_nodes_recursive()?;
                 result.append(&mut sub_nodes);
             }
         }
-
         Ok(result)
     }
+
     /// Executes a closure on every optical node in this group and all nested subgroups recursively.
     pub fn for_each_node_mut(&mut self, f: &mut impl FnMut(&mut OpticRef)) {
         for node in self.graph.g.node_weights_mut() {
@@ -263,42 +209,22 @@ impl NodeGroup {
             }
         }
     }
-    /// Returns the hierarchy of nodes starting from the given node and walking up
-    /// through its parent groups until the root is reached.
-    ///
-    /// The returned vector contains tuples of `(Uuid, String)` where:
-    /// - `Uuid` is the node ID
-    /// - `String` is the node's name
-    ///
-    /// The hierarchy is ordered **bottom-up**, meaning:
-    /// - The first element is the provided `node_id`
-    /// - Each following element is the parent group
-    /// - The last element is the root node of the hierarchy
+
+    /// Returns the hierarchy of nodes starting from `node_id` bottom-up to the root group.
     ///
     /// # Errors
-    ///
-    /// Returns an error if:
-    /// - The node cannot be resolved via `node_recursive`
-    /// - The internal optic reference cannot be locked
-    ///
-    /// # Notes
-    ///
-    /// This function performs a recursive traversal using `node_recursive`
-    /// to resolve parent nodes until the root node is reached.
+    /// Returns an error if node resolution or lock acquisition fails.
     pub fn get_node_hierarchy_bottom_up(&self, node_id: Uuid) -> OpmResult<Vec<(Uuid, String)>> {
         let mut group_hierarchy = Vec::<(Uuid, String)>::new();
-
         self.with_node_attr(node_id, |node_attr| {
             group_hierarchy.push((node_id, node_attr.name().to_string()));
         })?;
 
         if self.node_attr().uuid() != node_id {
             let parent_id = self.node_recursive(node_id)?.1;
-
             let group_vec = self.get_node_hierarchy_bottom_up(parent_id).map_err(|e| {
                 OpossumError::OpticGroup(format!("Error getting node hierarchy: {e}"))
             })?;
-
             group_hierarchy.extend(group_vec);
         }
         Ok(group_hierarchy)
@@ -320,13 +246,11 @@ impl NodeGroup {
         }
         Ok(())
     }
+
     /// Return a reference to the optical node specified by its [`Uuid`].
     ///
-    /// This function is mainly useful for setting up a [reference node](crate::nodes::NodeReference).
-    ///
     /// # Errors
-    ///
-    /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
+    /// Returns [`OpossumError::OpticScenery`] if the node does not exist.
     pub fn node(&self, node_id: Uuid) -> OpmResult<OpticRef> {
         if node_id == self.node_attr.uuid() {
             Ok(OpticRef::new(Box::new(self.clone())))
@@ -334,48 +258,25 @@ impl NodeGroup {
             self.graph.node(node_id)
         }
     }
+
     /// Return `true` if a node with the given [`Uuid`] exists in the graph.
-    ///
-    /// This function is similar to [`node`](NodeGroup::node()), but it only returns a boolean value.
     #[must_use]
     pub fn exists(&self, node_id: Uuid) -> bool {
         self.node_recursive(node_id).is_ok()
     }
-    /// Return a reference to the optical node specified by its [`Uuid`] and the Uuid of the group in which it is contained.
-    ///
-    /// This function is similar to [`node`](NodeGroup::node()), but it also recursively searches
-    /// for the node in the subnodes of the group.
+
+    /// Return a reference to the node specified by `node_id` and the UUID of its parent group.
     ///
     /// # Errors
-    ///
-    /// This function will return [`OpossumError::OpticScenery`] if the node does not exist.
+    /// Returns [`OpossumError::OpticScenery`] if the node does not exist.
     pub fn node_recursive(&self, node_id: Uuid) -> OpmResult<(OpticRef, Uuid)> {
         self.graph.node_recursive(node_id, self.node_attr().uuid())
     }
 
     /// Execute a read-only operation on the `NodeGroup` identified by `node_id`.
     ///
-    /// If `node_id` equals this group's own UUID, the closure is invoked directly with `&self`
-    /// (no lock is taken). Otherwise, the node is looked up in the graph, its internal mutex
-    /// is locked, and an `&NodeGroup` is passed to the closure. The lock is held only for the
-    /// duration of the closure call.
-    ///
-    /// # Parameters
-    /// - `node_id`: UUID of the target optical node.
-    /// - `f`: Closure that receives `&NodeGroup` and returns a value of type `R`.
-    ///
-    /// # Returns
-    /// The value produced by `f`, wrapped in `OpmResult<R>`.
-    ///
     /// # Errors
-    /// Propagates errors from the underlying lookup and locking:
-    /// - The node cannot be found in the graph.
-    /// - The node is not a group node.
-    /// - The mutex is poisoned (e.g., due to a previous panic while locked).
-    ///
-    /// # Concurrency
-    /// A mutex is only acquired when `node_id != self.uuid()`. Avoid performing operations
-    /// inside `f` that would attempt to lock the same node again to prevent deadlocks.
+    /// Returns an error if the node does not exist, cannot be downcast, or locking fails.
     pub fn with_group_node<R>(&self, node_id: Uuid, f: impl FnOnce(&Self) -> R) -> OpmResult<R> {
         if self.node_attr().uuid() == node_id {
             return Ok(f(self));
@@ -386,23 +287,11 @@ impl NodeGroup {
         };
         Ok(f(group))
     }
+
     /// Execute a mutable operation on the `NodeGroup` identified by `node_id`.
     ///
-    /// If `node_id` equals this group's own UUID, the closure is invoked directly with
-    /// `&mut self`. Otherwise, the node is looked up recursively in the graph
-    /// and an `&mut NodeGroup` is passed to the closure.
-    ///
-    /// # Parameters
-    /// - `node_id`: UUID of the target optical node.
-    /// - `f`: Closure that receives `&mut NodeGroup` and returns a value of type `R`.
-    ///
-    /// # Returns
-    /// The value produced by `f`, wrapped in `OpmResult<R>`.
-    ///
     /// # Errors
-    /// Propagates errors from the underlying lookup:
-    /// - The node cannot be found in the graph.
-    /// - The node is not a group node.
+    /// Returns an error if the node does not exist, cannot be downcast, or locking fails.
     pub fn with_group_node_mut<R>(
         &mut self,
         node_id: Uuid,
@@ -411,7 +300,6 @@ impl NodeGroup {
         if self.node_attr().uuid() == node_id {
             return Ok(f(self));
         }
-
         let node_ref = self.graph.node_recursive_mut(node_id)?;
         let Some(group) = node_ref.as_any_mut().downcast_mut::<Self>() else {
             return Err(OpossumError::Other("could not cast to NodeGroup".into()));
@@ -421,17 +309,8 @@ impl NodeGroup {
 
     /// Execute a mutable operation on the optical node identified by `node_id`.
     ///
-    /// Provides a mutable reference to the node (as `&mut dyn Analyzable`) for the duration of the closure `f`.
-    ///
-    /// # Parameters
-    /// - `node_id`: UUID of the target node (can be any node type, not necessarily a group).
-    /// - `f`: Closure that receives `&mut dyn Analyzable` and returns a value of type `R`.
-    ///
-    /// # Returns
-    /// The value produced by `f`, wrapped in `OpmResult<R>`.
-    ///
     /// # Errors
-    /// Returns an error if the node with `node_id` cannot be found in the graph.
+    /// Returns an error if the node cannot be found in the graph.
     pub fn with_node_mut<R>(
         &mut self,
         node_id: Uuid,
@@ -446,20 +325,8 @@ impl NodeGroup {
 
     /// Execute a mutable operation on the `NodeAttr` of the node identified by `node_id`.
     ///
-    /// If `node_id` equals this group's own UUID, the closure is invoked directly with
-    /// `&mut NodeAttr` from `self`. Otherwise, the node is looked up recursively
-    /// in the graph and an `&mut NodeAttr` is passed to the closure.
-    ///
-    /// # Parameters
-    /// - `node_id`: UUID of the target node.
-    /// - `f`: Closure that receives `&mut NodeAttr` and returns a value of type `R`.
-    ///
-    /// # Returns
-    /// The value produced by `f`, wrapped in `OpmResult<R>`.
-    ///
     /// # Errors
-    /// Propagates errors from the underlying lookup:
-    /// - The node cannot be found in the graph.
+    /// Returns an error if the node cannot be found in the graph.
     pub fn with_node_attr_mut<R>(
         &mut self,
         node_id: Uuid,
@@ -474,20 +341,8 @@ impl NodeGroup {
 
     /// Execute a read-only operation with the `NodeAttr` of the node identified by `node_id`.
     ///
-    /// If `node_id` equals this group's own UUID, the closure is invoked directly with
-    /// `&NodeAttr` from `self`. Otherwise, the node is looked up recursively in the graph
-    /// and an `&NodeAttr` is passed to the closure.
-    ///
-    /// # Parameters
-    /// - `node_id`: UUID of the target node.
-    /// - `f`: Closure that receives `&NodeAttr` and returns a value of type `R`.
-    ///
-    /// # Returns
-    /// The value produced by `f`, wrapped in `OpmResult<R>`.
-    ///
     /// # Errors
-    /// Propagates errors from the underlying lookup:
-    /// - The node cannot be found in the graph.
+    /// Returns an error if the node cannot be found in the graph.
     pub fn with_node_attr<R>(&self, node_id: Uuid, f: impl FnOnce(&NodeAttr) -> R) -> OpmResult<R> {
         if self.node_attr().uuid() == node_id {
             return Ok(f(self.node_attr()));
@@ -501,29 +356,23 @@ impl NodeGroup {
     pub fn nodes(&self) -> Vec<&OpticRef> {
         self.graph.nodes()
     }
+
     /// Returns all node connections of this [`NodeGroup`].
     #[must_use]
     pub fn connections(&self) -> Vec<ConnectionInfo> {
         self.graph.connections()
     }
+
     /// Returns the number of nodes of this [`NodeGroup`].
     #[must_use]
     pub fn nr_of_nodes(&self) -> usize {
         self.graph.node_count()
     }
-    ///  Connect (already existing) optical nodes within this [`NodeGroup`].
-    ///
-    /// This function connects two optical nodes (referenced by their [`Uuid`]) with their respective port names
-    /// and their geometrical distance (= propagation length) to each other thus extending the optical network.
-    /// **Note**: The connection of two internal nodes might affect external port mappings (see [`map_input_port`](NodeGroup::map_input_port())
-    /// & [`map_output_port`](NodeGroup::map_output_port()) functions). In this case no longer valid mappings will be deleted.
+
+    /// Connect two optical nodes within this [`NodeGroup`].
     ///
     /// # Errors
-    /// This function returns an [`OpossumError::OpticScenery`] if
-    ///   - the group is set as `inverted`. Connecting subnodes of an inverted group node would result in strange behaviour.
-    ///   - the source node / port or target node / port does not exist.
-    ///   - the source node / port or target node / port is already connected.
-    ///   - the node connection would form a loop in the graph.
+    /// Returns an error if ports are already connected, mapped, or form a cycle.
     pub fn connect_nodes(
         &mut self,
         src_id: Uuid,
@@ -531,217 +380,237 @@ impl NodeGroup {
         target_id: Uuid,
         target_port: &str,
         distance: Length,
-    ) -> OpmResult<()> {
+    ) -> OpmResult<GraphDelta> {
         if !self
             .graph()
             .port_map(&PortType::Input)
             .assigned_ports_for_node(target_id)
             .is_empty()
         {
-            Err(OpossumError::OpticPort(format!(
+            return Err(OpossumError::OpticPort(format!(
                 "Cannot connect node, as port '{target_port}' of node {} is already mapped!",
                 target_id.as_simple()
-            )))
-        } else if !self
+            )));
+        }
+        if !self
             .graph()
             .port_map(&PortType::Output)
             .assigned_ports_for_node(src_id)
             .is_empty()
         {
-            Err(OpossumError::OpticPort(format!(
+            return Err(OpossumError::OpticPort(format!(
                 "Cannot connect node, as port '{src_port}' of node {} is already mapped!",
                 src_id.as_simple()
-            )))
-        } else {
-            self.graph
-                .connect_nodes(src_id, src_port, target_id, target_port, distance)
+            )));
         }
+
+        let group_id = self.node_attr().uuid();
+        let mut displaced_port_mappings = Vec::new();
+
+        if let Some(ext_name) = self
+            .graph()
+            .port_map(&PortType::Output)
+            .external_port_name(src_id, src_port)
+        {
+            displaced_port_mappings.push(RemovedPortMapping {
+                group_id,
+                port_type: PortType::Output,
+                external_name: ext_name,
+                internal_node_id: src_id,
+                internal_port_name: src_port.to_string(),
+            });
+        }
+        if let Some(ext_name) = self
+            .graph()
+            .port_map(&PortType::Input)
+            .external_port_name(target_id, target_port)
+        {
+            displaced_port_mappings.push(RemovedPortMapping {
+                group_id,
+                port_type: PortType::Input,
+                external_name: ext_name,
+                internal_node_id: target_id,
+                internal_port_name: target_port.to_string(),
+            });
+        }
+
+        self.graph
+            .connect_nodes(src_id, src_port, target_id, target_port, distance)?;
+
+        let connection = ConnectionInfo {
+            src_id,
+            src_port: src_port.to_string(),
+            target_id,
+            target_port: target_port.to_string(),
+            distance,
+        };
+
+        Ok(GraphDelta::NodesConnected {
+            group_id,
+            connection,
+            displaced_port_mappings,
+        })
     }
+
     /// Disconnect two optical nodes within this [`NodeGroup`].
     ///
-    /// This function deletes the connection between two nodes, referenced by the [`Uuid`] of the
-    /// source node and the name of the source port. **Note**: It's not necessary to specify the target node,
-    /// as the connection is uniquely identified by the source node and the source port.
-    ///
     /// # Errors
-    ///
-    /// This function will return an error if
-    ///  - the node with the given [`Uuid`] does not exist.
-    ///  - the node's given port is not connected.
-    pub fn disconnect_nodes(&mut self, src_id: Uuid, src_port: &str) -> OpmResult<()> {
-        self.graph.disconnect_nodes(src_id, src_port)
+    /// Returns an error if the node or connection does not exist.
+    pub fn disconnect_nodes(&mut self, src_id: Uuid, src_port: &str) -> OpmResult<GraphDelta> {
+        let group_id = self.node_attr().uuid();
+        let connection = self
+            .graph
+            .get_outgoing_connection_info_of_node(src_id)
+            .into_iter()
+            .find(|conn| conn.src_port == src_port)
+            .ok_or_else(|| {
+                OpossumError::OpticScenery(format!(
+                    "source node {src_id} with port <{src_port}> is not connected"
+                ))
+            })?;
+
+        self.graph.disconnect_nodes(src_id, src_port)?;
+
+        Ok(GraphDelta::NodesDisconnected {
+            group_id,
+            connection,
+        })
     }
+
     /// Update the distance of an already existing connection.
     ///
     /// # Errors
-    ///
-    /// This function will return an error if the connection cannot be found.
+    /// Returns an error if the connection does not exist.
     pub fn update_connection_distance(
         &mut self,
         src_id: Uuid,
         src_port: &str,
         distance: Length,
-    ) -> OpmResult<()> {
+    ) -> OpmResult<GraphDelta> {
+        let group_id = self.node_attr().uuid();
+        let connection = self
+            .graph
+            .get_outgoing_connection_info_of_node(src_id)
+            .into_iter()
+            .find(|conn| conn.src_port == src_port)
+            .ok_or_else(|| {
+                OpossumError::OpticScenery(format!(
+                    "source node {src_id} with port <{src_port}> is not connected"
+                ))
+            })?;
+
+        let old_distance = connection.distance;
         self.graph
-            .update_connection_distance(src_id, src_port, distance)
+            .update_connection_distance(src_id, src_port, distance)?;
+
+        Ok(GraphDelta::ConnectionDistanceChanged {
+            group_id,
+            src_id,
+            src_port: src_port.to_string(),
+            old_distance,
+            new_distance: distance,
+        })
     }
+
     /// Map an input port of an internal node to an external port of the group.
     ///
-    /// In oder to use a [`NodeGroup`] from the outside, internal nodes / ports must be mapped to be visible. The
-    /// corresponding [`ports`](NodeGroup::ports()) function only returns ports that have been mapped before.
     /// # Errors
-    /// This function will return an error if
-    ///   - an external input port name has already been assigned.
-    ///   - the `input_node` / `internal_name` does not exist.
-    ///   - the specified `input_node` is not an input node of the group (i.e. fully connected to other internal nodes).
-    ///   - the `input_node` has an input port with the specified `internal_name` but is already internally connected.
+    /// Returns an error if the external port is already assigned or internal port is invalid.
     pub fn map_input_port(
         &mut self,
         input_node: Uuid,
         internal_name: &str,
         external_name: &str,
-    ) -> OpmResult<()> {
+    ) -> OpmResult<GraphDelta> {
+        let group_id = self.node_attr().uuid();
         self.graph
-            .map_port(input_node, &PortType::Input, internal_name, external_name)
+            .map_port(input_node, &PortType::Input, internal_name, external_name)?;
+
+        Ok(GraphDelta::PortMapped(RemovedPortMapping {
+            group_id,
+            port_type: PortType::Input,
+            external_name: external_name.to_string(),
+            internal_node_id: input_node,
+            internal_port_name: internal_name.to_string(),
+        }))
     }
+
     /// Map an output port of an internal node to an external port of the group.
     ///
-    /// In oder to use a [`NodeGroup`] from the outside, internal nodes / ports must be mapped to be visible. The
-    /// corresponding [`ports`](NodeGroup::ports()) function only returns ports that have been mapped before.
     /// # Errors
-    /// This function will return an error if
-    ///   - an external output port name has already been assigned.
-    ///   - the `output_node` / `internal_name` does not exist.
-    ///   - the specified `output_node` is not an output node of the group (i.e. fully connected to other internal nodes).
-    ///   - the `output_node` has an output port with the specified `internal_name` but is already internally connected.
+    /// Returns an error if the external port is already assigned or internal port is invalid.
     pub fn map_output_port(
         &mut self,
         output_node: Uuid,
         internal_name: &str,
         external_name: &str,
-    ) -> OpmResult<()> {
+    ) -> OpmResult<GraphDelta> {
+        let group_id = self.node_attr().uuid();
         self.graph
-            .map_port(output_node, &PortType::Output, internal_name, external_name)
+            .map_port(output_node, &PortType::Output, internal_name, external_name)?;
+
+        Ok(GraphDelta::PortMapped(RemovedPortMapping {
+            group_id,
+            port_type: PortType::Output,
+            external_name: external_name.to_string(),
+            internal_node_id: output_node,
+            internal_port_name: internal_name.to_string(),
+        }))
     }
 
-    /// Remove a port mapping
+    /// Remove a port mapping and return a [`GraphDelta`] for undo support.
     ///
-    /// Returns true if successful
-    pub fn remove_mapped_port(&mut self, external_name: &str, port_type: PortType) -> bool {
-        self.graph.remove_mapped_port(external_name, port_type)
+    /// # Errors
+    /// Returns an error if the port mapping does not exist.
+    pub fn remove_mapped_port(
+        &mut self,
+        external_name: &str,
+        port_type: PortType,
+    ) -> OpmResult<GraphDelta> {
+        let group_id = self.node_attr().uuid();
+        let (target_id, target_port) = self
+            .graph
+            .port_map(&port_type)
+            .get(external_name)
+            .cloned()
+            .ok_or_else(|| {
+                OpossumError::OpticPort(format!(
+                    "port mapping '{external_name}' not found for removal"
+                ))
+            })?;
+
+        self.graph.remove_mapped_port(external_name, port_type);
+
+        Ok(GraphDelta::PortUnmapped(RemovedPortMapping {
+            group_id,
+            port_type,
+            external_name: external_name.to_string(),
+            internal_node_id: target_id,
+            internal_port_name: target_port,
+        }))
     }
 
-    /// Defines and returns the node/port identifier to connect the edges in the dot format
-    /// # Parameters
-    ///   - `port_name`:            name of the external port of the group
-    ///   - `node_id`:    String containing the uuid of the parent node
-    /// # Errors
-    /// Returns [`OpossumError::OpticGroup`], if the specified `port_name` is not mapped as input or output
-    pub fn get_mapped_port_str(&self, port_name: &str, node_id: &str) -> OpmResult<String> {
-        if self.expand_view()? {
-            let in_port = self.graph.port_map(&PortType::Input).get(port_name);
-            let out_port = self.graph.port_map(&PortType::Output).get(port_name);
-
-            let port_info = if let Some(port) = in_port {
-                port
-            } else if let Some(port) = out_port {
-                port
-            } else {
-                return Err(OpossumError::OpticGroup(format!(
-                    "port {port_name} is not mapped"
-                )));
-            };
-            self.graph.node_idx_by_uuid(port_info.0).map_or_else(
-                || Ok(format!("i{}:{}", port_info.0.as_simple(), port_info.1)),
-                |node_idx| self.graph().create_node_edge_str(node_idx, &port_info.1),
-            )
-        } else {
-            Ok(format!("{node_id}:{port_name}"))
-        }
-    }
-    /// Returns the expansion flag of this [`NodeGroup`].
-    ///   
-    /// If true, the group expands and the internal nodes of this group are displayed in the dot format.
-    /// If false, only the group node itself is displayed and the internal setup is not shown
-    /// # Errors
-    /// This function returns an error if the property "expand view" does not exist and the
-    /// function [`get_bool()`](../properties/struct.Properties.html#method.get_bool) fails
-    pub fn expand_view(&self) -> OpmResult<bool> {
-        self.node_attr.get_property_bool("expand view")
-    }
-    /// Define if a [`NodeGroup`] should be displayed expanded or not in diagram.
-    /// # Errors
-    /// This function returns an error if the property "expand view" can not be set
-    pub fn set_expand_view(&mut self, expand_view: bool) -> OpmResult<()> {
-        self.node_attr
-            .set_property("expand view", expand_view.into())
-    }
-    /// Creates the dot format of the [`NodeGroup`] in its expanded view
-    /// # Parameters:
-    ///   - `node_index`: [`NodeIndex`] of the group
-    ///   - `name`:       name of the node
-    ///   - `inverted`:   boolean that descries wether the node is inverted or not
-    ///
-    /// Returns the result of the dot string that describes this node
-    fn to_dot_expanded_view(
-        &self,
-        node_index: &str,
-        name: &str,
-        inverted: bool,
-        rankdir: &str,
-    ) -> OpmResult<String> {
-        let inv_string = if inverted { "(inv)" } else { "" };
-        let mut dot_string = format!(
-            "  subgraph i{node_index} {{\n\tlabel=\"{name}{inv_string}\"\n\tfontsize=8\n\tcluster=true\n\t"
-        );
-        dot_string += &self.graph.create_dot_string(rankdir)?;
-        Ok(dot_string)
-    }
-    /// Creates the dot format of the [`NodeGroup`] in its collapsed view
-    /// # Parameters:
-    /// * `name`:                 name of the node
-    /// * `inverted`:             boolean that descries wether the node is inverted or not
-    /// * `ports`:               
-    ///
-    /// Returns the result of the dot string that describes this node
-    fn to_dot_collapsed_view(
-        &self,
-        node_index: &str,
-        name: &str,
-        inverted: bool,
-        ports: &OpticPorts,
-        rankdir: &str,
-    ) -> String {
-        let inv_string = if inverted { " (inv)" } else { "" };
-        let node_name = format!("{name}{inv_string}");
-        let mut dot_str = format!("\ti{node_index} [\n\t\tshape=plaintext\n");
-        let mut indent_level = 2;
-        dot_str.push_str(&self.add_html_like_labels(&node_name, &mut indent_level, ports, rankdir));
-        dot_str
-    }
-    /// A helper function for the distances handover between to two `OpticGraph`s.
-    ///
-    /// This function is used during the node positioning procedure and might be removed if a better
-    /// solution is found.
+    /// Stores the predecessor distance for an external input port during positioning.
     pub fn add_input_port_distance(&mut self, port_name: &str, distance: Length) {
         self.input_port_distances
             .insert(port_name.to_string(), distance);
     }
-    /// Returns a mutable reference to the underlying [`OpticGraph`] of this [`NodeGroup`].
+
+    /// Returns a mutable reference to the underlying [`OpticGraph`].
     pub const fn graph_mut(&mut self) -> &mut OpticGraph {
         &mut self.graph
     }
-    /// Returns a mutable reference to the underlying [`OpticGraph`] of this [`NodeGroup`].
+
+    /// Returns a shared reference to the underlying [`OpticGraph`].
     #[must_use]
     pub const fn graph(&self) -> &OpticGraph {
         &self.graph
     }
-    /// Generate a (top level) [`AnalysisReport`] containing the result of a previously preformed analysis.
+
+    /// Generate an [`AnalysisReport`] for this group.
     ///
-    /// This [`AnalysisReport`] can then be used to either save it to disk or produce an HTML document from. In addition,
-    /// the given report folder is used for the individual nodes to export specific result files.
     /// # Errors
-    /// This function will return an error if the individual export function of a node fails.
+    /// Returns an error if topological sorting or sub-node reporting fails.
     pub fn toplevel_report(&self, analyzer: AnalyzerKind) -> OpmResult<AnalysisReport> {
         let mut analysis_report = AnalysisReport::default();
         analysis_report.add_scenery(self);
@@ -779,103 +648,14 @@ impl NodeGroup {
         }
         Ok(analysis_report)
     }
-    /// Returns the dot-file header of this [`NodeGroup`] graph.
-    fn add_dot_header(&self, rankdir: &str) -> String {
-        use std::fmt::Write;
-        let mut dot_string = String::from("digraph {\n\tfontsize = 10;\n");
-        let _ = writeln!(dot_string, "\tcompound = true;");
-        let _ = writeln!(dot_string, "\trankdir = \"{rankdir}\";");
-        let _ = writeln!(dot_string, "\tlabel=\"{}\"", self.node_attr.name());
-        let _ = writeln!(dot_string, "\tfontname=\"Courier-monospace\"");
-        let _ = writeln!(
-            dot_string,
-            "\tnode [fontname=\"Courier-monospace\" fontsize = 10]"
-        );
-        let _ = writeln!(
-            dot_string,
-            "\tedge [fontname=\"Courier-monospace\" fontsize = 10]\n"
-        );
-        dot_string
-    }
-    /// Export the optic graph, including ports, into the `dot` format to be used in combination with
-    /// the [`graphviz`](https://graphviz.org/) software.
-    ///
-    /// # Errors
-    /// This function returns an error if nodes do not return a proper value for their `name` property.
-    pub fn toplevel_dot(&self, rankdir: &str) -> OpmResult<String> {
-        let mut dot_string = self.add_dot_header(rankdir);
-        dot_string += &self.graph.create_dot_string(rankdir)?;
-        Ok(dot_string)
-    }
-    /// Generate an SVG of the (top level) [`NodeGroup`] `dot` diagram.
-    ///
-    /// This function returns a string of a SVG image (scalable vector graphics). This string can be directly written to a
-    /// `*.svg` file.
-    /// # Errors
-    ///
-    /// This function will return an error if the image generation fails (e.g. program not found, no memory left etc.).
-    pub fn toplevel_dot_svg(&self, dot_str_file: &PathBuf, svg_file: &mut File) -> OpmResult<()> {
-        let dot_string = fs::read_to_string(dot_str_file)
-            .map_err(|e| OpossumError::Other(format!("writing diagram file (.svg) failed: {e}")))?;
-        let svg_str = Self::dot_string_to_svg_str(dot_string.as_str())?;
-        write!(svg_file, "{svg_str}")
-            .map_err(|e| OpossumError::Other(format!("writing diagram file (.svg) failed: {e}")))
-    }
 
-    /// Converts a dot string to an svg string
-    /// # Attributes
-    /// `dot_string`: string that constains the dot information
-    /// # Errors
-    /// This function errors if
-    /// - the spawn of a childprocess fails
-    /// - the mutable stdin handle creation fails
-    /// - writing to child stdin fails
-    /// - output collection fails
-    /// - string to utf8 conversion fails
-    fn dot_string_to_svg_str(dot_string: &str) -> OpmResult<String> {
-        let mut child = std::process::Command::new("dot")
-            .arg("-Tsvg:cairo")
-            .arg("-Kdot")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|e| {
-                OpossumError::Other(format!(
-                    "conversion to image failed: {e}. Maybe `graphviz` is not installed."
-                ))
-            })?;
-
-        let Some(child_stdin) = child.stdin.as_mut() else {
-            return Err(OpossumError::Other(
-                "conversion to image failed: could not set stdin for graphviz command".into(),
-            ));
-        };
-        child_stdin
-            .write_all(dot_string.as_bytes())
-            .map_err(|e| OpossumError::Other(format!("conversion to image failed: {e}")))?;
-
-        let output = child
-            .wait_with_output()
-            .map_err(|e| OpossumError::Other(format!("conversion to image failed: {e}")))?;
-
-        let svg_string = String::from_utf8(output.stdout)
-            .map_err(|e| OpossumError::Other(format!("conversion to image failed: {e}")))?;
-        Ok(svg_string)
-    }
-    /// Returns a reference to the accumulated rays of this [`NodeGroup`].
-    ///
-    /// This function returns a bundle of all rays that propagated in a group after a ghost focus analysis.
-    /// This function is in particular helpful for generating a global ray propagation plot.
+    /// Returns a reference to the accumulated rays after ghost focus analysis.
     #[must_use]
     pub const fn accumulated_rays(&self) -> &Vec<HashMap<Uuid, Rays>> {
         &self.accumulated_rays
     }
 
-    /// add a ray bundle to the set of accumulated rays of this node group
-    /// # Arguments
-    /// - rays: pointer to ray bundle that should be included
-    /// - bounce: bouncle level of these rays
+    /// Adds a ray bundle to the accumulated rays at `bounce` level.
     pub fn add_to_accumulated_rays(&mut self, rays: &Rays, bounce: usize) {
         if self.accumulated_rays.len() <= bounce {
             let mut hashed_rays = HashMap::<Uuid, Rays>::new();
@@ -886,26 +666,20 @@ impl NodeGroup {
         }
     }
 
-    /// Clears the edges of a graph. Necessary for ghost focus analysis.
+    /// Clears the data stored on all edges in this graph.
     pub fn clear_edges(&mut self) {
         self.graph.clear_edges();
     }
-    /// Sets the graph of this [`NodeGroup`].
-    ///
-    /// This function shoud be used with caution. It is mainly used for deserialization purposes.
+
+    /// Sets the underlying [`OpticGraph`].
     pub fn set_graph(&mut self, graph: OpticGraph) {
         self.graph = graph;
     }
-    /// Find all source ports in the graph.
-    ///
-    /// This function returns a vector of UUIDs identifying all nodes of the type "source port"
-    /// in the optical graph.
-    ///
-    /// # Returns
-    /// A vector of [`Uuid`]s representing the source port nodes.
+
+    /// Find all source ports in the graph recursively.
     ///
     /// # Errors
-    /// This function will return an error if the resources could not be locked.
+    /// Returns an error if querying subgraphs fails.
     pub fn find_source_ports(&self) -> OpmResult<Vec<Uuid>> {
         self.graph.find_source_ports()
     }
@@ -927,10 +701,12 @@ impl OpticNode for NodeGroup {
         ports.set_apertures(ports_to_be_set.clone()).unwrap();
         ports
     }
+
     fn after_deserialization_hook(&mut self) -> OpmResult<()> {
         self.graph.set_is_inverted(self.node_attr.inverted());
         Ok(())
     }
+
     fn node_report(&self, uuid: &str, analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
         let mut group_props = Properties::default();
         for node in self.graph.nodes() {
@@ -953,59 +729,32 @@ impl OpticNode for NodeGroup {
             )))
         }
     }
+
     fn set_inverted(&mut self, inverted: bool) -> OpmResult<()> {
         self.graph.set_is_inverted(inverted);
         self.node_attr_mut().set_inverted(inverted);
         Ok(())
     }
+
     fn reset_data(&mut self) {
         for node in self.graph.g.node_weights_mut() {
             node.reset_data();
         }
         self.accumulated_rays = Vec::<HashMap<Uuid, Rays>>::new();
     }
+
     fn prepare_volume(&mut self, strategy: &dyn PropagationStrategy) -> OpmResult<()> {
         for node in self.graph.g.node_weights_mut() {
             node.prepare_volume(strategy)?;
         }
         Ok(())
     }
-    // fn get_optic_surface_mut(&mut self, _surf_name: &str) -> Option<&mut OpticSurface> {
-    //     None
-    // }
+
     fn update_surfaces(&mut self) -> OpmResult<()> {
         Ok(())
     }
 }
 
-impl Dottable for NodeGroup {
-    fn to_dot(
-        &self,
-        node_index: &str,
-        name: &str,
-        inverted: bool,
-        ports: &OpticPorts,
-        rankdir: &str,
-    ) -> OpmResult<String> {
-        let mut cloned_group = self.clone();
-        if self.node_attr.inverted() {
-            cloned_group.graph.invert_graph()?;
-        }
-        let dot_str = if self.expand_view()? {
-            cloned_group.to_dot_expanded_view(node_index, name, inverted, rankdir)
-        } else {
-            Ok(cloned_group.to_dot_collapsed_view(node_index, name, inverted, ports, rankdir))
-        };
-        // revert the inversion
-        if self.node_attr.inverted() {
-            cloned_group.graph.invert_graph()?;
-        }
-        dot_str
-    }
-    fn node_color(&self) -> &'static str {
-        "yellow"
-    }
-}
 #[cfg(test)]
 mod test {
     use super::*;
@@ -1019,41 +768,47 @@ mod test {
         joule,
         light::{LightResult, Ray, Rays},
         millimeter, nanometer,
-        nodes::{Dummy, EnergyMeter, SourcePort, test_helper::test_helper::*},
+        nodes::{Dummy, EnergyMeter, SourcePort, test_helper::helper::*},
         prelude::RayDataSource,
+        reporting::Dottable,
         utils::geom_transformation::Isometry,
     };
     use num_traits::Zero;
+
     #[test]
     fn default() -> OpmResult<()> {
         let node = NodeGroup::default();
         assert_eq!(node.name(), "group");
         assert_eq!(node.node_type(), "group");
-        assert_eq!(node.node_attr().inverted(), false);
-        assert_eq!(node.expand_view()?, false);
+        assert!(!node.node_attr().inverted());
+        assert!(!node.expand_view()?);
         assert_eq!(node.node_color(), "yellow");
         assert_eq!(node.graph.edge_count(), 0);
         assert_eq!(node.graph.node_count(), 0);
         Ok(())
     }
+
     #[test]
     fn expand_view_property() -> OpmResult<()> {
         let mut node = NodeGroup::default();
         node.set_expand_view(true)?;
-        assert_eq!(node.expand_view()?, true);
+        assert!(node.expand_view()?);
         node.set_expand_view(false)?;
-        assert_eq!(node.expand_view()?, false);
+        assert!(!node.expand_view()?);
         Ok(())
     }
+
     #[test]
     fn new() {
         let node = NodeGroup::new("test");
         assert_eq!(node.name(), "test");
     }
+
     #[test]
     fn inverted() -> OpmResult<()> {
         test_inverted::<NodeGroup>()
     }
+
     #[test]
     fn ports() -> OpmResult<()> {
         let mut og = NodeGroup::default();
@@ -1076,6 +831,7 @@ mod test {
         );
         Ok(())
     }
+
     #[test]
     fn ports_inverted() -> OpmResult<()> {
         let mut og = NodeGroup::default();
@@ -1097,6 +853,7 @@ mod test {
         );
         Ok(())
     }
+
     #[test]
     fn report() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
@@ -1106,9 +863,9 @@ mod test {
             ron::ser::to_string_pretty(&report, ron::ser::PrettyConfig::new().new_line("\n"))
                 .is_ok()
         );
-        // How shall we further parse the output?
         Ok(())
     }
+
     #[test]
     fn report_empty() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
@@ -1120,6 +877,7 @@ mod test {
         scenery.toplevel_report(AnalyzerKind::Energy)?;
         Ok(())
     }
+
     #[test]
     fn analyze_dummy() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
@@ -1133,6 +891,7 @@ mod test {
         )?;
         Ok(())
     }
+
     #[test]
     fn analyze_empty() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
@@ -1143,6 +902,7 @@ mod test {
         )?;
         Ok(())
     }
+
     #[test]
     fn analyze_energy_threshold() -> OpmResult<()> {
         let mut rays = Rays::from(Ray::new_collimated(
@@ -1177,91 +937,106 @@ mod test {
         if let Proptype::Energy(e) = report.properties().get("Energy")? {
             assert_eq!(e, &joule!(1.0));
         } else {
-            assert!(false)
+            panic!("could not get energy")
         }
         Ok(())
     }
+
     #[test]
     fn get_optic_surface_mut() {
         let mut scenery = NodeGroup::default();
         assert!(scenery.get_optic_surface_mut("input_1").is_none())
     }
+
     #[test]
     fn delete_mapped_node_cleans_up_outer_connections() -> OpmResult<()> {
-        // 1. Create top-level (outer) group and internal (inner) group
         let mut outer_group = NodeGroup::new("outer_group");
+        let outer_id = outer_group.node_attr().uuid();
         let mut inner_group = NodeGroup::new("inner_group");
 
-        // 2. Add an optical node inside the inner group
         let n_inside = inner_group.add_node(Dummy::new("inside_node"))?;
-
-        // 3. Map the output port of the inside node to an external port of inner_group
         inner_group.map_output_port(n_inside, "output_1", "ext_out")?;
 
-        // 4. Add the inner group and an additional external node to the outer group
         let inner_id = outer_group.add_node(inner_group)?;
         let n_outside = outer_group.add_node(Dummy::new("outside_node"))?;
-
-        // 5. Connect inner_group's mapped output port to the external node's input port
         outer_group.connect_nodes(inner_id, "ext_out", n_outside, "input_1", Length::zero())?;
 
-        // Verify that the connection exists in outer_group before deletion
-        assert_eq!(
-            outer_group.connections().len(),
-            1,
-            "Outer group should have exactly 1 connection before node deletion"
-        );
+        assert_eq!(outer_group.connections().len(), 1);
 
-        // 6. Delete the inside node from the outer group
-        let deleted_nodes = outer_group.delete_node(n_inside)?;
+        let delta = outer_group.delete_node(n_inside)?;
+        assert_eq!(outer_group.connections().len(), 0);
 
-        // 7. Assertions:
-        // Verify that n_inside was returned in the list of deleted node UUIDs
-        assert!(
-            deleted_nodes.contains(&n_inside),
-            "Deleted node list should contain n_inside"
-        );
+        let GraphDelta::NodeDeleted(deletion_delta) = &delta else {
+            panic!("Expected GraphDelta::NodeDeleted variant from delete_node");
+        };
 
-        // Verify that the connection in outer_group was cleaned up because the mapped port no longer exists
-        assert_eq!(
-            outer_group.connections().len(),
-            0,
-            "Outer group connections should be cleaned up after deleting a mapped node inside a subgroup"
-        );
+        assert_eq!(deletion_delta.target_node_id, n_inside);
+        assert_eq!(deletion_delta.deleted_nodes.len(), 1);
+        assert_eq!(deletion_delta.deleted_nodes[0].node.uuid(), n_inside);
+        assert_eq!(deletion_delta.deleted_nodes[0].parent_group_id, inner_id);
+
+        assert_eq!(deletion_delta.removed_port_mappings.len(), 1);
+        let port_mapping = &deletion_delta.removed_port_mappings[0];
+        assert_eq!(port_mapping.group_id, inner_id);
+        assert_eq!(port_mapping.port_type, PortType::Output);
+        assert_eq!(port_mapping.external_name, "ext_out");
+        assert_eq!(port_mapping.internal_node_id, n_inside);
+        assert_eq!(port_mapping.internal_port_name, "output_1");
+
+        assert_eq!(deletion_delta.removed_connections.len(), 1);
+        let conn_record = &deletion_delta.removed_connections[0];
+        assert_eq!(conn_record.parent_group_id, outer_id);
+        assert_eq!(conn_record.connection.src_id, inner_id);
+        assert_eq!(conn_record.connection.src_port, "ext_out");
+        assert_eq!(conn_record.connection.target_id, n_outside);
+        assert_eq!(conn_record.connection.target_port, "input_1");
+
+        outer_group.apply_undo(&delta)?;
+
+        assert!(outer_group.exists(n_inside));
+        assert_eq!(outer_group.connections().len(), 1);
+        let restored_conn = &outer_group.connections()[0];
+        assert_eq!(restored_conn.src_id, inner_id);
+        assert_eq!(restored_conn.src_port, "ext_out");
+        assert_eq!(restored_conn.target_id, n_outside);
+        assert_eq!(restored_conn.target_port, "input_1");
 
         Ok(())
     }
+
     #[test]
     fn delete_mapped_node_cleans_up_nested_outer_connections() -> OpmResult<()> {
-        // 1. Setup a 3-level hierarchy: top_group -> mid_group -> inner_group
         let mut top_group = NodeGroup::new("top_group");
         let mut mid_group = NodeGroup::new("mid_group");
         let mut inner_group = NodeGroup::new("inner_group");
 
-        // 2. Add node inside inner_group
         let n_inside = inner_group.add_node(Dummy::new("inside_node"))?;
         inner_group.map_output_port(n_inside, "output_1", "ext_inner")?;
 
-        // 3. Map inner_group's output port to mid_group
         let inner_id = mid_group.add_node(inner_group)?;
         mid_group.map_output_port(inner_id, "ext_inner", "ext_mid")?;
 
-        // 4. Map mid_group's output port to top_group and connect to an outside node
         let mid_id = top_group.add_node(mid_group)?;
         let n_outside = top_group.add_node(Dummy::new("outside_node"))?;
         top_group.connect_nodes(mid_id, "ext_mid", n_outside, "input_1", Length::zero())?;
 
         assert_eq!(top_group.connections().len(), 1);
 
-        // 5. Delete the innermost node from the top-level group
-        top_group.delete_node(n_inside)?;
+        let delta = top_group.delete_node(n_inside)?;
+        assert_eq!(top_group.connections().len(), 0);
 
-        // 6. Assertions: connections at top_group level must be cleaned up
-        assert_eq!(
-            top_group.connections().len(),
-            0,
-            "Cascading cleanup failed to remove top-level connection"
-        );
+        let GraphDelta::NodeDeleted(deletion_delta) = &delta else {
+            panic!("Expected GraphDelta::NodeDeleted variant from delete_node");
+        };
+
+        assert_eq!(deletion_delta.deleted_nodes.len(), 1);
+        assert_eq!(deletion_delta.removed_connections.len(), 1);
+        assert_eq!(deletion_delta.removed_port_mappings.len(), 2);
+
+        top_group.apply_undo(&delta)?;
+
+        assert_eq!(top_group.connections().len(), 1);
+        assert!(top_group.exists(n_inside));
 
         Ok(())
     }
@@ -1271,12 +1046,6 @@ mod test {
 mod group_port_mapping_tests {
     use super::*;
     use crate::{meter, nodes::Dummy};
-
-    /*
-    ============================================================
-    Helper
-    ============================================================
-    */
 
     fn simple_group() -> OpmResult<NodeGroup> {
         let mut group = NodeGroup::new("g");
@@ -1314,12 +1083,6 @@ mod group_port_mapping_tests {
         }
         Ok(current)
     }
-
-    /*
-    ============================================================
-    Tests
-    ============================================================
-    */
 
     #[test]
     fn mapped_port_simple_group() -> OpmResult<()> {

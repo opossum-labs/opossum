@@ -274,11 +274,10 @@ mod test {
         degree, joule,
         light::{Ray, Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer,
-        nodes::test_helper::test_helper::*,
+        nodes::test_helper::helper::*,
         utils::geom_transformation::Isometry,
     };
     use approx::assert_relative_eq;
-    use core::f64;
     use nalgebra::vector;
     #[test]
     fn default() {
@@ -286,16 +285,16 @@ mod test {
         assert_eq!(node.name(), "reflective grating");
         assert_eq!(node.node_type(), "reflective grating");
         assert_eq!(node.node_color(), "cornsilk");
-        assert_eq!(node.inverted(), false);
+        assert!(!node.inverted());
         if let Ok(Proptype::I32(order)) = node.properties().get("diffraction order") {
             assert_eq!(*order, -1);
         } else {
-            assert!(false, "property diffraction order was not an I32.");
+            panic!("property diffraction order was not an I32.");
         }
         if let Ok(Proptype::LinearDensity(line_density)) = node.properties().get("line density") {
             assert_eq!(*line_density, num_per_mm!(1740.));
         } else {
-            assert!(false, "property line density was not a LinearDensity.");
+            panic!("property line density was not a LinearDensity.");
         }
     }
     #[test]
@@ -306,12 +305,12 @@ mod test {
         if let Ok(Proptype::I32(order)) = node.properties().get("diffraction order") {
             assert_eq!(*order, 1);
         } else {
-            assert!(false, "property diffraction order was not an I32.");
+            panic!("property diffraction order was not an I32.");
         }
         if let Ok(Proptype::LinearDensity(line_density)) = node.properties().get("line density") {
             assert_eq!(*line_density, num_per_mm!(200.));
         } else {
-            assert!(false, "property line density was not a LinearDensity.");
+            panic!("property line density was not a LinearDensity.");
         }
     }
     #[test]
@@ -352,7 +351,7 @@ mod test {
             .unwrap();
 
         // littrow = asin(-1 * 632.8e-6 * 1200.0 / 2.0)
-        let littrow = (-1.0_f64 * 632.8e-6 * 1200.0 / 2.0).asin();
+        let littrow = (-632.8e-6_f64 * 1200.0 / 2.0).asin();
         let expected_tilt = littrow + offset.get::<radian>();
         let actual_tilt = node
             .node_attr()
@@ -427,7 +426,7 @@ mod test {
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
-        let output = output.clone().unwrap();
+        let output = output.unwrap();
         assert_eq!(*output, input_light);
         Ok(())
     }
@@ -457,7 +456,7 @@ mod test {
             let dir = vector![0.0, 0.0, -1.];
             assert_relative_eq!(ray.direction(), dir, epsilon = 1e-15);
         } else {
-            assert!(false, "could not get LightData");
+            panic!("could not get LightData");
         }
         Ok(())
     }
@@ -485,7 +484,7 @@ mod test {
             let dir = vector![x_dir, 0.0, -z_dir];
             assert_relative_eq!(ray.direction(), dir, epsilon = 1e-15);
         } else {
-            assert!(false, "could not get LightData");
+            panic!("could not get LightData");
         }
         Ok(())
     }

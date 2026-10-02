@@ -309,7 +309,7 @@ mod test {
             FluenceEstimator::Binning,
         );
         assert_matches!(
-            fluence_data.get_plot_type(&mut Default::default()),
+            fluence_data.get_plot_type(&Default::default()),
             PlotType::ColorMesh(_)
         );
     }

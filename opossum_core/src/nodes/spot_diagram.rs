@@ -27,7 +27,6 @@ use crate::{
         },
     },
 };
-use core::f64;
 use log::warn;
 use nalgebra::{DVector, MatrixXx2};
 use opm_macros_lib::OpmNode;
@@ -362,7 +361,7 @@ mod test {
         distributions::position::Hexapolar,
         joule,
         light::{Rays, light_result::LightRays, spectrum_helper::create_he_ne_spec},
-        nodes::{NodeGroup, SourcePort, test_helper::test_helper::*},
+        nodes::{NodeGroup, SourcePort, test_helper::helper::*},
         prelude::{AnalyzerType, EnergyDataBuilder, GhostFocusConfig, OpmDocument},
     };
     use uom::num_traits::Zero;
@@ -373,7 +372,7 @@ mod test {
         assert!(node.light_data.is_none());
         assert_eq!(node.name(), "spot diagram");
         assert_eq!(node.node_type(), "spot diagram");
-        assert_eq!(node.inverted(), false);
+        assert!(!node.inverted());
         assert_eq!(node.node_color(), "darkorange");
     }
     #[test]
@@ -403,8 +402,10 @@ mod test {
     }
     #[test]
     fn reset_data() {
-        let mut spot = SpotDiagram::default();
-        spot.light_data = Some(LightData::Geometric(Rays::default()));
+        let mut spot = SpotDiagram {
+            light_data: Some(LightData::Geometric(Rays::default())),
+            ..Default::default()
+        };
         spot.reset_data();
         assert!(spot.light_data.is_none());
     }
@@ -433,7 +434,7 @@ mod test {
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
-        let output = output.clone().unwrap();
+        let output = output.unwrap();
         assert_eq!(*output, input_light);
         Ok(())
     }
@@ -454,7 +455,7 @@ mod test {
         assert_eq!(output.len(), 1);
         let output = output.get("input_1");
         assert!(output.is_some());
-        let output = output.clone().unwrap();
+        let output = output.unwrap();
         assert_eq!(*output, input_light);
         Ok(())
     }
@@ -476,7 +477,7 @@ mod test {
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
-        let output = output.clone().unwrap();
+        let output = output.unwrap();
         assert_eq!(output[0], light_rays);
         Ok(())
     }

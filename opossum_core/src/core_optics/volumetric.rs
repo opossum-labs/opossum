@@ -535,7 +535,7 @@ mod test {
         },
         percent, reciprocal_centimeter,
         refractive_index::RefrIndexConst,
-        utils::test_helper::test_helper::metered_energy,
+        utils::test_helper::helper::metered_energy,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
     use uom::si::{

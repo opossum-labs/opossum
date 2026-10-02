@@ -13,7 +13,7 @@ fn main() -> OpmResult<()> {
         "Prism1",
         millimeter!(20.0),
         degree!(30.0),
-        &RefrIndexConst::new(1.5068)?,
+        RefrIndexConst::new(1.5068)?,
     )?;
     let p1 = scenery.add_node(prism1)?;
 
@@ -21,7 +21,7 @@ fn main() -> OpmResult<()> {
         "Prism2",
         millimeter!(20.0),
         degree!(-30.0),
-        &RefrIndexConst::new(1.5068)?,
+        RefrIndexConst::new(1.5068)?,
     )?;
     prism2.set_positioning(NodePositioning::Absolute(Isometry::new(
         millimeter!(0.0, 20.0, 110.0),

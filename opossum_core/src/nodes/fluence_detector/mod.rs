@@ -176,14 +176,14 @@ mod test {
         analyzers::energy::EnergyConfig,
         core_optics::PortType,
         light::{LightData, LightResult, spectrum_helper::create_he_ne_spec},
-        nodes::test_helper::test_helper::*,
+        nodes::test_helper::helper::*,
     };
     #[test]
     fn default() {
         let node = FluenceDetector::default();
         assert_eq!(node.name(), "fluence detector");
         assert_eq!(node.node_type(), "fluence detector");
-        assert_eq!(node.inverted(), false);
+        assert!(!node.inverted());
         assert_eq!(node.node_color(), "hotpink");
     }
     #[test]
@@ -234,7 +234,7 @@ mod test {
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
-        let output = output.clone().unwrap();
+        let output = output.unwrap();
         assert_eq!(*output, input_light);
         Ok(())
     }
@@ -255,7 +255,7 @@ mod test {
         assert_eq!(output.len(), 1);
         let output = output.get("input_1");
         assert!(output.is_some());
-        let output = output.clone().unwrap();
+        let output = output.unwrap();
         assert_eq!(*output, input_light);
         Ok(())
     }

@@ -1,4 +1,3 @@
-use core::f64;
 use opossum_core::coatings::CoatingConstantR;
 use opossum_core::core_optics::OpticNodeExt;
 use opossum_core::{percent, prelude::*};

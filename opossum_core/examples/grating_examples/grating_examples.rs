@@ -228,7 +228,7 @@ fn main() -> OpmResult<()> {
     let i_src = scenery.add_node(SourcePort::default())?;
     let stretcher_node = scenery.add_node(folded_martinez(
         telescope_distance,
-        &RefrIndexConst::new(nbk7.get_refractive_index(nanometer!(1054.))?)?,
+        RefrIndexConst::new(nbk7.get_refractive_index(nanometer!(1054.))?)?,
         alignment_wvl,
     )?)?;
     let detectors = scenery.add_node(detector_group()?)?;

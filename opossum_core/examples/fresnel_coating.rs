@@ -18,7 +18,7 @@ fn main() -> OpmResult<()> {
         millimeter!(10.0),
         millimeter!(9.0),
         millimeter!(1.0),
-        &RefrIndexConst::new(1.5)?,
+        RefrIndexConst::new(1.5)?,
     )?;
     lens1.set_coating(&PortType::Input, "input_1", &CoatingType::Fresnel)?;
     let l1 = scenery.add_node(lens1)?;

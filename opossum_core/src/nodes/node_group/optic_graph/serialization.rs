@@ -98,7 +98,9 @@ impl TryFrom<SerializableGraph> for OpticGraph {
     fn try_from(temp_graph: SerializableGraph) -> Result<Self, Self::Error> {
         let mut g = Self::default();
         for node in temp_graph.nodes {
-            g.g.add_node(node);
+            let uuid = node.uuid();
+            let idx = g.g.add_node(node);
+            g.uuid_to_idx.insert(uuid, idx);
         }
         let node_indices = g.g.node_indices().collect::<Vec<_>>();
         for idx in node_indices {
@@ -204,7 +206,7 @@ impl OpticGraph {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{nodes::Dummy, prelude::PortType, utils::test_helper::test_helper::check_logs};
+    use crate::{nodes::Dummy, prelude::PortType, utils::test_helper::helper::check_logs};
 
     /// Regression test for issue #1144: an entry in the node list that isn't even shaped like a node
     /// (and therefore can't be identified via `NodeIdentity` either) must still be skipped with a
@@ -228,26 +230,24 @@ mod test {
     }
 
     #[test]
-    fn serialize_deserialize() {
+    fn serialize_deserialize() -> OpmResult<()> {
         let mut graph = OpticGraph::default();
-        let i_d1 = graph.add_node(Dummy::default()).unwrap();
-        let i_d2 = graph.add_node(Dummy::default()).unwrap();
-        graph
-            .map_port(i_d1, &PortType::Input, "input_1", "input_1")
-            .unwrap();
-        graph
-            .map_port(i_d2, &PortType::Input, "input_1", "input_2")
-            .unwrap();
+        let i_d1 = graph.add_node(Dummy::default())?;
+        let i_d2 = graph.add_node(Dummy::default())?;
+        graph.map_port(i_d1, &PortType::Input, "input_1", "input_1")?;
+        graph.map_port(i_d2, &PortType::Input, "input_1", "input_2")?;
         let mut port_names = graph.port_map(&PortType::Input).port_names();
         port_names.sort();
         assert_eq!(port_names, vec!["input_1", "input_2"]);
         let serialized =
             ron::ser::to_string_pretty(&graph, ron::ser::PrettyConfig::new().new_line("\n"))
-                .unwrap();
-        let deserialized: OpticGraph = ron::from_str(&serialized).unwrap();
+                .map_err(|e| OpossumError::OpticScenery(e.to_string()))?;
+        let deserialized: OpticGraph =
+            ron::from_str(&serialized).map_err(|e| OpossumError::OpticScenery(e.to_string()))?;
         let mut port_names = deserialized.port_map(&PortType::Input).port_names();
         port_names.sort();
         assert_eq!(port_names, vec!["input_1", "input_2"]);
+        Ok(())
     }
 
     /// Regression test for a reference surviving a save/reload once its target lives inside a nested group -
@@ -257,31 +257,30 @@ mod test {
     /// resolves recursively. Builds `graph { ref -> A, G { A } }`, round-trips it through RON, and asserts
     /// the load succeeds and the reloaded reference still resolves to A (non-empty mirrored ports).
     #[test]
-    fn deserialize_reference_into_nested_group() {
+    fn deserialize_reference_into_nested_group() -> OpmResult<()> {
         use crate::nodes::{NodeGroup, NodeReference};
 
         let mut graph = OpticGraph::default();
         let mut g = NodeGroup::new("G");
-        let a_id = g.add_node(Dummy::default()).unwrap();
-        let a_ref = g.node_recursive(a_id).unwrap().0;
-        let r_id = graph
-            .add_node(NodeReference::from_node(&a_ref).unwrap())
-            .unwrap();
-        graph.add_node(g).unwrap();
+        let a_id = g.add_node(Dummy::default())?;
+        let a_ref = g.node_recursive(a_id)?.0;
+        let r_id = graph.add_node(NodeReference::from_node(&a_ref)?)?;
+        graph.add_node(g)?;
 
         let serialized =
             ron::ser::to_string_pretty(&graph, ron::ser::PrettyConfig::new().new_line("\n"))
-                .unwrap();
+                .map_err(|e| OpossumError::OpticScenery(e.to_string()))?;
         // Before the fix this errored: A lives inside G, which the single-level lookup missed.
         let deserialized: OpticGraph =
             ron::from_str(&serialized).expect("a reference into a nested group must reload");
 
-        let ref_node = deserialized.node(r_id).unwrap();
+        let ref_node = deserialized.node(r_id)?;
         let ports = ref_node.ports();
         assert!(
             !ports.names(&PortType::Output).is_empty(),
             "the reloaded reference must resolve to A (non-empty mirrored ports)"
         );
+        Ok(())
     }
 
     /// Regression test for issue #1144: a nested group with mapped ports must survive a round-trip
@@ -294,17 +293,17 @@ mod test {
     /// `graph { G { d1 -> d2 } }` with G's ports mapped to the outside, round-trips it through RON, and
     /// asserts G and its port mapping are still there afterwards.
     #[test]
-    fn deserialize_nested_group_with_mapped_ports() {
+    fn deserialize_nested_group_with_mapped_ports() -> OpmResult<()> {
         use crate::nodes::NodeGroup;
 
         let mut g = NodeGroup::new("G");
-        let d1 = g.add_node(Dummy::default()).unwrap();
-        let d2 = g.add_node(Dummy::default()).unwrap();
-        g.map_input_port(d1, "input_1", "input_1").unwrap();
-        g.map_output_port(d2, "output_1", "output_1").unwrap();
+        let d1 = g.add_node(Dummy::default())?;
+        let d2 = g.add_node(Dummy::default())?;
+        g.map_input_port(d1, "input_1", "input_1")?;
+        g.map_output_port(d2, "output_1", "output_1")?;
 
         let mut graph = OpticGraph::default();
-        graph.add_node(g).unwrap();
+        graph.add_node(g)?;
 
         let serialized =
             ron::ser::to_string_pretty(&graph, ron::ser::PrettyConfig::new().new_line("\n"))
@@ -328,5 +327,6 @@ mod test {
         };
         assert_eq!(input_names, vec!["input_1".to_string()]);
         assert_eq!(output_names, vec!["output_1".to_string()]);
+        Ok(())
     }
 }

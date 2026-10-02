@@ -427,7 +427,7 @@ impl InversionField {
         };
 
         let counts = [nx, ny, nz];
-        let mut cell = [start_cell.0, start_cell.1, start_cell.2];
+        let mut cell = <[_; 3]>::from(start_cell);
 
         // Per-axis DDA state (all in metres from the ray origin).
         // `t_max[a]` = t at which the ray next crosses a boundary on axis a.

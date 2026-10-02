@@ -948,8 +948,6 @@ pub fn project_pos_to_plane_with_base_vectors(
 
 #[cfg(test)]
 mod test {
-    use core::f64;
-
     use super::*;
     use crate::{millimeter, nanometer, radian};
     use approx::{assert_abs_diff_eq, assert_relative_eq};

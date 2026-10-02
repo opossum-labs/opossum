@@ -43,7 +43,7 @@ fn main() -> OpmResult<()> {
         EdgeFilter::new(
             EdgeFilterType::LongPass,
             nanometer!(980.0),
-            (0.)..(1.),
+            (0.)..1.,
             None,
             nanometer!(800.0)..nanometer!(1100.0),
             nanometer!(0.5),
@@ -66,7 +66,7 @@ fn main() -> OpmResult<()> {
         EdgeFilter::new(
             EdgeFilterType::LongPass,
             nanometer!(1025.0),
-            (0.)..(1.),
+            (0.)..1.,
             None,
             nanometer!(800.0)..nanometer!(1100.0),
             nanometer!(0.5),
@@ -158,8 +158,8 @@ fn main() -> OpmResult<()> {
     // Configure wavelength-resolved optical energy analysis
     let mut config = EnergyConfig::default();
     // Map sources into energy analysis model
-    config.map_source(i_src, energy_data_builder_1.into());
-    config.map_source(i_src2, energy_data_builder_2.into());
+    config.map_source(i_src, energy_data_builder_1);
+    config.map_source(i_src2, energy_data_builder_2);
     // Attach analyzer to document
     doc.add_analyzer(AnalyzerType::Energy(config));
 

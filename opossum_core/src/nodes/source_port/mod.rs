@@ -98,7 +98,7 @@ mod test {
             node.positioning(),
             &NodePositioning::Absolute(Isometry::identity())
         );
-        assert_eq!(node.node_attr().inverted(), false);
+        assert!(!node.node_attr().inverted());
         assert_eq!(node.node_color(), "slateblue");
     }
     #[test]

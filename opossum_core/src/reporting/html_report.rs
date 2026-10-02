@@ -205,7 +205,7 @@ mod test {
         assert_eq!(html_report.node_name, "detector name");
         assert_eq!(html_report.node_type, "test detector");
         assert_eq!(html_report.uuid, "123");
-        assert_eq!(html_report.show_item, false);
+        assert!(!html_report.show_item);
         assert!(html_report.notes.is_empty());
         let html_props = html_report.props;
 

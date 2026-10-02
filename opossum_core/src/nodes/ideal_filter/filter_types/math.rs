@@ -3,7 +3,7 @@
 pub fn smootherstep(x: f64) -> f64 {
     let x = x.clamp(0.0, 1.0);
     // Ken Perlin's smootherstep: 6x^5 - 15x^4 + 10x^3
-    x * x * x * (x * (x * 6.0 - 15.0) + 10.0)
+    x * x * x * x.mul_add(x.mul_add(6.0, -15.0), 10.0)
 }
 
 /// Interpolates between 2 Trnasmission values.
