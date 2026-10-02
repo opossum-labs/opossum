@@ -1,4 +1,3 @@
-use std::collections::{HashMap, HashSet};
 use super::graph::OpticGraph;
 use crate::{
     analyzers::Analyzable,
@@ -19,6 +18,7 @@ use petgraph::{
     graph::{EdgeIndex, Edges, NodeIndex},
     visit::EdgeRef,
 };
+use std::collections::{HashMap, HashSet};
 use uom::si::f64::Length;
 use uuid::Uuid;
 
