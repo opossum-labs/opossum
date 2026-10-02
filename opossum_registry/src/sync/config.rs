@@ -3,6 +3,73 @@ use std::{fmt::Write, fs, path::Path};
 
 use super::DEFAULT_BRANCH;
 
+/// Ensures that a valid author/committer identity exists in .git/config.
+///
+/// If no global or local Git identity is configured, internal operations such as
+/// `prepare_fetch(...).receive(...)` fail when creating reflog entries for remote tracking refs.
+pub fn ensure_committer_configured(local_path: &Path) -> OpmResult<()> {
+    let config_path = local_path.join(".git").join("config");
+    if !config_path.exists() {
+        return Ok(());
+    }
+
+    // Check if gix can already resolve a committer from existing configuration
+    if let Ok(repo) = gix::open(local_path)
+        && repo.committer().and_then(Result::ok).is_some()
+    {
+        return Ok(());
+    }
+
+    let content = fs::read_to_string(&config_path).map_err(|e| {
+        OpossumError::Registry(format!(
+            "Failed to read git configuration {}: {e}",
+            config_path.display()
+        ))
+    })?;
+
+    let has_user_section = content.contains("[user]");
+    let has_name = content.lines().any(|l| {
+        let trimmed = l.trim();
+        trimmed.starts_with("name") && trimmed.contains('=')
+    });
+    let has_email = content.lines().any(|l| {
+        let trimmed = l.trim();
+        trimmed.starts_with("email") && trimmed.contains('=')
+    });
+
+    if has_user_section && has_name && has_email {
+        return Ok(());
+    }
+
+    let mut updated = content;
+    if !updated.ends_with('\n') {
+        updated.push('\n');
+    }
+
+    if !has_user_section {
+        let _ = write!(
+            updated,
+            "[user]\n\tname = Opossum User\n\temail = user@opossum.local\n"
+        );
+    } else {
+        if !has_name {
+            let _ = write!(updated, "\tname = Opossum User\n");
+        }
+        if !has_email {
+            let _ = write!(updated, "\temail = user@opossum.local\n");
+        }
+    }
+
+    fs::write(&config_path, updated).map_err(|e| {
+        OpossumError::Registry(format!(
+            "Failed to write user configuration to {}: {e}",
+            config_path.display()
+        ))
+    })?;
+
+    Ok(())
+}
+
 /// Ensures that the remote 'origin' is properly configured in .git/config.
 pub fn ensure_remote_configured(local_path: &Path, remote_url: &str) -> OpmResult<()> {
     let trimmed_url = remote_url.trim();
