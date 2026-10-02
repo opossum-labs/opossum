@@ -152,11 +152,8 @@ impl Kde {
 
 #[cfg(test)]
 mod test {
-    // use approx::assert_abs_diff_eq;
     use super::Kde;
-    // use crate::{joule, meter, millimeter};
     use crate::{error::OpmResult, millimeter};
-    use core::f64;
     #[test]
     fn default() {
         let kde = Kde::default();

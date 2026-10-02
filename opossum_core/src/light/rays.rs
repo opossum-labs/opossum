@@ -2603,7 +2603,7 @@ mod test {
         let mut ray =
             Ray::new_collimated(millimeter!(0., 1., 0.), nanometer!(1054.0), joule!(1.0))?;
         rays.add_ray(ray.clone());
-        let _ = ray.filter_energy(&FilterType::Constant(FilterConst::new(percent!(30.0))?))?;
+        ray.filter_energy(&FilterType::Constant(FilterConst::new(percent!(30.0))?))?;
         rays.filter_energy(&FilterType::Constant(FilterConst::new(percent!(30.0))?))?;
         assert_eq!(rays.ray_bundle[0].position(), ray.position());
         assert_eq!(rays.ray_bundle[0].direction(), ray.direction());
@@ -3016,7 +3016,7 @@ mod test {
         let mut rays = Rays::default();
         assert!(rays.node_origin().is_none());
         let uuid: Uuid = Uuid::new_v4();
-        rays.set_node_origin_uuid(uuid.clone());
+        rays.set_node_origin_uuid(uuid);
         assert_eq!(rays.node_origin().unwrap(), uuid);
     }
 
@@ -3025,7 +3025,7 @@ mod test {
         let mut rays = Rays::default();
         assert!(rays.parent_id().is_none());
         let uuid: Uuid = Uuid::new_v4();
-        rays.set_parent_uuid(uuid.clone());
+        rays.set_parent_uuid(uuid);
         assert_eq!(rays.parent_id().unwrap(), uuid);
     }
     #[test]
@@ -3068,11 +3068,7 @@ mod test {
 
 #[cfg(test)]
 mod fluence_rays_test {
-    use core::f64;
-
-    use approx::assert_relative_eq;
-    use nalgebra::Vector3;
-
+    use super::FluenceRays;
     use crate::{
         J_per_cm2,
         error::OpmResult,
@@ -3080,8 +3076,8 @@ mod fluence_rays_test {
         light::{Ray, Rays},
         meter, nanometer, percent,
     };
-
-    use super::FluenceRays;
+    use approx::assert_relative_eq;
+    use nalgebra::Vector3;
 
     #[test]
     fn new() -> OpmResult<()> {

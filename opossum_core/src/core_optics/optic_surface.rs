@@ -333,7 +333,6 @@ mod test {
         meter, nanometer,
         utils::geom_transformation::Isometry,
     };
-    use core::f64;
     use std::sync::{Arc, Mutex};
     use uuid::Uuid;
 

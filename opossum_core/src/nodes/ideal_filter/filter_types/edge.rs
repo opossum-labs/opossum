@@ -543,7 +543,7 @@ mod test {
             EdgeFilter::new(
                 EdgeFilterType::ShortPass,
                 micrometer!(7.0),
-                (0.)..(1.),
+                (0.)..1.,
                 None,
                 micrometer!(1.0)..micrometer!(5.0),
                 micrometer!(1.0)
@@ -557,7 +557,7 @@ mod test {
         let s: Spectrum = EdgeFilter::new(
             EdgeFilterType::ShortPass,
             micrometer!(3.0),
-            (0.)..(1.),
+            (0.)..1.,
             None,
             micrometer!(1.0)..micrometer!(5.0),
             micrometer!(1.0),
@@ -578,7 +578,7 @@ mod test {
             EdgeFilter::new(
                 EdgeFilterType::LongPass,
                 micrometer!(7.0),
-                (0.)..(1.),
+                (0.)..1.,
                 None,
                 micrometer!(1.0)..micrometer!(5.0),
                 micrometer!(1.0)
@@ -592,7 +592,7 @@ mod test {
         let s: Spectrum = EdgeFilter::new(
             EdgeFilterType::LongPass,
             micrometer!(3.0),
-            (0.)..(1.),
+            (0.)..1.,
             None,
             micrometer!(1.0)..micrometer!(5.0),
             micrometer!(1.0),
@@ -613,7 +613,7 @@ mod test {
             EdgeFilter::new(
                 EdgeFilterType::ShortPass,
                 micrometer!(3.0),
-                (0.)..(1.),
+                (0.)..1.,
                 Some(Length::zero()),
                 range.clone(),
                 resolution
@@ -624,7 +624,7 @@ mod test {
             EdgeFilter::new(
                 EdgeFilterType::ShortPass,
                 micrometer!(3.0),
-                (0.)..(1.),
+                (0.)..1.,
                 Some(micrometer!(-1.0)),
                 range.clone(),
                 resolution
@@ -634,7 +634,7 @@ mod test {
         let s: Spectrum = EdgeFilter::new(
             EdgeFilterType::ShortPass,
             micrometer!(3.0),
-            (0.)..(1.),
+            (0.)..1.,
             Some(micrometer!(1.0)),
             range,
             resolution,

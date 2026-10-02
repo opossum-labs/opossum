@@ -92,7 +92,7 @@ mod test {
     #[test]
     fn default() {
         let graph = OpticGraph::default();
-        assert_eq!(graph.is_inverted, false);
+        assert!(!graph.is_inverted);
         assert_eq!(graph.g.node_count(), 0)
     }
 }

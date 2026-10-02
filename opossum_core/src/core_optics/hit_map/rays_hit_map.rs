@@ -1132,7 +1132,6 @@ mod test_rays_hit_map {
         }
         HitPoints::Fluence(pts)
     }
-    use core::f64;
     #[test]
     fn lims() -> OpmResult<()> {
         let hp = HitPoints::Fluence(vec![
@@ -1420,7 +1419,7 @@ mod test_rays_hit_map {
         // Create hitmap with 2 nearly identical points (float inaccuracy) and 1 distinct point
         let mut rhm = RaysHitMap::new(HitPoints::Fluence(vec![
             FluenceHitPoint::new(meter!(1.0, 2.0, 3.0), J_per_cm2!(1.5))?,
-            FluenceHitPoint::new(meter!(1.0, 2.0, 3.0 + core::f64::EPSILON), J_per_cm2!(2.5))?,
+            FluenceHitPoint::new(meter!(1.0, 2.0, 3.0 + f64::EPSILON), J_per_cm2!(2.5))?,
             FluenceHitPoint::new(meter!(5.0, 5.0, 5.0), J_per_cm2!(4.0))?,
         ]));
 

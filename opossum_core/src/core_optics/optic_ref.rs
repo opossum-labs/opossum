@@ -193,7 +193,7 @@ mod test {
         let _ = File::open(path)
             .map_err(|e| OpossumError::OpticScenery(format!("Error opening file: {e}")))?
             .read_to_string(file_content);
-        let optic_ref: OpticRef = ron::from_str(&file_content).map_err(|e| {
+        let optic_ref: OpticRef = ron::from_str(file_content).map_err(|e| {
             OpossumError::OpmDocument(format!("Error parsing opm file string: {e}"))
         })?;
         assert_eq!(

@@ -413,9 +413,9 @@ mod test {
         let n4 = graph.add_node(Dummy::default())?;
         graph.connect_nodes(n1, "output_1", n2, "input_1", Length::zero())?;
         graph.connect_nodes(n3, "output_1", n4, "input_1", Length::zero())?;
-        assert_eq!(graph.is_single_tree(), false);
+        assert!(!graph.is_single_tree());
         graph.connect_nodes(n2, "output_1", n3, "input_1", Length::zero())?;
-        assert_eq!(graph.is_single_tree(), true);
+        assert!(graph.is_single_tree());
         Ok(())
     }
 

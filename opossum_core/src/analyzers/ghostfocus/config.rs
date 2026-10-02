@@ -166,11 +166,11 @@ mod test_ghost_focus_config {
         let uuid = Uuid::new_v4();
         let builder: RayDataBuilder = RayDataSource::Collimated(CollimatedSrc::default()).into();
 
-        assert_eq!(config.map_source(uuid, builder.clone()), false);
+        assert!(!config.map_source(uuid, builder.clone()));
         assert_eq!(config.get_source(&uuid), Some(&builder));
 
         let builder2: RayDataBuilder = RayDataSource::PointSrc(PointSrc::default()).into();
-        assert_eq!(config.map_source(uuid, builder2.clone()), true);
+        assert!(config.map_source(uuid, builder2.clone()));
         assert_eq!(config.get_source(&uuid), Some(&builder2));
     }
 

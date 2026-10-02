@@ -402,8 +402,10 @@ mod test {
     }
     #[test]
     fn reset_data() {
-        let mut spot = SpotDiagram::default();
-        spot.light_data = Some(LightData::Geometric(Rays::default()));
+        let mut spot = SpotDiagram {
+            light_data: Some(LightData::Geometric(Rays::default())),
+            ..Default::default()
+        };
         spot.reset_data();
         assert!(spot.light_data.is_none());
     }

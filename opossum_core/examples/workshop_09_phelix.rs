@@ -14,6 +14,7 @@
 //! 5. Long focal-length relay optics
 //! 6. Double-pass amplifier section implemented using `NodeReference`
 //! 7. Ray propagation visualizer for inspecting ray trajectories
+//!
 //! Distances between connected components are specified in millimeters.
 //!
 //! Import `opossum_core` modules:

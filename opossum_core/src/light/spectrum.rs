@@ -1081,14 +1081,14 @@ mod test {
     #[test]
     fn set_single_peak() -> OpmResult<()> {
         let mut s = prep()?;
-        assert_eq!(s.add_single_peak(micrometer!(2.0), 1.0).is_ok(), true);
+        assert!(s.add_single_peak(micrometer!(2.0), 1.0).is_ok());
         assert_eq!(s.data[2].1, 2.0);
         Ok(())
     }
     #[test]
     fn set_single_peak_interpolated() -> OpmResult<()> {
         let mut s = prep()?;
-        assert_eq!(s.add_single_peak(micrometer!(2.25), 1.0).is_ok(), true);
+        assert!(s.add_single_peak(micrometer!(2.25), 1.0).is_ok());
         assert_eq!(s.data[2].1, 1.0);
         assert_eq!(s.data[3].1, 1.0);
         Ok(())
@@ -1113,7 +1113,7 @@ mod test {
     #[test]
     fn set_single_peak_lower_bound() -> OpmResult<()> {
         let mut s = prep()?;
-        assert_eq!(s.add_single_peak(micrometer!(1.0), 1.0).is_ok(), true);
+        assert!(s.add_single_peak(micrometer!(1.0), 1.0).is_ok());
         assert_eq!(s.data[0].1, 2.0);
         Ok(())
     }

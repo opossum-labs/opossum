@@ -885,7 +885,7 @@ mod test {
         assert_eq!(ray.path_length, Length::zero());
         assert_eq!(ray.refractive_index, 1.0);
         assert_eq!(ray.pos_hist.len(), 0);
-        assert_eq!(ray.valid, true);
+        assert!(ray.valid);
         assert_eq!(ray.number_of_bounces, 0);
         assert_eq!(ray.number_of_refractions, 0);
         assert!(Ray::new(pos, dir, nanometer!(0.0), e).is_err());
@@ -911,7 +911,7 @@ mod test {
         assert_eq!(ray.e, e);
         assert_eq!(ray.path_length, Length::zero());
         assert_eq!(ray.pos_hist.len(), 0);
-        assert_eq!(ray.valid, true);
+        assert!(ray.valid);
         assert!(Ray::new_collimated(pos, nanometer!(0.0), e).is_err());
         assert!(Ray::new_collimated(pos, nanometer!(-10.0), e).is_err());
         assert!(Ray::new_collimated(pos, nanometer!(f64::NAN), e).is_err());
@@ -930,9 +930,9 @@ mod test {
         let wvl = nanometer!(1053.0);
         let e = joule!(1.0);
         let mut ray = Ray::new_collimated(pos, wvl, e)?;
-        assert_eq!(ray.valid(), true);
+        assert!(ray.valid());
         ray.valid = false;
-        assert_eq!(ray.valid(), false);
+        assert!(!ray.valid());
         Ok(())
     }
     #[test]
@@ -942,7 +942,7 @@ mod test {
         let e = joule!(1.0);
         let mut ray = Ray::new_collimated(pos, wvl, e)?;
         ray.set_invalid();
-        assert_eq!(ray.valid(), false);
+        assert!(!ray.valid());
         Ok(())
     }
     #[test]
@@ -1144,7 +1144,7 @@ mod test {
         ray.refract_paraxial(millimeter!(10.0), &Isometry::identity())?;
         assert_abs_diff_eq!(
             ray.path_length.get::<millimeter>(),
-            -1.0 * (f64::sqrt(200.0) - 10.0),
+            -(f64::sqrt(200.0) - 10.0),
             epsilon = 10.0 * f64::EPSILON
         );
         let pos = millimeter!(0., 100., 0.);
@@ -1384,7 +1384,7 @@ mod test {
         let position = millimeter!(0., 1., 0.);
         let wvl = nanometer!(1054.0);
         let mut ray = Ray::new_collimated(position, wvl, joule!(1.0))?;
-        let _ = ray.filter_energy(&FilterType::Constant(FilterConst::new(percent!(30.0))?))?;
+        ray.filter_energy(&FilterType::Constant(FilterConst::new(percent!(30.0))?))?;
         assert_eq!(ray.pos, millimeter!(0., 1., 0.));
         assert_eq!(ray.dir, Vector3::z());
         assert_eq!(ray.wvl, wvl);
@@ -1400,7 +1400,7 @@ mod test {
         spec_path.push("files_for_testing/spectrum/test_filter.csv");
         let s = Spectrum::from_csv(&spec_path)?;
         let filter = FilterType::Spectrum(s);
-        let _ = ray.filter_energy(&filter)?;
+        ray.filter_energy(&filter)?;
         assert_eq!(ray.e, e_1j);
         assert_eq!(ray.pos, ray.pos);
         assert_eq!(ray.dir, ray.dir);
@@ -1408,10 +1408,10 @@ mod test {
         assert_eq!(ray.path_length, ray.path_length);
         assert_eq!(ray.pos_hist, ray.pos_hist);
         let mut ray = Ray::new_collimated(position, nanometer!(500.0), e_1j)?;
-        let _ = ray.filter_energy(&filter)?;
+        ray.filter_energy(&filter)?;
         assert_eq!(ray.energy(), joule!(0.0));
         let mut ray = Ray::new_collimated(position, nanometer!(501.5), e_1j)?;
-        let _ = ray.filter_energy(&filter)?;
+        ray.filter_energy(&filter)?;
         assert!(abs_diff_eq!(
             ray.energy().get::<joule>(),
             0.5,
@@ -1442,7 +1442,7 @@ mod test {
         let spectrum: Spectrum = EdgeFilter::new(
             EdgeFilterType::ShortPass,
             nanometer!(1000.0),
-            (0.)..(1.),
+            (0.)..1.,
             None,
             nanometer!(500.0)..nanometer!(1500.0),
             nanometer!(1.0),
@@ -1459,7 +1459,7 @@ mod test {
         assert_eq!(ray.energy(), Energy::zero());
         assert_eq!(split_ray.energy(), joule!(1.0));
         let mut ray = Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(999.0), joule!(1.0))?;
-        let split_ray = ray.split(&&splitting_config)?;
+        let split_ray = ray.split(&splitting_config)?;
         assert_eq!(ray.energy(), joule!(1.0));
         assert_eq!(split_ray.energy(), Energy::zero());
         Ok(())
@@ -1471,7 +1471,7 @@ mod test {
         let spectrum: Spectrum = EdgeFilter::new(
             EdgeFilterType::ShortPass,
             nanometer!(1000.0),
-            (0.)..(1.),
+            (0.)..1.,
             None,
             nanometer!(500.0)..nanometer!(1500.0),
             nanometer!(1.0),

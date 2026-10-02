@@ -292,7 +292,7 @@ mod tests {
 
     #[test]
     fn test_numlike_quantity_angle() {
-        let angle = Angle::new::<radian>(3.14);
+        let angle = Angle::new::<radian>(1.23);
         let neg_angle = Angle::new::<radian>(-1.0);
         let zero_angle = Angle::new::<radian>(0.0);
 

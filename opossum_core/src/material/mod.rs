@@ -407,9 +407,11 @@ mod tests {
     #[test]
     fn test_material_serde_roundtrip() {
         // Test with optional thermal and mechanical blocks present
-        let mut material = Material::default();
-        material.thermal = Some(ThermalProperties::default());
-        material.mechanical = Some(MechanicalProperties::default());
+        let material = Material {
+            thermal: Some(ThermalProperties::default()),
+            mechanical: Some(MechanicalProperties::default()),
+            ..Default::default()
+        };
 
         let ron = ron::to_string(&material).expect("serialization failed");
         let deserialized: Material = ron::from_str(&ron).expect("deserialization failed");

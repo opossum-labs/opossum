@@ -482,13 +482,13 @@ mod test {
         let uuid = Uuid::new_v4();
         let source = RayDataSource::Collimated(CollimatedSrc::default());
 
-        assert_eq!(config.map_source(uuid, source.clone().into()), false);
+        assert!(!config.map_source(uuid, source.clone().into()));
         assert_eq!(config.get_source(&uuid), Some(&source.clone().into()));
 
         // Let's use PointSrc for the second one to be sure it's different
         let source2 = RayDataSource::PointSrc(PointSrc::default());
 
-        assert_eq!(config.map_source(uuid, source2.clone().into()), true);
+        assert!(config.map_source(uuid, source2.clone().into()));
         assert_eq!(config.get_source(&uuid), Some(&source2.clone().into()));
     }
 
