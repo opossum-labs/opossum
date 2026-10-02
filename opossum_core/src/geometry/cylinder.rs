@@ -161,11 +161,11 @@ mod test {
     #[test]
     fn new() -> OpmResult<()> {
         let iso = Isometry::new_along_z(millimeter!(1.0))?;
-        assert!(Cylinder::new(millimeter!(f64::NAN), iso.clone()).is_err());
-        assert!(Cylinder::new(millimeter!(f64::INFINITY), iso.clone()).is_err());
-        assert!(Cylinder::new(millimeter!(f64::NEG_INFINITY), iso.clone()).is_err());
+        assert!(Cylinder::new(millimeter!(f64::NAN), iso).is_err());
+        assert!(Cylinder::new(millimeter!(f64::INFINITY), iso).is_err());
+        assert!(Cylinder::new(millimeter!(f64::NEG_INFINITY), iso).is_err());
 
-        let s = Cylinder::new(millimeter!(2.0), iso.clone())?;
+        let s = Cylinder::new(millimeter!(2.0), iso)?;
         assert_eq!(s.radius, millimeter!(2.0));
         assert_eq!(s.get_pos(), millimeter!(0.0, 0.0, 1.0));
 
@@ -233,7 +233,7 @@ mod test {
     fn intersect_positive_on_axis_behind() -> OpmResult<()> {
         let ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0))?;
         let iso = Isometry::new_along_z(millimeter!(-10.0))?;
-        let s = Cylinder::new(millimeter!(1.0), iso.clone())?;
+        let s = Cylinder::new(millimeter!(1.0), iso)?;
         assert_eq!(s.calc_intersect_and_normal(&ray), None);
         Ok(())
     }

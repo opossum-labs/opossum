@@ -240,7 +240,7 @@ mod test {
         joule,
         light::spectrum_helper::create_he_ne_spec,
         millimeter, nanometer,
-        nodes::test_helper::test_helper::{
+        nodes::test_helper::helper::{
             test_analyze_empty, test_analyze_wrong_data_type, test_inverted,
         },
         percent,

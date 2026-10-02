@@ -176,7 +176,7 @@ mod test {
         analyzers::energy::EnergyConfig,
         core_optics::PortType,
         light::{LightData, LightResult, spectrum_helper::create_he_ne_spec},
-        nodes::test_helper::test_helper::*,
+        nodes::test_helper::helper::*,
     };
     #[test]
     fn default() {

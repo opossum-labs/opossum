@@ -658,7 +658,7 @@ mod test_hit_map {
         joule, meter,
         properties::Proptype,
         reporting::plottable::{PlotParameters, Plottable},
-        utils::test_helper::test_helper::check_logs,
+        utils::test_helper::helper::check_logs,
     };
 
     #[test]

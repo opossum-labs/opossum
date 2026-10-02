@@ -592,7 +592,7 @@ mod test {
         core_optics::PortType,
         light::spectrum_helper::create_he_ne_spec,
         nodes::{BeamSplitter, Dummy, SourcePort, SplittingConfigBuilder},
-        utils::{geom_transformation::Isometry, test_helper::test_helper::check_logs},
+        utils::{geom_transformation::Isometry, test_helper::helper::check_logs},
     };
     use approx::assert_abs_diff_eq;
     use num_traits::Zero;

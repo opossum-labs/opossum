@@ -533,7 +533,7 @@ impl From<EdgeFilter> for SpectralFilterBuilder {
 }
 #[cfg(test)]
 mod test {
-    use crate::utils::test_helper::test_helper::check_logs;
+    use crate::utils::test_helper::helper::check_logs;
 
     use super::*;
     #[test]

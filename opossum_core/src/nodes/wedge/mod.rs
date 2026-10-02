@@ -198,7 +198,7 @@ mod test {
         degree, joule,
         light::{LightData, LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
         nanometer,
-        nodes::test_helper::test_helper::*,
+        nodes::test_helper::helper::*,
         properties::{Proptype, proptype::AssetRef},
         refractive_index::RefractiveIndexType,
     };
@@ -211,26 +211,26 @@ mod test {
         assert_eq!(node.name(), "wedge");
         assert_eq!(node.node_type(), "wedge");
         assert_eq!(node.node_color(), "aquamarine");
-        assert_eq!(node.inverted(), false);
+        assert!(!node.inverted());
         if let Ok(Proptype::Length(p)) = node.properties().get("center thickness") {
             assert_eq!(p, &millimeter!(10.0));
         } else {
-            assert!(false, "could not read center thickness.");
+            panic!("could not read center thickness.");
         }
         if let Ok(Proptype::Angle(p)) = node.properties().get("wedge") {
             assert_eq!(p, &degree!(0.0));
         } else {
-            assert!(false, "could not read angle.");
+            panic!("could not read angle.");
         }
         if let Ok(Proptype::Material(AssetRef::Inline(p))) = node.properties().get(MATERIAL) {
             if let RefractiveIndexType::Const(val) = &p.optical.refractive_index {
                 let idx = val.get_refractive_index(nanometer!(1000.0))?;
                 assert_eq!(idx, 1.5);
             } else {
-                assert!(false, "could not read refractive index constant.");
+                panic!("could not read refractive index constant.");
             }
         } else {
-            assert!(false, "could not read material.");
+            panic!("could not read material.");
         }
         Ok(())
     }
@@ -241,7 +241,7 @@ mod test {
                 "test",
                 millimeter!(-0.1),
                 degree!(0.0),
-                &RefrIndexConst::new(1.5)?
+                RefrIndexConst::new(1.5)?
             )
             .is_err()
         );
@@ -250,7 +250,7 @@ mod test {
                 "test",
                 millimeter!(f64::NEG_INFINITY),
                 degree!(0.0),
-                &RefrIndexConst::new(1.5)?
+                RefrIndexConst::new(1.5)?
             )
             .is_err()
         );
@@ -259,7 +259,7 @@ mod test {
                 "test",
                 millimeter!(f64::INFINITY),
                 degree!(0.0),
-                &RefrIndexConst::new(1.5)?
+                RefrIndexConst::new(1.5)?
             )
             .is_err()
         );
@@ -268,7 +268,7 @@ mod test {
                 "test",
                 millimeter!(f64::NAN),
                 degree!(0.0),
-                &RefrIndexConst::new(1.5)?
+                RefrIndexConst::new(1.5)?
             )
             .is_err()
         );
@@ -278,7 +278,7 @@ mod test {
                 "test",
                 millimeter!(0.0),
                 degree!(f64::NEG_INFINITY),
-                &RefrIndexConst::new(1.0)?
+                RefrIndexConst::new(1.0)?
             )
             .is_err()
         );
@@ -287,7 +287,7 @@ mod test {
                 "test",
                 millimeter!(0.0),
                 degree!(f64::INFINITY),
-                &RefrIndexConst::new(1.0)?
+                RefrIndexConst::new(1.0)?
             )
             .is_err()
         );
@@ -296,7 +296,7 @@ mod test {
                 "test",
                 millimeter!(0.0),
                 degree!(f64::NAN),
-                &RefrIndexConst::new(1.0)?
+                RefrIndexConst::new(1.0)?
             )
             .is_err()
         );
@@ -305,7 +305,7 @@ mod test {
                 "test",
                 millimeter!(0.0),
                 degree!(90.01),
-                &RefrIndexConst::new(1.0)?
+                RefrIndexConst::new(1.0)?
             )
             .is_err()
         );
@@ -314,7 +314,7 @@ mod test {
                 "test",
                 millimeter!(0.0),
                 degree!(-90.01),
-                &RefrIndexConst::new(1.0)?
+                RefrIndexConst::new(1.0)?
             )
             .is_err()
         );
@@ -323,7 +323,7 @@ mod test {
                 "test",
                 millimeter!(0.0),
                 degree!(89.99),
-                &RefrIndexConst::new(1.0)?
+                RefrIndexConst::new(1.0)?
             )
             .is_ok()
         );
@@ -332,7 +332,7 @@ mod test {
                 "test",
                 millimeter!(0.0),
                 degree!(-89.99),
-                &RefrIndexConst::new(1.0)?
+                RefrIndexConst::new(1.0)?
             )
             .is_ok()
         );
@@ -340,28 +340,28 @@ mod test {
             "test",
             millimeter!(0.0),
             degree!(10.0),
-            &RefrIndexConst::new(1.0)?,
+            RefrIndexConst::new(1.0)?,
         )?;
         assert_eq!(n.name(), "test");
         if let Ok(Proptype::Length(p)) = n.properties().get("center thickness") {
             assert_eq!(p, &millimeter!(0.0));
         } else {
-            assert!(false, "could not read center thickness.");
+            panic!("could not read center thickness.");
         }
         if let Ok(Proptype::Angle(p)) = n.properties().get("wedge") {
             assert_eq!(p, &degree!(10.0));
         } else {
-            assert!(false, "could not read angle.");
+            panic!("could not read angle.");
         }
         if let Ok(Proptype::Material(AssetRef::Inline(p))) = n.properties().get(MATERIAL) {
             if let RefractiveIndexType::Const(val) = &p.optical.refractive_index {
                 let idx = val.get_refractive_index(nanometer!(1000.0))?;
                 assert_eq!(idx, 1.0);
             } else {
-                assert!(false, "could not read refractive index constant.");
+                panic!("could not read refractive index constant.");
             }
         } else {
-            assert!(false, "could not read material.");
+            panic!("could not read material.");
         }
         Ok(())
     }
@@ -404,7 +404,7 @@ mod test {
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
-        let output = output.clone().unwrap();
+        let output = output.unwrap();
         assert_eq!(*output, input_light);
         Ok(())
     }
@@ -431,7 +431,7 @@ mod test {
             let dir = Vector3::new(0.0_f64, 0.0, 1.0);
             assert_eq!(ray.direction(), dir);
         } else {
-            assert!(false, "could not get LightData");
+            panic!("could not get LightData");
         }
         Ok(())
     }

@@ -157,7 +157,7 @@ mod test {
         degree, joule,
         light::{Ray, Rays},
         millimeter, nanometer,
-        nodes::test_helper::test_helper::*,
+        nodes::test_helper::helper::*,
         utils::geom_transformation::Isometry,
     };
     use approx::assert_relative_eq;
@@ -168,7 +168,7 @@ mod test {
         let node = ParaxialSurface::default();
         assert_eq!(node.name(), "paraxial surface");
         assert_eq!(node.node_type(), "paraxial surface");
-        assert_eq!(node.inverted(), false);
+        assert!(!node.inverted());
         assert!(node.properties().get("focal length").is_ok());
         assert_matches!(
             node.properties().get("focal length").unwrap(),
@@ -177,7 +177,7 @@ mod test {
         if let Proptype::Length(dist) = node.properties().get("focal length")? {
             assert_eq!(*dist, millimeter!(10.0));
         } else {
-            assert!(false, "cannot read focal length");
+            panic!("cannot read focal length");
         }
         assert_eq!(node.node_color(), "palegreen");
         Ok(())
@@ -189,7 +189,7 @@ mod test {
         if let Ok(Proptype::Length(dist)) = node.properties().get("focal length") {
             assert_eq!(dist, &millimeter!(100.0));
         } else {
-            assert!(false, "cannot read focal length");
+            panic!("cannot read focal length");
         }
         assert!(ParaxialSurface::new("Test", millimeter!(-1.0)).is_ok());
         assert!(ParaxialSurface::new("Test", millimeter!(0.0)).is_err());
@@ -267,7 +267,7 @@ mod test {
                 "Ray position history was lost or not updated during propagation!"
             );
         } else {
-            assert!(false, "could not get LightData");
+            panic!("could not get LightData");
         }
         Ok(())
     }
@@ -293,7 +293,7 @@ mod test {
             assert_eq!(ray.position(), millimeter!(0.0, 0.0, 10.0));
             assert_eq!(ray.direction(), Vector3::new(1., 0., 1.).normalize());
         } else {
-            assert!(false, "could not get LightData");
+            panic!("could not get LightData");
         }
         Ok(())
     }
@@ -319,7 +319,7 @@ mod test {
             assert_eq!(ray.position(), millimeter!(0.0, 0.0, 10.0));
             assert_eq!(ray.direction(), Vector3::new(0., 1., 1.).normalize());
         } else {
-            assert!(false, "could not get LightData");
+            panic!("could not get LightData");
         }
         Ok(())
     }
@@ -348,7 +348,7 @@ mod test {
             assert_relative_eq!(ray.position()[2].value, 0.01 / f64::sqrt(2.) + 0.01);
             assert_relative_eq!(ray.direction(), Vector3::new(0., -1., 1.).normalize());
         } else {
-            assert!(false, "could not get LightData");
+            panic!("could not get LightData");
         }
         Ok(())
     }
@@ -377,7 +377,7 @@ mod test {
             assert_relative_eq!(ray.position()[2].value, 0.01 / f64::sqrt(2.) + 0.01);
             assert_relative_eq!(ray.direction(), Vector3::new(1., 0., 1.).normalize());
         } else {
-            assert!(false, "could not get LightData");
+            panic!("could not get LightData");
         }
         Ok(())
     }

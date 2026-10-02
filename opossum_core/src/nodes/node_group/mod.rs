@@ -768,7 +768,7 @@ mod test {
         joule,
         light::{LightResult, Ray, Rays},
         millimeter, nanometer,
-        nodes::{Dummy, EnergyMeter, SourcePort, test_helper::test_helper::*},
+        nodes::{Dummy, EnergyMeter, SourcePort, test_helper::helper::*},
         prelude::RayDataSource,
         reporting::Dottable,
         utils::geom_transformation::Isometry,
@@ -780,8 +780,8 @@ mod test {
         let node = NodeGroup::default();
         assert_eq!(node.name(), "group");
         assert_eq!(node.node_type(), "group");
-        assert_eq!(node.node_attr().inverted(), false);
-        assert_eq!(node.expand_view()?, false);
+        assert!(!node.node_attr().inverted());
+        assert!(!node.expand_view()?);
         assert_eq!(node.node_color(), "yellow");
         assert_eq!(node.graph.edge_count(), 0);
         assert_eq!(node.graph.node_count(), 0);
@@ -792,9 +792,9 @@ mod test {
     fn expand_view_property() -> OpmResult<()> {
         let mut node = NodeGroup::default();
         node.set_expand_view(true)?;
-        assert_eq!(node.expand_view()?, true);
+        assert!(node.expand_view()?);
         node.set_expand_view(false)?;
-        assert_eq!(node.expand_view()?, false);
+        assert!(!node.expand_view()?);
         Ok(())
     }
 
@@ -937,7 +937,7 @@ mod test {
         if let Proptype::Energy(e) = report.properties().get("Energy")? {
             assert_eq!(e, &joule!(1.0));
         } else {
-            assert!(false)
+            panic!("could not get energy")
         }
         Ok(())
     }

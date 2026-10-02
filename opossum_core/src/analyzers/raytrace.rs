@@ -325,7 +325,7 @@ mod test {
         joule, millimeter,
         nodes::{Dummy, ParaxialSurface, SourcePort, round_collimated_ray_builder},
         reporting::node_report::NodeReportResult,
-        utils::test_helper::test_helper::check_logs,
+        utils::test_helper::helper::check_logs,
     };
     #[test]
     fn config_default() {

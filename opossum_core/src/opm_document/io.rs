@@ -209,7 +209,7 @@ mod tests {
             collimated_line_ray_builder, round_collimated_ray_builder,
         },
         refractive_index::RefrIndexConst,
-        utils::test_helper::test_helper::check_logs,
+        utils::test_helper::helper::check_logs,
     };
     use std::path::PathBuf;
     use tempfile::NamedTempFile;
@@ -968,7 +968,7 @@ mod tests {
             "Wedge",
             millimeter!(10.0),
             degree!(0.0),
-            &RefrIndexConst::new(1.5068)?,
+            RefrIndexConst::new(1.5068)?,
         )?
         .with_tilt(degree!(15.0, 0.0, 0.0))?;
         let l1 = scenery.add_node(lens1)?;
@@ -977,7 +977,7 @@ mod tests {
             millimeter!(205.55),
             millimeter!(-205.55),
             millimeter!(2.79),
-            &RefrIndexConst::new(1.5068)?,
+            RefrIndexConst::new(1.5068)?,
         )?
         .with_tilt(degree!(15.0, 0.0, 0.0))?;
         let l2 = scenery.add_node(lens2)?;

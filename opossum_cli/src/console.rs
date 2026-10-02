@@ -396,7 +396,7 @@ GBB?        .BBB:  PBBPYYYJJ7^    YBBY        .GBBG#&&#BBBBBBBB#&&#Y.    .:^!YBB
 
         let args = Args {
             file_path: PathBuf::from(path_valid.clone()),
-            report_directory: PathBuf::from(get_parent_dir(&PathBuf::from(path_valid.clone()))?),
+            report_directory: get_parent_dir(&PathBuf::from(path_valid.clone()))?,
             show_logo: true,
         };
 

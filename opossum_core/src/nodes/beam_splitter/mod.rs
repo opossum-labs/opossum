@@ -502,7 +502,7 @@ mod test {
         nanometer,
         nodes::{
             ideal_filter::{EdgeFilter, EdgeFilterType},
-            test_helper::test_helper::*,
+            test_helper::helper::*,
         },
     };
     use approx::assert_abs_diff_eq;

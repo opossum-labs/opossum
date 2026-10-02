@@ -38,7 +38,7 @@ fn main() -> OpmResult<()> {
     let wedge2 = Wedge::new(
         "prism 2",
         millimeter!(20.0),
-        degree!(-1.0 * wedge_angle_in_degree),
+        degree!(-wedge_angle_in_degree),
         &refr_index_hk9l,
     )?
     .with_tilt(degree!(wedge_angle_in_degree / 2.0, 0.0, 0.0))?;
@@ -47,7 +47,7 @@ fn main() -> OpmResult<()> {
         Wedge::new(
             "prism 3",
             millimeter!(20.0),
-            degree!(-1.0 * wedge_angle_in_degree),
+            degree!(-wedge_angle_in_degree),
             &refr_index_hk9l,
         )?
         .with_tilt(degree!(wedge_angle_in_degree / 2.0, 0.0, 0.0))?,

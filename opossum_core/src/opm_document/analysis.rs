@@ -147,7 +147,7 @@ mod tests {
         light::lightdata::energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
         millimeter, nanometer,
         nodes::{EnergyMeter, Lens, NodeGroup, SourcePort},
-        utils::test_helper::test_helper::metered_energy,
+        utils::test_helper::helper::metered_energy,
     };
     use approx::assert_relative_eq;
     use uuid::Uuid;

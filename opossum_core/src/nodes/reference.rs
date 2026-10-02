@@ -182,7 +182,7 @@ mod test {
         joule, millimeter,
         nodes::{
             Dummy, Lens, NodeGroup, RayPropagationVisualizer, SourcePort, ThinMirror,
-            collimated_line_ray_builder, test_helper::test_helper::*,
+            collimated_line_ray_builder, test_helper::helper::*,
         },
         opm_document::OpmDocument,
         refractive_index::RefrIndexConst,
@@ -194,7 +194,7 @@ mod test {
         assert_eq!(node.referenced_uuid(), Uuid::nil());
         assert_eq!(node.name(), "reference");
         assert_eq!(node.node_type(), "reference");
-        assert_eq!(node.inverted(), false);
+        assert!(!node.inverted());
         assert_eq!(node.node_color(), "lightsalmon3");
     }
 
@@ -258,7 +258,7 @@ mod test {
         let mut scenery = NodeGroup::default();
         let node_id = scenery.add_node(Dummy::default())?;
         let mut node = NodeReference::from_node(&scenery.node(node_id)?)?;
-        node.set_inverted(true.into())?;
+        node.set_inverted(true)?;
         assert_eq!(node.ports().names(&PortType::Input), vec!["output_1"]);
         assert_eq!(node.ports().names(&PortType::Output), vec!["input_1"]);
         Ok(())
@@ -277,7 +277,7 @@ mod test {
             millimeter!(150.0),
             millimeter!(-150.0),
             millimeter!(4.0),
-            &refr_index,
+            refr_index,
         )?;
         let real_lens_id = scenery.add_node(lens)?;
 

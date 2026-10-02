@@ -228,7 +228,7 @@ mod test {
             spectrum_helper::{create_he_ne_spec, create_visible_spec},
         },
         nanometer,
-        nodes::test_helper::test_helper::*,
+        nodes::test_helper::helper::*,
     };
     use num_traits::Zero;
     use uom::si::f64::Length;
@@ -258,7 +258,7 @@ mod test {
         assert_eq!(node.spectrometer_type(), SpectrometerType::Ideal);
         assert_eq!(node.name(), "spectrometer");
         assert_eq!(node.node_type(), "spectrometer");
-        assert_eq!(node.inverted(), false);
+        assert!(!node.inverted());
         assert_eq!(node.node_color(), "lightseagreen");
     }
     #[test]

@@ -1,5 +1,5 @@
 #[cfg(test)]
-pub mod test_helper {
+pub mod helper {
     use crate::{
         analyzers::{
             Analyzable, RayTraceConfig,
@@ -19,7 +19,7 @@ pub mod test_helper {
         millimeter, nanometer,
         prelude::Aperture,
         properties::Proptype,
-        utils::{geom_transformation::Isometry, test_helper::test_helper::check_logs},
+        utils::{geom_transformation::Isometry, test_helper::helper::check_logs},
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::{Point3, Vector3};
@@ -27,7 +27,7 @@ pub mod test_helper {
     pub fn test_inverted<T: Default + OpticNode>() -> OpmResult<()> {
         let mut node = T::default();
         node.set_inverted(true)?;
-        assert_eq!(node.inverted(), true);
+        assert!(node.inverted());
         Ok(())
     }
     pub fn test_set_aperture<T: Default + OpticNode>(

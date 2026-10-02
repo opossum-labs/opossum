@@ -1,6 +1,5 @@
 #![warn(missing_docs)]
 //! Module for handling optical rays
-use core::f64;
 use std::{f64::consts::PI, fmt::Display};
 
 use approx::relative_ne;
@@ -865,7 +864,6 @@ mod test {
         percent,
     };
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_relative_eq, relative_eq};
-    use core::f64;
     use itertools::izip;
     use std::path::PathBuf;
     use uom::si::{energy::joule, length::millimeter};
@@ -1490,7 +1488,7 @@ mod test {
         ray.propagate(millimeter!(2.))?;
         let norm_dir = dir.normalize();
         let pos_hist_comp = MatrixXx3::from_vec(
-            vec![
+            [
                 0.,
                 0.,
                 0.,

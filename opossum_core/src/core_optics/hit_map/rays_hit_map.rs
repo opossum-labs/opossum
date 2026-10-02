@@ -20,7 +20,6 @@ use crate::{
     },
 };
 use approx::relative_eq;
-use core::f64;
 use itertools::Itertools;
 use libm::modf;
 use log::warn;
@@ -992,7 +991,6 @@ mod test_hitpoint {
         error::OpmResult,
         joule, meter,
     };
-    use core::f64;
     #[test]
     fn new_fluence_hit_point() {
         assert!(FluenceHitPoint::new(meter!(1.0, 1.0, 1.0), J_per_cm2!(f64::NAN)).is_err());

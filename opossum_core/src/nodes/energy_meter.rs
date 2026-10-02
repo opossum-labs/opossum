@@ -242,7 +242,7 @@ mod test {
         core_optics::{PortType, node_attr::NodePositioning},
         light::{LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer,
-        nodes::test_helper::test_helper::*,
+        nodes::test_helper::helper::*,
         utils::geom_transformation::Isometry,
     };
 

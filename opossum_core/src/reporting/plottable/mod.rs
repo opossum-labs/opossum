@@ -2535,7 +2535,7 @@ pub enum PlotArgs {
 
 #[cfg(test)]
 mod test {
-    use crate::utils::test_helper::test_helper::check_logs;
+    use crate::utils::test_helper::helper::check_logs;
 
     use super::*;
     use approx::{assert_relative_eq, relative_eq};
@@ -2804,20 +2804,20 @@ mod test {
     fn empty_plot_params() {
         let plt_params = PlotParameters::empty();
 
-        assert_eq!(plt_params.get_backend().is_err(), true);
-        assert_eq!(plt_params.get_x_label().is_err(), true);
-        assert_eq!(plt_params.get_x_label_pos().is_err(), true);
-        assert_eq!(plt_params.get_y_label().is_err(), true);
-        assert_eq!(plt_params.get_y_label_pos().is_err(), true);
-        assert_eq!(plt_params.get_cbar_label().is_err(), true);
-        assert_eq!(plt_params.get_cbar_label_pos().is_err(), true);
-        assert_eq!(plt_params.get_xlim().is_err(), true);
-        assert_eq!(plt_params.get_ylim().is_err(), true);
-        assert_eq!(plt_params.get_zlim().is_err(), true);
-        assert_eq!(plt_params.get_fdir().is_err(), true);
-        assert_eq!(plt_params.get_fname().is_err(), true);
-        assert_eq!(plt_params.get_cmap().is_err(), true);
-        assert_eq!(plt_params.get_plotsize().is_err(), true);
+        assert!(plt_params.get_backend().is_err());
+        assert!(plt_params.get_x_label().is_err());
+        assert!(plt_params.get_x_label_pos().is_err());
+        assert!(plt_params.get_y_label().is_err());
+        assert!(plt_params.get_y_label_pos().is_err());
+        assert!(plt_params.get_cbar_label().is_err());
+        assert!(plt_params.get_cbar_label_pos().is_err());
+        assert!(plt_params.get_xlim().is_err());
+        assert!(plt_params.get_ylim().is_err());
+        assert!(plt_params.get_zlim().is_err());
+        assert!(plt_params.get_fdir().is_err());
+        assert!(plt_params.get_fname().is_err());
+        assert!(plt_params.get_cmap().is_err());
+        assert!(plt_params.get_plotsize().is_err());
     }
     #[test]
     fn default_plot_params() -> OpmResult<()> {
@@ -2839,7 +2839,7 @@ mod test {
         assert_eq!(plt_params.get_fdir()?, current_dir().unwrap());
         assert_eq!(
             plt_params.get_fname()?,
-            format!("opossum_default_plot_0.png")
+            "opossum_default_plot_0.png".to_string()
         );
         assert_eq!(plt_params.get_plotsize()?, (800, 800));
         Ok(())
@@ -2862,7 +2862,7 @@ mod test {
         let mut plt_params = PlotParameters::default();
         assert!(
             plt_params
-                .set(&&PlotArgs::FName("test.invalidfileext".to_owned()))
+                .set(&PlotArgs::FName("test.invalidfileext".to_owned()))
                 .is_err()
         );
     }
@@ -3158,11 +3158,11 @@ mod test {
         let plot = Plot::new(&vec![plt_series_dim2], &plt_params)?;
         assert!(plot.get_plot_series_vec().is_some());
 
-        if let Some(vec) = plot.get_plot_series_vec() {
-            if let PlotData::Dim2 { xy_data } = vec[0].get_plot_series_data() {
-                assert!((xy_data[(0, 0)] - 0.).abs() < f64::EPSILON);
-                assert!((xy_data[(0, 1)] - 3.).abs() < f64::EPSILON)
-            }
+        if let Some(vec) = plot.get_plot_series_vec()
+            && let PlotData::Dim2 { xy_data } = vec[0].get_plot_series_data()
+        {
+            assert!((xy_data[(0, 0)] - 0.).abs() < f64::EPSILON);
+            assert!((xy_data[(0, 1)] - 3.).abs() < f64::EPSILON)
         }
         Ok(())
     }
@@ -3347,7 +3347,7 @@ mod test {
             vec!["No plot series defined! Cannot define axes bounds!"],
         );
         let mut plot = Plot::new(&vec![plt_series_dim2], &PlotParameters::default())?;
-        let _ = plot.define_axes_bounds();
+        plot.define_axes_bounds();
         assert_relative_eq!(plot.bounds.x.unwrap().min, -0.1);
         assert_relative_eq!(plot.bounds.x.unwrap().max, 2.1);
         assert_relative_eq!(plot.bounds.y.unwrap().min, -0.1);
@@ -3355,7 +3355,7 @@ mod test {
         assert!(plot.bounds.z.is_none());
 
         let mut plot = Plot::new(&vec![plt_series_dim3], &PlotParameters::default())?;
-        let _ = plot.define_axes_bounds();
+        plot.define_axes_bounds();
         assert_relative_eq!(plot.bounds.x.unwrap().min, -0.1);
         assert_relative_eq!(plot.bounds.x.unwrap().max, 2.1);
         assert_relative_eq!(plot.bounds.y.unwrap().min, -0.1);
@@ -3364,7 +3364,7 @@ mod test {
         assert_relative_eq!(plot.bounds.z.unwrap().max, 4.1);
 
         let mut plot = Plot::new(&vec![plt_series_colormesh], &PlotParameters::default())?;
-        let _ = plot.define_axes_bounds();
+        plot.define_axes_bounds();
         assert_relative_eq!(plot.bounds.x.unwrap().min, -0.1);
         assert_relative_eq!(plot.bounds.x.unwrap().max, 2.1);
         assert_relative_eq!(plot.bounds.y.unwrap().min, -0.1);
@@ -3373,7 +3373,7 @@ mod test {
         assert_relative_eq!(plot.bounds.z.unwrap().max, 4.2);
 
         let mut plot = Plot::new(&vec![plt_series_surf_triangle], &PlotParameters::default())?;
-        let _ = plot.define_axes_bounds();
+        plot.define_axes_bounds();
         assert_relative_eq!(plot.bounds.x.unwrap().min, -0.1);
         assert_relative_eq!(plot.bounds.x.unwrap().max, 2.1);
         assert_relative_eq!(plot.bounds.y.unwrap().min, -0.1);

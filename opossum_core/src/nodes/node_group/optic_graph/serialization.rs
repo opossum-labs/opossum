@@ -206,7 +206,7 @@ impl OpticGraph {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{nodes::Dummy, prelude::PortType, utils::test_helper::test_helper::check_logs};
+    use crate::{nodes::Dummy, prelude::PortType, utils::test_helper::helper::check_logs};
 
     /// Regression test for issue #1144: an entry in the node list that isn't even shaped like a node
     /// (and therefore can't be identified via `NodeIdentity` either) must still be skipped with a

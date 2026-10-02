@@ -235,7 +235,7 @@ mod test {
         joule,
         light::{LightData, LightResult, Rays},
         millimeter, nanometer,
-        nodes::test_helper::test_helper::*,
+        nodes::test_helper::helper::*,
         properties::{Proptype, proptype::AssetRef},
     };
     use approx::assert_relative_eq;

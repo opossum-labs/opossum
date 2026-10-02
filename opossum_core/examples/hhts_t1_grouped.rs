@@ -65,7 +65,7 @@ fn main() -> OpmResult<()> {
         millimeter!(5.77736),
         &refr_index_hzf52,
     )?;
-    node.set_coating(&PortType::Input, "input_1", &ar_coating)?;
+    node.set_coating(&PortType::Input, "input_1", ar_coating)?;
     node.set_lidt(&PortType::Input, "input_1", J_per_cm2!(0.1))?;
     node.set_lidt(&PortType::Output, "output_1", J_per_cm2!(0.1))?;
     node.set_aperture(&PortType::Input, "input_1", &a_2inch)?;
@@ -78,7 +78,7 @@ fn main() -> OpmResult<()> {
         millimeter!(14.0),
         &refr_index_hzf52,
     )?;
-    node.set_coating(&PortType::Input, "input_1", &ar_coating)?;
+    node.set_coating(&PortType::Input, "input_1", ar_coating)?;
     node.set_lidt(&PortType::Input, "input_1", J_per_cm2!(0.1))?;
     node.set_lidt(&PortType::Output, "output_1", J_per_cm2!(0.1))?;
     node.set_aperture(&PortType::Input, "input_1", &a_2inch)?;
@@ -90,7 +90,7 @@ fn main() -> OpmResult<()> {
         millimeter!(7.68327),
         &refr_index_hzf2,
     )?;
-    node.set_coating(&PortType::Input, "input_1", &ar_coating)?;
+    node.set_coating(&PortType::Input, "input_1", ar_coating)?;
     node.set_lidt(&PortType::Input, "input_1", J_per_cm2!(0.1))?;
     node.set_lidt(&PortType::Output, "output_1", J_per_cm2!(0.1))?;
     node.set_aperture(&PortType::Input, "input_1", &a_2inch)?;

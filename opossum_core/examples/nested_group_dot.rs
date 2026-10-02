@@ -29,7 +29,7 @@ fn main() -> OpmResult<()> {
         nanometer!(1.0),
     )?);
     let mut config = EnergyConfig::default();
-    config.map_source(i_s, energy_data_builder.into());
+    config.map_source(i_s, energy_data_builder);
     doc.add_analyzer(AnalyzerType::Energy(config));
     doc.save_to_file(Path::new("./opossum_core/playground/nested_group_dot.opm"))
 }
