@@ -112,30 +112,26 @@ pub fn remove_port_map_cascade(
     let mut cur_name = external_port_name.to_string();
 
     loop {
-        let (internal_node_id, _internal_port_name) =
-            match scenery.with_group_node_mut(cur_group, |g| {
+        let (internal_node_id, _internal_port_name) = if let Some(((id, name), delta)) =
+            scenery.with_group_node_mut(cur_group, |g| {
                 let hit = g.graph().port_map(&port_type).get(&cur_name).cloned();
-                if hit.is_some() {
+                if let Some(hit) = hit {
                     let delta = g.remove_mapped_port(&cur_name, port_type)?;
-                    Ok::<_, OpossumError>(Some((hit.unwrap(), delta)))
+                    Ok::<_, OpossumError>(Some((hit, delta)))
                 } else {
                     Ok(None)
                 }
             })?? {
-                Some(((id, name), delta)) => {
-                    port_deltas.push(delta);
-                    (id, name)
-                }
-                None => {
-                    if levels.is_empty() {
-                        return Ok(None);
-                    }
-                    return Err(OpossumError::Other(
-                        "chained port mapping vanished mid-cascade".into(),
-                    ));
-                }
-            };
-
+            port_deltas.push(delta);
+            (id, name)
+        } else {
+            if levels.is_empty() {
+                return Ok(None);
+            }
+            return Err(OpossumError::Other(
+                "chained port mapping vanished mid-cascade".into(),
+            ));
+        };
         let root_id = scenery.node_attr().uuid();
         if cur_group == root_id {
             levels.push(RemovedPortMapLevel {

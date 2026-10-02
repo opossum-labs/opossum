@@ -865,7 +865,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/paste_nodes")
-            .set_json(&(root_id, (500.0, 500.0)))
+            .set_json((root_id, (500.0, 500.0)))
             .to_request();
         assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
 
@@ -976,7 +976,7 @@ mod test {
         // the root scenery.
         let req = test::TestRequest::post()
             .uri("/paste_nodes")
-            .set_json(&(root_id, (500.0, 500.0)))
+            .set_json((root_id, (500.0, 500.0)))
             .to_request();
         assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
 
@@ -1097,7 +1097,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/paste_nodes")
-            .set_json(&(root_id, (500.0, 500.0)))
+            .set_json((root_id, (500.0, 500.0)))
             .to_request();
         assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
 
@@ -1247,7 +1247,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/paste_nodes")
-            .set_json(&(root_id, (500.0, 500.0)))
+            .set_json((root_id, (500.0, 500.0)))
             .to_request();
         let resp = app.call(req).await.unwrap();
         assert_eq!(
@@ -1328,7 +1328,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/paste_nodes")
-            .set_json(&(g_id, (0.0, 0.0)))
+            .set_json((g_id, (0.0, 0.0)))
             .to_request();
         assert_eq!(
             app.call(req).await.unwrap().status(),
@@ -1389,7 +1389,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/paste_nodes")
-            .set_json(&(g2_id, (0.0, 0.0)))
+            .set_json((g2_id, (0.0, 0.0)))
             .to_request();
         assert_eq!(
             app.call(req).await.unwrap().status(),
@@ -1439,7 +1439,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/paste_nodes")
-            .set_json(&(dest_id, (0.0, 0.0)))
+            .set_json((dest_id, (0.0, 0.0)))
             .to_request();
         assert_eq!(
             app.call(req).await.unwrap().status(),
@@ -1495,7 +1495,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/paste_nodes")
-            .set_json(&(root_id, (500.0, 500.0)))
+            .set_json((root_id, (500.0, 500.0)))
             .to_request();
         let resp = app.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
@@ -1581,7 +1581,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/paste_nodes")
-            .set_json(&(root_id, (500.0, 500.0)))
+            .set_json((root_id, (500.0, 500.0)))
             .to_request();
         let resp = app.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);

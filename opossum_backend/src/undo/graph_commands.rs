@@ -329,10 +329,8 @@ pub(super) fn jump_target_for_graph_delta(
         }
         GraphDelta::NodesConnected { group_id, .. }
         | GraphDelta::NodesDisconnected { group_id, .. }
-        | GraphDelta::ConnectionDistanceChanged { group_id, .. } => {
-            Some(JumpTarget::new_from_graph_id(*group_id))
-        }
-        GraphDelta::PortMapped(RemovedPortMapping { group_id, .. })
+        | GraphDelta::ConnectionDistanceChanged { group_id, .. }
+        | GraphDelta::PortMapped(RemovedPortMapping { group_id, .. })
         | GraphDelta::PortUnmapped(RemovedPortMapping { group_id, .. }) => {
             Some(JumpTarget::new_from_graph_id(*group_id))
         }

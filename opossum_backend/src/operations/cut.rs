@@ -427,7 +427,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/cut_nodes")
-            .set_json(&(root_id, (500.0, 500.0)))
+            .set_json((root_id, (500.0, 500.0)))
             .to_request();
         assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
 
@@ -549,7 +549,7 @@ mod test {
         // Cut A out of the group and into the root scenery.
         let req = test::TestRequest::post()
             .uri("/cut_nodes")
-            .set_json(&(root_id, (500.0, 500.0)))
+            .set_json((root_id, (500.0, 500.0)))
             .to_request();
         assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
 
@@ -692,7 +692,7 @@ mod test {
         // Cut B out of the group into the root. Before the fix this 400'd; it must now succeed.
         let req = test::TestRequest::post()
             .uri("/cut_nodes")
-            .set_json(&(root_id, (500.0, 500.0)))
+            .set_json((root_id, (500.0, 500.0)))
             .to_request();
         assert_eq!(
             app.call(req).await.unwrap().status(),
@@ -874,7 +874,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/cut_nodes")
-            .set_json(&(root_id, (500.0, 500.0)))
+            .set_json((root_id, (500.0, 500.0)))
             .to_request();
         assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
 
@@ -958,7 +958,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/cut_nodes")
-            .set_json(&(root_id, (500.0, 500.0)))
+            .set_json((root_id, (500.0, 500.0)))
             .to_request();
         assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
 
@@ -1103,7 +1103,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/cut_nodes")
-            .set_json(&(group_id, (50.0, 50.0)))
+            .set_json((group_id, (50.0, 50.0)))
             .to_request();
         assert_eq!(
             app.call(req).await.unwrap().status(),
@@ -1178,7 +1178,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/cut_nodes")
-            .set_json(&(g_id, (50.0, 50.0)))
+            .set_json((g_id, (50.0, 50.0)))
             .to_request();
         assert_eq!(
             app.call(req).await.unwrap().status(),
@@ -1238,7 +1238,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/cut_nodes")
-            .set_json(&(g2_id, (50.0, 50.0)))
+            .set_json((g2_id, (50.0, 50.0)))
             .to_request();
         assert_eq!(
             app.call(req).await.unwrap().status(),
@@ -1288,7 +1288,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/cut_nodes")
-            .set_json(&(dest_id, (50.0, 50.0)))
+            .set_json((dest_id, (50.0, 50.0)))
             .to_request();
         assert_eq!(
             app.call(req).await.unwrap().status(),

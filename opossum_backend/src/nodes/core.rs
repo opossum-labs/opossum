@@ -567,6 +567,135 @@ pub async fn get_node_hierarchy(
 
     Ok(Json(group_hierarchy))
 }
+/// Drops the entries of nodes that no longer exist from every [`PumpScenario`], returning the
+/// `PatchPumpScenario` inverse commands that restore each scenario that actually changed.
+///
+/// A pump scenario names its amplifying nodes by uuid and lives beside the model rather than inside
+/// it, so deleting a node has to be followed through here - otherwise the operating point keeps an
+/// entry that belongs to nothing, and the next analysis run would look for a component that is gone.
+/// Folding the inverses into the delete's undo batch is what keeps the deletion reversible.
+///
+/// Unlike the analyzer mappings this is not driven by the list of just-deleted uuids: the document
+/// prunes against its own model, which after a deletion means exactly those uuids - and heals any
+/// entry that an earlier code path might have left behind.
+///
+/// # Arguments
+///
+/// - `document`: the live document whose scenarios are pruned in place.
+///
+/// # Returns
+///
+/// One `Command::PatchPumpScenario` per scenario whose entries actually changed; empty if none did.
+#[allow(clippy::needless_collect)]
+fn prune_pump_scenario_entries(document: &mut OpmDocument) -> Vec<Command> {
+    let before: Vec<(Uuid, PumpScenario)> = document
+        .pump_scenarios()
+        .iter()
+        .map(|(id, scenario)| (*id, scenario.clone()))
+        .collect();
+    document.prune_pump_scenarios();
+    before
+        .into_iter()
+        .filter_map(|(id, old)| {
+            let pruned = document.pump_scenario(id)?;
+            (*pruned != old).then(|| {
+                Command::PatchPumpScenario(PatchPumpScenario {
+                    id,
+                    old: pruned.clone(),
+                    new: old,
+                })
+            })
+        })
+        .collect()
+}
+/// Drops the entries of nodes that no longer exist from the amplifier-candidate set, returning the
+/// `PatchAmplifierNodes` inverse command that restores it if it actually changed.
+///
+/// Mirrors [`prune_pump_scenario_entries`] exactly: the candidate set names nodes by uuid and lives
+/// beside the model rather than inside it, so deleting a node has to be followed through here too -
+/// folding the inverse into the delete's undo batch is what keeps the deletion reversible.
+///
+/// # Arguments
+///
+/// - `document`: the live document whose candidate set is pruned in place.
+///
+/// # Returns
+///
+/// A `Command::PatchAmplifierNodes` if the set actually changed; `None` if pruning found nothing to
+/// drop.
+fn prune_amplifier_node_entries(document: &mut OpmDocument) -> Option<Command> {
+    let before = document.amplifier_nodes().clone();
+    document.prune_amplifier_nodes();
+    let after = document.amplifier_nodes().clone();
+    (after != before).then(|| {
+        Command::PatchAmplifierNodes(PatchAmplifierNodes {
+            old: after,
+            new: before,
+        })
+    })
+}
+
+/// Removes the source mappings of every just-deleted node from all analyzers (deleting a `"source port"`
+/// node must strip it from each analyzer's source map), returning the `PatchAnalyzer` inverse commands
+/// that restore each changed analyzer's mapping on undo. Each returned command's own inverse re-prunes on
+/// redo, so folding these into the delete's undo batch keeps the whole cascade reversible.
+///
+/// # Arguments
+///
+/// - `document`: the live document whose analyzers are pruned in place.
+/// - `deleted_nodes`: the uuids that `delete_node` just removed (target plus any cascaded reference nodes).
+///
+/// # Returns
+///
+/// One `Command::PatchAnalyzer` per analyzer whose config actually changed; empty if none did.
+fn prune_analyzer_source_mappings(
+    document: &mut OpmDocument,
+    deleted_nodes: &[Uuid],
+) -> Vec<Command> {
+    // Snapshot each analyzer's config *before* pruning (indexed by id for lookup afterward), so undo can
+    // restore whatever the prune below removes.
+    let old_analyzer_types: HashMap<Uuid, AnalyzerType> = document
+        .analyzers()
+        .iter()
+        .map(|(id, info)| (*id, info.analyzer_type().clone()))
+        .collect();
+
+    for deleted_uuid in deleted_nodes {
+        let analyzer_keys: Vec<Uuid> = document.analyzers().keys().copied().collect();
+        for az_uuid in analyzer_keys {
+            if let Some(analyzer_info) = document.analyzer_mut(az_uuid) {
+                let mut a_type = analyzer_info.analyzer_type().clone();
+                match &mut a_type {
+                    AnalyzerType::Energy(cfg) => {
+                        let _ = cfg.remove_source(deleted_uuid);
+                    }
+                    AnalyzerType::RayTrace(cfg) => {
+                        let _ = cfg.remove_source(deleted_uuid);
+                    }
+                    AnalyzerType::GhostFocus(cfg) => {
+                        let _ = cfg.remove_source(deleted_uuid);
+                    }
+                }
+                analyzer_info.set_analyzer_type(&a_type);
+            }
+        }
+    }
+
+    let mut inverses = Vec::new();
+    for (az_uuid, old_type) in &old_analyzer_types {
+        if let Ok(info) = document.analyzer(*az_uuid) {
+            let new_type = info.analyzer_type().clone();
+            if new_type != *old_type {
+                inverses.push(Command::PatchAnalyzer(Box::new(PatchAnalyzer {
+                    id: *az_uuid,
+                    old: new_type,
+                    new: old_type.clone(),
+                })));
+            }
+        }
+    }
+    inverses
+}
 
 #[cfg(test)]
 mod test {
@@ -1220,7 +1349,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/delete")
-            .set_json(&vec![node_b, node_c])
+            .set_json(vec![node_b, node_c])
             .to_request();
         let resp = app.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
@@ -1291,7 +1420,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/delete")
-            .set_json(&vec![node_id, analyzer_id])
+            .set_json(vec![node_id, analyzer_id])
             .to_request();
         let resp = app.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
@@ -1521,7 +1650,7 @@ mod test {
         // Add a reference to A - its name is `ref (<A's name>)`.
         let req = test::TestRequest::post()
             .uri(&format!("/{root_id}/references"))
-            .set_json(&NewRefNode::new(node_a, (10.0, 20.0)))
+            .set_json(NewRefNode::new(node_a, (10.0, 20.0)))
             .to_request();
         let resp = app.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::CREATED);
@@ -1602,7 +1731,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri(&format!("/{root_id}/references"))
-            .set_json(&NewRefNode::new(target_id, (10.0, 20.0)))
+            .set_json(NewRefNode::new(target_id, (10.0, 20.0)))
             .to_request();
         let resp = app.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::CREATED);
@@ -1673,7 +1802,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri(&format!("/{group_id}/references"))
-            .set_json(&NewRefNode::new(group_id, (0.0, 0.0)))
+            .set_json(NewRefNode::new(group_id, (0.0, 0.0)))
             .to_request();
         let resp = app.call(req).await.unwrap();
         assert_eq!(
@@ -1710,7 +1839,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri(&format!("/{g2_id}/references"))
-            .set_json(&NewRefNode::new(g1_id, (0.0, 0.0)))
+            .set_json(NewRefNode::new(g1_id, (0.0, 0.0)))
             .to_request();
         let resp = app.call(req).await.unwrap();
         assert_eq!(
@@ -1746,7 +1875,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri(&format!("/{root_id}/references"))
-            .set_json(&NewRefNode::new(g1_id, (0.0, 0.0)))
+            .set_json(NewRefNode::new(g1_id, (0.0, 0.0)))
             .to_request();
         let resp = app.call(req).await.unwrap();
         assert_eq!(
@@ -1865,7 +1994,7 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri(&format!("/{root_id}/children"))
-            .set_json(&NewNode::new("source port".to_string(), (0.0, 0.0)))
+            .set_json(NewNode::new("source port".to_string(), (0.0, 0.0)))
             .to_request();
         let resp = app.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::CREATED);
@@ -2016,7 +2145,7 @@ mod test {
         // Create the source port (post_children injects it into the analyzer).
         let req = test::TestRequest::post()
             .uri(&format!("/{root_id}/children"))
-            .set_json(&NewNode::new("source port".to_string(), (0.0, 0.0)))
+            .set_json(NewNode::new("source port".to_string(), (0.0, 0.0)))
             .to_request();
         let resp = app.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::CREATED);
@@ -2064,135 +2193,4 @@ mod test {
         );
         assert_eq!(sources[0].uuid, src_uuid);
     }
-}
-
-/// Drops the entries of nodes that no longer exist from every [`PumpScenario`], returning the
-/// `PatchPumpScenario` inverse commands that restore each scenario that actually changed.
-///
-/// A pump scenario names its amplifying nodes by uuid and lives beside the model rather than inside
-/// it, so deleting a node has to be followed through here - otherwise the operating point keeps an
-/// entry that belongs to nothing, and the next analysis run would look for a component that is gone.
-/// Folding the inverses into the delete's undo batch is what keeps the deletion reversible.
-///
-/// Unlike the analyzer mappings this is not driven by the list of just-deleted uuids: the document
-/// prunes against its own model, which after a deletion means exactly those uuids - and heals any
-/// entry that an earlier code path might have left behind.
-///
-/// # Arguments
-///
-/// - `document`: the live document whose scenarios are pruned in place.
-///
-/// # Returns
-///
-/// One `Command::PatchPumpScenario` per scenario whose entries actually changed; empty if none did.
-#[allow(clippy::needless_collect)]
-fn prune_pump_scenario_entries(document: &mut OpmDocument) -> Vec<Command> {
-    let before: Vec<(Uuid, PumpScenario)> = document
-        .pump_scenarios()
-        .iter()
-        .map(|(id, scenario)| (*id, scenario.clone()))
-        .collect();
-    document.prune_pump_scenarios();
-    before
-        .into_iter()
-        .filter_map(|(id, old)| {
-            let pruned = document.pump_scenario(id)?;
-            (*pruned != old).then(|| {
-                Command::PatchPumpScenario(PatchPumpScenario {
-                    id,
-                    old: pruned.clone(),
-                    new: old,
-                })
-            })
-        })
-        .collect()
-}
-
-/// Drops the entries of nodes that no longer exist from the amplifier-candidate set, returning the
-/// `PatchAmplifierNodes` inverse command that restores it if it actually changed.
-///
-/// Mirrors [`prune_pump_scenario_entries`] exactly: the candidate set names nodes by uuid and lives
-/// beside the model rather than inside it, so deleting a node has to be followed through here too -
-/// folding the inverse into the delete's undo batch is what keeps the deletion reversible.
-///
-/// # Arguments
-///
-/// - `document`: the live document whose candidate set is pruned in place.
-///
-/// # Returns
-///
-/// A `Command::PatchAmplifierNodes` if the set actually changed; `None` if pruning found nothing to
-/// drop.
-fn prune_amplifier_node_entries(document: &mut OpmDocument) -> Option<Command> {
-    let before = document.amplifier_nodes().clone();
-    document.prune_amplifier_nodes();
-    let after = document.amplifier_nodes().clone();
-    (after != before).then(|| {
-        Command::PatchAmplifierNodes(PatchAmplifierNodes {
-            old: after,
-            new: before,
-        })
-    })
-}
-
-/// Removes the source mappings of every just-deleted node from all analyzers (deleting a `"source port"`
-/// node must strip it from each analyzer's source map), returning the `PatchAnalyzer` inverse commands
-/// that restore each changed analyzer's mapping on undo. Each returned command's own inverse re-prunes on
-/// redo, so folding these into the delete's undo batch keeps the whole cascade reversible.
-///
-/// # Arguments
-///
-/// - `document`: the live document whose analyzers are pruned in place.
-/// - `deleted_nodes`: the uuids that `delete_node` just removed (target plus any cascaded reference nodes).
-///
-/// # Returns
-///
-/// One `Command::PatchAnalyzer` per analyzer whose config actually changed; empty if none did.
-fn prune_analyzer_source_mappings(
-    document: &mut OpmDocument,
-    deleted_nodes: &[Uuid],
-) -> Vec<Command> {
-    // Snapshot each analyzer's config *before* pruning (indexed by id for lookup afterward), so undo can
-    // restore whatever the prune below removes.
-    let old_analyzer_types: HashMap<Uuid, AnalyzerType> = document
-        .analyzers()
-        .iter()
-        .map(|(id, info)| (*id, info.analyzer_type().clone()))
-        .collect();
-
-    for deleted_uuid in deleted_nodes {
-        let analyzer_keys: Vec<Uuid> = document.analyzers().keys().copied().collect();
-        for az_uuid in analyzer_keys {
-            if let Some(analyzer_info) = document.analyzer_mut(az_uuid) {
-                let mut a_type = analyzer_info.analyzer_type().clone();
-                match &mut a_type {
-                    AnalyzerType::Energy(cfg) => {
-                        let _ = cfg.remove_source(deleted_uuid);
-                    }
-                    AnalyzerType::RayTrace(cfg) => {
-                        let _ = cfg.remove_source(deleted_uuid);
-                    }
-                    AnalyzerType::GhostFocus(cfg) => {
-                        let _ = cfg.remove_source(deleted_uuid);
-                    }
-                }
-                analyzer_info.set_analyzer_type(&a_type);
-            }
-        }
-    }
-
-    let mut inverses = Vec::new();
-    for (az_uuid, old_type) in &old_analyzer_types {
-        if let Ok(info) = document.analyzer(*az_uuid) {
-            let new_type = info.analyzer_type().clone();
-            if new_type != *old_type {
-                inverses.push(Command::PatchAnalyzer(Box::new(PatchAnalyzer {
-                    id: *az_uuid,
-                    old: new_type,
-                    new: old_type.clone(),
-                })));
-            }
-        }
-    }
-    inverses
 }

@@ -1201,7 +1201,7 @@ mod test {
 
         let req = test::TestRequest::patch()
             .uri("/positions")
-            .set_json(&vec![PositionUpdate {
+            .set_json(vec![PositionUpdate {
                 uuid: node_id,
                 is_optical: true,
                 gui_position: (123.0, 456.0),
