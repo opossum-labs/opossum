@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use actix_web::{
     post,
@@ -21,31 +21,22 @@ use crate::{
     app_state::{AppState, NodeCacheItem},
     error::BackEndErrorResponse,
     helper_functions::{
-        build_connect_info, capture_node_connections, map_port, parent_group_id_or_self,
-        validate_relocated_references,
+        build_connect_info, map_port, parent_group_id_or_self, validate_relocated_references,
     },
-    undo::{CascadedNode, Command, NodeSnapshot, PatchAmplifierNodes, PatchPumpScenario},
+    undo::{Command, PatchAmplifierNodes, PatchPumpScenario},
 };
 
 /// The pasted-in node/connection info [`insert_copied_nodes`] hands back to [`post_paste_nodes`].
 struct PastedNodes {
     grouped_node_infos: HashMap<Uuid, Vec<NodeInfo>>,
     grouped_connect_info: HashMap<Uuid, Vec<ConnectInfo>>,
-    /// Maps each copied node's original uuid to the fresh one its paste got, for state that lives
-    /// outside `NodeAttr` and so isn't carried along by the generic node-attribute copy - see
-    /// [`propagate_amplifier_state`].
+    /// Maps each copied node's original uuid to the fresh one its paste got.
     node_id_link: HashMap<Uuid, Uuid>,
 }
 
 /// Copies `copied_optical_nodes` into `paste_group_id` (recursively, preserving group structure),
 /// replays their port maps and reference targets, and reconnects their captured internal connections
-/// through the fresh uuids - the whole "materialize a paste" phase of [`post_paste_nodes`], shared
-/// between a plain paste and the paste half of a cut+paste.
-///
-/// # Errors
-///
-/// Returns an error if the recursive copy, reference resolution, port-map replay, or connection replay
-/// step fails.
+/// through the fresh uuids.
 fn insert_copied_nodes(
     scenery: &mut NodeGroup,
     paste_group_id: Uuid,
@@ -137,189 +128,8 @@ fn partition_cache(
     (optical, analyzer)
 }
 
-/// Captures `node_id`'s connections in `parent_group_id`, splitting off any whose *other* endpoint is
-/// also in `sibling_set` as "mutual" - deduped via `seen_mutual` (keyed by
-/// `(src_uuid, src_port, target_uuid, target_port)`) so a connection reachable from both of its
-/// endpoints is only reported once. Own (non-mutual) connections are meant for the node's own
-/// `AddNode`/`RemoveNode` snapshot; mutual ones must instead go through a separate `AddEdge`/`RemoveEdge`
-/// command placed outside the sibling nodes' own commands in the same batch - `Command::Batch` applies
-/// (and reverses, see its `apply` impl) its commands in a fixed order, so a connection folded into one
-/// sibling's own snapshot could be replayed before its other endpoint exists again.
-fn capture_and_split_mutual_connections(
-    scenery: &NodeGroup,
-    parent_group_id: Uuid,
-    node_id: Uuid,
-    sibling_set: &HashSet<Uuid>,
-    seen_mutual: &mut HashSet<(Uuid, String, Uuid, String)>,
-) -> (Vec<ConnectInfo>, Vec<ConnectInfo>) {
-    let all_connections =
-        capture_node_connections(scenery, parent_group_id, node_id).unwrap_or_default();
-    let (mutual, own): (Vec<_>, Vec<_>) = all_connections.into_iter().partition(|c| {
-        sibling_set.contains(&c.src_uuid()) && sibling_set.contains(&c.target_uuid())
-    });
-    let mutual = mutual
-        .into_iter()
-        .filter(|c| {
-            let key = (
-                c.src_uuid(),
-                c.src_port().to_string(),
-                c.target_uuid(),
-                c.target_port().to_string(),
-            );
-            seen_mutual.insert(key)
-        })
-        .collect();
-    (own, mutual)
-}
-
-/// Finds, among `top_level_ids`, which ones are `NodeReference`s pointing at *another* member of
-/// `top_level_ids`, and returns them grouped by their target's uuid as [`CascadedNode`]s.
-///
-/// Mirrors `nodes/core.rs`'s `capture_cascade`: `NodeGroup::delete_node` cascades a target's removal to
-/// every reference node anywhere in the document that points at it (recursively, across nested groups -
-/// see `OpticGraph::delete_node`'s doc comment), so a reference pasted alongside its own target must not
-/// also get its own independent `RemoveNode` in the same batch - by the time that ran, the target's own
-/// `RemoveNode` may already have cascaded the reference away, 400ing with "node with given uuid does not
-/// exist" (order-dependent on `grouped_node_infos`' iteration order, so it doesn't always reproduce).
-/// Folding it into the target's own `NodeSnapshot.cascaded` instead makes the target's `RemoveNode`/
-/// `AddNode` pair remove/restore both together, order-independently. Only *top-level* siblings are
-/// considered - a reference nested inside a pasted group pointing at a top-level sibling is a rarer,
-/// differently-shaped edge case (silent data loss via shared-`Arc` semantics, not a 400) that this pass
-/// doesn't cover.
-fn cascaded_references(
-    document: &OpmDocument,
-    paste_group_id: Uuid,
-    top_level_ids: &HashSet<Uuid>,
-) -> HashMap<Uuid, Vec<CascadedNode>> {
-    let mut by_target = HashMap::<Uuid, Vec<CascadedNode>>::new();
-    let root_id = document.scenery().node_attr().uuid();
-    for target_id in top_level_ids {
-        let Ok(referring) = document
-            .scenery()
-            .graph()
-            .find_all_nodes_referring_to_uuid(*target_id, root_id)
-        else {
-            continue;
-        };
-        for ref_id in referring.values().flatten() {
-            if ref_id == target_id || !top_level_ids.contains(ref_id) {
-                continue;
-            }
-            if let Ok((node, _)) = document.scenery().node_recursive(*ref_id) {
-                by_target.entry(*target_id).or_default().push(CascadedNode {
-                    parent_group_id: paste_group_id,
-                    node,
-                    // A top-level pasted node's own wiring is already fully captured by the
-                    // mutual-`RemoveEdge`/`AddEdge` mechanism above, so it must not be captured
-                    // again here too.
-                    connections: Vec::new(),
-                });
-            }
-        }
-    }
-    by_target
-}
-
-/// Builds the "undo the whole paste" batch for [`post_paste_nodes`]: one `RemoveNode` per *top-level*
-/// pasted node, one `RemoveAnalyzer` per pasted analyzer, plus a leading `RemoveEdge` for every mutual
-/// connection between two top-level pasted nodes.
-///
-/// Only the *top-level* pasted roots need their own `RemoveNode` - a group's own `OpticRef` already
-/// carries its entire internal subtree (nodes and internal edges) as one live object, so removing it via
-/// a single `RemoveNode` already correctly captures/restores everything inside it. Giving a nested
-/// descendant (an entry under any *other* key of `grouped_node_infos` - a freshly-created nested group's
-/// own uuid) its own separate `RemoveNode` too is not just redundant but harmful: `Command::Batch`
-/// applies its commands in `Vec` order, itself derived from this map's non-deterministic iteration
-/// order, so a nested entry can end up targeting a uuid its own ancestor's `RemoveNode` already cascaded
-/// away (surfacing as "node with given uuid does not exist" on undo), or mutate the group's live
-/// internal graph directly *before* the group's own command runs, silently severing an internal
-/// connection that nothing later restores (a nested `AddNode` always passes an empty `connections` list,
-/// so redo can't reconnect what this already tore down). The same is true of a top-level pasted
-/// `NodeReference` targeting another top-level pasted node - see [`cascaded_references`] - so those are
-/// folded into their target's own `RemoveNode` instead of getting one of their own.
-///
-/// A freshly pasted node's only connections are to other nodes pasted in the same gesture
-/// (`insert_copied_nodes` only ever recreates connections between copied nodes) - so every connection
-/// touching a top-level pasted node is "mutual" in `capture_and_split_mutual_connections`'s sense.
-/// Restore each one once via a *leading* `RemoveEdge`, positioned before the `RemoveNode`s: on the first
-/// undo this disconnects the pair while both nodes still exist, and thanks to `Command::Batch` reversing
-/// its inverses, the resulting redo batch adds both nodes back before restoring the edge - never the
-/// other way around, which would try to reconnect to a node redo hasn't re-added yet.
-fn build_paste_undo_batch(
-    document: &OpmDocument,
-    paste_group_id: Uuid,
-    grouped_node_infos: &HashMap<Uuid, Vec<NodeInfo>>,
-    analyzers: &[AnalyzerItemDto],
-) -> Vec<Command> {
-    let mut removals = Vec::new();
-    if let Some(infos) = grouped_node_infos.get(&paste_group_id) {
-        let top_level_ids: HashSet<Uuid> = infos.iter().map(NodeInfo::uuid).collect();
-        let mut seen_mutual = HashSet::new();
-        for info in infos {
-            let (_own, mutual) = capture_and_split_mutual_connections(
-                document.scenery(),
-                paste_group_id,
-                info.uuid(),
-                &top_level_ids,
-                &mut seen_mutual,
-            );
-            for c in mutual {
-                removals.push(Command::UndoGraph(Box::new(GraphDelta::NodesConnected {
-                    group_id: paste_group_id,
-                    connection: ConnectionInfo {
-                        src_id: c.src_uuid(),
-                        src_port: c.src_port().to_string(),
-                        target_id: c.target_uuid(),
-                        target_port: c.target_port().to_string(),
-                        distance: meter!(c.distance()),
-                    },
-                    displaced_port_mappings: Vec::new(),
-                })));
-            }
-        }
-        let mut cascaded = cascaded_references(document, paste_group_id, &top_level_ids);
-        // Direct UUID access: each node's UUID is now directly available as Uuid
-        let folded_ids: HashSet<Uuid> =
-            cascaded.values().flatten().map(|c| c.node.uuid()).collect();
-        for info in infos {
-            if folded_ids.contains(&info.uuid()) {
-                continue;
-            }
-            if let Ok((node_ref, _)) = document.scenery().node_recursive(info.uuid()) {
-                removals.push(Command::RemoveNode(NodeSnapshot {
-                    parent_group_id: paste_group_id,
-                    node: node_ref,
-                    cascaded: cascaded.remove(&info.uuid()).unwrap_or_default(),
-                    connections: Vec::new(),
-                }));
-            }
-        }
-    }
-    for analyzer in analyzers {
-        removals.push(Command::RemoveAnalyzer(analyzer.clone()));
-    }
-    removals
-}
-
 /// Carries a pasted node's amplifier candidacy and its gain model in every pump scenario over to its
 /// fresh uuid.
-///
-/// Candidacy (`OpmDocument::amplifier_nodes`) and per-scenario gain models
-/// (`OpmDocument::pump_scenarios`) live outside `NodeAttr`, keyed by node uuid - so unlike an
-/// ordinary property (see `test_paste_preserves_node_properties`), pasting a node under a fresh uuid
-/// does not carry them along on its own. Without this, a copy of an amplifying node would silently
-/// come back passive, changing the modelled physics of the pasted subsystem without saying so - the
-/// same reasoning `set_is_amplifier_node`'s own doc comment applies to unmarking a candidate.
-///
-/// # Arguments
-///
-/// * `document` - the document to mutate.
-/// * `node_id_link` - maps each pasted node's original uuid to the fresh one it got.
-///
-/// # Returns
-///
-/// The undo commands that restore the pre-paste amplifier-candidate set and pump scenarios, meant to
-/// be folded into the same undo batch as the rest of the paste.
 fn propagate_amplifier_state(
     document: &mut OpmDocument,
     node_id_link: &HashMap<Uuid, Uuid>,
@@ -348,8 +158,6 @@ fn propagate_amplifier_state(
             continue;
         };
         for (old_id, new_id) in node_id_link {
-            // The whole configuration travels, not just the gain model: a pasted node that was
-            // pumped has to arrive pumped, and `set_config` drops an entry that does nothing anyway.
             scenario.set_config(*new_id, before.config(*old_id));
         }
         if *scenario != before {
@@ -367,13 +175,7 @@ fn propagate_amplifier_state(
 /// Paste copied nodes
 ///
 /// This function duplicates the nodes/analyzers currently in the copy cache into the target group,
-/// minting a fresh uuid for each copy. Moving nodes without duplicating them (a "cut") is a separate
-/// operation - see [`post_cut_nodes`](super::cut::post_cut_nodes).
-///
-/// Rejected (before anything is inserted, so the copy cache is left intact for a retry elsewhere) if a
-/// copied `NodeReference` - uncopied targets aren't duplicated, so it would still resolve to the same live
-/// target - would end up nested inside its own target group, or a group nested within it; see
-/// [`validate_relocated_references`].
+/// minting a fresh uuid for each copy.
 #[utoipa::path(tag = "operations",
     request_body(content = (Uuid, (f64, f64)),
         description = "Uuid of the group node to be pasted in, and the position at which the node should be pasted",
@@ -404,13 +206,11 @@ pub(super) async fn post_paste_nodes(
     let mut analyzers = Vec::new();
     if paste_in_scenery {
         for analyzer_dto in &copied_analyzer_nodes {
-            // Pass the internal AnalyzerInfo to copy_analyzer
             analyzers.push(copy_analyzer(&data, shift, &analyzer_dto.info));
         }
     }
 
     let mut document = data.document.lock();
-    // Directly collect root UUIDs since node.uuid() now returns Uuid directly
     let root_ids: Vec<Uuid> = copied_optical_nodes.iter().map(OpticRef::uuid).collect();
     validate_relocated_references(document.scenery(), &root_ids, paste_group_id)?;
 
@@ -427,14 +227,52 @@ pub(super) async fn post_paste_nodes(
 
     let mut amplifier_state_inverses = propagate_amplifier_state(&mut document, &node_id_link);
 
-    // One paste = one undo step: removing every pasted node/analyzer undoes the whole paste at once.
-    // See `build_paste_undo_batch` for why only top-level pasted roots get their own `RemoveNode`.
-    let mut removals =
-        build_paste_undo_batch(&document, paste_group_id, &grouped_node_infos, &analyzers);
-    removals.append(&mut amplifier_state_inverses);
-    if !removals.is_empty() {
-        data.push_undo(Command::Batch(removals));
+    // Build GraphDelta::Composite for top-level pasted optical nodes and their connections
+    let mut graph_deltas = Vec::new();
+    if let Some(infos) = grouped_node_infos.get(&paste_group_id) {
+        for info in infos {
+            if let Ok((node_ref, _)) = document.scenery().node_recursive(info.uuid()) {
+                graph_deltas.push(GraphDelta::NodeAdded {
+                    group_id: paste_group_id,
+                    node_id: info.uuid(),
+                    node: node_ref,
+                });
+            }
+        }
     }
+    if let Some(conns) = grouped_connect_info.get(&paste_group_id) {
+        for c in conns {
+            graph_deltas.push(GraphDelta::NodesConnected {
+                group_id: paste_group_id,
+                connection: ConnectionInfo {
+                    src_id: c.src_uuid(),
+                    src_port: c.src_port().to_string(),
+                    target_id: c.target_uuid(),
+                    target_port: c.target_port().to_string(),
+                    distance: meter!(c.distance()),
+                },
+                displaced_port_mappings: Vec::new(),
+            });
+        }
+    }
+
+    // Combine topological delta with analyzer removals and amplifier states into a single undo step
+    let mut undo_commands = Vec::new();
+    if !graph_deltas.is_empty() {
+        undo_commands.push(Command::UndoGraph(Box::new(GraphDelta::Composite(
+            graph_deltas,
+        ))));
+    }
+    for analyzer in &analyzers {
+        undo_commands.push(Command::RemoveAnalyzer(analyzer.clone()));
+    }
+    undo_commands.append(&mut amplifier_state_inverses);
+
+    if !undo_commands.is_empty() {
+        data.push_undo(Command::from_vec(undo_commands).expect("undo_commands is not empty"));
+    }
+
+    drop(document);
 
     Ok(Json(PasteNodesResponse {
         pasted_nodes: grouped_node_infos,
@@ -443,21 +281,7 @@ pub(super) async fn post_paste_nodes(
     }))
 }
 
-/// Replays every pasted group's own port map onto its freshly-created (still portless) copy.
-///
-/// Must process groups in `grouped_node_refs`'s own order (innermost/child groups before their
-/// ancestors) rather than iterating `input_port_maps`/`output_port_maps` directly: a group's ports
-/// are computed dynamically from its own port map, so mapping an ancestor's external port to a
-/// nested group node only works once *that nested group's own* port map has already been rebuilt -
-/// otherwise the nested group doesn't look like a valid mapping target yet and
-/// `map_input_port`/`map_output_port` rejects it. `grouped_node_refs` already has exactly this
-/// child-before-parent order, since `collect_optical_nodes_to_copy_recursive` only pushes a group's
-/// own entry after its recursive call for its children has returned.
-///
-/// # Errors
-///
-/// Returns an error if a group's own port-map replay fails (e.g. an internal port name no longer
-/// matching, which shouldn't happen given the maps were captured from the live original).
+/// Replays every pasted group's own port map onto its freshly-created copy.
 fn reconfigure_ports(
     scenery: &mut NodeGroup,
     grouped_node_refs: &[(Uuid, Vec<OpticRef>, bool)],
@@ -466,7 +290,6 @@ fn reconfigure_ports(
     node_id_link: &HashMap<Uuid, Uuid>,
     grouped_node_infos: &mut HashMap<Uuid, Vec<NodeInfo>>,
 ) -> Result<(), BackEndErrorResponse> {
-    // output port maps, then input port maps
     for port_type in [PortType::Output, PortType::Input] {
         let port_maps = match port_type {
             PortType::Output => output_port_maps,
@@ -497,7 +320,6 @@ fn reconfigure_ports(
     let inverted_node_link: HashMap<Uuid, Uuid> =
         node_id_link.iter().map(|(k, v)| (*v, *k)).collect();
 
-    // set ports
     for node_info in grouped_node_infos.values_mut() {
         for n in node_info {
             if n.node_type() == "group"
@@ -585,16 +407,13 @@ fn copy_analyzer(
     let new_pos = Point2::new(old_pos.x + shift.x, old_pos.y + shift.y);
     let mut document = data.document.lock();
 
-    // Add analyzer with new position, let opm_document generate the UUID
     let new_id = document.add_analyzer_with_position(
         analyzer.analyzer_type().clone(),
         Some((new_pos.x, new_pos.y)),
     );
 
-    // Retrieve the newly created info struct
     let new_info = document.analyzers().get(&new_id).cloned().unwrap();
     drop(document);
-    // Construct and return the DTO
     AnalyzerItemDto {
         id: new_id,
         info: new_info,
@@ -623,13 +442,9 @@ fn collect_optical_nodes_to_copy_recursive(
         let node_id = node.uuid();
 
         let group_nodes_opt = {
-            // Attempt to downcast the node reference to a NodeGroup
             node.as_any().downcast_ref::<NodeGroup>().map(|group| {
-                // These side-effects only run if the downcast was successful (Some)
                 input_port_maps.insert(node_id, group.graph().port_map(&PortType::Input).clone());
                 output_port_maps.insert(node_id, group.graph().port_map(&PortType::Output).clone());
-
-                // Return the collected nodes, which will be wrapped in Some() by map()
                 group.nodes().iter().copied().cloned().collect::<Vec<_>>()
             })
         };
@@ -772,12 +587,9 @@ fn copy_from_optic_ref(
 
     let mut new_node_ref = create_node_ref(&node_type)?;
     if let Some(referenced_node) = referenced_node_opt {
-        // Attempt to downcast the node mutably to a NodeReference
         if let Some(ref_node) = new_node_ref.as_any_mut().downcast_mut::<NodeReference>() {
             ref_node.assign_reference(&referenced_node)?;
         } else {
-            // Return an error if the node is not of type NodeReference,
-            // replicating the behavior of the previous `as_refnode_mut()?` call.
             return Err(OpossumError::Other("Cannot cast to reference node".into()).into());
         }
     }
@@ -796,6 +608,8 @@ fn get_shifted_pos_of_ref(optic_ref: &OpticRef, shift: Point2<f64>) -> (f64, f64
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashSet;
+
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
     use opossum_core::meter;
 
@@ -805,19 +619,6 @@ mod test {
         operations::copy::post_copy_nodes,
     };
 
-    /// Regression test for the bug where pasting a *group* whose members are internally connected
-    /// could 400 on undo ("node with given uuid does not exist"), or silently lose the members'
-    /// internal connection on redo. Root cause: the undo batch used to construct one `RemoveNode`
-    /// per pasted node at *every* nesting level - both the group itself and, redundantly, each of
-    /// its members - even though removing the group alone already captures/restores its entire
-    /// internal subtree via its own `OpticRef`. Since `Command::Batch` applies in a
-    /// non-deterministic order (derived from `HashMap` iteration), the member's own redundant
-    /// `RemoveNode` could target a uuid its ancestor's `RemoveNode` already cascaded away (undo
-    /// 400s), or run first and sever the internal connection before the group's own command even
-    /// applies (redo can't restore it, since a nested `AddNode` always passes an empty
-    /// `connections` list). Builds `G { A -> B }`, copies (not cuts, to isolate this from the
-    /// cut-deletion path) and pastes `G` itself, and asserts a single undo succeeds and a
-    /// following redo restores the group with its internal `A -> B` connection intact.
     #[actix_web::test]
     async fn test_undo_redo_paste_group_preserves_internal_connection() {
         use opossum_core::nodes::{Dummy, NodeGroup};
@@ -849,9 +650,6 @@ mod test {
         )
         .await;
 
-        // Copy G itself (not its members) - this is what makes `collect_optical_nodes_to_copy_recursive`
-        // recurse into it and populate a *nested* entry in `grouped_node_infos`, the shape that
-        // triggered the redundant-`RemoveNode` bug.
         let mut nodes_to_copy = HashSet::new();
         nodes_to_copy.insert(group_id);
         let req = test::TestRequest::post()
@@ -918,17 +716,6 @@ mod test {
         );
     }
 
-    /// Regression test for the bug where redoing a paste of two mutually-connected flat (non-grouped)
-    /// sibling nodes lost the connection between them. Root cause: `post_paste_nodes` built each
-    /// top-level pasted node's `Command::RemoveNode` with an empty `connections` field, so undo's
-    /// resulting `AddNode` (the command `Command::Batch` reverses onto the redo stack) never carried
-    /// the pasted pair's connection - `apply_remove_node` only forwards whatever `connections` its
-    /// `RemoveNode` snapshot already had. Builds `G { A -> B }`, copies A and B individually (not `G`,
-    /// which would hide the bug behind the group's own `OpticRef`-embedded internal edge - see
-    /// `test_undo_redo_paste_group_preserves_internal_connection` above), pastes them (not cut, to
-    /// isolate this from `perform_cut`'s own already-correct mutual-connection handling) into the root
-    /// scenery, and asserts a single undo succeeds and a following redo restores both pasted nodes
-    /// *and* the connection between them.
     #[actix_web::test]
     async fn test_undo_redo_paste_mutually_connected_nodes_preserves_connection() {
         use opossum_core::nodes::{Dummy, NodeGroup};
@@ -972,8 +759,6 @@ mod test {
             StatusCode::NO_CONTENT
         );
 
-        // Paste (not cut) both A and B as two flat siblings connected to each other, directly into
-        // the root scenery.
         let req = test::TestRequest::post()
             .uri("/paste_nodes")
             .set_json((root_id, (500.0, 500.0)))
@@ -1039,14 +824,6 @@ mod test {
         );
     }
 
-    /// Regression test for the bug where copying a node *and* a reference to it together, pasting them,
-    /// then undoing 400'd with "node with given uuid does not exist". Root cause: `build_paste_undo_batch`
-    /// gave both the pasted node and the pasted reference their own independent top-level `RemoveNode`;
-    /// removing the node cascades (via `NodeGroup::delete_node`) to also delete the reference pointing at
-    /// it, so the reference's own separate `RemoveNode` then found nothing to delete. Builds `A` and
-    /// `R = NodeReference::from_node(&A)` as flat top-level nodes, copies and pastes both together, and
-    /// asserts undo succeeds (removing both pasted duplicates) and a following redo restores both, with
-    /// the pasted reference resolving to the pasted node's uuid (not the original `A`'s).
     #[actix_web::test]
     async fn test_undo_redo_paste_node_with_reference_same_group() {
         use opossum_core::nodes::Dummy;
@@ -1148,8 +925,6 @@ mod test {
                 "the pasted duplicate must be restored by redo"
             );
         }
-        // Identify which of the two pasted nodes is the reference by its node type, then assert its
-        // "reference id" points at the *other* pasted node, not at the original `A`.
         let (pasted_ref_id, pasted_target_id) = {
             let mut ref_id = None;
             let mut target_id = None;
@@ -1183,16 +958,6 @@ mod test {
         );
     }
 
-    /// Regression test for the bug where pasting a group that itself contains a nested group with its
-    /// own port map failed with `OpticGroup:node to be mapped is not an input_1/output_1 node of the
-    /// group`. Root cause: `reconfigure_ports` replayed the pasted subtree's collected port maps by
-    /// iterating a plain `HashMap`, in arbitrary order - so an outer group's port map (which maps one
-    /// of its own external ports to a *nested* group node) could be replayed before that nested
-    /// group's own port map had been rebuilt, at which point the nested group didn't yet look like a
-    /// valid mapping target. Builds `root -> G1 -> G2 -> [A, B]`, where `G2` maps `A`'s input and `B`'s
-    /// output to its own external names, and `G1` maps `G2`'s external names to its own - mirroring the
-    /// reported repro exactly (a group inside a group, both with port maps). Copies and pastes `G1` and
-    /// asserts the paste succeeds and the pasted copy's external ports match the original.
     #[actix_web::test]
     async fn test_paste_doubly_nested_group_with_port_maps_at_both_levels() {
         use opossum_core::{
@@ -1287,11 +1052,6 @@ mod test {
         );
     }
 
-    /// Regression test for the bug where nothing stopped a reference to a group from being pasted into
-    /// that very group - which deadlocks the analyzer (analyzing a group holds its `Mutex` for the
-    /// duration of its own recursive descent, so a reference resolving back to an already-locked ancestor
-    /// self-deadlocks). Copies `R = ref(G)` alone (leaving `G` uncopied, so the paste would still resolve
-    /// to the same live `G`) and asserts pasting it into `G` is rejected, with nothing inserted.
     #[actix_web::test]
     async fn test_paste_reference_into_own_target_is_rejected() {
         use opossum_core::nodes::NodeGroup;
@@ -1347,8 +1107,6 @@ mod test {
         );
     }
 
-    /// Same hazard, one level deeper: `G1` contains `G2`; a reference to `G1` sitting at the root must
-    /// also be rejected when pasted into `G2`, since `G2` lives inside `G1`'s own subtree too.
     #[actix_web::test]
     async fn test_paste_reference_into_nested_descendant_of_target_is_rejected() {
         use opossum_core::nodes::{Dummy, NodeGroup};
@@ -1398,9 +1156,6 @@ mod test {
         );
     }
 
-    /// A reference and its own target copied and pasted together, as siblings, into an unrelated
-    /// destination group must still succeed - they keep the same (valid) relative structure either way,
-    /// unlike the two rejected cases above.
     #[actix_web::test]
     async fn test_paste_reference_and_target_together_as_siblings_is_allowed() {
         use opossum_core::nodes::NodeGroup;
@@ -1448,9 +1203,6 @@ mod test {
         );
     }
 
-    /// A copy must carry every property of its original - only the uuid is new. A non-default
-    /// property that silently came back at its default would change the modelled physics of the
-    /// pasted subsystem without saying so.
     #[actix_web::test]
     async fn test_paste_preserves_node_properties() {
         use opossum_core::{nodes::Lens, properties::Proptype};
@@ -1527,14 +1279,6 @@ mod test {
         );
     }
 
-    /// A copy of an amplifying node must itself be an amplifier candidate and carry its gain model
-    /// into every scenario the original was configured in.
-    ///
-    /// Regression test: candidacy (`OpmDocument::amplifier_nodes`) and per-scenario gain models
-    /// (`OpmDocument::pump_scenarios`) live outside `NodeAttr`, so unlike an ordinary property (see
-    /// `test_paste_preserves_node_properties`), paste's uuid remap never reached them - a copy of an
-    /// amplifier silently came back passive. Also checks that undoing the paste removes the copy's
-    /// entries without disturbing the original's.
     #[actix_web::test]
     async fn test_paste_preserves_amplifier_state() {
         use opossum_core::{
@@ -1607,8 +1351,7 @@ mod test {
                     .unwrap()
                     .config(pasted_id),
                 PumpConfig::new(gain, pump),
-                "the copy must carry the original's whole configuration - pumping included - into \
-                 the same scenario"
+                "the copy must carry the original's whole configuration into the same scenario"
             );
         }
 

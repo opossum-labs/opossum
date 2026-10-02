@@ -20,10 +20,9 @@ pub use content_negotiation::{Ron, ron_or_json_response};
 #[allow(unused_imports)]
 pub use graph_lookup::CollectedNode;
 pub use graph_lookup::{
-    capture_node_connections, check_reference_target_not_nested, collect_group_connections,
-    collect_node_refs_and_pos, collect_nodes, create_new_group_node_info, is_reference_target,
-    lowest_common_ancestor_group, map_port, parent_group_id_or_self, resolve_reference_chain,
-    validate_relocated_references,
+    check_reference_target_not_nested, collect_group_connections, collect_node_refs_and_pos,
+    collect_nodes, create_new_group_node_info, is_reference_target, lowest_common_ancestor_group,
+    map_port, parent_group_id_or_self, resolve_reference_chain, validate_relocated_references,
 };
 pub use handler_support::{analyzer_mut_or_404, apply_and_push_undo, pump_scenario_mut_or_404};
 pub use port_map_cascade::{remove_port_map_cascade, split_cascades_for_response};

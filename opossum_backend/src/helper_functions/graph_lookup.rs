@@ -6,7 +6,7 @@ use opossum_core::{
     nodes::{ConnectionInfo, NodeGroup},
     opm_document::OpmDocument,
     prelude::{PortType, Proptype},
-    types::api_types::{ConnectInfo, NodeInfo},
+    types::api_types::NodeInfo,
 };
 use std::collections::HashSet;
 use uuid::Uuid;
@@ -121,30 +121,6 @@ pub fn resolve_reference_chain(
     } else {
         Ok((optic_ref, false))
     }
-}
-
-/// Captures every connection touching `node_id` within `parent_group_id`'s graph, as `ConnectInfo`s.
-/// Used to snapshot a node's wiring before it's deleted, so `Command::AddNode`/`RemoveNode`'s
-/// `connections` field can restore it on undo - must be called before the node is actually removed from
-/// the graph, since deleting a node silently drops its incident edges.
-///
-/// # Errors
-///
-/// This function will return an error if `parent_group_id` doesn't resolve to a group.
-pub fn capture_node_connections(
-    scenery: &NodeGroup,
-    parent_group_id: Uuid,
-    node_id: Uuid,
-) -> OpmResult<Vec<ConnectInfo>> {
-    let connections = scenery.with_group_node(parent_group_id, NodeGroup::connections)?;
-    Ok(connections
-        .iter()
-        .filter(|c| c.src_id == node_id || c.target_id == node_id)
-        .map(|c| {
-            let is_reference = is_reference_target(scenery, c.target_id);
-            ConnectInfo::from_connection_info(c, is_reference)
-        })
-        .collect())
 }
 
 /// Maps `node_id`'s internal port `internal_name` to `external_name` on `g`'s external port map,

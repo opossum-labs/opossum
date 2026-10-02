@@ -28,9 +28,7 @@ mod viewport_commands;
 pub use amplifier_node_commands::PatchAmplifierNodes;
 pub use analyzer_commands::{PatchAnalyzer, PatchAnalyzerName, RepositionAnalyzer};
 pub use group_commands::{GroupConversion, MoveNodes, ReroutedMapping};
-pub use node_commands::{
-    CascadedNode, NodeSnapshot, PatchNode, PatchPort, PatchProperty, capture_old_node_request,
-};
+pub use node_commands::{PatchNode, PatchPort, PatchProperty, capture_old_node_request};
 pub use pump_scenario_commands::{PatchAnalyzerPumpScenarios, PatchPumpScenario};
 pub use viewport_commands::SetViewport;
 
@@ -42,10 +40,6 @@ pub enum Command {
     /// Re-executes a graph mutation during redo.
     RedoGraph(Box<GraphDelta>),
 
-    /// See [`NodeSnapshot`]. Inserts the node.
-    AddNode(NodeSnapshot),
-    /// See [`NodeSnapshot`]. Removes the node.
-    RemoveNode(NodeSnapshot),
     /// See [`PatchNode`].
     PatchNode(Box<PatchNode>),
     /// See [`PatchProperty`].
@@ -100,8 +94,6 @@ impl Command {
         match self {
             Self::UndoGraph(delta) => graph_commands::apply_undo_graph(document, *delta),
             Self::RedoGraph(delta) => graph_commands::apply_redo_graph(document, *delta),
-            Self::AddNode(cmd) => node_commands::apply_add_node(document, cmd),
-            Self::RemoveNode(cmd) => node_commands::apply_remove_node(document, cmd),
             Self::PatchNode(cmd) => node_commands::apply_patch_node(document, *cmd),
             Self::PatchProperty(cmd) => node_commands::apply_patch_property(document, cmd),
             Self::PatchPort(cmd) => node_commands::apply_patch_port(document, cmd),
@@ -163,8 +155,6 @@ impl Command {
             | Self::SetViewport(_) => false,
             Self::UndoGraph(_)
             | Self::RedoGraph(_)
-            | Self::AddNode(_)
-            | Self::RemoveNode(_)
             | Self::MoveNodes(_)
             | Self::InsertGroup(_)
             | Self::ExtractGroup(_)
@@ -209,9 +199,6 @@ impl Command {
                 panel: Some(NodeEditorPanel::PortConfig),
                 source_port: None,
             }),
-            Self::AddNode(cmd) | Self::RemoveNode(cmd) => Some(
-                JumpTarget::new_from_graph_and_node_id(cmd.parent_group_id, cmd.node.uuid()),
-            ),
             Self::AddAnalyzer(cmd) | Self::RemoveAnalyzer(cmd) => {
                 Some(JumpTarget::new_from_graph_and_node_id(root_id, cmd.id))
             }
@@ -255,8 +242,6 @@ impl Command {
                 let changes = graph_commands::describe_graph_delta(delta, false, document);
                 dedup_against_full_refreshes(changes)
             }
-            Self::AddNode(cmd) => node_commands::describe_add_node(cmd),
-            Self::RemoveNode(cmd) => node_commands::describe_remove_node(cmd),
             Self::PatchNode(cmd) => node_commands::describe_patch_node(cmd),
             Self::PatchProperty(PatchProperty {
                 uuid,
