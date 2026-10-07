@@ -24,7 +24,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     geometry::{Rim, geo_surface::GeoSurfaceRef},
     light::Ray,
-    meter, millimeter, nanometer,
+    millimeter, nanometer,
     types::validated_type_definitions::ValidatedCrossSection,
     utils::{LockExt, geom_transformation::Isometry, math_utils::distance_3d_point},
 };
@@ -267,73 +267,6 @@ impl SurfaceBoundedBody {
             .map(|(point, _)| point)
             .filter(|point| self.rim.contains(point, &self.isometry)))
     }
-    /// Return the points the transversal cross section of this body reaches farthest in, in the
-    /// body's own frame.
-    ///
-    /// Both the axis-aligned transversal bounds and the largest distance from the body's axis follow
-    /// from these points. They are not a tessellation of the outline: a circle is described by four
-    /// points plus, if it is shifted off the axis, the single point of it lying farthest out — a
-    /// direction none of the axis-aligned extremes points in.
-    ///
-    /// # Returns
-    ///
-    /// The extreme points of the cross section, with the isometry of its
-    /// [`Aperture`](crate::apertures::Aperture) already applied.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the cross section is not one of the binary shapes. Since
-    /// [`ValidatedCrossSection`] admits nothing else, that cannot happen for a body built through
-    /// its constructor.
-    fn cross_section_outline(&self) -> OpmResult<Vec<Point2<Length>>> {
-        let cross_section = self.rim.cross_section().get();
-        let transform = |point: Point2<Length>| {
-            cross_section.isometry().map_or(point, |iso| {
-                let transformed =
-                    iso.transform_point(&Point3::new(point.x, point.y, Length::zero()));
-                Point2::new(transformed.x, transformed.y)
-            })
-        };
-        match cross_section.shape() {
-            ApertureShape::BinaryCircle(circle) => {
-                // A circle is indifferent to the rotation of its aperture, so only its center
-                // moves. The axis-aligned bounds follow from that center alone, while the point
-                // farthest from the body's axis lies on the far side of the shifted circle.
-                let center = transform(Point2::origin());
-                let radius = circle.radius();
-                let mut outline = vec![
-                    Point2::new(center.x + radius, center.y),
-                    Point2::new(center.x - radius, center.y),
-                    Point2::new(center.x, center.y + radius),
-                    Point2::new(center.x, center.y - radius),
-                ];
-                let shift = center.x.value.hypot(center.y.value);
-                if shift > 0.0 {
-                    let stretch = 1.0 + radius.value / shift;
-                    outline.push(Point2::new(center.x * stretch, center.y * stretch));
-                }
-                Ok(outline)
-            }
-            ApertureShape::BinaryRectangle(rectangle) => {
-                let half_width = rectangle.width() / 2.0;
-                let half_height = rectangle.height() / 2.0;
-                Ok([
-                    Point2::new(half_width, half_height),
-                    Point2::new(-half_width, half_height),
-                    Point2::new(-half_width, -half_height),
-                    Point2::new(half_width, -half_height),
-                ]
-                .map(transform)
-                .to_vec())
-            }
-            ApertureShape::BinaryPolygon(polygon) => {
-                Ok(polygon.points().iter().map(|p| transform(*p)).collect())
-            }
-            shape => Err(OpossumError::Other(format!(
-                "the extent of a body bounded by a '{shape}' cross section is undefined"
-            ))),
-        }
-    }
     /// Return the range of longitudinal positions one of the bounding surfaces spans over the cross
     /// section of this body, in the body's own frame.
     ///
@@ -506,7 +439,7 @@ impl Body for SurfaceBoundedBody {
         Ok(Some(distance_3d_point(&first_point, &last_point)))
     }
     fn bounding_box(&self) -> OpmResult<BoundingBox> {
-        let outline = self.cross_section_outline()?;
+        let outline = self.rim.outline()?;
         let (Some(x_range), Some(y_range)) = (
             span(outline.iter().map(|point| point.x)),
             span(outline.iter().map(|point| point.y)),
@@ -515,9 +448,7 @@ impl Body for SurfaceBoundedBody {
                 "the cross section of the body has no extent at all".into(),
             ));
         };
-        let transversal_reach = outline.iter().fold(Length::zero(), |reach, point| {
-            Length::max(reach, meter!(point.x.value.hypot(point.y.value)))
-        });
+        let transversal_reach = self.rim.transversal_reach()?;
         // The two surfaces are measured one after the other and never held at once: a node with a
         // single surface hands out the same `GeoSurfaceRef` twice, which would deadlock.
         let entrance_z = self.surface_z_range(&self.entrance, transversal_reach)?;

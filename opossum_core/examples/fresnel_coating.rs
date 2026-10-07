@@ -2,8 +2,9 @@ use nalgebra::Point2;
 use opossum_core::core_optics::OpticNodeExt;
 use opossum_core::prelude::*;
 use opossum_core::{
-    coatings::CoatingType, core_optics::PortType, distributions::energy::UniformDist,
-    distributions::position::Grid, distributions::spectral::LaserLines,
+    apertures::CircleShape, coatings::CoatingType, core_optics::PortType,
+    distributions::energy::UniformDist, distributions::position::Grid,
+    distributions::spectral::LaserLines,
 };
 use std::path::Path;
 
@@ -13,12 +14,14 @@ fn main() -> OpmResult<()> {
 
     let fd1 = scenery.add_node(FluenceDetector::new("before lens"))?;
 
-    let mut lens1 = Lens::new(
+    // Curved to 10 mm and 9 mm, the lens reaches no further than 9 mm from its axis.
+    let mut lens1 = Lens::new_with_clear_aperture(
         "Lens",
         millimeter!(10.0),
         millimeter!(9.0),
         millimeter!(1.0),
         RefrIndexConst::new(1.5)?,
+        CircleShape::new(millimeter!(9.0))?.into(),
     )?;
     lens1.set_coating(&PortType::Input, "input_1", &CoatingType::Fresnel)?;
     let l1 = scenery.add_node(lens1)?;

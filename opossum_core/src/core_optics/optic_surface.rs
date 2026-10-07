@@ -131,8 +131,10 @@ impl OpticSurface {
     /// Intersect a [`Ray`] with this [`OpticSurface`].
     ///
     /// This is the one place that decides whether, and where, a ray hits this surface. A point
-    /// outside the surface's [`Rim`] is not part of the component, so a ray reaching the surface
-    /// only there misses it.
+    /// outside the surface's [`Rim`] is not part of the component, and neither is one on the far
+    /// side of a closed surface behind its equator (see
+    /// [`GeoSurface::is_on_vertex_sheet`](crate::geometry::geo_surface::GeoSurface::is_on_vertex_sheet));
+    /// a ray reaching the surface only there misses it.
     ///
     /// The rim follows the geometric surface: its frame is derived from where that surface sits
     /// right now (its isometry, minus its anchor, is the node's frame).
@@ -159,7 +161,9 @@ impl OpticSurface {
         let node_frame = Isometry::new_from_transform(
             geo_surface.isometry().get_transform() * self.anchor_point_iso.get_inv_transform(),
         );
-        Ok(intersection.filter(|(point, _)| rim.contains(point, &node_frame)))
+        Ok(intersection.filter(|(point, _)| {
+            rim.contains(point, &node_frame) && geo_surface.is_on_vertex_sheet(point)
+        }))
     }
     /// Returns a reference to the aperture of this [`OpticSurface`].
     #[must_use]
@@ -437,6 +441,48 @@ mod test {
         surface.set_isometry(Isometry::new_translation(millimeter!(0.0, 20.0, 0.0))?);
         assert!(surface.intersect(&ray_at(0.0)?)?.is_none());
         assert!(surface.intersect(&ray_at(20.0)?)?.is_some());
+        Ok(())
+    }
+    #[test]
+    fn a_hit_behind_the_equator_is_a_miss() -> OpmResult<()> {
+        // A sphere of 15 mm radius with its vertex at the node, bounded to 12.5 mm around the axis.
+        let anchor = Isometry::new_along_z(millimeter!(15.0))?;
+        let mut surface = OpticSurface::new(
+            GeoSurfaceRef(Arc::new(Mutex::new(Sphere::new(
+                millimeter!(15.0),
+                anchor,
+            )?))),
+            CoatingType::IdealAR,
+            Aperture::default(),
+            J_per_cm2!(1.0),
+        )?;
+        surface.set_anchor_point_iso(anchor);
+        surface.set_rim(Some(Rim::new(
+            ValidatedCrossSection::try_new(Aperture::new_circle(
+                millimeter!(12.5),
+                ApertureType::Hole,
+                None,
+            )?)?,
+            Isometry::identity(),
+        )));
+        // 135° from the vertex, the point lies behind the equator, 10.6 mm off the axis - within the
+        // rim when seen along the axis. A ray tilted by 50° reaches the sphere there first.
+        let (radius, polar, tilt) = (15.0, 135.0_f64.to_radians(), 50.0_f64.to_radians());
+        let behind = (radius * polar.sin(), radius - radius * polar.cos());
+        let direction = nalgebra::Vector3::new(-tilt.sin(), 0.0, tilt.cos());
+        let steep = Ray::new(
+            millimeter!(
+                behind.0 - 30.0 * direction.x,
+                0.0,
+                behind.1 - 30.0 * direction.z
+            ),
+            direction,
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?;
+        assert!(surface.intersect(&steep)?.is_none());
+        // A ray along the axis 5 mm out meets the sphere on the sheet through its vertex.
+        assert!(surface.intersect(&ray_at(5.0)?)?.is_some());
         Ok(())
     }
 

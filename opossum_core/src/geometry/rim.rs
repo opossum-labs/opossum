@@ -6,11 +6,16 @@
 //! [`Body`](crate::geometry::body::Body) and the surfaces light is traced at have to ask: does a
 //! point lie within that cross section?
 
-use nalgebra::Point3;
+use nalgebra::{Point2, Point3};
+use num_traits::Zero;
 use uom::si::f64::Length;
 
 use crate::{
-    types::validated_type_definitions::ValidatedCrossSection, utils::geom_transformation::Isometry,
+    apertures::ApertureShape,
+    error::{OpmResult, OpossumError},
+    meter,
+    types::validated_type_definitions::ValidatedCrossSection,
+    utils::geom_transformation::Isometry,
 };
 
 /// The lateral boundary of a component: its cross section, extruded along an axis.
@@ -61,6 +66,88 @@ impl Rim {
         let local_point = reference.append(&self.axis).inverse_transform_point(point);
         // The cross section is a binary hole, so a transmission above zero means "inside".
         self.cross_section.get().apodize(&local_point) > 0.0
+    }
+    /// Return the points the cross section of this [`Rim`] reaches farthest in, in the xy plane of
+    /// its axis.
+    ///
+    /// Both the axis-aligned transversal bounds and the largest distance from the axis follow from
+    /// these points. They are not a tessellation of the outline: a circle is described by four
+    /// points plus, if it is shifted off the axis, the single point of it lying farthest out — a
+    /// direction none of the axis-aligned extremes points in.
+    ///
+    /// # Returns
+    ///
+    /// The extreme points of the cross section, with the isometry of its
+    /// [`Aperture`](crate::apertures::Aperture) already applied.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the cross section is not one of the binary shapes. Since
+    /// [`ValidatedCrossSection`] admits nothing else, that cannot happen for a rim built through its
+    /// constructor.
+    pub(crate) fn outline(&self) -> OpmResult<Vec<Point2<Length>>> {
+        let cross_section = self.cross_section.get();
+        let transform = |point: Point2<Length>| {
+            cross_section.isometry().map_or(point, |iso| {
+                let transformed =
+                    iso.transform_point(&Point3::new(point.x, point.y, Length::zero()));
+                Point2::new(transformed.x, transformed.y)
+            })
+        };
+        match cross_section.shape() {
+            ApertureShape::BinaryCircle(circle) => {
+                // A circle is indifferent to the rotation of its aperture, so only its center
+                // moves. The axis-aligned bounds follow from that center alone, while the point
+                // farthest from the axis lies on the far side of the shifted circle.
+                let center = transform(Point2::origin());
+                let radius = circle.radius();
+                let mut outline = vec![
+                    Point2::new(center.x + radius, center.y),
+                    Point2::new(center.x - radius, center.y),
+                    Point2::new(center.x, center.y + radius),
+                    Point2::new(center.x, center.y - radius),
+                ];
+                let shift = center.x.value.hypot(center.y.value);
+                if shift > 0.0 {
+                    let stretch = 1.0 + radius.value / shift;
+                    outline.push(Point2::new(center.x * stretch, center.y * stretch));
+                }
+                Ok(outline)
+            }
+            ApertureShape::BinaryRectangle(rectangle) => {
+                let half_width = rectangle.width() / 2.0;
+                let half_height = rectangle.height() / 2.0;
+                Ok([
+                    Point2::new(half_width, half_height),
+                    Point2::new(-half_width, half_height),
+                    Point2::new(-half_width, -half_height),
+                    Point2::new(half_width, -half_height),
+                ]
+                .map(transform)
+                .to_vec())
+            }
+            ApertureShape::BinaryPolygon(polygon) => {
+                Ok(polygon.points().iter().map(|p| transform(*p)).collect())
+            }
+            shape => Err(OpossumError::Other(format!(
+                "the extent of a component bounded by a '{shape}' cross section is undefined"
+            ))),
+        }
+    }
+    /// Return how far the cross section of this [`Rim`] reaches from its axis.
+    ///
+    /// # Returns
+    ///
+    /// The largest distance of a point of the cross section from the axis.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the outline of the cross section cannot be determined (see
+    /// [`Rim::outline`]).
+    pub(crate) fn transversal_reach(&self) -> OpmResult<Length> {
+        Ok(self.outline()?.iter().fold(Length::zero(), |reach, point| {
+            Length::max(reach, meter!(point.x.value.hypot(point.y.value)))
+        }))
     }
 }
 

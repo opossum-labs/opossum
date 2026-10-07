@@ -3,9 +3,13 @@
 
 use crate::{
     analyzers::energy::AnalysisEnergy,
+    apertures::ApertureShape,
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, Volumetric},
     error::{OpmResult, OpossumError},
-    geometry::Geometry,
+    geometry::{
+        Geometry,
+        body::{CLEAR_APERTURE, default_clear_aperture},
+    },
     material::{MATERIAL, Material},
     millimeter,
     nodes::{NodeRegistration, create_volume_properties},
@@ -112,7 +116,9 @@ impl Lens {
     ///
     /// # Errors
     ///
-    /// This function returns an error if the given parameters are not correct.
+    /// This function returns an error if the given parameters are not correct, including a
+    /// curvature too tight to reach the default clear aperture of 12.5 mm (see
+    /// [`Lens::new_with_clear_aperture`]).
     pub fn new(
         name: &str,
         front_curvature: Length,
@@ -120,8 +126,46 @@ impl Lens {
         center_thickness: Length,
         material: impl Into<Material>,
     ) -> OpmResult<Self> {
+        Self::new_with_clear_aperture(
+            name,
+            front_curvature,
+            rear_curvature,
+            center_thickness,
+            material,
+            default_clear_aperture(),
+        )
+    }
+    /// Creates a new [`Lens`] of the given clear aperture.
+    ///
+    /// As [`Lens::new`], but with the transversal extent of the lens given as well. A lens curved
+    /// more tightly than the default clear aperture of 12.5 mm needs it: a spherical face ends at its
+    /// radius of curvature, so it cannot reach a wider edge.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - the name of the lens.
+    /// * `front_curvature` - radius of curvature of the front face; infinite for a flat face.
+    /// * `rear_curvature` - radius of curvature of the rear face; infinite for a flat face.
+    /// * `center_thickness` - distance between the two vertices.
+    /// * `material` - the material of the lens.
+    /// * `clear_aperture` - the transversal extent of the lens.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the given parameters are not correct, the clear aperture
+    /// does not delimit a region, or a face is curved too tightly to reach its edge.
+    pub fn new_with_clear_aperture(
+        name: &str,
+        front_curvature: Length,
+        rear_curvature: Length,
+        center_thickness: Length,
+        material: impl Into<Material>,
+        clear_aperture: ApertureShape,
+    ) -> OpmResult<Self> {
         let mut lens = Self::default();
         lens.node_attr.set_name(name);
+        lens.node_attr
+            .set_property(CLEAR_APERTURE, clear_aperture.into())?;
         lens.node_attr
             .set_property("front curvature", Proptype::Curvature(front_curvature))?;
         lens.node_attr
@@ -454,6 +498,45 @@ mod test {
     #[test]
     fn rays_beyond_clear_aperture_are_lost() -> OpmResult<()> {
         test_rays_beyond_clear_aperture_are_lost::<Lens>()
+    }
+    /// A lens whose curvature is tighter than its clear aperture describes no shape: a sphere of
+    /// 10 mm radius ends before the default rim of 12.5 mm. The lens refuses it.
+    #[test]
+    fn a_curvature_tighter_than_the_clear_aperture_is_rejected() -> OpmResult<()> {
+        let flat = millimeter!(f64::INFINITY);
+        let index = RefrIndexConst::new(1.5)?;
+        assert!(
+            Lens::new(
+                "lens",
+                millimeter!(10.0),
+                flat,
+                millimeter!(5.0),
+                index.clone()
+            )
+            .is_err()
+        );
+        assert!(Lens::new("lens", flat, millimeter!(-10.0), millimeter!(5.0), index).is_err());
+        Ok(())
+    }
+    /// A lens smaller than the default clear aperture is built with its own: a concentric meniscus
+    /// of 10 mm and 9 mm radius fits a clear aperture of 9 mm, its rear face a full hemisphere.
+    #[test]
+    fn a_small_lens_is_built_with_its_own_clear_aperture() -> OpmResult<()> {
+        use crate::apertures::CircleShape;
+        let clear_aperture: ApertureShape = CircleShape::new(millimeter!(9.0))?.into();
+        let lens = Lens::new_with_clear_aperture(
+            "meniscus",
+            millimeter!(10.0),
+            millimeter!(9.0),
+            millimeter!(1.0),
+            RefrIndexConst::new(1.5)?,
+            clear_aperture.clone(),
+        )?;
+        assert_eq!(
+            lens.node_attr.get_property(CLEAR_APERTURE)?,
+            &Proptype::Aperture(clear_aperture)
+        );
+        Ok(())
     }
     /// A port aperture masks only light that went through the lens: a ray running past the lens is
     /// not touched by it, one through the lens is.

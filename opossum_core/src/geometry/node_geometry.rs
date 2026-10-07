@@ -59,19 +59,20 @@ impl Geometry {
     ///
     /// # Errors
     ///
-    /// This function returns an error if the center thickness is not finite.
+    /// This function returns an error if the center thickness is not finite or if a face is curved
+    /// too tightly to reach the edge of the cross section.
     pub fn singlet(
         front_radius: Length,
         rear_radius: Length,
         center_thickness: Length,
         cross_section: ValidatedCrossSection,
     ) -> OpmResult<Self> {
-        Ok(Self::two_faced(
+        Self::two_faced(
             SurfaceShape::spherical(front_radius),
             SurfaceShape::spherical(rear_radius),
             Isometry::new_along_z(center_thickness)?,
             cross_section,
-        ))
+        )
     }
     /// A cylindrical singlet lens: two cylindrical (or flat) faces a center thickness apart.
     ///
@@ -84,19 +85,20 @@ impl Geometry {
     ///
     /// # Errors
     ///
-    /// This function returns an error if the center thickness is not finite.
+    /// This function returns an error if the center thickness is not finite or if a face is curved
+    /// too tightly to reach the edge of the cross section.
     pub fn cylindrical_singlet(
         front_radius: Length,
         rear_radius: Length,
         center_thickness: Length,
         cross_section: ValidatedCrossSection,
     ) -> OpmResult<Self> {
-        Ok(Self::two_faced(
+        Self::two_faced(
             SurfaceShape::cylindrical(front_radius),
             SurfaceShape::cylindrical(rear_radius),
             Isometry::new_along_z(center_thickness)?,
             cross_section,
-        ))
+        )
     }
     /// A wedge: two flat faces, the rear one tilted about the local x axis.
     ///
@@ -118,12 +120,12 @@ impl Geometry {
             Point3::origin(),
             Point3::new(wedge_angle, Angle::zero(), Angle::zero()),
         )?;
-        Ok(Self::two_faced(
+        Self::two_faced(
             SurfaceShape::Plane,
             SurfaceShape::Plane,
             Isometry::new_along_z(center_thickness)?.append(&tilt),
             cross_section,
-        ))
+        )
     }
     /// A single surface.
     ///
@@ -132,16 +134,26 @@ impl Geometry {
     /// * `shape` - the shape of the surface.
     /// * `vertex` - position and orientation of its vertex relative to the node.
     /// * `cross_section` - its transversal extent, or `None` for an unbounded (virtual) surface.
-    #[must_use]
-    pub const fn surface(
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the surface is curved too tightly to reach the edge of the
+    /// cross section, or if the outline of the cross section cannot be determined.
+    pub fn surface(
         shape: SurfaceShape,
         vertex: Isometry,
         cross_section: Option<ValidatedCrossSection>,
-    ) -> Self {
-        Self::Surface(SurfaceGeometry {
-            face: Face::new(shape, vertex),
+    ) -> OpmResult<Self> {
+        let face = Face::new(shape, vertex);
+        if let Some(cross_section) = &cross_section {
+            let reach =
+                Rim::new(cross_section.clone(), Isometry::identity()).transversal_reach()?;
+            face.check_reach(reach, "surface")?;
+        }
+        Ok(Self::Surface(SurfaceGeometry {
+            face,
             cross_section,
-        })
+        }))
     }
     /// A flat surface at the node itself.
     ///
@@ -150,7 +162,11 @@ impl Geometry {
     /// * `cross_section` - its transversal extent, or `None` for an unbounded (virtual) surface.
     #[must_use]
     pub fn plane(cross_section: Option<ValidatedCrossSection>) -> Self {
-        Self::surface(SurfaceShape::Plane, Isometry::identity(), cross_section)
+        // A plane reaches every cross section, so nothing is left to check.
+        Self::Surface(SurfaceGeometry {
+            face: Face::new(SurfaceShape::Plane, Isometry::identity()),
+            cross_section,
+        })
     }
     /// An extruded solid along the node's own axis whose front vertex sits at the node.
     ///
@@ -160,18 +176,22 @@ impl Geometry {
     /// * `rear` - the shape of the rear face.
     /// * `rear_vertex` - position and orientation of the rear face's vertex relative to the node.
     /// * `cross_section` - the transversal extent (clear aperture).
+    ///
+    /// # Errors
+    ///
+    /// See [`Extruded::new`].
     fn two_faced(
         front: SurfaceShape,
         rear: SurfaceShape,
         rear_vertex: Isometry,
         cross_section: ValidatedCrossSection,
-    ) -> Self {
-        Self::Solid(Solid::Extruded(Extruded::new(
+    ) -> OpmResult<Self> {
+        Ok(Self::Solid(Solid::Extruded(Extruded::new(
             Isometry::identity(),
             Face::new(front, Isometry::identity()),
             Face::new(rear, rear_vertex),
             cross_section,
-        )))
+        )?)))
     }
     /// Build the surfaces light enters and leaves through.
     ///
@@ -332,19 +352,26 @@ impl Extruded {
     /// * `front` - the face capping the profile towards -z, stated in the `axis` frame.
     /// * `rear` - the face capping the profile towards +z, stated in the `axis` frame.
     /// * `cross_section` - the profile, in the xy plane of the `axis` frame.
-    #[must_use]
-    pub const fn new(
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if a face is curved too tightly to reach the edge of the
+    /// profile, or if the outline of the profile cannot be determined.
+    pub fn new(
         axis: Isometry,
         front: Face,
         rear: Face,
         cross_section: ValidatedCrossSection,
-    ) -> Self {
-        Self {
+    ) -> OpmResult<Self> {
+        let reach = Rim::new(cross_section.clone(), axis).transversal_reach()?;
+        front.check_reach(reach, "front face")?;
+        rear.check_reach(reach, "rear face")?;
+        Ok(Self {
             axis,
             front,
             rear,
             cross_section,
-        }
+        })
     }
     /// See [`Geometry::body`].
     fn body(&self, node_frame: &Isometry) -> OpmResult<SurfaceBoundedBody> {
@@ -725,7 +752,7 @@ mod test {
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),
             circle()?,
-        );
+        )?;
         let ((_, front), (_, rear)) =
             Geometry::Solid(Solid::Extruded(extruded)).entrance_and_exit(&Isometry::identity())?;
         assert_eq!(front, axis);
@@ -752,6 +779,36 @@ mod test {
         }
         Ok(())
     }
+    /// A curved face has to reach as far out as the cross section it is bounded by; a sphere or a
+    /// cylinder ends at its radius of curvature. Exactly reaching it (a hemisphere) is still a shape.
+    #[test]
+    fn a_cross_section_beyond_the_curvature_is_rejected() -> OpmResult<()> {
+        let flat = millimeter!(f64::INFINITY);
+        for radius in [10.0, -10.0] {
+            let curved = millimeter!(radius);
+            for (front, rear) in [(curved, flat), (flat, curved)] {
+                let error = Geometry::singlet(front, rear, millimeter!(5.0), circle()?)
+                    .expect_err("a curvature tighter than the cross section was accepted");
+                assert!(error.to_string().contains("does not reach"), "{error}");
+            }
+            assert!(
+                Geometry::cylindrical_singlet(curved, flat, millimeter!(5.0), circle()?).is_err()
+            );
+            let mirror = SurfaceShape::spherical(curved);
+            assert!(
+                Geometry::surface(mirror.clone(), Isometry::identity(), Some(circle()?)).is_err()
+            );
+            // An unbounded surface has no edge to reach.
+            assert!(Geometry::surface(mirror, Isometry::identity(), None).is_ok());
+        }
+        assert!(Geometry::singlet(millimeter!(12.5), flat, millimeter!(5.0), circle()?).is_ok());
+        // A parabola opens without end, so even a short focal length reaches any edge.
+        let parabola = SurfaceShape::Parabola {
+            focal_length: millimeter!(1.0),
+        };
+        assert!(Geometry::surface(parabola, Isometry::identity(), Some(circle()?)).is_ok());
+        Ok(())
+    }
     /// A surface without a cross section is unbounded; a bounded surface and an extruded solid have
     /// a rim, stated along the extrusion axis.
     #[test]
@@ -770,7 +827,7 @@ mod test {
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),
             circle()?,
-        )));
+        )?));
         assert_eq!(extruded.rim()?, Some(Rim::new(circle()?, axis)));
         Ok(())
     }
@@ -789,7 +846,7 @@ mod test {
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),
             circle()?,
-        );
+        )?;
         let node_frame = Isometry::new(millimeter!(0.0, 5.0, 0.0), degree!(0.0, 0.0, 0.0))?;
         let body = Geometry::Solid(Solid::Extruded(extruded)).body(&node_frame)?;
         assert_eq!(*body.isometry(), node_frame.append(&axis));

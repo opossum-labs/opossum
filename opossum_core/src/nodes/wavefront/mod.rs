@@ -114,7 +114,7 @@ impl OpticNode for WaveFront {
                 .unwrap_or(SurfaceShape::Plane),
             Isometry::identity(),
             None,
-        )))
+        )?))
     }
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;

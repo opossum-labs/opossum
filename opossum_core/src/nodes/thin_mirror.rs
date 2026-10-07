@@ -116,7 +116,7 @@ impl OpticNode for ThinMirror {
             SurfaceShape::spherical(*curvature),
             Isometry::identity(),
             None,
-        )))
+        )?))
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.install_geometry(&["input_1"], &["output_1"])

@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 use crate::{
-    error::OpmResult,
+    error::{OpmResult, OpossumError},
     geometry::{Cylinder, Parabola, Plane, Sphere, geo_surface::GeoSurfaceRef},
     nanometer, radian,
     utils::geom_transformation::Isometry,
@@ -102,6 +102,25 @@ impl SurfaceShape {
                 matches!(other, Self::Parabola { focal_length: other_focal_length }
                     if close(focal_length, other_focal_length))
             }
+        }
+    }
+    /// Whether a surface of this shape reaches the given distance from its axis.
+    ///
+    /// A sphere or a cylinder ends at its radius of curvature; exactly reaching it (a hemisphere)
+    /// is still a shape. A cylinder is held to its radius in every direction, as a body bounded by
+    /// it is. The other shapes reach arbitrarily far.
+    ///
+    /// # Arguments
+    ///
+    /// * `distance` - the distance from the axis to be reached.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the surface reaches that far.
+    fn reaches(&self, distance: Length) -> bool {
+        match self {
+            Self::Plane | Self::Parabola { .. } => true,
+            Self::Sphere { radius } | Self::Cylinder { radius } => distance <= radius.abs(),
         }
     }
     /// Whether turning this shape about its own axis (local z) changes it.
@@ -195,6 +214,29 @@ impl Face {
             .append(&self.vertex)
             .append(&self.shape.vertex_to_frame()?);
         Ok((self.shape.build(node_frame.append(&anchor))?, anchor))
+    }
+    /// Check that this face reaches as far out as the cross section that bounds it.
+    ///
+    /// The vertex is taken to sit on the axis of the cross section, as it does for every face the
+    /// presets build.
+    ///
+    /// # Arguments
+    ///
+    /// * `transversal_reach` - how far the cross section reaches from its axis.
+    /// * `name` - how to name this face in the error, e.g. `"front face"`.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the face ends before the cross section does.
+    pub(crate) fn check_reach(&self, transversal_reach: Length, name: &str) -> OpmResult<()> {
+        if self.shape.reaches(transversal_reach) {
+            return Ok(());
+        }
+        Err(OpossumError::Other(format!(
+            "the {name} does not reach the edge of its clear aperture, {:.3} mm from the axis: its \
+             radius of curvature is smaller",
+            transversal_reach.get::<uom::si::length::millimeter>()
+        )))
     }
     /// Whether this face is the same surface at the same place as another face.
     ///

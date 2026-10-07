@@ -361,7 +361,7 @@ impl OpticNode for ParabolicMirror {
             },
             self.calc_off_axis_isometry()?,
             None,
-        )))
+        )?))
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.install_geometry(&["input_1"], &["output_1"])

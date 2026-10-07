@@ -4,7 +4,7 @@
 //! points etc. and an enum containing the concrete surface types.
 
 use super::Plane;
-use crate::{light::Ray, utils::geom_transformation::Isometry};
+use crate::{light::Ray, nanometer, utils::geom_transformation::Isometry};
 use nalgebra::{Point2, Point3, Vector3};
 use std::{
     fmt::Debug,
@@ -111,6 +111,25 @@ pub trait GeoSurface: Send + Sync + Debug {
     /// [`Sphere`](super::Sphere) or [`Cylinder`](super::Cylinder) ends where its radius of curvature
     /// does.
     fn local_z_at(&self, transversal_position: &Point2<Length>) -> Option<Length>;
+    /// Return whether a point of this [`GeoSurface`] lies on the sheet through its vertex.
+    ///
+    /// A [`Sphere`](super::Sphere) or [`Cylinder`](super::Cylinder) closes on itself, so a ray can
+    /// meet it on its far side, behind the equator, which is not part of a component built from
+    /// it. [`GeoSurface::local_z_at`] always answers for the sheet through the vertex, so a point
+    /// lies on that sheet if its own local z agrees. A single-sheeted surface always does.
+    ///
+    /// # Arguments
+    ///
+    /// - `point`: a point on this surface, given in global coordinates.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the point lies on the sheet through the vertex, up to floating-point noise.
+    fn is_on_vertex_sheet(&self, point: &Point3<Length>) -> bool {
+        let local_point = self.isometry().inverse_transform_point(point);
+        self.local_z_at(&Point2::new(local_point.x, local_point.y))
+            .is_some_and(|sheet_z| (local_point.z - sheet_z).abs() <= nanometer!(1.0))
+    }
     /// Returns the [`Isometry`] of this [`GeoSurface`].
     fn isometry(&self) -> &Isometry;
     /// Set the [`Isometry`] of this [`GeoSurface`].
