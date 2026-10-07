@@ -13,7 +13,7 @@ use std::{fs, path::PathBuf, sync::atomic::AtomicBool};
 
 use self::{
     commit::upsert_path_in_tree,
-    config::ensure_remote_configured,
+    config::{ensure_committer_configured, ensure_remote_configured},
     rebase::rebase_local_assets_onto_remote,
     utils::{
         checkout_worktree, clone_repository, collect_files_recursive, directory_contains_assets,
@@ -43,7 +43,7 @@ impl RegistrySync {
     ///
     /// # Errors
     ///
-    /// This function returns an error if an underlying git opreatin fails
+    /// This function returns an error if an underlying git operation fails.
     pub fn ensure_repository_initialized(&self) -> OpmResult<()> {
         if !self.local_path.exists() {
             fs::create_dir_all(&self.local_path).map_err(|e| {
@@ -54,22 +54,24 @@ impl RegistrySync {
             })?;
         }
 
-        // 1. If already a git repository, verify integrity and ensure remote config is up to date
+        // 1. If already a git repository, verify integrity and ensure remote/user config is up to date
         if self.local_path.join(".git").exists() {
             gix::open(&self.local_path).map_err(|e| {
                 OpossumError::Registry(format!("Failed to open existing repository: {e}"))
             })?;
 
-            // Keep remote configuration in sync even if the repository already existed
             if !self.remote_url.trim().is_empty() {
                 ensure_remote_configured(&self.local_path, &self.remote_url)?;
             }
+            ensure_committer_configured(&self.local_path)?;
             return Ok(());
         }
 
         // 2. Fresh installation: clone if empty and remote URL provided
         if is_directory_empty(&self.local_path) && !self.remote_url.trim().is_empty() {
-            return clone_repository(&self.remote_url, &self.local_path);
+            clone_repository(&self.remote_url, &self.local_path)?;
+            ensure_committer_configured(&self.local_path)?;
+            return Ok(());
         }
 
         // 3. In-place initialization
@@ -79,6 +81,10 @@ impl RegistrySync {
                 self.local_path.display()
             ))
         })?;
+
+        // Ensure committer is present right after init
+        ensure_committer_configured(&self.local_path)?;
+
         // 4. Create initial commit if existing assets are found on disk
         if directory_contains_assets(&self.local_path) {
             let files = collect_files_recursive(&self.local_path)?;
@@ -158,9 +164,11 @@ impl RegistrySync {
     ///
     /// # Errors
     ///
-    /// This functions retursn an error if an underlying git operation fails
+    /// This function returns an error if an underlying git operation fails.
     pub fn pull_updates(&self) -> OpmResult<()> {
         ensure_remote_configured(&self.local_path, &self.remote_url)?;
+        // Ensure local repository has a valid committer before opening repo snapshot
+        ensure_committer_configured(&self.local_path)?;
 
         let repo = gix::open(&self.local_path).map_err(|e| {
             OpossumError::Registry(format!("Failed to open registry repository: {e}"))
