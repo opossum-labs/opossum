@@ -492,7 +492,7 @@ mod test {
         nanometer,
         nodes::{
             ideal_filter::{EdgeFilter, EdgeFilterType},
-            test_helper::test_helper::*,
+            test_helper::helper::*,
         },
     };
     use approx::assert_abs_diff_eq;
@@ -505,7 +505,7 @@ mod test {
         ));
         assert_eq!(node.name(), "beam splitter");
         assert_eq!(node.node_type(), "beam splitter");
-        assert_eq!(node.inverted(), false);
+        assert!(!node.inverted());
         assert_eq!(node.node_color(), "lightpink");
         Ok(())
     }

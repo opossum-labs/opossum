@@ -1,5 +1,5 @@
 #[cfg(test)]
-pub mod test_helper {
+pub mod helper {
     use crate::{
         analyzers::{
             Analyzable, RayTraceConfig,
@@ -23,7 +23,7 @@ pub mod test_helper {
         millimeter, nanometer, percent,
         prelude::Aperture,
         properties::Proptype,
-        utils::{LockExt, geom_transformation::Isometry, test_helper::test_helper::check_logs},
+        utils::{LockExt, geom_transformation::Isometry, test_helper::helper::check_logs},
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::{Point2, Point3, Vector3};
@@ -53,7 +53,7 @@ pub mod test_helper {
         let upright = names(&node.ports());
         let stored = names(node.node_attr().raw_ports());
         node.set_inverted(true)?;
-        assert_eq!(node.inverted(), true);
+        assert!(node.inverted());
         node.update_surfaces()?;
         assert_eq!(
             names(node.node_attr().raw_ports()),

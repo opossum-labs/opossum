@@ -209,7 +209,7 @@ mod test {
         let i_em = scenery.add_node(EnergyMeter::default())?;
         scenery.connect_nodes(i_src, "output_1", i_em, "input_1", Length::zero())?;
         let mut config = EnergyConfig::default();
-        config.map_source(i_src, energy_data_builder.into());
+        config.map_source(i_src, energy_data_builder);
         Ok((scenery, config))
     }
 
@@ -245,14 +245,14 @@ mod test {
             nanometer!(1.0),
         )?);
 
-        assert_eq!(config.map_source(uuid, builder.clone()), false);
+        assert!(!config.map_source(uuid, builder.clone()));
         assert_eq!(config.get_source(&uuid), Some(&builder));
 
         let builder2 = EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
             vec![(nanometer!(532.0), joule!(2.0))],
             nanometer!(1.0),
         )?);
-        assert_eq!(config.map_source(uuid, builder2.clone()), true);
+        assert!(config.map_source(uuid, builder2.clone()));
         assert_eq!(config.get_source(&uuid), Some(&builder2));
         Ok(())
     }

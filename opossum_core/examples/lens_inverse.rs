@@ -8,7 +8,7 @@ fn main() -> OpmResult<()> {
         millimeter!(100.0),
         millimeter!(-100.0),
         millimeter!(10.0),
-        &RefrIndexConst::new(1.5)?,
+        RefrIndexConst::new(1.5)?,
     )?)?;
     let i_m2 = scenery.add_node(ThinMirror::new("mirror").with_tilt(degree!(5.0, 0.0, 0.0))?)?;
     let mut l1_ref = NodeReference::from_node(&scenery.node(i_l1)?)?;

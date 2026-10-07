@@ -220,11 +220,11 @@ mod test {
     #[test]
     fn new() -> OpmResult<()> {
         let iso = Isometry::new_along_z(millimeter!(1.0))?;
-        assert!(Sphere::new(millimeter!(f64::NAN), iso.clone()).is_err());
-        assert!(Sphere::new(millimeter!(f64::INFINITY), iso.clone()).is_err());
-        assert!(Sphere::new(millimeter!(f64::NEG_INFINITY), iso.clone()).is_err());
+        assert!(Sphere::new(millimeter!(f64::NAN), iso).is_err());
+        assert!(Sphere::new(millimeter!(f64::INFINITY), iso).is_err());
+        assert!(Sphere::new(millimeter!(f64::NEG_INFINITY), iso).is_err());
 
-        let s = Sphere::new(millimeter!(2.0), iso.clone())?;
+        let s = Sphere::new(millimeter!(2.0), iso)?;
         assert_eq!(s.radius, millimeter!(2.0));
         Ok(())
     }

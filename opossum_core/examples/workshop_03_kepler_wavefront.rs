@@ -54,7 +54,6 @@ use std::{env, path::Path};
 /// This function sets up the optical components, connects them, configures ray tracing,
 /// and saves the resulting `OpmDocument` to a file. It is a complete example demonstrating
 /// the basic workflow in `opossum_core`.
-
 fn main() -> OpmResult<()> {
     // Initialize the optical "scenery".
     // `NodeGroup` is a container that holds all optical nodes (sources, lenses, analyzers).

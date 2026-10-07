@@ -43,7 +43,7 @@ fn main() -> OpmResult<()> {
             BandFilterType::BandPass,
             nanometer!(630.),
             nanometer!(50.),
-            (0.)..(1.),
+            (0.)..1.,
             Some(nanometer!(25.)),
             nanometer!(560.)..nanometer!(700.),
             nanometer!(0.01),

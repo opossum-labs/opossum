@@ -357,7 +357,7 @@ mod test {
         joule, millimeter,
         nodes::{Dummy, ParaxialSurface, SourcePort, round_collimated_ray_builder},
         reporting::node_report::NodeReportResult,
-        utils::test_helper::test_helper::check_logs,
+        utils::test_helper::helper::check_logs,
     };
     #[test]
     fn config_default() {
@@ -514,13 +514,13 @@ mod test {
         let uuid = Uuid::new_v4();
         let source = RayDataSource::Collimated(CollimatedSrc::default());
 
-        assert_eq!(config.map_source(uuid, source.clone().into()), false);
+        assert!(!config.map_source(uuid, source.clone().into()));
         assert_eq!(config.get_source(&uuid), Some(&source.clone().into()));
 
         // Let's use PointSrc for the second one to be sure it's different
         let source2 = RayDataSource::PointSrc(PointSrc::default());
 
-        assert_eq!(config.map_source(uuid, source2.clone().into()), true);
+        assert!(config.map_source(uuid, source2.clone().into()));
         assert_eq!(config.get_source(&uuid), Some(&source2.clone().into()));
     }
 

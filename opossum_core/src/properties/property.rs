@@ -162,6 +162,6 @@ mod test {
             validator: None,
         };
         assert!(prop.set_value(Proptype::Bool(false)).is_ok());
-        assert!(prop.set_value(Proptype::F64(3.14)).is_err());
+        assert!(prop.set_value(Proptype::F64(1.23)).is_err());
     }
 }

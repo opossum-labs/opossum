@@ -478,10 +478,10 @@ mod test_ghost_analysis_nested_groups_inversion {
 
     fn check_not_inverted(group: &NodeGroup) -> bool {
         for opt_ref in group.graph().nodes() {
-            if let Some(g) = opt_ref.as_any().downcast_ref::<NodeGroup>() {
-                if !check_not_inverted(g) {
-                    return false;
-                }
+            if let Some(g) = opt_ref.as_any().downcast_ref::<NodeGroup>()
+                && !check_not_inverted(g)
+            {
+                return false;
             }
             if opt_ref.inverted() {
                 return false;

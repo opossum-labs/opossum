@@ -47,16 +47,14 @@ fn main() -> OpmResult<()> {
     let rays = ray_data_source.clone().build()?;
     println!("# of rays {}", rays.nr_of_rays(true),);
     let focal_length = millimeter!(100.0);
-    for p in vec![millimeter!(0.0)] {
-        let beam_size = millimeter!(10.0) * (p - focal_length) / focal_length;
-        let peak = joule!(1.0) / (2. * PI * beam_size * beam_size);
-        println!(
-            "theo. peak fluence @ pos {:2.} mm -> {:8.1} mJ/cm²",
-            p.get::<millimeter>(),
-            peak.get::<millijoule_per_square_centimeter>()
-        );
-    }
-
+    let p = millimeter!(0.0);
+    let beam_size = millimeter!(10.0) * (p - focal_length) / focal_length;
+    let peak = joule!(1.0) / (2. * PI * beam_size * beam_size);
+    println!(
+        "theo. peak fluence @ pos {:2.} mm -> {:8.1} mJ/cm²",
+        p.get::<millimeter>(),
+        peak.get::<millijoule_per_square_centimeter>()
+    );
     let mut config = RayTraceConfig::default();
     config.map_source(i_src, ray_data_source.into());
     doc.add_analyzer(AnalyzerType::RayTrace(config));

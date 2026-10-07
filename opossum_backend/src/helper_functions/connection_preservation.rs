@@ -338,7 +338,7 @@ fn disconnect_pre_existing_mapping(
                 // also account for.
                 scenery.with_group_node_mut(from_group_id, |g| {
                     g.remove_mapped_port(&external_name, port_type)
-                })?;
+                })??;
                 Ok((
                     Some(PendingReconnect::MappingReroute {
                         moved_node_id,
@@ -362,10 +362,10 @@ fn disconnect_pre_existing_mapping(
             // `to_group_id`'s.
             scenery.with_group_node_mut(from_group_id, |g| {
                 g.remove_mapped_port(&external_name, port_type)
-            })?;
+            })??;
             scenery.with_group_node_mut(to_group_id, |g| {
                 g.remove_mapped_port(&outer_name, port_type)
-            })?;
+            })??;
             Ok((
                 Some(PendingReconnect::MappingCollapse {
                     moved_node_id,
@@ -393,7 +393,7 @@ fn disconnect_pre_existing_mapping(
             // overwrite an existing name).
             scenery.with_group_node_mut(from_group_id, |g| {
                 g.remove_mapped_port(&external_name, port_type)
-            })?;
+            })??;
 
             // Only the "collapse" case (the other endpoint already lives in `to_group_id`) actually
             // needs the outer edge itself torn down - it becomes a direct sibling connection instead.
@@ -647,7 +647,7 @@ fn reconnect_edge(
         // (node, port) above, so nothing is lost by dropping the map entry now.
         scenery.with_group_node_mut(to_group_id, |g| {
             g.remove_mapped_port(&other_port, group_port_type)
-        })?;
+        })??;
 
         // Connect directly inside `to_group_id`, same direction as the original edge with the
         // group replaced by its internal node, reusing the external edge's distance (group port

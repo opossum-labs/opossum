@@ -44,7 +44,6 @@ use std::{env, path::Path};
 /// - connects them into an optical path
 /// - configures ray tracing
 /// - exports the final system to a file
-
 fn main() -> OpmResult<()> {
     // Create a container for all optical elements in the system.
     // This acts as the "scene" or optical bench.

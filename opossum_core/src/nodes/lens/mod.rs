@@ -335,12 +335,11 @@ mod test {
         joule,
         light::{LightData, LightResult, Rays},
         millimeter, nanometer,
-        nodes::test_helper::test_helper::*,
+        nodes::test_helper::helper::*,
         properties::{Proptype, proptype::AssetRef},
         utils::geom_transformation::Isometry,
     };
     use approx::assert_relative_eq;
-    use core::f64;
     use nalgebra::Vector3;
     use num_traits::Zero;
 
@@ -349,7 +348,7 @@ mod test {
         let node = Lens::default();
         assert_eq!(node.name(), "lens");
         assert_eq!(node.node_type(), "lens");
-        assert_eq!(node.inverted(), false);
+        assert!(!node.inverted());
         assert_eq!(node.node_color(), "aqua");
         let Ok(Proptype::Curvature(roc)) = node.node_attr.get_property("front curvature") else {
             panic!()
@@ -475,21 +474,21 @@ mod test {
         let ct = millimeter!(11.0);
         let ref_index = RefrIndexConst::new(1.5)?;
 
-        assert!(Lens::new("test", roc, roc, millimeter!(-0.1), &ref_index).is_err());
-        assert!(Lens::new("test", roc, roc, millimeter!(f64::NAN), &ref_index).is_err());
-        assert!(Lens::new("test", roc, roc, millimeter!(f64::INFINITY), &ref_index).is_err());
+        assert!(Lens::new("test", roc, roc, millimeter!(-0.1), ref_index).is_err());
+        assert!(Lens::new("test", roc, roc, millimeter!(f64::NAN), ref_index).is_err());
+        assert!(Lens::new("test", roc, roc, millimeter!(f64::INFINITY), ref_index).is_err());
 
-        assert!(Lens::new("test", roc, Length::zero(), ct, &ref_index).is_err());
-        assert!(Lens::new("test", roc, millimeter!(f64::NAN), ct, &ref_index).is_err());
-        assert!(Lens::new("test", roc, millimeter!(f64::INFINITY), ct, &ref_index).is_ok());
-        assert!(Lens::new("test", roc, millimeter!(f64::NEG_INFINITY), ct, &ref_index).is_ok());
+        assert!(Lens::new("test", roc, Length::zero(), ct, ref_index).is_err());
+        assert!(Lens::new("test", roc, millimeter!(f64::NAN), ct, ref_index).is_err());
+        assert!(Lens::new("test", roc, millimeter!(f64::INFINITY), ct, ref_index).is_ok());
+        assert!(Lens::new("test", roc, millimeter!(f64::NEG_INFINITY), ct, ref_index).is_ok());
 
-        assert!(Lens::new("test", Length::zero(), roc, ct, &ref_index).is_err());
-        assert!(Lens::new("test", millimeter!(f64::NAN), roc, ct, &ref_index).is_err());
-        assert!(Lens::new("test", millimeter!(f64::INFINITY), roc, ct, &ref_index).is_ok());
-        assert!(Lens::new("test", millimeter!(f64::NEG_INFINITY), roc, ct, &ref_index).is_ok());
+        assert!(Lens::new("test", Length::zero(), roc, ct, ref_index).is_err());
+        assert!(Lens::new("test", millimeter!(f64::NAN), roc, ct, ref_index).is_err());
+        assert!(Lens::new("test", millimeter!(f64::INFINITY), roc, ct, ref_index).is_ok());
+        assert!(Lens::new("test", millimeter!(f64::NEG_INFINITY), roc, ct, ref_index).is_ok());
         let ref_index = RefrIndexConst::new(2.0)?;
-        let node = Lens::new("test", roc, roc, ct, &ref_index)?;
+        let node = Lens::new("test", roc, roc, ct, ref_index)?;
         assert_eq!(node.name(), "test");
         let Ok(Proptype::Curvature(roc)) = node.node_attr.get_property("front curvature") else {
             panic!()
@@ -540,7 +539,7 @@ mod test {
             millimeter!(f64::INFINITY),
             millimeter!(f64::NEG_INFINITY),
             millimeter!(10.0),
-            &RefrIndexConst::new(2.0)?,
+            RefrIndexConst::new(2.0)?,
         )?;
         node.set_positioning(NodePositioning::Absolute(Isometry::new_along_z(
             millimeter!(10.0),
@@ -560,7 +559,7 @@ mod test {
                 assert_eq!(ray.path_length(), millimeter!(30.0));
             }
         } else {
-            assert!(false);
+            panic!();
         }
         Ok(())
     }
@@ -572,7 +571,7 @@ mod test {
             millimeter!(100.0),
             millimeter!(-100.0),
             millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
+            RefrIndexConst::new(1.0)?,
         )?;
         node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let rays = Rays::new_uniform_collimated(
@@ -589,7 +588,7 @@ mod test {
                 assert_eq!(ray.direction(), Vector3::z());
             }
         } else {
-            assert!(false);
+            panic!();
         }
         Ok(())
     }
@@ -679,7 +678,7 @@ mod test {
             millimeter!(100.0),
             millimeter!(-100.0),
             millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
+            RefrIndexConst::new(1.0)?,
         )?;
 
         assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
@@ -711,7 +710,7 @@ mod test {
             millimeter!(f64::INFINITY),
             millimeter!(-100.0),
             millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
+            RefrIndexConst::new(1.0)?,
         )?;
 
         assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
@@ -740,7 +739,7 @@ mod test {
             millimeter!(100.),
             millimeter!(f64::INFINITY),
             millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
+            RefrIndexConst::new(1.0)?,
         )?;
 
         assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
@@ -772,7 +771,7 @@ mod test {
             millimeter!(-100.0),
             millimeter!(100.0),
             millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
+            RefrIndexConst::new(1.0)?,
         )?;
 
         assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
@@ -801,7 +800,7 @@ mod test {
             millimeter!(-200.0),
             millimeter!(100.0),
             millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
+            RefrIndexConst::new(1.0)?,
         )?;
 
         assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
@@ -830,7 +829,7 @@ mod test {
             millimeter!(-100.0),
             millimeter!(200.0),
             millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
+            RefrIndexConst::new(1.0)?,
         )?;
 
         assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
@@ -862,7 +861,7 @@ mod test {
             millimeter!(f64::INFINITY),
             millimeter!(100.0),
             millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
+            RefrIndexConst::new(1.0)?,
         )?;
 
         assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
@@ -891,7 +890,7 @@ mod test {
             millimeter!(-100.0),
             millimeter!(f64::INFINITY),
             millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
+            RefrIndexConst::new(1.0)?,
         )?;
 
         assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
@@ -923,7 +922,7 @@ mod test {
             millimeter!(-105.0),
             millimeter!(-100.0),
             millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
+            RefrIndexConst::new(1.0)?,
         )?;
 
         assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
@@ -952,7 +951,7 @@ mod test {
             millimeter!(105.0),
             millimeter!(100.0),
             millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
+            RefrIndexConst::new(1.0)?,
         )?;
 
         assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
@@ -981,7 +980,7 @@ mod test {
             millimeter!(-100.0),
             millimeter!(-100.0),
             millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
+            RefrIndexConst::new(1.0)?,
         )?;
 
         assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
@@ -1010,7 +1009,7 @@ mod test {
             millimeter!(100.0),
             millimeter!(100.0),
             millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
+            RefrIndexConst::new(1.0)?,
         )?;
 
         assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
@@ -1042,7 +1041,7 @@ mod test {
             millimeter!(-100.0),
             millimeter!(-105.0),
             millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
+            RefrIndexConst::new(1.0)?,
         )?;
 
         assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
@@ -1071,7 +1070,7 @@ mod test {
             millimeter!(100.0),
             millimeter!(105.0),
             millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
+            RefrIndexConst::new(1.0)?,
         )?;
 
         assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
@@ -1124,7 +1123,7 @@ mod test {
             joule!(1.0),
             &Hexapolar::new(millimeter!(10.0), 3)?,
         )?;
-        rays.set_refractive_index(&config.ambient_material().refractive_index_type())?;
+        rays.set_refractive_index(config.ambient_material().refractive_index_type())?;
 
         let mut incoming_data = LightResult::default();
         incoming_data.insert("input_1".into(), LightData::Geometric(rays));

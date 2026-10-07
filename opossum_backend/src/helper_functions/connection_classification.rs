@@ -135,7 +135,8 @@ pub fn connect_from_info(group: &mut NodeGroup, conn: &ConnectInfo) -> OpmResult
         conn.target_uuid(),
         conn.target_port(),
         meter!(conn.distance()),
-    )
+    )?;
+    Ok(())
 }
 
 /// Reconnects every [`ConnectInfo`] in `connections` inside `group_id`'s graph, via

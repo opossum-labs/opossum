@@ -28,7 +28,7 @@ fn main() -> OpmResult<()> {
         vec![(nanometer!(633.0), joule!(1.0))],
         nanometer!(1.0),
     )?);
-    config.map_source(i_src, energy_data_builder.into());
+    config.map_source(i_src, energy_data_builder);
     doc.add_analyzer(AnalyzerType::Energy(config));
     doc.save_to_file(Path::new(
         "./opossum_core/playground/inverse_beam_splitter.opm",

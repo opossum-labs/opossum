@@ -98,9 +98,7 @@ impl LightFlow {
 mod test {
     use super::*;
     use crate::millimeter;
-    use core::f64;
     use num_traits::Zero;
-
     #[test]
     fn new() -> OpmResult<()> {
         assert!(LightFlow::new("test1", "test2", millimeter!(f64::NAN)).is_err());

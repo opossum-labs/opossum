@@ -175,7 +175,7 @@ impl AxLims {
 mod tests {
     use approx::assert_relative_eq;
 
-    use crate::utils::test_helper::test_helper::check_logs;
+    use crate::utils::test_helper::helper::check_logs;
 
     use super::*;
     #[test]
@@ -271,7 +271,7 @@ mod tests {
     #[test]
     fn axlim_expand() {
         let mut axlim = AxLims::new(-10., 10.).unwrap();
-        let _ = axlim.expand_lim_range_by_factor(1.2);
+        axlim.expand_lim_range_by_factor(1.2);
 
         assert!((axlim.min + 12.).abs() < f64::EPSILON);
         assert!((axlim.max - 12.).abs() < f64::EPSILON);

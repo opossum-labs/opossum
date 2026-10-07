@@ -247,16 +247,13 @@ mod test {
         for (point, expected) in ps.points().iter().zip(expected) {
             assert_eq!(point, &expected);
         }
-        assert!(ps.add_points(&vec![millimeter!(f64::NAN, 0.0)]).is_err());
+        assert!(ps.add_points(&[millimeter!(f64::NAN, 0.0)]).is_err());
+        assert!(ps.add_points(&[millimeter!(f64::INFINITY, 0.0)]).is_err());
         assert!(
-            ps.add_points(&vec![millimeter!(f64::INFINITY, 0.0)])
+            ps.add_points(&[millimeter!(f64::NEG_INFINITY, 0.0)])
                 .is_err()
         );
-        assert!(
-            ps.add_points(&vec![millimeter!(f64::NEG_INFINITY, 0.0)])
-                .is_err()
-        );
-        assert!(ps.add_points(&vec![millimeter!(0.0, 0.0)]).is_ok());
+        assert!(ps.add_points(&[millimeter!(0.0, 0.0)]).is_ok());
         let expected = vec![
             millimeter!(-12.5, -12.5),
             millimeter!(12.5, 12.5),

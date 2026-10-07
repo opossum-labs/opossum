@@ -35,7 +35,7 @@ impl Coating for Fresnel {
             .clamp(0.0, 1.0);
 
         let n1_over_n2 = n1 / n2;
-        let sin2_alpha = (1.0 - cos_alpha * cos_alpha).max(0.0);
+        let sin2_alpha = cos_alpha.mul_add(-cos_alpha, 1.0).max(0.0);
         let sin2_beta = n1_over_n2 * n1_over_n2 * sin2_alpha;
 
         // Total Internal Reflection (TIR)

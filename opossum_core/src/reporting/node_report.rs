@@ -139,7 +139,7 @@ mod test {
         assert_eq!(report.name, "detector name");
         assert_eq!(report.uuid, "123");
         assert_eq!(report.properties.nr_of_props(), 0);
-        assert_eq!(report.show_item, false);
+        assert!(!report.show_item);
 
         assert_eq!(report.node_type(), "test detector");
         assert_eq!(report.name(), "detector name");
@@ -155,10 +155,10 @@ mod test {
             "123",
             Properties::default(),
         );
-        assert_eq!(report.show_item(), false);
+        assert!(!report.show_item());
         report.set_show_item(true);
-        assert_eq!(report.show_item, true);
-        assert_eq!(report.show_item(), true);
+        assert!(report.show_item);
+        assert!(report.show_item());
     }
     #[test]
     fn to_proptype() {

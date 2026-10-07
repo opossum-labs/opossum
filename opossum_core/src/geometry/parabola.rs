@@ -169,7 +169,6 @@ mod test {
         utils::geom_transformation::Isometry,
     };
     use approx::assert_abs_diff_eq;
-    use core::f64;
     use nalgebra::vector;
     #[test]
     fn new() {

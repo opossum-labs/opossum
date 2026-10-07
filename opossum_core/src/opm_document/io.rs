@@ -209,7 +209,7 @@ mod tests {
             collimated_line_ray_builder, round_collimated_ray_builder,
         },
         refractive_index::RefrIndexConst,
-        utils::test_helper::test_helper::check_logs,
+        utils::test_helper::helper::check_logs,
     };
     use std::path::PathBuf;
     use tempfile::NamedTempFile;
@@ -282,19 +282,17 @@ mod tests {
     }
 
     #[test]
-    fn reference_into_ancestor_round_trips() {
+    fn reference_into_ancestor_round_trips() -> OpmResult<()> {
         use crate::nodes::NodeReference;
 
         let mut document = OpmDocument::default();
         let r_id = {
             let scenery = document.scenery_mut();
-            let a_id = scenery.add_node(Dummy::default()).unwrap();
-            let a_ref = scenery.node_recursive(a_id).unwrap().0;
+            let a_id = scenery.add_node(Dummy::default())?;
+            let a_ref = scenery.node_recursive(a_id)?.0;
             let mut g = NodeGroup::new("G");
-            let r_id = g
-                .add_node(NodeReference::from_node(&a_ref).unwrap())
-                .unwrap();
-            scenery.add_node(g).unwrap();
+            let r_id = g.add_node(NodeReference::from_node(&a_ref)?)?;
+            scenery.add_node(g)?;
             r_id
         };
 
@@ -311,6 +309,7 @@ mod tests {
             !ports.names(&PortType::Output).is_empty(),
             "the reloaded reference must resolve to A (non-empty mirrored ports)"
         );
+        Ok(())
     }
 
     #[test]
@@ -969,7 +968,7 @@ mod tests {
             "Wedge",
             millimeter!(10.0),
             degree!(0.0),
-            &RefrIndexConst::new(1.5068)?,
+            RefrIndexConst::new(1.5068)?,
         )?
         .with_tilt(degree!(15.0, 0.0, 0.0))?;
         let l1 = scenery.add_node(lens1)?;
@@ -978,7 +977,7 @@ mod tests {
             millimeter!(205.55),
             millimeter!(-205.55),
             millimeter!(2.79),
-            &RefrIndexConst::new(1.5068)?,
+            RefrIndexConst::new(1.5068)?,
         )?
         .with_tilt(degree!(15.0, 0.0, 0.0))?;
         let l2 = scenery.add_node(lens2)?;

@@ -571,7 +571,7 @@ mod test_bounced_hit_map {
                 .len(),
             1
         );
-        assert!(bhm.hit_map.get(&uuid2).is_none());
+        assert!(!bhm.hit_map.contains_key(&uuid2));
         bhm.add_to_hitmap(
             HitPoint::Energy(EnergyHitPoint::new(meter!(1.0, 0.0, 0.0), joule!(1.0))?),
             uuid1,
@@ -584,7 +584,7 @@ mod test_bounced_hit_map {
                 .len(),
             2
         );
-        assert!(bhm.hit_map.get(&uuid2).is_none());
+        assert!(!bhm.hit_map.contains_key(&uuid2));
         bhm.add_to_hitmap(
             HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?),
             uuid2,
@@ -658,7 +658,7 @@ mod test_hit_map {
         joule, meter,
         properties::Proptype,
         reporting::plottable::{PlotParameters, Plottable},
-        utils::test_helper::test_helper::check_logs,
+        utils::test_helper::helper::check_logs,
     };
 
     #[test]
@@ -1027,7 +1027,7 @@ mod test_hit_map {
         ];
         for pos in &pos1 {
             hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0))?),
+                HitPoint::Energy(EnergyHitPoint::new(*pos, joule!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1045,7 +1045,7 @@ mod test_hit_map {
         ];
         for pos in &pos2 {
             hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0))?),
+                HitPoint::Energy(EnergyHitPoint::new(*pos, joule!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1062,7 +1062,7 @@ mod test_hit_map {
         let pos1 = vec![meter!(-0.5, -0.5, 0.0), meter!(0., 0., 0.0)];
         for pos in &pos1 {
             hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0))?),
+                HitPoint::Energy(EnergyHitPoint::new(*pos, joule!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1085,7 +1085,7 @@ mod test_hit_map {
         ];
         for pos in &pos1 {
             hm.add_to_hitmap(
-                HitPoint::Fluence(FluenceHitPoint::new(pos.clone(), J_per_cm2!(1.0))?),
+                HitPoint::Fluence(FluenceHitPoint::new(*pos, J_per_cm2!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1114,7 +1114,7 @@ mod test_hit_map {
         ];
         for pos in &pos1 {
             hm.add_to_hitmap(
-                HitPoint::Fluence(FluenceHitPoint::new(pos.clone(), J_per_cm2!(1.0))?),
+                HitPoint::Fluence(FluenceHitPoint::new(*pos, J_per_cm2!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1132,7 +1132,7 @@ mod test_hit_map {
         ];
         for pos in &pos2 {
             hm.add_to_hitmap(
-                HitPoint::Fluence(FluenceHitPoint::new(pos.clone(), J_per_cm2!(1.0))?),
+                HitPoint::Fluence(FluenceHitPoint::new(*pos, J_per_cm2!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1179,7 +1179,7 @@ mod test_hit_map {
         ];
         for pos in &pos1 {
             hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0))?),
+                HitPoint::Energy(EnergyHitPoint::new(*pos, joule!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1208,7 +1208,7 @@ mod test_hit_map {
         ];
         for pos in &pos1 {
             hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0))?),
+                HitPoint::Energy(EnergyHitPoint::new(*pos, joule!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1229,7 +1229,7 @@ mod test_hit_map {
         ];
         for pos in &pos2 {
             hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0))?),
+                HitPoint::Energy(EnergyHitPoint::new(*pos, joule!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1255,7 +1255,7 @@ mod test_hit_map {
         ];
         for pos in &pos1 {
             hm.add_to_hitmap(
-                HitPoint::Fluence(FluenceHitPoint::new(pos.clone(), J_per_cm2!(1.0))?),
+                HitPoint::Fluence(FluenceHitPoint::new(*pos, J_per_cm2!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1284,7 +1284,7 @@ mod test_hit_map {
         ];
         for pos in &pos1 {
             hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0))?),
+                HitPoint::Energy(EnergyHitPoint::new(*pos, joule!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1302,7 +1302,7 @@ mod test_hit_map {
         ];
         for pos in &pos2 {
             hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0))?),
+                HitPoint::Energy(EnergyHitPoint::new(*pos, joule!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1325,7 +1325,7 @@ mod test_hit_map {
         ];
         for pos in &pos1 {
             hm.add_to_hitmap(
-                HitPoint::Fluence(FluenceHitPoint::new(pos.clone(), J_per_cm2!(1.0))?),
+                HitPoint::Fluence(FluenceHitPoint::new(*pos, J_per_cm2!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1354,7 +1354,7 @@ mod test_hit_map {
         ];
         for pos in &pos1 {
             hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0))?),
+                HitPoint::Energy(EnergyHitPoint::new(*pos, joule!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1391,7 +1391,7 @@ mod test_hit_map {
         ];
         for pos in &pos1 {
             hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0))?),
+                HitPoint::Energy(EnergyHitPoint::new(*pos, joule!(1.0))?),
                 1,
                 uuid,
             )?;

@@ -320,7 +320,6 @@ mod tests {
         let alignment = node
             .node_attr()
             .alignment()
-            .clone()
             .ok_or_else(|| OpossumError::Other("Error getting alignment".to_string()))?;
         assert_abs_diff_eq!(alignment.translation().x.value, decenter.x.value);
         assert_abs_diff_eq!(alignment.translation().y.value, decenter.y.value);

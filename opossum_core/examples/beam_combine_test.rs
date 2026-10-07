@@ -29,8 +29,8 @@ fn main() -> OpmResult<()> {
         nanometer!(1.0),
     )?);
     let mut energy_config = EnergyConfig::default();
-    energy_config.map_source(i_s1, energy_data_builder_1.into());
-    energy_config.map_source(i_s2, energy_data_builder_2.into());
+    energy_config.map_source(i_s1, energy_data_builder_1);
+    energy_config.map_source(i_s2, energy_data_builder_2);
     doc.add_analyzer(AnalyzerType::Energy(energy_config));
     doc.save_to_file(Path::new(
         "./opossum_core/playground/beam_combiner_test.opm",

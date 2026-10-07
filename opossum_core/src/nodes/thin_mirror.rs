@@ -235,7 +235,7 @@ mod test {
         degree, joule,
         light::{Ray, Rays, spectrum_helper::create_he_ne_spec},
         nanometer,
-        nodes::test_helper::test_helper::*,
+        nodes::test_helper::helper::*,
         utils::geom_transformation::Isometry,
     };
     use nalgebra::vector;
@@ -246,11 +246,11 @@ mod test {
         assert_eq!(node.name(), "mirror");
         assert_eq!(node.node_type(), "mirror");
         assert_eq!(node.node_color(), "aliceblue");
-        assert_eq!(node.inverted(), false);
+        assert!(!node.inverted());
         if let Ok(Proptype::Curvature(r)) = node.properties().get("curvature") {
             assert_eq!(r, &millimeter!(f64::INFINITY));
         } else {
-            assert!(false, "property curvature was not a length.");
+            panic!("property curvature was not a length.");
         }
     }
     #[test]
@@ -261,7 +261,7 @@ mod test {
         if let Ok(Proptype::Curvature(r)) = m.properties().get("curvature") {
             assert_eq!(r, &millimeter!(f64::INFINITY));
         } else {
-            assert!(false, "property curvature was not a length.");
+            panic!("property curvature was not a length.");
         }
     }
     #[test]
@@ -309,7 +309,7 @@ mod test {
         if let Ok(Proptype::Curvature(r)) = m.properties().get("curvature") {
             assert_eq!(r, &millimeter!(100.0));
         } else {
-            assert!(false, "property curvature was not a length.");
+            panic!("property curvature was not a length.");
         }
         Ok(())
     }
@@ -373,7 +373,7 @@ mod test {
             let dir = vector![0.0, 0.0, -1.0];
             assert_eq!(ray.direction(), dir);
         } else {
-            assert!(false, "could not get LightData");
+            panic!("could not get LightData");
         }
         Ok(())
     }

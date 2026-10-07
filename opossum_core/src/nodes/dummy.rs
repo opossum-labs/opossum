@@ -100,7 +100,7 @@ mod test {
         joule,
         light::{LightData, Ray, Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer,
-        nodes::test_helper::test_helper::*,
+        nodes::test_helper::helper::*,
         reporting::node_report::NodeReportResult,
         utils::geom_transformation::Isometry,
     };

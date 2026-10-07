@@ -157,6 +157,20 @@ impl Display for AnalyzerType {
         write!(f, "{msg}")
     }
 }
+/// Marker trait for all Analyzers
+pub trait Analyzer {
+    /// Analyze a [`NodeGroup`].
+    ///
+    /// # Errors
+    /// This function returns an error if the concrete implementation of the [`Analyzer`] returns an error.
+    fn analyze(&self, scenery: &mut NodeGroup) -> OpmResult<()>;
+    /// Generate an analysis report for this [`NodeGroup`].
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the concrete implementation of the [`Analyzer`] returns an error..
+    fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport>;
+}
 #[cfg(test)]
 mod test {
     use super::*;
@@ -225,19 +239,4 @@ mod test {
             "Energy(EnergyConfig { source_map: {}, active_pump_scenario: ActiveScenario(None) })"
         );
     }
-}
-
-/// Marker trait for all Analyzers
-pub trait Analyzer {
-    /// Analyze a [`NodeGroup`].
-    ///
-    /// # Errors
-    /// This function returns an error if the concrete implementation of the [`Analyzer`] returns an error.
-    fn analyze(&self, scenery: &mut NodeGroup) -> OpmResult<()>;
-    /// Generate an analysis report for this [`NodeGroup`].
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the concrete implementation of the [`Analyzer`] returns an error..
-    fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport>;
 }

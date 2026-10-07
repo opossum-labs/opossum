@@ -386,7 +386,7 @@ mod tests {
         millimeter, nanometer,
         nodes::{Dummy, EnergyMeter, Lens, NodeGroup, SourcePort, round_collimated_ray_builder},
         utils::geom_transformation::Isometry,
-        utils::test_helper::test_helper::metered_energy,
+        utils::test_helper::helper::metered_energy,
     };
     use approx::assert_relative_eq;
     use uom::si::{f64::Length, length::millimeter};
