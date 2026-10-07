@@ -155,20 +155,10 @@ pub mod helper {
     pub fn test_rays_beyond_clear_aperture_are_lost<
         T: Default + AnalysisRayTrace + AnalysisGhostFocus,
     >() -> OpmResult<()> {
-        let (inside, outside) = (millimeter!(0.0, 12.4, -10.0), millimeter!(0.0, 12.6, -10.0));
-        let rays = || -> OpmResult<Rays> {
-            Ok(Rays::from(vec![
-                Ray::new_collimated(inside, nanometer!(1000.0), joule!(1.0))?,
-                Ray::new_collimated(outside, nanometer!(1000.0), joule!(1.0))?,
-            ]))
-        };
-        let placed = || -> OpmResult<T> {
-            let mut node = T::default();
-            node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
-            Ok(node)
-        };
+        let (inside, outside) = around_the_default_rim();
+        let rays = || rays_along_z_from(&[inside, outside], nanometer!(1000.0));
         let traced = AnalysisRayTrace::analyze(
-            &mut placed()?,
+            &mut placed_at_origin::<T>()?,
             LightResult::from([("input_1".into(), LightData::Geometric(rays()?))]),
             &RayTraceConfig::default(),
         )?;
@@ -182,7 +172,7 @@ pub mod helper {
             "a ray trace keeps the ray inside, loses the one outside"
         );
         let passed = AnalysisGhostFocus::analyze(
-            &mut placed()?,
+            &mut placed_at_origin::<T>()?,
             LightRays::from([("input_1".into(), vec![rays()?])]),
             &GhostFocusConfig::default(),
             &mut Vec::new(),
@@ -203,6 +193,86 @@ pub mod helper {
         assert_eq!(beside.direction(), Vector3::z());
         assert_eq!(beside.energy(), joule!(1.0));
         Ok(())
+    }
+    /// Assert that a reflecting component reflects a ray inside its clear aperture and loses one
+    /// just outside, in a ray trace and in a ghost focus analysis alike.
+    ///
+    /// Both rays travel along z, 12.4 mm and 12.6 mm off the axis, around the default clear aperture
+    /// of 12.5 mm. A ray that misses a mirror or a grating has no reflected counterpart, whatever the
+    /// analyzer's missed surface strategy. At 500 nm the default grating diffracts a ray at normal
+    /// incidence.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node cannot be placed or analyzed.
+    ///
+    /// # Panics
+    ///
+    /// Panics if an analysis puts out no rays or another set of them.
+    pub fn test_reflections_beyond_clear_aperture_are_lost<
+        T: Default + AnalysisRayTrace + AnalysisGhostFocus,
+    >() -> OpmResult<()> {
+        let (inside, outside) = around_the_default_rim();
+        let rays = || rays_along_z_from(&[inside, outside], nanometer!(500.0));
+        let traced = AnalysisRayTrace::analyze(
+            &mut placed_at_origin::<T>()?,
+            LightResult::from([("input_1".into(), LightData::Geometric(rays()?))]),
+            &RayTraceConfig::default(),
+        )?;
+        let Some(LightData::Geometric(traced)) = traced.get("output_1") else {
+            panic!("expected ray data at the output port");
+        };
+        let ghosts = AnalysisGhostFocus::analyze(
+            &mut placed_at_origin::<T>()?,
+            LightRays::from([("input_1".into(), vec![rays()?])]),
+            &GhostFocusConfig::default(),
+            &mut Vec::new(),
+            0,
+        )?;
+        let Some(ghosts) = ghosts.get("output_1").and_then(|bundles| bundles.first()) else {
+            panic!("expected a ray bundle at the output port");
+        };
+        for (analysis, reflected) in [("ray trace", traced), ("ghost focus analysis", ghosts)] {
+            let heights: Vec<f64> = reflected
+                .iter()
+                .filter(|ray| ray.valid())
+                .map(|ray| ray.position().y.get::<millimeter>())
+                .collect();
+            assert_eq!(
+                heights.len(),
+                1,
+                "a {analysis} reflects the ray inside only: {heights:?}"
+            );
+            assert_abs_diff_eq!(heights[0], inside.y.get::<millimeter>(), epsilon = 1e-9);
+        }
+        Ok(())
+    }
+    /// Return the start points of two rays, 12.4 mm and 12.6 mm off the axis: just inside and
+    /// just outside the default clear aperture of 12.5 mm, 10 mm in front of a node at the origin.
+    fn around_the_default_rim() -> (Point3<Length>, Point3<Length>) {
+        (millimeter!(0.0, 12.4, -10.0), millimeter!(0.0, 12.6, -10.0))
+    }
+    /// Return a bundle of rays along z, one from each start point, carrying 1 J each.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the wavelength is not positive and finite.
+    fn rays_along_z_from(starts: &[Point3<Length>], wavelength: Length) -> OpmResult<Rays> {
+        let rays = starts
+            .iter()
+            .map(|start| Ray::new_collimated(*start, wavelength, joule!(1.0)))
+            .collect::<OpmResult<Vec<_>>>()?;
+        Ok(Rays::from(rays))
+    }
+    /// Return a default node of the given type, placed at the origin.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node cannot be placed.
+    fn placed_at_origin<T: Default + OpticNode>() -> OpmResult<T> {
+        let mut node = T::default();
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        Ok(node)
     }
     pub fn test_analyze_apodization_warning<T: Default + AnalysisRayTrace>() -> OpmResult<()> {
         testing_logger::setup();

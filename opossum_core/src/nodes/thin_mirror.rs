@@ -16,7 +16,7 @@ use crate::{
     geometry::{Geometry, SurfaceShape},
     light::{LightData, LightResult, Rays, light_result::LightRays},
     millimeter,
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, create_surface_properties},
     percent,
     properties::{Proptype, validator::Validator},
     utils::geom_transformation::Isometry,
@@ -46,6 +46,7 @@ inventory::submit! {
 ///   - `name`
 ///   - `inverted`
 ///   - `curvature`
+///   - `clear aperture`: the extent of the mirror; a ray beyond it misses the mirror
 pub struct ThinMirror {
     node_attr: NodeAttr,
 }
@@ -65,6 +66,7 @@ impl Default for ThinMirror {
                 Proptype::Curvature(millimeter!(f64::INFINITY)),
             )
             .unwrap();
+        create_surface_properties(&mut node_attr).unwrap();
 
         let mut m = Self { node_attr };
         m.update_surfaces().unwrap();
@@ -119,7 +121,7 @@ impl OpticNode for ThinMirror {
             Isometry::identity(),
             SurfaceShape::spherical(*curvature),
             Isometry::identity(),
-            None,
+            Some(self.clear_aperture()?),
         )?))
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
@@ -227,8 +229,11 @@ mod test {
     use super::*;
     use crate::{
         analyzers::{RayTraceConfig, energy::EnergyConfig},
-        core_optics::{PortType, node_attr::NodePositioning},
-        degree, joule,
+        apertures::{ApertureShape, CircleShape},
+        core_optics::{Alignable, PortType, node_attr::NodePositioning},
+        degree,
+        geometry::body::CLEAR_APERTURE,
+        joule,
         light::{Ray, Rays, spectrum_helper::create_he_ne_spec},
         nanometer,
         nodes::test_helper::helper::*,
@@ -307,6 +312,77 @@ mod test {
         } else {
             panic!("property curvature was not a length.");
         }
+        Ok(())
+    }
+    #[test]
+    fn a_curvature_tighter_than_the_clear_aperture_is_rejected() {
+        let error = ThinMirror::default()
+            .with_curvature(millimeter!(-10.0))
+            .expect_err("a sphere of 10 mm radius ends before the clear aperture of 12.5 mm");
+        assert!(error.to_string().contains("does not reach"), "{error}");
+        // A hemisphere just reaches it.
+        assert!(
+            ThinMirror::default()
+                .with_curvature(millimeter!(-12.5))
+                .is_ok()
+        );
+    }
+    #[test]
+    fn clear_aperture_absent_in_file() -> OpmResult<()> {
+        test_clear_aperture_absent_in_file::<ThinMirror>()
+    }
+    #[test]
+    fn reflections_beyond_clear_aperture_are_lost() -> OpmResult<()> {
+        test_reflections_beyond_clear_aperture_are_lost::<ThinMirror>()
+    }
+    /// A round mirror of 25 mm turned by 45° about x keeps its full diameter along x, but presents
+    /// only 25 mm · cos 45° ≈ 17.7 mm along y to a beam along z: its clear aperture is measured on
+    /// the mirror, in the frame of the node.
+    #[test]
+    fn a_45_degree_mirror_measures_its_clear_aperture_in_the_node_frame() -> OpmResult<()> {
+        let mut mirror = ThinMirror::default().with_tilt(degree!(45.0, 0.0, 0.0))?;
+        mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        for ((x, y), hits) in [
+            ((12.4, 0.0), true),
+            ((12.6, 0.0), false),
+            ((0.0, 8.8), true),
+            ((0.0, 8.9), false),
+            ((0.0, -8.8), true),
+            ((0.0, -8.9), false),
+        ] {
+            let ray =
+                Ray::new_collimated(millimeter!(x, y, -10.0), nanometer!(1000.0), joule!(1.0))?;
+            let input =
+                LightResult::from([("input_1".into(), LightData::Geometric(Rays::from(ray)))]);
+            let output = AnalysisRayTrace::analyze(&mut mirror, input, &RayTraceConfig::default())?;
+            let Some(LightData::Geometric(reflected)) = output.get("output_1") else {
+                panic!("expected ray data at the output port");
+            };
+            assert_eq!(
+                reflected.nr_of_rays(true) == 1,
+                hits,
+                "ray at ({x}, {y}) mm"
+            );
+        }
+        Ok(())
+    }
+    /// An energy analysis traces no rays, so the clear aperture does not cut its light, however
+    /// small the mirror is.
+    #[test]
+    fn energy_analysis_ignores_the_clear_aperture() -> OpmResult<()> {
+        let mut mirror = ThinMirror::default();
+        mirror.set_property(
+            CLEAR_APERTURE,
+            ApertureShape::BinaryCircle(CircleShape::new(millimeter!(0.1))?).into(),
+        )?;
+        mirror.update_surfaces()?;
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
+        let output = AnalysisEnergy::analyze(
+            &mut mirror,
+            LightResult::from([("input_1".into(), input_light.clone())]),
+            &EnergyConfig::default(),
+        )?;
+        assert_eq!(output.get("output_1"), Some(&input_light));
         Ok(())
     }
     #[test]

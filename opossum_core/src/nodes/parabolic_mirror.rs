@@ -15,7 +15,7 @@ use crate::{
     geometry::{Geometry, SurfaceShape},
     light::{LightData, LightRays, LightResult, Rays},
     meter,
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, create_surface_properties},
     percent,
     properties::{Proptype, validator::Validator},
     radian,
@@ -46,6 +46,8 @@ inventory::submit! {
 ///   - `name`
 ///   - `inverted`
 ///   - `curvature`
+///   - `clear aperture`: the extent of the mirror, measured perpendicular to the axis of the
+///     parent parabola around the point the chief ray hits; a ray beyond it misses the mirror
 pub struct ParabolicMirror {
     node_attr: NodeAttr,
 }
@@ -96,6 +98,7 @@ impl Default for ParabolicMirror {
                 Vector2::new(1., 0.).into(),
             )
             .unwrap();
+        create_surface_properties(&mut node_attr).unwrap();
 
         let mut parabola = Self { node_attr };
         parabola.update_surfaces().unwrap();
@@ -377,7 +380,7 @@ impl OpticNode for ParabolicMirror {
                 focal_length: -1. * self.calc_parent_focal_length()?,
             },
             vertex,
-            None,
+            Some(self.clear_aperture()?),
         )?))
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
@@ -493,17 +496,25 @@ mod test {
             ghostfocus::AnalysisGhostFocus,
             raytrace::AnalysisRayTrace,
         },
-        core_optics::{OpticNode, node_attr::NodePositioning},
+        apertures::{ApertureShape, CircleShape},
+        core_optics::{NodeAttrExt, OpticNode, node_attr::NodePositioning},
         degree,
         distributions::position::Hexapolar,
         error::OpmResult,
+        geometry::body::CLEAR_APERTURE,
         joule,
         light::{
             LightData, LightResult, Ray, Rays, light_result::light_result_to_light_rays,
             spectrum_helper::create_he_ne_spec,
         },
         meter, millimeter, nanometer,
-        nodes::{ParabolicMirror, test_helper::helper::test_reflects_completely},
+        nodes::{
+            ParabolicMirror,
+            test_helper::helper::{
+                test_clear_aperture_absent_in_file,
+                test_reflections_beyond_clear_aperture_are_lost, test_reflects_completely,
+            },
+        },
         properties::Proptype,
         utils::geom_transformation::Isometry,
     };
@@ -537,6 +548,66 @@ mod test {
     #[test]
     fn reflects_completely() {
         test_reflects_completely::<ParabolicMirror>();
+    }
+    #[test]
+    fn clear_aperture_absent_in_file() -> OpmResult<()> {
+        test_clear_aperture_absent_in_file::<ParabolicMirror>()
+    }
+    #[test]
+    fn reflections_beyond_clear_aperture_are_lost() -> OpmResult<()> {
+        test_reflections_beyond_clear_aperture_are_lost::<ParabolicMirror>()
+    }
+    /// A collimating 90° off-axis parabola of 50 mm diameter, as a supplier quotes it: the circle is
+    /// measured perpendicular to the parent axis, around the point the chief ray hits. A ray
+    /// parallel to the parent axis therefore hits exactly when it passes within 25 mm of the chief
+    /// ray's reflection, however far the curved surface bends away in between.
+    #[test]
+    fn an_off_axis_parabola_measures_its_clear_aperture_along_the_parent_axis() -> OpmResult<()> {
+        let mut parabola =
+            ParabolicMirror::new_with_off_axis_x("oap", millimeter!(100.0), true, degree!(90.0))?;
+        parabola.set_property(
+            CLEAR_APERTURE,
+            ApertureShape::BinaryCircle(CircleShape::new(millimeter!(25.0))?).into(),
+        )?;
+        parabola.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        let mut reflect = |ray: Ray| -> OpmResult<Option<Ray>> {
+            let input =
+                LightResult::from([("input_1".into(), LightData::Geometric(Rays::from(ray)))]);
+            let output =
+                AnalysisRayTrace::analyze(&mut parabola, input, &RayTraceConfig::default())?;
+            let Some(LightData::Geometric(reflected)) = output.get("output_1") else {
+                panic!("expected ray data at the output port");
+            };
+            Ok(reflected.iter().find(|ray| ray.valid()).cloned())
+        };
+        // The chief ray comes from the focus along z and leaves parallel to the parent axis.
+        let chief = reflect(Ray::new_collimated(
+            millimeter!(0.0, 0.0, -10.0),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?)?
+        .expect("the chief ray hits the mirror");
+        let parent_axis = chief.direction().normalize();
+        let across = Vector3::y();
+        let within = parent_axis.cross(&across);
+        for direction in [across, -across, within, -within] {
+            for (offset, hits) in [(24.9, true), (25.1, false)] {
+                // Sent back along the reflected beam, from 100 mm out.
+                let start = direction * offset + parent_axis * 100.0;
+                let ray = Ray::new(
+                    millimeter!(start.x, start.y, start.z),
+                    -parent_axis,
+                    nanometer!(1000.0),
+                    joule!(1.0),
+                )?;
+                assert_eq!(
+                    reflect(ray)?.is_some(),
+                    hits,
+                    "{offset} mm off the chief ray towards {direction:?}"
+                );
+            }
+        }
+        Ok(())
     }
     #[test]
     fn new() {

@@ -14,7 +14,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     geometry::Geometry,
     light::{LightData, LightRays, LightResult, Rays},
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, create_surface_properties},
     num_per_mm,
     properties::{Proptype, validator::Validator},
     radian,
@@ -54,6 +54,7 @@ inventory::submit! {
 ///   - `name`
 ///   - `inverted`
 ///   - `line density`
+///   - `clear aperture`: the extent of the grating; a ray beyond it misses the grating
 pub struct ReflectiveGrating {
     node_attr: NodeAttr,
 }
@@ -83,6 +84,7 @@ impl Default for ReflectiveGrating {
                 (-1).into(),
             )
             .unwrap();
+        create_surface_properties(&mut node_attr).unwrap();
         let mut g = Self { node_attr };
         g.update_surfaces().unwrap();
         g
@@ -267,7 +269,7 @@ impl AnalysisRayTrace for ReflectiveGrating {
 
 impl OpticNode for ReflectiveGrating {
     fn geometry(&self) -> OpmResult<Option<Geometry>> {
-        Ok(Some(Geometry::plane(None)))
+        Ok(Some(Geometry::plane(Some(self.clear_aperture()?))))
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.install_geometry(&["input_1"], &["output_1"])
@@ -386,6 +388,14 @@ mod test {
         let err_msg = result.unwrap_err();
         assert_eq!(err_msg, OpossumError::Analysis("Wavelength 1000 nm is too large for grating constant 5000 lines/mm and order 1 (evanescent waves)".into()));
         Ok(())
+    }
+    #[test]
+    fn clear_aperture_absent_in_file() -> OpmResult<()> {
+        test_clear_aperture_absent_in_file::<ReflectiveGrating>()
+    }
+    #[test]
+    fn reflections_beyond_clear_aperture_are_lost() -> OpmResult<()> {
+        test_reflections_beyond_clear_aperture_are_lost::<ReflectiveGrating>()
     }
     #[test]
     fn invalid_line_density() {
