@@ -456,9 +456,7 @@ impl Ray {
                 "the refractive index must be >=1.0 and finite".into(),
             ));
         }
-        let geo_surf = s.geo_surface();
-        let surf_vectors = geo_surf.0.lock_opm()?.calc_intersect_and_normal(self);
-        if let Some((intersection_point, surface_normal)) = surf_vectors {
+        if let Some((intersection_point, surface_normal)) = s.intersect(self)? {
             // it is assumed that the surface normal is already normalized and points against the ray direction.
 
             // get correctly normalized k vector of ray
@@ -578,9 +576,7 @@ impl Ray {
                 "the refractive index must be >=1.0 and finite".into(),
             ));
         }
-        let geo_surface = os.geo_surface();
-        let surf_vectors = geo_surface.0.lock_opm()?.calc_intersect_and_normal(self);
-        if let Some((intersection_point, surface_normal)) = surf_vectors {
+        if let Some((intersection_point, surface_normal)) = os.intersect(self)? {
             // Snell's law in vector form (src: https://www.starkeffects.com/snells-law-vector.shtml)
             // mu=n_1 / n_2
             // s1: incoming direction (normalized??)

@@ -15,12 +15,14 @@ use crate::{
     },
     error::{OpmResult, OpossumError},
     geometry::geo_surface::GeoSurfaceRef,
-    light::Rays,
+    light::{Ray, Rays},
     nodes::fluence_detector::Fluence,
     refractive_index::RefractiveIndexType,
     utils::{LockExt, geom_transformation::Isometry},
 };
 use core::fmt::Debug;
+use nalgebra::{Point3, Vector3};
+use uom::si::f64::Length;
 
 /// This struct represents an optical surface, which consists of the geometric surface shape
 /// ([`GeoSurface`](crate::geometry::geo_surface::GeoSurface)) and further properties such as the [`CoatingType`].
@@ -112,6 +114,29 @@ impl OpticSurface {
     #[must_use]
     pub fn geo_surface(&self) -> GeoSurfaceRef {
         self.geo_surface.clone()
+    }
+    /// Intersect a [`Ray`] with this [`OpticSurface`].
+    ///
+    /// This is the one place that decides whether, and where, a ray hits this surface.
+    ///
+    /// # Arguments
+    ///
+    /// * `ray` - the ray to be intersected.
+    ///
+    /// # Returns
+    ///
+    /// The intersection point in global coordinates and the normalized surface normal there,
+    /// pointing against the ray; or `None` if the ray misses the surface.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the mutex of the geometric surface cannot be locked.
+    pub fn intersect(&self, ray: &Ray) -> OpmResult<Option<(Point3<Length>, Vector3<f64>)>> {
+        Ok(self
+            .geo_surface
+            .0
+            .lock_opm()?
+            .calc_intersect_and_normal(ray))
     }
     /// Returns a reference to the aperture of this [`OpticSurface`].
     #[must_use]
@@ -404,6 +429,42 @@ mod test {
         assert_eq!(os.lidt, J_per_cm2!(2.0));
         assert!(matches!(os.coating, CoatingType::Fresnel));
         assert!(matches!(os.aperture, _aperture));
+        Ok(())
+    }
+    #[test]
+    fn intersect_finds_where_a_ray_meets_the_surface() -> OpmResult<()> {
+        // A sphere of 1 m radius with its vertex at the origin, curving away towards +z.
+        let surface = OpticSurface::new(
+            GeoSurfaceRef(Arc::new(Mutex::new(Sphere::new(
+                meter!(1.0),
+                Isometry::new_along_z(meter!(1.0))?,
+            )?))),
+            CoatingType::IdealAR,
+            Aperture::default(),
+            J_per_cm2!(1.0),
+        )?;
+        let towards = Ray::new(
+            meter!(0.0, 0.0, -1.0),
+            nalgebra::Vector3::z(),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?;
+        let (point, normal) = surface
+            .intersect(&towards)?
+            .ok_or_else(|| OpossumError::Other("the ray missed the surface".into()))?;
+        assert!(point.coords.map(|c| c.value).norm() < 1e-15, "{point:?}");
+        assert!(
+            (normal - (-nalgebra::Vector3::z())).norm() < 1e-15,
+            "{normal:?}"
+        );
+        // A ray running past the sphere sideways does not hit it.
+        let past = Ray::new(
+            meter!(2.0, 0.0, -1.0),
+            nalgebra::Vector3::z(),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?;
+        assert!(surface.intersect(&past)?.is_none());
         Ok(())
     }
     #[test]
