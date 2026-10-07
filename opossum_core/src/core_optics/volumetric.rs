@@ -1210,6 +1210,52 @@ mod test {
         assert_every_ray_gained(rays, ray_count, entering_energy);
         Ok(())
     }
+    /// Every ray through the inverted, curved amplifier gains exactly `exp(g₀·L)`, where `L` is the
+    /// straight path between the two points it was refracted at.
+    ///
+    /// The medium is pumped uniformly, so the factor follows from each ray's own path alone. This
+    /// checks the values recorded in [`an_inverted_aligned_lens_amplifies_as_recorded`] without
+    /// relying on them.
+    #[test]
+    fn every_ray_gains_exp_of_its_path_between_the_refractions() -> OpmResult<()> {
+        let mut lens = inverted_aligned_lens()?;
+        let mut config = RayTraceConfig::default();
+        config.set_active_pump_scenario(Some(scenario_with_small_signal(lens.node_attr().uuid())?));
+        lens.prepare_volume(&config)?;
+        let (in_port, out_port) = single_io_port_names(&lens)?;
+        let rays = backwards_bundle()?;
+        let (ray_count, entering_energy) = (rays.nr_of_rays(true), largest_energy(&rays));
+        let incoming = LightResult::from([(in_port, LightData::Geometric(rays))]);
+        let outgoing = AnalysisRayTrace::analyze(&mut lens, incoming, &config)?;
+        let Some(LightData::Geometric(rays)) = outgoing.get(&out_port) else {
+            panic!("expected ray data at the output port");
+        };
+        assert_eq!(rays.nr_of_rays(true), ray_count);
+        let mismatches: Vec<String> = rays
+            .iter()
+            .enumerate()
+            .filter_map(|(index, ray)| {
+                // The last two positions are where the ray entered and where it left the medium.
+                let positions = ray.position_history_with_current();
+                let point = |row: usize| {
+                    nalgebra::Point3::new(
+                        positions[(row, 0)],
+                        positions[(row, 1)],
+                        positions[(row, 2)],
+                    )
+                };
+                let last = positions.nrows() - 1;
+                let path =
+                    crate::utils::math_utils::distance_3d_point(&point(last - 1), &point(last));
+                let expected = entering_energy * f64::exp((head_gain_coefficient() * path).value);
+                let actual = ray.energy().value;
+                ((actual - expected).abs() > 1e-9 * expected)
+                    .then(|| format!("ray {index}: {actual} J instead of {expected} J"))
+            })
+            .collect();
+        assert!(mismatches.is_empty(), "{mismatches:#?}");
+        Ok(())
+    }
     /// The gain an inverted, decentred and tilted biconvex lens applies, ray by ray.
     ///
     /// A small signal model amplifies over the chord of every ray through the medium, so this pins
