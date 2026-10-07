@@ -23,7 +23,7 @@ pub mod helper {
         millimeter, nanometer, percent,
         prelude::Aperture,
         properties::Proptype,
-        utils::{LockExt, geom_transformation::Isometry, test_helper::test_helper::check_logs},
+        utils::{LockExt, geom_transformation::Isometry, test_helper::helper::check_logs},
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::{Point2, Point3, Vector3};

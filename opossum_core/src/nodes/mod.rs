@@ -201,7 +201,7 @@ mod test {
         degree,
         geometry::SurfaceShape,
         millimeter,
-        nodes::test_helper::test_helper::{
+        nodes::test_helper::helper::{
             assert_snapshots, body_snapshot, geometry_snapshot, surface_snapshot,
         },
         refractive_index::RefrIndexConst,

@@ -9,12 +9,14 @@
 
 use std::sync::{Arc, Mutex};
 
+use nalgebra::Vector3;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 use crate::{
     error::OpmResult,
     geometry::{Cylinder, Parabola, Plane, Sphere, geo_surface::GeoSurfaceRef},
+    nanometer, radian,
     utils::geom_transformation::Isometry,
 };
 
@@ -73,6 +75,46 @@ impl SurfaceShape {
             Self::Plane
         } else {
             Self::Cylinder { radius }
+        }
+    }
+    /// Whether this shape is the same as another one, up to a tolerance on its radius or focal length.
+    ///
+    /// # Arguments
+    ///
+    /// * `other` - the shape to compare with.
+    /// * `tolerance` - the largest difference of radius or focal length still counted as equal.
+    ///
+    /// # Returns
+    ///
+    /// `true` if both are the same kind of surface and their radius or focal length agree within
+    /// `tolerance`.
+    fn matches(&self, other: &Self, tolerance: Length) -> bool {
+        let close = |a: &Length, b: &Length| (*a - *b).abs() <= tolerance;
+        match self {
+            Self::Plane => matches!(other, Self::Plane),
+            Self::Sphere { radius } => {
+                matches!(other, Self::Sphere { radius: other_radius } if close(radius, other_radius))
+            }
+            Self::Cylinder { radius } => {
+                matches!(other, Self::Cylinder { radius: other_radius } if close(radius, other_radius))
+            }
+            Self::Parabola { focal_length } => {
+                matches!(other, Self::Parabola { focal_length: other_focal_length }
+                    if close(focal_length, other_focal_length))
+            }
+        }
+    }
+    /// Whether turning this shape about its own axis (local z) changes it.
+    ///
+    /// # Returns
+    ///
+    /// `false` for a shape that is rotationally symmetric about its axis. `true` for a
+    /// [`SurfaceShape::Cylinder`], which is curved along its local x axis only; half a turn still
+    /// maps it onto itself.
+    const fn depends_on_roll(&self) -> bool {
+        match self {
+            Self::Plane | Self::Sphere { .. } | Self::Parabola { .. } => false,
+            Self::Cylinder { .. } => true,
         }
     }
     /// Where the geometric surface's own frame sits relative to the vertex.
@@ -154,6 +196,44 @@ impl Face {
             .append(&self.shape.vertex_to_frame()?);
         Ok((self.shape.build(node_frame.append(&anchor))?, anchor))
     }
+    /// Whether this face is the same surface at the same place as another face.
+    ///
+    /// Both faces have to have the same shape, and their vertices have to sit at the same point with
+    /// their axes pointing the same way. How far a face is turned about its axis matters only for a
+    /// shape that is not symmetric about it, a cylinder. Deviations as small as floating-point noise
+    /// are tolerated.
+    ///
+    /// # Arguments
+    ///
+    /// * `frame` - the frame this face is stated in.
+    /// * `other` - the face to compare with.
+    /// * `other_frame` - the frame `other` is stated in.
+    ///
+    /// # Returns
+    ///
+    /// `true` if both faces describe the same surface.
+    #[must_use]
+    pub fn coincides_with(&self, frame: &Isometry, other: &Self, other_frame: &Isometry) -> bool {
+        // Tolerances that only absorb floating-point noise, as for the axes of two node inputs.
+        let angle_tolerance = radian!(1.0e-9);
+        let length_tolerance = nanometer!(1.0);
+        let vertex = frame.append(&self.vertex);
+        let other_vertex = other_frame.append(&other.vertex);
+        // With both axes aligned, the local y axes have to run along the same line; half a turn
+        // reverses them and still maps a cylinder onto itself.
+        let same_roll = || {
+            vertex
+                .transform_vector_f64(&Vector3::y())
+                .cross(&other_vertex.transform_vector_f64(&Vector3::y()))
+                .norm()
+                <= angle_tolerance.value
+        };
+        self.shape.matches(&other.shape, length_tolerance)
+            && vertex
+                .axis_mismatch(&other_vertex, angle_tolerance, length_tolerance)
+                .is_none()
+            && (!self.shape.depends_on_roll() || same_roll())
+    }
 }
 
 #[cfg(test)]
@@ -217,6 +297,52 @@ mod test {
             .append(&Isometry::new_along_z(millimeter!(2.0))?)
             .append(&Isometry::new_along_z(millimeter!(50.0))?);
         assert_eq!(anchor, expected_anchor);
+        Ok(())
+    }
+    #[test]
+    fn a_face_coincides_only_with_the_same_surface_at_the_same_place() -> OpmResult<()> {
+        let sphere = |radius: f64, vertex: Isometry| {
+            Face::new(
+                SurfaceShape::Sphere {
+                    radius: millimeter!(radius),
+                },
+                vertex,
+            )
+        };
+        let at = |z: f64| Isometry::new_along_z(millimeter!(z));
+        let frame = Isometry::identity();
+        let face = sphere(50.0, at(5.0)?);
+        // the same surface stated in another frame, or differing by rounding noise only
+        assert!(face.coincides_with(&frame, &sphere(50.0, at(2.0)?), &at(3.0)?));
+        assert!(face.coincides_with(&frame, &sphere(50.0 + 1.0e-10, at(5.0)?), &frame));
+        // another radius, another place, the axis flipped, another shape
+        for other in [
+            sphere(50.001, at(5.0)?),
+            sphere(50.0, at(5.001)?),
+            sphere(
+                50.0,
+                Isometry::new(millimeter!(0.0, 0.0, 5.0), degree!(180.0, 0.0, 0.0))?,
+            ),
+            Face::new(
+                SurfaceShape::Cylinder {
+                    radius: millimeter!(50.0),
+                },
+                at(5.0)?,
+            ),
+        ] {
+            assert!(!face.coincides_with(&frame, &other, &frame), "{other:?}");
+        }
+        // a parabola is compared by its focal length
+        let parabola = |focal_length: f64| {
+            Face::new(
+                SurfaceShape::Parabola {
+                    focal_length: millimeter!(focal_length),
+                },
+                Isometry::identity(),
+            )
+        };
+        assert!(parabola(100.0).coincides_with(&frame, &parabola(100.0), &frame));
+        assert!(!parabola(100.0).coincides_with(&frame, &parabola(101.0), &frame));
         Ok(())
     }
     #[test]

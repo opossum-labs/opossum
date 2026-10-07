@@ -473,7 +473,7 @@ mod test {
             spectrum_helper::create_he_ne_spec,
         },
         micrometer, millimeter, nanometer,
-        nodes::test_helper::test_helper::{assert_ray_bundle_snapshot, ray_bundle_snapshot},
+        nodes::test_helper::helper::{assert_ray_bundle_snapshot, ray_bundle_snapshot},
         nodes::{
             EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort, SpotDiagram, ThinMirror,
             create_node_ref, node_types, round_collimated_ray_builder,

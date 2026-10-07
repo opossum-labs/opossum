@@ -258,11 +258,15 @@ impl Solid {
     ///
     /// # Returns
     ///
-    /// The face, or `None` if there is no such face. An [`Assembly`] has no faces of its own.
-    fn face(&self, index: usize) -> Option<&Face> {
+    /// The face, the frame it is stated in relative to the solid, and the side of it the solid lies
+    /// on; or `None` if there is no such face. An [`Assembly`] has no faces of its own.
+    fn face(&self, index: usize) -> Option<(&Face, Isometry, Side)> {
         match self {
             Self::Extruded(extruded) => extruded.face(index),
-            Self::Parametric(parametric) => parametric.faces.get(index).map(|(face, _)| face),
+            Self::Parametric(parametric) => parametric
+                .faces
+                .get(index)
+                .map(|(face, side)| (face, Isometry::identity(), *side)),
             Self::Assembly(_) => None,
         }
     }
@@ -326,11 +330,11 @@ impl Extruded {
             node_frame.append(&self.axis),
         ))
     }
-    /// See [`Solid::face`].
-    const fn face(&self, index: usize) -> Option<&Face> {
+    /// See [`Solid::face`]. The profile lies behind the front face and in front of the rear face.
+    const fn face(&self, index: usize) -> Option<(&Face, Isometry, Side)> {
         match index {
-            0 => Some(&self.front),
-            1 => Some(&self.rear),
+            0 => Some((&self.front, self.axis, Side::Behind)),
+            1 => Some((&self.rear, self.axis, Side::InFront)),
             _ => None,
         }
     }
@@ -409,6 +413,21 @@ impl Part {
             material,
         }
     }
+    /// Return a face of this part's solid, placed with the part.
+    ///
+    /// # Arguments
+    ///
+    /// * `index` - the index of the face in the part's solid (see [`FaceId::new`]).
+    ///
+    /// # Returns
+    ///
+    /// The face, the frame it is stated in relative to the node, and the side of it the part lies
+    /// on; or `None` if the solid has no such face.
+    fn face(&self, index: usize) -> Option<(&Face, Isometry, Side)> {
+        self.solid
+            .face(index)
+            .map(|(face, owner, side)| (face, self.placement.append(&owner), side))
+    }
 }
 
 /// Refers to one face of one part of an [`Assembly`].
@@ -435,7 +454,10 @@ impl FaceId {
 /// Two faces of different parts of an [`Assembly`] lying on each other, such as the cemented
 /// surface of a doublet or the diagonal of a beam splitter cube.
 ///
-/// The shared surface is not stored a second time; the interface only refers to the two faces.
+/// The shared surface belongs to both parts: each states it among its own faces, and the interface
+/// links the two. They have to describe the same surface at the same place, with the two parts on
+/// opposite sides of it (see [`Assembly::new`]). Light crosses the interface only where both parts
+/// reach.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Interface {
     a: FaceId,
@@ -448,7 +470,8 @@ impl Interface {
     /// # Arguments
     ///
     /// * `a` - one of the two faces.
-    /// * `b` - the other face; it must belong to a different part (see [`Assembly::new`]).
+    /// * `b` - the other face; it must belong to a different part and lie on `a` (see
+    ///   [`Assembly::new`]).
     #[must_use]
     pub const fn new(a: FaceId, b: FaceId) -> Self {
         Self { a, b }
@@ -475,8 +498,12 @@ impl Assembly {
     ///
     /// # Errors
     ///
-    /// This function returns an error if a part is itself an assembly, if an interface refers to a
-    /// part or face that does not exist, or if an interface joins two faces of the same part.
+    /// This function returns an error if
+    /// - a part is itself an assembly,
+    /// - an interface refers to a part or face that does not exist or joins two faces of the same
+    ///   part,
+    /// - the two faces of an interface are not the same surface at the same place (see
+    ///   [`Face::coincides_with`]), or the two parts lie on the same side of it.
     pub fn new(parts: Vec<Part>, interfaces: Vec<Interface>) -> OpmResult<Self> {
         if let Some(index) = parts
             .iter()
@@ -493,17 +520,32 @@ impl Assembly {
                     interface.a.part
                 )));
             }
-            for id in [interface.a, interface.b] {
-                if parts
+            let resolve = |id: FaceId| {
+                parts
                     .get(id.part)
-                    .and_then(|part| part.solid.face(id.face))
-                    .is_none()
-                {
-                    return Err(OpossumError::Other(format!(
-                        "an interface refers to face {} of part {}, which does not exist",
-                        id.face, id.part
-                    )));
-                }
+                    .and_then(|part| part.face(id.face))
+                    .ok_or_else(|| {
+                        OpossumError::Other(format!(
+                            "an interface refers to face {} of part {}, which does not exist",
+                            id.face, id.part
+                        ))
+                    })
+            };
+            let (face_a, frame_a, side_a) = resolve(interface.a)?;
+            let (face_b, frame_b, side_b) = resolve(interface.b)?;
+            if !face_a.coincides_with(&frame_a, face_b, &frame_b) {
+                return Err(OpossumError::Other(format!(
+                    "the faces an interface joins have to be the same surface at the same place, \
+                     but face {} of part {} and face {} of part {} are not",
+                    interface.a.face, interface.a.part, interface.b.face, interface.b.part
+                )));
+            }
+            if side_a == side_b {
+                return Err(OpossumError::Other(format!(
+                    "the parts an interface joins have to lie on opposite sides of it, but parts {} \
+                     and {} lie on the same side",
+                    interface.a.part, interface.b.part
+                )));
             }
         }
         Ok(Self { parts, interfaces })
@@ -539,25 +581,84 @@ mod test {
             None,
         )?)
     }
+    /// A part made of glass with a refractive index of 1.5.
+    fn glass_part(placement: Isometry, solid: Solid) -> OpmResult<Part> {
+        Ok(Part::new(
+            placement,
+            solid,
+            AssetRef::Inline(Material::from(&RefrIndexConst::new(1.5)?)),
+        ))
+    }
+    /// The solid of the given geometry as a glass part at the given placement.
+    fn part_of(geometry: Geometry, placement: Isometry) -> OpmResult<Part> {
+        let Geometry::Solid(solid) = geometry else {
+            unreachable!("only solids are made into parts");
+        };
+        glass_part(placement, solid)
+    }
+    /// The diagonal of a beam splitter cube: tilted by 45° about x, 10 mm along z.
+    fn diagonal() -> OpmResult<Face> {
+        Ok(Face::new(
+            SurfaceShape::Plane,
+            Isometry::new(millimeter!(0.0, 0.0, 10.0), degree!(45.0, 0.0, 0.0))?,
+        ))
+    }
+    /// The front prism of a beam splitter cube: behind its entrance face, in front of the
+    /// diagonal (face 1).
     fn prism_part() -> OpmResult<Part> {
         let solid = Solid::Parametric(ParametricSolid::new(vec![
             (
                 Face::new(SurfaceShape::Plane, Isometry::identity()),
                 Side::Behind,
             ),
+            (diagonal()?, Side::InFront),
+        ])?);
+        glass_part(Isometry::identity(), solid)
+    }
+    /// The rear prism of the same cube: behind the diagonal (face 0), in front of its exit face.
+    fn opposite_prism_part() -> OpmResult<Part> {
+        let solid = Solid::Parametric(ParametricSolid::new(vec![
+            (diagonal()?, Side::Behind),
             (
                 Face::new(
                     SurfaceShape::Plane,
-                    Isometry::new(millimeter!(0.0, 0.0, 10.0), degree!(45.0, 0.0, 0.0))?,
+                    Isometry::new_along_z(millimeter!(20.0))?,
                 ),
                 Side::InFront,
             ),
         ])?);
-        Ok(Part::new(
+        glass_part(Isometry::identity(), solid)
+    }
+    /// A beam splitter cube: both prisms cemented along the diagonal.
+    fn cube() -> OpmResult<Assembly> {
+        Assembly::new(
+            vec![prism_part()?, opposite_prism_part()?],
+            vec![Interface::new(FaceId::new(0, 1), FaceId::new(1, 0))],
+        )
+    }
+    /// The crown lens of a doublet at the origin, its rear face (R = -40 mm) 5 mm behind it.
+    fn crown_part() -> OpmResult<Part> {
+        part_of(
+            Geometry::singlet(
+                millimeter!(60.0),
+                millimeter!(-40.0),
+                millimeter!(5.0),
+                circle()?,
+            )?,
             Isometry::identity(),
-            solid,
-            AssetRef::Inline(Material::from(&RefrIndexConst::new(1.5)?)),
-        ))
+        )
+    }
+    /// The flint lens of a doublet with the given front radius, at the given placement.
+    fn flint_part(front_radius: Length, placement: Isometry) -> OpmResult<Part> {
+        part_of(
+            Geometry::singlet(
+                front_radius,
+                millimeter!(f64::INFINITY),
+                millimeter!(5.0),
+                circle()?,
+            )?,
+            placement,
+        )
     }
     #[test]
     fn a_surface_is_entrance_and_exit_at_once() -> OpmResult<()> {
@@ -655,35 +756,32 @@ mod test {
     }
     #[test]
     fn an_assembly_checks_its_interfaces() -> OpmResult<()> {
-        let parts = || -> OpmResult<Vec<Part>> { Ok(vec![prism_part()?, prism_part()?]) };
-        let joined = Interface::new(FaceId::new(0, 1), FaceId::new(1, 1));
+        let parts = || -> OpmResult<Vec<Part>> { Ok(vec![prism_part()?, opposite_prism_part()?]) };
+        let joined = Interface::new(FaceId::new(0, 1), FaceId::new(1, 0));
         assert!(Assembly::new(parts()?, vec![joined]).is_ok());
-        let no_such_face = Interface::new(FaceId::new(0, 2), FaceId::new(1, 1));
+        let no_such_face = Interface::new(FaceId::new(0, 2), FaceId::new(1, 0));
         assert!(Assembly::new(parts()?, vec![no_such_face]).is_err());
-        let no_such_part = Interface::new(FaceId::new(0, 1), FaceId::new(2, 1));
+        let no_such_part = Interface::new(FaceId::new(0, 1), FaceId::new(2, 0));
         assert!(Assembly::new(parts()?, vec![no_such_part]).is_err());
         let same_part = Interface::new(FaceId::new(0, 0), FaceId::new(0, 1));
         assert!(Assembly::new(parts()?, vec![same_part]).is_err());
         Ok(())
     }
+    /// Two parts on the same side of their interface overlap instead of meeting there - the same
+    /// prism twice, for instance.
+    #[test]
+    fn the_parts_of_an_interface_lie_on_opposite_sides_of_it() -> OpmResult<()> {
+        let same_side = Interface::new(FaceId::new(0, 1), FaceId::new(1, 1));
+        assert!(Assembly::new(vec![prism_part()?, prism_part()?], vec![same_side]).is_err());
+        Ok(())
+    }
     #[test]
     fn a_doublet_joins_the_rear_of_one_lens_to_the_front_of_the_other() -> OpmResult<()> {
-        let lens = |front, rear| -> OpmResult<Part> {
-            let Geometry::Solid(solid) =
-                Geometry::singlet(front, rear, millimeter!(5.0), circle()?)?
-            else {
-                unreachable!("a singlet is a solid");
-            };
-            Ok(Part::new(
-                Isometry::identity(),
-                solid,
-                AssetRef::Inline(Material::from(&RefrIndexConst::new(1.5)?)),
-            ))
-        };
+        let behind_the_crown = Isometry::new_along_z(millimeter!(5.0))?;
         let parts = || -> OpmResult<Vec<Part>> {
             Ok(vec![
-                lens(millimeter!(60.0), millimeter!(-40.0))?,
-                lens(millimeter!(-40.0), millimeter!(f64::INFINITY))?,
+                crown_part()?,
+                flint_part(millimeter!(-40.0), behind_the_crown)?,
             ])
         };
         let cemented = Interface::new(FaceId::new(0, 1), FaceId::new(1, 0));
@@ -692,14 +790,63 @@ mod test {
         assert!(Assembly::new(parts()?, vec![beyond_the_rear]).is_err());
         Ok(())
     }
+    /// The cemented faces of a doublet have to be the same surface at the same place.
+    #[test]
+    fn a_doublet_whose_cemented_faces_do_not_meet_is_rejected() -> OpmResult<()> {
+        let cemented = Interface::new(FaceId::new(0, 1), FaceId::new(1, 0));
+        // Both lenses at the origin overlap, and the flint's front lies 5 mm before the crown's rear.
+        let overlapping = flint_part(millimeter!(-40.0), Isometry::identity())?;
+        let with_a_gap = flint_part(millimeter!(-40.0), Isometry::new_along_z(millimeter!(5.1))?)?;
+        let other_radius =
+            flint_part(millimeter!(-41.0), Isometry::new_along_z(millimeter!(5.0))?)?;
+        for flint in [overlapping, with_a_gap, other_radius] {
+            assert!(Assembly::new(vec![crown_part()?, flint], vec![cemented]).is_err());
+        }
+        Ok(())
+    }
+    /// A cylindrical face is curved in one direction only, so both parts have to agree on it. Turned
+    /// by half a turn about its axis it is the very same surface again.
+    #[test]
+    fn a_cylindrical_interface_has_to_agree_in_its_orientation() -> OpmResult<()> {
+        let crown = || {
+            part_of(
+                Geometry::cylindrical_singlet(
+                    millimeter!(60.0),
+                    millimeter!(-40.0),
+                    millimeter!(5.0),
+                    circle()?,
+                )?,
+                Isometry::identity(),
+            )
+        };
+        let flint = |roll: Angle| {
+            part_of(
+                Geometry::cylindrical_singlet(
+                    millimeter!(-40.0),
+                    millimeter!(f64::INFINITY),
+                    millimeter!(5.0),
+                    circle()?,
+                )?,
+                Isometry::new(
+                    millimeter!(0.0, 0.0, 5.0),
+                    Point3::new(Angle::zero(), Angle::zero(), roll),
+                )?,
+            )
+        };
+        let cemented = Interface::new(FaceId::new(0, 1), FaceId::new(1, 0));
+        for (roll, coincides) in [(0.0, true), (180.0, true), (90.0, false)] {
+            assert_eq!(
+                Assembly::new(vec![crown()?, flint(degree!(roll))?], vec![cemented]).is_ok(),
+                coincides,
+                "flint turned by {roll}°"
+            );
+        }
+        Ok(())
+    }
     #[test]
     fn an_assembly_cannot_contain_an_assembly() -> OpmResult<()> {
         let inner = Assembly::new(vec![prism_part()?], vec![])?;
-        let nested = Part::new(
-            Isometry::identity(),
-            Solid::Assembly(inner),
-            AssetRef::Inline(Material::from(&RefrIndexConst::new(1.5)?)),
-        );
+        let nested = glass_part(Isometry::identity(), Solid::Assembly(inner))?;
         assert!(Assembly::new(vec![nested], vec![]).is_err());
         Ok(())
     }
@@ -711,11 +858,8 @@ mod test {
             millimeter!(5.0),
             circle()?,
         )?;
-        let cube = Geometry::Solid(Solid::Assembly(Assembly::new(
-            vec![prism_part()?, prism_part()?],
-            vec![Interface::new(FaceId::new(0, 1), FaceId::new(1, 1))],
-        )?));
-        for geometry in [singlet, cube] {
+        let splitter_cube = Geometry::Solid(Solid::Assembly(cube()?));
+        for geometry in [singlet, splitter_cube] {
             let text = ron::to_string(&geometry).map_err(|e| OpossumError::Other(e.to_string()))?;
             let read: Geometry =
                 ron::from_str(&text).map_err(|e| OpossumError::Other(e.to_string()))?;
