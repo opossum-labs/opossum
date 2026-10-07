@@ -149,9 +149,9 @@ impl AnalysisGhostFocus for IdealFilter {
         let incoming_result = light_rays_to_light_result(incoming_data);
         let output =
             self.unified_analyze_single_surface_node(incoming_result, config, "input_1", None)?;
-        let light_rays = light_result_to_light_rays(output)?;
+        let mut light_rays = light_result_to_light_rays(output)?;
         let out_port = &self.ports().names(&PortType::Output)[0];
-        if let Some(rays_bundles) = light_rays.clone().get_mut(out_port) {
+        if let Some(rays_bundles) = light_rays.get_mut(out_port) {
             for rays in rays_bundles {
                 rays.filter_energy(&filter_type)?;
             }
@@ -413,6 +413,32 @@ mod test {
         } else {
             panic!("wrong data LightData format")
         }
+        Ok(())
+    }
+    /// A ghost focus analysis attenuates the light passing a filter just as a ray trace does.
+    #[test]
+    fn a_filter_attenuates_ghost_focus_rays() -> OpmResult<()> {
+        let mut node = IdealFilter::new(
+            "test",
+            &FilterTypeBuilder::Constant(FilterConst::new(percent!(30.0))?),
+        )?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        let rays = Rays::new_uniform_collimated(
+            nanometer!(1054.0),
+            joule!(1.0),
+            &Hexapolar::new(millimeter!(5.0), 1)?,
+        )?;
+        let output = AnalysisGhostFocus::analyze(
+            &mut node,
+            LightRays::from([("input_1".into(), vec![rays])]),
+            &GhostFocusConfig::default(),
+            &mut Vec::new(),
+            0,
+        )?;
+        let Some(passed) = output.get("output_1").and_then(|bundles| bundles.first()) else {
+            panic!("expected a ray bundle at the output port");
+        };
+        assert_abs_diff_eq!(passed.total_energy().get::<joule>(), 0.3);
         Ok(())
     }
     #[test]
