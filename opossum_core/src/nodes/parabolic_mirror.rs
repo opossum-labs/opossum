@@ -99,7 +99,6 @@ impl Default for ParabolicMirror {
         parabola.update_surfaces().unwrap();
 
         parabola
-            .ports_mut()
             .set_coating(
                 &PortType::Input,
                 "input_1",
@@ -108,7 +107,6 @@ impl Default for ParabolicMirror {
             .unwrap();
 
         parabola
-            .ports_mut()
             .set_coating(
                 &PortType::Output,
                 "output_1",
@@ -485,7 +483,7 @@ mod test {
             spectrum_helper::create_he_ne_spec,
         },
         meter, millimeter, nanometer,
-        nodes::ParabolicMirror,
+        nodes::{ParabolicMirror, test_helper::test_helper::test_reflects_completely},
         properties::Proptype,
         utils::geom_transformation::Isometry,
     };
@@ -516,6 +514,10 @@ mod test {
         };
         assert_relative_eq!(*dir, Vector2::new(1., 0.));
         Ok(())
+    }
+    #[test]
+    fn reflects_completely() {
+        test_reflects_completely::<ParabolicMirror>();
     }
     #[test]
     fn new() {

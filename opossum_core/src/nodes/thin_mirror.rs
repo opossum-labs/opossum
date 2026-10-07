@@ -65,21 +65,19 @@ impl Default for ThinMirror {
 
         let mut m = Self { node_attr };
         m.update_surfaces().unwrap();
-        m.ports_mut()
-            .set_coating(
-                &PortType::Input,
-                "input_1",
-                &CoatingConstantR::new(percent!(100.0)).unwrap().into(),
-            )
-            .unwrap();
+        m.set_coating(
+            &PortType::Input,
+            "input_1",
+            &CoatingConstantR::new(percent!(100.0)).unwrap().into(),
+        )
+        .unwrap();
 
-        m.ports_mut()
-            .set_coating(
-                &PortType::Output,
-                "output_1",
-                &CoatingConstantR::new(percent!(100.0)).unwrap().into(),
-            )
-            .unwrap();
+        m.set_coating(
+            &PortType::Output,
+            "output_1",
+            &CoatingConstantR::new(percent!(100.0)).unwrap().into(),
+        )
+        .unwrap();
         m
     }
 }
@@ -265,6 +263,10 @@ mod test {
     #[test]
     fn set_aperture() {
         test_set_aperture::<ThinMirror>("input_1", "output_1");
+    }
+    #[test]
+    fn reflects_completely() {
+        test_reflects_completely::<ThinMirror>();
     }
     #[test]
     fn inverted() -> OpmResult<()> {

@@ -4,9 +4,7 @@
 //! on any type that implements [`HasNodeAttr`].
 
 use crate::{
-    core_optics::{
-        NodeAttr, OpticPorts, hit_map::HitMap, node_attr::HasNodeAttr, optic_surface::OpticSurface,
-    },
+    core_optics::{NodeAttr, hit_map::HitMap, node_attr::HasNodeAttr, optic_surface::OpticSurface},
     error::OpmResult,
     light::Rays,
     properties::{Properties, Proptype},
@@ -62,9 +60,6 @@ pub trait NodeAttrExt {
     ///
     /// Returns an error if the property is undefined or if the value type does not match.
     fn set_property(&mut self, name: &str, proptype: Proptype) -> OpmResult<()>;
-
-    /// Return the optical ports of this node as mutable reference, applying inversion if active.
-    fn ports_mut(&mut self) -> &mut OpticPorts;
 
     /// Returns a mutable reference to an [`OpticSurface`] of this node matching `surf_name`.
     ///
@@ -138,13 +133,6 @@ impl<T: ?Sized + HasNodeAttr> NodeAttrExt for T {
 
     fn set_property(&mut self, name: &str, proptype: Proptype) -> OpmResult<()> {
         self.node_attr_mut().set_property(name, proptype)
-    }
-
-    fn ports_mut(&mut self) -> &mut OpticPorts {
-        let inverted = self.node_attr().inverted();
-        let ports = self.node_attr_mut().raw_ports_mut();
-        ports.set_inverted(inverted);
-        ports
     }
 
     fn get_optic_surface_mut(&mut self, surf_name: &str) -> Option<&mut OpticSurface> {

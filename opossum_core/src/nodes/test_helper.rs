@@ -7,9 +7,10 @@ pub mod test_helper {
             raytrace::AnalysisRayTrace,
         },
         apertures::{ApertureShape, ApertureType, CircleShape, GaussianShape},
+        coatings::{CoatingConstantR, CoatingType},
         core_optics::{
             NodeAttrExt, OpticNode, OpticNodeExt, OpticPorts, OpticRef, PortType, Volumetric,
-            node_attr::NodePositioning,
+            node_attr::NodePositioning, optic_surface::OpticSurface,
         },
         distributions::position::Hexapolar,
         error::{OpmResult, OpossumError},
@@ -19,7 +20,7 @@ pub mod test_helper {
         },
         joule,
         light::{LightData, LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
-        millimeter, nanometer,
+        millimeter, nanometer, percent,
         prelude::Aperture,
         properties::Proptype,
         utils::{LockExt, geom_transformation::Isometry, test_helper::test_helper::check_logs},
@@ -97,6 +98,25 @@ pub mod test_helper {
             node.set_aperture(&PortType::Output, "no port", &aperture)
                 .is_err()
         );
+    }
+    /// Assert that a node reflects completely on `input_1` and `output_1`: the ports and the
+    /// surfaces built from them carry a constant reflectivity of 100 %.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a port or its surface carries another coating.
+    pub fn test_reflects_completely<T: Default + OpticNode>() {
+        let node = T::default();
+        let full: CoatingType = CoatingConstantR::new(percent!(100.0)).unwrap().into();
+        let ports = node.ports();
+        for (port_type, name) in [(PortType::Input, "input_1"), (PortType::Output, "output_1")] {
+            assert_eq!(ports.coating(&port_type, name), Some(&full), "port {name}");
+            assert_eq!(
+                node.get_optic_surface(name).map(OpticSurface::coating),
+                Some(&full),
+                "surface {name}"
+            );
+        }
     }
     pub fn test_analyze_empty<T: Default + AnalysisEnergy>() -> OpmResult<()> {
         let mut node = T::default();
