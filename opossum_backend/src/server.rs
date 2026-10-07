@@ -86,6 +86,7 @@ pub fn start_with_config(config: &ServerConfig) -> Server {
                 .allow_any_header()
                 .max_age(3600);
 
+            // Compose Actix Web App with utoipa OpenAPI integration
             App::new()
                 .into_utoipa_app()
                 .openapi(ApiDocs::openapi())
