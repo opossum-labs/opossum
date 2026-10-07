@@ -1612,8 +1612,9 @@ mod test {
         }
         Ok(())
     }
-    /// A node declares a [`CLEAR_APERTURE`] exactly when its geometry has a rim, and every surface
-    /// it installs carries exactly that rim.
+    /// A node declares a [`CLEAR_APERTURE`] that bounds a region exactly when its geometry has a
+    /// rim, and every surface it installs carries exactly that rim. A detector starts with an open
+    /// clear aperture: it records all light and has no rim.
     ///
     /// The extent of a component is stated by the property, decides the hits through the rim of
     /// each surface, and bounds the medium through the geometry; all three have to agree, or rays
@@ -1626,10 +1627,15 @@ mod test {
                 Some(geometry) => geometry.rim()?,
                 None => None,
             };
+            let bounded = matches!(
+                optic_ref.node_attr().get_property(CLEAR_APERTURE),
+                Ok(Proptype::Aperture(shape)) if shape.is_binary()
+            );
             assert_eq!(
-                optic_ref.node_attr().get_property(CLEAR_APERTURE).is_ok(),
+                bounded,
                 rim.is_some(),
-                "node type '{node_type}' declares '{CLEAR_APERTURE}' or has a rim, but not both"
+                "node type '{node_type}' declares a bounding '{CLEAR_APERTURE}' or has a rim, \
+                 but not both"
             );
             let surfaces = optic_ref.node_attr().runtime_surfaces();
             for (name, surface) in surfaces.inputs.iter().chain(&surfaces.outputs) {

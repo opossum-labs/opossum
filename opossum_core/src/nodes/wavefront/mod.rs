@@ -13,7 +13,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     geometry::{Geometry, SurfaceShape},
     light::{LightData, LightResult},
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, create_detector_properties},
     properties::{Properties, Proptype},
     reporting::node_report::{NodeReport, NodeReportResult},
     utils::geom_transformation::Isometry,
@@ -39,6 +39,8 @@ inventory::submit! {
 ///
 /// ## Properties
 ///   - `name`
+///   - `clear aperture`: the window the light is recorded within, open by default; light outside
+///     it passes unrecorded
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
@@ -65,6 +67,7 @@ impl Default for WaveFront {
                 false.into(),
             )
             .unwrap();
+        create_detector_properties(&mut node_attr).unwrap();
         let mut wf = Self {
             light_data: None,
             node_attr,
@@ -106,15 +109,14 @@ impl WaveFront {
 }
 
 impl OpticNode for WaveFront {
-    /// The surface wavefronts are measured on: the reference surface, or a plane if none is set.
+    /// The surface wavefronts are measured on: the reference surface, or a plane if none is set,
+    /// within the recording window.
     fn geometry(&self) -> OpmResult<Option<Geometry>> {
-        Ok(Some(Geometry::surface(
-            Isometry::identity(),
+        Ok(Some(Geometry::detector(
             self.reference_surface
                 .clone()
                 .unwrap_or(SurfaceShape::Plane),
-            Isometry::identity(),
-            None,
+            self.clear_aperture()?,
         )?))
     }
     fn set_apodization_warning(&mut self, apodized: bool) {
@@ -321,6 +323,16 @@ mod test {
     #[test]
     fn analyze_apodazation_warning() -> OpmResult<()> {
         test_analyze_apodization_warning::<WaveFront>()
+    }
+    #[test]
+    fn clear_aperture_absent_in_file() -> OpmResult<()> {
+        test_clear_aperture_absent_in_file::<WaveFront>()
+    }
+    #[test]
+    fn records_inside_and_passes_all() -> OpmResult<()> {
+        test_detector_records_inside_and_passes_all::<WaveFront>(|monitor| {
+            monitor.light_data.as_ref()
+        })
     }
     #[test]
     fn analyze_inverse() -> OpmResult<()> {

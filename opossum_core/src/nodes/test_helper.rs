@@ -10,8 +10,8 @@ pub mod helper {
         apertures::{ApertureShape, ApertureType, CircleShape, GaussianShape},
         coatings::{CoatingConstantR, CoatingType},
         core_optics::{
-            NodeAttrExt, OpticNode, OpticNodeExt, OpticPorts, OpticRef, PortType, Volumetric,
-            node_attr::NodePositioning, optic_surface::OpticSurface,
+            NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, OpticPorts, OpticRef, PortType,
+            Volumetric, node_attr::NodePositioning, optic_surface::OpticSurface,
         },
         distributions::position::Hexapolar,
         error::{OpmResult, OpossumError},
@@ -247,6 +247,120 @@ pub mod helper {
         }
         Ok(())
     }
+    /// Assert that a detector records only the light within its clear aperture but lets every ray
+    /// pass, in a ray trace and in a ghost focus analysis alike.
+    ///
+    /// Two rays travel along z, 5 mm and 20 mm off the axis. A detector starts unbounded and
+    /// records both. Bounded to a circle of 12.5 mm it records the one inside only and warns that
+    /// the other was not recorded. Either way both rays leave it valid, with their direction and
+    /// energy.
+    ///
+    /// # Arguments
+    ///
+    /// * `recorded` - reads the light the detector recorded.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node cannot be placed, bounded or analyzed.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the detector holds back a ray, records other rays than expected or does not warn.
+    pub fn test_detector_records_inside_and_passes_all<
+        T: Default + AnalysisRayTrace + AnalysisGhostFocus,
+    >(
+        recorded: impl Fn(&T) -> Option<&LightData>,
+    ) -> OpmResult<()> {
+        let starts = [millimeter!(0.0, 5.0, -10.0), millimeter!(0.0, 20.0, -10.0)];
+        let rays = || rays_along_z_from(&starts, nanometer!(1000.0));
+        let heights = |rays: &Rays| -> Vec<f64> {
+            rays.iter()
+                .filter(|ray| ray.valid())
+                .map(|ray| ray.position().y.get::<millimeter>())
+                .collect()
+        };
+        let assert_passed = |passed: &Rays, analysis: &str| {
+            assert_valid_energies(
+                passed,
+                &[1.0, 1.0],
+                &format!("a {analysis} passes all rays"),
+            );
+            assert!(passed.iter().all(|ray| ray.direction() == Vector3::z()));
+        };
+        for bounded in [false, true] {
+            let mut detector = placed_at_origin::<T>()?;
+            if bounded {
+                detector.set_property(CLEAR_APERTURE, default_clear_aperture().into())?;
+                detector.update_surfaces()?;
+            }
+            let expected: &[f64] = if bounded { &[5.0] } else { &[5.0, 20.0] };
+            let context = if bounded { "bounded" } else { "unbounded" };
+            let assert_recorded = |recorded: &[f64], analysis: &str| {
+                assert_eq!(
+                    recorded.len(),
+                    expected.len(),
+                    "{context}, {analysis}: recorded {recorded:?}"
+                );
+                for (height, expected) in recorded.iter().zip(expected) {
+                    assert_abs_diff_eq!(height, expected, epsilon = 1e-9);
+                }
+            };
+
+            testing_logger::setup();
+            let output = AnalysisRayTrace::analyze(
+                &mut detector,
+                LightResult::from([("input_1".into(), LightData::Geometric(rays()?))]),
+                &RayTraceConfig::default(),
+            )?;
+            let Some(LightData::Geometric(passed)) = output.get("output_1") else {
+                panic!("expected ray data at the output port");
+            };
+            assert_passed(passed, "ray trace");
+            let Some(LightData::Geometric(traced)) = recorded(&detector) else {
+                panic!("the detector recorded no rays in a ray trace");
+            };
+            assert_recorded(&heights(traced), "ray trace");
+            let hit_points = detector
+                .get_optic_surface("input_1")
+                .and_then(|surface| surface.hit_map().get_first_hitpoints())
+                .map_or(0, |points| points.len());
+            assert_eq!(hit_points, expected.len(), "{context}: hit points");
+            testing_logger::validate(|logs| {
+                let warned = logs
+                    .iter()
+                    .any(|log| log.body.contains("were not recorded"));
+                assert_eq!(warned, bounded, "{context}: warning about unrecorded rays");
+            });
+
+            let output = AnalysisGhostFocus::analyze(
+                &mut detector,
+                LightRays::from([("input_1".into(), vec![rays()?])]),
+                &GhostFocusConfig::default(),
+                &mut Vec::new(),
+                0,
+            )?;
+            let Some(passed) = output.get("output_1").and_then(|bundles| bundles.first()) else {
+                panic!("expected a ray bundle at the output port");
+            };
+            assert_passed(passed, "ghost focus analysis");
+            let Some(LightData::GhostFocus(ghosts)) = recorded(&detector) else {
+                panic!("the detector recorded no rays in a ghost focus analysis");
+            };
+            let ghost_heights: Vec<f64> = ghosts.iter().flat_map(heights).collect();
+            assert_recorded(&ghost_heights, "ghost focus analysis");
+        }
+        // A window may be opened again; any other shape needs an edge.
+        let mut detector = T::default();
+        detector.set_property(CLEAR_APERTURE, default_clear_aperture().into())?;
+        detector.set_property(CLEAR_APERTURE, ApertureShape::Open.into())?;
+        let soft = GaussianShape::new((millimeter!(5.0), millimeter!(5.0)))?;
+        assert!(
+            detector
+                .set_property(CLEAR_APERTURE, ApertureShape::Gaussian(soft).into())
+                .is_err()
+        );
+        Ok(())
+    }
     /// Return the start points of two rays, 12.4 mm and 12.6 mm off the axis: just inside and
     /// just outside the default clear aperture of 12.5 mm, 10 mm in front of a node at the origin.
     fn around_the_default_rim() -> (Point3<Length>, Point3<Length>) {
@@ -388,21 +502,20 @@ pub mod helper {
     ///
     /// # Panics
     ///
-    /// Panics if the loaded node does not fall back to [`default_clear_aperture`].
+    /// Panics if the loaded node does not fall back to the clear aperture a default node of its
+    /// type has.
     pub fn test_clear_aperture_absent_in_file<T: Default + Analyzable + 'static>() -> OpmResult<()>
     {
-        let deserialized = load_without_property::<T>(CLEAR_APERTURE)?;
-        let clear_aperture = {
-            let Ok(Proptype::Aperture(shape)) =
-                deserialized.node_attr().get_property(CLEAR_APERTURE)
-            else {
-                panic!("the loaded node has no '{CLEAR_APERTURE}' property holding a shape");
+        let shape_of = |node_attr: &NodeAttr| {
+            let Ok(Proptype::Aperture(shape)) = node_attr.get_property(CLEAR_APERTURE) else {
+                panic!("the node has no '{CLEAR_APERTURE}' property holding a shape");
             };
             shape.clone()
         };
+        let deserialized = load_without_property::<T>(CLEAR_APERTURE)?;
         assert_eq!(
-            clear_aperture,
-            default_clear_aperture(),
+            shape_of(deserialized.node_attr()),
+            shape_of(T::default().node_attr()),
             "loading a file without the property must fall back to the default"
         );
         Ok(())

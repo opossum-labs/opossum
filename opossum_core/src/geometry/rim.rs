@@ -8,6 +8,7 @@
 
 use nalgebra::{Point2, Point3};
 use num_traits::Zero;
+use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 use crate::{
@@ -29,10 +30,22 @@ use crate::{
 pub struct Rim {
     cross_section: ValidatedCrossSection,
     axis: Isometry,
+    role: RimRole,
+}
+
+/// What a [`Rim`] means for a ray that meets the unbounded surface outside of it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RimRole {
+    /// The component ends at the rim: a ray outside misses it, and the analyzer's missed surface
+    /// strategy decides what happens to the ray.
+    Edge,
+    /// The rim only bounds what a detector records: a ray outside passes the surface like one
+    /// inside, but is not recorded and leaves no hit.
+    Window,
 }
 
 impl Rim {
-    /// Create a new [`Rim`].
+    /// Create a new [`Rim`] the component ends at ([`RimRole::Edge`]).
     ///
     /// # Arguments
     ///
@@ -44,12 +57,44 @@ impl Rim {
         Self {
             cross_section,
             axis,
+            role: RimRole::Edge,
+        }
+    }
+    /// Create a new [`Rim`] that only bounds what a detector records ([`RimRole::Window`]).
+    ///
+    /// # Arguments
+    ///
+    /// See [`Rim::new`].
+    #[must_use]
+    pub const fn window(cross_section: ValidatedCrossSection, axis: Isometry) -> Self {
+        Self {
+            cross_section,
+            axis,
+            role: RimRole::Window,
         }
     }
     /// Return the cross section of this [`Rim`], in the xy plane of its axis.
     #[must_use]
     pub const fn cross_section(&self) -> &ValidatedCrossSection {
         &self.cross_section
+    }
+    /// Return what this [`Rim`] means for a ray outside of it.
+    #[must_use]
+    pub const fn role(&self) -> RimRole {
+        self.role
+    }
+    /// Return the frame the cross section of this [`Rim`] lies in.
+    ///
+    /// # Arguments
+    ///
+    /// * `reference` - the frame this rim is stated relative to.
+    ///
+    /// # Returns
+    ///
+    /// The reference frame followed by the axis, in global coordinates.
+    #[must_use]
+    pub fn frame(&self, reference: &Isometry) -> Isometry {
+        reference.append(&self.axis)
     }
     /// Return whether the given point lies within this [`Rim`].
     ///
@@ -63,7 +108,7 @@ impl Rim {
     /// `true` if the point's projection along the axis lies within the cross section.
     #[must_use]
     pub fn contains(&self, point: &Point3<Length>, reference: &Isometry) -> bool {
-        let local_point = reference.append(&self.axis).inverse_transform_point(point);
+        let local_point = self.frame(reference).inverse_transform_point(point);
         // The cross section is a binary hole, so a transmission above zero means "inside".
         self.cross_section.get().apodize(&local_point) > 0.0
     }

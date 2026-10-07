@@ -10,10 +10,10 @@ use crate::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, optic_surface::OpticSurface,
     },
     error::OpmResult,
-    geometry::Geometry,
+    geometry::{Geometry, SurfaceShape},
     light::{LightData, LightResult, Rays},
     nanometer,
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, create_detector_properties},
     properties::{Properties, Proptype},
     reporting::{
         node_report::{NodeReport, NodeReportResult},
@@ -54,6 +54,8 @@ inventory::submit! {
 /// ## Properties
 ///   - `name`
 ///   - `plot_aperture`
+///   - `clear aperture`: the window the light is recorded within, open by default; light outside
+///     it passes unrecorded
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
@@ -75,6 +77,8 @@ impl Default for SpotDiagram {
                 "flag that defines if the aperture is displayed in a plot",
                 false.into(),
             )
+            .expect("Hardcoded property creation must not fail");
+        create_detector_properties(&mut node_attr)
             .expect("Hardcoded property creation must not fail");
         let mut sd = Self {
             light_data: None,
@@ -103,7 +107,10 @@ impl SpotDiagram {
 }
 impl OpticNode for SpotDiagram {
     fn geometry(&self) -> OpmResult<Option<Geometry>> {
-        Ok(Some(Geometry::plane(None)))
+        Ok(Some(Geometry::detector(
+            SurfaceShape::Plane,
+            self.clear_aperture()?,
+        )?))
     }
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
@@ -445,6 +452,16 @@ mod test {
     #[test]
     fn analyze_apodization_warning() -> OpmResult<()> {
         test_analyze_apodization_warning::<SpotDiagram>()
+    }
+    #[test]
+    fn clear_aperture_absent_in_file() -> OpmResult<()> {
+        test_clear_aperture_absent_in_file::<SpotDiagram>()
+    }
+    #[test]
+    fn records_inside_and_passes_all() -> OpmResult<()> {
+        test_detector_records_inside_and_passes_all::<SpotDiagram>(|diagram| {
+            diagram.light_data.as_ref()
+        })
     }
     #[test]
     fn analyze_energy_inverse() -> OpmResult<()> {

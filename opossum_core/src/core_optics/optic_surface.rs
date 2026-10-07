@@ -14,7 +14,10 @@ use crate::{
         rays_hit_map::{HitPoint, RaysHitMap},
     },
     error::{OpmResult, OpossumError},
-    geometry::{Rim, geo_surface::GeoSurfaceRef},
+    geometry::{
+        Rim, RimRole,
+        geo_surface::{GeoSurface, GeoSurfaceRef},
+    },
     light::{Ray, Rays},
     nodes::fluence_detector::Fluence,
     refractive_index::RefractiveIndexType,
@@ -134,7 +137,9 @@ impl OpticSurface {
     /// outside the surface's [`Rim`] is not part of the component, and neither is one on the far
     /// side of a closed surface behind its equator (see
     /// [`GeoSurface::is_on_vertex_sheet`](crate::geometry::geo_surface::GeoSurface::is_on_vertex_sheet));
-    /// a ray reaching the surface only there misses it.
+    /// a ray reaching the surface only there misses it. A detector's rim is a window
+    /// ([`RimRole::Window`]): it decides what is recorded (see [`OpticSurface::records_at`]), not
+    /// what is hit.
     ///
     /// The rim follows the geometric surface: its frame is derived from where that surface sits
     /// right now (its isometry, minus its anchor, is the node's frame).
@@ -155,15 +160,64 @@ impl OpticSurface {
     pub fn intersect(&self, ray: &Ray) -> OpmResult<Option<(Point3<Length>, Vector3<f64>)>> {
         let geo_surface = self.geo_surface.0.lock_opm()?;
         let intersection = geo_surface.calc_intersect_and_normal(ray);
-        let Some(rim) = &self.rim else {
+        let Some(rim) = self.rim.as_ref().filter(|rim| rim.role() == RimRole::Edge) else {
             return Ok(intersection);
         };
-        let node_frame = Isometry::new_from_transform(
-            geo_surface.isometry().get_transform() * self.anchor_point_iso.get_inv_transform(),
-        );
+        let node_frame = self.node_frame(&*geo_surface);
         Ok(intersection.filter(|(point, _)| {
             rim.contains(point, &node_frame) && geo_surface.is_on_vertex_sheet(point)
         }))
+    }
+    /// Return whether this [`OpticSurface`] records a hit at the given point.
+    ///
+    /// Only a detector's window ([`RimRole::Window`]) leaves points unrecorded: those outside it.
+    ///
+    /// # Arguments
+    ///
+    /// * `point` - a point on this surface, in global coordinates.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the mutex of the geometric surface cannot be locked.
+    pub fn records_at(&self, point: &Point3<Length>) -> OpmResult<bool> {
+        match &self.rim {
+            Some(rim) if rim.role() == RimRole::Window => {
+                let geo_surface = self.geo_surface.0.lock_opm()?;
+                Ok(rim.contains(point, &self.node_frame(&*geo_surface)))
+            }
+            _ => Ok(true),
+        }
+    }
+    /// Cut a bundle of rays that passed this [`OpticSurface`] to what it records: the rays within
+    /// a detector's window ([`RimRole::Window`]).
+    ///
+    /// # Arguments
+    ///
+    /// * `rays` - rays at this surface; those outside the window are invalidated.
+    ///
+    /// # Returns
+    ///
+    /// `true` if valid rays were cut.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the mutex of the geometric surface cannot be locked or a
+    /// ray cannot be apodized.
+    pub fn clip_to_window(&self, rays: &mut Rays) -> OpmResult<bool> {
+        match &self.rim {
+            Some(rim) if rim.role() == RimRole::Window => {
+                let frame = rim.frame(&self.node_frame(&*self.geo_surface.0.lock_opm()?));
+                rays.apodize(rim.cross_section().get(), &frame)
+            }
+            _ => Ok(false),
+        }
+    }
+    /// Return the frame of the node this surface belongs to, derived from where its geometric
+    /// surface sits right now: that surface's isometry, minus its anchor.
+    fn node_frame(&self, geo_surface: &dyn GeoSurface) -> Isometry {
+        Isometry::new_from_transform(
+            geo_surface.isometry().get_transform() * self.anchor_point_iso.get_inv_transform(),
+        )
     }
     /// Returns a reference to the aperture of this [`OpticSurface`].
     #[must_use]

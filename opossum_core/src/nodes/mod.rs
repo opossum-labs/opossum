@@ -70,6 +70,7 @@ pub use wedge::Wedge;
 
 use crate::{
     analyzers::Analyzable,
+    apertures::ApertureShape,
     core_optics::{NodeAttr, OpticRef},
     error::{OpmResult, OpossumError},
     geometry::body::{CLEAR_APERTURE, default_clear_aperture},
@@ -81,8 +82,8 @@ use std::{collections::HashSet, sync::LazyLock};
 /// transversally ([`CLEAR_APERTURE`]).
 ///
 /// Declaring it from one place keeps the node types that call this in sync with each other, and
-/// together with [`create_surface_properties`] they are exactly the node types whose geometry has a
-/// rim — which is what the test in `volumetric.rs` checks.
+/// together with [`create_surface_properties`] and [`create_detector_properties`] they are exactly
+/// the node types whose geometry can have a rim — which is what the test in `volumetric.rs` checks.
 ///
 /// Creates standard volumetric properties for a node.
 ///
@@ -123,6 +124,29 @@ pub fn create_surface_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
         "transversal extent of the surface",
         Validator::ApertureDelimitsRegion,
         default_clear_aperture().into(),
+    )
+}
+
+/// Declare the property every detector carries: the window it records the light within
+/// ([`CLEAR_APERTURE`]).
+///
+/// The sibling of [`create_surface_properties`] for detectors. A detector lets all light pass and
+/// only records it, so it starts unbounded ([`ApertureShape::Open`]): a measurement changes only if
+/// its window is set.
+///
+/// # Arguments
+///
+/// * `node_attr` - the attributes of the node under construction.
+///
+/// # Errors
+///
+/// This function returns an error if the property is already declared.
+pub fn create_detector_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
+    node_attr.create_property_with_validator(
+        CLEAR_APERTURE,
+        "window the light is recorded within",
+        Validator::ApertureDelimitsRegionOrIsOpen,
+        ApertureShape::Open.into(),
     )
 }
 

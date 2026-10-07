@@ -3,7 +3,7 @@ use uom::si::f64::{Angle, Length};
 
 use crate::{
     analyzers::propagation_strategy::PropagationStrategy,
-    apertures::{Aperture, ApertureType},
+    apertures::{Aperture, ApertureShape, ApertureType},
     coatings::CoatingType,
     core_optics::{NodeAttrExt, OpticNode, PortType},
     error::{OpmResult, OpossumError},
@@ -42,11 +42,17 @@ pub trait OpticNodeExt {
     /// surface transmits where and may soften or invert that transmission, which says nothing about
     /// how far the component reaches. Masking a component down does not make it smaller.
     ///
+    /// # Returns
+    ///
+    /// The extent, or `None` if the clear aperture is open: the node is unbounded, as a detector
+    /// that records all light.
+    ///
     /// # Errors
     ///
     /// This function returns an error if the node does not declare a clear aperture at all or if
-    /// that clear aperture does not delimit a region, which leaves the extent undefined.
-    fn clear_aperture(&self) -> OpmResult<ValidatedCrossSection>;
+    /// that clear aperture neither is open nor delimits a region, which leaves the extent
+    /// undefined.
+    fn clear_aperture(&self) -> OpmResult<Option<ValidatedCrossSection>>;
 
     /// Set local alignment (decenter, tilt) of an optical node and update its optical surfaces.
     ///
@@ -209,6 +215,31 @@ pub trait OpticNodeExt {
         optic_surf_name: &str,
         refri_after_surf: Option<RefractiveIndexType>,
     ) -> OpmResult<LightResult>;
+
+    /// Cut copies of the ray bundles that passed a surface to what the surface records.
+    ///
+    /// A detector records only the light within its window (see
+    /// [`OpticSurface::clip_to_window`](crate::core_optics::optic_surface::OpticSurface::clip_to_window)),
+    /// while all of it passes on. If rays were not recorded, a positioning run warns that the
+    /// optical axis misses the detector; any other analysis warns that the result may be
+    /// incomplete and sets the node's apodization warning.
+    ///
+    /// # Arguments
+    ///
+    /// * `optic_surf_name` - the name of the recording surface.
+    /// * `bundles` - copies of the bundles that passed the surface; rays outside the window are
+    ///   invalidated.
+    /// * `strategy` - the strategy of the current analysis.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the surface cannot be found or a ray cannot be cut.
+    fn record_within_window(
+        &mut self,
+        optic_surf_name: &str,
+        bundles: &mut [Rays],
+        strategy: &dyn PropagationStrategy,
+    ) -> OpmResult<()>;
 }
 
 /// Return the names of the one input and the one output port of `node`.
@@ -278,7 +309,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         Ok(eff_node_iso.append(surf.anchor_point_iso()))
     }
 
-    fn clear_aperture(&self) -> OpmResult<ValidatedCrossSection> {
+    fn clear_aperture(&self) -> OpmResult<Option<ValidatedCrossSection>> {
         let Ok(Proptype::Aperture(clear_aperture)) = self.node_attr().get_property(CLEAR_APERTURE)
         else {
             return Err(OpossumError::Other(format!(
@@ -286,13 +317,18 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
                 self.name()
             )));
         };
+        if matches!(clear_aperture, ApertureShape::Open) {
+            return Ok(None);
+        }
         let aperture = Aperture::new(clear_aperture.clone(), ApertureType::Hole, None, None)?;
-        ValidatedCrossSection::try_new(aperture).map_err(|e| {
-            OpossumError::Other(format!(
-                "the {CLEAR_APERTURE} of node '{}' does not bound a region: {e}",
-                self.name()
-            ))
-        })
+        ValidatedCrossSection::try_new(aperture)
+            .map(Some)
+            .map_err(|e| {
+                OpossumError::Other(format!(
+                    "the {CLEAR_APERTURE} of node '{}' does not bound a region: {e}",
+                    self.name()
+                ))
+            })
     }
 
     fn set_alignment(
@@ -511,8 +547,10 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
                     false,
                     true,
                 )?;
+                let mut recorded = rays_bundle.clone();
+                self.record_within_window(optic_surf_name, &mut recorded, strategy)?;
+                self.set_light_data(Some(LightData::Geometric(recorded.remove(0))));
                 let out_data = LightData::Geometric(rays_bundle.remove(0));
-                self.set_light_data(Some(out_data.clone()));
                 Ok(LightResult::from([(out_port_name, out_data)]))
             }
             LightData::GhostFocus(mut rays_bundle) => {
@@ -524,8 +562,10 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
                     false,
                     true,
                 )?;
+                let mut recorded = rays_bundle.clone();
+                self.record_within_window(optic_surf_name, &mut recorded, strategy)?;
+                self.set_light_data(Some(LightData::GhostFocus(recorded)));
                 let out_data = LightData::GhostFocus(rays_bundle);
-                self.set_light_data(Some(out_data.clone()));
                 Ok(LightResult::from([(out_port_name, out_data)]))
             }
             LightData::Energy(energy) => {
@@ -535,6 +575,38 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
             }
             LightData::Fourier => Ok(LightResult::default()),
         }
+    }
+
+    fn record_within_window(
+        &mut self,
+        optic_surf_name: &str,
+        bundles: &mut [Rays],
+        strategy: &dyn PropagationStrategy,
+    ) -> OpmResult<()> {
+        let Some(surface) = self.get_optic_surface(optic_surf_name) else {
+            return Err(OpossumError::Analysis(format!(
+                "Cannot find surface: \"{optic_surf_name}\" of node: \"{}\"",
+                self.name()
+            )));
+        };
+        let mut cut = false;
+        for rays in bundles.iter_mut() {
+            cut |= surface.clip_to_window(rays)?;
+        }
+        if cut {
+            let (name, node_type) = (self.name(), self.node_type());
+            if strategy.is_positioning_run() {
+                log::warn!(
+                    "the optical axis misses the clear aperture of detector '{name}' ({node_type}); its measurement may fail"
+                );
+            } else {
+                log::warn!(
+                    "rays passed '{name}' ({node_type}) outside its clear aperture and were not recorded. Results might not be accurate."
+                );
+                self.set_apodization_warning(true);
+            }
+        }
+        Ok(())
     }
 }
 

@@ -23,7 +23,7 @@ use uom::si::f64::{Angle, Length};
 use crate::{
     error::{OpmResult, OpossumError},
     geometry::{
-        Rim,
+        Rim, RimRole,
         body::SurfaceBoundedBody,
         face::{Face, SurfaceShape},
         geo_surface::GeoSurfaceRef,
@@ -148,16 +148,34 @@ impl Geometry {
         vertex: Isometry,
         cross_section: Option<ValidatedCrossSection>,
     ) -> OpmResult<Self> {
-        let face = Face::new(shape, vertex);
-        if let Some(cross_section) = &cross_section {
-            let reach = Rim::new(cross_section.clone(), axis).transversal_reach()?;
-            face.check_reach(reach, "surface")?;
-        }
-        Ok(Self::Surface(SurfaceGeometry {
+        Ok(Self::Surface(SurfaceGeometry::new(
             axis,
-            face,
+            Face::new(shape, vertex),
             cross_section,
-        }))
+            RimRole::Edge,
+        )?))
+    }
+    /// A detector: a surface at the node that records the light within its cross section and lets
+    /// all of it pass (see [`RimRole::Window`]).
+    ///
+    /// # Arguments
+    ///
+    /// * `shape` - the shape of the surface the light is recorded on.
+    /// * `cross_section` - the window the light is recorded within, or `None` to record all of it.
+    ///
+    /// # Errors
+    ///
+    /// See [`Geometry::surface`].
+    pub fn detector(
+        shape: SurfaceShape,
+        cross_section: Option<ValidatedCrossSection>,
+    ) -> OpmResult<Self> {
+        Ok(Self::Surface(SurfaceGeometry::new(
+            Isometry::identity(),
+            Face::new(shape, Isometry::identity()),
+            cross_section,
+            RimRole::Window,
+        )?))
     }
     /// A flat surface at the node itself.
     ///
@@ -171,6 +189,7 @@ impl Geometry {
             axis: Isometry::identity(),
             face: Face::new(SurfaceShape::Plane, Isometry::identity()),
             cross_section,
+            role: RimRole::Edge,
         })
     }
     /// An extruded solid along the node's own axis whose front vertex sits at the node.
@@ -267,10 +286,15 @@ impl Geometry {
     /// [`Assembly`]): `None` would declare it unbounded.
     pub fn rim(&self) -> OpmResult<Option<Rim>> {
         match self {
-            Self::Surface(surface) => Ok(surface
-                .cross_section
-                .clone()
-                .map(|cross_section| Rim::new(cross_section, surface.axis))),
+            Self::Surface(surface) => {
+                Ok(surface
+                    .cross_section
+                    .clone()
+                    .map(|cross_section| match surface.role {
+                        RimRole::Edge => Rim::new(cross_section, surface.axis),
+                        RimRole::Window => Rim::window(cross_section, surface.axis),
+                    }))
+            }
             Self::Solid(Solid::Extruded(extruded)) => Ok(Some(Rim::new(
                 extruded.cross_section.clone(),
                 extruded.axis,
@@ -291,6 +315,40 @@ pub struct SurfaceGeometry {
     axis: Isometry,
     face: Face,
     cross_section: Option<ValidatedCrossSection>,
+    role: RimRole,
+}
+
+impl SurfaceGeometry {
+    /// Create a new [`SurfaceGeometry`].
+    ///
+    /// # Arguments
+    ///
+    /// * `axis` - the frame of the cross section relative to the node.
+    /// * `face` - the surface, stated in the `axis` frame.
+    /// * `cross_section` - its transversal extent, or `None` for an unbounded surface.
+    /// * `role` - what the edge of the cross section means for a ray outside it.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the surface is curved too tightly to reach the edge of the
+    /// cross section, or if the outline of the cross section cannot be determined.
+    fn new(
+        axis: Isometry,
+        face: Face,
+        cross_section: Option<ValidatedCrossSection>,
+        role: RimRole,
+    ) -> OpmResult<Self> {
+        if let Some(cross_section) = &cross_section {
+            let reach = Rim::new(cross_section.clone(), axis).transversal_reach()?;
+            face.check_reach(reach, "surface")?;
+        }
+        Ok(Self {
+            axis,
+            face,
+            cross_section,
+            role,
+        })
+    }
 }
 
 /// A component enclosing a volume of material.

@@ -134,7 +134,7 @@ impl IdealFilter {
 }
 impl OpticNode for IdealFilter {
     fn geometry(&self) -> OpmResult<Option<Geometry>> {
-        Ok(Some(Geometry::plane(Some(self.clear_aperture()?))))
+        Ok(Some(Geometry::plane(self.clear_aperture()?)))
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.install_geometry(&["input_1"], &["output_1"])

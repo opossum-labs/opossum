@@ -342,7 +342,7 @@ mod test {
         light::LightResult,
         millimeter,
         nodes::{
-            Dummy, IdealFilter, Lens, NodeGroup, SourcePort, ThinMirror,
+            Dummy, IdealFilter, Lens, NodeGroup, SourcePort, SpotDiagram, ThinMirror,
             ideal_filter::{FilterConst, FilterTypeBuilder},
             round_collimated_ray_builder,
         },
@@ -491,6 +491,34 @@ mod test {
         // The untilted mirror sends the axis straight back.
         let direction = screen.transform_vector_f64(&Vector3::z());
         assert_relative_eq!(direction.z, -1.0, epsilon = 1e-12);
+        Ok(())
+    }
+    /// A detector does not bend the axis, so the axis running outside its clear aperture does not
+    /// stop positioning: it only warns that the detector's measurement may fail. A detector the
+    /// axis passes within its clear aperture gives no such warning.
+    #[test]
+    fn positioning_warns_when_the_axis_misses_a_detector() -> OpmResult<()> {
+        for (decentre, warns) in [(DECENTRE, true), (0.0, false)] {
+            let mut detector = SpotDiagram::default().with_decenter(Point3::new(
+                Length::zero(),
+                millimeter!(decentre),
+                Length::zero(),
+            ))?;
+            detector.set_property(CLEAR_APERTURE, default_clear_aperture().into())?;
+            let mut scenery = NodeGroup::default();
+            let detector = scenery.add_node(detector)?;
+            testing_logger::setup();
+            let screen = place_screen_behind(scenery, &[detector])?;
+            let direction = screen.transform_vector_f64(&Vector3::z());
+            assert_relative_eq!(direction.z, 1.0, epsilon = 1e-12);
+            testing_logger::validate(|logs| {
+                let warned = logs.iter().any(|log| {
+                    log.level == log::Level::Warn
+                        && log.body.contains("misses the clear aperture of detector")
+                });
+                assert_eq!(warned, warns, "detector decentred by {decentre} mm");
+            });
+        }
         Ok(())
     }
 }

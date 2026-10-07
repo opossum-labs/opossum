@@ -121,7 +121,7 @@ impl OpticNode for ThinMirror {
             Isometry::identity(),
             SurfaceShape::spherical(*curvature),
             Isometry::identity(),
-            Some(self.clear_aperture()?),
+            self.clear_aperture()?,
         )?))
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {

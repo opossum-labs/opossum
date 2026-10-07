@@ -14,10 +14,10 @@ use crate::{
     },
     core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, node_attr::HasNodeAttr},
     error::OpmResult,
-    geometry::Geometry,
+    geometry::{Geometry, SurfaceShape},
     joule,
     light::LightData,
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, create_detector_properties},
     properties::{Properties, Proptype},
     reporting::{
         node_report::{NodeReport, NodeReportResult},
@@ -78,6 +78,8 @@ inventory::submit! {
 ///   - `name`
 ///   - `inverted`
 ///   - `meter type`
+///   - `clear aperture`: the window the light is recorded within, open by default; light outside
+///     it passes unrecorded
 ///
 /// During analysis, the output port forwards an exact replica of the input beam (similar to
 /// a [`Dummy`](crate::nodes::Dummy) node). This allows detector nodes to be stacked or placed
@@ -99,6 +101,8 @@ impl Default for EnergyMeter {
                 "model type of the meter",
                 Metertype::default().into(),
             )
+            .expect("Hardcoded property creation must not fail");
+        create_detector_properties(&mut node_attr)
             .expect("Hardcoded property creation must not fail");
         let mut em = Self {
             light_data: None,
@@ -183,7 +187,10 @@ impl EnergyMeter {
 
 impl OpticNode for EnergyMeter {
     fn geometry(&self) -> OpmResult<Option<Geometry>> {
-        Ok(Some(Geometry::plane(None)))
+        Ok(Some(Geometry::detector(
+            SurfaceShape::Plane,
+            self.clear_aperture()?,
+        )?))
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.install_geometry(&["input_1"], &["output_1"])
@@ -352,6 +359,16 @@ mod test {
     #[test]
     fn analyze_apodization_warning() -> OpmResult<()> {
         test_analyze_apodization_warning::<EnergyMeter>()
+    }
+    #[test]
+    fn clear_aperture_absent_in_file() -> OpmResult<()> {
+        test_clear_aperture_absent_in_file::<EnergyMeter>()
+    }
+    #[test]
+    fn records_inside_and_passes_all() -> OpmResult<()> {
+        test_detector_records_inside_and_passes_all::<EnergyMeter>(|meter| {
+            meter.light_data.as_ref()
+        })
     }
 
     #[test]

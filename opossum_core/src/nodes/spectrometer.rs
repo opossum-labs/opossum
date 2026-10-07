@@ -10,9 +10,9 @@ use crate::{
     },
     core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt},
     error::OpmResult,
-    geometry::Geometry,
+    geometry::{Geometry, SurfaceShape},
     light::{LightData, Rays, Spectrum},
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, create_detector_properties},
     properties::{Properties, Proptype},
     reporting::node_report::{NodeReport, NodeReportResult},
 };
@@ -58,6 +58,8 @@ inventory::submit! {
 /// ## Properties
 ///   - `name`
 ///   - `spectrometer type`
+///   - `clear aperture`: the window the light is recorded within, open by default; light outside
+///     it passes unrecorded
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
@@ -80,6 +82,7 @@ impl Default for Spectrometer {
                 SpectrometerType::Ideal.into(),
             )
             .unwrap();
+        create_detector_properties(&mut node_attr).unwrap();
         let mut spect = Self {
             light_data: None,
             node_attr,
@@ -156,7 +159,10 @@ impl Spectrometer {
 }
 impl OpticNode for Spectrometer {
     fn geometry(&self) -> OpmResult<Option<Geometry>> {
-        Ok(Some(Geometry::plane(None)))
+        Ok(Some(Geometry::detector(
+            SurfaceShape::Plane,
+            self.clear_aperture()?,
+        )?))
     }
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
@@ -328,6 +334,16 @@ mod test {
     #[test]
     fn analyze_apodazation_warning() -> OpmResult<()> {
         test_analyze_apodization_warning::<Spectrometer>()
+    }
+    #[test]
+    fn clear_aperture_absent_in_file() -> OpmResult<()> {
+        test_clear_aperture_absent_in_file::<Spectrometer>()
+    }
+    #[test]
+    fn records_inside_and_passes_all() -> OpmResult<()> {
+        test_detector_records_inside_and_passes_all::<Spectrometer>(|spectrometer| {
+            spectrometer.light_data.as_ref()
+        })
     }
     #[test]
     fn analyze_inverse() -> OpmResult<()> {

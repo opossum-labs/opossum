@@ -380,7 +380,7 @@ impl OpticNode for ParabolicMirror {
                 focal_length: -1. * self.calc_parent_focal_length()?,
             },
             vertex,
-            Some(self.clear_aperture()?),
+            self.clear_aperture()?,
         )?))
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {

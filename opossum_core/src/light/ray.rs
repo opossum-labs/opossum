@@ -616,24 +616,30 @@ impl Ray {
                     self.number_of_refractions += 1;
                 }
                 let mut generated_hit_point = None;
+                // A detector records no hit outside its window.
+                let recorded = os.records_at(&intersection_point)?;
                 if self.helper_rays.is_none() && !self.is_helper {
-                    generated_hit_point = Some(HitPoint::Energy(EnergyHitPoint::new(
-                        os.geo_surface()
-                            .0
-                            .lock_opm()?
-                            .isometry()
-                            .inverse_transform_point(&intersection_point),
-                        input_energy,
-                    )?));
+                    if recorded {
+                        generated_hit_point = Some(HitPoint::Energy(EnergyHitPoint::new(
+                            os.geo_surface()
+                                .0
+                                .lock_opm()?
+                                .isometry()
+                                .inverse_transform_point(&intersection_point),
+                            input_energy,
+                        )?));
+                    }
                 } else if let Some(helper_fluence) = &self.helper_ray_fluence() {
-                    generated_hit_point = Some(HitPoint::Fluence(FluenceHitPoint::new(
-                        os.geo_surface()
-                            .0
-                            .lock_opm()?
-                            .isometry()
-                            .inverse_transform_point(&intersection_point),
-                        *helper_fluence,
-                    )?));
+                    if recorded {
+                        generated_hit_point = Some(HitPoint::Fluence(FluenceHitPoint::new(
+                            os.geo_surface()
+                                .0
+                                .lock_opm()?
+                                .isometry()
+                                .inverse_transform_point(&intersection_point),
+                            *helper_fluence,
+                        )?));
+                    }
                     self.change_helper_fluence_by_factor(percent!(100.0) - reflectivity)?;
                     reflected_ray.change_helper_fluence_by_factor(reflectivity)?;
                 }

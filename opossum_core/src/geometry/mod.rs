@@ -30,5 +30,5 @@ pub use node_geometry::{
 };
 pub use parabola::Parabola;
 pub use plane::Plane;
-pub use rim::Rim;
+pub use rim::{Rim, RimRole};
 pub use sphere::Sphere;

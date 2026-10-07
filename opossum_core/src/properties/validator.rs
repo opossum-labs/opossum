@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use uom::si::{angle::degree, f64::Angle};
 
 use crate::{
+    apertures::ApertureShape,
     error::{OpmResult, OpossumError},
     nodes::{SplittingConfigBuilder, ideal_filter::FilterTypeBuilder},
     properties::Proptype,
@@ -27,6 +28,8 @@ pub enum Validator {
     StringIsNotEmpty,
     /// The aperture shape must delimit a region, i.e. have a hard edge.
     ApertureDelimitsRegion,
+    /// The aperture shape must delimit a region or be open, i.e. bound nothing at all.
+    ApertureDelimitsRegionOrIsOpen,
     OrValidator {
         validators: Vec<Self>,
     },
@@ -58,6 +61,13 @@ impl Validator {
             } => Self::validate_angle_is_in_range(prop, *min, *max, *inclusive),
             Self::StringIsNotEmpty => Self::validate_string_is_not_empty(prop),
             Self::ApertureDelimitsRegion => Self::validate_aperture_delimits_region(prop),
+            Self::ApertureDelimitsRegionOrIsOpen => {
+                if matches!(prop, Proptype::Aperture(ApertureShape::Open)) {
+                    Ok(())
+                } else {
+                    Self::validate_aperture_delimits_region(prop)
+                }
+            }
             Self::OrValidator { validators } => Self::validate_or_validator(prop, validators),
             Self::AndValidator { validators } => Self::validate_and_validator(prop, validators),
             Self::LightDataBuilderValidator => Self::validate_light_data_builder(prop),
