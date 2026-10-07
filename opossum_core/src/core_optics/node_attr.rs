@@ -441,7 +441,12 @@ impl NodeAttr {
     }
 
     /// Sets the port configuration of this [`NodeAttr`].
-    pub fn set_ports(&mut self, ports: OpticPorts) {
+    ///
+    /// The ports are stored physically even if they arrive as the inverted view
+    /// [`OpticNode::ports`](crate::core_optics::OpticNode::ports) hands out: only the node's own
+    /// `inverted` flag decides how they are presented.
+    pub fn set_ports(&mut self, mut ports: OpticPorts) {
+        ports.set_inverted(false);
         self.ports = ports;
     }
 

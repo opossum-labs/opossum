@@ -10,6 +10,7 @@ use crate::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, optic_surface::OpticSurface,
     },
     error::OpmResult,
+    geometry::Geometry,
     light::{LightData, LightResult, Rays},
     nanometer,
     nodes::NodeRegistration,
@@ -102,6 +103,9 @@ impl SpotDiagram {
     }
 }
 impl OpticNode for SpotDiagram {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::plane(None)))
+    }
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }
@@ -178,7 +182,7 @@ impl OpticNode for SpotDiagram {
     }
 
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.update_flat_single_surfaces()
+        self.install_geometry(&["input_1"], &["output_1"])
     }
 
     fn set_light_data(&mut self, ld: Option<LightData>) {

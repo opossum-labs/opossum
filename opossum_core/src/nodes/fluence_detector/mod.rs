@@ -12,6 +12,7 @@ use crate::{
         hit_map::fluence_estimator::FluenceEstimator,
     },
     error::OpmResult,
+    geometry::Geometry,
     light::LightData,
     nodes::NodeRegistration,
     properties::{Properties, Proptype},
@@ -85,11 +86,14 @@ impl FluenceDetector {
     }
 }
 impl OpticNode for FluenceDetector {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::plane(None)))
+    }
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.update_flat_single_surfaces()
+        self.install_geometry(&["input_1"], &["output_1"])
     }
     fn node_report(&self, uuid: &str, analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
         if analyzer == AnalyzerKind::Energy {

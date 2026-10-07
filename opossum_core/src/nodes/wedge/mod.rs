@@ -1,21 +1,17 @@
-use std::sync::{Arc, Mutex};
-
 #[cfg(test)]
 use crate::refractive_index::RefractiveIndex;
 use crate::{
     analyzers::energy::AnalysisEnergy,
-    core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType, Volumetric},
+    core_optics::{NodeAttr, OpticNode, OpticNodeExt, Volumetric},
     degree,
     error::{OpmResult, OpossumError},
-    geometry::{Plane, geo_surface::GeoSurfaceRef},
+    geometry::Geometry,
     material::{MATERIAL, Material},
     millimeter,
     nodes::{NodeRegistration, create_volume_properties},
     properties::{Proptype, validator::Validator},
     refractive_index::RefrIndexConst,
-    utils::geom_transformation::Isometry,
 };
-use nalgebra::Point3;
 use num_traits::Zero;
 use opm_macros_lib::OpmNode;
 use uom::si::f64::{Angle, Length};
@@ -135,52 +131,26 @@ impl Wedge {
 
 impl Volumetric for Wedge {}
 impl OpticNode for Wedge {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        let (Ok(Proptype::Length(center_thickness)), Ok(Proptype::Angle(wedge_angle))) = (
+            self.node_attr.get_property("center thickness"),
+            self.node_attr.get_property("wedge"),
+        ) else {
+            return Err(OpossumError::Analysis(
+                "cannot read the center thickness and the wedge angle".into(),
+            ));
+        };
+        Ok(Some(Geometry::wedge(
+            *center_thickness,
+            *wedge_angle,
+            self.clear_aperture()?,
+        )?))
+    }
     fn as_volume(&self) -> Option<&dyn Volumetric> {
         Some(self)
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
-
-        let front_geosurface = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso))));
-
-        self.update_surface(
-            "input_1",
-            front_geosurface,
-            Isometry::identity(),
-            &PortType::Input,
-        )?;
-
-        let Ok(Proptype::Length(center_thickness)) =
-            self.node_attr.get_property("center thickness")
-        else {
-            return Err(OpossumError::Analysis(
-                "cannot read center thickness".into(),
-            ));
-        };
-
-        let angle = if let Ok(Proptype::Angle(wedge)) = self.node_attr.get_property("wedge") {
-            *wedge
-        } else {
-            return Err(OpossumError::Analysis("cannot read wedge angle".into()));
-        };
-
-        let thickness_iso = Isometry::new_along_z(*center_thickness)?;
-        let wedge_iso = Isometry::new(
-            Point3::origin(),
-            Point3::new(angle, Angle::zero(), Angle::zero()),
-        )?;
-        let anchor_point_iso = thickness_iso.append(&wedge_iso);
-        let rear_geosurface = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(
-            node_iso.append(&anchor_point_iso),
-        ))));
-
-        self.update_surface(
-            "output_1",
-            rear_geosurface,
-            anchor_point_iso,
-            &PortType::Output,
-        )?;
-        Ok(())
+        self.install_geometry(&["input_1"], &["output_1"])
     }
 }
 impl AnalysisEnergy for Wedge {}
@@ -201,6 +171,7 @@ mod test {
         nodes::test_helper::test_helper::*,
         properties::{Proptype, proptype::AssetRef},
         refractive_index::RefractiveIndexType,
+        utils::geom_transformation::Isometry,
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::Vector3;

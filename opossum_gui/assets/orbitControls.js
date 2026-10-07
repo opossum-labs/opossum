@@ -1,3 +1,9 @@
+/**
+ * Contains OrbitControls from three.js (https://github.com/mrdoob/three.js).
+ * @license
+ * Copyright 2010-2025 Three.js Authors
+ * SPDX-License-Identifier: MIT
+ */
 const interval = setInterval(init, 100);
 
 function init() {

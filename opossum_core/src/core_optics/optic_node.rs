@@ -16,6 +16,7 @@ use crate::{
         volumetric::Volumetric,
     },
     error::OpmResult,
+    geometry::Geometry,
     light::LightData,
     nodes::fluence_detector::Fluence,
     reporting::{Dottable, node_report::NodeReportResult},
@@ -89,16 +90,22 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     /// alongside the body; otherwise the inversion slot is `None`.
     ///
     /// The body is always re-derived on every call, so geometry edits (e.g. changed centre thickness)
-    /// and repositioning by the analyzer's `calc_node_positions` are picked up correctly. Non-volume nodes
-    /// return immediately without touching the medium slot.
+    /// and repositioning by the analyzer's `calc_node_positions` are picked up correctly. The node's
+    /// surfaces are installed anew first, so the surfaces rays are traced at and the medium the gain
+    /// acts in describe the same component. Non-volume nodes return immediately without touching
+    /// the medium slot.
     ///
     /// [`NodeGroup`](crate::nodes::NodeGroup) overrides this to recurse into every child node.
     ///
     /// # Errors
     ///
-    /// Returns an error if the body cannot be derived from the node's surfaces or if building the
-    /// inversion field fails.
+    /// Returns an error if the node's surfaces cannot be installed, if its body cannot be derived
+    /// from its geometry, or if building the inversion field fails.
     fn prepare_volume(&mut self, strategy: &dyn PropagationStrategy) -> OpmResult<()> {
+        if self.as_volume().is_none() {
+            return Ok(());
+        }
+        self.update_surfaces()?;
         let Some(volumetric) = self.as_volume() else {
             return Ok(());
         };
@@ -134,6 +141,22 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     ///
     /// Returns an error if geometry evaluation or surface construction fails.
     fn update_surfaces(&mut self) -> OpmResult<()>;
+
+    /// Describe the shape of this node, derived from its current properties.
+    ///
+    /// The node type acts as a preset: a lens, for instance, describes itself as a
+    /// [`Geometry::singlet`] whose parameters are its curvatures, center thickness and clear
+    /// aperture. The runtime surfaces rays are traced against are built from this description.
+    ///
+    /// # Returns
+    ///
+    /// The node's [`Geometry`], or `None` for a node without a shape of its own, such as a group
+    /// or a reference to another node.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a geometry property cannot be read or describes no valid shape.
+    fn geometry(&self) -> OpmResult<Option<Geometry>>;
 
     /// Return the effective (input & output) ports of this [`OpticNode`].
     ///

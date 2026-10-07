@@ -10,6 +10,7 @@ use crate::{
         node_attr::{HasNodeAttr, NodePositioning},
     },
     error::{OpmResult, OpossumError},
+    geometry::Geometry,
     light::LightResult,
     nodes::NodeRegistration,
     properties::Proptype,
@@ -127,6 +128,10 @@ impl NodeReference {
 }
 
 impl OpticNode for NodeReference {
+    /// A reference has no shape of its own; it is traced through the node it refers to.
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(None)
+    }
     fn ports(&self) -> OpticPorts {
         let mut ports = self.ports.clone();
         if self.inverted() {

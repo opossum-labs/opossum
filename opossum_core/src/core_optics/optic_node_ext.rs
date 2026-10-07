@@ -1,18 +1,18 @@
-use std::sync::{Arc, Mutex};
-
 use nalgebra::Vector3;
 use uom::si::f64::{Angle, Length};
 
 use crate::{
     analyzers::propagation_strategy::PropagationStrategy,
-    apertures::Aperture,
+    apertures::{Aperture, ApertureType},
     coatings::CoatingType,
     core_optics::{NodeAttrExt, OpticNode, PortType},
     error::{OpmResult, OpossumError},
-    geometry::{Plane, geo_surface::GeoSurfaceRef},
+    geometry::{body::CLEAR_APERTURE, geo_surface::GeoSurfaceRef},
     light::{LightData, LightResult, Rays},
     nodes::fluence_detector::Fluence,
+    properties::Proptype,
     refractive_index::RefractiveIndexType,
+    types::validated_type_definitions::ValidatedCrossSection,
     utils::geom_transformation::Isometry,
 };
 
@@ -35,6 +35,18 @@ pub trait OpticNodeExt {
     /// - no effective node isometry is defined
     /// - the surface with the specified name cannot be found
     fn effective_surface_iso(&self, surf_name: &str) -> OpmResult<Isometry>;
+
+    /// Return the transversal extent of this node, read from its [`CLEAR_APERTURE`] property.
+    ///
+    /// The port [`Aperture`]s are deliberately not consulted: an aperture states how much light a
+    /// surface transmits where and may soften or invert that transmission, which says nothing about
+    /// how far the component reaches. Masking a component down does not make it smaller.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the node does not declare a clear aperture at all or if
+    /// that clear aperture does not delimit a region, which leaves the extent undefined.
+    fn clear_aperture(&self) -> OpmResult<ValidatedCrossSection>;
 
     /// Set local alignment (decenter, tilt) of an optical node and update its optical surfaces.
     ///
@@ -85,20 +97,31 @@ pub trait OpticNodeExt {
     /// This function returns an error if the port name does not exist.
     fn set_lidt(&mut self, port_type: &PortType, port_name: &str, lidt: Fluence) -> OpmResult<()>;
 
-    /// Update the surfaces of nodes with a single interacting surface (e.g. detectors or dummy nodes).
+    /// Build the surfaces of this node's [`Geometry`](crate::geometry::Geometry) and install them
+    /// under the given ports.
+    ///
+    /// The entrance surface is installed under every input port, the exit surface under every
+    /// output port. A single surface is both, so all ports then share it.
+    ///
+    /// # Arguments
+    ///
+    /// * `inputs` - the input ports light enters through, by their (physical) names.
+    /// * `outputs` - the output ports light leaves through, by their (physical) names.
     ///
     /// # Errors
     ///
-    /// This function returns an error if `update_surface` fails.
-    fn update_flat_single_surfaces(&mut self) -> OpmResult<()>;
+    /// This function returns an error if the node has no geometry, if the geometry cannot be
+    /// derived or built, or if a surface cannot be installed.
+    fn install_geometry(&mut self, inputs: &[&str], outputs: &[&str]) -> OpmResult<()>;
 
-    /// Updates a single surface of this node.
+    /// Updates a single surface of this node, adding its port if the node does not have it yet.
     ///
-    /// # Parameters
-    /// * `surf_name`: Name of the surface.
-    /// * `geo_surface`: The geometric surface reference [`GeoSurfaceRef`].
-    /// * `anchor_point_iso`: The isometry of the geometrical anchor point.
-    /// * `port_type`: The port type (`Input` or `Output`) of this surface.
+    /// # Arguments
+    ///
+    /// * `surf_name` - name of the surface, which is the physical name of its port.
+    /// * `geo_surface` - the geometric surface reference [`GeoSurfaceRef`].
+    /// * `anchor_point_iso` - the isometry of the geometrical anchor point.
+    /// * `port_type` - the physical port type (`Input` or `Output`) of this surface.
     ///
     /// # Errors
     ///
@@ -247,6 +270,23 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         Ok(eff_node_iso.append(surf.anchor_point_iso()))
     }
 
+    fn clear_aperture(&self) -> OpmResult<ValidatedCrossSection> {
+        let Ok(Proptype::Aperture(clear_aperture)) = self.node_attr().get_property(CLEAR_APERTURE)
+        else {
+            return Err(OpossumError::Other(format!(
+                "node '{}' has no '{CLEAR_APERTURE}' property, so its extent is unknown",
+                self.name()
+            )));
+        };
+        let aperture = Aperture::new(clear_aperture.clone(), ApertureType::Hole, None, None)?;
+        ValidatedCrossSection::try_new(aperture).map_err(|e| {
+            OpossumError::Other(format!(
+                "the {CLEAR_APERTURE} of node '{}' does not bound a region: {e}",
+                self.name()
+            ))
+        })
+    }
+
     fn set_alignment(
         &mut self,
         decenter: nalgebra::Point3<Length>,
@@ -293,21 +333,22 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         self.update_surfaces()
     }
 
-    fn update_flat_single_surfaces(&mut self) -> OpmResult<()> {
+    fn install_geometry(&mut self, inputs: &[&str], outputs: &[&str]) -> OpmResult<()> {
+        let Some(geometry) = self.geometry()? else {
+            return Err(OpossumError::Other(format!(
+                "node '{}' has no geometry to install surfaces from",
+                self.name()
+            )));
+        };
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
-        let geosurface = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso))));
-        self.update_surface(
-            "input_1",
-            geosurface.clone(),
-            Isometry::identity(),
-            &PortType::Input,
-        )?;
-        self.update_surface(
-            "output_1",
-            geosurface,
-            Isometry::identity(),
-            &PortType::Output,
-        )?;
+        let ((entrance, entrance_anchor), (exit, exit_anchor)) =
+            geometry.entrance_and_exit(&node_iso)?;
+        for name in inputs {
+            self.update_surface(name, entrance.clone(), entrance_anchor, &PortType::Input)?;
+        }
+        for name in outputs {
+            self.update_surface(name, exit.clone(), exit_anchor, &PortType::Output)?;
+        }
         Ok(())
     }
 
@@ -319,9 +360,9 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         port_type: &PortType,
     ) -> OpmResult<()> {
         let config = {
-            let mut ports = self.ports();
-            if ports.ports(port_type).get(surf_name).is_none() {
-                let _ = ports.add(port_type, surf_name);
+            let mut ports = self.node_attr().raw_ports().clone();
+            if ports.ports_raw(port_type).get(surf_name).is_none() {
+                ports.add(port_type, surf_name)?;
                 self.node_attr_mut().set_ports(ports.clone());
             }
             ports
@@ -477,8 +518,12 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
 mod test {
     use super::*;
     use crate::{
+        J_per_cm2,
         analyzers::RayTraceConfig,
-        core_optics::node_attr::{HasNodeAttr, NodePositioning},
+        core_optics::{
+            node_attr::{HasNodeAttr, NodePositioning},
+            optic_node::LIDT,
+        },
         degree, millimeter,
         nodes::{BeamSplitter, Dummy},
     };
@@ -552,6 +597,39 @@ mod test {
             None,
         )?;
         assert!(out.is_empty());
+        Ok(())
+    }
+
+    /// Setting a port's aperture, coating or LIDT addresses an inverted node's ports by their
+    /// logical names, but the node has to keep storing them physically: otherwise it stays
+    /// inverted after the inversion is reverted, and every lookup of a physical port misses.
+    #[test]
+    fn port_settings_keep_the_stored_ports_of_an_inverted_node_physical() -> OpmResult<()> {
+        let inverted = || -> OpmResult<Dummy> {
+            let mut node = Dummy::default();
+            node.set_inverted(true)?;
+            Ok(node)
+        };
+        let lidt = J_per_cm2!(2.0);
+        let mut with_aperture = inverted()?;
+        with_aperture.set_aperture(&PortType::Input, "output_1", &Aperture::default())?;
+        let mut with_coating = inverted()?;
+        with_coating.set_coating(&PortType::Input, "output_1", &CoatingType::Fresnel)?;
+        let mut with_lidt = inverted()?;
+        with_lidt.set_lidt(&PortType::Input, "output_1", lidt)?;
+        for mut node in [
+            with_aperture,
+            with_coating,
+            with_lidt,
+            inverted()?.with_lidt(lidt)?,
+        ] {
+            assert_eq!(
+                node.node_attr().raw_ports().names(&PortType::Input),
+                vec!["input_1"]
+            );
+            node.set_inverted(false)?;
+            assert_eq!(node.ports().names(&PortType::Input), vec!["input_1"]);
+        }
         Ok(())
     }
 }

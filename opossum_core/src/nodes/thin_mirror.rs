@@ -10,17 +10,15 @@ use crate::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, node_attr::HasNodeAttr,
     },
     error::{OpmResult, OpossumError},
-    geometry::{Plane, Sphere, geo_surface::GeoSurfaceRef},
+    geometry::{Geometry, SurfaceShape},
     light::{LightData, LightResult, Rays, light_result::LightRays},
-    meter, millimeter,
+    millimeter,
     nodes::NodeRegistration,
     percent,
     properties::{Proptype, validator::Validator},
-    radian,
     utils::geom_transformation::Isometry,
 };
 use opm_macros_lib::OpmNode;
-use std::sync::{Arc, Mutex};
 use uom::si::f64::Length;
 
 inventory::submit! {
@@ -112,35 +110,18 @@ impl ThinMirror {
     }
 }
 impl OpticNode for ThinMirror {
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
         let Ok(Proptype::Curvature(curvature)) = self.node_attr.get_property("curvature") else {
             return Err(OpossumError::Analysis("cannot read curvature".into()));
         };
-        let (geosurface, anchor_point_iso) = if curvature.is_infinite() {
-            (
-                GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso)))),
-                Isometry::identity(),
-            )
-        } else {
-            let anchor_point_iso_front =
-                Isometry::new(meter!(0., 0., curvature.value), radian!(0., 0., 0.))?;
-            (
-                GeoSurfaceRef(Arc::new(Mutex::new(Sphere::new(
-                    *curvature,
-                    node_iso.append(&anchor_point_iso_front),
-                )?))),
-                anchor_point_iso_front,
-            )
-        };
-        self.update_surface(
-            "input_1",
-            geosurface.clone(),
-            anchor_point_iso,
-            &PortType::Input,
-        )?;
-        self.update_surface("output_1", geosurface, anchor_point_iso, &PortType::Output)?;
-        Ok(())
+        Ok(Some(Geometry::surface(
+            SurfaceShape::spherical(*curvature),
+            Isometry::identity(),
+            None,
+        )))
+    }
+    fn update_surfaces(&mut self) -> OpmResult<()> {
+        self.install_geometry(&["input_1"], &["output_1"])
     }
 }
 impl AnalysisGhostFocus for ThinMirror {

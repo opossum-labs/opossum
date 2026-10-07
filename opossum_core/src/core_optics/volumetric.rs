@@ -16,29 +16,27 @@
 use crate::{
     absorption::absorption_model::AbsorptionModel,
     analyzers::propagation_strategy::PropagationStrategy,
-    apertures::{Aperture, ApertureType},
     core_optics::{
         NodeAttrExt, OpticNode, OpticNodeExt, node_attr::RuntimeMedium,
         optic_node_ext::single_io_port_names,
     },
     error::{OpmResult, OpossumError},
     gain::Extraction,
-    geometry::body::{CLEAR_APERTURE, SurfaceBoundedBody},
+    geometry::body::SurfaceBoundedBody,
     light::{LightData, LightRays, LightResult, Rays},
     material::{MATERIAL, Material},
     properties::{Proptype, proptype::AssetRef},
-    types::validated_type_definitions::ValidatedCrossSection,
     utils::geom_transformation::Isometry,
 };
 
 /// An [`OpticNode`] that encloses a volume of material between two of its surfaces.
 ///
 /// Implementing this trait is what makes a node a volume node. Everything the volume machinery needs
-/// is derived from what such a node already has — the two
-/// [`GeoSurface`](crate::geometry::geo_surface::GeoSurface)s its `update_surfaces()` places and its
-/// [`CLEAR_APERTURE`] property — so a node type declares the capability with an empty
-/// `impl Volumetric for ... {}`, plus the [`OpticNode::as_volume`] override that makes it visible
-/// through a trait object.
+/// is derived from what such a node already has — its [`Geometry`](crate::geometry::Geometry), a
+/// solid whose cross section is the node's
+/// [`CLEAR_APERTURE`](crate::geometry::body::CLEAR_APERTURE) — so a node type declares the
+/// capability with an empty `impl Volumetric for ... {}`, plus the [`OpticNode::as_volume`] override
+/// that makes it visible through a trait object.
 ///
 /// The methods below live here rather than on [`OpticNodeExt`], which every node type gets: they
 /// are meaningful only where there is a volume, and now the compiler says so instead of a runtime
@@ -75,60 +73,40 @@ pub trait Volumetric: OpticNode {
     ///
     /// This is the geometric counterpart of [`Volumetric::pass_through_volume_generic`]: that
     /// function guides rays *through* the volume, this one describes the volume itself. It is
-    /// derived entirely from what the node already has — the two
-    /// [`GeoSurface`](crate::geometry::geo_surface::GeoSurface)s built by `update_surfaces()` from
-    /// the node's curvature and thickness properties, and its [`CLEAR_APERTURE`] property as the
-    /// transversal extent.
+    /// built from the node's [`Geometry`](crate::geometry::Geometry) at the node's current
+    /// placement - the same description the surfaces light is traced at are installed from.
     ///
-    /// The returned body refers to the surfaces the node holds at this moment. Changing the node's
-    /// placement or any of its geometry properties runs `update_surfaces()`, which installs fresh
-    /// surfaces, so the body has to be derived again afterwards.
+    /// The body is built from the node's properties as they are now, so it has to be derived again
+    /// after the node is moved or one of its properties changes.
     ///
-    /// **Derive it once per node and keep it**, rather than per ray or per grid point: resolving
-    /// the node's ports copies its whole `OpticPorts` (see [`OpticNode::ports`]), which is a
-    /// handful of allocations, while the body itself only shares the surfaces it is handed. The
-    /// body is what belongs in the loop, not this call.
+    /// **Derive it once per node and keep it**, rather than per ray or per grid point: it reads the
+    /// node's properties and builds its surfaces anew. The body is what belongs in the loop, not
+    /// this call.
     ///
-    /// Both bounding surfaces are taken in their *physical* order, so an inverted node encloses the
+    /// The geometry states the faces in their *physical* order, so an inverted node encloses the
     /// same volume as an upright one: inverting a node reverses the direction light travels, not
     /// the geometry it travels through.
     ///
-    /// **Note**: The port [`Aperture`]s have no say in the extent of the body. They mask the light
-    /// passing a surface, which is independent of how far the medium behind it reaches.
+    /// **Note**: The port [`Aperture`](crate::apertures::Aperture)s have no say in the extent of
+    /// the body. They mask the light passing a surface, which is independent of how far the medium
+    /// behind it reaches.
     ///
     /// # Returns
     ///
-    /// The [`SurfaceBoundedBody`] enclosed by the node's entrance and exit surface.
+    /// The [`SurfaceBoundedBody`] enclosed by the node's entrance and exit face.
     ///
     /// # Errors
     ///
-    /// This function returns an error if the node does not have exactly one input and one output
-    /// port or if either of the two surfaces cannot be found.
+    /// This function returns an error if the node's geometry cannot be derived or encloses no
+    /// volume that can be traced.
     fn volume_body(&self) -> OpmResult<SurfaceBoundedBody> {
-        let (in_port_name, out_port_name) = single_io_port_names(self)?;
-        // `OpticNode::ports` hands out the *logical* ports, which are swapped on an inverted node.
-        // The body is a geometric object, so the physical order is restored here.
-        let (entrance_name, exit_name) = if self.inverted() {
-            (out_port_name, in_port_name)
-        } else {
-            (in_port_name, out_port_name)
+        let Some(geometry) = self.geometry()? else {
+            return Err(OpossumError::Other(format!(
+                "node '{}' has no geometry to enclose a volume",
+                self.name()
+            )));
         };
-        let surface_by_name = |surf_name: &str| {
-            self.get_optic_surface(surf_name).ok_or_else(|| {
-                OpossumError::Other(format!(
-                    "no surface with name {surf_name} defined for node '{}'",
-                    self.name()
-                ))
-            })
-        };
-        let entrance_surface = surface_by_name(&entrance_name)?;
-        let exit_surface = surface_by_name(&exit_name)?;
-        Ok(SurfaceBoundedBody::new(
-            entrance_surface.geo_surface(),
-            exit_surface.geo_surface(),
-            cross_section(self)?,
-            self.effective_node_iso().unwrap_or_else(Isometry::identity),
-        ))
+        geometry.body(&self.effective_node_iso().unwrap_or_else(Isometry::identity))
     }
     /// Guides a ray bundle through the volume of a node: in through its entry surface, out through
     /// its exit surface.
@@ -393,41 +371,6 @@ pub trait Volumetric: OpticNode {
     }
 }
 
-/// Determine the transversal boundary of a node's volume from its [`CLEAR_APERTURE`] property.
-///
-/// The port [`Aperture`]s are deliberately not consulted: an aperture states how much light a
-/// surface transmits where and may soften or invert that transmission, which says nothing about how
-/// far the material reaches. Masking a component down does not make it smaller.
-///
-/// # Arguments
-///
-/// * `node` - the node whose volume is to be bounded.
-///
-/// # Returns
-///
-/// The cross section of the node's volume.
-///
-/// # Errors
-///
-/// This function returns an error if the node does not declare a clear aperture at all or if that
-/// clear aperture does not delimit a region, which leaves the extent of the medium undefined.
-fn cross_section<T: ?Sized + Volumetric>(node: &T) -> OpmResult<ValidatedCrossSection> {
-    let Ok(Proptype::Aperture(clear_aperture)) = node.node_attr().get_property(CLEAR_APERTURE)
-    else {
-        return Err(OpossumError::Other(format!(
-            "node '{}' has no '{CLEAR_APERTURE}' property, so the extent of its volume is unknown",
-            node.name()
-        )));
-    };
-    let aperture = Aperture::new(clear_aperture.clone(), ApertureType::Hole, None, None)?;
-    ValidatedCrossSection::try_new(aperture).map_err(|e| {
-        OpossumError::Other(format!(
-            "the {CLEAR_APERTURE} of node '{}' cannot bound its volume: {e}",
-            node.name()
-        ))
-    })
-}
-
 /// Apply the medium's effects — gain and host-material absorption — to each ray that travels
 /// through it, in a single traversal.
 ///
@@ -522,6 +465,7 @@ mod test {
         },
         degree,
         gain::{ConstGain, GainModel, MonochromaticSmallSignalGain, PumpScenario, PumpSource},
+        geometry::{Geometry, body::CLEAR_APERTURE},
         joule,
         light::{
             Rays, Spectrum,
@@ -529,6 +473,7 @@ mod test {
             spectrum_helper::create_he_ne_spec,
         },
         micrometer, millimeter, nanometer,
+        nodes::test_helper::test_helper::{assert_ray_bundle_snapshot, ray_bundle_snapshot},
         nodes::{
             EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort, SpotDiagram, ThinMirror,
             create_node_ref, node_types, round_collimated_ray_builder,
@@ -1166,6 +1111,271 @@ mod test {
         );
         Ok(())
     }
+    /// The gain an inverted, decentred and tilted biconvex lens applies, ray by ray.
+    ///
+    /// A small signal model amplifies over the chord of every ray through the medium, so this pins
+    /// the whole way from the node's geometry to the gain - in the configuration where mixing up
+    /// entrance and exit or the frame of the medium would show.
+    ///
+    /// Four rays (energy exactly 1/19 J) currently pass without any gain: on a backwards pass the
+    /// chord misses the surface the ray starts on. Pinned so that a fix shows up as a deliberate change.
+    #[test]
+    fn an_inverted_aligned_lens_amplifies_as_recorded() -> OpmResult<()> {
+        let mut lens = Lens::new(
+            "head",
+            millimeter!(80.0),
+            millimeter!(-120.0),
+            millimeter!(8.0),
+            RefrIndexConst::new(HEAD_INDEX)?,
+        )?;
+        lens.set_inverted(true)?;
+        lens.set_positioning(NodePositioning::Absolute(Isometry::new(
+            millimeter!(0.0, 0.0, 20.0),
+            degree!(0.0, 0.0, 0.0),
+        )?))?;
+        lens.set_alignment(millimeter!(1.0, -2.0, 0.0), degree!(3.0, -2.0, 0.0))?;
+        let mut config = RayTraceConfig::default();
+        config.set_active_pump_scenario(Some(scenario_with_small_signal(lens.node_attr().uuid())?));
+        lens.prepare_volume(&config)?;
+        let (in_port, out_port) = single_io_port_names(&lens)?;
+        // An inverted node is passed backwards, so the bundle comes from +z and travels along -z.
+        let rays = Rays::new_uniform_collimated(
+            nanometer!(1053.0),
+            joule!(1.0),
+            &crate::distributions::position::Hexapolar::new(millimeter!(5.0), 2)?,
+        )?
+        .transformed_by_iso(&Isometry::new(
+            millimeter!(0.0, 0.0, 60.0),
+            degree!(180.0, 0.0, 0.0),
+        )?);
+        let incoming = LightResult::from([(in_port, LightData::Geometric(rays))]);
+        let outgoing = AnalysisRayTrace::analyze(&mut lens, incoming, &config)?;
+        let Some(LightData::Geometric(rays)) = outgoing.get(&out_port) else {
+            panic!("expected ray data at the output port");
+        };
+        assert_ray_bundle_snapshot(
+            &ray_bundle_snapshot(rays),
+            &[
+                [
+                    0.108_379_430_584,
+                    0.085_353_442_501,
+                    20.110_507_538_352,
+                    0.008_554_139_978,
+                    -0.023_235_310_481,
+                    -0.999_693_426_524,
+                    0.078_320_617_033,
+                    43.865_635_273_265,
+                ],
+                [
+                    0.109_108_642_782,
+                    -2.358_443_047_170,
+                    19.955_879_906_753,
+                    0.008_594_586_448,
+                    0.002_600_563_590,
+                    -0.999_959_684_264,
+                    0.078_511_731_131,
+                    44.045_434_674_518,
+                ],
+                [
+                    2.225_812_155_144,
+                    -1.136_600_526_387,
+                    20.102_226_498_838,
+                    -0.013_748_195_716,
+                    -0.010_349_341_315,
+                    -0.999_851_928_162,
+                    0.052_631_578_947,
+                    43.888_931_228_945,
+                ],
+                [
+                    2.224_929_061_137,
+                    1.307_095_703_674,
+                    20.294_629_725_695,
+                    -0.013_844_859_914,
+                    -0.036_281_875_871,
+                    -0.999_245_688_175,
+                    0.052_631_578_947,
+                    43.639_682_117_745,
+                ],
+                [
+                    0.105_948_639_269,
+                    2.529_420_998_843,
+                    20.340_509_506_376,
+                    0.008_504_535_771,
+                    -0.049_262_444_790,
+                    -0.998_749_660_528,
+                    0.077_634_609_245,
+                    43.547_238_409_842,
+                ],
+                [
+                    -2.011_854_154_490,
+                    1.306_607_273_715,
+                    20.193_734_990_249,
+                    0.030_897_363_895,
+                    -0.036_220_848_334,
+                    -0.998_866_058_614,
+                    0.077_707_738_235,
+                    43.704_362_317_455,
+                ],
+                [
+                    -2.009_578_421_851,
+                    -1.137_559_259_979,
+                    20.001_509_372_798,
+                    0.030_890_943_795,
+                    -0.010_290_917_119,
+                    -0.999_469_782_743,
+                    0.078_144_927_615,
+                    43.953_308_281_885,
+                ],
+                [
+                    0.108_138_581_647,
+                    -4.804_566_961_948,
+                    19.876_119_556_703,
+                    0.008_626_386_893,
+                    0.028_371_002_571,
+                    -0.999_560_239_136,
+                    0.052_631_578_947,
+                    44.087_285_729_648,
+                ],
+                [
+                    2.553_059_228_397,
+                    -4.149_278_831_403,
+                    19.985_561_076_091,
+                    -0.017_147_757_359,
+                    0.021_433_303_873,
+                    -0.999_623_212_967,
+                    0.078_259_377_388,
+                    43.983_801_334_800,
+                ],
+                [
+                    4.342_693_227_466,
+                    -2.360_549_212_081,
+                    20.168_788_266_276,
+                    -0.036_116_375_165,
+                    0.002_499_004_365,
+                    -0.999_344_466_349,
+                    0.078_062_871_781,
+                    43.774_437_648_913,
+                ],
+                [
+                    4.997_910_596_171,
+                    0.083_513_445_716,
+                    20.377_038_075_680,
+                    -0.043_197_029_539,
+                    -0.023_446_830_064,
+                    -0.998_791_401_044,
+                    0.077_669_190_641,
+                    43.514_833_906_863,
+                ],
+                [
+                    4.342_322_219_250,
+                    2.528_966_473_540,
+                    20.554_549_265_141,
+                    -0.036_416_272_038,
+                    -0.049_496_402_765,
+                    -0.998_110_194_941,
+                    0.077_186_040_880,
+                    43.274_538_460_526,
+                ],
+                [
+                    2.550_366_986_431,
+                    4.320_308_820_382,
+                    20.653_461_309_671,
+                    -0.017_513_767_670,
+                    -0.068_624_039_745,
+                    -0.997_488_851_622,
+                    0.052_631_578_947,
+                    43.118_390_369_090,
+                ],
+                [
+                    0.101_802_235_603,
+                    4.976_365_538_721,
+                    20.646_934_727_112,
+                    0.008_444_903_079,
+                    -0.075_613_564_637,
+                    -0.997_101_435_389,
+                    0.076_462_935_216,
+                    43.088_694_571_371,
+                ],
+                [
+                    -2.346_450_877_720,
+                    4.320_410_148_376,
+                    20.536_681_960_597,
+                    0.034_425_377_719,
+                    -0.068_548_680_451,
+                    -0.997_053_645_386,
+                    0.076_414_111_901,
+                    43.193_416_320_920,
+                ],
+                [
+                    -4.137_164_875_842,
+                    2.528_455_308_276,
+                    20.352_545_257_341,
+                    0.053_389_878_737,
+                    -0.049_370_734_370,
+                    -0.997_352_521_146,
+                    0.076_609_509_278,
+                    43.404_037_819_848,
+                ],
+                [
+                    -4.790_129_833_695,
+                    0.081_834_662_742,
+                    20.144_197_161_326,
+                    0.060_260_119_515,
+                    -0.023_308_420_009,
+                    -0.997_910_534_844,
+                    0.076_997_173_485,
+                    43.663_662_049_305,
+                ],
+                [
+                    -4.131_208_995_059,
+                    -2.362_951_167_738,
+                    19.967_497_192_106,
+                    0.053_273_032_613,
+                    0.002_614_006_058,
+                    -0.998_576_562_397,
+                    0.077_475_414_614,
+                    43.902_720_179_405,
+                ],
+                [
+                    -2.338_173_706_518,
+                    -4.151_068_267_045,
+                    19.869_494_681_312,
+                    0.034_374_611_449,
+                    0.021_497_977_619,
+                    -0.999_177_773_495,
+                    0.077_917_887_922,
+                    44.057_610_428_733,
+                ],
+            ],
+        );
+        Ok(())
+    }
+    /// A new thickness takes effect in the next analysis even if nobody refreshed the node's
+    /// surfaces: the medium the gain acts in and the surfaces the rays cross are the same.
+    #[test]
+    fn prepare_volume_follows_a_changed_thickness() -> OpmResult<()> {
+        let mut head = amplifier_head()?;
+        head.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        let thickness = millimeter!(2.0 * HEAD_THICKNESS);
+        head.node_attr_mut()
+            .set_property("center thickness", thickness.into())?;
+        let mut config = RayTraceConfig::default();
+        config.set_active_pump_scenario(Some(scenario_with_small_signal(head.node_attr().uuid())?));
+        assert_relative_eq!(
+            traced_energy_ratio(&mut head, &config)?,
+            f64::exp((head_gain_coefficient() * thickness).value),
+            epsilon = 1e-9
+        );
+        let Some(rear) = head.get_optic_surface("output_1") else {
+            panic!("the head has no rear surface");
+        };
+        assert_abs_diff_eq!(
+            rear.anchor_point_iso().translation().z.value,
+            thickness.value,
+            epsilon = 1e-15
+        );
+        Ok(())
+    }
     /// The two halves of an operating point really are independent.
     ///
     /// A gain model that reads the medium finds nothing there if nobody pumped it, and a medium
@@ -1296,6 +1506,20 @@ mod test {
                 is_volumetric,
                 "node type '{node_type}' declares '{CLEAR_APERTURE}' or presents itself as \
                  volumetric, but not both"
+            );
+        }
+        Ok(())
+    }
+    /// A node presents itself as a volume exactly when its geometry encloses one.
+    #[test]
+    fn the_volume_capability_matches_the_geometry() -> OpmResult<()> {
+        for (node_type, _) in node_types() {
+            let optic_ref = create_node_ref(node_type)?;
+            assert_eq!(
+                optic_ref.as_volume().is_some(),
+                matches!(optic_ref.geometry()?, Some(Geometry::Solid(_))),
+                "node type '{node_type}' presents itself as volumetric or describes a solid, \
+                 but not both"
             );
         }
         Ok(())

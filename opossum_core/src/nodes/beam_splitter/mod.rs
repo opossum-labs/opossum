@@ -9,21 +9,18 @@ use crate::{
     coatings::{CoatingConstantR, CoatingType},
     core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType},
     error::{OpmResult, OpossumError},
-    geometry::{Plane, geo_surface::GeoSurfaceRef},
+    geometry::Geometry,
     light::{
         LightData, Rays,
         spectrum::{Spectrum, merge_spectra},
     },
     nodes::{NodeRegistration, ideal_filter::SpectralFilterBuilder},
     properties::{Proptype, validator::Validator},
-    utils::{default_from_name::DefaultFromName, geom_transformation::Isometry},
+    utils::default_from_name::DefaultFromName,
 };
 use opm_macros_lib::OpmNode;
 use serde::{Deserialize, Serialize};
-use std::{
-    fmt::Display,
-    sync::{Arc, Mutex},
-};
+use std::fmt::Display;
 use strum::{EnumIter, IntoEnumIterator};
 use uom::si::{
     f64::{Length, Ratio},
@@ -468,30 +465,14 @@ impl BeamSplitter {
     }
 }
 impl OpticNode for BeamSplitter {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::plane(None)))
+    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
-
-        let input_surf_name_list = vec!["input_1", "input_2"];
-        let output_surf_name_list = vec!["out1_trans1_refl2", "out2_trans2_refl1"];
-        let geosurface = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso))));
-        let anchor_point_iso = Isometry::identity();
-        for in_surf_name in &input_surf_name_list {
-            self.update_surface(
-                in_surf_name,
-                geosurface.clone(),
-                anchor_point_iso,
-                &PortType::Input,
-            )?;
-        }
-        for out_surf_name in &output_surf_name_list {
-            self.update_surface(
-                out_surf_name,
-                geosurface.clone(),
-                anchor_point_iso,
-                &PortType::Output,
-            )?;
-        }
-        Ok(())
+        self.install_geometry(
+            &["input_1", "input_2"],
+            &["out1_trans1_refl2", "out2_trans2_refl1"],
+        )
     }
 }
 #[cfg(test)]

@@ -14,6 +14,7 @@ use crate::{
     },
     core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, node_attr::HasNodeAttr},
     error::OpmResult,
+    geometry::Geometry,
     joule,
     light::LightData,
     nodes::NodeRegistration,
@@ -181,8 +182,11 @@ impl EnergyMeter {
 }
 
 impl OpticNode for EnergyMeter {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::plane(None)))
+    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.update_flat_single_surfaces()
+        self.install_geometry(&["input_1"], &["output_1"])
     }
 
     fn reset_data(&mut self) {

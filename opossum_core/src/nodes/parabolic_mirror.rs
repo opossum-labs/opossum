@@ -9,7 +9,7 @@ use crate::{
     },
     degree,
     error::{OpmResult, OpossumError},
-    geometry::{Parabola, geo_surface::GeoSurfaceRef},
+    geometry::{Geometry, SurfaceShape},
     light::{LightData, LightRays, LightResult, Rays},
     meter,
     nodes::NodeRegistration,
@@ -21,7 +21,6 @@ use crate::{
 use core::f64;
 use nalgebra::{Isometry3, Point3, Vector2, Vector3, vector};
 use opm_macros_lib::OpmNode;
-use std::sync::{Arc, Mutex};
 use uom::si::f64::{Angle, Length};
 
 inventory::submit! {
@@ -358,25 +357,17 @@ impl ParabolicMirror {
 }
 
 impl OpticNode for ParabolicMirror {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::surface(
+            SurfaceShape::Parabola {
+                focal_length: -1. * self.calc_parent_focal_length()?,
+            },
+            self.calc_off_axis_isometry()?,
+            None,
+        )))
+    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
-        let anchor_point_iso = self.calc_off_axis_isometry()?;
-        let total_iso = node_iso.append(&anchor_point_iso);
-        let parabola = Parabola::new(-1. * self.calc_parent_focal_length()?, total_iso)?;
-        let para_geo_surface = GeoSurfaceRef(Arc::new(Mutex::new(parabola)));
-        self.update_surface(
-            "input_1",
-            para_geo_surface.clone(),
-            anchor_point_iso,
-            &PortType::Input,
-        )?;
-        self.update_surface(
-            "output_1",
-            para_geo_surface,
-            anchor_point_iso,
-            &PortType::Output,
-        )?;
-        Ok(())
+        self.install_geometry(&["input_1"], &["output_1"])
     }
 }
 impl AnalysisGhostFocus for ParabolicMirror {

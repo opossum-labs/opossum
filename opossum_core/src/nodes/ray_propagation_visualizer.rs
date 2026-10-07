@@ -21,6 +21,7 @@ use crate::{
     },
     core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt},
     error::{OpmResult, OpossumError},
+    geometry::Geometry,
     light::{LightData, LightResult, Spectrum},
     millimeter,
     nodes::NodeRegistration,
@@ -105,11 +106,14 @@ impl RayPropagationVisualizer {
     }
 }
 impl OpticNode for RayPropagationVisualizer {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::plane(None)))
+    }
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.update_flat_single_surfaces()
+        self.install_geometry(&["input_1"], &["output_1"])
     }
     fn node_report(&self, uuid: &str, analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
         if analyzer == AnalyzerKind::Energy {

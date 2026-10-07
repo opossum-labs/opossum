@@ -9,6 +9,7 @@ use crate::{
     },
     core_optics::{NodeAttr, NodeAttrExt, OpticNodeExt},
     error::{OpmResult, OpossumError},
+    geometry::Geometry,
     light::{
         LightData, LightRays, LightResult, Rays,
         light_result::{light_rays_to_light_result, light_result_to_light_rays},
@@ -128,8 +129,11 @@ impl IdealFilter {
     }
 }
 impl OpticNode for IdealFilter {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::plane(None)))
+    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.update_flat_single_surfaces()
+        self.install_geometry(&["input_1"], &["output_1"])
     }
 }
 impl AnalysisGhostFocus for IdealFilter {

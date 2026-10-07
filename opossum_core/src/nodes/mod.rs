@@ -39,7 +39,7 @@ mod source_helper;
 mod source_port;
 mod spectrometer;
 mod spot_diagram;
-mod test_helper;
+pub(crate) mod test_helper;
 mod thin_mirror;
 mod wavefront;
 mod wedge;
@@ -195,6 +195,412 @@ pub fn is_volume_node_type(node_type: &str) -> bool {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::{
+        core_optics::{OpticNode, OpticNodeExt, node_attr::NodePositioning},
+        degree,
+        geometry::SurfaceShape,
+        millimeter,
+        nodes::test_helper::test_helper::{
+            assert_snapshots, body_snapshot, geometry_snapshot, surface_snapshot,
+        },
+        refractive_index::RefrIndexConst,
+        utils::geom_transformation::Isometry,
+    };
+
+    /// One flat surface, placed at the node itself and shared by its input and output port.
+    const FLAT_INPUT_OUTPUT: &[&str] = &[
+        "in input_1: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
+        "out output_1: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
+    ];
+
+    /// Place a node away from the origin, rotated about all three axes and with an alignment on
+    /// top, so that every part of a surface's placement is exercised.
+    fn place<T: OpticNode + ?Sized>(node: &mut T) -> OpmResult<()> {
+        node.set_positioning(NodePositioning::Absolute(Isometry::new(
+            millimeter!(10.0, -20.0, 30.0),
+            degree!(5.0, -10.0, 15.0),
+        )?))?;
+        node.set_alignment(millimeter!(1.0, 2.0, 0.0), degree!(2.0, 0.0, -3.0))
+    }
+
+    /// Node configurations the default ones do not cover: a tilted exit surface, an off-axis
+    /// parabola, an inverted lens, a flat lens surface, a curved mirror and a curved wavefront
+    /// reference surface.
+    fn node_variants() -> OpmResult<Vec<(&'static str, OpticRef)>> {
+        let glass = RefrIndexConst::new(1.5)?;
+        let mut inverted_lens = Lens::new(
+            "inverted lens",
+            millimeter!(50.0),
+            millimeter!(-80.0),
+            millimeter!(5.0),
+            &glass,
+        )?;
+        inverted_lens.set_inverted(true)?;
+        let mut spherical_wavefront = WaveFront::new("wavefront")?;
+        spherical_wavefront.set_reference_surface(SurfaceShape::Sphere {
+            radius: millimeter!(100.0),
+        })?;
+        Ok(vec![
+            (
+                "5 degree wedge",
+                OpticRef::new(Box::new(Wedge::new(
+                    "wedge",
+                    millimeter!(10.0),
+                    degree!(5.0),
+                    &glass,
+                )?)),
+            ),
+            (
+                "90 degree parabola",
+                OpticRef::new(Box::new(ParabolicMirror::new_with_off_axis_y(
+                    "parabola",
+                    millimeter!(100.0),
+                    true,
+                    degree!(90.0),
+                )?)),
+            ),
+            ("inverted lens", OpticRef::new(Box::new(inverted_lens))),
+            (
+                "plano-convex lens",
+                OpticRef::new(Box::new(Lens::new(
+                    "plano-convex lens",
+                    millimeter!(50.0),
+                    millimeter!(f64::INFINITY),
+                    millimeter!(5.0),
+                    &glass,
+                )?)),
+            ),
+            (
+                "spherical mirror",
+                OpticRef::new(Box::new(
+                    ThinMirror::new("mirror").with_curvature(millimeter!(200.0))?,
+                )),
+            ),
+            (
+                "spherical wavefront reference",
+                OpticRef::new(Box::new(spherical_wavefront)),
+            ),
+        ])
+    }
+
+    /// Every node's geometry describes exactly the surfaces the node installs.
+    #[test]
+    fn every_geometry_describes_the_installed_surfaces() -> OpmResult<()> {
+        for (label, node) in placed_configurations()? {
+            assert_eq!(
+                geometry_snapshot(&*node)?,
+                surface_snapshot(&*node)?,
+                "the geometry of '{label}' does not describe its surfaces"
+            );
+        }
+        Ok(())
+    }
+
+    /// Everything gain and absorption read from the medium of every volume node configuration.
+    ///
+    /// Pins the body the medium is made of - frame, bounding box, chords of straight and oblique
+    /// rays and which points it contains - for placed, rotated, aligned and inverted nodes.
+    #[test]
+    fn every_volume_body_is_recorded() -> OpmResult<()> {
+        let mut actual = Vec::new();
+        for (label, node) in placed_configurations()? {
+            if let Some(volume) = node.as_volume() {
+                let frame = node.effective_node_iso().unwrap_or_else(Isometry::identity);
+                actual.push((label, body_snapshot(&volume.volume_body()?, &frame)?));
+            }
+        }
+        actual.sort_by_key(|(label, _)| *label);
+        assert_snapshots(
+            &actual,
+            &[
+                (
+                    "5 degree wedge",
+                    &[
+                        "frame t=(10.406345, -17.828447, 30.345311) x=(0.964207, 0.204382, 0.168918) z=(-0.136689, -0.162745, 0.977154)",
+                        "box x=[-12.500000, 12.500000] y=[-12.500000, 12.500000] z=[0.000000, 11.093608]",
+                        "chord from (0, 0) at 0 deg: 10.000000",
+                        "chord from (0, 0) at 10 deg: 11.108868",
+                        "chord from (5, 0) at 0 deg: 10.000000",
+                        "chord from (5, 0) at 10 deg: 11.108868",
+                        "chord from (0, 5) at 0 deg: 10.437443",
+                        "chord from (0, 5) at 10 deg: none",
+                        "chord from (-8, 3) at 0 deg: 10.262466",
+                        "chord from (-8, 3) at 10 deg: none",
+                        "chord from (12.4, 0) at 0 deg: 10.000000",
+                        "chord from (12.4, 0) at 10 deg: none",
+                        "chord from (12.6, 0) at 0 deg: none",
+                        "chord from (12.6, 0) at 10 deg: none",
+                        "inside: ...............#####.........#####..######.#####..######.#####......................",
+                    ],
+                ),
+                (
+                    "cylindric lens",
+                    &[
+                        "frame t=(10.406345, -17.828447, 30.345311) x=(0.964207, 0.204382, 0.168918) z=(-0.136689, -0.162745, 0.977154)",
+                        "box: Opossum Error:Other:the extent of a body bounded by the curved 'cylindric' surface tilted against it is not supported",
+                        "chord from (0, 0) at 0 deg: 10.000000",
+                        "chord from (0, 0) at 10 deg: 10.154266",
+                        "chord from (5, 0) at 0 deg: 9.949999",
+                        "chord from (5, 0) at 10 deg: 10.103494",
+                        "chord from (0, 5) at 0 deg: 10.000000",
+                        "chord from (0, 5) at 10 deg: none",
+                        "chord from (-8, 3) at 0 deg: 9.871992",
+                        "chord from (-8, 3) at 10 deg: none",
+                        "chord from (12.4, 0) at 0 deg: 9.692433",
+                        "chord from (12.4, 0) at 10 deg: none",
+                        "chord from (12.6, 0) at 0 deg: none",
+                        "chord from (12.6, 0) at 10 deg: none",
+                        "inside: ...............#####.........#####..#####..#####..#####..#####......................",
+                    ],
+                ),
+                (
+                    "inverted lens",
+                    &[
+                        "frame t=(10.406345, -17.828447, 30.345311) x=(0.964207, 0.204382, 0.168918) z=(-0.136689, -0.162745, 0.977154)",
+                        "box: Opossum Error:Other:the extent of a body bounded by the curved 'sphere' surface tilted against it is not supported",
+                        "chord from (0, 0) at 0 deg: 5.000000",
+                        "chord from (0, 0) at 10 deg: 3.668928",
+                        "chord from (5, 0) at 0 deg: 4.592969",
+                        "chord from (5, 0) at 10 deg: 3.244937",
+                        "chord from (0, 5) at 0 deg: 4.592969",
+                        "chord from (0, 5) at 10 deg: none",
+                        "chord from (-8, 3) at 0 deg: 3.807033",
+                        "chord from (-8, 3) at 10 deg: none",
+                        "chord from (12.4, 0) at 0 deg: 2.471159",
+                        "chord from (12.4, 0) at 10 deg: none",
+                        "chord from (12.6, 0) at 0 deg: none",
+                        "chord from (12.6, 0) at 10 deg: none",
+                        "inside: ................#............###....###....###.....#......#.........................",
+                    ],
+                ),
+                (
+                    "lens",
+                    &[
+                        "frame t=(10.406345, -17.828447, 30.345311) x=(0.964207, 0.204382, 0.168918) z=(-0.136689, -0.162745, 0.977154)",
+                        "box: Opossum Error:Other:the extent of a body bounded by the curved 'sphere' surface tilted against it is not supported",
+                        "chord from (0, 0) at 0 deg: 10.000000",
+                        "chord from (0, 0) at 10 deg: 9.961841",
+                        "chord from (5, 0) at 0 deg: 9.949999",
+                        "chord from (5, 0) at 10 deg: 9.911074",
+                        "chord from (0, 5) at 0 deg: 9.949999",
+                        "chord from (0, 5) at 10 deg: none",
+                        "chord from (-8, 3) at 0 deg: 9.853989",
+                        "chord from (-8, 3) at 10 deg: none",
+                        "chord from (12.4, 0) at 0 deg: 9.692433",
+                        "chord from (12.4, 0) at 10 deg: none",
+                        "chord from (12.6, 0) at 0 deg: none",
+                        "chord from (12.6, 0) at 10 deg: none",
+                        "inside: ...............#####.........#####..#####..#####..#####..#####......................",
+                    ],
+                ),
+                (
+                    "plano-convex lens",
+                    &[
+                        "frame t=(10.406345, -17.828447, 30.345311) x=(0.964207, 0.204382, 0.168918) z=(-0.136689, -0.162745, 0.977154)",
+                        "box: Opossum Error:Other:the extent of a body bounded by the curved 'sphere' surface tilted against it is not supported",
+                        "chord from (0, 0) at 0 deg: 5.000000",
+                        "chord from (0, 0) at 10 deg: 4.255460",
+                        "chord from (5, 0) at 0 deg: 4.749372",
+                        "chord from (5, 0) at 10 deg: 3.988103",
+                        "chord from (0, 5) at 0 deg: 4.749372",
+                        "chord from (0, 5) at 10 deg: none",
+                        "chord from (-8, 3) at 0 deg: 4.264592",
+                        "chord from (-8, 3) at 10 deg: none",
+                        "chord from (12.4, 0) at 0 deg: 3.438002",
+                        "chord from (12.4, 0) at 10 deg: none",
+                        "chord from (12.6, 0) at 0 deg: none",
+                        "chord from (12.6, 0) at 10 deg: none",
+                        "inside: ................##...........###....###....###.....##.....##........................",
+                    ],
+                ),
+                (
+                    "wedge",
+                    &[
+                        "frame t=(10.406345, -17.828447, 30.345311) x=(0.964207, 0.204382, 0.168918) z=(-0.136689, -0.162745, 0.977154)",
+                        "box x=[-12.500000, 12.500000] y=[-12.500000, 12.500000] z=[0.000000, 10.000000]",
+                        "chord from (0, 0) at 0 deg: 10.000000",
+                        "chord from (0, 0) at 10 deg: 10.154266",
+                        "chord from (5, 0) at 0 deg: 10.000000",
+                        "chord from (5, 0) at 10 deg: 10.154266",
+                        "chord from (0, 5) at 0 deg: 10.000000",
+                        "chord from (0, 5) at 10 deg: none",
+                        "chord from (-8, 3) at 0 deg: 10.000000",
+                        "chord from (-8, 3) at 10 deg: none",
+                        "chord from (12.4, 0) at 0 deg: 10.000000",
+                        "chord from (12.4, 0) at 10 deg: none",
+                        "chord from (12.6, 0) at 0 deg: none",
+                        "chord from (12.6, 0) at 10 deg: none",
+                        "inside: ...............#####.........#####..#####..#####..#####..#####......................",
+                    ],
+                ),
+            ],
+        );
+        Ok(())
+    }
+
+    /// Every registered node type in its default configuration, the reference node and the
+    /// [`node_variants`], each placed (see [`place`]).
+    fn placed_configurations() -> OpmResult<Vec<(&'static str, OpticRef)>> {
+        let mut nodes = node_variants()?;
+        for (node_type, _) in node_types() {
+            nodes.push((node_type, create_node_ref(node_type)?));
+        }
+        nodes.push(("reference", create_node_ref("reference")?));
+        for (_, node) in &mut nodes {
+            place(&mut **node)?;
+        }
+        Ok(nodes)
+    }
+
+    /// A node without a shape of its own has no surfaces to install.
+    #[test]
+    fn a_node_without_geometry_cannot_install_surfaces() {
+        assert!(
+            NodeGroup::default()
+                .install_geometry(&["input_1"], &["output_1"])
+                .is_err()
+        );
+    }
+
+    /// Place a node (see [`place`]) and take its surface snapshot.
+    fn placed_snapshot<T: OpticNode + ?Sized>(node: &mut T) -> OpmResult<Vec<String>> {
+        place(node)?;
+        surface_snapshot(node)
+    }
+
+    /// The surfaces every registered node type installs in its default configuration.
+    ///
+    /// Pins today's hand-written `update_surfaces` of every node type, so that describing their
+    /// geometry generically cannot change where a surface ends up.
+    #[test]
+    fn every_node_type_installs_its_recorded_surfaces() -> OpmResult<()> {
+        let mut actual = Vec::new();
+        for (node_type, _) in node_types() {
+            let mut node = create_node_ref(node_type)?;
+            actual.push((node_type, placed_snapshot(&mut *node)?));
+        }
+        actual.sort_by_key(|(node_type, _)| *node_type);
+        assert_snapshots(
+            &actual,
+            &[
+                (
+                    "beam splitter",
+                    &[
+                        "in input_1: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
+                        "in input_2: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
+                        "out out1_trans1_refl2: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
+                        "out out2_trans2_refl1: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
+                    ],
+                ),
+                (
+                    "cylindric lens",
+                    &[
+                        "in input_1: cylindric t=(0.000000, 0.000000, 500.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(-500.000000, -499.974999, -500.000000) shared=0",
+                        "out output_1: cylindric t=(0.000000, 0.000000, -490.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(500.000000, 499.974999, 500.000000) shared=1",
+                    ],
+                ),
+                ("dummy", FLAT_INPUT_OUTPUT),
+                ("energy meter", FLAT_INPUT_OUTPUT),
+                ("fluence detector", FLAT_INPUT_OUTPUT),
+                ("group", &[]),
+                ("ideal filter", FLAT_INPUT_OUTPUT),
+                (
+                    "lens",
+                    &[
+                        "in input_1: sphere t=(0.000000, 0.000000, 500.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(-500.000000, -499.974999, -499.974999) shared=0",
+                        "out output_1: sphere t=(0.000000, 0.000000, -490.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(500.000000, 499.974999, 499.974999) shared=1",
+                    ],
+                ),
+                ("mirror", FLAT_INPUT_OUTPUT),
+                (
+                    "parabolic mirror",
+                    &[
+                        "in input_1: parabolic t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, -0.006250, -0.006250) shared=0",
+                        "out output_1: parabolic t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, -0.006250, -0.006250) shared=0",
+                    ],
+                ),
+                ("paraxial surface", FLAT_INPUT_OUTPUT),
+                ("ray propagation", FLAT_INPUT_OUTPUT),
+                ("reflective grating", FLAT_INPUT_OUTPUT),
+                (
+                    "source port",
+                    &[
+                        "out output_1: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
+                    ],
+                ),
+                ("spectrometer", FLAT_INPUT_OUTPUT),
+                ("spot diagram", FLAT_INPUT_OUTPUT),
+                ("wavefront monitor", FLAT_INPUT_OUTPUT),
+                (
+                    "wedge",
+                    &[
+                        "in input_1: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
+                        "out output_1: plane t=(0.000000, 0.000000, 10.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=1",
+                    ],
+                ),
+            ],
+        );
+        Ok(())
+    }
+
+    /// The surfaces of node configurations the default ones do not cover: a tilted exit surface,
+    /// a curved mirror, a flat lens surface, an inverted lens and an off-axis parabola.
+    #[test]
+    fn node_variants_install_their_recorded_surfaces() -> OpmResult<()> {
+        let mut actual = Vec::new();
+        for (label, mut node) in node_variants()? {
+            actual.push((label, placed_snapshot(&mut *node)?));
+        }
+        actual.sort_by_key(|(label, _)| *label);
+        assert_snapshots(
+            &actual,
+            &[
+                (
+                    "5 degree wedge",
+                    &[
+                        "in input_1: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
+                        "out output_1: plane t=(0.000000, 0.000000, 10.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, -0.087156, 0.996195) sag=(0.000000, 0.000000, 0.000000) shared=1",
+                    ],
+                ),
+                (
+                    "90 degree parabola",
+                    &[
+                        "in input_1: parabolic t=(0.000000, -50.000000, -100.000000) x=(0.000000, 0.000000, -1.000000) z=(0.000000, -1.000000, 0.000000) sag=(0.000000, -0.125000, -0.125000) shared=0",
+                        "out output_1: parabolic t=(0.000000, -50.000000, -100.000000) x=(0.000000, 0.000000, -1.000000) z=(0.000000, -1.000000, 0.000000) sag=(0.000000, -0.125000, -0.125000) shared=0",
+                    ],
+                ),
+                (
+                    "inverted lens",
+                    &[
+                        "in input_1: sphere t=(0.000000, 0.000000, 50.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(-50.000000, -49.749372, -49.749372) shared=0",
+                        "out output_1: sphere t=(0.000000, 0.000000, -75.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(80.000000, 79.843597, 79.843597) shared=1",
+                    ],
+                ),
+                (
+                    "plano-convex lens",
+                    &[
+                        "in input_1: sphere t=(0.000000, 0.000000, 50.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(-50.000000, -49.749372, -49.749372) shared=0",
+                        "out output_1: plane t=(0.000000, 0.000000, 5.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=1",
+                    ],
+                ),
+                (
+                    "spherical mirror",
+                    &[
+                        "in input_1: sphere t=(0.000000, 0.000000, 200.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(-200.000000, -199.937490, -199.937490) shared=0",
+                        "out output_1: sphere t=(0.000000, 0.000000, 200.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(-200.000000, -199.937490, -199.937490) shared=0",
+                    ],
+                ),
+                (
+                    "spherical wavefront reference",
+                    &[
+                        "in input_1: sphere t=(0.000000, 0.000000, 100.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(-100.000000, -99.874922, -99.874922) shared=0",
+                        "out output_1: sphere t=(0.000000, 0.000000, 100.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(-100.000000, -99.874922, -99.874922) shared=0",
+                    ],
+                ),
+            ],
+        );
+        Ok(())
+    }
     #[test]
     fn create_node_ref_error() {
         assert!(create_node_ref("test").is_err());

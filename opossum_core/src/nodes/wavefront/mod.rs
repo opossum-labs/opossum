@@ -11,7 +11,7 @@ use crate::{
     },
     core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType},
     error::{OpmResult, OpossumError},
-    geometry::geo_surface::GeoSurfaceRef,
+    geometry::{Geometry, SurfaceShape},
     light::{LightData, LightResult},
     nodes::NodeRegistration,
     properties::{Properties, Proptype},
@@ -48,9 +48,10 @@ pub struct WaveFront {
     light_data: Option<LightData>,
     node_attr: NodeAttr,
     apodization_warning: bool,
-    /// Optional custom reference surface for wavefront evaluation (e.g. Sphere).
+    /// Optional custom reference surface for wavefront evaluation (e.g. a sphere), with its vertex
+    /// at the node.
     #[serde(skip)]
-    reference_surface: Option<GeoSurfaceRef>,
+    reference_surface: Option<SurfaceShape>,
 }
 
 impl Default for WaveFront {
@@ -86,44 +87,40 @@ impl WaveFront {
         wf.update_surfaces()?;
         Ok(wf)
     }
-    /// Sets a custom geometric reference surface for wavefront calculation.
-    /// Allows analyzing wavefronts against curved surfaces like spheres.
+    /// Sets a custom reference surface for wavefront calculation.
+    ///
+    /// Allows analyzing wavefronts against curved surfaces like spheres. The surface's vertex sits
+    /// at the node, so it moves with the node.
+    ///
+    /// # Arguments
+    ///
+    /// * `shape` - the shape of the reference surface.
     ///
     /// # Errors
     ///
-    /// Ths funtion returns an error if the internal update with the given surface reference fails.
-    pub fn set_reference_surface(&mut self, geo: GeoSurfaceRef) -> OpmResult<()> {
-        self.reference_surface = Some(geo);
+    /// This function returns an error if the surface cannot be built from the given shape.
+    pub fn set_reference_surface(&mut self, shape: SurfaceShape) -> OpmResult<()> {
+        self.reference_surface = Some(shape);
         self.update_surfaces()
     }
 }
 
 impl OpticNode for WaveFront {
+    /// The surface wavefronts are measured on: the reference surface, or a plane if none is set.
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::surface(
+            self.reference_surface
+                .clone()
+                .unwrap_or(SurfaceShape::Plane),
+            Isometry::identity(),
+            None,
+        )))
+    }
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        // Use custom reference surface if defined, otherwise default to a Plane
-        let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
-        let geosurface = self.reference_surface.clone().unwrap_or_else(|| {
-            GeoSurfaceRef(std::sync::Arc::new(std::sync::Mutex::new(
-                crate::geometry::Plane::new(node_iso),
-            )))
-        });
-
-        self.update_surface(
-            "input_1",
-            geosurface.clone(),
-            Isometry::identity(),
-            &PortType::Input,
-        )?;
-        self.update_surface(
-            "output_1",
-            geosurface,
-            Isometry::identity(),
-            &PortType::Output,
-        )?;
-        Ok(())
+        self.install_geometry(&["input_1"], &["output_1"])
     }
     fn node_report(&self, uuid: &str, analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
         if analyzer == AnalyzerKind::Energy {

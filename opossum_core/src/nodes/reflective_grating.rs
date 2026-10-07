@@ -9,6 +9,7 @@ use crate::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, node_attr::HasNodeAttr,
     },
     error::{OpmResult, OpossumError},
+    geometry::Geometry,
     light::{LightData, LightRays, LightResult, Rays},
     nodes::NodeRegistration,
     num_per_mm,
@@ -260,8 +261,11 @@ impl AnalysisRayTrace for ReflectiveGrating {
 }
 
 impl OpticNode for ReflectiveGrating {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::plane(None)))
+    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.update_flat_single_surfaces()
+        self.install_geometry(&["input_1"], &["output_1"])
     }
 }
 
