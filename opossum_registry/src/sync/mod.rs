@@ -17,7 +17,7 @@ use self::{
     rebase::rebase_local_assets_onto_remote,
     utils::{
         checkout_worktree, clone_repository, collect_files_recursive, directory_contains_assets,
-        format_error_chain, is_directory_empty, resolve_signature,
+        format_error_chain, is_asset_file, is_directory_empty, resolve_signature,
     },
 };
 
@@ -82,7 +82,6 @@ impl RegistrySync {
             ))
         })?;
 
-        // Ensure committer is present right after init
         ensure_committer_configured(&self.local_path)?;
 
         // 4. Create initial commit if existing assets are found on disk
@@ -91,9 +90,14 @@ impl RegistrySync {
             let mut root_tree_oid = None;
 
             for file_path in files {
-                if let Ok(rel_path) = file_path.strip_prefix(&self.local_path) {
+                if let Ok(rel_path) = file_path.strip_prefix(&self.local_path)
+                    && is_asset_file(rel_path)
+                {
                     let rel_path_str = rel_path.to_string_lossy().replace('\\', "/");
-                    let segments: Vec<&str> = rel_path_str.split('/').collect();
+                    let segments: Vec<&str> = rel_path_str
+                        .split('/')
+                        .filter(|segment| !segment.is_empty())
+                        .collect();
 
                     if let Ok(file_bytes) = fs::read(&file_path)
                         && let Ok(blob) = repo.write_blob(&file_bytes)
@@ -167,7 +171,6 @@ impl RegistrySync {
     /// This function returns an error if an underlying git operation fails.
     pub fn pull_updates(&self) -> OpmResult<()> {
         ensure_remote_configured(&self.local_path, &self.remote_url)?;
-        // Ensure local repository has a valid committer before opening repo snapshot
         ensure_committer_configured(&self.local_path)?;
 
         let repo = gix::open(&self.local_path).map_err(|e| {

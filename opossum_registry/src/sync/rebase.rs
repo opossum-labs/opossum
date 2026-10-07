@@ -27,23 +27,21 @@ pub fn rebase_local_assets_onto_remote(
     let mut staged_asset_count = 0;
 
     for file_path in files {
-        if let Ok(rel_path) = file_path.strip_prefix(local_path) {
-            // Check dynamically if file is an asset rather than matching hardcoded strings
-            if is_asset_file(rel_path) {
-                let rel_str = rel_path.to_string_lossy().replace('\\', "/");
-                let segments: Vec<&str> = rel_str.split('/').collect();
+        if let Ok(rel_path) = file_path.strip_prefix(local_path)
+            && is_asset_file(rel_path)
+        {
+            let rel_str = rel_path.to_string_lossy().replace('\\', "/");
+            let segments: Vec<&str> = rel_str
+                .split('/')
+                .filter(|segment| !segment.is_empty())
+                .collect();
 
-                if let Ok(file_bytes) = fs::read(&file_path)
-                    && let Ok(blob) = repo.write_blob(&file_bytes)
-                {
-                    current_tree_oid = upsert_path_in_tree(
-                        repo,
-                        Some(current_tree_oid),
-                        &segments,
-                        blob.detach(),
-                    )?;
-                    staged_asset_count += 1;
-                }
+            if let Ok(file_bytes) = fs::read(&file_path)
+                && let Ok(blob) = repo.write_blob(&file_bytes)
+            {
+                current_tree_oid =
+                    upsert_path_in_tree(repo, Some(current_tree_oid), &segments, blob.detach())?;
+                staged_asset_count += 1;
             }
         }
     }

@@ -1,12 +1,15 @@
 use opossum_core::error::{OpmResult, OpossumError};
 use std::{fmt::Write, fs, path::Path};
 
-use super::DEFAULT_BRANCH;
+use super::{
+    DEFAULT_BRANCH,
+    utils::{DEFAULT_GIT_USER_EMAIL, DEFAULT_GIT_USER_NAME},
+};
 
 /// Ensures that a valid author/committer identity exists in .git/config.
 ///
-/// If no global or local Git identity is configured, internal operations such as
-/// `prepare_fetch(...).receive(...)` fail when creating reflog entries for remote tracking refs.
+/// Section-aware: guarantees that `name` and `email` are placed directly within
+/// the `[user]` section, preventing configuration leakage into other sections.
 pub fn ensure_committer_configured(local_path: &Path) -> OpmResult<()> {
     let config_path = local_path.join(".git").join("config");
     if !config_path.exists() {
@@ -27,50 +30,86 @@ pub fn ensure_committer_configured(local_path: &Path) -> OpmResult<()> {
         ))
     })?;
 
-    let has_user_section = content.contains("[user]");
-    let has_name = content.lines().any(|l| {
-        let trimmed = l.trim();
-        trimmed.starts_with("name") && trimmed.contains('=')
-    });
-    let has_email = content.lines().any(|l| {
-        let trimmed = l.trim();
-        trimmed.starts_with("email") && trimmed.contains('=')
-    });
+    let lines: Vec<&str> = content.lines().collect();
+    let mut updated_lines = Vec::new();
+    let mut inside_user_section = false;
+    let mut user_section_found = false;
+    let mut has_name = false;
+    let mut has_email = false;
+    let mut modified = false;
 
-    if has_user_section && has_name && has_email {
-        return Ok(());
+    for line in &lines {
+        let trimmed = line.trim();
+
+        if trimmed.starts_with('[') {
+            // When exiting the [user] section, insert any missing fields
+            if inside_user_section {
+                if !has_name {
+                    updated_lines.push(format!("\tname = {DEFAULT_GIT_USER_NAME}"));
+                    modified = true;
+                }
+                if !has_email {
+                    updated_lines.push(format!("\temail = {DEFAULT_GIT_USER_EMAIL}"));
+                    modified = true;
+                }
+                inside_user_section = false;
+            }
+
+            if trimmed.eq_ignore_ascii_case("[user]") {
+                inside_user_section = true;
+                user_section_found = true;
+            }
+        } else if inside_user_section {
+            if trimmed.starts_with("name") && trimmed.contains('=') {
+                has_name = true;
+            } else if trimmed.starts_with("email") && trimmed.contains('=') {
+                has_email = true;
+            }
+        }
+
+        updated_lines.push((*line).to_string());
     }
 
-    let mut updated = content;
-    if !updated.ends_with('\n') {
-        updated.push('\n');
-    }
-
-    if !has_user_section {
-        let _ = write!(
-            updated,
-            "[user]\n\tname = Opossum User\n\temail = user@opossum.local\n"
-        );
-    } else {
+    // Handle case where [user] was the last section in the file
+    if inside_user_section {
         if !has_name {
-            let _ = write!(updated, "\tname = Opossum User\n");
+            updated_lines.push(format!("\tname = {DEFAULT_GIT_USER_NAME}"));
+            modified = true;
         }
         if !has_email {
-            let _ = write!(updated, "\temail = user@opossum.local\n");
+            updated_lines.push(format!("\temail = {DEFAULT_GIT_USER_EMAIL}"));
+            modified = true;
         }
     }
 
-    fs::write(&config_path, updated).map_err(|e| {
-        OpossumError::Registry(format!(
-            "Failed to write user configuration to {}: {e}",
-            config_path.display()
-        ))
-    })?;
+    // If [user] section was never found, append it cleanly at the end
+    if !user_section_found {
+        if !updated_lines.is_empty() && !updated_lines.last().is_some_and(String::is_empty) {
+            updated_lines.push(String::new());
+        }
+        updated_lines.push("[user]".to_string());
+        updated_lines.push(format!("\tname = {DEFAULT_GIT_USER_NAME}"));
+        updated_lines.push(format!("\temail = {DEFAULT_GIT_USER_EMAIL}"));
+        modified = true;
+    }
+
+    if modified {
+        let mut updated_content = updated_lines.join("\n");
+        updated_content.push('\n');
+        fs::write(&config_path, updated_content).map_err(|e| {
+            OpossumError::Registry(format!(
+                "Failed to write user configuration to {}: {e}",
+                config_path.display()
+            ))
+        })?;
+    }
 
     Ok(())
 }
 
 /// Ensures that the remote 'origin' is properly configured in .git/config.
+///
+/// Only performs disk writes if the configuration actually changed.
 pub fn ensure_remote_configured(local_path: &Path, remote_url: &str) -> OpmResult<()> {
     let trimmed_url = remote_url.trim();
     if trimmed_url.is_empty() {
@@ -98,23 +137,43 @@ pub fn ensure_remote_configured(local_path: &Path, remote_url: &str) -> OpmResul
         let lines: Vec<&str> = content.lines().collect();
         let mut updated_lines = Vec::new();
         let mut inside_origin = false;
-        let mut url_updated = false;
+        let mut url_found = false;
+        let mut modified = false;
 
         for line in lines {
             let trimmed = line.trim();
             if trimmed.starts_with('[') {
+                if inside_origin && !url_found {
+                    updated_lines.push(format!("\turl = {trimmed_url}"));
+                    modified = true;
+                }
                 inside_origin = trimmed.eq_ignore_ascii_case("[remote \"origin\"]");
             }
 
             if inside_origin && trimmed.starts_with("url") && trimmed.contains('=') {
-                updated_lines.push(format!("\turl = {trimmed_url}"));
-                url_updated = true;
+                url_found = true;
+                let current_url = trimmed
+                    .split_once('=')
+                    .map(|(_, val)| val.trim())
+                    .unwrap_or_default();
+
+                if current_url == trimmed_url {
+                    updated_lines.push(line.to_string());
+                } else {
+                    updated_lines.push(format!("\turl = {trimmed_url}"));
+                    modified = true;
+                }
             } else {
                 updated_lines.push(line.to_string());
             }
         }
 
-        if url_updated {
+        if inside_origin && !url_found {
+            updated_lines.push(format!("\turl = {trimmed_url}"));
+            modified = true;
+        }
+
+        if modified {
             let mut updated_content = updated_lines.join("\n");
             updated_content.push('\n');
             fs::write(&config_path, updated_content).map_err(|e| {
