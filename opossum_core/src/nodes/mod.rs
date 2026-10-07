@@ -363,7 +363,7 @@ mod test {
                     "cylindric lens",
                     &[
                         "frame t=(10.406345, -17.828447, 30.345311) x=(0.964207, 0.204382, 0.168918) z=(-0.136689, -0.162745, 0.977154)",
-                        "box: Opossum Error:Other:the extent of a body bounded by the curved 'cylindric' surface tilted against it is not supported",
+                        "box x=[-12.500000, 12.500000] y=[-12.500000, 12.500000] z=[0.000000, 10.000000]",
                         "chord from (0, 0) at 0 deg: 10.000000",
                         "chord from (0, 0) at 10 deg: 10.154266",
                         "chord from (5, 0) at 0 deg: 9.949999",
@@ -383,7 +383,7 @@ mod test {
                     "inverted lens",
                     &[
                         "frame t=(10.406345, -17.828447, 30.345311) x=(0.964207, 0.204382, 0.168918) z=(-0.136689, -0.162745, 0.977154)",
-                        "box: Opossum Error:Other:the extent of a body bounded by the curved 'sphere' surface tilted against it is not supported",
+                        "box x=[-12.500000, 12.500000] y=[-12.500000, 12.500000] z=[0.000000, 5.000000]",
                         "chord from (0, 0) at 0 deg: 5.000000",
                         "chord from (0, 0) at 10 deg: 3.668928",
                         "chord from (5, 0) at 0 deg: 4.592969",
@@ -403,7 +403,7 @@ mod test {
                     "lens",
                     &[
                         "frame t=(10.406345, -17.828447, 30.345311) x=(0.964207, 0.204382, 0.168918) z=(-0.136689, -0.162745, 0.977154)",
-                        "box: Opossum Error:Other:the extent of a body bounded by the curved 'sphere' surface tilted against it is not supported",
+                        "box x=[-12.500000, 12.500000] y=[-12.500000, 12.500000] z=[0.000000, 10.000000]",
                         "chord from (0, 0) at 0 deg: 10.000000",
                         "chord from (0, 0) at 10 deg: 9.961841",
                         "chord from (5, 0) at 0 deg: 9.949999",
@@ -423,7 +423,7 @@ mod test {
                     "plano-convex lens",
                     &[
                         "frame t=(10.406345, -17.828447, 30.345311) x=(0.964207, 0.204382, 0.168918) z=(-0.136689, -0.162745, 0.977154)",
-                        "box: Opossum Error:Other:the extent of a body bounded by the curved 'sphere' surface tilted against it is not supported",
+                        "box x=[-12.500000, 12.500000] y=[-12.500000, 12.500000] z=[0.000000, 5.000000]",
                         "chord from (0, 0) at 0 deg: 5.000000",
                         "chord from (0, 0) at 10 deg: 4.255460",
                         "chord from (5, 0) at 0 deg: 4.749372",
