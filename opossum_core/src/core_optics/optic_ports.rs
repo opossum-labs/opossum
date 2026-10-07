@@ -469,7 +469,7 @@ mod test {
         let ports = OpticPorts::new();
         assert_eq!(ports.inputs.len(), 0);
         assert_eq!(ports.outputs.len(), 0);
-        assert_eq!(ports.inverted, false);
+        assert!(!ports.inverted);
     }
     #[test]
     fn add_input_ok() {
@@ -551,7 +551,7 @@ mod test {
     fn set_inverted() {
         let mut ports = OpticPorts::new();
         ports.set_inverted(true);
-        assert_eq!(ports.inverted, true);
+        assert!(ports.inverted);
     }
     #[test]
     fn display_empty() {

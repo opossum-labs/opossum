@@ -244,7 +244,7 @@ impl<'a> IntoIterator for &'a Properties {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::utils::test_helper::test_helper::check_logs;
+    use crate::utils::test_helper::helper::check_logs;
     use assert_matches::assert_matches;
     use log::Level;
     #[test]
@@ -274,16 +274,16 @@ mod test {
         props.create("my other bool", "my description", false.into())?;
         assert!(props.get_bool("wrong").is_err());
         assert!(props.get_bool("no bool").is_err());
-        assert_eq!(props.get_bool("my bool")?, true);
-        assert_eq!(props.get_bool("my other bool")?, false);
+        assert!(props.get_bool("my bool")?);
+        assert!(!props.get_bool("my other bool")?);
         Ok(())
     }
     #[test]
     fn is_empty() -> OpmResult<()> {
         let mut props = Properties::default();
-        assert_eq!(props.is_empty(), true);
+        assert!(props.is_empty());
         props.create("my prop", "my description", 1.into())?;
-        assert_eq!(props.is_empty(), false);
+        assert!(!props.is_empty());
         Ok(())
     }
     #[test]

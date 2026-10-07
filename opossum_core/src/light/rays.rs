@@ -1813,11 +1813,10 @@ impl<'a> IntoIterator for &'a Rays {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::distributions::energy::General2DGaussian;
-    use crate::distributions::position::FibonacciEllipse;
-    use crate::distributions::position::FibonacciRectangle;
-    use crate::distributions::position::Random;
-    use crate::prelude::ApertureShape;
+    use crate::distributions::{
+        energy::General2DGaussian,
+        position::{FibonacciEllipse, FibonacciRectangle, Random},
+    };
     use crate::{
         apertures::{ApertureType, CircleShape},
         centimeter,
@@ -1829,15 +1828,15 @@ mod test {
             SplittingConfig,
             ideal_filter::{EdgeFilter, EdgeFilterType},
         },
-        percent, radian,
+        percent,
+        prelude::ApertureShape,
+        radian,
         refractive_index::{RefrIndexConst, refr_index_vaccuum},
-        utils::test_helper::test_helper::check_logs,
+        utils::test_helper::helper::check_logs,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
-    use core::f64;
     use itertools::izip;
     use nalgebra::Vector3;
-    use std::f64::consts::PI;
     use std::sync::{Arc, Mutex};
     use testing_logger;
     use uom::si::{energy::joule, length::nanometer};
@@ -2604,7 +2603,7 @@ mod test {
         let mut ray =
             Ray::new_collimated(millimeter!(0., 1., 0.), nanometer!(1054.0), joule!(1.0))?;
         rays.add_ray(ray.clone());
-        let _ = ray.filter_energy(&FilterType::Constant(FilterConst::new(percent!(30.0))?))?;
+        ray.filter_energy(&FilterType::Constant(FilterConst::new(percent!(30.0))?))?;
         rays.filter_energy(&FilterType::Constant(FilterConst::new(percent!(30.0))?))?;
         assert_eq!(rays.ray_bundle[0].position(), ray.position());
         assert_eq!(rays.ray_bundle[0].direction(), ray.direction());
@@ -2786,7 +2785,7 @@ mod test {
         let _ = propagate(&mut rays, millimeter!(0.5));
         let _ = propagate(&mut rays, millimeter!(1.0));
 
-        let pos_hist_comp = vec![MatrixXx3::from_vec(vec![0., 0., 0., 0., 0.5, 1.5])];
+        let pos_hist_comp = [MatrixXx3::from_vec(vec![0., 0., 0., 0., 0.5, 1.5])];
         let pos_hist = rays.get_rays_position_history(false)?;
         for (ray_pos, ray_pos_calc) in izip!(
             pos_hist_comp.iter(),
@@ -3017,7 +3016,7 @@ mod test {
         let mut rays = Rays::default();
         assert!(rays.node_origin().is_none());
         let uuid: Uuid = Uuid::new_v4();
-        rays.set_node_origin_uuid(uuid.clone());
+        rays.set_node_origin_uuid(uuid);
         assert_eq!(rays.node_origin().unwrap(), uuid);
     }
 
@@ -3026,7 +3025,7 @@ mod test {
         let mut rays = Rays::default();
         assert!(rays.parent_id().is_none());
         let uuid: Uuid = Uuid::new_v4();
-        rays.set_parent_uuid(uuid.clone());
+        rays.set_parent_uuid(uuid);
         assert_eq!(rays.parent_id().unwrap(), uuid);
     }
     #[test]
@@ -3059,7 +3058,7 @@ mod test {
                 .helper_ray_fluence()
                 .unwrap()
                 .value
-                * (2. * PI * 0.0025 * 0.0025),
+                * (2. * std::f64::consts::PI * 0.0025 * 0.0025),
             1.,
             epsilon = 2. * f64::EPSILON
         );
@@ -3069,11 +3068,7 @@ mod test {
 
 #[cfg(test)]
 mod fluence_rays_test {
-    use core::f64;
-
-    use approx::assert_relative_eq;
-    use nalgebra::Vector3;
-
+    use super::FluenceRays;
     use crate::{
         J_per_cm2,
         error::OpmResult,
@@ -3081,8 +3076,8 @@ mod fluence_rays_test {
         light::{Ray, Rays},
         meter, nanometer, percent,
     };
-
-    use super::FluenceRays;
+    use approx::assert_relative_eq;
+    use nalgebra::Vector3;
 
     #[test]
     fn new() -> OpmResult<()> {

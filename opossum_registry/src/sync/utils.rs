@@ -7,6 +7,12 @@ use std::{
     sync::atomic::AtomicBool,
 };
 
+/// Default Git committer and author name used when no user identity is configured.
+pub const DEFAULT_GIT_USER_NAME: &str = "Opossum User";
+
+/// Default Git committer and author email used when no user identity is configured.
+pub const DEFAULT_GIT_USER_EMAIL: &str = "user@opossum.local";
+
 /// Resolves author/committer signature from git configuration with sensible fallbacks.
 pub fn resolve_signature(repo: &Repository) -> Signature {
     let (name, email) = repo
@@ -18,7 +24,12 @@ pub fn resolve_signature(repo: &Repository) -> Signature {
                 .and_then(Result::ok)
                 .map(|sig| (sig.name.to_string(), sig.email.to_string()))
         })
-        .unwrap_or_else(|| ("Opossum User".to_string(), "user@opossum.local".to_string()));
+        .unwrap_or_else(|| {
+            (
+                DEFAULT_GIT_USER_NAME.to_string(),
+                DEFAULT_GIT_USER_EMAIL.to_string(),
+            )
+        });
 
     Signature {
         name: name.into(),
@@ -36,20 +47,15 @@ pub fn is_asset_file(rel_path: &Path) -> bool {
     is_ron && not_git
 }
 
-/// Checks whether the directory contains any non-empty subdirectories other than `.git`.
+/// Checks whether the directory contains any valid asset files.
 pub fn directory_contains_assets(dir: &Path) -> bool {
-    if let Ok(entries) = fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir()
-                && path.file_name().is_some_and(|name| name != ".git")
-                && fs::read_dir(&path).is_ok_and(|mut sub| sub.next().is_some())
-            {
-                return true;
-            }
-        }
-    }
-    false
+    let Ok(files) = collect_files_recursive(dir) else {
+        return false;
+    };
+    files
+        .iter()
+        .filter_map(|p| p.strip_prefix(dir).ok())
+        .any(is_asset_file)
 }
 
 /// Checks if a directory does not exist or contains no entries.

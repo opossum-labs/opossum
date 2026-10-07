@@ -1,8 +1,8 @@
 use super::{super::port_map::PortMap, serialization::SerializableGraph};
 use crate::{core_optics::OpticRef, light::LightFlow, prelude::PortType};
-use petgraph::graph::DiGraph;
+use petgraph::graph::{DiGraph, NodeIndex};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use uom::si::f64::Length;
 use uuid::Uuid;
 
@@ -48,6 +48,9 @@ pub struct OpticGraph {
     pub(super) output_port_map: PortMap,
     is_inverted: bool,
     external_distances: BTreeMap<String, Length>,
+    /// Lookup table for better performance
+    #[serde(skip)]
+    pub(crate) uuid_to_idx: HashMap<Uuid, NodeIndex>,
 }
 
 impl OpticGraph {
@@ -89,7 +92,7 @@ mod test {
     #[test]
     fn default() {
         let graph = OpticGraph::default();
-        assert_eq!(graph.is_inverted, false);
+        assert!(!graph.is_inverted);
         assert_eq!(graph.g.node_count(), 0)
     }
 }

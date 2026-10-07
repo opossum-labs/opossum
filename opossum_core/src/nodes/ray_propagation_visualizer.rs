@@ -406,7 +406,7 @@ mod test {
         joule,
         light::{Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer,
-        nodes::test_helper::test_helper::*,
+        nodes::test_helper::helper::*,
     };
     use approx::assert_relative_eq;
     use uom::si::length::{millimeter, nanometer};
@@ -416,7 +416,7 @@ mod test {
         assert!(node.light_data.is_none());
         assert_eq!(node.name(), "ray propagation");
         assert_eq!(node.node_type(), "ray propagation");
-        assert_eq!(node.inverted(), false);
+        assert!(!node.inverted());
         assert_eq!(node.node_color(), "darkgreen");
     }
     #[test]

@@ -305,8 +305,6 @@ mod macro_type_tests {
 }
 #[cfg(test)]
 mod nested_macro_tests {
-    use core::f64;
-
     use crate::{
         error::OpmResult,
         generic_validators::{

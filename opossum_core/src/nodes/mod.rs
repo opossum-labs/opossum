@@ -50,6 +50,7 @@ pub use energy_meter::{EnergyMeter, Metertype};
 pub use fluence_detector::FluenceDetector;
 pub use ideal_filter::{FilterType, IdealFilter};
 pub use lens::Lens;
+pub use node_group::optic_graph::delta::{GraphDeletionDelta, GraphDelta, RemovedPortMapping};
 pub use node_group::{ConnectionInfo, NodeGroup, OpticGraph};
 pub use parabolic_mirror::ParabolicMirror;
 pub use paraxial_surface::ParaxialSurface;

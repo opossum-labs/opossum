@@ -1,4 +1,3 @@
-use core::f64;
 use nalgebra::Vector3;
 use opossum_core::light::lightdata::ray_data_builder::RayDataBuilder;
 use opossum_core::prelude::*;

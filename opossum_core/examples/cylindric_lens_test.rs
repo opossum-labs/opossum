@@ -12,7 +12,7 @@ fn main() -> OpmResult<()> {
         millimeter!(100.0),
         millimeter!(f64::INFINITY),
         millimeter!(5.0),
-        &RefrIndexConst::new(1.5068)?,
+        RefrIndexConst::new(1.5068)?,
     )?
     .with_tilt(degree!(0.0, 0.0, 45.0))?;
     let l1 = scenery.add_node(lens)?;
@@ -31,7 +31,7 @@ fn main() -> OpmResult<()> {
 
     let mut config = RayTraceConfig::default();
     let ray_data_builder = round_collimated_ray_builder(millimeter!(20.0), joule!(1.0), 10)?;
-    config.map_source(src, ray_data_builder.into());
+    config.map_source(src, ray_data_builder);
 
     doc.add_analyzer(AnalyzerType::RayTrace(config));
 

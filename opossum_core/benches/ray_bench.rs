@@ -87,8 +87,8 @@ fn bench_refract_on_surface(c: &mut Criterion) {
         };
 
         // iter_with_setup is used because the function requires mutable access to the ray and surface.
-        b.iter_with_setup(setup, |(mut ray, mut surface, n2, strategy)| {
-            std::hint::black_box(ray.refract_on_surface(&mut surface, n2, &strategy))?;
+        b.iter_with_setup(setup, |(mut ray, surface, n2, strategy)| {
+            std::hint::black_box(ray.refract_on_surface(&surface, n2, &strategy))?;
             Ok::<(), OpossumError>(())
         });
     });

@@ -244,7 +244,7 @@ mod test {
         joule,
         light::{Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer,
-        nodes::test_helper::test_helper::*,
+        nodes::test_helper::helper::*,
         utils::geom_transformation::Isometry,
     };
     #[test]
@@ -253,7 +253,7 @@ mod test {
         assert!(node.light_data.is_none());
         assert_eq!(node.name(), "wavefront monitor");
         assert_eq!(node.node_type(), "wavefront monitor");
-        assert_eq!(node.inverted(), false);
+        assert!(!node.inverted());
         assert_eq!(node.node_color(), "goldenrod1");
     }
     #[test]

@@ -174,12 +174,8 @@ impl OpticGraph {
     /// `None` is returned if the node with the given [`Uuid`] does not exist.
     #[must_use]
     pub fn node_idx_by_uuid(&self, uuid: Uuid) -> Option<NodeIndex> {
-        self.g.node_indices().find(|&idx| {
-            // Compare UUID directly without unwrap or result matching
-            self.g
-                .node_weight(idx)
-                .is_some_and(|node| node.uuid() == uuid)
-        })
+        // Fast O(1) lookup using the internal map
+        self.uuid_to_idx.get(&uuid).copied()
     }
 
     /// Returns all nodes of this [`OpticGraph`].
@@ -417,9 +413,9 @@ mod test {
         let n4 = graph.add_node(Dummy::default())?;
         graph.connect_nodes(n1, "output_1", n2, "input_1", Length::zero())?;
         graph.connect_nodes(n3, "output_1", n4, "input_1", Length::zero())?;
-        assert_eq!(graph.is_single_tree(), false);
+        assert!(!graph.is_single_tree());
         graph.connect_nodes(n2, "output_1", n3, "input_1", Length::zero())?;
-        assert_eq!(graph.is_single_tree(), true);
+        assert!(graph.is_single_tree());
         Ok(())
     }
 

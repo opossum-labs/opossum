@@ -244,7 +244,7 @@ mod test {
         joule,
         light::spectrum_helper::create_he_ne_spec,
         millimeter, nanometer,
-        nodes::test_helper::test_helper::{
+        nodes::test_helper::helper::{
             test_analyze_empty, test_analyze_wrong_data_type, test_inverted,
         },
         percent,
@@ -261,7 +261,7 @@ mod test {
         );
         assert_eq!(node.name(), "ideal filter");
         assert_eq!(node.node_type(), "ideal filter");
-        assert_eq!(node.inverted(), false);
+        assert!(!node.inverted());
         assert_eq!(node.node_color(), "darkgray");
         Ok(())
     }
@@ -377,7 +377,7 @@ mod test {
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
-        let output = output.clone().unwrap();
+        let output = output.unwrap();
         let expected_output_light = LightData::Energy(create_he_ne_spec(0.5)?);
         assert_eq!(*output, expected_output_light);
         Ok(())
@@ -404,7 +404,7 @@ mod test {
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
-        if let LightData::Geometric(output) = output.clone().unwrap() {
+        if let LightData::Geometric(output) = output.unwrap() {
             assert_abs_diff_eq!(output.total_energy().get::<joule>(), 0.3);
         } else {
             panic!("wrong data LightData format")
