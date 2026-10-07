@@ -116,6 +116,7 @@ impl OpticNode for ThinMirror {
             return Err(OpossumError::Analysis("cannot read curvature".into()));
         };
         Ok(Some(Geometry::surface(
+            Isometry::identity(),
             SurfaceShape::spherical(*curvature),
             Isometry::identity(),
             None,

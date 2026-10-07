@@ -109,6 +109,7 @@ impl OpticNode for WaveFront {
     /// The surface wavefronts are measured on: the reference surface, or a plane if none is set.
     fn geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::surface(
+            Isometry::identity(),
             self.reference_surface
                 .clone()
                 .unwrap_or(SurfaceShape::Plane),

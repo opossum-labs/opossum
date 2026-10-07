@@ -262,30 +262,42 @@ impl ParabolicMirror {
         parabola.update_surfaces()?;
         Ok(parabola)
     }
-    fn calc_off_axis_isometry(&self) -> OpmResult<Isometry> {
+    /// Return where the parent parabola lies relative to this node.
+    ///
+    /// The node sits where the chief ray hits the mirror.
+    ///
+    /// # Returns
+    ///
+    /// The frame of the parent axis through the node: a pure rotation of the node frame whose z
+    /// axis is parallel to the axis of the parent parabola. And the vertex of the parent parabola,
+    /// stated in that frame: a pure translation by the decenter and the sag of the hit point.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the parabola's properties cannot be read.
+    fn calc_off_axis_frames(&self) -> OpmResult<(Isometry, Isometry)> {
         let (focal_length, oa_angle, oa_dir, collimating) = self.get_parabola_attributes()?;
         let tan_val = (oa_angle / 2.).tan().value;
         let decenter_x = oa_angle.sin() * focal_length;
         let z_shift = focal_length * (1. / tan_val.mul_add(tan_val, 1.) - oa_angle.cos().value);
         let z_rot_angle = f64::atan2(oa_dir.y, oa_dir.x);
 
-        let iso = Isometry::new_translation(Point3::new(decenter_x, meter!(0.), z_shift))?;
-        let rot_iso = Isometry::new_rotation(radian!(0., 0., z_rot_angle))?;
-        let mut tot_iso = rot_iso.append(&iso);
+        let vertex = Isometry::new_translation(Point3::new(decenter_x, meter!(0.), z_shift))?;
+        let mut axis = Isometry::new_rotation(radian!(0., 0., z_rot_angle))?;
         if collimating {
             let normal_vector = vector![
                 decenter_x.value,
                 0.,
                 -2. * self.calc_parent_focal_length()?.value
             ];
-            let trans_normal_vector = tot_iso.transform_vector_f64(&normal_vector);
+            let trans_normal_vector = axis.transform_vector_f64(&normal_vector);
             let rot = Isometry::new_from_transform(Isometry3::new(
                 Vector3::zeros(),
                 trans_normal_vector.normalize() * std::f64::consts::PI,
             ));
-            tot_iso = rot.append(&tot_iso);
+            axis = rot.append(&axis);
         }
-        Ok(tot_iso)
+        Ok((axis, vertex))
     }
     fn calc_parent_focal_length(&self) -> OpmResult<Length> {
         let Ok(Proptype::Length(focal_length)) = self.node_attr.get_property("focal length") else {
@@ -358,11 +370,13 @@ impl ParabolicMirror {
 
 impl OpticNode for ParabolicMirror {
     fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        let (axis, vertex) = self.calc_off_axis_frames()?;
         Ok(Some(Geometry::surface(
+            axis,
             SurfaceShape::Parabola {
                 focal_length: -1. * self.calc_parent_focal_length()?,
             },
-            self.calc_off_axis_isometry()?,
+            vertex,
             None,
         )?))
     }
@@ -485,7 +499,7 @@ mod test {
         error::OpmResult,
         joule,
         light::{
-            LightData, LightResult, Rays, light_result::light_result_to_light_rays,
+            LightData, LightResult, Ray, Rays, light_result::light_result_to_light_rays,
             spectrum_helper::create_he_ne_spec,
         },
         meter, millimeter, nanometer,
@@ -493,8 +507,8 @@ mod test {
         properties::Proptype,
         utils::geom_transformation::Isometry,
     };
-    use approx::assert_relative_eq;
-    use nalgebra::{Matrix4, Vector2};
+    use approx::{assert_abs_diff_eq, assert_relative_eq};
+    use nalgebra::{Matrix4, Vector2, Vector3};
     #[test]
     fn default() -> OpmResult<()> {
         let parabola = ParabolicMirror::default();
@@ -800,7 +814,7 @@ mod test {
         );
     }
     #[test]
-    fn calc_off_axis_isometry() -> OpmResult<()> {
+    fn calc_off_axis_frames() -> OpmResult<()> {
         let parabola = ParabolicMirror::new_with_off_axis(
             "Parabola",
             meter!(1.),
@@ -827,14 +841,60 @@ mod test {
             1.,
         ])
         .transpose();
+        let (axis, vertex) = parabola.calc_off_axis_frames()?;
         assert_relative_eq!(
             transform_mat,
-            parabola
-                .calc_off_axis_isometry()?
-                .get_transform()
-                .to_matrix(),
+            axis.append(&vertex).get_transform().to_matrix(),
             epsilon = 3. * f64::EPSILON
         );
+        // The parent axis passes through the node; the vertex is offset without a turn.
+        assert_eq!(axis.translation(), millimeter!(0.0, 0.0, 0.0));
+        assert_eq!(vertex.rotation(), degree!(0.0, 0.0, 0.0));
+        Ok(())
+    }
+    /// The off-axis frame is parallel to the axis of the parent parabola: a collimating mirror
+    /// sends the chief ray from its focus along that axis, a focusing mirror receives it along it.
+    #[test]
+    fn the_off_axis_frame_is_parallel_to_the_parent_axis() -> OpmResult<()> {
+        for collimating in [true, false] {
+            let mut parabola = ParabolicMirror::new_with_off_axis_y(
+                "oap",
+                millimeter!(100.0),
+                collimating,
+                degree!(90.0),
+            )?;
+            parabola.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+            let chief_ray = Ray::new_collimated(
+                millimeter!(0.0, 0.0, -10.0),
+                nanometer!(1000.0),
+                joule!(1.0),
+            )?;
+            let input = LightResult::from([(
+                "input_1".into(),
+                LightData::Geometric(Rays::from(chief_ray)),
+            )]);
+            let output =
+                AnalysisRayTrace::analyze(&mut parabola, input, &RayTraceConfig::default())?;
+            let Some(LightData::Geometric(reflected)) = output.get("output_1") else {
+                panic!("the mirror reflects the chief ray");
+            };
+            let along_parent_axis = if collimating {
+                reflected
+                    .iter()
+                    .next()
+                    .expect("one reflected ray")
+                    .direction()
+            } else {
+                Vector3::z()
+            };
+            let (axis, _) = parabola.calc_off_axis_frames()?;
+            let frame_z = axis.transform_vector_f64(&Vector3::z());
+            assert_abs_diff_eq!(
+                frame_z.cross(&along_parent_axis.normalize()).norm(),
+                0.0,
+                epsilon = 1e-12
+            );
+        }
         Ok(())
     }
 

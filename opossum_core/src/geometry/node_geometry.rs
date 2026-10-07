@@ -131,26 +131,30 @@ impl Geometry {
     ///
     /// # Arguments
     ///
+    /// * `axis` - the frame of the cross section relative to the node; its z axis is the direction
+    ///   the cross section is projected along. The identity for a surface used along its own axis.
     /// * `shape` - the shape of the surface.
-    /// * `vertex` - position and orientation of its vertex relative to the node.
-    /// * `cross_section` - its transversal extent, or `None` for an unbounded (virtual) surface.
+    /// * `vertex` - position and orientation of its vertex, stated in the `axis` frame.
+    /// * `cross_section` - its transversal extent in the xy plane of the `axis` frame, or `None`
+    ///   for an unbounded (virtual) surface.
     ///
     /// # Errors
     ///
     /// This function returns an error if the surface is curved too tightly to reach the edge of the
     /// cross section, or if the outline of the cross section cannot be determined.
     pub fn surface(
+        axis: Isometry,
         shape: SurfaceShape,
         vertex: Isometry,
         cross_section: Option<ValidatedCrossSection>,
     ) -> OpmResult<Self> {
         let face = Face::new(shape, vertex);
         if let Some(cross_section) = &cross_section {
-            let reach =
-                Rim::new(cross_section.clone(), Isometry::identity()).transversal_reach()?;
+            let reach = Rim::new(cross_section.clone(), axis).transversal_reach()?;
             face.check_reach(reach, "surface")?;
         }
         Ok(Self::Surface(SurfaceGeometry {
+            axis,
             face,
             cross_section,
         }))
@@ -164,6 +168,7 @@ impl Geometry {
     pub fn plane(cross_section: Option<ValidatedCrossSection>) -> Self {
         // A plane reaches every cross section, so nothing is left to check.
         Self::Surface(SurfaceGeometry {
+            axis: Isometry::identity(),
             face: Face::new(SurfaceShape::Plane, Isometry::identity()),
             cross_section,
         })
@@ -216,7 +221,7 @@ impl Geometry {
     ) -> OpmResult<(PlacedSurface, PlacedSurface)> {
         match self {
             Self::Surface(surface) => {
-                let placed = surface.face.place(node_frame, &Isometry::identity())?;
+                let placed = surface.face.place(node_frame, &surface.axis)?;
                 Ok((placed.clone(), placed))
             }
             Self::Solid(solid) => solid.entrance_and_exit(node_frame),
@@ -265,7 +270,7 @@ impl Geometry {
             Self::Surface(surface) => Ok(surface
                 .cross_section
                 .clone()
-                .map(|cross_section| Rim::new(cross_section, Isometry::identity()))),
+                .map(|cross_section| Rim::new(cross_section, surface.axis))),
             Self::Solid(Solid::Extruded(extruded)) => Ok(Some(Rim::new(
                 extruded.cross_section.clone(),
                 extruded.axis,
@@ -277,8 +282,13 @@ impl Geometry {
 }
 
 /// A single surface without thickness.
+///
+/// The face and the cross section are stated in the frame of the axis, as for an [`Extruded`]
+/// solid. An off-axis parabola uses the axis to measure its clear aperture parallel to the axis of
+/// its parent parabola.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SurfaceGeometry {
+    axis: Isometry,
     face: Face,
     cross_section: Option<ValidatedCrossSection>,
 }
@@ -794,19 +804,43 @@ mod test {
             assert!(
                 Geometry::cylindrical_singlet(curved, flat, millimeter!(5.0), circle()?).is_err()
             );
-            let mirror = SurfaceShape::spherical(curved);
-            assert!(
-                Geometry::surface(mirror.clone(), Isometry::identity(), Some(circle()?)).is_err()
-            );
+            let mirror = |cross_section| {
+                Geometry::surface(
+                    Isometry::identity(),
+                    SurfaceShape::spherical(curved),
+                    Isometry::identity(),
+                    cross_section,
+                )
+            };
+            assert!(mirror(Some(circle()?)).is_err());
             // An unbounded surface has no edge to reach.
-            assert!(Geometry::surface(mirror, Isometry::identity(), None).is_ok());
+            assert!(mirror(None).is_ok());
         }
         assert!(Geometry::singlet(millimeter!(12.5), flat, millimeter!(5.0), circle()?).is_ok());
         // A parabola opens without end, so even a short focal length reaches any edge.
         let parabola = SurfaceShape::Parabola {
             focal_length: millimeter!(1.0),
         };
-        assert!(Geometry::surface(parabola, Isometry::identity(), Some(circle()?)).is_ok());
+        assert!(
+            Geometry::surface(
+                Isometry::identity(),
+                parabola,
+                Isometry::identity(),
+                Some(circle()?)
+            )
+            .is_ok()
+        );
+        Ok(())
+    }
+    #[test]
+    fn a_surface_places_its_face_and_its_rim_along_its_axis() -> OpmResult<()> {
+        let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
+        let vertex = Isometry::new_along_z(millimeter!(20.0))?;
+        let geometry = Geometry::surface(axis, SurfaceShape::Plane, vertex, Some(circle()?))?;
+        let ((_, entrance), (_, exit)) = geometry.entrance_and_exit(&Isometry::identity())?;
+        assert_eq!(entrance, axis.append(&vertex));
+        assert_eq!(exit, entrance);
+        assert_eq!(geometry.rim()?, Some(Rim::new(circle()?, axis)));
         Ok(())
     }
     /// A surface without a cross section is unbounded; a bounded surface and an extruded solid have
