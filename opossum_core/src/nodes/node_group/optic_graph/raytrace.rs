@@ -3,9 +3,9 @@
 use super::{InvertGraphGuard, OpticGraph};
 use crate::{
     analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
-    core_optics::{NodeAttrExt, OpticNodeExt, node_attr::NodePositioning},
+    core_optics::{NodeAttrExt, OpticNodeExt, PortType, node_attr::NodePositioning},
     error::{OpmResult, OpossumError},
-    light::{LightData, LightResult},
+    light::{LightData, LightResult, Rays},
     radian,
     utils::geom_transformation::Isometry,
 };
@@ -28,6 +28,13 @@ fn filter_ray_limits(light_result: &mut LightResult, r_config: &RayTraceConfig) 
 impl OpticGraph {
     /// Performs ray tracing analysis through the optical graph.
     ///
+    /// # Arguments
+    ///
+    /// * `incoming_data` - the light entering the graph through its external input ports.
+    /// * `config` - the ray tracing configuration.
+    /// * `ray_ends` - if given, collects the ray bundles leaving through output ports that are
+    ///   neither connected nor mapped outward.
+    ///
     /// # Errors
     ///
     /// This function returns an error if underlying functions fail.
@@ -35,6 +42,7 @@ impl OpticGraph {
         &mut self,
         incoming_data: &LightResult,
         config: &RayTraceConfig,
+        mut ray_ends: Option<&mut Vec<Rays>>,
     ) -> OpmResult<LightResult> {
         let is_inverted = self.is_inverted();
         let mut guard = InvertGraphGuard::new(self, is_inverted)?;
@@ -65,8 +73,20 @@ impl OpticGraph {
                 // Map outgoing ports to external group ports
                 guard.collect_group_output_ports(node_id, &outgoing_edges, &mut light_result)?;
 
-                for outgoing_edge in outgoing_edges {
-                    guard.set_outgoing_edge_data(idx, &outgoing_edge.0, outgoing_edge.1);
+                for (port, data) in outgoing_edges {
+                    let leftover = guard.set_outgoing_edge_data(idx, &port, data);
+                    // Only an actual output port can be an end: a nested group returns its
+                    // incoming data along with its outputs, so input-port keys show up here too.
+                    if let Some(ray_ends) = ray_ends.as_deref_mut()
+                        && let Some(LightData::Geometric(rays)) = leftover
+                        && guard.g[idx]
+                            .ports()
+                            .names(&PortType::Output)
+                            .contains(&port)
+                        && !guard.is_mapped_output_port(node_id, &port)
+                    {
+                        ray_ends.push(rays);
+                    }
                 }
             }
         }
@@ -76,6 +96,13 @@ impl OpticGraph {
 
     /// Positions nodes in the graph based on optical ray propagation.
     ///
+    /// # Arguments
+    ///
+    /// * `incoming_data` - the optical axis entering the graph through its external input ports.
+    /// * `config` - the ray tracing configuration of the positioning run.
+    /// * `ray_ends` - if given, collects the ray bundles leaving through output ports that are
+    ///   neither connected nor mapped outward.
+    ///
     /// # Errors
     ///
     /// This function returns an error if the node positions could not be determined (e.g. optical axis misses element
@@ -84,6 +111,7 @@ impl OpticGraph {
         &mut self,
         incoming_data: &LightResult,
         config: &RayTraceConfig,
+        mut ray_ends: Option<&mut Vec<Rays>>,
     ) -> OpmResult<LightResult> {
         let sorted = self.topologically_sorted()?;
         let mut light_result = LightResult::default();
@@ -113,6 +141,7 @@ impl OpticGraph {
                     &mut up_direction,
                     config,
                     &mut light_result,
+                    ray_ends.as_deref_mut(),
                 )?;
             }
         }
@@ -235,16 +264,49 @@ fn execute_node_calculation(
     }
 }
 
+/// Stores outgoing edge data in the graph and updates the up-direction reference vector.
+///
+/// When `ray_ends` is `Some`, ray bundles that are returned by [`OpticGraph::set_outgoing_edge_data`]
+/// (i.e. bundles with no connected edge) are pushed into it, provided the port is not a mapped
+/// external output port of the group.  When `ray_ends` is `None`, behavior is identical to the
+/// previous (flag-off) path.
+///
+/// # Arguments
+///
+/// * `graph` - The optical graph to operate on.
+/// * `node_idx` - Index of the node whose outgoing beams are being processed.
+/// * `outgoing_edges` - The light data produced by the node for each of its output ports.
+/// * `up_direction` - Running "up" direction vector, updated by this function.
+/// * `ray_ends` - Optional collector for unconnected, unmapped ray bundles.
+///
+/// # Errors
+///
+/// This function returns an error if a referenced node cannot be found, if the up-direction cannot
+/// be derived from an outgoing beam, or if an outgoing beam holds no rays at all: the optical axis
+/// ends at this node then, and nothing connected after it can be placed.
 fn update_outgoing_edges_and_up_direction(
     graph: &mut OpticGraph,
     node_idx: NodeIndex,
     outgoing_edges: LightResult,
     up_direction: &mut Vector3<f64>,
+    mut ray_ends: Option<&mut Vec<Rays>>,
 ) -> OpmResult<()> {
     let referenced_id = graph.g[node_idx].referenced_node_id();
     let fallback_node_type = graph.g[node_idx].node_attr().node_type().to_string();
+    let node_id = graph.g[node_idx].uuid();
 
-    for outgoing_edge in outgoing_edges {
+    for (port, data) in outgoing_edges {
+        // Checked here rather than left to the up-direction calculation below, which could only
+        // report an empty bundle - not where the optical axis was lost.
+        if let LightData::Geometric(rays) = &data
+            && rays.nr_of_rays(false) == 0
+        {
+            return Err(OpossumError::Analysis(format!(
+                "no light leaves {} at port '{}': the optical axis ends there, so the components \
+                 after it cannot be placed",
+                graph.g[node_idx], port
+            )));
+        }
         if let Some(target_uuid) = referenced_id {
             let target_idx = graph.node_idx_by_uuid(target_uuid).ok_or_else(|| {
                 OpossumError::Analysis(format!(
@@ -253,23 +315,45 @@ fn update_outgoing_edges_and_up_direction(
             })?;
             let target = &graph.g[target_idx];
             if target.node_type() == "source" || target.node_type() == "source port" {
-                *up_direction = target.define_up_direction(&outgoing_edge.1)?;
+                *up_direction = target.define_up_direction(&data)?;
             } else {
-                target.calc_new_up_direction(&outgoing_edge.1, up_direction)?;
+                target.calc_new_up_direction(&data, up_direction)?;
             }
         } else {
             let node = &graph.g[node_idx];
             if fallback_node_type == "source" || fallback_node_type == "source port" {
-                *up_direction = node.define_up_direction(&outgoing_edge.1)?;
+                *up_direction = node.define_up_direction(&data)?;
             } else {
-                node.calc_new_up_direction(&outgoing_edge.1, up_direction)?;
+                node.calc_new_up_direction(&data, up_direction)?;
             }
         }
-        graph.set_outgoing_edge_data(node_idx, &outgoing_edge.0, outgoing_edge.1);
+        let leftover = graph.set_outgoing_edge_data(node_idx, &port, data);
+        if let Some(ray_ends) = ray_ends.as_deref_mut()
+            && let Some(LightData::Geometric(rays)) = leftover
+            && !graph.is_mapped_output_port(node_id, &port)
+        {
+            ray_ends.push(rays);
+        }
     }
     Ok(())
 }
 
+/// Places one node of the graph on the optical axis and passes the axis on to its successors.
+///
+/// # Arguments
+///
+/// * `graph` - The optical graph to operate on.
+/// * `node_idx` - Index of the node to place.
+/// * `incoming_data` - The optical axis entering the graph through its external input ports.
+/// * `up_direction` - Running "up" direction vector, updated by this function.
+/// * `config` - The ray tracing configuration of the positioning run.
+/// * `light_result` - Collects what leaves the graph through its mapped output ports.
+/// * `ray_ends` - Optional collector for unconnected, unmapped ray bundles.
+///
+/// # Errors
+///
+/// This function returns an error if the node cannot be placed, if its calculation fails while
+/// it has successors, or if its outgoing beams cannot be passed on.
 fn calculate_single_node_position(
     graph: &mut OpticGraph,
     node_idx: NodeIndex,
@@ -277,6 +361,7 @@ fn calculate_single_node_position(
     up_direction: &mut Vector3<f64>,
     config: &RayTraceConfig,
     light_result: &mut LightResult,
+    ray_ends: Option<&mut Vec<Rays>>,
 ) -> OpmResult<()> {
     let node_id = graph.g[node_idx].uuid();
     let node_info = format!("{}", graph.g[node_idx]);
@@ -302,7 +387,13 @@ fn calculate_single_node_position(
     };
 
     graph.collect_group_output_ports(node_id, &outgoing_edges, light_result)?;
-    update_outgoing_edges_and_up_direction(graph, node_idx, outgoing_edges, up_direction)?;
+    update_outgoing_edges_and_up_direction(
+        graph,
+        node_idx,
+        outgoing_edges,
+        up_direction,
+        ray_ends,
+    )?;
 
     Ok(())
 }

@@ -218,7 +218,7 @@ mod test {
         types::validated_type_definitions::ValidatedCrossSection,
         utils::{
             geom_transformation::Isometry,
-            test_helper::test_helper::{l_shape_corners, placed, somewhere_else},
+            test_helper::helper::{l_shape_corners, placed, somewhere_else},
         },
     };
     use nalgebra::Point3;

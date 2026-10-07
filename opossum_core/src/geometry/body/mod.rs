@@ -504,7 +504,7 @@ mod test {
         degree,
         geometry::{Cylinder, Plane, Sphere, geo_surface::GeoSurface},
         joule, millimeter, nanometer,
-        utils::test_helper::test_helper::somewhere_else,
+        utils::test_helper::helper::somewhere_else,
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::Vector3;

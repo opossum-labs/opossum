@@ -242,8 +242,7 @@ fn inner_triangles(
 mod test {
     use super::*;
     use crate::{
-        apertures::ApertureType, degree, millimeter,
-        utils::test_helper::test_helper::l_shape_corners,
+        apertures::ApertureType, degree, millimeter, utils::test_helper::helper::l_shape_corners,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
     use nalgebra::Point3;

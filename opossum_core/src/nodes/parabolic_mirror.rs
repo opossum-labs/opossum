@@ -494,7 +494,7 @@ mod test {
             spectrum_helper::create_he_ne_spec,
         },
         meter, millimeter, nanometer,
-        nodes::{ParabolicMirror, test_helper::test_helper::test_reflects_completely},
+        nodes::{ParabolicMirror, test_helper::helper::test_reflects_completely},
         properties::Proptype,
         utils::geom_transformation::Isometry,
     };

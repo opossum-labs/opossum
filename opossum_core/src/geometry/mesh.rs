@@ -143,7 +143,7 @@ mod test {
         degree,
         geometry::{Cylinder, Parabola, Plane, Sphere, geo_surface::GeoSurface},
         millimeter,
-        utils::test_helper::test_helper::{placed, somewhere_else},
+        utils::test_helper::helper::{placed, somewhere_else},
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::Point2;
