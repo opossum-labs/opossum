@@ -942,12 +942,55 @@ impl Rays {
     ///  - the z component of a ray direction is zero.
     ///  - the focal length is zero or not finite.
     pub fn refract_paraxial(&mut self, focal_length: Length, iso: &Isometry) -> OpmResult<()> {
+        self.refract_paraxial_where(focal_length, iso, |_| true)
+    }
+    /// Refract only the rays of this bundle that hit a surface, as
+    /// [`refract_paraxial`](Self::refract_paraxial) does for all of them.
+    ///
+    /// A ray that missed the surface never passed the lens and keeps its direction.
+    ///
+    /// # Arguments
+    ///
+    /// * `focal_length` - the focal length of the paraxial surface.
+    /// * `iso` - the isometry the paraxial surface is placed at.
+    /// * `hits` - for every ray of this bundle in order, whether it hit the surface, as returned by
+    ///   [`refract_on_surface`](Self::refract_on_surface).
+    ///
+    /// # Errors
+    ///
+    /// See [`refract_paraxial`](Self::refract_paraxial).
+    pub fn refract_paraxial_hits(
+        &mut self,
+        focal_length: Length,
+        iso: &Isometry,
+        hits: &[bool],
+    ) -> OpmResult<()> {
+        self.refract_paraxial_where(focal_length, iso, |index| {
+            hits.get(index).copied().unwrap_or(false)
+        })
+    }
+    /// The common implementation of [`refract_paraxial`](Self::refract_paraxial) and
+    /// [`refract_paraxial_hits`](Self::refract_paraxial_hits): refract the rays whose index is
+    /// selected.
+    ///
+    /// # Errors
+    ///
+    /// See [`refract_paraxial`](Self::refract_paraxial).
+    fn refract_paraxial_where(
+        &mut self,
+        focal_length: Length,
+        iso: &Isometry,
+        selected: impl Fn(usize) -> bool,
+    ) -> OpmResult<()> {
         if focal_length.is_zero() || !focal_length.is_finite() {
             return Err(OpossumError::Other(
                 "focal length must be !=0.0 and finite".into(),
             ));
         }
-        for ray in &mut self.ray_bundle {
+        for (index, ray) in self.ray_bundle.iter_mut().enumerate() {
+            if !selected(index) {
+                continue;
+            }
             if ray.valid() {
                 ray.refract_paraxial(focal_length, iso)?;
             }
@@ -1243,8 +1286,39 @@ impl Rays {
     /// This function will return an error if the underlying function for filtering a single [`Ray`] with the given
     /// [`FilterType`] fails for any of the rays in the bundle.
     pub fn filter_energy(&mut self, filter: &FilterType) -> OpmResult<()> {
-        for ray in &mut self.ray_bundle {
-            if (*ray).valid() {
+        self.filter_energy_where(filter, |_| true)
+    }
+    /// Filter only the rays of this bundle that hit a surface, as
+    /// [`filter_energy`](Self::filter_energy) does for all of them.
+    ///
+    /// A ray that missed the surface never passed the filter and keeps its energy.
+    ///
+    /// # Arguments
+    ///
+    /// * `filter` - the filter to apply.
+    /// * `hits` - for every ray of this bundle in order, whether it hit the surface, as returned by
+    ///   [`refract_on_surface`](Self::refract_on_surface).
+    ///
+    /// # Errors
+    ///
+    /// See [`filter_energy`](Self::filter_energy).
+    pub fn filter_energy_hits(&mut self, filter: &FilterType, hits: &[bool]) -> OpmResult<()> {
+        self.filter_energy_where(filter, |index| hits.get(index).copied().unwrap_or(false))
+    }
+    /// The common implementation of [`filter_energy`](Self::filter_energy) and
+    /// [`filter_energy_hits`](Self::filter_energy_hits): filter the valid rays whose index is
+    /// selected.
+    ///
+    /// # Errors
+    ///
+    /// See [`filter_energy`](Self::filter_energy).
+    fn filter_energy_where(
+        &mut self,
+        filter: &FilterType,
+        selected: impl Fn(usize) -> bool,
+    ) -> OpmResult<()> {
+        for (index, ray) in self.ray_bundle.iter_mut().enumerate() {
+            if ray.valid() && selected(index) {
                 ray.filter_energy(filter)?;
             }
         }

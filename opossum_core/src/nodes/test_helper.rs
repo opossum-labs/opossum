@@ -257,7 +257,7 @@ pub mod helper {
     /// # Errors
     ///
     /// Returns an error if the wavelength is not positive and finite.
-    fn rays_along_z_from(starts: &[Point3<Length>], wavelength: Length) -> OpmResult<Rays> {
+    pub fn rays_along_z_from(starts: &[Point3<Length>], wavelength: Length) -> OpmResult<Rays> {
         let rays = starts
             .iter()
             .map(|start| Ray::new_collimated(*start, wavelength, joule!(1.0)))
@@ -269,10 +269,32 @@ pub mod helper {
     /// # Errors
     ///
     /// Returns an error if the node cannot be placed.
-    fn placed_at_origin<T: Default + OpticNode>() -> OpmResult<T> {
+    pub fn placed_at_origin<T: Default + OpticNode>() -> OpmResult<T> {
         let mut node = T::default();
         node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         Ok(node)
+    }
+    /// Assert the energies of the valid rays of a bundle, in order.
+    ///
+    /// # Arguments
+    ///
+    /// * `rays` - the bundle to check.
+    /// * `expected` - the energy of each valid ray, in J.
+    /// * `context` - what the bundle is, for the failure message.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the number of valid rays or one of their energies differs.
+    pub fn assert_valid_energies(rays: &Rays, expected: &[f64], context: &str) {
+        let energies: Vec<f64> = rays
+            .iter()
+            .filter(|ray| ray.valid())
+            .map(|ray| ray.energy().get::<joule>())
+            .collect();
+        assert_eq!(energies.len(), expected.len(), "{context}: {energies:?}");
+        for (energy, expected) in energies.iter().zip(expected) {
+            assert_abs_diff_eq!(energy, expected, epsilon = 1e-12);
+        }
     }
     pub fn test_analyze_apodization_warning<T: Default + AnalysisRayTrace>() -> OpmResult<()> {
         testing_logger::setup();

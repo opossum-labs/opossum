@@ -10,7 +10,7 @@ use crate::{
     geometry::Geometry,
     light::{LightData, LightRays, LightResult, Rays},
     millimeter,
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, create_surface_properties},
     properties::{Proptype, validator::Validator},
 };
 use log::warn;
@@ -41,6 +41,8 @@ inventory::submit! {
 ///   - `apertures`
 ///   - `inverted`
 ///   - `focal length`
+///   - `clear aperture`: the extent of the lens; a ray beyond it misses the lens, is not
+///     deflected and follows the analyzer's missed surface strategy
 #[derive(OpmNode, Debug, Clone)]
 #[opm_node("palegreen")]
 pub struct ParaxialSurface {
@@ -62,6 +64,7 @@ impl Default for ParaxialSurface {
                 millimeter!(10.0).into(),
             )
             .unwrap();
+        create_surface_properties(&mut node_attr).unwrap();
         let mut ps = Self { node_attr };
         ps.update_surfaces().unwrap();
         ps
@@ -84,7 +87,7 @@ impl ParaxialSurface {
 }
 impl OpticNode for ParaxialSurface {
     fn geometry(&self) -> OpmResult<Option<Geometry>> {
-        Ok(Some(Geometry::plane(None)))
+        Ok(Some(Geometry::plane(Some(self.clear_aperture()?))))
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.install_geometry(&["input_1"], &["output_1"])
@@ -111,9 +114,16 @@ impl AnalysisGhostFocus for ParaxialSurface {
             return Ok(out_light_rays);
         };
         let iso = self.effective_surface_iso(in_port)?;
-        self.pass_through_surface_generic(in_port, None, &mut rays_bundle, config, false, false)?;
-        for rays in &mut rays_bundle {
-            rays.refract_paraxial(focal_length, &iso)?;
+        let hits = self.pass_through_surface_generic(
+            in_port,
+            None,
+            &mut rays_bundle,
+            config,
+            false,
+            false,
+        )?;
+        for (rays, hits) in rays_bundle.iter_mut().zip(&hits) {
+            rays.refract_paraxial_hits(focal_length, &iso, hits)?;
         }
         let mut out_light_rays = LightRays::default();
         out_light_rays.insert(out_port.clone(), rays_bundle);
@@ -143,9 +153,17 @@ impl AnalysisRayTrace for ParaxialSurface {
         };
         let iso = self.effective_surface_iso(in_port)?;
         let mut rays_bundle = vec![rays];
-        self.pass_through_surface_generic(in_port, None, &mut rays_bundle, config, false, true)?;
-        let rays = &mut rays_bundle[0];
-        rays.refract_paraxial(focal_length, &iso)?;
+        let hits = self.pass_through_surface_generic(
+            in_port,
+            None,
+            &mut rays_bundle,
+            config,
+            false,
+            true,
+        )?;
+        for (rays, hits) in rays_bundle.iter_mut().zip(&hits) {
+            rays.refract_paraxial_hits(focal_length, &iso, hits)?;
+        }
         let mut light_result = LightResult::default();
         light_result.insert(out_port.into(), LightData::Geometric(rays_bundle.remove(0)));
         Ok(light_result)
@@ -224,6 +242,16 @@ mod test {
     #[test]
     fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<ParaxialSurface>()
+    }
+    #[test]
+    fn clear_aperture_absent_in_file() -> OpmResult<()> {
+        test_clear_aperture_absent_in_file::<ParaxialSurface>()
+    }
+    /// Beyond its clear aperture an ideal lens neither focuses nor deflects: a ray trace loses the
+    /// ray there, a ghost focus analysis lets it run past unchanged.
+    #[test]
+    fn rays_beyond_clear_aperture_are_lost() -> OpmResult<()> {
+        test_rays_beyond_clear_aperture_are_lost::<ParaxialSurface>()
     }
     #[test]
     fn analyze_wrong_port() -> OpmResult<()> {

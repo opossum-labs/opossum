@@ -319,6 +319,11 @@ impl OpticSurface {
     /// * `refraction_intended`: Indicates whether refraction should be calculated.
     /// * `strategy`: The strategy defining the behavior of the current analysis mode.
     ///
+    /// # Returns
+    /// For every bundle in `rays_bundle` after the call, whether each of its rays hit this surface
+    /// (see [`Rays::refract_on_surface`]). The ghost reflections appended from the cache of this
+    /// surface left it from a hit, so all of them count as hits.
+    ///
     /// # Errors
     /// This function errors if the optical calculations (refraction/reflection) or the
     /// strategy-specific hooks (e.g., fluence evaluation) fail.
@@ -332,9 +337,9 @@ impl OpticSurface {
         backward: bool,
         refraction_intended: bool,
         strategy: &dyn PropagationStrategy,
-    ) -> OpmResult<()> {
+    ) -> OpmResult<Vec<Vec<bool>>> {
         let missed_strategy = strategy.missed_surface_strategy();
-
+        let mut hits_per_bundle = Vec::with_capacity(rays_bundle.len());
         for rays in &mut *rays_bundle {
             let (mut reflected, hits) = rays.refract_on_surface(
                 self,
@@ -350,12 +355,14 @@ impl OpticSurface {
                 rays.apodize_hits(self.aperture(), iso, &hits)?;
             }
             strategy.on_after_apodization(rays)?;
+            hits_per_bundle.push(hits);
         }
         for rays in self.get_rays_cache(backward) {
+            hits_per_bundle.push(vec![true; rays.nr_of_rays(false)]);
             rays_bundle.push(rays.clone());
         }
         self.prune_hit_map(iso);
-        Ok(())
+        Ok(hits_per_bundle)
     }
 }
 
@@ -380,6 +387,7 @@ mod test {
     use super::OpticSurface;
     use crate::{
         J_per_cm2,
+        analyzers::RayTraceConfig,
         apertures::{Aperture, ApertureShape, ApertureType, CircleShape},
         coatings::CoatingType,
         degree,
@@ -423,6 +431,26 @@ mod test {
         let surface = bounded_plane(Isometry::identity())?;
         assert!(surface.intersect(&ray_at(4.9)?)?.is_some());
         assert!(surface.intersect(&ray_at(5.1)?)?.is_none());
+        Ok(())
+    }
+    /// The surface pass tells for each ray of each bundle whether it hit. Ghost reflections cached
+    /// at the surface left it from a hit, so when they are appended they count as hits.
+    #[test]
+    fn propagation_tells_which_rays_hit() -> OpmResult<()> {
+        let mut surface = bounded_plane(Isometry::identity())?;
+        surface.set_forward_rays_cache(vec![Rays::from(vec![ray_at(0.0)?, ray_at(7.0)?])]);
+        let mut bundles = vec![Rays::from(vec![ray_at(4.9)?, ray_at(5.1)?])];
+        let hits = surface.propagate_rays(
+            &mut bundles,
+            Uuid::new_v4(),
+            &Isometry::identity(),
+            None,
+            false,
+            true,
+            &RayTraceConfig::default(),
+        )?;
+        assert_eq!(hits, [vec![true, false], vec![true, true]]);
+        assert_eq!(bundles.len(), 2);
         Ok(())
     }
     #[test]

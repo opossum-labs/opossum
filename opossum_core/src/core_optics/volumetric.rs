@@ -166,7 +166,8 @@ pub trait Volumetric: OpticNode {
             strategy,
             backward,
             refraction_intended,
-        )
+        )?;
+        Ok(())
     }
     /// Apply whatever the medium does to a ray bundle travelling through it.
     ///

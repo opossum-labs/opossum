@@ -164,6 +164,12 @@ pub trait OpticNodeExt {
     /// the ray count before and after propagation to detect apodization, and logging a warning
     /// if rays were blocked by the surface's aperture.
     ///
+    /// # Returns
+    ///
+    /// For every bundle in `rays_bundle` after the call, whether each of its rays hit the surface
+    /// (see [`OpticSurface::propagate_rays`](crate::core_optics::optic_surface::OpticSurface::propagate_rays)).
+    /// A node that processes the light further after the surface does so only for those rays.
+    ///
     /// # Errors
     ///
     /// This function returns an error if the specified surface cannot be found, if geometric propagation fails,
@@ -176,7 +182,7 @@ pub trait OpticNodeExt {
         strategy: &dyn PropagationStrategy,
         backward: bool,
         refraction_intended: bool,
-    ) -> OpmResult<()>;
+    ) -> OpmResult<Vec<Vec<bool>>>;
 
     /// A unified helper function to analyze optical nodes that feature a single interacting surface.
     ///
@@ -451,7 +457,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         strategy: &dyn PropagationStrategy,
         backward: bool,
         refraction_intended: bool,
-    ) -> OpmResult<()> {
+    ) -> OpmResult<Vec<Vec<bool>>> {
         let uuid = self.node_attr().uuid();
         let iso = self.effective_surface_iso(optic_surf_name)?;
         let node_name = self.name().to_string();
@@ -463,7 +469,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
             )));
         };
         let rays_before: usize = rays_bundle.iter().map(|r| r.nr_of_rays(true)).sum();
-        surf.propagate_rays(
+        let hits = surf.propagate_rays(
             rays_bundle,
             uuid,
             &iso,
@@ -479,7 +485,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
                 "Rays have been apodized at input aperture of '{node_name}' ({node_type}). Results might not be accurate."
             );
         }
-        Ok(())
+        Ok(hits)
     }
 
     fn unified_analyze_single_surface_node(
