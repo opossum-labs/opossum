@@ -344,8 +344,11 @@ impl OpticSurface {
             )?;
             reflected.set_node_origin_uuid(node_uuid);
             strategy.on_surface_interaction(self, rays, reflected, backward)?;
-            // The port aperture masks light that passed this surface, not rays that ran past it.
-            rays.apodize_hits(self.aperture(), iso, &hits)?;
+            // The port aperture masks light that passed this surface, not rays that ran past it,
+            // and never the optical axis: only the components' rims decide where that runs.
+            if !strategy.is_positioning_run() {
+                rays.apodize_hits(self.aperture(), iso, &hits)?;
+            }
             strategy.on_after_apodization(rays)?;
         }
         for rays in self.get_rays_cache(backward) {

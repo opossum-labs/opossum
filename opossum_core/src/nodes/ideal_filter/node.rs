@@ -5,6 +5,7 @@ use crate::{
     analyzers::{
         energy::{AnalysisEnergy, EnergyConfig},
         ghostfocus::AnalysisGhostFocus,
+        propagation_strategy::PropagationStrategy,
         raytrace::AnalysisRayTrace,
     },
     core_optics::{NodeAttr, NodeAttrExt, OpticNodeExt},
@@ -214,6 +215,8 @@ impl AnalysisRayTrace for IdealFilter {
         )?;
         rays.filter_energy(&filter_type)?;
         match self.ports().aperture(&PortType::Input, in_port) {
+            // Only the components' rims decide where the optical axis runs, not its energy.
+            Some(_) if config.is_positioning_run() => {}
             Some(aperture) => {
                 rays.apodize(aperture, &iso)?;
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
@@ -223,6 +226,7 @@ impl AnalysisRayTrace for IdealFilter {
             }
         }
         match self.ports().aperture(&PortType::Output, out_port) {
+            Some(_) if config.is_positioning_run() => {}
             Some(aperture) => {
                 rays.apodize(aperture, &iso)?;
                 rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;

@@ -189,13 +189,16 @@ impl RayTraceConfig {
     /// Copies the source map and scalar settings from `self` but drops the `active_pump_scenario`
     /// (to avoid cloning a potentially large [`PumpScenario`]) and sets `positioning_run = true`
     /// so that gain models know no medium has been prepared yet.
+    ///
+    /// A missed surface always stops the ray, whatever `self` says: the optical axis has to pass
+    /// every component it is connected through, and positioning stops where it does not.
     #[must_use]
     pub fn for_positioning(&self) -> Self {
         Self {
             min_energy_per_ray: self.min_energy_per_ray,
             max_number_of_bounces: self.max_number_of_bounces,
             max_number_of_refractions: self.max_number_of_refractions,
-            missed_surface_strategy: self.missed_surface_strategy,
+            missed_surface_strategy: MissedSurfaceStrategy::Stop,
             source_map: self.source_map.clone(),
             active_pump_scenario: ActiveScenario::default(),
             ambient_material: self.ambient_material().clone(),
@@ -218,6 +221,10 @@ impl PropagationStrategy for RayTraceConfig {
         self.positioning_run
     }
     fn on_after_apodization(&self, rays: &mut Rays) -> OpmResult<()> {
+        // The optical axis is placed by geometry alone; its energy does not decide where it runs.
+        if self.positioning_run {
+            return Ok(());
+        }
         rays.invalidate_by_threshold_energy(self.min_energy_per_ray())?;
         Ok(())
     }
@@ -333,6 +340,19 @@ mod test {
         assert_eq!(rt_conf.max_number_of_bounces(), 1000);
         assert_eq!(rt_conf.max_number_of_refractions(), 1000);
         assert_eq!(rt_conf.min_energy_per_ray(), picojoule!(1.0));
+    }
+    /// The optical axis has to pass every component, so positioning stops a ray that misses one
+    /// even when the ray trace itself lets missed rays run on.
+    #[test]
+    fn positioning_always_stops_a_ray_that_misses_a_surface() {
+        let mut rt_conf = RayTraceConfig::default();
+        rt_conf.set_missed_surface_strategy(MissedSurfaceStrategy::Ignore);
+        let positioning = rt_conf.for_positioning();
+        assert_eq!(
+            positioning.missed_surface_strategy(),
+            &MissedSurfaceStrategy::Stop
+        );
+        assert!(positioning.is_positioning_run());
     }
     #[test]
     fn config_set_min_energy() {

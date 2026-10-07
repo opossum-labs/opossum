@@ -296,23 +296,33 @@ mod test {
         let lens_proxy = NodeReference::from_node(&scenery.node(real_lens_id)?)?;
         let ref_id = scenery.add_node(lens_proxy)?;
 
+        // The mirror sends the light back through the real lens, which it passes backwards: the
+        // lens is inverted for that pass, as any double pass is built.
+        let mut inverted = Ok(());
+        scenery.for_each_node_mut(&mut |node| {
+            if node.uuid() == real_lens_id {
+                inverted = node.set_inverted(true);
+            }
+        });
+        inverted?;
+
         // 4. Add auxiliary components
         let mirror_id = scenery.add_node(ThinMirror::default())?;
         let visualizer_id = scenery.add_node(RayPropagationVisualizer::new("visualizer", None)?)?;
 
-        // 5. Build topology: Source -> Reference -> Mirror -> Real Lens -> Visualizer
+        // 5. Build topology: Source -> Reference -> Mirror -> Real Lens (backwards) -> Visualizer
         scenery.connect_nodes(src_id, "output_1", ref_id, "input_1", millimeter!(50.0))?;
         scenery.connect_nodes(ref_id, "output_1", mirror_id, "input_1", millimeter!(40.0))?;
         scenery.connect_nodes(
             mirror_id,
             "output_1",
             real_lens_id,
-            "input_1",
+            "output_1",
             millimeter!(40.0),
         )?;
         scenery.connect_nodes(
             real_lens_id,
-            "output_1",
+            "input_1",
             visualizer_id,
             "input_1",
             millimeter!(50.0),

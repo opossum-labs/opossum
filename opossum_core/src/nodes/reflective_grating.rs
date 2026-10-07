@@ -2,8 +2,11 @@
 //! Infinitely thin mirror with spherical or flat surface
 use crate::{
     analyzers::{
-        GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
-        propagation_strategy::MissedSurfaceStrategy, raytrace::AnalysisRayTrace,
+        GhostFocusConfig, RayTraceConfig,
+        energy::AnalysisEnergy,
+        ghostfocus::AnalysisGhostFocus,
+        propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
+        raytrace::AnalysisRayTrace,
     },
     core_optics::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, node_attr::HasNodeAttr,
@@ -236,6 +239,8 @@ impl AnalysisRayTrace for ReflectiveGrating {
                     refraction_intended,
                 )?;
                 match self.ports().aperture(&PortType::Input, in_port) {
+                    // Only the components' rims decide where the optical axis runs.
+                    Some(_) if config.is_positioning_run() => {}
                     Some(aperture) => {
                         diffracted_rays.apodize(aperture, &iso)?;
                         diffracted_rays

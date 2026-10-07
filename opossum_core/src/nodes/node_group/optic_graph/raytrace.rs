@@ -301,8 +301,196 @@ fn calculate_single_node_position(
         }
     };
 
+    // Positioning stops a missed surface (see `RayTraceConfig::for_positioning`), so an invalid axis
+    // means it ran outside this node; placing its successors along it would bend it where no optic is.
+    if graph.has_output_connections(node_id)? && axis_is_lost(&outgoing_edges) {
+        return Err(OpossumError::Analysis(format!(
+            "the optical axis misses node {node_info}: it does not pass the node within its clear \
+             aperture"
+        )));
+    }
     graph.collect_group_output_ports(node_id, &outgoing_edges, light_result)?;
     update_outgoing_edges_and_up_direction(graph, node_idx, outgoing_edges, up_direction)?;
 
     Ok(())
+}
+
+/// Whether a node lost the optical axis during a positioning run.
+///
+/// # Arguments
+///
+/// * `outgoing_edges` - the light the node passes on.
+///
+/// # Returns
+///
+/// `true` if an output carries an axis ray that is no longer valid.
+fn axis_is_lost(outgoing_edges: &LightResult) -> bool {
+    outgoing_edges.values().any(|data| {
+        matches!(data, LightData::Geometric(rays) if rays.iter().next().is_some_and(|ray| !ray.valid()))
+    })
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
+        apertures::{Aperture, ApertureShape, ApertureType, CircleShape},
+        core_optics::{Alignable, NodeAttrExt, OpticNodeExt, PortType},
+        error::{OpmResult, OpossumError},
+        geometry::body::{CLEAR_APERTURE, default_clear_aperture},
+        joule,
+        light::LightResult,
+        millimeter,
+        nodes::{
+            Dummy, IdealFilter, Lens, NodeGroup, SourcePort, ThinMirror,
+            ideal_filter::{FilterConst, FilterTypeBuilder},
+            round_collimated_ray_builder,
+        },
+        percent,
+        utils::geom_transformation::Isometry,
+    };
+    use approx::assert_relative_eq;
+    use nalgebra::{Point2, Point3, Vector3};
+    use num_traits::Zero;
+    use uom::si::f64::Length;
+    use uuid::Uuid;
+
+    /// How far the lens behind which the screen is placed is shifted off the axis, in millimeter.
+    const DECENTRE: f64 = 20.0;
+    /// The focal length of the default lens in millimeter: a thick lens with R1 = -R2 = 500 mm,
+    /// d = 10 mm and n = 1.5, so 1/f = (n-1) (2/R - (n-1) d / (n R²)).
+    fn default_lens_focal_length() -> f64 {
+        let (n, radius, thickness) = (1.5, 500.0, 10.0);
+        1.0 / ((n - 1.0) * (2.0 / radius - (n - 1.0) * thickness / (n * radius * radius)))
+    }
+    /// A default lens shifted [`DECENTRE`] up, so the optical axis crosses it that far below its
+    /// own axis, with the given clear aperture.
+    fn decentred_lens(clear_aperture: ApertureShape) -> OpmResult<Lens> {
+        let mut lens = Lens::default().with_decenter(Point3::new(
+            Length::zero(),
+            millimeter!(DECENTRE),
+            Length::zero(),
+        ))?;
+        lens.set_property(CLEAR_APERTURE, clear_aperture.into())?;
+        Ok(lens)
+    }
+    /// Put a source in front of and a screen behind the given row of nodes, 100 mm apart, and
+    /// position the row.
+    ///
+    /// # Returns
+    ///
+    /// Where the screen was placed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if positioning fails or does not place the screen.
+    fn place_screen_behind(mut scenery: NodeGroup, row: &[Uuid]) -> OpmResult<Isometry> {
+        let source = scenery.add_node(SourcePort::default())?;
+        let screen = scenery.add_node(Dummy::default())?;
+        let mut upstream = source;
+        for &node in row.iter().chain(&[screen]) {
+            scenery.connect_nodes(upstream, "output_1", node, "input_1", millimeter!(100.0))?;
+            upstream = node;
+        }
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1)?,
+        );
+        AnalysisRayTrace::calc_node_positions(
+            &mut scenery,
+            LightResult::default(),
+            &config.for_positioning(),
+        )?;
+        scenery
+            .node(screen)?
+            .effective_position()
+            .copied()
+            .ok_or_else(|| OpossumError::Other("the screen was not placed".into()))
+    }
+    /// Assert that the screen was placed along the optical axis as the decentred lens bends it:
+    /// towards the lens's own axis, by h / f.
+    fn assert_bent_by_the_decentred_lens(screen: &Isometry) {
+        let direction = screen.transform_vector_f64(&Vector3::z());
+        assert_relative_eq!(
+            direction.y / direction.z,
+            DECENTRE / default_lens_focal_length(),
+            max_relative = 0.01
+        );
+    }
+    /// The optical axis has to pass every component it is connected through: running outside one,
+    /// it would be bent where there is no glass. Positioning stops there and names the component.
+    #[test]
+    fn positioning_stops_when_the_axis_misses_a_component() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let lens = scenery.add_node(decentred_lens(default_clear_aperture())?)?;
+        let error = place_screen_behind(scenery, &[lens])
+            .expect_err("the axis runs outside the lens's clear aperture of 12.5 mm");
+        assert!(error.to_string().contains("optical axis"), "{error}");
+        assert!(error.to_string().contains("lens"), "{error}");
+        // With a clear aperture of 50 mm the axis passes the lens and is bent by it.
+        let mut scenery = NodeGroup::default();
+        let large = CircleShape::new(millimeter!(50.0))?.into();
+        let lens = scenery.add_node(decentred_lens(large)?)?;
+        assert_bent_by_the_decentred_lens(&place_screen_behind(scenery, &[lens])?);
+        Ok(())
+    }
+    /// A port aperture masks light, it does not decide where the axis runs: a hole beside the axis
+    /// leaves the placement as if it were not there.
+    #[test]
+    fn positioning_ignores_port_apertures() -> OpmResult<()> {
+        let mut masked = Lens::default();
+        masked.set_aperture(
+            &PortType::Input,
+            "input_1",
+            &Aperture::new_circle(
+                millimeter!(2.0),
+                ApertureType::Hole,
+                Some(Point2::new(Length::zero(), millimeter!(10.0))),
+            )?,
+        )?;
+        let mut scenery = NodeGroup::default();
+        let masked = scenery.add_node(masked)?;
+        let large = CircleShape::new(millimeter!(50.0))?.into();
+        let lens = scenery.add_node(decentred_lens(large)?)?;
+        assert_bent_by_the_decentred_lens(&place_screen_behind(scenery, &[masked, lens])?);
+        Ok(())
+    }
+    /// The axis is placed by geometry alone: a filter blocking it entirely leaves it running on,
+    /// and the lens behind still bends it.
+    #[test]
+    fn positioning_does_not_depend_on_energy() -> OpmResult<()> {
+        let blocking = IdealFilter::new(
+            "blocking filter",
+            &FilterTypeBuilder::Constant(FilterConst::new(percent!(0.0))?),
+        )?;
+        let mut scenery = NodeGroup::default();
+        let filter = scenery.add_node(blocking)?;
+        let large = CircleShape::new(millimeter!(50.0))?.into();
+        let lens = scenery.add_node(decentred_lens(large)?)?;
+        assert_bent_by_the_decentred_lens(&place_screen_behind(scenery, &[filter, lens])?);
+        Ok(())
+    }
+    /// A mirror applies its port aperture on its own rather than through the common surface pass;
+    /// there too it must not cut the axis. A hole beside the axis leaves the reflection in place.
+    #[test]
+    fn positioning_ignores_the_port_aperture_of_a_mirror() -> OpmResult<()> {
+        let mut mirror = ThinMirror::default();
+        mirror.set_aperture(
+            &PortType::Input,
+            "input_1",
+            &Aperture::new_circle(
+                millimeter!(2.0),
+                ApertureType::Hole,
+                Some(Point2::new(Length::zero(), millimeter!(10.0))),
+            )?,
+        )?;
+        let mut scenery = NodeGroup::default();
+        let mirror = scenery.add_node(mirror)?;
+        let screen = place_screen_behind(scenery, &[mirror])?;
+        // The untilted mirror sends the axis straight back.
+        let direction = screen.transform_vector_f64(&Vector3::z());
+        assert_relative_eq!(direction.z, -1.0, epsilon = 1e-12);
+        Ok(())
+    }
 }
