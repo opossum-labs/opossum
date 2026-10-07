@@ -2,8 +2,9 @@
 pub mod helper {
     use crate::{
         analyzers::{
-            Analyzable, RayTraceConfig,
+            Analyzable, GhostFocusConfig, RayTraceConfig,
             energy::{AnalysisEnergy, EnergyConfig},
+            ghostfocus::AnalysisGhostFocus,
             raytrace::AnalysisRayTrace,
         },
         apertures::{ApertureShape, ApertureType, CircleShape, GaussianShape},
@@ -19,7 +20,7 @@ pub mod helper {
             geo_surface::GeoSurfaceRef,
         },
         joule,
-        light::{LightData, LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
+        light::{LightData, LightRays, LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer, percent,
         prelude::Aperture,
         properties::Proptype,
@@ -139,6 +140,68 @@ pub mod helper {
         );
         input.insert(input_port_name.into(), input_light.clone());
         assert!(AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).is_err());
+        Ok(())
+    }
+    /// Assert that a ray inside a component's clear aperture passes it and one just outside does
+    /// not: a ray trace loses it, a ghost focus analysis lets it run past unchanged.
+    ///
+    /// Both rays travel along z, 12.4 mm and 12.6 mm off the axis, just inside and just outside the
+    /// default clear aperture of 12.5 mm. Whether a missed ray is lost or runs past is the analyzer's
+    /// missed surface strategy (`Stop` for a ray trace, `Ignore` for a ghost focus analysis).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node cannot be placed or analyzed.
+    pub fn test_rays_beyond_clear_aperture_are_lost<
+        T: Default + AnalysisRayTrace + AnalysisGhostFocus,
+    >() -> OpmResult<()> {
+        let (inside, outside) = (millimeter!(0.0, 12.4, -10.0), millimeter!(0.0, 12.6, -10.0));
+        let rays = || -> OpmResult<Rays> {
+            Ok(Rays::from(vec![
+                Ray::new_collimated(inside, nanometer!(1000.0), joule!(1.0))?,
+                Ray::new_collimated(outside, nanometer!(1000.0), joule!(1.0))?,
+            ]))
+        };
+        let placed = || -> OpmResult<T> {
+            let mut node = T::default();
+            node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+            Ok(node)
+        };
+        let traced = AnalysisRayTrace::analyze(
+            &mut placed()?,
+            LightResult::from([("input_1".into(), LightData::Geometric(rays()?))]),
+            &RayTraceConfig::default(),
+        )?;
+        let Some(LightData::Geometric(traced)) = traced.get("output_1") else {
+            panic!("expected ray data at the output port");
+        };
+        let valid: Vec<bool> = traced.iter().map(Ray::valid).collect();
+        assert_eq!(
+            valid,
+            [true, false],
+            "a ray trace keeps the ray inside, loses the one outside"
+        );
+        let passed = AnalysisGhostFocus::analyze(
+            &mut placed()?,
+            LightRays::from([("input_1".into(), vec![rays()?])]),
+            &GhostFocusConfig::default(),
+            &mut Vec::new(),
+            0,
+        )?;
+        let Some(beside) = passed
+            .get("output_1")
+            .and_then(|bundles| bundles.first())
+            .and_then(|bundle| bundle.iter().nth(1))
+        else {
+            panic!("expected the ray outside the clear aperture at the output port");
+        };
+        assert!(
+            beside.valid(),
+            "a ghost focus analysis lets the ray outside run past"
+        );
+        assert_eq!(beside.position(), outside);
+        assert_eq!(beside.direction(), Vector3::z());
+        assert_eq!(beside.energy(), joule!(1.0));
         Ok(())
     }
     pub fn test_analyze_apodization_warning<T: Default + AnalysisRayTrace>() -> OpmResult<()> {

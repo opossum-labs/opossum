@@ -452,6 +452,55 @@ mod test {
         Ok(())
     }
     #[test]
+    fn rays_beyond_clear_aperture_are_lost() -> OpmResult<()> {
+        test_rays_beyond_clear_aperture_are_lost::<Lens>()
+    }
+    /// A port aperture masks only light that went through the lens: a ray running past the lens is
+    /// not touched by it, one through the lens is.
+    #[test]
+    fn a_port_aperture_does_not_touch_a_ray_that_missed_the_optic() -> OpmResult<()> {
+        use crate::{
+            analyzers::{GhostFocusConfig, ghostfocus::AnalysisGhostFocus},
+            apertures::{Aperture, ApertureType},
+            light::{LightRays, Ray},
+        };
+        let mut lens = Lens::default();
+        lens.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        lens.set_aperture(
+            &PortType::Input,
+            "input_1",
+            &Aperture::new_circle(millimeter!(5.0), ApertureType::Hole, None)?,
+        )?;
+        // At 8 mm the ray goes through the lens but outside the port's hole; at 12.6 mm it runs
+        // past the lens's clear aperture of 12.5 mm.
+        let rays = Rays::from(vec![
+            Ray::new_collimated(
+                millimeter!(0.0, 8.0, -10.0),
+                nanometer!(1000.0),
+                joule!(1.0),
+            )?,
+            Ray::new_collimated(
+                millimeter!(0.0, 12.6, -10.0),
+                nanometer!(1000.0),
+                joule!(1.0),
+            )?,
+        ]);
+        let passed = AnalysisGhostFocus::analyze(
+            &mut lens,
+            LightRays::from([("input_1".into(), vec![rays])]),
+            &GhostFocusConfig::default(),
+            &mut Vec::new(),
+            0,
+        )?;
+        let Some(bundle) = passed.get("output_1").and_then(|bundles| bundles.first()) else {
+            panic!("expected rays at the output port");
+        };
+        let valid: Vec<bool> = bundle.iter().map(Ray::valid).collect();
+        assert_eq!(valid, [false, true]);
+        assert_eq!(bundle.iter().nth(1).map(Ray::energy), Some(joule!(1.0)));
+        Ok(())
+    }
+    #[test]
     fn inverted() -> OpmResult<()> {
         test_inverted::<Lens>()
     }

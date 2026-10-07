@@ -1611,22 +1611,33 @@ mod test {
         }
         Ok(())
     }
-    /// Only the nodes that really enclose a medium may present themselves as [`Volumetric`].
+    /// A node declares a [`CLEAR_APERTURE`] exactly when its geometry has a rim, and every surface
+    /// it installs carries exactly that rim.
     ///
-    /// "Node with a volume" is stated twice: by this capability and by the transversal extent of
-    /// its medium ([`CLEAR_APERTURE`]), a property such a node carries. Both have to mean the same
-    /// set of node types, otherwise a node ends up with a body whose extent is undefined.
+    /// The extent of a component is stated by the property, decides the hits through the rim of
+    /// each surface, and bounds the medium through the geometry; all three have to agree, or rays
+    /// would hit a component of one size while the medium has another.
     #[test]
-    fn the_volume_capability_matches_the_volume_properties() -> OpmResult<()> {
+    fn a_declared_clear_aperture_bounds_every_installed_surface() -> OpmResult<()> {
         for (node_type, _) in node_types() {
             let optic_ref = create_node_ref(node_type)?;
-            let is_volumetric = optic_ref.as_volume().is_some();
+            let rim = match optic_ref.geometry()? {
+                Some(geometry) => geometry.rim()?,
+                None => None,
+            };
             assert_eq!(
                 optic_ref.node_attr().get_property(CLEAR_APERTURE).is_ok(),
-                is_volumetric,
-                "node type '{node_type}' declares '{CLEAR_APERTURE}' or presents itself as \
-                 volumetric, but not both"
+                rim.is_some(),
+                "node type '{node_type}' declares '{CLEAR_APERTURE}' or has a rim, but not both"
             );
+            let surfaces = optic_ref.node_attr().runtime_surfaces();
+            for (name, surface) in surfaces.inputs.iter().chain(&surfaces.outputs) {
+                assert_eq!(
+                    surface.rim(),
+                    rim.as_ref(),
+                    "surface '{name}' of node type '{node_type}'"
+                );
+            }
         }
         Ok(())
     }

@@ -434,7 +434,7 @@ impl AnalysisRayTrace for ParabolicMirror {
         };
 
         let refraction_intended = false;
-        let mut reflected_rays = rays.refract_on_surface(
+        let (mut reflected_rays, _) = rays.refract_on_surface(
             surf,
             None,
             refraction_intended,

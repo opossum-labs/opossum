@@ -14,7 +14,7 @@ use crate::{
         rays_hit_map::{HitPoint, RaysHitMap},
     },
     error::{OpmResult, OpossumError},
-    geometry::geo_surface::GeoSurfaceRef,
+    geometry::{Rim, geo_surface::GeoSurfaceRef},
     light::{Ray, Rays},
     nodes::fluence_detector::Fluence,
     refractive_index::RefractiveIndexType,
@@ -31,6 +31,8 @@ pub struct OpticSurface {
     #[serde(skip)]
     geo_surface: GeoSurfaceRef,
     anchor_point_iso: Isometry,
+    #[serde(skip)]
+    rim: Option<Rim>,
     #[serde(skip_serializing_if = "Aperture::is_none", default)]
     aperture: Aperture,
     coating: CoatingType,
@@ -51,6 +53,7 @@ impl Default for OpticSurface {
         Self {
             geo_surface: GeoSurfaceRef::default(),
             anchor_point_iso: Isometry::identity(),
+            rim: None,
             aperture: Aperture::default(),
             coating: CoatingType::IdealAR,
             lidt: J_per_cm2!(1.),
@@ -115,9 +118,24 @@ impl OpticSurface {
     pub fn geo_surface(&self) -> GeoSurfaceRef {
         self.geo_surface.clone()
     }
+    /// Sets the [`Rim`] of this [`OpticSurface`]: the lateral boundary of its component, stated
+    /// relative to the node. `None` leaves the surface unbounded.
+    pub fn set_rim(&mut self, rim: Option<Rim>) {
+        self.rim = rim;
+    }
+    /// Returns the [`Rim`] of this [`OpticSurface`], or `None` if it is unbounded.
+    #[must_use]
+    pub const fn rim(&self) -> Option<&Rim> {
+        self.rim.as_ref()
+    }
     /// Intersect a [`Ray`] with this [`OpticSurface`].
     ///
-    /// This is the one place that decides whether, and where, a ray hits this surface.
+    /// This is the one place that decides whether, and where, a ray hits this surface. A point
+    /// outside the surface's [`Rim`] is not part of the component, so a ray reaching the surface
+    /// only there misses it.
+    ///
+    /// The rim follows the geometric surface: its frame is derived from where that surface sits
+    /// right now (its isometry, minus its anchor, is the node's frame).
     ///
     /// # Arguments
     ///
@@ -126,17 +144,22 @@ impl OpticSurface {
     /// # Returns
     ///
     /// The intersection point in global coordinates and the normalized surface normal there,
-    /// pointing against the ray; or `None` if the ray misses the surface.
+    /// pointing against the ray; or `None` if the ray misses the surface or meets it outside its
+    /// rim.
     ///
     /// # Errors
     ///
     /// This function returns an error if the mutex of the geometric surface cannot be locked.
     pub fn intersect(&self, ray: &Ray) -> OpmResult<Option<(Point3<Length>, Vector3<f64>)>> {
-        Ok(self
-            .geo_surface
-            .0
-            .lock_opm()?
-            .calc_intersect_and_normal(ray))
+        let geo_surface = self.geo_surface.0.lock_opm()?;
+        let intersection = geo_surface.calc_intersect_and_normal(ray);
+        let Some(rim) = &self.rim else {
+            return Ok(intersection);
+        };
+        let node_frame = Isometry::new_from_transform(
+            geo_surface.isometry().get_transform() * self.anchor_point_iso.get_inv_transform(),
+        );
+        Ok(intersection.filter(|(point, _)| rim.contains(point, &node_frame)))
     }
     /// Returns a reference to the aperture of this [`OpticSurface`].
     #[must_use]
@@ -309,7 +332,7 @@ impl OpticSurface {
         let missed_strategy = strategy.missed_surface_strategy();
 
         for rays in &mut *rays_bundle {
-            let mut reflected = rays.refract_on_surface(
+            let (mut reflected, hits) = rays.refract_on_surface(
                 self,
                 refri_after_surf,
                 refraction_intended,
@@ -317,7 +340,8 @@ impl OpticSurface {
             )?;
             reflected.set_node_origin_uuid(node_uuid);
             strategy.on_surface_interaction(self, rays, reflected, backward)?;
-            rays.apodize(self.aperture(), iso)?;
+            // The port aperture masks light that passed this surface, not rays that ran past it.
+            rays.apodize_hits(self.aperture(), iso, &hits)?;
             strategy.on_after_apodization(rays)?;
         }
         for rays in self.get_rays_cache(backward) {
@@ -351,15 +375,70 @@ mod test {
         J_per_cm2,
         apertures::{Aperture, ApertureShape, ApertureType, CircleShape},
         coatings::CoatingType,
+        degree,
         error::{OpmResult, OpossumError},
-        geometry::{Sphere, geo_surface::GeoSurfaceRef},
+        geometry::{Plane, Rim, Sphere, geo_surface::GeoSurfaceRef},
         joule,
         light::{Ray, Rays},
-        meter, nanometer,
+        meter, millimeter, nanometer,
+        types::validated_type_definitions::ValidatedCrossSection,
         utils::geom_transformation::Isometry,
     };
     use std::sync::{Arc, Mutex};
     use uuid::Uuid;
+
+    /// A plane placed at the given anchor of a node at the origin, its component reaching 5 mm
+    /// around the node's axis.
+    fn bounded_plane(anchor: Isometry) -> OpmResult<OpticSurface> {
+        let mut surface = OpticSurface::new(
+            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(anchor)))),
+            CoatingType::IdealAR,
+            Aperture::default(),
+            J_per_cm2!(1.0),
+        )?;
+        surface.set_anchor_point_iso(anchor);
+        surface.set_rim(Some(Rim::new(
+            ValidatedCrossSection::try_new(Aperture::new_circle(
+                millimeter!(5.0),
+                ApertureType::Hole,
+                None,
+            )?)?,
+            Isometry::identity(),
+        )));
+        Ok(surface)
+    }
+    /// A ray along z, the given distance off the axis in y.
+    fn ray_at(y: f64) -> OpmResult<Ray> {
+        Ray::new_collimated(millimeter!(0.0, y, -10.0), nanometer!(1000.0), joule!(1.0))
+    }
+    #[test]
+    fn intersect_misses_outside_the_rim() -> OpmResult<()> {
+        let surface = bounded_plane(Isometry::identity())?;
+        assert!(surface.intersect(&ray_at(4.9)?)?.is_some());
+        assert!(surface.intersect(&ray_at(5.1)?)?.is_none());
+        Ok(())
+    }
+    #[test]
+    fn the_rim_is_measured_in_the_node_frame() -> OpmResult<()> {
+        // Tilted by 30°, the plane is hit at y = 4.9 mm by a ray along the node's axis. In the plane's
+        // own frame that point lies 4.9 / cos 30° = 5.66 mm out, beyond the 5 mm rim.
+        let surface = bounded_plane(Isometry::new(
+            millimeter!(0.0, 0.0, 0.0),
+            degree!(30.0, 0.0, 0.0),
+        )?)?;
+        assert!(surface.intersect(&ray_at(4.9)?)?.is_some());
+        assert!(surface.intersect(&ray_at(5.1)?)?.is_none());
+        Ok(())
+    }
+    #[test]
+    fn the_rim_follows_its_surface() -> OpmResult<()> {
+        // Moved without being installed anew, the surface takes its rim along.
+        let surface = bounded_plane(Isometry::identity())?;
+        surface.set_isometry(Isometry::new_translation(millimeter!(0.0, 20.0, 0.0))?);
+        assert!(surface.intersect(&ray_at(0.0)?)?.is_none());
+        assert!(surface.intersect(&ray_at(20.0)?)?.is_some());
+        Ok(())
+    }
 
     #[test]
     fn default() {

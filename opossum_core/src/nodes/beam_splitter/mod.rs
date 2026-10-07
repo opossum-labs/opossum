@@ -365,6 +365,7 @@ impl BeamSplitter {
                     // Split rays on the input surface
                     let mut reflected = if let Some(surf) = self.get_optic_surface_mut(port_name) {
                         rays.split_on_surface(surf, splitting_config, &missed_surface_strategy)?
+                            .0
                     } else {
                         return Err(OpossumError::OpticPort(format!(
                             "Input optic surface not found for port '{port_name}'"

@@ -589,9 +589,54 @@ impl Rays {
     ///
     /// This function returns an error if a single ray cannot be properly apodized (e.g. filter factor outside (0.0..=1.0)).
     pub fn apodize(&mut self, aperture: &Aperture, iso: &Isometry) -> OpmResult<bool> {
+        self.apodize_where(aperture, iso, |_| true)
+    }
+    /// Apodize only the rays of this bundle that hit a surface, as [`apodize`](Self::apodize) does
+    /// for all of them.
+    ///
+    /// An aperture belonging to a surface masks the light passing that surface; a ray that missed
+    /// the surface never passed it and is left untouched.
+    ///
+    /// # Arguments
+    ///
+    /// * `aperture` - the aperture to apply.
+    /// * `iso` - the isometry the aperture is placed at.
+    /// * `hits` - for every ray of this bundle in order, whether it hit the surface, as returned by
+    ///   [`refract_on_surface`](Self::refract_on_surface) or
+    ///   [`split_on_surface`](Self::split_on_surface).
+    ///
+    /// # Returns
+    ///
+    /// `true` if valid rays have been invalidated by the apodization.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if a single ray cannot be properly apodized.
+    pub fn apodize_hits(
+        &mut self,
+        aperture: &Aperture,
+        iso: &Isometry,
+        hits: &[bool],
+    ) -> OpmResult<bool> {
+        self.apodize_where(aperture, iso, |index| {
+            hits.get(index).copied().unwrap_or(false)
+        })
+    }
+    /// The common implementation of [`apodize`](Self::apodize) and
+    /// [`apodize_hits`](Self::apodize_hits): apodize the valid rays whose index is selected.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if a single ray cannot be properly apodized.
+    fn apodize_where(
+        &mut self,
+        aperture: &Aperture,
+        iso: &Isometry,
+        selected: impl Fn(usize) -> bool,
+    ) -> OpmResult<bool> {
         let mut beams_invalided = false;
-        for ray in &mut self.ray_bundle {
-            if ray.valid() {
+        for (index, ray) in self.ray_bundle.iter_mut().enumerate() {
+            if ray.valid() && selected(index) {
                 let ap_factor = aperture.apodize(&ray.inverse_transformed_ray(iso).position());
                 if ap_factor > 0.0 {
                     ray.filter_energy(&FilterType::Constant(FilterConst::new(ap_factor.into())?))?;
@@ -920,6 +965,11 @@ impl Rays {
     /// set to `None`, the refractive index of the incoming individual beam is used. This way it is possible to model
     /// a "passive" surface, which does not change the direction of the [`Ray`].
     ///
+    /// # Returns
+    ///
+    /// The bundle of reflected rays and, for every ray of this bundle in order, whether it hit the
+    /// surface (see [`OpticSurface::intersect`]).
+    ///
     /// # Warnings
     ///
     /// This functions emits a warning of no valid [`Ray`]s are found in the bundle.
@@ -935,7 +985,7 @@ impl Rays {
         refractive_index: Option<&RefractiveIndexType>,
         refraction_intended: bool,
         missed_surface_strategy: &MissedSurfaceStrategy,
-    ) -> OpmResult<Self> {
+    ) -> OpmResult<(Self, Vec<bool>)> {
         let reflected_part = if refraction_intended {
             ReflectedPart::Ghost
         } else {
@@ -967,7 +1017,8 @@ impl Rays {
     ///
     /// # Returns
     ///
-    /// The bundle of reflected rays. Rays that missed the surface have no reflected counterpart.
+    /// The bundle of reflected rays and, for every ray of this bundle in order, whether it hit the
+    /// surface. Rays that missed the surface have no reflected counterpart.
     ///
     /// # Warnings
     ///
@@ -983,7 +1034,7 @@ impl Rays {
         surface: &mut OpticSurface,
         config: &SplittingConfig,
         missed_surface_strategy: &MissedSurfaceStrategy,
-    ) -> OpmResult<Self> {
+    ) -> OpmResult<(Self, Vec<bool>)> {
         self.interact_with_surface(
             surface,
             None,
@@ -1006,7 +1057,8 @@ impl Rays {
     ///
     /// # Returns
     ///
-    /// The bundle of reflected rays.
+    /// The bundle of reflected rays and, for every ray of this bundle in order, whether it hit the
+    /// surface. A ray that was already invalid did not.
     ///
     /// # Errors
     ///
@@ -1020,13 +1072,14 @@ impl Rays {
         refractive_index: Option<&RefractiveIndexType>,
         missed_surface_strategy: MissedSurfaceStrategy,
         reflected_part: &ReflectedPart<'_>,
-    ) -> OpmResult<Self> {
+    ) -> OpmResult<(Self, Vec<bool>)> {
         let mut valid_rays_found = false;
         let mut rays_missed = false;
         // Pre-allocate memory to avoid massive reallocation overhead
         let mut reflected_rays = Self::with_capacity(self.ray_bundle.len());
+        let mut hits = vec![false; self.ray_bundle.len()];
 
-        for ray in &mut self.ray_bundle {
+        for (ray, hit) in self.ray_bundle.iter_mut().zip(hits.iter_mut()) {
             if ray.valid() {
                 let n2 = if let Some(refractive_index) = refractive_index {
                     Some(refractive_index.get_refractive_index(ray.wavelength())?)
@@ -1039,12 +1092,14 @@ impl Rays {
                 };
 
                 // Wir übergeben 'surface' unveränderlich und empfangen unser neues Tupel
-                let (reflected_opt, hit_point_opt) = ray.refract_on_surface_with_coating(
+                let interaction = ray.refract_on_surface_with_coating(
                     surface,
                     &coating,
                     n2,
                     missed_surface_strategy,
                 )?;
+                *hit = interaction.is_some();
+                let (reflected_opt, hit_point_opt) = interaction.unwrap_or((None, None));
 
                 if let Some(mut reflected) = reflected_opt {
                     if let (Some(helper_rays), Some(relf_helper)) =
@@ -1054,7 +1109,7 @@ impl Rays {
                             helper_rays.ray_bundle.iter_mut(),
                             relf_helper.ray_bundle.iter_mut()
                         ) {
-                            if let (Some(h_reflected), _h_hit_point) = h_ray
+                            if let Some((Some(h_reflected), _h_hit_point)) = h_ray
                                 .refract_on_surface_with_coating(
                                     surface,
                                     &coating,
@@ -1113,7 +1168,7 @@ impl Rays {
             // independent bundle rather than a branch continuing its parent's history.
             ReflectedPart::Branch(_) => {}
         }
-        Ok(reflected_rays)
+        Ok((reflected_rays, hits))
     }
     /// Diffract a bundle of [`Rays`] on a periodic surface, e.g., a grating
     /// All valid rays that hit this surface are diffracted according to the peridic structure,
@@ -2349,7 +2404,7 @@ mod test {
     fn refract_on_surface_empty() -> OpmResult<()> {
         let mut rays = Rays::default();
         testing_logger::setup();
-        let reflected = rays.refract_on_surface(
+        let (reflected, _) = rays.refract_on_surface(
             &mut OpticSurface::default(),
             Some(&refr_index_vaccuum()),
             true,
@@ -2395,7 +2450,7 @@ mod test {
         rays.set_node_origin_uuid(node_uuid);
         rays.set_parent_uuid(parent_uuid);
         rays.set_parent_node_split_idx(10);
-        let reflected = rays.refract_on_surface(
+        let (reflected, _) = rays.refract_on_surface(
             &mut OpticSurface::default(),
             Some(&refr_index_vaccuum()),
             false,
@@ -2445,7 +2500,7 @@ mod test {
             joule!(1.0),
         )?);
         testing_logger::setup();
-        let reflected = rays.refract_on_surface(
+        let (reflected, _) = rays.refract_on_surface(
             &mut OpticSurface::default(),
             Some(&refr_index_vaccuum()),
             true,
@@ -2468,7 +2523,7 @@ mod test {
         )?);
         let mut s = OpticSurface::default();
         s.set_coating(CoatingConstantR::new(percent!(20.0))?.into());
-        let reflected = rays.refract_on_surface(
+        let (reflected, _) = rays.refract_on_surface(
             &mut s,
             Some(&refr_index_vaccuum()),
             true,
@@ -2495,7 +2550,7 @@ mod test {
     fn split_on_surface_tilted() -> OpmResult<()> {
         let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1000.0))?);
         let mut surface = tilted_splitting_surface()?;
-        let reflected = rays.split_on_surface(
+        let (reflected, _) = rays.split_on_surface(
             &mut surface,
             &SplittingConfig::Ratio(0.6),
             &MissedSurfaceStrategy::Stop,
@@ -2516,7 +2571,7 @@ mod test {
         let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1000.0))?);
         let mut surface = tilted_splitting_surface()?;
         surface.set_coating(CoatingConstantR::new(percent!(20.0))?.into());
-        let reflected = rays.split_on_surface(
+        let (reflected, _) = rays.split_on_surface(
             &mut surface,
             &SplittingConfig::Ratio(0.6),
             &MissedSurfaceStrategy::Stop,
@@ -2529,7 +2584,7 @@ mod test {
     fn split_on_surface_keeps_both_parts_intended() -> OpmResult<()> {
         let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1000.0))?);
         let mut surface = tilted_splitting_surface()?;
-        let reflected = rays.split_on_surface(
+        let (reflected, _) = rays.split_on_surface(
             &mut surface,
             &SplittingConfig::Ratio(0.6),
             &MissedSurfaceStrategy::Stop,
@@ -2559,7 +2614,7 @@ mod test {
         rays.add_ray(collimated_ray_along_z(nanometer!(999.0))?);
         rays.add_ray(collimated_ray_along_z(nanometer!(1001.0))?);
         let mut surface = tilted_splitting_surface()?;
-        let reflected =
+        let (reflected, _) =
             rays.split_on_surface(&mut surface, &config, &MissedSurfaceStrategy::Stop)?;
         assert_eq!(rays.ray_bundle[0].energy(), joule!(1.0));
         assert_eq!(rays.ray_bundle[1].energy(), joule!(0.0));
@@ -2581,7 +2636,7 @@ mod test {
             joule!(1.0),
         )?);
         testing_logger::setup();
-        let reflected = rays.split_on_surface(
+        let (reflected, _) = rays.split_on_surface(
             &mut OpticSurface::default(),
             &SplittingConfig::Ratio(0.6),
             &MissedSurfaceStrategy::Stop,

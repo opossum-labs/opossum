@@ -177,7 +177,7 @@ impl AnalysisRayTrace for ThinMirror {
         if let LightData::Geometric(mut rays) = data.clone() {
             let reflected = if let Some(surf) = self.get_optic_surface_mut(in_port) {
                 let refraction_intended = false;
-                let mut reflected_rays = rays.refract_on_surface(
+                let (mut reflected_rays, _) = rays.refract_on_surface(
                     surf,
                     None,
                     refraction_intended,

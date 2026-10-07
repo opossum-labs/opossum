@@ -275,6 +275,10 @@ mod test {
         Ok(())
     }
     #[test]
+    fn rays_beyond_clear_aperture_are_lost() -> OpmResult<()> {
+        test_rays_beyond_clear_aperture_are_lost::<CylindricLens>()
+    }
+    #[test]
     fn inverted() -> OpmResult<()> {
         test_inverted::<CylindricLens>()
     }

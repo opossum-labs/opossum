@@ -351,6 +351,36 @@ mod test {
         test_inverted::<Wedge>()
     }
     #[test]
+    fn rays_beyond_clear_aperture_are_lost() -> OpmResult<()> {
+        test_rays_beyond_clear_aperture_are_lost::<Wedge>()
+    }
+    /// A ray entering the wedge inside its clear aperture but heading outwards leaves through the
+    /// barrel instead of the exit face, and a ray trace (`Stop`) loses it.
+    #[test]
+    fn a_ray_leaving_through_the_barrel_is_lost_in_a_ray_trace() -> OpmResult<()> {
+        let mut wedge = Wedge::default();
+        wedge.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        // Tilted by 10° it enters at 12.3 mm; refracted to about 6.6° it reaches about 13.5 mm at
+        // the exit face 10 mm further on, outside the clear aperture of 12.5 mm.
+        let tilt = 10.0_f64.to_radians();
+        let ray = Ray::new(
+            millimeter!(0.0, 12.3 - tilt.tan(), -1.0),
+            Vector3::new(0.0, tilt.sin(), tilt.cos()),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?;
+        let traced = AnalysisRayTrace::analyze(
+            &mut wedge,
+            LightResult::from([("input_1".into(), LightData::Geometric(Rays::from(ray)))]),
+            &RayTraceConfig::default(),
+        )?;
+        let Some(LightData::Geometric(rays)) = traced.get("output_1") else {
+            panic!("expected ray data at the output port");
+        };
+        assert_eq!(rays.nr_of_rays(true), 0);
+        Ok(())
+    }
+    #[test]
     fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<Wedge>()
     }

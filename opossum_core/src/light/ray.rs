@@ -540,7 +540,9 @@ impl Ray {
         n2: Option<f64>,
         missed_surface_strategy: &MissedSurfaceStrategy,
     ) -> OpmResult<(Option<Self>, Option<HitPoint>)> {
-        self.refract_on_surface_with_coating(os, os.coating(), n2, *missed_surface_strategy)
+        Ok(self
+            .refract_on_surface_with_coating(os, os.coating(), n2, *missed_surface_strategy)?
+            .unwrap_or((None, None)))
     }
     /// Refract the [`Ray`] on a given [`OpticSurface`] as [`refract_on_surface`](Self::refract_on_surface)
     /// does, but with the given coating instead of the coating of the surface.
@@ -558,7 +560,8 @@ impl Ray {
     ///
     /// # Returns
     ///
-    /// The reflected [`Ray`] (if any) and the [`HitPoint`] on the surface (if any).
+    /// `None` if the ray missed the surface (see [`OpticSurface::intersect`]); otherwise the
+    /// reflected [`Ray`] (if any) and the [`HitPoint`] on the surface (if any).
     ///
     /// # Errors
     ///
@@ -569,7 +572,7 @@ impl Ray {
         coating: &CoatingType,
         n2: Option<f64>,
         missed_surface_strategy: MissedSurfaceStrategy,
-    ) -> OpmResult<(Option<Self>, Option<HitPoint>)> {
+    ) -> OpmResult<Option<(Option<Self>, Option<HitPoint>)>> {
         let n_refri_2 = n2.unwrap_or_else(|| self.refractive_index());
         if n_refri_2 < 1.0 || !n_refri_2.is_finite() {
             return Err(OpossumError::Other(
@@ -636,19 +639,19 @@ impl Ray {
                 }
 
                 // Wir geben beides zurück
-                Ok((Some(reflected_ray), generated_hit_point))
+                Ok(Some((Some(reflected_ray), generated_hit_point)))
             } else {
                 self.number_of_bounces += 1;
                 self.prev_dir = Some(self.dir);
                 self.dir = reflected_dir;
-                Ok((None, None))
+                Ok(Some((None, None)))
             }
         } else {
             match missed_surface_strategy {
                 MissedSurfaceStrategy::Stop => self.set_invalid(),
                 MissedSurfaceStrategy::Ignore => {}
             }
-            Ok((None, None))
+            Ok(None)
         }
     }
 

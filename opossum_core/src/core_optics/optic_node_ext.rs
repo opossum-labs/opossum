@@ -7,7 +7,7 @@ use crate::{
     coatings::CoatingType,
     core_optics::{NodeAttrExt, OpticNode, PortType},
     error::{OpmResult, OpossumError},
-    geometry::{body::CLEAR_APERTURE, geo_surface::GeoSurfaceRef},
+    geometry::{Rim, body::CLEAR_APERTURE, geo_surface::GeoSurfaceRef},
     light::{LightData, LightResult, Rays},
     nodes::fluence_detector::Fluence,
     properties::Proptype,
@@ -121,6 +121,7 @@ pub trait OpticNodeExt {
     /// * `surf_name` - name of the surface, which is the physical name of its port.
     /// * `geo_surface` - the geometric surface reference [`GeoSurfaceRef`].
     /// * `anchor_point_iso` - the isometry of the geometrical anchor point.
+    /// * `rim` - the lateral boundary of the component, or `None` for an unbounded surface.
     /// * `port_type` - the physical port type (`Input` or `Output`) of this surface.
     ///
     /// # Errors
@@ -131,6 +132,7 @@ pub trait OpticNodeExt {
         surf_name: &str,
         geo_surface: GeoSurfaceRef,
         anchor_point_iso: Isometry,
+        rim: Option<Rim>,
         port_type: &PortType,
     ) -> OpmResult<()>;
 
@@ -343,11 +345,24 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
         let ((entrance, entrance_anchor), (exit, exit_anchor)) =
             geometry.entrance_and_exit(&node_iso)?;
+        let rim = geometry.rim()?;
         for name in inputs {
-            self.update_surface(name, entrance.clone(), entrance_anchor, &PortType::Input)?;
+            self.update_surface(
+                name,
+                entrance.clone(),
+                entrance_anchor,
+                rim.clone(),
+                &PortType::Input,
+            )?;
         }
         for name in outputs {
-            self.update_surface(name, exit.clone(), exit_anchor, &PortType::Output)?;
+            self.update_surface(
+                name,
+                exit.clone(),
+                exit_anchor,
+                rim.clone(),
+                &PortType::Output,
+            )?;
         }
         Ok(())
     }
@@ -357,6 +372,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         surf_name: &str,
         geo_surface: GeoSurfaceRef,
         anchor_point_iso: Isometry,
+        rim: Option<Rim>,
         port_type: &PortType,
     ) -> OpmResult<()> {
         let config = {
@@ -380,6 +396,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         if let Some(optic_surf) = self.get_optic_surface_mut(surf_name) {
             optic_surf.set_geo_surface(geo_surface);
             optic_surf.set_anchor_point_iso(anchor_point_iso);
+            optic_surf.set_rim(rim);
             optic_surf.set_aperture(config.aperture);
             optic_surf.set_coating(config.coating);
             optic_surf.set_lidt(*config.lidt.get())?;
@@ -391,6 +408,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
                 *config.lidt.get(),
             )?;
             optic_surf.set_anchor_point_iso(anchor_point_iso);
+            optic_surf.set_rim(rim);
             let runtime = self.node_attr_mut().runtime_surfaces_mut();
             match port_type {
                 PortType::Input => runtime.inputs.insert(surf_name.to_string(), optic_surf),
