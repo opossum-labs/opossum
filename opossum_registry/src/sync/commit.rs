@@ -37,7 +37,10 @@ pub fn commit_asset_file(
         .ok_or_else(|| OpossumError::Registry("Path contains invalid UTF-8 characters".into()))?
         .replace('\\', "/");
 
-    let path_segments: Vec<&str> = rel_path_str.split('/').collect();
+    let path_segments: Vec<&str> = rel_path_str
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .collect();
 
     // 1. Resolve author and committer signatures
     let author = resolve_signature(&repo);
