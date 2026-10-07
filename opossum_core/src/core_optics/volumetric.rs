@@ -1111,16 +1111,12 @@ mod test {
         );
         Ok(())
     }
-    /// The gain an inverted, decentred and tilted biconvex lens applies, ray by ray.
+    /// An inverted, decentred and tilted biconvex lens, placed 20 mm along z.
     ///
-    /// A small signal model amplifies over the chord of every ray through the medium, so this pins
-    /// the whole way from the node's geometry to the gain - in the configuration where mixing up
-    /// entrance and exit or the frame of the medium would show.
+    /// # Errors
     ///
-    /// Four rays (energy exactly 1/19 J) currently pass without any gain: on a backwards pass the
-    /// chord misses the surface the ray starts on. Pinned so that a fix shows up as a deliberate change.
-    #[test]
-    fn an_inverted_aligned_lens_amplifies_as_recorded() -> OpmResult<()> {
+    /// Returns an error if the lens cannot be built or placed.
+    fn inverted_aligned_lens() -> OpmResult<Lens> {
         let mut lens = Lens::new(
             "head",
             millimeter!(80.0),
@@ -1134,12 +1130,16 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )?))?;
         lens.set_alignment(millimeter!(1.0, -2.0, 0.0), degree!(3.0, -2.0, 0.0))?;
-        let mut config = RayTraceConfig::default();
-        config.set_active_pump_scenario(Some(scenario_with_small_signal(lens.node_attr().uuid())?));
-        lens.prepare_volume(&config)?;
-        let (in_port, out_port) = single_io_port_names(&lens)?;
-        // An inverted node is passed backwards, so the bundle comes from +z and travels along -z.
-        let rays = Rays::new_uniform_collimated(
+        Ok(lens)
+    }
+    /// A collimated bundle of 19 rays (1 J in total) coming from +z and travelling along -z, as an
+    /// inverted node is passed backwards.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the bundle cannot be built.
+    fn backwards_bundle() -> OpmResult<Rays> {
+        Ok(Rays::new_uniform_collimated(
             nanometer!(1053.0),
             joule!(1.0),
             &crate::distributions::position::Hexapolar::new(millimeter!(5.0), 2)?,
@@ -1147,8 +1147,82 @@ mod test {
         .transformed_by_iso(&Isometry::new(
             millimeter!(0.0, 0.0, 60.0),
             degree!(180.0, 0.0, 0.0),
-        )?);
+        )?))
+    }
+    /// The largest energy of a single ray in the bundle, in joule.
+    fn largest_energy(rays: &Rays) -> f64 {
+        rays.iter()
+            .map(|ray| ray.energy().value)
+            .fold(0.0, f64::max)
+    }
+    /// Assert that every one of the given number of rays left the medium valid and with more energy
+    /// than any of them entered with.
+    fn assert_every_ray_gained(rays: &Rays, ray_count: usize, entering_energy: f64) {
+        let valid: Vec<_> = rays.iter().filter(|ray| ray.valid()).collect();
+        assert_eq!(valid.len(), ray_count, "every ray has to pass the medium");
+        for (index, ray) in valid.iter().enumerate() {
+            assert!(
+                ray.energy().value > entering_energy,
+                "ray {index} left the medium with {} J, not more than the {entering_energy} J \
+                 a ray entered with",
+                ray.energy().value
+            );
+        }
+    }
+    /// Every ray crossing an inverted, curved amplifier gains.
+    ///
+    /// Regression test: on a backwards pass a ray starts on the surface it has just entered
+    /// through, and its chord was lost whenever rounding put that start just outside the medium.
+    #[test]
+    fn every_ray_through_an_inverted_curved_amplifier_gains() -> OpmResult<()> {
+        let mut lens = inverted_aligned_lens()?;
+        let mut config = RayTraceConfig::default();
+        config.set_active_pump_scenario(Some(scenario_with_small_signal(lens.node_attr().uuid())?));
+        lens.prepare_volume(&config)?;
+        let (in_port, out_port) = single_io_port_names(&lens)?;
+        let rays = backwards_bundle()?;
+        let (ray_count, entering_energy) = (rays.nr_of_rays(true), largest_energy(&rays));
         let incoming = LightResult::from([(in_port, LightData::Geometric(rays))]);
+        let outgoing = AnalysisRayTrace::analyze(&mut lens, incoming, &config)?;
+        let Some(LightData::Geometric(rays)) = outgoing.get(&out_port) else {
+            panic!("expected ray data at the output port");
+        };
+        assert_every_ray_gained(rays, ray_count, entering_energy);
+        Ok(())
+    }
+    /// The ghost focus variant of [`every_ray_through_an_inverted_curved_amplifier_gains`]: a ghost
+    /// running back through the medium starts on a surface of it just the same.
+    #[test]
+    fn every_ghost_focus_ray_through_an_inverted_curved_amplifier_gains() -> OpmResult<()> {
+        let mut lens = inverted_aligned_lens()?;
+        let mut config = GhostFocusConfig::default();
+        config.set_active_pump_scenario(Some(scenario_with_small_signal(lens.node_attr().uuid())?));
+        lens.prepare_volume(&config)?;
+        let (in_port, out_port) = single_io_port_names(&lens)?;
+        let rays = backwards_bundle()?;
+        let (ray_count, entering_energy) = (rays.nr_of_rays(true), largest_energy(&rays));
+        let incoming = LightRays::from([(in_port, vec![rays])]);
+        let outgoing =
+            AnalysisGhostFocus::analyze(&mut lens, incoming, &config, &mut Vec::new(), 0)?;
+        let Some([rays, ..]) = outgoing.get(&out_port).map(Vec::as_slice) else {
+            panic!("expected rays at the output port");
+        };
+        assert_every_ray_gained(rays, ray_count, entering_energy);
+        Ok(())
+    }
+    /// The gain an inverted, decentred and tilted biconvex lens applies, ray by ray.
+    ///
+    /// A small signal model amplifies over the chord of every ray through the medium, so this pins
+    /// the whole way from the node's geometry to the gain - in the configuration where mixing up
+    /// entrance and exit or the frame of the medium would show.
+    #[test]
+    fn an_inverted_aligned_lens_amplifies_as_recorded() -> OpmResult<()> {
+        let mut lens = inverted_aligned_lens()?;
+        let mut config = RayTraceConfig::default();
+        config.set_active_pump_scenario(Some(scenario_with_small_signal(lens.node_attr().uuid())?));
+        lens.prepare_volume(&config)?;
+        let (in_port, out_port) = single_io_port_names(&lens)?;
+        let incoming = LightResult::from([(in_port, LightData::Geometric(backwards_bundle()?))]);
         let outgoing = AnalysisRayTrace::analyze(&mut lens, incoming, &config)?;
         let Some(LightData::Geometric(rays)) = outgoing.get(&out_port) else {
             panic!("expected ray data at the output port");
@@ -1183,7 +1257,7 @@ mod test {
                     -0.013_748_195_716,
                     -0.010_349_341_315,
                     -0.999_851_928_162,
-                    0.052_631_578_947,
+                    0.078_439_558_536,
                     43.888_931_228_945,
                 ],
                 [
@@ -1193,7 +1267,7 @@ mod test {
                     -0.013_844_859_914,
                     -0.036_281_875_871,
                     -0.999_245_688_175,
-                    0.052_631_578_947,
+                    0.077_999_622_756,
                     43.639_682_117_745,
                 ],
                 [
@@ -1233,7 +1307,7 @@ mod test {
                     0.008_626_386_893,
                     0.028_371_002_571,
                     -0.999_560_239_136,
-                    0.052_631_578_947,
+                    0.078_205_645_377,
                     44.087_285_729_648,
                 ],
                 [
@@ -1283,7 +1357,7 @@ mod test {
                     -0.017_513_767_670,
                     -0.068_624_039_745,
                     -0.997_488_851_622,
-                    0.052_631_578_947,
+                    0.076_744_675_811,
                     43.118_390_369_090,
                 ],
                 [

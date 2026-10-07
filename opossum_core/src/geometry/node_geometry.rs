@@ -23,6 +23,7 @@ use uom::si::f64::{Angle, Length};
 use crate::{
     error::{OpmResult, OpossumError},
     geometry::{
+        Rim,
         body::SurfaceBoundedBody,
         face::{Face, SurfaceShape},
         geo_surface::GeoSurfaceRef,
@@ -224,6 +225,31 @@ impl Geometry {
                 "a single surface encloses no volume".into(),
             )),
             Self::Solid(Solid::Extruded(extruded)) => extruded.body(node_frame),
+            Self::Solid(Solid::Parametric(_)) => Err(not_supported_yet("a parametric solid")),
+            Self::Solid(Solid::Assembly(_)) => Err(not_supported_yet("an assembly")),
+        }
+    }
+    /// Return the lateral boundary of this geometry, stated relative to the node.
+    ///
+    /// # Returns
+    ///
+    /// The [`Rim`] of an extruded solid or of a bounded surface, or `None` for a surface without
+    /// a cross section, which is unbounded.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error for a solid that cannot be traced yet ([`ParametricSolid`],
+    /// [`Assembly`]): `None` would declare it unbounded.
+    pub fn rim(&self) -> OpmResult<Option<Rim>> {
+        match self {
+            Self::Surface(surface) => Ok(surface
+                .cross_section
+                .clone()
+                .map(|cross_section| Rim::new(cross_section, Isometry::identity()))),
+            Self::Solid(Solid::Extruded(extruded)) => Ok(Some(Rim::new(
+                extruded.cross_section.clone(),
+                extruded.axis,
+            ))),
             Self::Solid(Solid::Parametric(_)) => Err(not_supported_yet("a parametric solid")),
             Self::Solid(Solid::Assembly(_)) => Err(not_supported_yet("an assembly")),
         }
@@ -721,7 +747,31 @@ mod test {
             assert!(error.to_string().contains("not supported yet"));
             let error = geometry.body(&Isometry::identity()).unwrap_err();
             assert!(error.to_string().contains("not supported yet"));
+            let error = geometry.rim().unwrap_err();
+            assert!(error.to_string().contains("not supported yet"));
         }
+        Ok(())
+    }
+    /// A surface without a cross section is unbounded; a bounded surface and an extruded solid have
+    /// a rim, stated along the extrusion axis.
+    #[test]
+    fn rim_is_none_for_a_virtual_plane() -> OpmResult<()> {
+        assert_eq!(Geometry::plane(None).rim()?, None);
+        assert_eq!(
+            Geometry::plane(Some(circle()?)).rim()?,
+            Some(Rim::new(circle()?, Isometry::identity()))
+        );
+        let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
+        let extruded = Geometry::Solid(Solid::Extruded(Extruded::new(
+            axis,
+            Face::new(SurfaceShape::Plane, Isometry::identity()),
+            Face::new(
+                SurfaceShape::Plane,
+                Isometry::new_along_z(millimeter!(20.0))?,
+            ),
+            circle()?,
+        )));
+        assert_eq!(extruded.rim()?, Some(Rim::new(circle()?, axis)));
         Ok(())
     }
     #[test]
