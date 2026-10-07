@@ -98,8 +98,7 @@ mod test {
             None,
             None,
         )?;
-        node.ports_mut()
-            .set_aperture(&PortType::Output, "output_1", &aperture)?;
+        node.set_aperture(&PortType::Output, "output_1", &aperture)?;
 
         // 2. Create a hexapolar ray distribution wide enough to guarantee clipping (10mm radius)
         let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(

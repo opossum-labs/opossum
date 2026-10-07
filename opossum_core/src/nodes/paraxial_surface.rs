@@ -7,6 +7,7 @@ use crate::{
     },
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind},
     error::{OpmResult, OpossumError},
+    geometry::Geometry,
     light::{LightData, LightRays, LightResult, Rays},
     millimeter,
     nodes::{NodeRegistration, create_surface_properties},
@@ -88,11 +89,14 @@ impl Planar for ParaxialSurface {
     }
 }
 impl OpticNode for ParaxialSurface {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::plane(None)))
+    }
     fn as_surface(&self) -> Option<&dyn Planar> {
         Some(self)
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.update_flat_single_surfaces()
+        self.install_geometry(&["input_1"], &["output_1"])
     }
 }
 impl AnalysisGhostFocus for ParaxialSurface {

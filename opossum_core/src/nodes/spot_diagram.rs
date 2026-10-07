@@ -11,6 +11,7 @@ use crate::{
         optic_surface::OpticSurface,
     },
     error::OpmResult,
+    geometry::Geometry,
     light::{LightData, LightResult, Rays},
     nanometer,
     nodes::{NodeRegistration, create_surface_properties},
@@ -110,6 +111,9 @@ impl Planar for SpotDiagram {
     }
 }
 impl OpticNode for SpotDiagram {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::plane(None)))
+    }
     fn as_surface(&self) -> Option<&dyn Planar> {
         Some(self)
     }
@@ -189,7 +193,7 @@ impl OpticNode for SpotDiagram {
     }
 
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.update_flat_single_surfaces()
+        self.install_geometry(&["input_1"], &["output_1"])
     }
 
     fn set_light_data(&mut self, ld: Option<LightData>) {

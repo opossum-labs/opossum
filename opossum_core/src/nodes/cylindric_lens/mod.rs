@@ -3,20 +3,17 @@
 
 use crate::{
     analyzers::energy::AnalysisEnergy,
-    core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType, Volumetric},
+    core_optics::{NodeAttr, OpticNode, OpticNodeExt, Volumetric},
     error::{OpmResult, OpossumError},
-    geometry::{Cylinder, Plane, geo_surface::GeoSurfaceRef},
+    geometry::Geometry,
     material::{MATERIAL, Material},
-    meter, millimeter,
+    millimeter,
     nodes::{NodeRegistration, create_volume_properties},
     properties::{Proptype, validator::Validator},
-    radian,
     refractive_index::RefrIndexConst,
-    utils::geom_transformation::Isometry,
 };
 use log::warn;
 use opm_macros_lib::OpmNode;
-use std::sync::{Arc, Mutex};
 use uom::si::f64::Length;
 
 mod analysis_ghostfocus;
@@ -147,77 +144,33 @@ impl CylindricLens {
 
 impl Volumetric for CylindricLens {}
 impl OpticNode for CylindricLens {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        let (
+            Ok(Proptype::Curvature(front_curvature)),
+            Ok(Proptype::Curvature(rear_curvature)),
+            Ok(Proptype::Length(center_thickness)),
+        ) = (
+            self.node_attr.get_property("front curvature"),
+            self.node_attr.get_property("rear curvature"),
+            self.node_attr.get_property("center thickness"),
+        )
+        else {
+            return Err(OpossumError::Analysis(
+                "cannot read the curvatures and the center thickness of the lens".into(),
+            ));
+        };
+        Ok(Some(Geometry::cylindrical_singlet(
+            *front_curvature,
+            *rear_curvature,
+            *center_thickness,
+            self.clear_aperture()?,
+        )?))
+    }
     fn as_volume(&self) -> Option<&dyn Volumetric> {
         Some(self)
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
-        let Ok(Proptype::Curvature(front_curvature)) =
-            self.node_attr.get_property("front curvature")
-        else {
-            return Err(OpossumError::Analysis("cannot read front curvature".into()));
-        };
-        let (front_geosurface, anchor_point_iso_front) = if front_curvature.is_infinite() {
-            (
-                GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso)))),
-                Isometry::identity(),
-            )
-        } else {
-            let anchor_point_iso_front =
-                Isometry::new(meter!(0., 0., front_curvature.value), radian!(0., 0., 0.))?;
-            (
-                GeoSurfaceRef(Arc::new(Mutex::new(Cylinder::new(
-                    *front_curvature,
-                    node_iso.append(&anchor_point_iso_front),
-                )?))),
-                anchor_point_iso_front,
-            )
-        };
-        self.update_surface(
-            "input_1",
-            front_geosurface,
-            anchor_point_iso_front,
-            &PortType::Input,
-        )?;
-        let Ok(Proptype::Curvature(rear_curvature)) = self.node_attr.get_property("rear curvature")
-        else {
-            return Err(OpossumError::Analysis("cannot read rear curvature".into()));
-        };
-        let Ok(Proptype::Length(center_thickness)) =
-            self.node_attr.get_property("center thickness")
-        else {
-            return Err(OpossumError::Analysis(
-                "cannot read center thickness".into(),
-            ));
-        };
-        let (rear_geosurface, anchor_point_iso_rear) = if rear_curvature.is_infinite() {
-            let anchor_point_iso_rear =
-                Isometry::new(meter!(0., 0., center_thickness.value), radian!(0., 0., 0.))?;
-            (
-                GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(
-                    node_iso.append(&anchor_point_iso_rear),
-                )))),
-                anchor_point_iso_rear,
-            )
-        } else {
-            let anchor_point_iso_rear = Isometry::new(
-                meter!(0., 0., (*rear_curvature + *center_thickness).value),
-                radian!(0., 0., 0.),
-            )?;
-            (
-                GeoSurfaceRef(Arc::new(Mutex::new(Cylinder::new(
-                    *rear_curvature,
-                    node_iso.append(&anchor_point_iso_rear),
-                )?))),
-                anchor_point_iso_rear,
-            )
-        };
-        self.update_surface(
-            "output_1",
-            rear_geosurface,
-            anchor_point_iso_rear,
-            &PortType::Output,
-        )
+        self.install_geometry(&["input_1"], &["output_1"])
     }
 }
 impl AnalysisEnergy for CylindricLens {}
@@ -237,6 +190,7 @@ mod test {
         millimeter, nanometer,
         nodes::test_helper::test_helper::*,
         properties::{Proptype, proptype::AssetRef},
+        utils::geom_transformation::Isometry,
     };
     use approx::assert_relative_eq;
     use nalgebra::Vector3;

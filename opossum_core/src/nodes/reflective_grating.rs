@@ -13,6 +13,7 @@ use crate::{
         SurfaceFinish, SurfaceKind, node_attr::HasNodeAttr,
     },
     error::{OpmResult, OpossumError},
+    geometry::Geometry,
     light::{LightData, LightRays, LightResult, Ray, Rays},
     nodes::{NodeRegistration, create_surface_properties},
     num_per_mm,
@@ -372,11 +373,14 @@ impl Planar for ReflectiveGrating {
     }
 }
 impl OpticNode for ReflectiveGrating {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::plane(None)))
+    }
     fn as_surface(&self) -> Option<&dyn Planar> {
         Some(self)
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.update_flat_single_surfaces()
+        self.install_geometry(&["input_1"], &["output_1"])
     }
 }
 

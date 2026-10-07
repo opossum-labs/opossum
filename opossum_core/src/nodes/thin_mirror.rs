@@ -11,17 +11,15 @@ use crate::{
         node_attr::HasNodeAttr,
     },
     error::{OpmResult, OpossumError},
-    geometry::{Plane, Sphere, geo_surface::GeoSurfaceRef},
+    geometry::{Geometry, SurfaceShape},
     light::{LightData, LightResult, Rays, light_result::LightRays},
-    meter, millimeter,
+    millimeter,
     nodes::{NodeRegistration, create_surface_properties},
     percent,
     properties::{Proptype, validator::Validator},
-    radian,
     utils::geom_transformation::Isometry,
 };
 use opm_macros_lib::OpmNode;
-use std::sync::{Arc, Mutex};
 use uom::si::f64::Length;
 
 inventory::submit! {
@@ -69,21 +67,19 @@ impl Default for ThinMirror {
 
         let mut m = Self { node_attr };
         m.update_surfaces().unwrap();
-        m.ports_mut()
-            .set_coating(
-                &PortType::Input,
-                "input_1",
-                &CoatingConstantR::new(percent!(100.0)).unwrap().into(),
-            )
-            .unwrap();
+        m.set_coating(
+            &PortType::Input,
+            "input_1",
+            &CoatingConstantR::new(percent!(100.0)).unwrap().into(),
+        )
+        .unwrap();
 
-        m.ports_mut()
-            .set_coating(
-                &PortType::Output,
-                "output_1",
-                &CoatingConstantR::new(percent!(100.0)).unwrap().into(),
-            )
-            .unwrap();
+        m.set_coating(
+            &PortType::Output,
+            "output_1",
+            &CoatingConstantR::new(percent!(100.0)).unwrap().into(),
+        )
+        .unwrap();
         m
     }
 }
@@ -119,38 +115,21 @@ impl Planar for ThinMirror {
     }
 }
 impl OpticNode for ThinMirror {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        let Ok(Proptype::Curvature(curvature)) = self.node_attr.get_property("curvature") else {
+            return Err(OpossumError::Analysis("cannot read curvature".into()));
+        };
+        Ok(Some(Geometry::surface(
+            SurfaceShape::spherical(*curvature),
+            Isometry::identity(),
+            None,
+        )))
+    }
     fn as_surface(&self) -> Option<&dyn Planar> {
         Some(self)
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
-        let Ok(Proptype::Curvature(curvature)) = self.node_attr.get_property("curvature") else {
-            return Err(OpossumError::Analysis("cannot read curvature".into()));
-        };
-        let (geosurface, anchor_point_iso) = if curvature.is_infinite() {
-            (
-                GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso)))),
-                Isometry::identity(),
-            )
-        } else {
-            let anchor_point_iso_front =
-                Isometry::new(meter!(0., 0., curvature.value), radian!(0., 0., 0.))?;
-            (
-                GeoSurfaceRef(Arc::new(Mutex::new(Sphere::new(
-                    *curvature,
-                    node_iso.append(&anchor_point_iso_front),
-                )?))),
-                anchor_point_iso_front,
-            )
-        };
-        self.update_surface(
-            "input_1",
-            geosurface.clone(),
-            anchor_point_iso,
-            &PortType::Input,
-        )?;
-        self.update_surface("output_1", geosurface, anchor_point_iso, &PortType::Output)?;
-        Ok(())
+        self.install_geometry(&["input_1"], &["output_1"])
     }
 }
 impl AnalysisGhostFocus for ThinMirror {
@@ -294,6 +273,10 @@ mod test {
     #[test]
     fn set_aperture() {
         test_set_aperture::<ThinMirror>("input_1", "output_1");
+    }
+    #[test]
+    fn reflects_completely() {
+        test_reflects_completely::<ThinMirror>();
     }
     #[test]
     fn inverted() -> OpmResult<()> {

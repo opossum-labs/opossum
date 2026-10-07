@@ -14,6 +14,7 @@ use crate::{
         NodeAttr, NodeAttrExt, OpticNode, OpticPorts, OpticRef, PortType, node_attr::HasNodeAttr,
     },
     error::{OpmResult, OpossumError},
+    geometry::Geometry,
     light::{
         Rays,
         lightdata::{LightData, light_data_builder::LightDataBuilder},
@@ -995,6 +996,9 @@ impl NodeGroup {
 }
 
 impl OpticNode for NodeGroup {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(None)
+    }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
         let ports_to_be_set = self.node_attr.raw_ports();

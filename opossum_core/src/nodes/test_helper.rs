@@ -7,27 +7,65 @@ pub mod test_helper {
             raytrace::AnalysisRayTrace,
         },
         apertures::{ApertureShape, ApertureType, CircleShape, GaussianShape},
+        coatings::{CoatingConstantR, CoatingType},
         core_optics::{
-            NodeAttrExt, OpticNode, OpticNodeExt, OpticRef, PortType, Volumetric,
-            node_attr::NodePositioning,
+            NodeAttrExt, OpticNode, OpticNodeExt, OpticPorts, OpticRef, PortType, Volumetric,
+            node_attr::NodePositioning, optic_surface::OpticSurface,
         },
         distributions::position::Hexapolar,
         error::{OpmResult, OpossumError},
-        geometry::body::{Body, CLEAR_APERTURE, default_clear_aperture},
+        geometry::{
+            body::{Body, CLEAR_APERTURE, default_clear_aperture},
+            geo_surface::GeoSurfaceRef,
+        },
         joule,
         light::{LightData, LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
-        millimeter, nanometer,
+        millimeter, nanometer, percent,
         prelude::Aperture,
         properties::Proptype,
-        utils::{geom_transformation::Isometry, test_helper::test_helper::check_logs},
+        utils::{LockExt, geom_transformation::Isometry, test_helper::test_helper::check_logs},
     };
     use approx::assert_abs_diff_eq;
-    use nalgebra::{Point3, Vector3};
+    use nalgebra::{Point2, Point3, Vector3};
+    use std::sync::Arc;
     use uom::si::{energy::joule, f64::Length, length::millimeter};
+    /// Assert that a node can be inverted and that reverting the inversion restores its ports.
+    ///
+    /// The surfaces of the inverted node are rebuilt in between, as loading a file, positioning and
+    /// alignment do: that must leave the node's stored ports physical.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node cannot be inverted or its surfaces cannot be built.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node does not report being inverted, if its stored ports change or if
+    /// reverting the inversion does not restore its ports.
     pub fn test_inverted<T: Default + OpticNode>() -> OpmResult<()> {
+        let names = |ports: &OpticPorts| {
+            (
+                ports.names(&PortType::Input),
+                ports.names(&PortType::Output),
+            )
+        };
         let mut node = T::default();
+        let upright = names(&node.ports());
+        let stored = names(node.node_attr().raw_ports());
         node.set_inverted(true)?;
         assert_eq!(node.inverted(), true);
+        node.update_surfaces()?;
+        assert_eq!(
+            names(node.node_attr().raw_ports()),
+            stored,
+            "the stored ports of an inverted node must stay physical"
+        );
+        node.set_inverted(false)?;
+        assert_eq!(
+            names(&node.ports()),
+            upright,
+            "reverting the inversion must restore the ports"
+        );
         Ok(())
     }
     pub fn test_set_aperture<T: Default + OpticNode>(
@@ -60,6 +98,25 @@ pub mod test_helper {
             node.set_aperture(&PortType::Output, "no port", &aperture)
                 .is_err()
         );
+    }
+    /// Assert that a node reflects completely on `input_1` and `output_1`: the ports and the
+    /// surfaces built from them carry a constant reflectivity of 100 %.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a port or its surface carries another coating.
+    pub fn test_reflects_completely<T: Default + OpticNode>() {
+        let node = T::default();
+        let full: CoatingType = CoatingConstantR::new(percent!(100.0)).unwrap().into();
+        let ports = node.ports();
+        for (port_type, name) in [(PortType::Input, "input_1"), (PortType::Output, "output_1")] {
+            assert_eq!(ports.coating(&port_type, name), Some(&full), "port {name}");
+            assert_eq!(
+                node.get_optic_surface(name).map(OpticSurface::coating),
+                Some(&full),
+                "surface {name}"
+            );
+        }
     }
     pub fn test_analyze_empty<T: Default + AnalysisEnergy>() -> OpmResult<()> {
         let mut node = T::default();
@@ -234,10 +291,11 @@ pub mod test_helper {
 
     /// Assert that the body of a volume node matches the geometry its properties describe.
     ///
-    /// The body is not configured separately: it is derived from the very surfaces
-    /// `update_surfaces()` places from the node's curvature and thickness properties. What ties the
-    /// two together is the on-axis path length — it has to come out as exactly the node's center
-    /// thickness, the same distance the entry surface → exit surface pass covers.
+    /// The body is not configured separately: it is derived from the node's geometry, the same
+    /// description of its curvature and thickness properties that `update_surfaces()` installs the
+    /// traced surfaces from. What ties the two together is the on-axis path length — it has to
+    /// come out as exactly the node's center thickness, the same distance the entry surface → exit
+    /// surface pass covers.
     ///
     /// The optical axis starts exactly on the entrance surface, so this also exercises the case of
     /// a ray originating on a bounding surface, which is how a refracted ray enters the volume.
@@ -585,6 +643,333 @@ pub mod test_helper {
             .collect::<Vec<_>>()
             .join("_");
         format!("{integer_part}.{grouped}")
+    }
+
+    /// Describe every runtime surface a node has installed, one line of text per surface.
+    ///
+    /// Input surfaces come first, then output surfaces, each sorted by port name. A line states
+    /// the port, the kind of [`GeoSurface`](crate::geometry::geo_surface::GeoSurface), the anchor
+    /// relative to the node (translation in millimeter, then its local x and z axis), the
+    /// surface's own `local_z_at` at (0, 0), (5 mm, 0) and (0, 5 mm) in millimeter - which pins
+    /// radius, sign and orientation of a curved surface - and the index of the first surface
+    /// sharing the same geometric surface. Values are rounded to 1e-6, so the order in which
+    /// isometries are composed cannot show up.
+    ///
+    /// # Arguments
+    ///
+    /// * `node` - the node whose surfaces are described.
+    ///
+    /// # Returns
+    ///
+    /// One line per installed surface.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the mutex of a geometric surface cannot be locked.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a geometric surface is not placed at the node's effective isometry followed by
+    /// its anchor.
+    pub fn surface_snapshot<T: OpticNode + ?Sized>(node: &T) -> OpmResult<Vec<String>> {
+        let runtime = node.node_attr().runtime_surfaces();
+        let surfaces = runtime
+            .inputs
+            .iter()
+            .map(|(name, surface)| ("in", name, surface))
+            .chain(
+                runtime
+                    .outputs
+                    .iter()
+                    .map(|(name, surface)| ("out", name, surface)),
+            )
+            .map(|(port_type, name, surface)| {
+                (
+                    port_type,
+                    name.as_str(),
+                    surface.geo_surface(),
+                    *surface.anchor_point_iso(),
+                )
+            })
+            .collect::<Vec<_>>();
+        describe_surfaces(node, &surfaces)
+    }
+
+    /// Describe the surfaces a node's [`Geometry`](crate::geometry::Geometry) builds, in the
+    /// format of [`surface_snapshot`] and under the port names the node has installed: the
+    /// entrance surface under every input port, the exit surface under every output port.
+    ///
+    /// Comparing the two snapshots shows whether the geometry describes exactly the surfaces the
+    /// node installs.
+    ///
+    /// # Arguments
+    ///
+    /// * `node` - the node whose geometry is described.
+    ///
+    /// # Returns
+    ///
+    /// One line per port with an installed surface; no line at all for a node without geometry.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the geometry cannot be derived or built.
+    ///
+    /// # Panics
+    ///
+    /// See [`surface_snapshot`].
+    pub fn geometry_snapshot<T: OpticNode + ?Sized>(node: &T) -> OpmResult<Vec<String>> {
+        let Some(geometry) = node.geometry()? else {
+            return Ok(Vec::new());
+        };
+        let node_iso = node.effective_node_iso().unwrap_or_else(Isometry::identity);
+        let ((entrance, entrance_anchor), (exit, exit_anchor)) =
+            geometry.entrance_and_exit(&node_iso)?;
+        let runtime = node.node_attr().runtime_surfaces();
+        let surfaces = runtime
+            .inputs
+            .keys()
+            .map(|name| ("in", name.as_str(), entrance.clone(), entrance_anchor))
+            .chain(
+                runtime
+                    .outputs
+                    .keys()
+                    .map(|name| ("out", name.as_str(), exit.clone(), exit_anchor)),
+            )
+            .collect::<Vec<_>>();
+        describe_surfaces(node, &surfaces)
+    }
+
+    /// Describe surfaces one line each, as documented at [`surface_snapshot`].
+    ///
+    /// # Arguments
+    ///
+    /// * `node` - the node the surfaces belong to.
+    /// * `surfaces` - port type, port name, geometric surface and anchor of each surface.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the mutex of a geometric surface cannot be locked.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a geometric surface is not placed at the node's effective isometry followed by
+    /// its anchor.
+    fn describe_surfaces<T: OpticNode + ?Sized>(
+        node: &T,
+        surfaces: &[(&str, &str, GeoSurfaceRef, Isometry)],
+    ) -> OpmResult<Vec<String>> {
+        let node_iso = node.effective_node_iso().unwrap_or_else(Isometry::identity);
+        let mut lines = Vec::with_capacity(surfaces.len());
+        for (port_type, port_name, geo_surface, anchor) in surfaces {
+            let shared = surfaces
+                .iter()
+                .position(|(_, _, other, _)| {
+                    Arc::as_ptr(&other.0).cast::<()>() == Arc::as_ptr(&geo_surface.0).cast::<()>()
+                })
+                .expect("a surface is shared with itself");
+            let translation = anchor.translation();
+            let (name, sag) = {
+                let geo = geo_surface.0.lock_opm()?;
+                assert_same_isometry(geo.isometry(), &node_iso.append(anchor), port_name);
+                let sag = [(0.0, 0.0), (5.0, 0.0), (0.0, 5.0)].map(|(x, y)| {
+                    geo.local_z_at(&Point2::new(millimeter!(x), millimeter!(y)))
+                        .map_or_else(|| "none".to_owned(), |z| rounded(z.get::<millimeter>()))
+                });
+                (geo.name().to_owned(), sag.join(", "))
+            };
+            lines.push(format!(
+                "{port_type} {port_name}: {name} t=({}, {}, {}) x={} z={} sag=({sag}) shared={shared}",
+                rounded(translation.x.get::<millimeter>()),
+                rounded(translation.y.get::<millimeter>()),
+                rounded(translation.z.get::<millimeter>()),
+                rounded_vector(&anchor.transform_vector_f64(&Vector3::x())),
+                rounded_vector(&anchor.transform_vector_f64(&Vector3::z())),
+            ));
+        }
+        Ok(lines)
+    }
+
+    /// Compare labelled snapshots against the ones recorded when the behaviour was last accepted.
+    ///
+    /// Both tables are compared as a whole, so a failure reports every deviating entry at once.
+    ///
+    /// # Arguments
+    ///
+    /// * `actual` - pairs of label and snapshot (see [`surface_snapshot`] or [`body_snapshot`])
+    ///   from the current run, sorted by label.
+    /// * `expected` - the recorded reference, sorted by label.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the tables differ. The panic message contains the current table as a paste-ready
+    /// literal, so an intentional change of behaviour can be re-baselined directly.
+    pub fn assert_snapshots(actual: &[(&str, Vec<String>)], expected: &[(&str, &[&str])]) {
+        let matches = actual.len() == expected.len()
+            && actual.iter().zip(expected).all(
+                |((actual_label, actual_lines), (expected_label, expected_lines))| {
+                    actual_label == expected_label
+                        && actual_lines
+                            .iter()
+                            .map(String::as_str)
+                            .eq(expected_lines.iter().copied())
+                },
+            );
+        let table = actual
+            .iter()
+            .map(|(label, lines)| {
+                let lines = lines
+                    .iter()
+                    .map(|line| format!("\n                    \"{line}\","))
+                    .collect::<String>();
+                format!("            (\n                \"{label}\",\n                &[{lines}\n                ],\n            ),")
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            matches,
+            "snapshots deviate from the recorded reference.\ncurrent values:\n{table}"
+        );
+    }
+
+    /// Describe everything a gain or absorption model reads from a volume body.
+    ///
+    /// One line each for the body's frame (translation in millimeter, local x and z axis) and its
+    /// bounding box, one line per chord of a set of straight and oblique rays through it, and one
+    /// line marking which points of a grid lie inside it (`#`) or not (`.`). Rays and points are
+    /// stated in the node's frame, so the same component gives the same chords wherever it is
+    /// placed. Values are rounded as by [`surface_snapshot`].
+    ///
+    /// # Arguments
+    ///
+    /// * `body` - the body to describe.
+    /// * `node_frame` - the placement of the node the body belongs to.
+    ///
+    /// # Returns
+    ///
+    /// The lines describing the body.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the body cannot answer one of the questions.
+    pub fn body_snapshot(body: &dyn Body, node_frame: &Isometry) -> OpmResult<Vec<String>> {
+        let frame = body.isometry();
+        let translation = frame.translation();
+        let range = |range: std::ops::Range<Length>| {
+            format!(
+                "[{}, {}]",
+                rounded(range.start.get::<millimeter>()),
+                rounded(range.end.get::<millimeter>())
+            )
+        };
+        // A body whose extent cannot be determined is recorded as such rather than aborting.
+        let bounds = body.bounding_box().map_or_else(
+            |error| format!("box: {error}"),
+            |bounds| {
+                format!(
+                    "box x={} y={} z={}",
+                    range(bounds.x_range()),
+                    range(bounds.y_range()),
+                    range(bounds.z_range())
+                )
+            },
+        );
+        let mut lines = vec![
+            format!(
+                "frame t=({}, {}, {}) x={} z={}",
+                rounded(translation.x.get::<millimeter>()),
+                rounded(translation.y.get::<millimeter>()),
+                rounded(translation.z.get::<millimeter>()),
+                rounded_vector(&frame.transform_vector_f64(&Vector3::x())),
+                rounded_vector(&frame.transform_vector_f64(&Vector3::z())),
+            ),
+            bounds,
+        ];
+        for (x, y) in [
+            (0.0, 0.0),
+            (5.0, 0.0),
+            (0.0, 5.0),
+            (-8.0, 3.0),
+            (12.4, 0.0),
+            (12.6, 0.0),
+        ] {
+            for tilt in [0.0_f64, 10.0] {
+                let direction = Vector3::new(0.0, tilt.to_radians().sin(), tilt.to_radians().cos());
+                let ray = Ray::new(
+                    Point3::new(millimeter!(x), millimeter!(y), millimeter!(-50.0)),
+                    direction,
+                    nanometer!(1053.0),
+                    joule!(1.0),
+                )?
+                .transformed_ray(node_frame);
+                let chord = body
+                    .path_length_inside(&ray)?
+                    .map_or_else(|| "none".to_owned(), |l| rounded(l.get::<millimeter>()));
+                lines.push(format!("chord from ({x}, {y}) at {tilt} deg: {chord}"));
+            }
+        }
+        let mut inside = String::new();
+        for x in [-12.6, -12.4, 0.0, 6.0, 12.4, 12.6] {
+            for y in [0.0, 7.0] {
+                for z in [-0.5, 0.5, 2.5, 4.5, 5.5, 9.5, 10.5] {
+                    let point = node_frame.transform_point(&millimeter!(x, y, z));
+                    inside.push(if body.contains(&point)? { '#' } else { '.' });
+                }
+            }
+        }
+        lines.push(format!("inside: {inside}"));
+        Ok(lines)
+    }
+
+    /// Assert that two isometries describe the same placement up to numerical noise.
+    ///
+    /// # Arguments
+    ///
+    /// * `actual` - the placement found.
+    /// * `expected` - the placement required.
+    /// * `surface_name` - the surface being checked, for the failure message.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the two placements differ by more than 1e-12 m or 1e-12 rad.
+    fn assert_same_isometry(actual: &Isometry, expected: &Isometry, surface_name: &str) {
+        let difference = expected.get_inv_transform() * actual.get_transform();
+        assert!(
+            difference.translation.vector.norm() < 1e-12
+                && difference.rotation.imag().norm() < 1e-12,
+            "surface '{surface_name}' is not placed at the node's isometry followed by its anchor"
+        );
+    }
+
+    /// Format a value rounded to six decimal places.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - the value to format.
+    ///
+    /// # Returns
+    ///
+    /// The rounded value; `-0.000000` is written as `0.000000`.
+    fn rounded(value: f64) -> String {
+        // Adding 0.0 turns a negative zero into a positive one.
+        format!("{:.6}", (value * 1e6).round() / 1e6 + 0.0)
+    }
+
+    /// Format a vector with every component rounded as by [`rounded`].
+    ///
+    /// # Arguments
+    ///
+    /// * `vector` - the vector to format.
+    ///
+    /// # Returns
+    ///
+    /// The components as `(x, y, z)`.
+    fn rounded_vector(vector: &Vector3<f64>) -> String {
+        format!(
+            "({}, {}, {})",
+            rounded(vector.x),
+            rounded(vector.y),
+            rounded(vector.z)
+        )
     }
 
     pub fn test_analyze_geometric_no_isometry<T: Default + AnalysisRayTrace>(

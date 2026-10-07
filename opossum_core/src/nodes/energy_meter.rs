@@ -16,6 +16,7 @@ use crate::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, SurfaceKind, node_attr::HasNodeAttr,
     },
     error::OpmResult,
+    geometry::Geometry,
     joule,
     light::LightData,
     nodes::{NodeRegistration, create_surface_properties},
@@ -190,11 +191,14 @@ impl Planar for EnergyMeter {
     }
 }
 impl OpticNode for EnergyMeter {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::plane(None)))
+    }
     fn as_surface(&self) -> Option<&dyn Planar> {
         Some(self)
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.update_flat_single_surfaces()
+        self.install_geometry(&["input_1"], &["output_1"])
     }
 
     fn reset_data(&mut self) {

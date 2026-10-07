@@ -10,6 +10,7 @@ use crate::{
     },
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, optic_node_ext::single_io_port_names},
     error::OpmResult,
+    geometry::Geometry,
     light::LightResult,
     nodes::NodeRegistration,
 };
@@ -81,8 +82,11 @@ impl AnalysisRayTrace for Dummy {
 }
 
 impl OpticNode for Dummy {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::plane(None)))
+    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.update_flat_single_surfaces()
+        self.install_geometry(&["input_1"], &["output_1"])
     }
 }
 
