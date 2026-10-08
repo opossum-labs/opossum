@@ -26,7 +26,7 @@
 //! This example demonstrates:
 //! - Defining wavelength-dependent refractive index data for HZF52 glass
 //! - Creating a spherical lens with a specified decenter
-//! - Applying a circular aperture to a lens
+//! - Giving a lens its size with a clear aperture
 //! - Connecting optical components with fixed propagation distances
 //! - Configuring a ray propagation visualizer
 //! - Adding a wavefront node to the optical system
@@ -36,15 +36,14 @@
 //! Imports:
 //! - `opossum_core::prelude::*` provides optical components, analyzers,
 //!   unit macros, and document types
-//! - `opossum_core::core_optics::{NodeAttrExt, OpticNodeExt}` provides
-//!   optical node extension traits
+//! - `opossum_core::core_optics::NodeAttrExt` provides the optical node
+//!   extension trait
+//! - `opossum_core::apertures::CircleShape` provides the shape of a lens's
+//!   clear aperture
 //! - `std::{env, path::Path}` is used to determine the output directory
 //!   and save the generated `.opm` file
 //!
-use opossum_core::{
-    core_optics::{NodeAttrExt, OpticNodeExt},
-    prelude::*,
-};
+use opossum_core::{apertures::CircleShape, core_optics::NodeAttrExt, prelude::*};
 /// Import `Path` from the standard library for working with file paths
 use std::{env, path::Path};
 /// Entry point for the program; returns `OpmResult<()>` to handle simulation errors safely
@@ -69,24 +68,19 @@ fn main() -> OpmResult<()> {
     // - 10 mm thickness
     // - HZF52 refractive index
     //
+    // - a clear aperture of 25 mm radius
+    //
     // The lens is shifted by +5 mm along the y-axis
     // using `with_decenter(...)`
-    let mut lens1 = Lens::new(
+    let lens1 = Lens::new_with_clear_aperture(
         "75 mm lens (y shifted)",
         millimeter!(122.25),
         millimeter!(-122.25),
         millimeter!(10.0),
         &refr_index_hzf52,
+        CircleShape::new(millimeter!(25.0))?.into(),
     )?
     .with_decenter(millimeter!(0.0, 5.0, 0.0))?;
-    // Define a circular aperture with a value of 25 mm
-    let aperture = Aperture::new_circle(
-        millimeter!(25.0),
-        ApertureType::Hole,
-        Some(millimeter!(0.0, 0.0)),
-    )?;
-    // Apply the aperture to the input side of the first lens
-    lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
     // Add the first lens to the optical system
     let i_pl1 = scenery.add_node(lens1)?;
     // Create the second lens aligned with the optical axis

@@ -6,7 +6,7 @@
 //! System Overview
 //! 1. One collimated line ray source
 //! 2. Two paraxial lenses ("75 mm lens" and "50 mm lens")
-//! 3. A circular aperture on the first lens's input
+//! 3. A clear aperture of 25 mm radius on the first lens, the size of that lens
 //! 4. A ray propagation visualizer after the second lens
 //! 5. A ray-tracing analyzer for the source beam
 //! 6. Saving the optical system to a file for later use
@@ -18,7 +18,7 @@
 //! - 9 rays in total
 //!
 //! This example demonstrates:
-//! - Building an optical system from paraxial lenses and an aperture
+//! - Building an optical system from paraxial lenses of a given size
 //! - Connecting components with fixed propagation distances
 //! - Attaching a visualizer to inspect ray paths
 //! - Setting up a collimated line ray source for ray tracing
@@ -28,13 +28,14 @@
 //! Imports:
 //! - `opossum_core::prelude::*` — optical components, analyzers, unit
 //!   macros, and document types
-//! - `opossum_core::core_optics::{NodeAttrExt, OpticNodeExt}` — extension
-//!   traits for setting node names and properties
+//! - `opossum_core::core_optics::NodeAttrExt` — extension trait for setting
+//!   node names and properties
+//! - `opossum_core::{apertures::CircleShape, geometry::body::CLEAR_APERTURE}`
+//!   — the shape and the property name of a lens's clear aperture
 //! - `std::{env, path::Path}` — used to find the output directory and save
 //!   the `.opm` file
 use opossum_core::{
-    core_optics::{NodeAttrExt, OpticNodeExt},
-    prelude::*,
+    apertures::CircleShape, core_optics::NodeAttrExt, geometry::body::CLEAR_APERTURE, prelude::*,
 };
 use std::{env, path::Path};
 /// Entry point of the example.
@@ -54,9 +55,11 @@ fn main() -> OpmResult<()> {
     // Create the first lens with a focal length of 75 mm.
     // This lens is part of the Kepler telescope setup.
     let mut lens1 = ParaxialSurface::new("75 mm lens", millimeter!(75.0))?;
-    let aperture = Aperture::new_circle(millimeter!(25.0), ApertureType::Hole, None)?;
-    // Attach the aperture to the first lens input.
-    lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
+    // The lens is 50 mm in diameter: its clear aperture is a circle of 25 mm radius.
+    lens1.set_property(
+        CLEAR_APERTURE,
+        ApertureShape::from(CircleShape::new(millimeter!(25.0))?).into(),
+    )?;
     // Add the first lens into the optical scene.
     let i_pl1 = scenery.add_node(lens1)?;
     // Create the second lens with a focal length of 50 mm.

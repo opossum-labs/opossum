@@ -8,7 +8,9 @@ use cambox_2w::cambox_2w;
 use hhts_input::hhts_input;
 
 use num_traits::Zero;
-use opossum_core::core_optics::OpticNodeExt;
+use opossum_core::apertures::CircleShape;
+use opossum_core::core_optics::NodeAttrExt;
+use opossum_core::geometry::body::CLEAR_APERTURE;
 use opossum_core::light::lightdata::ray_data_builder::RayDataBuilder;
 use opossum_core::prelude::*;
 use opossum_core::{
@@ -46,8 +48,8 @@ fn main() -> OpmResult<()> {
         nanometer!(300.0)..nanometer!(2000.0),
     )?;
 
-    // apertures
-    let a_1inch = Aperture::new_circle(millimeter!(12.7), ApertureType::Hole, None)?;
+    // the clear aperture of a 1-inch filter
+    let a_1inch: ApertureShape = CircleShape::new(millimeter!(12.7))?.into();
 
     let mut scenery = NodeGroup::new("HHT Sensor");
     let src = scenery.add_node(SourcePort::new("Source"))?;
@@ -143,7 +145,7 @@ fn main() -> OpmResult<()> {
             Path::new("./opossum_core/examples/hhts/FELH1000_Transmission.csv").to_path_buf(),
         )),
     )?;
-    node.set_aperture(&PortType::Input, "input_1", &a_1inch)?;
+    node.set_property(CLEAR_APERTURE, a_1inch.clone().into())?;
     let filter_1w = group_bs.add_node(node)?;
     group_bs.connect_nodes(
         bs,
@@ -163,7 +165,7 @@ fn main() -> OpmResult<()> {
             Path::new("./opossum_core/examples/hhts/FESH0700_Transmission.csv").to_path_buf(),
         )),
     )?;
-    node.set_aperture(&PortType::Input, "input_1", &a_1inch)?;
+    node.set_property(CLEAR_APERTURE, a_1inch.into())?;
     let filter_2w = group_bs.add_node(node)?;
     group_bs.connect_nodes(
         bs,

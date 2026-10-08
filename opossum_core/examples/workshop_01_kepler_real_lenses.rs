@@ -9,7 +9,7 @@
 //! 2. A wavelength-dependent refractive index material ("HZF52")
 //! 3. Two spherical lenses ("75 mm lens" and "50 mm lens") using that
 //!    material
-//! 4. A circular aperture on the first lens's input
+//! 4. A clear aperture of 25 mm radius on the first lens, the size of that lens
 //! 5. A ray propagation visualizer after the second lens
 //! 6. A ray-tracing analyzer for the source beam
 //! 7. Saving the optical system to a file for later use
@@ -23,7 +23,7 @@
 //! This example demonstrates:
 //! - Defining a wavelength-dependent refractive index material and using it
 //!   to build spherical lenses
-//! - Building an optical system from spherical lenses and an aperture
+//! - Building an optical system from spherical lenses of a given size
 //! - Connecting components with fixed propagation distances
 //! - Attaching a visualizer to inspect ray paths
 //! - Setting up a collimated line ray source for ray tracing
@@ -33,15 +33,15 @@
 //! Imports:
 //! - `opossum_core::prelude::*` — optical components, analyzers, unit
 //!   macros, and document types
-//! - `opossum_core::core_optics::{NodeAttrExt, OpticNodeExt}` — extension
-//!   traits for setting node names and properties
+//! - `opossum_core::core_optics::NodeAttrExt` — extension trait for setting
+//!   node names and properties
+//! - `opossum_core::apertures::CircleShape` — the shape of a lens's clear
+//!   aperture
 //! - `opossum_core::material::Material` — refractive index material type
 //! - `std::{env, path::Path}` — used to find the output directory and save
 //!   the `.opm` file
 use opossum_core::{
-    core_optics::{NodeAttrExt, OpticNodeExt},
-    material::Material,
-    prelude::*,
+    apertures::CircleShape, core_optics::NodeAttrExt, material::Material, prelude::*,
 };
 use std::{env, path::Path};
 
@@ -65,18 +65,16 @@ fn main() -> OpmResult<()> {
     )?;
     let mut material_hzf52: Material = refr_index_hzf52.into();
     material_hzf52.header.name = "HZF52".to_string();
-    // Create the first spherical lens with real optical parameters.
-    let mut lens1 = Lens::new(
+    // Create the first spherical lens with real optical parameters. It is 50 mm in diameter: its
+    // clear aperture is a circle of 25 mm radius.
+    let lens1 = Lens::new_with_clear_aperture(
         "75 mm lens",
         millimeter!(122.25),
         millimeter!(-122.25),
         millimeter!(10.0),
         material_hzf52.clone(),
+        CircleShape::new(millimeter!(25.0))?.into(),
     )?;
-    // Define a circular aperture.
-    let aperture = Aperture::new_circle(millimeter!(25.0), ApertureType::Hole, None)?;
-    // Attach aperture to the first lens input.
-    lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
     // Add first lens to the optical scene.
     let i_pl1 = scenery.add_node(lens1)?;
     // Create the second spherical lens of the telescope.

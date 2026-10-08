@@ -9,7 +9,7 @@
 //! 1. One two-dimensional image source
 //! 2. A fluence detector at the object plane
 //! 3. Refractive index data for HZF52 glass
-//! 4. One 75 mm spherical lens with a circular aperture
+//! 4. One 75 mm spherical lens with a clear aperture of 25 mm radius
 //! 5. One 50 mm spherical lens
 //! 6. A fluence detector before the image plane
 //! 7. A fluence detector at the image plane
@@ -21,7 +21,7 @@
 //! This example demonstrates:
 //! - How to build a Keplerian optical system using two spherical lenses
 //! - How to define wavelength-dependent refractive index data for HZF52 glass
-//! - How to apply a circular aperture to the first lens
+//! - How to give the first lens its size with a clear aperture
 //! - How to connect optical components with physical propagation distances
 //! - How to configure fluence detectors using the `Binning` estimator
 //! - How to define a two-dimensional image as a ray source
@@ -32,14 +32,17 @@
 //! Imports:
 //! - `opossum_core::prelude::*` provides optical components, analyzers,
 //!   unit macros, and document types
-//! - `opossum_core::core_optics::{NodeAttrExt, OpticNodeExt,
-//!   hit_map::fluence_estimator::FluenceEstimator}` provides optical node
-//!   extensions and the fluence estimator used by the detectors
+//! - `opossum_core::core_optics::{NodeAttrExt,
+//!   hit_map::fluence_estimator::FluenceEstimator}` provides the optical node
+//!   extension and the fluence estimator used by the detectors
+//! - `opossum_core::apertures::CircleShape` provides the shape of a lens's
+//!   clear aperture
 //! - `std::path::Path` is used to specify the input image and output
 //!   document paths
 
 use opossum_core::{
-    core_optics::{NodeAttrExt, OpticNodeExt, hit_map::fluence_estimator::FluenceEstimator},
+    apertures::CircleShape,
+    core_optics::{NodeAttrExt, hit_map::fluence_estimator::FluenceEstimator},
     prelude::*,
 };
 use std::path::Path;
@@ -67,20 +70,15 @@ fn main() -> OpmResult<()> {
         nanometer!(300.0)..nanometer!(2000.0),
     )?;
     // 4. Define the first lens: 75 mm focal length and 10 mm thickness.
-    // A circular aperture with a diameter of 25 mm is placed at its input.
-    let mut lens1 = Lens::new(
+    // Its clear aperture is a circle of 25 mm radius.
+    let lens1 = Lens::new_with_clear_aperture(
         "75 mm lens",
         millimeter!(130.0),
         millimeter!(-130.0),
         millimeter!(10.0),
         &refr_index_hzf52,
+        CircleShape::new(millimeter!(25.0))?.into(),
     )?;
-    let aperture = Aperture::new_circle(
-        millimeter!(25.0),
-        ApertureType::Hole,
-        Some(millimeter!(0.0, 0.0)),
-    )?;
-    lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
     let i_pl1 = scenery.add_node(lens1)?;
     // 5. Define the second lens: 50 mm focal length and 10 mm thickness.
     let lens2 = Lens::new(
