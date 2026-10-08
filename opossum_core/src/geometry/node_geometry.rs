@@ -339,8 +339,7 @@ impl SurfaceGeometry {
         role: RimRole,
     ) -> OpmResult<Self> {
         if let Some(cross_section) = &cross_section {
-            let reach = Rim::new(cross_section.clone(), axis).transversal_reach()?;
-            face.check_reach(reach, "surface")?;
+            face.check_reach(cross_section.transversal_reach(), "surface")?;
         }
         Ok(Self {
             axis,
@@ -431,7 +430,7 @@ impl Extruded {
         rear: Face,
         cross_section: ValidatedCrossSection,
     ) -> OpmResult<Self> {
-        let reach = Rim::new(cross_section.clone(), axis).transversal_reach()?;
+        let reach = cross_section.transversal_reach();
         front.check_reach(reach, "front face")?;
         rear.check_reach(reach, "rear face")?;
         Ok(Self {

@@ -439,7 +439,7 @@ impl Body for SurfaceBoundedBody {
         Ok(Some(distance_3d_point(&first_point, &last_point)))
     }
     fn bounding_box(&self) -> OpmResult<BoundingBox> {
-        let outline = self.rim.cross_section().get().outline()?;
+        let outline = self.rim.cross_section().outline();
         let (Some(x_range), Some(y_range)) = (
             span(outline.iter().map(|point| point.x)),
             span(outline.iter().map(|point| point.y)),
@@ -448,7 +448,7 @@ impl Body for SurfaceBoundedBody {
                 "the cross section of the body has no extent at all".into(),
             ));
         };
-        let transversal_reach = self.rim.transversal_reach()?;
+        let transversal_reach = self.rim.cross_section().transversal_reach();
         // The two surfaces are measured one after the other and never held at once: a node with a
         // single surface hands out the same `GeoSurfaceRef` twice, which would deadlock.
         let entrance_z = self.surface_z_range(&self.entrance, transversal_reach)?;

@@ -2,18 +2,17 @@
 //! The lateral boundary of a component.
 //!
 //! A component's [`GeoSurface`](crate::geometry::geo_surface::GeoSurface)s are unbounded; how far
-//! the component reaches sideways is its cross section. A [`Rim`] answers the one question both a
-//! [`Body`](crate::geometry::body::Body) and the surfaces light is traced at have to ask: does a
-//! point lie within that cross section?
+//! the component reaches sideways is its cross section. A [`Rim`] places that cross section in
+//! space and answers the one question both a [`Body`](crate::geometry::body::Body) and the
+//! surfaces light is traced at have to ask: does a point lie within it? Questions about the region
+//! itself, in its own plane, are answered by the [`ValidatedCrossSection`].
 
-use nalgebra::Point3;
-use num_traits::Zero;
+use nalgebra::{Point2, Point3};
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 use crate::{
-    error::OpmResult, meter, types::validated_type_definitions::ValidatedCrossSection,
-    utils::geom_transformation::Isometry,
+    types::validated_type_definitions::ValidatedCrossSection, utils::geom_transformation::Isometry,
 };
 
 /// The lateral boundary of a component: its cross section, extruded along an axis.
@@ -106,24 +105,8 @@ impl Rim {
     #[must_use]
     pub fn contains(&self, point: &Point3<Length>, reference: &Isometry) -> bool {
         let local_point = self.frame(reference).inverse_transform_point(point);
-        // The cross section has hard edges only, so a transmission above zero means "inside".
-        self.cross_section.get().apodize(&local_point) > 0.0
-    }
-    /// Return how far the cross section of this [`Rim`] reaches from its axis.
-    ///
-    /// # Returns
-    ///
-    /// The largest distance of a point of the cross section from the axis.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the outline of the cross section cannot be determined (see
-    /// [`Aperture::outline`](crate::apertures::Aperture::outline)).
-    pub(crate) fn transversal_reach(&self) -> OpmResult<Length> {
-        let outline = self.cross_section.get().outline()?;
-        Ok(outline.iter().fold(Length::zero(), |reach, point| {
-            Length::max(reach, meter!(point.x.value.hypot(point.y.value)))
-        }))
+        self.cross_section
+            .contains(Point2::new(local_point.x, local_point.y))
     }
 }
 
@@ -136,7 +119,6 @@ mod test {
         error::OpmResult,
         millimeter,
     };
-    use nalgebra::Point2;
 
     #[test]
     fn rim_contains_respects_a_decentred_tilted_frame() -> OpmResult<()> {
