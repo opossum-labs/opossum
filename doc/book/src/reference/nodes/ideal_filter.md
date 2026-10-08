@@ -21,3 +21,6 @@ This node represents an ideal absorptive filter. Hence it has no geometric thick
 
 - Constant: The incoming energy is attenuated by a constant (wavelength independent) factor. A value of 0.0 corresponds to a total absorption while 1.0 denotes a fully transparent filter.
 - Spectrum: The incoming energy is attenuated according to the given filter spectrum. The filter spectrum is an array of filter values (between 0.0 and 1.0) with respect to a wavelength bin.
+
+`clear aperture`
+: Transversal extent of the filter. Only rays within it are filtered. A ray outside of it follows the analyzer's missed surface strategy: with `Ignore` it passes unfiltered, with `Stop` it is lost (see [Clear aperture and port apertures](../nodes.md#clear-aperture-and-port-apertures)). Defaults to a circle of 12.5 mm radius; a shape without an edge (`Open`, Gaussian) is refused.

@@ -19,3 +19,6 @@
 
 `diffraction order`
 : The diffraction order delivered a output port `output_1`.
+
+`clear aperture`
+: Transversal extent of the grating. It decides which rays are diffracted: a ray outside of it is lost in every analysis (see [Clear aperture and port apertures](../nodes.md#clear-aperture-and-port-apertures)). Defaults to a circle of 12.5 mm radius; gratings are often rectangles. A shape without an edge (`Open`, Gaussian) is refused.

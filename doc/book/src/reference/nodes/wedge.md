@@ -33,7 +33,11 @@ or disk amplifier head.
 : Wedge angle. Angle between the front and back surface. An angle of zero corresponds to parallel surfaces.
 
 `clear aperture`
-: Transversal extent of the wedge: the size the material is actually available in. Defaults to a
-  circle of 12.5 mm radius, i.e. the usual 1 inch mount. Not to be confused with the aperture of a
-  port: a port aperture states how much light a surface transmits where, while the clear aperture
-  states where the material ends.
+: Transversal extent of the wedge: the size the material is actually available in. It decides which
+  rays hit the wedge, at both of its faces: a ray that would enter or leave through the side misses it
+  and follows the analyzer's missed surface strategy (see
+  [Clear aperture and port apertures](../nodes.md#clear-aperture-and-port-apertures)). Defaults to a
+  circle of 12.5 mm radius, i.e. the usual 1 inch mount. Choose it so that the wedge keeps a positive
+  thickness: beyond its thin edge rays miss the rear surface. A shape without an edge (`Open`,
+  Gaussian) is refused. Not to be confused with the aperture of a port: a port aperture only masks the
+  light that passed a surface, while the clear aperture states where the material ends.

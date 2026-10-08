@@ -4,7 +4,7 @@
 
 This element represents a "real" lens with spherical front and back surfaces. Furthermore, the lens consists of an optical material, which carries the refractive index model among other data. The `center thickness` denotes the distance of the front and back surfaces at symmetry axis of the lens.
 
-Besides the usual aperture definitions of the `front` and `back` surfaces, a lens might limit the aperture additionally if the front and back surfaces intersect. E.g. this is always the case for a biconvex lens. In this case, rays outside this intersection circle are clipped.
+The `clear aperture` decides which rays hit the lens (see [Clear aperture and port apertures](../nodes.md#clear-aperture-and-port-apertures)). Choose it so that the lens keeps a positive edge thickness: where the front and back surfaces would cross, e.g. beyond the rim of a thin biconvex lens, rays miss the rear surface.
 
 Since this element encloses a volume of material, it can be operated as an amplifier: a [pump scenario](../pump_scenarios.md) assigns it a gain model, and light travelling through the medium is amplified accordingly. Without such an assignment the lens is the passive component described here.
 
@@ -19,10 +19,13 @@ Since this element encloses a volume of material, it can be operated as an ampli
 
     During ray tracing analysis, incoming rays are refracted on the `front`surface according to Snellius' law of refraction.
     Inside the lens the ray propagate within the given medium. On the `rear`surface, the rays are again refracted.
+    A ray reaching a surface outside the `clear aperture` misses the lens and follows the analyzer's missed surface
+    strategy.
 
 - Ghost focus Analysis
 
-    During this analysis, the lens behaves similar to the ray tracing analysis.
+    During this analysis, the lens behaves similar to the ray tracing analysis. A ray outside the `clear aperture` passes
+    the lens unchanged.
 
 ## Ports
 
@@ -59,9 +62,10 @@ Since this element encloses a volume of material, it can be operated as an ampli
 - `clear aperture`
 
     Transversal extent of the lens: the size the material is actually available in, the figure a
-    supplier quotes next to the curvatures and the thickness. Defaults to a circle of 12.5 mm radius,
-    i.e. the usual 1 inch mount.
+    supplier quotes next to the curvatures and the thickness. It decides which rays hit the lens. Defaults
+    to a circle of 12.5 mm radius, i.e. the usual 1 inch mount. Both curvatures must reach its edge; a
+    shape without an edge (`Open`, Gaussian) is refused.
 
-    Not to be confused with the aperture of a port: a port aperture states how much light a surface
-    transmits where, while the clear aperture states where the material ends. Putting a pinhole in
-    front of a lens does not make the lens smaller.
+    Not to be confused with the aperture of a port: a port aperture only masks the light that passed a
+    surface, while the clear aperture states where the material ends. Putting a pinhole in front of a
+    lens does not make the lens smaller.

@@ -18,3 +18,6 @@ A paraxial surface represents an ideal lens which is free of geometric or chroma
 
 `focal length`
 : The focal length of this ideal lens. A positive values denotes a focussing lens.
+
+`clear aperture`
+: Transversal extent of the ideal lens. Only rays within it are focussed. A ray outside of it follows the analyzer's missed surface strategy: with `Ignore` it passes unchanged, with `Stop` it is lost (see [Clear aperture and port apertures](../nodes.md#clear-aperture-and-port-apertures)). Defaults to a circle of 12.5 mm radius. As an idealization, the paraxial surface may also be unbounded (`Open`): it then focusses every ray, however far off the axis.

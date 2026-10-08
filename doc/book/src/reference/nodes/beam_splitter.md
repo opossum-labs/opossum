@@ -45,3 +45,6 @@ During the alignment run (which precedes ray tracing and ghost-focus analysis), 
 
 - Ratio: The incoming light is split according to a fixed (wavelength-independent) transmission between 0.0 and 1.0. A value of 1.0 fully transmits both inputs (`input_1` → `out1_trans1_refl2`, `input_2` → `out2_trans2_refl1`), while a value of 0.0 fully reflects them (`input_1` → `out2_trans2_refl1`, `input_2` → `out1_trans1_refl2`).
 - Spectrum: The incoming light is split with respect to its wavelength. The provided spectrum defines a wavelength-dependent transmission between 0.0 and 1.0.
+
+`clear aperture`
+: Transversal extent of the splitting surface. Only rays within it are split. A ray outside of it, or through a hole of a stacked shape, follows the analyzer's missed surface strategy: with `Ignore` (always in a ghost focus analysis) it passes on as transmitted light, with `Stop` it is lost. A ring-shaped clear aperture therefore models a scraper mirror whose hole passes the main beam (see [Clear aperture and port apertures](../nodes.md#clear-aperture-and-port-apertures)). Defaults to a circle of 12.5 mm radius; a shape without an edge (`Open`, Gaussian) is refused.

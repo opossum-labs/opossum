@@ -76,9 +76,10 @@ In addition, nodes have a set of attributes that are common to all of them. Howe
 
    Besides the location (see previous point) an optical component has a given orientation in 3D space. This orientation is defined by angles around the axes of the global coordinate system.
 
-1. Aperture shape
+1. Clear aperture
 
-   Each real-world optical component has a limited physical / mechanical size which also determines the area of incoming light it can handle. Incoming beams farther away from the optical axis than the component's extent will simply be lost during the analysis. Hence, each node can define an aperture with different shapes (mostly circular or rectangular). The exact handling of the aperture is defined by the specific node. Without a given aperture many nodes assume an infinitely large component such that all beams are always caught.
+   Each real-world optical component has a limited transversal size, which decides the light it can catch. Nodes state it
+   in their `clear aperture` property, see [Clear aperture and port apertures](#clear-aperture-and-port-apertures).
 
 1. 3D mechanical model
 
@@ -87,6 +88,46 @@ In addition, nodes have a set of attributes that are common to all of them. Howe
 1. Surface definitions
 
    For both, sequential and non-sequential analysis, surface properties such as coating or roughness which define the way light will be reflected or propagated through should be defined. *This could also be modeled using basic nodes*
+
+## Clear aperture and port apertures
+
+Every component that light hits has a transversal size, its `clear aperture`: the size the material or the coated
+surface is actually available in, the figure a supplier quotes. The clear aperture decides which rays hit the component.
+A ray that reaches the surface outside of it misses the component. What happens to that ray depends on the analysis:
+
+- **Ray tracing** follows its `missed surface strategy` (see [Analyzers](analyzers.md)): with `Stop`, the default, the
+  ray is lost; with `Ignore` it passes the component unchanged.
+- **Ghost focus** analysis always lets it pass unchanged.
+- **Energy** analysis traces no rays and ignores all apertures.
+
+A mirror, a parabolic mirror and a grating only reflect: a ray that misses them has no way on and is lost in every
+analysis. A ray outside the clear aperture of a beam splitter, or through a hole in it as on a scraper mirror, follows
+the strategy above: with `Ignore` it passes on as transmitted light, with `Stop` it is lost.
+
+**Shapes.** A component needs a shape with an edge: a circle, a rectangle, a polygon, or a stack of such shapes holding
+at least one hole, e.g. a ring or a mirror with a central bore. The default is a circle of 12.5 mm radius, the usual
+1 inch mount. The clear aperture lies in the plane perpendicular to the component's axis and extends along that axis:
+for a rod cut at Brewster's angle it is the cross section of the rod, as its manufacturer states it. An off-axis
+parabola measures it parallel to its parent axis, as catalogs do. A curved surface has to reach the edge of the clear
+aperture, so its radius of curvature cannot be smaller than the largest distance of that edge from the axis. The edge
+thickness of a lens or a wedge is not checked: where its surfaces would cross, rays miss the rear surface.
+
+**Detectors** let all light pass. Their clear aperture is the window they record within, unbounded (`Open`) by
+default. Light outside a set window passes on unrecorded, and the log and the report warn about it. The
+[paraxial surface](nodes/paraxial_surface.md) is an idealization and may be unbounded as well.
+
+**Port apertures** are an additional mask on the light that passed a surface, e.g. a soft Gaussian apodization. They
+never decide whether a ray hits a component: they act only on rays that did. In the `Node Editor` they are found under
+each port as `Aperture (additional mask)`.
+
+**Alignment.** The component alignment run (see [Geometry](../concepts/geometry.md)) respects clear apertures too: if
+the optical axis misses the clear aperture of a component, the alignment stops with an error naming that node. At a
+detector it only warns that the measurement may fail. Port apertures do not act during the alignment run.
+
+**Older model files** are upgraded when they are read. A centered hole at the input port that gave a component its
+size becomes its clear aperture, and the port apertures that carried that hole are opened. A clear aperture that a curvature cannot
+reach is reduced to fit. Components that had no such hole get the default of 12.5 mm. The log lists what was changed;
+saving the model writes the upgraded version.
 
 ## Analysis interface
 
