@@ -42,7 +42,7 @@ pub type PlacedSurface = (GeoSurfaceRef, Isometry);
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Geometry {
     /// A single surface without thickness, such as a thin mirror, a grating or a detector.
-    Surface(SurfaceGeometry),
+    Surface(Box<SurfaceGeometry>),
     /// A component enclosing a volume of material.
     Solid(Solid),
 }
@@ -148,12 +148,12 @@ impl Geometry {
         vertex: Isometry,
         cross_section: Option<ValidatedCrossSection>,
     ) -> OpmResult<Self> {
-        Ok(Self::Surface(SurfaceGeometry::new(
+        Ok(Self::Surface(Box::new(SurfaceGeometry::new(
             axis,
             Face::new(shape, vertex),
             cross_section,
             RimRole::Edge,
-        )?))
+        )?)))
     }
     /// A detector: a surface at the node that records the light within its cross section and lets
     /// all of it pass (see [`RimRole::Window`]).
@@ -170,12 +170,12 @@ impl Geometry {
         shape: SurfaceShape,
         cross_section: Option<ValidatedCrossSection>,
     ) -> OpmResult<Self> {
-        Ok(Self::Surface(SurfaceGeometry::new(
+        Ok(Self::Surface(Box::new(SurfaceGeometry::new(
             Isometry::identity(),
             Face::new(shape, Isometry::identity()),
             cross_section,
             RimRole::Window,
-        )?))
+        )?)))
     }
     /// A flat surface at the node itself.
     ///
@@ -185,12 +185,12 @@ impl Geometry {
     #[must_use]
     pub fn plane(cross_section: Option<ValidatedCrossSection>) -> Self {
         // A plane reaches every cross section, so nothing is left to check.
-        Self::Surface(SurfaceGeometry {
+        Self::Surface(Box::new(SurfaceGeometry {
             axis: Isometry::identity(),
             face: Face::new(SurfaceShape::Plane, Isometry::identity()),
             cross_section,
             role: RimRole::Edge,
-        })
+        }))
     }
     /// An extruded solid along the node's own axis whose front vertex sits at the node.
     ///
@@ -210,12 +210,12 @@ impl Geometry {
         rear_vertex: Isometry,
         cross_section: ValidatedCrossSection,
     ) -> OpmResult<Self> {
-        Ok(Self::Solid(Solid::Extruded(Extruded::new(
+        Ok(Self::Solid(Solid::Extruded(Box::new(Extruded::new(
             Isometry::identity(),
             Face::new(front, Isometry::identity()),
             Face::new(rear, rear_vertex),
             cross_section,
-        )?)))
+        )?))))
     }
     /// Build the surfaces light enters and leaves through.
     ///
@@ -354,7 +354,7 @@ impl SurfaceGeometry {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Solid {
     /// Two faces capping a profile extruded along an axis.
-    Extruded(Extruded),
+    Extruded(Box<Extruded>),
     /// The intersection of the inner sides of several faces.
     Parametric(ParametricSolid),
     /// Several solids sharing interfaces.
@@ -820,8 +820,8 @@ mod test {
             ),
             circle()?,
         )?;
-        let ((_, front), (_, rear)) =
-            Geometry::Solid(Solid::Extruded(extruded)).entrance_and_exit(&Isometry::identity())?;
+        let ((_, front), (_, rear)) = Geometry::Solid(Solid::Extruded(Box::new(extruded)))
+            .entrance_and_exit(&Isometry::identity())?;
         assert_eq!(front, axis);
         assert_eq!(
             rear,
@@ -910,7 +910,7 @@ mod test {
             Some(Rim::new(circle()?, Isometry::identity()))
         );
         let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
-        let extruded = Geometry::Solid(Solid::Extruded(Extruded::new(
+        let extruded = Geometry::Solid(Solid::Extruded(Box::new(Extruded::new(
             axis,
             Face::new(SurfaceShape::Plane, Isometry::identity()),
             Face::new(
@@ -918,7 +918,7 @@ mod test {
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),
             circle()?,
-        )?));
+        )?)));
         assert_eq!(extruded.rim()?, Some(Rim::new(circle()?, axis)));
         Ok(())
     }
@@ -939,7 +939,7 @@ mod test {
             circle()?,
         )?;
         let node_frame = Isometry::new(millimeter!(0.0, 5.0, 0.0), degree!(0.0, 0.0, 0.0))?;
-        let body = Geometry::Solid(Solid::Extruded(extruded)).body(&node_frame)?;
+        let body = Geometry::Solid(Solid::Extruded(Box::new(extruded))).body(&node_frame)?;
         assert_eq!(*body.isometry(), node_frame.append(&axis));
         // halfway along the extrusion axis, which runs along the node's x axis
         let halfway = node_frame

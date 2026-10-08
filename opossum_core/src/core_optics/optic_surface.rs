@@ -164,9 +164,11 @@ impl OpticSurface {
             return Ok(intersection);
         };
         let node_frame = self.node_frame(&*geo_surface);
-        Ok(intersection.filter(|(point, _)| {
+        let hit = intersection.filter(|(point, _)| {
             rim.contains(point, &node_frame) && geo_surface.is_on_vertex_sheet(point)
-        }))
+        });
+        drop(geo_surface);
+        Ok(hit)
     }
     /// Return whether this [`OpticSurface`] records a hit at the given point.
     ///

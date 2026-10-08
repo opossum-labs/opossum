@@ -116,7 +116,7 @@ pub(super) fn read(file_string: &str) -> OpmResult<OpmDocument> {
 ///
 /// This function returns an error if a property of the node cannot be set or its geometry cannot
 /// be derived.
-pub(crate) fn upgrade_node(node: &mut dyn OpticNode) -> OpmResult<()> {
+pub fn upgrade_node(node: &mut dyn OpticNode) -> OpmResult<()> {
     if UPGRADING_FROM.get().is_some_and(|version| version < 1) {
         upgrade_node_from_0(node)?;
     }
