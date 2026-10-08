@@ -55,7 +55,7 @@ pub fn PortConfigEditor(
     // resolves, so opening it any earlier is a silent no-op. Reading the resource with `.read()` (not
     // `.read_unchecked()`) subscribes the effect, so it re-runs the moment the ports resolve - which is
     // what makes this reliable across a preceding re-fetch (e.g. an invert that swapped the port set).
-    // Also expands each port's own sub-accordion, plus its nested Aperture Configuration accordion, so
+    // Also expands each port's own sub-accordion, plus its nested aperture accordion, so
     // the reverted value isn't hidden behind a collapsed row.
     use_effect(move || {
         let Some((uuid, panel)) = *crate::PENDING_PANEL_OPEN.read() else {

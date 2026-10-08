@@ -162,7 +162,7 @@ pub fn ApertureEditor(
             id: "accordionApertureConfig{port_name}",
             AccordionItem {
                 elements: aperture_inputs,
-                header: "Aperture Configuration",
+                header: "Aperture (additional mask)",
                 header_id: "apertureConfigHeading{port_name}",
                 parent_id: "accordionApertureConfig{port_name}",
                 content_id: "apertureConfigCollapse{port_name}",
