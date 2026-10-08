@@ -7,7 +7,8 @@ use crate::{
         raytrace::AnalysisRayTrace,
     },
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, optic_surface::OpticSurface,
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, optic_node::APERTURE_LIMIT_NOTE,
+        optic_surface::OpticSurface,
     },
     error::OpmResult,
     geometry::{Geometry, SurfaceShape},
@@ -179,10 +180,7 @@ impl OpticNode for SpotDiagram {
         };
 
         if self.apodization_warning {
-            report.add_note(ReportNote::new(
-                ReportLevel::Warning,
-                "Rays have been apodized at input aperture. Results might not be accurate.",
-            ));
+            report.add_note(ReportNote::new(ReportLevel::Warning, APERTURE_LIMIT_NOTE));
         }
 
         Ok(NodeReportResult::Report(report))
@@ -593,7 +591,7 @@ mod test {
         let notes = node_report.notes();
         assert_eq!(notes.len(), 1);
         assert_eq!(notes[0].level, ReportLevel::Warning);
-        assert!(notes[0].message.contains("apodized"));
+        assert_eq!(notes[0].message, APERTURE_LIMIT_NOTE);
         Ok(())
     }
     #[test]

@@ -9,7 +9,7 @@ use crate::{
     },
     core_optics::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt,
-        hit_map::fluence_estimator::FluenceEstimator,
+        hit_map::fluence_estimator::FluenceEstimator, optic_node::APERTURE_LIMIT_NOTE,
     },
     error::OpmResult,
     geometry::{Geometry, SurfaceShape},
@@ -147,8 +147,7 @@ impl OpticNode for FluenceDetector {
                 props.create(
                     "Warning",
                     "warning during analysis",
-                    "Rays have been apodized at input aperture. Results might not be accurate."
-                        .into(),
+                    APERTURE_LIMIT_NOTE.into(),
                 )?;
             }
         } else {

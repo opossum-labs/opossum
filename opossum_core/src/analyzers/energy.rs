@@ -175,7 +175,7 @@ pub trait AnalysisEnergy: OpticNode {
         if apodized {
             self.set_apodization_warning(true);
             log::warn!(
-                "Rays have been apodized at input aperture of '{}' ({}). Results might not be accurate.",
+                "'{}' ({}) has a port aperture, which the energy analysis does not apply. Results might not be accurate.",
                 self.node_attr().name(),
                 self.node_type()
             );
@@ -187,14 +187,21 @@ pub trait AnalysisEnergy: OpticNode {
 
 #[cfg(test)]
 mod test {
-    use super::EnergyAnalyzer;
+    use super::{AnalysisEnergy, EnergyAnalyzer};
     use crate::{
         analyzers::{Analyzer, energy::EnergyConfig},
+        apertures::{Aperture, ApertureShape, ApertureType, CircleShape},
+        core_optics::{OpticNodeExt, PortType},
         error::OpmResult,
         joule,
-        light::lightdata::energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
-        nanometer,
+        light::{
+            LightData, LightResult,
+            lightdata::energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
+            spectrum_helper::create_he_ne_spec,
+        },
+        millimeter, nanometer,
         nodes::{EnergyMeter, NodeGroup, SourcePort},
+        utils::test_helper::helper::check_logs,
     };
     use num_traits::Zero;
     use uom::si::f64::Length;
@@ -293,6 +300,36 @@ mod test {
 
         assert!(config.get_source(&node_id).is_some());
         assert!(config.get_source(&uuid2).is_none());
+        Ok(())
+    }
+    #[test]
+    fn a_port_aperture_is_passed_over_with_a_warning() -> OpmResult<()> {
+        let mut meter = EnergyMeter::default();
+        meter.set_aperture(
+            &PortType::Input,
+            "input_1",
+            &Aperture::new(
+                ApertureShape::BinaryCircle(CircleShape::new(millimeter!(1.0))?),
+                ApertureType::Hole,
+                None,
+                None,
+            )?,
+        )?;
+        let input = LightData::Energy(create_he_ne_spec(1.0)?);
+        testing_logger::setup();
+        let output = AnalysisEnergy::analyze(
+            &mut meter,
+            LightResult::from([("input_1".into(), input.clone())]),
+            &EnergyConfig::default(),
+        )?;
+        assert_eq!(output.get("output_1"), Some(&input), "no energy is cut");
+        check_logs(
+            log::Level::Warn,
+            vec![
+                "'energy meter' (energy meter) has a port aperture, which the energy analysis does not apply. Results might not be accurate.",
+            ],
+        );
+        assert!(meter.has_apodization_warning());
         Ok(())
     }
 }

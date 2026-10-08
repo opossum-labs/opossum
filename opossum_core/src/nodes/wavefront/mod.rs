@@ -9,7 +9,9 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType},
+    core_optics::{
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, optic_node::APERTURE_LIMIT_NOTE,
+    },
     error::{OpmResult, OpossumError},
     geometry::{Geometry, SurfaceShape},
     light::{LightData, LightResult},
@@ -189,8 +191,7 @@ impl OpticNode for WaveFront {
                     props.create(
                         "Warning",
                         "warning during analysis",
-                        "Rays have been apodized at input aperture. Results might not be accurate."
-                            .into(),
+                        APERTURE_LIMIT_NOTE.into(),
                     )?;
                 }
             } else {

@@ -19,7 +19,9 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt},
+    core_optics::{
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, optic_node::APERTURE_LIMIT_NOTE,
+    },
     error::{OpmResult, OpossumError},
     geometry::Geometry,
     light::{LightData, LightResult, Spectrum},
@@ -147,10 +149,7 @@ impl OpticNode for RayPropagationVisualizer {
             report = NodeReport::new(self.node_type(), self.name(), uuid, props);
 
             if self.apodization_warning {
-                report.add_note(ReportNote::new(
-                    ReportLevel::Warning,
-                    "Rays have been apodized at input aperture. Results might not be accurate.",
-                ));
+                report.add_note(ReportNote::new(ReportLevel::Warning, APERTURE_LIMIT_NOTE));
             }
         }
 
@@ -534,7 +533,7 @@ mod test {
             node_report.notes()[0].level,
             crate::reporting::report_note::ReportLevel::Warning
         );
-        assert!(node_report.notes()[0].message.contains("apodized"));
+        assert_eq!(node_report.notes()[0].message, APERTURE_LIMIT_NOTE);
 
         // Test Energy Data Warning
         fd.set_apodization_warning(false);

@@ -12,7 +12,10 @@ use crate::{
         AnalyzerKind, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, node_attr::HasNodeAttr},
+    core_optics::{
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, node_attr::HasNodeAttr,
+        optic_node::APERTURE_LIMIT_NOTE,
+    },
     error::OpmResult,
     geometry::{Geometry, SurfaceShape},
     joule,
@@ -215,10 +218,7 @@ impl OpticNode for EnergyMeter {
         let mut report = NodeReport::new(self.node_type(), self.name(), uuid, props);
 
         if self.apodization_warning {
-            report.add_note(ReportNote::new(
-                ReportLevel::Warning,
-                "Rays have been apodized at input aperture. Results might not be accurate.",
-            ));
+            report.add_note(ReportNote::new(ReportLevel::Warning, APERTURE_LIMIT_NOTE));
         }
         Ok(NodeReportResult::Report(report))
     }

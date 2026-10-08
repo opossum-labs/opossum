@@ -8,7 +8,9 @@ use crate::{
         AnalyzerKind, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt},
+    core_optics::{
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, optic_node::APERTURE_LIMIT_NOTE,
+    },
     error::OpmResult,
     geometry::{Geometry, SurfaceShape},
     light::{LightData, Rays, Spectrum},
@@ -189,7 +191,7 @@ impl OpticNode for Spectrometer {
         if self.apodization_warning {
             report.add_note(crate::reporting::report_note::ReportNote::new(
                 crate::reporting::report_note::ReportLevel::Warning,
-                "Rays have been apodized at input aperture. Results might not be accurate.",
+                APERTURE_LIMIT_NOTE,
             ));
         }
 
