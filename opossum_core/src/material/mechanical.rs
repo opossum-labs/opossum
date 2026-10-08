@@ -8,11 +8,11 @@ use uom::si::f64::{MassDensity, Pressure};
 pub struct MechanicalProperties {
     /// Mass density
     #[serde(default)]
-    density: Option<MassDensity>,
+    pub density: Option<MassDensity>,
 
     /// Young's modulus
     #[serde(default)]
-    youngs_modulus: Option<Pressure>,
+    pub youngs_modulus: Option<Pressure>,
 }
 
 impl MechanicalProperties {
