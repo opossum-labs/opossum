@@ -40,24 +40,28 @@ fn main() -> OpmResult<()> {
     let ar_coating = &CoatingConstantR::new(percent!(1.0))?.into();
     // the clear aperture of a 2-inch lens
     let a_2inch: ApertureShape = CircleShape::new(millimeter!(25.4))?.into();
+    // the front lenses take the full beam of 100 mm radius and are 250 mm in diameter
+    let front_lens: ApertureShape = CircleShape::new(millimeter!(125.0))?.into();
 
     let mut scenery = NodeGroup::new("HHT Sensor Telescope T1");
     let src = scenery.add_node(SourcePort::new("Collimated Source"))?;
     let mut telescope = NodeGroup::new("HHT Sensor Telescope T1");
 
-    let t1_l1a = telescope.add_node(Lens::new(
+    let t1_l1a = telescope.add_node(Lens::new_with_clear_aperture(
         "T1 L1a",
         millimeter!(518.34008),
         millimeter!(-847.40402),
         millimeter!(30.0),
         &refr_index_hk9l,
+        front_lens.clone(),
     )?)?;
-    let t1_l1b = telescope.add_node(Lens::new(
+    let t1_l1b = telescope.add_node(Lens::new_with_clear_aperture(
         "T1 L1b",
         millimeter!(-788.45031),
         millimeter!(-2551.88619),
         millimeter!(21.66602),
         &refr_index_hzf52,
+        front_lens,
     )?)?;
     let mut node = Lens::new_with_clear_aperture(
         "T1 L2a",

@@ -1,14 +1,17 @@
-use opossum_core::prelude::*;
+use opossum_core::{apertures::CircleShape, prelude::*};
 use std::path::Path;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
     let i_src = scenery.add_node(SourcePort::new("collimated line ray source"))?;
-    let i_l1 = scenery.add_node(Lens::new(
+    // Tilted by 5°, the mirror sends the light back through the lens up to 26 mm off its axis: the
+    // lens is 56 mm in diameter and still 2 mm thick at its edge.
+    let i_l1 = scenery.add_node(Lens::new_with_clear_aperture(
         "lens",
         millimeter!(100.0),
         millimeter!(-100.0),
         millimeter!(10.0),
         RefrIndexConst::new(1.5)?,
+        CircleShape::new(millimeter!(28.0))?.into(),
     )?)?;
     let i_m2 = scenery.add_node(ThinMirror::new("mirror").with_tilt(degree!(5.0, 0.0, 0.0))?)?;
     let mut l1_ref = NodeReference::from_node(&scenery.node(i_l1)?)?;

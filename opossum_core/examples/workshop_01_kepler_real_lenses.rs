@@ -9,7 +9,7 @@
 //! 2. A wavelength-dependent refractive index material ("HZF52")
 //! 3. Two spherical lenses ("75 mm lens" and "50 mm lens") using that
 //!    material
-//! 4. A clear aperture of 25 mm radius on the first lens, the size of that lens
+//! 4. A clear aperture of 25 mm radius on both lenses, the size of the lenses
 //! 5. A ray propagation visualizer after the second lens
 //! 6. A ray-tracing analyzer for the source beam
 //! 7. Saving the optical system to a file for later use
@@ -77,13 +77,14 @@ fn main() -> OpmResult<()> {
     )?;
     // Add first lens to the optical scene.
     let i_pl1 = scenery.add_node(lens1)?;
-    // Create the second spherical lens of the telescope.
-    let lens2 = Lens::new(
+    // Create the second spherical lens of the telescope, of the same size as the first one.
+    let lens2 = Lens::new_with_clear_aperture(
         "50 mm lens",
         millimeter!(100.0),
         millimeter!(-100.0),
         millimeter!(10.0),
         material_hzf52,
+        CircleShape::new(millimeter!(25.0))?.into(),
     )?;
     // Add second lens to the scene.
     let i_pl2 = scenery.add_node(lens2)?;

@@ -6,7 +6,7 @@
 //! System Overview
 //! 1. One collimated line ray source
 //! 2. Two paraxial lenses ("75 mm lens" and "50 mm lens")
-//! 3. A clear aperture of 25 mm radius on the first lens, the size of that lens
+//! 3. A clear aperture of 25 mm radius on both lenses, the size of the lenses
 //! 4. A ray propagation visualizer after the second lens
 //! 5. A ray-tracing analyzer for the source beam
 //! 6. Saving the optical system to a file for later use
@@ -62,9 +62,14 @@ fn main() -> OpmResult<()> {
     )?;
     // Add the first lens into the optical scene.
     let i_pl1 = scenery.add_node(lens1)?;
-    // Create the second lens with a focal length of 50 mm.
+    // Create the second lens with a focal length of 50 mm and the same size as the first one.
     // Together with the first lens, it forms a Kepler telescope system.
-    let i_pl2 = scenery.add_node(ParaxialSurface::new("50 mm lens", millimeter!(50.0))?)?;
+    let mut lens2 = ParaxialSurface::new("50 mm lens", millimeter!(50.0))?;
+    lens2.set_property(
+        CLEAR_APERTURE,
+        ApertureShape::from(CircleShape::new(millimeter!(25.0))?).into(),
+    )?;
+    let i_pl2 = scenery.add_node(lens2)?;
     // Add a ray propagation visualizer.
     // This does not affect optics; it only displays ray paths.
     let mut ray_prop_vis = RayPropagationVisualizer::new("after telecope", None)?;

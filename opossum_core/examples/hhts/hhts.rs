@@ -56,43 +56,51 @@ fn main() -> OpmResult<()> {
     let input_group = scenery.add_node(hhts_input()?)?;
     scenery.connect_nodes(src, "output_1", input_group, "input_1", Length::zero())?;
 
-    // T1
+    // T1: the front lenses take the full beam of 100 mm radius and are 250 mm in diameter, the
+    // rear lenses are 2 inches.
+    let front_lens: ApertureShape = CircleShape::new(millimeter!(125.0))?.into();
+    let a_2inch: ApertureShape = CircleShape::new(millimeter!(25.4))?.into();
     let mut group_t1 = NodeGroup::new("T1");
-    let t1_l1a = group_t1.add_node(Lens::new(
+    let t1_l1a = group_t1.add_node(Lens::new_with_clear_aperture(
         "T1 L1a",
         millimeter!(518.34008),
         millimeter!(-847.40402),
         millimeter!(30.0),
         &refr_index_hk9l,
+        front_lens.clone(),
     )?)?;
-    let t1_l1b = group_t1.add_node(Lens::new(
+    let t1_l1b = group_t1.add_node(Lens::new_with_clear_aperture(
         "T1 L1b",
         millimeter!(-788.45031),
         millimeter!(-2551.88619),
         millimeter!(21.66602),
         &refr_index_hzf52,
+        front_lens,
     )?)?;
-    let node = Lens::new(
+    let node = Lens::new_with_clear_aperture(
         "T1 L2a",
         millimeter!(-88.51496),
         millimeter!(f64::INFINITY),
         millimeter!(5.77736),
         &refr_index_hzf52,
+        a_2inch.clone(),
     )?;
     let t1_l2a = group_t1.add_node(node)?;
-    let t1_l2b = group_t1.add_node(Lens::new(
+    let t1_l2b = group_t1.add_node(Lens::new_with_clear_aperture(
         "T1 L2b",
         millimeter!(76.76954),
         millimeter!(-118.59590),
         millimeter!(14.0),
         &refr_index_hzf52,
+        a_2inch.clone(),
     )?)?;
-    let t1_l2c = group_t1.add_node(Lens::new(
+    let t1_l2c = group_t1.add_node(Lens::new_with_clear_aperture(
         "T1 L2c",
         millimeter!(-63.45837),
         millimeter!(66.33014),
         millimeter!(7.68327),
         &refr_index_hzf2,
+        a_2inch,
     )?)?;
 
     group_t1.connect_nodes(t1_l1a, "output_1", t1_l1b, "input_1", millimeter!(10.0))?;

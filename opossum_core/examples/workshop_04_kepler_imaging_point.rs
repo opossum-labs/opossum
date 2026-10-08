@@ -9,7 +9,7 @@
 //! 1. One point light source
 //! 2. Refractive index data for HZF52 glass
 //! 3. One 75 mm spherical lens with a clear aperture of 25 mm radius
-//! 4. One 50 mm spherical lens
+//! 4. One 50 mm spherical lens of the same size
 //! 5. A ray propagation visualizer
 //! 6. Two spot diagram analyzers
 //! 7. A point-source ray-tracing configuration
@@ -72,13 +72,15 @@ fn main() -> OpmResult<()> {
         CircleShape::new(millimeter!(25.0))?.into(),
     )?;
     let i_pl1 = scenery.add_node(lens1)?;
-    // 4. Define the second lens: 50 mm focal length and 10 mm thickness.
-    let lens2 = Lens::new(
+    // 4. Define the second lens: 50 mm focal length, 10 mm thickness and the same size as the
+    // first.
+    let lens2 = Lens::new_with_clear_aperture(
         "50 mm lens",
         millimeter!(100.0),
         millimeter!(-100.0),
         millimeter!(10.0),
         &refr_index_hzf52,
+        CircleShape::new(millimeter!(25.0))?.into(),
     )?;
     let i_pl2 = scenery.add_node(lens2)?;
     // 5. Define the ray propagation visualizer.

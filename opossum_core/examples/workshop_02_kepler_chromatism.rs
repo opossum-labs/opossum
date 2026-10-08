@@ -9,7 +9,8 @@
 //! 2. A wavelength-dependent refractive index material (Schott model)
 //! 3. Two spherical lenses ("75 mm lens" and "50 mm lens") using that
 //!    material
-//! 4. A clear aperture of 25 mm radius on the first lens, the size of that lens
+//! 4. A clear aperture of 25 mm radius on the first lens and of 27.5 mm on the
+//!    second one, the size of the lenses
 //! 5. A ray propagation visualizer after the second lens
 //! 6. A ray-tracing analyzer configured for two wavelengths
 //!
@@ -88,13 +89,15 @@ fn main() -> OpmResult<()> {
     )?;
     // Add the first lens to the optical scene.
     let i_pl1 = scenery.add_node(lens1)?;
-    // Create the second spherical lens of the telescope.
-    let lens2 = Lens::new(
+    // Create the second spherical lens of the telescope. It is slightly larger than the first one,
+    // because the 350 nm light reaches it up to 26.4 mm off its axis.
+    let lens2 = Lens::new_with_clear_aperture(
         "50 mm lens",
         millimeter!(100.0),
         millimeter!(-100.0),
         millimeter!(10.0),
         &refr_index_hzf52,
+        CircleShape::new(millimeter!(27.5))?.into(),
     )?;
     // Add the second lens to the scene.
     let i_pl2 = scenery.add_node(lens2)?;

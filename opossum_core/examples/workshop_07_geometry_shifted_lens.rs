@@ -8,7 +8,7 @@
 //! System Overview
 //! 1. One collimated line ray source
 //! 2. One decentered 75 mm lens
-//! 3. One 50 mm lens
+//! 3. One 50 mm lens of the same size
 //! 4. One ray propagation visualizer
 //! 5. One wavefront node after the optical system
 //! 6. One ray-tracing analyzer
@@ -83,13 +83,14 @@ fn main() -> OpmResult<()> {
     .with_decenter(millimeter!(0.0, 5.0, 0.0))?;
     // Add the first lens to the optical system
     let i_pl1 = scenery.add_node(lens1)?;
-    // Create the second lens aligned with the optical axis
-    let lens2 = Lens::new(
+    // Create the second lens aligned with the optical axis, of the same size as the first one
+    let lens2 = Lens::new_with_clear_aperture(
         "50 mm lens",
         millimeter!(100.0),
         millimeter!(-100.0),
         millimeter!(10.0),
         &refr_index_hzf52,
+        CircleShape::new(millimeter!(25.0))?.into(),
     )?;
     // Add the second lens to the optical system
     let i_pl2 = scenery.add_node(lens2)?;
