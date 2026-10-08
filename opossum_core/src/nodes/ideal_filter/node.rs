@@ -209,6 +209,7 @@ impl AnalysisRayTrace for IdealFilter {
             ));
         };
         let mut rays = r.clone();
+        let rays_before = rays.nr_of_rays(true);
         let iso = self.effective_surface_iso(in_port)?;
         let Some(surf) = self.get_optic_surface_mut(in_port) else {
             return Err(OpossumError::Analysis("no surface found. Aborting".into()));
@@ -243,6 +244,7 @@ impl AnalysisRayTrace for IdealFilter {
                 return Err(OpossumError::OpticPort("output aperture not found".into()));
             }
         }
+        self.warn_about_lost_rays(rays_before, rays.nr_of_rays(true));
         let light_data = LightData::Geometric(rays);
         Ok(LightResult::from([(out_port.into(), light_data)]))
     }

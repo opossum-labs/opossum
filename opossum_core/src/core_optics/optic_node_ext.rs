@@ -240,6 +240,13 @@ pub trait OpticNodeExt {
         bundles: &mut [Rays],
         strategy: &dyn PropagationStrategy,
     ) -> OpmResult<()>;
+    /// Warn if rays were lost while passing this node and set its apodization warning.
+    ///
+    /// # Arguments
+    ///
+    /// * `rays_before` - the number of valid rays that reached the node.
+    /// * `rays_after` - the number of valid rays that left it.
+    fn warn_about_lost_rays(&mut self, rays_before: usize, rays_after: usize);
 }
 
 /// Return the names of the one input and the one output port of `node`.
@@ -497,7 +504,6 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         let uuid = self.node_attr().uuid();
         let iso = self.effective_surface_iso(optic_surf_name)?;
         let node_name = self.name().to_string();
-        let node_type = self.node_type().to_string();
 
         let Some(surf) = self.get_optic_surface_mut(optic_surf_name) else {
             return Err(OpossumError::Analysis(format!(
@@ -515,12 +521,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
             strategy,
         )?;
         let rays_after: usize = rays_bundle.iter().map(|r| r.nr_of_rays(true)).sum();
-        if rays_after < rays_before {
-            self.set_apodization_warning(true);
-            log::warn!(
-                "Rays have been apodized at input aperture of '{node_name}' ({node_type}). Results might not be accurate."
-            );
-        }
+        self.warn_about_lost_rays(rays_before, rays_after);
         Ok(hits)
     }
 
@@ -607,6 +608,17 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
             }
         }
         Ok(())
+    }
+
+    fn warn_about_lost_rays(&mut self, rays_before: usize, rays_after: usize) {
+        if rays_after < rays_before {
+            self.set_apodization_warning(true);
+            log::warn!(
+                "Rays were lost at '{}' ({}): they ran outside its clear aperture, were cut by a port aperture or fell below the energy threshold. Results might not be accurate.",
+                self.name(),
+                self.node_type()
+            );
+        }
     }
 }
 

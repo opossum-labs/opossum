@@ -146,7 +146,8 @@ pub mod helper {
         Ok(())
     }
     /// Assert that a ray inside a component's clear aperture passes it and one just outside does
-    /// not: a ray trace loses it, a ghost focus analysis lets it run past unchanged.
+    /// not: a ray trace loses it and warns about the loss, a ghost focus analysis lets it run past
+    /// unchanged.
     ///
     /// Both rays travel along z, 12.4 mm and 12.6 mm off the axis, just inside and just outside the
     /// default clear aperture of 12.5 mm. Whether a missed ray is lost or runs past is the analyzer's
@@ -160,11 +161,25 @@ pub mod helper {
     >() -> OpmResult<()> {
         let (inside, outside) = around_the_default_rim();
         let rays = || rays_along_z_from(&[inside, outside], nanometer!(1000.0));
+        let mut node = placed_at_origin::<T>()?;
+        let warning = format!(
+            "Rays were lost at '{}' ({}): they ran outside its clear aperture, were cut by a port aperture or fell below the energy threshold. Results might not be accurate.",
+            node.node_attr().name(),
+            node.node_attr().node_type()
+        );
+        testing_logger::setup();
         let traced = AnalysisRayTrace::analyze(
-            &mut placed_at_origin::<T>()?,
+            &mut node,
             LightResult::from([("input_1".into(), LightData::Geometric(rays()?))]),
             &RayTraceConfig::default(),
         )?;
+        testing_logger::validate(|logs| {
+            assert!(
+                logs.iter().any(|log| log.body == warning),
+                "a ray trace warns that it lost the ray outside: {:?}",
+                logs.iter().map(|log| &log.body).collect::<Vec<_>>()
+            );
+        });
         let Some(LightData::Geometric(traced)) = traced.get("output_1") else {
             panic!("expected ray data at the output port");
         };
@@ -510,7 +525,7 @@ pub mod helper {
         input.insert("input_1".into(), input_light.clone());
         AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
         let msg = format!(
-            "Rays have been apodized at input aperture of '{}' ({}). Results might not be accurate.",
+            "Rays were lost at '{}' ({}): they ran outside its clear aperture, were cut by a port aperture or fell below the energy threshold. Results might not be accurate.",
             node.node_attr().name(),
             node.node_attr().node_type()
         );
