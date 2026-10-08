@@ -5,7 +5,7 @@ use crate::{
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, Volumetric},
     degree,
     error::{OpmResult, OpossumError},
-    geometry::{Geometry, body::CLEAR_APERTURE},
+    geometry::Geometry,
     material::{MATERIAL, Material},
     millimeter,
     nodes::{NodeRegistration, create_volume_properties},
@@ -140,16 +140,10 @@ impl OpticNode for Wedge {
                 "cannot read the center thickness and the wedge angle".into(),
             ));
         };
-        let Some(clear_aperture) = self.clear_aperture()? else {
-            return Err(OpossumError::Analysis(format!(
-                "the {CLEAR_APERTURE} of wedge '{}' is open, so its medium is unbounded",
-                self.node_attr.name()
-            )));
-        };
         Ok(Some(Geometry::wedge(
             *center_thickness,
             *wedge_angle,
-            clear_aperture,
+            self.cross_section()?,
         )?))
     }
     fn as_volume(&self) -> Option<&dyn Volumetric> {

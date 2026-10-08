@@ -97,8 +97,8 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     /// The body is always re-derived on every call, so geometry edits (e.g. changed centre thickness)
     /// and repositioning by the analyzer's `calc_node_positions` are picked up correctly. The node's
     /// surfaces are installed anew first, so the surfaces rays are traced at and the medium the gain
-    /// acts in describe the same component. Non-volume nodes return immediately without touching
-    /// the medium slot.
+    /// acts in describe the same component. Non-volume nodes return immediately, without installing
+    /// surfaces or touching the medium slot.
     ///
     /// [`NodeGroup`](crate::nodes::NodeGroup) overrides this to recurse into every child node.
     ///
