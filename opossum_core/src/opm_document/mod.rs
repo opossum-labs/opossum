@@ -9,6 +9,7 @@
 mod analysis;
 mod analyzer_info;
 mod io;
+mod migration;
 
 #[cfg(test)]
 mod tests;

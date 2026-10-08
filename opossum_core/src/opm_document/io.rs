@@ -1,13 +1,12 @@
 //! Serialization, deserialization, and export capabilities for [`OpmDocument`].
 
-use super::OpmDocument;
+use super::{OpmDocument, migration};
 use crate::{
     core_optics::OpticNode,
     error::{OpmResult, OpossumError},
     properties::{Proptype, proptype::AssetRef},
     utils::file_utils::{create_f_path, create_file_instance},
 };
-use log::warn;
 use ron::{extensions::Extensions, ser::PrettyConfig};
 use std::{
     fs::{self, File},
@@ -106,18 +105,7 @@ impl OpmDocument {
     pub fn from_string(file_string: &str) -> OpmResult<Self> {
         let mut document: Self = ron::from_str(file_string)
             .map_err(|e| OpossumError::OpmDocument(format!("parsing of model failed: {e}")))?;
-
-        if document.opm_file_version != env!("OPM_FILE_VERSION") {
-            warn!("OPM file version does not match the used OPOSSUM version.");
-            warn!(
-                "read version '{}' <-> program file version '{}'",
-                document.opm_file_version,
-                env!("OPM_FILE_VERSION")
-            );
-            warn!(
-                "This file might have been written by an older or newer version of OPOSSUM. The model import might not be correct."
-            );
-        }
+        migration::upgrade(&mut document)?;
 
         document.scenery.after_deserialization_hook()?;
         // Resolve cross-group node references across the entire graph
