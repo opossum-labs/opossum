@@ -49,7 +49,7 @@ use opm_macros_lib::EnsureValidated;
 use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
-use strum::{EnumIter, IntoEnumIterator};
+use strum::EnumIter;
 use uom::si::{
     f64::{Angle, Length},
     length::millimeter,
@@ -536,7 +536,10 @@ impl ApertureShape {
     }
     /// Return whether some shape of this kind bounds a region (see [`Self::delimits_region`]).
     ///
-    /// The match is exhaustive on purpose: a new variant has to state on which side it is.
+    /// A user interface offering a choice of shapes asks through
+    /// [`Validator::may_accept`](crate::properties::validator::Validator::may_accept) rather than
+    /// keeping a list of its own. The match is exhaustive on purpose: a new variant has to state on
+    /// which side it is.
     pub(crate) const fn may_delimit_region(&self) -> bool {
         match self {
             Self::Open | Self::Gaussian(_) => false,
@@ -545,28 +548,6 @@ impl ApertureShape {
             | Self::BinaryPolygon(_)
             | Self::Stack(_) => true,
         }
-    }
-    /// Return one instance of every kind of shape that can **never** delimit a region.
-    ///
-    /// These are the shapes that cannot state where a medium ends, so anything describing an
-    /// outline rather than a transmission mask has to refuse them — the clear aperture of a volume
-    /// node ([`CLEAR_APERTURE`](crate::geometry::body::CLEAR_APERTURE)) above all, whose property is
-    /// guarded by [`Validator::ApertureDelimitsRegion`](crate::properties::validator::Validator).
-    /// A user interface offering a choice of shapes asks here rather than keeping a list of its own,
-    /// which would silently go stale as soon as a variant is added. A stack is not listed: whether
-    /// it bounds a region depends on its members (see [`Self::delimits_region`]).
-    ///
-    /// The returned values are the [`Default`] of each variant: only *which* variant each one is
-    /// carries meaning here, never its contents.
-    ///
-    /// # Returns
-    ///
-    /// One instance of [`Self::Open`] and [`Self::Gaussian`].
-    #[must_use]
-    pub fn non_delimiting() -> Vec<Self> {
-        Self::iter()
-            .filter(|shape| !shape.may_delimit_region())
-            .collect()
     }
     /// Calculate the transmission factor of a given point on the [`Aperture`]. The value is in the range (0.0..=1.0)
     /// 0.0 is fully opaque, 1.0 fully transparent.
@@ -725,32 +706,6 @@ mod test {
     #[test]
     fn default() {
         assert!(matches!(ApertureShape::default(), ApertureShape::Open));
-    }
-    /// Exactly the shapes no instance of which can bound a region are listed as unable to: an open
-    /// aperture and a soft Gaussian one. A stack is not listed, since a stack holding a hole with
-    /// an edge bounds a region (a ring, a mirror with a central hole).
-    #[test]
-    fn non_delimiting_covers_every_shape_without_a_region() {
-        let non_delimiting = ApertureShape::non_delimiting();
-        let listed = |shape: &ApertureShape| {
-            non_delimiting
-                .iter()
-                .any(|s| std::mem::discriminant(s) == std::mem::discriminant(shape))
-        };
-        for (shape, without_region) in [
-            (ApertureShape::Open, true),
-            (ApertureShape::Gaussian(GaussianShape::default()), true),
-            (ApertureShape::BinaryCircle(CircleShape::default()), false),
-            (
-                ApertureShape::BinaryRectangle(RectangleShape::default()),
-                false,
-            ),
-            (ApertureShape::BinaryPolygon(PolygonShape::default()), false),
-            (ApertureShape::Stack(StackShape::default()), false),
-        ] {
-            assert_eq!(listed(&shape), without_region, "{shape}");
-        }
-        assert_eq!(non_delimiting.len(), 2);
     }
     /// A stack bounds a region if all its members are shapes with an edge and at least one of them
     /// is a hole: a ring does, obstructions alone do not, nor does a soft or a nested member.

@@ -33,14 +33,17 @@ use crate::components::node_editor::{
 use dioxus::prelude::*;
 use opossum_core::{
     prelude::{Properties, Property, Proptype},
+    properties::validator::Validator,
     types::api_types::{NodeEditorPanel, NodeInfo},
 };
+use std::collections::BTreeMap;
 use uuid::Uuid;
 
 #[component]
 pub fn PropertiesEditor(
     node_id: ReadSignal<Uuid>,
     node_properties: ReadSignal<Properties>,
+    node_validators: ReadSignal<BTreeMap<String, Validator>>,
     node_info_sig: ReadSignal<NodeInfo>,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
@@ -48,9 +51,15 @@ pub fn PropertiesEditor(
     let editor_inputs = if node_info_sig.read().uuid == *node_id.read() {
         let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
         for (property_key, property) in node_properties.read().iter() {
-            if let Some(editor) =
-                get_editor(node_id, property, property_key.clone(), on_change, readonly)
-            {
+            let validator = node_validators.read().get(property_key).cloned();
+            if let Some(editor) = get_editor(
+                node_id,
+                property,
+                validator,
+                property_key.clone(),
+                on_change,
+                readonly,
+            ) {
                 editor_inputs.push(editor);
             }
         }
@@ -73,6 +82,7 @@ pub fn PropertiesEditor(
 fn get_editor(
     node_id: ReadSignal<Uuid>,
     property: &Property,
+    validator: Option<Validator>,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
@@ -88,7 +98,14 @@ fn get_editor(
     {
         return Some(editor);
     }
-    get_geometric_editor(node_id, property, property_key, on_change, readonly)
+    get_geometric_editor(
+        node_id,
+        property,
+        validator,
+        property_key,
+        on_change,
+        readonly,
+    )
 }
 
 fn get_primitive_editor(
@@ -219,6 +236,7 @@ fn get_optical_editor(
 fn get_geometric_editor(
     node_id: ReadSignal<Uuid>,
     property: &Property,
+    validator: Option<Validator>,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
@@ -275,6 +293,7 @@ fn get_geometric_editor(
             ClearApertureEditor {
                 node_id,
                 aperture,
+                validator,
                 property_key,
                 on_change,
                 readonly,

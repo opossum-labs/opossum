@@ -17,9 +17,11 @@ use dioxus::prelude::*;
 use heck::ToLowerCamelCase;
 use opossum_core::{
     apertures::StackShape,
-    prelude::{Aperture, ApertureShape, ApertureType},
+    prelude::{Aperture, ApertureShape, ApertureType, Proptype},
+    properties::validator::Validator,
     utils::default_from_name::DefaultFromName,
 };
+use strum::IntoEnumIterator;
 use uuid::Uuid;
 
 /// The parameter rows belonging to the currently selected shape.
@@ -72,21 +74,43 @@ fn shape_to_switch_to(chosen: ApertureShape, current: &ApertureShape) -> Apertur
         .map_or(chosen, ApertureShape::Stack)
 }
 
+/// The kinds of shapes the clear aperture cannot take, as its validator states them.
+///
+/// The core decides which kinds a property accepts ([`Validator::may_accept`]); a property without
+/// a validator accepts every kind.
+///
+/// # Arguments
+///
+/// * `validator` - the validator of the clear aperture property, if it has one.
+///
+/// # Returns
+///
+/// The [`Default`] of each excluded kind: only which variant each one is carries meaning.
+fn excluded_shapes(validator: Option<&Validator>) -> Vec<ApertureShape> {
+    ApertureShape::iter()
+        .filter(|shape| {
+            validator
+                .is_some_and(|validator| !validator.may_accept(&Proptype::Aperture(shape.clone())))
+        })
+        .collect()
+}
+
 /// Editor for a node's `clear aperture` property: a shape selector plus that shape's parameters.
 ///
 /// The dropdown-plus-parameter-rows composition is the one `MaterialEditor` and
 /// `RefractiveIndexEditor` use, and the parameter rows and the stack editor themselves are the port
 /// aperture editor's. What differs from that editor is the choice offered: it edits a transmission
 /// mask and may therefore offer every shape, while this one states the transversal extent of the
-/// component and is restricted to the kinds of shapes that can bound a region (see
-/// [`ApertureShape::non_delimiting`]); a stack, for a ring or a mirror with a central hole, is one of
-/// them. It also has no aperture *type* and no isometry of its own — the property carries a bare
-/// [`ApertureShape`].
+/// component and offers only the kinds of shapes its validator accepts (see [`excluded_shapes`]):
+/// those that can bound a region - a stack, for a ring or a mirror with a central hole, is one of
+/// them - and, for a detector's window or an ideal surface, also an open one. It also has no
+/// aperture *type* and no isometry of its own — the property carries a bare [`ApertureShape`].
 ///
 /// # Arguments
 ///
 /// * `node_id` - id of the node whose property is edited.
 /// * `aperture` - the clear aperture shape to show.
+/// * `validator` - the validator of the property, which decides the shapes offered.
 /// * `property_key` - name of the edited property, needed for the change event.
 /// * `on_change` - handler that carries a property change towards the backend.
 /// * `readonly` - whether the inputs are shown read-only.
@@ -94,6 +118,7 @@ fn shape_to_switch_to(chosen: ApertureShape, current: &ApertureShape) -> Apertur
 pub fn ClearApertureEditor(
     node_id: ReadSignal<Uuid>,
     aperture: ApertureShape,
+    validator: Option<Validator>,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
@@ -125,10 +150,7 @@ pub fn ClearApertureEditor(
         },
     };
 
-    // Which shapes can bound a medium is decided by the core, not restated here: the clear aperture
-    // states where the material ends, and a shape without an edge cannot say that (the property's
-    // validator rejects exactly these).
-    let excluded = ApertureShape::non_delimiting();
+    let excluded = excluded_shapes(validator.as_ref());
     let excluded = excluded.iter().collect::<Vec<_>>();
     rsx! {
         LabeledSelect {
@@ -144,5 +166,29 @@ pub fn ClearApertureEditor(
             },
         }
         div { class: "accordion-content-wrapper-div border-start", {shape_specific_input} }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn names(shapes: &[ApertureShape]) -> Vec<String> {
+        shapes.iter().map(ToString::to_string).collect()
+    }
+
+    /// A component must have an edge, so neither an open nor a soft shape is offered; a detector's
+    /// window or an ideal surface may also be open; without a validator every shape is offered.
+    #[test]
+    fn the_validator_decides_which_shapes_are_offered() {
+        let open = names(&[ApertureShape::Open]);
+        let gaussian = names(&[ApertureShape::Gaussian(Default::default())]);
+        let component = names(&excluded_shapes(Some(&Validator::ApertureDelimitsRegion)));
+        assert_eq!(component, [open[0].clone(), gaussian[0].clone()]);
+        let window = names(&excluded_shapes(Some(
+            &Validator::ApertureDelimitsRegionOrIsOpen,
+        )));
+        assert_eq!(window, gaussian);
+        assert!(excluded_shapes(None).is_empty());
     }
 }
