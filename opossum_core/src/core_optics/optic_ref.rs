@@ -11,6 +11,7 @@ use crate::{
     analyzers::Analyzable,
     core_optics::{NodeAttr, NodeAttrExt, node_attr::HasNodeAttr},
     nodes::{NodeGroup, OpticGraph, create_node_ref},
+    opm_document::upgrade_node,
 };
 
 /// Structure for storing an optical node.
@@ -148,6 +149,8 @@ impl<'de> Deserialize<'de> for OpticRef {
         if let Some(group_node) = node_ref.as_any_mut().downcast_mut::<NodeGroup>() {
             group_node.set_graph(intermediate.graph);
         }
+        // A node of an older file is upgraded before it builds its surfaces.
+        upgrade_node(&mut *node_ref).map_err(|e| de::Error::custom(e.to_string()))?;
         node_ref
             .after_deserialization_hook()
             .map_err(|e| de::Error::custom(e.to_string()))?;
