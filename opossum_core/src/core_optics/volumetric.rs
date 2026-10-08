@@ -1648,6 +1648,35 @@ mod test {
         }
         Ok(())
     }
+    /// Only what merely records light or is an idealization may be unbounded: the detectors and the
+    /// paraxial surface accept an open clear aperture, every real component refuses one.
+    #[test]
+    fn only_detectors_and_ideal_surfaces_may_be_open() -> OpmResult<()> {
+        let mut may_be_open = Vec::new();
+        for (node_type, _) in node_types() {
+            let mut node_attr = create_node_ref(node_type)?.node_attr().clone();
+            if node_attr.get_property(CLEAR_APERTURE).is_ok()
+                && node_attr
+                    .set_property(CLEAR_APERTURE, crate::apertures::ApertureShape::Open.into())
+                    .is_ok()
+            {
+                may_be_open.push(node_type);
+            }
+        }
+        may_be_open.sort_unstable();
+        assert_eq!(
+            may_be_open,
+            [
+                "energy meter",
+                "fluence detector",
+                "paraxial surface",
+                "spectrometer",
+                "spot diagram",
+                "wavefront monitor",
+            ]
+        );
+        Ok(())
+    }
     /// A node presents itself as a volume exactly when its geometry encloses one.
     #[test]
     fn the_volume_capability_matches_the_geometry() -> OpmResult<()> {

@@ -82,8 +82,9 @@ use std::{collections::HashSet, sync::LazyLock};
 /// transversally ([`CLEAR_APERTURE`]).
 ///
 /// Declaring it from one place keeps the node types that call this in sync with each other, and
-/// together with [`create_surface_properties`] and [`create_detector_properties`] they are exactly
-/// the node types whose geometry can have a rim — which is what the test in `volumetric.rs` checks.
+/// together with [`create_surface_properties`], [`create_ideal_surface_properties`] and
+/// [`create_detector_properties`] they are exactly the node types whose geometry can have a rim —
+/// which is what the tests in `volumetric.rs` check.
 ///
 /// Creates standard volumetric properties for a node.
 ///
@@ -123,6 +124,28 @@ pub fn create_surface_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
         CLEAR_APERTURE,
         "transversal extent of the surface",
         Validator::ApertureDelimitsRegion,
+        default_clear_aperture().into(),
+    )
+}
+
+/// Declare the property of a surface that is an idealization, such as a paraxial lens: how far it
+/// extends transversally ([`CLEAR_APERTURE`]).
+///
+/// The sibling of [`create_surface_properties`], with the same default size. Unlike a real
+/// component, an idealized surface may also be unbounded ([`ApertureShape::Open`]).
+///
+/// # Arguments
+///
+/// * `node_attr` - the attributes of the node under construction.
+///
+/// # Errors
+///
+/// This function returns an error if the property is already declared.
+pub fn create_ideal_surface_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
+    node_attr.create_property_with_validator(
+        CLEAR_APERTURE,
+        "transversal extent of the surface, open for an unbounded ideal surface",
+        Validator::ApertureDelimitsRegionOrIsOpen,
         default_clear_aperture().into(),
     )
 }
