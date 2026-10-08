@@ -155,16 +155,18 @@ pub fn NodePorts(node: NodeElement, inverted: bool) -> Element {
     rsx! {
         for in_port in input_ports {
             NodePort {
+                key: "in-{in_port}",
                 node: node.clone(),
-                port_name: in_port,
+                port_name: in_port.clone(),
                 port_type: PortType::Input,
                 inverted_node: inverted,
             }
         }
         for out_port in node.output_ports() {
             NodePort {
+                key: "out-{out_port}",
                 node: node.clone(),
-                port_name: out_port,
+                port_name: out_port.clone(),
                 port_type: PortType::Output,
                 inverted_node: inverted,
             }

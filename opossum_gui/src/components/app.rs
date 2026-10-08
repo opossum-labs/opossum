@@ -152,7 +152,7 @@ pub fn App() -> Element {
 
         // Initialize registry facade and build in-memory index
         AssetRegistry::<Material>::new(registry_path).unwrap_or_else(|err| {
-            log::error!("Failed to initialize MaterialRegistry: {err}");
+            error!("Failed to initialize MaterialRegistry: {err}");
             // Fallback to in-memory/empty registry on severe I/O errors
             AssetRegistry::new("./catalogs").expect("Fallback registry path failed")
         })

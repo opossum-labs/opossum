@@ -189,6 +189,12 @@ impl<Lens> Store<GraphStore, Lens> {
     }
     fn set_node_active(&mut self, id: Uuid, z_index: usize, is_optical: bool) {
         self.set_z_level_to_top(id, z_index);
+
+        // Avoid re-allocating and re-notifying selection signals if this node is already the sole active node
+        let current_selected = self.node_selection().read().all_nodes.read().clone();
+        if current_selected.len() == 1 && current_selected.contains_key(&id) {
+            return;
+        }
         self.clear_selected_nodes();
         self.node_selection()
             .write()
@@ -292,14 +298,20 @@ impl<Lens> Store<GraphStore, Lens> {
             }
         }
     }
-    fn set_z_level_to_top(&mut self, node_id: Uuid, z_level: usize) {
-        let number_of_nodes = self.nodes().len();
-        for (id, mut elem) in self.nodes().iter() {
-            let z_index = elem.read().z_index();
-            if z_index > z_level && id != node_id {
-                elem.write().set_z_index(z_index - 1);
-            } else if id == node_id {
-                elem.write().set_z_index(number_of_nodes);
+    fn set_z_level_to_top(&mut self, node_id: Uuid, _z_level: usize) {
+        // Find the current highest z-index across all nodes without mutating them
+        let max_z = self
+            .nodes()
+            .read()
+            .values()
+            .map(NodeElement::z_index)
+            .max()
+            .unwrap_or(0);
+
+        // Only mutate the clicked node if it is not already at the top
+        if let Some(mut node) = self.nodes().get(node_id) {
+            if node.read().z_index() < max_z {
+                node.write().set_z_index(max_z + 1);
             }
         }
     }

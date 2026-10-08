@@ -123,7 +123,7 @@ fn start_backend() -> Result<ProcessHandle, String> {
 
 /// Helper to configure and launch the Dioxus desktop window.
 fn launch_desktop_window(backend_handle: ProcessHandle, root_component: fn() -> Element) {
-    dioxus::logger::init(dioxus::logger::tracing::Level::INFO).ok();
+    dioxus::logger::init(dioxus::logger::tracing::Level::DEBUG).ok();
     println!("Launching GUI...");
 
     let data_dir = ProjectDirs::from("org", "OpossumLabs", "OpossumGui").map_or_else(
