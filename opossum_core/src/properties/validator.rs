@@ -78,12 +78,13 @@ impl Validator {
             // Silently ignore if not an aperture.
             return Ok(());
         };
-        if shape.is_binary() {
+        if shape.delimits_region() {
             Ok(())
         } else {
             Err(OpossumError::Properties(format!(
                 "an aperture of shape '{shape}' does not delimit a region: only a shape with a \
-                 hard edge can state where something begins and ends"
+                 hard edge, or a stack of such shapes holding a hole, can state where something \
+                 begins and ends"
             )))
         }
     }

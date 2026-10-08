@@ -8,14 +8,18 @@ use crate::components::node_editor::{
     node_config_editor::NodeChangeEvent,
     optical_node_editor::{
         port_config_editor::aperture_editor::{
-            CircularApertureParam, PolygonApertureInput, RectApertureParam,
+            CircularApertureParam, PolygonApertureInput, RectApertureParam, StackedApertureInput,
         },
         properties_editor::on_save_proptype_handler,
     },
 };
 use dioxus::prelude::*;
 use heck::ToLowerCamelCase;
-use opossum_core::{prelude::ApertureShape, utils::default_from_name::DefaultFromName};
+use opossum_core::{
+    apertures::StackShape,
+    prelude::{Aperture, ApertureShape, ApertureType},
+    utils::default_from_name::DefaultFromName,
+};
 use uuid::Uuid;
 
 /// The parameter rows belonging to the currently selected shape.
@@ -49,15 +53,34 @@ fn clear_aperture_input_data(
     }
 }
 
-/// Editor for a volume node's `clear aperture` property: a shape selector plus that shape's
-/// parameters.
+/// The shape to switch to when another kind of shape is chosen in the dropdown.
+///
+/// A new stack starts with the current outline as its hole, so it bounds a region from the start
+/// and the bore or notch can be added to it; the stack a bare default would give holds nothing
+/// and is refused by the property. Any other shape is switched to as chosen.
+///
+/// # Arguments
+///
+/// * `chosen` - the default of the chosen kind of shape.
+/// * `current` - the shape the clear aperture has now.
+fn shape_to_switch_to(chosen: ApertureShape, current: &ApertureShape) -> ApertureShape {
+    if !matches!(chosen, ApertureShape::Stack(_)) {
+        return chosen;
+    }
+    Aperture::new(current.clone(), ApertureType::Hole, None, None)
+        .and_then(|outline| StackShape::new(vec![outline]))
+        .map_or(chosen, ApertureShape::Stack)
+}
+
+/// Editor for a node's `clear aperture` property: a shape selector plus that shape's parameters.
 ///
 /// The dropdown-plus-parameter-rows composition is the one `MaterialEditor` and
-/// `RefractiveIndexEditor` use, and the parameter rows themselves are the port aperture editor's.
-/// What differs from that editor is the choice offered: it edits a transmission mask and may
-/// therefore offer every shape, while this one states the transversal extent of the medium and is
-/// restricted to the shapes that actually bound a region (see [`non_delimiting_shapes`]). It also
-/// has no aperture *type* and no isometry of its own — the property carries a bare
+/// `RefractiveIndexEditor` use, and the parameter rows and the stack editor themselves are the port
+/// aperture editor's. What differs from that editor is the choice offered: it edits a transmission
+/// mask and may therefore offer every shape, while this one states the transversal extent of the
+/// component and is restricted to the kinds of shapes that can bound a region (see
+/// [`ApertureShape::non_delimiting`]); a stack, for a ring or a mirror with a central hole, is one of
+/// them. It also has no aperture *type* and no isometry of its own — the property carries a bare
 /// [`ApertureShape`].
 ///
 /// # Arguments
@@ -90,6 +113,13 @@ pub fn ClearApertureEditor(
                 readonly,
             }
         },
+        ApertureShape::Stack(stack) => rsx! {
+            StackedApertureInput {
+                stacked_aperture: stack.clone(),
+                on_shape_change: on_save,
+                readonly,
+            }
+        },
         _ => rsx! {
             RowedInputs { inputs: clear_aperture_input_data(&current_shape, on_save, readonly) }
         },
@@ -109,7 +139,7 @@ pub fn ClearApertureEditor(
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if let Some(shape) = ApertureShape::default_from_name(val.as_str()) {
-                    on_save.call(shape);
+                    on_save.call(shape_to_switch_to(shape, &aperture_sig.read()));
                 }
             },
         }

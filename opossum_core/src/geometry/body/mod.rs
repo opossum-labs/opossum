@@ -439,7 +439,7 @@ impl Body for SurfaceBoundedBody {
         Ok(Some(distance_3d_point(&first_point, &last_point)))
     }
     fn bounding_box(&self) -> OpmResult<BoundingBox> {
-        let outline = self.rim.outline()?;
+        let outline = self.rim.cross_section().get().outline()?;
         let (Some(x_range), Some(y_range)) = (
             span(outline.iter().map(|point| point.x)),
             span(outline.iter().map(|point| point.y)),
@@ -765,6 +765,38 @@ mod test {
         let bounds = body.bounding_box()?;
         assert_spans(&bounds.x_range(), -10.0, 10.0);
         assert_spans(&bounds.y_range(), -2.0, 2.0);
+        Ok(())
+    }
+    /// A ring (a plate with a central bore) reaches as far as its outer circle. An obstruction only
+    /// takes away from the plate, so a notch cut into its edge does not widen the box either.
+    #[test]
+    fn bounding_box_of_a_ring_is_that_of_its_outer_circle() -> OpmResult<()> {
+        let bounds_of_disk_with = |obstruction: Aperture| -> OpmResult<BoundingBox> {
+            let (entrance, exit) = plate_surfaces(millimeter!(10.0))?;
+            let cross_section = ValidatedCrossSection::try_new(Aperture::new_stack(
+                vec![
+                    Aperture::new_circle(millimeter!(8.0), ApertureType::Hole, None)?,
+                    obstruction,
+                ],
+                ApertureType::Hole,
+                None,
+                None,
+            )?)?;
+            SurfaceBoundedBody::new(entrance, exit, cross_section, Isometry::identity())
+                .bounding_box()
+        };
+        let bore = Aperture::new_circle(millimeter!(3.0), ApertureType::Obstruction, None)?;
+        let notch = Aperture::new_circle(
+            millimeter!(3.0),
+            ApertureType::Obstruction,
+            Some(millimeter!(0.0, 9.0)),
+        )?;
+        for obstruction in [bore, notch] {
+            let bounds = bounds_of_disk_with(obstruction)?;
+            assert_spans(&bounds.x_range(), -8.0, 8.0);
+            assert_spans(&bounds.y_range(), -8.0, 8.0);
+            assert_spans(&bounds.z_range(), 0.0, 10.0);
+        }
         Ok(())
     }
     #[test]

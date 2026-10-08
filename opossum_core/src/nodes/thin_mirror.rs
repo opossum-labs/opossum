@@ -229,7 +229,7 @@ mod test {
     use super::*;
     use crate::{
         analyzers::{RayTraceConfig, energy::EnergyConfig},
-        apertures::{ApertureShape, CircleShape},
+        apertures::{Aperture, ApertureShape, ApertureType, CircleShape, StackShape},
         core_optics::{Alignable, PortType, node_attr::NodePositioning},
         degree,
         geometry::body::CLEAR_APERTURE,
@@ -239,6 +239,7 @@ mod test {
         nodes::test_helper::helper::*,
         utils::geom_transformation::Isometry,
     };
+    use approx::assert_abs_diff_eq;
     use nalgebra::vector;
     use num_traits::Zero;
     #[test]
@@ -363,6 +364,60 @@ mod test {
                 hits,
                 "ray at ({x}, {y}) mm"
             );
+        }
+        Ok(())
+    }
+    /// A mirror with a central hole of 2 mm in a 12.5 mm disk: its clear aperture is a ring. A ray
+    /// through the hole misses the mirror, one on the ring is reflected.
+    #[test]
+    fn a_ray_through_the_central_hole_of_a_mirror_misses_it() -> OpmResult<()> {
+        let ring = ApertureShape::Stack(StackShape::new(vec![
+            Aperture::new_circle(millimeter!(12.5), ApertureType::Hole, None)?,
+            Aperture::new_circle(millimeter!(2.0), ApertureType::Obstruction, None)?,
+        ])?);
+        let mut mirror = ThinMirror::default();
+        mirror.set_property(CLEAR_APERTURE, ring.into())?;
+        mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        let rays = rays_along_z_from(
+            &[millimeter!(0.0, 1.0, -10.0), millimeter!(0.0, 8.0, -10.0)],
+            nanometer!(1000.0),
+        )?;
+        let output = AnalysisRayTrace::analyze(
+            &mut mirror,
+            LightResult::from([("input_1".into(), LightData::Geometric(rays))]),
+            &RayTraceConfig::default(),
+        )?;
+        let Some(LightData::Geometric(reflected)) = output.get("output_1") else {
+            panic!("expected ray data at the output port");
+        };
+        let heights: Vec<f64> = reflected
+            .iter()
+            .filter(|ray| ray.valid())
+            .map(|ray| ray.position().y.get::<uom::si::length::millimeter>())
+            .collect();
+        assert_eq!(
+            heights.len(),
+            1,
+            "only the ray on the ring is reflected: {heights:?}"
+        );
+        assert_abs_diff_eq!(heights[0], 8.0, epsilon = 1e-9);
+        Ok(())
+    }
+    /// A clear aperture has to bound a region: a stack of obstructions only, or one with a soft
+    /// member, does not.
+    #[test]
+    fn a_stacked_clear_aperture_needs_a_hole_with_an_edge() -> OpmResult<()> {
+        let obstruction = Aperture::new_circle(millimeter!(2.0), ApertureType::Obstruction, None)?;
+        let soft = Aperture::new_gaussian(
+            (millimeter!(5.0), millimeter!(5.0)),
+            ApertureType::Hole,
+            None,
+            None,
+        )?;
+        let mut mirror = ThinMirror::default();
+        for members in [vec![obstruction.clone()], vec![soft, obstruction]] {
+            let stack = ApertureShape::Stack(StackShape::new(members)?);
+            assert!(mirror.set_property(CLEAR_APERTURE, stack.into()).is_err());
         }
         Ok(())
     }
