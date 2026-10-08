@@ -1,7 +1,10 @@
 use nalgebra::{Rotation3, Vector3};
 
 use crate::{
-    analyzers::{AnalyzerType, RayTraceConfig, raytrace::AnalysisRayTrace},
+    analyzers::{
+        AnalyzerType, RayTraceConfig, propagation_strategy::PropagationStrategy,
+        raytrace::AnalysisRayTrace,
+    },
     core_optics::{NodeAttrExt, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
     light::{LightData, LightResult, Rays},
@@ -12,11 +15,23 @@ use crate::{
 use super::{BeamSplitter, SplittingConfig};
 
 impl AnalysisRayTrace for BeamSplitter {
+    /// Splits the rays arriving at both inputs on the splitting surface and merges them per output.
+    ///
+    /// An alignment run reaches this through a reference (to the splitter or to a group holding
+    /// it). It then places the following nodes by geometry alone, exactly like
+    /// [`AnalysisRayTrace::calc_node_positions`]: neither port apertures nor the splitting ratio
+    /// may decide where the optical axis runs.
     fn analyze(
         &mut self,
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
+        if config.is_positioning_run() {
+            if incoming_data.is_empty() {
+                return Ok(LightResult::default());
+            }
+            return AnalysisRayTrace::calc_node_positions(self, incoming_data, config);
+        }
         let (input_port1, input_port2) = if self.inverted() {
             ("out1_trans1_refl2", "out2_trans2_refl1")
         } else {
@@ -198,7 +213,8 @@ mod test {
 
     use crate::{
         analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
-        core_optics::{OpticNode, OpticNodeExt, node_attr::NodePositioning},
+        apertures::{Aperture, ApertureType},
+        core_optics::{OpticNode, OpticNodeExt, PortType, node_attr::NodePositioning},
         degree,
         error::OpmResult,
         joule,
@@ -206,7 +222,7 @@ mod test {
         millimeter, nanometer,
         nodes::{
             BeamSplitter, Dummy, NodeGroup, NodeReference, SourcePort, SplittingConfigBuilder,
-            round_collimated_ray_builder,
+            ThinMirror, round_collimated_ray_builder,
         },
         prelude::{AnalyzerType, OpmDocument},
         utils::geom_transformation::Isometry,
@@ -785,6 +801,126 @@ mod test {
         let (ref_pos, ref_dir) = placed(&scenery, bs_ref);
         assert_abs_diff_eq!(ref_pos, mm(0., 0., 100.), epsilon = 1e-9);
         assert_abs_diff_eq!(ref_dir, Vector3::x(), epsilon = 1e-9);
+        Ok(())
+    }
+    /// Run the positioning of `scenery`, fed by one centered collimated ray from `src`.
+    fn position(scenery: &mut NodeGroup, src: uuid::Uuid) -> OpmResult<()> {
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            src,
+            round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1)?,
+        );
+        AnalysisRayTrace::calc_node_positions(
+            scenery,
+            LightResult::default(),
+            &config.for_positioning(),
+        )?;
+        Ok(())
+    }
+    /// A source feeding a 45°-tilted beam splitter only through a reference 100 mm away, with a dummy
+    /// 50 mm behind each output of the reference.
+    ///
+    /// Returns the scenery, the source and the dummies behind the transmitted and the reflected
+    /// output.
+    fn behind_a_referenced_splitter(
+        mut bs: BeamSplitter,
+    ) -> OpmResult<(NodeGroup, uuid::Uuid, uuid::Uuid, uuid::Uuid)> {
+        bs.set_alignment(millimeter!(0., 0., 0.), degree!(0., 45., 0.))?;
+        let mut scenery = NodeGroup::default();
+        let src = scenery.add_node(SourcePort::default())?;
+        let bs = scenery.add_node(bs)?;
+        let bs_ref = scenery.add_node(NodeReference::from_node(&scenery.node(bs)?)?)?;
+        let transmitted = scenery.add_node(Dummy::new("transmitted"))?;
+        let reflected = scenery.add_node(Dummy::new("reflected"))?;
+        scenery.connect_nodes(src, "output_1", bs_ref, "input_1", millimeter!(100.0))?;
+        scenery.connect_nodes(
+            bs_ref,
+            "out1_trans1_refl2",
+            transmitted,
+            "input_1",
+            millimeter!(50.0),
+        )?;
+        scenery.connect_nodes(
+            bs_ref,
+            "out2_trans2_refl1",
+            reflected,
+            "input_1",
+            millimeter!(50.0),
+        )?;
+        Ok((scenery, src, transmitted, reflected))
+    }
+    /// Reached through a reference without any axis to place by, a splitter passes nothing on in an
+    /// alignment run, as it does in a ray trace, rather than failing.
+    #[test]
+    fn a_positioning_run_without_input_passes_nothing_on() -> OpmResult<()> {
+        let mut bs = BeamSplitter::default();
+        let output = AnalysisRayTrace::analyze(
+            &mut bs,
+            LightResult::default(),
+            &RayTraceConfig::default().for_positioning(),
+        )?;
+        assert!(output.is_empty());
+        Ok(())
+    }
+    /// Positioning through a reference to a beam splitter ignores its port apertures, as it does for
+    /// a placed one: a central obstruction on the input port must not cut the optical axis.
+    #[test]
+    fn a_referenced_splitter_ignores_its_port_apertures_when_positioning() -> OpmResult<()> {
+        let mut bs = BeamSplitter::new("bs", &SplittingConfigBuilder::FixedRatio(0.5))?;
+        bs.set_aperture(
+            &PortType::Input,
+            "input_1",
+            &Aperture::new_circle(millimeter!(1.0), ApertureType::Obstruction, None)?,
+        )?;
+        let (mut scenery, src, transmitted, reflected) = behind_a_referenced_splitter(bs)?;
+        position(&mut scenery, src)?;
+        let (trans_pos, trans_dir) = placed(&scenery, transmitted);
+        assert_abs_diff_eq!(trans_pos, mm(0., 0., 150.), epsilon = 1e-9);
+        assert_abs_diff_eq!(trans_dir, Vector3::z(), epsilon = 1e-9);
+        let (refl_pos, refl_dir) = placed(&scenery, reflected);
+        assert_abs_diff_eq!(refl_pos, mm(-50., 0., 100.), epsilon = 1e-9);
+        assert_abs_diff_eq!(refl_dir, -Vector3::x(), epsilon = 1e-9);
+        Ok(())
+    }
+    /// Positioning through a reference to a beam splitter does not depend on how it splits the
+    /// light: the axis also reaches the output a fully transmitting splitter sends no light to.
+    #[test]
+    fn a_referenced_splitter_places_the_branch_it_sends_no_light_to() -> OpmResult<()> {
+        let bs = BeamSplitter::new("bs", &SplittingConfigBuilder::FixedRatio(1.0))?;
+        let (mut scenery, src, _, reflected) = behind_a_referenced_splitter(bs)?;
+        position(&mut scenery, src)?;
+        let (refl_pos, refl_dir) = placed(&scenery, reflected);
+        assert_abs_diff_eq!(refl_pos, mm(-50., 0., 100.), epsilon = 1e-9);
+        assert_abs_diff_eq!(refl_dir, -Vector3::x(), epsilon = 1e-9);
+        Ok(())
+    }
+    /// Positioning through a reference to a group passes the axis through a beam splitter inside
+    /// the group whatever its splitting ratio: on the way back through a fully reflecting splitter,
+    /// the axis still runs out of the transmitting side towards the source.
+    #[test]
+    fn a_referenced_group_passes_the_axis_through_its_splitter() -> OpmResult<()> {
+        let mut group = NodeGroup::new("splitter group");
+        let mut bs = BeamSplitter::new("bs", &SplittingConfigBuilder::FixedRatio(0.0))?;
+        bs.set_alignment(millimeter!(0., 0., 0.), degree!(0., 45., 0.))?;
+        let bs = group.add_node(bs)?;
+        group.map_input_port(bs, "input_1", "input_1")?;
+        group.map_output_port(bs, "out1_trans1_refl2", "output_1")?;
+        let mut scenery = NodeGroup::default();
+        let src = scenery.add_node(SourcePort::default())?;
+        let group = scenery.add_node(group)?;
+        let mirror = scenery.add_node(ThinMirror::default())?;
+        let mut group_ref = NodeReference::from_node(&scenery.node(group)?)?;
+        group_ref.set_inverted(true)?;
+        let group_ref = scenery.add_node(group_ref)?;
+        let back = scenery.add_node(Dummy::new("back"))?;
+        scenery.connect_nodes(src, "output_1", group, "input_1", millimeter!(100.0))?;
+        scenery.connect_nodes(group, "output_1", mirror, "input_1", millimeter!(50.0))?;
+        scenery.connect_nodes(mirror, "output_1", group_ref, "output_1", millimeter!(50.0))?;
+        scenery.connect_nodes(group_ref, "input_1", back, "input_1", millimeter!(50.0))?;
+        position(&mut scenery, src)?;
+        let (back_pos, back_dir) = placed(&scenery, back);
+        assert_abs_diff_eq!(back_pos, mm(0., 0., 50.), epsilon = 1e-9);
+        assert_abs_diff_eq!(back_dir, -Vector3::z(), epsilon = 1e-9);
         Ok(())
     }
 }
