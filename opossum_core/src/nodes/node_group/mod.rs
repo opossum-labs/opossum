@@ -211,6 +211,26 @@ impl NodeGroup {
         }
     }
 
+    /// Rebuild the surfaces of every node in this group and its subgroups from the node's current
+    /// properties.
+    ///
+    /// A property can be changed without its node rebuilding its surfaces: the backend writes it
+    /// into the node's attributes directly. An analysis that traces rays calls this first, so it
+    /// traces each component as its properties state it now.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if a node cannot build its surfaces.
+    pub fn rebuild_surfaces(&mut self) -> OpmResult<()> {
+        let mut result = Ok(());
+        self.for_each_node_mut(&mut |node| {
+            if result.is_ok() {
+                result = node.update_surfaces();
+            }
+        });
+        result
+    }
+
     /// Returns the hierarchy of nodes starting from `node_id` bottom-up to the root group.
     ///
     /// # Errors

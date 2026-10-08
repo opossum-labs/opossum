@@ -21,7 +21,9 @@ pub mod helper {
         },
         joule,
         light::{LightData, LightRays, LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
-        millimeter, nanometer, percent,
+        millimeter, nanometer,
+        nodes::{EnergyMeter, NodeGroup, SourcePort, ThinMirror},
+        percent,
         prelude::Aperture,
         properties::Proptype,
         utils::{LockExt, geom_transformation::Isometry, test_helper::helper::check_logs},
@@ -30,6 +32,7 @@ pub mod helper {
     use nalgebra::{Point2, Point3, Vector3};
     use std::sync::Arc;
     use uom::si::{energy::joule, f64::Length, length::millimeter};
+    use uuid::Uuid;
     /// Assert that a node can be inverted and that reverting the inversion restores its ports.
     ///
     /// The surfaces of the inverted node are rebuilt in between, as loading a file, positioning and
@@ -360,6 +363,78 @@ pub mod helper {
                 .is_err()
         );
         Ok(())
+    }
+    /// Build a source, an absolutely placed flat mirror 100 mm in front of it and an energy meter
+    /// 50 mm back on the reflected beam. The mirror's clear aperture is then shrunk to a radius of
+    /// 5 mm the way the backend changes a property (see
+    /// [`scenery_with_a_mirror_changed_behind_its_back`]).
+    ///
+    /// # Returns
+    ///
+    /// The scenery, the id of the source and the id of the energy meter.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the scenery cannot be built.
+    pub fn scenery_with_a_mirror_shrunk_behind_its_back() -> OpmResult<(NodeGroup, Uuid, Uuid)> {
+        let shrunk: ApertureShape = CircleShape::new(millimeter!(5.0))?.into();
+        scenery_with_a_mirror_changed_behind_its_back(CLEAR_APERTURE, shrunk.into())
+    }
+    /// Build a source, an absolutely placed flat mirror 100 mm in front of it and an energy meter
+    /// 50 mm back on the reflected beam. A property of the mirror is then changed the way the
+    /// backend changes it: written into the node's attributes, without the node rebuilding its
+    /// surfaces.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - the name of the mirror's property to change.
+    /// * `value` - its new value.
+    ///
+    /// # Returns
+    ///
+    /// The scenery, the id of the source and the id of the energy meter.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the scenery cannot be built or the property cannot be set.
+    pub fn scenery_with_a_mirror_changed_behind_its_back(
+        name: &str,
+        value: Proptype,
+    ) -> OpmResult<(NodeGroup, Uuid, Uuid)> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let mut mirror = ThinMirror::default();
+        mirror.set_positioning(NodePositioning::Absolute(Isometry::new_along_z(
+            millimeter!(100.0),
+        )?))?;
+        let mirror = scenery.add_node(mirror)?;
+        let meter = scenery.add_node(EnergyMeter::default())?;
+        scenery.connect_nodes(source, "output_1", mirror, "input_1", millimeter!(100.0))?;
+        scenery.connect_nodes(mirror, "output_1", meter, "input_1", millimeter!(50.0))?;
+        scenery.with_node_attr_mut(mirror, |node_attr| node_attr.set_property(name, value))??;
+        Ok((scenery, source, meter))
+    }
+    /// Return the number of valid rays the energy meter with the given id recorded.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the scenery has no such node.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node is no energy meter or recorded no rays.
+    pub fn rays_recorded_by_meter(scenery: &NodeGroup, meter: Uuid) -> OpmResult<usize> {
+        let node = scenery.node(meter)?;
+        let Some(meter) = node.as_any().downcast_ref::<EnergyMeter>() else {
+            panic!("the node is no energy meter");
+        };
+        match meter.light_data() {
+            Some(LightData::Geometric(rays)) => Ok(rays.nr_of_rays(true)),
+            Some(LightData::GhostFocus(bundles)) => {
+                Ok(bundles.iter().map(|rays| rays.nr_of_rays(true)).sum())
+            }
+            _ => panic!("the energy meter recorded no rays"),
+        }
     }
     /// Return the start points of two rays, 12.4 mm and 12.6 mm off the axis: just inside and
     /// just outside the default clear aperture of 12.5 mm, 10 mm in front of a node at the origin.
