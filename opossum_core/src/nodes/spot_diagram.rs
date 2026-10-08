@@ -20,6 +20,7 @@ use crate::{
         plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
         report_note::{ReportLevel, ReportNote},
     },
+    types::validated_type_definitions::ValidatedCrossSection,
     utils::{
         geom_transformation::Isometry,
         unit_format::{
@@ -74,7 +75,7 @@ impl Default for SpotDiagram {
         node_attr
             .create_property(
                 "plot aperture",
-                "flag that defines if the aperture is displayed in a plot",
+                "flag that defines if the recording window and a port aperture are outlined in a plot",
                 false.into(),
             )
             .expect("Hardcoded property creation must not fail");
@@ -342,15 +343,26 @@ impl Plottable for SpotDiagram {
         plt_type.set_plot_param(&PlotArgs::XLim(AxLims::new(-x_max * 1.1, 1.1 * x_max)))?;
         plt_type.set_plot_param(&PlotArgs::YLim(AxLims::new(-y_max * 1.1, 1.1 * y_max)))?;
 
-        // Render aperture contour if requested and available
+        // Outline the window recorded within and a port aperture masking the light, if requested.
         if let Ok(Proptype::Bool(plot_aperture)) = self.properties().get("plot aperture")
             && *plot_aperture
-            && let Some(aperture) = self.ports().aperture(&PortType::Input, &input_port)
         {
-            let plt_series_opt = aperture
-                .get_plot_series(&mut PlotType::Line2D(PlotParameters::default()), legend)?;
-            if let Some(aperture_plt_series) = plt_series_opt {
-                plt_series.extend(aperture_plt_series);
+            let window = self.clear_aperture()?;
+            let mask = self
+                .ports()
+                .aperture(&PortType::Input, &input_port)
+                .cloned();
+            for aperture in window
+                .as_ref()
+                .map(ValidatedCrossSection::get)
+                .into_iter()
+                .chain(&mask)
+            {
+                let plt_series_opt = aperture
+                    .get_plot_series(&mut PlotType::Line2D(PlotParameters::default()), legend)?;
+                if let Some(aperture_plt_series) = plt_series_opt {
+                    plt_series.extend(aperture_plt_series);
+                }
             }
         }
 
@@ -377,6 +389,46 @@ mod test {
     };
     use uom::num_traits::Zero;
 
+    /// With "plot aperture" set, the plot outlines the window the spot diagram records within, and
+    /// a port aperture masking the light on top of it.
+    #[test]
+    fn the_plot_outlines_the_window_and_a_port_mask() -> OpmResult<()> {
+        use crate::{
+            analyzers::RayTraceConfig,
+            apertures::{Aperture, ApertureShape, ApertureType, CircleShape},
+            geometry::body::CLEAR_APERTURE,
+            millimeter,
+        };
+        let series_count = |with_mask: bool| -> OpmResult<usize> {
+            let mut diagram = placed_at_origin::<SpotDiagram>()?;
+            diagram.set_property("plot aperture", true.into())?;
+            diagram.set_property(
+                CLEAR_APERTURE,
+                ApertureShape::from(CircleShape::new(millimeter!(5.0))?).into(),
+            )?;
+            if with_mask {
+                diagram.set_aperture(
+                    &PortType::Input,
+                    "input_1",
+                    &Aperture::new_circle(millimeter!(3.0), ApertureType::Hole, None)?,
+                )?;
+            }
+            let rays = rays_along_z_from(&[millimeter!(0.0, 1.0, -10.0)], nanometer!(1000.0))?;
+            AnalysisRayTrace::analyze(
+                &mut diagram,
+                LightResult::from([("input_1".into(), LightData::Geometric(rays))]),
+                &RayTraceConfig::default(),
+            )?;
+            let series = diagram
+                .get_plot_series(&mut PlotType::Scatter2D(PlotParameters::default()), false)?
+                .expect("the spot diagram has plot data");
+            Ok(series.len())
+        };
+        // One series for the single wavelength, one for each outline.
+        assert_eq!(series_count(false)?, 2, "the window");
+        assert_eq!(series_count(true)?, 3, "the window and the mask");
+        Ok(())
+    }
     #[test]
     fn default() {
         let node = SpotDiagram::default();
