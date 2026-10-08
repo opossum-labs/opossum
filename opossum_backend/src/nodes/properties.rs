@@ -42,8 +42,14 @@ pub async fn get_properties(
     let (optic_ref, is_reference) = resolve_reference_chain(&document, uuid)?;
     let node_attr = optic_ref.node_attr().clone();
 
+    let validators = node_attr
+        .properties()
+        .iter()
+        .filter_map(|(name, property)| Some((name.clone(), property.validator()?.clone())))
+        .collect();
     let response_data = NodePropertiesResponse {
         properties: node_attr.properties().clone(),
+        validators,
         is_reference,
     };
 
@@ -110,9 +116,10 @@ mod test {
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
     use opossum_core::{
         core_optics::node_attr::HasNodeAttr,
+        geometry::body::CLEAR_APERTURE,
         material::{MATERIAL, Material},
-        nodes::{Dummy, Lens},
-        properties::proptype::AssetRef,
+        nodes::{Dummy, Lens, ParaxialSurface},
+        properties::{proptype::AssetRef, validator::Validator},
         refractive_index::{RefrIndexConst, RefractiveIndexType},
         types::api_types::{DocumentChange, NodeEditorPanel, UndoRedoResponse},
     };
@@ -237,6 +244,39 @@ mod test {
             StatusCode::NO_CONTENT
         );
         assert_eq!(index_model_of_node(), index_model(2.0));
+    }
+
+    /// The GUI offers only the shapes a clear aperture can take, and learns them from the property's
+    /// validator: a lens must have an edge, a paraxial surface may also be open.
+    #[actix_web::test]
+    async fn test_get_properties_carries_the_validators() {
+        let app_state = create_test_state();
+        let (lens_id, paraxial_id) = {
+            let mut document = app_state.document.lock();
+            (
+                document.scenery_mut().add_node(Lens::default()).unwrap(),
+                document
+                    .scenery_mut()
+                    .add_node(ParaxialSurface::default())
+                    .unwrap(),
+            )
+        };
+        let app = test::init_service(App::new().app_data(app_state).service(get_properties)).await;
+        for (node_id, expected) in [
+            (lens_id, Validator::ApertureDelimitsRegion),
+            (paraxial_id, Validator::ApertureDelimitsRegionOrIsOpen),
+        ] {
+            let req = test::TestRequest::get()
+                .uri(&format!("/{node_id}/properties"))
+                .insert_header(("Accept", "application/ron"))
+                .to_request();
+            let resp = app.call(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::OK);
+            let body = test::read_body(resp).await;
+            let response: NodePropertiesResponse =
+                ron::from_str(std::str::from_utf8(&body).unwrap()).unwrap();
+            assert_eq!(response.validators.get(CLEAR_APERTURE), Some(&expected));
+        }
     }
 
     #[actix_web::test]

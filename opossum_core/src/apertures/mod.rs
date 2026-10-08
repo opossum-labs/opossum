@@ -537,7 +537,7 @@ impl ApertureShape {
     /// Return whether some shape of this kind bounds a region (see [`Self::delimits_region`]).
     ///
     /// The match is exhaustive on purpose: a new variant has to state on which side it is.
-    const fn may_delimit_region(&self) -> bool {
+    pub(crate) const fn may_delimit_region(&self) -> bool {
         match self {
             Self::Open | Self::Gaussian(_) => false,
             Self::BinaryCircle(_)

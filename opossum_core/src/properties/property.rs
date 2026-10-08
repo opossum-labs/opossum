@@ -51,6 +51,11 @@ impl Property {
     pub fn description(&self) -> &str {
         self.description.as_ref()
     }
+    /// Returns the [`Validator`] that guards the value of this [`Property`], if any.
+    #[must_use]
+    pub const fn validator(&self) -> Option<&Validator> {
+        self.validator.as_ref()
+    }
     /// Sets the value of this [`Property`].
     ///
     /// # Errors
