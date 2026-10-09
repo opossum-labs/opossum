@@ -1,12 +1,16 @@
-use crate::components::scenery_editor::graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt};
+// File: opossum_gui/src/components/scenery_editor/ports/ports_component.rs
+
 use crate::components::scenery_editor::{
-    GraphState, GraphsWorkspaceState,
     constants::{BORDER_WIDTH, PORT_HEIGHT, PORT_WIDTH},
+    graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt},
     node::NodeElement,
     ports::{
-        hooks::{use_on_context_menu, use_on_mouse_down, use_on_mouse_enter, use_on_mouse_leave},
+        hooks::{
+            use_on_context_menu, use_on_mouse_down, use_on_mouse_enter, use_on_mouse_leave,
+        },
         port_map_component::PortMapComponent,
     },
+    GraphState, GraphsWorkspaceState,
 };
 use dioxus::prelude::*;
 use opossum_core::prelude::*;
@@ -25,26 +29,33 @@ impl Ports {
             output_ports,
         }
     }
+
     pub fn set_input_ports(&mut self, ports: Vec<String>) {
         self.input_ports = ports;
     }
+
     pub fn set_output_ports(&mut self, ports: Vec<String>) {
         self.output_ports = ports;
     }
+
     pub fn remove_input_port(&mut self, remove: &str) {
         self.input_ports.retain(|p| p != remove);
     }
+
     pub fn remove_output_port(&mut self, remove: &str) {
         self.output_ports.retain(|p| p != remove);
     }
+
     #[must_use]
     pub const fn input_ports(&self) -> &Vec<String> {
         &self.input_ports
     }
+
     #[must_use]
     pub const fn output_ports(&self) -> &Vec<String> {
         &self.output_ports
     }
+
     pub fn invert_ports(&mut self) {
         let input_buffer = self.input_ports.clone();
         self.input_ports = self.output_ports.clone();
@@ -71,7 +82,7 @@ pub fn NodePort(
 
     let external_port_opt = graph_store
         .mapped_ports()
-        .read()
+        .peek()
         .external_port_of_mapped_port(node.id(), &port_name);
 
     let on_mouse_down_handler =
@@ -79,7 +90,7 @@ pub fn NodePort(
     let on_mouse_leave_handler = use_on_mouse_leave(editor_status);
     let on_mouse_enter_handler = use_on_mouse_enter(
         editor_status,
-        &port_name,
+        port_name.clone(),
         node_id,
         port_type,
         external_port_opt.is_some(),
@@ -87,24 +98,20 @@ pub fn NodePort(
     let on_context_menu_handler = use_on_context_menu(
         workspace,
         graph_store,
-        graph_state.graph_info().read().clone(),
+        graph_state.graph_info().peek().clone(),
         node_id,
         port_name.clone(),
         port_type,
     );
 
-    // Format port type string ("input" or "output") for E2E selector construction
     let port_type_str = match port_type {
         PortType::Input => "input",
         PortType::Output => "output",
     };
-
-    // Construct deterministic test ID string (e.g., "port-output-out", "port-input-in")
     let port_test_id = format!("port-{port_type_str}-{port_name}");
 
     rsx! {
         div {
-            // Assign deterministic test ID for Playwright targeting
             "data-testid": "{port_test_id}",
             class: "port {port_class}",
             title: "{port_name}",
@@ -123,7 +130,6 @@ pub fn NodePort(
             onmouseleave: move |e| on_mouse_leave_handler.call(e),
             oncontextmenu: move |e| on_context_menu_handler.call(e),
         }
-
         if let Some(external_port) = external_port_opt {
             PortMapComponent {
                 on_context_menu_handler,
@@ -152,6 +158,8 @@ fn get_port_class(is_inverted: bool, port_type: PortType) -> &'static str {
 #[component]
 pub fn NodePorts(node: NodeElement, inverted: bool) -> Element {
     let input_ports = node.input_ports();
+    let output_ports = node.output_ports();
+
     rsx! {
         for in_port in input_ports {
             NodePort {
@@ -162,7 +170,7 @@ pub fn NodePorts(node: NodeElement, inverted: bool) -> Element {
                 inverted_node: inverted,
             }
         }
-        for out_port in node.output_ports() {
+        for out_port in output_ports {
             NodePort {
                 key: "out-{out_port}",
                 node: node.clone(),

@@ -1,26 +1,27 @@
+// File: opossum_gui/src/components/scenery_editor/ports/hooks.rs
+
 use dioxus::{
     html::{
-        MouseEvent, PointerInteraction, geometry::euclid::default::Point2D, input_data::MouseButton,
+        geometry::euclid::default::Point2D, input_data::MouseButton, MouseEvent,
     },
     prelude::*,
 };
 use opossum_core::prelude::PortType;
 use uuid::Uuid;
-
 use crate::{
-    CONTEXT_MENU,
     components::{
         context_menu::cx_menu::{CxMenu, CxtCommand},
         scenery_editor::{
-            DragStatus, EditorState, EditorStateStoreExt, GraphState, GraphStore,
-            GraphsWorkspaceAction, GraphsWorkspaceState,
             edges::edges_component::{EdgePort, NewEdgeCreationStart},
             graph_workspace::{
-                GraphStateStoreExt, GraphStoreStoreExt, GraphsWorkspaceStateStoreExt,
-                workspace_state::GraphInfo,
+                workspace_state::GraphInfo, EditorStateStoreExt, GraphStateStoreExt,
+                GraphStoreStoreExt, GraphsWorkspaceStateStoreExt,
             },
+            DragStatus, EditorState, GraphState, GraphStore, GraphsWorkspaceAction,
+            GraphsWorkspaceState,
         },
     },
+    CONTEXT_MENU,
 };
 
 pub fn use_on_mouse_down(
@@ -45,19 +46,20 @@ pub fn use_on_mouse_down(
 }
 
 pub fn use_on_mouse_leave(
-    editor_status: Store<EditorState, impl Readable<Target = EditorState> + 'static>,
+    // Require `Clone` on the lens to allow cloning the store handle inside FnMut closures
+    editor_status: Store<EditorState, impl Readable<Target = EditorState> + Clone + 'static>,
 ) -> EventHandler<MouseEvent> {
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
-    let graph_id = use_context::<ReadStore<GraphState>>()
-        .graph_info()
-        .read()
-        .id;
+    let graph_state = use_context::<ReadStore<GraphState>>();
 
-    EventHandler::new({
-        let edge_increation = editor_status.edge_in_creation().read().clone();
-        move |event: MouseEvent| {
-            event.stop_propagation();
-            if let Some(mut edge_in_creation) = edge_increation.clone() {
+    EventHandler::new(move |event: MouseEvent| {
+        // Clone the store handle to consume the clone rather than moving the captured variable
+        let edge_opt = editor_status.clone().edge_in_creation().peek().clone();
+        if let Some(mut edge_in_creation) = edge_opt {
+            // Only update if an end port was actively targeted
+            if edge_in_creation.end_port().is_some() {
+                event.stop_propagation();
+                let graph_id = graph_state.graph_info().peek().id;
                 edge_in_creation.set_end_port(None);
                 workspace_processor.send(GraphsWorkspaceAction::SetEdgeInCreation {
                     graph_id,
@@ -69,37 +71,35 @@ pub fn use_on_mouse_leave(
 }
 
 pub fn use_on_mouse_enter(
-    editor_status: Store<EditorState, impl Readable<Target = EditorState> + 'static>,
-    port_name: &str,
+    // Require `Clone` on the lens to allow cloning the store handle inside FnMut closures
+    editor_status: Store<EditorState, impl Readable<Target = EditorState> + Clone + 'static>,
+    port_name: String,
     node_id: Uuid,
     port_type: PortType,
     is_mapped_port: bool,
 ) -> EventHandler<MouseEvent> {
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
-    let graph_id = use_context::<ReadStore<GraphState>>()
-        .graph_info()
-        .read()
-        .id;
-    EventHandler::new({
-        let edge_increation = editor_status.edge_in_creation().read().clone();
-        let port_name = port_name.to_owned();
-        move |event: MouseEvent| {
-            if let Some(mut edge_in_creation) = edge_increation.clone()
-                && !is_mapped_port
-            {
-                event.stop_propagation();
+    let graph_state = use_context::<ReadStore<GraphState>>();
 
-                edge_in_creation.set_end_port(Some(EdgePort {
-                    node_id,
-                    port_name: port_name.clone(),
-                    port_type,
-                }));
+    EventHandler::new(move |event: MouseEvent| {
+        if is_mapped_port {
+            return;
+        }
 
-                workspace_processor.send(GraphsWorkspaceAction::SetEdgeInCreation {
-                    graph_id,
-                    edge_in_creation: Some(edge_in_creation),
-                });
-            }
+        // Clone the store handle to consume the clone rather than moving the captured variable
+        let edge_opt = editor_status.clone().edge_in_creation().peek().clone();
+        if let Some(mut edge_in_creation) = edge_opt {
+            event.stop_propagation();
+            let graph_id = graph_state.graph_info().peek().id;
+            edge_in_creation.set_end_port(Some(EdgePort {
+                node_id,
+                port_name: port_name.clone(),
+                port_type,
+            }));
+            workspace_processor.send(GraphsWorkspaceAction::SetEdgeInCreation {
+                graph_id,
+                edge_in_creation: Some(edge_in_creation),
+            });
         }
     })
 }
@@ -118,13 +118,11 @@ pub fn use_on_context_menu(
         event.stop_propagation();
         let x_coord = event.page_coordinates().x;
         let y_coord = event.page_coordinates().y;
-
         let root_tab = *workspace.root_scenery_id().read();
         if graph_info.id != root_tab {
             let mut cx_menu = CxMenu::new(x_coord, y_coord, vec![]);
-
             let mapped_external_port_opt = mapped_ports
-                .read()
+                .peek()
                 .external_port_of_mapped_port(node_id, &port_name);
             if let Some(group_port_name) = mapped_external_port_opt {
                 let remove_entry = (
@@ -136,7 +134,6 @@ pub fn use_on_context_menu(
                     },
                 );
                 cx_menu.add_entry(remove_entry);
-
                 let parent = graph_info.get_parent().unwrap_or_else(|| {
                     let root_id = *workspace.root_scenery_id().read();
                     let root_name = workspace
@@ -149,7 +146,6 @@ pub fn use_on_context_menu(
                         .clone();
                     (root_id, root_name)
                 });
-
                 let jump_to_mapped_port_entry = (
                     "Jump to mapped port".to_owned(),
                     CxtCommand::JumpToMappedPort {

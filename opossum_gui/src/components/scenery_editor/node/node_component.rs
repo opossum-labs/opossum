@@ -2,16 +2,9 @@
 
 use super::{AMP_STATUS_HEIGHT, NodeElement};
 use crate::{
-    CONTEXT_MENU,
-    components::{
-        context_menu::cx_menu::{CxMenu, CxtCommand},
-        scenery_editor::{
-            DragStatus, GraphState, GraphsWorkspaceAction, GraphsWorkspaceState,
-            GraphsWorkspaceStateStoreExt, NodeType,
-            constants::{BORDER_WIDTH, NODE_WIDTH},
-            graph_workspace::GraphStateStoreExt,
-            node::{graph_node_components::GraphNodeContent, node_icon::NodeSymbolIcon},
-            ports::ports_component::NodePorts,
+    CONTEXT_MENU, components::{
+        context_menu::cx_menu::{CxMenu, CxtCommand}, scenery_editor::{
+            DragStatus, GraphState, GraphsWorkspaceAction, GraphsWorkspaceStateStoreExt, NodeType, constants::{BORDER_WIDTH, NODE_WIDTH}, graph_workspace::{GraphStateStoreExt, GraphsWorkspaceState}, node::{graph_node_components::GraphNodeContent, node_icon::NodeSymbolIcon}, ports::ports_component::NodePorts,
         },
     },
 };
@@ -101,7 +94,6 @@ pub fn Node(
             onmouseup: {
                 let z_index = node.z_index();
                 move |_| {
-                    // Peek the drag status without creating a reactive subscription in Dioxus
                     let was_plain_click = *workspace.drag_status().peek()
                         == DragStatus::NodeInit;
                     if was_plain_click && !ctrl_pressed() {
@@ -128,7 +120,6 @@ pub fn Node(
                         vec![],
                     );
 
-                    // Query selected optical nodes on demand only
                     let active_optical_node_ids = graph_store.peek().selected_optical_nodes();
                     if active_optical_node_ids.len() <= 1 {
                         cx_menu
@@ -186,6 +177,7 @@ pub fn Node(
                         draggable: false,
                         style: format!("height: {}px;", node.node_body_height()),
                         NodeSymbolIcon { symbol_id }
+                        // Stage 4a: Integrate NodePorts with stripped static rendering
                         NodePorts { node: node.clone(), inverted: node.inverted() }
                     }
                 },

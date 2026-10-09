@@ -299,20 +299,10 @@ impl<Lens> Store<GraphStore, Lens> {
         }
     }
     fn set_z_level_to_top(&mut self, node_id: Uuid, _z_level: usize) {
-        // Find the current highest z-index across all nodes without mutating them
-        let max_z = self
-            .nodes()
-            .read()
-            .values()
-            .map(NodeElement::z_index)
-            .max()
-            .unwrap_or(0);
-
-        // Only mutate the clicked node if it is not already at the top
-        if let Some(mut node) = self.nodes().get(node_id) {
-            if node.read().z_index() < max_z {
-                node.write().set_z_index(max_z + 1);
-            }
+        let number_of_nodes = self.nodes().len();
+        if let Some(mut elem) = self.nodes().get(node_id) {
+            // Nur diese EINE Node mutieren, alle anderen in Ruhe lassen
+            elem.write().set_z_index(number_of_nodes + 1);
         }
     }
     /// Adds a new reference node to the graph store.
