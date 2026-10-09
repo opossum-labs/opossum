@@ -1667,10 +1667,11 @@ mod test {
         }
         Ok(())
     }
-    /// Only what merely records light or is an idealization may be unbounded: the detectors and the
-    /// paraxial surface accept an open clear aperture, every real component refuses one.
+    /// Only what merely records light, is an idealization or has no optical function may be
+    /// unbounded: the detectors, the paraxial surface and the dummy accept an open clear aperture,
+    /// every real component refuses one.
     #[test]
-    fn only_detectors_and_ideal_surfaces_may_be_open() -> OpmResult<()> {
+    fn only_detectors_ideal_surfaces_and_the_dummy_may_be_open() -> OpmResult<()> {
         let mut may_be_open = Vec::new();
         for (node_type, _) in node_types() {
             let mut node_attr = create_node_ref(node_type)?.node_attr().clone();
@@ -1686,6 +1687,7 @@ mod test {
         assert_eq!(
             may_be_open,
             [
+                "dummy",
                 "energy meter",
                 "fluence detector",
                 "paraxial surface",

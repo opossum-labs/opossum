@@ -343,7 +343,10 @@ mod test {
         error::OpmResult,
         geometry::body::{CLEAR_APERTURE, default_clear_aperture},
         millimeter,
-        nodes::{BeamSplitter, Dummy, Lens, NodeGroup, ParabolicMirror, SpotDiagram, ThinMirror},
+        nodes::{
+            BeamSplitter, Dummy, Lens, NodeGroup, ParabolicMirror, RayPropagationVisualizer,
+            SpotDiagram, ThinMirror,
+        },
         opm_document::OpmDocument,
         properties::Proptype,
         refractive_index::RefrIndexConst,
@@ -438,7 +441,8 @@ mod test {
     }
     /// In format version 0 a binary hole at the entrance of a component stated how large the
     /// component is. It becomes the clear aperture, and every port with the same hole opens; a
-    /// port with another aperture keeps it. A detector records within the hole from now on.
+    /// port with another aperture keeps it. A detector records within the hole from now on, and a
+    /// dummy becomes an iris.
     #[test]
     fn a_port_hole_becomes_the_clear_aperture() -> OpmResult<()> {
         let mut lens = Lens::default();
@@ -472,6 +476,7 @@ mod test {
         for mut node in [
             OpticRef::new(Box::new(ThinMirror::default())),
             OpticRef::new(Box::new(SpotDiagram::default())),
+            OpticRef::new(Box::new(Dummy::default())),
         ] {
             node.set_aperture(&PortType::Input, "input_1", &hole(5.0)?)?;
             let mut scenery = NodeGroup::default();
@@ -524,11 +529,11 @@ mod test {
     /// A node without a clear aperture keeps its port hole: there is no outline to move it to.
     #[test]
     fn a_node_without_a_clear_aperture_keeps_its_port_hole() -> OpmResult<()> {
-        let mut dummy = Dummy::default();
-        dummy.set_aperture(&PortType::Input, "input_1", &hole(5.0)?)?;
-        let dummy = upgraded(dummy)?;
+        let mut visualizer = RayPropagationVisualizer::default();
+        visualizer.set_aperture(&PortType::Input, "input_1", &hole(5.0)?)?;
+        let visualizer = upgraded(visualizer)?;
         assert_eq!(
-            port_aperture(&dummy, &PortType::Input, "input_1"),
+            port_aperture(&visualizer, &PortType::Input, "input_1"),
             hole(5.0)?
         );
         Ok(())

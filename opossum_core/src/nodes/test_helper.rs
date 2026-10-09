@@ -159,9 +159,26 @@ pub mod helper {
     pub fn test_rays_beyond_clear_aperture_are_lost<
         T: Default + AnalysisRayTrace + AnalysisGhostFocus,
     >() -> OpmResult<()> {
+        test_rays_beyond_clear_aperture_are_lost_for(placed_at_origin::<T>)
+    }
+    /// The same check as [`test_rays_beyond_clear_aperture_are_lost`], for a node built by `make`
+    /// rather than a default one: e.g. a node that only has a clear aperture once it is set.
+    ///
+    /// # Arguments
+    ///
+    /// * `make` - builds the node at the origin, bounded by the default clear aperture.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node cannot be built or analyzed.
+    pub fn test_rays_beyond_clear_aperture_are_lost_for<
+        T: AnalysisRayTrace + AnalysisGhostFocus,
+    >(
+        make: impl Fn() -> OpmResult<T>,
+    ) -> OpmResult<()> {
         let (inside, outside) = around_the_default_rim();
         let rays = || rays_along_z_from(&[inside, outside], nanometer!(1000.0));
-        let mut node = placed_at_origin::<T>()?;
+        let mut node = make()?;
         let warning = format!(
             "Rays were lost at '{}' ({}): they ran outside its clear aperture, were cut by a port aperture or fell below the energy threshold. Results might not be accurate.",
             node.node_attr().name(),
@@ -190,7 +207,7 @@ pub mod helper {
             "a ray trace keeps the ray inside, loses the one outside"
         );
         let passed = AnalysisGhostFocus::analyze(
-            &mut placed_at_origin::<T>()?,
+            &mut make()?,
             LightRays::from([("input_1".into(), vec![rays()?])]),
             &GhostFocusConfig::default(),
             &mut Vec::new(),

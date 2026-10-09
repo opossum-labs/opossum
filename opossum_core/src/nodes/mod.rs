@@ -82,9 +82,9 @@ use std::{collections::HashSet, sync::LazyLock};
 /// transversally ([`CLEAR_APERTURE`]).
 ///
 /// Declaring it from one place keeps the node types that call this in sync with each other, and
-/// together with [`create_surface_properties`], [`create_ideal_surface_properties`] and
-/// [`create_detector_properties`] they are exactly the node types whose geometry can have a rim —
-/// which is what the tests in `volumetric.rs` check.
+/// together with [`create_surface_properties`], [`create_ideal_surface_properties`],
+/// [`create_detector_properties`] and [`create_dummy_properties`] they are exactly the node types
+/// whose geometry can have a rim — which is what the tests in `volumetric.rs` check.
 ///
 /// Creates standard volumetric properties for a node.
 ///
@@ -168,6 +168,29 @@ pub fn create_detector_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
     node_attr.create_property_with_validator(
         CLEAR_APERTURE,
         "window the light is recorded within",
+        Validator::ApertureDelimitsRegionOrIsOpen,
+        ApertureShape::Open.into(),
+    )
+}
+
+/// Declare the property of a [`Dummy`]: how far its surface extends transversally
+/// ([`CLEAR_APERTURE`]).
+///
+/// The sibling of [`create_detector_properties`]. A dummy has no optical function, so it starts
+/// unbounded ([`ApertureShape::Open`]) and changes nothing unless its clear aperture is set. Bounded,
+/// it is an iris: a ray outside misses it and follows the analyzer's missed surface strategy.
+///
+/// # Arguments
+///
+/// * `node_attr` - the attributes of the node under construction.
+///
+/// # Errors
+///
+/// This function returns an error if the property is already declared.
+pub fn create_dummy_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
+    node_attr.create_property_with_validator(
+        CLEAR_APERTURE,
+        "transversal extent of the surface, open for an unbounded one",
         Validator::ApertureDelimitsRegionOrIsOpen,
         ApertureShape::Open.into(),
     )

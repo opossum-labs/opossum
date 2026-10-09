@@ -12,7 +12,7 @@ use crate::{
     error::OpmResult,
     geometry::Geometry,
     light::LightResult,
-    nodes::NodeRegistration,
+    nodes::{NodeRegistration, create_dummy_properties},
 };
 
 inventory::submit! {
@@ -27,8 +27,8 @@ inventory::submit! {
 /// development and debugging purposes. In addition, it can be used as an "optical terminal" of a
 /// [`NodeGroup`](crate::nodes::NodeGroup) such as the "input hole" of a camera box which does not really
 /// represent an optically active component. However, this way a group can be positioned in a scenery.
-/// Similar to all other nodes, a [`Dummy`] can have an [`Aperture`](crate::apertures::Aperture) defined.
-/// This way, things like a mask (e.g. serrated aperture) which apodizes an incoming beam can be realized.
+/// A [`Dummy`] is unbounded by default; given a clear aperture it acts as an iris, which a ray outside
+/// misses.
 ///
 /// Geometrically, a [`Dummy`] node consists of a single flat surface.
 ///
@@ -41,15 +41,17 @@ inventory::submit! {
 /// ## Properties
 ///   - `name`
 ///   - `inverted`
+///   - `clear aperture`: the extent of the surface, open by default; a ray beyond it misses the
+///     dummy and follows the analyzer's missed surface strategy
 pub struct Dummy {
     node_attr: NodeAttr,
 }
 
 impl Default for Dummy {
     fn default() -> Self {
-        let mut dummy = Self {
-            node_attr: NodeAttr::new("dummy"),
-        };
+        let mut node_attr = NodeAttr::new("dummy");
+        create_dummy_properties(&mut node_attr).expect("Failed to declare dummy properties");
+        let mut dummy = Self { node_attr };
         dummy
             .update_surfaces()
             .expect("Failed to initialize dummy surfaces");
@@ -83,7 +85,7 @@ impl AnalysisRayTrace for Dummy {
 
 impl OpticNode for Dummy {
     fn geometry(&self) -> OpmResult<Option<Geometry>> {
-        Ok(Some(Geometry::plane(None)))
+        Ok(Some(Geometry::plane(self.clear_aperture()?)))
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.install_geometry(&["input_1"], &["output_1"])
@@ -97,6 +99,7 @@ mod test {
         analyzers::energy::EnergyConfig,
         apertures::{Aperture, ApertureType},
         core_optics::{NodeAttrExt, PortType, node_attr::NodePositioning},
+        geometry::body::{CLEAR_APERTURE, default_clear_aperture},
         joule,
         light::{LightData, Ray, Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer,
@@ -264,6 +267,33 @@ mod test {
         } else {
             panic!("Expected geometric ray bundle in output port");
         }
+        Ok(())
+    }
+
+    /// Bounded by a clear aperture, a dummy is an iris: a ray outside it misses the dummy.
+    #[test]
+    fn a_bounded_dummy_is_an_iris() -> OpmResult<()> {
+        test_rays_beyond_clear_aperture_are_lost_for(|| {
+            let mut dummy = placed_at_origin::<Dummy>()?;
+            dummy.set_property(CLEAR_APERTURE, default_clear_aperture().into())?;
+            dummy.update_surfaces()?;
+            Ok(dummy)
+        })
+    }
+
+    /// Unbounded by default, a dummy passes every ray, however far off its axis.
+    #[test]
+    fn a_dummy_is_unbounded_by_default() -> OpmResult<()> {
+        let rays = rays_along_z_from(&[millimeter!(0.0, 100.0, -10.0)], nanometer!(1000.0))?;
+        let output = AnalysisRayTrace::analyze(
+            &mut placed_at_origin::<Dummy>()?,
+            LightResult::from([("input_1".into(), LightData::Geometric(rays))]),
+            &RayTraceConfig::default(),
+        )?;
+        let Some(LightData::Geometric(passed)) = output.get("output_1") else {
+            panic!("expected ray data at the output port");
+        };
+        assert_eq!(passed.nr_of_rays(true), 1);
         Ok(())
     }
 

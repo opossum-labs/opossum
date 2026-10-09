@@ -81,6 +81,9 @@
                     "node_type": "dummy",
                     "name": "dummy",
                     "uuid": "d634c539-40ff-4eec-84a9-c08be51a95fe",
+                    "props": {
+                        "clear aperture": Aperture(Open),
+                    },
                 },
                 {
                     "node_type": "group",
@@ -95,11 +98,17 @@
                                 "node_type": "dummy",
                                 "name": "nested dummy in",
                                 "uuid": "ecee13ec-0b59-495a-864a-3ebe961df08f",
+                                "props": {
+                                    "clear aperture": Aperture(Open),
+                                },
                             },
                             {
                                 "node_type": "dummy",
                                 "name": "nested dummy out",
                                 "uuid": "b07410d7-9039-486e-839d-945ca9f0b301",
+                                "props": {
+                                    "clear aperture": Aperture(Open),
+                                },
                             },
                         ],
                         edges: [
