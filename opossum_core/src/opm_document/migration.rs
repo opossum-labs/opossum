@@ -10,7 +10,7 @@
 
 use super::OpmDocument;
 use crate::{
-    apertures::{Aperture, ApertureShape, ApertureType, CircleShape},
+    apertures::{Aperture, ApertureShape, ApertureType, CircleShape, StackShape},
     core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, PortType},
     error::{OpmResult, OpossumError},
     geometry::{
@@ -125,25 +125,114 @@ pub fn upgrade_node(node: &mut dyn OpticNode) -> OpmResult<()> {
 
 /// Upgrade a node of format version 0.
 ///
-/// That format stated the size of a component by a binary hole at its entrance port, and it did
-/// not check that a curved face reaches the clear aperture. Such a hole becomes the clear
-/// aperture and the ports holding it open; a clear aperture beyond the curvature shrinks to it.
+/// That format stated the size of a component by a binary hole at its entrance port, let every
+/// port mask the light passing it by an aperture, and did not check that a curved face reaches the
+/// clear aperture. Such a hole becomes the clear aperture and the ports holding it open; a clear
+/// aperture beyond the curvature shrinks to it. Only the clear aperture limits light now, so every
+/// other port aperture joins it or is dropped (see [`join_port_apertures`]).
 ///
 /// # Errors
 ///
 /// See [`upgrade_node`].
 fn upgrade_node_from_0(node: &mut dyn OpticNode) -> OpmResult<()> {
-    if node.node_attr().get_property(CLEAR_APERTURE).is_err() {
+    if node.node_attr().get_property(CLEAR_APERTURE).is_ok() {
+        if let Some(hole) = entrance_hole(node)
+            && port_frame_is_rim_frame(node, &PortType::Input)?
+        {
+            node.node_attr_mut()
+                .set_property(CLEAR_APERTURE, hole.shape().clone().into())?;
+            open_ports_with(node, &hole);
+        }
+        fit_clear_aperture_to_curvature(node)?;
+    }
+    join_port_apertures(node)
+}
+
+/// Let the remaining port apertures of a node join its clear aperture.
+///
+/// A port aperture masked the light that passed its port. In the clear aperture it bounds the
+/// component instead: the clear aperture becomes a stack of its own outline and the binary port
+/// apertures, which transmits where all of them do. A port aperture is dropped if the node has no
+/// clear aperture, if it is no binary outline (soft or stacked), if it was measured in another
+/// frame than the clear aperture (an off-axis parabola, a tilted face), or if the stack does not
+/// bound the component. Every port opens, and a warning names each port aperture and what became
+/// of it.
+///
+/// # Errors
+///
+/// This function returns an error if the clear aperture cannot be read or set, or the frames of
+/// the node cannot be derived.
+fn join_port_apertures(node: &mut dyn OpticNode) -> OpmResult<()> {
+    let mut apertures = Vec::new();
+    let ports = node.node_attr_mut().raw_ports_mut();
+    for port_type in [PortType::Input, PortType::Output] {
+        for (name, config) in ports.ports_mut(&port_type).iter_mut() {
+            if !config.aperture.is_none() {
+                let aperture = std::mem::take(&mut config.aperture);
+                apertures.push((port_type, name.clone(), aperture));
+            }
+        }
+    }
+    if apertures.is_empty() {
         return Ok(());
     }
-    if let Some(hole) = entrance_hole(node)
-        && port_frame_is_rim_frame(node)?
-    {
-        node.node_attr_mut()
-            .set_property(CLEAR_APERTURE, hole.shape().clone().into())?;
-        open_ports_with(node, &hole);
+    let node_info = node.node_info();
+    let Ok(declared) = node.node_attr().get_property(CLEAR_APERTURE).cloned() else {
+        for (port_type, name, _) in apertures {
+            warn!(
+                "the aperture of {port_type} port '{name}' of {node_info} was dropped: the node \
+                 has no clear aperture; a dummy with one next to it limits the light instead"
+            );
+        }
+        return Ok(());
+    };
+    let mut members = match node.clear_aperture()? {
+        None => Vec::new(),
+        Some(outline) => match outline.get().shape() {
+            ApertureShape::Stack(stack) => stack.apertures().to_vec(),
+            _ => vec![outline.get().clone()],
+        },
+    };
+    let mut joined = Vec::new();
+    for (port_type, name, aperture) in apertures {
+        let port = format!("{port_type} port '{name}'");
+        let dropped = if !aperture.shape().is_binary() {
+            Some("it is no binary outline")
+        } else if !port_frame_is_rim_frame(node, &port_type)? {
+            Some("it was measured in another frame than the clear aperture")
+        } else {
+            None
+        };
+        match dropped {
+            Some(reason) => warn!("the aperture of {port} of {node_info} was dropped: {reason}"),
+            None => {
+                members.push(aperture);
+                joined.push(port);
+            }
+        }
     }
-    fit_clear_aperture_to_curvature(node)
+    if joined.is_empty() {
+        return Ok(());
+    }
+    let bounded = StackShape::new(members)
+        .and_then(|stack| {
+            node.node_attr_mut()
+                .set_property(CLEAR_APERTURE, ApertureShape::Stack(stack).into())
+        })
+        .and_then(|()| node.geometry().map(|_| ()));
+    let outcome = if let Err(e) = bounded {
+        node.node_attr_mut()
+            .set_property(CLEAR_APERTURE, declared)?;
+        format!(
+            "was dropped: it does not bound the component together with its clear aperture ({e})"
+        )
+    } else {
+        "joined its clear aperture: rays outside it now miss the component".to_string()
+    };
+    for port in joined {
+        warn!("the aperture of {port} of {node_info} {outcome}");
+    }
+    Ok(())
 }
 
 /// Return the aperture at the physical entrance `input_1` of a node if it outlines a region the
@@ -161,23 +250,30 @@ fn entrance_hole(node: &dyn OpticNode) -> Option<Aperture> {
     .then(|| aperture.clone())
 }
 
-/// Return whether the port apertures of a node were measured in the frame its clear aperture is
-/// measured in, but for a shift along the axis. Only then does a port hole outline the same
-/// region as a clear aperture of its shape; it does not for an off-axis parabola.
+/// Return whether the apertures of a node's physical ports of the given type were measured in the
+/// frame its clear aperture is measured in, but for a shift along the axis. Only then does a port
+/// aperture outline the same region as a clear aperture of its shape; it does not for an off-axis
+/// parabola or at the tilted exit of a wedge.
 ///
 /// The frames do not depend on the size of the clear aperture, so they are taken with a tiny one
 /// that any curvature reaches, and the declared one is put back.
+///
+/// # Arguments
+///
+/// * `node` - the node.
+/// * `port_type` - the physical type of the ports: input ports sit at the entrance surface,
+///   output ports at the exit surface.
 ///
 /// # Errors
 ///
 /// This function returns an error if the clear aperture cannot be set or the geometry cannot be
 /// derived.
-fn port_frame_is_rim_frame(node: &mut dyn OpticNode) -> OpmResult<bool> {
+fn port_frame_is_rim_frame(node: &mut dyn OpticNode, port_type: &PortType) -> OpmResult<bool> {
     let declared = node.node_attr().get_property(CLEAR_APERTURE)?.clone();
     let probe = ApertureShape::from(CircleShape::new(nanometer!(1.0))?);
     node.node_attr_mut()
         .set_property(CLEAR_APERTURE, probe.into())?;
-    let frames = port_and_rim_frames(node);
+    let frames = port_and_rim_frames(node, port_type);
     node.node_attr_mut()
         .set_property(CLEAR_APERTURE, declared)?;
     let Some((port_frame, rim_frame)) = frames? else {
@@ -193,17 +289,24 @@ fn port_frame_is_rim_frame(node: &mut dyn OpticNode) -> OpmResult<bool> {
             .all(|angle| angle.get::<radian>().abs() < 1e-9))
 }
 
-/// Return the frame the entrance port's aperture is measured in and the frame the rim is
-/// measured in, both relative to the node, or `None` if the node has no rim.
+/// Return the frame the apertures of a node's ports of the given type are measured in and the
+/// frame the rim is measured in, both relative to the node, or `None` if the node has no rim.
 ///
 /// # Errors
 ///
 /// This function returns an error if the geometry cannot be derived.
-fn port_and_rim_frames(node: &dyn OpticNode) -> OpmResult<Option<(Isometry, Isometry)>> {
+fn port_and_rim_frames(
+    node: &dyn OpticNode,
+    port_type: &PortType,
+) -> OpmResult<Option<(Isometry, Isometry)>> {
     let Some(geometry) = node.geometry()? else {
         return Ok(None);
     };
-    let ((_, port_frame), _) = geometry.entrance_and_exit(&Isometry::identity())?;
+    let ((_, entrance), (_, exit)) = geometry.entrance_and_exit(&Isometry::identity())?;
+    let port_frame = match port_type {
+        PortType::Input => entrance,
+        PortType::Output => exit,
+    };
     Ok(geometry
         .rim()?
         .map(|rim| (port_frame, rim.frame(&Isometry::identity()))))
@@ -336,16 +439,20 @@ fn warn_about_the_upgrade_from_0(scenery: &mut NodeGroup) {
 #[cfg(test)]
 mod test {
     use crate::{
-        analyzers::Analyzable,
+        analyzers::{Analyzable, Analyzer, RayTraceConfig, raytrace::RayTracingAnalyzer},
         apertures::{Aperture, ApertureShape, ApertureType, CircleShape, StackShape},
-        core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, OpticRef, PortType},
+        core_optics::{
+            NodeAttrExt, OpticNode, OpticNodeExt, OpticRef, PortType, node_attr::HasNodeAttr,
+        },
         degree,
         error::OpmResult,
         geometry::body::{CLEAR_APERTURE, default_clear_aperture},
-        millimeter,
+        joule, millimeter,
         nodes::{
-            BeamSplitter, Dummy, Lens, NodeGroup, ParabolicMirror, RayPropagationVisualizer,
-            SpotDiagram, ThinMirror,
+            BeamSplitter, Dummy, EnergyMeter, IdealFilter, Lens, NodeGroup, ParabolicMirror,
+            RayPropagationVisualizer, SourcePort, SpotDiagram, ThinMirror, Wedge,
+            ideal_filter::FilterTypeBuilder, round_collimated_ray_builder,
+            test_helper::helper::rays_recorded_by_meter,
         },
         opm_document::OpmDocument,
         properties::Proptype,
@@ -440,9 +547,8 @@ mod test {
         Ok(())
     }
     /// In format version 0 a binary hole at the entrance of a component stated how large the
-    /// component is. It becomes the clear aperture, and every port with the same hole opens; a
-    /// port with another aperture keeps it. A detector records within the hole from now on, and a
-    /// dummy becomes an iris.
+    /// component is. It becomes the clear aperture, and every port with the same hole opens. A
+    /// detector records within the hole from now on, and a dummy becomes an iris.
     #[test]
     fn a_port_hole_becomes_the_clear_aperture() -> OpmResult<()> {
         let mut lens = Lens::default();
@@ -461,17 +567,15 @@ mod test {
 
         let mut splitter = BeamSplitter::default();
         splitter.set_aperture(&PortType::Input, "input_1", &hole(5.0)?)?;
-        splitter.set_aperture(&PortType::Input, "input_2", &hole(4.0)?)?;
+        splitter.set_aperture(&PortType::Input, "input_2", &hole(5.0)?)?;
         let splitter = upgraded(splitter)?;
         assert_eq!(clear_aperture(&splitter), circle(5.0)?);
-        assert_eq!(
-            port_aperture(&splitter, &PortType::Input, "input_1"),
-            Aperture::default()
-        );
-        assert_eq!(
-            port_aperture(&splitter, &PortType::Input, "input_2"),
-            hole(4.0)?
-        );
+        for port in ["input_1", "input_2"] {
+            assert_eq!(
+                port_aperture(&splitter, &PortType::Input, port),
+                Aperture::default()
+            );
+        }
 
         for mut node in [
             OpticRef::new(Box::new(ThinMirror::default())),
@@ -490,68 +594,245 @@ mod test {
         }
         Ok(())
     }
-    /// Only a plain binary hole centred on the port outlines a component. A soft, an obstructing,
-    /// a stacked or a decentred aperture stays a mask on the port.
+    /// Any other binary port aperture joins the clear aperture: the two become a stack, which
+    /// transmits where both do. The port opens, and a warning names the node and the port.
     #[test]
-    fn a_port_aperture_that_is_no_plain_outline_stays_a_mask() -> OpmResult<()> {
-        let masks = [
-            Aperture::new_gaussian(
-                (millimeter!(5.0), millimeter!(5.0)),
-                ApertureType::Hole,
-                None,
-                None,
-            )?,
-            Aperture::new_circle(millimeter!(5.0), ApertureType::Obstruction, None)?,
-            Aperture::new(
-                ApertureShape::Stack(StackShape::new(vec![
-                    hole(8.0)?,
-                    Aperture::new_circle(millimeter!(2.0), ApertureType::Obstruction, None)?,
-                ])?),
-                ApertureType::Hole,
-                None,
-                None,
-            )?,
-            Aperture::new_circle(
-                millimeter!(5.0),
-                ApertureType::Hole,
-                Some(millimeter!(1.0, 0.0)),
-            )?,
-        ];
-        for mask in masks {
+    fn other_binary_port_apertures_join_the_clear_aperture() -> OpmResult<()> {
+        let default_hole = Aperture::new(default_clear_aperture(), ApertureType::Hole, None, None)?;
+        let obstruction = Aperture::new_circle(millimeter!(2.0), ApertureType::Obstruction, None)?;
+        let decentred = Aperture::new_circle(
+            millimeter!(5.0),
+            ApertureType::Hole,
+            Some(millimeter!(1.0, 0.0)),
+        )?;
+        for mask in [obstruction, decentred] {
             let mut lens = Lens::default();
             lens.set_aperture(&PortType::Input, "input_1", &mask)?;
+            testing_logger::setup();
             let lens = upgraded(lens)?;
-            assert_eq!(clear_aperture(&lens), default_clear_aperture(), "{mask:?}");
-            assert_eq!(port_aperture(&lens, &PortType::Input, "input_1"), mask);
+            testing_logger::validate(|logs| {
+                assert!(logs.iter().any(|log| log.level == log::Level::Warn
+                    && log.body.contains("'input_1' of 'lens'")
+                    && log.body.contains("joined")));
+            });
+            assert_eq!(
+                clear_aperture(&lens),
+                ApertureShape::Stack(StackShape::new(vec![default_hole.clone(), mask.clone()])?),
+                "{mask:?}"
+            );
+            assert_eq!(
+                port_aperture(&lens, &PortType::Input, "input_1"),
+                Aperture::default()
+            );
         }
         Ok(())
     }
-    /// A node without a clear aperture keeps its port hole: there is no outline to move it to.
+    /// A port aperture joins only if it is a binary outline in the frame the clear aperture is
+    /// measured in. A soft or a stacked aperture is none; the one of an off-axis parabola is
+    /// measured around the off-axis point, the one at the tilted exit of a wedge in that face,
+    /// while their clear apertures are measured along the axis. Each is dropped with a warning
+    /// naming the node and the port, and the clear aperture stays as it was.
     #[test]
-    fn a_node_without_a_clear_aperture_keeps_its_port_hole() -> OpmResult<()> {
-        let mut visualizer = RayPropagationVisualizer::default();
-        visualizer.set_aperture(&PortType::Input, "input_1", &hole(5.0)?)?;
-        let visualizer = upgraded(visualizer)?;
-        assert_eq!(
-            port_aperture(&visualizer, &PortType::Input, "input_1"),
-            hole(5.0)?
-        );
-        Ok(())
-    }
-    /// The port hole of an off-axis parabola was measured around the off-axis point, its clear
-    /// aperture is measured along the parent axis: the two are not the same outline, so the hole
-    /// stays a mask.
-    #[test]
-    fn the_port_hole_of_an_off_axis_parabola_stays_a_mask() -> OpmResult<()> {
+    fn port_apertures_that_cannot_join_are_dropped() -> OpmResult<()> {
+        let soft = Aperture::new_gaussian(
+            (millimeter!(5.0), millimeter!(5.0)),
+            ApertureType::Hole,
+            None,
+            None,
+        )?;
+        let mut lens = Lens::default();
+        lens.set_aperture(&PortType::Input, "input_1", &soft)?;
+        let obstruction = Aperture::new_circle(millimeter!(2.0), ApertureType::Obstruction, None)?;
+        let ring = StackShape::new(vec![hole(8.0)?, obstruction])?;
+        let mut ringed = Lens::default();
+        ringed.node_attr_mut().set_name("ringed lens");
+        ringed.set_aperture(
+            &PortType::Input,
+            "input_1",
+            &Aperture::new(ApertureShape::Stack(ring), ApertureType::Hole, None, None)?,
+        )?;
         let mut parabola =
             ParabolicMirror::new_with_off_axis_x("oap", millimeter!(100.0), true, degree!(90.0))?;
         parabola.set_aperture(&PortType::Input, "input_1", &hole(5.0)?)?;
-        let parabola = upgraded(parabola)?;
-        assert_eq!(clear_aperture(&parabola), default_clear_aperture());
+        let mut wedge = Wedge::new(
+            "wedge",
+            millimeter!(10.0),
+            degree!(5.0),
+            RefrIndexConst::new(1.5)?,
+        )?;
+        wedge.set_aperture(&PortType::Output, "output_1", &hole(5.0)?)?;
+        let mut scenery = NodeGroup::default();
+        let dropped = [
+            (scenery.add_node(lens)?, "'lens'", "input_1"),
+            (scenery.add_node(ringed)?, "'ringed lens'", "input_1"),
+            (scenery.add_node(parabola)?, "'oap'", "input_1"),
+            (scenery.add_node(wedge)?, "'wedge'", "output_1"),
+        ];
+        let file = file_of(&OpmDocument::new(scenery), "0")?;
+        testing_logger::setup();
+        let read = OpmDocument::from_string(&file)?;
+        testing_logger::validate(|logs| {
+            for (_, name, port) in dropped {
+                assert!(
+                    logs.iter().any(|log| log.level == log::Level::Warn
+                        && log.body.contains(name)
+                        && log.body.contains(port)
+                        && log.body.contains("dropped")),
+                    "{name}"
+                );
+            }
+        });
+        for (id, name, port) in dropped {
+            let node = read.scenery().node_recursive(id)?.0;
+            assert_eq!(clear_aperture(&node), default_clear_aperture(), "{name}");
+            let port_type = if port == "input_1" {
+                PortType::Input
+            } else {
+                PortType::Output
+            };
+            assert_eq!(port_aperture(&node, &port_type, port), Aperture::default());
+        }
+        Ok(())
+    }
+    /// A joined clear aperture must still bound the component. A hole reaching 11 mm off the axis
+    /// of a lens curved with R = 10 mm does not: the hole is dropped with a warning, and the lens
+    /// keeps its clear aperture and still loads.
+    #[test]
+    fn a_port_aperture_the_component_cannot_take_is_dropped() -> OpmResult<()> {
+        let mut lens = Lens::new_with_clear_aperture(
+            "strong lens",
+            millimeter!(10.0),
+            millimeter!(f64::INFINITY),
+            millimeter!(5.0),
+            RefrIndexConst::new(1.5)?,
+            circle(9.0)?,
+        )?;
+        let beyond = Aperture::new_circle(
+            millimeter!(6.0),
+            ApertureType::Hole,
+            Some(millimeter!(5.0, 0.0)),
+        )?;
+        lens.set_aperture(&PortType::Input, "input_1", &beyond)?;
+        testing_logger::setup();
+        let lens = upgraded(lens)?;
+        testing_logger::validate(|logs| {
+            assert!(logs.iter().any(|log| log.level == log::Level::Warn
+                && log.body.contains("'input_1' of 'strong lens'")
+                && log.body.contains("dropped")));
+        });
+        assert_eq!(clear_aperture(&lens), circle(9.0)?);
         assert_eq!(
-            port_aperture(&parabola, &PortType::Input, "input_1"),
-            hole(5.0)?
+            port_aperture(&lens, &PortType::Input, "input_1"),
+            Aperture::default()
         );
+        Ok(())
+    }
+    /// A node without a clear aperture has no outline a port aperture could join: it is dropped,
+    /// with a warning naming the node and the port.
+    #[test]
+    fn a_node_without_a_clear_aperture_drops_its_port_apertures() -> OpmResult<()> {
+        let mut visualizer = RayPropagationVisualizer::new("visualizer", None)?;
+        visualizer.set_aperture(&PortType::Input, "input_1", &hole(5.0)?)?;
+        let mut source = SourcePort::new("source");
+        source.set_aperture(&PortType::Output, "output_1", &hole(5.0)?)?;
+        let mut group = NodeGroup::new("group");
+        let inside = group.add_node(Dummy::default())?;
+        group.map_input_port(inside, "input_1", "input_1")?;
+        group.set_aperture(&PortType::Input, "input_1", &hole(5.0)?)?;
+        let mut scenery = NodeGroup::default();
+        let dropped = [
+            (scenery.add_node(visualizer)?, "'visualizer'"),
+            (scenery.add_node(source)?, "'source'"),
+            (scenery.add_node(group)?, "'group'"),
+        ];
+        let file = file_of(&OpmDocument::new(scenery), "0")?;
+        testing_logger::setup();
+        let read = OpmDocument::from_string(&file)?;
+        testing_logger::validate(|logs| {
+            for (_, name) in dropped {
+                assert!(
+                    logs.iter().any(|log| log.level == log::Level::Warn
+                        && log.body.contains(name)
+                        && log.body.contains("dropped")),
+                    "{name}"
+                );
+            }
+        });
+        for (id, name) in dropped {
+            let node = read.scenery().node_recursive(id)?.0;
+            assert!(node.node_attr().raw_ports().is_all_default(), "{name}");
+        }
+        Ok(())
+    }
+    /// Joining the port apertures into the clear aperture changes nothing a ray trace sees: the
+    /// same rays reach an energy meter behind a component before the upgrade, when its port
+    /// apertures masked the light hitting it, and after it, when its clear aperture bounds it.
+    #[test]
+    fn a_ray_trace_passes_the_same_rays_after_the_upgrade() -> OpmResult<()> {
+        let at = |x: f64| Some(millimeter!(x, 0.0));
+        let mut lens = Lens::default();
+        lens.set_aperture(
+            &PortType::Input,
+            "input_1",
+            &Aperture::new_circle(millimeter!(2.0), ApertureType::Obstruction, at(5.0))?,
+        )?;
+        let mut mirror = ThinMirror::default();
+        mirror.set_aperture(
+            &PortType::Input,
+            "input_1",
+            &Aperture::new_circle(millimeter!(8.0), ApertureType::Hole, at(3.0))?,
+        )?;
+        let mut filter = IdealFilter::new("filter", &FilterTypeBuilder::default())?;
+        filter.set_aperture(&PortType::Input, "input_1", &hole(6.0)?)?;
+        filter.set_aperture(
+            &PortType::Output,
+            "output_1",
+            &Aperture::new_circle(millimeter!(6.0), ApertureType::Hole, at(2.0))?,
+        )?;
+        let mut dummy = Dummy::default();
+        dummy.set_aperture(
+            &PortType::Input,
+            "input_1",
+            &Aperture::new_rectangle(
+                millimeter!(15.0),
+                millimeter!(15.0),
+                ApertureType::Hole,
+                None,
+                Some(degree!(10.0)),
+            )?,
+        )?;
+        let rays = || round_collimated_ray_builder(millimeter!(12.0), joule!(1.0), 6);
+        let emitted = rays()?.build()?.nr_of_rays(true);
+        for component in [
+            OpticRef::new(Box::new(lens)),
+            OpticRef::new(Box::new(mirror)),
+            OpticRef::new(Box::new(filter)),
+            OpticRef::new(Box::new(dummy)),
+        ] {
+            let node_type = component.node_type().to_string();
+            let mut scenery = NodeGroup::default();
+            let source = scenery.add_node(SourcePort::default())?;
+            let component = scenery.add_node_ref(component)?;
+            let meter = scenery.add_node(EnergyMeter::default())?;
+            scenery.connect_nodes(source, "output_1", component, "input_1", millimeter!(50.0))?;
+            scenery.connect_nodes(component, "output_1", meter, "input_1", millimeter!(50.0))?;
+            let mut config = RayTraceConfig::default();
+            config.map_source(source, rays()?);
+            let mut before = OpmDocument::new(scenery);
+            let mut after = OpmDocument::from_string(&file_of(&before, "0")?)?;
+            RayTracingAnalyzer::new(config.clone()).analyze(before.scenery_mut())?;
+            RayTracingAnalyzer::new(config).analyze(after.scenery_mut())?;
+            let passed = rays_recorded_by_meter(before.scenery(), meter)?;
+            assert!(
+                0 < passed && passed < emitted,
+                "{node_type}: {passed} of {emitted}"
+            );
+            assert_eq!(
+                rays_recorded_by_meter(after.scenery(), meter)?,
+                passed,
+                "{node_type}"
+            );
+        }
         Ok(())
     }
     /// Nodes in nested groups are upgraded too.
