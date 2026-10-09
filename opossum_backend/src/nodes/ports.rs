@@ -56,7 +56,7 @@ pub async fn get_ports(
     Ok(HttpResponse::Ok().json(response)) // <-- Saubere Serialisierung
 }
 
-/// Update a specific port configuration (Aperture, Coating, LIDT)
+/// Update a specific port configuration (Coating, LIDT)
 ///
 /// Modifies only the provided properties of a port. Omitted fields remain unchanged.
 #[utoipa::path(
@@ -109,7 +109,6 @@ pub async fn patch_port(
                 Ok((
                     physical_type,
                     UpdatePortRequest {
-                        aperture: new.aperture.is_some().then(|| port.aperture.clone()),
                         coating: new.coating.is_some().then_some(port.coating),
                         lidt: new.lidt.is_some().then_some(port.lidt),
                     },
@@ -167,7 +166,6 @@ mod test {
         .await;
 
         let update_req = UpdatePortRequest {
-            aperture: None,
             coating: Some(CoatingType::default()),
             lidt: None,
         };
@@ -233,7 +231,6 @@ mod test {
 
         // The GUI edits the physical `output_1` under the (inverted) Input direction.
         let update_req = UpdatePortRequest {
-            aperture: None,
             coating: Some(CoatingType::Fresnel),
             lidt: None,
         };
@@ -363,7 +360,6 @@ mod test {
         let app = test::init_service(App::new().app_data(app_state).service(patch_port)).await;
 
         let update_req = UpdatePortRequest {
-            aperture: None,
             coating: None,
             lidt: None,
         };

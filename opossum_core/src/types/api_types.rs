@@ -19,7 +19,7 @@ use crate::{
     gain::{GainModel, PumpConfig, PumpScenario, PumpSource},
     nodes::ConnectionInfo,
     opm_document::AnalyzerInfo,
-    prelude::{AnalyzerType, Aperture, Isometry, PortMap, PortType, Properties},
+    prelude::{AnalyzerType, Isometry, PortMap, PortType, Properties},
     properties::validator::Validator,
 };
 
@@ -419,10 +419,6 @@ pub struct NodePortsResponse {
 /// Request payload for partial updates of a specific port
 #[derive(Debug, Default, Serialize, Deserialize, ToSchema, Clone, PartialEq)]
 pub struct UpdatePortRequest {
-    /// The new aperture of the port
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub aperture: Option<Aperture>,
-
     /// The new coating of the port
     #[serde(skip_serializing_if = "Option::is_none")]
     pub coating: Option<CoatingType>,

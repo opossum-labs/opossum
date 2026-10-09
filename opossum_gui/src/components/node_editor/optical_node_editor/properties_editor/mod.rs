@@ -287,8 +287,7 @@ fn get_geometric_editor(
                 readonly,
             }
         }),
-        // The clear aperture is the transversal extent of a component: rays outside it miss it -
-        // unlike a port aperture, which only masks the light that passed the surface.
+        // The clear aperture is the transversal extent of a component: rays outside it miss it.
         Proptype::Aperture(aperture) => Some(rsx! {
             ClearApertureEditor {
                 node_id,
