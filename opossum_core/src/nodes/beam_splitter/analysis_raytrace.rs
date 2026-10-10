@@ -197,7 +197,7 @@ impl BeamSplitter {
                 "input optic surface not found".into(),
             ));
         };
-        let (reflected, _) = transmitted.split_on_surface(
+        let reflected = transmitted.split_on_surface(
             surf,
             &SplittingConfig::Ratio(0.5),
             config.missed_surface_strategy(),

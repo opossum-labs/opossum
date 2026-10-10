@@ -373,8 +373,7 @@ impl BeamSplitter {
                 "Input optic surface not found for port '{port_name}'"
             )));
         };
-        let (reflected, _) =
-            rays.split_on_surface(surf, splitting_config, &missed_surface_strategy)?;
+        let reflected = rays.split_on_surface(surf, splitting_config, &missed_surface_strategy)?;
         Ok((rays, reflected))
     }
     fn analyze_raytrace(

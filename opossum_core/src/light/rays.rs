@@ -1015,8 +1015,7 @@ impl Rays {
     ///
     /// # Returns
     ///
-    /// The bundle of reflected rays and, for every ray of this bundle in order, whether it hit the
-    /// surface. Rays that missed the surface have no reflected counterpart.
+    /// The bundle of reflected rays. Rays that missed the surface have no reflected counterpart.
     ///
     /// # Warnings
     ///
@@ -1032,13 +1031,14 @@ impl Rays {
         surface: &mut OpticSurface,
         config: &SplittingConfig,
         missed_surface_strategy: &MissedSurfaceStrategy,
-    ) -> OpmResult<(Self, Vec<bool>)> {
+    ) -> OpmResult<Self> {
         self.interact_with_surface(
             surface,
             None,
             *missed_surface_strategy,
             &ReflectedPart::Branch(config),
         )
+        .map(|(reflected, _)| reflected)
     }
     /// Propagate all `valid` [`Ray`]s to a surface, split them into a transmitted and a reflected part and
     /// return the reflected [`Ray`] bundle.
@@ -2578,7 +2578,7 @@ mod test {
     fn split_on_surface_tilted() -> OpmResult<()> {
         let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1000.0))?);
         let mut surface = tilted_splitting_surface()?;
-        let (reflected, _) = rays.split_on_surface(
+        let reflected = rays.split_on_surface(
             &mut surface,
             &SplittingConfig::Ratio(0.6),
             &MissedSurfaceStrategy::Stop,
@@ -2599,7 +2599,7 @@ mod test {
         let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1000.0))?);
         let mut surface = tilted_splitting_surface()?;
         surface.set_coating(CoatingConstantR::new(percent!(20.0))?.into());
-        let (reflected, _) = rays.split_on_surface(
+        let reflected = rays.split_on_surface(
             &mut surface,
             &SplittingConfig::Ratio(0.6),
             &MissedSurfaceStrategy::Stop,
@@ -2612,7 +2612,7 @@ mod test {
     fn split_on_surface_keeps_both_parts_intended() -> OpmResult<()> {
         let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1000.0))?);
         let mut surface = tilted_splitting_surface()?;
-        let (reflected, _) = rays.split_on_surface(
+        let reflected = rays.split_on_surface(
             &mut surface,
             &SplittingConfig::Ratio(0.6),
             &MissedSurfaceStrategy::Stop,
@@ -2642,7 +2642,7 @@ mod test {
         rays.add_ray(collimated_ray_along_z(nanometer!(999.0))?);
         rays.add_ray(collimated_ray_along_z(nanometer!(1001.0))?);
         let mut surface = tilted_splitting_surface()?;
-        let (reflected, _) =
+        let reflected =
             rays.split_on_surface(&mut surface, &config, &MissedSurfaceStrategy::Stop)?;
         assert_eq!(rays.ray_bundle[0].energy(), joule!(1.0));
         assert_eq!(rays.ray_bundle[1].energy(), joule!(0.0));
@@ -2664,7 +2664,7 @@ mod test {
             joule!(1.0),
         )?);
         testing_logger::setup();
-        let (reflected, _) = rays.split_on_surface(
+        let reflected = rays.split_on_surface(
             &mut OpticSurface::default(),
             &SplittingConfig::Ratio(0.6),
             &MissedSurfaceStrategy::Stop,
