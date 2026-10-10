@@ -53,7 +53,7 @@ The following analyzers are implemented:
     reflections considered during the analysis. The missed surface strategy defines how rays are handled that miss a
     surface, including rays that reach it outside the `clear aperture` of its component. The available options are `Stop`,
     the default, which loses such rays, and `Ignore`, which lets them pass unchanged (see
-    [Clear aperture and port apertures](nodes.md#clear-aperture-and-port-apertures)). The alignment run that places the
+    [Clear aperture](nodes.md#clear-aperture)). The alignment run that places the
     components always uses `Stop`.
 
     The analyzer is also used to configure the properties of source ports. For the ray tracing analyzer, the source port

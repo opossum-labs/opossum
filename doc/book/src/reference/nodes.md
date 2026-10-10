@@ -79,7 +79,7 @@ In addition, nodes have a set of attributes that are common to all of them. Howe
 1. Clear aperture
 
    Each real-world optical component has a limited transversal size, which decides the light it can catch. Nodes state it
-   in their `clear aperture` property, see [Clear aperture and port apertures](#clear-aperture-and-port-apertures).
+   in their `clear aperture` property, see [Clear aperture](#clear-aperture).
 
 1. 3D mechanical model
 
@@ -89,7 +89,7 @@ In addition, nodes have a set of attributes that are common to all of them. Howe
 
    For both, sequential and non-sequential analysis, surface properties such as coating or roughness which define the way light will be reflected or propagated through should be defined. *This could also be modeled using basic nodes*
 
-## Clear aperture and port apertures
+## Clear aperture
 
 Every component that light hits has a transversal size, its `clear aperture`: the size the material or the coated
 surface is actually available in, the figure a supplier quotes. The clear aperture decides which rays hit the component.
@@ -116,18 +116,30 @@ thickness of a lens or a wedge is not checked: where its surfaces would cross, r
 default. Light outside a set window passes on unrecorded, and the log and the report warn about it. The
 [paraxial surface](nodes/paraxial_surface.md) is an idealization and may be unbounded as well.
 
-**Port apertures** are an additional mask on the light that passed a surface, e.g. a soft Gaussian apodization. They
-never decide whether a ray hits a component: they act only on rays that did. In the `Node Editor` they are found under
-each port as `Aperture (additional mask)`.
+**Iris.** A [dummy](nodes/dummy.md) passes light unchanged and is unbounded (`Open`) by default. Given a clear
+aperture, it acts as an iris: a ray outside of it misses the dummy and follows the rules above.
+
+Only the clear aperture limits light; ports carry no aperture, only a coating and an LIDT. Sources, ray propagation
+visualizers and groups are idealized or abstract nodes and have no clear aperture. To limit the beam of a source, place
+a dummy behind it or shrink its ray distribution.
 
 **Alignment.** The component alignment run (see [Geometry](../concepts/geometry.md)) respects clear apertures too: if
 the optical axis misses the clear aperture of a component, the alignment stops with an error naming that node. At a
-detector it only warns that the measurement may fail. Port apertures do not act during the alignment run.
+detector it only warns that the measurement may fail.
 
-**Older model files** are upgraded when they are read. A centered hole at the input port that gave a component its
-size becomes its clear aperture, and the port apertures that carried that hole are opened. A clear aperture that a curvature cannot
-reach is reduced to fit. Components that had no such hole get the default of 12.5 mm. The log lists what was changed;
-saving the model writes the upgraded version.
+**Older model files** are upgraded when they are read. Files of format version 0 let every port hold an aperture that
+masked the light passing it:
+
+- A centered hole at the input port that gave a component its size becomes its clear aperture, together with the same
+  hole at its other ports.
+- Any other hole or obstruction, centered or not, joins the clear aperture as a stack. Rays outside the former mask now
+  miss the component, with the consequences described above; a detector records within it.
+- A port aperture that cannot join is dropped: a soft (Gaussian) or stacked one, one measured in another frame than the
+  clear aperture (an off-axis parabola, the tilted exit face of a wedge), one that would reach beyond a curvature of the
+  component, and every port aperture of a node without a clear aperture.
+
+A clear aperture that a curvature cannot reach is reduced to fit. Components that had no such hole get the default of
+12.5 mm. The log lists what was changed, naming node and port; saving the model writes the upgraded version.
 
 ## Analysis interface
 

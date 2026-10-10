@@ -6,7 +6,7 @@ This element represents a "real" lens with cylindrical front and back surfaces. 
 
 By default, both cylinder axex are oriented along the y axis. This can be easily changed using the `alignment` property. 
 
-The `clear aperture` decides which rays hit the lens (see [Clear aperture and port apertures](../nodes.md#clear-aperture-and-port-apertures)). Choose it so that the lens keeps a positive edge thickness: where the front and back surfaces would cross, e.g. beyond the rim of a thin biconvex lens, rays miss the rear surface.
+The `clear aperture` decides which rays hit the lens (see [Clear aperture](../nodes.md#clear-aperture)). Choose it so that the lens keeps a positive edge thickness: where the front and back surfaces would cross, e.g. beyond the rim of a thin biconvex lens, rays miss the rear surface.
 
 Since this element encloses a volume of material, it can be operated as an amplifier: a [pump scenario](../pump_scenarios.md) assigns it a gain model, and light travelling through the medium is amplified accordingly. Without such an assignment the lens is the passive component described here.
 
@@ -15,7 +15,7 @@ Since this element encloses a volume of material, it can be operated as an ampli
 - Energy Analysis
 
     During energy analysis, besides the common behaviour, this element does not alter the incoming the incoming light.
-    The output is a copy of the input light. Above mentioned intrinsic apertures as well as explicit port apertures are ignored.
+    The output is a copy of the input light. Above mentioned apertures are ignored.
 
 - Ray tracing Analysis
 
@@ -57,6 +57,4 @@ Since this element encloses a volume of material, it can be operated as an ampli
 `clear aperture`
 : Transversal extent of the lens: the size the material is actually available in. It decides which
   rays hit the lens. Defaults to a circle of 12.5 mm radius, i.e. the usual 1 inch mount. Both
-  curvatures must reach its edge; a shape without an edge (`Open`, Gaussian) is refused. Not to be
-  confused with the aperture of a port: a port aperture only masks the light that passed a surface,
-  while the clear aperture states where the material ends.
+  curvatures must reach its edge; a shape without an edge (`Open`, Gaussian) is refused.

@@ -4,7 +4,7 @@
 
 ## Analysis
 
-The incoming light data is simply passed unmodified through the node. However, possible apodization due to input or output port apertures might occur.
+The incoming light data is simply passed unmodified through the node. Given a `clear aperture`, the dummy acts as an iris: a ray outside of it misses the dummy (see [Clear aperture](../nodes.md#clear-aperture)).
 
 ## Ports
 
@@ -16,4 +16,5 @@ The incoming light data is simply passed unmodified through the node. However, p
 
 ## Properties
 
-This node type has no specific properties.
+`clear aperture`
+: The opening of the iris, unbounded (`Open`) by default, so that all light passes. Any shape with an edge can be set instead. A ray outside of it follows the analyzer's missed surface strategy: with `Ignore` it passes unchanged, with `Stop` it is lost (see [Clear aperture](../nodes.md#clear-aperture)).
