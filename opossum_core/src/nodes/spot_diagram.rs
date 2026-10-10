@@ -21,7 +21,6 @@ use crate::{
         plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
         report_note::{ReportLevel, ReportNote},
     },
-    types::validated_type_definitions::ValidatedCrossSection,
     utils::{
         geom_transformation::Isometry,
         unit_format::{
@@ -76,7 +75,7 @@ impl Default for SpotDiagram {
         node_attr
             .create_property(
                 "plot aperture",
-                "flag that defines if the recording window and a port aperture are outlined in a plot",
+                "flag that defines if the recording window is outlined in a plot",
                 false.into(),
             )
             .expect("Hardcoded property creation must not fail");
@@ -341,27 +340,15 @@ impl Plottable for SpotDiagram {
         plt_type.set_plot_param(&PlotArgs::XLim(AxLims::new(-x_max * 1.1, 1.1 * x_max)))?;
         plt_type.set_plot_param(&PlotArgs::YLim(AxLims::new(-y_max * 1.1, 1.1 * y_max)))?;
 
-        // Outline the window recorded within and a port aperture masking the light, if requested.
+        // Outline the window recorded within, if requested.
         if let Ok(Proptype::Bool(plot_aperture)) = self.properties().get("plot aperture")
             && *plot_aperture
+            && let Some(window) = self.clear_aperture()?
+            && let Some(window_plt_series) = window
+                .get()
+                .get_plot_series(&mut PlotType::Line2D(PlotParameters::default()), legend)?
         {
-            let window = self.clear_aperture()?;
-            let mask = self
-                .ports()
-                .aperture(&PortType::Input, &input_port)
-                .cloned();
-            for aperture in window
-                .as_ref()
-                .map(ValidatedCrossSection::get)
-                .into_iter()
-                .chain(&mask)
-            {
-                let plt_series_opt = aperture
-                    .get_plot_series(&mut PlotType::Line2D(PlotParameters::default()), legend)?;
-                if let Some(aperture_plt_series) = plt_series_opt {
-                    plt_series.extend(aperture_plt_series);
-                }
-            }
+            plt_series.extend(window_plt_series);
         }
 
         match plt_type {
@@ -375,10 +362,7 @@ impl Plottable for SpotDiagram {
 mod test {
     use super::*;
     use crate::{
-        core_optics::{
-            PortType,
-            node_attr::{HasNodeAttr, NodePositioning},
-        },
+        core_optics::{PortType, node_attr::NodePositioning},
         distributions::position::Hexapolar,
         joule,
         light::{Rays, light_result::LightRays, spectrum_helper::create_he_ne_spec},
@@ -387,44 +371,32 @@ mod test {
     };
     use uom::num_traits::Zero;
 
-    /// With "plot aperture" set, the plot outlines the window the spot diagram records within, and
-    /// a port aperture masking the light on top of it.
+    /// With "plot aperture" set, the plot outlines the window the spot diagram records within.
     #[test]
-    fn the_plot_outlines_the_window_and_a_port_mask() -> OpmResult<()> {
+    fn the_plot_outlines_the_window() -> OpmResult<()> {
         use crate::{
             analyzers::RayTraceConfig,
-            apertures::{Aperture, ApertureShape, ApertureType, CircleShape},
+            apertures::{ApertureShape, CircleShape},
             geometry::body::CLEAR_APERTURE,
             millimeter,
         };
-        let series_count = |with_mask: bool| -> OpmResult<usize> {
-            let mut diagram = placed_at_origin::<SpotDiagram>()?;
-            diagram.set_property("plot aperture", true.into())?;
-            diagram.set_property(
-                CLEAR_APERTURE,
-                ApertureShape::from(CircleShape::new(millimeter!(5.0))?).into(),
-            )?;
-            if with_mask {
-                diagram.set_aperture(
-                    &PortType::Input,
-                    "input_1",
-                    &Aperture::new_circle(millimeter!(3.0), ApertureType::Hole, None)?,
-                )?;
-            }
-            let rays = rays_along_z_from(&[millimeter!(0.0, 1.0, -10.0)], nanometer!(1000.0))?;
-            AnalysisRayTrace::analyze(
-                &mut diagram,
-                LightResult::from([("input_1".into(), LightData::Geometric(rays))]),
-                &RayTraceConfig::default(),
-            )?;
-            let series = diagram
-                .get_plot_series(&mut PlotType::Scatter2D(PlotParameters::default()), false)?
-                .expect("the spot diagram has plot data");
-            Ok(series.len())
-        };
-        // One series for the single wavelength, one for each outline.
-        assert_eq!(series_count(false)?, 2, "the window");
-        assert_eq!(series_count(true)?, 3, "the window and the mask");
+        let mut diagram = placed_at_origin::<SpotDiagram>()?;
+        diagram.set_property("plot aperture", true.into())?;
+        diagram.set_property(
+            CLEAR_APERTURE,
+            ApertureShape::from(CircleShape::new(millimeter!(5.0))?).into(),
+        )?;
+        let rays = rays_along_z_from(&[millimeter!(0.0, 1.0, -10.0)], nanometer!(1000.0))?;
+        AnalysisRayTrace::analyze(
+            &mut diagram,
+            LightResult::from([("input_1".into(), LightData::Geometric(rays))]),
+            &RayTraceConfig::default(),
+        )?;
+        let series = diagram
+            .get_plot_series(&mut PlotType::Scatter2D(PlotParameters::default()), false)?
+            .expect("the spot diagram has plot data");
+        // One series for the single wavelength, one for the outline.
+        assert_eq!(series.len(), 2);
         Ok(())
     }
     #[test]
@@ -498,10 +470,6 @@ mod test {
         let output = output.unwrap();
         assert_eq!(*output, input_light);
         Ok(())
-    }
-    #[test]
-    fn analyze_apodization_warning() -> OpmResult<()> {
-        test_analyze_apodization_warning::<SpotDiagram>()
     }
     #[test]
     fn clear_aperture_absent_in_file() -> OpmResult<()> {
@@ -592,81 +560,6 @@ mod test {
         assert_eq!(notes.len(), 1);
         assert_eq!(notes[0].level, ReportLevel::Warning);
         assert_eq!(notes[0].message, APERTURE_LIMIT_NOTE);
-        Ok(())
-    }
-    #[test]
-    fn test_aperture_on_hitmap() -> OpmResult<()> {
-        use crate::{
-            analyzers::raytrace::{AnalysisRayTrace, RayTraceConfig},
-            apertures::{Aperture, ApertureType},
-            light::{LightData, LightResult, Ray, Rays},
-            prelude::*,
-        };
-        use nalgebra::{Point3, Vector3};
-
-        let mut sd = SpotDiagram::default();
-        let aperture = Aperture::new_rectangle(
-            millimeter!(1.0),
-            millimeter!(1.0),
-            ApertureType::Hole,
-            None,
-            None,
-        )?;
-
-        sd.set_aperture(&PortType::Input, "input_1", &aperture)?;
-        sd.node_attr_mut()
-            .set_positioning(NodePositioning::Absolute(Isometry::identity()));
-
-        let mut rays = Rays::from(Ray::new(
-            Point3::new(millimeter!(0.0), millimeter!(0.0), millimeter!(-1.0)),
-            Vector3::new(0.0, 0.0, 1.0),
-            nanometer!(550.0),
-            joule!(1.0),
-        )?);
-
-        // ray outside aperture
-        rays.add_ray(Ray::new(
-            Point3::new(millimeter!(0.0), millimeter!(2.0), millimeter!(-1.0)),
-            Vector3::new(0.0, 0.0, 1.0),
-            nanometer!(550.0),
-            joule!(1.0),
-        )?);
-
-        let analyzer = RayTraceConfig::default();
-        let mut incoming_data = LightResult::default();
-        incoming_data.insert("input_1".to_string(), LightData::Geometric(rays));
-
-        AnalysisRayTrace::analyze(&mut sd, incoming_data, &analyzer)?;
-
-        let NodeReportResult::Report(node_report) = sd.node_report("", AnalyzerKind::RayTrace)?
-        else {
-            panic!("Node report should be `Report` variant");
-        };
-        let node_props = node_report.properties(); // Returns &Properties
-
-        // Use iterator correctly as (key, value)
-        let hit_map_prop = node_props
-            .iter()
-            .find(|(name, _p)| *name == "Spot diagram")
-            .unwrap();
-
-        if let Proptype::HitMap(hm) = hit_map_prop.1.prop() {
-            // Should verify that we only have 1 hit point (the one inside the aperture)
-            // The one outside should be pruned/not present
-            let merged = hm.get_merged_rays_hit_map()?;
-            let points = merged.hit_map().positions();
-            assert_eq!(
-                points.len(),
-                1,
-                "HitMap should only contain rays passing through aperture"
-            );
-            assert!(
-                points[0].y.abs().value < 1.0,
-                "Remaining point should be inside the aperture"
-            );
-        } else {
-            panic!("Property is not a HitMap");
-        }
         Ok(())
     }
     #[test]

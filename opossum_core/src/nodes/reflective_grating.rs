@@ -240,19 +240,11 @@ impl AnalysisRayTrace for ReflectiveGrating {
                     &diffraction_order,
                     refraction_intended,
                 )?;
-                match self.ports().aperture(&PortType::Input, in_port) {
-                    // Only the components' rims decide where the optical axis runs.
-                    Some(_) if config.is_positioning_run() => {}
-                    Some(aperture) => {
-                        diffracted_rays.apodize(aperture, &iso)?;
-                        diffracted_rays
-                            .invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                    }
-                    _ => {
-                        return Err(OpossumError::OpticPort("input aperture not found".into()));
-                    }
+                // The optical axis is placed by geometry alone; its energy does not decide where
+                // it runs.
+                if !config.is_positioning_run() {
+                    diffracted_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                 }
-
                 let light_result =
                     LightResult::from([(out_port.into(), LightData::Geometric(diffracted_rays))]);
                 Ok(light_result)

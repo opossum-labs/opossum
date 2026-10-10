@@ -167,8 +167,7 @@ pub trait OpticNodeExt {
     /// Finds a surface by its name and guides the ray bundle through it.
     ///
     /// This function handles the boilerplate of retrieving the correct surface, calculating
-    /// the ray count before and after propagation to detect apodization, and logging a warning
-    /// if rays were blocked by the surface's aperture.
+    /// the ray count before and after propagation, and logging a warning if rays were lost.
     ///
     /// # Returns
     ///
@@ -446,14 +445,12 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
             optic_surf.set_geo_surface(geo_surface);
             optic_surf.set_anchor_point_iso(anchor_point_iso);
             optic_surf.set_rim(rim);
-            optic_surf.set_aperture(config.aperture);
             optic_surf.set_coating(config.coating);
             optic_surf.set_lidt(*config.lidt.get())?;
         } else {
             let mut optic_surf = crate::core_optics::optic_surface::OpticSurface::new(
                 geo_surface,
                 config.coating,
-                config.aperture,
                 *config.lidt.get(),
             )?;
             optic_surf.set_anchor_point_iso(anchor_point_iso);
@@ -502,7 +499,6 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         refraction_intended: bool,
     ) -> OpmResult<Vec<Vec<bool>>> {
         let uuid = self.node_attr().uuid();
-        let iso = self.effective_surface_iso(optic_surf_name)?;
         let node_name = self.name().to_string();
 
         let Some(surf) = self.get_optic_surface_mut(optic_surf_name) else {
@@ -514,7 +510,6 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         let hits = surf.propagate_rays(
             rays_bundle,
             uuid,
-            &iso,
             refri_after_surf.as_ref(),
             backward,
             refraction_intended,
@@ -614,7 +609,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         if rays_after < rays_before {
             self.set_apodization_warning(true);
             log::warn!(
-                "Rays were lost at '{}' ({}): they ran outside its clear aperture, were cut by a port aperture or fell below the energy threshold. Results might not be accurate.",
+                "Rays were lost at '{}' ({}): they ran outside its clear aperture or fell below the energy threshold. Results might not be accurate.",
                 self.name(),
                 self.node_type()
             );

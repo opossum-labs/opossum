@@ -460,16 +460,9 @@ impl AnalysisRayTrace for ParabolicMirror {
             refraction_intended,
             config.missed_surface_strategy(),
         )?;
-        match self.ports().aperture(&PortType::Input, in_port) {
-            // Only the components' rims decide where the optical axis runs.
-            Some(_) if config.is_positioning_run() => {}
-            Some(aperture) => {
-                reflected_rays.apodize(aperture, &self.effective_surface_iso(in_port)?)?;
-                reflected_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-            }
-            _ => {
-                return Err(OpossumError::OpticPort("input aperture not found".into()));
-            }
+        // The optical axis is placed by geometry alone; its energy does not decide where it runs.
+        if !config.is_positioning_run() {
+            reflected_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
         }
         let light_data = LightData::Geometric(reflected_rays);
         let light_result = LightResult::from([(out_port.into(), light_data)]);
@@ -1045,19 +1038,6 @@ mod test {
     }
 
     #[test]
-    fn analysis_raytrace_no_iso() -> OpmResult<()> {
-        let mut node = ParabolicMirror::default();
-        let rays = Rays::new_uniform_collimated(
-            nanometer!(1000.),
-            joule!(1.),
-            &Hexapolar::new(millimeter!(1.), 3)?,
-        )?;
-        let light_data = LightData::Geometric(rays);
-        let input = LightResult::from([("input_1".into(), light_data)]);
-        assert!(AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).is_err());
-        Ok(())
-    }
-    #[test]
     fn analysis_raytrace() -> OpmResult<()> {
         let mut node = ParabolicMirror::default();
         node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
@@ -1144,27 +1124,6 @@ mod test {
             0,
         )?;
         assert!(output.values().last().unwrap().is_empty());
-        Ok(())
-    }
-    #[test]
-    fn analysis_ghost_focus_no_iso() -> OpmResult<()> {
-        let mut node = ParabolicMirror::default();
-        let rays = Rays::new_uniform_collimated(
-            nanometer!(1000.),
-            joule!(1.),
-            &Hexapolar::new(millimeter!(1.), 3)?,
-        )?;
-        let light_data = LightData::GhostFocus(vec![rays]);
-        let input =
-            light_result_to_light_rays(LightResult::from([("input_1".into(), light_data)]))?;
-        let output = AnalysisGhostFocus::analyze(
-            &mut node,
-            input,
-            &GhostFocusConfig::default(),
-            &mut Vec::<Rays>::new(),
-            0,
-        );
-        assert!(output.is_err());
         Ok(())
     }
     #[test]

@@ -589,54 +589,9 @@ impl Rays {
     ///
     /// This function returns an error if a single ray cannot be properly apodized (e.g. filter factor outside (0.0..=1.0)).
     pub fn apodize(&mut self, aperture: &Aperture, iso: &Isometry) -> OpmResult<bool> {
-        self.apodize_where(aperture, iso, |_| true)
-    }
-    /// Apodize only the rays of this bundle that hit a surface, as [`apodize`](Self::apodize) does
-    /// for all of them.
-    ///
-    /// An aperture belonging to a surface masks the light passing that surface; a ray that missed
-    /// the surface never passed it and is left untouched.
-    ///
-    /// # Arguments
-    ///
-    /// * `aperture` - the aperture to apply.
-    /// * `iso` - the isometry the aperture is placed at.
-    /// * `hits` - for every ray of this bundle in order, whether it hit the surface, as returned by
-    ///   [`refract_on_surface`](Self::refract_on_surface) or
-    ///   [`split_on_surface`](Self::split_on_surface).
-    ///
-    /// # Returns
-    ///
-    /// `true` if valid rays have been invalidated by the apodization.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if a single ray cannot be properly apodized.
-    pub fn apodize_hits(
-        &mut self,
-        aperture: &Aperture,
-        iso: &Isometry,
-        hits: &[bool],
-    ) -> OpmResult<bool> {
-        self.apodize_where(aperture, iso, |index| {
-            hits.get(index).copied().unwrap_or(false)
-        })
-    }
-    /// The common implementation of [`apodize`](Self::apodize) and
-    /// [`apodize_hits`](Self::apodize_hits): apodize the valid rays whose index is selected.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if a single ray cannot be properly apodized.
-    fn apodize_where(
-        &mut self,
-        aperture: &Aperture,
-        iso: &Isometry,
-        selected: impl Fn(usize) -> bool,
-    ) -> OpmResult<bool> {
         let mut beams_invalided = false;
-        for (index, ray) in self.ray_bundle.iter_mut().enumerate() {
-            if ray.valid() && selected(index) {
+        for ray in &mut self.ray_bundle {
+            if ray.valid() {
                 let ap_factor = aperture.apodize(&ray.inverse_transformed_ray(iso).position());
                 if ap_factor > 0.0 {
                     ray.filter_energy(&FilterType::Constant(FilterConst::new(ap_factor.into())?))?;
@@ -2613,7 +2568,6 @@ mod test {
         OpticSurface::new(
             GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(iso)))),
             CoatingType::IdealAR,
-            Aperture::default(),
             J_per_cm2!(1.),
         )
     }

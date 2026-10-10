@@ -334,15 +334,15 @@ fn axis_is_lost(outgoing_edges: &LightResult) -> bool {
 mod test {
     use crate::{
         analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
-        apertures::{Aperture, ApertureShape, ApertureType, CircleShape},
-        core_optics::{Alignable, NodeAttrExt, OpticNodeExt, PortType},
+        apertures::{ApertureShape, CircleShape},
+        core_optics::{Alignable, NodeAttrExt},
         error::{OpmResult, OpossumError},
         geometry::body::{CLEAR_APERTURE, default_clear_aperture},
         joule,
         light::LightResult,
         millimeter,
         nodes::{
-            Dummy, IdealFilter, Lens, NodeGroup, SourcePort, SpotDiagram, ThinMirror,
+            Dummy, IdealFilter, Lens, NodeGroup, SourcePort, SpotDiagram,
             ideal_filter::{FilterConst, FilterTypeBuilder},
             round_collimated_ray_builder,
         },
@@ -350,7 +350,7 @@ mod test {
         utils::geom_transformation::Isometry,
     };
     use approx::assert_relative_eq;
-    use nalgebra::{Point2, Point3, Vector3};
+    use nalgebra::{Point3, Vector3};
     use num_traits::Zero;
     use uom::si::f64::Length;
     use uuid::Uuid;
@@ -435,27 +435,6 @@ mod test {
         assert_bent_by_the_decentred_lens(&place_screen_behind(scenery, &[lens])?);
         Ok(())
     }
-    /// A port aperture masks light, it does not decide where the axis runs: a hole beside the axis
-    /// leaves the placement as if it were not there.
-    #[test]
-    fn positioning_ignores_port_apertures() -> OpmResult<()> {
-        let mut masked = Lens::default();
-        masked.set_aperture(
-            &PortType::Input,
-            "input_1",
-            &Aperture::new_circle(
-                millimeter!(2.0),
-                ApertureType::Hole,
-                Some(Point2::new(Length::zero(), millimeter!(10.0))),
-            )?,
-        )?;
-        let mut scenery = NodeGroup::default();
-        let masked = scenery.add_node(masked)?;
-        let large = CircleShape::new(millimeter!(50.0))?.into();
-        let lens = scenery.add_node(decentred_lens(large)?)?;
-        assert_bent_by_the_decentred_lens(&place_screen_behind(scenery, &[masked, lens])?);
-        Ok(())
-    }
     /// The axis is placed by geometry alone: a filter blocking it entirely leaves it running on,
     /// and the lens behind still bends it.
     #[test]
@@ -469,28 +448,6 @@ mod test {
         let large = CircleShape::new(millimeter!(50.0))?.into();
         let lens = scenery.add_node(decentred_lens(large)?)?;
         assert_bent_by_the_decentred_lens(&place_screen_behind(scenery, &[filter, lens])?);
-        Ok(())
-    }
-    /// A mirror applies its port aperture on its own rather than through the common surface pass;
-    /// there too it must not cut the axis. A hole beside the axis leaves the reflection in place.
-    #[test]
-    fn positioning_ignores_the_port_aperture_of_a_mirror() -> OpmResult<()> {
-        let mut mirror = ThinMirror::default();
-        mirror.set_aperture(
-            &PortType::Input,
-            "input_1",
-            &Aperture::new_circle(
-                millimeter!(2.0),
-                ApertureType::Hole,
-                Some(Point2::new(Length::zero(), millimeter!(10.0))),
-            )?,
-        )?;
-        let mut scenery = NodeGroup::default();
-        let mirror = scenery.add_node(mirror)?;
-        let screen = place_screen_behind(scenery, &[mirror])?;
-        // The untilted mirror sends the axis straight back.
-        let direction = screen.transform_vector_f64(&Vector3::z());
-        assert_relative_eq!(direction.z, -1.0, epsilon = 1e-12);
         Ok(())
     }
     /// A detector does not bend the axis, so the axis running outside its clear aperture does not

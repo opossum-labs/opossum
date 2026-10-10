@@ -209,7 +209,6 @@ inventory::submit! {
 ///
 /// ## Properties
 ///   - `name`
-///   - `apertures`
 ///   - `inverted`
 ///   - `splitter config`
 ///   - `clear aperture`: the extent of the splitting surface; a ray beyond it misses the splitter
@@ -334,8 +333,7 @@ impl BeamSplitter {
     /// Processes rays arriving at a single input port.
     ///
     /// The rays are split on the splitting surface of this port: the transmitted part keeps its
-    /// direction, the reflected part is mirrored about the surface normal. Afterwards, the input
-    /// aperture is applied to both parts, but only to rays that hit the splitter.
+    /// direction, the reflected part is mirrored about the surface normal.
     ///
     /// # Arguments
     ///
@@ -346,79 +344,38 @@ impl BeamSplitter {
     ///
     /// # Returns
     ///
-    /// The transmitted rays, whether each of them hit the splitter, and the reflected rays, which
-    /// all did. Everything is empty if there is no input.
+    /// The transmitted and the reflected rays, both empty if there is no input.
     ///
     /// # Errors
     ///
     /// This function returns an error if
     ///   - the input is not [`LightData::Geometric`].
-    ///   - the surface or the aperture of the port cannot be found.
-    ///   - the splitting of the rays or the apodization fails.
+    ///   - the surface of the port cannot be found.
+    ///   - the splitting of the rays fails.
     fn process_input_port(
         &mut self,
         input: Option<&LightData>,
         port_name: &str,
         splitting_config: &SplittingConfig,
         missed_surface_strategy: MissedSurfaceStrategy,
-    ) -> OpmResult<(Rays, Vec<bool>, Rays)> {
-        if let Some(light_data) = input {
-            match light_data {
-                LightData::Geometric(r) => {
-                    let mut rays = r.clone();
-                    // Split rays on the input surface
-                    let (mut reflected, hits) =
-                        if let Some(surf) = self.get_optic_surface_mut(port_name) {
-                            rays.split_on_surface(surf, splitting_config, &missed_surface_strategy)?
-                        } else {
-                            return Err(OpossumError::OpticPort(format!(
-                                "Input optic surface not found for port '{port_name}'"
-                            )));
-                        };
-
-                    // Apply the input aperture to both parts where they hit. They sit at the same
-                    // points on the surface, so this equals apodizing those rays before splitting.
-                    if let Some(aperture) = self.ports().aperture(&PortType::Input, port_name) {
-                        let iso = self.effective_surface_iso(port_name)?;
-                        rays.apodize_hits(aperture, &iso, &hits)?;
-                        reflected.apodize(aperture, &iso)?;
-                    } else {
-                        return Err(OpossumError::OpticPort(format!(
-                            "Input aperture not found for port '{port_name}'"
-                        )));
-                    }
-                    Ok((rays, hits, reflected))
-                }
-                _ => Err(OpossumError::Analysis(format!(
-                    "Expected LightData::Geometric at port '{port_name}'"
-                ))),
-            }
-        } else {
-            // No input, return empty sets of rays
-            Ok((Rays::default(), Vec::new(), Rays::default()))
-        }
-    }
-    /// Processes rays for a single output port.
-    /// This includes apodization of the rays that hit the splitter and invalidating low-energy rays.
-    fn process_output_port(
-        &self,
-        rays: &mut Rays,
-        hits: &[bool],
-        port_name: &str,
-        analyzer_type: &AnalyzerType,
-    ) -> OpmResult<()> {
-        if let Some(aperture) = self.ports().aperture(&PortType::Output, port_name) {
-            let iso = self.effective_surface_iso(port_name)?;
-            rays.apodize_hits(aperture, &iso, hits)?;
-            if let AnalyzerType::RayTrace(config) = analyzer_type {
-                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-            }
-        } else {
-            return Err(OpossumError::OpticPort(format!(
-                "Output aperture not found for port '{port_name}'"
+    ) -> OpmResult<(Rays, Rays)> {
+        let Some(light_data) = input else {
+            return Ok((Rays::default(), Rays::default()));
+        };
+        let LightData::Geometric(rays) = light_data else {
+            return Err(OpossumError::Analysis(format!(
+                "Expected LightData::Geometric at port '{port_name}'"
             )));
-        }
-        Ok(())
+        };
+        let mut rays = rays.clone();
+        let Some(surf) = self.get_optic_surface_mut(port_name) else {
+            return Err(OpossumError::OpticPort(format!(
+                "Input optic surface not found for port '{port_name}'"
+            )));
+        };
+        let (reflected, _) =
+            rays.split_on_surface(surf, splitting_config, &missed_surface_strategy)?;
+        Ok((rays, reflected))
     }
     fn analyze_raytrace(
         &mut self,
@@ -432,8 +389,6 @@ impl BeamSplitter {
 
         let in1_port_name = &self.ports().names(&PortType::Input)[0];
         let in2_port_name = &self.ports().names(&PortType::Input)[1];
-        let out1_port_name = &self.ports().names(&PortType::Output)[0];
-        let out2_port_name = &self.ports().names(&PortType::Output)[1];
 
         let splitting_config = self.splitting_config()?;
         let missed_surface_strategy = match analyzer_type {
@@ -443,28 +398,26 @@ impl BeamSplitter {
         };
 
         // Process both inputs
-        let (mut main_rays1, mut hits1, split_rays1) = self.process_input_port(
+        let (mut main_rays1, split_rays1) = self.process_input_port(
             in1,
             in1_port_name,
             &splitting_config,
             *missed_surface_strategy,
         )?;
-        let (mut main_rays2, mut hits2, split_rays2) = self.process_input_port(
+        let (mut main_rays2, split_rays2) = self.process_input_port(
             in2,
             in2_port_name,
             &splitting_config,
             *missed_surface_strategy,
         )?;
 
-        // Merge the transmitted and reflected rays for the two outputs; a reflected ray has hit.
-        hits1.resize(hits1.len() + split_rays2.nr_of_rays(false), true);
+        // Merge the transmitted and reflected rays for the two outputs.
         main_rays1.merge(&split_rays2); // out1 = trans1 + refl2
-        hits2.resize(hits2.len() + split_rays1.nr_of_rays(false), true);
         main_rays2.merge(&split_rays1); // out2 = trans2 + refl1
-
-        // Process both outputs
-        self.process_output_port(&mut main_rays1, &hits1, out1_port_name, analyzer_type)?;
-        self.process_output_port(&mut main_rays2, &hits2, out2_port_name, analyzer_type)?;
+        if let AnalyzerType::RayTrace(config) = analyzer_type {
+            main_rays1.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+            main_rays2.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
+        }
 
         Ok((
             Some(LightData::Geometric(main_rays1)),
@@ -491,7 +444,6 @@ mod test {
             GhostFocusConfig, RayTraceConfig, ghostfocus::AnalysisGhostFocus,
             raytrace::AnalysisRayTrace,
         },
-        apertures::{Aperture, ApertureType},
         core_optics::{NodeAttrExt, PortType},
         light::{LightRays, LightResult},
         millimeter, nanometer,
@@ -673,31 +625,6 @@ mod test {
         assert_valid_energies(&reflected, &[0.5], "only the ray inside is reflected");
         let beside = transmitted.iter().nth(1).expect("the ray outside");
         assert_eq!(beside.position(), millimeter!(0.0, 12.6, -10.0));
-        Ok(())
-    }
-    /// A port aperture masks the light passing the splitter, never a ray that ran past it: in a
-    /// ghost focus analysis a ray beyond the clear aperture keeps all its energy, while a hole of
-    /// 5 mm blocks both halves of a ray that hits 8 mm off the axis at the input, and the half
-    /// leaving through it at an output.
-    #[test]
-    fn a_port_aperture_does_not_touch_a_ray_that_missed_the_splitter() -> OpmResult<()> {
-        let hole = Aperture::new_circle(millimeter!(5.0), ApertureType::Hole, None)?;
-        for ((port_type, port_name), transmitted_energies, reflected_energies) in [
-            (
-                (PortType::Input, "input_1"),
-                [1.0].as_slice(),
-                [].as_slice(),
-            ),
-            ((PortType::Output, "out1_trans1_refl2"), &[1.0], &[0.5]),
-            ((PortType::Output, "out2_trans2_refl1"), &[0.5, 1.0], &[]),
-        ] {
-            let mut splitter = placed_at_origin::<BeamSplitter>()?;
-            splitter.set_aperture(&port_type, port_name, &hole)?;
-            let (transmitted, reflected) = ghost_trace(&mut splitter, rays_at(&[8.0, 12.6])?)?;
-            let context = format!("hole at {port_name}");
-            assert_valid_energies(&transmitted, transmitted_energies, &context);
-            assert_valid_energies(&reflected, reflected_energies, &context);
-        }
         Ok(())
     }
 }

@@ -439,7 +439,7 @@ fn warn_about_the_upgrade_from_0(scenery: &mut NodeGroup) {
 #[cfg(test)]
 mod test {
     use crate::{
-        analyzers::{Analyzable, Analyzer, RayTraceConfig, raytrace::RayTracingAnalyzer},
+        analyzers::Analyzable,
         apertures::{Aperture, ApertureShape, ApertureType, CircleShape, StackShape},
         core_optics::{
             NodeAttrExt, OpticNode, OpticNodeExt, OpticRef, PortType, node_attr::HasNodeAttr,
@@ -447,12 +447,10 @@ mod test {
         degree,
         error::OpmResult,
         geometry::body::{CLEAR_APERTURE, default_clear_aperture},
-        joule, millimeter,
+        millimeter,
         nodes::{
-            BeamSplitter, Dummy, EnergyMeter, IdealFilter, Lens, NodeGroup, ParabolicMirror,
-            RayPropagationVisualizer, SourcePort, SpotDiagram, ThinMirror, Wedge,
-            ideal_filter::FilterTypeBuilder, round_collimated_ray_builder,
-            test_helper::helper::rays_recorded_by_meter,
+            BeamSplitter, Dummy, Lens, NodeGroup, ParabolicMirror, RayPropagationVisualizer,
+            SourcePort, SpotDiagram, ThinMirror, Wedge,
         },
         opm_document::OpmDocument,
         properties::Proptype,
@@ -761,77 +759,6 @@ mod test {
         for (id, name) in dropped {
             let node = read.scenery().node_recursive(id)?.0;
             assert!(node.node_attr().raw_ports().is_all_default(), "{name}");
-        }
-        Ok(())
-    }
-    /// Joining the port apertures into the clear aperture changes nothing a ray trace sees: the
-    /// same rays reach an energy meter behind a component before the upgrade, when its port
-    /// apertures masked the light hitting it, and after it, when its clear aperture bounds it.
-    #[test]
-    fn a_ray_trace_passes_the_same_rays_after_the_upgrade() -> OpmResult<()> {
-        let at = |x: f64| Some(millimeter!(x, 0.0));
-        let mut lens = Lens::default();
-        lens.set_aperture(
-            &PortType::Input,
-            "input_1",
-            &Aperture::new_circle(millimeter!(2.0), ApertureType::Obstruction, at(5.0))?,
-        )?;
-        let mut mirror = ThinMirror::default();
-        mirror.set_aperture(
-            &PortType::Input,
-            "input_1",
-            &Aperture::new_circle(millimeter!(8.0), ApertureType::Hole, at(3.0))?,
-        )?;
-        let mut filter = IdealFilter::new("filter", &FilterTypeBuilder::default())?;
-        filter.set_aperture(&PortType::Input, "input_1", &hole(6.0)?)?;
-        filter.set_aperture(
-            &PortType::Output,
-            "output_1",
-            &Aperture::new_circle(millimeter!(6.0), ApertureType::Hole, at(2.0))?,
-        )?;
-        let mut dummy = Dummy::default();
-        dummy.set_aperture(
-            &PortType::Input,
-            "input_1",
-            &Aperture::new_rectangle(
-                millimeter!(15.0),
-                millimeter!(15.0),
-                ApertureType::Hole,
-                None,
-                Some(degree!(10.0)),
-            )?,
-        )?;
-        let rays = || round_collimated_ray_builder(millimeter!(12.0), joule!(1.0), 6);
-        let emitted = rays()?.build()?.nr_of_rays(true);
-        for component in [
-            OpticRef::new(Box::new(lens)),
-            OpticRef::new(Box::new(mirror)),
-            OpticRef::new(Box::new(filter)),
-            OpticRef::new(Box::new(dummy)),
-        ] {
-            let node_type = component.node_type().to_string();
-            let mut scenery = NodeGroup::default();
-            let source = scenery.add_node(SourcePort::default())?;
-            let component = scenery.add_node_ref(component)?;
-            let meter = scenery.add_node(EnergyMeter::default())?;
-            scenery.connect_nodes(source, "output_1", component, "input_1", millimeter!(50.0))?;
-            scenery.connect_nodes(component, "output_1", meter, "input_1", millimeter!(50.0))?;
-            let mut config = RayTraceConfig::default();
-            config.map_source(source, rays()?);
-            let mut before = OpmDocument::new(scenery);
-            let mut after = OpmDocument::from_string(&file_of(&before, "0")?)?;
-            RayTracingAnalyzer::new(config.clone()).analyze(before.scenery_mut())?;
-            RayTracingAnalyzer::new(config).analyze(after.scenery_mut())?;
-            let passed = rays_recorded_by_meter(before.scenery(), meter)?;
-            assert!(
-                0 < passed && passed < emitted,
-                "{node_type}: {passed} of {emitted}"
-            );
-            assert_eq!(
-                rays_recorded_by_meter(after.scenery(), meter)?,
-                passed,
-                "{node_type}"
-            );
         }
         Ok(())
     }

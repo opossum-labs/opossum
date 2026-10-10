@@ -60,7 +60,8 @@ pub type ValidatedLidt = validated_type!(Fluence, AllPositive && AllNotNan);
 /// It does NOT contain geometric runtime data like `GeoSurface` or `HitMap`.
 #[derive(Debug, Clone, Serialize, ToSchema, PartialEq)]
 pub struct PortConfig {
-    /// The aperture of the port, defining the spatial transmission.
+    /// The aperture of the port. It limits no light any more: the upgrade of a version-0 file
+    /// moves it into the clear aperture of the node or drops it.
     #[serde(default, skip_serializing_if = "is_default_aperture")]
     pub aperture: Aperture,
     /// The coating of the port, defining reflection and transmission properties.

@@ -5,7 +5,9 @@ use std::collections::HashMap;
 use super::{Analyzer, AnalyzerType};
 use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
-    core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, node_attr::HasNodeAttr},
+    core_optics::{
+        NodeAttrExt, OpticNode, OpticNodeExt, node_attr::HasNodeAttr, optic_surface::OpticSurface,
+    },
     error::{OpmResult, OpossumError},
     gain::{ActiveScenario, PumpConfig, PumpScenario},
     light::{LightResult, Rays, lightdata::ray_data_builder::RayDataBuilder},
@@ -220,7 +222,13 @@ impl PropagationStrategy for RayTraceConfig {
     fn is_positioning_run(&self) -> bool {
         self.positioning_run
     }
-    fn on_after_apodization(&self, rays: &mut Rays) -> OpmResult<()> {
+    fn on_surface_interaction(
+        &self,
+        _surf: &mut OpticSurface,
+        rays: &mut Rays,
+        _reflected_rays: Rays,
+        _backward: bool,
+    ) -> OpmResult<()> {
         // The optical axis is placed by geometry alone; its energy does not decide where it runs.
         if self.positioning_run {
             return Ok(());

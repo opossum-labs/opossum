@@ -189,19 +189,11 @@ impl AnalysisRayTrace for ThinMirror {
                     refraction_intended,
                     config.missed_surface_strategy(),
                 )?;
-                match self.ports().aperture(&PortType::Input, in_port) {
-                    // Only the components' rims decide where the optical axis runs.
-                    Some(_) if config.is_positioning_run() => reflected_rays,
-                    Some(aperture) => {
-                        reflected_rays.apodize(aperture, &self.effective_surface_iso(in_port)?)?;
-                        reflected_rays
-                            .invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                        reflected_rays
-                    }
-                    _ => {
-                        return Err(OpossumError::OpticPort("input aperture not found".into()));
-                    }
+                // The optical axis is placed by geometry alone; its energy does not decide where it runs.
+                if !config.is_positioning_run() {
+                    reflected_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                 }
+                reflected_rays
             } else {
                 return Err(OpossumError::Analysis("no surface found. Aborting".into()));
             };
@@ -473,10 +465,6 @@ mod test {
     #[test]
     fn analyze_geometric_wrong_data_type() -> OpmResult<()> {
         test_analyze_wrong_data_type::<ThinMirror>("input_1")
-    }
-    #[test]
-    fn analyze_geometric_no_isometery() {
-        test_analyze_geometric_no_isometry::<ThinMirror>("input_1");
     }
     #[test]
     fn analyze_geometric_ok() -> OpmResult<()> {

@@ -13,7 +13,6 @@ pub mod helper {
             NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, OpticPorts, OpticRef, PortType,
             Volumetric, node_attr::NodePositioning, optic_surface::OpticSurface,
         },
-        distributions::position::Hexapolar,
         error::{OpmResult, OpossumError},
         geometry::{
             body::{Body, CLEAR_APERTURE, default_clear_aperture},
@@ -26,7 +25,7 @@ pub mod helper {
         percent,
         prelude::Aperture,
         properties::Proptype,
-        utils::{LockExt, geom_transformation::Isometry, test_helper::helper::check_logs},
+        utils::{LockExt, geom_transformation::Isometry},
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::{Point2, Point3, Vector3};
@@ -180,7 +179,7 @@ pub mod helper {
         let rays = || rays_along_z_from(&[inside, outside], nanometer!(1000.0));
         let mut node = make()?;
         let warning = format!(
-            "Rays were lost at '{}' ({}): they ran outside its clear aperture, were cut by a port aperture or fell below the energy threshold. Results might not be accurate.",
+            "Rays were lost at '{}' ({}): they ran outside its clear aperture or fell below the energy threshold. Results might not be accurate.",
             node.node_attr().name(),
             node.node_attr().node_type()
         );
@@ -516,38 +515,6 @@ pub mod helper {
         for (energy, expected) in energies.iter().zip(expected) {
             assert_abs_diff_eq!(energy, expected, epsilon = 1e-12);
         }
-    }
-    pub fn test_analyze_apodization_warning<T: Default + AnalysisRayTrace>() -> OpmResult<()> {
-        testing_logger::setup();
-        let mut node = T::default();
-        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
-        let config = CircleShape::new(millimeter!(1.0))?;
-        node.set_aperture(
-            &PortType::Input,
-            "input_1",
-            &Aperture::new(
-                ApertureShape::BinaryCircle(config),
-                ApertureType::Hole,
-                None,
-                None,
-            )?,
-        )?;
-        let mut input = LightResult::default();
-        let rays = Rays::new_uniform_collimated(
-            nanometer!(1054.0),
-            joule!(1.0),
-            &Hexapolar::new(millimeter!(10.0), 3)?,
-        )?;
-        let input_light = LightData::Geometric(rays);
-        input.insert("input_1".into(), input_light.clone());
-        AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
-        let msg = format!(
-            "Rays were lost at '{}' ({}): they ran outside its clear aperture, were cut by a port aperture or fell below the energy threshold. Results might not be accurate.",
-            node.node_attr().name(),
-            node.node_attr().node_type()
-        );
-        check_logs(log::Level::Warn, vec![&msg]);
-        Ok(())
     }
     /// Remove one property entry from a serialized node, key and value.
     ///

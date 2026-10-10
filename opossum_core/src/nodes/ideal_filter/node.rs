@@ -210,7 +210,6 @@ impl AnalysisRayTrace for IdealFilter {
         };
         let mut rays = r.clone();
         let rays_before = rays.nr_of_rays(true);
-        let iso = self.effective_surface_iso(in_port)?;
         let Some(surf) = self.get_optic_surface_mut(in_port) else {
             return Err(OpossumError::Analysis("no surface found. Aborting".into()));
         };
@@ -221,28 +220,11 @@ impl AnalysisRayTrace for IdealFilter {
             refraction_intended,
             config.missed_surface_strategy(),
         )?;
-        // A ray that ran past the filter is neither filtered nor masked by its port apertures.
+        // A ray that ran past the filter is not filtered.
         rays.filter_energy_hits(&filter_type, &hits)?;
-        match self.ports().aperture(&PortType::Input, in_port) {
-            // Only the components' rims decide where the optical axis runs, not its energy.
-            Some(_) if config.is_positioning_run() => {}
-            Some(aperture) => {
-                rays.apodize_hits(aperture, &iso, &hits)?;
-                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-            }
-            _ => {
-                return Err(OpossumError::OpticPort("input aperture not found".into()));
-            }
-        }
-        match self.ports().aperture(&PortType::Output, out_port) {
-            Some(_) if config.is_positioning_run() => {}
-            Some(aperture) => {
-                rays.apodize_hits(aperture, &iso, &hits)?;
-                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-            }
-            _ => {
-                return Err(OpossumError::OpticPort("output aperture not found".into()));
-            }
+        // The optical axis is placed by geometry alone; its energy does not decide where it runs.
+        if !config.is_positioning_run() {
+            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
         }
         self.warn_about_lost_rays(rays_before, rays.nr_of_rays(true));
         let light_data = LightData::Geometric(rays);
@@ -253,8 +235,6 @@ impl AnalysisRayTrace for IdealFilter {
 mod test {
     use super::*;
     use crate::{
-        analyzers::propagation_strategy::MissedSurfaceStrategy,
-        apertures::{Aperture, ApertureType},
         core_optics::node_attr::NodePositioning,
         distributions::position::Hexapolar,
         joule,
@@ -495,33 +475,6 @@ mod test {
             &[0.3, 1.0],
             "the ray beyond the rim keeps its energy",
         );
-        Ok(())
-    }
-    /// A port aperture masks the light passing the filter, never a ray that ran past it: with an
-    /// analyzer that lets missed rays run on, a ray beyond the clear aperture keeps all its energy,
-    /// while a hole of 5 mm at the input or at the output blocks a ray that hits 8 mm off the axis.
-    #[test]
-    fn a_port_aperture_does_not_touch_a_ray_that_missed_the_filter() -> OpmResult<()> {
-        let hole = Aperture::new_circle(millimeter!(5.0), ApertureType::Hole, None)?;
-        let mut config = RayTraceConfig::default();
-        config.set_missed_surface_strategy(MissedSurfaceStrategy::Ignore);
-        for (port_type, port_name) in [(PortType::Input, "input_1"), (PortType::Output, "output_1")]
-        {
-            let mut node = placed_filter()?;
-            node.set_aperture(&port_type, port_name, &hole)?;
-            let output = AnalysisRayTrace::analyze(
-                &mut node,
-                LightResult::from([(
-                    "input_1".into(),
-                    LightData::Geometric(rays_at(&[8.0, 12.6])?),
-                )]),
-                &config,
-            )?;
-            let Some(LightData::Geometric(passed)) = output.get("output_1") else {
-                panic!("expected ray data at the output port");
-            };
-            assert_valid_energies(passed, &[1.0], &format!("hole at {port_name}"));
-        }
         Ok(())
     }
     #[test]

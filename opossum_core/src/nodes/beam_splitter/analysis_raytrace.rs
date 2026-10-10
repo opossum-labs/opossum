@@ -19,8 +19,8 @@ impl AnalysisRayTrace for BeamSplitter {
     ///
     /// An alignment run reaches this through a reference (to the splitter or to a group holding
     /// it). It then places the following nodes by geometry alone, exactly like
-    /// [`AnalysisRayTrace::calc_node_positions`]: neither port apertures nor the splitting ratio
-    /// may decide where the optical axis runs.
+    /// [`AnalysisRayTrace::calc_node_positions`]: the splitting ratio must not decide where the
+    /// optical axis runs.
     fn analyze(
         &mut self,
         incoming_data: LightResult,
@@ -213,8 +213,7 @@ mod test {
 
     use crate::{
         analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
-        apertures::{Aperture, ApertureType},
-        core_optics::{OpticNode, OpticNodeExt, PortType, node_attr::NodePositioning},
+        core_optics::{OpticNode, OpticNodeExt, node_attr::NodePositioning},
         degree,
         error::OpmResult,
         joule,
@@ -860,26 +859,6 @@ mod test {
             &RayTraceConfig::default().for_positioning(),
         )?;
         assert!(output.is_empty());
-        Ok(())
-    }
-    /// Positioning through a reference to a beam splitter ignores its port apertures, as it does for
-    /// a placed one: a central obstruction on the input port must not cut the optical axis.
-    #[test]
-    fn a_referenced_splitter_ignores_its_port_apertures_when_positioning() -> OpmResult<()> {
-        let mut bs = BeamSplitter::new("bs", &SplittingConfigBuilder::FixedRatio(0.5))?;
-        bs.set_aperture(
-            &PortType::Input,
-            "input_1",
-            &Aperture::new_circle(millimeter!(1.0), ApertureType::Obstruction, None)?,
-        )?;
-        let (mut scenery, src, transmitted, reflected) = behind_a_referenced_splitter(bs)?;
-        position(&mut scenery, src)?;
-        let (trans_pos, trans_dir) = placed(&scenery, transmitted);
-        assert_abs_diff_eq!(trans_pos, mm(0., 0., 150.), epsilon = 1e-9);
-        assert_abs_diff_eq!(trans_dir, Vector3::z(), epsilon = 1e-9);
-        let (refl_pos, refl_dir) = placed(&scenery, reflected);
-        assert_abs_diff_eq!(refl_pos, mm(-50., 0., 100.), epsilon = 1e-9);
-        assert_abs_diff_eq!(refl_dir, -Vector3::x(), epsilon = 1e-9);
         Ok(())
     }
     /// Positioning through a reference to a beam splitter does not depend on how it splits the

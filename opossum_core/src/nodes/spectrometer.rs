@@ -334,10 +334,6 @@ mod test {
         Ok(())
     }
     #[test]
-    fn analyze_apodazation_warning() -> OpmResult<()> {
-        test_analyze_apodization_warning::<Spectrometer>()
-    }
-    #[test]
     fn clear_aperture_absent_in_file() -> OpmResult<()> {
         test_clear_aperture_absent_in_file::<Spectrometer>()
     }

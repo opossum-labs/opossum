@@ -161,25 +161,6 @@ pub trait AnalysisEnergy: OpticNode {
         if let Some(volume) = self.as_volume() {
             volume.propagate_energy_inside_medium(&mut data, config)?;
         }
-        let apodized = if let Some(surf) = self.get_optic_surface(out_port)
-            && !surf.aperture().is_none()
-        {
-            true
-        } else if let Some(surf) = self.get_optic_surface(in_port)
-            && !surf.aperture().is_none()
-        {
-            true
-        } else {
-            false
-        };
-        if apodized {
-            self.set_apodization_warning(true);
-            log::warn!(
-                "'{}' ({}) has a port aperture, which the energy analysis does not apply. Results might not be accurate.",
-                self.node_attr().name(),
-                self.node_type()
-            );
-        }
         self.set_light_data(Some(data.clone()));
         Ok(LightResult::from([(out_port.clone(), data)]))
     }
@@ -187,21 +168,14 @@ pub trait AnalysisEnergy: OpticNode {
 
 #[cfg(test)]
 mod test {
-    use super::{AnalysisEnergy, EnergyAnalyzer};
+    use super::EnergyAnalyzer;
     use crate::{
         analyzers::{Analyzer, energy::EnergyConfig},
-        apertures::{Aperture, ApertureShape, ApertureType, CircleShape},
-        core_optics::{OpticNodeExt, PortType},
         error::OpmResult,
         joule,
-        light::{
-            LightData, LightResult,
-            lightdata::energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
-            spectrum_helper::create_he_ne_spec,
-        },
-        millimeter, nanometer,
+        light::lightdata::energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
+        nanometer,
         nodes::{EnergyMeter, NodeGroup, SourcePort},
-        utils::test_helper::helper::check_logs,
     };
     use num_traits::Zero;
     use uom::si::f64::Length;
@@ -300,36 +274,6 @@ mod test {
 
         assert!(config.get_source(&node_id).is_some());
         assert!(config.get_source(&uuid2).is_none());
-        Ok(())
-    }
-    #[test]
-    fn a_port_aperture_is_passed_over_with_a_warning() -> OpmResult<()> {
-        let mut meter = EnergyMeter::default();
-        meter.set_aperture(
-            &PortType::Input,
-            "input_1",
-            &Aperture::new(
-                ApertureShape::BinaryCircle(CircleShape::new(millimeter!(1.0))?),
-                ApertureType::Hole,
-                None,
-                None,
-            )?,
-        )?;
-        let input = LightData::Energy(create_he_ne_spec(1.0)?);
-        testing_logger::setup();
-        let output = AnalysisEnergy::analyze(
-            &mut meter,
-            LightResult::from([("input_1".into(), input.clone())]),
-            &EnergyConfig::default(),
-        )?;
-        assert_eq!(output.get("output_1"), Some(&input), "no energy is cut");
-        check_logs(
-            log::Level::Warn,
-            vec![
-                "'energy meter' (energy meter) has a port aperture, which the energy analysis does not apply. Results might not be accurate.",
-            ],
-        );
-        assert!(meter.has_apodization_warning());
         Ok(())
     }
 }

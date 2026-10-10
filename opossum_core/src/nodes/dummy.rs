@@ -97,7 +97,6 @@ mod test {
     use super::*;
     use crate::{
         analyzers::energy::EnergyConfig,
-        apertures::{Aperture, ApertureType},
         core_optics::{NodeAttrExt, PortType, node_attr::NodePositioning},
         geometry::body::{CLEAR_APERTURE, default_clear_aperture},
         joule,
@@ -230,40 +229,6 @@ mod test {
 
         if let Some(LightData::Geometric(out_rays)) = output.get("output_1") {
             assert_eq!(out_rays.nr_of_rays(true), 1);
-        } else {
-            panic!("Expected geometric ray bundle in output port");
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn analyze_raytrace_with_aperture_apodization() -> OpmResult<()> {
-        let mut dummy = Dummy::default();
-        dummy.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
-
-        // Circular aperture with 5 mm radius
-        let aperture = Aperture::new_circle(millimeter!(5.0), ApertureType::Hole, None)?;
-        dummy.set_aperture(&PortType::Input, "input_1", &aperture)?;
-
-        // Ray 1: Inside the aperture (r = 2 mm)
-        let ray_inside =
-            Ray::new_collimated(millimeter!(2.0, 0.0, 0.0), nanometer!(1064.0), joule!(1.0))?;
-        // Ray 2: Outside the aperture (r = 7 mm)
-        let ray_outside =
-            Ray::new_collimated(millimeter!(7.0, 0.0, 0.0), nanometer!(1064.0), joule!(1.0))?;
-
-        let rays = Rays::from(vec![ray_inside, ray_outside]);
-        let mut input = LightResult::default();
-        input.insert("input_1".into(), LightData::Geometric(rays));
-
-        let output = AnalysisRayTrace::analyze(&mut dummy, input, &RayTraceConfig::default())?;
-        assert!(output.contains_key("output_1"));
-
-        if let Some(LightData::Geometric(out_rays)) = output.get("output_1") {
-            // Only the ray inside the aperture should survive as valid
-            assert_eq!(out_rays.nr_of_rays(true), 1);
-            // Total rays (valid + invalid) remains 2
-            assert_eq!(out_rays.nr_of_rays(false), 2);
         } else {
             panic!("Expected geometric ray bundle in output port");
         }

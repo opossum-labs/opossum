@@ -357,10 +357,6 @@ mod test {
     }
 
     #[test]
-    fn analyze_apodization_warning() -> OpmResult<()> {
-        test_analyze_apodization_warning::<EnergyMeter>()
-    }
-    #[test]
     fn clear_aperture_absent_in_file() -> OpmResult<()> {
         test_clear_aperture_absent_in_file::<EnergyMeter>()
     }

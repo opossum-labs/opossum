@@ -24,9 +24,9 @@ use crate::{
 };
 
 /// The report note of a detector whose apodization warning is set (see
-/// [`OpticNode::set_apodization_warning`]): an aperture limited what it measured.
+/// [`OpticNode::set_apodization_warning`]): a clear aperture limited what it measured.
 pub(crate) const APERTURE_LIMIT_NOTE: &str =
-    "A port aperture or the clear aperture limits this measurement. Results might not be accurate.";
+    "A clear aperture limits this measurement. Results might not be accurate.";
 
 /// Helper trait for dynamic downcasting of optical nodes.
 ///
