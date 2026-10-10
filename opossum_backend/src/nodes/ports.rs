@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 /// Get all port configurations of an optical node
 ///
-/// Returns the port configurations (Aperture, Coating, LIDT).
+/// Returns the port configurations (Coating, LIDT).
 /// Note: If the node is inverted, the physical inputs and outputs are automatically swapped in the response.
 #[utoipa::path(
     tag = "node",

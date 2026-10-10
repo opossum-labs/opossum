@@ -307,11 +307,6 @@ mod test {
     }
 
     #[test]
-    fn set_aperture() {
-        test_set_aperture::<EnergyMeter>("input_1", "output_1");
-    }
-
-    #[test]
     fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<EnergyMeter>()
     }

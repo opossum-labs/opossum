@@ -38,9 +38,6 @@ inventory::submit! {
 /// ## Properties
 ///   - `name`
 ///   - `inverted`
-///
-/// **Note**: Since this node only refers to another optical node it does not handle
-/// (ignores) any [`Aperture`](crate::apertures::Aperture) definitions on its ports.
 pub struct NodeReference {
     node_attr: NodeAttr,
     referenced_uuid: Uuid,

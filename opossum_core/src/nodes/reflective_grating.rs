@@ -405,10 +405,6 @@ mod test {
         assert_eq!(node.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
-    fn set_aperture() {
-        test_set_aperture::<ReflectiveGrating>("input_1", "output_1");
-    }
-    #[test]
     fn inverted() -> OpmResult<()> {
         test_inverted::<ReflectiveGrating>()
     }

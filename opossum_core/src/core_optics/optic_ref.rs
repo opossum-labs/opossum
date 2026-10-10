@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::{
     analyzers::Analyzable,
-    core_optics::{NodeAttr, NodeAttrExt, node_attr::HasNodeAttr},
+    core_optics::{NodeAttr, NodeAttrExt, node_attr::HasNodeAttr, optic_ports::FilePorts},
     nodes::{NodeGroup, OpticGraph, create_node_ref},
     opm_document::upgrade_node,
 };
@@ -121,6 +121,10 @@ struct OpticRefIntermediate {
     attributes: NodeAttr,
     #[serde(default)]
     graph: OpticGraph,
+    /// Read here rather than in `attributes`, so the upgrade of an older file gets the apertures
+    /// its ports held.
+    #[serde(default)]
+    ports: FilePorts,
 }
 
 impl<'de> Deserialize<'de> for OpticRef {
@@ -129,6 +133,8 @@ impl<'de> Deserialize<'de> for OpticRef {
         D: serde::Deserializer<'de>,
     {
         let mut intermediate = OpticRefIntermediate::deserialize(deserializer)?;
+        let (ports, port_apertures) = intermediate.ports.split();
+        intermediate.attributes.set_ports(ports);
 
         let node_type = intermediate.attributes.node_type();
         let mut node_ref =
@@ -150,7 +156,8 @@ impl<'de> Deserialize<'de> for OpticRef {
             group_node.set_graph(intermediate.graph);
         }
         // A node of an older file is upgraded before it builds its surfaces.
-        upgrade_node(&mut *node_ref).map_err(|e| de::Error::custom(e.to_string()))?;
+        upgrade_node(&mut *node_ref, port_apertures)
+            .map_err(|e| de::Error::custom(e.to_string()))?;
         node_ref
             .after_deserialization_hook()
             .map_err(|e| de::Error::custom(e.to_string()))?;

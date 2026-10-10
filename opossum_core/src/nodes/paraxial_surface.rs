@@ -236,10 +236,6 @@ mod test {
         assert_eq!(node.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
-    fn set_aperture() {
-        test_set_aperture::<ParaxialSurface>("input_1", "output_1");
-    }
-    #[test]
     fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<ParaxialSurface>()
     }

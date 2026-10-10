@@ -7,7 +7,7 @@ pub mod helper {
             ghostfocus::AnalysisGhostFocus,
             raytrace::AnalysisRayTrace,
         },
-        apertures::{ApertureShape, ApertureType, CircleShape, GaussianShape},
+        apertures::{ApertureShape, CircleShape, GaussianShape},
         coatings::{CoatingConstantR, CoatingType},
         core_optics::{
             NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, OpticPorts, OpticRef, PortType,
@@ -23,7 +23,6 @@ pub mod helper {
         millimeter, nanometer,
         nodes::{EnergyMeter, NodeGroup, SourcePort, ThinMirror},
         percent,
-        prelude::Aperture,
         properties::Proptype,
         utils::{LockExt, geom_transformation::Isometry},
     };
@@ -70,37 +69,6 @@ pub mod helper {
             "reverting the inversion must restore the ports"
         );
         Ok(())
-    }
-    pub fn test_set_aperture<T: Default + OpticNode>(
-        input_port_name: &str,
-        output_port_name: &str,
-    ) {
-        let mut node = T::default();
-        let aperture = Aperture::default();
-        assert!(
-            node.set_aperture(&PortType::Input, input_port_name, &aperture)
-                .is_ok()
-        );
-        assert!(
-            node.set_aperture(&PortType::Input, output_port_name, &aperture)
-                .is_err()
-        );
-        assert!(
-            node.set_aperture(&PortType::Input, "no port", &aperture)
-                .is_err()
-        );
-        assert!(
-            node.set_aperture(&PortType::Output, input_port_name, &aperture)
-                .is_err()
-        );
-        assert!(
-            node.set_aperture(&PortType::Output, output_port_name, &aperture)
-                .is_ok()
-        );
-        assert!(
-            node.set_aperture(&PortType::Output, "no port", &aperture)
-                .is_err()
-        );
     }
     /// Assert that a node reflects completely on `input_1` and `output_1`: the ports and the
     /// surfaces built from them carry a constant reflectivity of 100 %.
@@ -708,8 +676,7 @@ pub mod helper {
     /// Assert that the transversal extent of a volume node is its clear aperture, and nothing else.
     ///
     /// The clear aperture is what a supplier quotes as the size of the component, and a volume node
-    /// starts out with the 25 mm standard. A port [`Aperture`] must not influence it: masking the
-    /// light in front of a component does not make the component smaller.
+    /// starts out with the 25 mm standard.
     ///
     /// # Errors
     ///
@@ -728,14 +695,7 @@ pub mod helper {
         let body = node.volume_body()?;
         assert!(body.contains(&point_at(millimeter!(12.4)))?);
         assert!(!body.contains(&point_at(millimeter!(12.6)))?);
-        // a port aperture masks the light, it does not resize the medium
-        node.set_aperture(
-            &PortType::Input,
-            "input_1",
-            &Aperture::new_circle(millimeter!(1.0), ApertureType::Hole, None)?,
-        )?;
-        assert!(node.volume_body()?.contains(&point_at(millimeter!(12.4)))?);
-        // a wider clear aperture does
+        // a wider clear aperture widens it
         node.node_attr_mut().set_property(
             CLEAR_APERTURE,
             ApertureShape::BinaryCircle(CircleShape::new(millimeter!(25.0))?).into(),

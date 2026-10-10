@@ -712,7 +712,6 @@ impl OpticNode for NodeGroup {
     }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
-        let ports_to_be_set = self.node_attr.raw_ports();
         for p in self.graph.port_map(&PortType::Input).port_names() {
             ports.add(&PortType::Input, &p).unwrap();
         }
@@ -722,7 +721,6 @@ impl OpticNode for NodeGroup {
         if self.graph.is_inverted() {
             ports.set_inverted(true);
         }
-        ports.set_apertures(ports_to_be_set.clone()).unwrap();
         ports
     }
 

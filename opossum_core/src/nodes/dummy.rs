@@ -147,11 +147,6 @@ mod test {
     }
 
     #[test]
-    fn set_aperture() {
-        test_set_aperture::<Dummy>("input_1", "output_1");
-    }
-
-    #[test]
     fn report() -> OpmResult<()> {
         let report = Dummy::default().node_report("123", crate::analyzers::AnalyzerKind::Energy)?;
         assert!(matches!(report, NodeReportResult::None));

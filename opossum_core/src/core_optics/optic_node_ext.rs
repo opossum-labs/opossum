@@ -38,10 +38,6 @@ pub trait OpticNodeExt {
 
     /// Return the transversal extent of this node, read from its [`CLEAR_APERTURE`] property.
     ///
-    /// The port [`Aperture`]s are deliberately not consulted: an aperture states how much light a
-    /// surface transmits where and may soften or invert that transmission, which says nothing about
-    /// how far the component reaches. Masking a component down does not make it smaller.
-    ///
     /// # Returns
     ///
     /// The extent, or `None` if the clear aperture is open: the node is unbounded, as a detector
@@ -71,18 +67,6 @@ pub trait OpticNodeExt {
     ///
     /// This function returns an error if `update_surfaces` fails.
     fn clear_alignment(&mut self) -> OpmResult<()>;
-
-    /// Set an [`Aperture`] for a given port name.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the port name does not exist.
-    fn set_aperture(
-        &mut self,
-        port_type: &PortType,
-        port_name: &str,
-        aperture: &Aperture,
-    ) -> OpmResult<()>;
 
     /// Set a coating for a given port name.
     ///
@@ -349,18 +333,6 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
 
     fn clear_alignment(&mut self) -> OpmResult<()> {
         self.node_attr_mut().set_alignment_option(None);
-        self.update_surfaces()
-    }
-
-    fn set_aperture(
-        &mut self,
-        port_type: &PortType,
-        port_name: &str,
-        aperture: &Aperture,
-    ) -> OpmResult<()> {
-        let mut ports = self.ports();
-        ports.set_aperture(port_type, port_name, aperture)?;
-        self.node_attr_mut().set_ports(ports);
         self.update_surfaces()
     }
 
@@ -703,9 +675,9 @@ mod test {
         Ok(())
     }
 
-    /// Setting a port's aperture, coating or LIDT addresses an inverted node's ports by their
-    /// logical names, but the node has to keep storing them physically: otherwise it stays
-    /// inverted after the inversion is reverted, and every lookup of a physical port misses.
+    /// Setting a port's coating or LIDT addresses an inverted node's ports by their logical
+    /// names, but the node has to keep storing them physically: otherwise it stays inverted after
+    /// the inversion is reverted, and every lookup of a physical port misses.
     #[test]
     fn port_settings_keep_the_stored_ports_of_an_inverted_node_physical() -> OpmResult<()> {
         let inverted = || -> OpmResult<Dummy> {
@@ -714,18 +686,11 @@ mod test {
             Ok(node)
         };
         let lidt = J_per_cm2!(2.0);
-        let mut with_aperture = inverted()?;
-        with_aperture.set_aperture(&PortType::Input, "output_1", &Aperture::default())?;
         let mut with_coating = inverted()?;
         with_coating.set_coating(&PortType::Input, "output_1", &CoatingType::Fresnel)?;
         let mut with_lidt = inverted()?;
         with_lidt.set_lidt(&PortType::Input, "output_1", lidt)?;
-        for mut node in [
-            with_aperture,
-            with_coating,
-            with_lidt,
-            inverted()?.with_lidt(lidt)?,
-        ] {
+        for mut node in [with_coating, with_lidt, inverted()?.with_lidt(lidt)?] {
             assert_eq!(
                 node.node_attr().raw_ports().names(&PortType::Input),
                 vec!["input_1"]
