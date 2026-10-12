@@ -1,5 +1,3 @@
-// In opossum_backend/src/server.rs
-
 use actix_cors::Cors;
 use actix_web::{
     App, HttpResponse, HttpServer,
@@ -16,6 +14,13 @@ use crate::{
     app_state::AppState, error::BackEndErrorResponse, pages, payload_logger::PayloadLogger, routes,
     sse_logger::init_logger,
 };
+
+/// Maximum accepted payload size in bytes (10 MiB).
+///
+/// Actix Web defaults to 256 KiB for primitive extractors like `String` and `web::Bytes`,
+/// and 2 MiB for `web::Json`. Setting this to 10 MiB comfortably accommodates large
+/// OPM models with hundreds or thousands of connected optical nodes.
+const MAX_PAYLOAD_SIZE: usize = 10 * 1024 * 1024;
 
 #[derive(Debug, Clone, Default)]
 pub struct ServerConfig {
@@ -96,6 +101,10 @@ pub fn start_with_config(config: &ServerConfig) -> Server {
                 .map(|app| app.wrap(Condition::new(debug_payload, payload_logger.clone())))
                 .map(|app| app.wrap(cors))
                 .app_data(app_state.clone())
+                // Increase payload limit for raw String / Bytes extractors (used by put_document)
+                .app_data(web::PayloadConfig::default().limit(MAX_PAYLOAD_SIZE))
+                // Increase payload limit for JSON extractors
+                .app_data(web::JsonConfig::default().limit(MAX_PAYLOAD_SIZE))
                 .configure(routes::root_config)
                 .openapi_service(|api| {
                     SwaggerUi::new("/swagger-ui/{_:.*}").url("/api-docs/openapi.json", api)
