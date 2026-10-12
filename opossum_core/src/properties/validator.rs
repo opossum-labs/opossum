@@ -1,4 +1,4 @@
-use approx::relative_ne;
+use approx::abs_diff_ne;
 use serde::{Deserialize, Serialize};
 use uom::si::{angle::degree, f64::Angle};
 
@@ -117,15 +117,15 @@ impl Validator {
     }
     fn validate_numeric_is_not_zero(prop: &Proptype) -> OpmResult<()> {
         let is_valid = match prop {
-            Proptype::F64(v) => relative_ne!(*v, 0.0),
-            Proptype::Angle(a) => relative_ne!(a.value, 0.0),
-            Proptype::Energy(e) => relative_ne!(e.value, 0.0),
-            Proptype::Fluence(f) => relative_ne!(f.value, 0.0),
+            Proptype::F64(v) => abs_diff_ne!(*v, 0.0),
+            Proptype::Angle(a) => abs_diff_ne!(a.value, 0.0),
+            Proptype::Energy(e) => abs_diff_ne!(e.value, 0.0),
+            Proptype::Fluence(f) => abs_diff_ne!(f.value, 0.0),
             Proptype::I32(i) => *i != 0,
-            Proptype::Length(l) | Proptype::Curvature(l) => relative_ne!(l.value, 0.0),
-            Proptype::LinearDensity(d) => relative_ne!(d.value, 0.0),
-            Proptype::WfLambda(l, _) => relative_ne!(*l, 0.0),
-            _ => true, // Silently ignore if not numeric
+            Proptype::Length(l) | Proptype::Curvature(l) => abs_diff_ne!(l.value, 0.0),
+            Proptype::LinearDensity(d) => abs_diff_ne!(d.value, 0.0),
+            Proptype::WfLambda(l, _) => abs_diff_ne!(*l, 0.0),
+            _ => true,
         };
         if is_valid {
             Ok(())
@@ -137,16 +137,17 @@ impl Validator {
     }
 
     fn validate_numeric_is_positive(prop: &Proptype) -> OpmResult<()> {
+        // Enforce strictly positive values (> 0.0) consistent with integer semantics
         let is_valid = match prop {
-            Proptype::F64(v) => v.is_sign_positive(),
-            Proptype::Angle(a) => a.is_sign_positive(),
-            Proptype::Energy(e) => e.is_sign_positive(),
-            Proptype::Fluence(f) => f.is_sign_positive(),
+            Proptype::F64(v) => *v > 0.0,
+            Proptype::Angle(a) => a.value > 0.0,
+            Proptype::Energy(e) => e.value > 0.0,
+            Proptype::Fluence(f) => f.value > 0.0,
             Proptype::I32(i) => i.is_positive(),
-            Proptype::Length(l) | Proptype::Curvature(l) => l.is_sign_positive(),
-            Proptype::LinearDensity(d) => d.is_sign_positive(),
-            Proptype::WfLambda(l, _) => l.is_sign_positive(),
-            _ => true, // Silently ignore if not numeric
+            Proptype::Length(l) | Proptype::Curvature(l) => l.value > 0.0,
+            Proptype::LinearDensity(d) => d.value > 0.0,
+            Proptype::WfLambda(l, _) => *l > 0.0,
+            _ => true,
         };
         if is_valid {
             Ok(())
@@ -228,17 +229,26 @@ impl Validator {
             Ok(())
         }
     }
-    fn validate_or_validator(prop: &Proptype, validators: &Vec<Self>) -> OpmResult<()> {
-        let mut result = Ok(());
+    fn validate_or_validator(prop: &Proptype, validators: &[Self]) -> OpmResult<()> {
+        if validators.is_empty() {
+            return Err(OpossumError::Properties(
+                "empty OR validator cannot match".to_string(),
+            ));
+        }
+
+        let mut last_err = None;
         for validator in validators {
-            result = validator.validate(prop);
-            if result.is_ok() {
-                break;
+            match validator.validate(prop) {
+                Ok(()) => return Ok(()),
+                Err(e) => last_err = Some(e),
             }
         }
-        result
+
+        Err(last_err.unwrap_or_else(|| {
+            OpossumError::Properties("all validation branches failed".to_string())
+        }))
     }
-    fn validate_and_validator(prop: &Proptype, validators: &Vec<Self>) -> OpmResult<()> {
+    fn validate_and_validator(prop: &Proptype, validators: &[Self]) -> OpmResult<()> {
         for validator in validators {
             validator.validate(prop)?;
         }
@@ -257,5 +267,123 @@ impl Validator {
                 "lightdatabuilder validator is only for Proptype::LightDataBuilder".into(),
             ))
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::meter;
+    use uom::si::{angle::degree, f64::Angle};
+
+    #[test]
+    fn validate_finite_and_nan() {
+        let val_finite = Validator::NumericIsFinite;
+        let val_nan = Validator::NumericIsNotNaN;
+
+        assert!(val_finite.validate(&Proptype::F64(42.0)).is_ok());
+        assert!(val_finite.validate(&Proptype::F64(f64::INFINITY)).is_err());
+        assert!(val_finite.validate(&Proptype::F64(f64::NAN)).is_err());
+
+        assert!(val_nan.validate(&Proptype::F64(f64::NAN)).is_err());
+        assert!(val_nan.validate(&Proptype::F64(f64::INFINITY)).is_ok());
+    }
+
+    #[test]
+    fn validate_positive() {
+        let val = Validator::NumericIsPositive;
+        assert!(val.validate(&Proptype::F64(1.0)).is_ok());
+        assert!(val.validate(&Proptype::F64(0.0)).is_err());
+        assert!(val.validate(&Proptype::F64(-1.0)).is_err());
+
+        assert!(val.validate(&Proptype::I32(5)).is_ok());
+        assert!(val.validate(&Proptype::I32(0)).is_err());
+        assert!(val.validate(&Proptype::I32(-2)).is_err());
+
+        assert!(val.validate(&Proptype::Length(meter!(0.005))).is_ok());
+        assert!(val.validate(&Proptype::Length(meter!(0.0))).is_err());
+    }
+
+    #[test]
+    fn validate_not_zero() {
+        let val = Validator::NumericIsNotZero;
+        assert!(val.validate(&Proptype::F64(0.0)).is_err());
+        assert!(val.validate(&Proptype::F64(1e-12)).is_ok());
+        assert!(val.validate(&Proptype::I32(0)).is_err());
+        assert!(val.validate(&Proptype::I32(1)).is_ok());
+    }
+
+    #[test]
+    fn validate_numeric_in_range() {
+        let val = Validator::NumericInRange {
+            min: -10.0,
+            max: 10.0,
+        };
+        assert!(val.validate(&Proptype::F64(-10.0)).is_ok());
+        assert!(val.validate(&Proptype::F64(0.0)).is_ok());
+        assert!(val.validate(&Proptype::F64(10.0)).is_ok());
+        assert!(val.validate(&Proptype::F64(10.01)).is_err());
+        assert!(val.validate(&Proptype::F64(-10.01)).is_err());
+    }
+
+    #[test]
+    fn validate_angle_in_range() {
+        let val_inclusive = Validator::AngleInRange {
+            min: Angle::new::<degree>(0.0),
+            max: Angle::new::<degree>(90.0),
+            inclusive: true,
+        };
+        let val_exclusive = Validator::AngleInRange {
+            min: Angle::new::<degree>(0.0),
+            max: Angle::new::<degree>(90.0),
+            inclusive: false,
+        };
+
+        let angle_0 = Proptype::Angle(Angle::new::<degree>(0.0));
+        let angle_45 = Proptype::Angle(Angle::new::<degree>(45.0));
+        let angle_90 = Proptype::Angle(Angle::new::<degree>(90.0));
+
+        assert!(val_inclusive.validate(&angle_0).is_ok());
+        assert!(val_inclusive.validate(&angle_45).is_ok());
+        assert!(val_inclusive.validate(&angle_90).is_ok());
+
+        assert!(val_exclusive.validate(&angle_0).is_err());
+        assert!(val_exclusive.validate(&angle_45).is_ok());
+        assert!(val_exclusive.validate(&angle_90).is_err());
+    }
+
+    #[test]
+    fn validate_string_not_empty() {
+        let val = Validator::StringIsNotEmpty;
+        assert!(val.validate(&Proptype::String("data".to_string())).is_ok());
+        assert!(val.validate(&Proptype::String(String::new())).is_err());
+        // Non-string variants are ignored
+        assert!(val.validate(&Proptype::I32(0)).is_ok());
+    }
+
+    #[test]
+    fn validate_composite_and_or() {
+        let val_and = Validator::AndValidator {
+            validators: vec![Validator::NumericIsNotZero, Validator::NumericIsPositive],
+        };
+        assert!(val_and.validate(&Proptype::F64(1.0)).is_ok());
+        assert!(val_and.validate(&Proptype::F64(0.0)).is_err());
+        assert!(val_and.validate(&Proptype::F64(-1.0)).is_err());
+
+        let val_or = Validator::OrValidator {
+            validators: vec![
+                Validator::NumericInRange { min: 0.0, max: 1.0 },
+                Validator::NumericInRange {
+                    min: 10.0,
+                    max: 20.0,
+                },
+            ],
+        };
+        assert!(val_or.validate(&Proptype::F64(0.5)).is_ok());
+        assert!(val_or.validate(&Proptype::F64(15.0)).is_ok());
+        assert!(val_or.validate(&Proptype::F64(5.0)).is_err());
+
+        let empty_or = Validator::OrValidator { validators: vec![] };
+        assert!(empty_or.validate(&Proptype::F64(1.0)).is_err());
     }
 }

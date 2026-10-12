@@ -14,7 +14,7 @@ use crate::{
 };
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, fmt::Debug};
+use std::fmt::Debug;
 
 /// A general set of (optical) properties.
 ///
@@ -111,13 +111,13 @@ impl Properties {
         })?;
         Ok(())
     }
-    /// Update [`Properties`] through another [`Properties`] input.
+    /// Update [`Properties`] through another [`Properties`] reference.
     ///
-    /// This functions sets all [`Properties`] from `new_properties` that have already been created in `Self`. Properties not existent
-    /// in `Self` are silently ignored.
-    pub fn update(&mut self, new_properties: Self) {
-        for new_prop in new_properties.props {
-            let _ = self.set(&new_prop.0, (*new_prop.1.prop()).clone());
+    /// This function updates all properties that exist in both sets.
+    /// Properties not existent in `self` are silently ignored.
+    pub fn update(&mut self, new_properties: &Self) {
+        for (name, property) in &new_properties.props {
+            let _ = self.set(name, property.prop().clone());
         }
     }
     /// Returns the iter of this [`Properties`], mapped to return an `id_string` for the reports and the actual property in a tuple.
@@ -160,11 +160,10 @@ impl Properties {
     }
     /// Return the value of a boolean property.
     ///
-    /// This is convenience function for easier access.
-    ///
     /// # Errors
     ///
-    /// This function will return an error if the property with the given name does not exist.
+    /// This function will return an error if the property does not exist
+    /// or is not of type boolean.
     pub fn get_bool(&self, name: &str) -> OpmResult<bool> {
         self.props.get(name).map_or_else(
             || {
@@ -176,7 +175,9 @@ impl Properties {
                 if let Proptype::Bool(value) = property.prop() {
                     Ok(*value)
                 } else {
-                    Err(OpossumError::Other("not a bool property".into()))
+                    Err(OpossumError::Properties(format!(
+                        "property {name} is not a boolean property"
+                    )))
                 }
             },
         )
@@ -203,9 +204,7 @@ impl Properties {
     }
 }
 
-/// Fault tolerant deserializer.
-///
-/// If a property cannot be read mark it as "Invalid".
+/// Fault tolerant deserializer maintaining creation order.
 impl<'de> Deserialize<'de> for Properties {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -218,8 +217,10 @@ impl<'de> Deserialize<'de> for Properties {
             Invalid(serde::de::IgnoredAny),
         }
 
-        let raw_props = BTreeMap::<String, PropertyEntry>::deserialize(deserializer)?;
-        let mut props = IndexMap::new();
+        // Use IndexMap instead of BTreeMap to preserve insertion order from the file/stream
+        let raw_props = IndexMap::<String, PropertyEntry>::deserialize(deserializer)?;
+        let mut props = IndexMap::with_capacity(raw_props.len());
+
         for (key, entry) in raw_props {
             match entry {
                 PropertyEntry::Valid(prop) => {
@@ -327,6 +328,76 @@ mod test {
         assert_eq!(html_props.prop_value, "1");
         let html_props = props.html_props("test123", 0);
         assert_eq!(html_props.len(), 1);
+        Ok(())
+    }
+    #[test]
+    fn properties_create_with_validator() {
+        let mut props = Properties::default();
+        let res = props.create_with_validator(
+            "focal_length",
+            "Focal length in meters",
+            Validator::NumericIsPositive,
+            (-5.0).into(),
+        );
+        assert!(res.is_err());
+
+        let res_ok = props.create_with_validator(
+            "focal_length",
+            "Focal length in meters",
+            Validator::NumericIsPositive,
+            5.0.into(),
+        );
+        assert!(res_ok.is_ok());
+    }
+
+    #[test]
+    fn properties_set_validation() -> OpmResult<()> {
+        let mut props = Properties::default();
+        props.create_with_validator(
+            "radius",
+            "Curvature radius",
+            Validator::NumericIsPositive,
+            10.0.into(),
+        )?;
+
+        assert!(props.set("radius", 15.0.into()).is_ok());
+        assert!(props.set("radius", (-2.0).into()).is_err());
+        assert!(props.set("unknown", 1.0.into()).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn properties_update() -> OpmResult<()> {
+        let mut target = Properties::default();
+        target.create("prop1", "first", 10.into())?;
+        target.create("prop2", "second", 20.into())?;
+
+        let mut source = Properties::default();
+        source.create("prop2", "second new", 99.into())?;
+        source.create("prop3", "unrelated", 100.into())?;
+
+        target.update(&source);
+
+        assert_eq!(target.get("prop1")?, &Proptype::I32(10));
+        assert_eq!(target.get("prop2")?, &Proptype::I32(99));
+        assert!(!target.contains("prop3"));
+        Ok(())
+    }
+
+    #[test]
+    fn deserialization_preserves_insertion_order() -> OpmResult<()> {
+        let ron_data = r#"
+        {
+            "z_param": F64(1.0),
+            "a_param": F64(2.0),
+            "m_param": F64(3.0)
+        }
+        "#;
+        let props: Properties =
+            ron::from_str(ron_data).map_err(|e| OpossumError::Other(e.to_string()))?;
+
+        let keys: Vec<&str> = props.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(keys, vec!["z_param", "a_param", "m_param"]);
         Ok(())
     }
 }
