@@ -252,14 +252,14 @@ fn update_outgoing_edges_and_up_direction(
                 ))
             })?;
             let target = &graph.g[target_idx];
-            if target.node_type() == "source" || target.node_type() == "source port" {
+            if target.node_type() == "source port" {
                 *up_direction = target.define_up_direction(&outgoing_edge.1)?;
             } else {
                 target.calc_new_up_direction(&outgoing_edge.1, up_direction)?;
             }
         } else {
             let node = &graph.g[node_idx];
-            if fallback_node_type == "source" || fallback_node_type == "source port" {
+            if fallback_node_type == "source port" {
                 *up_direction = node.define_up_direction(&outgoing_edge.1)?;
             } else {
                 node.calc_new_up_direction(&outgoing_edge.1, up_direction)?;
