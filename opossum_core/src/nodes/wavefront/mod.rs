@@ -1,6 +1,7 @@
 #![warn(missing_docs)]
 //! Wavefront measurement node
 pub mod wavefront_data;
+mod zernike;
 
 use crate::{
     analyzers::{
@@ -64,11 +65,26 @@ impl Default for WaveFront {
                 false.into(),
             )
             .unwrap();
+        node_attr
+            .create_property(
+                "decompose zernike",
+                "decompose wavefront into Zernike polynomials",
+                false.into(),
+            )
+            .unwrap();
+        node_attr
+            .create_property(
+                "zernike max order",
+                "maximum radial order n for Zernike decomposition",
+                4.into(), // Default n=4 yields 15 modes up to spherical aberration
+            )
+            .unwrap();
+
         let mut wf = Self {
             light_data: None,
             node_attr,
             apodization_warning: false,
-            reference_surface: None, // Use standard plane surface as reference
+            reference_surface: None,
         };
         wf.update_surfaces().unwrap();
         wf
@@ -144,6 +160,19 @@ impl OpticNode for WaveFront {
                     "cannot read `remove tilt` flag".into(),
                 ));
             };
+            let Ok(Proptype::Bool(decomp_zernike)) =
+                self.node_attr.get_property("decompose zernike")
+            else {
+                return Err(OpossumError::Analysis(
+                    "cannot read `decompose zernike` flag".into(),
+                ));
+            };
+            let Ok(Proptype::I32(max_order)) = self.node_attr.get_property("zernike max order")
+            else {
+                return Err(OpossumError::Analysis(
+                    "cannot read `zernike max order`".into(),
+                ));
+            };
             let wf_data_opt =
                 wavefront_data::WaveFrontData::from_rays(rays, true, false, &iso, *remove_tilt);
 
@@ -162,7 +191,7 @@ impl OpticNode for WaveFront {
                     //todo for all error maps at every wavelength!
                     props
                     .create(
-                        &format!("Wavefront PtV at {:.3} nm", wf_error_map.wavelength().get::<uom::si::length::nanometer>()),
+                        "Wavefront PtV",
                         "Wavefront Peak-to-Valley value with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
                         Proptype::WfLambda(wf_error_map.ptv(), wf_error_map.wavelength()),
                     )
@@ -171,7 +200,7 @@ impl OpticNode for WaveFront {
                     //todo for all error maps at every wavelength!
                     props
                     .create(
-                        &format!("Wavefront RMS at {:.3} nm", wf_error_map.wavelength().get::<uom::si::length::nanometer>()),
+                        "Wavefront RMS",
                         "Wavefront root mean square value with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
                         Proptype::WfLambda(wf_error_map.rms(), wf_error_map.wavelength()),
                     )
@@ -182,6 +211,63 @@ impl OpticNode for WaveFront {
                             "note",
                             "A possible wavefront tilt has been subtracted.".into(),
                         )?;
+                    }
+                    if *decomp_zernike {
+                        match wf_error_map.decompose_zernike(*max_order as usize) {
+                            Ok(decomp) => {
+                                // Numerical noise threshold: 1 micro-lambda (1e-6 lambda)
+                                const NOISE_THRESHOLD_LAMBDA: f64 = 1e-6;
+
+                                let residual_rms =
+                                    if decomp.residual_rms.abs() < NOISE_THRESHOLD_LAMBDA {
+                                        0.0
+                                    } else {
+                                        decomp.residual_rms
+                                    };
+                                props.create(
+                                "Zernike Residual RMS",
+                                "Root-mean-square error of the remaining wavefront after Zernike subtraction",
+                               Proptype::WfLambda(residual_rms, wf_error_map.wavelength()),
+                            )?;
+                                props.create(
+                                    "Zernike Norm Radius",
+                                    "Normalization radius used for Zernike polynomials",
+                                    decomp.norm_radius.into(),
+                                )?;
+                                for (coeff, mode) in
+                                    decomp.coefficients.iter().zip(decomp.modes.iter())
+                                {
+                                    // 1. Skip Piston (j = 1) as it represents an irrelevant global phase shift
+                                    if mode.j == 1 {
+                                        continue;
+                                    }
+
+                                    // 2. Filter coefficients smaller than 1 micro-lambda to avoid femto/pico noise
+                                    let filtered_coeff = if coeff.abs() < NOISE_THRESHOLD_LAMBDA {
+                                        0.0
+                                    } else {
+                                        *coeff
+                                    };
+
+                                    props.create(
+                                        &format!("Z{} ({})", mode.j, mode.name),
+                                        "Zernike polynomial expansion coefficient",
+                                        Proptype::WfLambda(
+                                            filtered_coeff,
+                                            wf_error_map.wavelength(),
+                                        ),
+                                    )?;
+                                }
+                            }
+                            Err(err) => {
+                                props.create(
+                                    "Warning",
+                                    "warning during Zernike decomposition",
+                                    format!("Failed to calculate Zernike coefficients: {err}")
+                                        .into(),
+                                )?;
+                            }
+                        }
                     }
                 }
 
@@ -201,7 +287,7 @@ impl OpticNode for WaveFront {
                     "This warning might have been created if the wavefront monitor was used with zero distance from Source or with multiple wavelengths in a completely paraxial setup.".into(),
                 )
                 ?;
-            }
+            };
         }
         Ok(NodeReportResult::Report(NodeReport::new(
             self.node_type(),
@@ -357,11 +443,37 @@ mod test {
         assert_eq!(node_report.name(), "wavefront monitor");
         let props = node_report.properties();
         assert!(props.contains("Wavefront Map at 1053.000 nm"));
-        assert!(props.contains("Wavefront RMS at 1053.000 nm"));
-        assert!(props.contains("Wavefront PtV at 1053.000 nm"));
+        assert!(props.contains("Wavefront RMS"));
+        assert!(props.contains("Wavefront PtV"));
         let nr_of_props = props.iter().count();
         assert_eq!(nr_of_props, 3);
 
+        Ok(())
+    }
+    #[test]
+    fn report_with_zernike() -> OpmResult<()> {
+        let mut wf = WaveFront::default();
+        wf.node_attr
+            .set_property("decompose zernike", true.into())?;
+        wf.node_attr.set_property("zernike max order", 2.into())?; // Order 2: 6 modes (j=1..6)
+
+        // Generate hexapolar rays with 2 rings (enough points for 6 modes)
+        wf.light_data = Some(LightData::Geometric(Rays::new_uniform_collimated(
+            nanometer!(1053.0),
+            joule!(1.0),
+            &Hexapolar::new(millimeter!(2.0), 2)?,
+        )?));
+
+        let NodeReportResult::Report(node_report) = wf.node_report("", AnalyzerKind::RayTrace)?
+        else {
+            panic!("Wrong report variant");
+        };
+
+        let props = node_report.properties();
+        assert!(props.contains("Wavefront Map at 1053.000 nm"));
+        assert!(props.contains("Zernike Residual RMS"));
+        assert!(props.contains("Zernike Norm Radius"));
+        assert!(props.contains("Z4 (Defocus)"));
         Ok(())
     }
 }
