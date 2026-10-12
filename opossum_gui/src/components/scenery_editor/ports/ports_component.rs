@@ -123,10 +123,22 @@ pub fn NodePort(
                 -BORDER_WIDTH / 2.,
             ),
             draggable: false,
-            onmousedown: move |e| on_mouse_down_handler.call(e),
-            onmouseenter: move |e| on_mouse_enter_handler.call(e),
-            onmouseleave: move |e| on_mouse_leave_handler.call(e),
-            oncontextmenu: move |e| on_context_menu_handler.call(e),
+            onmousedown: move |e: MouseEvent| {
+                e.stop_propagation();
+                on_mouse_down_handler.call(e);
+            },
+            onmouseenter: move |e: MouseEvent| {
+                e.stop_propagation();
+                on_mouse_enter_handler.call(e);
+            },
+            onmouseleave: move |e: MouseEvent| {
+                e.stop_propagation();
+                on_mouse_leave_handler.call(e);
+            },
+            oncontextmenu: move |e: MouseEvent| {
+                e.stop_propagation();
+                on_context_menu_handler.call(e);
+            },
         }
         if let Some(external_port) = external_port_opt {
             PortMapComponent {
