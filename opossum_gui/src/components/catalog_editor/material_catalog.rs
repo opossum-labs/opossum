@@ -88,6 +88,10 @@ pub fn MaterialCatalog(
     let mut min_nd = use_signal(|| Option::<f64>::None);
     let mut max_nd = use_signal(|| Option::<f64>::None);
 
+    // Formatted string values for input elements to ensure controlled inputs
+    let min_nd_str = min_nd().map(|v| v.to_string()).unwrap_or_default();
+    let max_nd_str = max_nd().map(|v| v.to_string()).unwrap_or_default();
+
     // Reactive filter pipeline reading from the in-memory registry index
     let filtered_entries = use_memo(move || {
         let text_query = search_text.read();
@@ -243,6 +247,7 @@ pub fn MaterialCatalog(
                                     class: "form-control form-control-sm",
                                     r#type: "number",
                                     step: "0.01",
+                                    value: "{min_nd_str}",
                                     oninput: move |e| min_nd.set(e.value().parse().ok()),
                                 }
                             }
@@ -258,6 +263,7 @@ pub fn MaterialCatalog(
                                     class: "form-control form-control-sm",
                                     r#type: "number",
                                     step: "0.01",
+                                    value: "{max_nd_str}",
                                     oninput: move |e| max_nd.set(e.value().parse().ok()),
                                 }
                             }
