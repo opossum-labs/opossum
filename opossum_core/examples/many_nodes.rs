@@ -1,14 +1,14 @@
 use nalgebra::Point2;
 use opossum_core::{core_optics::node_attr::HasNodeAttr, prelude::*};
-use uuid::Uuid;
 use std::path::Path;
+use uuid::Uuid;
 
 fn main() -> OpmResult<()> {
     // Configuration parameters for the grid layout
-    let rows: usize = 25;
-    let cols: usize = 30; // 10 x 10 = 100 nodes (change e.g. to 25 x 40 for 1000 nodes)
-    let spacing_x: f64 = 100.0;
-    let spacing_y: f64 = 50.0;
+    let rows: usize = 10;
+    let cols: usize = 10; // 10 x 10 = 100 nodes (change e.g. to 25 x 40 for 1000 nodes)
+    let spacing_x: f64 = 10.0;
+    let spacing_y: f64 = 10.0;
     let connect_sequentially: bool = true;
     let output_path = Path::new("./opossum_core/playground/many_nodes.opm");
 

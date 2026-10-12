@@ -1,16 +1,14 @@
 // File: opossum_gui/src/components/scenery_editor/ports/ports_component.rs
 
 use crate::components::scenery_editor::{
+    GraphState, GraphsWorkspaceState,
     constants::{BORDER_WIDTH, PORT_HEIGHT, PORT_WIDTH},
     graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt},
     node::NodeElement,
     ports::{
-        hooks::{
-            use_on_context_menu, use_on_mouse_down, use_on_mouse_enter, use_on_mouse_leave,
-        },
+        hooks::{use_on_context_menu, use_on_mouse_down, use_on_mouse_enter, use_on_mouse_leave},
         port_map_component::PortMapComponent,
     },
-    GraphState, GraphsWorkspaceState,
 };
 use dioxus::prelude::*;
 use opossum_core::prelude::*;

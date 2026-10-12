@@ -1,28 +1,26 @@
 // File: opossum_gui/src/components/scenery_editor/ports/hooks.rs
 
-use dioxus::{
-    html::{
-        geometry::euclid::default::Point2D, input_data::MouseButton, MouseEvent,
+use crate::{
+    CONTEXT_MENU,
+    components::{
+        context_menu::cx_menu::{CxMenu, CxtCommand},
+        scenery_editor::{
+            DragStatus, EditorState, GraphState, GraphStore, GraphsWorkspaceAction,
+            GraphsWorkspaceState,
+            edges::edges_component::{EdgePort, NewEdgeCreationStart},
+            graph_workspace::{
+                EditorStateStoreExt, GraphStateStoreExt, GraphStoreStoreExt,
+                GraphsWorkspaceStateStoreExt, workspace_state::GraphInfo,
+            },
+        },
     },
+};
+use dioxus::{
+    html::{MouseEvent, geometry::euclid::default::Point2D, input_data::MouseButton},
     prelude::*,
 };
 use opossum_core::prelude::PortType;
 use uuid::Uuid;
-use crate::{
-    components::{
-        context_menu::cx_menu::{CxMenu, CxtCommand},
-        scenery_editor::{
-            edges::edges_component::{EdgePort, NewEdgeCreationStart},
-            graph_workspace::{
-                workspace_state::GraphInfo, EditorStateStoreExt, GraphStateStoreExt,
-                GraphStoreStoreExt, GraphsWorkspaceStateStoreExt,
-            },
-            DragStatus, EditorState, GraphState, GraphStore, GraphsWorkspaceAction,
-            GraphsWorkspaceState,
-        },
-    },
-    CONTEXT_MENU,
-};
 
 pub fn use_on_mouse_down(
     node_id: Uuid,
