@@ -6,10 +6,10 @@ use std::path::Path;
 fn main() -> OpmResult<()> {
     // Configuration parameters for the grid layout
     let rows: usize = 25;
-    let cols: usize = 40; // 10 x 10 = 100 nodes (change e.g. to 25 x 40 for 1000 nodes)
+    let cols: usize = 30; // 10 x 10 = 100 nodes (change e.g. to 25 x 40 for 1000 nodes)
     let spacing_x: f64 = 100.0;
     let spacing_y: f64 = 50.0;
-    let connect_sequentially: bool = false;
+    let connect_sequentially: bool = true;
     let output_path = Path::new("./opossum_core/playground/many_nodes.opm");
 
     let mut scenery = NodeGroup::new("Grid Generation Demo");
@@ -51,7 +51,7 @@ fn main() -> OpmResult<()> {
     }
 
     // Wrap scenery into an OPM document and attach standard analyzers
-    let mut doc = OpmDocument::new(scenery);
+    let doc = OpmDocument::new(scenery);
     // doc.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
 
     // Ensure the parent directory exists before saving

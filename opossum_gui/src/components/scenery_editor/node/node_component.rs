@@ -2,16 +2,19 @@
 
 use super::{AMP_STATUS_HEIGHT, NodeElement};
 use crate::{
-    CONTEXT_MENU, components::{
-        context_menu::cx_menu::{CxMenu, CxtCommand}, scenery_editor::{
-            DragStatus, GraphState, GraphsWorkspaceAction, GraphsWorkspaceStateStoreExt, NodeType, constants::{BORDER_WIDTH, NODE_WIDTH}, graph_workspace::{GraphStateStoreExt, GraphsWorkspaceState}, node::{graph_node_components::GraphNodeContent, node_icon::NodeSymbolIcon}, ports::ports_component::NodePorts,
+    CONTEXT_MENU,
+    components::{
+        context_menu::cx_menu::{CxMenu, CxtCommand},
+        scenery_editor::{
+            DragStatus, GraphState, GraphsWorkspaceAction, GraphsWorkspaceStateStoreExt, NodeType,
+            constants::{BORDER_WIDTH, NODE_WIDTH},
+            graph_workspace::{GraphStateStoreExt, GraphsWorkspaceState},
+            node::{graph_node_components::GraphNodeContent, node_icon::NodeSymbolIcon},
+            ports::ports_component::NodePorts,
         },
     },
 };
-use dioxus::{
-    html::{geometry::euclid::default::Point2D, input_data::MouseButton},
-    prelude::*,
-};
+use dioxus::{html::input_data::MouseButton, prelude::*};
 use opossum_core::{nodes::is_volume_node_type, types::api_types::NewRefNode};
 use std::collections::HashSet;
 use uuid::Uuid;
