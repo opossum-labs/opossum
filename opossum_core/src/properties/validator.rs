@@ -1,5 +1,7 @@
+//! Validation rules for property values.
 use approx::abs_diff_ne;
 use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 use uom::si::{angle::degree, f64::Angle};
 
 use crate::{
@@ -7,7 +9,6 @@ use crate::{
     nodes::{SplittingConfigBuilder, ideal_filter::FilterTypeBuilder},
     properties::Proptype,
 };
-use std::fmt::Debug;
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum Validator {
@@ -37,11 +38,10 @@ pub enum Validator {
 }
 
 impl Validator {
-    /// Validate a given `Proptype`.
+    /// Validate a given [`Proptype`].
     ///
     /// # Errors
-    ///
-    /// This function will return an error if the validation was not successful.
+    /// Returns an error if validation fails.
     pub fn validate(&self, prop: &Proptype) -> OpmResult<()> {
         match self {
             Self::NumericIsFinite => Self::validate_numeric_is_finite(prop),
@@ -63,20 +63,20 @@ impl Validator {
             Self::LightDataBuilderValidator => Self::validate_light_data_builder(prop),
         }
     }
+
     fn validate_aperture_delimits_region(prop: &Proptype) -> OpmResult<()> {
         let Proptype::Aperture(shape) = prop else {
-            // Silently ignore if not an aperture.
             return Ok(());
         };
         if shape.is_binary() {
             Ok(())
         } else {
             Err(OpossumError::Properties(format!(
-                "an aperture of shape '{shape}' does not delimit a region: only a shape with a \
-                 hard edge can state where something begins and ends"
+                "An aperture of shape '{shape}' does not delimit a region: only a shape with a hard edge can state where something begins and ends"
             )))
         }
     }
+
     fn validate_numeric_is_finite(prop: &Proptype) -> OpmResult<()> {
         let is_valid = match prop {
             Proptype::F64(v) => v.is_finite(),
@@ -86,16 +86,17 @@ impl Validator {
             Proptype::Length(l) | Proptype::Curvature(l) => l.is_finite(),
             Proptype::LinearDensity(d) => d.is_finite(),
             Proptype::WfLambda(l, _) => l.is_finite(),
-            _ => true, // Silently ignore if not numeric or I32 which is always finite
+            _ => true,
         };
         if is_valid {
             Ok(())
         } else {
             Err(OpossumError::Properties(format!(
-                "value {prop:?} must be finite (not NaN or +/- Infinity)"
+                "Value {prop:?} must be finite (neither NaN nor Infinity)"
             )))
         }
     }
+
     fn validate_numeric_is_not_nan(prop: &Proptype) -> OpmResult<()> {
         let is_valid = match prop {
             Proptype::F64(v) => !v.is_nan(),
@@ -105,16 +106,17 @@ impl Validator {
             Proptype::Length(l) | Proptype::Curvature(l) => !l.is_nan(),
             Proptype::LinearDensity(d) => !d.is_nan(),
             Proptype::WfLambda(l, _) => !l.is_nan(),
-            _ => true, // Silently ignore if not numeric or I32 which is always not NaN
+            _ => true,
         };
         if is_valid {
             Ok(())
         } else {
             Err(OpossumError::Properties(format!(
-                "value {prop:?} must not be NaN"
+                "Value {prop:?} must not be NaN"
             )))
         }
     }
+
     fn validate_numeric_is_not_zero(prop: &Proptype) -> OpmResult<()> {
         let is_valid = match prop {
             Proptype::F64(v) => abs_diff_ne!(*v, 0.0),
@@ -131,13 +133,12 @@ impl Validator {
             Ok(())
         } else {
             Err(OpossumError::Properties(format!(
-                "value {prop:?} must not be zero"
+                "Value {prop:?} must not be zero"
             )))
         }
     }
 
     fn validate_numeric_is_positive(prop: &Proptype) -> OpmResult<()> {
-        // Enforce strictly positive values (> 0.0) consistent with integer semantics
         let is_valid = match prop {
             Proptype::F64(v) => *v > 0.0,
             Proptype::Angle(a) => a.value > 0.0,
@@ -153,7 +154,7 @@ impl Validator {
             Ok(())
         } else {
             Err(OpossumError::Properties(format!(
-                "value {prop:?} must be positive."
+                "Value {prop:?} must be strictly positive"
             )))
         }
     }
@@ -177,13 +178,13 @@ impl Validator {
                 SplittingConfigBuilder::FixedRatio(c) => allowed_range.contains(c),
                 SplittingConfigBuilder::Spectrum(s) => s.values_are_in_range(min, max)?,
             },
-            _ => true, // Silently ignore if not numeric
+            _ => true,
         };
         if is_valid {
             Ok(())
         } else {
             Err(OpossumError::Properties(format!(
-                "value {prop:?} is outside the allowed range [{min}, {max}]."
+                "Value {prop:?} is outside the allowed range [{min}, {max}]"
             )))
         }
     }
@@ -197,74 +198,69 @@ impl Validator {
         let is_valid = if inclusive {
             match prop {
                 Proptype::Angle(a) => (min..=max).contains(a),
-                _ => true, // Silently ignore if not numeric
+                _ => true,
             }
         } else {
             match prop {
                 Proptype::Angle(a) => a > &min && a < &max,
-                _ => true, // Silently ignore if not numeric
+                _ => true,
             }
         };
         if is_valid {
             Ok(())
         } else {
             Err(OpossumError::Properties(format!(
-                "angle {:?} is outside the allowed range [{}°, {}°].",
-                prop,
+                "Angle {prop:?} is outside the allowed range [{}°, {}°]",
                 min.get::<degree>(),
                 max.get::<degree>()
             )))
         }
     }
+
     fn validate_string_is_not_empty(prop: &Proptype) -> OpmResult<()> {
-        if let Proptype::String(s) = prop {
-            if s.is_empty() {
-                Err(OpossumError::Properties(
-                    "string must not be empty.".to_string(),
-                ))
-            } else {
-                Ok(())
-            }
-        } else {
-            Ok(())
+        if let Proptype::String(s) = prop
+            && s.is_empty()
+        {
+            return Err(OpossumError::Properties(
+                "String must not be empty".to_string(),
+            ));
         }
+        Ok(())
     }
+
     fn validate_or_validator(prop: &Proptype, validators: &[Self]) -> OpmResult<()> {
         if validators.is_empty() {
             return Err(OpossumError::Properties(
-                "empty OR validator cannot match".to_string(),
+                "Empty OR validator cannot match".to_string(),
             ));
         }
-
-        let mut last_err = None;
+        let mut last_error = None;
         for validator in validators {
             match validator.validate(prop) {
                 Ok(()) => return Ok(()),
-                Err(e) => last_err = Some(e),
+                Err(err) => last_error = Some(err),
             }
         }
-
-        Err(last_err.unwrap_or_else(|| {
-            OpossumError::Properties("all validation branches failed".to_string())
+        Err(last_error.unwrap_or_else(|| {
+            OpossumError::Properties("All validation branches failed".to_string())
         }))
     }
+
     fn validate_and_validator(prop: &Proptype, validators: &[Self]) -> OpmResult<()> {
         for validator in validators {
             validator.validate(prop)?;
         }
         Ok(())
     }
+
     fn validate_light_data_builder(prop: &Proptype) -> OpmResult<()> {
         if let Proptype::LightDataBuilder(ldb) = prop {
-            match ldb.clone().build() {
-                Err(e) => Err(OpossumError::Properties(format!(
-                    "light_data_builder validation failed: {e}"
-                ))),
-                Ok(_) => Ok(()),
-            }
+            ldb.clone().build().map(|_| ()).map_err(|e| {
+                OpossumError::Properties(format!("LightDataBuilder validation failed: {e}"))
+            })
         } else {
             Err(OpossumError::Properties(
-                "lightdatabuilder validator is only for Proptype::LightDataBuilder".into(),
+                "LightDataBuilder validator only applies to Proptype::LightDataBuilder".into(),
             ))
         }
     }
