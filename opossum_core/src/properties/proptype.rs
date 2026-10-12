@@ -573,4 +573,21 @@ mod test {
         assert_eq!(count_str(23), "23rd");
         assert_eq!(count_str(24), "24th");
     }
+    #[test]
+    fn asset_ref_inline_and_id() {
+        let inline_ref: AssetRef<i32> = AssetRef::from(42);
+        assert_eq!(inline_ref.as_inline(), Some(&42));
+        assert_eq!(*inline_ref.unwrap_inline(), 42);
+
+        let test_uuid = Uuid::new_v4();
+        let id_ref: AssetRef<i32> = AssetRef::Id(test_uuid);
+        assert_eq!(id_ref.as_inline(), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "Expected inline asset, found AssetRef::Id")]
+    fn asset_ref_unwrap_panic() {
+        let id_ref: AssetRef<i32> = AssetRef::Id(Uuid::new_v4());
+        let _ = id_ref.unwrap_inline();
+    }
 }
