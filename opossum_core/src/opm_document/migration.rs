@@ -443,9 +443,11 @@ mod test {
         properties::Proptype,
         refractive_index::RefrIndexConst,
     };
+    use approx::assert_relative_eq;
     use ron::extensions::Extensions;
     use serde::Serialize;
-    use std::collections::BTreeSet;
+    use std::{collections::BTreeSet, path::Path};
+    use uom::si::energy::joule;
     use uuid::Uuid;
 
     /// The file a program writing format version `version` would have written for the document.
@@ -894,6 +896,78 @@ mod test {
                 "{warnings:?}"
             );
         });
+        Ok(())
+    }
+    /// A model the program of file format version 0 wrote (`main` at `e4bcc3a5`), with apertures
+    /// in its ports, is upgraded as a whole, and its ray trace then measures what that program
+    /// measured: of the 127 rays of the source, 61 behind a lens sized by a port hole, 40 behind a
+    /// mirror with a decentred hole, 29 behind a filter with a hole and an obstruction, 19 behind
+    /// an iris and 6 within the hole of a camera, the filter halving their energy. The port
+    /// apertures of its unconnected nodes that cannot become a clear aperture are dropped.
+    #[test]
+    fn a_model_written_as_version_0_measures_the_same_after_the_upgrade() -> OpmResult<()> {
+        testing_logger::setup();
+        let mut document = OpmDocument::from_file(Path::new(
+            "./files_for_testing/opm/version_0_port_apertures.opm",
+        ))?;
+        assert_eq!(document.opm_file_version, env!("OPM_FILE_VERSION"));
+        testing_logger::validate(|logs| {
+            for (name, outcome) in [
+                ("mirror with a decentred hole", "joined"),
+                ("filter with a hole and an obstruction", "joined"),
+                ("iris", "joined"),
+                ("source with a wide aperture", "dropped"),
+                ("lens with a soft aperture", "dropped"),
+                ("lens with a stacked aperture", "dropped"),
+                ("off-axis parabola with a hole", "dropped"),
+                ("wedge with a hole at its exit", "dropped"),
+                ("visualizer with a hole", "dropped"),
+                ("group with a port aperture", "dropped"),
+            ] {
+                assert!(
+                    logs.iter().any(|log| log.level == log::Level::Warn
+                        && log.body.contains(&format!("'{name}'"))
+                        && log.body.contains(outcome)),
+                    "the aperture of '{name}' is not reported as {outcome}"
+                );
+            }
+        });
+        let node = |name: &str| {
+            let nodes = document.scenery().nodes();
+            let found = nodes.into_iter().find(|node| node.name() == name);
+            found
+                .cloned()
+                .unwrap_or_else(|| panic!("'{name}' is missing"))
+        };
+        assert_eq!(
+            clear_aperture(&node("lens sized by a port hole")),
+            circle(8.0)?
+        );
+        assert_eq!(clear_aperture(&node("camera with a hole")), circle(2.0)?);
+        assert!(matches!(
+            clear_aperture(&node("spot diagram with a polygon hole")),
+            ApertureShape::BinaryPolygon(_)
+        ));
+
+        let reports = document.analyze()?;
+        for (meter, rays, transmission) in [
+            ("meter behind the lens", 61.0, 1.0),
+            ("meter behind the mirror", 40.0, 1.0),
+            ("meter behind the filter", 29.0, 0.5),
+            ("meter behind the iris", 19.0, 0.5),
+            ("camera with a hole", 6.0, 0.5),
+        ] {
+            let measured = reports
+                .iter()
+                .flat_map(|report| report.node_reports())
+                .find(|report| report.name() == meter)
+                .and_then(|report| match report.properties().get("Energy") {
+                    Ok(Proptype::Energy(energy)) => Some(energy.get::<joule>()),
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("'{meter}' measured no energy"));
+            assert_relative_eq!(measured, rays * transmission / 127.0, max_relative = 1e-9);
+        }
         Ok(())
     }
 }
