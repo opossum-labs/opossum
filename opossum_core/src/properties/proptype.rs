@@ -280,6 +280,63 @@ impl Proptype {
             string_value.map_err(|e| OpossumError::Other(format!("Template rendering error: {e}")))
         })
     }
+    /// Returns the raw scalar value as an `f64` if this variant represents a numeric scalar.
+    /// For dimensional `uom` quantities, the value is returned in its fundamental SI base unit.
+    #[must_use]
+    pub fn as_f64(&self) -> Option<f64> {
+        match self {
+            Self::F64(v) | Self::WfLambda(v, _) => Some(*v),
+            Self::I32(v) => Some(f64::from(*v)),
+            Self::Length(v) | Self::Curvature(v) => Some(v.value),
+            Self::Angle(v) => Some(v.value),
+            Self::Energy(v) => Some(v.value),
+            Self::Fluence(v) => Some(v.value),
+            Self::LinearDensity(v) => Some(v.value),
+            _ => None,
+        }
+    }
+
+    /// Sets the scalar value directly if this variant represents a numeric scalar.
+    /// Dimensional quantities are updated in their fundamental SI base unit.
+    ///
+    /// # Errors
+    /// Returns an [`OpossumError::Properties`] if the variant does not support scalar numeric assignment.
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn set_f64(&mut self, value: f64) -> OpmResult<()> {
+        match self {
+            Self::F64(v) | Self::WfLambda(v, _) => {
+                *v = value;
+                Ok(())
+            }
+            Self::I32(v) => {
+                *v = value.round() as i32;
+                Ok(())
+            }
+            Self::Length(v) | Self::Curvature(v) => {
+                v.value = value;
+                Ok(())
+            }
+            Self::Angle(v) => {
+                v.value = value;
+                Ok(())
+            }
+            Self::Energy(v) => {
+                v.value = value;
+                Ok(())
+            }
+            Self::Fluence(v) => {
+                v.value = value;
+                Ok(())
+            }
+            Self::LinearDensity(v) => {
+                v.value = value;
+                Ok(())
+            }
+            _ => Err(OpossumError::Properties(
+                "Property variant cannot be set from a scalar f64 value".into(),
+            )),
+        }
+    }
 }
 impl From<bool> for Proptype {
     fn from(value: bool) -> Self {
@@ -589,5 +646,33 @@ mod test {
     fn asset_ref_unwrap_panic() {
         let id_ref: AssetRef<i32> = AssetRef::Id(Uuid::new_v4());
         let _ = id_ref.unwrap_inline();
+    }
+    #[test]
+    fn scalar_f64_access_and_mutation() -> OpmResult<()> {
+        use uom::si::length::millimeter;
+
+        // F64 variant
+        let mut prop_f64 = Proptype::F64(3.14);
+        assert_eq!(prop_f64.as_f64(), Some(3.14));
+        prop_f64.set_f64(2.718)?;
+        assert_eq!(prop_f64.as_f64(), Some(2.718));
+
+        // I32 variant
+        let mut prop_i32 = Proptype::I32(10);
+        assert_eq!(prop_i32.as_f64(), Some(10.0));
+        prop_i32.set_f64(25.4)?;
+        assert_eq!(prop_i32, Proptype::I32(25));
+
+        // UOM Length variant (operates strictly on SI base unit meter)
+        let mut prop_len = Proptype::Length(Length::new::<millimeter>(50.0));
+        assert!((prop_len.as_f64().unwrap() - 0.05).abs() < 1e-12);
+        prop_len.set_f64(0.125)?;
+        assert_eq!(prop_len, Proptype::Length(Length::new::<meter>(0.125)));
+
+        // Non-scalar variant must fail
+        let mut prop_bool = Proptype::Bool(true);
+        assert_eq!(prop_bool.as_f64(), None);
+        assert!(prop_bool.set_f64(1.0).is_err());
+        Ok(())
     }
 }
