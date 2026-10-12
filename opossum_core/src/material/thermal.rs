@@ -6,11 +6,11 @@ use uom::si::f64::{TemperatureCoefficient, ThermalConductivity};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct ThermalProperties {
     #[serde(default)]
-    thermal_conductivity: Option<ThermalConductivity>,
+    pub thermal_conductivity: Option<ThermalConductivity>,
 
     /// Coefficient of thermal expansion
     #[serde(default)]
-    expansion_coefficient: Option<TemperatureCoefficient>,
+    pub expansion_coefficient: Option<TemperatureCoefficient>,
 }
 
 impl ThermalProperties {

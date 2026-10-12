@@ -154,14 +154,14 @@ fn apply_drag_handler(
                 relative_shift.x / current_zoom,
                 relative_shift.y / current_zoom,
             );
-
             match drag_status {
                 DragStatus::Graph => {
                     with_editor_state(workspace, graph_id, false, |e| {
                         e.write().apply_shift(relative_shift);
                     });
                 }
-                DragStatus::Nodes => {
+                // Handle both active drag and the initial movement frame seamlessly
+                DragStatus::Nodes | DragStatus::NodeInit => {
                     with_graph_store(workspace, graph_id, false, |g| {
                         let selected_nodes = g.read().selected_nodes();
                         for (id, _) in selected_nodes {
@@ -184,54 +184,41 @@ fn apply_drag_handler(
                         edge.shift_end(node_edge_shift);
                     }
                 }
-
                 DragStatus::ArmedSelection(start) => {
                     let editor_origin = workspace.editor_area().read().origin;
-
                     let graph_pos = Point2D::new(
                         (mouse_to_graph_shift.x - editor_origin.x) / current_zoom,
                         (mouse_to_graph_shift.y - editor_origin.y) / current_zoom,
                     );
-
                     let dx = graph_pos.x - start.x;
                     let dy = graph_pos.y - start.y;
-
                     let dist_sq = dx.mul_add(dx, dy * dy);
-
                     if dist_sq < 25.0 {
                         return;
                     }
                     let rect = Rect::new(start, Size2D::new(0.0, 0.0));
-
                     workspace.drag_status().set(DragStatus::SelectionBox(rect));
                 }
                 DragStatus::SelectionBox(rect) => {
                     let editor_origin = workspace.editor_area().read().origin;
-
                     let graph_pos = Point2D::new(
                         (mouse_to_graph_shift.x - editor_origin.x) / current_zoom,
                         (mouse_to_graph_shift.y - editor_origin.y) / current_zoom,
                     );
-
                     let min_x = rect.origin.x.min(graph_pos.x);
                     let min_y = rect.origin.y.min(graph_pos.y);
-
                     let max_x = rect.origin.x.max(graph_pos.x);
                     let max_y = rect.origin.y.max(graph_pos.y);
-
                     let new_rect = Rect::new(
                         Point2D::new(min_x, min_y),
                         Size2D::new(max_x - min_x, max_y - min_y),
                     );
-
                     if rect == new_rect {
                         return;
                     }
-
                     workspace.selection_box().set(Some(new_rect));
                 }
-
-                DragStatus::None | DragStatus::NodeInit => {}
+                DragStatus::None => {}
             }
         },
     )
@@ -262,7 +249,10 @@ fn set_drop_in_group_handler(
     workspace: Store<GraphsWorkspaceState>,
 ) -> EventHandler<Option<(Uuid, usize)>> {
     EventHandler::new(move |drop_in_group| {
-        workspace.drop_in_group().set(drop_in_group);
+        // Prevent triggering reactive updates if the drop target has not changed
+        if *workspace.drop_in_group().peek() != drop_in_group {
+            workspace.drop_in_group().set(drop_in_group);
+        }
     })
 }
 fn set_drag_status_handler(workspace: Store<GraphsWorkspaceState>) -> EventHandler<DragStatus> {
