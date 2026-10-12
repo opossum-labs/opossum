@@ -146,7 +146,7 @@ fn upgrade_node_from_0(
 ) -> OpmResult<()> {
     if node.node_attr().get_property(CLEAR_APERTURE).is_ok() {
         if let Some(hole) = entrance_hole(&port_apertures)
-            && port_frame_is_rim_frame(node, &PortType::Input)?
+            && port_frame_is_rim_frame(node, PortType::Input)?
         {
             node.node_attr_mut()
                 .set_property(CLEAR_APERTURE, hole.shape().clone().into())?;
@@ -187,29 +187,27 @@ fn join_port_apertures(
         }
         return Ok(());
     };
-    let mut members = match node.clear_aperture()? {
-        None => Vec::new(),
-        Some(outline) => match outline.get().shape() {
-            ApertureShape::Stack(stack) => stack.apertures().to_vec(),
-            _ => vec![outline.get().clone()],
-        },
-    };
+    let mut members =
+        node.clear_aperture()?
+            .map_or_else(Vec::new, |outline| match outline.get().shape() {
+                ApertureShape::Stack(stack) => stack.apertures().to_vec(),
+                _ => vec![outline.get().clone()],
+            });
     let mut joined = Vec::new();
     for (port_type, name, aperture) in apertures {
         let port = format!("{port_type} port '{name}'");
         let dropped = if !aperture.shape().is_binary() {
             Some("it is no binary outline")
-        } else if !port_frame_is_rim_frame(node, &port_type)? {
+        } else if !port_frame_is_rim_frame(node, port_type)? {
             Some("it was measured in another frame than the clear aperture")
         } else {
             None
         };
-        match dropped {
-            Some(reason) => warn!("the aperture of {port} of {node_info} was dropped: {reason}"),
-            None => {
-                members.push(aperture);
-                joined.push(port);
-            }
+        if let Some(reason) = dropped {
+            warn!("the aperture of {port} of {node_info} was dropped: {reason}");
+        } else {
+            members.push(aperture);
+            joined.push(port);
         }
     }
     if joined.is_empty() {
@@ -271,7 +269,7 @@ fn entrance_hole(port_apertures: &[(PortType, String, Aperture)]) -> Option<Aper
 ///
 /// This function returns an error if the clear aperture cannot be set or the geometry cannot be
 /// derived.
-fn port_frame_is_rim_frame(node: &mut dyn OpticNode, port_type: &PortType) -> OpmResult<bool> {
+fn port_frame_is_rim_frame(node: &mut dyn OpticNode, port_type: PortType) -> OpmResult<bool> {
     let declared = node.node_attr().get_property(CLEAR_APERTURE)?.clone();
     let probe = ApertureShape::from(CircleShape::new(nanometer!(1.0))?);
     node.node_attr_mut()
@@ -300,7 +298,7 @@ fn port_frame_is_rim_frame(node: &mut dyn OpticNode, port_type: &PortType) -> Op
 /// This function returns an error if the geometry cannot be derived.
 fn port_and_rim_frames(
     node: &dyn OpticNode,
-    port_type: &PortType,
+    port_type: PortType,
 ) -> OpmResult<Option<(Isometry, Isometry)>> {
     let Some(geometry) = node.geometry()? else {
         return Ok(None);
