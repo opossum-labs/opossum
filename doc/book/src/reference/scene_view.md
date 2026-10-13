@@ -63,8 +63,13 @@ Each component is drawn as large as its `clear aperture` (see
 [Clear aperture](nodes.md#clear-aperture)), the same extent that decides which rays hit it. A
 detector or a paraxial surface whose clear aperture is `Open` has no edge to draw. It is shown at a
 nominal size instead, a circle of 12.5 mm radius, which says nothing about what it records or
-focuses. A component whose clear aperture is a stack of shapes — a ring, or a mirror with a central
-bore — cannot be drawn yet and is left out; the status line and the log say so.
+focuses.
+
+A clear aperture stacked from several shapes is drawn with its bores: a ring, or a plate with holes
+through it, shows the walls of the bores as well. That works as long as the shapes lie within one
+another — every obstruction inside the hole, and none of them touching or crossing another. A stack
+whose shapes cross, such as a notch cut across the outer edge, cannot be drawn yet. Such a component
+is left out, and the status line and the log say so.
 
 A component only knows where it is once the optical axis has been traced, so the model needs an
 analyzer that places its nodes — a ray trace. Without one there is nothing to place, and the view
@@ -76,8 +81,8 @@ and the view cannot be drawn at all. The log names the component the axis ended 
 usual causes:
 
 - **The axis passes the component outside its clear aperture** — a lens decentered by more than its
-  radius, say, or a double pass whose return path walks off. Enlarge the clear aperture or correct
-  the position (see [Geometry](../concepts/geometry.md)).
+  radius, say, a double pass whose return path walks off, or a bore the axis runs through. Enlarge
+  the clear aperture or correct the position (see [Geometry](../concepts/geometry.md)).
 - **A grating is not tilted**: its diffraction order then does not propagate at the source's
   wavelength, and the message names the Littrow angle to tilt the grating by.
 
