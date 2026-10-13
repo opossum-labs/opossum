@@ -116,9 +116,11 @@ impl OpticNode for SpotDiagram {
             }
 
             // Create compact wavelength-resolved spot diagram property
-            let spot_data = SpotDiagramData::from_rays(rays, &iso, nanometer!(0.2))?;
-            props.create("Spot diagram", "2D spot diagram", spot_data.into())?;
-
+            if let Ok(spot_data) = SpotDiagramData::from_rays(rays, &iso, nanometer!(0.2)) {
+                props.create("Spot diagram", "2D spot diagram", spot_data.into())?;
+            } else {
+                props.create("note","spot diagram warning", "Spot diagram could not be calculated. This could happen, if all rays miss the detector or are apodized.".into())?
+            }
             if let Some(c) = transformed_rays.energy_weighted_centroid() {
                 props.create(
                     "centroid x",
@@ -145,14 +147,12 @@ impl OpticNode for SpotDiagram {
         } else {
             NodeReport::new(self.node_type(), self.name(), uuid, Properties::default())
         };
-
         if self.apodization_warning {
             report.add_note(ReportNote::new(
                 ReportLevel::Warning,
                 "Rays have been apodized at input aperture. Results might not be accurate.",
             ));
         }
-
         Ok(NodeReportResult::Report(report))
     }
 
