@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! Wavefront measurement node
 pub mod wavefront_data;
-mod zernike;
+pub mod zernike;
 
 use crate::{
     analyzers::{
@@ -14,7 +14,8 @@ use crate::{
     error::{OpmResult, OpossumError},
     geometry::geo_surface::GeoSurfaceRef,
     light::{LightData, LightResult},
-    nodes::NodeRegistration,
+    millimeter,
+    nodes::{NodeRegistration, wavefront::zernike::ZernikeNoll},
     properties::{Properties, Proptype},
     reporting::node_report::{NodeReport, NodeReportResult},
     utils::geom_transformation::Isometry,
@@ -112,6 +113,71 @@ impl WaveFront {
         self.reference_surface = Some(geo);
         self.update_surfaces()
     }
+    /// Helper function to evaluate and append polynomial basis decomposition to the report properties.
+    fn add_decomposition_properties(
+        props: &mut Properties,
+        wf_error_map: &WaveFrontMap,
+        order: usize,
+    ) -> OpmResult<()> {
+        let norm_radius = wf_error_map.max_radius();
+        if norm_radius <= millimeter!(1.0e-9) {
+            props.create(
+                "Warning",
+                "warning during decomposition",
+                "Beam radius is near zero; cannot fit basis functions.".into(),
+            )?;
+            return Ok(());
+        }
+
+        let basis = ZernikeNoll::new(order, norm_radius);
+        match wf_error_map.decompose(&basis) {
+            Ok(decomp) => {
+                const NOISE_THRESHOLD_LAMBDA: f64 = 1e-6;
+
+                let residual_rms = if decomp.residual_rms.abs() < NOISE_THRESHOLD_LAMBDA {
+                    0.0
+                } else {
+                    decomp.residual_rms
+                };
+
+                props.create(
+                    &format!("{} Residual RMS", decomp.basis_name),
+                    "Root-mean-square error of the remaining wavefront after basis subtraction",
+                    Proptype::WfLambda(residual_rms, wf_error_map.wavelength()),
+                )?;
+
+                for (key, val) in decomp.metadata {
+                    props.create(&key, "Polynomial expansion metadata", val.into())?;
+                }
+
+                for mode in decomp.modes {
+                    if mode.is_piston {
+                        continue;
+                    }
+
+                    let filtered_coeff = if mode.coefficient.abs() < NOISE_THRESHOLD_LAMBDA {
+                        0.0
+                    } else {
+                        mode.coefficient
+                    };
+
+                    props.create(
+                        &mode.label,
+                        "Polynomial expansion coefficient",
+                        Proptype::WfLambda(filtered_coeff, wf_error_map.wavelength()),
+                    )?;
+                }
+            }
+            Err(err) => {
+                props.create(
+                    "Warning",
+                    "warning during wavefront decomposition",
+                    format!("Failed to calculate basis coefficients: {err}").into(),
+                )?;
+            }
+        }
+        Ok(())
+    }
 }
 
 impl OpticNode for WaveFront {
@@ -151,10 +217,12 @@ impl OpticNode for WaveFront {
         }
         let mut props = Properties::default();
         let data = &self.light_data;
+
         if let Some(LightData::Geometric(rays)) = data {
             let iso = self
                 .effective_surface_iso("input_1")
                 .unwrap_or_else(|_| Isometry::identity());
+
             let Ok(Proptype::Bool(remove_tilt)) = self.node_attr.get_property("remove tilt") else {
                 return Err(OpossumError::Analysis(
                     "cannot read `remove tilt` flag".into(),
@@ -173,6 +241,8 @@ impl OpticNode for WaveFront {
                     "cannot read `zernike max order`".into(),
                 ));
             };
+            let zernike_order = usize::try_from(*max_order).unwrap_or(0);
+
             let wf_data_opt =
                 wavefront_data::WaveFrontData::from_rays(rays, true, false, &iso, *remove_tilt);
 
@@ -180,31 +250,26 @@ impl OpticNode for WaveFront {
                 && !wf_data.wavefront_error_maps.is_empty()
             {
                 for wf_error_map in &wf_data.wavefront_error_maps {
-                    props
-                    .create(
-                        &format!("Wavefront Map at {:.3} nm", wf_error_map.wavelength().get::<uom::si::length::nanometer>()),
+                    let wvl_nm = wf_error_map
+                        .wavelength()
+                        .get::<uom::si::length::nanometer>();
+
+                    props.create(
+                        &format!("Wavefront Map at {wvl_nm:.3} nm"),
                         "Wavefront error map with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
                         wf_error_map.clone().into(),
-                    )
-                    ?;
-
-                    //todo for all error maps at every wavelength!
-                    props
-                    .create(
+                    )?;
+                    props.create(
                         "Wavefront PtV",
                         "Wavefront Peak-to-Valley value with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
                         Proptype::WfLambda(wf_error_map.ptv(), wf_error_map.wavelength()),
-                    )
-                    ?;
-
-                    //todo for all error maps at every wavelength!
-                    props
-                    .create(
+                    )?;
+                    props.create(
                         "Wavefront RMS",
                         "Wavefront root mean square value with respect to the chief ray (closest ray to the optical axis) for a specific spectral band",
                         Proptype::WfLambda(wf_error_map.rms(), wf_error_map.wavelength()),
-                    )
-                    ?;
+                    )?;
+
                     if *remove_tilt {
                         props.create(
                             "Note",
@@ -212,62 +277,13 @@ impl OpticNode for WaveFront {
                             "A possible wavefront tilt has been subtracted.".into(),
                         )?;
                     }
+
                     if *decomp_zernike {
-                        match wf_error_map.decompose_zernike(*max_order as usize) {
-                            Ok(decomp) => {
-                                // Numerical noise threshold: 1 micro-lambda (1e-6 lambda)
-                                const NOISE_THRESHOLD_LAMBDA: f64 = 1e-6;
-
-                                let residual_rms =
-                                    if decomp.residual_rms.abs() < NOISE_THRESHOLD_LAMBDA {
-                                        0.0
-                                    } else {
-                                        decomp.residual_rms
-                                    };
-                                props.create(
-                                "Zernike Residual RMS",
-                                "Root-mean-square error of the remaining wavefront after Zernike subtraction",
-                               Proptype::WfLambda(residual_rms, wf_error_map.wavelength()),
-                            )?;
-                                props.create(
-                                    "Zernike Norm Radius",
-                                    "Normalization radius used for Zernike polynomials",
-                                    decomp.norm_radius.into(),
-                                )?;
-                                for (coeff, mode) in
-                                    decomp.coefficients.iter().zip(decomp.modes.iter())
-                                {
-                                    // 1. Skip Piston (j = 1) as it represents an irrelevant global phase shift
-                                    if mode.j == 1 {
-                                        continue;
-                                    }
-
-                                    // 2. Filter coefficients smaller than 1 micro-lambda to avoid femto/pico noise
-                                    let filtered_coeff = if coeff.abs() < NOISE_THRESHOLD_LAMBDA {
-                                        0.0
-                                    } else {
-                                        *coeff
-                                    };
-
-                                    props.create(
-                                        &format!("Z{} ({})", mode.j, mode.name),
-                                        "Zernike polynomial expansion coefficient",
-                                        Proptype::WfLambda(
-                                            filtered_coeff,
-                                            wf_error_map.wavelength(),
-                                        ),
-                                    )?;
-                                }
-                            }
-                            Err(err) => {
-                                props.create(
-                                    "Warning",
-                                    "warning during Zernike decomposition",
-                                    format!("Failed to calculate Zernike coefficients: {err}")
-                                        .into(),
-                                )?;
-                            }
-                        }
+                        Self::add_decomposition_properties(
+                            &mut props,
+                            wf_error_map,
+                            zernike_order,
+                        )?;
                     }
                 }
 
@@ -280,15 +296,14 @@ impl OpticNode for WaveFront {
                     )?;
                 }
             } else {
-                props
-                .create(
+                props.create(
                     "Warning",
                     "warning during wavefront calculation",
                     "This warning might have been created if the wavefront monitor was used with zero distance from Source or with multiple wavelengths in a completely paraxial setup.".into(),
-                )
-                ?;
-            };
+                )?;
+            }
         }
+
         Ok(NodeReportResult::Report(NodeReport::new(
             self.node_type(),
             self.name(),

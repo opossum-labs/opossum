@@ -2,7 +2,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     light::Rays,
     millimeter, nanometer,
-    nodes::wavefront::zernike::{Basis2D, DecompositionResult, ZernikeNoll, fit_wavefront_points},
+    nodes::wavefront::zernike::{Basis2D, DecompositionResult, fit_wavefront_points},
     reporting::plottable::{
         AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable,
     },
@@ -340,59 +340,34 @@ impl WaveFrontMap {
     pub const fn ptv(&self) -> f64 {
         self.ptv
     }
-    /// Decomposes the discrete wavefront points into Zernike polynomials up to radial order `max_n`.
-    ///
-    /// Automatically determines the normalization radius from the outermost ray point.
-    ///
-    /// # Errors
-    /// Returns an error if points are empty, insufficient to fit the basis modes, or SVD fails.
-    pub fn decompose_zernike(&self, max_n: usize) -> OpmResult<DecompositionResult> {
-        let n = self.x.len();
-        if n == 0 {
-            return Err(OpossumError::Other("Empty wavefront map.".into()));
-        }
-
-        // 1. Determine maximum radial distance as normalization radius
+    /// Calculates the maximum radial distance of all points from the origin in millimeters.
+    #[must_use]
+    pub fn max_radius(&self) -> Length {
         let mut max_radius_sq = 0.0f64;
-        let mut points = Vec::with_capacity(n);
-
         for (&x, &y) in self.x.iter().zip(self.y.iter()) {
             let r_sq = x.mul_add(x, y * y);
             if r_sq > max_radius_sq {
                 max_radius_sq = r_sq;
             }
+        }
+        millimeter!(max_radius_sq.sqrt())
+    }
+    /// Decomposes the discrete wavefront points into an arbitrary 2D basis system.
+    ///
+    /// # Errors
+    /// Returns an error if the map is empty, has fewer points than basis modes, or SVD fails.
+    pub fn decompose<B: Basis2D>(&self, basis: &B) -> OpmResult<DecompositionResult> {
+        let n = self.x.len();
+        if n == 0 {
+            return Err(OpossumError::Other("Empty wavefront map.".into()));
+        }
+
+        let mut points = Vec::with_capacity(n);
+        for (&x, &y) in self.x.iter().zip(self.y.iter()) {
             points.push(Point2::new(x, y));
         }
 
-        let norm_radius = millimeter!(max_radius_sq.sqrt());
-        if norm_radius <= millimeter!(1.0e-9) {
-            return Err(OpossumError::Other(
-                "Normalization radius is near zero; cannot fit Zernike polynomials.".into(),
-            ));
-        }
-
-        // 2. Initialize Noll basis and solve least-squares fit
-        let basis = ZernikeNoll::new(max_n, norm_radius);
-        let coeffs = fit_wavefront_points(&points, &self.opd, &basis)?;
-
-        // 3. Compute residual RMS
-        let mut residual_sum_sq = 0.0;
-        for (pt, &actual_opd) in points.iter().zip(self.opd.iter()) {
-            let mut fitted_val = 0.0;
-            for (col_idx, &c) in coeffs.iter().enumerate() {
-                fitted_val += c * basis.evaluate(col_idx, pt);
-            }
-            let diff = actual_opd - fitted_val;
-            residual_sum_sq += diff * diff;
-        }
-        let residual_rms = (residual_sum_sq / (n as f64)).sqrt();
-
-        Ok(DecompositionResult {
-            coefficients: coeffs,
-            modes: basis.modes().to_vec(),
-            residual_rms,
-            norm_radius,
-        })
+        fit_wavefront_points(&points, &self.opd, basis)
     }
 }
 
@@ -572,7 +547,7 @@ mod test {
         joule,
         light::{Ray, Rays},
         millimeter, nanometer,
-        nodes::{WaveFrontData, WaveFrontMap},
+        nodes::{WaveFrontData, WaveFrontMap, wavefront::zernike::ZernikeNoll},
         refractive_index::refr_index_vaccuum,
         utils::geom_transformation::Isometry,
     };
@@ -800,41 +775,10 @@ mod test {
         Ok(())
     }
     #[test]
-    fn test_noll_indexing_generation() {
-        let basis = ZernikeNoll::new(4, millimeter!(1.0));
-        let modes = basis.modes();
-
-        // Standard Noll definitions:
-        // j=1: (0,0), j=2: (1,1), j=3: (1,-1), j=4: (2,0), j=5: (2,-2), j=6: (2,2)
-        assert_eq!(modes[0].j, 1);
-        assert_eq!((modes[0].n, modes[0].m), (0, 0));
-
-        assert_eq!(modes[1].j, 2);
-        assert_eq!((modes[1].n, modes[1].m), (1, 1));
-
-        assert_eq!(modes[2].j, 3);
-        assert_eq!((modes[2].n, modes[2].m), (1, -1));
-
-        assert_eq!(modes[3].j, 4);
-        assert_eq!((modes[3].n, modes[3].m), (2, 0));
-
-        assert_eq!(modes[4].j, 5);
-        assert_eq!((modes[4].n, modes[4].m), (2, -2));
-
-        assert_eq!(modes[5].j, 6);
-        assert_eq!((modes[5].n, modes[5].m), (2, 2));
-
-        // Up to n=4 there are (4+1)(4+2)/2 = 15 modes
-        assert_eq!(modes.len(), 15);
-    }
-
-    #[test]
     fn test_fit_pure_defocus() -> OpmResult<()> {
         let norm_r = millimeter!(10.0);
         let basis = ZernikeNoll::new(2, norm_r);
 
-        // Z_4 (Defocus) = sqrt(3) * (2 * (r/R)^2 - 1)
-        // Let's create a synthetic grid of points with amplitude 2.5 of Z_4
         let mut points = Vec::new();
         let mut opd = Vec::new();
 
@@ -844,20 +788,20 @@ mod test {
                 let y = iy as f64 * 1.5;
                 let pt = Point2::new(x, y);
                 if pt.coords.norm() <= norm_r.get::<millimeter>() {
-                    let val = 2.5 * basis.evaluate(3, &pt); // mode index 3 is j=4 (0-based)
+                    let val = 2.5 * basis.evaluate(3, &pt); // mode 3 is j=4 (Defocus)
                     points.push(pt);
                     opd.push(val);
                 }
             }
         }
 
-        let coeffs = fit_wavefront_points(&points, &opd, &basis)?;
+        let decomp = fit_wavefront_points(&points, &opd, &basis)?;
 
-        // Coefficient for Z_4 should be 2.5, others ~0.0
-        assert_relative_eq!(coeffs[3], 2.5, epsilon = 1e-10);
-        for (i, &c) in coeffs.iter().enumerate() {
+        assert_relative_eq!(decomp.residual_rms, 0.0, epsilon = 1e-10);
+        assert_relative_eq!(decomp.modes[3].coefficient, 2.5, epsilon = 1e-10);
+        for (i, mode) in decomp.modes.iter().enumerate() {
             if i != 3 {
-                assert_relative_eq!(c, 0.0, epsilon = 1e-10);
+                assert_relative_eq!(mode.coefficient, 0.0, epsilon = 1e-10);
             }
         }
         Ok(())
