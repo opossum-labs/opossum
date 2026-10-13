@@ -264,6 +264,40 @@ mod test {
         )?)
     }
 
+    /// The given shape with a bore through it, beside its centre.
+    fn bored(shape: &ValidatedCrossSection, bore: Aperture) -> OpmResult<ValidatedCrossSection> {
+        ValidatedCrossSection::try_new(Aperture::new_stack(
+            vec![shape.get().clone(), bore],
+            ApertureType::Hole,
+            None,
+            None,
+        )?)
+    }
+
+    fn round_bore() -> OpmResult<Aperture> {
+        Aperture::new_circle(
+            millimeter!(3.0),
+            ApertureType::Obstruction,
+            Some(millimeter!(2.0, -1.0)),
+        )
+    }
+
+    fn square_bore() -> OpmResult<Aperture> {
+        Aperture::new_rectangle(
+            millimeter!(3.0),
+            millimeter!(3.0),
+            ApertureType::Obstruction,
+            Some(millimeter!(2.0, -1.0)),
+            None,
+        )
+    }
+
+    /// How many points of a cross section's mesh lie on its rims; they lead the points.
+    fn rim_points(cross_section: &ValidatedCrossSection) -> OpmResult<usize> {
+        let mesh = cross_section.get().triangulate(SEGMENTS)?;
+        Ok(mesh.rims().last().map_or(0, |rim| rim.end))
+    }
+
     /// One body of every shape the volume nodes build, placed in the given frame.
     fn volumes(placement: &Isometry) -> OpmResult<Vec<(&'static str, SurfaceBoundedBody)>> {
         let sphere = |radius: f64, z: f64| -> OpmResult<GeoSurfaceRef> {
@@ -341,6 +375,24 @@ mod test {
                 "lens over an L",
                 SurfaceBoundedBody::new(sphere(60.0, 0.0)?, plane(8.0)?, l_shape()?, *placement),
             ),
+            (
+                "plate with a bore",
+                SurfaceBoundedBody::new(
+                    plane(0.0)?,
+                    plane(5.0)?,
+                    bored(&circle(10.0)?, round_bore()?)?,
+                    *placement,
+                ),
+            ),
+            (
+                "lens with a square bore",
+                SurfaceBoundedBody::new(
+                    sphere(50.0, 0.0)?,
+                    sphere(-50.0, 6.0)?,
+                    bored(&circle(10.0)?, square_bore()?)?,
+                    *placement,
+                ),
+            ),
         ])
     }
 
@@ -353,48 +405,58 @@ mod test {
 
     /// Stepping off a face along its normal has to leave the body, and stepping the other way has
     /// to stay in it. That pins down both where the faces lie and which way they face.
+    ///
+    /// The step starts a hair inside a triangle rather than on its very corner. Where two walls
+    /// meet in a corner pointing into the body, as in a square bore, a step from the corner along
+    /// the normal of one wall runs along the other, and rounding would decide which side it is on.
     #[test]
     fn every_face_of_a_body_points_out_of_it() -> OpmResult<()> {
+        /// How far towards the centre of its triangle a step starts, as a fraction of the way.
+        const INTO_THE_TRIANGLE: f64 = 1e-3;
         for placement in [Isometry::identity(), somewhere_else()?] {
             for (name, body) in volumes(&placement)? {
                 let mesh = body.triangulate(SEGMENTS)?;
-                // The rim of a bounding surface is the outline of the cross section, asked for
-                // directly rather than by triangulating it a second time.
-                let rim = body
-                    .rim
-                    .cross_section()
-                    .get()
-                    .outline_points(SEGMENTS)?
-                    .len();
+                let rim = rim_points(body.rim.cross_section())?;
                 for (face, bounds_the_body) in [
                     (mesh.entrance(), true),
                     (mesh.exit(), true),
                     (mesh.edge(), false),
                 ] {
-                    for (index, (point, normal)) in
-                        face.points().iter().zip(face.normals()).enumerate()
-                    {
-                        let from = body.isometry().transform_point(point);
-                        let outwards = body.isometry().transform_vector_f64(normal);
-                        let step = |sign: f64| {
-                            Point3::new(
-                                from.x + meter!(sign * STEP * outwards.x),
-                                from.y + meter!(sign * STEP * outwards.y),
-                                from.z + meter!(sign * STEP * outwards.z),
-                            )
+                    for triangle in face.triangles() {
+                        let corners = triangle.map(|index| face.points()[index as usize]);
+                        let to_the_centre = |corner: Point3<Length>| {
+                            ((corners[0] - corner) + (corners[1] - corner) + (corners[2] - corner))
+                                .map(|c| c / 3.)
                         };
-                        assert!(
-                            !body.contains(&step(1.0))?,
-                            "a point just outside the {name} was taken for being in it"
-                        );
-                        // Stepping the other way has to land inside — except from the rim of a
-                        // bounding surface, which lies on the edge of the cross section too and
-                        // would leave it sideways on the slightest rounding.
-                        if bounds_the_body && index >= rim {
+                        for (index, corner) in
+                            triangle.map(|index| index as usize).iter().zip(corners)
+                        {
+                            let inside =
+                                corner + to_the_centre(corner).map(|c| c * INTO_THE_TRIANGLE);
+                            let from = body.isometry().transform_point(&inside);
+                            let outwards = body
+                                .isometry()
+                                .transform_vector_f64(&face.normals()[*index]);
+                            let step = |sign: f64| {
+                                Point3::new(
+                                    from.x + meter!(sign * STEP * outwards.x),
+                                    from.y + meter!(sign * STEP * outwards.y),
+                                    from.z + meter!(sign * STEP * outwards.z),
+                                )
+                            };
                             assert!(
-                                body.contains(&step(-1.0))?,
-                                "a point just inside the {name} was taken for being outside it"
+                                !body.contains(&step(1.0))?,
+                                "a point just outside the {name} was taken for being in it"
                             );
+                            // Stepping the other way has to land inside — except from the rim of
+                            // a bounding surface, which lies on the edge of the cross section too
+                            // and would leave it sideways on the slightest rounding.
+                            if bounds_the_body && *index >= rim {
+                                assert!(
+                                    body.contains(&step(-1.0))?,
+                                    "a point just inside the {name} was taken for being outside it"
+                                );
+                            }
                         }
                     }
                 }
@@ -444,8 +506,18 @@ mod test {
             ("circle", circle(10.0)?, 0),
             ("rectangle", rectangle(20.0, 8.0)?, 4),
             ("L", l_shape()?, 6),
+            (
+                "circle with a bore",
+                bored(&circle(10.0)?, round_bore()?)?,
+                0,
+            ),
+            (
+                "rectangle with a square bore",
+                bored(&rectangle(20.0, 8.0)?, square_bore()?)?,
+                8,
+            ),
         ] {
-            let rim = cross_section.get().outline_points(SEGMENTS)?.len();
+            let rim = rim_points(&cross_section)?;
             let body = SurfaceBoundedBody::new(
                 placed(Plane::default(), &placement, millimeter!(0.0))?,
                 placed(Plane::default(), &placement, millimeter!(5.0))?,

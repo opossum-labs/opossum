@@ -175,8 +175,9 @@ mod test {
         nodes::{EnergyMeter, IdealFilter, ParabolicMirror, ThinMirror},
         utils::{LockExt, geom_transformation::Isometry},
     };
-    use approx::assert_abs_diff_eq;
+    use approx::{assert_abs_diff_eq, assert_relative_eq};
     use nalgebra::Point2;
+    use std::f64::consts::PI;
 
     /// A node in its default state — a flat mirror over the default clear aperture — can be meshed
     /// at all, and the mesh actually covers ground rather than coming back empty.
@@ -219,6 +220,38 @@ mod test {
             far_away.points(),
             "the surface mesh must be independent of the node's placement"
         );
+        Ok(())
+    }
+
+    /// A mirror with a bore through it is meshed around the bore: what is drawn covers the ring it
+    /// is, not the disc it would be without the bore.
+    #[test]
+    fn a_surface_with_a_bore_is_meshed_around_it() -> OpmResult<()> {
+        let (radius, bore) = (millimeter!(12.5), millimeter!(4.0));
+        let ring = Aperture::new_stack(
+            vec![
+                Aperture::new_circle(radius, ApertureType::Hole, None)?,
+                Aperture::new_circle(bore, ApertureType::Obstruction, None)?,
+            ],
+            ApertureType::Hole,
+            None,
+            None,
+        )?;
+        let mut mirror = ThinMirror::default();
+        mirror.set_property(CLEAR_APERTURE, ring.shape().clone().into())?;
+        mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        let mesh = mirror.surface_mesh(64)?;
+        let covered = mesh
+            .triangles()
+            .iter()
+            .map(|triangle| {
+                let [a, b, c] =
+                    triangle.map(|index| mesh.points()[index as usize].map(|c| c.value));
+                (b - a).cross(&(c - a)).norm() / 2.
+            })
+            .sum::<f64>();
+        let ring_area = PI * (radius.value.powi(2) - bore.value.powi(2));
+        assert_relative_eq!(covered, ring_area, max_relative = 1e-2);
         Ok(())
     }
 

@@ -833,7 +833,7 @@ mod test {
     use super::*;
     use opossum_core::{
         analyzers::{AnalyzerType, RayTraceConfig},
-        apertures::{ApertureShape, CircleShape},
+        apertures::{Aperture, ApertureShape, ApertureType, CircleShape},
         core_optics::{OpticNode, node_attr::NodePositioning},
         degree,
         geometry::body::CLEAR_APERTURE,
@@ -1085,6 +1085,46 @@ mod test {
         assert_ne!(
             before.nodes[0].geometry, after.nodes[0].geometry,
             "shrinking the mirror's clear aperture did not change its reported geometry"
+        );
+        Ok(())
+    }
+
+    /// A mirror whose clear aperture is a stack of shapes — here a disc with a bore beside the
+    /// optical axis — is drawn like any other component rather than left out.
+    #[test]
+    fn a_mirror_with_a_bore_is_drawn() -> OpmResult<()> {
+        let bored = Aperture::new_stack(
+            vec![
+                Aperture::new_circle(millimeter!(12.5), ApertureType::Hole, None)?,
+                Aperture::new_circle(
+                    millimeter!(2.0),
+                    ApertureType::Obstruction,
+                    Some(millimeter!(6.0, 0.0)),
+                )?,
+            ],
+            ApertureType::Hole,
+            None,
+            None,
+        )?;
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let mirror = scenery.add_node(ThinMirror::default())?;
+        let detector = scenery.add_node(EnergyMeter::default())?;
+        scenery.connect_nodes(source, "output_1", mirror, "input_1", millimeter!(50.0))?;
+        scenery.connect_nodes(mirror, "output_1", detector, "input_1", millimeter!(50.0))?;
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(source, RayDataBuilder::default());
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+        document.scenery_mut().with_node_attr_mut(mirror, |attr| {
+            attr.set_property(CLEAR_APERTURE, bored.shape().clone().into())
+        })??;
+
+        let manifest = manifest(&document)?;
+        assert!(manifest.skipped.is_empty(), "{:?}", manifest.skipped);
+        assert!(
+            manifest.nodes.iter().any(|node| node.uid == mirror),
+            "the mirror with a bore is missing from the scene"
         );
         Ok(())
     }
