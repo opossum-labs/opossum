@@ -59,16 +59,29 @@ where light begins rather than a thing, and a reference node is the same compone
 second time rather than a second component. The count in the view's status line tells you how many are
 drawn.
 
+Each component is drawn as large as its `clear aperture` (see
+[Clear aperture](nodes.md#clear-aperture)), the same extent that decides which rays hit it. A
+detector or a paraxial surface whose clear aperture is `Open` has no edge to draw. It is shown at a
+nominal size instead, a circle of 12.5 mm radius, which says nothing about what it records or
+focuses. A component whose clear aperture is a stack of shapes — a ring, or a mirror with a central
+bore — cannot be drawn yet and is left out; the status line and the log say so.
+
 A component only knows where it is once the optical axis has been traced, so the model needs an
 analyzer that places its nodes — a ray trace. Without one there is nothing to place, and the view
 stays empty. Components the trace does not reach are reported in the log and left out rather than
 stopping the rest of the setup from being drawn.
 
 If the optical axis ends *at* a component that still has others after it, those cannot be placed,
-and the view cannot be drawn at all. The log says where the axis ended. The usual cause is a
-**grating that is not tilted**: its diffraction order then does not propagate at the source's
-wavelength, and the message names the Littrow angle to tilt the grating by. A grating with nothing
-after it is drawn either way.
+and the view cannot be drawn at all. The log names the component the axis ended at. There are two
+usual causes:
+
+- **The axis passes the component outside its clear aperture** — a lens decentered by more than its
+  radius, say, or a double pass whose return path walks off. Enlarge the clear aperture or correct
+  the position (see [Geometry](../concepts/geometry.md)).
+- **A grating is not tilted**: its diffraction order then does not propagate at the source's
+  wavelength, and the message names the Littrow angle to tilt the grating by.
+
+A component with nothing after it is drawn either way.
 
 ## Light: the optical axis and the rays
 
@@ -82,9 +95,13 @@ from default rays, and its axis is drawn from those.
 
 **The rays** (**Rays**, off by default) are the light of the sources an analyzer defines, traced
 through the setup like a ray trace does. They show what the axis alone cannot: how a bundle widens
-and focuses, where an aperture clips it, where a beam splitter divides it. Each ray is coloured by
-its wavelength; infrared light, which has no colour of its own, is drawn red, and ultraviolet light
-violet. A ray stopped by an aperture ends where it is stopped.
+and focuses, where a clear aperture clips it, where a beam splitter divides it. Each ray is coloured
+by its wavelength; infrared light, which has no colour of its own, is drawn red, and ultraviolet
+light violet.
+
+A ray that is stopped for passing a component outside its clear aperture is drawn up to the last
+component it reached before, not up to the one it missed. One that misses a mirror, a parabolic
+mirror or a grating is not drawn at all.
 
 A few things to know about the rays:
 
