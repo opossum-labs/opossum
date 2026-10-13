@@ -234,36 +234,6 @@ impl Aperture {
             .collect())
     }
 
-    /// Return the points the edge of this [`Aperture`] reaches farthest out in.
-    ///
-    /// Where [`outline_points`](Aperture::outline_points) walks the whole edge, this states only how
-    /// far it reaches: both the axis-aligned extent and the largest distance from the origin follow
-    /// from these points. They are not a tessellation of the edge — a circle is described by four
-    /// points plus, if it is shifted off the origin, the single point of it lying farthest out, a
-    /// direction none of the axis-aligned extremes points in.
-    ///
-    /// The aperture's isometry is already applied, but by the shape rather than to the result, since
-    /// which points lie farthest out along an axis depends on the frame those axes belong to — see
-    /// [`Bounded::extreme_points`].
-    ///
-    /// # Returns
-    ///
-    /// The extreme points of this aperture's edge.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error for every shape without a closed edge
-    /// ([`ApertureShape::Open`], [`ApertureShape::Gaussian`] and [`ApertureShape::Stack`]).
-    pub(crate) fn extreme_points(&self) -> OpmResult<Vec<Point2<Length>>> {
-        let bounded = self.shape.as_bounded().ok_or_else(|| {
-            OpossumError::Other(format!(
-                "the extent of an aperture of shape '{}' is undefined",
-                self.shape
-            ))
-        })?;
-        Ok(bounded.extreme_points(self.isometry.as_ref()))
-    }
-
     /// Returns a reference to the shape of this [`Aperture`].
     #[must_use]
     pub const fn shape(&self) -> &ApertureShape {
@@ -298,64 +268,27 @@ impl Aperture {
     }
     /// Return the points the region of this [`Aperture`] reaches farthest in, in its xy plane.
     ///
-    /// The implementation of [`ValidatedCrossSection::outline`], which describes the points. It
-    /// works on a bare aperture because the members of a stack are bare apertures.
+    /// The implementation of [`ValidatedCrossSection::extreme_points`], which describes the points.
+    /// It works on a bare aperture because the members of a stack are bare apertures. A shape with
+    /// an edge answers for itself ([`Bounded::extreme_points`]); a stack reaches as far as its holes.
     ///
     /// # Returns
     ///
     /// The extreme points of the region, with the isometry of this aperture applied; none if the
     /// shape does not bound a region.
-    fn region_outline(&self) -> Vec<Point2<Length>> {
-        let transform = |point: Point2<Length>| {
-            self.isometry.as_ref().map_or(point, |iso| {
-                let transformed =
-                    iso.transform_point(&Point3::new(point.x, point.y, Length::zero()));
-                Point2::new(transformed.x, transformed.y)
-            })
-        };
+    fn extreme_points(&self) -> Vec<Point2<Length>> {
+        let iso = self.isometry.as_ref();
         match &self.shape {
-            ApertureShape::BinaryCircle(circle) => {
-                // A circle is indifferent to the rotation of its aperture, so only its center
-                // moves. The axis-aligned bounds follow from that center alone, while the point
-                // farthest from the origin lies on the far side of the shifted circle.
-                let center = transform(Point2::origin());
-                let radius = circle.radius();
-                let mut outline = vec![
-                    Point2::new(center.x + radius, center.y),
-                    Point2::new(center.x - radius, center.y),
-                    Point2::new(center.x, center.y + radius),
-                    Point2::new(center.x, center.y - radius),
-                ];
-                let shift = center.x.value.hypot(center.y.value);
-                if shift > 0.0 {
-                    let stretch = 1.0 + radius.value / shift;
-                    outline.push(Point2::new(center.x * stretch, center.y * stretch));
-                }
-                outline
-            }
-            ApertureShape::BinaryRectangle(rectangle) => {
-                let half_width = rectangle.width() / 2.0;
-                let half_height = rectangle.height() / 2.0;
-                [
-                    Point2::new(half_width, half_height),
-                    Point2::new(-half_width, half_height),
-                    Point2::new(-half_width, -half_height),
-                    Point2::new(half_width, -half_height),
-                ]
-                .map(transform)
-                .to_vec()
-            }
-            ApertureShape::BinaryPolygon(polygon) => {
-                polygon.points().iter().map(|p| transform(*p)).collect()
-            }
             ApertureShape::Stack(stack) if self.shape.delimits_region() => stack
                 .apertures()
                 .iter()
                 .filter(|member| *member.aperture_type() == ApertureType::Hole)
-                .flat_map(Self::region_outline)
-                .map(transform)
+                .flat_map(Self::extreme_points)
+                .map(|point| transformed(point, iso))
                 .collect(),
-            _ => Vec::new(),
+            shape => shape
+                .as_bounded()
+                .map_or_else(Vec::new, |bounded| bounded.extreme_points(iso)),
         }
     }
     /// Set the shape of this [`Aperture`].
@@ -515,8 +448,8 @@ impl ValidatedCrossSection {
     ///
     /// The extreme points of the region, with the isometry of the aperture applied.
     #[must_use]
-    pub(crate) fn outline(&self) -> Vec<Point2<Length>> {
-        self.get().region_outline()
+    pub(crate) fn extreme_points(&self) -> Vec<Point2<Length>> {
+        self.get().extreme_points()
     }
     /// Return how far the region reaches from the origin of its plane.
     ///
@@ -525,9 +458,11 @@ impl ValidatedCrossSection {
     /// The largest distance of a point of the region from the origin.
     #[must_use]
     pub(crate) fn transversal_reach(&self) -> Length {
-        self.outline().iter().fold(Length::zero(), |reach, point| {
-            Length::max(reach, meter!(point.x.value.hypot(point.y.value)))
-        })
+        self.extreme_points()
+            .iter()
+            .fold(Length::zero(), |reach, point| {
+                Length::max(reach, meter!(point.x.value.hypot(point.y.value)))
+            })
     }
     /// Return whether a point of the plane lies within the region.
     ///
@@ -1403,7 +1338,7 @@ mod test {
             millimeter!(5.0, -3.0, 0.0),
             degree!(0.0, 0.0, 30.0),
         )?);
-        let extremes = aperture.extreme_points()?;
+        let extremes = aperture.extreme_points();
 
         let reduce =
             |pick: fn(f64, f64) -> f64, start: f64, axis: fn(&Point2<Length>) -> Length| {
