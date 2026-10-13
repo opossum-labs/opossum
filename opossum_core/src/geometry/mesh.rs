@@ -45,7 +45,7 @@ impl SurfaceMesh {
     /// The points of the mesh, in the frame it was built in.
     ///
     /// Point `i` lies above point `i` of the [`ApertureMesh`] the surface was meshed over, so the
-    /// aperture's [`rim_len`](ApertureMesh::rim_len) delimits the rim of this mesh as well.
+    /// aperture's [`rims`](ApertureMesh::rims) are the rims of this mesh as well.
     #[must_use]
     pub fn points(&self) -> &[Point3<Length>] {
         &self.points
@@ -108,7 +108,7 @@ impl GeoSurfaceRef {
     /// aperture, and what will let a detector be drawn as a single surface over its own.
     ///
     /// Points and triangles come out in the order the aperture mesh had them, so
-    /// [`ApertureMesh::rim_len`] delimits the rim of the result too.
+    /// [`ApertureMesh::rims`] are the rims of the result too.
     ///
     /// # Arguments
     ///

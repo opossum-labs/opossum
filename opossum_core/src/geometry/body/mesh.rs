@@ -7,6 +7,7 @@ use crate::{
     geometry::SurfaceMesh,
 };
 use nalgebra::{Point2, Vector3};
+use std::ops::Range;
 
 /// A closed triangle mesh of a [`SurfaceBoundedBody`].
 ///
@@ -124,9 +125,9 @@ impl SurfaceBoundedBody {
 
 /// Draw the lateral face between the rims of the two bounding surfaces.
 ///
-/// Both rims are the rim of the same [`ApertureMesh`], so the face is built by walking that rim once
-/// and spanning two triangles between each pair of neighbouring positions. Its points are taken from
-/// the two surface meshes verbatim, which is what makes the three faces meet without a seam.
+/// Both surfaces share the rims of the same [`ApertureMesh`], so the face is built by walking each
+/// rim once and spanning two triangles between each pair of neighbouring positions. Its points are
+/// taken from the two surface meshes verbatim, which is what makes the faces meet without a seam.
 ///
 /// # Arguments
 ///
@@ -136,69 +137,73 @@ impl SurfaceBoundedBody {
 ///
 /// # Returns
 ///
-/// The lateral face, facing away from the body's axis.
+/// The lateral face, facing away from the material of the body.
 ///
 /// # Errors
 ///
 /// This function returns an error if the face needs more points than can be indexed.
-// The one cast below is guarded by the `try_from` on the very first line: no more than `4 * rim`
-// points are ever pushed.
+// The one cast below is guarded by the `try_from` on the very first line: no more than
+// `4 * rim_points` points are ever pushed.
 #[allow(clippy::cast_possible_truncation)]
 fn lateral_face(
     aperture: &ApertureMesh,
     entrance: &SurfaceMesh,
     exit: &SurfaceMesh,
 ) -> OpmResult<SurfaceMesh> {
-    let rim = aperture.rim_len();
+    let rim_points = aperture.rims().iter().map(Range::len).sum::<usize>();
     // Every rim position needs at most two pairs of points, and one index has to address them all.
-    u32::try_from(4 * rim).map_err(|_| {
+    u32::try_from(4 * rim_points).map_err(|_| {
         OpossumError::Other("the lateral face has more points than can be indexed".into())
     })?;
-    // The outward normal of the rim segment leaving each position. The rim runs counter-clockwise
-    // seen from +z, so turning its direction a right angle clockwise points away from the body.
-    // Every one of them is needed twice — once leaving a position, once arriving at the next.
-    let segment_normals = (0..rim)
-        .map(|step| {
-            let (from, to) = (aperture.points()[step], aperture.points()[(step + 1) % rim]);
-            Vector3::new((to.y - from.y).value, (from.x - to.x).value, 0.0).normalize()
-        })
-        .collect::<Vec<_>>();
-    let mut points = Vec::with_capacity(4 * rim);
-    let mut normals = Vec::with_capacity(4 * rim);
-    // Where each rim segment begins and ends in the point list. A position the rim merely curves
-    // through carries one pair of points with an averaged normal, so the face reads as round; one
-    // it turns a corner at carries two, so the corner stays sharp.
-    let mut begins = vec![0_u32; rim];
-    let mut ends = vec![0_u32; rim];
-    for step in 0..rim {
-        let arriving = segment_normals[(step + rim - 1) % rim];
-        let leaving = segment_normals[step];
-        let mut stack_pair = |normal: Vector3<f64>| -> u32 {
-            let index = points.len() as u32;
-            // The entrance point first and the exit point right after it, so that one index
-            // addresses both ends of the rim at this position.
-            for surface in [entrance, exit] {
-                points.push(surface.points()[step]);
-                normals.push(normal);
+    let mut points = Vec::with_capacity(4 * rim_points);
+    let mut normals = Vec::with_capacity(4 * rim_points);
+    let mut triangles = Vec::with_capacity(2 * rim_points);
+    for rim in aperture.rims() {
+        let len = rim.len();
+        // The outward normal of the rim segment leaving each position. A rim runs with the body on
+        // its left seen from +z, so turning its direction a right angle clockwise points away from
+        // the body. Every one is needed twice — once leaving a position, once arriving at the next.
+        let segment_normals = (0..len)
+            .map(|step| {
+                let from = aperture.points()[rim.start + step];
+                let to = aperture.points()[rim.start + (step + 1) % len];
+                Vector3::new((to.y - from.y).value, (from.x - to.x).value, 0.0).normalize()
+            })
+            .collect::<Vec<_>>();
+        // Where each rim segment begins and ends in the point list. A position the rim merely
+        // curves through carries one pair of points with an averaged normal, so the face reads as
+        // round; one it turns a corner at carries two, so the corner stays sharp.
+        let mut begins = vec![0_u32; len];
+        let mut ends = vec![0_u32; len];
+        for step in 0..len {
+            let arriving = segment_normals[(step + len - 1) % len];
+            let leaving = segment_normals[step];
+            let mut stack_pair = |normal: Vector3<f64>| -> u32 {
+                let index = points.len() as u32;
+                // The entrance point first and the exit point right after it, so that one index
+                // addresses both ends of the rim at this position.
+                for surface in [entrance, exit] {
+                    points.push(surface.points()[rim.start + step]);
+                    normals.push(normal);
+                }
+                index
+            };
+            if arriving.dot(&leaving) > SMOOTH_ENOUGH_TO_ROUND {
+                let shared = stack_pair((arriving + leaving).normalize());
+                begins[step] = shared;
+                ends[step] = shared;
+            } else {
+                ends[step] = stack_pair(arriving);
+                begins[step] = stack_pair(leaving);
             }
-            index
-        };
-        if arriving.dot(&leaving) > SMOOTH_ENOUGH_TO_ROUND {
-            let shared = stack_pair((arriving + leaving).normalize());
-            begins[step] = shared;
-            ends[step] = shared;
-        } else {
-            ends[step] = stack_pair(arriving);
-            begins[step] = stack_pair(leaving);
         }
-    }
-    let mut triangles = Vec::with_capacity(2 * rim);
-    for step in 0..rim {
-        let (near, far) = (begins[step], ends[(step + 1) % rim]);
-        // Seen from outside the rim runs counter-clockwise with the entrance below the exit, so
-        // this is the winding that leaves both triangles facing outwards.
-        triangles.push([near, far, near + 1]);
-        triangles.push([far, far + 1, near + 1]);
+        for step in 0..len {
+            let (near, far) = (begins[step], ends[(step + 1) % len]);
+            // Seen from outside, the rim runs counter-clockwise with the entrance below the exit,
+            // so this is the winding that leaves both triangles facing outwards.
+            triangles.push([near, far, near + 1]);
+            triangles.push([far, far + 1, near + 1]);
+        }
     }
     Ok(SurfaceMesh::new(points, normals, triangles))
 }

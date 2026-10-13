@@ -11,7 +11,7 @@ use spade::{
     ConstrainedDelaunayTriangulation, Point2 as SpadePoint, RefinementParameters, Triangulation,
     handles::{FixedFaceHandle, InnerTag},
 };
-use std::collections::HashSet;
+use std::{collections::HashSet, ops::Range};
 use uom::si::f64::Length;
 
 /// A triangulation of the area an [`Aperture`] encloses, in the aperture's own plane.
@@ -20,20 +20,20 @@ use uom::si::f64::Length;
 /// triangles covering the whole area, with points inside it and not just along its edge. That is
 /// what a curved surface needs to be laid onto — sampled at the rim alone it would be flat.
 ///
-/// The points of the outline come first, so a body built from two such surfaces can join them along
-/// exactly those points; see [`rim_len`](ApertureMesh::rim_len).
+/// The points of its rims come first, so a body built from two such surfaces can join them along
+/// exactly those points; see [`rims`](ApertureMesh::rims).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ApertureMesh {
     points: Vec<Point2<Length>>,
     triangles: Vec<[u32; 3]>,
-    rim_len: usize,
+    rims: Vec<Range<usize>>,
 }
 
 impl ApertureMesh {
     /// The points of the mesh, in the plane of the aperture.
     ///
-    /// The first [`rim_len`](ApertureMesh::rim_len) of them are the rim, in the order the outline
-    /// walks it; the rest fill the inside.
+    /// The leading ones are the [`rims`](ApertureMesh::rims), rim after rim in the order each is
+    /// walked; the rest fill the inside.
     #[must_use]
     pub fn points(&self) -> &[Point2<Length>] {
         &self.points
@@ -45,14 +45,15 @@ impl ApertureMesh {
     pub fn triangles(&self) -> &[[u32; 3]] {
         &self.triangles
     }
-    /// How many of the leading [`points`](ApertureMesh::points) came from the outline.
+    /// The rims of the mesh, each as the range of the [`points`](ApertureMesh::points) it runs
+    /// through.
     ///
-    /// These are exactly the points [`Aperture::outline_points`] returned, in the same order.
-    /// Anything that has to meet this mesh along its edge — the lateral face of a body, or a
-    /// neighbouring surface — walks that prefix instead of comparing coordinates.
+    /// A rim is a closed edge of the area, walked with the area on its left. Anything that has to
+    /// meet this mesh along its edge — the lateral face of a body, or a neighbouring surface —
+    /// walks these ranges instead of comparing coordinates.
     #[must_use]
-    pub const fn rim_len(&self) -> usize {
-        self.rim_len
+    pub fn rims(&self) -> &[Range<usize>] {
+        &self.rims
     }
 }
 
@@ -66,11 +67,11 @@ const REFINEMENT_HEADROOM: f64 = 4.0;
 impl Aperture {
     /// Triangulate the area this [`Aperture`] encloses.
     ///
-    /// The rim comes from [`outline_points`](Aperture::outline_points) and is held fixed; the
+    /// The rims come from [`outline_points`](Aperture::outline_points) and are held fixed; the
     /// inside is then filled with further points until no triangle is larger than an equilateral
-    /// one whose side is the mean spacing of the outline points. Holding the rim fixed is what lets
-    /// two surfaces meshed over the same aperture be joined along it afterwards — at the price that
-    /// triangles touching the rim may come out somewhat larger than that, since a point dividing
+    /// one whose side is the mean spacing of the rim points. Holding the rims fixed is what lets
+    /// two surfaces meshed over the same aperture be joined along them afterwards — at the price
+    /// that triangles touching a rim may come out somewhat larger than that, since a point dividing
     /// them would have to encroach on the rim.
     ///
     /// The result is reproducible: the same aperture and the same `segments` always yield the same
@@ -98,13 +99,24 @@ impl Aperture {
                 self.shape()
             )));
         }
-        let outline = self.distinct_outline(segments)?;
+        let rims = self.rims(segments)?;
+        // Rim after rim, which makes each of them a range of the points.
+        let outline = rims.concat();
+        let mut ranges = Vec::with_capacity(rims.len());
+        for rim in &rims {
+            let start = ranges.last().map_or(0, |range: &Range<usize>| range.end);
+            ranges.push(start..start + rim.len());
+        }
         let vertices = outline
             .iter()
             .map(|point| SpadePoint::new(point.x.value, point.y.value))
             .collect::<Vec<_>>();
-        let edges = (0..outline.len())
-            .map(|from| [from, (from + 1) % outline.len()])
+        let edges = ranges
+            .iter()
+            .flat_map(|rim| {
+                rim.clone()
+                    .map(|from| [from, rim.start + (from + 1 - rim.start) % rim.len()])
+            })
             .collect::<Vec<_>>();
         let mut crossing = None;
         let mut triangulation: ConstrainedDelaunayTriangulation<SpadePoint<f64>> =
@@ -122,9 +134,16 @@ impl Aperture {
         }
         // A curved surface lifted onto this mesh has to be sampled inside, not only along its rim,
         // so the triangles are held to the size the rim is already sampled at.
-        let mean_spacing = ring_perimeter(&outline) / to_f64(outline.len());
+        let perimeter = rims.iter().map(|rim| ring_perimeter(rim)).sum::<f64>();
+        let mean_spacing = perimeter / to_f64(outline.len());
         let max_area = 3.0_f64.sqrt() / 4. * mean_spacing * mean_spacing;
-        let area = doubled_signed_area(&outline).abs() / 2.;
+        // A rim walked clockwise takes its area away: the sum is what the rims leave between them.
+        let area = rims
+            .iter()
+            .map(|rim| doubled_signed_area(rim))
+            .sum::<f64>()
+            .abs()
+            / 2.;
         let refinement = triangulation.refine(
             RefinementParameters::<f64>::default()
                 .with_max_allowed_area(max_area)
@@ -166,38 +185,39 @@ impl Aperture {
         Ok(ApertureMesh {
             points,
             triangles: inner_triangles(&triangulation, &refinement.excluded_faces)?,
-            rim_len: outline.len(),
+            rims: ranges,
         })
     }
-    /// The outline of this aperture, checked to visit no point twice.
+    /// The rims bounding the area of this aperture, checked to visit no point twice.
+    ///
+    /// Each rim is a closed edge of the area, walked with the area on its left.
     ///
     /// `spade` removes duplicate points before it triangulates, which would shift every index
-    /// behind the duplicate and quietly mislabel the rim. An outline visiting a point twice pinches
-    /// the area off there anyway.
+    /// behind the duplicate and quietly mislabel the rims. Rims visiting a point twice pinch the
+    /// area off there anyway.
     ///
     /// # Arguments
     ///
-    /// - `segments`: the number of outline points to aim for
+    /// - `segments`: the number of points to aim for on each rim
     ///
     /// # Returns
     ///
-    /// The outline points, all distinct.
+    /// The points of each rim, all distinct.
     ///
     /// # Errors
     ///
-    /// This function returns an error if the outline cannot be walked, or if it visits a point
-    /// twice.
-    fn distinct_outline(&self, segments: usize) -> OpmResult<Vec<Point2<Length>>> {
-        let outline = self.outline_points(segments)?;
-        let mut seen = HashSet::with_capacity(outline.len());
-        for point in &outline {
+    /// This function returns an error if a rim cannot be walked, or if a point is visited twice.
+    fn rims(&self, segments: usize) -> OpmResult<Vec<Vec<Point2<Length>>>> {
+        let rims = vec![self.outline_points(segments)?];
+        let mut seen = HashSet::new();
+        for point in rims.iter().flatten() {
             if !seen.insert((point.x.value.to_bits(), point.y.value.to_bits())) {
                 return Err(OpossumError::Other(
                     "the outline visits the same point twice and does not enclose an area".into(),
                 ));
             }
         }
-        Ok(outline)
+        Ok(rims)
     }
 }
 
@@ -359,9 +379,11 @@ mod test {
             let max_area = 3.0_f64.sqrt() / 4. * mean_spacing * mean_spacing;
             for triangle in mesh.triangles() {
                 let area = doubled_signed_area(&corners(&mesh, triangle)) / 2.;
-                let touches_rim = triangle
-                    .iter()
-                    .any(|index| (*index as usize) < mesh.rim_len());
+                let touches_rim = triangle.iter().any(|index| {
+                    mesh.rims()
+                        .iter()
+                        .any(|rim| rim.contains(&(*index as usize)))
+                });
                 let allowed = if touches_rim { 2. } else { 1. } * max_area;
                 assert!(
                     area <= allowed,
@@ -381,9 +403,9 @@ mod test {
         for (name, aperture) in apertures_that_bound_a_region()? {
             let outline = aperture.outline_points(SEGMENTS)?;
             let mesh = aperture.triangulate(SEGMENTS)?;
-            assert_eq!(mesh.rim_len(), outline.len());
+            assert_eq!(mesh.rims(), [0..outline.len()]);
             assert_eq!(
-                &mesh.points()[..mesh.rim_len()],
+                &mesh.points()[..outline.len()],
                 outline.as_slice(),
                 "the rim of the {name} does not follow its outline"
             );
