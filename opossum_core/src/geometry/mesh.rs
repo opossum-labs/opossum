@@ -62,6 +62,25 @@ impl SurfaceMesh {
     pub fn triangles(&self) -> &[[u32; 3]] {
         &self.triangles
     }
+    /// Express the mesh in another frame.
+    ///
+    /// # Arguments
+    ///
+    /// - `iso`: where the frame the mesh was built in sits within the frame to express it in
+    ///
+    /// # Returns
+    ///
+    /// The same mesh, its points and normals carried through `iso`.
+    #[must_use]
+    pub(crate) fn transformed(mut self, iso: &Isometry) -> Self {
+        for point in &mut self.points {
+            *point = iso.transform_point(point);
+        }
+        for normal in &mut self.normals {
+            *normal = iso.transform_vector_f64(normal);
+        }
+        self
+    }
     /// Turn the mesh around, so that it faces the other way.
     ///
     /// A body is bounded from below by one surface and from above by another, and what is outside

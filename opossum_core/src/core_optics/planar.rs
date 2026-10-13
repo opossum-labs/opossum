@@ -17,11 +17,8 @@ use crate::{
     apertures::{Aperture, ApertureType},
     core_optics::{Appearance, NodeAttrExt, OpticNode, OpticNodeExt, PortType, SurfaceFinish},
     error::{OpmResult, OpossumError},
-    geometry::{
-        SurfaceMesh,
-        body::{CLEAR_APERTURE, default_clear_aperture},
-    },
-    properties::Proptype,
+    geometry::{Rim, SurfaceMesh, body::default_clear_aperture},
+    types::validated_type_definitions::ValidatedCrossSection,
     utils::geom_transformation::Isometry,
 };
 
@@ -30,8 +27,8 @@ use crate::{
 /// Implementing this trait is what makes a node a surface node. Everything the drawing machinery
 /// needs is derived from what such a node already has — the single
 /// [`GeoSurface`](crate::geometry::geo_surface::GeoSurface) every one of its ports shares (see e.g.
-/// `ThinMirror::update_surfaces`) and its [`CLEAR_APERTURE`] property for that surface's transversal
-/// extent — so a node type declares the capability with an `impl Planar for ... {}` that answers
+/// `ThinMirror::update_surfaces`) and the [`Rim`] that surface ends at, its clear aperture placed
+/// in space — so a node type declares the capability with an `impl Planar for ... {}` that answers
 /// only [`Planar::surface_kind`], plus the [`OpticNode::as_surface`] override that makes it visible
 /// through a trait object.
 pub trait Planar: OpticNode {
@@ -81,8 +78,10 @@ pub trait Planar: OpticNode {
         }
     }
 
-    /// Mesh this node's one surface over its [`CLEAR_APERTURE`], or over the default clear aperture
-    /// if it is open.
+    /// Mesh this node's one surface within its [`Rim`], so that what is drawn is what light hits.
+    ///
+    /// An unbounded surface, one whose clear aperture is open, has no rim; it is meshed over the
+    /// default clear aperture, as a nominal size to draw it at.
     ///
     /// The counterpart of [`Volumetric::volume_body`](crate::core_optics::Volumetric::volume_body)
     /// for a node with one surface instead of two: everything needed is already on the node, so this
@@ -90,8 +89,8 @@ pub trait Planar: OpticNode {
     ///
     /// # Arguments
     ///
-    /// * `segments` - how finely the rim of the aperture is sampled; see e.g. `RIM_SEGMENTS` in the
-    ///   backend's scene export, which is what this exists for.
+    /// * `segments` - how finely the rim is sampled; see e.g. `RIM_SEGMENTS` in the backend's scene
+    ///   export, which is what this exists for.
     ///
     /// # Returns
     ///
@@ -100,9 +99,9 @@ pub trait Planar: OpticNode {
     /// # Errors
     ///
     /// This function returns an error if the node has no input port to read a surface from, if that
-    /// surface is not registered, if the node declares no [`CLEAR_APERTURE`], or if the surface
-    /// cannot be meshed over it (too few segments, or a surface that cannot reach as far out as the
-    /// aperture).
+    /// surface is not registered, or if the surface cannot be meshed within its rim (too few
+    /// segments, a rim without a closed edge such as a ring, or a surface that cannot reach as far
+    /// out as the rim).
     fn surface_mesh(&self, segments: usize) -> OpmResult<SurfaceMesh> {
         // Every `Planar` node registers its one surface under all of its ports alike (a mirror under
         // `input_1` and `output_1`, a beam splitter under all four) - see e.g.
@@ -125,24 +124,27 @@ pub trait Planar: OpticNode {
                 self.name()
             ))
         })?;
-        let Ok(Proptype::Aperture(clear_aperture)) = self.node_attr().get_property(CLEAR_APERTURE)
-        else {
-            return Err(OpossumError::Other(format!(
-                "node '{}' has no '{CLEAR_APERTURE}' property, so the extent of its surface is \
-                 unknown",
-                self.name()
-            )));
+        let rim = match surface.rim() {
+            Some(rim) => rim.clone(),
+            None => Rim::new(
+                ValidatedCrossSection::try_new(Aperture::new(
+                    default_clear_aperture(),
+                    ApertureType::Hole,
+                    None,
+                    None,
+                )?)?,
+                Isometry::identity(),
+            ),
         };
-        // An open clear aperture has no edge to mesh, so the surface is drawn at its nominal size.
-        let shape = if clear_aperture.is_none() {
-            default_clear_aperture()
-        } else {
-            clear_aperture.clone()
-        };
-        let aperture_mesh =
-            Aperture::new(shape, ApertureType::Hole, None, None)?.triangulate(segments)?;
-        let frame = self.effective_node_iso().unwrap_or_else(Isometry::identity);
-        surface.geo_surface().mesh_over(&aperture_mesh, &frame)
+        // The cross section lies across the rim's axis, which need not be the node's: the surface
+        // is meshed along that axis and the result is then stated in the node's frame.
+        let axis = rim.frame(&Isometry::identity());
+        let node_frame = self.effective_node_iso().unwrap_or_else(Isometry::identity);
+        let aperture_mesh = rim.cross_section().get().triangulate(segments)?;
+        Ok(surface
+            .geo_surface()
+            .mesh_over(&aperture_mesh, &node_frame.append(&axis))?
+            .transformed(&axis))
     }
 }
 
@@ -165,10 +167,16 @@ pub enum SurfaceKind {
 mod test {
     use super::*;
     use crate::{
+        apertures::{ApertureShape, CircleShape},
         core_optics::node_attr::NodePositioning,
-        nodes::{EnergyMeter, IdealFilter, ThinMirror},
-        utils::geom_transformation::Isometry,
+        degree,
+        geometry::body::CLEAR_APERTURE,
+        millimeter,
+        nodes::{EnergyMeter, IdealFilter, ParabolicMirror, ThinMirror},
+        utils::{LockExt, geom_transformation::Isometry},
     };
+    use approx::assert_abs_diff_eq;
+    use nalgebra::Point2;
 
     /// A node in its default state — a flat mirror over the default clear aperture — can be meshed
     /// at all, and the mesh actually covers ground rather than coming back empty.
@@ -211,6 +219,52 @@ mod test {
             far_away.points(),
             "the surface mesh must be independent of the node's placement"
         );
+        Ok(())
+    }
+
+    /// What is drawn is what is hit. The clear aperture of an off-axis parabola is measured along
+    /// the parent axis, not along the node's, so its mesh has to lie on the mirror all over and
+    /// reach exactly as far as its rim does.
+    #[test]
+    fn the_mesh_of_an_off_axis_parabola_fills_its_rim() -> OpmResult<()> {
+        let mut parabola =
+            ParabolicMirror::new_with_off_axis_x("oap", millimeter!(100.0), true, degree!(90.0))?;
+        parabola.set_property(
+            CLEAR_APERTURE,
+            ApertureShape::BinaryCircle(CircleShape::new(millimeter!(25.0))?).into(),
+        )?;
+        // At the origin the node's own frame, which the mesh is stated in, is the global one.
+        parabola.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        let mesh = parabola.surface_mesh(32)?;
+
+        let surface = parabola
+            .get_optic_surface("input_1")
+            .expect("a mirror has a surface at its input");
+        let rim_frame = surface
+            .rim()
+            .expect("a mirror is bounded")
+            .frame(&Isometry::identity());
+        let geo_surface = surface.geo_surface();
+        let geo_surface = geo_surface.0.lock_opm()?;
+        let mut reach = 0.0_f64;
+        for point in mesh.points() {
+            assert!(
+                geo_surface.is_on_vertex_sheet(point),
+                "{point:?} does not lie on the mirror"
+            );
+            let across = rim_frame.inverse_transform_point(point);
+            reach = reach.max(across.x.value.hypot(across.y.value));
+        }
+        assert_abs_diff_eq!(reach, millimeter!(25.0).value, epsilon = 1e-9);
+        // Each normal stands on the mirror where its point lies, whichever side it faces.
+        for (point, normal) in mesh.points().iter().zip(mesh.normals()) {
+            let on_surface = geo_surface.isometry().inverse_transform_point(point);
+            let surface_normal = geo_surface
+                .local_normal_at(&Point2::new(on_surface.x, on_surface.y))
+                .expect("the mirror reaches a point it was meshed at");
+            let surface_normal = geo_surface.isometry().transform_vector_f64(&surface_normal);
+            assert_abs_diff_eq!(normal.dot(&surface_normal).abs(), 1.0, epsilon = 1e-9);
+        }
         Ok(())
     }
 
