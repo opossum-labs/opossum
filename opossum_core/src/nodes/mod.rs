@@ -66,6 +66,7 @@ pub use spot_diagram::SpotDiagram;
 pub use thin_mirror::ThinMirror;
 pub use wavefront::WaveFront;
 pub use wavefront::wavefront_data::{WaveFrontData, WaveFrontMap};
+pub use wavefront::zernike::WavefrontDecomposition;
 pub use wedge::Wedge;
 
 use crate::{

@@ -15,7 +15,10 @@ use crate::{
     geometry::geo_surface::GeoSurfaceRef,
     light::{LightData, LightResult},
     millimeter,
-    nodes::{NodeRegistration, wavefront::zernike::ZernikeNoll},
+    nodes::{
+        NodeRegistration,
+        wavefront::zernike::{WavefrontDecomposition, ZernikeNoll},
+    },
     properties::{Properties, Proptype},
     reporting::node_report::{NodeReport, NodeReportResult},
     utils::geom_transformation::Isometry,
@@ -132,41 +135,19 @@ impl WaveFront {
         let basis = ZernikeNoll::new(order, norm_radius);
         match wf_error_map.decompose(&basis) {
             Ok(decomp) => {
-                const NOISE_THRESHOLD_LAMBDA: f64 = 1e-6;
-
-                let residual_rms = if decomp.residual_rms.abs() < NOISE_THRESHOLD_LAMBDA {
-                    0.0
-                } else {
-                    decomp.residual_rms
-                };
+                let wvl_nm = wf_error_map
+                    .wavelength()
+                    .get::<uom::si::length::nanometer>();
+                let decomp_prop = WavefrontDecomposition::new(decomp, wf_error_map.wavelength());
 
                 props.create(
-                    &format!("{} Residual RMS", decomp.basis_name),
-                    "Root-mean-square error of the remaining wavefront after basis subtraction",
-                    Proptype::WfLambda(residual_rms, wf_error_map.wavelength()),
+                    &format!(
+                        "{} Decomposition at {wvl_nm:.3} nm",
+                        decomp_prop.decomposition.basis_name
+                    ),
+                    "Wavefront decomposition into orthogonal polynomial basis modes",
+                    decomp_prop.into(),
                 )?;
-
-                for (key, val) in decomp.metadata {
-                    props.create(&key, "Polynomial expansion metadata", val.into())?;
-                }
-
-                for mode in decomp.modes {
-                    if mode.is_piston {
-                        continue;
-                    }
-
-                    let filtered_coeff = if mode.coefficient.abs() < NOISE_THRESHOLD_LAMBDA {
-                        0.0
-                    } else {
-                        mode.coefficient
-                    };
-
-                    props.create(
-                        &mode.label,
-                        "Polynomial expansion coefficient",
-                        Proptype::WfLambda(filtered_coeff, wf_error_map.wavelength()),
-                    )?;
-                }
             }
             Err(err) => {
                 props.create(
@@ -486,9 +467,10 @@ mod test {
 
         let props = node_report.properties();
         assert!(props.contains("Wavefront Map at 1053.000 nm"));
-        assert!(props.contains("Zernike Residual RMS"));
-        assert!(props.contains("Zernike Norm Radius"));
-        assert!(props.contains("Z4 (Defocus)"));
+        assert!(props.contains("Wavefront RMS"));
+        assert!(props.contains("Wavefront PtV"));
+        assert!(props.contains("Zernike Decomposition at 1053.000 nm"));
+        assert_eq!(props.nr_of_props(), 4);
         Ok(())
     }
 }

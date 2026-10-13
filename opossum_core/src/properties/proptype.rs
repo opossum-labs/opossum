@@ -17,7 +17,7 @@ use crate::{
     },
     material::Material,
     nodes::{
-        Metertype, SpectrometerType, SplittingConfigBuilder, WaveFrontMap,
+        Metertype, SpectrometerType, SplittingConfigBuilder, WaveFrontMap, WavefrontDecomposition,
         fluence_detector::{Fluence, fluence_data::FluenceData},
         ideal_filter::FilterTypeBuilder,
         ray_propagation_visualizer::RayPositionHistories,
@@ -47,6 +47,7 @@ use uuid::Uuid;
 static HTML_PROP_SIMPLE: &str = include_str!("../html/prop_simple.html");
 static HTML_PROP_IMAGE: &str = include_str!("../html/prop_image.html");
 static HTML_PROP_GROUP: &str = include_str!("../html/node_report.html");
+static HTML_PROP_DECOMPOSITION: &str = include_str!("../html/prop_decomposition.html");
 
 thread_local! {
     static THREAD_TEMPLATES: RefCell<TinyTemplate<'static>> = RefCell::new({
@@ -57,6 +58,8 @@ thread_local! {
             .expect("Failed to add image template (thread-local)");
         tt.add_template("group", HTML_PROP_GROUP)
             .expect("Failed to add group template (thread-local)");
+        tt.add_template("decomposition", HTML_PROP_DECOMPOSITION)
+            .expect("Failed to add decomposition template (thread-local)");
         tt
     });
 }
@@ -167,6 +170,8 @@ pub enum Proptype {
     FluenceEstimator(FluenceEstimator),
     /// This property stores the wavefront Information [`WaveFrontMap`]
     WaveFrontData(WaveFrontMap),
+    /// Polynomial wavefront basis decomposition
+    WavefrontDecomposition(WavefrontDecomposition),
     /// This property stores the ray position history of all [`Rays`](crate::light::Rays) during propagation through the optic scenery
     RayPositionHistory(RayPositionHistories),
     /// This property stores the ray position history of all [`Rays`](crate::light::Rays), separated by their bounce level,
@@ -245,6 +250,9 @@ impl Proptype {
                     let html_node_report = HtmlNodeReport::from_node_report(report, report_number);
                     template_engine.render("group", &html_node_report)
                 }
+                Self::WavefrontDecomposition(decomp) => {
+                    render_decomposition_html(decomp, &template_engine)
+                }
                 Self::Fluence(value) => template_engine.render(
                     "simple",
                     &format!(
@@ -295,7 +303,6 @@ impl Proptype {
             _ => None,
         }
     }
-
     /// Sets the scalar value directly if this variant represents a numeric scalar.
     /// Dimensional quantities are updated in their fundamental SI base unit.
     ///
@@ -337,6 +344,65 @@ impl Proptype {
             )),
         }
     }
+}
+/// Helper function to build the template context and render the decomposition table to HTML.
+fn render_decomposition_html(
+    decomp_data: &WavefrontDecomposition,
+    template_engine: &TinyTemplate<'_>,
+) -> Result<String, tinytemplate::error::Error> {
+    const NOISE_THRESHOLD_LAMBDA: f64 = 1e-6;
+    let wvl = decomp_data.wavelength;
+
+    let residual_rms_val = if decomp_data.decomposition.residual_rms.abs() < NOISE_THRESHOLD_LAMBDA
+    {
+        0.0
+    } else {
+        decomp_data.decomposition.residual_rms
+    };
+
+    let mut modes = Vec::new();
+    for mode in &decomp_data.decomposition.modes {
+        // Skip global phase shift (piston)
+        if mode.is_piston {
+            continue;
+        }
+
+        // Cut off sub-micro-lambda numerical noise
+        let coeff = if mode.coefficient.abs() < NOISE_THRESHOLD_LAMBDA {
+            0.0
+        } else {
+            mode.coefficient
+        };
+
+        let coeff_lambda_str = format!("{}λ", format_value_with_prefix(coeff));
+        let physical_val = coeff * wvl.value; // Value in fundamental base unit (meter)
+        let coeff_phys_str = format_quantity(meter, Length::new::<meter>(physical_val));
+
+        modes.push(HtmlDecompMode {
+            label: mode.label.clone(),
+            coeff_lambda: coeff_lambda_str,
+            coeff_physical: coeff_phys_str,
+        });
+    }
+
+    let metadata = decomp_data
+        .decomposition
+        .metadata
+        .iter()
+        .map(|(k, v)| HtmlDecompMeta {
+            key: k.clone(),
+            val: v.clone(),
+        })
+        .collect();
+
+    let ctx = HtmlDecompContext {
+        basis_name: decomp_data.decomposition.basis_name.clone(),
+        residual_rms: format!("{}λ", format_value_with_prefix(residual_rms_val)),
+        metadata,
+        modes,
+    };
+
+    template_engine.render("decomposition", &ctx)
 }
 impl From<bool> for Proptype {
     fn from(value: bool) -> Self {
@@ -443,6 +509,32 @@ impl From<Material> for Proptype {
     fn from(value: Material) -> Self {
         Self::Material(AssetRef::Inline(value))
     }
+}
+
+impl From<WavefrontDecomposition> for Proptype {
+    fn from(value: WavefrontDecomposition) -> Self {
+        Self::WavefrontDecomposition(value)
+    }
+}
+#[derive(Serialize)]
+struct HtmlDecompMeta {
+    key: String,
+    val: String,
+}
+
+#[derive(Serialize)]
+struct HtmlDecompMode {
+    label: String,
+    coeff_lambda: String,
+    coeff_physical: String,
+}
+
+#[derive(Serialize)]
+struct HtmlDecompContext {
+    basis_name: String,
+    residual_rms: String,
+    metadata: Vec<HtmlDecompMeta>,
+    modes: Vec<HtmlDecompMode>,
 }
 /// Generate a string suffix for an ordinal number
 #[must_use]

@@ -60,7 +60,25 @@ pub struct DecompositionResult {
     /// Basis-specific metadata (e.g. normalization radius).
     pub metadata: Vec<(String, String)>,
 }
+/// Bundled decomposition result including the reference wavelength.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct WavefrontDecomposition {
+    /// Generic basis decomposition outcome.
+    pub decomposition: DecompositionResult,
+    /// Reference wavelength of the decomposed wavefront map.
+    pub wavelength: Length,
+}
 
+impl WavefrontDecomposition {
+    /// Creates a new [`WavefrontDecomposition`].
+    #[must_use]
+    pub const fn new(decomposition: DecompositionResult, wavelength: Length) -> Self {
+        Self {
+            decomposition,
+            wavelength,
+        }
+    }
+}
 /// A single mode with Noll index `j`, radial order `n`, azimuthal frequency `m`, and absolute order `m_abs`.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ZernikeMode {
