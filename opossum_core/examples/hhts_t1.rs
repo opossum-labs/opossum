@@ -1,3 +1,4 @@
+use opossum_core::apertures::CircleShape;
 use opossum_core::coatings::CoatingConstantR;
 use opossum_core::core_optics::OpticNodeExt;
 use opossum_core::{J_per_cm2, percent, prelude::*};
@@ -37,62 +38,66 @@ fn main() -> OpmResult<()> {
     )?;
     // coatings
     let ar_coating = &CoatingConstantR::new(percent!(1.0))?.into();
-    // apertures
-    let a_2inch = Aperture::new_circle(millimeter!(25.4), ApertureType::Hole, None)?;
+    // the clear aperture of a 2-inch lens
+    let a_2inch: ApertureShape = CircleShape::new(millimeter!(25.4))?.into();
+    // the front lenses take the full beam of 100 mm radius and are 250 mm in diameter
+    let front_lens: ApertureShape = CircleShape::new(millimeter!(125.0))?.into();
 
     let mut scenery = NodeGroup::new("HHT Sensor Telescope T1");
     let src = scenery.add_node(SourcePort::new("Collimated Source"))?;
 
-    let t1_l1a = scenery.add_node(Lens::new(
+    let t1_l1a = scenery.add_node(Lens::new_with_clear_aperture(
         "T1 L1a",
         millimeter!(518.34008),
         millimeter!(-847.40402),
         millimeter!(30.0),
         &refr_index_hk9l,
+        front_lens.clone(),
     )?)?;
-    let t1_l1b = scenery.add_node(Lens::new(
+    let t1_l1b = scenery.add_node(Lens::new_with_clear_aperture(
         "T1 L1b",
         millimeter!(-788.45031),
         millimeter!(-2551.88619),
         millimeter!(21.66602),
         &refr_index_hzf52,
+        front_lens,
     )?)?;
-    let mut node = Lens::new(
+    let mut node = Lens::new_with_clear_aperture(
         "T1 L2a",
         millimeter!(-88.51496),
         millimeter!(f64::INFINITY),
         millimeter!(5.77736),
         &refr_index_hzf52,
+        a_2inch.clone(),
     )?;
     node.set_coating(&PortType::Input, "input_1", ar_coating)?;
     node.set_lidt(&PortType::Input, "input_1", J_per_cm2!(0.1))?;
     node.set_lidt(&PortType::Output, "output_1", J_per_cm2!(0.1))?;
-    node.set_aperture(&PortType::Input, "input_1", &a_2inch)?;
     let t1_l2a = scenery.add_node(node)?;
 
-    let mut node = Lens::new(
+    let mut node = Lens::new_with_clear_aperture(
         "T1 L2b",
         millimeter!(76.76954),
         millimeter!(-118.59590),
         millimeter!(14.0),
         &refr_index_hzf52,
+        a_2inch.clone(),
     )?;
     node.set_coating(&PortType::Input, "input_1", ar_coating)?;
     node.set_lidt(&PortType::Input, "input_1", J_per_cm2!(0.1))?;
     node.set_lidt(&PortType::Output, "output_1", J_per_cm2!(0.1))?;
-    node.set_aperture(&PortType::Input, "input_1", &a_2inch)?;
     let t1_l2b = scenery.add_node(node)?;
-    let mut node = Lens::new(
+    let mut node = Lens::new_with_clear_aperture(
         "T1 L2c",
         millimeter!(-63.45837),
         millimeter!(66.33014),
         millimeter!(7.68327),
         &refr_index_hzf2,
+        a_2inch,
     )?;
     node.set_coating(&PortType::Input, "input_1", ar_coating)?;
     node.set_lidt(&PortType::Input, "input_1", J_per_cm2!(0.1))?;
     node.set_lidt(&PortType::Output, "output_1", J_per_cm2!(0.1))?;
-    node.set_aperture(&PortType::Input, "input_1", &a_2inch)?;
     let t1_l2c = scenery.add_node(node)?;
 
     scenery.connect_nodes(src, "output_1", t1_l1a, "input_1", millimeter!(100.0))?;

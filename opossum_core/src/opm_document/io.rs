@@ -1,13 +1,12 @@
 //! Serialization, deserialization, and export capabilities for [`OpmDocument`].
 
-use super::OpmDocument;
+use super::{OpmDocument, migration};
 use crate::{
     core_optics::OpticNode,
     error::{OpmResult, OpossumError},
     properties::{Proptype, proptype::AssetRef},
     utils::file_utils::{create_f_path, create_file_instance},
 };
-use log::warn;
 use ron::{extensions::Extensions, ser::PrettyConfig};
 use std::{
     fs::{self, File},
@@ -104,21 +103,7 @@ impl OpmDocument {
     ///
     /// Returns an error if the RON deserialization or graph hook resolution fails.
     pub fn from_string(file_string: &str) -> OpmResult<Self> {
-        let mut document: Self = ron::from_str(file_string)
-            .map_err(|e| OpossumError::OpmDocument(format!("parsing of model failed: {e}")))?;
-
-        if document.opm_file_version != env!("OPM_FILE_VERSION") {
-            warn!("OPM file version does not match the used OPOSSUM version.");
-            warn!(
-                "read version '{}' <-> program file version '{}'",
-                document.opm_file_version,
-                env!("OPM_FILE_VERSION")
-            );
-            warn!(
-                "This file might have been written by an older or newer version of OPOSSUM. The model import might not be correct."
-            );
-        }
-
+        let mut document = migration::read(file_string)?;
         document.scenery.after_deserialization_hook()?;
         // Resolve cross-group node references across the entire graph
         document.scenery.graph_mut().resolve_all_references()?;
@@ -670,9 +655,10 @@ mod tests {
 
     #[test]
     fn test_corrupt_node_property_falls_back_to_default_and_warns() -> OpmResult<()> {
+        // A file of the current version, so that no upgrade adds warnings of its own.
         let ron_data = r#"#![enable(unwrap_variant_newtypes)]
 (
-    opm_file_version: "0",
+    opm_file_version: "1",
     scenery: {
         "node_type": "group",
         "name": "test",

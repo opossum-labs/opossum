@@ -1,5 +1,10 @@
-use opossum_core::prelude::*;
-use opossum_core::refractive_index::RefractiveIndexType;
+use opossum_core::{
+    apertures::{CircleShape, RectangleShape},
+    core_optics::NodeAttrExt,
+    geometry::body::CLEAR_APERTURE,
+    prelude::*,
+    refractive_index::RefractiveIndexType,
+};
 use uom::si::f64::Length;
 
 pub fn folded_martinez_longer_f(
@@ -12,21 +17,32 @@ pub fn folded_martinez_longer_f(
     //////////////////////////////////////////
     let mut cb = NodeGroup::new("Martinez stretcher");
 
-    let i_g1 = cb.add_node(
-        ReflectiveGrating::new("grating 1", num_per_mm!(1740.), -1)?
-            .with_rot_from_littrow(alignment_wvl, degree!(-4.))?,
+    // The grating takes the dispersed beam on its return passes, up to 50 mm off its center.
+    let mut grating = ReflectiveGrating::new("grating 1", num_per_mm!(1740.), -1)?
+        .with_rot_from_littrow(alignment_wvl, degree!(-4.))?;
+    grating.set_property(
+        CLEAR_APERTURE,
+        ApertureShape::from(RectangleShape::new(millimeter!(140.0), millimeter!(60.0))?).into(),
     )?;
-    // focal length = 996.7 mm (Thorlabs LA1779-B)
-    let lens1 = cb.add_node(Lens::new(
+    let i_g1 = cb.add_node(grating)?;
+    // focal length = 996.7 mm (Thorlabs LA1779-B). The dispersed beam passes the lens up to 150 mm
+    // off its center: 12 inches, only 0.7 mm thick at its edge.
+    let lens1 = cb.add_node(Lens::new_with_clear_aperture(
         "Lens 1",
         millimeter!(1250.),
         millimeter!(f64::INFINITY),
         millimeter!(10.),
         refr_index.into(),
+        CircleShape::new(millimeter!(152.4))?.into(),
     )?)?;
 
-    let mir_1 = cb
-        .add_node(ThinMirror::new("mirr").align_like_node_at_distance(lens1, telescope_distance))?;
+    // The spectrum spreads up to 140 mm across the mirror in the focal plane: 300 mm in diameter.
+    let mut mirror = ThinMirror::new("mirr").align_like_node_at_distance(lens1, telescope_distance);
+    mirror.set_property(
+        CLEAR_APERTURE,
+        ApertureShape::from(CircleShape::new(millimeter!(150.0))?).into(),
+    )?;
+    let mir_1 = cb.add_node(mirror)?;
     let mir_1_ref = cb.add_node(NodeReference::from_node(&cb.node(mir_1)?)?)?;
     let mut lens_1_ref1 = NodeReference::from_node(&cb.node(lens1)?)?;
     lens_1_ref1.set_inverted(true)?;
@@ -38,7 +54,13 @@ pub fn folded_martinez_longer_f(
     let g1ref1 = cb.add_node(NodeReference::from_node(&cb.node(i_g1)?)?)?;
     let g1ref2 = cb.add_node(NodeReference::from_node(&cb.node(i_g1)?)?)?;
     let g1ref3 = cb.add_node(NodeReference::from_node(&cb.node(i_g1)?)?)?;
-    let retro_mir1 = cb.add_node(ThinMirror::new("retro_mir1"))?;
+    // The spatially chirped beam is up to 16 mm off the center of the retro mirror: 2 inches.
+    let mut retro_mirror = ThinMirror::new("retro_mir1");
+    retro_mirror.set_property(
+        CLEAR_APERTURE,
+        ApertureShape::from(CircleShape::new(millimeter!(25.4))?).into(),
+    )?;
+    let retro_mir1 = cb.add_node(retro_mirror)?;
     //first grating pass up to 0° mirror
     cb.connect_nodes(
         i_g1,

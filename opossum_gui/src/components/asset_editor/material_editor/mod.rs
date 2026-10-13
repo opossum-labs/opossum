@@ -1,5 +1,10 @@
+pub mod mechanical_properties_editor;
 pub mod optical_properties_editor;
+pub mod thermal_properties_editor;
 
+use super::asset_header_editor::{
+    AssetHeaderChangeAction, AssetHeaderChangeEvent, AssetHeaderEditor,
+};
 use crate::components::primitives::{
     alert_dialog::{
         AlertDialog, AlertDialogAction, AlertDialogActions, AlertDialogCancel,
@@ -8,81 +13,100 @@ use crate::components::primitives::{
     scroll_area::ScrollArea,
 };
 use dioxus::prelude::*;
-use opossum_core::material::Material;
-
-use super::asset_header_editor::{
-    AssetHeaderChangeAction, AssetHeaderChangeEvent, AssetHeaderEditor,
+use mechanical_properties_editor::{
+    MechanicalPropertiesChangeAction, MechanicalPropertiesChangeEvent, MechanicalPropertiesEditor,
 };
+use opossum_core::material::Material;
 use optical_properties_editor::{
     OpticalPropertiesChangeAction, OpticalPropertiesChangeEvent, OpticalPropertiesEditor,
+};
+use thermal_properties_editor::{
+    ThermalPropertiesChangeAction, ThermalPropertiesChangeEvent, ThermalPropertiesEditor,
 };
 
 /// Actions representing modifications to a Material.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MaterialChangeAction {
-    /// Modifications inside the `AssetHeader` (Name, Manufacturer, Description).
     Header(AssetHeaderChangeAction),
-    /// Modifications inside the `OpticalProperties` (Dispersion model, Absorption).
     Optical(OpticalPropertiesChangeAction),
-    /// Explicitly sets the version number (0 = draft for next auto-version, >0 = target specific version).
+    Thermal(ThermalPropertiesChangeAction),
+    Mechanical(MechanicalPropertiesChangeAction),
     SetVersion(u32),
 }
 
 impl MaterialChangeAction {
     /// Applies the change action directly to the given `Material`
-    /// by delegating to the specific sub-actions.
     pub fn apply(self, material: &mut opossum_core::material::Material) {
         match self {
             Self::Header(header_action) => header_action.apply(&mut material.header),
             Self::Optical(optical_action) => optical_action.apply(&mut material.optical),
+            Self::Thermal(thermal_action) => thermal_action.apply(&mut material.thermal),
+            Self::Mechanical(mech_action) => mech_action.apply(&mut material.mechanical),
             Self::SetVersion(version) => material.header.version = version,
         }
     }
 }
 
-/// Event emitted when any property of the material is modified.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MaterialChangeEvent {
-    /// The specific modification action.
     pub action: MaterialChangeAction,
 }
 
-/// The main editor component for optical materials.
+/// Helper component to handle `Option<f64>` inputs. Translates empty strings to `None`.
+#[component]
+pub fn OptionalPropertyInput(
+    id: String,
+    label: String,
+    value: Option<f64>,
+    on_change: EventHandler<Option<f64>>,
+    #[props(default = false)] readonly: bool,
+) -> Element {
+    // Show empty string if the property is None
+    let val_str = value.map(|v| v.to_string()).unwrap_or_default();
+
+    let on_save = move |s: String| {
+        let trimmed = s.trim();
+        if trimmed.is_empty() {
+            on_change.call(None);
+        } else if let Ok(parsed) = trimmed.parse::<f64>() {
+            on_change.call(Some(parsed));
+        }
+        // Invalid input is gracefully ignored (reverts to previous valid value on next render)
+    };
+
+    rsx! {
+        crate::components::node_editor::inputs::input_components::FlushableTextInput {
+            id,
+            label,
+            value: val_str,
+            on_save,
+            readonly,
+            container_class: "form-floating border-start".to_string(),
+            input_class: "form-control bg-dark text-light form-control-sm noselect".to_string(),
+            label_class: "form-label text-secondary".to_string(),
+            r#type: "number",
+            step: "any",
+        }
+    }
+}
+
 #[component]
 pub fn MaterialEditor(
-    /// Controls if the main modal dialog should be displayed.
     open: Signal<bool>,
-    /// Read-only signal containing the complete material data.
     material: ReadSignal<Material>,
-
-    /// Event handler triggered when properties inside the material change.
     on_change: EventHandler<MaterialChangeEvent>,
-
-    /// Optional event handler triggered when the user saves/publishes the asset.
-    #[props(default)]
-    on_save: Option<EventHandler<()>>,
-
-    /// Custom label for the primary action button (e.g. "Save Changes" for `AdHoc` editing).
-    /// If None, defaults to "Publish New Version" (for drafts) or "Overwrite Version vX".
-    #[props(default)]
-    save_label: Option<String>,
-
-    /// Base ID used for HTML element IDs to avoid DOM collisions.
-    #[props(default = "materialEditor".to_string())]
-    base_id: String,
-
-    /// If true, disables all input fields and actions.
-    #[props(default = false)]
-    readonly: bool,
+    #[props(default)] on_save: Option<EventHandler<()>>,
+    #[props(default)] save_label: Option<String>,
+    #[props(default = "materialEditor".to_string())] base_id: String,
+    #[props(default = false)] readonly: bool,
 ) -> Element {
     debug!("🔄 Render: MaterialEditor");
-
-    // Local state to control the overwrite confirmation dialog
     let mut show_overwrite_warning = use_signal(|| false);
 
-    // Derive memoized read-signals for child components to optimize re-rendering
     let header_memo = use_memo(move || material.read().header.clone());
     let optical_memo = use_memo(move || material.read().optical.clone());
+    let thermal_memo = use_memo(move || material.read().thermal.clone());
+    let mechanical_memo = use_memo(move || material.read().mechanical.clone());
 
     let current_version = material.read().version();
     let is_draft = current_version == 0;
@@ -92,29 +116,34 @@ pub fn MaterialEditor(
             action: MaterialChangeAction::Header(event.action),
         });
     });
-
     let handle_optical_change = use_callback(move |event: OpticalPropertiesChangeEvent| {
         on_change.call(MaterialChangeEvent {
             action: MaterialChangeAction::Optical(event.action),
         });
     });
+    let handle_thermal_change = use_callback(move |event: ThermalPropertiesChangeEvent| {
+        on_change.call(MaterialChangeEvent {
+            action: MaterialChangeAction::Thermal(event.action),
+        });
+    });
+    let handle_mechanical_change = use_callback(move |event: MechanicalPropertiesChangeEvent| {
+        on_change.call(MaterialChangeEvent {
+            action: MaterialChangeAction::Mechanical(event.action),
+        });
+    });
 
-    // Handler that checks whether a direct save or a confirmation warning is required
     let save_label_for_click = save_label.clone();
     let handle_save_click = use_callback(move |_| {
         if let Some(save_handler) = on_save {
-            // Direct save if it is a draft or if a custom save label is used (e.g. local AdHoc save)
             if is_draft || save_label_for_click.is_some() {
                 save_handler.call(());
             } else {
-                // Existing catalog version: Require explicit user confirmation before overwriting on disk
                 show_overwrite_warning.set(true);
             }
         }
     });
 
     rsx! {
-        // 1. Main Material Editor Dialog
         AlertDialog {
             open: open(),
             on_open_change: move |v| open.set(v),
@@ -122,8 +151,6 @@ pub fn MaterialEditor(
             AlertDialogTitle { "Material Editor" }
             AlertDialogDescription {
                 div { class: "material-editor-container", id: "{base_id}",
-
-                    // Clean Header Bar: Displays asset title and status badge
                     div { class: "d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom",
                         h4 { class: "mb-0",
                             "{material.read().name()}"
@@ -141,8 +168,6 @@ pub fn MaterialEditor(
                         }
                     }
                 }
-
-                // Main Scroll Area for Material Attributes
                 ScrollArea { height: "45em",
                     AssetHeaderEditor {
                         header: header_memo,
@@ -155,8 +180,19 @@ pub fn MaterialEditor(
                         readonly,
                         on_change: handle_optical_change,
                     }
+                    ThermalPropertiesEditor {
+                        thermal: thermal_memo,
+                        base_id: format!("{}_thermal", base_id),
+                        readonly,
+                        on_change: handle_thermal_change,
+                    }
+                    MechanicalPropertiesEditor {
+                        mechanical: mechanical_memo,
+                        base_id: format!("{}_mechanical", base_id),
+                        readonly,
+                        on_change: handle_mechanical_change,
+                    }
 
-                    // Advanced / Dangerous Options: Positioned at the very bottom
                     details { class: "mt-4 p-3 border rounded bg-light",
                         summary {
                             class: "fw-bold text-secondary text-uppercase small",
@@ -165,7 +201,7 @@ pub fn MaterialEditor(
                         }
                         div { class: "mt-3",
                             div { class: "alert alert-warning py-2 px-3 small mb-2",
-                                "Warning: Manually altering the version number bypasses the append-only database rule. Overwriting existing versions may cause merge conflicts when synchronizing with remote repositories."
+                                "Warning: Manually altering the version number bypasses the append-only database rule."
                             }
                             div { class: "d-flex align-items-center gap-2",
                                 label {
@@ -182,7 +218,6 @@ pub fn MaterialEditor(
                                     step: "1",
                                     disabled: readonly,
                                     value: "{current_version}",
-                                    // Prevent typing of negative signs, decimal points, and scientific notation
                                     onkeydown: move |evt| {
                                         if let Key::Character(ref c) = evt.key()
                                             && ["-", "+", ".", ",", "e", "E"].contains(&c.as_str())
@@ -193,7 +228,6 @@ pub fn MaterialEditor(
                                     oninput: move |evt| {
                                         let raw_val = evt.value();
                                         if raw_val.is_empty() {
-                                            // Optional fallback: Reset to 0 (draft) if field is cleared
                                             on_change
                                                 .call(MaterialChangeEvent {
                                                     action: MaterialChangeAction::SetVersion(0),
@@ -218,11 +252,8 @@ pub fn MaterialEditor(
                     }
                 }
             }
-
-            // Primary Action Footer
             AlertDialogActions {
                 AlertDialogCancel { "Cancel" }
-
                 if on_save.is_some() && !readonly {
                     AlertDialogAction { on_click: handle_save_click,
                         if let Some(custom_label) = save_label.as_deref() {
@@ -236,8 +267,6 @@ pub fn MaterialEditor(
                 }
             }
         }
-
-        // 2. Overwrite Confirmation Warning Dialog
         AlertDialog {
             open: show_overwrite_warning(),
             on_open_change: move |v| show_overwrite_warning.set(v),

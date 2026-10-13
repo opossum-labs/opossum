@@ -1,11 +1,14 @@
 use nalgebra::Point2;
 use num_traits::Zero;
 use opossum_core::{
+    apertures::CircleShape,
+    core_optics::NodeAttrExt,
     distributions::energy::{EnergyDistType, UniformDist},
     distributions::position::{
         FibonacciRectangle, Grid, HexagonalTiling, Hexapolar, PosDistType, Random, SobolDist,
     },
     distributions::spectral::{LaserLines, SpecDistType},
+    geometry::body::CLEAR_APERTURE,
     light::lightdata::ray_data_builder::RayDataBuilder,
     prelude::*,
 };
@@ -24,11 +27,21 @@ fn main() -> OpmResult<()> {
     let src_sobol = scenery.add_node(SourcePort::new("sobol"))?;
     let src_random = scenery.add_node(SourcePort::new("random"))?;
 
-    let i_bs = scenery.add_node(BeamSplitter::default())?;
-    let i_bs2 = scenery.add_node(BeamSplitter::default())?;
-    let i_bs3 = scenery.add_node(BeamSplitter::default())?;
-    let i_bs4 = scenery.add_node(BeamSplitter::default())?;
-    let i_bs5 = scenery.add_node(BeamSplitter::default())?;
+    // The beam splitters meet the sources up to 35 mm off their centers: they are 3 inches in
+    // diameter.
+    let beam_splitter = || -> OpmResult<BeamSplitter> {
+        let mut node = BeamSplitter::default();
+        node.set_property(
+            CLEAR_APERTURE,
+            ApertureShape::from(CircleShape::new(millimeter!(38.1))?).into(),
+        )?;
+        Ok(node)
+    };
+    let i_bs = scenery.add_node(beam_splitter()?)?;
+    let i_bs2 = scenery.add_node(beam_splitter()?)?;
+    let i_bs3 = scenery.add_node(beam_splitter()?)?;
+    let i_bs4 = scenery.add_node(beam_splitter()?)?;
+    let i_bs5 = scenery.add_node(beam_splitter()?)?;
 
     let i_sd = scenery.add_node(SpotDiagram::default())?;
 

@@ -1,8 +1,10 @@
 use nalgebra::Point2;
 use num_traits::Zero;
 use opossum_core::{
-    core_optics::OpticNodeExt,
+    apertures::CircleShape,
+    core_optics::NodeAttrExt,
     distributions::{energy::UniformDist, position::Grid, spectral::LaserLines},
+    geometry::body::CLEAR_APERTURE,
     nodes::SourcePort,
     prelude::*,
 };
@@ -13,8 +15,10 @@ fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
     let i_src = scenery.add_node(SourcePort::default())?;
     let mut lens1 = ParaxialSurface::new("100 mm lens", millimeter!(100.0))?;
-    let aperture = Aperture::new_circle(millimeter!(25.), ApertureType::Hole, None)?;
-    lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
+    lens1.set_property(
+        CLEAR_APERTURE,
+        ApertureShape::from(CircleShape::new(millimeter!(25.))?).into(),
+    )?;
     let i_pl1 = scenery.add_node(lens1)?;
     let i_pl2 = scenery.add_node(ParaxialSurface::new("50 mm lens", millimeter!(50.0))?)?;
     let i_sd3 = scenery.add_node(RayPropagationVisualizer::new("after telecope", None)?)?;

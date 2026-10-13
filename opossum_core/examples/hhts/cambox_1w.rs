@@ -1,16 +1,11 @@
 use opossum_core::{
-    core_optics::{NodeAttrExt, OpticNodeExt},
-    prelude::*,
+    apertures::RectangleShape, core_optics::NodeAttrExt, geometry::body::CLEAR_APERTURE, prelude::*,
 };
 
 pub fn cambox_1w() -> OpmResult<NodeGroup> {
-    let cam_aperture = Aperture::new_rectangle(
-        millimeter!(11.33),
-        millimeter!(7.13),
-        ApertureType::Hole,
-        None,
-        None,
-    )?;
+    // The camera chip: the cameras and fluence detectors record only the light falling on it.
+    let cam_chip: ApertureShape =
+        RectangleShape::new(millimeter!(11.33), millimeter!(7.13))?.into();
 
     let mut cb = NodeGroup::new("CamBox 1w");
 
@@ -29,11 +24,11 @@ pub fn cambox_1w() -> OpmResult<NodeGroup> {
     )?)?;
     let ff_lens = cb.add_node(ParaxialSurface::new("FF lens", millimeter!(100.0))?)?;
     let mut node = SpotDiagram::new("FF cam")?;
-    node.set_aperture(&PortType::Input, "input_1", &cam_aperture)?;
+    node.set_property(CLEAR_APERTURE, cam_chip.clone().into())?;
     let ff_cam = cb.add_node(node)?;
 
     let mut ff_fluence = FluenceDetector::new("FF fluence");
-    ff_fluence.set_aperture(&PortType::Input, "input_1", &cam_aperture)?;
+    ff_fluence.set_property(CLEAR_APERTURE, cam_chip.clone().into())?;
     let ff_fluence_cam = cb.add_node(ff_fluence)?;
 
     cb.connect_nodes(
@@ -67,12 +62,12 @@ pub fn cambox_1w() -> OpmResult<NodeGroup> {
         &SplittingConfigBuilder::FixedRatio(0.5),
     )?)?;
     let mut node = SpotDiagram::new("NF cam")?;
-    node.set_aperture(&PortType::Input, "input_1", &cam_aperture)?;
+    node.set_property(CLEAR_APERTURE, cam_chip.clone().into())?;
     node.set_property("plot aperture", true.into())?;
     let nf_cam = cb.add_node(node)?;
 
     let mut nf_fluence = FluenceDetector::new("NF fluence");
-    nf_fluence.set_aperture(&PortType::Input, "input_1", &cam_aperture)?;
+    nf_fluence.set_property(CLEAR_APERTURE, cam_chip.into())?;
     let nf_fluence_cam = cb.add_node(nf_fluence)?;
 
     cb.connect_nodes(

@@ -9,11 +9,13 @@
 mod analysis;
 mod analyzer_info;
 mod io;
+mod migration;
 
 #[cfg(test)]
 mod tests;
 
 pub use analyzer_info::AnalyzerInfo;
+pub(crate) use migration::upgrade_node;
 
 use crate::{
     analyzers::AnalyzerType,

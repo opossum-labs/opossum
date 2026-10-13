@@ -853,24 +853,29 @@ mod test {
     };
     use uuid::Uuid;
 
-    /// A model holding one of everything: three components that enclose a volume, one that is a
-    /// single surface (a detector), a source port that is neither, and a reference, which is the
-    /// same lens passed through a second time rather than another component.
+    /// A model holding one of everything: three components that enclose a volume, two that are a
+    /// single surface (a mirror and a detector), a source port that is neither, and a reference,
+    /// which is the same lens passed through a second time rather than another component. The
+    /// mirror folds the beam back, so that the light can take that second pass at all.
     fn a_bit_of_everything() -> OpmResult<OpmDocument> {
         let mut scenery = NodeGroup::default();
         let source = scenery.add_node(SourcePort::default())?;
-        let lens = scenery.add_node(Lens::default())?;
         let wedge = scenery.add_node(Wedge::default())?;
         let cylinder = scenery.add_node(CylindricLens::default())?;
-        let lens_again =
-            scenery.add_node(NodeReference::from_node(&scenery.node_recursive(lens)?.0)?)?;
+        let lens = scenery.add_node(Lens::default())?;
+        let mirror = scenery.add_node(ThinMirror::default())?;
+        let mut lens_again = NodeReference::from_node(&scenery.node_recursive(lens)?.0)?;
+        lens_again.set_inverted(true)?;
+        let lens_again = scenery.add_node(lens_again)?;
         let detector = scenery.add_node(EnergyMeter::default())?;
         let hop = millimeter!(50.0);
-        scenery.connect_nodes(source, "output_1", lens, "input_1", hop)?;
-        scenery.connect_nodes(lens, "output_1", wedge, "input_1", hop)?;
+        scenery.connect_nodes(source, "output_1", wedge, "input_1", hop)?;
         scenery.connect_nodes(wedge, "output_1", cylinder, "input_1", hop)?;
-        scenery.connect_nodes(cylinder, "output_1", lens_again, "input_1", hop)?;
-        scenery.connect_nodes(lens_again, "output_1", detector, "input_1", hop)?;
+        scenery.connect_nodes(cylinder, "output_1", lens, "input_1", hop)?;
+        scenery.connect_nodes(lens, "output_1", mirror, "input_1", hop)?;
+        // Passed backwards, the lens is entered through what is its output port.
+        scenery.connect_nodes(mirror, "output_1", lens_again, "output_1", hop)?;
+        scenery.connect_nodes(lens_again, "input_1", detector, "input_1", hop)?;
 
         let mut document = OpmDocument::new(scenery);
         let mut config = RayTraceConfig::default();
@@ -919,8 +924,9 @@ mod test {
         let document = a_bit_of_everything()?;
         let scene = exported(&document)?;
         let drawn = drawn_components(&scene);
-        // The lens, the wedge and the cylindric lens enclose a volume; the detector is one surface.
-        assert_eq!(drawn.len(), 4);
+        // The lens, the wedge and the cylindric lens enclose a volume; the mirror and the detector
+        // are one surface each.
+        assert_eq!(drawn.len(), 5);
         // Every one of them names the component it stands for, so a viewer can point back at it.
         for component in drawn {
             let uid = component["extras"]["uid"]

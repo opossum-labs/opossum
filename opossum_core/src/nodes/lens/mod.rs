@@ -6,13 +6,15 @@ use crate::{
     apertures::ApertureShape,
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, Volumetric},
     error::{OpmResult, OpossumError},
-    geometry::Geometry,
+    geometry::{
+        Geometry,
+        body::{CLEAR_APERTURE, default_clear_aperture},
+    },
     material::{MATERIAL, Material},
     millimeter,
     nodes::{NodeRegistration, create_volume_properties},
     properties::{Proptype, validator::Validator},
     refractive_index::RefrIndexConst,
-    types::validated_type_definitions::ValidatedCrossSection,
 };
 use log::warn;
 use opm_macros_lib::OpmNode;
@@ -114,7 +116,9 @@ impl Lens {
     ///
     /// # Errors
     ///
-    /// This function returns an error if the given parameters are not correct.
+    /// This function returns an error if the given parameters are not correct, including a
+    /// curvature too tight to reach the default clear aperture of 12.5 mm (see
+    /// [`Lens::new_with_clear_aperture`]).
     pub fn new(
         name: &str,
         front_curvature: Length,
@@ -122,8 +126,46 @@ impl Lens {
         center_thickness: Length,
         material: impl Into<Material>,
     ) -> OpmResult<Self> {
+        Self::new_with_clear_aperture(
+            name,
+            front_curvature,
+            rear_curvature,
+            center_thickness,
+            material,
+            default_clear_aperture(),
+        )
+    }
+    /// Creates a new [`Lens`] of the given clear aperture.
+    ///
+    /// As [`Lens::new`], but with the transversal extent of the lens given as well. A lens curved
+    /// more tightly than the default clear aperture of 12.5 mm needs it: a spherical face ends at its
+    /// radius of curvature, so it cannot reach a wider edge.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - the name of the lens.
+    /// * `front_curvature` - radius of curvature of the front face; infinite for a flat face.
+    /// * `rear_curvature` - radius of curvature of the rear face; infinite for a flat face.
+    /// * `center_thickness` - distance between the two vertices.
+    /// * `material` - the material of the lens.
+    /// * `clear_aperture` - the transversal extent of the lens.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the given parameters are not correct, the clear aperture
+    /// does not delimit a region, or a face is curved too tightly to reach its edge.
+    pub fn new_with_clear_aperture(
+        name: &str,
+        front_curvature: Length,
+        rear_curvature: Length,
+        center_thickness: Length,
+        material: impl Into<Material>,
+        clear_aperture: ApertureShape,
+    ) -> OpmResult<Self> {
         let mut lens = Self::default();
         lens.node_attr.set_name(name);
+        lens.node_attr
+            .set_property(CLEAR_APERTURE, clear_aperture.into())?;
         lens.node_attr
             .set_property("front curvature", Proptype::Curvature(front_curvature))?;
         lens.node_attr
@@ -135,92 +177,6 @@ impl Lens {
         lens.update_surfaces()?;
         Ok(lens)
     }
-
-    // /// create a default aperture: defined by
-    // ///  - intersection of two spheres
-    // ///  - intersection of sphere and plane
-    // ///  - the minimum radius of the spheres if there is no intersection
-    // fn get_minimum_logical_aperture_radius(
-    //     front_curvature: Length,
-    //     rear_curvature: Length,
-    //     center_thickness: Length,
-    // ) -> Option<Length> {
-    //     // case 1: bi-convex
-    //     if front_curvature.is_sign_positive()
-    //         && front_curvature.is_finite()
-    //         && rear_curvature.is_sign_negative()
-    //         && rear_curvature.is_finite()
-    //     {
-    //         //get intersecting radius by calculating the area of a triangle that is defined the two radii and the distance between the sphere centers
-    //         let sphere_dist = rear_curvature.abs() + front_curvature.abs() - center_thickness;
-    //         let semiperimeter = 0.5 * (sphere_dist + rear_curvature.abs() + front_curvature.abs());
-    //         //herons formula
-    //         let triangle_area = (semiperimeter
-    //             * (semiperimeter - sphere_dist)
-    //             * (semiperimeter - rear_curvature.abs())
-    //             * (semiperimeter - front_curvature.abs()))
-    //         .sqrt();
-    //         //setting equal two are defined by base height x base length / 2 and rearrange
-    //         Some(triangle_area / sphere_dist * 2.)
-    //     }
-    //     // case 2a: plano-convex with back plane
-    //     else if front_curvature.is_sign_positive()
-    //         && front_curvature.is_finite()
-    //         && rear_curvature.is_infinite()
-    //     {
-    //         Some(
-    //             (front_curvature * front_curvature
-    //                 - (front_curvature.abs() - center_thickness)
-    //                     * (front_curvature.abs() - center_thickness))
-    //                 .sqrt(),
-    //         )
-    //     }
-    //     // case 2b: plano-convex with front plane
-    //     else if rear_curvature.is_sign_negative()
-    //         && rear_curvature.is_finite()
-    //         && front_curvature.is_infinite()
-    //     {
-    //         Some(
-    //             (rear_curvature * rear_curvature
-    //                 - (rear_curvature.abs() - center_thickness)
-    //                     * (rear_curvature.abs() - center_thickness))
-    //                 .sqrt(),
-    //         )
-    //     }
-    //     // case 3: positive meniscus lens
-    //     else if front_curvature.is_sign_positive()
-    //         && rear_curvature.is_sign_positive()
-    //         && front_curvature >= rear_curvature
-    //         && front_curvature.is_finite()
-    //         || front_curvature.is_sign_negative()
-    //             && rear_curvature.is_sign_negative()
-    //             && front_curvature <= rear_curvature
-    //             && rear_curvature.is_finite()
-    //     {
-    //         let g = front_curvature.abs() - (rear_curvature.abs() - center_thickness);
-    //         let semiperimeter = 0.5 * (g + rear_curvature.abs() + front_curvature.abs());
-    //         let triangle_area = (semiperimeter
-    //             * (semiperimeter - g)
-    //             * (semiperimeter - rear_curvature.abs())
-    //             * (semiperimeter - front_curvature.abs()))
-    //         .sqrt();
-    //         Some(
-    //             2. * triangle_area
-    //                 / (front_curvature.abs() + center_thickness - rear_curvature.abs()),
-    //         )
-    //     }
-    //     //case 4: flat flat. no defined aperture. set to infinity
-    //     else if front_curvature.is_infinite() && rear_curvature.is_infinite() {
-    //         None
-    //     }
-    //     // case 5: negative meniscus lens or bi-concave or plano-concave
-    //     // get the minimum of both radii
-    //     else if front_curvature.abs() < rear_curvature.abs() {
-    //         Some(front_curvature.abs())
-    //     } else {
-    //         Some(rear_curvature.abs())
-    //     }
-    // }
 }
 
 impl Volumetric for Lens {}
@@ -240,14 +196,11 @@ impl OpticNode for Lens {
                 "cannot read the curvatures and the center thickness of the lens".into(),
             ));
         };
-        let cross_section = self.clear_aperture()?;
-        check_curvature_fits_circular_aperture(*front_curvature, &cross_section, "front")?;
-        check_curvature_fits_circular_aperture(*rear_curvature, &cross_section, "rear")?;
         Ok(Some(Geometry::singlet(
             *front_curvature,
             *rear_curvature,
             *center_thickness,
-            cross_section,
+            self.cross_section()?,
         )?))
     }
     fn as_volume(&self) -> Option<&dyn Volumetric> {
@@ -256,59 +209,6 @@ impl OpticNode for Lens {
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.install_geometry(&["input_1"], &["output_1"])
     }
-}
-
-/// Reject a curvature radius that cannot span its own clear aperture.
-///
-/// A spherical surface curves back on itself at its own radius of curvature - beyond that distance
-/// from the axis it no longer lies above the transversal plane at all (see
-/// [`curved_local_z`](crate::geometry::geo_surface)'s doc comment). A curvature radius smaller in
-/// magnitude than the clear aperture's radius therefore describes a surface that cannot reach the
-/// rim of its own aperture: not a shape that merely fails to mesh later, but one that was never
-/// geometrically possible. Equality is allowed - a curvature radius exactly equal to the aperture
-/// radius is a hemisphere, the tightest valid case, and `curved_local_z`'s own tolerance is what
-/// lets that exact case actually be meshed.
-///
-/// Checked by [`Lens::geometry`] before the curvatures become a [`Geometry::singlet`], so every
-/// surface build and every derived body goes through it, rather than expressed as a [`Validator`]:
-/// `Validator::validate` sees only the one property being set, never a sibling one, so a
-/// curvature-versus-aperture comparison cannot be written as one. Only a circular clear aperture is
-/// checked, which is the case this exists for - see `known_issue_update_surfaces.md` and C1 of the
-/// plan this belongs to, both about exactly this scenario - and the only [`ApertureShape`] with a
-/// single radius to compare against; a non-circular clear aperture is left to fail at meshing time
-/// as before.
-///
-/// # Arguments
-///
-/// * `curvature` - the front or rear curvature radius, as read from the node's properties.
-/// * `cross_section` - the lens's clear aperture.
-/// * `surface_name` - `"front"` or `"rear"`, to name the offending surface in the error.
-///
-/// # Errors
-///
-/// Returns an error if the clear aperture is circular and `curvature`'s magnitude is smaller than
-/// its radius.
-fn check_curvature_fits_circular_aperture(
-    curvature: Length,
-    cross_section: &ValidatedCrossSection,
-    surface_name: &str,
-) -> OpmResult<()> {
-    if curvature.is_infinite() {
-        // Flat - every clear aperture fits under a plane.
-        return Ok(());
-    }
-    let ApertureShape::BinaryCircle(circle) = cross_section.get().shape() else {
-        return Ok(());
-    };
-    let aperture_radius = circle.radius();
-    if curvature.abs() < aperture_radius {
-        return Err(OpossumError::Properties(format!(
-            "the {surface_name} curvature radius ({curvature:?}) is smaller than the clear \
-             aperture radius ({aperture_radius:?}): the surface cannot reach the rim of its own \
-             aperture"
-        )));
-    }
-    Ok(())
 }
 
 impl AnalysisEnergy for Lens {}
@@ -330,7 +230,7 @@ mod test {
             raytrace::AnalysisRayTrace,
         },
         apertures::{ApertureShape, CircleShape},
-        core_optics::{NodeAttrExt, PortType, node_attr::NodePositioning},
+        core_optics::{NodeAttrExt, node_attr::NodePositioning},
         distributions::position::Hexapolar,
         joule,
         light::{LightData, LightResult, Rays},
@@ -444,6 +344,11 @@ mod test {
         assert!(
             lens.node_attr
                 .set_property("center thickness", Proptype::Length(millimeter!(0.0)))
+                .is_err()
+        );
+        assert!(
+            lens.node_attr
+                .set_property("center thickness", Proptype::Length(millimeter!(0.0001)))
                 .is_ok()
         );
         assert!(
@@ -508,6 +413,48 @@ mod test {
             panic!()
         };
         assert_eq!((*material).get_refractive_index(Length::zero())?, 2.0);
+        Ok(())
+    }
+    #[test]
+    fn rays_beyond_clear_aperture_are_lost() -> OpmResult<()> {
+        test_rays_beyond_clear_aperture_are_lost::<Lens>()
+    }
+    /// A lens whose curvature is tighter than its clear aperture describes no shape: a sphere of
+    /// 10 mm radius ends before the default rim of 12.5 mm. The lens refuses it.
+    #[test]
+    fn a_curvature_tighter_than_the_clear_aperture_is_rejected() -> OpmResult<()> {
+        let flat = millimeter!(f64::INFINITY);
+        let index = RefrIndexConst::new(1.5)?;
+        assert!(
+            Lens::new(
+                "lens",
+                millimeter!(10.0),
+                flat,
+                millimeter!(5.0),
+                index.clone()
+            )
+            .is_err()
+        );
+        assert!(Lens::new("lens", flat, millimeter!(-10.0), millimeter!(5.0), index).is_err());
+        Ok(())
+    }
+    /// A lens smaller than the default clear aperture is built with its own: a concentric meniscus
+    /// of 10 mm and 9 mm radius fits a clear aperture of 9 mm, its rear face a full hemisphere.
+    #[test]
+    fn a_small_lens_is_built_with_its_own_clear_aperture() -> OpmResult<()> {
+        let clear_aperture: ApertureShape = CircleShape::new(millimeter!(9.0))?.into();
+        let lens = Lens::new_with_clear_aperture(
+            "meniscus",
+            millimeter!(10.0),
+            millimeter!(9.0),
+            millimeter!(1.0),
+            RefrIndexConst::new(1.5)?,
+            clear_aperture.clone(),
+        )?;
+        assert_eq!(
+            lens.node_attr.get_property(CLEAR_APERTURE)?,
+            &Proptype::Aperture(clear_aperture)
+        );
         Ok(())
     }
     #[test]
@@ -672,430 +619,6 @@ mod test {
         Ok(())
     }
     #[test]
-    fn get_minimum_logical_aperture_radius_bi_convex() -> OpmResult<()> {
-        let node = Lens::new(
-            "test",
-            millimeter!(100.0),
-            millimeter!(-100.0),
-            millimeter!(10.0),
-            RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.031224989991992);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.031224989991992);
-        }
-        Ok(())
-    }
-    #[test]
-    fn get_minimum_logical_aperture_radius_plano_convex() -> OpmResult<()> {
-        let node = Lens::new(
-            "test",
-            millimeter!(f64::INFINITY),
-            millimeter!(-100.0),
-            millimeter!(10.0),
-            RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.04358898943540674);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.04358898943540674);
-        }
-
-        let node = Lens::new(
-            "test",
-            millimeter!(100.),
-            millimeter!(f64::INFINITY),
-            millimeter!(10.0),
-            RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.04358898943540674);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.04358898943540674);
-        }
-        Ok(())
-    }
-    #[test]
-    fn get_minimum_logical_aperture_radius_bi_concave() -> OpmResult<()> {
-        let node = Lens::new(
-            "test",
-            millimeter!(-100.0),
-            millimeter!(100.0),
-            millimeter!(10.0),
-            RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-
-        let node = Lens::new(
-            "test",
-            millimeter!(-200.0),
-            millimeter!(100.0),
-            millimeter!(10.0),
-            RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-
-        let node = Lens::new(
-            "test",
-            millimeter!(-100.0),
-            millimeter!(200.0),
-            millimeter!(10.0),
-            RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-        Ok(())
-    }
-    #[test]
-    fn get_minimum_logical_aperture_radius_plano_concave() -> OpmResult<()> {
-        let node = Lens::new(
-            "test",
-            millimeter!(f64::INFINITY),
-            millimeter!(100.0),
-            millimeter!(10.0),
-            RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-
-        let node = Lens::new(
-            "test",
-            millimeter!(-100.0),
-            millimeter!(f64::INFINITY),
-            millimeter!(10.0),
-            RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-        Ok(())
-    }
-    #[test]
-    fn get_minimum_logical_aperture_radius_pos_meniscus() -> OpmResult<()> {
-        let node = Lens::new(
-            "test",
-            millimeter!(-105.0),
-            millimeter!(-100.0),
-            millimeter!(10.0),
-            RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.09637888196533964);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.09637888196533964);
-        }
-
-        let node = Lens::new(
-            "test",
-            millimeter!(105.0),
-            millimeter!(100.0),
-            millimeter!(10.0),
-            RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.09637888196533964);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.09637888196533964);
-        }
-
-        let node = Lens::new(
-            "test",
-            millimeter!(-100.0),
-            millimeter!(-100.0),
-            millimeter!(10.0),
-            RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.09987492177719105);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.09987492177719105);
-        }
-
-        let node = Lens::new(
-            "test",
-            millimeter!(100.0),
-            millimeter!(100.0),
-            millimeter!(10.0),
-            RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.09987492177719105);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.09987492177719105);
-        }
-        Ok(())
-    }
-    #[test]
-    fn get_minimum_logical_aperture_radius_neg_meniscus() -> OpmResult<()> {
-        let node = Lens::new(
-            "test",
-            millimeter!(-100.0),
-            millimeter!(-105.0),
-            millimeter!(10.0),
-            RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-
-        let node = Lens::new(
-            "test",
-            millimeter!(100.0),
-            millimeter!(105.0),
-            millimeter!(10.0),
-            RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-        Ok(())
-    }
-    #[test]
     fn analyze_lens_matching_ambient_medium() -> OpmResult<()> {
         let n_match = 1.5;
         let mat = Material::new_draft(
@@ -1188,33 +711,6 @@ mod test {
             .volume_body()?
             .triangulate(64)?;
 
-        Ok(())
-    }
-
-    /// A curvature radius smaller than a circular clear aperture's radius describes a face that
-    /// cannot reach the rim of its own aperture, so the lens refuses to build its surfaces - for
-    /// either face.
-    #[test]
-    fn a_curvature_tighter_than_the_clear_aperture_is_rejected() -> OpmResult<()> {
-        let aperture: Proptype = ApertureShape::from(CircleShape::new(millimeter!(25.0))?).into();
-        for face in ["front", "rear"] {
-            let mut lens = Lens::default();
-            lens.node_attr
-                .set_property("clear aperture", aperture.clone())?;
-            lens.node_attr.set_property(
-                &format!("{face} curvature"),
-                Proptype::Curvature(millimeter!(20.0)),
-            )?;
-            let error = lens
-                .update_surfaces()
-                .expect_err("a curvature tighter than the clear aperture was accepted");
-            assert!(
-                error
-                    .to_string()
-                    .contains(&format!("the {face} curvature radius")),
-                "the error does not name the {face} face: {error}"
-            );
-        }
         Ok(())
     }
 }

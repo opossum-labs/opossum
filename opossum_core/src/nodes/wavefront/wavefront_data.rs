@@ -1,17 +1,8 @@
-use approx::relative_eq;
-use log::warn;
-use nalgebra::{DVector, DVectorView, MatrixXx2, MatrixXx3, Vector2};
-use plotters::style::RGBAColor;
-use serde::{Deserialize, Serialize};
-use uom::si::{
-    f64::Length,
-    length::{millimeter, nanometer},
-};
-
 use crate::{
     error::{OpmResult, OpossumError},
     light::Rays,
-    nanometer,
+    millimeter, nanometer,
+    nodes::wavefront::zernike::{Basis2D, DecompositionResult, fit_wavefront_points},
     reporting::plottable::{
         AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable,
     },
@@ -20,6 +11,15 @@ use crate::{
         griddata::{create_linspace_axes, grid_interpolate_3d_scatter_data},
         to_f64,
     },
+};
+use approx::relative_eq;
+use log::warn;
+use nalgebra::{DVector, DVectorView, MatrixXx2, MatrixXx3, Point2, Vector2};
+use plotters::style::RGBAColor;
+use serde::{Deserialize, Serialize};
+use uom::si::{
+    f64::Length,
+    length::{millimeter, nanometer},
 };
 
 /// This [`WaveFrontData`] struct holds a vector of wavefront-error maps.
@@ -340,6 +340,35 @@ impl WaveFrontMap {
     pub const fn ptv(&self) -> f64 {
         self.ptv
     }
+    /// Calculates the maximum radial distance of all points from the origin in millimeters.
+    #[must_use]
+    pub fn max_radius(&self) -> Length {
+        let mut max_radius_sq = 0.0f64;
+        for (&x, &y) in self.x.iter().zip(self.y.iter()) {
+            let r_sq = x.mul_add(x, y * y);
+            if r_sq > max_radius_sq {
+                max_radius_sq = r_sq;
+            }
+        }
+        millimeter!(max_radius_sq.sqrt())
+    }
+    /// Decomposes the discrete wavefront points into an arbitrary 2D basis system.
+    ///
+    /// # Errors
+    /// Returns an error if the map is empty, has fewer points than basis modes, or SVD fails.
+    pub fn decompose<B: Basis2D>(&self, basis: &B) -> OpmResult<DecompositionResult> {
+        let n = self.x.len();
+        if n == 0 {
+            return Err(OpossumError::Other("Empty wavefront map.".into()));
+        }
+
+        let mut points = Vec::with_capacity(n);
+        for (&x, &y) in self.x.iter().zip(self.y.iter()) {
+            points.push(Point2::new(x, y));
+        }
+
+        fit_wavefront_points(&points, &self.opd, basis)
+    }
 }
 
 impl Plottable for WaveFrontMap {
@@ -509,6 +538,7 @@ impl Plottable for WaveFrontMap {
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use crate::{
         analyzers::propagation_strategy::MissedSurfaceStrategy,
         core_optics::optic_surface::OpticSurface,
@@ -517,7 +547,7 @@ mod test {
         joule,
         light::{Ray, Rays},
         millimeter, nanometer,
-        nodes::{WaveFrontData, WaveFrontMap},
+        nodes::{WaveFrontData, WaveFrontMap, wavefront::zernike::ZernikeNoll},
         refractive_index::refr_index_vaccuum,
         utils::geom_transformation::Isometry,
     };
@@ -742,6 +772,38 @@ mod test {
         // PtV still 4.0
         assert_relative_eq!(wf_map.ptv(), 4.0, epsilon = 1e-8);
 
+        Ok(())
+    }
+    #[test]
+    fn test_fit_pure_defocus() -> OpmResult<()> {
+        let norm_r = millimeter!(10.0);
+        let basis = ZernikeNoll::new(2, norm_r);
+
+        let mut points = Vec::new();
+        let mut opd = Vec::new();
+
+        for ix in -5..=5 {
+            for iy in -5..=5 {
+                let x = ix as f64 * 1.5;
+                let y = iy as f64 * 1.5;
+                let pt = Point2::new(x, y);
+                if pt.coords.norm() <= norm_r.get::<millimeter>() {
+                    let val = 2.5 * basis.evaluate(3, &pt); // mode 3 is j=4 (Defocus)
+                    points.push(pt);
+                    opd.push(val);
+                }
+            }
+        }
+
+        let decomp = fit_wavefront_points(&points, &opd, &basis)?;
+
+        assert_relative_eq!(decomp.residual_rms, 0.0, epsilon = 1e-10);
+        assert_relative_eq!(decomp.modes[3].coefficient, 2.5, epsilon = 1e-10);
+        for (i, mode) in decomp.modes.iter().enumerate() {
+            if i != 3 {
+                assert_relative_eq!(mode.coefficient, 0.0, epsilon = 1e-10);
+            }
+        }
         Ok(())
     }
 }

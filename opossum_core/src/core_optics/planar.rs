@@ -17,7 +17,10 @@ use crate::{
     apertures::{Aperture, ApertureType},
     core_optics::{Appearance, NodeAttrExt, OpticNode, OpticNodeExt, PortType, SurfaceFinish},
     error::{OpmResult, OpossumError},
-    geometry::{SurfaceMesh, body::CLEAR_APERTURE},
+    geometry::{
+        SurfaceMesh,
+        body::{CLEAR_APERTURE, default_clear_aperture},
+    },
     properties::Proptype,
     utils::geom_transformation::Isometry,
 };
@@ -78,7 +81,8 @@ pub trait Planar: OpticNode {
         }
     }
 
-    /// Mesh this node's one surface over its [`CLEAR_APERTURE`].
+    /// Mesh this node's one surface over its [`CLEAR_APERTURE`], or over the default clear aperture
+    /// if it is open.
     ///
     /// The counterpart of [`Volumetric::volume_body`](crate::core_optics::Volumetric::volume_body)
     /// for a node with one surface instead of two: everything needed is already on the node, so this
@@ -129,8 +133,14 @@ pub trait Planar: OpticNode {
                 self.name()
             )));
         };
-        let aperture_mesh = Aperture::new(clear_aperture.clone(), ApertureType::Hole, None, None)?
-            .triangulate(segments)?;
+        // An open clear aperture has no edge to mesh, so the surface is drawn at its nominal size.
+        let shape = if clear_aperture.is_none() {
+            default_clear_aperture()
+        } else {
+            clear_aperture.clone()
+        };
+        let aperture_mesh =
+            Aperture::new(shape, ApertureType::Hole, None, None)?.triangulate(segments)?;
         let frame = self.effective_node_iso().unwrap_or_else(Isometry::identity);
         surface.geo_surface().mesh_over(&aperture_mesh, &frame)
     }

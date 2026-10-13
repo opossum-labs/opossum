@@ -22,11 +22,11 @@ As a detector node, incoming light data is simply passed unmodified through the 
 
 - Ray tracing Analysis
 
-    In ray tracing analysis, this node generates a 2D plot as described above. Possible apodization due to input or output port apertures might occur.
+    In ray tracing analysis, this node generates a 2D plot as described above.
 
 - Ghost focus Analysis
 
-    In ghost focus analysis, this node generates a 2D plot as described above. Possible apodization due to input or output port apertures might occur.
+    In ghost focus analysis, this node generates a 2D plot as described above.
 
 ## Ports
 

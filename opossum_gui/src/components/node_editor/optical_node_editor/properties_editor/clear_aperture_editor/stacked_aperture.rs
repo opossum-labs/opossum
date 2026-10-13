@@ -4,7 +4,9 @@ use opossum_core::{
     prelude::{Aperture, ApertureShape, ApertureType},
     utils::default_from_name::DefaultFromName,
 };
+use strum::IntoEnumIterator;
 
+use super::{PolygonApertureInput, shape_input_data};
 use crate::{
     OPOSSUM_UI_LOGS,
     components::{
@@ -16,12 +18,22 @@ use crate::{
                 input_components::{LabeledSelect, RowedInputs},
                 select_options_from_enum_iterator,
             },
-            optical_node_editor::port_config_editor::aperture_editor::{
-                PolygonApertureInput, aperture_component::get_aperture_input_data,
-            },
         },
     },
 };
+
+/// The kinds of shapes a member of the stack cannot take: a stack bounds a region only if all its
+/// members are binary (see [`ApertureShape::delimits_region`]).
+///
+/// # Returns
+///
+/// The [`Default`] of each excluded kind: only which variant each one is carries meaning.
+fn non_member_shapes() -> Vec<ApertureShape> {
+    ApertureShape::iter()
+        .filter(|shape| !shape.is_binary())
+        .collect()
+}
+
 #[component]
 pub fn StackedApertureInput(
     stacked_aperture: StackShape,
@@ -35,8 +47,8 @@ pub fn StackedApertureInput(
     let on_save = EventHandler::new(move |stack: StackShape| {
         if stack != *stacked_aperture_sig.read() {
             // Send the *new* stack, not the old signal value - sending the stale signal made every
-            // PatchPort lag one add behind, so one undo wiped the whole stack and redo restored only
-            // the first entry.
+            // patch lag one add behind, so one undo wiped the whole stack and redo restored only the
+            // first entry.
             on_shape_change.call(ApertureShape::Stack(stack.clone()));
             stacked_aperture_sig.set(stack);
         }
@@ -68,6 +80,8 @@ pub fn StackedApertureInput(
         }
     });
 
+    let non_members = non_member_shapes();
+    let non_members = non_members.iter().collect::<Vec<_>>();
     rsx! {
         LabeledSelect {
             id: "apertureTypeSelectorStack",
@@ -84,10 +98,7 @@ pub fn StackedApertureInput(
         LabeledSelect {
             id: "apertureShapeSelectorStack",
             label: "Select Aperture for Stack",
-            options: select_options_from_enum_iterator(
-                current_aperture.read().shape(),
-                Some(&[&ApertureShape::Stack(StackShape::default())]),
-            ),
+            options: select_options_from_enum_iterator(current_aperture.read().shape(), Some(&non_members)),
             readonly,
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
@@ -113,7 +124,7 @@ pub fn StackedApertureInput(
                 } else {
                     rsx! {
                         RowedInputs {
-                            inputs: get_aperture_input_data(
+                            inputs: shape_input_data(
                                 current_aperture.read().shape(),
                                 on_current_aperture_shape_change,
                                 readonly,
@@ -222,5 +233,20 @@ fn StackedAperturesList(
             edit_index: editing_index,
             readonly,
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    /// A clear aperture is bounded only by binary members, so only those are offered for a stack.
+    #[test]
+    fn only_binary_shapes_are_offered_as_members() {
+        let offered: Vec<String> = ApertureShape::iter()
+            .filter(|shape| !non_member_shapes().contains(shape))
+            .map(|shape| shape.to_string())
+            .collect();
+        assert_eq!(offered, ["Circle", "Rectangle", "Polygon"]);
     }
 }

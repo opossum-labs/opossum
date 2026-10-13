@@ -23,6 +23,7 @@ use uom::si::f64::{Angle, Length};
 use crate::{
     error::{OpmResult, OpossumError},
     geometry::{
+        Rim, RimRole,
         body::SurfaceBoundedBody,
         face::{Face, SurfaceShape},
         geo_surface::GeoSurfaceRef,
@@ -41,7 +42,7 @@ pub type PlacedSurface = (GeoSurfaceRef, Isometry);
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Geometry {
     /// A single surface without thickness, such as a thin mirror, a grating or a detector.
-    Surface(SurfaceGeometry),
+    Surface(Box<SurfaceGeometry>),
     /// A component enclosing a volume of material.
     Solid(Solid),
 }
@@ -58,19 +59,20 @@ impl Geometry {
     ///
     /// # Errors
     ///
-    /// This function returns an error if the center thickness is not finite.
+    /// This function returns an error if the center thickness is not finite or if a face is curved
+    /// too tightly to reach the edge of the cross section.
     pub fn singlet(
         front_radius: Length,
         rear_radius: Length,
         center_thickness: Length,
         cross_section: ValidatedCrossSection,
     ) -> OpmResult<Self> {
-        Ok(Self::two_faced(
+        Self::two_faced(
             SurfaceShape::spherical(front_radius),
             SurfaceShape::spherical(rear_radius),
             Isometry::new_along_z(center_thickness)?,
             cross_section,
-        ))
+        )
     }
     /// A cylindrical singlet lens: two cylindrical (or flat) faces a center thickness apart.
     ///
@@ -83,19 +85,20 @@ impl Geometry {
     ///
     /// # Errors
     ///
-    /// This function returns an error if the center thickness is not finite.
+    /// This function returns an error if the center thickness is not finite or if a face is curved
+    /// too tightly to reach the edge of the cross section.
     pub fn cylindrical_singlet(
         front_radius: Length,
         rear_radius: Length,
         center_thickness: Length,
         cross_section: ValidatedCrossSection,
     ) -> OpmResult<Self> {
-        Ok(Self::two_faced(
+        Self::two_faced(
             SurfaceShape::cylindrical(front_radius),
             SurfaceShape::cylindrical(rear_radius),
             Isometry::new_along_z(center_thickness)?,
             cross_section,
-        ))
+        )
     }
     /// A wedge: two flat faces, the rear one tilted about the local x axis.
     ///
@@ -117,30 +120,62 @@ impl Geometry {
             Point3::origin(),
             Point3::new(wedge_angle, Angle::zero(), Angle::zero()),
         )?;
-        Ok(Self::two_faced(
+        Self::two_faced(
             SurfaceShape::Plane,
             SurfaceShape::Plane,
             Isometry::new_along_z(center_thickness)?.append(&tilt),
             cross_section,
-        ))
+        )
     }
     /// A single surface.
     ///
     /// # Arguments
     ///
+    /// * `axis` - the frame of the cross section relative to the node; its z axis is the direction
+    ///   the cross section is projected along. The identity for a surface used along its own axis.
     /// * `shape` - the shape of the surface.
-    /// * `vertex` - position and orientation of its vertex relative to the node.
-    /// * `cross_section` - its transversal extent, or `None` for an unbounded (virtual) surface.
-    #[must_use]
-    pub const fn surface(
+    /// * `vertex` - position and orientation of its vertex, stated in the `axis` frame.
+    /// * `cross_section` - its transversal extent in the xy plane of the `axis` frame, or `None`
+    ///   for an unbounded (virtual) surface.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the surface is curved too tightly to reach the edge of the
+    /// cross section, or if the outline of the cross section cannot be determined.
+    pub fn surface(
+        axis: Isometry,
         shape: SurfaceShape,
         vertex: Isometry,
         cross_section: Option<ValidatedCrossSection>,
-    ) -> Self {
-        Self::Surface(SurfaceGeometry {
-            face: Face::new(shape, vertex),
+    ) -> OpmResult<Self> {
+        Ok(Self::Surface(Box::new(SurfaceGeometry::new(
+            axis,
+            Face::new(shape, vertex),
             cross_section,
-        })
+            RimRole::Edge,
+        )?)))
+    }
+    /// A detector: a surface at the node that records the light within its cross section and lets
+    /// all of it pass (see [`RimRole::Window`]).
+    ///
+    /// # Arguments
+    ///
+    /// * `shape` - the shape of the surface the light is recorded on.
+    /// * `cross_section` - the window the light is recorded within, or `None` to record all of it.
+    ///
+    /// # Errors
+    ///
+    /// See [`Geometry::surface`].
+    pub fn detector(
+        shape: SurfaceShape,
+        cross_section: Option<ValidatedCrossSection>,
+    ) -> OpmResult<Self> {
+        Ok(Self::Surface(Box::new(SurfaceGeometry::new(
+            Isometry::identity(),
+            Face::new(shape, Isometry::identity()),
+            cross_section,
+            RimRole::Window,
+        )?)))
     }
     /// A flat surface at the node itself.
     ///
@@ -149,7 +184,13 @@ impl Geometry {
     /// * `cross_section` - its transversal extent, or `None` for an unbounded (virtual) surface.
     #[must_use]
     pub fn plane(cross_section: Option<ValidatedCrossSection>) -> Self {
-        Self::surface(SurfaceShape::Plane, Isometry::identity(), cross_section)
+        // A plane reaches every cross section, so nothing is left to check.
+        Self::Surface(Box::new(SurfaceGeometry {
+            axis: Isometry::identity(),
+            face: Face::new(SurfaceShape::Plane, Isometry::identity()),
+            cross_section,
+            role: RimRole::Edge,
+        }))
     }
     /// An extruded solid along the node's own axis whose front vertex sits at the node.
     ///
@@ -159,18 +200,22 @@ impl Geometry {
     /// * `rear` - the shape of the rear face.
     /// * `rear_vertex` - position and orientation of the rear face's vertex relative to the node.
     /// * `cross_section` - the transversal extent (clear aperture).
+    ///
+    /// # Errors
+    ///
+    /// See [`Extruded::new`].
     fn two_faced(
         front: SurfaceShape,
         rear: SurfaceShape,
         rear_vertex: Isometry,
         cross_section: ValidatedCrossSection,
-    ) -> Self {
-        Self::Solid(Solid::Extruded(Extruded::new(
+    ) -> OpmResult<Self> {
+        Ok(Self::Solid(Solid::Extruded(Box::new(Extruded::new(
             Isometry::identity(),
             Face::new(front, Isometry::identity()),
             Face::new(rear, rear_vertex),
             cross_section,
-        )))
+        )?))))
     }
     /// Build the surfaces light enters and leaves through.
     ///
@@ -195,7 +240,7 @@ impl Geometry {
     ) -> OpmResult<(PlacedSurface, PlacedSurface)> {
         match self {
             Self::Surface(surface) => {
-                let placed = surface.face.place(node_frame, &Isometry::identity())?;
+                let placed = surface.face.place(node_frame, &surface.axis)?;
                 Ok((placed.clone(), placed))
             }
             Self::Solid(solid) => solid.entrance_and_exit(node_frame),
@@ -228,20 +273,88 @@ impl Geometry {
             Self::Solid(Solid::Assembly(_)) => Err(not_supported_yet("an assembly")),
         }
     }
+    /// Return the lateral boundary of this geometry, stated relative to the node.
+    ///
+    /// # Returns
+    ///
+    /// The [`Rim`] of an extruded solid or of a bounded surface, or `None` for a surface without
+    /// a cross section, which is unbounded.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error for a solid that cannot be traced yet ([`ParametricSolid`],
+    /// [`Assembly`]): `None` would declare it unbounded.
+    pub fn rim(&self) -> OpmResult<Option<Rim>> {
+        match self {
+            Self::Surface(surface) => {
+                Ok(surface
+                    .cross_section
+                    .clone()
+                    .map(|cross_section| match surface.role {
+                        RimRole::Edge => Rim::new(cross_section, surface.axis),
+                        RimRole::Window => Rim::window(cross_section, surface.axis),
+                    }))
+            }
+            Self::Solid(Solid::Extruded(extruded)) => Ok(Some(Rim::new(
+                extruded.cross_section.clone(),
+                extruded.axis,
+            ))),
+            Self::Solid(Solid::Parametric(_)) => Err(not_supported_yet("a parametric solid")),
+            Self::Solid(Solid::Assembly(_)) => Err(not_supported_yet("an assembly")),
+        }
+    }
 }
 
 /// A single surface without thickness.
+///
+/// The face and the cross section are stated in the frame of the axis, as for an [`Extruded`]
+/// solid. An off-axis parabola uses the axis to measure its clear aperture parallel to the axis of
+/// its parent parabola.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SurfaceGeometry {
+    axis: Isometry,
     face: Face,
     cross_section: Option<ValidatedCrossSection>,
+    role: RimRole,
+}
+
+impl SurfaceGeometry {
+    /// Create a new [`SurfaceGeometry`].
+    ///
+    /// # Arguments
+    ///
+    /// * `axis` - the frame of the cross section relative to the node.
+    /// * `face` - the surface, stated in the `axis` frame.
+    /// * `cross_section` - its transversal extent, or `None` for an unbounded surface.
+    /// * `role` - what the edge of the cross section means for a ray outside it.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the surface is curved too tightly to reach the edge of the
+    /// cross section, or if the outline of the cross section cannot be determined.
+    fn new(
+        axis: Isometry,
+        face: Face,
+        cross_section: Option<ValidatedCrossSection>,
+        role: RimRole,
+    ) -> OpmResult<Self> {
+        if let Some(cross_section) = &cross_section {
+            face.check_reach(cross_section.transversal_reach(), "surface")?;
+        }
+        Ok(Self {
+            axis,
+            face,
+            cross_section,
+            role,
+        })
+    }
 }
 
 /// A component enclosing a volume of material.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Solid {
     /// Two faces capping a profile extruded along an axis.
-    Extruded(Extruded),
+    Extruded(Box<Extruded>),
     /// The intersection of the inner sides of several faces.
     Parametric(ParametricSolid),
     /// Several solids sharing interfaces.
@@ -258,11 +371,15 @@ impl Solid {
     ///
     /// # Returns
     ///
-    /// The face, or `None` if there is no such face. An [`Assembly`] has no faces of its own.
-    fn face(&self, index: usize) -> Option<&Face> {
+    /// The face, the frame it is stated in relative to the solid, and the side of it the solid lies
+    /// on; or `None` if there is no such face. An [`Assembly`] has no faces of its own.
+    fn face(&self, index: usize) -> Option<(&Face, Isometry, Side)> {
         match self {
             Self::Extruded(extruded) => extruded.face(index),
-            Self::Parametric(parametric) => parametric.faces.get(index).map(|(face, _)| face),
+            Self::Parametric(parametric) => parametric
+                .faces
+                .get(index)
+                .map(|(face, side)| (face, Isometry::identity(), *side)),
             Self::Assembly(_) => None,
         }
     }
@@ -302,19 +419,26 @@ impl Extruded {
     /// * `front` - the face capping the profile towards -z, stated in the `axis` frame.
     /// * `rear` - the face capping the profile towards +z, stated in the `axis` frame.
     /// * `cross_section` - the profile, in the xy plane of the `axis` frame.
-    #[must_use]
-    pub const fn new(
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if a face is curved too tightly to reach the edge of the
+    /// profile, or if the outline of the profile cannot be determined.
+    pub fn new(
         axis: Isometry,
         front: Face,
         rear: Face,
         cross_section: ValidatedCrossSection,
-    ) -> Self {
-        Self {
+    ) -> OpmResult<Self> {
+        let reach = cross_section.transversal_reach();
+        front.check_reach(reach, "front face")?;
+        rear.check_reach(reach, "rear face")?;
+        Ok(Self {
             axis,
             front,
             rear,
             cross_section,
-        }
+        })
     }
     /// See [`Geometry::body`].
     fn body(&self, node_frame: &Isometry) -> OpmResult<SurfaceBoundedBody> {
@@ -326,11 +450,11 @@ impl Extruded {
             node_frame.append(&self.axis),
         ))
     }
-    /// See [`Solid::face`].
-    const fn face(&self, index: usize) -> Option<&Face> {
+    /// See [`Solid::face`]. The profile lies behind the front face and in front of the rear face.
+    const fn face(&self, index: usize) -> Option<(&Face, Isometry, Side)> {
         match index {
-            0 => Some(&self.front),
-            1 => Some(&self.rear),
+            0 => Some((&self.front, self.axis, Side::Behind)),
+            1 => Some((&self.rear, self.axis, Side::InFront)),
             _ => None,
         }
     }
@@ -409,6 +533,21 @@ impl Part {
             material,
         }
     }
+    /// Return a face of this part's solid, placed with the part.
+    ///
+    /// # Arguments
+    ///
+    /// * `index` - the index of the face in the part's solid (see [`FaceId::new`]).
+    ///
+    /// # Returns
+    ///
+    /// The face, the frame it is stated in relative to the node, and the side of it the part lies
+    /// on; or `None` if the solid has no such face.
+    fn face(&self, index: usize) -> Option<(&Face, Isometry, Side)> {
+        self.solid
+            .face(index)
+            .map(|(face, owner, side)| (face, self.placement.append(&owner), side))
+    }
 }
 
 /// Refers to one face of one part of an [`Assembly`].
@@ -435,7 +574,10 @@ impl FaceId {
 /// Two faces of different parts of an [`Assembly`] lying on each other, such as the cemented
 /// surface of a doublet or the diagonal of a beam splitter cube.
 ///
-/// The shared surface is not stored a second time; the interface only refers to the two faces.
+/// The shared surface belongs to both parts: each states it among its own faces, and the interface
+/// links the two. They have to describe the same surface at the same place, with the two parts on
+/// opposite sides of it (see [`Assembly::new`]). Light crosses the interface only where both parts
+/// reach.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Interface {
     a: FaceId,
@@ -448,7 +590,8 @@ impl Interface {
     /// # Arguments
     ///
     /// * `a` - one of the two faces.
-    /// * `b` - the other face; it must belong to a different part (see [`Assembly::new`]).
+    /// * `b` - the other face; it must belong to a different part and lie on `a` (see
+    ///   [`Assembly::new`]).
     #[must_use]
     pub const fn new(a: FaceId, b: FaceId) -> Self {
         Self { a, b }
@@ -475,8 +618,12 @@ impl Assembly {
     ///
     /// # Errors
     ///
-    /// This function returns an error if a part is itself an assembly, if an interface refers to a
-    /// part or face that does not exist, or if an interface joins two faces of the same part.
+    /// This function returns an error if
+    /// - a part is itself an assembly,
+    /// - an interface refers to a part or face that does not exist or joins two faces of the same
+    ///   part,
+    /// - the two faces of an interface are not the same surface at the same place (see
+    ///   [`Face::coincides_with`]), or the two parts lie on the same side of it.
     pub fn new(parts: Vec<Part>, interfaces: Vec<Interface>) -> OpmResult<Self> {
         if let Some(index) = parts
             .iter()
@@ -493,17 +640,32 @@ impl Assembly {
                     interface.a.part
                 )));
             }
-            for id in [interface.a, interface.b] {
-                if parts
+            let resolve = |id: FaceId| {
+                parts
                     .get(id.part)
-                    .and_then(|part| part.solid.face(id.face))
-                    .is_none()
-                {
-                    return Err(OpossumError::Other(format!(
-                        "an interface refers to face {} of part {}, which does not exist",
-                        id.face, id.part
-                    )));
-                }
+                    .and_then(|part| part.face(id.face))
+                    .ok_or_else(|| {
+                        OpossumError::Other(format!(
+                            "an interface refers to face {} of part {}, which does not exist",
+                            id.face, id.part
+                        ))
+                    })
+            };
+            let (face_a, frame_a, side_a) = resolve(interface.a)?;
+            let (face_b, frame_b, side_b) = resolve(interface.b)?;
+            if !face_a.coincides_with(&frame_a, face_b, &frame_b) {
+                return Err(OpossumError::Other(format!(
+                    "the faces an interface joins have to be the same surface at the same place, \
+                     but face {} of part {} and face {} of part {} are not",
+                    interface.a.face, interface.a.part, interface.b.face, interface.b.part
+                )));
+            }
+            if side_a == side_b {
+                return Err(OpossumError::Other(format!(
+                    "the parts an interface joins have to lie on opposite sides of it, but parts {} \
+                     and {} lie on the same side",
+                    interface.a.part, interface.b.part
+                )));
             }
         }
         Ok(Self { parts, interfaces })
@@ -539,25 +701,84 @@ mod test {
             None,
         )?)
     }
+    /// A part made of glass with a refractive index of 1.5.
+    fn glass_part(placement: Isometry, solid: Solid) -> OpmResult<Part> {
+        Ok(Part::new(
+            placement,
+            solid,
+            AssetRef::Inline(Material::from(&RefrIndexConst::new(1.5)?)),
+        ))
+    }
+    /// The solid of the given geometry as a glass part at the given placement.
+    fn part_of(geometry: Geometry, placement: Isometry) -> OpmResult<Part> {
+        let Geometry::Solid(solid) = geometry else {
+            unreachable!("only solids are made into parts");
+        };
+        glass_part(placement, solid)
+    }
+    /// The diagonal of a beam splitter cube: tilted by 45° about x, 10 mm along z.
+    fn diagonal() -> OpmResult<Face> {
+        Ok(Face::new(
+            SurfaceShape::Plane,
+            Isometry::new(millimeter!(0.0, 0.0, 10.0), degree!(45.0, 0.0, 0.0))?,
+        ))
+    }
+    /// The front prism of a beam splitter cube: behind its entrance face, in front of the
+    /// diagonal (face 1).
     fn prism_part() -> OpmResult<Part> {
         let solid = Solid::Parametric(ParametricSolid::new(vec![
             (
                 Face::new(SurfaceShape::Plane, Isometry::identity()),
                 Side::Behind,
             ),
+            (diagonal()?, Side::InFront),
+        ])?);
+        glass_part(Isometry::identity(), solid)
+    }
+    /// The rear prism of the same cube: behind the diagonal (face 0), in front of its exit face.
+    fn opposite_prism_part() -> OpmResult<Part> {
+        let solid = Solid::Parametric(ParametricSolid::new(vec![
+            (diagonal()?, Side::Behind),
             (
                 Face::new(
                     SurfaceShape::Plane,
-                    Isometry::new(millimeter!(0.0, 0.0, 10.0), degree!(45.0, 0.0, 0.0))?,
+                    Isometry::new_along_z(millimeter!(20.0))?,
                 ),
                 Side::InFront,
             ),
         ])?);
-        Ok(Part::new(
+        glass_part(Isometry::identity(), solid)
+    }
+    /// A beam splitter cube: both prisms cemented along the diagonal.
+    fn cube() -> OpmResult<Assembly> {
+        Assembly::new(
+            vec![prism_part()?, opposite_prism_part()?],
+            vec![Interface::new(FaceId::new(0, 1), FaceId::new(1, 0))],
+        )
+    }
+    /// The crown lens of a doublet at the origin, its rear face (R = -40 mm) 5 mm behind it.
+    fn crown_part() -> OpmResult<Part> {
+        part_of(
+            Geometry::singlet(
+                millimeter!(60.0),
+                millimeter!(-40.0),
+                millimeter!(5.0),
+                circle()?,
+            )?,
             Isometry::identity(),
-            solid,
-            AssetRef::Inline(Material::from(&RefrIndexConst::new(1.5)?)),
-        ))
+        )
+    }
+    /// The flint lens of a doublet with the given front radius, at the given placement.
+    fn flint_part(front_radius: Length, placement: Isometry) -> OpmResult<Part> {
+        part_of(
+            Geometry::singlet(
+                front_radius,
+                millimeter!(f64::INFINITY),
+                millimeter!(5.0),
+                circle()?,
+            )?,
+            placement,
+        )
     }
     #[test]
     fn a_surface_is_entrance_and_exit_at_once() -> OpmResult<()> {
@@ -598,9 +819,9 @@ mod test {
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),
             circle()?,
-        );
-        let ((_, front), (_, rear)) =
-            Geometry::Solid(Solid::Extruded(extruded)).entrance_and_exit(&Isometry::identity())?;
+        )?;
+        let ((_, front), (_, rear)) = Geometry::Solid(Solid::Extruded(Box::new(extruded)))
+            .entrance_and_exit(&Isometry::identity())?;
         assert_eq!(front, axis);
         assert_eq!(
             rear,
@@ -620,7 +841,85 @@ mod test {
             assert!(error.to_string().contains("not supported yet"));
             let error = geometry.body(&Isometry::identity()).unwrap_err();
             assert!(error.to_string().contains("not supported yet"));
+            let error = geometry.rim().unwrap_err();
+            assert!(error.to_string().contains("not supported yet"));
         }
+        Ok(())
+    }
+    /// A curved face has to reach as far out as the cross section it is bounded by; a sphere or a
+    /// cylinder ends at its radius of curvature. Exactly reaching it (a hemisphere) is still a shape.
+    #[test]
+    fn a_cross_section_beyond_the_curvature_is_rejected() -> OpmResult<()> {
+        let flat = millimeter!(f64::INFINITY);
+        for radius in [10.0, -10.0] {
+            let curved = millimeter!(radius);
+            for (front, rear) in [(curved, flat), (flat, curved)] {
+                let error = Geometry::singlet(front, rear, millimeter!(5.0), circle()?)
+                    .expect_err("a curvature tighter than the cross section was accepted");
+                assert!(error.to_string().contains("does not reach"), "{error}");
+            }
+            assert!(
+                Geometry::cylindrical_singlet(curved, flat, millimeter!(5.0), circle()?).is_err()
+            );
+            let mirror = |cross_section| {
+                Geometry::surface(
+                    Isometry::identity(),
+                    SurfaceShape::spherical(curved),
+                    Isometry::identity(),
+                    cross_section,
+                )
+            };
+            assert!(mirror(Some(circle()?)).is_err());
+            // An unbounded surface has no edge to reach.
+            assert!(mirror(None).is_ok());
+        }
+        assert!(Geometry::singlet(millimeter!(12.5), flat, millimeter!(5.0), circle()?).is_ok());
+        // A parabola opens without end, so even a short focal length reaches any edge.
+        let parabola = SurfaceShape::Parabola {
+            focal_length: millimeter!(1.0),
+        };
+        assert!(
+            Geometry::surface(
+                Isometry::identity(),
+                parabola,
+                Isometry::identity(),
+                Some(circle()?)
+            )
+            .is_ok()
+        );
+        Ok(())
+    }
+    #[test]
+    fn a_surface_places_its_face_and_its_rim_along_its_axis() -> OpmResult<()> {
+        let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
+        let vertex = Isometry::new_along_z(millimeter!(20.0))?;
+        let geometry = Geometry::surface(axis, SurfaceShape::Plane, vertex, Some(circle()?))?;
+        let ((_, entrance), (_, exit)) = geometry.entrance_and_exit(&Isometry::identity())?;
+        assert_eq!(entrance, axis.append(&vertex));
+        assert_eq!(exit, entrance);
+        assert_eq!(geometry.rim()?, Some(Rim::new(circle()?, axis)));
+        Ok(())
+    }
+    /// A surface without a cross section is unbounded; a bounded surface and an extruded solid have
+    /// a rim, stated along the extrusion axis.
+    #[test]
+    fn rim_is_none_for_a_virtual_plane() -> OpmResult<()> {
+        assert_eq!(Geometry::plane(None).rim()?, None);
+        assert_eq!(
+            Geometry::plane(Some(circle()?)).rim()?,
+            Some(Rim::new(circle()?, Isometry::identity()))
+        );
+        let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
+        let extruded = Geometry::Solid(Solid::Extruded(Box::new(Extruded::new(
+            axis,
+            Face::new(SurfaceShape::Plane, Isometry::identity()),
+            Face::new(
+                SurfaceShape::Plane,
+                Isometry::new_along_z(millimeter!(20.0))?,
+            ),
+            circle()?,
+        )?)));
+        assert_eq!(extruded.rim()?, Some(Rim::new(circle()?, axis)));
         Ok(())
     }
     #[test]
@@ -638,9 +937,9 @@ mod test {
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),
             circle()?,
-        );
+        )?;
         let node_frame = Isometry::new(millimeter!(0.0, 5.0, 0.0), degree!(0.0, 0.0, 0.0))?;
-        let body = Geometry::Solid(Solid::Extruded(extruded)).body(&node_frame)?;
+        let body = Geometry::Solid(Solid::Extruded(Box::new(extruded))).body(&node_frame)?;
         assert_eq!(*body.isometry(), node_frame.append(&axis));
         // halfway along the extrusion axis, which runs along the node's x axis
         let halfway = node_frame
@@ -655,35 +954,32 @@ mod test {
     }
     #[test]
     fn an_assembly_checks_its_interfaces() -> OpmResult<()> {
-        let parts = || -> OpmResult<Vec<Part>> { Ok(vec![prism_part()?, prism_part()?]) };
-        let joined = Interface::new(FaceId::new(0, 1), FaceId::new(1, 1));
+        let parts = || -> OpmResult<Vec<Part>> { Ok(vec![prism_part()?, opposite_prism_part()?]) };
+        let joined = Interface::new(FaceId::new(0, 1), FaceId::new(1, 0));
         assert!(Assembly::new(parts()?, vec![joined]).is_ok());
-        let no_such_face = Interface::new(FaceId::new(0, 2), FaceId::new(1, 1));
+        let no_such_face = Interface::new(FaceId::new(0, 2), FaceId::new(1, 0));
         assert!(Assembly::new(parts()?, vec![no_such_face]).is_err());
-        let no_such_part = Interface::new(FaceId::new(0, 1), FaceId::new(2, 1));
+        let no_such_part = Interface::new(FaceId::new(0, 1), FaceId::new(2, 0));
         assert!(Assembly::new(parts()?, vec![no_such_part]).is_err());
         let same_part = Interface::new(FaceId::new(0, 0), FaceId::new(0, 1));
         assert!(Assembly::new(parts()?, vec![same_part]).is_err());
         Ok(())
     }
+    /// Two parts on the same side of their interface overlap instead of meeting there - the same
+    /// prism twice, for instance.
+    #[test]
+    fn the_parts_of_an_interface_lie_on_opposite_sides_of_it() -> OpmResult<()> {
+        let same_side = Interface::new(FaceId::new(0, 1), FaceId::new(1, 1));
+        assert!(Assembly::new(vec![prism_part()?, prism_part()?], vec![same_side]).is_err());
+        Ok(())
+    }
     #[test]
     fn a_doublet_joins_the_rear_of_one_lens_to_the_front_of_the_other() -> OpmResult<()> {
-        let lens = |front, rear| -> OpmResult<Part> {
-            let Geometry::Solid(solid) =
-                Geometry::singlet(front, rear, millimeter!(5.0), circle()?)?
-            else {
-                unreachable!("a singlet is a solid");
-            };
-            Ok(Part::new(
-                Isometry::identity(),
-                solid,
-                AssetRef::Inline(Material::from(&RefrIndexConst::new(1.5)?)),
-            ))
-        };
+        let behind_the_crown = Isometry::new_along_z(millimeter!(5.0))?;
         let parts = || -> OpmResult<Vec<Part>> {
             Ok(vec![
-                lens(millimeter!(60.0), millimeter!(-40.0))?,
-                lens(millimeter!(-40.0), millimeter!(f64::INFINITY))?,
+                crown_part()?,
+                flint_part(millimeter!(-40.0), behind_the_crown)?,
             ])
         };
         let cemented = Interface::new(FaceId::new(0, 1), FaceId::new(1, 0));
@@ -692,14 +988,63 @@ mod test {
         assert!(Assembly::new(parts()?, vec![beyond_the_rear]).is_err());
         Ok(())
     }
+    /// The cemented faces of a doublet have to be the same surface at the same place.
+    #[test]
+    fn a_doublet_whose_cemented_faces_do_not_meet_is_rejected() -> OpmResult<()> {
+        let cemented = Interface::new(FaceId::new(0, 1), FaceId::new(1, 0));
+        // Both lenses at the origin overlap, and the flint's front lies 5 mm before the crown's rear.
+        let overlapping = flint_part(millimeter!(-40.0), Isometry::identity())?;
+        let with_a_gap = flint_part(millimeter!(-40.0), Isometry::new_along_z(millimeter!(5.1))?)?;
+        let other_radius =
+            flint_part(millimeter!(-41.0), Isometry::new_along_z(millimeter!(5.0))?)?;
+        for flint in [overlapping, with_a_gap, other_radius] {
+            assert!(Assembly::new(vec![crown_part()?, flint], vec![cemented]).is_err());
+        }
+        Ok(())
+    }
+    /// A cylindrical face is curved in one direction only, so both parts have to agree on it. Turned
+    /// by half a turn about its axis it is the very same surface again.
+    #[test]
+    fn a_cylindrical_interface_has_to_agree_in_its_orientation() -> OpmResult<()> {
+        let crown = || {
+            part_of(
+                Geometry::cylindrical_singlet(
+                    millimeter!(60.0),
+                    millimeter!(-40.0),
+                    millimeter!(5.0),
+                    circle()?,
+                )?,
+                Isometry::identity(),
+            )
+        };
+        let flint = |roll: Angle| {
+            part_of(
+                Geometry::cylindrical_singlet(
+                    millimeter!(-40.0),
+                    millimeter!(f64::INFINITY),
+                    millimeter!(5.0),
+                    circle()?,
+                )?,
+                Isometry::new(
+                    millimeter!(0.0, 0.0, 5.0),
+                    Point3::new(Angle::zero(), Angle::zero(), roll),
+                )?,
+            )
+        };
+        let cemented = Interface::new(FaceId::new(0, 1), FaceId::new(1, 0));
+        for (roll, coincides) in [(0.0, true), (180.0, true), (90.0, false)] {
+            assert_eq!(
+                Assembly::new(vec![crown()?, flint(degree!(roll))?], vec![cemented]).is_ok(),
+                coincides,
+                "flint turned by {roll}°"
+            );
+        }
+        Ok(())
+    }
     #[test]
     fn an_assembly_cannot_contain_an_assembly() -> OpmResult<()> {
         let inner = Assembly::new(vec![prism_part()?], vec![])?;
-        let nested = Part::new(
-            Isometry::identity(),
-            Solid::Assembly(inner),
-            AssetRef::Inline(Material::from(&RefrIndexConst::new(1.5)?)),
-        );
+        let nested = glass_part(Isometry::identity(), Solid::Assembly(inner))?;
         assert!(Assembly::new(vec![nested], vec![]).is_err());
         Ok(())
     }
@@ -711,11 +1056,8 @@ mod test {
             millimeter!(5.0),
             circle()?,
         )?;
-        let cube = Geometry::Solid(Solid::Assembly(Assembly::new(
-            vec![prism_part()?, prism_part()?],
-            vec![Interface::new(FaceId::new(0, 1), FaceId::new(1, 1))],
-        )?));
-        for geometry in [singlet, cube] {
+        let splitter_cube = Geometry::Solid(Solid::Assembly(cube()?));
+        for geometry in [singlet, splitter_cube] {
             let text = ron::to_string(&geometry).map_err(|e| OpossumError::Other(e.to_string()))?;
             let read: Geometry =
                 ron::from_str(&text).map_err(|e| OpossumError::Other(e.to_string()))?;

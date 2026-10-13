@@ -21,7 +21,7 @@ members = [
     "dioxus_glb_viewer",
     "opossum_core/opm_macros_lib",
     "xtask",
-    "opossum_registry",
+    "opossum_registry", "schott_converter",
 ]
 # `optoscene` is a workspace of its own living next to this one. Without this, cargo takes its
 # crates for members of this workspace and resolves their inherited dependencies against the wrong
@@ -32,7 +32,7 @@ exclude = ["optoscene"]
 resolver = "3"
 
 [workspace.package]
-version = "0.8.0"
+version = "0.8.1"
 edition = "2024"
 authors = [
     "Udo Eisenbarth <u.eisenbarth@gsi.de>",
@@ -45,12 +45,12 @@ keywords = ["laser", "optics", "physics", "simulation"]
 categories = ["science", "simulation"]
 
 [workspace.dependencies]
-opossum_core = { version = "0.8.0", path = "opossum_core" }
-opm_macros_lib = { version = "0.8.0", path = "opossum_core/opm_macros_lib" }
-opossum_backend = { version = "0.8.0", path = "opossum_backend" }
-opossum_cli = { version = "0.8.0", path = "opossum_cli" }
-opossum_gui = { version = "0.8.0", path = "opossum_gui" }
-opossum_registry = { version = "0.8.0", path = "opossum_registry" }
+opossum_core = { version = "0.8.1", path = "opossum_core" }
+opm_macros_lib = { version = "0.8.1", path = "opossum_core/opm_macros_lib" }
+opossum_backend = { version = "0.8.1", path = "opossum_backend" }
+opossum_cli = { version = "0.8.1", path = "opossum_cli" }
+opossum_gui = { version = "0.8.1", path = "opossum_gui" }
+opossum_registry = { version = "0.8.1", path = "opossum_registry" }
 
 approx = "0.5"
 chrono = { version = "0.4.45", features = ["serde"] }
@@ -64,8 +64,8 @@ strum = { version = "0.28", features = ["derive"] }
 strum_macros = "0.28"
 tempfile = "3.27"
 uom = { version = "0.38", features = ["serde"] }
-utoipa = { version = "5.4", features = ["actix_extras", "uuid"] }
-uuid = { version = "1.26.0", features = ["v4", "fast-rng", "serde", "js"] }
+utoipa = { version = "6", features = ["actix_extras", "uuid"] }
+uuid = { version = "1.27.0", features = ["v4", "fast-rng", "serde", "js"] }
 
 # The profile that 'cargo dist' will build with
 [profile.dist]

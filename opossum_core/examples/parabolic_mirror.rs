@@ -1,22 +1,38 @@
 use nalgebra::Vector3;
-use opossum_core::{nodes::round_collimated_ray_builder, prelude::*};
+use opossum_core::{
+    apertures::CircleShape, core_optics::NodeAttrExt, geometry::body::CLEAR_APERTURE,
+    nodes::round_collimated_ray_builder, prelude::*,
+};
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
     let i_src = scenery.add_node(SourcePort::new("collimated ray source"))?;
-    let i_m1 = scenery.add_node(ParabolicMirror::new_with_off_axis_y(
+    // The clear aperture of a parabola is measured parallel to its parent axis, here parallel to
+    // the collimated beam: parabola 1 takes the beam of 240 mm radius, parabola 2 sends it on with
+    // 240 mm * 50 / 400 = 30 mm radius.
+    let mut parabola1 = ParabolicMirror::new_with_off_axis_y(
         "parabola 1",
         millimeter!(400.0),
         false,
         degree!(45.0),
-    )?)?;
-    let i_m2 = scenery.add_node(ParabolicMirror::new_with_off_axis_y(
+    )?;
+    parabola1.set_property(
+        CLEAR_APERTURE,
+        ApertureShape::from(CircleShape::new(millimeter!(250.0))?).into(),
+    )?;
+    let i_m1 = scenery.add_node(parabola1)?;
+    let mut parabola2 = ParabolicMirror::new_with_off_axis_y(
         "parabola 2",
         millimeter!(50.0),
         true,
         degree!(-45.0),
-    )?)?;
+    )?;
+    parabola2.set_property(
+        CLEAR_APERTURE,
+        ApertureShape::from(CircleShape::new(millimeter!(38.1))?).into(),
+    )?;
+    let i_m2 = scenery.add_node(parabola2)?;
     let rpv =
         RayPropagationVisualizer::new("visualizer", Some(Vector3::new(10., 0., 0.).normalize()))?;
     let i_prop_vis = scenery.add_node(rpv)?;

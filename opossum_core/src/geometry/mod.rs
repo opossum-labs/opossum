@@ -17,6 +17,7 @@ mod mesh;
 mod node_geometry;
 mod parabola;
 mod plane;
+mod rim;
 mod sphere;
 
 pub mod body;
@@ -31,4 +32,5 @@ pub use node_geometry::{
 };
 pub use parabola::Parabola;
 pub use plane::Plane;
+pub use rim::{Rim, RimRole};
 pub use sphere::Sphere;

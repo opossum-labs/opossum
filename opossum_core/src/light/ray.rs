@@ -456,9 +456,7 @@ impl Ray {
                 "the refractive index must be >=1.0 and finite".into(),
             ));
         }
-        let geo_surf = s.geo_surface();
-        let surf_vectors = geo_surf.0.lock_opm()?.calc_intersect_and_normal(self);
-        if let Some((intersection_point, surface_normal)) = surf_vectors {
+        if let Some((intersection_point, surface_normal)) = s.intersect(self)? {
             // it is assumed that the surface normal is already normalized and points against the ray direction.
 
             // get correctly normalized k vector of ray
@@ -542,7 +540,9 @@ impl Ray {
         n2: Option<f64>,
         missed_surface_strategy: &MissedSurfaceStrategy,
     ) -> OpmResult<(Option<Self>, Option<HitPoint>)> {
-        self.refract_on_surface_with_coating(os, os.coating(), n2, *missed_surface_strategy)
+        Ok(self
+            .refract_on_surface_with_coating(os, os.coating(), n2, *missed_surface_strategy)?
+            .unwrap_or((None, None)))
     }
     /// Refract the [`Ray`] on a given [`OpticSurface`] as [`refract_on_surface`](Self::refract_on_surface)
     /// does, but with the given coating instead of the coating of the surface.
@@ -560,7 +560,8 @@ impl Ray {
     ///
     /// # Returns
     ///
-    /// The reflected [`Ray`] (if any) and the [`HitPoint`] on the surface (if any).
+    /// `None` if the ray missed the surface (see [`OpticSurface::intersect`]); otherwise the
+    /// reflected [`Ray`] (if any) and the [`HitPoint`] on the surface (if any).
     ///
     /// # Errors
     ///
@@ -571,16 +572,14 @@ impl Ray {
         coating: &CoatingType,
         n2: Option<f64>,
         missed_surface_strategy: MissedSurfaceStrategy,
-    ) -> OpmResult<(Option<Self>, Option<HitPoint>)> {
+    ) -> OpmResult<Option<(Option<Self>, Option<HitPoint>)>> {
         let n_refri_2 = n2.unwrap_or_else(|| self.refractive_index());
         if n_refri_2 < 1.0 || !n_refri_2.is_finite() {
             return Err(OpossumError::Other(
                 "the refractive index must be >=1.0 and finite".into(),
             ));
         }
-        let geo_surface = os.geo_surface();
-        let surf_vectors = geo_surface.0.lock_opm()?.calc_intersect_and_normal(self);
-        if let Some((intersection_point, surface_normal)) = surf_vectors {
+        if let Some((intersection_point, surface_normal)) = os.intersect(self)? {
             // Snell's law in vector form (src: https://www.starkeffects.com/snells-law-vector.shtml)
             // mu=n_1 / n_2
             // s1: incoming direction (normalized??)
@@ -617,42 +616,48 @@ impl Ray {
                     self.number_of_refractions += 1;
                 }
                 let mut generated_hit_point = None;
+                // A detector records no hit outside its window.
+                let recorded = os.records_at(&intersection_point)?;
                 if self.helper_rays.is_none() && !self.is_helper {
-                    generated_hit_point = Some(HitPoint::Energy(EnergyHitPoint::new(
-                        os.geo_surface()
-                            .0
-                            .lock_opm()?
-                            .isometry()
-                            .inverse_transform_point(&intersection_point),
-                        input_energy,
-                    )?));
+                    if recorded {
+                        generated_hit_point = Some(HitPoint::Energy(EnergyHitPoint::new(
+                            os.geo_surface()
+                                .0
+                                .lock_opm()?
+                                .isometry()
+                                .inverse_transform_point(&intersection_point),
+                            input_energy,
+                        )?));
+                    }
                 } else if let Some(helper_fluence) = &self.helper_ray_fluence() {
-                    generated_hit_point = Some(HitPoint::Fluence(FluenceHitPoint::new(
-                        os.geo_surface()
-                            .0
-                            .lock_opm()?
-                            .isometry()
-                            .inverse_transform_point(&intersection_point),
-                        *helper_fluence,
-                    )?));
+                    if recorded {
+                        generated_hit_point = Some(HitPoint::Fluence(FluenceHitPoint::new(
+                            os.geo_surface()
+                                .0
+                                .lock_opm()?
+                                .isometry()
+                                .inverse_transform_point(&intersection_point),
+                            *helper_fluence,
+                        )?));
+                    }
                     self.change_helper_fluence_by_factor(percent!(100.0) - reflectivity)?;
                     reflected_ray.change_helper_fluence_by_factor(reflectivity)?;
                 }
 
                 // Wir geben beides zurück
-                Ok((Some(reflected_ray), generated_hit_point))
+                Ok(Some((Some(reflected_ray), generated_hit_point)))
             } else {
                 self.number_of_bounces += 1;
                 self.prev_dir = Some(self.dir);
                 self.dir = reflected_dir;
-                Ok((None, None))
+                Ok(Some((None, None)))
             }
         } else {
             match missed_surface_strategy {
                 MissedSurfaceStrategy::Stop => self.set_invalid(),
                 MissedSurfaceStrategy::Ignore => {}
             }
-            Ok((None, None))
+            Ok(None)
         }
     }
 

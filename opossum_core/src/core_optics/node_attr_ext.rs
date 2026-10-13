@@ -165,7 +165,7 @@ impl<T: ?Sized + HasNodeAttr> NodeAttrExt for T {
             node_attr_mut.set_align_like_node_at_distance(*node_idx, *distance);
         }
 
-        node_attr_mut.update_properties(node_attributes.properties().clone());
+        node_attr_mut.update_properties(node_attributes.properties());
         node_attr_mut.set_ports(node_attributes.raw_ports().clone());
         node_attr_mut.set_uuid(node_attributes.uuid());
         node_attr_mut.set_gui_position(node_attributes.gui_position());

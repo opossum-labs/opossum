@@ -5,15 +5,13 @@ use crate::{
     analyzers::{
         energy::{AnalysisEnergy, EnergyConfig},
         ghostfocus::AnalysisGhostFocus,
+        propagation_strategy::PropagationStrategy,
         raytrace::AnalysisRayTrace,
     },
     core_optics::{NodeAttr, NodeAttrExt, OpticNodeExt, Planar, SurfaceKind},
     error::{OpmResult, OpossumError},
     geometry::Geometry,
-    light::{
-        LightData, LightRays, LightResult, Rays,
-        light_result::{light_rays_to_light_result, light_result_to_light_rays},
-    },
+    light::{LightData, LightRays, LightResult, Rays},
     nodes::{
         FilterType, NodeRegistration, create_surface_properties,
         ideal_filter::filter_types::FilterConst,
@@ -40,6 +38,8 @@ inventory::submit! {
 ///   - `name`
 ///   - `inverted`
 ///   - `filter type builder`: Config data for the filter type. See [`FilterTypeBuilder`] for details.
+///   - `clear aperture`: the extent of the filter; a ray beyond it misses the filter, is not
+///     filtered and follows the analyzer's missed surface strategy
 pub struct IdealFilter {
     node_attr: NodeAttr,
 }
@@ -139,7 +139,7 @@ impl Planar for IdealFilter {
 }
 impl OpticNode for IdealFilter {
     fn geometry(&self) -> OpmResult<Option<Geometry>> {
-        Ok(Some(Geometry::plane(None)))
+        Ok(Some(Geometry::plane(self.clear_aperture()?)))
     }
     fn as_surface(&self) -> Option<&dyn Planar> {
         Some(self)
@@ -151,25 +151,29 @@ impl OpticNode for IdealFilter {
 impl AnalysisGhostFocus for IdealFilter {
     fn analyze(
         &mut self,
-        incoming_data: LightRays,
+        mut incoming_data: LightRays,
         config: &GhostFocusConfig,
         _ray_collection: &mut Vec<Rays>,
         _bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
         let filter_type = self.filter_type()?;
-        let incoming_result = light_rays_to_light_result(incoming_data);
-        let output =
-            self.unified_analyze_single_surface_node(incoming_result, config, "input_1", None)?;
-        let light_rays = light_result_to_light_rays(output)?;
+        let in_port = &self.ports().names(&PortType::Input)[0];
         let out_port = &self.ports().names(&PortType::Output)[0];
-        if let Some(rays_bundles) = light_rays.clone().get_mut(out_port) {
-            for rays in rays_bundles {
-                rays.filter_energy(&filter_type)?;
-            }
-            Ok(light_rays)
-        } else {
-            Err(OpossumError::Analysis("filtering of rays failed".into()))
+        let Some(mut rays_bundle) = incoming_data.remove(in_port) else {
+            return Err(OpossumError::Analysis("filtering of rays failed".into()));
+        };
+        let hits = self.pass_through_surface_generic(
+            "input_1",
+            None,
+            &mut rays_bundle,
+            config,
+            false,
+            true,
+        )?;
+        for (rays, hits) in rays_bundle.iter_mut().zip(&hits) {
+            rays.filter_energy_hits(&filter_type, hits)?;
         }
+        Ok(LightRays::from([(out_port.clone(), rays_bundle)]))
     }
 }
 impl AnalysisEnergy for IdealFilter {
@@ -213,36 +217,24 @@ impl AnalysisRayTrace for IdealFilter {
             ));
         };
         let mut rays = r.clone();
-        let iso = self.effective_surface_iso(in_port)?;
+        let rays_before = rays.nr_of_rays(true);
         let Some(surf) = self.get_optic_surface_mut(in_port) else {
             return Err(OpossumError::Analysis("no surface found. Aborting".into()));
         };
         let refraction_intended = true;
-        rays.refract_on_surface(
+        let (_, hits) = rays.refract_on_surface(
             surf,
             None,
             refraction_intended,
             config.missed_surface_strategy(),
         )?;
-        rays.filter_energy(&filter_type)?;
-        match self.ports().aperture(&PortType::Input, in_port) {
-            Some(aperture) => {
-                rays.apodize(aperture, &iso)?;
-                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-            }
-            _ => {
-                return Err(OpossumError::OpticPort("input aperture not found".into()));
-            }
+        // A ray that ran past the filter is not filtered.
+        rays.filter_energy_hits(&filter_type, &hits)?;
+        // The optical axis is placed by geometry alone; its energy does not decide where it runs.
+        if !config.is_positioning_run() {
+            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
         }
-        match self.ports().aperture(&PortType::Output, out_port) {
-            Some(aperture) => {
-                rays.apodize(aperture, &iso)?;
-                rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-            }
-            _ => {
-                return Err(OpossumError::OpticPort("output aperture not found".into()));
-            }
-        }
+        self.warn_about_lost_rays(rays_before, rays.nr_of_rays(true));
         let light_data = LightData::Geometric(rays);
         Ok(LightResult::from([(out_port.into(), light_data)]))
     }
@@ -257,7 +249,9 @@ mod test {
         light::spectrum_helper::create_he_ne_spec,
         millimeter, nanometer,
         nodes::test_helper::helper::{
-            test_analyze_empty, test_analyze_wrong_data_type, test_inverted,
+            assert_valid_energies, placed_at_origin, rays_along_z_from, test_analyze_empty,
+            test_analyze_wrong_data_type, test_clear_aperture_absent_in_file, test_inverted,
+            test_rays_beyond_clear_aperture_are_lost,
         },
         percent,
         prelude::{BandFilter, Isometry},
@@ -421,6 +415,74 @@ mod test {
         } else {
             panic!("wrong data LightData format")
         }
+        Ok(())
+    }
+    /// A ghost focus analysis attenuates the light passing a filter just as a ray trace does.
+    #[test]
+    fn a_filter_attenuates_ghost_focus_rays() -> OpmResult<()> {
+        let mut node = IdealFilter::new(
+            "test",
+            &FilterTypeBuilder::Constant(FilterConst::new(percent!(30.0))?),
+        )?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        let rays = Rays::new_uniform_collimated(
+            nanometer!(1054.0),
+            joule!(1.0),
+            &Hexapolar::new(millimeter!(5.0), 1)?,
+        )?;
+        let output = AnalysisGhostFocus::analyze(
+            &mut node,
+            LightRays::from([("input_1".into(), vec![rays])]),
+            &GhostFocusConfig::default(),
+            &mut Vec::new(),
+            0,
+        )?;
+        let Some(passed) = output.get("output_1").and_then(|bundles| bundles.first()) else {
+            panic!("expected a ray bundle at the output port");
+        };
+        assert_abs_diff_eq!(passed.total_energy().get::<joule>(), 0.3);
+        Ok(())
+    }
+    #[test]
+    fn clear_aperture_absent_in_file() -> OpmResult<()> {
+        test_clear_aperture_absent_in_file::<IdealFilter>()
+    }
+    #[test]
+    fn rays_beyond_clear_aperture_are_lost() -> OpmResult<()> {
+        test_rays_beyond_clear_aperture_are_lost::<IdealFilter>()
+    }
+    /// A filter of 30 % at the origin.
+    fn placed_filter() -> OpmResult<IdealFilter> {
+        let mut node = placed_at_origin::<IdealFilter>()?;
+        node.set_transmission(percent!(30.0))?;
+        Ok(node)
+    }
+    /// Rays along z towards a filter at the origin, one at each of the given heights in mm.
+    fn rays_at(heights: &[f64]) -> OpmResult<Rays> {
+        let starts: Vec<_> = heights
+            .iter()
+            .map(|y| millimeter!(0.0, *y, -10.0))
+            .collect();
+        rays_along_z_from(&starts, nanometer!(1000.0))
+    }
+    /// A ray running past a filter in a ghost focus analysis is not filtered; one passing it is.
+    #[test]
+    fn a_filter_does_not_filter_a_ray_beyond_its_rim() -> OpmResult<()> {
+        let output = AnalysisGhostFocus::analyze(
+            &mut placed_filter()?,
+            LightRays::from([("input_1".into(), vec![rays_at(&[12.4, 12.6])?])]),
+            &GhostFocusConfig::default(),
+            &mut Vec::new(),
+            0,
+        )?;
+        let Some(passed) = output.get("output_1").and_then(|bundles| bundles.first()) else {
+            panic!("expected a ray bundle at the output port");
+        };
+        assert_valid_energies(
+            passed,
+            &[0.3, 1.0],
+            "the ray beyond the rim keeps its energy",
+        );
         Ok(())
     }
     #[test]

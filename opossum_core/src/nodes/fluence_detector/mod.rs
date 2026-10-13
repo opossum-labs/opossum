@@ -9,12 +9,12 @@ use crate::{
     },
     core_optics::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, SurfaceKind,
-        hit_map::fluence_estimator::FluenceEstimator,
+        hit_map::fluence_estimator::FluenceEstimator, optic_node::APERTURE_LIMIT_NOTE,
     },
     error::OpmResult,
-    geometry::Geometry,
+    geometry::{Geometry, SurfaceShape},
     light::LightData,
-    nodes::{NodeRegistration, create_surface_properties},
+    nodes::{NodeRegistration, create_detector_properties},
     properties::{Properties, Proptype},
     reporting::node_report::{NodeReport, NodeReportResult},
 };
@@ -43,6 +43,8 @@ inventory::submit! {
 /// ## Properties
 ///   - `name`
 ///   - `fluence estimator`
+///   - `clear aperture`: the window the light is recorded within, open by default; light outside
+///     it passes unrecorded
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
@@ -65,7 +67,7 @@ impl Default for FluenceDetector {
                 FluenceEstimator::Voronoi.into(),
             )
             .unwrap();
-        create_surface_properties(&mut node_attr).unwrap();
+        create_detector_properties(&mut node_attr).unwrap();
         let mut fld = Self {
             node_attr,
             apodization_warning: false,
@@ -93,7 +95,10 @@ impl Planar for FluenceDetector {
 }
 impl OpticNode for FluenceDetector {
     fn geometry(&self) -> OpmResult<Option<Geometry>> {
-        Ok(Some(Geometry::plane(None)))
+        Ok(Some(Geometry::detector(
+            SurfaceShape::Plane,
+            self.clear_aperture()?,
+        )?))
     }
     fn as_surface(&self) -> Option<&dyn Planar> {
         Some(self)
@@ -150,8 +155,7 @@ impl OpticNode for FluenceDetector {
                 props.create(
                     "Warning",
                     "warning during analysis",
-                    "Rays have been apodized at input aperture. Results might not be accurate."
-                        .into(),
+                    APERTURE_LIMIT_NOTE.into(),
                 )?;
             }
         } else {
@@ -252,8 +256,14 @@ mod test {
         Ok(())
     }
     #[test]
-    fn analyze_apodization_warning() -> OpmResult<()> {
-        test_analyze_apodization_warning::<FluenceDetector>()
+    fn clear_aperture_absent_in_file() -> OpmResult<()> {
+        test_clear_aperture_absent_in_file::<FluenceDetector>()
+    }
+    #[test]
+    fn records_inside_and_passes_all() -> OpmResult<()> {
+        test_detector_records_inside_and_passes_all::<FluenceDetector>(|detector| {
+            detector.light_data.as_ref()
+        })
     }
     #[test]
     fn analyze_inverse() -> OpmResult<()> {

@@ -22,10 +22,11 @@ use crate::{
     },
     error::{OpmResult, OpossumError},
     gain::Extraction,
-    geometry::body::SurfaceBoundedBody,
+    geometry::body::{CLEAR_APERTURE, SurfaceBoundedBody},
     light::{LightData, LightRays, LightResult, Rays},
     material::{MATERIAL, Material},
     properties::{Proptype, proptype::AssetRef},
+    types::validated_type_definitions::ValidatedCrossSection,
     utils::geom_transformation::Isometry,
 };
 
@@ -84,6 +85,24 @@ pub trait Volumetric: OpticNode {
         [0.3, 0.3, 0.3]
     }
 
+    /// Return the cross section of this node's medium: its clear aperture, which has to bound it.
+    ///
+    /// # Returns
+    ///
+    /// The clear aperture as the outline of a region.
+    ///
+    /// # Errors
+    ///
+    /// This function errors if the clear aperture cannot be read, does not delimit a region or is
+    /// open, which would leave the medium unbounded.
+    fn cross_section(&self) -> OpmResult<ValidatedCrossSection> {
+        self.clear_aperture()?.ok_or_else(|| {
+            OpossumError::Analysis(format!(
+                "the {CLEAR_APERTURE} of {} is open, so its medium is unbounded",
+                self.node_info()
+            ))
+        })
+    }
     /// Return the volume enclosed by the two surfaces of this node as a
     /// [`Body`](crate::geometry::body::Body).
     ///
@@ -182,7 +201,8 @@ pub trait Volumetric: OpticNode {
             strategy,
             backward,
             refraction_intended,
-        )
+        )?;
+        Ok(())
     }
     /// Apply whatever the medium does to a ray bundle travelling through it.
     ///
@@ -1127,16 +1147,12 @@ mod test {
         );
         Ok(())
     }
-    /// The gain an inverted, decentred and tilted biconvex lens applies, ray by ray.
+    /// An inverted, decentred and tilted biconvex lens, placed 20 mm along z.
     ///
-    /// A small signal model amplifies over the chord of every ray through the medium, so this pins
-    /// the whole way from the node's geometry to the gain - in the configuration where mixing up
-    /// entrance and exit or the frame of the medium would show.
+    /// # Errors
     ///
-    /// Four rays (energy exactly 1/19 J) currently pass without any gain: on a backwards pass the
-    /// chord misses the surface the ray starts on. Pinned so that a fix shows up as a deliberate change.
-    #[test]
-    fn an_inverted_aligned_lens_amplifies_as_recorded() -> OpmResult<()> {
+    /// Returns an error if the lens cannot be built or placed.
+    fn inverted_aligned_lens() -> OpmResult<Lens> {
         let mut lens = Lens::new(
             "head",
             millimeter!(80.0),
@@ -1150,12 +1166,16 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )?))?;
         lens.set_alignment(millimeter!(1.0, -2.0, 0.0), degree!(3.0, -2.0, 0.0))?;
-        let mut config = RayTraceConfig::default();
-        config.set_active_pump_scenario(Some(scenario_with_small_signal(lens.node_attr().uuid())?));
-        lens.prepare_volume(&config)?;
-        let (in_port, out_port) = single_io_port_names(&lens)?;
-        // An inverted node is passed backwards, so the bundle comes from +z and travels along -z.
-        let rays = Rays::new_uniform_collimated(
+        Ok(lens)
+    }
+    /// A collimated bundle of 19 rays (1 J in total) coming from +z and travelling along -z, as an
+    /// inverted node is passed backwards.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the bundle cannot be built.
+    fn backwards_bundle() -> OpmResult<Rays> {
+        Ok(Rays::new_uniform_collimated(
             nanometer!(1053.0),
             joule!(1.0),
             &crate::distributions::position::Hexapolar::new(millimeter!(5.0), 2)?,
@@ -1163,8 +1183,128 @@ mod test {
         .transformed_by_iso(&Isometry::new(
             millimeter!(0.0, 0.0, 60.0),
             degree!(180.0, 0.0, 0.0),
-        )?);
+        )?))
+    }
+    /// The largest energy of a single ray in the bundle, in joule.
+    fn largest_energy(rays: &Rays) -> f64 {
+        rays.iter()
+            .map(|ray| ray.energy().value)
+            .fold(0.0, f64::max)
+    }
+    /// Assert that every one of the given number of rays left the medium valid and with more energy
+    /// than any of them entered with.
+    fn assert_every_ray_gained(rays: &Rays, ray_count: usize, entering_energy: f64) {
+        let valid: Vec<_> = rays.iter().filter(|ray| ray.valid()).collect();
+        assert_eq!(valid.len(), ray_count, "every ray has to pass the medium");
+        for (index, ray) in valid.iter().enumerate() {
+            assert!(
+                ray.energy().value > entering_energy,
+                "ray {index} left the medium with {} J, not more than the {entering_energy} J \
+                 a ray entered with",
+                ray.energy().value
+            );
+        }
+    }
+    /// Every ray crossing an inverted, curved amplifier gains.
+    ///
+    /// Regression test: on a backwards pass a ray starts on the surface it has just entered
+    /// through, and its chord was lost whenever rounding put that start just outside the medium.
+    #[test]
+    fn every_ray_through_an_inverted_curved_amplifier_gains() -> OpmResult<()> {
+        let mut lens = inverted_aligned_lens()?;
+        let mut config = RayTraceConfig::default();
+        config.set_active_pump_scenario(Some(scenario_with_small_signal(lens.node_attr().uuid())?));
+        lens.prepare_volume(&config)?;
+        let (in_port, out_port) = single_io_port_names(&lens)?;
+        let rays = backwards_bundle()?;
+        let (ray_count, entering_energy) = (rays.nr_of_rays(true), largest_energy(&rays));
         let incoming = LightResult::from([(in_port, LightData::Geometric(rays))]);
+        let outgoing = AnalysisRayTrace::analyze(&mut lens, incoming, &config)?;
+        let Some(LightData::Geometric(rays)) = outgoing.get(&out_port) else {
+            panic!("expected ray data at the output port");
+        };
+        assert_every_ray_gained(rays, ray_count, entering_energy);
+        Ok(())
+    }
+    /// The ghost focus variant of [`every_ray_through_an_inverted_curved_amplifier_gains`]: a ghost
+    /// running back through the medium starts on a surface of it just the same.
+    #[test]
+    fn every_ghost_focus_ray_through_an_inverted_curved_amplifier_gains() -> OpmResult<()> {
+        let mut lens = inverted_aligned_lens()?;
+        let mut config = GhostFocusConfig::default();
+        config.set_active_pump_scenario(Some(scenario_with_small_signal(lens.node_attr().uuid())?));
+        lens.prepare_volume(&config)?;
+        let (in_port, out_port) = single_io_port_names(&lens)?;
+        let rays = backwards_bundle()?;
+        let (ray_count, entering_energy) = (rays.nr_of_rays(true), largest_energy(&rays));
+        let incoming = LightRays::from([(in_port, vec![rays])]);
+        let outgoing =
+            AnalysisGhostFocus::analyze(&mut lens, incoming, &config, &mut Vec::new(), 0)?;
+        let Some([rays, ..]) = outgoing.get(&out_port).map(Vec::as_slice) else {
+            panic!("expected rays at the output port");
+        };
+        assert_every_ray_gained(rays, ray_count, entering_energy);
+        Ok(())
+    }
+    /// Every ray through the inverted, curved amplifier gains exactly `exp(g₀·L)`, where `L` is the
+    /// straight path between the two points it was refracted at.
+    ///
+    /// The medium is pumped uniformly, so the factor follows from each ray's own path alone. This
+    /// checks the values recorded in [`an_inverted_aligned_lens_amplifies_as_recorded`] without
+    /// relying on them.
+    #[test]
+    fn every_ray_gains_exp_of_its_path_between_the_refractions() -> OpmResult<()> {
+        let mut lens = inverted_aligned_lens()?;
+        let mut config = RayTraceConfig::default();
+        config.set_active_pump_scenario(Some(scenario_with_small_signal(lens.node_attr().uuid())?));
+        lens.prepare_volume(&config)?;
+        let (in_port, out_port) = single_io_port_names(&lens)?;
+        let rays = backwards_bundle()?;
+        let (ray_count, entering_energy) = (rays.nr_of_rays(true), largest_energy(&rays));
+        let incoming = LightResult::from([(in_port, LightData::Geometric(rays))]);
+        let outgoing = AnalysisRayTrace::analyze(&mut lens, incoming, &config)?;
+        let Some(LightData::Geometric(rays)) = outgoing.get(&out_port) else {
+            panic!("expected ray data at the output port");
+        };
+        assert_eq!(rays.nr_of_rays(true), ray_count);
+        let mismatches: Vec<String> = rays
+            .iter()
+            .enumerate()
+            .filter_map(|(index, ray)| {
+                // The last two positions are where the ray entered and where it left the medium.
+                let positions = ray.position_history_with_current();
+                let point = |row: usize| {
+                    nalgebra::Point3::new(
+                        positions[(row, 0)],
+                        positions[(row, 1)],
+                        positions[(row, 2)],
+                    )
+                };
+                let last = positions.nrows() - 1;
+                let path =
+                    crate::utils::math_utils::distance_3d_point(&point(last - 1), &point(last));
+                let expected = entering_energy * f64::exp((head_gain_coefficient() * path).value);
+                let actual = ray.energy().value;
+                ((actual - expected).abs() > 1e-9 * expected)
+                    .then(|| format!("ray {index}: {actual} J instead of {expected} J"))
+            })
+            .collect();
+        assert!(mismatches.is_empty(), "{mismatches:#?}");
+        Ok(())
+    }
+    /// The gain an inverted, decentred and tilted biconvex lens applies, ray by ray.
+    ///
+    /// A small signal model amplifies over the chord of every ray through the medium, so this pins
+    /// the whole way from the node's geometry to the gain - in the configuration where mixing up
+    /// entrance and exit or the frame of the medium would show.
+    #[test]
+    fn an_inverted_aligned_lens_amplifies_as_recorded() -> OpmResult<()> {
+        let mut lens = inverted_aligned_lens()?;
+        let mut config = RayTraceConfig::default();
+        config.set_active_pump_scenario(Some(scenario_with_small_signal(lens.node_attr().uuid())?));
+        lens.prepare_volume(&config)?;
+        let (in_port, out_port) = single_io_port_names(&lens)?;
+        let incoming = LightResult::from([(in_port, LightData::Geometric(backwards_bundle()?))]);
         let outgoing = AnalysisRayTrace::analyze(&mut lens, incoming, &config)?;
         let Some(LightData::Geometric(rays)) = outgoing.get(&out_port) else {
             panic!("expected ray data at the output port");
@@ -1199,7 +1339,7 @@ mod test {
                     -0.013_748_195_716,
                     -0.010_349_341_315,
                     -0.999_851_928_162,
-                    0.052_631_578_947,
+                    0.078_439_558_536,
                     43.888_931_228_945,
                 ],
                 [
@@ -1209,7 +1349,7 @@ mod test {
                     -0.013_844_859_914,
                     -0.036_281_875_871,
                     -0.999_245_688_175,
-                    0.052_631_578_947,
+                    0.077_999_622_756,
                     43.639_682_117_745,
                 ],
                 [
@@ -1249,7 +1389,7 @@ mod test {
                     0.008_626_386_893,
                     0.028_371_002_571,
                     -0.999_560_239_136,
-                    0.052_631_578_947,
+                    0.078_205_645_377,
                     44.087_285_729_648,
                 ],
                 [
@@ -1299,7 +1439,7 @@ mod test {
                     -0.017_513_767_670,
                     -0.068_624_039_745,
                     -0.997_488_851_622,
-                    0.052_631_578_947,
+                    0.076_744_675_811,
                     43.118_390_369_090,
                 ],
                 [
@@ -1507,32 +1647,6 @@ mod test {
         }
         Ok(())
     }
-    /// Only the nodes that really enclose a medium or are one optical surface may present
-    /// themselves as [`Volumetric`] or [`Planar`].
-    ///
-    /// "Node with a transversal extent" is stated twice: by one of these two capabilities and by
-    /// the [`CLEAR_APERTURE`] property such a node carries. Both have to mean the same set of node
-    /// types, otherwise a node ends up with an extent that is undefined, and no node may claim both
-    /// capabilities at once - a lens is not also its own mirror.
-    #[test]
-    fn the_clear_aperture_property_matches_exactly_the_volume_and_surface_nodes() -> OpmResult<()> {
-        for (node_type, _) in node_types() {
-            let optic_ref = create_node_ref(node_type)?;
-            let is_volumetric = optic_ref.as_volume().is_some();
-            let is_planar = optic_ref.as_surface().is_some();
-            assert!(
-                !(is_volumetric && is_planar),
-                "node type '{node_type}' presents itself as both volumetric and planar"
-            );
-            assert_eq!(
-                optic_ref.node_attr().get_property(CLEAR_APERTURE).is_ok(),
-                is_volumetric || is_planar,
-                "node type '{node_type}' declares '{CLEAR_APERTURE}' or presents itself as \
-                 volumetric or planar, but not both"
-            );
-        }
-        Ok(())
-    }
     /// Every node that presents itself as [`Volumetric`] can also be drawn as a solid.
     ///
     /// A node type is registered once and then shows up in the 3D view without anything being added
@@ -1574,6 +1688,73 @@ mod test {
                 "the surface of node type '{node_type}' came out without any triangles"
             );
         }
+        Ok(())
+    }
+    /// A node declares a [`CLEAR_APERTURE`] that bounds a region exactly when its geometry has a
+    /// rim, and every surface it installs carries exactly that rim. A detector starts with an open
+    /// clear aperture: it records all light and has no rim.
+    ///
+    /// The extent of a component is stated by the property, decides the hits through the rim of
+    /// each surface, and bounds the medium through the geometry; all three have to agree, or rays
+    /// would hit a component of one size while the medium has another.
+    #[test]
+    fn a_declared_clear_aperture_bounds_every_installed_surface() -> OpmResult<()> {
+        for (node_type, _) in node_types() {
+            let optic_ref = create_node_ref(node_type)?;
+            let rim = match optic_ref.geometry()? {
+                Some(geometry) => geometry.rim()?,
+                None => None,
+            };
+            let bounded = matches!(
+                optic_ref.node_attr().get_property(CLEAR_APERTURE),
+                Ok(Proptype::Aperture(shape)) if shape.is_binary()
+            );
+            assert_eq!(
+                bounded,
+                rim.is_some(),
+                "node type '{node_type}' declares a bounding '{CLEAR_APERTURE}' or has a rim, \
+                 but not both"
+            );
+            let surfaces = optic_ref.node_attr().runtime_surfaces();
+            for (name, surface) in surfaces.inputs.iter().chain(&surfaces.outputs) {
+                assert_eq!(
+                    surface.rim(),
+                    rim.as_ref(),
+                    "surface '{name}' of node type '{node_type}'"
+                );
+            }
+        }
+        Ok(())
+    }
+    /// Only what merely records light, is an idealization or has no optical function may be
+    /// unbounded: the detectors, the paraxial surface and the dummy accept an open clear aperture,
+    /// every real component refuses one.
+    #[test]
+    fn only_detectors_ideal_surfaces_and_the_dummy_may_be_open() -> OpmResult<()> {
+        let mut may_be_open = Vec::new();
+        for (node_type, _) in node_types() {
+            let mut node_attr = create_node_ref(node_type)?.node_attr().clone();
+            if node_attr.get_property(CLEAR_APERTURE).is_ok()
+                && node_attr
+                    .set_property(CLEAR_APERTURE, crate::apertures::ApertureShape::Open.into())
+                    .is_ok()
+            {
+                may_be_open.push(node_type);
+            }
+        }
+        may_be_open.sort_unstable();
+        assert_eq!(
+            may_be_open,
+            [
+                "dummy",
+                "energy meter",
+                "fluence detector",
+                "paraxial surface",
+                "spectrometer",
+                "spot diagram",
+                "wavefront monitor",
+            ]
+        );
         Ok(())
     }
     /// A node presents itself as a volume exactly when its geometry encloses one.

@@ -163,7 +163,7 @@ impl OpticNode for CylindricLens {
             *front_curvature,
             *rear_curvature,
             *center_thickness,
-            self.clear_aperture()?,
+            self.cross_section()?,
         )?))
     }
     fn as_volume(&self) -> Option<&dyn Volumetric> {
@@ -273,6 +273,10 @@ mod test {
         };
         assert_eq!((*material).get_refractive_index(Length::zero())?, 2.0);
         Ok(())
+    }
+    #[test]
+    fn rays_beyond_clear_aperture_are_lost() -> OpmResult<()> {
+        test_rays_beyond_clear_aperture_are_lost::<CylindricLens>()
     }
     #[test]
     fn inverted() -> OpmResult<()> {

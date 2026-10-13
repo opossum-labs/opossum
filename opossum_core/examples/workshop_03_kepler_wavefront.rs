@@ -8,9 +8,9 @@
 //! 1. One collimated line ray source
 //! 2. A wavefront analyzer before the telescope
 //! 3. Refractive index data for HZF52 glass
-//! 4. A 75 mm spherical lens with a circular input aperture
+//! 4. A 75 mm spherical lens with a clear aperture of 25 mm radius
 //! 5. A spot diagram analyzer at the focus of the first lens
-//! 6. A 50 mm spherical lens
+//! 6. A 50 mm spherical lens of the same size
 //! 7. A ray propagation visualizer after the second lens
 //! 8. A wavefront analyzer after the telescope
 //! 9. A ray-tracing analyzer for the source beam
@@ -23,7 +23,7 @@
 //!
 //! This example demonstrates:
 //! - Building spherical lenses from wavelength-dependent refractive index data
-//! - Applying a circular aperture to the first lens
+//! - Giving the lenses their size with a clear aperture
 //! - Connecting optical components with fixed propagation distances
 //! - Attaching wavefront and spot diagram analyzers to inspect the beam
 //! - Configuring a ray-tracing analyzer and saving the system as an
@@ -32,16 +32,17 @@
 //! Imports:
 //! - `opossum_core::prelude::*` — optical components, analyzers, unit
 //!   macros, and document types
-//! - `opossum_core::core_optics::{NodeAttrExt, OpticNodeExt}` — extension
-//!   traits for setting node names and properties
+//! - `opossum_core::core_optics::NodeAttrExt` — extension trait for setting
+//!   node names and properties
+//! - `opossum_core::apertures::CircleShape` — the shape of a lens's clear
+//!   aperture
 //! - `opossum_core::nodes::round_collimated_ray_builder` — builds a round
 //!   collimated ray source
 //! - `std::{env, path::Path}` — used to find the output directory and save
 //!   the `.opm` file
 
 use opossum_core::{
-    core_optics::{NodeAttrExt, OpticNodeExt},
-    nodes::round_collimated_ray_builder,
+    apertures::CircleShape, core_optics::NodeAttrExt, nodes::round_collimated_ray_builder,
     prelude::*,
 };
 use std::{env, path::Path};
@@ -78,29 +79,29 @@ fn main() -> OpmResult<()> {
         7.52649555E-005,
         nanometer!(300.0)..nanometer!(2000.0),
     )?;
-    // 4. Define the Lenses and Aperture
-    // First lens: 75 mm focal length, 10 mm thickness, with a circular aperture of 25 mm.
-    let mut lens1 = Lens::new(
+    // 4. Define the Lenses and their size
+    // First lens: 75 mm focal length, 10 mm thickness, with a clear aperture of 25 mm radius.
+    let lens1 = Lens::new_with_clear_aperture(
         "75 mm lens",
         millimeter!(122.25),  // radius of curvature front
         millimeter!(-122.25), // radius of curvature back
         millimeter!(10.0),    // thickness
         &refr_index_hzf52,
+        CircleShape::new(millimeter!(25.0))?.into(),
     )?;
-    let aperture = Aperture::new_circle(millimeter!(25.0), ApertureType::Hole, None)?;
-    lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
     // Add the first lens to the optical system.
     let i_pl1 = scenery.add_node(lens1)?;
     // 5. Define the Spot Diagram Analyzer
     // Add a spot diagram analyzer to inspect the beam at the focus of the first lens.
     let i_sd6 = scenery.add_node(SpotDiagram::new("spot diagram at focus")?)?;
-    // Define the second lens: 50 mm focal length and 10 mm thickness.
-    let lens2 = Lens::new(
+    // Define the second lens: 50 mm focal length, 10 mm thickness and the same size as the first.
+    let lens2 = Lens::new_with_clear_aperture(
         "50 mm lens",
         millimeter!(100.0),
         millimeter!(-100.0),
         millimeter!(10.0),
         &refr_index_hzf52,
+        CircleShape::new(millimeter!(25.0))?.into(),
     )?;
     let i_pl2 = scenery.add_node(lens2)?;
     // 6. Define the Ray Propagation Visualizer

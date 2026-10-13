@@ -1,4 +1,3 @@
-pub mod aperture_editor;
 mod coating_editor;
 
 use dioxus::prelude::*;
@@ -6,7 +5,7 @@ use opossum_core::{
     coatings::CoatingType,
     core_optics::optic_ports::PortConfig,
     nodes::fluence_detector::Fluence,
-    prelude::{Aperture, PortType},
+    prelude::PortType,
     types::api_types::{NodeEditorPanel, NodeInfo, UpdatePortRequest},
 };
 use uom::si::radiant_exposure::joule_per_square_centimeter;
@@ -21,9 +20,7 @@ use crate::{
         },
         inputs::input_components::{NodeConfigUnitInput, UnitHandling},
         node_config_editor::{NodeChangeAction, NodeChangeEvent},
-        optical_node_editor::port_config_editor::{
-            aperture_editor::ApertureEditor, coating_editor::CoatingEditor,
-        },
+        optical_node_editor::port_config_editor::coating_editor::CoatingEditor,
     },
 };
 
@@ -55,8 +52,8 @@ pub fn PortConfigEditor(
     // resolves, so opening it any earlier is a silent no-op. Reading the resource with `.read()` (not
     // `.read_unchecked()`) subscribes the effect, so it re-runs the moment the ports resolve - which is
     // what makes this reliable across a preceding re-fetch (e.g. an invert that swapped the port set).
-    // Also expands each port's own sub-accordion, plus its nested Aperture Configuration accordion, so
-    // the reverted value isn't hidden behind a collapsed row.
+    // Also expands each port's own sub-accordion, so the reverted value isn't hidden behind a
+    // collapsed row.
     use_effect(move || {
         let Some((uuid, panel)) = *crate::PENDING_PANEL_OPEN.read() else {
             return;
@@ -70,7 +67,6 @@ pub fn PortConfigEditor(
         open_accordion_section(NodeEditorPanel::PortConfig);
         for port_name in ports_info.inputs.keys().chain(ports_info.outputs.keys()) {
             open_accordion_content(&format!("singlePortCollapse{port_name}"));
-            open_accordion_content(&format!("apertureConfigCollapse{port_name}"));
         }
         *crate::PENDING_PANEL_OPEN.write() = None;
     });
@@ -169,19 +165,6 @@ pub fn SinglePortConfigEditor(
                         OPOSSUM_UI_LOGS.write().add_log(&format!("Invalid LIDT value: {err}"));
                     });
                 update_port_request.lidt = Some(new_fluence);
-                on_change.call(update_port_request);
-            },
-            readonly,
-        }
-        ApertureEditor {
-            node_id,
-            port_name: port_name.clone(),
-            aperture: port_config.aperture,
-            on_change: move |aperture: Aperture| {
-                let update_port_request = UpdatePortRequest {
-                    aperture: Some(aperture),
-                    ..Default::default()
-                };
                 on_change.call(update_port_request);
             },
             readonly,

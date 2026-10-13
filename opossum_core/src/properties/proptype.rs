@@ -17,7 +17,7 @@ use crate::{
     },
     material::Material,
     nodes::{
-        Metertype, SpectrometerType, SplittingConfigBuilder, WaveFrontMap,
+        Metertype, SpectrometerType, SplittingConfigBuilder, WaveFrontMap, WavefrontDecomposition,
         fluence_detector::{Fluence, fluence_data::FluenceData},
         ideal_filter::FilterTypeBuilder,
         ray_propagation_visualizer::RayPositionHistories,
@@ -47,6 +47,7 @@ use uuid::Uuid;
 static HTML_PROP_SIMPLE: &str = include_str!("../html/prop_simple.html");
 static HTML_PROP_IMAGE: &str = include_str!("../html/prop_image.html");
 static HTML_PROP_GROUP: &str = include_str!("../html/node_report.html");
+static HTML_PROP_DECOMPOSITION: &str = include_str!("../html/prop_decomposition.html");
 
 thread_local! {
     static THREAD_TEMPLATES: RefCell<TinyTemplate<'static>> = RefCell::new({
@@ -57,6 +58,8 @@ thread_local! {
             .expect("Failed to add image template (thread-local)");
         tt.add_template("group", HTML_PROP_GROUP)
             .expect("Failed to add group template (thread-local)");
+        tt.add_template("decomposition", HTML_PROP_DECOMPOSITION)
+            .expect("Failed to add decomposition template (thread-local)");
         tt
     });
 }
@@ -167,6 +170,8 @@ pub enum Proptype {
     FluenceEstimator(FluenceEstimator),
     /// This property stores the wavefront Information [`WaveFrontMap`]
     WaveFrontData(WaveFrontMap),
+    /// Polynomial wavefront basis decomposition
+    WavefrontDecomposition(WavefrontDecomposition),
     /// This property stores the ray position history of all [`Rays`](crate::light::Rays) during propagation through the optic scenery
     RayPositionHistory(RayPositionHistories),
     /// This property stores the ray position history of all [`Rays`](crate::light::Rays), separated by their bounce level,
@@ -245,6 +250,9 @@ impl Proptype {
                     let html_node_report = HtmlNodeReport::from_node_report(report, report_number);
                     template_engine.render("group", &html_node_report)
                 }
+                Self::WavefrontDecomposition(decomp) => {
+                    render_decomposition_html(decomp, &template_engine)
+                }
                 Self::Fluence(value) => template_engine.render(
                     "simple",
                     &format!(
@@ -280,6 +288,121 @@ impl Proptype {
             string_value.map_err(|e| OpossumError::Other(format!("Template rendering error: {e}")))
         })
     }
+    /// Returns the raw scalar value as an `f64` if this variant represents a numeric scalar.
+    /// For dimensional `uom` quantities, the value is returned in its fundamental SI base unit.
+    #[must_use]
+    pub fn as_f64(&self) -> Option<f64> {
+        match self {
+            Self::F64(v) | Self::WfLambda(v, _) => Some(*v),
+            Self::I32(v) => Some(f64::from(*v)),
+            Self::Length(v) | Self::Curvature(v) => Some(v.value),
+            Self::Angle(v) => Some(v.value),
+            Self::Energy(v) => Some(v.value),
+            Self::Fluence(v) => Some(v.value),
+            Self::LinearDensity(v) => Some(v.value),
+            _ => None,
+        }
+    }
+    /// Sets the scalar value directly if this variant represents a numeric scalar.
+    /// Dimensional quantities are updated in their fundamental SI base unit.
+    ///
+    /// # Errors
+    /// Returns an [`OpossumError::Properties`] if the variant does not support scalar numeric assignment.
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn set_f64(&mut self, value: f64) -> OpmResult<()> {
+        match self {
+            Self::F64(v) | Self::WfLambda(v, _) => {
+                *v = value;
+                Ok(())
+            }
+            Self::I32(v) => {
+                *v = value.round() as i32;
+                Ok(())
+            }
+            Self::Length(v) | Self::Curvature(v) => {
+                v.value = value;
+                Ok(())
+            }
+            Self::Angle(v) => {
+                v.value = value;
+                Ok(())
+            }
+            Self::Energy(v) => {
+                v.value = value;
+                Ok(())
+            }
+            Self::Fluence(v) => {
+                v.value = value;
+                Ok(())
+            }
+            Self::LinearDensity(v) => {
+                v.value = value;
+                Ok(())
+            }
+            _ => Err(OpossumError::Properties(
+                "Property variant cannot be set from a scalar f64 value".into(),
+            )),
+        }
+    }
+}
+/// Helper function to build the template context and render the decomposition table to HTML.
+fn render_decomposition_html(
+    decomp_data: &WavefrontDecomposition,
+    template_engine: &TinyTemplate<'_>,
+) -> Result<String, tinytemplate::error::Error> {
+    const NOISE_THRESHOLD_LAMBDA: f64 = 1e-6;
+    let wvl = decomp_data.wavelength;
+
+    let residual_rms_val = if decomp_data.decomposition.residual_rms.abs() < NOISE_THRESHOLD_LAMBDA
+    {
+        0.0
+    } else {
+        decomp_data.decomposition.residual_rms
+    };
+
+    let mut modes = Vec::new();
+    for mode in &decomp_data.decomposition.modes {
+        // Skip global phase shift (piston)
+        if mode.is_piston {
+            continue;
+        }
+
+        // Cut off sub-micro-lambda numerical noise
+        let coeff = if mode.coefficient.abs() < NOISE_THRESHOLD_LAMBDA {
+            0.0
+        } else {
+            mode.coefficient
+        };
+
+        let coeff_lambda_str = format!("{}λ", format_value_with_prefix(coeff));
+        let physical_val = coeff * wvl.value; // Value in fundamental base unit (meter)
+        let coeff_phys_str = format_quantity(meter, Length::new::<meter>(physical_val));
+
+        modes.push(HtmlDecompMode {
+            label: mode.label.clone(),
+            coeff_lambda: coeff_lambda_str,
+            coeff_physical: coeff_phys_str,
+        });
+    }
+
+    let metadata = decomp_data
+        .decomposition
+        .metadata
+        .iter()
+        .map(|(k, v)| HtmlDecompMeta {
+            key: k.clone(),
+            val: v.clone(),
+        })
+        .collect();
+
+    let ctx = HtmlDecompContext {
+        basis_name: decomp_data.decomposition.basis_name.clone(),
+        residual_rms: format!("{}λ", format_value_with_prefix(residual_rms_val)),
+        metadata,
+        modes,
+    };
+
+    template_engine.render("decomposition", &ctx)
 }
 impl From<bool> for Proptype {
     fn from(value: bool) -> Self {
@@ -386,6 +509,32 @@ impl From<Material> for Proptype {
     fn from(value: Material) -> Self {
         Self::Material(AssetRef::Inline(value))
     }
+}
+
+impl From<WavefrontDecomposition> for Proptype {
+    fn from(value: WavefrontDecomposition) -> Self {
+        Self::WavefrontDecomposition(value)
+    }
+}
+#[derive(Serialize)]
+struct HtmlDecompMeta {
+    key: String,
+    val: String,
+}
+
+#[derive(Serialize)]
+struct HtmlDecompMode {
+    label: String,
+    coeff_lambda: String,
+    coeff_physical: String,
+}
+
+#[derive(Serialize)]
+struct HtmlDecompContext {
+    basis_name: String,
+    residual_rms: String,
+    metadata: Vec<HtmlDecompMeta>,
+    modes: Vec<HtmlDecompMode>,
 }
 /// Generate a string suffix for an ordinal number
 #[must_use]
@@ -572,5 +721,50 @@ mod test {
         assert_eq!(count_str(22), "22nd");
         assert_eq!(count_str(23), "23rd");
         assert_eq!(count_str(24), "24th");
+    }
+    #[test]
+    fn asset_ref_inline_and_id() {
+        let inline_ref: AssetRef<i32> = AssetRef::from(42);
+        assert_eq!(inline_ref.as_inline(), Some(&42));
+        assert_eq!(*inline_ref.unwrap_inline(), 42);
+
+        let test_uuid = Uuid::new_v4();
+        let id_ref: AssetRef<i32> = AssetRef::Id(test_uuid);
+        assert_eq!(id_ref.as_inline(), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "Expected inline asset, found AssetRef::Id")]
+    fn asset_ref_unwrap_panic() {
+        let id_ref: AssetRef<i32> = AssetRef::Id(Uuid::new_v4());
+        let _ = id_ref.unwrap_inline();
+    }
+    #[test]
+    fn scalar_f64_access_and_mutation() -> OpmResult<()> {
+        use uom::si::length::millimeter;
+
+        // F64 variant
+        let mut prop_f64 = Proptype::F64(3.14);
+        assert_eq!(prop_f64.as_f64(), Some(3.14));
+        prop_f64.set_f64(2.718)?;
+        assert_eq!(prop_f64.as_f64(), Some(2.718));
+
+        // I32 variant
+        let mut prop_i32 = Proptype::I32(10);
+        assert_eq!(prop_i32.as_f64(), Some(10.0));
+        prop_i32.set_f64(25.4)?;
+        assert_eq!(prop_i32, Proptype::I32(25));
+
+        // UOM Length variant (operates strictly on SI base unit meter)
+        let mut prop_len = Proptype::Length(Length::new::<millimeter>(50.0));
+        assert!((prop_len.as_f64().unwrap() - 0.05).abs() < 1e-12);
+        prop_len.set_f64(0.125)?;
+        assert_eq!(prop_len, Proptype::Length(Length::new::<meter>(0.125)));
+
+        // Non-scalar variant must fail
+        let mut prop_bool = Proptype::Bool(true);
+        assert_eq!(prop_bool.as_f64(), None);
+        assert!(prop_bool.set_f64(1.0).is_err());
+        Ok(())
     }
 }

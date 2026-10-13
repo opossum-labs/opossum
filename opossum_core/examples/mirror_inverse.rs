@@ -1,10 +1,19 @@
-use opossum_core::prelude::*;
+use opossum_core::{
+    apertures::CircleShape, core_optics::NodeAttrExt, geometry::body::CLEAR_APERTURE, prelude::*,
+};
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
     let i_src = scenery.add_node(SourcePort::new("collimated line ray source"))?;
-    let i_m1 = scenery.add_node(ThinMirror::new("mirror 1").with_tilt(degree!(45.0, 0.0, 0.0))?)?;
+    // Turned by 45°, mirror 1 meets the beam on both passes up to about 19 mm from its center:
+    // it is a 2-inch mirror.
+    let mut mirror1 = ThinMirror::new("mirror 1").with_tilt(degree!(45.0, 0.0, 0.0))?;
+    mirror1.set_property(
+        CLEAR_APERTURE,
+        ApertureShape::from(CircleShape::new(millimeter!(25.4))?).into(),
+    )?;
+    let i_m1 = scenery.add_node(mirror1)?;
     let i_m2 = scenery.add_node(ThinMirror::new("mirror 2").with_tilt(degree!(2.0, 0.0, 0.0))?)?;
     let m1_ref = NodeReference::from_node(&scenery.node(i_m1)?)?;
     let i_m1_ref = scenery.add_node(m1_ref)?;

@@ -904,12 +904,55 @@ impl Rays {
     ///  - the z component of a ray direction is zero.
     ///  - the focal length is zero or not finite.
     pub fn refract_paraxial(&mut self, focal_length: Length, iso: &Isometry) -> OpmResult<()> {
+        self.refract_paraxial_where(focal_length, iso, |_| true)
+    }
+    /// Refract only the rays of this bundle that hit a surface, as
+    /// [`refract_paraxial`](Self::refract_paraxial) does for all of them.
+    ///
+    /// A ray that missed the surface never passed the lens and keeps its direction.
+    ///
+    /// # Arguments
+    ///
+    /// * `focal_length` - the focal length of the paraxial surface.
+    /// * `iso` - the isometry the paraxial surface is placed at.
+    /// * `hits` - for every ray of this bundle in order, whether it hit the surface, as returned by
+    ///   [`refract_on_surface`](Self::refract_on_surface).
+    ///
+    /// # Errors
+    ///
+    /// See [`refract_paraxial`](Self::refract_paraxial).
+    pub fn refract_paraxial_hits(
+        &mut self,
+        focal_length: Length,
+        iso: &Isometry,
+        hits: &[bool],
+    ) -> OpmResult<()> {
+        self.refract_paraxial_where(focal_length, iso, |index| {
+            hits.get(index).copied().unwrap_or(false)
+        })
+    }
+    /// The common implementation of [`refract_paraxial`](Self::refract_paraxial) and
+    /// [`refract_paraxial_hits`](Self::refract_paraxial_hits): refract the rays whose index is
+    /// selected.
+    ///
+    /// # Errors
+    ///
+    /// See [`refract_paraxial`](Self::refract_paraxial).
+    fn refract_paraxial_where(
+        &mut self,
+        focal_length: Length,
+        iso: &Isometry,
+        selected: impl Fn(usize) -> bool,
+    ) -> OpmResult<()> {
         if focal_length.is_zero() || !focal_length.is_finite() {
             return Err(OpossumError::Other(
                 "focal length must be !=0.0 and finite".into(),
             ));
         }
-        for ray in &mut self.ray_bundle {
+        for (index, ray) in self.ray_bundle.iter_mut().enumerate() {
+            if !selected(index) {
+                continue;
+            }
             if ray.valid() {
                 ray.refract_paraxial(focal_length, iso)?;
             }
@@ -927,6 +970,11 @@ impl Rays {
     /// set to `None`, the refractive index of the incoming individual beam is used. This way it is possible to model
     /// a "passive" surface, which does not change the direction of the [`Ray`].
     ///
+    /// # Returns
+    ///
+    /// The bundle of reflected rays and, for every ray of this bundle in order, whether it hit the
+    /// surface (see [`OpticSurface::intersect`]).
+    ///
     /// # Warnings
     ///
     /// This functions emits a warning of no valid [`Ray`]s are found in the bundle.
@@ -942,7 +990,7 @@ impl Rays {
         refractive_index: Option<&RefractiveIndexType>,
         refraction_intended: bool,
         missed_surface_strategy: &MissedSurfaceStrategy,
-    ) -> OpmResult<Self> {
+    ) -> OpmResult<(Self, Vec<bool>)> {
         let reflected_part = if refraction_intended {
             ReflectedPart::Ghost
         } else {
@@ -997,6 +1045,7 @@ impl Rays {
             *missed_surface_strategy,
             &ReflectedPart::Branch(config),
         )
+        .map(|(reflected, _)| reflected)
     }
     /// Propagate all `valid` [`Ray`]s to a surface, split them into a transmitted and a reflected part and
     /// return the reflected [`Ray`] bundle.
@@ -1013,7 +1062,8 @@ impl Rays {
     ///
     /// # Returns
     ///
-    /// The bundle of reflected rays.
+    /// The bundle of reflected rays and, for every ray of this bundle in order, whether it hit the
+    /// surface. A ray that was already invalid did not.
     ///
     /// # Errors
     ///
@@ -1027,13 +1077,14 @@ impl Rays {
         refractive_index: Option<&RefractiveIndexType>,
         missed_surface_strategy: MissedSurfaceStrategy,
         reflected_part: &ReflectedPart<'_>,
-    ) -> OpmResult<Self> {
+    ) -> OpmResult<(Self, Vec<bool>)> {
         let mut valid_rays_found = false;
         let mut rays_missed = false;
         // Pre-allocate memory to avoid massive reallocation overhead
         let mut reflected_rays = Self::with_capacity(self.ray_bundle.len());
+        let mut hits = vec![false; self.ray_bundle.len()];
 
-        for ray in &mut self.ray_bundle {
+        for (ray, hit) in self.ray_bundle.iter_mut().zip(hits.iter_mut()) {
             if ray.valid() {
                 let n2 = if let Some(refractive_index) = refractive_index {
                     Some(refractive_index.get_refractive_index(ray.wavelength())?)
@@ -1046,12 +1097,14 @@ impl Rays {
                 };
 
                 // Wir übergeben 'surface' unveränderlich und empfangen unser neues Tupel
-                let (reflected_opt, hit_point_opt) = ray.refract_on_surface_with_coating(
+                let interaction = ray.refract_on_surface_with_coating(
                     surface,
                     &coating,
                     n2,
                     missed_surface_strategy,
                 )?;
+                *hit = interaction.is_some();
+                let (reflected_opt, hit_point_opt) = interaction.unwrap_or((None, None));
 
                 if let Some(mut reflected) = reflected_opt {
                     if let (Some(helper_rays), Some(relf_helper)) =
@@ -1061,7 +1114,7 @@ impl Rays {
                             helper_rays.ray_bundle.iter_mut(),
                             relf_helper.ray_bundle.iter_mut()
                         ) {
-                            if let (Some(h_reflected), _h_hit_point) = h_ray
+                            if let Some((Some(h_reflected), _h_hit_point)) = h_ray
                                 .refract_on_surface_with_coating(
                                     surface,
                                     &coating,
@@ -1120,7 +1173,7 @@ impl Rays {
             // independent bundle rather than a branch continuing its parent's history.
             ReflectedPart::Branch(_) => {}
         }
-        Ok(reflected_rays)
+        Ok((reflected_rays, hits))
     }
     /// Diffract a bundle of [`Rays`] on a periodic surface, e.g., a grating
     /// All valid rays that hit this surface are diffracted according to the peridic structure,
@@ -1195,8 +1248,39 @@ impl Rays {
     /// This function will return an error if the underlying function for filtering a single [`Ray`] with the given
     /// [`FilterType`] fails for any of the rays in the bundle.
     pub fn filter_energy(&mut self, filter: &FilterType) -> OpmResult<()> {
-        for ray in &mut self.ray_bundle {
-            if (*ray).valid() {
+        self.filter_energy_where(filter, |_| true)
+    }
+    /// Filter only the rays of this bundle that hit a surface, as
+    /// [`filter_energy`](Self::filter_energy) does for all of them.
+    ///
+    /// A ray that missed the surface never passed the filter and keeps its energy.
+    ///
+    /// # Arguments
+    ///
+    /// * `filter` - the filter to apply.
+    /// * `hits` - for every ray of this bundle in order, whether it hit the surface, as returned by
+    ///   [`refract_on_surface`](Self::refract_on_surface).
+    ///
+    /// # Errors
+    ///
+    /// See [`filter_energy`](Self::filter_energy).
+    pub fn filter_energy_hits(&mut self, filter: &FilterType, hits: &[bool]) -> OpmResult<()> {
+        self.filter_energy_where(filter, |index| hits.get(index).copied().unwrap_or(false))
+    }
+    /// The common implementation of [`filter_energy`](Self::filter_energy) and
+    /// [`filter_energy_hits`](Self::filter_energy_hits): filter the valid rays whose index is
+    /// selected.
+    ///
+    /// # Errors
+    ///
+    /// See [`filter_energy`](Self::filter_energy).
+    fn filter_energy_where(
+        &mut self,
+        filter: &FilterType,
+        selected: impl Fn(usize) -> bool,
+    ) -> OpmResult<()> {
+        for (index, ray) in self.ray_bundle.iter_mut().enumerate() {
+            if ray.valid() && selected(index) {
                 ray.filter_energy(filter)?;
             }
         }
@@ -2654,7 +2738,7 @@ mod test {
     fn refract_on_surface_empty() -> OpmResult<()> {
         let mut rays = Rays::default();
         testing_logger::setup();
-        let reflected = rays.refract_on_surface(
+        let (reflected, _) = rays.refract_on_surface(
             &mut OpticSurface::default(),
             Some(&refr_index_vaccuum()),
             true,
@@ -2700,7 +2784,7 @@ mod test {
         rays.set_node_origin_uuid(node_uuid);
         rays.set_parent_uuid(parent_uuid);
         rays.set_parent_node_split_idx(10);
-        let reflected = rays.refract_on_surface(
+        let (reflected, _) = rays.refract_on_surface(
             &mut OpticSurface::default(),
             Some(&refr_index_vaccuum()),
             false,
@@ -2750,7 +2834,7 @@ mod test {
             joule!(1.0),
         )?);
         testing_logger::setup();
-        let reflected = rays.refract_on_surface(
+        let (reflected, _) = rays.refract_on_surface(
             &mut OpticSurface::default(),
             Some(&refr_index_vaccuum()),
             true,
@@ -2773,7 +2857,7 @@ mod test {
         )?);
         let mut s = OpticSurface::default();
         s.set_coating(CoatingConstantR::new(percent!(20.0))?.into());
-        let reflected = rays.refract_on_surface(
+        let (reflected, _) = rays.refract_on_surface(
             &mut s,
             Some(&refr_index_vaccuum()),
             true,
@@ -2789,7 +2873,6 @@ mod test {
         OpticSurface::new(
             GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(iso)))),
             CoatingType::IdealAR,
-            Aperture::default(),
             J_per_cm2!(1.),
         )
     }

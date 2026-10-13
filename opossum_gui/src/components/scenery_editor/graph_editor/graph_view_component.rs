@@ -18,6 +18,64 @@ use uuid::Uuid;
 use web_time::Instant;
 
 #[component]
+fn GraphCanvasTransformLayer(graph_state: ReadStore<GraphState>, children: Element) -> Element {
+    let editor_state = graph_state.editor_state();
+    let shift = *editor_state.shift().read();
+    let zoom = *editor_state.zoom().read();
+
+    rsx! {
+        div {
+            draggable: false,
+            style: format!(
+                "transform-origin: 0 0; transform: translate({}px, {}px) scale({});",
+                shift.x,
+                shift.y,
+                zoom,
+            ),
+            {children}
+        }
+    }
+}
+
+#[component]
+fn NodeList(
+    graph_state: ReadStore<GraphState>,
+    ctrl_pressed: ReadSignal<bool>,
+    nodes_in_selection: Memo<HashSet<Uuid>>,
+) -> Element {
+    let workspace = use_context::<ReadStore<GraphsWorkspaceState>>();
+    let graph_store = graph_state.graph_store();
+    let graph_id = graph_state.graph_info().read().id;
+
+    let selected_node_ids = graph_store().selected_node_ids();
+    let drop_group_id = (*workspace.drop_in_group().read()).map(|(id, _)| id);
+
+    rsx! {
+        for (id , node) in graph_store.nodes().iter() {
+            {
+                let node_id = id;
+                let is_active = selected_node_ids.contains(&node_id);
+                let is_drop_group = drop_group_id == Some(node_id);
+                // Extract concrete NodeElement value to enable props-based memoization in Dioxus
+                let node_element = node.read().clone();
+
+                rsx! {
+                    Node {
+                        key: "{node_id}",
+                        node: node_element,
+                        graph_id,
+                        is_active,
+                        is_drop_group,
+                        ctrl_pressed,
+                        nodes_in_selection,
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
 pub fn GraphViewEditor(
     model_modified_sig: ReadSignal<bool>,
     model_modified_handler: EventHandler<bool>,
@@ -78,17 +136,14 @@ pub fn GraphViewEditor(
         if *workspace.active_tab().read() != graph_id {
             return;
         }
-
-        let mouse = mouse_pos_in_editor.read();
-
+        // Check drag status first to avoid subscribing to mouse moves during pan or idle
         if *workspace.drag_status().read() != DragStatus::Nodes {
             return;
         }
+        let mouse = mouse_pos_in_editor.read();
 
         let selected_nodes = graph_store.node_selection().read().all_nodes.read().clone();
-
         let mut best_match = None;
-
         for (_, node) in graph_store.nodes().iter() {
             let node_read = node.read();
             if selected_nodes.contains_key(&node_read.id()) {
@@ -98,10 +153,8 @@ pub fn GraphViewEditor(
                 if t != "group" {
                     continue;
                 }
-
                 if node_read.get_bounding_box().contains(*mouse) {
                     let z = node_read.z_index();
-
                     match best_match {
                         Some((_, best_z)) if z <= best_z => {}
                         _ => best_match = Some((node_read.id(), z)),
@@ -109,7 +162,6 @@ pub fn GraphViewEditor(
                 }
             }
         }
-
         workspace_processor.send(GraphsWorkspaceAction::SetDropInGroup(best_match));
     });
 
@@ -159,39 +211,21 @@ pub fn GraphViewEditor(
                 onmousedown: onmousedown_handler,
                 onmouseup: use_drag_end(workspace, Some(nodes_in_selection())),
                 onmousemove: onmousemove_handler,
-                div {
-                    draggable: false,
-                    style: format!(
-                        "transform-origin: 0 0; transform: translate({}px, {}px) scale({});",
-                        shift().x,
-                        shift().y,
-                        zoom(),
-                    ),
-                    for (_, node) in graph_store.nodes().iter() {
-                        {
-                            rsx! {
-                                Node {
-                                    node,
-                                    ctrl_pressed,
-                                    shift_pressed,
-                                    mouse_pos_in_editor,
-                                    nodes_in_selection,
-                                }
-                            }
-                        }
+                GraphCanvasTransformLayer { graph_state,
+                    NodeList {
+                        graph_state,
+                        ctrl_pressed,
+                        nodes_in_selection,
                     }
                     svg {
                         width: "100%",
                         height: "100%",
                         overflow: "visible",
+                        pointer_events: "none",
                         tabindex: 0,
-                        {
-                            rsx! {
-                                EdgesComponent {}
-                                EdgeCreationComponent {}
-                                SelectionBoxComponent {}
-                            }
-                        }
+                        EdgesComponent {}
+                        EdgeCreationComponent {}
+                        SelectionBoxComponent {}
                     }
                 }
             }

@@ -55,6 +55,7 @@ inventory::submit! {
 ///   - `name`
 ///   - `inverted`
 ///   - `line density`
+///   - `clear aperture`: the extent of the grating; a ray beyond it misses the grating
 pub struct ReflectiveGrating {
     node_attr: NodeAttr,
 }
@@ -328,17 +329,11 @@ impl AnalysisRayTrace for ReflectiveGrating {
                         wavelength,
                     )));
                 }
-                match self.ports().aperture(&PortType::Input, in_port) {
-                    Some(aperture) => {
-                        diffracted_rays.apodize(aperture, &iso)?;
-                        diffracted_rays
-                            .invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                    }
-                    _ => {
-                        return Err(OpossumError::OpticPort("input aperture not found".into()));
-                    }
+                // The optical axis is placed by geometry alone; its energy does not decide where
+                // it runs.
+                if !config.is_positioning_run() {
+                    diffracted_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                 }
-
                 let light_result =
                     LightResult::from([(out_port.into(), LightData::Geometric(diffracted_rays))]);
                 Ok(light_result)
@@ -374,7 +369,7 @@ impl Planar for ReflectiveGrating {
 }
 impl OpticNode for ReflectiveGrating {
     fn geometry(&self) -> OpmResult<Option<Geometry>> {
-        Ok(Some(Geometry::plane(None)))
+        Ok(Some(Geometry::plane(self.clear_aperture()?)))
     }
     fn as_surface(&self) -> Option<&dyn Planar> {
         Some(self)
@@ -516,6 +511,14 @@ mod test {
         );
     }
     #[test]
+    fn clear_aperture_absent_in_file() -> OpmResult<()> {
+        test_clear_aperture_absent_in_file::<ReflectiveGrating>()
+    }
+    #[test]
+    fn reflections_beyond_clear_aperture_are_lost() -> OpmResult<()> {
+        test_reflections_beyond_clear_aperture_are_lost::<ReflectiveGrating>()
+    }
+    #[test]
     fn invalid_line_density() {
         assert!(ReflectiveGrating::new("test", num_per_mm!(200.), 1).is_ok());
         assert!(ReflectiveGrating::new("test", num_per_mm!(-200.), 1).is_err());
@@ -529,10 +532,6 @@ mod test {
         let node = ReflectiveGrating::default();
         assert_eq!(node.ports().names(&PortType::Input), vec!["input_1"]);
         assert_eq!(node.ports().names(&PortType::Output), vec!["output_1"]);
-    }
-    #[test]
-    fn set_aperture() {
-        test_set_aperture::<ReflectiveGrating>("input_1", "output_1");
     }
     #[test]
     fn inverted() -> OpmResult<()> {

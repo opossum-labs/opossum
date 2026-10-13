@@ -242,12 +242,15 @@ fn inner_triangles(
 mod test {
     use super::*;
     use crate::{
-        apertures::ApertureType, degree, millimeter, utils::test_helper::helper::l_shape_corners,
+        apertures::{ApertureShape, ApertureType},
+        degree, millimeter,
+        utils::test_helper::helper::l_shape_corners,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
     use nalgebra::Point3;
     use num_traits::Zero;
     use std::f64::consts::PI;
+    use strum::IntoEnumIterator;
 
     /// How finely the test apertures are sampled along their rim.
     const SEGMENTS: usize = 48;
@@ -434,7 +437,7 @@ mod test {
         // What an obstruction lets through is the unbounded outside of its shape.
         let obstruction = Aperture::new_circle(millimeter!(5.0), ApertureType::Obstruction, None)?;
         assert!(obstruction.triangulate(SEGMENTS).is_err());
-        for shape in crate::apertures::ApertureShape::non_delimiting() {
+        for shape in ApertureShape::iter().filter(|shape| !shape.is_binary()) {
             let aperture = Aperture::new(shape.clone(), ApertureType::Hole, None, None)?;
             assert!(
                 aperture.triangulate(SEGMENTS).is_err(),

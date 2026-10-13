@@ -94,7 +94,7 @@ impl SurfaceBoundedBody {
     /// surface cannot be laid over it (see [`GeoSurfaceRef::mesh_over`](crate::geometry::geo_surface::GeoSurfaceRef::mesh_over)),
     /// or if the two surfaces cross inside the aperture, so that there is no body between them.
     pub fn triangulate(&self, segments: usize) -> OpmResult<BodyMesh> {
-        let aperture = self.cross_section.get().triangulate(segments)?;
+        let aperture = self.rim.cross_section().get().triangulate(segments)?;
         // The two surfaces are meshed one after the other and never held at once: a node with a
         // single surface hands out the same `GeoSurfaceRef` twice, which would deadlock.
         let entrance = self.entrance.mesh_over(&aperture, &self.isometry)?;
@@ -355,7 +355,12 @@ mod test {
                 let mesh = body.triangulate(SEGMENTS)?;
                 // The rim of a bounding surface is the outline of the cross section, asked for
                 // directly rather than by triangulating it a second time.
-                let rim = body.cross_section.get().outline_points(SEGMENTS)?.len();
+                let rim = body
+                    .rim
+                    .cross_section()
+                    .get()
+                    .outline_points(SEGMENTS)?
+                    .len();
                 for (face, bounds_the_body) in [
                     (mesh.entrance(), true),
                     (mesh.exit(), true),
