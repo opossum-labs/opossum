@@ -105,7 +105,7 @@ enum Drawable<'a> {
 /// caller.
 enum Drawn<'a> {
     /// Encloses a volume of material, with the volume already derived.
-    Volume(&'a dyn Volumetric, SurfaceBoundedBody),
+    Volume(&'a dyn Volumetric, Box<SurfaceBoundedBody>),
     /// Is one optical surface, with the surface already meshed.
     Surface(&'a dyn Planar, SurfaceMesh),
 }
@@ -164,7 +164,7 @@ where
         let drawn = match drawable {
             Drawable::Volume(volume) => volume
                 .volume_body()
-                .and_then(|body| draw(Drawn::Volume(volume, body))),
+                .and_then(|body| draw(Drawn::Volume(volume, Box::new(body)))),
             Drawable::Surface(surface) => surface
                 .surface_mesh(RIM_SEGMENTS)
                 .and_then(|mesh| draw(Drawn::Surface(surface, mesh))),
@@ -301,7 +301,7 @@ fn add_surface_at(
 /// # Returns
 ///
 /// The [`Material`] a renderer should draw the surface in.
-fn material_of(appearance: Appearance) -> Material {
+const fn material_of(appearance: Appearance) -> Material {
     let c = appearance.color;
     let rgb = [c[0], c[1], c[2]];
     match appearance.finish {
@@ -579,7 +579,7 @@ pub fn manifest_of(placed: &OpmDocument, wavelength: Length) -> OpmResult<SceneM
             Drawn::Surface(node, mesh) => (
                 node.node_attr().uuid(),
                 node.name().to_string(),
-                surface_geometry_of(node, &mesh)?,
+                surface_geometry_of(node, &mesh),
                 node.effective_node_iso()
                     .unwrap_or_else(Isometry::identity)
                     .get_transform(),
@@ -650,16 +650,11 @@ fn geometry_of(
 /// # Returns
 ///
 /// A hexadecimal digest of the component's mesh and material.
-///
-/// # Errors
-///
-/// This function never actually fails — [`material_of`] is infallible — but returns
-/// `OpmResult` to read the same as [`geometry_of`] at the one call site both are used from.
-fn surface_geometry_of(node: &dyn Planar, mesh: &SurfaceMesh) -> OpmResult<String> {
+fn surface_geometry_of(node: &dyn Planar, mesh: &SurfaceMesh) -> String {
     let mut hash = Fnv1a::new();
     hash.write_mesh(mesh);
     hash.write_material(&material_of(node.appearance()));
-    Ok(hash.finish())
+    hash.finish()
 }
 
 /// A running 64 bit FNV-1a hash.
