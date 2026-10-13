@@ -7,7 +7,7 @@ use crate::{
         scenery_editor::{
             DragStatus, EditorState, GraphState, GraphStore, GraphsWorkspaceAction,
             GraphsWorkspaceState,
-            edges::edges_component::{EdgePort, NewEdgeCreationStart},
+            edges::edges_component::{EdgeCreation, EdgePort, NewEdgeCreationStart},
             graph_workspace::{
                 EditorStateStoreExt, GraphStateStoreExt, GraphStoreStoreExt,
                 GraphsWorkspaceStateStoreExt, workspace_state::GraphInfo,
@@ -29,9 +29,14 @@ pub fn use_on_mouse_down(
     abs_port_position: Point2D<f64>,
 ) -> EventHandler<MouseEvent> {
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
+    let graph_state = use_context::<ReadStore<GraphState>>();
+
     EventHandler::new(move |event: MouseEvent| {
         if Some(MouseButton::Primary) == event.trigger_button() {
             event.stop_propagation();
+            let graph_id = graph_state.graph_info().peek().id;
+
+            // Set drag status carrying source information
             let drag_status = DragStatus::Edge(NewEdgeCreationStart {
                 src_node: node_id,
                 src_port: port_name.clone(),
@@ -39,6 +44,14 @@ pub fn use_on_mouse_down(
                 start_pos: abs_port_position,
             });
             workspace_processor.send(GraphsWorkspaceAction::SetDragStatus(drag_status));
+
+            // Immediately instantiate EdgeCreation so that it is active and reactive
+            let edge_in_creation =
+                EdgeCreation::new(node_id, port_name.clone(), port_type, abs_port_position);
+            workspace_processor.send(GraphsWorkspaceAction::SetEdgeInCreation {
+                graph_id,
+                edge_in_creation: Some(edge_in_creation),
+            });
         }
     })
 }

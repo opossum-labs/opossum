@@ -299,7 +299,7 @@ impl NodeAttr {
     }
 
     /// Updates multiple properties of this [`NodeAttr`].
-    pub fn update_properties(&mut self, new_props: Properties) {
+    pub fn update_properties(&mut self, new_props: &Properties) {
         self.props.update(new_props);
     }
 

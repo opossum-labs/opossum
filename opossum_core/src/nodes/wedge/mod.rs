@@ -87,10 +87,6 @@ impl Default for Wedge {
                         Validator::NumericIsFinite,
                     ],
                 },
-                // and_validator(vec![
-                //     angle_in_range(degree!(-90.0), degree!(90.0), true),
-                //     numeric_is_finite(),
-                // ]),
                 Angle::zero().into(),
             )
             .unwrap();
@@ -247,7 +243,7 @@ mod test {
         assert!(
             Wedge::new(
                 "test",
-                millimeter!(0.0),
+                millimeter!(1.0),
                 degree!(f64::NEG_INFINITY),
                 RefrIndexConst::new(1.0)?
             )
@@ -256,7 +252,7 @@ mod test {
         assert!(
             Wedge::new(
                 "test",
-                millimeter!(0.0),
+                millimeter!(1.0),
                 degree!(f64::INFINITY),
                 RefrIndexConst::new(1.0)?
             )
@@ -265,7 +261,7 @@ mod test {
         assert!(
             Wedge::new(
                 "test",
-                millimeter!(0.0),
+                millimeter!(1.0),
                 degree!(f64::NAN),
                 RefrIndexConst::new(1.0)?
             )
@@ -274,7 +270,7 @@ mod test {
         assert!(
             Wedge::new(
                 "test",
-                millimeter!(0.0),
+                millimeter!(1.0),
                 degree!(90.01),
                 RefrIndexConst::new(1.0)?
             )
@@ -283,7 +279,7 @@ mod test {
         assert!(
             Wedge::new(
                 "test",
-                millimeter!(0.0),
+                millimeter!(1.0),
                 degree!(-90.01),
                 RefrIndexConst::new(1.0)?
             )
@@ -292,7 +288,7 @@ mod test {
         assert!(
             Wedge::new(
                 "test",
-                millimeter!(0.0),
+                millimeter!(1.0),
                 degree!(89.99),
                 RefrIndexConst::new(1.0)?
             )
@@ -301,7 +297,7 @@ mod test {
         assert!(
             Wedge::new(
                 "test",
-                millimeter!(0.0),
+                millimeter!(1.0),
                 degree!(-89.99),
                 RefrIndexConst::new(1.0)?
             )
@@ -309,13 +305,13 @@ mod test {
         );
         let n = Wedge::new(
             "test",
-            millimeter!(0.0),
+            millimeter!(1.0),
             degree!(10.0),
             RefrIndexConst::new(1.0)?,
         )?;
         assert_eq!(n.name(), "test");
         if let Ok(Proptype::Length(p)) = n.properties().get("center thickness") {
-            assert_eq!(p, &millimeter!(0.0));
+            assert_eq!(p, &millimeter!(1.0));
         } else {
             panic!("could not read center thickness.");
         }

@@ -143,7 +143,7 @@ impl<'de> Deserialize<'de> for OpticRef {
         // Merge the deserialized properties on top of the node's default properties.
         {
             let mut merged_props = node_ref.node_attr().properties().clone();
-            merged_props.update(intermediate.attributes.properties().clone());
+            merged_props.update(intermediate.attributes.properties());
             intermediate.attributes.set_properties(merged_props);
         }
 

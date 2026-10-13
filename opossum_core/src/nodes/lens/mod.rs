@@ -343,6 +343,11 @@ mod test {
         assert!(
             lens.node_attr
                 .set_property("center thickness", Proptype::Length(millimeter!(0.0)))
+                .is_err()
+        );
+        assert!(
+            lens.node_attr
+                .set_property("center thickness", Proptype::Length(millimeter!(0.0001)))
                 .is_ok()
         );
         assert!(

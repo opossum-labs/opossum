@@ -205,6 +205,7 @@ pub fn GraphViewEditor(
                         width: "100%",
                         height: "100%",
                         overflow: "visible",
+                        pointer_events: "none",
                         tabindex: 0,
                         EdgesComponent {}
                         EdgeCreationComponent {}
