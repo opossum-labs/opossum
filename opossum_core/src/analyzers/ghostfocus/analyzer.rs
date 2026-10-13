@@ -174,7 +174,7 @@ impl Analyzer for GhostFocusAnalyzer {
     }
     fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport> {
         let mut analysis_report = AnalysisReport::default();
-        analysis_report.add_scenery(scenery);
+        analysis_report.set_scenery(scenery.clone());
         let mut props = Properties::default();
         let ghost_focus_history = GhostFocusHistory::from(scenery.accumulated_rays().clone());
 

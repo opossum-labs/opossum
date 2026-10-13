@@ -119,7 +119,7 @@ impl OpticNode for SpotDiagram {
             if let Ok(spot_data) = SpotDiagramData::from_rays(rays, &iso, nanometer!(0.2)) {
                 props.create("Spot diagram", "2D spot diagram", spot_data.into())?;
             } else {
-                props.create("note","spot diagram warning", "Spot diagram could not be calculated. This could happen, if all rays miss the detector or are apodized.".into())?
+                props.create("note","spot diagram warning", "Spot diagram could not be calculated. This could happen, if all rays miss the detector or are apodized.".into())?;
             }
             if let Some(c) = transformed_rays.energy_weighted_centroid() {
                 props.create(
