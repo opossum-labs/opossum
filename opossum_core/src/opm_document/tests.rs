@@ -439,3 +439,19 @@ fn an_empty_outgoing_bundle_names_the_node_and_port() -> OpmResult<()> {
     assert!(error.contains("'output_1'"), "{error}");
     Ok(())
 }
+
+/// With nothing after it, a node that lets no light out leaves nothing unplaced, whoever notices
+/// the empty bundle - here the graph walk, as the run is not flagged as positioning.
+#[test]
+fn an_empty_outgoing_bundle_at_the_last_node_stops_nothing() -> OpmResult<()> {
+    let (mut scenery, source, grating) = source_then_untilted_grating(false)?;
+
+    AnalysisRayTrace::calc_node_positions(
+        &mut scenery,
+        LightResult::default(),
+        &single_ray_config(source)?,
+    )?;
+
+    assert!(is_placed(&OpmDocument::new(scenery), grating)?);
+    Ok(())
+}

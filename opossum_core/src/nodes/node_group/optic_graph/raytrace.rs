@@ -282,8 +282,8 @@ fn execute_node_calculation(
 /// # Errors
 ///
 /// This function returns an error if a referenced node cannot be found, if the up-direction cannot
-/// be derived from an outgoing beam, or if an outgoing beam holds no rays at all: the optical axis
-/// ends at this node then, and nothing connected after it can be placed.
+/// be derived from an outgoing beam, or if an outgoing beam of a node with successors carries no
+/// valid axis ray: the optical axis ends at this node then, and nothing after it can be placed.
 fn update_outgoing_edges_and_up_direction(
     graph: &mut OpticGraph,
     node_idx: NodeIndex,
@@ -294,20 +294,21 @@ fn update_outgoing_edges_and_up_direction(
     let referenced_id = graph.g[node_idx].referenced_node_id();
     let fallback_node_type = graph.g[node_idx].node_attr().node_type().to_string();
     let node_id = graph.g[node_idx].uuid();
+    let has_successors = graph.has_output_connections(node_id)?;
 
     for (port, data) in outgoing_edges {
-        // Checked here rather than left to the up-direction calculation below, which could only
-        // report an empty bundle - not where the optical axis was lost.
-        if let LightData::Geometric(rays) = &data
-            && rays.nr_of_rays(false) == 0
+        // The first ray of a bundle carries the axis. Swallowed by the node or stopped beside it
+        // (`RayTraceConfig::for_positioning`), it gives no direction to place a successor along.
+        if matches!(&data, LightData::Geometric(rays) if rays.iter().next().is_none_or(|ray| !ray.valid()))
         {
-            return Err(OpossumError::Analysis(format!(
-                "no light leaves {} at port '{}': the optical axis ends there, so the components \
-                 after it cannot be placed",
-                graph.g[node_idx], port
-            )));
-        }
-        if let Some(target_uuid) = referenced_id {
+            if has_successors {
+                return Err(OpossumError::Analysis(format!(
+                    "no light leaves {} at port '{}' within its clear aperture: the optical axis \
+                     ends there, so the components after it cannot be placed",
+                    graph.g[node_idx], port
+                )));
+            }
+        } else if let Some(target_uuid) = referenced_id {
             let target_idx = graph.node_idx_by_uuid(target_uuid).ok_or_else(|| {
                 OpossumError::Analysis(format!(
                     "referenced node with id {target_uuid} not found in graph"
@@ -386,14 +387,6 @@ fn calculate_single_node_position(
         }
     };
 
-    // Positioning stops a missed surface (see `RayTraceConfig::for_positioning`), so an invalid axis
-    // means it ran outside this node; placing its successors along it would bend it where no optic is.
-    if graph.has_output_connections(node_id)? && axis_is_lost(&outgoing_edges) {
-        return Err(OpossumError::Analysis(format!(
-            "the optical axis misses node {node_info}: it does not pass the node within its clear \
-             aperture"
-        )));
-    }
     graph.collect_group_output_ports(node_id, &outgoing_edges, light_result)?;
     update_outgoing_edges_and_up_direction(
         graph,
@@ -404,21 +397,6 @@ fn calculate_single_node_position(
     )?;
 
     Ok(())
-}
-
-/// Whether a node lost the optical axis during a positioning run.
-///
-/// # Arguments
-///
-/// * `outgoing_edges` - the light the node passes on.
-///
-/// # Returns
-///
-/// `true` if an output carries an axis ray that is no longer valid.
-fn axis_is_lost(outgoing_edges: &LightResult) -> bool {
-    outgoing_edges.values().any(|data| {
-        matches!(data, LightData::Geometric(rays) if rays.iter().next().is_some_and(|ray| !ray.valid()))
-    })
 }
 
 #[cfg(test)]
@@ -465,21 +443,19 @@ mod test {
         lens.set_property(CLEAR_APERTURE, clear_aperture.into())?;
         Ok(lens)
     }
-    /// Put a source in front of and a screen behind the given row of nodes, 100 mm apart, and
-    /// position the row.
+    /// Put a source in front of the given row of nodes, 100 mm apart, and position the row.
     ///
     /// # Returns
     ///
-    /// Where the screen was placed.
+    /// The positioned scenery.
     ///
     /// # Errors
     ///
-    /// Returns an error if positioning fails or does not place the screen.
-    fn place_screen_behind(mut scenery: NodeGroup, row: &[Uuid]) -> OpmResult<Isometry> {
+    /// Returns an error if positioning fails.
+    fn position_behind_a_source(mut scenery: NodeGroup, row: &[Uuid]) -> OpmResult<NodeGroup> {
         let source = scenery.add_node(SourcePort::default())?;
-        let screen = scenery.add_node(Dummy::default())?;
         let mut upstream = source;
-        for &node in row.iter().chain(&[screen]) {
+        for &node in row {
             scenery.connect_nodes(upstream, "output_1", node, "input_1", millimeter!(100.0))?;
             upstream = node;
         }
@@ -493,7 +469,21 @@ mod test {
             LightResult::default(),
             &config.for_positioning(),
         )?;
-        scenery
+        Ok(scenery)
+    }
+    /// Put a source in front of and a screen behind the given row of nodes, 100 mm apart, and
+    /// position the row.
+    ///
+    /// # Returns
+    ///
+    /// Where the screen was placed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if positioning fails or does not place the screen.
+    fn place_screen_behind(mut scenery: NodeGroup, row: &[Uuid]) -> OpmResult<Isometry> {
+        let screen = scenery.add_node(Dummy::default())?;
+        position_behind_a_source(scenery, &[row, &[screen]].concat())?
             .node(screen)?
             .effective_position()
             .copied()
@@ -524,6 +514,16 @@ mod test {
         let large = CircleShape::new(millimeter!(50.0))?.into();
         let lens = scenery.add_node(decentred_lens(large)?)?;
         assert_bent_by_the_decentred_lens(&place_screen_behind(scenery, &[lens])?);
+        Ok(())
+    }
+    /// With nothing after it, a component the optical axis misses leaves nothing unplaced: the run
+    /// finishes and the component itself is placed.
+    #[test]
+    fn positioning_passes_a_missed_component_with_nothing_after_it() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let lens = scenery.add_node(decentred_lens(default_clear_aperture())?)?;
+        let scenery = position_behind_a_source(scenery, &[lens])?;
+        assert!(scenery.node(lens)?.effective_position().is_some());
         Ok(())
     }
     /// The axis is placed by geometry alone: a filter blocking it entirely leaves it running on,
