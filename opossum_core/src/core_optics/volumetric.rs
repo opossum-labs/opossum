@@ -480,9 +480,7 @@ mod test {
             EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort, SpotDiagram, ThinMirror,
             create_node_ref, node_types, round_collimated_ray_builder,
         },
-        percent,
-        properties::Proptype,
-        reciprocal_centimeter,
+        percent, reciprocal_centimeter,
         refractive_index::RefrIndexConst,
         utils::test_helper::helper::metered_energy,
     };
@@ -1616,8 +1614,8 @@ mod test {
         Ok(())
     }
     /// A node declares an [`OPTIC_SHAPE`] that bounds a region exactly when its geometry has a
-    /// rim, and every surface it installs carries exactly that rim. A detector starts with an open
-    /// optic shape: it records all light and has no rim.
+    /// rim, and every surface it installs carries exactly that rim. The dummy starts with an open
+    /// optic shape and has no rim.
     ///
     /// The extent of a component is stated by the property, decides the hits through the rim of
     /// each surface, and bounds the medium through the geometry; all three have to agree, or rays

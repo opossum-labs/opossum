@@ -254,7 +254,7 @@ pub mod helper {
     ///
     /// # Errors
     ///
-    /// Returns an error if the node cannot be placed, bounded or analyzed.
+    /// Returns an error if the node cannot be placed, opened or analyzed.
     ///
     /// # Panics
     ///

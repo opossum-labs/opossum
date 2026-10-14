@@ -81,8 +81,8 @@ inventory::submit! {
 ///   - `name`
 ///   - `inverted`
 ///   - `meter type`
-///   - `optic shape`: the window the light is recorded within, open by default; light outside
-///     it passes unrecorded
+///   - `optic shape`: the window the light is recorded within, a 25 mm square by default; light
+///     outside it passes unrecorded
 ///
 /// During analysis, the output port forwards an exact replica of the input beam (similar to
 /// a [`Dummy`](crate::nodes::Dummy) node). This allows detector nodes to be stacked or placed
