@@ -832,7 +832,16 @@ fn patch_of(face: &SurfaceMesh, material: MaterialId) -> SurfacePatch {
 mod test {
     use super::*;
     use opossum_core::{
-        analyzers::{AnalyzerType, RayTraceConfig}, apertures::{Aperture, ApertureShape, ApertureType, CircleShape, OpticShape}, core_optics::{OpticNode, node_attr::NodePositioning}, degree, geometry::body::OPTIC_SHAPE, joule, light::{Ray, lightdata::ray_data_builder::RayDataBuilder}, material::default_reference_wavelength, millimeter, nanometer, nodes::{
+        analyzers::{AnalyzerType, RayTraceConfig},
+        apertures::{Aperture, ApertureShape, ApertureType, CircleShape, OpticShape},
+        core_optics::{OpticNode, node_attr::NodePositioning},
+        degree,
+        geometry::body::OPTIC_SHAPE,
+        joule,
+        light::{Ray, lightdata::ray_data_builder::RayDataBuilder},
+        material::default_reference_wavelength,
+        millimeter, nanometer,
+        nodes::{
             CylindricLens, EnergyMeter, Lens, NodeGroup, NodeReference, ReflectiveGrating,
             SourcePort, ThinMirror, Wedge, round_collimated_ray_builder,
         },
@@ -1068,7 +1077,10 @@ mod test {
 
         let smaller: ApertureShape = CircleShape::new(millimeter!(5.0))?.into();
         document.scenery_mut().with_node_attr_mut(mirror, |attr| {
-            attr.set_property(OPTIC_SHAPE, OpticShape::from_aperture_shape(&smaller)?.into())
+            attr.set_property(
+                OPTIC_SHAPE,
+                OpticShape::from_aperture_shape(&smaller)?.into(),
+            )
         })??;
 
         let after = manifest(&document)?;
@@ -1108,7 +1120,10 @@ mod test {
         config.map_source(source, RayDataBuilder::default());
         document.add_analyzer(AnalyzerType::RayTrace(config));
         document.scenery_mut().with_node_attr_mut(mirror, |attr| {
-            attr.set_property(OPTIC_SHAPE, OpticShape::from_aperture_shape(bored.shape())?.into())
+            attr.set_property(
+                OPTIC_SHAPE,
+                OpticShape::from_aperture_shape(bored.shape())?.into(),
+            )
         })??;
 
         let manifest = manifest(&document)?;

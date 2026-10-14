@@ -14,12 +14,31 @@ use uom::si::{f64::Length, length::meter};
 use utoipa::ToSchema;
 
 /// Configuration of a polygonal aperture defined by a given set of points.
+///
+/// Only the points are written to a file; the triangles are worked out from them whenever they
+/// change, also when a polygon is read.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnsureValidated, ToSchema)]
+#[serde(try_from = "PolygonFields")]
 pub struct PolygonShape {
     #[schema(value_type = Object)]
     points: ValidatedPolygonPoints2D,
     #[validate(skip)]
+    #[serde(skip)]
     triangle_indices: Vec<Vec<usize>>,
+}
+
+/// The fields of a [`PolygonShape`] as a file states them.
+#[derive(Deserialize)]
+struct PolygonFields {
+    points: ValidatedPolygonPoints2D,
+}
+
+impl TryFrom<PolygonFields> for PolygonShape {
+    type Error = OpossumError;
+
+    fn try_from(fields: PolygonFields) -> OpmResult<Self> {
+        Self::new(fields.points.get().to_vec())
+    }
 }
 impl From<PolygonShape> for ApertureShape {
     fn from(value: PolygonShape) -> Self {
@@ -70,8 +89,6 @@ impl PolygonShape {
     }
 
     /// checks, if a point lies within this [`PolygonShape`]
-    /// # Panics
-    /// This function panics if the triangulation fails
     #[must_use]
     pub fn in_polygon(&self, point: &Point3<Length>) -> bool {
         let mut in_polygon = false;
@@ -109,18 +126,20 @@ impl PolygonShape {
     /// The order of the points must follow the outline of the polygon. Otherwise intersections may occur.
     /// # Errors
     /// This function will return an error if the new points are invalid, e.g. if they are indefinite.
+    /// The polygon is left as it was then.
     pub fn add_points(&mut self, new_points: &[Point2<Length>]) -> OpmResult<()> {
-        for p in new_points {
-            self.points.push(*p)?;
-        }
+        *self = Self::new([self.points(), new_points].concat())?;
         Ok(())
     }
 
     /// Delete a point at a given index from this [`PolygonShape`].
     /// # Errors
-    /// This function will return an error if the index is out of bounds.
+    /// This function will return an error if the index is out of bounds or fewer than three
+    /// points would remain. The polygon is left as it was then.
     pub fn delete_point(&mut self, index: usize) -> OpmResult<()> {
-        self.points.remove(index)?;
+        let mut points = self.points.clone();
+        points.remove(index)?;
+        *self = Self::new(points.get().to_vec())?;
         Ok(())
     }
 }
@@ -233,6 +252,69 @@ mod test {
         for (point, expected) in ps.points().iter().zip(expected) {
             assert_eq!(point, &expected);
         }
+    }
+    /// A regular pentagon of 5 mm circumradius, counter-clockwise from its top corner.
+    fn pentagon() -> Vec<Point2<Length>> {
+        [
+            (0.0, 5.0),
+            (-4.755_283, 1.545_085),
+            (-2.938_926, -4.045_085),
+            (2.938_926, -4.045_085),
+            (4.755_283, 1.545_085),
+        ]
+        .map(|(x, y)| millimeter!(x, y))
+        .to_vec()
+    }
+    /// A polygon edited point by point, the way the node editor builds one from the default
+    /// square, transmits after every edit where a polygon given the same points at once does.
+    #[test]
+    fn an_edited_polygon_transmits_where_its_points_enclose() -> OpmResult<()> {
+        let transmits_alike = |edited: &PolygonShape| -> OpmResult<()> {
+            let given = PolygonShape::new(edited.points().to_vec())?;
+            for x in (-28..=28).map(|step| f64::from(step) / 2.0) {
+                for y in (-28..=28).map(|step| f64::from(step) / 2.0) {
+                    let point = millimeter!(x, y, 0.0);
+                    assert_eq!(
+                        edited.transmission_factor(&point),
+                        given.transmission_factor(&point),
+                        "at ({x}, {y}) mm within {:?}",
+                        edited.points()
+                    );
+                }
+            }
+            Ok(())
+        };
+        let mut edited = PolygonShape::default();
+        edited.delete_point(0)?;
+        transmits_alike(&edited)?;
+        for corner in pentagon() {
+            edited.add_points(&[corner])?;
+            transmits_alike(&edited)?;
+        }
+        for _ in 0..3 {
+            edited.delete_point(0)?;
+            transmits_alike(&edited)?;
+        }
+        assert_eq!(edited.points(), pentagon().as_slice());
+        Ok(())
+    }
+    /// A file states the points of a polygon only; its triangles are worked out anew when it is
+    /// read, whatever an older file wrote for them.
+    #[test]
+    fn a_polygon_read_from_a_file_is_triangulated_anew() -> OpmResult<()> {
+        let pentagon = PolygonShape::new(pentagon())?;
+        let file = ron::to_string(&pentagon).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert!(!file.contains("triangle_indices"), "{file}");
+        let stale = format!(
+            "{},triangle_indices:[[2,3,0],[0,1,7]])",
+            file.strip_suffix(')').unwrap()
+        );
+        let read = ron::from_str::<PolygonShape>(&stale)
+            .map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert_eq!(read, pentagon);
+        // Between the corners P7, P9 and P1, which the stale triangles leave out.
+        assert_eq!(read.transmission_factor(&millimeter!(3.5, 0.0, 0.0)), 1.0);
+        Ok(())
     }
     #[test]
     fn remove_add_point() {
