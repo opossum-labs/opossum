@@ -67,7 +67,7 @@ impl TryFrom<&ApertureShape> for OutlineShape {
     fn try_from(shape: &ApertureShape) -> OpmResult<Self> {
         match shape {
             ApertureShape::BinaryCircle(shape) => Ok(Self::Circle(*shape)),
-            ApertureShape::BinaryRectangle(shape) => Ok(Self::Rectangle(shape.clone())),
+            ApertureShape::BinaryRectangle(shape) => Ok(Self::Rectangle(*shape)),
             ApertureShape::BinaryPolygon(shape) => Ok(Self::Polygon(shape.clone())),
             shape => Err(OpossumError::Properties(format!(
                 "a shape '{shape}' has no edge to outline a component or a bore with"
@@ -151,13 +151,13 @@ impl Bore {
     ///
     /// This function returns an error if the shape of the aperture has no edge.
     pub(crate) fn from_aperture(aperture: &Aperture) -> OpmResult<Self> {
-        let (center, rotation) =
-            aperture
-                .isometry()
-                .map_or((Point2::origin(), Angle::zero()), |isometry| {
-                    let shift = isometry.translation();
-                    (Point2::new(shift.x, shift.y), isometry.rotation().z)
-                });
+        let (center, rotation) = aperture.isometry().map_or_else(
+            || (Point2::origin(), Angle::zero()),
+            |isometry| {
+                let shift = isometry.translation();
+                (Point2::new(shift.x, shift.y), isometry.rotation().z)
+            },
+        );
         Ok(Self::new(
             OutlineShape::try_from(aperture.shape())?,
             center,

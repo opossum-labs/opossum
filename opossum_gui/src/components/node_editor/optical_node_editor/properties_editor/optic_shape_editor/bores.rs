@@ -148,7 +148,7 @@ pub fn BoreEditor(
             value: if editing_index.read().is_none() { "Add bore" } else { "Update bore" },
             disabled: readonly,
             onclick: {
-                let bores = bores.clone();
+                let bores = bores;
                 move |_| {
                     let bore = draft.read().clone();
                     let index = *editing_index.read();

@@ -248,9 +248,9 @@ fn join_port_apertures(
         return Ok(());
     }
     let outcome = match Outline::new(outline.shape().clone(), bores) {
-        Ok(bored) => {
+        Ok(bored_outline) => {
             node.node_attr_mut()
-                .set_property(OPTIC_SHAPE, OpticShape::from(bored).into())?;
+                .set_property(OPTIC_SHAPE, OpticShape::from(bored_outline).into())?;
             "joined the optic shape as a bore: rays through it now miss the component".to_string()
         }
         Err(e) => format!("was dropped: it does not lie as a bore within the optic shape ({e})"),
