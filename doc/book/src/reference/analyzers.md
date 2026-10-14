@@ -51,9 +51,9 @@ The following analyzers are implemented:
     of bounces, minimum ray energy, and missed surface strategy. The maximum number of refractions defines the maximum number
     of refraction events considered during the analysis. The maximum number of bounces defines the maximum number of
     reflections considered during the analysis. The missed surface strategy defines how rays are handled that miss a
-    surface, including rays that reach it outside the `clear aperture` of its component. The available options are `Stop`,
+    surface, including rays that reach it outside the `optic shape` of its component. The available options are `Stop`,
     the default, which loses such rays, and `Ignore`, which lets them pass unchanged (see
-    [Clear aperture](nodes.md#clear-aperture)). The alignment run that places the
+    [Optic shape](nodes.md#optic-shape)). The alignment run that places the
     components always uses `Stop`.
 
     The analyzer is also used to configure the properties of source ports. For the ray tracing analyzer, the source port
@@ -65,7 +65,7 @@ The following analyzers are implemented:
 
     The ghost focus analyzer can be seen as an extended ray tracing analyzer. In fact, the ghost focus analyzer with the `Max bounces`
     parameter set to zero is the basic ray tracing analysis presented above. A ray that misses a surface, e.g. outside the
-    `clear aperture` of its component, always passes it unchanged, as with the `Ignore` strategy of the ray tracing analyzer.
+    `optic shape` of its component, always passes it unchanged, as with the `Ignore` strategy of the ray tracing analyzer.
 
     The ghost focus analyzer is particularly important for the analysis of high-energy laser systems. In practical optical systems,
     optical surfaces are not ideal and can generate unintended reflections. Although these reflections may represent only a small

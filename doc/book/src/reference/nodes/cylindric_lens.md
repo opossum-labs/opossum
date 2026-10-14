@@ -6,7 +6,7 @@ This element represents a "real" lens with cylindrical front and back surfaces. 
 
 By default, both cylinder axex are oriented along the y axis. This can be easily changed using the `alignment` property. 
 
-The `clear aperture` decides which rays hit the lens (see [Clear aperture](../nodes.md#clear-aperture)). Choose it so that the lens keeps a positive edge thickness: where the front and back surfaces would cross, e.g. beyond the rim of a thin biconvex lens, rays miss the rear surface.
+The `optic shape` decides which rays hit the lens (see [Optic shape](../nodes.md#optic-shape)). Choose it so that the lens keeps a positive edge thickness: where the front and back surfaces would cross, e.g. beyond the rim of a thin biconvex lens, rays miss the rear surface.
 
 Since this element encloses a volume of material, it can be operated as an amplifier: a [pump scenario](../pump_scenarios.md) assigns it a gain model, and light travelling through the medium is amplified accordingly. Without such an assignment the lens is the passive component described here.
 
@@ -21,12 +21,12 @@ Since this element encloses a volume of material, it can be operated as an ampli
 
     During ray tracing analysis, incoming rays are refracted on the `front`surface according to Snellius' law of refraction.
     Inside the lens the ray propagate within the given medium. On the `rear`surface, the rays are again refracted.
-    A ray reaching a surface outside the `clear aperture` misses the lens and follows the analyzer's missed surface
+    A ray reaching a surface outside the `optic shape` misses the lens and follows the analyzer's missed surface
     strategy.
 
 - Ghost focus Analysis
 
-    During this analysis, the lens behaves similar to the ray tracing analysis. A ray outside the `clear aperture` passes
+    During this analysis, the lens behaves similar to the ray tracing analysis. A ray outside the `optic shape` passes
     the lens unchanged.
 
 
@@ -54,7 +54,7 @@ Since this element encloses a volume of material, it can be operated as an ampli
   or a dispersion formula such as Sellmeier or Schott — which is what the refraction at both surfaces
   is calculated from.
 
-`clear aperture`
+`optic shape`
 : Transversal extent of the lens: the size the material is actually available in. It decides which
   rays hit the lens. Defaults to a circle of 12.5 mm radius, i.e. the usual 1 inch mount. Both
-  curvatures must reach its edge; a shape without an edge (`Open`, Gaussian) is refused.
+  curvatures must reach its edge; `Open` is refused.

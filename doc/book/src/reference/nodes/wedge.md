@@ -8,7 +8,7 @@ parallel. A wedge angle of zero turns it into a plane-parallel plate.
 Since this element encloses a volume of material, it can be operated as an amplifier: a
 [pump scenario](../pump_scenarios.md) assigns it a gain model, and light travelling through the
 medium is amplified accordingly. Without such an assignment the wedge is the passive component
-described here. With flat surfaces and a suitable clear aperture it is the closest match to a slab
+described here. With flat surfaces and a suitable optic shape it is the closest match to a slab
 or disk amplifier head.
 
 ## Ports
@@ -32,11 +32,10 @@ or disk amplifier head.
 `wedge`
 : Wedge angle. Angle between the front and back surface. An angle of zero corresponds to parallel surfaces.
 
-`clear aperture`
+`optic shape`
 : Transversal extent of the wedge: the size the material is actually available in. It decides which
   rays hit the wedge, at both of its faces: a ray that would enter or leave through the side misses it
   and follows the analyzer's missed surface strategy (see
-  [Clear aperture](../nodes.md#clear-aperture)). Defaults to a
+  [Optic shape](../nodes.md#optic-shape)). Defaults to a
   circle of 12.5 mm radius, i.e. the usual 1 inch mount. Choose it so that the wedge keeps a positive
-  thickness: beyond its thin edge rays miss the rear surface. A shape without an edge (`Open`,
-  Gaussian) is refused.
+  thickness: beyond its thin edge rays miss the rear surface. `Open` is refused.

@@ -19,7 +19,7 @@ For ray tracing analysis, incoming rays are deflected according to the laws of r
 ## Properties
 
 `curvature`
-: The radius of curvature of the mirror surface. A negative value corresponds to a concave (= focussing) mirror while a positive value corresponds to a convex (= defocussing) mirror. A value of `+infinity` or `-infinity` represents a flat mirror. The curved surface must reach the edge of the `clear aperture`: for a radius below 12.5 mm, reduce the clear aperture first.
+: The radius of curvature of the mirror surface. A negative value corresponds to a concave (= focussing) mirror while a positive value corresponds to a convex (= defocussing) mirror. A value of `+infinity` or `-infinity` represents a flat mirror. The curved surface must reach the edge of the `optic shape`: for a radius below 12.5 mm, reduce the optic shape first.
 
-`clear aperture`
-: Transversal extent of the mirror. It decides which rays are reflected: a ray outside of it, or through a hole of a stacked shape, is lost in every analysis, since the mirror has no output for it (see [Clear aperture](../nodes.md#clear-aperture)). Defaults to a circle of 12.5 mm radius; a shape without an edge (`Open`, Gaussian) is refused.
+`optic shape`
+: Transversal extent of the mirror. It decides which rays are reflected: a ray outside of it, or through one of its bores, is lost in every analysis, since the mirror has no output for it (see [Optic shape](../nodes.md#optic-shape)). Defaults to a circle of 12.5 mm radius; `Open` is refused.

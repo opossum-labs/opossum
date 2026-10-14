@@ -171,3 +171,36 @@ pub fn BoreEditor(
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use approx::assert_relative_eq;
+
+    /// A bore is shifted in meters and turned in degrees, each input leaving the shape and the
+    /// other values of the bore as they were; the inputs show the values back in those units.
+    #[test]
+    fn a_bore_is_placed_by_its_offset_and_rotation() {
+        let shape = OutlineShape::from(CircleShape::default());
+        let mut bore = Bore::new(shape.clone(), Point2::origin(), degree!(0.0));
+        for (param, value) in [
+            (BoreParam::X, 0.004),
+            (BoreParam::Y, -0.003),
+            (BoreParam::Rotation, 30.0),
+        ] {
+            let mut set = param.setter_from_obj();
+            set(&mut bore, value);
+        }
+        assert_eq!(bore.shape(), &shape);
+        assert_eq!(bore.center(), meter!(0.004, -0.003));
+        assert_relative_eq!(bore.rotation().get::<degree>(), 30.0, max_relative = 1e-12);
+        for (param, shown) in [
+            (BoreParam::X, 0.004),
+            (BoreParam::Y, -0.003),
+            (BoreParam::Rotation, 30.0),
+        ] {
+            let value = param.create_value_string(&bore).parse::<f64>().unwrap();
+            assert_relative_eq!(value, shown, max_relative = 1e-12);
+        }
+    }
+}

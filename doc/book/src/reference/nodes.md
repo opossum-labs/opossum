@@ -76,10 +76,10 @@ In addition, nodes have a set of attributes that are common to all of them. Howe
 
    Besides the location (see previous point) an optical component has a given orientation in 3D space. This orientation is defined by angles around the axes of the global coordinate system.
 
-1. Clear aperture
+1. Optic shape
 
    Each real-world optical component has a limited transversal size, which decides the light it can catch. Nodes state it
-   in their `clear aperture` property, see [Clear aperture](#clear-aperture).
+   in their `optic shape` property, see [Optic shape](#optic-shape).
 
 1. 3D mechanical model
 
@@ -89,56 +89,70 @@ In addition, nodes have a set of attributes that are common to all of them. Howe
 
    For both, sequential and non-sequential analysis, surface properties such as coating or roughness which define the way light will be reflected or propagated through should be defined. *This could also be modeled using basic nodes*
 
-## Clear aperture
+## Optic shape
 
-Every component that light hits has a transversal size, its `clear aperture`: the size the material or the coated
-surface is actually available in, the figure a supplier quotes. The clear aperture decides which rays hit the component.
-A ray that reaches the surface outside of it misses the component. What happens to that ray depends on the analysis:
+Every component that light hits has a transversal size, its `optic shape`: where the material or the coated surface
+actually is, the size a supplier quotes, with any bores through it. The optic shape decides which rays hit the
+component. A ray that reaches the surface outside of it, or through one of its bores, misses the component. What
+happens to that ray depends on the analysis:
 
 - **Ray tracing** follows its `missed surface strategy` (see [Analyzers](analyzers.md)): with `Stop`, the default, the
   ray is lost; with `Ignore` it passes the component unchanged.
 - **Ghost focus** analysis always lets it pass unchanged.
-- **Energy** analysis traces no rays and ignores all apertures.
+- **Energy** analysis traces no rays and ignores optic shapes.
 
 A mirror, a parabolic mirror and a grating only reflect: a ray that misses them has no way on and is lost in every
-analysis. A ray outside the clear aperture of a beam splitter, or through a hole in it as on a scraper mirror, follows
-the strategy above: with `Ignore` it passes on as transmitted light, with `Stop` it is lost.
+analysis. A ray outside the optic shape of a beam splitter, or through one of its bores as on a scraper mirror,
+follows the strategy above: with `Ignore` it passes on as transmitted light, with `Stop` it is lost.
 
-**Shapes.** A component needs a shape with an edge: a circle, a rectangle, a polygon, or a stack of such shapes holding
-at least one hole, e.g. a ring or a mirror with a central bore. The default is a circle of 12.5 mm radius, the usual
-1 inch mount. The clear aperture lies in the plane perpendicular to the component's axis and extends along that axis:
-for a rod cut at Brewster's angle it is the cross section of the rod, as its manufacturer states it. An off-axis
-parabola measures it parallel to its parent axis, as catalogs do. A curved surface has to reach the edge of the clear
-aperture, so its radius of curvature cannot be smaller than the largest distance of that edge from the axis. The edge
-thickness of a lens or a wedge is not checked: where its surfaces would cross, rays miss the rear surface.
+**Edge and bores.** An optic shape is an edge with bores through it. The edge is a circle, a rectangle or a polygon,
+centered on the component's axis and not turned: to shift or turn a component, align its node. A bore is a circle, a
+rectangle or a polygon too, shifted off the axis and turned by its own offset and rotation; a ring, for instance, is a
+circle with a centered bore. Every bore lies within the edge, and bores neither overlap nor touch each other or the
+edge: OPOSSUM refuses a bore that does and says why. Overlapping bores and a notch cut into the edge cannot be stated.
+In the node editor, choosing another kind of edge starts a fresh edge of that kind without bores.
 
-**Detectors** let all light pass. Their clear aperture is the window they record within, unbounded (`Open`) by
+The default is a circle of 12.5 mm radius, the usual 1 inch mount. The optic shape lies in the plane perpendicular to
+the component's axis and extends along that axis: for a rod cut at Brewster's angle it is the cross section of the
+rod, as its manufacturer states it. An off-axis parabola measures it parallel to its parent axis, as catalogs do. A
+curved surface has to reach the edge of the optic shape, so its radius of curvature cannot be smaller than the
+largest distance of that edge from the axis. The edge thickness of a lens or a wedge is not checked: where its
+surfaces would cross, rays miss the rear surface.
+
+**Detectors** let all light pass. Their optic shape is the window they record within, unbounded (`Open`) by
 default. Light outside a set window passes on unrecorded, and the log and the report warn about it. The
-[paraxial surface](nodes/paraxial_surface.md) is an idealization and may be unbounded as well.
+[paraxial surface](nodes/paraxial_surface.md) is an idealization and may be unbounded as well. Every other component
+refuses `Open`.
 
-**Iris.** A [dummy](nodes/dummy.md) passes light unchanged and is unbounded (`Open`) by default. Given a clear
-aperture, it acts as an iris: a ray outside of it misses the dummy and follows the rules above.
+**Iris.** A [dummy](nodes/dummy.md) passes light unchanged and is unbounded (`Open`) by default. Given an optic
+shape, it acts as an iris: a ray outside of it misses the dummy and follows the rules above.
 
-Only the clear aperture limits light; ports carry no aperture, only a coating and an LIDT. Sources, ray propagation
-visualizers and groups are idealized or abstract nodes and have no clear aperture. To limit the beam of a source, place
+Only the optic shape limits light; ports carry no aperture, only a coating and an LIDT. Sources, ray propagation
+visualizers and groups are idealized or abstract nodes and have no optic shape. To limit the beam of a source, place
 a dummy behind it or shrink its ray distribution.
 
-**Alignment.** The component alignment run (see [Geometry](../concepts/geometry.md)) respects clear apertures too: if
-the optical axis misses the clear aperture of a component, the alignment stops with an error naming that node. At a
-detector it only warns that the measurement may fail.
+**Alignment.** The component alignment run (see [Geometry](../concepts/geometry.md)) respects optic shapes too: if
+the optical axis misses the optic shape of a component, beside its edge or through one of its bores, the alignment
+stops with an error naming that node. A bore meant to let the beam pass along the axis, as on a scraper mirror for
+the main beam, is therefore not supported yet. At a detector a missed window only warns that the measurement may fail.
 
-**Older model files** are upgraded when they are read. Files of format version 0 let every port hold an aperture that
-masked the light passing it:
+**Older model files** are upgraded when they are read. Before the optic shape had its name, files stated it as the
+`clear aperture` of a node. That value is read as the optic shape: a shape with an edge becomes the edge, a stack of
+one centered hole and obstructions within it becomes an edge with bores. A value that cannot be stated this way, a
+soft (Gaussian) shape for instance, is dropped with a warning, and the node keeps its default.
 
-- A centered hole at the input port that gave a component its size becomes its clear aperture, together with the same
-  hole at its other ports.
-- Any other hole or obstruction, centered or not, joins the clear aperture as a stack. Rays outside the former mask now
-  miss the component, with the consequences described above; a detector records within it.
-- A port aperture that cannot join is dropped: a soft (Gaussian) or stacked one, one measured in another frame than the
-  clear aperture (an off-axis parabola, the tilted exit face of a wedge), one that would reach beyond a curvature of the
-  component, and every port aperture of a node without a clear aperture.
+Files of format version 0 let every port hold an aperture that masked the light passing it:
 
-A clear aperture that a curvature cannot reach is reduced to fit. Components that had no such hole get the default of
+- A centered hole at the input port that gave a component its size becomes the edge of its optic shape, together with
+  the same hole at its other ports; a detector records within it.
+- A binary obstruction becomes a bore, shifted and turned as it was. Rays through it now miss the component, with the
+  consequences described above.
+- A port aperture that cannot become part of the optic shape is dropped: a soft (Gaussian) or stacked one; a further
+  or a shifted hole, since the one edge of an optic shape is centered; one measured in another frame than the optic
+  shape (an off-axis parabola, the tilted exit face of a wedge); an obstruction that does not lie within the edge; and
+  every port aperture of a node without a bounded optic shape.
+
+An optic shape that a curvature cannot reach is reduced to fit. Components that had no such hole get the default of
 12.5 mm. The log lists what was changed, naming node and port; saving the model writes the upgraded version.
 
 ## Analysis interface
