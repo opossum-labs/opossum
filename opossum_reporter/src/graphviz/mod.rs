@@ -46,29 +46,29 @@ fn resolve_port_endpoint(
     let node_idx = group
         .graph()
         .node_idx_by_uuid(node_uuid)
-        .ok_or_else(|| ReporterError::Other(format!("Node {} not found in group", node_uuid)))?;
+        .ok_or_else(|| ReporterError::Other(format!("Node {node_uuid} not found in group")))?;
     let node_ref = group.graph().node_by_idx(node_idx)?;
     let node_id = format!("i{}", node_ref.uuid().as_simple());
 
-    if let Some(group_node) = node_ref.as_any().downcast_ref::<NodeGroup>() {
-        if group_node.expand_view()? {
-            let in_port = group_node.graph().port_map(&PortType::Input).get(port_name);
-            let out_port = group_node
-                .graph()
-                .port_map(&PortType::Output)
-                .get(port_name);
-            let port_info = if let Some(port) = in_port {
-                port
-            } else if let Some(port) = out_port {
-                port
-            } else {
-                return Err(ReporterError::Other(format!(
-                    "Port {port_name} is not mapped in group {}",
-                    group_node.name()
-                )));
-            };
-            return resolve_port_endpoint(group_node, port_info.0, &port_info.1);
-        }
+    if let Some(group_node) = node_ref.as_any().downcast_ref::<NodeGroup>()
+        && group_node.expand_view()?
+    {
+        let in_port = group_node.graph().port_map(&PortType::Input).get(port_name);
+        let out_port = group_node
+            .graph()
+            .port_map(&PortType::Output)
+            .get(port_name);
+        let port_info = if let Some(port) = in_port {
+            port
+        } else if let Some(port) = out_port {
+            port
+        } else {
+            return Err(ReporterError::Other(format!(
+                "Port {port_name} is not mapped in group {}",
+                group_node.name()
+            )));
+        };
+        return resolve_port_endpoint(group_node, port_info.0, &port_info.1);
     }
     Ok(format!("{node_id}:{port_name}"))
 }
@@ -83,17 +83,17 @@ fn write_group_dot(group: &NodeGroup, rankdir: &str, out: &mut String) -> Report
         let inverted = node_ref.inverted();
         let ports = node_ref.ports();
 
-        if let Some(subgroup) = node_ref.as_any().downcast_ref::<NodeGroup>() {
-            if subgroup.expand_view()? {
-                let inv_str = if inverted { " (inv)" } else { "" };
-                let _ = writeln!(
-                    out,
-                    "  subgraph i{uuid} {{\n\tlabel=\"{node_name}{inv_str}\"\n\tfontsize=8\n\tcluster=true\n\t"
-                );
-                write_group_dot(subgroup, rankdir, out)?;
-                out.push_str("}\n");
-                continue;
-            }
+        if let Some(subgroup) = node_ref.as_any().downcast_ref::<NodeGroup>()
+            && subgroup.expand_view()?
+        {
+            let inv_str = if inverted { " (inv)" } else { "" };
+            let _ = writeln!(
+                out,
+                "  subgraph i{uuid} {{\n\tlabel=\"{node_name}{inv_str}\"\n\tfontsize=8\n\tcluster=true\n\t"
+            );
+            write_group_dot(subgroup, rankdir, out)?;
+            out.push_str("}\n");
+            continue;
         }
 
         let dot_cell = format_node_to_dot(

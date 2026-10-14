@@ -546,7 +546,7 @@ mod test_hit_map {
             fluence_estimator::FluenceEstimator,
             rays_hit_map::{EnergyHitPoint, FluenceHitPoint},
         },
-        error::{OpmResult, OpossumError},
+        error::OpmResult,
         joule, meter,
         properties::Proptype,
         utils::test_helper::helper::check_logs,

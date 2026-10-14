@@ -206,13 +206,14 @@ pub fn proptype_to_html(
 }
 
 /// Convert a node's [`Properties`] into a list of [`HtmlProperty`].
+#[must_use]
 pub fn format_html_props(
     properties: &Properties,
     id: &str,
     report_number: usize,
 ) -> Vec<HtmlProperty> {
     let mut html_props: Vec<HtmlProperty> = Vec::new();
-    for (name, prop) in properties.iter() {
+    for (name, prop) in properties {
         if let Ok(html_prop_value) = proptype_to_html(prop.prop(), id, name, report_number) {
             html_props.push(HtmlProperty {
                 name: name.clone(),

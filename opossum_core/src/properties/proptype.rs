@@ -192,7 +192,7 @@ impl Proptype {
     /// Generate a html representation of a Proptype.
     ///
     /// # Errors
-
+    ///
     /// Returns the raw scalar value as an `f64` if this variant represents a numeric scalar.
     /// For dimensional `uom` quantities, the value is returned in its fundamental SI base unit.
     #[must_use]

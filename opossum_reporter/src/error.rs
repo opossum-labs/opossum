@@ -1,8 +1,8 @@
-//! Error types for the opossum_reporter crate.
+//! Error types for the `opossum_reporter` crate.
 
 use std::fmt;
 
-/// Result type shorthand for opossum_reporter operations.
+/// Result type shorthand for `opossum_reporter` operations.
 pub type ReporterResult<T> = Result<T, ReporterError>;
 
 /// Errors that can occur during report generation, plotting, or graph export.

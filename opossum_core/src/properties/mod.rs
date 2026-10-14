@@ -416,9 +416,7 @@ impl<'a> IntoIterator for &'a Properties {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::utils::test_helper::helper::check_logs;
     use assert_matches::assert_matches;
-    use log::Level;
     #[test]
     fn properties_create() {
         let mut props = Properties::default();

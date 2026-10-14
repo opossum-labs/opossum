@@ -189,9 +189,7 @@ impl AnalysisReport {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{
-        opm_document::OpmDocument, properties::Properties, reporting::report_note::ReportLevel,
-    };
+    use crate::{properties::Properties, reporting::report_note::ReportLevel};
 
     #[test]
     fn new_and_default() {
