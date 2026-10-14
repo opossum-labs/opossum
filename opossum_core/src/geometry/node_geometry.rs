@@ -286,18 +286,14 @@ impl Geometry {
     /// [`Assembly`]): `None` would declare it unbounded.
     pub fn rim(&self) -> OpmResult<Option<Rim>> {
         match self {
-            Self::Surface(surface) => {
-                Ok(surface
-                    .cross_section
-                    .clone()
-                    .map(|cross_section| match surface.role {
-                        RimRole::Edge => Rim::new(cross_section, surface.axis),
-                        RimRole::Window => Rim::window(cross_section, surface.axis),
-                    }))
-            }
+            Self::Surface(surface) => Ok(surface
+                .cross_section
+                .clone()
+                .map(|cross_section| Rim::new(cross_section, surface.axis, surface.role))),
             Self::Solid(Solid::Extruded(extruded)) => Ok(Some(Rim::new(
                 extruded.cross_section.clone(),
                 extruded.axis,
+                RimRole::Edge,
             ))),
             Self::Solid(Solid::Parametric(_)) => Err(not_supported_yet("a parametric solid")),
             Self::Solid(Solid::Assembly(_)) => Err(not_supported_yet("an assembly")),
@@ -897,7 +893,10 @@ mod test {
         let ((_, entrance), (_, exit)) = geometry.entrance_and_exit(&Isometry::identity())?;
         assert_eq!(entrance, axis.append(&vertex));
         assert_eq!(exit, entrance);
-        assert_eq!(geometry.rim()?, Some(Rim::new(circle()?, axis)));
+        assert_eq!(
+            geometry.rim()?,
+            Some(Rim::new(circle()?, axis, RimRole::Edge))
+        );
         Ok(())
     }
     /// A surface without a cross section is unbounded; a bounded surface and an extruded solid have
@@ -907,7 +906,7 @@ mod test {
         assert_eq!(Geometry::plane(None).rim()?, None);
         assert_eq!(
             Geometry::plane(Some(circle()?)).rim()?,
-            Some(Rim::new(circle()?, Isometry::identity()))
+            Some(Rim::new(circle()?, Isometry::identity(), RimRole::Edge))
         );
         let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
         let extruded = Geometry::Solid(Solid::Extruded(Box::new(Extruded::new(
@@ -919,7 +918,10 @@ mod test {
             ),
             circle()?,
         )?)));
-        assert_eq!(extruded.rim()?, Some(Rim::new(circle()?, axis)));
+        assert_eq!(
+            extruded.rim()?,
+            Some(Rim::new(circle()?, axis, RimRole::Edge))
+        );
         Ok(())
     }
     #[test]

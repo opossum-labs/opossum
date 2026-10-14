@@ -41,32 +41,21 @@ pub enum RimRole {
 }
 
 impl Rim {
-    /// Create a new [`Rim`] the component ends at ([`RimRole::Edge`]).
+    /// Create a new [`Rim`].
     ///
     /// # Arguments
     ///
     /// * `cross_section` - the transversal extent, in the xy plane of `axis`.
     /// * `axis` - the frame of the cross section relative to the reference frame; its z axis is the
     ///   direction the cross section is extruded along.
+    /// * `role` - what the rim means for a ray outside of it: the edge of the component, or the
+    ///   window of a detector.
     #[must_use]
-    pub const fn new(cross_section: ValidatedCrossSection, axis: Isometry) -> Self {
+    pub const fn new(cross_section: ValidatedCrossSection, axis: Isometry, role: RimRole) -> Self {
         Self {
             cross_section,
             axis,
-            role: RimRole::Edge,
-        }
-    }
-    /// Create a new [`Rim`] that only bounds what a detector records ([`RimRole::Window`]).
-    ///
-    /// # Arguments
-    ///
-    /// See [`Rim::new`].
-    #[must_use]
-    pub const fn window(cross_section: ValidatedCrossSection, axis: Isometry) -> Self {
-        Self {
-            cross_section,
-            axis,
-            role: RimRole::Window,
+            role,
         }
     }
     /// Return the cross section of this [`Rim`], in the xy plane of its axis.
@@ -131,6 +120,7 @@ mod test {
                 Some(Point2::new(millimeter!(3.0), millimeter!(4.0))),
             )?)?,
             axis,
+            RimRole::Edge,
         );
         let reference = Isometry::new(millimeter!(10.0, 0.0, 0.0), degree!(0.0, 0.0, 30.0))?;
         // Points are stated in the frame of the cross section and placed from there.

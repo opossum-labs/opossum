@@ -411,7 +411,7 @@ mod test {
         coatings::CoatingType,
         degree,
         error::{OpmResult, OpossumError},
-        geometry::{Plane, Rim, Sphere, geo_surface::GeoSurfaceRef},
+        geometry::{Plane, Rim, RimRole, Sphere, geo_surface::GeoSurfaceRef},
         joule,
         light::{Ray, Rays},
         meter, millimeter, nanometer,
@@ -437,6 +437,7 @@ mod test {
                 None,
             )?)?,
             Isometry::identity(),
+            RimRole::Edge,
         )));
         Ok(surface)
     }
@@ -536,6 +537,7 @@ mod test {
                 None,
             )?)?,
             Isometry::identity(),
+            RimRole::Edge,
         )));
         // 135° from the vertex, the point lies behind the equator, 10.6 mm off the axis - within the
         // rim when seen along the axis. A ray tilted by 50° reaches the sphere there first.

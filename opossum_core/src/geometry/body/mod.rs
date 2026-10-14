@@ -22,7 +22,7 @@
 use crate::{
     apertures::{CircleShape, OpticShape, RectangleShape},
     error::{OpmResult, OpossumError},
-    geometry::{Rim, geo_surface::GeoSurfaceRef},
+    geometry::{Rim, RimRole, geo_surface::GeoSurfaceRef},
     light::Ray,
     millimeter, nanometer,
     types::validated_type_definitions::ValidatedCrossSection,
@@ -253,7 +253,7 @@ impl SurfaceBoundedBody {
         Self {
             entrance,
             exit,
-            rim: Rim::new(cross_section, Isometry::identity()),
+            rim: Rim::new(cross_section, Isometry::identity(), RimRole::Edge),
             isometry,
         }
     }
