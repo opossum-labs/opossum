@@ -123,7 +123,7 @@ The reference ray (optical axis) travels straight from the source. Because the l
 * The optical axis is "lost" at this point.
 * The downstream components (e.g., the `Energy meter`) cannot be placed, so OPOSSUM stops the alignment with an error naming the lens. A component at the end of a path, without successors, is only warned about.
 
-The same happens if the axis reaches a component but passes it outside its `clear aperture`, e.g. a lens decentered by more than its radius or a double pass whose return path walks off. Enlarge the clear aperture (see [Clear aperture](../reference/nodes.md#clear-aperture)) or correct the position. If the axis misses the window of a detector, OPOSSUM only warns that the measurement may fail.
+The same happens if the axis reaches a component but passes it outside its `optic shape`, e.g. a lens decentered by more than its radius or a double pass whose return path walks off. Enlarge the optic shape (see [Optic shape](../reference/nodes.md#optic-shape)) or correct the position. If the axis misses the window of a detector, OPOSSUM only warns that the measurement may fail.
 
 ### Multi-pass and Reference Nodes
 
