@@ -14,11 +14,9 @@
 //! `Some`.
 
 use crate::{
-    apertures::{Aperture, ApertureType},
     core_optics::{Appearance, NodeAttrExt, OpticNode, OpticNodeExt, PortType, SurfaceFinish},
     error::{OpmResult, OpossumError},
-    geometry::{Rim, SurfaceMesh, body::default_clear_aperture},
-    types::validated_type_definitions::ValidatedCrossSection,
+    geometry::{Rim, SurfaceMesh, body::default_optic_shape},
     utils::geom_transformation::Isometry,
 };
 
@@ -127,12 +125,7 @@ pub trait Planar: OpticNode {
         let rim = match surface.rim() {
             Some(rim) => rim.clone(),
             None => Rim::new(
-                ValidatedCrossSection::try_new(Aperture::new(
-                    default_clear_aperture(),
-                    ApertureType::Hole,
-                    None,
-                    None,
-                )?)?,
+                default_optic_shape().cross_section()?.unwrap(),
                 Isometry::identity(),
             ),
         };
@@ -167,13 +160,7 @@ pub enum SurfaceKind {
 mod test {
     use super::*;
     use crate::{
-        apertures::{ApertureShape, CircleShape},
-        core_optics::node_attr::NodePositioning,
-        degree,
-        geometry::body::CLEAR_APERTURE,
-        millimeter,
-        nodes::{EnergyMeter, IdealFilter, ParabolicMirror, ThinMirror},
-        utils::{LockExt, geom_transformation::Isometry},
+        apertures::{Aperture, ApertureShape, ApertureType, CircleShape, OpticShape}, core_optics::node_attr::NodePositioning, degree, geometry::body::OPTIC_SHAPE, millimeter, nodes::{EnergyMeter, IdealFilter, ParabolicMirror, ThinMirror}, utils::{LockExt, geom_transformation::Isometry},
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
     use nalgebra::Point2;
@@ -238,7 +225,7 @@ mod test {
             None,
         )?;
         let mut mirror = ThinMirror::default();
-        mirror.set_property(CLEAR_APERTURE, ring.shape().clone().into())?;
+        mirror.set_property(OPTIC_SHAPE, OpticShape::from_aperture_shape(ring.shape())?.into())?;
         mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let mesh = mirror.surface_mesh(64)?;
         let covered = mesh
@@ -263,8 +250,8 @@ mod test {
         let mut parabola =
             ParabolicMirror::new_with_off_axis_x("oap", millimeter!(100.0), true, degree!(90.0))?;
         parabola.set_property(
-            CLEAR_APERTURE,
-            ApertureShape::BinaryCircle(CircleShape::new(millimeter!(25.0))?).into(),
+            OPTIC_SHAPE,
+            OpticShape::from_aperture_shape(&ApertureShape::BinaryCircle(CircleShape::new(millimeter!(25.0))?))?.into(),
         )?;
         // At the origin the node's own frame, which the mesh is stated in, is the global one.
         parabola.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;

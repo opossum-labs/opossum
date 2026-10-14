@@ -234,15 +234,7 @@ mod test {
             RayTraceConfig,
             energy::{AnalysisEnergy, EnergyConfig},
             raytrace::AnalysisRayTrace,
-        },
-        core_optics::{NodeAttrExt, node_attr::NodePositioning},
-        distributions::position::Hexapolar,
-        joule,
-        light::{LightData, LightResult, Rays},
-        millimeter, nanometer,
-        nodes::test_helper::helper::*,
-        properties::{Proptype, proptype::AssetRef},
-        utils::geom_transformation::Isometry,
+        }, apertures::CircleShape, core_optics::{NodeAttrExt, node_attr::NodePositioning}, distributions::position::Hexapolar, joule, light::{LightData, LightResult, Rays}, millimeter, nanometer, nodes::test_helper::helper::*, properties::{Proptype, proptype::AssetRef}, utils::geom_transformation::Isometry,
     };
     use approx::assert_relative_eq;
     use nalgebra::Vector3;
@@ -679,7 +671,7 @@ mod test {
     #[test]
     fn a_hemisphere_lens_can_be_meshed() -> OpmResult<()> {
         let hemisphere_radius = millimeter!(25.0);
-        let aperture: Proptype = ApertureShape::from(CircleShape::new(hemisphere_radius)?).into();
+        let aperture: Proptype = OpticShape::from(CircleShape::new(hemisphere_radius)?).into();
 
         // Plano-convex: one flat face, one exact hemisphere - the centre thickness has to reach
         // that one sag (25 mm) or the hemisphere's rim would poke out past the flat face.
@@ -692,7 +684,7 @@ mod test {
         )?;
         plano_convex
             .node_attr
-            .set_property("clear aperture", aperture.clone())?;
+            .set_property(OPTIC_SHAPE, aperture.clone())?;
         plano_convex
             .as_volume()
             .expect("a lens is volumetric")
@@ -710,7 +702,7 @@ mod test {
         )?;
         bi_convex
             .node_attr
-            .set_property("clear aperture", aperture)?;
+            .set_property(OPTIC_SHAPE, aperture)?;
         bi_convex
             .as_volume()
             .expect("a lens is volumetric")

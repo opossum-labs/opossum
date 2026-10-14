@@ -421,7 +421,7 @@ impl OpticShape {
     ///
     /// This function returns an error if the shape cannot be stated as an edge with bores: a soft
     /// shape, or a stack that is not one centred hole with obstructions in it.
-    pub(crate) fn from_aperture_shape(shape: &ApertureShape) -> OpmResult<Self> {
+    pub fn from_aperture_shape(shape: &ApertureShape) -> OpmResult<Self> {
         let ApertureShape::Stack(stack) = shape else {
             if matches!(shape, ApertureShape::Open) {
                 return Ok(Self::Open);

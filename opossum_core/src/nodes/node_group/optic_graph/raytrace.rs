@@ -521,7 +521,7 @@ mod test {
     #[test]
     fn positioning_passes_a_missed_component_with_nothing_after_it() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
-        let lens = scenery.add_node(decentred_lens(default_clear_aperture())?)?;
+        let lens = scenery.add_node(decentred_lens(default_optic_shape())?)?;
         let scenery = position_behind_a_source(scenery, &[lens])?;
         assert!(scenery.node(lens)?.effective_position().is_some());
         Ok(())
