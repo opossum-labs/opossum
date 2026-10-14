@@ -98,7 +98,10 @@ pub fn StackedApertureInput(
         LabeledSelect {
             id: "apertureShapeSelectorStack",
             label: "Select Aperture for Stack",
-            options: select_options_from_enum_iterator(current_aperture.read().shape(), Some(&non_members)),
+            options: select_options_from_enum_iterator(
+                current_aperture.read().shape(),
+                Some(&non_members),
+            ),
             readonly,
             onchange: move |e: Event<FormData>| {
                 let val = e.value();

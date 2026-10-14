@@ -328,7 +328,9 @@ pub fn GraphEditor(
             onmousemove: move |e: MouseEvent| {
                 let held = *tab_drag.peek();
                 if let Some(mut drag) = held {
-                    drag.move_to(Point2D::new(e.client_coordinates().x, e.client_coordinates().y));
+                    drag.move_to(
+                        Point2D::new(e.client_coordinates().x, e.client_coordinates().y),
+                    );
                     tab_drag.set(Some(drag));
                 }
                 if let Some((start_x, start_width)) = *split_drag.peek() {
@@ -337,8 +339,6 @@ pub fn GraphEditor(
                         start_width + e.client_coordinates().x - start_x,
                         *split_width.peek(),
                     );
-                    // Written only on an actual change, which is none at all while a pane sits at
-                    // its minimum width.
                     if next != *layout.peek() {
                         layout.set(next);
                     }
@@ -462,7 +462,7 @@ pub fn GraphEditor(
                                         }
                                     },
                                     TabList { class: "editor-tab-list",
-                                        for (index , key) in pane_tabs.into_iter().enumerate() {
+                                        for (index, key) in pane_tabs.into_iter().enumerate() {
                                             TabTrigger {
                                                 key: "{key.value()}",
                                                 value: key.value(),
@@ -479,10 +479,7 @@ pub fn GraphEditor(
                                                     // has travelled a few pixels, so a click stays a click.
                                                     onmousedown: move |e: MouseEvent| {
                                                         if e.trigger_button() == Some(MouseButton::Primary) {
-                                                            let at = Point2D::new(
-                                                                e.client_coordinates().x,
-                                                                e.client_coordinates().y,
-                                                            );
+                                                            let at = Point2D::new(e.client_coordinates().x, e.client_coordinates().y);
                                                             tab_drag.set(Some(TabDrag::new(key, at)));
                                                         }
                                                     },

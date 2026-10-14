@@ -290,8 +290,7 @@ pub fn SceneView() -> Element {
             // 3D View menu: what was left out, and how much is drawn.
             div { class: "scene-view-status",
                 if *skipped_count.read() > 0 {
-                    span {
-                        class: "scene-view-skipped",
+                    span { class: "scene-view-skipped",
                         "{skipped_count} component(s) could not be drawn \u{2013} see logs"
                     }
                 }
@@ -315,12 +314,9 @@ pub fn SceneView() -> Element {
                     for object in objects.write().iter_mut() {
                         object.selected =
                             !is_ray_object(&object.id) && Some(&object.id) == picked.id.as_ref();
+                            && Some(&object.id) == picked.id.as_ref(); // Mirror the 2D canvas: a hit opens the component's properties without leaving
+                        &&Some(&object.id) == picked.id.as_ref();
                     }
-                    // Mirror the 2D canvas: a hit opens the component's properties without leaving
-                    // the 3D view, and a click on empty space clears the selection so the
-                    // properties sidebar deselects too - not just the 3D box. See `action_for_pick`.
-                    // Looked up in the manifest last fetched rather than awaiting a fresh one, so
-                    // the click responds immediately.
                     if let Some(Ok(fetched)) = &*manifest.read()
                         && let Some(action) = action_for_pick(&picked, fetched)
                     {
@@ -334,10 +330,14 @@ pub fn SceneView() -> Element {
                         ViewerEvent::LoadError { id, message } => {
                             OPOSSUM_UI_LOGS
                                 .write()
-                                .add_log(&format!("the 3D view could not draw component {id}: {message}"));
+                                .add_log(
+                                    &format!("the 3D view could not draw component {id}: {message}"),
+                                );
                         }
                         ViewerEvent::Error { message } => {
-                            OPOSSUM_UI_LOGS.write().add_log(&format!("the 3D view reported: {message}"));
+                            OPOSSUM_UI_LOGS
+                                .write()
+                                .add_log(&format!("the 3D view reported: {message}"));
                         }
                         _ => {}
                     }

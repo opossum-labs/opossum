@@ -57,49 +57,49 @@ pub fn MechanicalPropertiesEditor(
         .map(|p| p.get::<pascal>() / 1e9);
 
     rsx! {
-      Card {
-        CardHeader {
-          CardTitle { "Mechanical properties" }
-        }
-        CardContent {
-          div { class: "row gy-3",
-            div { class: "col-md-6",
-              OptionalPropertyInput {
-                id: format!("{}_density", base_id),
-                label: "Density [g/cm³]".to_string(),
-                value: density_val,
-                readonly,
-                on_change: move |v: Option<f64>| {
-                    on_change
-                        .call(MechanicalPropertiesChangeEvent {
-                            action: MechanicalPropertiesChangeAction::Density(
-                                v
-                                    .map(|val| MassDensity::new::<
-                                        kilogram_per_cubic_meter,
-                                    >(val * 1000.0)),
-                            ),
-                        });
-                },
-              }
+        Card {
+            CardHeader {
+                CardTitle { "Mechanical properties" }
             }
-            div { class: "col-md-6",
-              OptionalPropertyInput {
-                id: format!("{}_youngs", base_id),
-                label: "Young's Modulus [GPa]".to_string(),
-                value: youngs_val,
-                readonly,
-                on_change: move |v: Option<f64>| {
-                    on_change
-                        .call(MechanicalPropertiesChangeEvent {
-                            action: MechanicalPropertiesChangeAction::YoungsModulus(
-                                v.map(|val| Pressure::new::<pascal>(val * 1e9)),
-                            ),
-                        });
-                },
-              }
+            CardContent {
+                div { class: "row gy-3",
+                    div { class: "col-md-6",
+                        OptionalPropertyInput {
+                            id: format!("{}_density", base_id),
+                            label: "Density [g/cm³]".to_string(),
+                            value: density_val,
+                            readonly,
+                            on_change: move |v: Option<f64>| {
+                                on_change
+                                    .call(MechanicalPropertiesChangeEvent {
+                                        action: MechanicalPropertiesChangeAction::Density(
+                                            v
+                                                .map(|val| MassDensity::new::<
+                                                    kilogram_per_cubic_meter,
+                                                >(val * 1000.0)),
+                                        ),
+                                    });
+                            },
+                        }
+                    }
+                    div { class: "col-md-6",
+                        OptionalPropertyInput {
+                            id: format!("{}_youngs", base_id),
+                            label: "Young's Modulus [GPa]".to_string(),
+                            value: youngs_val,
+                            readonly,
+                            on_change: move |v: Option<f64>| {
+                                on_change
+                                    .call(MechanicalPropertiesChangeEvent {
+                                        action: MechanicalPropertiesChangeAction::YoungsModulus(
+                                            v.map(|val| Pressure::new::<pascal>(val * 1e9)),
+                                        ),
+                                    });
+                            },
+                        }
+                    }
+                }
             }
-          }
         }
-      }
     }
 }
