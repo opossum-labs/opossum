@@ -17,7 +17,8 @@ use crate::{
     },
     material::Material,
     nodes::{
-        Metertype, SpectrometerType, SplittingConfigBuilder, WaveFrontMap, WavefrontDecomposition,
+        Metertype, SpectrometerType, SplittingConfigBuilder, SpotDiagramData, WaveFrontMap,
+        WavefrontDecomposition,
         fluence_detector::{Fluence, fluence_data::FluenceData},
         ideal_filter::FilterTypeBuilder,
         ray_propagation_visualizer::RayPositionHistories,
@@ -203,8 +204,10 @@ pub enum Proptype {
     Isometry(Option<Isometry>),
     /// Three dimensional Vector
     Vec3(Vector3<f64>),
-    /// a hit map (position fo rays hitting a given surface)
+    /// a hit map (position of rays hitting a given surface)
     HitMap(HitMap),
+    /// 2D spot diagram data resolved by wavelength
+    SpotDiagram(SpotDiagramData),
     /// 2-dimenstional vector
     Vec2(Vector2<f64>),
     /// [`LightData`] build configuration
@@ -239,6 +242,7 @@ impl Proptype {
                 Self::Metertype(value) => template_engine.render("simple", &value.to_string()),
                 Self::Spectrum(_)
                 | Self::HitMap(_)
+                | Self::SpotDiagram(_)
                 | Self::RayPositionHistory(_)
                 | Self::GhostFocusHistory(_) => template_engine.render(
                     "image",
@@ -472,6 +476,11 @@ impl From<LinearNumberDensity> for Proptype {
 impl From<FluenceEstimator> for Proptype {
     fn from(val: FluenceEstimator) -> Self {
         Self::FluenceEstimator(val)
+    }
+}
+impl From<SpotDiagramData> for Proptype {
+    fn from(value: SpotDiagramData) -> Self {
+        Self::SpotDiagram(value)
     }
 }
 impl From<Vector2<f64>> for Proptype {

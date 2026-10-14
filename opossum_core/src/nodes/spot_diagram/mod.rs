@@ -1,4 +1,9 @@
 #![warn(missing_docs)]
+//! Spot diagram detector node.
+
+pub mod spot_data;
+pub use spot_data::SpotDiagramData;
+
 use crate::{
     analyzers::{
         AnalyzerKind,
@@ -18,25 +23,12 @@ use crate::{
     properties::{Properties, Proptype},
     reporting::{
         node_report::{NodeReport, NodeReportResult},
-        plottable::{AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
+        plottable::{PlotArgs, PlotParameters, PlotSeries, PlotType, Plottable},
         report_note::{ReportLevel, ReportNote},
     },
-    utils::{
-        geom_transformation::Isometry,
-        unit_format::{
-            get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit,
-            get_unit_value_as_length_with_format_by_exponent,
-        },
-    },
+    utils::geom_transformation::Isometry,
 };
-use log::warn;
-use nalgebra::{DVector, MatrixXx2};
 use opm_macros_lib::OpmNode;
-use plotters::style::RGBAColor;
-use uom::si::{
-    f64::Length,
-    length::{meter, nanometer},
-};
 
 inventory::submit! {
     NodeRegistration::new::<SpotDiagram>("spot diagram", "spot diagram detector")
@@ -44,13 +36,11 @@ inventory::submit! {
 
 /// A spot-diagram monitor
 ///
-/// It simply generates a spot diagram of an incoming ray bundle.
+/// Generates a 2D spot diagram of an incoming ray bundle.
 ///
 /// ## Optical Ports
-///   - Inputs
-///     - `in1`
-///   - Outputs
-///     - `out1`
+///   - Inputs: `in1`
+///   - Outputs: `out1`
 ///
 /// ## Properties
 ///   - `name`
@@ -69,7 +59,6 @@ pub struct SpotDiagram {
 }
 
 impl Default for SpotDiagram {
-    /// create a spot-diagram monitor.
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("spot diagram");
         node_attr
@@ -91,14 +80,12 @@ impl Default for SpotDiagram {
         sd
     }
 }
+
 impl SpotDiagram {
     /// Creates a new [`SpotDiagram`].
-    /// # Attributes
-    /// - `name`: name of the spot diagram
     ///
     /// # Errors
-    ///
-    /// This function returns an error if internally `update_surfaces` fails.
+    /// Returns an error if updating surfaces fails.
     pub fn new(name: &str) -> OpmResult<Self> {
         let mut sd = Self::default();
         sd.node_attr.set_name(name);
@@ -106,6 +93,7 @@ impl SpotDiagram {
         Ok(sd)
     }
 }
+
 impl OpticNode for SpotDiagram {
     fn geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::detector(
@@ -128,7 +116,6 @@ impl OpticNode for SpotDiagram {
 
         let mut props = Properties::default();
         let mut report = if let Some(LightData::Geometric(rays)) = &self.light_data {
-            // Dynamically resolve active input port to support inverted state
             let input_port = self
                 .ports()
                 .names(&PortType::Input)
@@ -145,11 +132,11 @@ impl OpticNode for SpotDiagram {
                 transformed_rays.add_ray(ray.inverse_transformed_ray(&iso));
             }
 
-            if let Some(hit_map) = self
-                .get_optic_surface(&input_port)
-                .map(OpticSurface::hit_map)
-            {
-                props.create("Spot diagram", "2D spot diagram", hit_map.clone().into())?;
+            // Create compact wavelength-resolved spot diagram property
+            if let Ok(spot_data) = SpotDiagramData::from_rays(rays, &iso, nanometer!(0.2)) {
+                props.create("Spot diagram", "2D spot diagram", spot_data.into())?;
+            } else {
+                props.create("note","spot diagram warning", "Spot diagram could not be calculated. This could happen, if all rays miss the detector or are apodized.".into())?;
             }
             if let Some(c) = transformed_rays.energy_weighted_centroid() {
                 props.create(
@@ -177,11 +164,9 @@ impl OpticNode for SpotDiagram {
         } else {
             NodeReport::new(self.node_type(), self.name(), uuid, Properties::default())
         };
-
         if self.apodization_warning {
             report.add_note(ReportNote::new(ReportLevel::Warning, APERTURE_LIMIT_NOTE));
         }
-
         Ok(NodeReportResult::Report(report))
     }
 
@@ -193,6 +178,7 @@ impl OpticNode for SpotDiagram {
         self.light_data = ld;
     }
 }
+
 impl AnalysisEnergy for SpotDiagram {
     fn analyze(
         &mut self,
@@ -208,6 +194,7 @@ impl AnalysisEnergy for SpotDiagram {
         Ok(result)
     }
 }
+
 impl AnalysisGhostFocus for SpotDiagram {}
 impl AnalysisRayTrace for SpotDiagram {}
 
@@ -225,7 +212,6 @@ impl Plottable for SpotDiagram {
         PlotType::Scatter2D(plt_params.clone())
     }
 
-    #[allow(clippy::too_many_lines)]
     fn get_plot_series(
         &self,
         plt_type: &mut PlotType,
@@ -235,23 +221,6 @@ impl Plottable for SpotDiagram {
             return Ok(None);
         };
 
-        let (split_rays_bundles, wavelengths) =
-            rays.split_ray_bundle_by_wavelength(nanometer!(0.2), true)?;
-        let num_series = split_rays_bundles.len();
-
-        let use_colorbar = if num_series > 5 {
-            plt_type.set_plot_param(&PlotArgs::CBarLabel("wavelength (nm)".into()))?;
-            plt_type.set_plot_param(&PlotArgs::PlotSize((970, 800)))?;
-            plt_type.set_plot_param(&PlotArgs::ZLim(AxLims::new(
-                wavelengths[0].get::<nanometer>(),
-                wavelengths[num_series - 1].get::<nanometer>(),
-            )))?;
-            true
-        } else {
-            false
-        };
-
-        // Resolve input port and calculate transformation isometry once upfront
         let input_port = self
             .ports()
             .names(&PortType::Input)
@@ -260,85 +229,10 @@ impl Plottable for SpotDiagram {
             .unwrap_or_else(|| "input_1".to_string());
         let iso = self.effective_surface_iso(&input_port)?;
 
-        let color_grad = colorous::TURBO;
-        let wvl_span = (wavelengths[num_series - 1] - wavelengths[0]).get::<nanometer>();
-        let wvl_range = if num_series <= 1 || wvl_span.abs() < f64::EPSILON {
-            1.0
-        } else {
-            wvl_span * 2.0
-        };
-
-        let mut x_max = f64::NEG_INFINITY;
-        let mut y_max = f64::NEG_INFINITY;
-        let mut xy_pos_series = Vec::<MatrixXx2<Length>>::with_capacity(num_series);
-
-        for ray_bundle in &split_rays_bundles {
-            let xy_pos = ray_bundle.get_xy_rays_pos(true, &iso);
-            x_max = xy_pos
-                .column(0)
-                .iter()
-                .map(Length::get::<meter>)
-                .fold(x_max, |acc, x| acc.max(x.abs()));
-            y_max = xy_pos
-                .column(1)
-                .iter()
-                .map(Length::get::<meter>)
-                .fold(y_max, |acc, y| acc.max(y.abs()));
-            xy_pos_series.push(xy_pos);
-        }
-
-        let min_window = wavelengths[0].get::<meter>() / 2.0;
-        x_max = x_max.max(min_window);
-        y_max = y_max.max(min_window);
-
-        let x_exponent = get_exponent_for_base_unit_in_e3_steps(x_max);
-        let y_exponent = get_exponent_for_base_unit_in_e3_steps(y_max);
-        let x_prefix = get_prefix_for_base_unit(x_max);
-        let y_prefix = get_prefix_for_base_unit(y_max);
-
-        plt_type.set_plot_param(&PlotArgs::XLabel(format!("x in {x_prefix}m")))?;
-        plt_type.set_plot_param(&PlotArgs::YLabel(format!("y in {y_prefix}m")))?;
-
-        let mut plt_series = Vec::<PlotSeries>::with_capacity(num_series);
-
-        for (idx, xy_pos) in xy_pos_series.iter().enumerate() {
-            let grad_val =
-                0.42 + (wavelengths[idx] - wavelengths[0]).get::<nanometer>() / wvl_range;
-            let rgbcolor = color_grad.eval_continuous(grad_val);
-            let x_vals = xy_pos
-                .column(0)
-                .iter()
-                .map(|x| get_unit_value_as_length_with_format_by_exponent(*x, x_exponent))
-                .collect::<Vec<f64>>();
-            let y_vals = xy_pos
-                .column(1)
-                .iter()
-                .map(|y| get_unit_value_as_length_with_format_by_exponent(*y, y_exponent))
-                .collect::<Vec<f64>>();
-
-            let data = PlotData::Dim2 {
-                xy_data: MatrixXx2::from_columns(&[
-                    DVector::from_vec(x_vals),
-                    DVector::from_vec(y_vals),
-                ]),
-            };
-            let series_label = if legend && !use_colorbar {
-                Some(format!("{:.1} nm", wavelengths[idx].get::<nanometer>()))
-            } else {
-                None
-            };
-            plt_series.push(PlotSeries::new(
-                &data,
-                RGBAColor(rgbcolor.r, rgbcolor.g, rgbcolor.b, 1.0),
-                series_label,
-            ));
-        }
-
-        x_max *= f64::powi(10.0, -x_exponent);
-        y_max *= f64::powi(10.0, -y_exponent);
-
-        plt_type.set_plot_param(&PlotArgs::XLim(AxLims::new(-x_max * 1.1, 1.1 * x_max)))?;
-        plt_type.set_plot_param(&PlotArgs::YLim(AxLims::new(-y_max * 1.1, 1.1 * y_max)))?;
+        let spot_data = SpotDiagramData::from_rays(rays, &iso, nanometer!(0.2))?;
+        let mut plt_series = spot_data
+            .get_plot_series(plt_type, legend)?
+            .unwrap_or_default();
 
         // Outline the window recorded within, if requested.
         if let Ok(Proptype::Bool(plot_aperture)) = self.properties().get("plot aperture")
@@ -369,7 +263,7 @@ mod test {
         nodes::{NodeGroup, SourcePort, test_helper::helper::*},
         prelude::{AnalyzerType, EnergyDataBuilder, GhostFocusConfig, OpmDocument},
     };
-    use uom::num_traits::Zero;
+    use uom::{num_traits::Zero, si::f64::Length};
 
     /// With "plot aperture" set, the plot outlines the window the spot diagram records within.
     #[test]
@@ -408,6 +302,7 @@ mod test {
         assert!(!node.inverted());
         assert_eq!(node.node_color(), "darkorange");
     }
+
     #[test]
     fn new() -> OpmResult<()> {
         let spot = SpotDiagram::new("test")?;
@@ -415,12 +310,14 @@ mod test {
         assert!(spot.light_data.is_none());
         Ok(())
     }
+
     #[test]
     fn ports() {
         let spot = SpotDiagram::default();
         assert_eq!(spot.ports().names(&PortType::Input), vec!["input_1"]);
         assert_eq!(spot.ports().names(&PortType::Output), vec!["output_1"]);
     }
+
     #[test]
     fn ports_inverted() -> OpmResult<()> {
         let mut spot = SpotDiagram::default();
@@ -429,10 +326,12 @@ mod test {
         assert_eq!(spot.ports().names(&PortType::Output), vec!["input_1"]);
         Ok(())
     }
+
     #[test]
     fn inverted() -> OpmResult<()> {
         test_inverted::<SpotDiagram>()
     }
+
     #[test]
     fn reset_data() {
         let mut spot = SpotDiagram {
@@ -442,10 +341,12 @@ mod test {
         spot.reset_data();
         assert!(spot.light_data.is_none());
     }
+
     #[test]
     fn analyze_energy_empty() -> OpmResult<()> {
         test_analyze_empty::<SpotDiagram>()
     }
+
     #[test]
     fn analyze_energy_wrong() -> OpmResult<()> {
         let mut node = SpotDiagram::default();
@@ -456,6 +357,7 @@ mod test {
         assert!(output.is_empty());
         Ok(())
     }
+
     #[test]
     fn analyze_energy_ok() -> OpmResult<()> {
         let mut node = SpotDiagram::default();
@@ -471,6 +373,7 @@ mod test {
         assert_eq!(*output, input_light);
         Ok(())
     }
+
     #[test]
     fn optic_shape_absent_in_file() -> OpmResult<()> {
         test_optic_shape_absent_in_file::<SpotDiagram>()
@@ -481,6 +384,7 @@ mod test {
             diagram.light_data.as_ref()
         })
     }
+
     #[test]
     fn analyze_energy_inverse() -> OpmResult<()> {
         let mut node = SpotDiagram::default();
@@ -498,6 +402,7 @@ mod test {
         assert_eq!(*output, input_light);
         Ok(())
     }
+
     #[test]
     fn analyze_ghostfocus_ok() -> OpmResult<()> {
         let mut node = SpotDiagram::default();
@@ -520,6 +425,7 @@ mod test {
         assert_eq!(output[0], light_rays);
         Ok(())
     }
+
     #[test]
     fn report() -> OpmResult<()> {
         let mut sd = SpotDiagram::default();
@@ -532,12 +438,14 @@ mod test {
         let node_props = node_report.properties();
         let nr_of_props = node_props.iter().fold(0, |c, _p| c + 1);
         assert_eq!(nr_of_props, 0);
+
         sd.light_data = Some(LightData::Geometric(Rays::default()));
         let NodeReportResult::Report(node_report) = sd.node_report("", AnalyzerKind::RayTrace)?
         else {
             panic!("Node report should be `Report` variant");
         };
         assert!(node_report.properties().contains("Spot diagram"));
+
         sd.light_data = Some(LightData::Geometric(Rays::new_uniform_collimated(
             nanometer!(1053.0),
             joule!(1.0),
@@ -562,6 +470,79 @@ mod test {
         assert_eq!(notes[0].message, APERTURE_LIMIT_NOTE);
         Ok(())
     }
+
+    #[test]
+    fn test_aperture_on_spot_diagram() -> OpmResult<()> {
+        use crate::{
+            analyzers::raytrace::{AnalysisRayTrace, RayTraceConfig},
+            apertures::{Aperture, ApertureType},
+            light::{LightData, LightResult, Ray, Rays},
+            millimeter,
+            prelude::*,
+        };
+        use nalgebra::{Point3, Vector3};
+
+        let mut sd = SpotDiagram::default();
+        let aperture = Aperture::new_rectangle(
+            millimeter!(1.0),
+            millimeter!(1.0),
+            ApertureType::Hole,
+            None,
+            None,
+        )?;
+
+        sd.set_aperture(&PortType::Input, "input_1", &aperture)?;
+        sd.node_attr_mut()
+            .set_positioning(NodePositioning::Absolute(Isometry::identity()));
+
+        let mut rays = Rays::from(Ray::new(
+            Point3::new(millimeter!(0.0), millimeter!(0.0), millimeter!(-1.0)),
+            Vector3::new(0.0, 0.0, 1.0),
+            nanometer!(550.0),
+            joule!(1.0),
+        )?);
+
+        // Ray outside aperture
+        rays.add_ray(Ray::new(
+            Point3::new(millimeter!(0.0), millimeter!(2.0), millimeter!(-1.0)),
+            Vector3::new(0.0, 0.0, 1.0),
+            nanometer!(550.0),
+            joule!(1.0),
+        )?);
+
+        let analyzer = RayTraceConfig::default();
+        let mut incoming_data = LightResult::default();
+        incoming_data.insert("input_1".to_string(), LightData::Geometric(rays));
+
+        AnalysisRayTrace::analyze(&mut sd, incoming_data, &analyzer)?;
+
+        let NodeReportResult::Report(node_report) = sd.node_report("", AnalyzerKind::RayTrace)?
+        else {
+            panic!("Node report should be `Report` variant");
+        };
+        let node_props = node_report.properties();
+
+        let spot_prop = node_props
+            .iter()
+            .find(|(name, _p)| *name == "Spot diagram")
+            .unwrap();
+
+        if let Proptype::SpotDiagram(spot_data) = spot_prop.1.prop() {
+            assert_eq!(
+                spot_data.total_spots(),
+                1,
+                "SpotDiagramData should only contain rays passing through aperture"
+            );
+            assert!(
+                spot_data.series[0].spots[0].1.abs().value < 1.0,
+                "Remaining point should be inside the aperture"
+            );
+        } else {
+            panic!("Property is not a SpotDiagram");
+        }
+        Ok(())
+    }
+
     #[test]
     fn show_warning_if_energy_analysis() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
@@ -576,13 +557,11 @@ mod test {
         let reports = doc.analyze()?;
         let report = reports.first().expect("No report found");
 
-        // 1. The incompatible detector should NOT have generated a NodeReport
         assert!(
             report.node_reports().is_empty(),
             "Incompatible detector nodes must not generate a NodeReport"
         );
 
-        // 2. The warning must appear at the top-level in AnalysisReport::notes
         let note = report
             .notes()
             .first()
@@ -594,7 +573,6 @@ mod test {
                 .contains("A spot diagram can only be displayed")
         );
         assert!(note.message.contains("spot diagram"));
-
         Ok(())
     }
 }

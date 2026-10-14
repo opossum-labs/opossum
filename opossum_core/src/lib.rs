@@ -61,17 +61,15 @@ pub fn get_version() -> String {
 
     // Attempt to read the git describe string, default to "unknown version"
     let describe = option_env!("OPM_GIT_DESCRIBE").unwrap_or("unknown version");
-
     format!("{describe} ({timestamp})")
 }
 #[cfg(test)]
 mod test {
-    use crate::error::{OpmResult, OpossumError};
-
     use super::*;
+    use crate::error::{OpmResult, OpossumError};
     use regex::Regex;
+
     #[test]
-    #[ignore]
     fn get_ver() -> OpmResult<()> {
         let version_string = get_version();
         let re = Regex::new(r"(.*) \(\d{4}/\d{2}/\d{2} \d{2}:\d{2}\)")

@@ -634,7 +634,7 @@ impl NodeGroup {
     /// Returns an error if topological sorting or sub-node reporting fails.
     pub fn toplevel_report(&self, analyzer: AnalyzerKind) -> OpmResult<AnalysisReport> {
         let mut analysis_report = AnalysisReport::default();
-        analysis_report.add_scenery(self);
+        analysis_report.set_scenery(self.clone());
 
         if !self.graph.is_single_tree() {
             analysis_report.add_note(ReportNote::new(

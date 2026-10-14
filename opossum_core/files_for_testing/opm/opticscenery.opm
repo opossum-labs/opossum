@@ -1,10 +1,10 @@
 #![enable(unwrap_variant_newtypes)]
 (
-    opm_file_version: "0",
+    opm_file_version: 0,
     scenery: {
         "node_type": "group",
         "name": "OpticScenery demo",
-        "uuid": "a2475c01-2daf-46c1-90e7-8647458f4d52",
+        "uuid": "0dd8913e-b6c1-46c1-ad0b-da1a67b750e3",
         "props": {
             "expand view": Bool(false),
         },
@@ -13,19 +13,19 @@
                 {
                     "node_type": "dummy",
                     "name": "dummy1",
-                    "uuid": "16b23c9f-d617-4cd5-b23a-01cc03366c1d",
+                    "uuid": "4cc84761-86d8-4fc3-af22-7b57191cbf16",
                 },
                 {
                     "node_type": "dummy",
                     "name": "dummy2",
-                    "uuid": "918d5cb6-19b1-4d7b-92ae-d8ba12ad2976",
+                    "uuid": "7e59ad6d-6ffb-41c0-96e0-18c5a3359ed7",
                 },
             ],
             edges: [
                 (
-                    src_id: "16b23c9f-d617-4cd5-b23a-01cc03366c1d",
+                    src_id: "4cc84761-86d8-4fc3-af22-7b57191cbf16",
                     src_port: "output_1",
-                    target_id: "918d5cb6-19b1-4d7b-92ae-d8ba12ad2976",
+                    target_id: "7e59ad6d-6ffb-41c0-96e0-18c5a3359ed7",
                     target_port: "input_1",
                     distance: 0.0,
                 ),
@@ -33,7 +33,7 @@
         ),
     },
     analyzers: {
-        "7298d589-2928-4829-a9f5-b4b6d0898a9f": (
+        "3b5bef41-1024-4965-8c0d-15929f748e56": (
             analyzer_type: RayTrace(
                 min_energy_per_ray: 0.000000000001,
                 max_number_of_bounces: 1000,
@@ -42,14 +42,13 @@
                 source_map: {},
                 ambient_material: {
                     "schema_version": 1,
-                    "id": "86dac8fb-b2de-4ba1-8bf8-6f8e4730cf1e",
+                    "id": "00000000-0000-0000-0000-000000000000",
                     "version": 0,
-                    "name": "vaccuum",
+                    "name": "vacuum",
                     "optical": (
                         refractive_index: Const(
                             refractive_index: 1.0,
                         ),
-                        absorption: r#None,
                     ),
                 },
             ),

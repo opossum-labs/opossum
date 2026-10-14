@@ -16,10 +16,9 @@ impl AnalysisGhostFocus for SourcePort {
         bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
         let rays = if self.inverted() {
-            let Some(bouncing_rays) = incoming_data.get("output_1") else {
-                return Err(OpossumError::Analysis("no light at port".into()));
-            };
-            bouncing_rays.clone()
+            // In backward passes, forward returning ghost rays so they are recorded in the accumulated rays.
+            // If no rays bounced back to the source port, do not error - simply treat it as an empty bundle.
+            incoming_data.get("output_1").cloned().unwrap_or_default()
         } else if bounce_lvl == 0 {
             // First pass: generate initial rays from RayDataBuilder in GhostFocusConfig
             let mut rays = config
@@ -36,6 +35,7 @@ impl AnalysisGhostFocus for SourcePort {
             let iso = self.effective_surface_iso("output_1")?;
             vec![rays.transformed_by_iso(&iso)]
         } else {
+            // Forward bounce > 0: source port does not generate new initial rays
             Vec::<Rays>::new()
         };
 
@@ -48,6 +48,13 @@ impl AnalysisGhostFocus for SourcePort {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::{
+        distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines},
+        joule,
+        light::{Ray, lightdata::ray_data_builder::RayDataBuilder},
+        millimeter, nanometer,
+        prelude::{Aperture, ApertureType, CollimatedSrc, RayDataSource},
+    };
 
     #[test]
     fn analyze_ghostfocus_no_source_definition() {
@@ -65,5 +72,96 @@ mod test {
                 .to_string()
                 .contains("No source data found in analyzer for")
         );
+    }
+
+    #[test]
+    fn analyze_ghostfocus_inverted_without_incoming_light() -> OpmResult<()> {
+        let mut node = SourcePort::default();
+        node.set_inverted(true)?;
+
+        // Must succeed without error when no light arrives at the inverted source port
+        let output = AnalysisGhostFocus::analyze(
+            &mut node,
+            LightRays::default(),
+            &GhostFocusConfig::default(),
+            &mut Vec::new(),
+            1,
+        )?;
+
+        let rays = output.get("output_1").expect("port mapping exists");
+        assert!(rays.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn analyze_ghostfocus_inverted_with_returning_rays() -> OpmResult<()> {
+        let mut node = SourcePort::default();
+        node.set_inverted(true)?;
+
+        let ray = Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1064.0), joule!(1.0))?;
+        let rays = Rays::from(ray);
+        let input = LightRays::from([("output_1".into(), vec![rays.clone()])]);
+
+        let output = AnalysisGhostFocus::analyze(
+            &mut node,
+            input,
+            &GhostFocusConfig::default(),
+            &mut Vec::new(),
+            1,
+        )?;
+
+        assert_eq!(output.get("output_1"), Some(&vec![rays]));
+        Ok(())
+    }
+
+    #[test]
+    fn analyze_ghostfocus_with_aperture_clipping() -> OpmResult<()> {
+        let mut node = SourcePort::default();
+
+        // 1. Setup a restrictive rectangular aperture on the output port
+        let aperture = Aperture::new_rectangle(
+            millimeter!(5.),
+            millimeter!(5.),
+            ApertureType::Hole,
+            None,
+            None,
+        )?;
+        node.ports_mut()
+            .set_aperture(&PortType::Output, "output_1", &aperture)?;
+
+        // 2. Create a hexapolar ray distribution wide enough to guarantee clipping (10mm radius)
+        let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
+            Hexapolar::new(millimeter!(10.), 3)?.into(),
+            UniformDist::new(joule!(1.))?.into(),
+            LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+        ));
+
+        let ray_data_builder = RayDataBuilder::from(ray_data_source);
+        let mut ghost_config = GhostFocusConfig::default();
+        ghost_config.map_source(node.node_attr().uuid(), ray_data_builder.clone());
+
+        // 3. Run the GhostFocus analysis for the initial pass (bounce_lvl = 0)
+        let mut ray_collection = Vec::new();
+        let output = AnalysisGhostFocus::analyze(
+            &mut node,
+            LightRays::default(),
+            &ghost_config,
+            &mut ray_collection,
+            0,
+        )?;
+
+        // 4. Extract the resulting rays from the LightRays output mapping
+        let rays_vec = output.get("output_1").unwrap();
+        let rays_after = &rays_vec[0];
+
+        let rays_before = ray_data_builder.build()?;
+
+        // 5. Verification: Ensure the aperture actually clipped (reduced) the number of rays
+        assert!(
+            rays_after.nr_of_rays(true) < rays_before.nr_of_rays(true),
+            "Rays were not clipped by the aperture during GhostFocus analysis!"
+        );
+
+        Ok(())
     }
 }

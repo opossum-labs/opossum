@@ -598,19 +598,54 @@ impl PlotType {
 
     fn plot_2d_multi_line<B: DrawingBackend>(plt: &Plot, root: &DrawingArea<B, Shift>) {
         if let Some(plt_series_vec) = plt.get_plot_series_vec() {
+            // Split area for colorbar if more than 5 series are present and z-bounds are defined
+            let root = if let Some(z_bounds) = plt.bounds.z
+                && plt_series_vec.len() > 5
+            {
+                let split_pixel = plt.fig_size.0 - 170;
+                let (main_root, cbar_root) = root.split_horizontally(split_pixel);
+
+                // Draw colorbar first so x-label of the main plot is not cropped
+                let mut chart = Self::create_2d_plot_chart(
+                    &cbar_root,
+                    AxLims { min: 0., max: 1. },
+                    z_bounds,
+                    &[
+                        LabelDescription::new("", plt.label[0].label_pos),
+                        plt.cbar.label.clone(),
+                    ],
+                    true,
+                    false,
+                );
+
+                let c_dat = linspace(z_bounds.min, z_bounds.max, plt_series_vec.len()).unwrap();
+                let d_mat = DMatrix::<f64>::from_columns(&[c_dat.clone(), c_dat]);
+                let xxx = DVector::<f64>::from_vec(vec![0., 1.]);
+                Self::draw_2d_colormesh(
+                    &mut chart,
+                    &xxx,
+                    &linspace(z_bounds.min, z_bounds.max, plt_series_vec.len()).unwrap(),
+                    &d_mat,
+                    &plt.cbar.cmap,
+                    z_bounds,
+                );
+                main_root
+            } else {
+                root.clone()
+            };
+
             let mut label_flag = false;
             let mut chart = Self::create_2d_plot_chart(
-                root,
+                &root,
                 plt.bounds.x.unwrap(),
                 plt.bounds.y.unwrap(),
                 &plt.label,
                 true,
                 true,
             );
+
             for plt_series in plt_series_vec {
                 if let PlotData::MultiDim2 { vec_of_xy_data } = plt_series.get_plot_series_data() {
-                    //main plot
-                    //currently there is no support for axes labels in 3d plots
                     let color = plt_series.get_series_color();
 
                     for (i, line_dat) in vec_of_xy_data.iter().enumerate() {
@@ -635,9 +670,12 @@ impl PlotType {
                     );
                 }
             }
+
             if label_flag {
                 Self::config_series_label_2d(&mut chart);
             }
+
+            root.present().unwrap();
         } else {
             warn!("No plot series defined! Cannot create plot!");
         }

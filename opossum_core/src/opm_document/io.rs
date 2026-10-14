@@ -8,11 +8,16 @@ use crate::{
     utils::file_utils::{create_f_path, create_file_instance},
 };
 use ron::{extensions::Extensions, ser::PrettyConfig};
+use serde::Deserialize;
 use std::{
     fs::{self, File},
     io::Write,
     path::Path,
 };
+#[derive(Deserialize)]
+struct OpmHeader {
+    opm_file_version: u32,
+}
 
 impl OpmDocument {
     /// Replaces all `AssetRef::Id(Uuid)` properties in scene nodes (including all nested
@@ -103,16 +108,27 @@ impl OpmDocument {
     ///
     /// Returns an error if the RON deserialization or graph hook resolution fails.
     pub fn from_string(file_string: &str) -> OpmResult<Self> {
-        let mut document = migration::read(file_string)?;
-        document.scenery.after_deserialization_hook()?;
-        // Resolve cross-group node references across the entire graph
-        document.scenery.graph_mut().resolve_all_references()?;
+        // 1. Fast header check: catches mismatched versions before deep parsing fails
+        if let Ok(header) = ron::from_str::<OpmHeader>(file_string)
+            && header.opm_file_version != super::CURRENT_OPM_FILE_VERSION
+        {
+            warn!(
+                "OPM file version mismatch: file has '{}', expected '{}'.",
+                header.opm_file_version,
+                super::CURRENT_OPM_FILE_VERSION
+            );
+        }
 
-        // Resolve embedded material references into full in-memory Material structs
+        // 2. Full document deserialization
+        let mut document: Self = ron::from_str(file_string)
+            .map_err(|e| OpossumError::OpmDocument(format!("parsing of model failed: {e}")))?;
+
+        document.scenery.after_deserialization_hook()?;
+        document.scenery.graph_mut().resolve_all_references()?;
         document.resolve_embedded_materials()?;
+
         Ok(document)
     }
-
     /// Saves this [`OpmDocument`] to an `.opm` file at the specified path.
     ///
     /// # Errors
@@ -393,7 +409,7 @@ mod tests {
     fn test_skip_unknown_node_type_during_deserialization() -> OpmResult<()> {
         let ron_data = r#"#![enable(unwrap_variant_newtypes)]
 (
-    opm_file_version: "0",
+    opm_file_version: 0,
     scenery: {
         "node_type": "group",
         "name": "test",
@@ -458,7 +474,7 @@ mod tests {
     fn test_skip_invalid_edge_connection() -> OpmResult<()> {
         let ron_data = r#"#![enable(unwrap_variant_newtypes)]
 (
-    opm_file_version: "0",
+    opm_file_version: 0,
     scenery: {
         "node_type": "group",
         "name": "test",
@@ -521,7 +537,7 @@ mod tests {
     fn test_load_nested_group_with_mapped_ports() -> OpmResult<()> {
         let ron_data = r#"#![enable(unwrap_variant_newtypes)]
 (
-    opm_file_version: "0",
+    opm_file_version: 0,
     scenery: {
         "node_type": "group",
         "name": "test",
@@ -658,7 +674,7 @@ mod tests {
         // A file of the current version, so that no upgrade adds warnings of its own.
         let ron_data = r#"#![enable(unwrap_variant_newtypes)]
 (
-    opm_file_version: "1",
+    opm_file_version: 0,
     scenery: {
         "node_type": "group",
         "name": "test",
@@ -770,7 +786,7 @@ mod tests {
     fn test_load_source_port_with_empty_transform() -> OpmResult<()> {
         let ron_data = r#"#![enable(unwrap_variant_newtypes)]
 (
-    opm_file_version: "0",
+    opm_file_version: 0,
     scenery: {
         "node_type": "group",
         "name": "test",
@@ -815,7 +831,7 @@ mod tests {
     fn test_deserialize_node_with_asymmetric_ports() -> OpmResult<()> {
         let ron_data = r#"#![enable(unwrap_variant_newtypes)]
 (
-    opm_file_version: "0",
+    opm_file_version: 0,
     scenery: {
         "node_type": "group",
         "name": "test",
