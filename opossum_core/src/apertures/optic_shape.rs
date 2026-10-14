@@ -201,8 +201,8 @@ impl Bore {
 
 /// The edge of a component, centred on its axis, and the bores through it.
 ///
-/// The bores lie within the edge and apart from each other; that is checked whenever an
-/// [`Outline`] is made, also when one is read from a file.
+/// The edge and every bore bound a region, and the bores lie within the edge and apart from each
+/// other; that is checked whenever an [`Outline`] is made, also when one is read from a file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(try_from = "OutlineFields")]
 pub struct Outline {
@@ -236,15 +236,16 @@ impl Outline {
     ///
     /// # Errors
     ///
-    /// This function returns an error if a bore reaches beyond the edge or touches it, or if two
-    /// bores overlap or touch. The edges are compared as polygons, a circle sampled at 64 points;
-    /// edges closer than 1 nm touch.
+    /// This function returns an error if the edge or a bore crosses or touches itself, so that it
+    /// bounds no region, if a bore reaches beyond the edge or touches it, or if two bores overlap
+    /// or touch. The edges are compared as polygons, a circle sampled at 64 points; edges closer
+    /// than 1 nm touch.
     pub fn new(shape: impl Into<OutlineShape>, bores: Vec<Bore>) -> OpmResult<Self> {
         let outline = Self {
             shape: shape.into(),
             bores,
         };
-        outline.check_bores()?;
+        outline.check()?;
         Ok(outline)
     }
     /// Returns the edge of the component.
@@ -281,18 +282,31 @@ impl Outline {
             None,
         )
     }
-    /// Check that every bore lies within the edge and apart from every other bore, none touching.
+    /// Check that the edge and every bore bound a region, and that every bore lies within the
+    /// edge and apart from every other bore, none touching.
     ///
-    /// Two regions apart from each other have edges that do not meet and neither holds a point of
-    /// the other; a bore within the edge has edges that do not meet and a corner inside it.
-    fn check_bores(&self) -> OpmResult<()> {
+    /// A shape bounds a region if its edge neither crosses nor touches itself. Two regions apart
+    /// from each other have edges that do not meet and neither holds a point of the other; a bore
+    /// within the edge has edges that do not meet and a corner inside it.
+    fn check(&self) -> OpmResult<()> {
         let edge = self.edge();
         let edge_ring = edge.corners()?;
+        if ring_meets_itself(&edge_ring) {
+            return Err(OpossumError::Properties(
+                "the edge of the component crosses or touches itself".into(),
+            ));
+        }
         let corners = self
             .bores
             .iter()
             .map(Bore::corners)
             .collect::<OpmResult<Vec<_>>>()?;
+        if let Some(number) = corners.iter().position(|ring| ring_meets_itself(ring)) {
+            return Err(OpossumError::Properties(format!(
+                "bore {} crosses or touches itself",
+                number + 1
+            )));
+        }
         for (number, (bore, ring)) in self.bores.iter().zip(&corners).enumerate() {
             if rings_meet(&edge_ring, ring) || !edge.holds(ring[0])? {
                 return Err(OpossumError::Properties(format!(
@@ -328,21 +342,58 @@ impl From<OutlineShape> for Outline {
     }
 }
 
+/// The edges of a closed polygon, each given by its end points in meters, in the order the
+/// polygon runs through them.
+fn ring_edges(ring: &[Point2<Length>]) -> Vec<(Point2<f64>, Point2<f64>)> {
+    ring.iter()
+        .zip(ring.iter().cycle().skip(1))
+        .map(|(from, to)| (from.map(|c| c.value), to.map(|c| c.value)))
+        .collect()
+}
+
 /// Whether the edges of two closed polygons cross or touch each other: come closer than
 /// [`TOUCHING`].
 fn rings_meet(one: &[Point2<Length>], other: &[Point2<Length>]) -> bool {
-    let edges = |ring: &[Point2<Length>]| {
-        ring.iter()
-            .zip(ring.iter().cycle().skip(1))
-            .map(|(from, to)| (from.map(|c| c.value), to.map(|c| c.value)))
-            .collect::<Vec<_>>()
-    };
-    let other_edges = edges(other);
-    edges(one).iter().any(|&edge| {
+    let other_edges = ring_edges(other);
+    ring_edges(one).iter().any(|&edge| {
         other_edges
             .iter()
             .any(|&other_edge| segments_meet(edge, other_edge))
     })
+}
+
+/// Whether the edge of a closed polygon crosses or touches itself, so that it bounds no region.
+///
+/// Two edges following each other share a corner and may meet nowhere else; any other two edges
+/// may not meet at all. That also refuses a corner given twice and corners all on one line.
+fn ring_meets_itself(ring: &[Point2<Length>]) -> bool {
+    let edges = ring_edges(ring);
+    let last = edges.len().saturating_sub(1);
+    edges.iter().enumerate().any(|(number, &edge)| {
+        edges
+            .iter()
+            .enumerate()
+            .skip(number + 1)
+            .any(|(other_number, &other)| {
+                if other_number == number + 1 {
+                    neighbors_meet(edge, other)
+                } else if number == 0 && other_number == last {
+                    neighbors_meet(other, edge)
+                } else {
+                    segments_meet(edge, other)
+                }
+            })
+    })
+}
+
+/// Whether an edge and the edge following it on a polygon meet anywhere but in the corner they
+/// share: the far end of either comes closer than [`TOUCHING`] to the other.
+fn neighbors_meet(
+    (from, corner): (Point2<f64>, Point2<f64>),
+    (next_corner, to): (Point2<f64>, Point2<f64>),
+) -> bool {
+    distance_to_segment(from, next_corner, to) < TOUCHING
+        || distance_to_segment(to, from, corner) < TOUCHING
 }
 
 /// Whether two segments, each given by its end points in meters, cross or come closer than
@@ -688,6 +739,79 @@ mod test {
             ),
         ] {
             assert!(plate(bores).is_err(), "a bore {case} is accepted");
+        }
+        Ok(())
+    }
+    /// The edge and every bore bound a region: a polygon that crosses or touches itself, runs back
+    /// on itself or lies on one line encloses nothing and is refused, as the edge and as a bore. A
+    /// star and a pentagon bound a region.
+    #[test]
+    fn every_shape_of_an_outline_bounds_a_region() -> OpmResult<()> {
+        let polygon = |corners: &[(f64, f64)]| {
+            PolygonShape::new(corners.iter().map(|&(x, y)| millimeter!(x, y)).collect())
+        };
+        let with_bore = |shape: PolygonShape| -> OpmResult<Outline> {
+            Outline::new(
+                rectangle(20.0, 20.0)?,
+                vec![
+                    bore(circle(1.0)?, 8.0, 8.0, 0.0),
+                    bore(shape, 0.0, 0.0, 0.0),
+                ],
+            )
+        };
+        for (case, corners) in [
+            (
+                "crossing itself",
+                vec![(-2.0, -2.0), (2.0, 2.0), (2.0, -2.0), (-2.0, 2.0)],
+            ),
+            (
+                "touching itself in a corner",
+                vec![
+                    (0.0, 0.0),
+                    (-3.0, 2.0),
+                    (-3.0, -2.0),
+                    (0.0, 0.0),
+                    (3.0, -2.0),
+                    (3.0, 2.0),
+                ],
+            ),
+            (
+                "with a corner twice in a row",
+                vec![(0.0, 0.0), (3.0, 0.0), (3.0, 0.0), (0.0, 3.0)],
+            ),
+            ("on one line", vec![(0.0, 0.0), (1.0, 0.0), (3.0, 0.0)]),
+            (
+                "running back on itself",
+                vec![(0.0, 0.0), (4.0, 0.0), (4.0, 3.0), (4.0, 1.0)],
+            ),
+        ] {
+            let shape = polygon(&corners)?;
+            let error = Outline::new(shape.clone(), Vec::new())
+                .expect_err(case)
+                .to_string();
+            assert!(error.contains("the edge"), "an edge {case}: {error}");
+            let error = with_bore(shape).expect_err(case).to_string();
+            assert!(error.contains("bore 2"), "a bore {case}: {error}");
+        }
+        let star = PolygonShape::new(
+            (0..10)
+                .map(|corner| {
+                    let angle = to_f64(corner) * PI / 5.0;
+                    let radius = if corner % 2 == 0 { 4.0 } else { 1.6 };
+                    millimeter!(radius * angle.cos(), radius * angle.sin())
+                })
+                .collect(),
+        )?;
+        let pentagon = polygon(&[
+            (0.0, 4.0),
+            (-3.804, 1.236),
+            (-2.351, -3.236),
+            (2.351, -3.236),
+            (3.804, 1.236),
+        ])?;
+        for shape in [star, pentagon] {
+            assert!(Outline::new(shape.clone(), Vec::new()).is_ok(), "{shape:?}");
+            assert!(with_bore(shape.clone()).is_ok(), "{shape:?}");
         }
         Ok(())
     }
