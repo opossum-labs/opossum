@@ -110,14 +110,14 @@ impl OpmDocument {
     /// Returns an error if the RON deserialization or graph hook resolution fails.
     pub fn from_string(file_string: &str) -> OpmResult<Self> {
         // 1. Fast header check: catches mismatched versions before deep parsing fails
-        if let Ok(header) = ron::from_str::<OpmHeader>(file_string) {
-            if header.opm_file_version != super::CURRENT_OPM_FILE_VERSION {
-                warn!(
-                    "OPM file version mismatch: file has '{}', expected '{}'.",
-                    header.opm_file_version,
-                    super::CURRENT_OPM_FILE_VERSION
-                );
-            }
+        if let Ok(header) = ron::from_str::<OpmHeader>(file_string)
+            && header.opm_file_version != super::CURRENT_OPM_FILE_VERSION
+        {
+            warn!(
+                "OPM file version mismatch: file has '{}', expected '{}'.",
+                header.opm_file_version,
+                super::CURRENT_OPM_FILE_VERSION
+            );
         }
 
         // 2. Full document deserialization
@@ -174,7 +174,6 @@ impl OpmDocument {
             OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}"))
         })
     }
-    
 
     /// Creates DOT and SVG diagram files representing the optical scenery.
     ///
