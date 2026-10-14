@@ -367,16 +367,6 @@ fn rings_meet(one: &[Point2<Length>], other: &[Point2<Length>]) -> bool {
     })
 }
 
-/// Whether the edges of two closed polygons cross or touch each other: come closer than
-/// [`TOUCHING`].
-fn rings_meet(one: &[Point2<Length>], other: &[Point2<Length>]) -> bool {
-    let other_edges = ring_edges(other);
-    ring_edges(one).iter().any(|&edge| {
-        other_edges
-            .iter()
-            .any(|&other_edge| segments_meet(edge, other_edge))
-    })
-}
 
 /// Whether the edge of a closed polygon crosses or touches itself, so that it bounds no region.
 ///
@@ -474,52 +464,6 @@ impl OpticShape {
             Self::Open => Ok(None),
             Self::Bounded(outline) => ValidatedCrossSection::try_new(outline.aperture()?).map(Some),
         }
-    }
-    /// Read the clear aperture an older file stated as an [`ApertureShape`] as an optic shape.
-    ///
-    /// A shape with an edge becomes the edge of the component. A stack becomes an edge with bores
-    /// if it holds exactly one hole, unshifted and unturned, and obstructions with an edge.
-    ///
-    /// # Arguments
-    ///
-    /// * `shape` - the clear aperture as an older file stated it.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the shape cannot be stated as an edge with bores: a soft
-    /// shape, or a stack that is not one centred hole with obstructions in it.
-    pub fn from_aperture_shape(shape: &ApertureShape) -> OpmResult<Self> {
-        let ApertureShape::Stack(stack) = shape else {
-            if matches!(shape, ApertureShape::Open) {
-                return Ok(Self::Open);
-            }
-            return Ok(Self::Bounded(OutlineShape::try_from(shape)?.into()));
-        };
-        let (holes, obstructions): (Vec<_>, Vec<_>) = stack
-            .apertures()
-            .iter()
-            .partition(|member| *member.aperture_type() == ApertureType::Hole);
-        let [edge] = holes.as_slice() else {
-            return Err(OpossumError::Properties(format!(
-                "a stack of {} holes cannot be stated as the edge of a component",
-                holes.len()
-            )));
-        };
-        if edge.isometry().is_some() {
-            return Err(OpossumError::Properties(
-                "the hole of the stack is shifted or turned, but the edge of a component is \
-                 centred on its axis"
-                    .into(),
-            ));
-        }
-        let bores = obstructions
-            .iter()
-            .map(|obstruction| Bore::from_aperture(obstruction))
-            .collect::<OpmResult<_>>()?;
-        Ok(Self::Bounded(Outline::new(
-            OutlineShape::try_from(edge.shape())?,
-            bores,
-        )?))
     }
 }
 
