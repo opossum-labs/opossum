@@ -174,6 +174,7 @@ impl OpmDocument {
             OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}"))
         })
     }
+    
 
     /// Creates DOT and SVG diagram files representing the optical scenery.
     ///
