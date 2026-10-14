@@ -16,10 +16,9 @@ impl AnalysisGhostFocus for SourcePort {
         bounce_lvl: usize,
     ) -> OpmResult<LightRays> {
         let rays = if self.inverted() {
-            let Some(bouncing_rays) = incoming_data.get("output_1") else {
-                return Err(OpossumError::Analysis("no light at port".into()));
-            };
-            bouncing_rays.clone()
+            // In backward passes, forward returning ghost rays so they are recorded in the accumulated rays.
+            // If no rays bounced back to the source port, do not error - simply treat it as an empty bundle.
+            incoming_data.get("output_1").cloned().unwrap_or_default()
         } else if bounce_lvl == 0 {
             // First pass: generate initial rays from RayDataBuilder in GhostFocusConfig
             let mut rays = config
@@ -48,6 +47,7 @@ impl AnalysisGhostFocus for SourcePort {
 
             vec![rays]
         } else {
+            // Forward bounce > 0: source port does not generate new initial rays
             Vec::<Rays>::new()
         };
 
@@ -63,7 +63,7 @@ mod test {
     use crate::{
         distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines},
         joule,
-        light::lightdata::ray_data_builder::RayDataBuilder,
+        light::{Ray, lightdata::ray_data_builder::RayDataBuilder},
         millimeter, nanometer,
         prelude::{Aperture, ApertureType, CollimatedSrc, RayDataSource},
     };
@@ -84,6 +84,46 @@ mod test {
                 .to_string()
                 .contains("No source data found in analyzer for")
         );
+    }
+
+    #[test]
+    fn analyze_ghostfocus_inverted_without_incoming_light() -> OpmResult<()> {
+        let mut node = SourcePort::default();
+        node.set_inverted(true)?;
+
+        // Must succeed without error when no light arrives at the inverted source port
+        let output = AnalysisGhostFocus::analyze(
+            &mut node,
+            LightRays::default(),
+            &GhostFocusConfig::default(),
+            &mut Vec::new(),
+            1,
+        )?;
+
+        let rays = output.get("output_1").expect("port mapping exists");
+        assert!(rays.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn analyze_ghostfocus_inverted_with_returning_rays() -> OpmResult<()> {
+        let mut node = SourcePort::default();
+        node.set_inverted(true)?;
+
+        let ray = Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1064.0), joule!(1.0))?;
+        let rays = Rays::from(ray);
+        let input = LightRays::from([("output_1".into(), vec![rays.clone()])]);
+
+        let output = AnalysisGhostFocus::analyze(
+            &mut node,
+            input,
+            &GhostFocusConfig::default(),
+            &mut Vec::new(),
+            1,
+        )?;
+
+        assert_eq!(output.get("output_1"), Some(&vec![rays]));
+        Ok(())
     }
 
     #[test]
