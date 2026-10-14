@@ -1,9 +1,13 @@
 use opossum_core::core_optics::NodeAttrExt;
 use opossum_core::prelude::*;
 use opossum_core::{
-    apertures::CircleShape, core_optics::hit_map::fluence_estimator::FluenceEstimator,
+    apertures::{CircleShape, RectangleShape},
+    core_optics::hit_map::fluence_estimator::FluenceEstimator,
     distributions::fluence::general_gaussian::General2DGaussian,
-    distributions::position::Hexapolar, geometry::body::OPTIC_SHAPE, light::Rays, radian,
+    distributions::position::Hexapolar,
+    geometry::body::OPTIC_SHAPE,
+    light::Rays,
+    radian,
 };
 use std::{f64::consts::PI, path::Path};
 use uom::si::radiant_exposure::joule_per_square_centimeter;
@@ -17,8 +21,13 @@ fn main() -> OpmResult<()> {
         OpticShape::from(CircleShape::new(millimeter!(25.4))?).into(),
     )?;
     let i_pl = scenery.add_node(paraxial)?;
+    // The first detector takes the beam of 15 mm radius: it is 40 mm square.
     let mut fl_det = FluenceDetector::default();
     fl_det.set_property("fluence estimator", FluenceEstimator::HelperRays.into())?;
+    fl_det.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(RectangleShape::new(millimeter!(40.0), millimeter!(40.0))?).into(),
+    )?;
     let i_fl1 = scenery.add_node(fl_det)?;
     let i_fl2 = scenery.add_node(FluenceDetector::default())?;
 

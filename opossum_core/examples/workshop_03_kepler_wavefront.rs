@@ -42,8 +42,11 @@
 //!   the `.opm` file
 
 use opossum_core::{
-    apertures::CircleShape, core_optics::NodeAttrExt, geometry::body::OPTIC_SHAPE,
-    nodes::round_collimated_ray_builder, prelude::*,
+    apertures::{CircleShape, RectangleShape},
+    core_optics::NodeAttrExt,
+    geometry::body::OPTIC_SHAPE,
+    nodes::round_collimated_ray_builder,
+    prelude::*,
 };
 use std::{env, path::Path};
 /// Entry point for the Kepler wavefront aberration example.
@@ -65,8 +68,12 @@ fn main() -> OpmResult<()> {
     let i_src = scenery.add_node(SourcePort::new("collimated line ray source"))?;
     // 2. Define the Wavefront Analyzer
     // The wavefront analyzer captures phase information from the light
-    // before it enters the telescope.
-    let i_sd5 = scenery.add_node(WaveFront::new("wavefront before telescope")?)?;
+    // before it enters the telescope. Its sensor is 50 mm square, large enough for the beam of
+    // 24 mm radius.
+    let sensor: OpticShape = RectangleShape::new(millimeter!(50.0), millimeter!(50.0))?.into();
+    let mut wavefront = WaveFront::new("wavefront before telescope")?;
+    wavefront.set_property(OPTIC_SHAPE, sensor.clone().into())?;
+    let i_sd5 = scenery.add_node(wavefront)?;
     // 3. Define the Refractive Index
     // Define wavelength-dependent refractive index data for HZF52 glass
     // over the wavelength range from 300 nm to 2000 nm.
@@ -116,8 +123,11 @@ fn main() -> OpmResult<()> {
     ray_prop_vis.set_property("ray transparency", 1.0.into())?;
     let i_sd3 = scenery.add_node(ray_prop_vis)?;
     // 7. Define the Post-Telescope Wavefront Analyzer
-    // Add a wavefront analyzer to inspect the beam after it passes through the telescope.
-    let i_sd4 = scenery.add_node(WaveFront::new("wavefront after telescope")?)?;
+    // Add a wavefront analyzer to inspect the beam after it passes through the telescope. Its
+    // sensor is as large as the first one.
+    let mut wavefront = WaveFront::new("wavefront after telescope")?;
+    wavefront.set_property(OPTIC_SHAPE, sensor.into())?;
+    let i_sd4 = scenery.add_node(wavefront)?;
     // 8. Connect Components
     // Connect the nodes in order to create the optical path:
     // Light source → pre-telescope wavefront analyzer → first lens →

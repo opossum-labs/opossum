@@ -44,7 +44,10 @@
 //!   and save the generated `.opm` file
 //!
 use opossum_core::{
-    apertures::CircleShape, core_optics::NodeAttrExt, geometry::body::OPTIC_SHAPE, prelude::*,
+    apertures::{CircleShape, RectangleShape},
+    core_optics::NodeAttrExt,
+    geometry::body::OPTIC_SHAPE,
+    prelude::*,
 };
 /// Import `Path` from the standard library for working with file paths
 use std::{env, path::Path};
@@ -108,8 +111,14 @@ fn main() -> OpmResult<()> {
     ray_prop_vis.set_property("ray transparency", 1.0.into())?;
     // Add the ray visualizer to the system
     let i_sd3 = scenery.add_node(ray_prop_vis)?;
-    // Create a wavefront node after the optical system
-    let i_sd4 = scenery.add_node(WaveFront::new("wavefront after telescope")?)?;
+    // Create a wavefront node after the optical system. The beam reaches it up to 17 mm off its
+    // center: its sensor is 40 mm square.
+    let mut wavefront = WaveFront::new("wavefront after telescope")?;
+    wavefront.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(RectangleShape::new(millimeter!(40.0), millimeter!(40.0))?).into(),
+    )?;
+    let i_sd4 = scenery.add_node(wavefront)?;
     // Connect source → shifted lens
     scenery.connect_nodes(i_src, "output_1", i_pl1, "input_1", millimeter!(20.0))?;
     // Connect shifted lens → second lens

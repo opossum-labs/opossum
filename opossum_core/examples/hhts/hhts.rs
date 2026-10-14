@@ -288,10 +288,14 @@ fn main() -> OpmResult<()> {
     let mut group_det_1w = NodeGroup::new("Detectors 1w");
 
     let det_prop = group_det_1w.add_node(RayPropagationVisualizer::new("Propagation", None)?)?;
-    let det_wavefront_1w = group_det_1w.add_node(WaveFront::new("Wavefront")?)?;
+    // Ghost foci spread across these detectors in the ghost focus analysis: they record all light.
+    let mut wavefront = WaveFront::new("Wavefront")?;
+    wavefront.set_property(OPTIC_SHAPE, OpticShape::Open.into())?;
+    let det_wavefront_1w = group_det_1w.add_node(wavefront)?;
     let cambox_1w = group_det_1w.add_node(cambox_1w()?)?;
-    let det_energy_1w =
-        group_det_1w.add_node(EnergyMeter::new("Energy", Metertype::IdealEnergyMeter)?)?;
+    let mut energy_meter = EnergyMeter::new("Energy", Metertype::IdealEnergyMeter)?;
+    energy_meter.set_property(OPTIC_SHAPE, OpticShape::Open.into())?;
+    let det_energy_1w = group_det_1w.add_node(energy_meter)?;
 
     group_det_1w.connect_nodes(
         det_prop,
