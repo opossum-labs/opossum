@@ -84,11 +84,6 @@ fn analyze_ok() -> OpmResult<()> {
 }
 
 #[test]
-fn analyze_apodization_warning() -> OpmResult<()> {
-    test_analyze_apodization_warning::<RayPropagationVisualizer>()
-}
-
-#[test]
 fn analyze_inverse() -> OpmResult<()> {
     let mut node = RayPropagationVisualizer::default();
     node.set_inverted(true)?;

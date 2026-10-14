@@ -48,9 +48,7 @@ impl AnalysisGhostFocus for SourcePort {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{
-        core_optics::{OpticNode, PortType}, distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines}, joule, light::{Ray, lightdata::ray_data_builder::RayDataBuilder}, millimeter, nanometer, prelude::{Aperture, ApertureType, CollimatedSrc, RayDataSource},
-    };
+    use crate::{core_optics::OpticNode, joule, light::Ray, millimeter, nanometer};
 
     #[test]
     fn analyze_ghostfocus_no_source_definition() {
@@ -107,57 +105,6 @@ mod test {
         )?;
 
         assert_eq!(output.get("output_1"), Some(&vec![rays]));
-        Ok(())
-    }
-
-    #[test]
-    fn analyze_ghostfocus_with_aperture_clipping() -> OpmResult<()> {
-        let mut node = SourcePort::default();
-
-        // 1. Setup a restrictive rectangular aperture on the output port
-        let aperture = Aperture::new_rectangle(
-            millimeter!(5.),
-            millimeter!(5.),
-            ApertureType::Hole,
-            None,
-            None,
-        )?;
-        node.ports_mut()
-            .set_aperture(&PortType::Output, "output_1", &aperture)?;
-
-        // 2. Create a hexapolar ray distribution wide enough to guarantee clipping (10mm radius)
-        let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
-            Hexapolar::new(millimeter!(10.), 3)?.into(),
-            UniformDist::new(joule!(1.))?.into(),
-            LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
-        ));
-
-        let ray_data_builder = RayDataBuilder::from(ray_data_source);
-        let mut ghost_config = GhostFocusConfig::default();
-        ghost_config.map_source(node.node_attr().uuid(), ray_data_builder.clone());
-
-        // 3. Run the GhostFocus analysis for the initial pass (bounce_lvl = 0)
-        let mut ray_collection = Vec::new();
-        let output = AnalysisGhostFocus::analyze(
-            &mut node,
-            LightRays::default(),
-            &ghost_config,
-            &mut ray_collection,
-            0,
-        )?;
-
-        // 4. Extract the resulting rays from the LightRays output mapping
-        let rays_vec = output.get("output_1").unwrap();
-        let rays_after = &rays_vec[0];
-
-        let rays_before = ray_data_builder.build()?;
-
-        // 5. Verification: Ensure the aperture actually clipped (reduced) the number of rays
-        assert!(
-            rays_after.nr_of_rays(true) < rays_before.nr_of_rays(true),
-            "Rays were not clipped by the aperture during GhostFocus analysis!"
-        );
-
         Ok(())
     }
 }

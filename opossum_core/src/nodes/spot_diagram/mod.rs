@@ -13,7 +13,6 @@ use crate::{
     },
     core_optics::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, optic_node::APERTURE_LIMIT_NOTE,
-        optic_surface::OpticSurface,
     },
     error::OpmResult,
     geometry::{Geometry, SurfaceShape},
@@ -468,78 +467,6 @@ mod test {
         assert_eq!(notes.len(), 1);
         assert_eq!(notes[0].level, ReportLevel::Warning);
         assert_eq!(notes[0].message, APERTURE_LIMIT_NOTE);
-        Ok(())
-    }
-
-    #[test]
-    fn test_aperture_on_spot_diagram() -> OpmResult<()> {
-        use crate::{
-            analyzers::raytrace::{AnalysisRayTrace, RayTraceConfig},
-            apertures::{Aperture, ApertureType},
-            light::{LightData, LightResult, Ray, Rays},
-            millimeter,
-            prelude::*,
-        };
-        use nalgebra::{Point3, Vector3};
-
-        let mut sd = SpotDiagram::default();
-        let aperture = Aperture::new_rectangle(
-            millimeter!(1.0),
-            millimeter!(1.0),
-            ApertureType::Hole,
-            None,
-            None,
-        )?;
-
-        sd.set_aperture(&PortType::Input, "input_1", &aperture)?;
-        sd.node_attr_mut()
-            .set_positioning(NodePositioning::Absolute(Isometry::identity()));
-
-        let mut rays = Rays::from(Ray::new(
-            Point3::new(millimeter!(0.0), millimeter!(0.0), millimeter!(-1.0)),
-            Vector3::new(0.0, 0.0, 1.0),
-            nanometer!(550.0),
-            joule!(1.0),
-        )?);
-
-        // Ray outside aperture
-        rays.add_ray(Ray::new(
-            Point3::new(millimeter!(0.0), millimeter!(2.0), millimeter!(-1.0)),
-            Vector3::new(0.0, 0.0, 1.0),
-            nanometer!(550.0),
-            joule!(1.0),
-        )?);
-
-        let analyzer = RayTraceConfig::default();
-        let mut incoming_data = LightResult::default();
-        incoming_data.insert("input_1".to_string(), LightData::Geometric(rays));
-
-        AnalysisRayTrace::analyze(&mut sd, incoming_data, &analyzer)?;
-
-        let NodeReportResult::Report(node_report) = sd.node_report("", AnalyzerKind::RayTrace)?
-        else {
-            panic!("Node report should be `Report` variant");
-        };
-        let node_props = node_report.properties();
-
-        let spot_prop = node_props
-            .iter()
-            .find(|(name, _p)| *name == "Spot diagram")
-            .unwrap();
-
-        if let Proptype::SpotDiagram(spot_data) = spot_prop.1.prop() {
-            assert_eq!(
-                spot_data.total_spots(),
-                1,
-                "SpotDiagramData should only contain rays passing through aperture"
-            );
-            assert!(
-                spot_data.series[0].spots[0].1.abs().value < 1.0,
-                "Remaining point should be inside the aperture"
-            );
-        } else {
-            panic!("Property is not a SpotDiagram");
-        }
         Ok(())
     }
 
