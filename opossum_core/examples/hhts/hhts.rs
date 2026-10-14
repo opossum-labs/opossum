@@ -49,7 +49,7 @@ fn main() -> OpmResult<()> {
     )?;
 
     // the clear aperture of a 1-inch filter
-    let a_1inch: ApertureShape = CircleShape::new(millimeter!(12.7))?.into();
+    let a_1inch: ClearAperture = CircleShape::new(millimeter!(12.7))?.into();
 
     let mut scenery = NodeGroup::new("HHT Sensor");
     let src = scenery.add_node(SourcePort::new("Source"))?;
@@ -58,8 +58,8 @@ fn main() -> OpmResult<()> {
 
     // T1: the front lenses take the full beam of 100 mm radius and are 250 mm in diameter, the
     // rear lenses are 2 inches.
-    let front_lens: ApertureShape = CircleShape::new(millimeter!(125.0))?.into();
-    let a_2inch: ApertureShape = CircleShape::new(millimeter!(25.4))?.into();
+    let front_lens: ClearAperture = CircleShape::new(millimeter!(125.0))?.into();
+    let a_2inch: ClearAperture = CircleShape::new(millimeter!(25.4))?.into();
     let mut group_t1 = NodeGroup::new("T1");
     let t1_l1a = group_t1.add_node(Lens::new_with_clear_aperture(
         "T1 L1a",

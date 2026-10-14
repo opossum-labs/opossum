@@ -3,7 +3,6 @@ use uom::si::f64::{Angle, Length};
 
 use crate::{
     analyzers::propagation_strategy::PropagationStrategy,
-    apertures::{Aperture, ApertureShape, ApertureType},
     coatings::CoatingType,
     core_optics::{NodeAttrExt, OpticNode, PortType},
     error::{OpmResult, OpossumError},
@@ -300,25 +299,20 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
     }
 
     fn clear_aperture(&self) -> OpmResult<Option<ValidatedCrossSection>> {
-        let Ok(Proptype::Aperture(clear_aperture)) = self.node_attr().get_property(CLEAR_APERTURE)
+        let Ok(Proptype::ClearAperture(clear_aperture)) =
+            self.node_attr().get_property(CLEAR_APERTURE)
         else {
             return Err(OpossumError::Other(format!(
                 "node '{}' has no '{CLEAR_APERTURE}' property, so its extent is unknown",
                 self.name()
             )));
         };
-        if matches!(clear_aperture, ApertureShape::Open) {
-            return Ok(None);
-        }
-        let aperture = Aperture::new(clear_aperture.clone(), ApertureType::Hole, None, None)?;
-        ValidatedCrossSection::try_new(aperture)
-            .map(Some)
-            .map_err(|e| {
-                OpossumError::Other(format!(
-                    "the {CLEAR_APERTURE} of node '{}' does not bound a region: {e}",
-                    self.name()
-                ))
-            })
+        clear_aperture.cross_section().map_err(|e| {
+            OpossumError::Other(format!(
+                "the {CLEAR_APERTURE} of node '{}' does not bound a region: {e}",
+                self.name()
+            ))
+        })
     }
 
     fn set_alignment(

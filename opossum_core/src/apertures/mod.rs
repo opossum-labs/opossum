@@ -24,6 +24,7 @@
 //! assert_eq!(ap.apodize(&millimeter!(0.0, 0.0, 0.0)), 1.0);
 //! ```
 mod circle;
+mod clear_aperture;
 mod gaussian;
 mod polygon;
 mod rectangle;
@@ -56,6 +57,7 @@ use uom::si::{
 };
 
 pub use circle::CircleShape;
+pub use clear_aperture::{Bore, ClearAperture, Outline, OutlineShape};
 pub use gaussian::GaussianShape;
 pub use polygon::PolygonShape;
 pub use rectangle::RectangleShape;
@@ -532,21 +534,6 @@ impl ApertureShape {
                         .any(|member| *member.aperture_type() == ApertureType::Hole)
             }
             shape => shape.is_binary(),
-        }
-    }
-    /// Return whether some shape of this kind bounds a region (see [`Self::delimits_region`]).
-    ///
-    /// A user interface offering a choice of shapes asks through
-    /// [`Validator::may_accept`](crate::properties::validator::Validator::may_accept) rather than
-    /// keeping a list of its own. The match is exhaustive on purpose: a new variant has to state on
-    /// which side it is.
-    pub(crate) const fn may_delimit_region(&self) -> bool {
-        match self {
-            Self::Open | Self::Gaussian(_) => false,
-            Self::BinaryCircle(_)
-            | Self::BinaryRectangle(_)
-            | Self::BinaryPolygon(_)
-            | Self::Stack(_) => true,
         }
     }
     /// Calculate the transmission factor of a given point on the [`Aperture`]. The value is in the range (0.0..=1.0)

@@ -256,7 +256,7 @@ mod test {
         let mut node = placed_at_origin::<ParaxialSurface>()?;
         node.set_property(
             crate::geometry::body::CLEAR_APERTURE,
-            crate::apertures::ApertureShape::Open.into(),
+            crate::apertures::ClearAperture::Open.into(),
         )?;
         node.update_surfaces()?;
         let far_off = rays_along_z_from(&[millimeter!(0.0, 100.0, -10.0)], nanometer!(1000.0))?;

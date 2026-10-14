@@ -334,7 +334,7 @@ fn axis_is_lost(outgoing_edges: &LightResult) -> bool {
 mod test {
     use crate::{
         analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
-        apertures::{ApertureShape, CircleShape},
+        apertures::{CircleShape, ClearAperture},
         core_optics::{Alignable, NodeAttrExt},
         error::{OpmResult, OpossumError},
         geometry::body::{CLEAR_APERTURE, default_clear_aperture},
@@ -365,7 +365,7 @@ mod test {
     }
     /// A default lens shifted [`DECENTRE`] up, so the optical axis crosses it that far below its
     /// own axis, with the given clear aperture.
-    fn decentred_lens(clear_aperture: ApertureShape) -> OpmResult<Lens> {
+    fn decentred_lens(clear_aperture: ClearAperture) -> OpmResult<Lens> {
         let mut lens = Lens::default().with_decenter(Point3::new(
             Length::zero(),
             millimeter!(DECENTRE),

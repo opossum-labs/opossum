@@ -1,5 +1,5 @@
 use opossum_core::{
-    apertures::StackShape, core_optics::NodeAttrExt, geometry::body::CLEAR_APERTURE,
+    apertures::RectangleShape, core_optics::NodeAttrExt, geometry::body::CLEAR_APERTURE,
     nodes::round_collimated_ray_builder, prelude::*,
 };
 use std::path::Path;
@@ -8,19 +8,11 @@ fn main() -> OpmResult<()> {
 
     let i_src = scenery.add_node(SourcePort::new("round collimated ray source"))?;
 
-    // A dummy bounded by a square turned by 10° acts as an iris; a stack carries the rotation.
-    let mut dummy = Dummy::default();
-    let square = Aperture::new_rectangle(
-        millimeter!(15.),
-        millimeter!(15.),
-        ApertureType::Hole,
-        None,
-        Some(degree!(10.0)),
-    )?;
-    dummy.set_property(
-        CLEAR_APERTURE,
-        ApertureShape::Stack(StackShape::new(vec![square])?).into(),
-    )?;
+    // A dummy bounded by a square acts as an iris; turning the dummy by 10° about the axis turns
+    // the square with it.
+    let mut dummy = Dummy::default().with_tilt(degree!(0.0, 0.0, 10.0))?;
+    let square = RectangleShape::new(millimeter!(15.), millimeter!(15.))?;
+    dummy.set_property(CLEAR_APERTURE, ClearAperture::from(square).into())?;
 
     let i_d = scenery.add_node(dummy)?;
     let sd = SpotDiagram::default();

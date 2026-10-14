@@ -7,7 +7,7 @@ pub mod helper {
             ghostfocus::AnalysisGhostFocus,
             raytrace::AnalysisRayTrace,
         },
-        apertures::{ApertureShape, CircleShape, GaussianShape},
+        apertures::{CircleShape, ClearAperture},
         coatings::{CoatingConstantR, CoatingType},
         core_optics::{
             NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, OpticPorts, OpticRef, PortType,
@@ -351,16 +351,10 @@ pub mod helper {
             let ghost_heights: Vec<f64> = ghosts.iter().flat_map(heights).collect();
             assert_recorded(&ghost_heights, "ghost focus analysis");
         }
-        // A window may be opened again; any other shape needs an edge.
+        // A window may be opened again.
         let mut detector = T::default();
         detector.set_property(CLEAR_APERTURE, default_clear_aperture().into())?;
-        detector.set_property(CLEAR_APERTURE, ApertureShape::Open.into())?;
-        let soft = GaussianShape::new((millimeter!(5.0), millimeter!(5.0)))?;
-        assert!(
-            detector
-                .set_property(CLEAR_APERTURE, ApertureShape::Gaussian(soft).into())
-                .is_err()
-        );
+        detector.set_property(CLEAR_APERTURE, ClearAperture::Open.into())?;
         Ok(())
     }
     /// Build a source, an absolutely placed flat mirror 100 mm in front of it and an energy meter
@@ -376,7 +370,7 @@ pub mod helper {
     ///
     /// Returns an error if the scenery cannot be built.
     pub fn scenery_with_a_mirror_shrunk_behind_its_back() -> OpmResult<(NodeGroup, Uuid, Uuid)> {
-        let shrunk: ApertureShape = CircleShape::new(millimeter!(5.0))?.into();
+        let shrunk: ClearAperture = CircleShape::new(millimeter!(5.0))?.into();
         scenery_with_a_mirror_changed_behind_its_back(CLEAR_APERTURE, shrunk.into())
     }
     /// Build a source, an absolutely placed flat mirror 100 mm in front of it and an energy meter
@@ -549,10 +543,12 @@ pub mod helper {
     pub fn test_clear_aperture_absent_in_file<T: Default + Analyzable + 'static>() -> OpmResult<()>
     {
         let shape_of = |node_attr: &NodeAttr| {
-            let Ok(Proptype::Aperture(shape)) = node_attr.get_property(CLEAR_APERTURE) else {
-                panic!("the node has no '{CLEAR_APERTURE}' property holding a shape");
+            let Ok(Proptype::ClearAperture(clear_aperture)) =
+                node_attr.get_property(CLEAR_APERTURE)
+            else {
+                panic!("the node has no '{CLEAR_APERTURE}' property holding a clear aperture");
             };
-            shape.clone()
+            clear_aperture.clone()
         };
         let deserialized = load_without_property::<T>(CLEAR_APERTURE)?;
         assert_eq!(
@@ -698,25 +694,18 @@ pub mod helper {
         // a wider clear aperture widens it
         node.node_attr_mut().set_property(
             CLEAR_APERTURE,
-            ApertureShape::BinaryCircle(CircleShape::new(millimeter!(25.0))?).into(),
+            ClearAperture::from(CircleShape::new(millimeter!(25.0))?).into(),
         )?;
         let body = node.volume_body()?;
         assert!(body.contains(&point_at(millimeter!(24.9)))?);
         assert!(!body.contains(&point_at(millimeter!(25.1)))?);
-        // A shape that does not state where the medium ends leaves the volume undefined and is
-        // rejected right where it is set, before it can reach a file. An open aperture is one of
-        // them: two curved surfaces may happen to close the volume on their own, but nothing
-        // guarantees that they do.
-        for undefined_extent in [
-            ApertureShape::Open,
-            ApertureShape::Gaussian(GaussianShape::new((millimeter!(5.0), millimeter!(5.0)))?),
-        ] {
-            assert!(
-                node.node_attr_mut()
-                    .set_property(CLEAR_APERTURE, undefined_extent.into())
-                    .is_err()
-            );
-        }
+        // An open clear aperture leaves the volume undefined and is rejected where it is set: two
+        // curved surfaces may happen to close the volume on their own, but nothing guarantees it.
+        assert!(
+            node.node_attr_mut()
+                .set_property(CLEAR_APERTURE, ClearAperture::Open.into())
+                .is_err()
+        );
         Ok(())
     }
 

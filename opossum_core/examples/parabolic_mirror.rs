@@ -19,7 +19,7 @@ fn main() -> OpmResult<()> {
     )?;
     parabola1.set_property(
         CLEAR_APERTURE,
-        ApertureShape::from(CircleShape::new(millimeter!(250.0))?).into(),
+        ClearAperture::from(CircleShape::new(millimeter!(250.0))?).into(),
     )?;
     let i_m1 = scenery.add_node(parabola1)?;
     let mut parabola2 = ParabolicMirror::new_with_off_axis_y(
@@ -30,7 +30,7 @@ fn main() -> OpmResult<()> {
     )?;
     parabola2.set_property(
         CLEAR_APERTURE,
-        ApertureShape::from(CircleShape::new(millimeter!(38.1))?).into(),
+        ClearAperture::from(CircleShape::new(millimeter!(38.1))?).into(),
     )?;
     let i_m2 = scenery.add_node(parabola2)?;
     let rpv =

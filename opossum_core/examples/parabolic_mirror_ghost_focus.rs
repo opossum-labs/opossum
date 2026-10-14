@@ -11,7 +11,7 @@ use opossum_core::{
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
-    let two_inch: ApertureShape = CircleShape::new(millimeter!(25.4))?.into();
+    let two_inch: ClearAperture = CircleShape::new(millimeter!(25.4))?.into();
     let mut scenery = NodeGroup::default();
     let i_src = scenery.add_node(SourcePort::new("collimated ray source"))?;
 
@@ -20,7 +20,7 @@ fn main() -> OpmResult<()> {
     let mut mirror1 = ThinMirror::new("mirror 1").with_tilt(degree!(45., 0.0, 0.0))?;
     mirror1.set_property(
         CLEAR_APERTURE,
-        ApertureShape::from(CircleShape::new(millimeter!(38.1))?).into(),
+        ClearAperture::from(CircleShape::new(millimeter!(38.1))?).into(),
     )?;
     mirror1.set_coating(
         &PortType::Input,

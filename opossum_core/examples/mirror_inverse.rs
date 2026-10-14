@@ -11,7 +11,7 @@ fn main() -> OpmResult<()> {
     let mut mirror1 = ThinMirror::new("mirror 1").with_tilt(degree!(45.0, 0.0, 0.0))?;
     mirror1.set_property(
         CLEAR_APERTURE,
-        ApertureShape::from(CircleShape::new(millimeter!(25.4))?).into(),
+        ClearAperture::from(CircleShape::new(millimeter!(25.4))?).into(),
     )?;
     let i_m1 = scenery.add_node(mirror1)?;
     let i_m2 = scenery.add_node(ThinMirror::new("mirror 2").with_tilt(degree!(2.0, 0.0, 0.0))?)?;

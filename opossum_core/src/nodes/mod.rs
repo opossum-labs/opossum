@@ -71,7 +71,7 @@ pub use wedge::Wedge;
 
 use crate::{
     analyzers::Analyzable,
-    apertures::ApertureShape,
+    apertures::ClearAperture,
     core_optics::{NodeAttr, OpticRef},
     error::{OpmResult, OpossumError},
     geometry::body::{CLEAR_APERTURE, default_clear_aperture},
@@ -100,7 +100,7 @@ pub fn create_volume_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
     node_attr.create_property_with_validator(
         CLEAR_APERTURE,
         "transversal extent of the medium",
-        Validator::ApertureDelimitsRegion,
+        Validator::ClearApertureIsBounded,
         default_clear_aperture().into(),
     )
 }
@@ -124,7 +124,7 @@ pub fn create_surface_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
     node_attr.create_property_with_validator(
         CLEAR_APERTURE,
         "transversal extent of the surface",
-        Validator::ApertureDelimitsRegion,
+        Validator::ClearApertureIsBounded,
         default_clear_aperture().into(),
     )
 }
@@ -133,7 +133,7 @@ pub fn create_surface_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
 /// extends transversally ([`CLEAR_APERTURE`]).
 ///
 /// The sibling of [`create_surface_properties`], with the same default size. Unlike a real
-/// component, an idealized surface may also be unbounded ([`ApertureShape::Open`]).
+/// component, an idealized surface may also be unbounded ([`ClearAperture::Open`]).
 ///
 /// # Arguments
 ///
@@ -143,10 +143,9 @@ pub fn create_surface_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
 ///
 /// This function returns an error if the property is already declared.
 pub fn create_ideal_surface_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
-    node_attr.create_property_with_validator(
+    node_attr.create_property(
         CLEAR_APERTURE,
         "transversal extent of the surface, open for an unbounded ideal surface",
-        Validator::ApertureDelimitsRegionOrIsOpen,
         default_clear_aperture().into(),
     )
 }
@@ -155,7 +154,7 @@ pub fn create_ideal_surface_properties(node_attr: &mut NodeAttr) -> OpmResult<()
 /// ([`CLEAR_APERTURE`]).
 ///
 /// The sibling of [`create_surface_properties`] for detectors. A detector lets all light pass and
-/// only records it, so it starts unbounded ([`ApertureShape::Open`]): a measurement changes only if
+/// only records it, so it starts unbounded ([`ClearAperture::Open`]): a measurement changes only if
 /// its window is set.
 ///
 /// # Arguments
@@ -166,11 +165,10 @@ pub fn create_ideal_surface_properties(node_attr: &mut NodeAttr) -> OpmResult<()
 ///
 /// This function returns an error if the property is already declared.
 pub fn create_detector_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
-    node_attr.create_property_with_validator(
+    node_attr.create_property(
         CLEAR_APERTURE,
         "window the light is recorded within",
-        Validator::ApertureDelimitsRegionOrIsOpen,
-        ApertureShape::Open.into(),
+        ClearAperture::Open.into(),
     )
 }
 
@@ -178,8 +176,9 @@ pub fn create_detector_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
 /// ([`CLEAR_APERTURE`]).
 ///
 /// The sibling of [`create_detector_properties`]. A dummy has no optical function, so it starts
-/// unbounded ([`ApertureShape::Open`]) and changes nothing unless its clear aperture is set. Bounded,
-/// it is an iris: a ray outside misses it and follows the analyzer's missed surface strategy.
+/// unbounded ([`ClearAperture::Open`]) and changes nothing unless its clear aperture is set.
+/// Bounded, it is an iris: a ray outside misses it and follows the analyzer's missed surface
+/// strategy.
 ///
 /// # Arguments
 ///
@@ -189,11 +188,10 @@ pub fn create_detector_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
 ///
 /// This function returns an error if the property is already declared.
 pub fn create_dummy_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
-    node_attr.create_property_with_validator(
+    node_attr.create_property(
         CLEAR_APERTURE,
         "transversal extent of the surface, open for an unbounded one",
-        Validator::ApertureDelimitsRegionOrIsOpen,
-        ApertureShape::Open.into(),
+        ClearAperture::Open.into(),
     )
 }
 

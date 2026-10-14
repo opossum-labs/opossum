@@ -22,7 +22,7 @@ pub fn folded_martinez(
         .with_rot_from_littrow(alignment_wvl, degree!(-4.))?;
     grating.set_property(
         CLEAR_APERTURE,
-        ApertureShape::from(RectangleShape::new(millimeter!(140.0), millimeter!(60.0))?).into(),
+        ClearAperture::from(RectangleShape::new(millimeter!(140.0), millimeter!(60.0))?).into(),
     )?;
     let i_g1 = cb.add_node(grating)?;
     // focal length = 996.7 mm (Thorlabs LA1779-B). The dispersed beam passes the lens up to 70 mm
@@ -43,7 +43,7 @@ pub fn folded_martinez(
     let mut mirror = ThinMirror::new("mirr").align_like_node_at_distance(lens1, telescope_distance);
     mirror.set_property(
         CLEAR_APERTURE,
-        ApertureShape::from(CircleShape::new(millimeter!(63.5))?).into(),
+        ClearAperture::from(CircleShape::new(millimeter!(63.5))?).into(),
     )?;
     let mir_1 = cb.add_node(mirror)?;
     let mir_1_ref = cb.add_node(NodeReference::from_node(&cb.node(mir_1)?)?)?;
@@ -65,7 +65,7 @@ pub fn folded_martinez(
     let mut retro_mirror = ThinMirror::new("retro_mir1");
     retro_mirror.set_property(
         CLEAR_APERTURE,
-        ApertureShape::from(CircleShape::new(millimeter!(25.4))?).into(),
+        ClearAperture::from(CircleShape::new(millimeter!(25.4))?).into(),
     )?;
     let retro_mir1 = cb.add_node(retro_mirror)?;
 

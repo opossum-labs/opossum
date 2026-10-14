@@ -39,9 +39,9 @@ fn main() -> OpmResult<()> {
     // coatings
     let ar_coating = &CoatingConstantR::new(percent!(1.0))?.into();
     // the clear aperture of a 2-inch lens
-    let a_2inch: ApertureShape = CircleShape::new(millimeter!(25.4))?.into();
+    let a_2inch: ClearAperture = CircleShape::new(millimeter!(25.4))?.into();
     // the front lenses take the full beam of 100 mm radius and are 250 mm in diameter
-    let front_lens: ApertureShape = CircleShape::new(millimeter!(125.0))?.into();
+    let front_lens: ClearAperture = CircleShape::new(millimeter!(125.0))?.into();
 
     let mut scenery = NodeGroup::new("HHT Sensor Telescope T1");
     let src = scenery.add_node(SourcePort::new("Collimated Source"))?;

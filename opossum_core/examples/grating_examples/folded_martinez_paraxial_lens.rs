@@ -20,7 +20,7 @@ pub fn folded_martinez_paraxial_lens(
         .with_rot_from_littrow(alignment_wvl, degree!(-4.))?;
     grating.set_property(
         CLEAR_APERTURE,
-        ApertureShape::from(RectangleShape::new(millimeter!(140.0), millimeter!(60.0))?).into(),
+        ClearAperture::from(RectangleShape::new(millimeter!(140.0), millimeter!(60.0))?).into(),
     )?;
     let i_g1 = cb.add_node(grating)?;
     // focal length = 996.7 mm (Thorlabs LA1779-B); the dispersed beam passes the lens up to 73 mm
@@ -29,7 +29,7 @@ pub fn folded_martinez_paraxial_lens(
         .with_decenter(centimeter!(0., 1., 0.))?;
     lens.set_property(
         CLEAR_APERTURE,
-        ApertureShape::from(CircleShape::new(millimeter!(76.2))?).into(),
+        ClearAperture::from(CircleShape::new(millimeter!(76.2))?).into(),
     )?;
     let lens1 = cb.add_node(lens)?;
 
@@ -37,7 +37,7 @@ pub fn folded_martinez_paraxial_lens(
     let mut mirror = ThinMirror::new("mirr").align_like_node_at_distance(lens1, telescope_distance);
     mirror.set_property(
         CLEAR_APERTURE,
-        ApertureShape::from(CircleShape::new(millimeter!(63.5))?).into(),
+        ClearAperture::from(CircleShape::new(millimeter!(63.5))?).into(),
     )?;
     let mir_1 = cb.add_node(mirror)?;
     let mir_1_ref = cb.add_node(NodeReference::from_node(&cb.node(mir_1)?)?)?;
@@ -60,7 +60,7 @@ pub fn folded_martinez_paraxial_lens(
         let mut mirror = ThinMirror::new(name).with_tilt(degree!(-45., 0., 0.))?;
         mirror.set_property(
             CLEAR_APERTURE,
-            ApertureShape::from(CircleShape::new(millimeter!(25.4))?).into(),
+            ClearAperture::from(CircleShape::new(millimeter!(25.4))?).into(),
         )?;
         Ok(mirror)
     };

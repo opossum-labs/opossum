@@ -5,7 +5,7 @@ use std::path::Path;
 fn main() -> OpmResult<()> {
     // Turned by 45°, the mirrors meet the line of ±10 mm up to 14.1 mm from their centers: they are
     // 2-inch mirrors.
-    let two_inch: ApertureShape = CircleShape::new(millimeter!(25.4))?.into();
+    let two_inch: ClearAperture = CircleShape::new(millimeter!(25.4))?.into();
     let mut scenery = NodeGroup::default();
     let src = SourcePort::default().with_tilt(degree!(20.0, 0.0, 0.0))?;
     let i_src = scenery.add_node(src)?;

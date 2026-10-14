@@ -489,7 +489,7 @@ mod test {
             ghostfocus::AnalysisGhostFocus,
             raytrace::AnalysisRayTrace,
         },
-        apertures::{ApertureShape, CircleShape},
+        apertures::{CircleShape, ClearAperture},
         core_optics::{NodeAttrExt, OpticNode, node_attr::NodePositioning},
         degree,
         distributions::position::Hexapolar,
@@ -560,7 +560,7 @@ mod test {
             ParabolicMirror::new_with_off_axis_x("oap", millimeter!(100.0), true, degree!(90.0))?;
         parabola.set_property(
             CLEAR_APERTURE,
-            ApertureShape::BinaryCircle(CircleShape::new(millimeter!(25.0))?).into(),
+            ClearAperture::from(CircleShape::new(millimeter!(25.0))?).into(),
         )?;
         parabola.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let mut reflect = |ray: Ray| -> OpmResult<Option<Ray>> {

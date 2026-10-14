@@ -168,26 +168,3 @@ pub fn ClearApertureEditor(
         div { class: "accordion-content-wrapper-div border-start", {shape_specific_input} }
     }
 }
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    fn names(shapes: &[ApertureShape]) -> Vec<String> {
-        shapes.iter().map(ToString::to_string).collect()
-    }
-
-    /// A component must have an edge, so neither an open nor a soft shape is offered; a detector's
-    /// window or an ideal surface may also be open; without a validator every shape is offered.
-    #[test]
-    fn the_validator_decides_which_shapes_are_offered() {
-        let open = names(&[ApertureShape::Open]);
-        let gaussian = names(&[ApertureShape::Gaussian(Default::default())]);
-        let component = names(&excluded_shapes(Some(&Validator::ApertureDelimitsRegion)));
-        assert_eq!(component, [open[0].clone(), gaussian[0].clone()]);
-        let window = names(&excluded_shapes(Some(
-            &Validator::ApertureDelimitsRegionOrIsOpen,
-        )));
-        assert_eq!(window, gaussian);
-        assert!(excluded_shapes(None).is_empty());
-    }
-}

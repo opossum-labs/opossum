@@ -58,7 +58,7 @@ fn main() -> OpmResult<()> {
     // The lens is 50 mm in diameter: its clear aperture is a circle of 25 mm radius.
     lens1.set_property(
         CLEAR_APERTURE,
-        ApertureShape::from(CircleShape::new(millimeter!(25.0))?).into(),
+        ClearAperture::from(CircleShape::new(millimeter!(25.0))?).into(),
     )?;
     // Add the first lens into the optical scene.
     let i_pl1 = scenery.add_node(lens1)?;
@@ -67,7 +67,7 @@ fn main() -> OpmResult<()> {
     let mut lens2 = ParaxialSurface::new("50 mm lens", millimeter!(50.0))?;
     lens2.set_property(
         CLEAR_APERTURE,
-        ApertureShape::from(CircleShape::new(millimeter!(25.0))?).into(),
+        ClearAperture::from(CircleShape::new(millimeter!(25.0))?).into(),
     )?;
     let i_pl2 = scenery.add_node(lens2)?;
     // Add a ray propagation visualizer.

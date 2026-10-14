@@ -4,7 +4,7 @@ use opossum_core::{
 
 pub fn cambox_1w() -> OpmResult<NodeGroup> {
     // The camera chip: the cameras and fluence detectors record only the light falling on it.
-    let cam_chip: ApertureShape =
+    let cam_chip: ClearAperture =
         RectangleShape::new(millimeter!(11.33), millimeter!(7.13))?.into();
 
     let mut cb = NodeGroup::new("CamBox 1w");

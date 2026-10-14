@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use uom::si::{angle::degree, f64::Angle};
 
 use crate::{
-    apertures::ApertureShape,
+    apertures::ClearAperture,
     error::{OpmResult, OpossumError},
     nodes::{SplittingConfigBuilder, ideal_filter::FilterTypeBuilder},
     properties::Proptype,
@@ -27,10 +27,8 @@ pub enum Validator {
         inclusive: bool,
     },
     StringIsNotEmpty,
-    /// The aperture shape must delimit a region, i.e. have a hard edge.
-    ApertureDelimitsRegion,
-    /// The aperture shape must delimit a region or be open, i.e. bound nothing at all.
-    ApertureDelimitsRegionOrIsOpen,
+    /// The clear aperture must bound the component: it may not be open.
+    ClearApertureIsBounded,
     OrValidator {
         validators: Vec<Self>,
     },
@@ -60,14 +58,7 @@ impl Validator {
                 inclusive,
             } => Self::validate_angle_is_in_range(prop, *min, *max, *inclusive),
             Self::StringIsNotEmpty => Self::validate_string_is_not_empty(prop),
-            Self::ApertureDelimitsRegion => Self::validate_aperture_delimits_region(prop),
-            Self::ApertureDelimitsRegionOrIsOpen => {
-                if matches!(prop, Proptype::Aperture(ApertureShape::Open)) {
-                    Ok(())
-                } else {
-                    Self::validate_aperture_delimits_region(prop)
-                }
-            }
+            Self::ClearApertureIsBounded => Self::validate_clear_aperture_is_bounded(prop),
             Self::OrValidator { validators } => Self::validate_or_validator(prop, validators),
             Self::AndValidator { validators } => Self::validate_and_validator(prop, validators),
             Self::LightDataBuilderValidator => Self::validate_light_data_builder(prop),
@@ -76,9 +67,10 @@ impl Validator {
     /// Return whether a value of the kind of `prop` can pass this validator, judged by its kind
     /// alone and not by its contents.
     ///
-    /// An editor that offers a choice of kinds (such as aperture shapes) asks here, so it offers
-    /// only what the property can take; the value itself is still checked by
-    /// [`Validator::validate`] when it is set. Only the aperture validators restrict kinds.
+    /// An editor that offers a choice of kinds (such as an open clear aperture) asks here, so it
+    /// offers only what the property can take; the value itself is still checked by
+    /// [`Validator::validate`] when it is set. Only [`Validator::ClearApertureIsBounded`] restricts
+    /// kinds.
     ///
     /// # Arguments
     ///
@@ -86,9 +78,8 @@ impl Validator {
     #[must_use]
     pub fn may_accept(&self, prop: &Proptype) -> bool {
         match (self, prop) {
-            (Self::ApertureDelimitsRegion, Proptype::Aperture(shape)) => shape.may_delimit_region(),
-            (Self::ApertureDelimitsRegionOrIsOpen, Proptype::Aperture(shape)) => {
-                matches!(shape, ApertureShape::Open) || shape.may_delimit_region()
+            (Self::ClearApertureIsBounded, Proptype::ClearAperture(clear_aperture)) => {
+                !matches!(clear_aperture, ClearAperture::Open)
             }
             (Self::OrValidator { validators }, _) => validators
                 .iter()
@@ -104,25 +95,19 @@ impl Validator {
                 | Self::NumericInRange { .. }
                 | Self::AngleInRange { .. }
                 | Self::StringIsNotEmpty
-                | Self::ApertureDelimitsRegion
-                | Self::ApertureDelimitsRegionOrIsOpen
+                | Self::ClearApertureIsBounded
                 | Self::LightDataBuilderValidator,
                 _,
             ) => true,
         }
     }
-    fn validate_aperture_delimits_region(prop: &Proptype) -> OpmResult<()> {
-        let Proptype::Aperture(shape) = prop else {
-            return Ok(());
-        };
-        if shape.delimits_region() {
-            Ok(())
+    fn validate_clear_aperture_is_bounded(prop: &Proptype) -> OpmResult<()> {
+        if matches!(prop, Proptype::ClearAperture(ClearAperture::Open)) {
+            Err(OpossumError::Properties(
+                "a component ends somewhere, so its clear aperture cannot be open".into(),
+            ))
         } else {
-            Err(OpossumError::Properties(format!(
-                "an aperture of shape '{shape}' does not delimit a region: only a shape with a \
-                 hard edge, or a stack of such shapes holding a hole, can state where something \
-                 begins and ends"
-            )))
+            Ok(())
         }
     }
 
@@ -436,51 +421,31 @@ mod test {
 #[cfg(test)]
 mod test_apertures {
     use super::*;
-    use crate::apertures::StackShape;
-    use strum::IntoEnumIterator;
+    use crate::{apertures::CircleShape, millimeter};
 
-    /// The aperture validators admit a shape by its kind: every kind that can bound a region, and
-    /// `Open` where the property may also be unbounded. A default stack is refused as a value but
-    /// admitted as a kind, because a stack with a hole bounds a region.
+    /// A component's clear aperture may be anything but open; no other validator restricts the
+    /// kinds of clear apertures.
     #[test]
-    fn may_accept_judges_aperture_shapes_by_kind() {
-        let accepts = |validator: &Validator, shape: &ApertureShape| {
-            validator.may_accept(&Proptype::Aperture(shape.clone()))
-        };
-        for shape in ApertureShape::iter() {
-            let bounds_a_region =
-                !matches!(shape, ApertureShape::Open | ApertureShape::Gaussian(_));
-            let open = matches!(shape, ApertureShape::Open);
-            assert_eq!(
-                accepts(&Validator::ApertureDelimitsRegion, &shape),
-                bounds_a_region,
-                "{shape:?}"
-            );
-            assert_eq!(
-                accepts(&Validator::ApertureDelimitsRegionOrIsOpen, &shape),
-                bounds_a_region || open,
-                "{shape:?}"
-            );
-            assert!(
-                accepts(&Validator::NumericIsPositive, &shape),
-                "a validator of numbers does not restrict the kinds of shapes"
-            );
-        }
-        let default_stack = ApertureShape::Stack(StackShape::default());
+    fn may_accept_judges_clear_apertures_by_kind() -> crate::error::OpmResult<()> {
+        let open = Proptype::ClearAperture(ClearAperture::Open);
+        let bounded = Proptype::ClearAperture(CircleShape::new(millimeter!(5.0))?.into());
+        assert!(!Validator::ClearApertureIsBounded.may_accept(&open));
+        assert!(Validator::ClearApertureIsBounded.validate(&open).is_err());
+        assert!(Validator::ClearApertureIsBounded.may_accept(&bounded));
+        assert!(Validator::ClearApertureIsBounded.validate(&bounded).is_ok());
         assert!(
-            Validator::ApertureDelimitsRegion
-                .validate(&Proptype::Aperture(default_stack.clone()))
-                .is_err()
+            Validator::NumericIsPositive.may_accept(&open),
+            "a validator of numbers does not restrict the kinds of clear apertures"
         );
-        assert!(accepts(&Validator::ApertureDelimitsRegion, &default_stack));
+        Ok(())
     }
     /// A combined validator admits a kind if any of its members does (or) or all of them do (and).
     #[test]
     fn may_accept_combines_its_members() {
-        let open = Proptype::Aperture(ApertureShape::Open);
+        let open = Proptype::ClearAperture(ClearAperture::Open);
         let members = vec![
-            Validator::ApertureDelimitsRegion,
-            Validator::ApertureDelimitsRegionOrIsOpen,
+            Validator::ClearApertureIsBounded,
+            Validator::NumericIsPositive,
         ];
         assert!(
             Validator::OrValidator {

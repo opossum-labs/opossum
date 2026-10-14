@@ -11,7 +11,7 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     // Both mirrors are 2 inches in diameter, large enough for the beam of 20 mm radius.
-    let two_inch: ApertureShape = CircleShape::new(millimeter!(25.4))?.into();
+    let two_inch: ClearAperture = CircleShape::new(millimeter!(25.4))?.into();
     let mut scenery = NodeGroup::default();
     let i_src = scenery.add_node(SourcePort::new("collimated ray source"))?;
     let mut mirror1 = ThinMirror::new("mirror 1").with_tilt(degree!(22.5, 0.0, 0.0))?;

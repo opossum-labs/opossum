@@ -3,7 +3,7 @@
 
 use crate::{
     analyzers::energy::AnalysisEnergy,
-    apertures::ApertureShape,
+    apertures::ClearAperture,
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, Volumetric},
     error::{OpmResult, OpossumError},
     geometry::{
@@ -160,7 +160,7 @@ impl Lens {
         rear_curvature: Length,
         center_thickness: Length,
         material: impl Into<Material>,
-        clear_aperture: ApertureShape,
+        clear_aperture: ClearAperture,
     ) -> OpmResult<Self> {
         let mut lens = Self::default();
         lens.node_attr.set_name(name);
@@ -228,7 +228,6 @@ mod test {
             energy::{AnalysisEnergy, EnergyConfig},
             raytrace::AnalysisRayTrace,
         },
-        apertures::ApertureShape,
         core_optics::{NodeAttrExt, node_attr::NodePositioning},
         distributions::position::Hexapolar,
         joule,
@@ -442,7 +441,7 @@ mod test {
     #[test]
     fn a_small_lens_is_built_with_its_own_clear_aperture() -> OpmResult<()> {
         use crate::apertures::CircleShape;
-        let clear_aperture: ApertureShape = CircleShape::new(millimeter!(9.0))?.into();
+        let clear_aperture: ClearAperture = CircleShape::new(millimeter!(9.0))?.into();
         let lens = Lens::new_with_clear_aperture(
             "meniscus",
             millimeter!(10.0),
@@ -453,7 +452,7 @@ mod test {
         )?;
         assert_eq!(
             lens.node_attr.get_property(CLEAR_APERTURE)?,
-            &Proptype::Aperture(clear_aperture)
+            &Proptype::ClearAperture(clear_aperture)
         );
         Ok(())
     }

@@ -376,7 +376,7 @@ mod test {
     fn the_plot_outlines_the_window() -> OpmResult<()> {
         use crate::{
             analyzers::RayTraceConfig,
-            apertures::{ApertureShape, CircleShape},
+            apertures::{CircleShape, ClearAperture},
             geometry::body::CLEAR_APERTURE,
             millimeter,
         };
@@ -384,7 +384,7 @@ mod test {
         diagram.set_property("plot aperture", true.into())?;
         diagram.set_property(
             CLEAR_APERTURE,
-            ApertureShape::from(CircleShape::new(millimeter!(5.0))?).into(),
+            ClearAperture::from(CircleShape::new(millimeter!(5.0))?).into(),
         )?;
         let rays = rays_along_z_from(&[millimeter!(0.0, 1.0, -10.0)], nanometer!(1000.0))?;
         AnalysisRayTrace::analyze(

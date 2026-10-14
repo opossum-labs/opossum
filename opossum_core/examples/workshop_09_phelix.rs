@@ -353,7 +353,7 @@ fn amp(name: &str, disk_material: Material) -> OpmResult<NodeGroup> {
     // Create amplifier node group
     let mut amp = NodeGroup::new(name);
     // The disks are octagons, 621.19 mm wide in their tilt plane and 330.18 mm high.
-    let octagon: ApertureShape = PolygonShape::new(
+    let octagon: ClearAperture = PolygonShape::new(
         [
             (310.595, 38.025),
             (183.53, 165.09),
@@ -405,7 +405,7 @@ fn amp(name: &str, disk_material: Material) -> OpmResult<NodeGroup> {
 fn with_clear_aperture<T: NodeAttrExt>(mut node: T, radius: Length) -> OpmResult<T> {
     node.set_property(
         CLEAR_APERTURE,
-        ApertureShape::from(CircleShape::new(radius)?).into(),
+        ClearAperture::from(CircleShape::new(radius)?).into(),
     )?;
     Ok(node)
 }

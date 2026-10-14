@@ -17,7 +17,7 @@ fn main() -> OpmResult<()> {
     let mut lens1 = ParaxialSurface::new("100 mm lens", millimeter!(100.0))?;
     lens1.set_property(
         CLEAR_APERTURE,
-        ApertureShape::from(CircleShape::new(millimeter!(25.))?).into(),
+        ClearAperture::from(CircleShape::new(millimeter!(25.))?).into(),
     )?;
     let i_pl1 = scenery.add_node(lens1)?;
     let i_pl2 = scenery.add_node(ParaxialSurface::new("50 mm lens", millimeter!(50.0))?)?;

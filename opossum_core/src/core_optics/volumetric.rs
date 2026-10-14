@@ -478,6 +478,7 @@ mod test {
             ghostfocus::{AnalysisGhostFocus, GhostFocusAnalyzer},
             raytrace::{AnalysisRayTrace, RayTracingAnalyzer},
         },
+        apertures::ClearAperture,
         coatings::CoatingConstantR,
         core_optics::{
             Alignable, PortType,
@@ -1648,7 +1649,7 @@ mod test {
             };
             let bounded = matches!(
                 optic_ref.node_attr().get_property(CLEAR_APERTURE),
-                Ok(Proptype::Aperture(shape)) if shape.is_binary()
+                Ok(Proptype::ClearAperture(ClearAperture::Bounded(_)))
             );
             assert_eq!(
                 bounded,
@@ -1677,7 +1678,7 @@ mod test {
             let mut node_attr = create_node_ref(node_type)?.node_attr().clone();
             if node_attr.get_property(CLEAR_APERTURE).is_ok()
                 && node_attr
-                    .set_property(CLEAR_APERTURE, crate::apertures::ApertureShape::Open.into())
+                    .set_property(CLEAR_APERTURE, ClearAperture::Open.into())
                     .is_ok()
             {
                 may_be_open.push(node_type);

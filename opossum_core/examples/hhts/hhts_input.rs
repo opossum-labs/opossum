@@ -5,7 +5,7 @@ use std::path::Path;
 
 pub fn hhts_input() -> OpmResult<NodeGroup> {
     // The input optics take the full beam of 100 mm radius: they are 250 mm in diameter.
-    let input_optics: ApertureShape = CircleShape::new(millimeter!(125.0))?.into();
+    let input_optics: ClearAperture = CircleShape::new(millimeter!(125.0))?.into();
     let dichroic_mirror = SplittingConfigBuilder::Spectrum(SpectralFilterBuilder::FromFile(
         Path::new("./opossum_core/examples/hhts/MM15_Transmission.csv").to_path_buf(),
     ));

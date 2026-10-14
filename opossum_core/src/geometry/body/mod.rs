@@ -20,7 +20,7 @@
 //! ends.
 
 use crate::{
-    apertures::{ApertureShape, CircleShape},
+    apertures::{CircleShape, ClearAperture},
     error::{OpmResult, OpossumError},
     geometry::{Rim, geo_surface::GeoSurfaceRef},
     light::Ray,
@@ -60,7 +60,7 @@ pub const CLEAR_APERTURE: &str = "clear aperture";
 ///
 /// Panics if the hard-coded radius is rejected by [`CircleShape`], which cannot happen.
 #[must_use]
-pub fn default_clear_aperture() -> ApertureShape {
+pub fn default_clear_aperture() -> ClearAperture {
     CircleShape::new(millimeter!(12.5))
         .expect("12.5 mm is a valid aperture radius")
         .into()

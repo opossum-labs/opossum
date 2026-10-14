@@ -326,7 +326,7 @@ fn main() -> OpmResult<()> {
 
     let i_src = scenery.add_node(SourcePort::default())?;
     // Both lenses take the beam of 50 mm radius: they are 4 inches in diameter.
-    let a_4inch: ApertureShape = CircleShape::new(millimeter!(50.8))?.into();
+    let a_4inch: ClearAperture = CircleShape::new(millimeter!(50.8))?.into();
     // focal length = 996.7 mm (Thorlabs LA1779-B)
     let lens1 = scenery.add_node(Lens::new_with_clear_aperture(
         "Lens 1",

@@ -221,7 +221,7 @@ mod test {
     use super::*;
     use crate::{
         analyzers::{RayTraceConfig, energy::EnergyConfig},
-        apertures::{Aperture, ApertureShape, ApertureType, CircleShape, StackShape},
+        apertures::{Bore, CircleShape, ClearAperture, Outline},
         core_optics::{Alignable, PortType, node_attr::NodePositioning},
         degree,
         geometry::body::CLEAR_APERTURE,
@@ -232,8 +232,9 @@ mod test {
         utils::geom_transformation::Isometry,
     };
     use approx::assert_abs_diff_eq;
-    use nalgebra::vector;
+    use nalgebra::{Point2, vector};
     use num_traits::Zero;
+    use uom::si::f64::Angle;
     #[test]
     fn default() {
         let node = ThinMirror::default();
@@ -359,12 +360,14 @@ mod test {
     /// through the hole misses the mirror, one on the ring is reflected.
     #[test]
     fn a_ray_through_the_central_hole_of_a_mirror_misses_it() -> OpmResult<()> {
-        let ring = ApertureShape::Stack(StackShape::new(vec![
-            Aperture::new_circle(millimeter!(12.5), ApertureType::Hole, None)?,
-            Aperture::new_circle(millimeter!(2.0), ApertureType::Obstruction, None)?,
-        ])?);
+        let hole = Bore::new(
+            CircleShape::new(millimeter!(2.0))?,
+            Point2::origin(),
+            Angle::zero(),
+        );
+        let ring = Outline::new(CircleShape::new(millimeter!(12.5))?, vec![hole])?;
         let mut mirror = ThinMirror::default();
-        mirror.set_property(CLEAR_APERTURE, ring.into())?;
+        mirror.set_property(CLEAR_APERTURE, ClearAperture::from(ring).into())?;
         mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let rays = rays_along_z_from(
             &[millimeter!(0.0, 1.0, -10.0), millimeter!(0.0, 8.0, -10.0)],
@@ -391,24 +394,6 @@ mod test {
         assert_abs_diff_eq!(heights[0], 8.0, epsilon = 1e-9);
         Ok(())
     }
-    /// A clear aperture has to bound a region: a stack of obstructions only, or one with a soft
-    /// member, does not.
-    #[test]
-    fn a_stacked_clear_aperture_needs_a_hole_with_an_edge() -> OpmResult<()> {
-        let obstruction = Aperture::new_circle(millimeter!(2.0), ApertureType::Obstruction, None)?;
-        let soft = Aperture::new_gaussian(
-            (millimeter!(5.0), millimeter!(5.0)),
-            ApertureType::Hole,
-            None,
-            None,
-        )?;
-        let mut mirror = ThinMirror::default();
-        for members in [vec![obstruction.clone()], vec![soft, obstruction]] {
-            let stack = ApertureShape::Stack(StackShape::new(members)?);
-            assert!(mirror.set_property(CLEAR_APERTURE, stack.into()).is_err());
-        }
-        Ok(())
-    }
     /// An energy analysis traces no rays, so the clear aperture does not cut its light, however
     /// small the mirror is.
     #[test]
@@ -416,7 +401,7 @@ mod test {
         let mut mirror = ThinMirror::default();
         mirror.set_property(
             CLEAR_APERTURE,
-            ApertureShape::BinaryCircle(CircleShape::new(millimeter!(0.1))?).into(),
+            ClearAperture::from(CircleShape::new(millimeter!(0.1))?).into(),
         )?;
         mirror.update_surfaces()?;
         let input_light = LightData::Energy(create_he_ne_spec(1.0)?);

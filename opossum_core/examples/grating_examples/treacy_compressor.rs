@@ -23,7 +23,7 @@ pub fn treacy_compressor(alignment_wvl: Length) -> OpmResult<NodeGroup> {
 
     // Gratings 2 and 3 take the dispersed beam, up to 145 mm off their centers along the
     // dispersion: they are 300 mm wide and 30 mm high.
-    let wide_grating: ApertureShape =
+    let wide_grating: ClearAperture =
         RectangleShape::new(millimeter!(300.0), millimeter!(30.0))?.into();
     let mut grating_2 = ReflectiveGrating::new("grating 2", num_per_mm!(1740.), -1)?
         .to_rot_from_littrow(alignment_wvl, degree!(-4.001))?;

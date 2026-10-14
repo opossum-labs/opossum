@@ -32,7 +32,7 @@ pub fn main() -> OpmResult<()> {
     let mut mir_1 = ThinMirror::new("mirr").align_like_node_at_distance(lens1, millimeter!(996.7));
     mir_1.set_property(
         CLEAR_APERTURE,
-        ApertureShape::from(CircleShape::new(millimeter!(25.4))?).into(),
+        ClearAperture::from(CircleShape::new(millimeter!(25.4))?).into(),
     )?;
     let mir_1 = scenery.add_node(mir_1)?;
     let mut lens_1_ref = NodeReference::from_node(&scenery.node(lens1)?)?;

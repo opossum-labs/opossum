@@ -13,7 +13,7 @@ fn main() -> OpmResult<()> {
     let src = scenery.add_node(SourcePort::new("collimated ray source"))?;
     // The beam meets the prisms up to 31 mm off their centers, so they are 64 mm in diameter and
     // still 1.5 mm thick at their thin edge. The outermost ray misses Prism2.
-    let prism_size: ApertureShape = CircleShape::new(millimeter!(32.0))?.into();
+    let prism_size: ClearAperture = CircleShape::new(millimeter!(32.0))?.into();
     let mut prism1 = Wedge::new(
         "Prism1",
         millimeter!(20.0),

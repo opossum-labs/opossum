@@ -14,7 +14,7 @@ fn main() -> OpmResult<()> {
     let mut paraxial = ParaxialSurface::new("paraxial", millimeter!(500.0))?;
     paraxial.set_property(
         CLEAR_APERTURE,
-        ApertureShape::from(CircleShape::new(millimeter!(25.4))?).into(),
+        ClearAperture::from(CircleShape::new(millimeter!(25.4))?).into(),
     )?;
     let i_pl = scenery.add_node(paraxial)?;
     let mut fl_det = FluenceDetector::default();

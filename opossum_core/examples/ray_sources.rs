@@ -33,7 +33,7 @@ fn main() -> OpmResult<()> {
         let mut node = BeamSplitter::default();
         node.set_property(
             CLEAR_APERTURE,
-            ApertureShape::from(CircleShape::new(millimeter!(38.1))?).into(),
+            ClearAperture::from(CircleShape::new(millimeter!(38.1))?).into(),
         )?;
         Ok(node)
     };
