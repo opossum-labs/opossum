@@ -15,7 +15,7 @@ pub mod helper {
         },
         error::{OpmResult, OpossumError},
         geometry::{
-            body::{Body, OPTIC_SHAPE},
+            body::{Body, OPTIC_SHAPE, default_optic_shape},
             geo_surface::GeoSurfaceRef,
         },
         joule,
@@ -116,31 +116,24 @@ pub mod helper {
     /// not: a ray trace loses it and warns about the loss, a ghost focus analysis lets it run past
     /// unchanged.
     ///
-    /// Both rays travel along z, 12.4 mm and 12.6 mm off the axis, just inside and just outside the
-    /// default optic shape of 12.5 mm. Whether a missed ray is lost or runs past is the analyzer's
-    /// missed surface strategy (`Stop` for a ray trace, `Ignore` for a ghost focus analysis).
+    /// The node is placed at the origin and bounded by the round default optic shape of 12.5 mm
+    /// ([`default_optic_shape`]), whatever its own default. Both rays travel along z, 12.4 mm and
+    /// 12.6 mm off the axis, just inside and just outside of it. Whether a missed ray is lost or
+    /// runs past is the analyzer's missed surface strategy (`Stop` for a ray trace, `Ignore` for a
+    /// ghost focus analysis).
     ///
     /// # Errors
     ///
-    /// Returns an error if the node cannot be placed or analyzed.
+    /// Returns an error if the node cannot be placed, bounded or analyzed.
     pub fn test_rays_beyond_optic_shape_are_lost<
         T: Default + AnalysisRayTrace + AnalysisGhostFocus,
     >() -> OpmResult<()> {
-        test_rays_beyond_optic_shape_are_lost_for(placed_at_origin::<T>)
-    }
-    /// The same check as [`test_rays_beyond_optic_shape_are_lost`], for a node built by `make`
-    /// rather than a default one: e.g. a node that only has an optic shape once it is set.
-    ///
-    /// # Arguments
-    ///
-    /// * `make` - builds the node at the origin, bounded by the default optic shape.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the node cannot be built or analyzed.
-    pub fn test_rays_beyond_optic_shape_are_lost_for<T: AnalysisRayTrace + AnalysisGhostFocus>(
-        make: impl Fn() -> OpmResult<T>,
-    ) -> OpmResult<()> {
+        let make = || -> OpmResult<T> {
+            let mut node = placed_at_origin::<T>()?;
+            node.set_property(OPTIC_SHAPE, default_optic_shape().into())?;
+            node.update_surfaces()?;
+            Ok(node)
+        };
         let (inside, outside) = around_the_default_rim();
         let rays = || rays_along_z_from(&[inside, outside], nanometer!(1000.0));
         let mut node = make()?;

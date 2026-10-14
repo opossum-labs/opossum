@@ -195,7 +195,6 @@ mod test {
         },
         core_optics::{NodeAttrExt, node_attr::NodePositioning},
         distributions::position::Hexapolar,
-        geometry::body::default_optic_shape,
         joule,
         light::{LightData, LightResult, Rays},
         millimeter, nanometer,
@@ -287,12 +286,7 @@ mod test {
     }
     #[test]
     fn rays_beyond_optic_shape_are_lost() -> OpmResult<()> {
-        test_rays_beyond_optic_shape_are_lost_for(|| {
-            let mut lens = placed_at_origin::<CylindricLens>()?;
-            lens.set_property(OPTIC_SHAPE, default_optic_shape().into())?;
-            lens.update_surfaces()?;
-            Ok(lens)
-        })
+        test_rays_beyond_optic_shape_are_lost::<CylindricLens>()
     }
     #[test]
     fn inverted() -> OpmResult<()> {
