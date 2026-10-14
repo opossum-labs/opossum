@@ -16,7 +16,9 @@ pub struct AnalyzerInfo {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pump_scenarios: Vec<Uuid>,
     /// Optional default wavelength used when configuring or auto-mapping source ports
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    ///
+    /// This value is not serialized since it takes its value from the local settings of the OPOSSUM installation
+    #[serde(default, skip_serializing)]
     #[schema(value_type = Option<Object>)]
     default_wavelength: Option<Length>,
 }
