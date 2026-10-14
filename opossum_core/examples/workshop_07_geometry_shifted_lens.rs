@@ -26,7 +26,7 @@
 //! This example demonstrates:
 //! - Defining wavelength-dependent refractive index data for HZF52 glass
 //! - Creating a spherical lens with a specified decenter
-//! - Giving a lens its size with a clear aperture
+//! - Giving a lens its size with an optic shape
 //! - Connecting optical components with fixed propagation distances
 //! - Configuring a ray propagation visualizer
 //! - Adding a wavefront node to the optical system
@@ -39,7 +39,7 @@
 //! - `opossum_core::core_optics::NodeAttrExt` provides the optical node
 //!   extension trait
 //! - `opossum_core::apertures::CircleShape` provides the shape of a lens's
-//!   clear aperture
+//!   optic shape
 //! - `std::{env, path::Path}` is used to determine the output directory
 //!   and save the generated `.opm` file
 //!
@@ -68,11 +68,11 @@ fn main() -> OpmResult<()> {
     // - 10 mm thickness
     // - HZF52 refractive index
     //
-    // - a clear aperture of 25 mm radius
+    // - an optic shape of 25 mm radius
     //
     // The lens is shifted by +5 mm along the y-axis
     // using `with_decenter(...)`
-    let lens1 = Lens::new_with_clear_aperture(
+    let lens1 = Lens::new_with_optic_shape(
         "75 mm lens (y shifted)",
         millimeter!(122.25),
         millimeter!(-122.25),
@@ -84,7 +84,7 @@ fn main() -> OpmResult<()> {
     // Add the first lens to the optical system
     let i_pl1 = scenery.add_node(lens1)?;
     // Create the second lens aligned with the optical axis, of the same size as the first one
-    let lens2 = Lens::new_with_clear_aperture(
+    let lens2 = Lens::new_with_optic_shape(
         "50 mm lens",
         millimeter!(100.0),
         millimeter!(-100.0),

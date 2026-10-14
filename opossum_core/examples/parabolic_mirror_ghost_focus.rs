@@ -3,7 +3,7 @@ use opossum_core::{
     apertures::CircleShape,
     coatings::CoatingConstantR,
     core_optics::{NodeAttrExt, OpticNodeExt},
-    geometry::body::CLEAR_APERTURE,
+    geometry::body::OPTIC_SHAPE,
     nodes::round_collimated_ray_builder,
     percent,
     prelude::*,
@@ -11,7 +11,7 @@ use opossum_core::{
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
-    let two_inch: ClearAperture = CircleShape::new(millimeter!(25.4))?.into();
+    let two_inch: OpticShape = CircleShape::new(millimeter!(25.4))?.into();
     let mut scenery = NodeGroup::default();
     let i_src = scenery.add_node(SourcePort::new("collimated ray source"))?;
 
@@ -19,8 +19,8 @@ fn main() -> OpmResult<()> {
     // is a 3-inch mirror.
     let mut mirror1 = ThinMirror::new("mirror 1").with_tilt(degree!(45., 0.0, 0.0))?;
     mirror1.set_property(
-        CLEAR_APERTURE,
-        ClearAperture::from(CircleShape::new(millimeter!(38.1))?).into(),
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(38.1))?).into(),
     )?;
     mirror1.set_coating(
         &PortType::Input,
@@ -39,12 +39,12 @@ fn main() -> OpmResult<()> {
     let mut parabola1 = ParabolicMirror::new("parabola 1", millimeter!(100.), false)?
         .with_oap_angle(degree!(-90.))?
         .with_oap_direction(Vector2::new(0., 1.))?;
-    parabola1.set_property(CLEAR_APERTURE, two_inch.clone().into())?;
+    parabola1.set_property(OPTIC_SHAPE, two_inch.clone().into())?;
     let i_m2 = scenery.add_node(parabola1)?;
     let mut parabola2 = ParabolicMirror::new("parabola 2", millimeter!(100.), true)?
         .with_oap_angle(degree!(90.))?
         .with_oap_direction(Vector2::new(0., 1.))?;
-    parabola2.set_property(CLEAR_APERTURE, two_inch.into())?;
+    parabola2.set_property(OPTIC_SHAPE, two_inch.into())?;
     let i_m3 = scenery.add_node(parabola2)?;
     let i_rpv = scenery.add_node(RayPropagationVisualizer::default())?;
 

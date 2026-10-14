@@ -43,7 +43,7 @@ inventory::submit! {
 /// ## Properties
 ///   - `name`
 ///   - `fluence estimator`
-///   - `clear aperture`: the window the light is recorded within, open by default; light outside
+///   - `optic shape`: the window the light is recorded within, open by default; light outside
 ///     it passes unrecorded
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
@@ -92,7 +92,7 @@ impl OpticNode for FluenceDetector {
     fn geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::detector(
             SurfaceShape::Plane,
-            self.clear_aperture()?,
+            self.cross_section()?,
         )?))
     }
     fn set_apodization_warning(&mut self, apodized: bool) {
@@ -248,8 +248,8 @@ mod test {
         Ok(())
     }
     #[test]
-    fn clear_aperture_absent_in_file() -> OpmResult<()> {
-        test_clear_aperture_absent_in_file::<FluenceDetector>()
+    fn optic_shape_absent_in_file() -> OpmResult<()> {
+        test_optic_shape_absent_in_file::<FluenceDetector>()
     }
     #[test]
     fn records_inside_and_passes_all() -> OpmResult<()> {

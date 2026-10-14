@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! The shape of an optical component, described rather than built.
 //!
-//! A node's properties (curvatures, thickness, clear aperture, ...) are what a user enters; the node
+//! A node's properties (curvatures, thickness, optic shape, ...) are what a user enters; the node
 //! derives a [`Geometry`] from them (see
 //! [`OpticNode::geometry`](crate::core_optics::OpticNode::geometry)), and the runtime surfaces rays
 //! are traced against are built from that description. The node type thereby acts as a preset: a
@@ -55,7 +55,7 @@ impl Geometry {
     /// * `front_radius` - radius of curvature of the front face; infinite for a flat face.
     /// * `rear_radius` - radius of curvature of the rear face; infinite for a flat face.
     /// * `center_thickness` - distance between the two vertices.
-    /// * `cross_section` - the transversal extent (clear aperture).
+    /// * `cross_section` - the transversal extent (optic shape).
     ///
     /// # Errors
     ///
@@ -81,7 +81,7 @@ impl Geometry {
     /// * `front_radius` - radius of curvature of the front face; infinite for a flat face.
     /// * `rear_radius` - radius of curvature of the rear face; infinite for a flat face.
     /// * `center_thickness` - distance between the two vertices.
-    /// * `cross_section` - the transversal extent (clear aperture).
+    /// * `cross_section` - the transversal extent (optic shape).
     ///
     /// # Errors
     ///
@@ -106,7 +106,7 @@ impl Geometry {
     ///
     /// * `center_thickness` - distance between the two faces on the axis.
     /// * `wedge_angle` - tilt of the rear face.
-    /// * `cross_section` - the transversal extent (clear aperture).
+    /// * `cross_section` - the transversal extent (optic shape).
     ///
     /// # Errors
     ///
@@ -199,7 +199,7 @@ impl Geometry {
     /// * `front` - the shape of the front face.
     /// * `rear` - the shape of the rear face.
     /// * `rear_vertex` - position and orientation of the rear face's vertex relative to the node.
-    /// * `cross_section` - the transversal extent (clear aperture).
+    /// * `cross_section` - the transversal extent (optic shape).
     ///
     /// # Errors
     ///
@@ -308,7 +308,7 @@ impl Geometry {
 /// A single surface without thickness.
 ///
 /// The face and the cross section are stated in the frame of the axis, as for an [`Extruded`]
-/// solid. An off-axis parabola uses the axis to measure its clear aperture parallel to the axis of
+/// solid. An off-axis parabola uses the axis to measure its optic shape parallel to the axis of
 /// its parent parabola.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SurfaceGeometry {
@@ -399,7 +399,7 @@ impl Solid {
 /// Two faces capping a profile that is extruded along an axis.
 ///
 /// The profile is the cross section, stated in the plane perpendicular to the axis; it is also the
-/// component's clear aperture. The center thickness is not stored separately: it is where the rear
+/// component's optic shape. The center thickness is not stored separately: it is where the rear
 /// face's vertex sits, together with any tilt of that face.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Extruded {

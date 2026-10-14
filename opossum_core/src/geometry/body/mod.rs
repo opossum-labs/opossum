@@ -20,7 +20,7 @@
 //! ends.
 
 use crate::{
-    apertures::{CircleShape, ClearAperture},
+    apertures::{CircleShape, OpticShape},
     error::{OpmResult, OpossumError},
     geometry::{Rim, geo_surface::GeoSurfaceRef},
     light::Ray,
@@ -35,20 +35,20 @@ use uom::si::f64::Length;
 
 /// Name of the property holding the transversal extent of a volume node.
 ///
-/// The clear aperture is the size the material is actually available in — the figure a supplier
+/// The optic shape is the size the material is actually available in — the figure a supplier
 /// quotes next to the curvatures and the thickness. It is a property of the component rather than
 /// of one of its ports, which is what distinguishes it from the port
 /// [`Aperture`](crate::apertures::Aperture): the latter states how much light a surface transmits
-/// where and may soften or invert that transmission, while the clear aperture states where the
+/// where and may soften or invert that transmission, while the optic shape states where the
 /// medium ends. The two are independent — putting a pinhole in front of a lens does not make the
 /// lens smaller.
 ///
 /// Every volume node has one: a component of unstated size has no volume to speak of, and two
 /// curved surfaces only happen to close on their own if they are curved strongly enough. Shapes
 /// that leave the extent undefined — [`ApertureShape::Open`] among them — are therefore rejected.
-pub const CLEAR_APERTURE: &str = "clear aperture";
+pub const OPTIC_SHAPE: &str = "optic shape";
 
-/// The clear aperture a volume node starts out with if nothing is defined.
+/// The optic shape a volume node starts out with if nothing is defined.
 ///
 /// A circle of 12.5 mm radius: the 25 mm (1 inch) mount most catalogue optics come in.
 ///
@@ -60,7 +60,7 @@ pub const CLEAR_APERTURE: &str = "clear aperture";
 ///
 /// Panics if the hard-coded radius is rejected by [`CircleShape`], which cannot happen.
 #[must_use]
-pub fn default_clear_aperture() -> ClearAperture {
+pub fn default_optic_shape() -> OpticShape {
     CircleShape::new(millimeter!(12.5))
         .expect("12.5 mm is a valid aperture radius")
         .into()

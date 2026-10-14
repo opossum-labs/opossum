@@ -243,7 +243,7 @@ fn StackedAperturesList(
 mod test {
     use super::*;
 
-    /// A clear aperture is bounded only by binary members, so only those are offered for a stack.
+    /// An optic shape is bounded only by binary members, so only those are offered for a stack.
     #[test]
     fn only_binary_shapes_are_offered_as_members() {
         let offered: Vec<String> = ApertureShape::iter()

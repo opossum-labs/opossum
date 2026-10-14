@@ -81,7 +81,7 @@ inventory::submit! {
 ///   - `name`
 ///   - `inverted`
 ///   - `meter type`
-///   - `clear aperture`: the window the light is recorded within, open by default; light outside
+///   - `optic shape`: the window the light is recorded within, open by default; light outside
 ///     it passes unrecorded
 ///
 /// During analysis, the output port forwards an exact replica of the input beam (similar to
@@ -192,7 +192,7 @@ impl OpticNode for EnergyMeter {
     fn geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::detector(
             SurfaceShape::Plane,
-            self.clear_aperture()?,
+            self.cross_section()?,
         )?))
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
@@ -352,8 +352,8 @@ mod test {
     }
 
     #[test]
-    fn clear_aperture_absent_in_file() -> OpmResult<()> {
-        test_clear_aperture_absent_in_file::<EnergyMeter>()
+    fn optic_shape_absent_in_file() -> OpmResult<()> {
+        test_optic_shape_absent_in_file::<EnergyMeter>()
     }
     #[test]
     fn records_inside_and_passes_all() -> OpmResult<()> {

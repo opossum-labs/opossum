@@ -40,7 +40,7 @@ inventory::submit! {
 ///   - `center thickness`
 ///   - `material`
 ///   - `wedge`
-///   - `clear aperture`
+///   - `optic shape`
 pub struct Wedge {
     node_attr: NodeAttr,
 }
@@ -139,7 +139,7 @@ impl OpticNode for Wedge {
         Ok(Some(Geometry::wedge(
             *center_thickness,
             *wedge_angle,
-            self.cross_section()?,
+            self.medium_cross_section()?,
         )?))
     }
     fn as_volume(&self) -> Option<&dyn Volumetric> {
@@ -343,17 +343,17 @@ mod test {
         test_inverted::<Wedge>()
     }
     #[test]
-    fn rays_beyond_clear_aperture_are_lost() -> OpmResult<()> {
-        test_rays_beyond_clear_aperture_are_lost::<Wedge>()
+    fn rays_beyond_optic_shape_are_lost() -> OpmResult<()> {
+        test_rays_beyond_optic_shape_are_lost::<Wedge>()
     }
-    /// A ray entering the wedge inside its clear aperture but heading outwards leaves through the
+    /// A ray entering the wedge inside its optic shape but heading outwards leaves through the
     /// barrel instead of the exit face, and a ray trace (`Stop`) loses it.
     #[test]
     fn a_ray_leaving_through_the_barrel_is_lost_in_a_ray_trace() -> OpmResult<()> {
         let mut wedge = Wedge::default();
         wedge.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         // Tilted by 10° it enters at 12.3 mm; refracted to about 6.6° it reaches about 13.5 mm at
-        // the exit face 10 mm further on, outside the clear aperture of 12.5 mm.
+        // the exit face 10 mm further on, outside the optic shape of 12.5 mm.
         let tilt = 10.0_f64.to_radians();
         let ray = Ray::new(
             millimeter!(0.0, 12.3 - tilt.tan(), -1.0),
@@ -483,12 +483,12 @@ mod test {
         test_volume_body::<Wedge>()
     }
     #[test]
-    fn clear_aperture() -> OpmResult<()> {
-        test_clear_aperture::<Wedge>()
+    fn optic_shape() -> OpmResult<()> {
+        test_optic_shape::<Wedge>()
     }
     #[test]
-    fn clear_aperture_absent_in_file() -> OpmResult<()> {
-        test_clear_aperture_absent_in_file::<Wedge>()
+    fn optic_shape_absent_in_file() -> OpmResult<()> {
+        test_optic_shape_absent_in_file::<Wedge>()
     }
     /// The wedge tilts its rear surface around the axis, so the volume thickens on one side of it
     /// by as much as it thins on the other.

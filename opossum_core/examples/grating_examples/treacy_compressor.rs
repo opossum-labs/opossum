@@ -1,7 +1,7 @@
 use opossum_core::{
     apertures::RectangleShape,
     core_optics::{NodeAttrExt, node_attr::HasNodeAttr},
-    geometry::body::CLEAR_APERTURE,
+    geometry::body::OPTIC_SHAPE,
     prelude::*,
 };
 use uom::si::f64::Length;
@@ -23,16 +23,16 @@ pub fn treacy_compressor(alignment_wvl: Length) -> OpmResult<NodeGroup> {
 
     // Gratings 2 and 3 take the dispersed beam, up to 145 mm off their centers along the
     // dispersion: they are 300 mm wide and 30 mm high.
-    let wide_grating: ClearAperture =
+    let wide_grating: OpticShape =
         RectangleShape::new(millimeter!(300.0), millimeter!(30.0))?.into();
     let mut grating_2 = ReflectiveGrating::new("grating 2", num_per_mm!(1740.), -1)?
         .to_rot_from_littrow(alignment_wvl, degree!(-4.001))?;
-    grating_2.set_property(CLEAR_APERTURE, wide_grating.clone().into())?;
+    grating_2.set_property(OPTIC_SHAPE, wide_grating.clone().into())?;
     let i_g2 = cb.add_node(grating_2)?;
 
     let mut grating_3 = ReflectiveGrating::new("grating 3", num_per_mm!(1740.), 1)?
         .with_rot_from_littrow(alignment_wvl, degree!(4.))?;
-    grating_3.set_property(CLEAR_APERTURE, wide_grating.into())?;
+    grating_3.set_property(OPTIC_SHAPE, wide_grating.into())?;
     let i_g3 = cb.add_node(grating_3)?;
 
     let grating_4 = ReflectiveGrating::new("grating 4", num_per_mm!(1740.), 1)?

@@ -1,11 +1,11 @@
 use opossum_core::{
-    apertures::CircleShape, core_optics::NodeAttrExt, geometry::body::CLEAR_APERTURE, prelude::*,
+    apertures::CircleShape, core_optics::NodeAttrExt, geometry::body::OPTIC_SHAPE, prelude::*,
 };
 use std::path::Path;
 
 pub fn hhts_input() -> OpmResult<NodeGroup> {
     // The input optics take the full beam of 100 mm radius: they are 250 mm in diameter.
-    let input_optics: ClearAperture = CircleShape::new(millimeter!(125.0))?.into();
+    let input_optics: OpticShape = CircleShape::new(millimeter!(125.0))?.into();
     let dichroic_mirror = SplittingConfigBuilder::Spectrum(SpectralFilterBuilder::FromFile(
         Path::new("./opossum_core/examples/hhts/MM15_Transmission.csv").to_path_buf(),
     ));
@@ -18,19 +18,19 @@ pub fn hhts_input() -> OpmResult<NodeGroup> {
     let mut group = NodeGroup::new("HHTS Input");
     let d1 = group.add_node(Dummy::new("d1"))?;
     let mut node = BeamSplitter::new("MM15", &dichroic_mirror)?;
-    node.set_property(CLEAR_APERTURE, input_optics.clone().into())?;
+    node.set_property(OPTIC_SHAPE, input_optics.clone().into())?;
     let mm15 = group.add_node(node)?;
     let mut node = IdealFilter::new("window", &window_filter)?;
-    node.set_property(CLEAR_APERTURE, input_optics.clone().into())?;
+    node.set_property(OPTIC_SHAPE, input_optics.clone().into())?;
     let window = group.add_node(node)?;
     let mut node = BeamSplitter::new("HHTS_T1_CM", &dichroic_mirror)?;
-    node.set_property(CLEAR_APERTURE, input_optics.clone().into())?;
+    node.set_property(OPTIC_SHAPE, input_optics.clone().into())?;
     let hhts_t1_cm = group.add_node(node)?;
     let meter = EnergyMeter::new("Beamdump", Metertype::IdealEnergyMeter)?;
     let beam_dump = group.add_node(meter)?;
 
     let mut node = BeamSplitter::new("HHTS_T1_PM", &double_mirror)?;
-    node.set_property(CLEAR_APERTURE, input_optics.into())?;
+    node.set_property(OPTIC_SHAPE, input_optics.into())?;
     let hhts_t1_pm = group.add_node(node)?;
 
     group.connect_nodes(d1, "output_1", mm15, "input_1", millimeter!(500.0))?;

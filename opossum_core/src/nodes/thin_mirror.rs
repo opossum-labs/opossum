@@ -46,7 +46,7 @@ inventory::submit! {
 ///   - `name`
 ///   - `inverted`
 ///   - `curvature`
-///   - `clear aperture`: the extent of the mirror; a ray beyond it misses the mirror
+///   - `optic shape`: the extent of the mirror; a ray beyond it misses the mirror
 pub struct ThinMirror {
     node_attr: NodeAttr,
 }
@@ -121,7 +121,7 @@ impl OpticNode for ThinMirror {
             Isometry::identity(),
             SurfaceShape::spherical(*curvature),
             Isometry::identity(),
-            self.clear_aperture()?,
+            self.cross_section()?,
         )?))
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
@@ -221,10 +221,10 @@ mod test {
     use super::*;
     use crate::{
         analyzers::{RayTraceConfig, energy::EnergyConfig},
-        apertures::{Bore, CircleShape, ClearAperture, Outline},
+        apertures::{Bore, CircleShape, OpticShape, Outline},
         core_optics::{Alignable, PortType, node_attr::NodePositioning},
         degree,
-        geometry::body::CLEAR_APERTURE,
+        geometry::body::OPTIC_SHAPE,
         joule,
         light::{Ray, Rays, spectrum_helper::create_he_ne_spec},
         nanometer,
@@ -305,10 +305,10 @@ mod test {
         Ok(())
     }
     #[test]
-    fn a_curvature_tighter_than_the_clear_aperture_is_rejected() {
+    fn a_curvature_tighter_than_the_optic_shape_is_rejected() {
         let error = ThinMirror::default()
             .with_curvature(millimeter!(-10.0))
-            .expect_err("a sphere of 10 mm radius ends before the clear aperture of 12.5 mm");
+            .expect_err("a sphere of 10 mm radius ends before the optic shape of 12.5 mm");
         assert!(error.to_string().contains("does not reach"), "{error}");
         // A hemisphere just reaches it.
         assert!(
@@ -318,18 +318,18 @@ mod test {
         );
     }
     #[test]
-    fn clear_aperture_absent_in_file() -> OpmResult<()> {
-        test_clear_aperture_absent_in_file::<ThinMirror>()
+    fn optic_shape_absent_in_file() -> OpmResult<()> {
+        test_optic_shape_absent_in_file::<ThinMirror>()
     }
     #[test]
-    fn reflections_beyond_clear_aperture_are_lost() -> OpmResult<()> {
-        test_reflections_beyond_clear_aperture_are_lost::<ThinMirror>()
+    fn reflections_beyond_optic_shape_are_lost() -> OpmResult<()> {
+        test_reflections_beyond_optic_shape_are_lost::<ThinMirror>()
     }
     /// A round mirror of 25 mm turned by 45° about x keeps its full diameter along x, but presents
-    /// only 25 mm · cos 45° ≈ 17.7 mm along y to a beam along z: its clear aperture is measured on
+    /// only 25 mm · cos 45° ≈ 17.7 mm along y to a beam along z: its optic shape is measured on
     /// the mirror, in the frame of the node.
     #[test]
-    fn a_45_degree_mirror_measures_its_clear_aperture_in_the_node_frame() -> OpmResult<()> {
+    fn a_45_degree_mirror_measures_its_optic_shape_in_the_node_frame() -> OpmResult<()> {
         let mut mirror = ThinMirror::default().with_tilt(degree!(45.0, 0.0, 0.0))?;
         mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         for ((x, y), hits) in [
@@ -356,7 +356,7 @@ mod test {
         }
         Ok(())
     }
-    /// A mirror with a central hole of 2 mm in a 12.5 mm disk: its clear aperture is a ring. A ray
+    /// A mirror with a central hole of 2 mm in a 12.5 mm disk: its optic shape is a ring. A ray
     /// through the hole misses the mirror, one on the ring is reflected.
     #[test]
     fn a_ray_through_the_central_hole_of_a_mirror_misses_it() -> OpmResult<()> {
@@ -367,7 +367,7 @@ mod test {
         );
         let ring = Outline::new(CircleShape::new(millimeter!(12.5))?, vec![hole])?;
         let mut mirror = ThinMirror::default();
-        mirror.set_property(CLEAR_APERTURE, ClearAperture::from(ring).into())?;
+        mirror.set_property(OPTIC_SHAPE, OpticShape::from(ring).into())?;
         mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let rays = rays_along_z_from(
             &[millimeter!(0.0, 1.0, -10.0), millimeter!(0.0, 8.0, -10.0)],
@@ -394,14 +394,14 @@ mod test {
         assert_abs_diff_eq!(heights[0], 8.0, epsilon = 1e-9);
         Ok(())
     }
-    /// An energy analysis traces no rays, so the clear aperture does not cut its light, however
+    /// An energy analysis traces no rays, so the optic shape does not cut its light, however
     /// small the mirror is.
     #[test]
-    fn energy_analysis_ignores_the_clear_aperture() -> OpmResult<()> {
+    fn energy_analysis_ignores_the_optic_shape() -> OpmResult<()> {
         let mut mirror = ThinMirror::default();
         mirror.set_property(
-            CLEAR_APERTURE,
-            ClearAperture::from(CircleShape::new(millimeter!(0.1))?).into(),
+            OPTIC_SHAPE,
+            OpticShape::from(CircleShape::new(millimeter!(0.1))?).into(),
         )?;
         mirror.update_surfaces()?;
         let input_light = LightData::Energy(create_he_ne_spec(1.0)?);

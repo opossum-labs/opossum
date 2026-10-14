@@ -24,9 +24,9 @@ use crate::{
 };
 
 /// The report note of a detector whose apodization warning is set (see
-/// [`OpticNode::set_apodization_warning`]): a clear aperture limited what it measured.
+/// [`OpticNode::set_apodization_warning`]): an optic shape limited what it measured.
 pub(crate) const APERTURE_LIMIT_NOTE: &str =
-    "A clear aperture limits this measurement. Results might not be accurate.";
+    "An optic shape limits this measurement. Results might not be accurate.";
 
 /// Helper trait for dynamic downcasting of optical nodes.
 ///
@@ -150,8 +150,8 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     /// Describe the shape of this node, derived from its current properties.
     ///
     /// The node type acts as a preset: a lens, for instance, describes itself as a
-    /// [`Geometry::singlet`] whose parameters are its curvatures, center thickness and clear
-    /// aperture. The runtime surfaces rays are traced against are built from this description.
+    /// [`Geometry::singlet`] whose parameters are its curvatures, center thickness and optic
+    /// shape. The runtime surfaces rays are traced against are built from this description.
     ///
     /// # Returns
     ///

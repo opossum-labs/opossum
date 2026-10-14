@@ -3,7 +3,7 @@ use opossum_core::prelude::*;
 use opossum_core::{
     apertures::CircleShape, core_optics::hit_map::fluence_estimator::FluenceEstimator,
     distributions::fluence::general_gaussian::General2DGaussian,
-    distributions::position::Hexapolar, geometry::body::CLEAR_APERTURE, light::Rays, radian,
+    distributions::position::Hexapolar, geometry::body::OPTIC_SHAPE, light::Rays, radian,
 };
 use std::{f64::consts::PI, path::Path};
 use uom::si::radiant_exposure::joule_per_square_centimeter;
@@ -13,8 +13,8 @@ fn main() -> OpmResult<()> {
     // A 2-inch lens, large enough for the beam of 15 mm radius.
     let mut paraxial = ParaxialSurface::new("paraxial", millimeter!(500.0))?;
     paraxial.set_property(
-        CLEAR_APERTURE,
-        ClearAperture::from(CircleShape::new(millimeter!(25.4))?).into(),
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.4))?).into(),
     )?;
     let i_pl = scenery.add_node(paraxial)?;
     let mut fl_det = FluenceDetector::default();

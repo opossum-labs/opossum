@@ -8,7 +8,7 @@ use opossum_core::{
         FibonacciRectangle, Grid, HexagonalTiling, Hexapolar, PosDistType, Random, SobolDist,
     },
     distributions::spectral::{LaserLines, SpecDistType},
-    geometry::body::CLEAR_APERTURE,
+    geometry::body::OPTIC_SHAPE,
     light::lightdata::ray_data_builder::RayDataBuilder,
     prelude::*,
 };
@@ -32,8 +32,8 @@ fn main() -> OpmResult<()> {
     let beam_splitter = || -> OpmResult<BeamSplitter> {
         let mut node = BeamSplitter::default();
         node.set_property(
-            CLEAR_APERTURE,
-            ClearAperture::from(CircleShape::new(millimeter!(38.1))?).into(),
+            OPTIC_SHAPE,
+            OpticShape::from(CircleShape::new(millimeter!(38.1))?).into(),
         )?;
         Ok(node)
     };

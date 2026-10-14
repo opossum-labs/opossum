@@ -28,7 +28,7 @@ use stacked_aperture::StackedApertureInput;
 use strum::IntoEnumIterator;
 use uuid::Uuid;
 
-/// The parameter rows belonging to the given shape, for the clear aperture and for each member of
+/// The parameter rows belonging to the given shape, for the optic shape and for each member of
 /// a stack.
 ///
 /// # Arguments
@@ -66,7 +66,7 @@ fn shape_input_data(
 /// # Arguments
 ///
 /// * `chosen` - the default of the chosen kind of shape.
-/// * `current` - the shape the clear aperture has now.
+/// * `current` - the shape the optic shape has now.
 fn shape_to_switch_to(chosen: ApertureShape, current: &ApertureShape) -> ApertureShape {
     if !matches!(chosen, ApertureShape::Stack(_)) {
         return chosen;
@@ -76,14 +76,14 @@ fn shape_to_switch_to(chosen: ApertureShape, current: &ApertureShape) -> Apertur
         .map_or(chosen, ApertureShape::Stack)
 }
 
-/// The kinds of shapes the clear aperture cannot take, as its validator states them.
+/// The kinds of shapes the optic shape cannot take, as its validator states them.
 ///
 /// The core decides which kinds a property accepts ([`Validator::may_accept`]); a property without
 /// a validator accepts every kind.
 ///
 /// # Arguments
 ///
-/// * `validator` - the validator of the clear aperture property, if it has one.
+/// * `validator` - the validator of the optic shape property, if it has one.
 ///
 /// # Returns
 ///
@@ -97,10 +97,10 @@ fn excluded_shapes(validator: Option<&Validator>) -> Vec<ApertureShape> {
         .collect()
 }
 
-/// Editor for a node's `clear aperture` property: a shape selector plus that shape's parameters.
+/// Editor for a node's `optic shape` property: a shape selector plus that shape's parameters.
 ///
 /// The dropdown-plus-parameter-rows composition is the one `MaterialEditor` and
-/// `RefractiveIndexEditor` use. The clear aperture states the transversal extent of the component,
+/// `RefractiveIndexEditor` use. The optic shape states the transversal extent of the component,
 /// so only the kinds of shapes its validator accepts are offered (see [`excluded_shapes`]): those
 /// that can bound a region - a stack, for a ring or a mirror with a central hole, is one of them -
 /// and, for a detector's window, an ideal surface or a dummy, also an open one. It has no aperture
@@ -109,13 +109,13 @@ fn excluded_shapes(validator: Option<&Validator>) -> Vec<ApertureShape> {
 /// # Arguments
 ///
 /// * `node_id` - id of the node whose property is edited.
-/// * `aperture` - the clear aperture shape to show.
+/// * `aperture` - the optic shape shape to show.
 /// * `validator` - the validator of the property, which decides the shapes offered.
 /// * `property_key` - name of the edited property, needed for the change event.
 /// * `on_change` - handler that carries a property change towards the backend.
 /// * `readonly` - whether the inputs are shown read-only.
 #[component]
-pub fn ClearApertureEditor(
+pub fn OpticShapeEditor(
     node_id: ReadSignal<Uuid>,
     aperture: ApertureShape,
     validator: Option<Validator>,
@@ -154,8 +154,8 @@ pub fn ClearApertureEditor(
     let excluded = excluded.iter().collect::<Vec<_>>();
     rsx! {
         LabeledSelect {
-            id: format!("clearApertureProperty{property_key}").to_lower_camel_case(),
-            label: "Clear aperture",
+            id: format!("opticShapeProperty{property_key}").to_lower_camel_case(),
+            label: "Optic shape",
             options: select_options_from_enum_iterator(&*aperture_sig.read(), Some(&excluded)),
             readonly,
             onchange: move |e: Event<FormData>| {

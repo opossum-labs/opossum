@@ -27,7 +27,7 @@ inventory::submit! {
 /// development and debugging purposes. In addition, it can be used as an "optical terminal" of a
 /// [`NodeGroup`](crate::nodes::NodeGroup) such as the "input hole" of a camera box which does not really
 /// represent an optically active component. However, this way a group can be positioned in a scenery.
-/// A [`Dummy`] is unbounded by default; given a clear aperture it acts as an iris, which a ray outside
+/// A [`Dummy`] is unbounded by default; given an optic shape it acts as an iris, which a ray outside
 /// misses.
 ///
 /// Geometrically, a [`Dummy`] node consists of a single flat surface.
@@ -41,7 +41,7 @@ inventory::submit! {
 /// ## Properties
 ///   - `name`
 ///   - `inverted`
-///   - `clear aperture`: the extent of the surface, open by default; a ray beyond it misses the
+///   - `optic shape`: the extent of the surface, open by default; a ray beyond it misses the
 ///     dummy and follows the analyzer's missed surface strategy
 pub struct Dummy {
     node_attr: NodeAttr,
@@ -85,7 +85,7 @@ impl AnalysisRayTrace for Dummy {
 
 impl OpticNode for Dummy {
     fn geometry(&self) -> OpmResult<Option<Geometry>> {
-        Ok(Some(Geometry::plane(self.clear_aperture()?)))
+        Ok(Some(Geometry::plane(self.cross_section()?)))
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.install_geometry(&["input_1"], &["output_1"])
@@ -98,7 +98,7 @@ mod test {
     use crate::{
         analyzers::energy::EnergyConfig,
         core_optics::{NodeAttrExt, PortType, node_attr::NodePositioning},
-        geometry::body::{CLEAR_APERTURE, default_clear_aperture},
+        geometry::body::{OPTIC_SHAPE, default_optic_shape},
         joule,
         light::{LightData, Ray, Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer,
@@ -230,12 +230,12 @@ mod test {
         Ok(())
     }
 
-    /// Bounded by a clear aperture, a dummy is an iris: a ray outside it misses the dummy.
+    /// Bounded by an optic shape, a dummy is an iris: a ray outside it misses the dummy.
     #[test]
     fn a_bounded_dummy_is_an_iris() -> OpmResult<()> {
-        test_rays_beyond_clear_aperture_are_lost_for(|| {
+        test_rays_beyond_optic_shape_are_lost_for(|| {
             let mut dummy = placed_at_origin::<Dummy>()?;
-            dummy.set_property(CLEAR_APERTURE, default_clear_aperture().into())?;
+            dummy.set_property(OPTIC_SHAPE, default_optic_shape().into())?;
             dummy.update_surfaces()?;
             Ok(dummy)
         })

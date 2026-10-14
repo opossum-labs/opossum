@@ -1,10 +1,10 @@
 #![warn(missing_docs)]
-//! The value of a component's clear aperture: an outline on its axis with bores through it.
+//! The value of a component's optic shape: an outline on its axis with bores through it.
 //!
 //! A component has an edge and, possibly, bores through it, such as a mirror with a hole for the
-//! beam to pass. That is all the clear aperture states: unlike a general [`Aperture`], it has no
+//! beam to pass. That is all the optic shape states: unlike a general [`Aperture`], it has no
 //! soft edges, no obstructions and no stack of arbitrary shapes. The geometry works with it as the
-//! [`Aperture`] it amounts to (see [`ClearAperture::cross_section`]).
+//! [`Aperture`] it amounts to (see [`OpticShape::cross_section`]).
 
 use super::{Aperture, ApertureShape, ApertureType, CircleShape, PolygonShape, RectangleShape};
 use crate::{
@@ -381,21 +381,21 @@ fn distance_to_segment(point: Point2<f64>, from: Point2<f64>, to: Point2<f64>) -
     (from + run * along - point).norm()
 }
 
-/// The value of a node's clear aperture: how far the component reaches transversally.
+/// The value of a node's optic shape: how far the component reaches transversally.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum ClearAperture {
+pub enum OpticShape {
     /// Unbounded, which only an idealization, a detector or a dummy may be.
     Open,
     /// Bounded by an edge on the axis, with bores through it.
     Bounded(Outline),
 }
 
-impl ClearAperture {
-    /// Return the region of this clear aperture as the cross section the geometry works with.
+impl OpticShape {
+    /// Return the region of this optic shape as the cross section the geometry works with.
     ///
     /// # Returns
     ///
-    /// The cross section, or `None` if the clear aperture is open.
+    /// The cross section, or `None` if the optic shape is open.
     ///
     /// # Errors
     ///
@@ -406,7 +406,7 @@ impl ClearAperture {
             Self::Bounded(outline) => ValidatedCrossSection::try_new(outline.aperture()?).map(Some),
         }
     }
-    /// Read a clear aperture the way older files stated it, as an [`ApertureShape`].
+    /// Read the clear aperture an older file stated as an [`ApertureShape`] as an optic shape.
     ///
     /// A shape with an edge becomes the edge of the component. A stack becomes an edge with bores
     /// if it holds exactly one hole, unshifted and unturned, and obstructions with an edge.
@@ -463,7 +463,7 @@ impl Display for OutlineShape {
         }
     }
 }
-impl Display for ClearAperture {
+impl Display for OpticShape {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Open => write!(f, "Open"),
@@ -476,29 +476,29 @@ impl Display for ClearAperture {
     }
 }
 
-impl From<Outline> for ClearAperture {
+impl From<Outline> for OpticShape {
     fn from(outline: Outline) -> Self {
         Self::Bounded(outline)
     }
 }
-impl From<CircleShape> for ClearAperture {
+impl From<CircleShape> for OpticShape {
     fn from(shape: CircleShape) -> Self {
         Self::Bounded(OutlineShape::from(shape).into())
     }
 }
-impl From<RectangleShape> for ClearAperture {
+impl From<RectangleShape> for OpticShape {
     fn from(shape: RectangleShape) -> Self {
         Self::Bounded(OutlineShape::from(shape).into())
     }
 }
-impl From<PolygonShape> for ClearAperture {
+impl From<PolygonShape> for OpticShape {
     fn from(shape: PolygonShape) -> Self {
         Self::Bounded(OutlineShape::from(shape).into())
     }
 }
-impl From<ClearAperture> for Proptype {
-    fn from(clear_aperture: ClearAperture) -> Self {
-        Self::ClearAperture(clear_aperture)
+impl From<OpticShape> for Proptype {
+    fn from(optic_shape: OpticShape) -> Self {
+        Self::OpticShape(optic_shape)
     }
 }
 
@@ -522,11 +522,11 @@ mod test {
     fn bore(shape: impl Into<OutlineShape>, x: f64, y: f64, rotation: f64) -> Bore {
         Bore::new(shape, millimeter!(x, y), degree!(rotation))
     }
-    /// The cross section of a bounded clear aperture.
-    fn region(clear_aperture: &ClearAperture) -> OpmResult<Aperture> {
-        let cross_section = clear_aperture
+    /// The cross section of a bounded optic shape.
+    fn region(optic_shape: &OpticShape) -> OpmResult<Aperture> {
+        let cross_section = optic_shape
             .cross_section()?
-            .ok_or_else(|| OpossumError::Other("the clear aperture is open".into()))?;
+            .ok_or_else(|| OpossumError::Other("the optic shape is open".into()))?;
         Ok(cross_section.get().clone())
     }
     /// Whether the region transmits at (x, y) mm.
@@ -550,7 +550,7 @@ mod test {
     /// stated it as, on an area of π (R² - r²).
     #[test]
     fn a_ring_is_the_region_of_the_stack_it_replaces() -> OpmResult<()> {
-        let ring = ClearAperture::from(Outline::new(
+        let ring = OpticShape::from(Outline::new(
             circle(12.5)?,
             vec![bore(circle(2.0)?, 0.0, 0.0, 0.0)],
         )?);
@@ -584,7 +584,7 @@ mod test {
     /// on the plate but not in the bores, so it transmits on 400 mm² less the bores.
     #[test]
     fn a_plate_transmits_beside_its_shifted_and_turned_bores() -> OpmResult<()> {
-        let plate = region(&ClearAperture::from(Outline::new(
+        let plate = region(&OpticShape::from(Outline::new(
             rectangle(20.0, 20.0)?,
             vec![
                 bore(circle(2.0)?, 4.0, 4.0, 0.0),
@@ -706,7 +706,7 @@ mod test {
         assert!(ron::from_str::<Outline>(&overlapping).is_err());
         Ok(())
     }
-    /// A clear aperture as an older file stated it, as an aperture shape: a shape with an edge is
+    /// An optic shape as an older file stated it, as an aperture shape: a shape with an edge is
     /// the edge, a stack of one centred hole and obstructions an edge with bores shifted and turned
     /// as the obstructions were. A hole shifted off the axis, or a second hole, has no such form.
     #[test]
@@ -730,8 +730,8 @@ mod test {
         let stack = |members| -> OpmResult<ApertureShape> {
             Ok(ApertureShape::Stack(StackShape::new(members)?))
         };
-        let ClearAperture::Bounded(outline) =
-            ClearAperture::from_aperture_shape(&stack(vec![plate()?, slot.clone()])?)?
+        let OpticShape::Bounded(outline) =
+            OpticShape::from_aperture_shape(&stack(vec![plate()?, slot.clone()])?)?
         else {
             panic!("a plate with a slot is bounded");
         };
@@ -748,12 +748,12 @@ mod test {
             max_relative = 1e-12
         );
         assert_eq!(
-            ClearAperture::from_aperture_shape(&ApertureShape::BinaryCircle(circle(5.0)?))?,
+            OpticShape::from_aperture_shape(&ApertureShape::BinaryCircle(circle(5.0)?))?,
             circle(5.0)?.into()
         );
         assert_eq!(
-            ClearAperture::from_aperture_shape(&ApertureShape::Open)?,
-            ClearAperture::Open
+            OpticShape::from_aperture_shape(&ApertureShape::Open)?,
+            OpticShape::Open
         );
         let shifted = Aperture::new_circle(
             millimeter!(5.0),
@@ -762,7 +762,7 @@ mod test {
         )?;
         for members in [vec![shifted, slot.clone()], vec![plate()?, plate()?, slot]] {
             assert!(
-                ClearAperture::from_aperture_shape(&stack(members.clone())?).is_err(),
+                OpticShape::from_aperture_shape(&stack(members.clone())?).is_err(),
                 "{members:?}"
             );
         }
@@ -770,12 +770,12 @@ mod test {
     }
     #[test]
     fn display() -> OpmResult<()> {
-        let plate = |bores| -> OpmResult<ClearAperture> {
+        let plate = |bores| -> OpmResult<OpticShape> {
             Ok(Outline::new(rectangle(20.0, 20.0)?, bores)?.into())
         };
         let hole_at = |x| -> OpmResult<Bore> { Ok(bore(circle(1.0)?, x, 0.0, 0.0)) };
-        assert_eq!(ClearAperture::Open.to_string(), "Open");
-        assert_eq!(ClearAperture::from(circle(5.0)?).to_string(), "Circle");
+        assert_eq!(OpticShape::Open.to_string(), "Open");
+        assert_eq!(OpticShape::from(circle(5.0)?).to_string(), "Circle");
         assert_eq!(
             plate(vec![hole_at(4.0)?])?.to_string(),
             "Rectangle with 1 bore"

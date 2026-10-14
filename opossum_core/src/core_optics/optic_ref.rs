@@ -10,9 +10,8 @@ use uuid::Uuid;
 use crate::{
     analyzers::Analyzable,
     core_optics::{NodeAttr, NodeAttrExt, node_attr::HasNodeAttr, optic_ports::FilePorts},
-    geometry::body::CLEAR_APERTURE,
     nodes::{NodeGroup, OpticGraph, create_node_ref},
-    opm_document::{upgrade_clear_aperture, upgrade_node},
+    opm_document::{CLEAR_APERTURE, upgrade_node, upgrade_optic_shape},
 };
 
 /// Structure for storing an optical node.
@@ -141,7 +140,7 @@ impl<'de> Deserialize<'de> for OpticRef {
         let mut node_ref =
             create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
 
-        // The merge drops a clear aperture of the type older files wrote; it is upgraded below.
+        // The merge drops the clear aperture older files stated; it becomes the optic shape below.
         let read_clear_aperture = intermediate
             .attributes
             .properties()
@@ -158,7 +157,7 @@ impl<'de> Deserialize<'de> for OpticRef {
         node_ref
             .set_node_attr(intermediate.attributes)
             .map_err(|e| de::Error::custom(e.to_string()))?;
-        upgrade_clear_aperture(&mut *node_ref, read_clear_aperture.as_ref());
+        upgrade_optic_shape(&mut *node_ref, read_clear_aperture.as_ref());
 
         // If the node is a group node, set its graph.
         if let Some(group_node) = node_ref.as_any_mut().downcast_mut::<NodeGroup>() {

@@ -15,7 +15,7 @@ fn main() -> OpmResult<()> {
     let fd1 = scenery.add_node(FluenceDetector::new("before lens"))?;
 
     // Curved to 10 mm and 9 mm, the lens reaches no further than 9 mm from its axis.
-    let mut lens1 = Lens::new_with_clear_aperture(
+    let mut lens1 = Lens::new_with_optic_shape(
         "Lens",
         millimeter!(10.0),
         millimeter!(9.0),

@@ -9,7 +9,7 @@
 //! 1. One two-dimensional image source
 //! 2. A fluence detector at the object plane
 //! 3. Refractive index data for HZF52 glass
-//! 4. One 75 mm spherical lens with a clear aperture of 25 mm radius
+//! 4. One 75 mm spherical lens with an optic shape of 25 mm radius
 //! 5. One 50 mm spherical lens of the same size
 //! 6. A fluence detector before the image plane
 //! 7. A fluence detector at the image plane
@@ -21,7 +21,7 @@
 //! This example demonstrates:
 //! - How to build a Keplerian optical system using two spherical lenses
 //! - How to define wavelength-dependent refractive index data for HZF52 glass
-//! - How to give the lenses their size with a clear aperture
+//! - How to give the lenses their size with an optic shape
 //! - How to connect optical components with physical propagation distances
 //! - How to configure fluence detectors using the `Binning` estimator
 //! - How to define a two-dimensional image as a ray source
@@ -36,7 +36,7 @@
 //!   hit_map::fluence_estimator::FluenceEstimator}` provides the optical node
 //!   extension and the fluence estimator used by the detectors
 //! - `opossum_core::apertures::CircleShape` provides the shape of a lens's
-//!   clear aperture
+//!   optic shape
 //! - `std::path::Path` is used to specify the input image and output
 //!   document paths
 
@@ -70,8 +70,8 @@ fn main() -> OpmResult<()> {
         nanometer!(300.0)..nanometer!(2000.0),
     )?;
     // 4. Define the first lens: 75 mm focal length and 10 mm thickness.
-    // Its clear aperture is a circle of 25 mm radius.
-    let lens1 = Lens::new_with_clear_aperture(
+    // Its optic shape is a circle of 25 mm radius.
+    let lens1 = Lens::new_with_optic_shape(
         "75 mm lens",
         millimeter!(130.0),
         millimeter!(-130.0),
@@ -82,7 +82,7 @@ fn main() -> OpmResult<()> {
     let i_pl1 = scenery.add_node(lens1)?;
     // 5. Define the second lens: 50 mm focal length, 10 mm thickness and the same size as the
     // first.
-    let lens2 = Lens::new_with_clear_aperture(
+    let lens2 = Lens::new_with_optic_shape(
         "50 mm lens",
         millimeter!(100.0),
         millimeter!(-100.0),

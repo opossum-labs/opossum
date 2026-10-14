@@ -7,7 +7,7 @@ pub mod helper {
             ghostfocus::AnalysisGhostFocus,
             raytrace::AnalysisRayTrace,
         },
-        apertures::{CircleShape, ClearAperture},
+        apertures::{CircleShape, OpticShape},
         coatings::{CoatingConstantR, CoatingType},
         core_optics::{
             NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, OpticPorts, OpticRef, PortType,
@@ -15,7 +15,7 @@ pub mod helper {
         },
         error::{OpmResult, OpossumError},
         geometry::{
-            body::{Body, CLEAR_APERTURE, default_clear_aperture},
+            body::{Body, OPTIC_SHAPE, default_optic_shape},
             geo_surface::GeoSurfaceRef,
         },
         joule,
@@ -112,42 +112,40 @@ pub mod helper {
         assert!(AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).is_err());
         Ok(())
     }
-    /// Assert that a ray inside a component's clear aperture passes it and one just outside does
+    /// Assert that a ray inside a component's optic shape passes it and one just outside does
     /// not: a ray trace loses it and warns about the loss, a ghost focus analysis lets it run past
     /// unchanged.
     ///
     /// Both rays travel along z, 12.4 mm and 12.6 mm off the axis, just inside and just outside the
-    /// default clear aperture of 12.5 mm. Whether a missed ray is lost or runs past is the analyzer's
+    /// default optic shape of 12.5 mm. Whether a missed ray is lost or runs past is the analyzer's
     /// missed surface strategy (`Stop` for a ray trace, `Ignore` for a ghost focus analysis).
     ///
     /// # Errors
     ///
     /// Returns an error if the node cannot be placed or analyzed.
-    pub fn test_rays_beyond_clear_aperture_are_lost<
+    pub fn test_rays_beyond_optic_shape_are_lost<
         T: Default + AnalysisRayTrace + AnalysisGhostFocus,
     >() -> OpmResult<()> {
-        test_rays_beyond_clear_aperture_are_lost_for(placed_at_origin::<T>)
+        test_rays_beyond_optic_shape_are_lost_for(placed_at_origin::<T>)
     }
-    /// The same check as [`test_rays_beyond_clear_aperture_are_lost`], for a node built by `make`
-    /// rather than a default one: e.g. a node that only has a clear aperture once it is set.
+    /// The same check as [`test_rays_beyond_optic_shape_are_lost`], for a node built by `make`
+    /// rather than a default one: e.g. a node that only has an optic shape once it is set.
     ///
     /// # Arguments
     ///
-    /// * `make` - builds the node at the origin, bounded by the default clear aperture.
+    /// * `make` - builds the node at the origin, bounded by the default optic shape.
     ///
     /// # Errors
     ///
     /// Returns an error if the node cannot be built or analyzed.
-    pub fn test_rays_beyond_clear_aperture_are_lost_for<
-        T: AnalysisRayTrace + AnalysisGhostFocus,
-    >(
+    pub fn test_rays_beyond_optic_shape_are_lost_for<T: AnalysisRayTrace + AnalysisGhostFocus>(
         make: impl Fn() -> OpmResult<T>,
     ) -> OpmResult<()> {
         let (inside, outside) = around_the_default_rim();
         let rays = || rays_along_z_from(&[inside, outside], nanometer!(1000.0));
         let mut node = make()?;
         let warning = format!(
-            "Rays were lost at '{}' ({}): they ran outside its clear aperture or fell below the energy threshold. Results might not be accurate.",
+            "Rays were lost at '{}' ({}): they ran outside its optic shape or fell below the energy threshold. Results might not be accurate.",
             node.node_attr().name(),
             node.node_attr().node_type()
         );
@@ -185,7 +183,7 @@ pub mod helper {
             .and_then(|bundles| bundles.first())
             .and_then(|bundle| bundle.iter().nth(1))
         else {
-            panic!("expected the ray outside the clear aperture at the output port");
+            panic!("expected the ray outside the optic shape at the output port");
         };
         assert!(
             beside.valid(),
@@ -196,10 +194,10 @@ pub mod helper {
         assert_eq!(beside.energy(), joule!(1.0));
         Ok(())
     }
-    /// Assert that a reflecting component reflects a ray inside its clear aperture and loses one
+    /// Assert that a reflecting component reflects a ray inside its optic shape and loses one
     /// just outside, in a ray trace and in a ghost focus analysis alike.
     ///
-    /// Both rays travel along z, 12.4 mm and 12.6 mm off the axis, around the default clear aperture
+    /// Both rays travel along z, 12.4 mm and 12.6 mm off the axis, around the default optic shape
     /// of 12.5 mm. A ray that misses a mirror or a grating has no reflected counterpart, whatever the
     /// analyzer's missed surface strategy. At 500 nm the default grating diffracts a ray at normal
     /// incidence.
@@ -211,7 +209,7 @@ pub mod helper {
     /// # Panics
     ///
     /// Panics if an analysis puts out no rays or another set of them.
-    pub fn test_reflections_beyond_clear_aperture_are_lost<
+    pub fn test_reflections_beyond_optic_shape_are_lost<
         T: Default + AnalysisRayTrace + AnalysisGhostFocus,
     >() -> OpmResult<()> {
         let (inside, outside) = around_the_default_rim();
@@ -249,7 +247,7 @@ pub mod helper {
         }
         Ok(())
     }
-    /// Assert that a detector records only the light within its clear aperture but lets every ray
+    /// Assert that a detector records only the light within its optic shape but lets every ray
     /// pass, in a ray trace and in a ghost focus analysis alike.
     ///
     /// Two rays travel along z, 5 mm and 20 mm off the axis. A detector starts unbounded and
@@ -292,7 +290,7 @@ pub mod helper {
         for bounded in [false, true] {
             let mut detector = placed_at_origin::<T>()?;
             if bounded {
-                detector.set_property(CLEAR_APERTURE, default_clear_aperture().into())?;
+                detector.set_property(OPTIC_SHAPE, default_optic_shape().into())?;
                 detector.update_surfaces()?;
             }
             let expected: &[f64] = if bounded { &[5.0] } else { &[5.0, 20.0] };
@@ -353,12 +351,12 @@ pub mod helper {
         }
         // A window may be opened again.
         let mut detector = T::default();
-        detector.set_property(CLEAR_APERTURE, default_clear_aperture().into())?;
-        detector.set_property(CLEAR_APERTURE, ClearAperture::Open.into())?;
+        detector.set_property(OPTIC_SHAPE, default_optic_shape().into())?;
+        detector.set_property(OPTIC_SHAPE, OpticShape::Open.into())?;
         Ok(())
     }
     /// Build a source, an absolutely placed flat mirror 100 mm in front of it and an energy meter
-    /// 50 mm back on the reflected beam. The mirror's clear aperture is then shrunk to a radius of
+    /// 50 mm back on the reflected beam. The mirror's optic shape is then shrunk to a radius of
     /// 5 mm the way the backend changes a property (see
     /// [`scenery_with_a_mirror_changed_behind_its_back`]).
     ///
@@ -370,8 +368,8 @@ pub mod helper {
     ///
     /// Returns an error if the scenery cannot be built.
     pub fn scenery_with_a_mirror_shrunk_behind_its_back() -> OpmResult<(NodeGroup, Uuid, Uuid)> {
-        let shrunk: ClearAperture = CircleShape::new(millimeter!(5.0))?.into();
-        scenery_with_a_mirror_changed_behind_its_back(CLEAR_APERTURE, shrunk.into())
+        let shrunk: OpticShape = CircleShape::new(millimeter!(5.0))?.into();
+        scenery_with_a_mirror_changed_behind_its_back(OPTIC_SHAPE, shrunk.into())
     }
     /// Build a source, an absolutely placed flat mirror 100 mm in front of it and an energy meter
     /// 50 mm back on the reflected beam. A property of the mirror is then changed the way the
@@ -430,7 +428,7 @@ pub mod helper {
         }
     }
     /// Return the start points of two rays, 12.4 mm and 12.6 mm off the axis: just inside and
-    /// just outside the default clear aperture of 12.5 mm, 10 mm in front of a node at the origin.
+    /// just outside the default optic shape of 12.5 mm, 10 mm in front of a node at the origin.
     fn around_the_default_rim() -> (Point3<Length>, Point3<Length>) {
         (millimeter!(0.0, 12.4, -10.0), millimeter!(0.0, 12.6, -10.0))
     }
@@ -526,7 +524,7 @@ pub mod helper {
         format!("{}{}", &serialized[..entry_start], &serialized[entry_end..])
     }
 
-    /// Assert that a file written before the `clear aperture` property existed still loads.
+    /// Assert that a file written before the `optic shape` property existed still loads.
     ///
     /// Such a file simply has no entry for the property. Because `set_node_attr` merges the
     /// properties of the file into those of a freshly constructed default node, the default has to
@@ -538,19 +536,16 @@ pub mod helper {
     ///
     /// # Panics
     ///
-    /// Panics if the loaded node does not fall back to the clear aperture a default node of its
+    /// Panics if the loaded node does not fall back to the optic shape a default node of its
     /// type has.
-    pub fn test_clear_aperture_absent_in_file<T: Default + Analyzable + 'static>() -> OpmResult<()>
-    {
+    pub fn test_optic_shape_absent_in_file<T: Default + Analyzable + 'static>() -> OpmResult<()> {
         let shape_of = |node_attr: &NodeAttr| {
-            let Ok(Proptype::ClearAperture(clear_aperture)) =
-                node_attr.get_property(CLEAR_APERTURE)
-            else {
-                panic!("the node has no '{CLEAR_APERTURE}' property holding a clear aperture");
+            let Ok(Proptype::OpticShape(optic_shape)) = node_attr.get_property(OPTIC_SHAPE) else {
+                panic!("the node has no '{OPTIC_SHAPE}' property holding an optic shape");
             };
-            clear_aperture.clone()
+            optic_shape.clone()
         };
-        let deserialized = load_without_property::<T>(CLEAR_APERTURE)?;
+        let deserialized = load_without_property::<T>(OPTIC_SHAPE)?;
         assert_eq!(
             shape_of(deserialized.node_attr()),
             shape_of(T::default().node_attr()),
@@ -669,9 +664,9 @@ pub mod helper {
             })
     }
 
-    /// Assert that the transversal extent of a volume node is its clear aperture, and nothing else.
+    /// Assert that the transversal extent of a volume node is its optic shape, and nothing else.
     ///
-    /// The clear aperture is what a supplier quotes as the size of the component, and a volume node
+    /// The optic shape is what a supplier quotes as the size of the component, and a volume node
     /// starts out with the 25 mm standard.
     ///
     /// # Errors
@@ -681,8 +676,8 @@ pub mod helper {
     /// # Panics
     ///
     /// Panics if the node has no `center thickness` property or if its extent does not follow the
-    /// clear aperture.
-    pub fn test_clear_aperture<T: Default + Volumetric>() -> OpmResult<()> {
+    /// optic shape.
+    pub fn test_optic_shape<T: Default + Volumetric>() -> OpmResult<()> {
         let mut node = T::default();
         node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let mid_thickness = center_thickness_of(&node) * 0.5;
@@ -691,19 +686,19 @@ pub mod helper {
         let body = node.volume_body()?;
         assert!(body.contains(&point_at(millimeter!(12.4)))?);
         assert!(!body.contains(&point_at(millimeter!(12.6)))?);
-        // a wider clear aperture widens it
+        // a wider optic shape widens it
         node.node_attr_mut().set_property(
-            CLEAR_APERTURE,
-            ClearAperture::from(CircleShape::new(millimeter!(25.0))?).into(),
+            OPTIC_SHAPE,
+            OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
         )?;
         let body = node.volume_body()?;
         assert!(body.contains(&point_at(millimeter!(24.9)))?);
         assert!(!body.contains(&point_at(millimeter!(25.1)))?);
-        // An open clear aperture leaves the volume undefined and is rejected where it is set: two
+        // An open optic shape leaves the volume undefined and is rejected where it is set: two
         // curved surfaces may happen to close the volume on their own, but nothing guarantees it.
         assert!(
             node.node_attr_mut()
-                .set_property(CLEAR_APERTURE, ClearAperture::Open.into())
+                .set_property(OPTIC_SHAPE, OpticShape::Open.into())
                 .is_err()
         );
         Ok(())

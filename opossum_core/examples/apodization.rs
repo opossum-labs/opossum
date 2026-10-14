@@ -1,5 +1,5 @@
 use opossum_core::{
-    apertures::RectangleShape, core_optics::NodeAttrExt, geometry::body::CLEAR_APERTURE,
+    apertures::RectangleShape, core_optics::NodeAttrExt, geometry::body::OPTIC_SHAPE,
     nodes::round_collimated_ray_builder, prelude::*,
 };
 use std::path::Path;
@@ -12,7 +12,7 @@ fn main() -> OpmResult<()> {
     // the square with it.
     let mut dummy = Dummy::default().with_tilt(degree!(0.0, 0.0, 10.0))?;
     let square = RectangleShape::new(millimeter!(15.), millimeter!(15.))?;
-    dummy.set_property(CLEAR_APERTURE, ClearAperture::from(square).into())?;
+    dummy.set_property(OPTIC_SHAPE, OpticShape::from(square).into())?;
 
     let i_d = scenery.add_node(dummy)?;
     let sd = SpotDiagram::default();

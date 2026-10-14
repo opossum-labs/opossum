@@ -71,16 +71,16 @@ pub use wedge::Wedge;
 
 use crate::{
     analyzers::Analyzable,
-    apertures::ClearAperture,
+    apertures::OpticShape,
     core_optics::{NodeAttr, OpticRef},
     error::{OpmResult, OpossumError},
-    geometry::body::{CLEAR_APERTURE, default_clear_aperture},
+    geometry::body::{OPTIC_SHAPE, default_optic_shape},
     properties::validator::Validator,
 };
 use std::{collections::HashSet, sync::LazyLock};
 
 /// Declare the property every node with a physical volume carries: how far its medium extends
-/// transversally ([`CLEAR_APERTURE`]).
+/// transversally ([`OPTIC_SHAPE`]).
 ///
 /// Declaring it from one place keeps the node types that call this in sync with each other, and
 /// together with [`create_surface_properties`], [`create_ideal_surface_properties`],
@@ -98,15 +98,15 @@ use std::{collections::HashSet, sync::LazyLock};
 /// This function returns an error if the property is already declared.
 pub fn create_volume_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
     node_attr.create_property_with_validator(
-        CLEAR_APERTURE,
+        OPTIC_SHAPE,
         "transversal extent of the medium",
-        Validator::ClearApertureIsBounded,
-        default_clear_aperture().into(),
+        Validator::OpticShapeIsBounded,
+        default_optic_shape().into(),
     )
 }
 
 /// Declare the property every node that is one optical surface carries: how far that surface
-/// extends transversally ([`CLEAR_APERTURE`]).
+/// extends transversally ([`OPTIC_SHAPE`]).
 ///
 /// The sibling of [`create_volume_properties`] for nodes whose geometry is a single surface - a
 /// mirror or a grating has no second surface to bound a medium between, but its one surface still
@@ -122,18 +122,18 @@ pub fn create_volume_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
 /// This function returns an error if the property is already declared.
 pub fn create_surface_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
     node_attr.create_property_with_validator(
-        CLEAR_APERTURE,
+        OPTIC_SHAPE,
         "transversal extent of the surface",
-        Validator::ClearApertureIsBounded,
-        default_clear_aperture().into(),
+        Validator::OpticShapeIsBounded,
+        default_optic_shape().into(),
     )
 }
 
 /// Declare the property of a surface that is an idealization, such as a paraxial lens: how far it
-/// extends transversally ([`CLEAR_APERTURE`]).
+/// extends transversally ([`OPTIC_SHAPE`]).
 ///
 /// The sibling of [`create_surface_properties`], with the same default size. Unlike a real
-/// component, an idealized surface may also be unbounded ([`ClearAperture::Open`]).
+/// component, an idealized surface may also be unbounded ([`OpticShape::Open`]).
 ///
 /// # Arguments
 ///
@@ -144,17 +144,17 @@ pub fn create_surface_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
 /// This function returns an error if the property is already declared.
 pub fn create_ideal_surface_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
     node_attr.create_property(
-        CLEAR_APERTURE,
+        OPTIC_SHAPE,
         "transversal extent of the surface, open for an unbounded ideal surface",
-        default_clear_aperture().into(),
+        default_optic_shape().into(),
     )
 }
 
 /// Declare the property every detector carries: the window it records the light within
-/// ([`CLEAR_APERTURE`]).
+/// ([`OPTIC_SHAPE`]).
 ///
 /// The sibling of [`create_surface_properties`] for detectors. A detector lets all light pass and
-/// only records it, so it starts unbounded ([`ClearAperture::Open`]): a measurement changes only if
+/// only records it, so it starts unbounded ([`OpticShape::Open`]): a measurement changes only if
 /// its window is set.
 ///
 /// # Arguments
@@ -166,17 +166,17 @@ pub fn create_ideal_surface_properties(node_attr: &mut NodeAttr) -> OpmResult<()
 /// This function returns an error if the property is already declared.
 pub fn create_detector_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
     node_attr.create_property(
-        CLEAR_APERTURE,
+        OPTIC_SHAPE,
         "window the light is recorded within",
-        ClearAperture::Open.into(),
+        OpticShape::Open.into(),
     )
 }
 
 /// Declare the property of a [`Dummy`]: how far its surface extends transversally
-/// ([`CLEAR_APERTURE`]).
+/// ([`OPTIC_SHAPE`]).
 ///
 /// The sibling of [`create_detector_properties`]. A dummy has no optical function, so it starts
-/// unbounded ([`ClearAperture::Open`]) and changes nothing unless its clear aperture is set.
+/// unbounded ([`OpticShape::Open`]) and changes nothing unless its optic shape is set.
 /// Bounded, it is an iris: a ray outside misses it and follows the analyzer's missed surface
 /// strategy.
 ///
@@ -189,9 +189,9 @@ pub fn create_detector_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
 /// This function returns an error if the property is already declared.
 pub fn create_dummy_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
     node_attr.create_property(
-        CLEAR_APERTURE,
+        OPTIC_SHAPE,
         "transversal extent of the surface, open for an unbounded one",
-        ClearAperture::Open.into(),
+        OpticShape::Open.into(),
     )
 }
 

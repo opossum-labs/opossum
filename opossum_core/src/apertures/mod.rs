@@ -24,8 +24,8 @@
 //! assert_eq!(ap.apodize(&millimeter!(0.0, 0.0, 0.0)), 1.0);
 //! ```
 mod circle;
-mod clear_aperture;
 mod gaussian;
+mod optic_shape;
 mod polygon;
 mod rectangle;
 mod stack;
@@ -57,8 +57,8 @@ use uom::si::{
 };
 
 pub use circle::CircleShape;
-pub use clear_aperture::{Bore, ClearAperture, Outline, OutlineShape};
 pub use gaussian::GaussianShape;
+pub use optic_shape::{Bore, OpticShape, Outline, OutlineShape};
 pub use polygon::PolygonShape;
 pub use rectangle::RectangleShape;
 pub use stack::StackShape;

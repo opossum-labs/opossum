@@ -754,7 +754,7 @@ mod test {
     #[test]
     fn a_field_over_the_volume_of_a_lens() -> OpmResult<()> {
         // The whole point of the exercise: the domain comes from a real component, through the
-        // body its own surfaces and clear aperture enclose.
+        // body its own surfaces and optic shape enclose.
         let mut lens = Lens::default();
         lens.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let body = lens.volume_body()?;
@@ -762,7 +762,7 @@ mod test {
         assert_eq!(field.dimensions(), (9, 9, 5));
         // the axis of the lens runs through the middle column of cells, which is all medium
         assert!((0..5).all(|k| field.is_inside((4, 4, k))));
-        // ... while the corners of the box are outside the round clear aperture
+        // ... while the corners of the box are outside the round optic shape
         assert!(!field.is_inside((0, 0, 2)));
         Ok(())
     }

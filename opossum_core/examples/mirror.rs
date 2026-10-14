@@ -2,7 +2,7 @@ use opossum_core::{
     apertures::CircleShape,
     coatings::CoatingConstantR,
     core_optics::{NodeAttrExt, OpticNodeExt},
-    geometry::body::CLEAR_APERTURE,
+    geometry::body::OPTIC_SHAPE,
     nodes::round_collimated_ray_builder,
     percent,
     prelude::*,
@@ -11,11 +11,11 @@ use std::path::Path;
 
 fn main() -> OpmResult<()> {
     // Both mirrors are 2 inches in diameter, large enough for the beam of 20 mm radius.
-    let two_inch: ClearAperture = CircleShape::new(millimeter!(25.4))?.into();
+    let two_inch: OpticShape = CircleShape::new(millimeter!(25.4))?.into();
     let mut scenery = NodeGroup::default();
     let i_src = scenery.add_node(SourcePort::new("collimated ray source"))?;
     let mut mirror1 = ThinMirror::new("mirror 1").with_tilt(degree!(22.5, 0.0, 0.0))?;
-    mirror1.set_property(CLEAR_APERTURE, two_inch.clone().into())?;
+    mirror1.set_property(OPTIC_SHAPE, two_inch.clone().into())?;
     mirror1.set_coating(
         &PortType::Input,
         "input_1",
@@ -25,7 +25,7 @@ fn main() -> OpmResult<()> {
     let mut mirror2 = ThinMirror::new("mirror 2")
         .with_curvature(millimeter!(-100.0))?
         .with_tilt(degree!(-22.5, 0.0, 0.0))?;
-    mirror2.set_property(CLEAR_APERTURE, two_inch.into())?;
+    mirror2.set_property(OPTIC_SHAPE, two_inch.into())?;
     let i_m2 = scenery.add_node(mirror2)?;
     let i_prop_vis = scenery.add_node(RayPropagationVisualizer::default())?;
     let i_sd = scenery.add_node(SpotDiagram::default())?;

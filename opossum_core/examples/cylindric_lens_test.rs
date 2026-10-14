@@ -1,7 +1,7 @@
 use nalgebra::Vector3;
 use opossum_core::{
     analyzers::energy::EnergyConfig, apertures::CircleShape, core_optics::NodeAttrExt,
-    geometry::body::CLEAR_APERTURE, nodes::round_collimated_ray_builder, prelude::*,
+    geometry::body::OPTIC_SHAPE, nodes::round_collimated_ray_builder, prelude::*,
 };
 use std::path::Path;
 
@@ -17,8 +17,8 @@ fn main() -> OpmResult<()> {
     )?;
     // A 2-inch lens, large enough for the beam of 20 mm radius.
     lens.set_property(
-        CLEAR_APERTURE,
-        ClearAperture::from(CircleShape::new(millimeter!(25.4))?).into(),
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.4))?).into(),
     )?;
     let lens = lens.with_tilt(degree!(0.0, 0.0, 45.0))?;
     let l1 = scenery.add_node(lens)?;

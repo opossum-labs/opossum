@@ -334,10 +334,10 @@ fn axis_is_lost(outgoing_edges: &LightResult) -> bool {
 mod test {
     use crate::{
         analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
-        apertures::{CircleShape, ClearAperture},
+        apertures::{CircleShape, OpticShape},
         core_optics::{Alignable, NodeAttrExt},
         error::{OpmResult, OpossumError},
-        geometry::body::{CLEAR_APERTURE, default_clear_aperture},
+        geometry::body::{OPTIC_SHAPE, default_optic_shape},
         joule,
         light::LightResult,
         millimeter,
@@ -364,14 +364,14 @@ mod test {
         1.0 / ((n - 1.0) * (2.0 / radius - (n - 1.0) * thickness / (n * radius * radius)))
     }
     /// A default lens shifted [`DECENTRE`] up, so the optical axis crosses it that far below its
-    /// own axis, with the given clear aperture.
-    fn decentred_lens(clear_aperture: ClearAperture) -> OpmResult<Lens> {
+    /// own axis, with the given optic shape.
+    fn decentred_lens(optic_shape: OpticShape) -> OpmResult<Lens> {
         let mut lens = Lens::default().with_decenter(Point3::new(
             Length::zero(),
             millimeter!(DECENTRE),
             Length::zero(),
         ))?;
-        lens.set_property(CLEAR_APERTURE, clear_aperture.into())?;
+        lens.set_property(OPTIC_SHAPE, optic_shape.into())?;
         Ok(lens)
     }
     /// Put a source in front of and a screen behind the given row of nodes, 100 mm apart, and
@@ -423,12 +423,12 @@ mod test {
     #[test]
     fn positioning_stops_when_the_axis_misses_a_component() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
-        let lens = scenery.add_node(decentred_lens(default_clear_aperture())?)?;
+        let lens = scenery.add_node(decentred_lens(default_optic_shape())?)?;
         let error = place_screen_behind(scenery, &[lens])
-            .expect_err("the axis runs outside the lens's clear aperture of 12.5 mm");
+            .expect_err("the axis runs outside the lens's optic shape of 12.5 mm");
         assert!(error.to_string().contains("optical axis"), "{error}");
         assert!(error.to_string().contains("lens"), "{error}");
-        // With a clear aperture of 50 mm the axis passes the lens and is bent by it.
+        // With an optic shape of 50 mm the axis passes the lens and is bent by it.
         let mut scenery = NodeGroup::default();
         let large = CircleShape::new(millimeter!(50.0))?.into();
         let lens = scenery.add_node(decentred_lens(large)?)?;
@@ -450,9 +450,9 @@ mod test {
         assert_bent_by_the_decentred_lens(&place_screen_behind(scenery, &[filter, lens])?);
         Ok(())
     }
-    /// A detector does not bend the axis, so the axis running outside its clear aperture does not
+    /// A detector does not bend the axis, so the axis running outside its optic shape does not
     /// stop positioning: it only warns that the detector's measurement may fail. A detector the
-    /// axis passes within its clear aperture gives no such warning.
+    /// axis passes within its optic shape gives no such warning.
     #[test]
     fn positioning_warns_when_the_axis_misses_a_detector() -> OpmResult<()> {
         for (decentre, warns) in [(DECENTRE, true), (0.0, false)] {
@@ -461,7 +461,7 @@ mod test {
                 millimeter!(decentre),
                 Length::zero(),
             ))?;
-            detector.set_property(CLEAR_APERTURE, default_clear_aperture().into())?;
+            detector.set_property(OPTIC_SHAPE, default_optic_shape().into())?;
             let mut scenery = NodeGroup::default();
             let detector = scenery.add_node(detector)?;
             testing_logger::setup();
@@ -471,7 +471,7 @@ mod test {
             testing_logger::validate(|logs| {
                 let warned = logs.iter().any(|log| {
                     log.level == log::Level::Warn
-                        && log.body.contains("misses the clear aperture of detector")
+                        && log.body.contains("misses the optic shape of detector")
                 });
                 assert_eq!(warned, warns, "detector decentred by {decentre} mm");
             });

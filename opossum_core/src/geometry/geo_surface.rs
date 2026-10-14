@@ -57,7 +57,7 @@ pub trait GeoSurface: Send + Sync + Debug {
     /// coincides with the half space near the vertex and departs from it towards the rim, where
     /// the surface curves away and eventually closes on itself. Composing two of them into a body
     /// is therefore exact as long as the body reaches less far transversally than its radii of
-    /// curvature — which is what a clear aperture normally guarantees.
+    /// curvature — which is what an optic shape normally guarantees.
     ///
     /// # Arguments
     ///

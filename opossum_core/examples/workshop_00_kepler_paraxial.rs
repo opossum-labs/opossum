@@ -6,7 +6,7 @@
 //! System Overview
 //! 1. One collimated line ray source
 //! 2. Two paraxial lenses ("75 mm lens" and "50 mm lens")
-//! 3. A clear aperture of 25 mm radius on both lenses, the size of the lenses
+//! 3. An optic shape of 25 mm radius on both lenses, the size of the lenses
 //! 4. A ray propagation visualizer after the second lens
 //! 5. A ray-tracing analyzer for the source beam
 //! 6. Saving the optical system to a file for later use
@@ -30,12 +30,12 @@
 //!   macros, and document types
 //! - `opossum_core::core_optics::NodeAttrExt` — extension trait for setting
 //!   node names and properties
-//! - `opossum_core::{apertures::CircleShape, geometry::body::CLEAR_APERTURE}`
-//!   — the shape and the property name of a lens's clear aperture
+//! - `opossum_core::{apertures::CircleShape, geometry::body::OPTIC_SHAPE}`
+//!   — the shape and the property name of a lens's optic shape
 //! - `std::{env, path::Path}` — used to find the output directory and save
 //!   the `.opm` file
 use opossum_core::{
-    apertures::CircleShape, core_optics::NodeAttrExt, geometry::body::CLEAR_APERTURE, prelude::*,
+    apertures::CircleShape, core_optics::NodeAttrExt, geometry::body::OPTIC_SHAPE, prelude::*,
 };
 use std::{env, path::Path};
 /// Entry point of the example.
@@ -55,10 +55,10 @@ fn main() -> OpmResult<()> {
     // Create the first lens with a focal length of 75 mm.
     // This lens is part of the Kepler telescope setup.
     let mut lens1 = ParaxialSurface::new("75 mm lens", millimeter!(75.0))?;
-    // The lens is 50 mm in diameter: its clear aperture is a circle of 25 mm radius.
+    // The lens is 50 mm in diameter: its optic shape is a circle of 25 mm radius.
     lens1.set_property(
-        CLEAR_APERTURE,
-        ClearAperture::from(CircleShape::new(millimeter!(25.0))?).into(),
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
     )?;
     // Add the first lens into the optical scene.
     let i_pl1 = scenery.add_node(lens1)?;
@@ -66,8 +66,8 @@ fn main() -> OpmResult<()> {
     // Together with the first lens, it forms a Kepler telescope system.
     let mut lens2 = ParaxialSurface::new("50 mm lens", millimeter!(50.0))?;
     lens2.set_property(
-        CLEAR_APERTURE,
-        ClearAperture::from(CircleShape::new(millimeter!(25.0))?).into(),
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
     )?;
     let i_pl2 = scenery.add_node(lens2)?;
     // Add a ray propagation visualizer.
