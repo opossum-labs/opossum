@@ -18,8 +18,8 @@ use crate::{
     light::{LightData, LightResult},
     millimeter,
     nodes::{
-        {NodeRegistration, create_detector_properties},
         wavefront::zernike::{WavefrontDecomposition, ZernikeNoll},
+        {NodeRegistration, create_detector_properties},
     },
     properties::{Properties, Proptype},
     reporting::node_report::{NodeReport, NodeReportResult},

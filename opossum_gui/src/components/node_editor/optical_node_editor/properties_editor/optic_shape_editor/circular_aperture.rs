@@ -3,7 +3,10 @@ use crate::components::{
     node_editor::inputs::{InputParam, IntoInputData, IntoInputDataStrings},
 };
 use dioxus::prelude::*;
-use opossum_core::{apertures::CircleShape, meter, prelude::ApertureShape};
+use opossum_core::{
+    apertures::{CircleShape, OutlineShape},
+    meter,
+};
 use strum::EnumIter;
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq, EnumIter)]
@@ -34,7 +37,7 @@ impl IntoInputDataStrings<CircleShape> for CircularApertureParam {
     }
 }
 
-impl IntoInputData<f64, CircleShape, ApertureShape> for CircularApertureParam {
+impl IntoInputData<f64, CircleShape, OutlineShape> for CircularApertureParam {
     fn parse_value(&self, e: Event<FormData>) -> Option<f64> {
         let e_value = e.value();
         e_value.parse::<f64>().ok()

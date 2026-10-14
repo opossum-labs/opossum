@@ -288,10 +288,10 @@ fn get_geometric_editor(
             }
         }),
         // The optic shape is the transversal extent of a component: rays outside it miss it.
-        Proptype::Aperture(aperture) => Some(rsx! {
+        Proptype::OpticShape(optic_shape) => Some(rsx! {
             OpticShapeEditor {
                 node_id,
-                aperture,
+                optic_shape,
                 validator,
                 property_key,
                 on_change,

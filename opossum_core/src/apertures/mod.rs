@@ -36,7 +36,6 @@ use crate::{
     generic_validators::Validate,
     meter,
     prelude::Isometry,
-    properties::Proptype,
     reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     types::validated_type_definitions::{
         ValidatedAngle1D, ValidatedCenter2D, ValidatedCrossSection,
@@ -552,11 +551,6 @@ impl ApertureShape {
                 .iter()
                 .fold(1.0, |acc, ap| acc * ap.apodize(point)),
         }
-    }
-}
-impl From<ApertureShape> for Proptype {
-    fn from(value: ApertureShape) -> Self {
-        Self::Aperture(value)
     }
 }
 

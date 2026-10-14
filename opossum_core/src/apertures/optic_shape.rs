@@ -11,12 +11,13 @@ use crate::{
     error::{OpmResult, OpossumError},
     properties::Proptype,
     types::validated_type_definitions::ValidatedCrossSection,
-    utils::math_utils::to_f64,
+    utils::{default_from_name::DefaultFromName, math_utils::to_f64},
 };
 use nalgebra::{Point2, Point3};
 use num_traits::Zero;
 use serde::{Deserialize, Serialize};
 use std::{f64::consts::TAU, fmt::Display};
+use strum::EnumIter;
 use uom::si::f64::{Angle, Length};
 
 /// How many points the edge of a circle is sampled with when the bores are checked.
@@ -25,7 +26,7 @@ const CIRCLE_POINTS: usize = 64;
 const TOUCHING: f64 = 1e-9;
 
 /// A shape with an edge: the outline of a component, or of a bore through it.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnumIter)]
 pub enum OutlineShape {
     /// A circle around the origin.
     Circle(CircleShape),
@@ -34,6 +35,7 @@ pub enum OutlineShape {
     /// A polygon.
     Polygon(PolygonShape),
 }
+impl DefaultFromName for OutlineShape {}
 
 impl From<CircleShape> for OutlineShape {
     fn from(shape: CircleShape) -> Self {
