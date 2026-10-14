@@ -78,8 +78,8 @@ async fn get_document(data: web::Data<AppState>) -> Result<impl Responder, BackE
 )]
 /// Load a document from an OPM file string
 ///
-/// This function reads a OPM model from the given OPM file string and replaces the current
-/// document. It also evaluates if the newly loaded document is missing GUI coordinates.
+/// This function reads an OPM model from the given OPM file string and replaces the current
+/// document.
 #[put("")]
 async fn put_document(
     data: web::Data<AppState>,
@@ -89,15 +89,9 @@ async fn put_document(
     *document = OpmDocument::from_string(&opm_file_string)?;
 
     let name = document.scenery().node_attr().name().to_string();
-    let needs_autolayout = document.needs_autolayout();
-
     drop(document);
     data.clear_undo_history();
-
-    Ok(Json(LoadDocumentResponse {
-        name,
-        needs_autolayout,
-    }))
+    Ok(Json(LoadDocumentResponse { name }))
 }
 
 /// Undo the last checkpointed document edit.
@@ -134,7 +128,15 @@ pub async fn undo_document(
         }
     }
 }
-
+/// Clear the entire undo and redo history.
+#[utoipa::path(tag = "document",
+    responses((status = NO_CONTENT, description = "Undo history cleared successfully"))
+)]
+#[delete("/undo")]
+async fn delete_undo_history(data: web::Data<AppState>) -> impl Responder {
+    data.clear_undo_history();
+    HttpResponse::NoContent().finish()
+}
 /// Runs one undo or redo step: describes `command` for the GUI and computes its [`JumpTarget`], then
 /// applies it under a rollback guard, returning `(changes, jump, inverse)`.
 fn apply_history_step(
@@ -398,6 +400,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_root_uuid);
 
     cfg.service(undo_document);
+    cfg.service(delete_undo_history);
     cfg.service(redo_document);
     cfg.service(post_viewport_change);
     cfg.service(patch_positions);

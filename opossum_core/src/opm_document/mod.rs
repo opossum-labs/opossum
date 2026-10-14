@@ -17,7 +17,6 @@ pub use analyzer_info::AnalyzerInfo;
 
 use crate::{
     analyzers::AnalyzerType,
-    core_optics::NodeAttrExt,
     error::{OpmResult, OpossumError},
     gain::{GainModel, PumpScenario},
     material::Material,
@@ -243,23 +242,5 @@ impl OpmDocument {
     /// Replaces the whole amplifier candidate set at once (e.g. for undo/redo).
     pub fn set_amplifier_nodes(&mut self, nodes: HashSet<Uuid>) {
         self.amplifier_nodes = nodes;
-    }
-
-    /// Checks if any node or analyzer in the document is missing its GUI coordinates.
-    ///
-    /// This signals to frontends that an automatic layout is required.
-    #[must_use]
-    pub fn needs_autolayout(&self) -> bool {
-        // 1. Check if any analyzer is missing its GUI position
-        if self.analyzers.values().any(|a| a.gui_position().is_none()) {
-            return true;
-        }
-        // 2. Check optical nodes
-        for node_ref in self.scenery.nodes() {
-            if node_ref.gui_position().is_none() {
-                return true;
-            }
-        }
-        false
     }
 }
