@@ -59,17 +59,16 @@ where light begins rather than a thing, and a reference node is the same compone
 second time rather than a second component. The count in the view's status line tells you how many are
 drawn.
 
-Each component is drawn as large as its `clear aperture` (see
-[Clear aperture](nodes.md#clear-aperture)), the same extent that decides which rays hit it. A
-detector or a paraxial surface whose clear aperture is `Open` has no edge to draw. It is shown at a
+Each component is drawn as large as its `optic shape` (see
+[Optic shape](nodes.md#optic-shape)), the same extent that decides which rays hit it. A
+detector or a paraxial surface whose optic shape is `Open` has no edge to draw. It is shown at a
 nominal size instead, a circle of 12.5 mm radius, which says nothing about what it records or
 focuses.
 
-A clear aperture stacked from several shapes is drawn with its bores: a ring, or a plate with holes
-through it, shows the walls of the bores as well. That works as long as the shapes lie within one
-another — every obstruction inside the hole, and none of them touching or crossing another. A stack
-whose shapes cross, such as a notch cut across the outer edge, cannot be drawn yet. Such a component
-is left out, and the status line and the log say so.
+An optic shape with bores is drawn with them: a ring, or a plate with holes through it, shows the
+walls of the bores as well. OPOSSUM only accepts shapes that enclose an area and bores that lie
+within the edge and apart from each other, so every optic shape it accepts can be drawn. A
+component that cannot be drawn all the same is left out, and the status line and the log say so.
 
 A component only knows where it is once the optical axis has been traced, so the model needs an
 analyzer that places its nodes — a ray trace. Without one there is nothing to place, and the view
@@ -80,9 +79,9 @@ If the optical axis ends *at* a component that still has others after it, those 
 and the view cannot be drawn at all. The log names the component the axis ended at. There are two
 usual causes:
 
-- **The axis passes the component outside its clear aperture** — a lens decentered by more than its
+- **The axis passes the component outside its optic shape** — a lens decentered by more than its
   radius, say, a double pass whose return path walks off, or a bore the axis runs through. Enlarge
-  the clear aperture or correct the position (see [Geometry](../concepts/geometry.md)).
+  the optic shape or correct the position (see [Geometry](../concepts/geometry.md)).
 - **A grating is not tilted**: its diffraction order then does not propagate at the source's
   wavelength, and the message names the Littrow angle to tilt the grating by.
 
@@ -100,11 +99,11 @@ from default rays, and its axis is drawn from those.
 
 **The rays** (**Rays**, off by default) are the light of the sources an analyzer defines, traced
 through the setup like a ray trace does. They show what the axis alone cannot: how a bundle widens
-and focuses, where a clear aperture clips it, where a beam splitter divides it. Each ray is coloured
+and focuses, where an optic shape clips it, where a beam splitter divides it. Each ray is coloured
 by its wavelength; infrared light, which has no colour of its own, is drawn red, and ultraviolet
 light violet.
 
-A ray that is stopped for passing a component outside its clear aperture is drawn up to the last
+A ray that is stopped for passing a component outside its optic shape is drawn up to the last
 component it reached before, not up to the one it missed. One that misses a mirror, a parabolic
 mirror or a grating is not drawn at all.
 

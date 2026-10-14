@@ -108,9 +108,16 @@ follows the strategy above: with `Ignore` it passes on as transmitted light, wit
 **Edge and bores.** An optic shape is an edge with bores through it. The edge is a circle, a rectangle or a polygon,
 centered on the component's axis and not turned: to shift or turn a component, align its node. A bore is a circle, a
 rectangle or a polygon too, shifted off the axis and turned by its own offset and rotation; a ring, for instance, is a
-circle with a centered bore. Every bore lies within the edge, and bores neither overlap nor touch each other or the
-edge: OPOSSUM refuses a bore that does and says why. Overlapping bores and a notch cut into the edge cannot be stated.
-In the node editor, choosing another kind of edge starts a fresh edge of that kind without bores.
+circle with a centered bore. A polygon has to enclose an area: its outline neither crosses nor touches itself, so no
+corner is given twice and the corners do not all lie on one line. Every bore lies within the edge, and bores neither
+overlap nor touch each other or the edge. OPOSSUM refuses a shape that breaks one of these rules and says why.
+Overlapping bores and a notch cut into the edge cannot be stated.
+
+In the node editor, choosing another kind of edge starts a fresh edge of that kind without bores. Corners of a
+polygon can always be added or deleted, even while it does not enclose an area yet. While the edge breaks a rule, a
+note below it says why and nothing is saved; the edge is saved as soon as it is valid again. While the bore being
+drafted breaks a rule, the label of "Add bore" (or "Update bore") turns red and the button does nothing; hovering over
+it says why.
 
 The default is a circle of 12.5 mm radius, the usual 1 inch mount. The optic shape lies in the plane perpendicular to
 the component's axis and extends along that axis: for a rod cut at Brewster's angle it is the cross section of the
