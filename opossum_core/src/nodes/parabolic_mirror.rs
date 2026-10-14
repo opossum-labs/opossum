@@ -47,7 +47,7 @@ inventory::submit! {
 ///   - `name`
 ///   - `inverted`
 ///   - `curvature`
-///   - `clear aperture`: the extent of the mirror, measured perpendicular to the axis of the
+///   - `optic shape`: the extent of the mirror, measured perpendicular to the axis of the
 ///     parent parabola around the point the chief ray hits; a ray beyond it misses the mirror
 pub struct ParabolicMirror {
     node_attr: NodeAttr,
@@ -386,7 +386,7 @@ impl OpticNode for ParabolicMirror {
                 focal_length: -1. * self.calc_parent_focal_length()?,
             },
             vertex,
-            self.clear_aperture()?,
+            self.cross_section()?,
         )?))
     }
     fn as_surface(&self) -> Option<&dyn Planar> {
@@ -498,12 +498,12 @@ mod test {
             ghostfocus::AnalysisGhostFocus,
             raytrace::AnalysisRayTrace,
         },
-        apertures::{ApertureShape, CircleShape},
+        apertures::{CircleShape, OpticShape},
         core_optics::{NodeAttrExt, OpticNode, node_attr::NodePositioning},
         degree,
         distributions::position::Hexapolar,
         error::OpmResult,
-        geometry::body::CLEAR_APERTURE,
+        geometry::body::OPTIC_SHAPE,
         joule,
         light::{
             LightData, LightResult, Ray, Rays, light_result::light_result_to_light_rays,
@@ -513,8 +513,8 @@ mod test {
         nodes::{
             ParabolicMirror,
             test_helper::helper::{
-                test_clear_aperture_absent_in_file,
-                test_reflections_beyond_clear_aperture_are_lost, test_reflects_completely,
+                test_optic_shape_absent_in_file, test_reflections_beyond_optic_shape_are_lost,
+                test_reflects_completely,
             },
         },
         properties::Proptype,
@@ -552,24 +552,24 @@ mod test {
         test_reflects_completely::<ParabolicMirror>();
     }
     #[test]
-    fn clear_aperture_absent_in_file() -> OpmResult<()> {
-        test_clear_aperture_absent_in_file::<ParabolicMirror>()
+    fn optic_shape_absent_in_file() -> OpmResult<()> {
+        test_optic_shape_absent_in_file::<ParabolicMirror>()
     }
     #[test]
-    fn reflections_beyond_clear_aperture_are_lost() -> OpmResult<()> {
-        test_reflections_beyond_clear_aperture_are_lost::<ParabolicMirror>()
+    fn reflections_beyond_optic_shape_are_lost() -> OpmResult<()> {
+        test_reflections_beyond_optic_shape_are_lost::<ParabolicMirror>()
     }
     /// A collimating 90° off-axis parabola of 50 mm diameter, as a supplier quotes it: the circle is
     /// measured perpendicular to the parent axis, around the point the chief ray hits. A ray
     /// parallel to the parent axis therefore hits exactly when it passes within 25 mm of the chief
     /// ray's reflection, however far the curved surface bends away in between.
     #[test]
-    fn an_off_axis_parabola_measures_its_clear_aperture_along_the_parent_axis() -> OpmResult<()> {
+    fn an_off_axis_parabola_measures_its_optic_shape_along_the_parent_axis() -> OpmResult<()> {
         let mut parabola =
             ParabolicMirror::new_with_off_axis_x("oap", millimeter!(100.0), true, degree!(90.0))?;
         parabola.set_property(
-            CLEAR_APERTURE,
-            ApertureShape::BinaryCircle(CircleShape::new(millimeter!(25.0))?).into(),
+            OPTIC_SHAPE,
+            OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
         )?;
         parabola.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let mut reflect = |ray: Ray| -> OpmResult<Option<Ray>> {

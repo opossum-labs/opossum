@@ -211,7 +211,7 @@ inventory::submit! {
 ///   - `name`
 ///   - `inverted`
 ///   - `splitter config`
-///   - `clear aperture`: the extent of the splitting surface; a ray beyond it misses the splitter
+///   - `optic shape`: the extent of the splitting surface; a ray beyond it misses the splitter
 ///     and follows the analyzer's missed surface strategy
 pub struct BeamSplitter {
     node_attr: NodeAttr,
@@ -431,7 +431,7 @@ impl Planar for BeamSplitter {
 }
 impl OpticNode for BeamSplitter {
     fn geometry(&self) -> OpmResult<Option<Geometry>> {
-        Ok(Some(Geometry::plane(self.clear_aperture()?)))
+        Ok(Some(Geometry::plane(self.cross_section()?)))
     }
     fn as_surface(&self) -> Option<&dyn Planar> {
         Some(self)
@@ -557,8 +557,8 @@ mod test {
         Ok(())
     }
     #[test]
-    fn clear_aperture_absent_in_file() -> OpmResult<()> {
-        test_clear_aperture_absent_in_file::<BeamSplitter>()
+    fn optic_shape_absent_in_file() -> OpmResult<()> {
+        test_optic_shape_absent_in_file::<BeamSplitter>()
     }
     /// Rays along z towards a splitter at the origin, one at each of the given heights in mm.
     fn rays_at(heights: &[f64]) -> OpmResult<Rays> {
@@ -590,11 +590,11 @@ mod test {
         };
         Ok((bundle("out1_trans1_refl2"), bundle("out2_trans2_refl1")))
     }
-    /// A ray beyond the clear aperture misses the splitter, whatever the analyzer does with it: a
+    /// A ray beyond the optic shape misses the splitter, whatever the analyzer does with it: a
     /// ray trace loses it, a ghost focus analysis lets it run on, unchanged. Only a ray that hits
     /// is split.
     #[test]
-    fn rays_beyond_clear_aperture_are_lost() -> OpmResult<()> {
+    fn rays_beyond_optic_shape_are_lost() -> OpmResult<()> {
         let output = AnalysisRayTrace::analyze(
             &mut placed_at_origin::<BeamSplitter>()?,
             LightResult::from([(

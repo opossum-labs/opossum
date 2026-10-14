@@ -1,6 +1,5 @@
 mod angle_editor;
 mod bool_editor;
-mod clear_aperture_editor;
 mod curvature_editor;
 mod f64_editor;
 mod filter_type_editor;
@@ -11,6 +10,7 @@ mod length_editor;
 mod length_option_editor;
 mod linear_density_editor;
 mod material_property_editor;
+mod optic_shape_editor;
 mod splitter_type_editor;
 mod string_editor;
 mod vec2_editor;
@@ -20,14 +20,14 @@ use crate::components::node_editor::{
     accordion::{AccordionItem, content_id_for_panel},
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
     optical_node_editor::properties_editor::{
-        angle_editor::AngleEditor, bool_editor::BoolEditor,
-        clear_aperture_editor::ClearApertureEditor, curvature_editor::CurvatureEditor,
+        angle_editor::AngleEditor, bool_editor::BoolEditor, curvature_editor::CurvatureEditor,
         f64_editor::F64Editor, filter_type_editor::FilterTypeEditor,
         fluence_estimator_editor::FluenceEstimatorEditor, i32_editor::I32Editor,
         isometry_option_editor::IsometryOptionEditor, length_editor::LengthEditor,
         length_option_editor::LengthOptionEditor, linear_density_editor::LinearDensityEditor,
-        material_property_editor::MaterialPropertyEditor, splitter_type_editor::SplitterTypeEditor,
-        string_editor::StringEditor, vec2_editor::Vec2Editor, vec3_editor::Vec3Editor,
+        material_property_editor::MaterialPropertyEditor, optic_shape_editor::OpticShapeEditor,
+        splitter_type_editor::SplitterTypeEditor, string_editor::StringEditor,
+        vec2_editor::Vec2Editor, vec3_editor::Vec3Editor,
     },
 };
 use dioxus::prelude::*;
@@ -287,11 +287,11 @@ fn get_geometric_editor(
                 readonly,
             }
         }),
-        // The clear aperture is the transversal extent of a component: rays outside it miss it.
-        Proptype::Aperture(aperture) => Some(rsx! {
-            ClearApertureEditor {
+        // The optic shape is the transversal extent of a component: rays outside it miss it.
+        Proptype::OpticShape(optic_shape) => Some(rsx! {
+            OpticShapeEditor {
                 node_id,
-                aperture,
+                optic_shape,
                 validator,
                 property_key,
                 on_change,

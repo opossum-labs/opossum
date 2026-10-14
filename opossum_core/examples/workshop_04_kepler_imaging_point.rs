@@ -8,7 +8,7 @@
 //! System Overview
 //! 1. One point light source
 //! 2. Refractive index data for HZF52 glass
-//! 3. One 75 mm spherical lens with a clear aperture of 25 mm radius
+//! 3. One 75 mm spherical lens with an optic shape of 25 mm radius
 //! 4. One 50 mm spherical lens of the same size
 //! 5. A ray propagation visualizer
 //! 6. Two spot diagram analyzers
@@ -20,7 +20,7 @@
 //! This example demonstrates:
 //! - How to build a Keplerian optical system using two spherical lenses
 //! - How to define wavelength-dependent refractive index data
-//! - How to give a lens its size with a clear aperture
+//! - How to give a lens its size with an optic shape
 //! - How to connect optical components with physical propagation distances
 //! - How to use spot diagram analyzers to inspect ray distributions
 //! - How to visualize ray propagation through the optical system
@@ -33,7 +33,7 @@
 //! - `opossum_core::core_optics::NodeAttrExt` provides the extension trait
 //!   for optical node attributes and properties
 //! - `opossum_core::apertures::CircleShape` provides the shape of a lens's
-//!   clear aperture
+//!   optic shape
 //! - `opossum_core::distributions::*` provides spatial, energy, and
 //!   spectral distributions for the point source
 //! - `std::{env, path::Path}` is used to determine the output directory
@@ -62,8 +62,8 @@ fn main() -> OpmResult<()> {
         nanometer!(300.0)..nanometer!(2000.0),
     )?;
     // 3. Define the first lens: 75 mm focal length, 10 mm thickness,
-    // with a clear aperture of 25 mm radius.
-    let lens1 = Lens::new_with_clear_aperture(
+    // with an optic shape of 25 mm radius.
+    let lens1 = Lens::new_with_optic_shape(
         "75 mm lens",
         millimeter!(130.0),
         millimeter!(-130.0),
@@ -74,7 +74,7 @@ fn main() -> OpmResult<()> {
     let i_pl1 = scenery.add_node(lens1)?;
     // 4. Define the second lens: 50 mm focal length, 10 mm thickness and the same size as the
     // first.
-    let lens2 = Lens::new_with_clear_aperture(
+    let lens2 = Lens::new_with_optic_shape(
         "50 mm lens",
         millimeter!(100.0),
         millimeter!(-100.0),

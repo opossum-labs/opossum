@@ -26,7 +26,7 @@ use crate::{
 
 /// Name of the property that carries the [`Material`] of a node with a volume.
 ///
-/// Same purpose as [`CLEAR_APERTURE`](crate::geometry::body::CLEAR_APERTURE) for the transversal
+/// Same purpose as [`OPTIC_SHAPE`](crate::geometry::body::OPTIC_SHAPE) for the transversal
 /// extent: the node declarations and every reader refer to the property by this constant rather
 /// than by a literal.
 pub const MATERIAL: &str = "Material";

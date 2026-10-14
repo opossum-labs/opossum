@@ -3,12 +3,12 @@
 
 use crate::{
     analyzers::energy::AnalysisEnergy,
-    apertures::ApertureShape,
+    apertures::OpticShape,
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, Volumetric},
     error::{OpmResult, OpossumError},
     geometry::{
         Geometry,
-        body::{CLEAR_APERTURE, default_clear_aperture},
+        body::{OPTIC_SHAPE, default_optic_shape},
     },
     material::{MATERIAL, Material},
     millimeter,
@@ -49,7 +49,7 @@ inventory::submit! {
 ///   - `rear curvature`
 ///   - `center thickness`
 ///   - `material`
-///   - `clear aperture`
+///   - `optic shape`
 pub struct Lens {
     node_attr: NodeAttr,
 }
@@ -117,8 +117,8 @@ impl Lens {
     /// # Errors
     ///
     /// This function returns an error if the given parameters are not correct, including a
-    /// curvature too tight to reach the default clear aperture of 12.5 mm (see
-    /// [`Lens::new_with_clear_aperture`]).
+    /// curvature too tight to reach the default optic shape of 12.5 mm (see
+    /// [`Lens::new_with_optic_shape`]).
     pub fn new(
         name: &str,
         front_curvature: Length,
@@ -126,19 +126,19 @@ impl Lens {
         center_thickness: Length,
         material: impl Into<Material>,
     ) -> OpmResult<Self> {
-        Self::new_with_clear_aperture(
+        Self::new_with_optic_shape(
             name,
             front_curvature,
             rear_curvature,
             center_thickness,
             material,
-            default_clear_aperture(),
+            default_optic_shape(),
         )
     }
-    /// Creates a new [`Lens`] of the given clear aperture.
+    /// Creates a new [`Lens`] of the given optic shape.
     ///
     /// As [`Lens::new`], but with the transversal extent of the lens given as well. A lens curved
-    /// more tightly than the default clear aperture of 12.5 mm needs it: a spherical face ends at its
+    /// more tightly than the default optic shape of 12.5 mm needs it: a spherical face ends at its
     /// radius of curvature, so it cannot reach a wider edge.
     ///
     /// # Arguments
@@ -148,24 +148,24 @@ impl Lens {
     /// * `rear_curvature` - radius of curvature of the rear face; infinite for a flat face.
     /// * `center_thickness` - distance between the two vertices.
     /// * `material` - the material of the lens.
-    /// * `clear_aperture` - the transversal extent of the lens.
+    /// * `optic_shape` - the transversal extent of the lens.
     ///
     /// # Errors
     ///
-    /// This function returns an error if the given parameters are not correct, the clear aperture
+    /// This function returns an error if the given parameters are not correct, the optic shape
     /// does not delimit a region, or a face is curved too tightly to reach its edge.
-    pub fn new_with_clear_aperture(
+    pub fn new_with_optic_shape(
         name: &str,
         front_curvature: Length,
         rear_curvature: Length,
         center_thickness: Length,
         material: impl Into<Material>,
-        clear_aperture: ApertureShape,
+        optic_shape: OpticShape,
     ) -> OpmResult<Self> {
         let mut lens = Self::default();
         lens.node_attr.set_name(name);
         lens.node_attr
-            .set_property(CLEAR_APERTURE, clear_aperture.into())?;
+            .set_property(OPTIC_SHAPE, optic_shape.into())?;
         lens.node_attr
             .set_property("front curvature", Proptype::Curvature(front_curvature))?;
         lens.node_attr
@@ -196,11 +196,17 @@ impl OpticNode for Lens {
                 "cannot read the curvatures and the center thickness of the lens".into(),
             ));
         };
+        let cross_section = self.cross_section()?.ok_or_else(|| {
+            OpossumError::Analysis(format!(
+                "the {OPTIC_SHAPE} of node '{}' is open, so its medium is unbounded",
+                self.node_attr.name()
+            ))
+        })?;
         Ok(Some(Geometry::singlet(
             *front_curvature,
             *rear_curvature,
             *center_thickness,
-            self.cross_section()?,
+            cross_section,
         )?))
     }
     fn as_volume(&self) -> Option<&dyn Volumetric> {
@@ -229,7 +235,6 @@ mod test {
             energy::{AnalysisEnergy, EnergyConfig},
             raytrace::AnalysisRayTrace,
         },
-        apertures::{ApertureShape, CircleShape},
         core_optics::{NodeAttrExt, node_attr::NodePositioning},
         distributions::position::Hexapolar,
         joule,
@@ -416,13 +421,13 @@ mod test {
         Ok(())
     }
     #[test]
-    fn rays_beyond_clear_aperture_are_lost() -> OpmResult<()> {
-        test_rays_beyond_clear_aperture_are_lost::<Lens>()
+    fn rays_beyond_optic_shape_are_lost() -> OpmResult<()> {
+        test_rays_beyond_optic_shape_are_lost::<Lens>()
     }
-    /// A lens whose curvature is tighter than its clear aperture describes no shape: a sphere of
+    /// A lens whose curvature is tighter than its optic shape describes no shape: a sphere of
     /// 10 mm radius ends before the default rim of 12.5 mm. The lens refuses it.
     #[test]
-    fn a_curvature_tighter_than_the_clear_aperture_is_rejected() -> OpmResult<()> {
+    fn a_curvature_tighter_than_the_optic_shape_is_rejected() -> OpmResult<()> {
         let flat = millimeter!(f64::INFINITY);
         let index = RefrIndexConst::new(1.5)?;
         assert!(
@@ -438,22 +443,23 @@ mod test {
         assert!(Lens::new("lens", flat, millimeter!(-10.0), millimeter!(5.0), index).is_err());
         Ok(())
     }
-    /// A lens smaller than the default clear aperture is built with its own: a concentric meniscus
-    /// of 10 mm and 9 mm radius fits a clear aperture of 9 mm, its rear face a full hemisphere.
+    /// A lens smaller than the default optic shape is built with its own: a concentric meniscus
+    /// of 10 mm and 9 mm radius fits an optic shape of 9 mm, its rear face a full hemisphere.
     #[test]
-    fn a_small_lens_is_built_with_its_own_clear_aperture() -> OpmResult<()> {
-        let clear_aperture: ApertureShape = CircleShape::new(millimeter!(9.0))?.into();
-        let lens = Lens::new_with_clear_aperture(
+    fn a_small_lens_is_built_with_its_own_optic_shape() -> OpmResult<()> {
+        use crate::apertures::CircleShape;
+        let optic_shape: OpticShape = CircleShape::new(millimeter!(9.0))?.into();
+        let lens = Lens::new_with_optic_shape(
             "meniscus",
             millimeter!(10.0),
             millimeter!(9.0),
             millimeter!(1.0),
             RefrIndexConst::new(1.5)?,
-            clear_aperture.clone(),
+            optic_shape.clone(),
         )?;
         assert_eq!(
-            lens.node_attr.get_property(CLEAR_APERTURE)?,
-            &Proptype::Aperture(clear_aperture)
+            lens.node_attr.get_property(OPTIC_SHAPE)?,
+            &Proptype::OpticShape(optic_shape)
         );
         Ok(())
     }
@@ -586,12 +592,12 @@ mod test {
         test_volume_body::<Lens>()
     }
     #[test]
-    fn clear_aperture() -> OpmResult<()> {
-        test_clear_aperture::<Lens>()
+    fn optic_shape() -> OpmResult<()> {
+        test_optic_shape::<Lens>()
     }
     #[test]
-    fn clear_aperture_absent_in_file() -> OpmResult<()> {
-        test_clear_aperture_absent_in_file::<Lens>()
+    fn optic_shape_absent_in_file() -> OpmResult<()> {
+        test_optic_shape_absent_in_file::<Lens>()
     }
     /// The body of a biconvex lens is thinner towards its rim by the sag of both surfaces.
     #[test]

@@ -9,7 +9,7 @@
 //! 2. A wavelength-dependent refractive index material ("HZF52")
 //! 3. Two spherical lenses ("75 mm lens" and "50 mm lens") using that
 //!    material
-//! 4. A clear aperture of 25 mm radius on both lenses, the size of the lenses
+//! 4. An optic shape of 25 mm radius on both lenses, the size of the lenses
 //! 5. A ray propagation visualizer after the second lens
 //! 6. A ray-tracing analyzer for the source beam
 //! 7. Saving the optical system to a file for later use
@@ -35,8 +35,8 @@
 //!   macros, and document types
 //! - `opossum_core::core_optics::NodeAttrExt` — extension trait for setting
 //!   node names and properties
-//! - `opossum_core::apertures::CircleShape` — the shape of a lens's clear
-//!   aperture
+//! - `opossum_core::apertures::CircleShape` — the outline of a lens's optic
+//!   shape
 //! - `opossum_core::material::Material` — refractive index material type
 //! - `std::{env, path::Path}` — used to find the output directory and save
 //!   the `.opm` file
@@ -66,8 +66,8 @@ fn main() -> OpmResult<()> {
     let mut material_hzf52: Material = refr_index_hzf52.into();
     material_hzf52.header.name = "HZF52".to_string();
     // Create the first spherical lens with real optical parameters. It is 50 mm in diameter: its
-    // clear aperture is a circle of 25 mm radius.
-    let lens1 = Lens::new_with_clear_aperture(
+    // optic shape is a circle of 25 mm radius.
+    let lens1 = Lens::new_with_optic_shape(
         "75 mm lens",
         millimeter!(122.25),
         millimeter!(-122.25),
@@ -78,7 +78,7 @@ fn main() -> OpmResult<()> {
     // Add first lens to the optical scene.
     let i_pl1 = scenery.add_node(lens1)?;
     // Create the second spherical lens of the telescope, of the same size as the first one.
-    let lens2 = Lens::new_with_clear_aperture(
+    let lens2 = Lens::new_with_optic_shape(
         "50 mm lens",
         millimeter!(100.0),
         millimeter!(-100.0),

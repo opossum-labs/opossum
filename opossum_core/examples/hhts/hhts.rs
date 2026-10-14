@@ -10,7 +10,7 @@ use hhts_input::hhts_input;
 use num_traits::Zero;
 use opossum_core::apertures::CircleShape;
 use opossum_core::core_optics::NodeAttrExt;
-use opossum_core::geometry::body::CLEAR_APERTURE;
+use opossum_core::geometry::body::OPTIC_SHAPE;
 use opossum_core::light::lightdata::ray_data_builder::RayDataBuilder;
 use opossum_core::prelude::*;
 use opossum_core::{
@@ -48,8 +48,8 @@ fn main() -> OpmResult<()> {
         nanometer!(300.0)..nanometer!(2000.0),
     )?;
 
-    // the clear aperture of a 1-inch filter
-    let a_1inch: ApertureShape = CircleShape::new(millimeter!(12.7))?.into();
+    // the optic shape of a 1-inch filter
+    let a_1inch: OpticShape = CircleShape::new(millimeter!(12.7))?.into();
 
     let mut scenery = NodeGroup::new("HHT Sensor");
     let src = scenery.add_node(SourcePort::new("Source"))?;
@@ -58,10 +58,10 @@ fn main() -> OpmResult<()> {
 
     // T1: the front lenses take the full beam of 100 mm radius and are 250 mm in diameter, the
     // rear lenses are 2 inches.
-    let front_lens: ApertureShape = CircleShape::new(millimeter!(125.0))?.into();
-    let a_2inch: ApertureShape = CircleShape::new(millimeter!(25.4))?.into();
+    let front_lens: OpticShape = CircleShape::new(millimeter!(125.0))?.into();
+    let a_2inch: OpticShape = CircleShape::new(millimeter!(25.4))?.into();
     let mut group_t1 = NodeGroup::new("T1");
-    let t1_l1a = group_t1.add_node(Lens::new_with_clear_aperture(
+    let t1_l1a = group_t1.add_node(Lens::new_with_optic_shape(
         "T1 L1a",
         millimeter!(518.34008),
         millimeter!(-847.40402),
@@ -69,7 +69,7 @@ fn main() -> OpmResult<()> {
         &refr_index_hk9l,
         front_lens.clone(),
     )?)?;
-    let t1_l1b = group_t1.add_node(Lens::new_with_clear_aperture(
+    let t1_l1b = group_t1.add_node(Lens::new_with_optic_shape(
         "T1 L1b",
         millimeter!(-788.45031),
         millimeter!(-2551.88619),
@@ -77,7 +77,7 @@ fn main() -> OpmResult<()> {
         &refr_index_hzf52,
         front_lens,
     )?)?;
-    let node = Lens::new_with_clear_aperture(
+    let node = Lens::new_with_optic_shape(
         "T1 L2a",
         millimeter!(-88.51496),
         millimeter!(f64::INFINITY),
@@ -86,7 +86,7 @@ fn main() -> OpmResult<()> {
         a_2inch.clone(),
     )?;
     let t1_l2a = group_t1.add_node(node)?;
-    let t1_l2b = group_t1.add_node(Lens::new_with_clear_aperture(
+    let t1_l2b = group_t1.add_node(Lens::new_with_optic_shape(
         "T1 L2b",
         millimeter!(76.76954),
         millimeter!(-118.59590),
@@ -94,7 +94,7 @@ fn main() -> OpmResult<()> {
         &refr_index_hzf52,
         a_2inch.clone(),
     )?)?;
-    let t1_l2c = group_t1.add_node(Lens::new_with_clear_aperture(
+    let t1_l2c = group_t1.add_node(Lens::new_with_optic_shape(
         "T1 L2c",
         millimeter!(-63.45837),
         millimeter!(66.33014),
@@ -153,7 +153,7 @@ fn main() -> OpmResult<()> {
             Path::new("./opossum_core/examples/hhts/FELH1000_Transmission.csv").to_path_buf(),
         )),
     )?;
-    node.set_property(CLEAR_APERTURE, a_1inch.clone().into())?;
+    node.set_property(OPTIC_SHAPE, a_1inch.clone().into())?;
     let filter_1w = group_bs.add_node(node)?;
     group_bs.connect_nodes(
         bs,
@@ -173,7 +173,7 @@ fn main() -> OpmResult<()> {
             Path::new("./opossum_core/examples/hhts/FESH0700_Transmission.csv").to_path_buf(),
         )),
     )?;
-    node.set_property(CLEAR_APERTURE, a_1inch.into())?;
+    node.set_property(OPTIC_SHAPE, a_1inch.into())?;
     let filter_2w = group_bs.add_node(node)?;
     group_bs.connect_nodes(
         bs,

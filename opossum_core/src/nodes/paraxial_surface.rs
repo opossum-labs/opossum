@@ -41,7 +41,7 @@ inventory::submit! {
 ///   - `apertures`
 ///   - `inverted`
 ///   - `focal length`
-///   - `clear aperture`: the extent of the lens; a ray beyond it misses the lens, is not
+///   - `optic shape`: the extent of the lens; a ray beyond it misses the lens, is not
 ///     deflected and follows the analyzer's missed surface strategy
 #[derive(OpmNode, Debug, Clone)]
 #[opm_node("palegreen")]
@@ -92,7 +92,7 @@ impl Planar for ParaxialSurface {
 }
 impl OpticNode for ParaxialSurface {
     fn geometry(&self) -> OpmResult<Option<Geometry>> {
-        Ok(Some(Geometry::plane(self.clear_aperture()?)))
+        Ok(Some(Geometry::plane(self.cross_section()?)))
     }
     fn as_surface(&self) -> Option<&dyn Planar> {
         Some(self)
@@ -248,23 +248,23 @@ mod test {
         test_analyze_empty::<ParaxialSurface>()
     }
     #[test]
-    fn clear_aperture_absent_in_file() -> OpmResult<()> {
-        test_clear_aperture_absent_in_file::<ParaxialSurface>()
+    fn optic_shape_absent_in_file() -> OpmResult<()> {
+        test_optic_shape_absent_in_file::<ParaxialSurface>()
     }
-    /// Beyond its clear aperture an ideal lens neither focuses nor deflects: a ray trace loses the
+    /// Beyond its optic shape an ideal lens neither focuses nor deflects: a ray trace loses the
     /// ray there, a ghost focus analysis lets it run past unchanged.
     #[test]
-    fn rays_beyond_clear_aperture_are_lost() -> OpmResult<()> {
-        test_rays_beyond_clear_aperture_are_lost::<ParaxialSurface>()
+    fn rays_beyond_optic_shape_are_lost() -> OpmResult<()> {
+        test_rays_beyond_optic_shape_are_lost::<ParaxialSurface>()
     }
-    /// An ideal lens may be unbounded: with an open clear aperture it focuses a ray however far off
+    /// An ideal lens may be unbounded: with an open optic shape it focuses a ray however far off
     /// the axis it arrives.
     #[test]
-    fn an_open_clear_aperture_makes_an_unbounded_ideal_lens() -> OpmResult<()> {
+    fn an_open_optic_shape_makes_an_unbounded_ideal_lens() -> OpmResult<()> {
         let mut node = placed_at_origin::<ParaxialSurface>()?;
         node.set_property(
-            crate::geometry::body::CLEAR_APERTURE,
-            crate::apertures::ApertureShape::Open.into(),
+            crate::geometry::body::OPTIC_SHAPE,
+            crate::apertures::OpticShape::Open.into(),
         )?;
         node.update_surfaces()?;
         let far_off = rays_along_z_from(&[millimeter!(0.0, 100.0, -10.0)], nanometer!(1000.0))?;

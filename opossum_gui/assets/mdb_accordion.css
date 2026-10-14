@@ -130,7 +130,7 @@ input[type=number] {
     column-gap: 0.1rem;
 }
 
-#laserlinesubmit, #energylaserlinesubmit, #polygonPointSubmit, #stackedApertureSubmit{
+#laserlinesubmit, #energylaserlinesubmit, #polygonPointSubmit, #boreSubmit{
     background-color:rgb(70, 70, 70) !important;
     width: 100%;
     color:white;
@@ -138,17 +138,17 @@ input[type=number] {
     padding-top: 0.3rem;
     padding-bottom: 0.3rem;
 }
-#laserlinesubmit:hover, #energylaserlinesubmit:hover, #polygonPointSubmit:hover, #stackedApertureSubmit:hover{
+#laserlinesubmit:hover, #energylaserlinesubmit:hover, #polygonPointSubmit:hover, #boreSubmit:hover{
       background-color:rgb(105, 104, 104) !important;
 }
 
-#laserLineList, #energylaserLineList, #polygonPointList, #stackedAperturesList{
+#laserLineList, #energylaserLineList, #polygonPointList, #dynamicList{
   border-radius: 0;
   border: none;
   max-height: 100px;
   overflow: auto;
 }
-#laserLineList >li, #energylaserLineList >li, #polygonPointList >li, #stackedAperturesList >li{
+#laserLineList >li, #energylaserLineList >li, #polygonPointList >li, #dynamicList >li{
   margin: 0 0.5rem;
   border: none;
   border-bottom: 1px solid gray;

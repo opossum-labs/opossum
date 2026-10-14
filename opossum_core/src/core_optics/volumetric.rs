@@ -22,11 +22,10 @@ use crate::{
     },
     error::{OpmResult, OpossumError},
     gain::Extraction,
-    geometry::body::{CLEAR_APERTURE, SurfaceBoundedBody},
+    geometry::body::SurfaceBoundedBody,
     light::{LightData, LightRays, LightResult, Rays},
     material::{MATERIAL, Material},
     properties::{Proptype, proptype::AssetRef},
-    types::validated_type_definitions::ValidatedCrossSection,
     utils::geom_transformation::Isometry,
 };
 
@@ -35,7 +34,7 @@ use crate::{
 /// Implementing this trait is what makes a node a volume node. Everything the volume machinery needs
 /// is derived from what such a node already has — its [`Geometry`](crate::geometry::Geometry), a
 /// solid whose cross section is the node's
-/// [`CLEAR_APERTURE`](crate::geometry::body::CLEAR_APERTURE) — so a node type declares the
+/// [`OPTIC_SHAPE`](crate::geometry::body::OPTIC_SHAPE) — so a node type declares the
 /// capability with an empty `impl Volumetric for ... {}`, plus the [`OpticNode::as_volume`] override
 /// that makes it visible through a trait object.
 ///
@@ -85,24 +84,6 @@ pub trait Volumetric: OpticNode {
         [0.3, 0.3, 0.3]
     }
 
-    /// Return the cross section of this node's medium: its clear aperture, which has to bound it.
-    ///
-    /// # Returns
-    ///
-    /// The clear aperture as the outline of a region.
-    ///
-    /// # Errors
-    ///
-    /// This function errors if the clear aperture cannot be read, does not delimit a region or is
-    /// open, which would leave the medium unbounded.
-    fn cross_section(&self) -> OpmResult<ValidatedCrossSection> {
-        self.clear_aperture()?.ok_or_else(|| {
-            OpossumError::Analysis(format!(
-                "the {CLEAR_APERTURE} of {} is open, so its medium is unbounded",
-                self.node_info()
-            ))
-        })
-    }
     /// Return the volume enclosed by the two surfaces of this node as a
     /// [`Body`](crate::geometry::body::Body).
     ///
@@ -494,6 +475,7 @@ mod test {
             ghostfocus::{AnalysisGhostFocus, GhostFocusAnalyzer},
             raytrace::{AnalysisRayTrace, RayTracingAnalyzer},
         },
+        apertures::OpticShape,
         coatings::CoatingConstantR,
         core_optics::{
             Alignable, PortType,
@@ -501,7 +483,7 @@ mod test {
         },
         degree,
         gain::{ConstGain, GainModel, MonochromaticSmallSignalGain, PumpScenario, PumpSource},
-        geometry::{Geometry, body::CLEAR_APERTURE},
+        geometry::{Geometry, body::OPTIC_SHAPE},
         joule,
         light::{
             Rays, Spectrum,
@@ -1690,15 +1672,15 @@ mod test {
         }
         Ok(())
     }
-    /// A node declares a [`CLEAR_APERTURE`] that bounds a region exactly when its geometry has a
+    /// A node declares an [`OPTIC_SHAPE`] that bounds a region exactly when its geometry has a
     /// rim, and every surface it installs carries exactly that rim. A detector starts with an open
-    /// clear aperture: it records all light and has no rim.
+    /// optic shape: it records all light and has no rim.
     ///
     /// The extent of a component is stated by the property, decides the hits through the rim of
     /// each surface, and bounds the medium through the geometry; all three have to agree, or rays
     /// would hit a component of one size while the medium has another.
     #[test]
-    fn a_declared_clear_aperture_bounds_every_installed_surface() -> OpmResult<()> {
+    fn a_declared_optic_shape_bounds_every_installed_surface() -> OpmResult<()> {
         for (node_type, _) in node_types() {
             let optic_ref = create_node_ref(node_type)?;
             let rim = match optic_ref.geometry()? {
@@ -1706,13 +1688,13 @@ mod test {
                 None => None,
             };
             let bounded = matches!(
-                optic_ref.node_attr().get_property(CLEAR_APERTURE),
-                Ok(Proptype::Aperture(shape)) if shape.is_binary()
+                optic_ref.node_attr().get_property(OPTIC_SHAPE),
+                Ok(Proptype::OpticShape(OpticShape::Bounded(_)))
             );
             assert_eq!(
                 bounded,
                 rim.is_some(),
-                "node type '{node_type}' declares a bounding '{CLEAR_APERTURE}' or has a rim, \
+                "node type '{node_type}' declares a bounding '{OPTIC_SHAPE}' or has a rim, \
                  but not both"
             );
             let surfaces = optic_ref.node_attr().runtime_surfaces();
@@ -1727,16 +1709,16 @@ mod test {
         Ok(())
     }
     /// Only what merely records light, is an idealization or has no optical function may be
-    /// unbounded: the detectors, the paraxial surface and the dummy accept an open clear aperture,
+    /// unbounded: the detectors, the paraxial surface and the dummy accept an open optic shape,
     /// every real component refuses one.
     #[test]
     fn only_detectors_ideal_surfaces_and_the_dummy_may_be_open() -> OpmResult<()> {
         let mut may_be_open = Vec::new();
         for (node_type, _) in node_types() {
             let mut node_attr = create_node_ref(node_type)?.node_attr().clone();
-            if node_attr.get_property(CLEAR_APERTURE).is_ok()
+            if node_attr.get_property(OPTIC_SHAPE).is_ok()
                 && node_attr
-                    .set_property(CLEAR_APERTURE, crate::apertures::ApertureShape::Open.into())
+                    .set_property(OPTIC_SHAPE, OpticShape::Open.into())
                     .is_ok()
             {
                 may_be_open.push(node_type);

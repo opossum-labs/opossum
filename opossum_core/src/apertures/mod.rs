@@ -25,6 +25,7 @@
 //! ```
 mod circle;
 mod gaussian;
+mod optic_shape;
 mod mesh;
 mod polygon;
 mod rectangle;
@@ -36,7 +37,6 @@ use crate::{
     generic_validators::Validate,
     meter,
     prelude::Isometry,
-    properties::Proptype,
     reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     types::validated_type_definitions::{
         ValidatedAngle1D, ValidatedCenter2D, ValidatedCrossSection,
@@ -62,6 +62,7 @@ use uom::si::{
 
 pub use circle::CircleShape;
 pub use gaussian::GaussianShape;
+pub use optic_shape::{Bore, OpticShape, Outline, OutlineShape};
 pub use mesh::ApertureMesh;
 pub use polygon::PolygonShape;
 pub use rectangle::RectangleShape;
@@ -556,21 +557,6 @@ impl ApertureShape {
             shape => shape.is_binary(),
         }
     }
-    /// Return whether some shape of this kind bounds a region (see [`Self::delimits_region`]).
-    ///
-    /// A user interface offering a choice of shapes asks through
-    /// [`Validator::may_accept`](crate::properties::validator::Validator::may_accept) rather than
-    /// keeping a list of its own. The match is exhaustive on purpose: a new variant has to state on
-    /// which side it is.
-    pub(crate) const fn may_delimit_region(&self) -> bool {
-        match self {
-            Self::Open | Self::Gaussian(_) => false,
-            Self::BinaryCircle(_)
-            | Self::BinaryRectangle(_)
-            | Self::BinaryPolygon(_)
-            | Self::Stack(_) => true,
-        }
-    }
     /// Calculate the transmission factor of a given point on the [`Aperture`]. The value is in the range (0.0..=1.0)
     /// 0.0 is fully opaque, 1.0 fully transparent.
     #[must_use]
@@ -587,141 +573,6 @@ impl ApertureShape {
                 .iter()
                 .fold(1.0, |acc, ap| acc * ap.apodize(point)),
         }
-    }
-    /// Return this shape as a [`Bounded`] one, or `None` if it has no closed edge.
-    ///
-    /// **The one place a variant of this enum is named outside its own module.** Everything a shape
-    /// answers about where it ends is asked of the [`Bounded`] capability and therefore lives with
-    /// the shape, so a shape added later does not edit the aperture machinery every component
-    /// shares.
-    ///
-    /// The match stays exhaustive: a variant added later has to appear here, and the trait it then
-    /// has to implement has no default methods, so the compiler still walks it through every
-    /// question rather than answering any of them silently.
-    ///
-    /// # Returns
-    ///
-    /// The shape behind this variant, or `None` for the shapes without an edge to walk.
-    #[must_use]
-    pub const fn as_bounded(&self) -> Option<&dyn Bounded> {
-        match self {
-            // Open transmits everywhere and Gaussian attenuates everywhere, so neither has an edge
-            // to walk; a Stack may be made of both and has no single outline either.
-            Self::Open | Self::Gaussian(_) | Self::Stack(_) => None,
-            Self::BinaryCircle(shape) => Some(shape),
-            Self::BinaryRectangle(shape) => Some(shape),
-            Self::BinaryPolygon(shape) => Some(shape),
-        }
-    }
-}
-
-/// Carry a point of a shape's own frame through the isometry of the [`Aperture`] holding it.
-///
-/// The isometry shifts within the xy plane and turns about z, so a point of the shape maps onto a
-/// point of the placed shape and nothing else has to be accounted for. `None` leaves the point
-/// where it is, which is what an aperture at the identity stores.
-fn transformed(point: Point2<Length>, iso: Option<&Isometry>) -> Point2<Length> {
-    iso.map_or(point, |iso| {
-        let moved = iso.transform_point(&Point3::new(point.x, point.y, Length::zero()));
-        Point2::new(moved.x, moved.y)
-    })
-}
-
-/// The length of the edge leaving the ring's `from`th point, in meter.
-fn ring_edge_length(ring: &[Point2<Length>], from: usize) -> f64 {
-    distance_2d_point(&ring[(from + 1) % ring.len()], &ring[from]).value
-}
-
-/// The length of the closed ring through the given points, in meter.
-fn ring_perimeter(ring: &[Point2<Length>]) -> f64 {
-    (0..ring.len())
-        .map(|from| ring_edge_length(ring, from))
-        .sum()
-}
-
-/// Twice the area a ring of points encloses, in square meters, signed by its orientation.
-///
-/// Positive for a counter-clockwise ring, negative for a clockwise one, and zero for one whose
-/// points all lie on a line — which is the only reason this is doubled rather than halved: the
-/// factor carries no meaning here, only the sign does.
-fn doubled_signed_area(ring: &[Point2<Length>]) -> f64 {
-    (0..ring.len())
-        .map(|from| {
-            let to = (from + 1) % ring.len();
-            ring[from]
-                .x
-                .value
-                .mul_add(ring[to].y.value, -(ring[to].x.value * ring[from].y.value))
-        })
-        .sum()
-}
-
-/// Spread points along a closed ring of corners and return it counter-clockwise.
-///
-/// Every corner is kept and further points are inserted along the edges, roughly `segments` in
-/// total, handed out by edge length so that a long edge is not sampled more coarsely than a short
-/// one. This is what lets a rectangle and a polygon share one implementation: each only has to name
-/// its corners.
-///
-/// # Arguments
-///
-/// - `corners`: the corners of the ring, in either orientation, without repeating the first one
-/// - `segments`: the number of points to aim for
-///
-/// # Returns
-///
-/// The resampled ring, counter-clockwise, without a repeated first point.
-///
-/// # Errors
-///
-/// This function returns an error if fewer than three corners are given, or if the corners enclose
-/// no area — a ring whose corners all lie on one line has no inside, and no orientation either.
-fn resample_ring(corners: &[Point2<Length>], segments: usize) -> OpmResult<Vec<Point2<Length>>> {
-    if corners.len() < 3 {
-        return Err(OpossumError::Other(format!(
-            "a ring of {} corners encloses nothing",
-            corners.len()
-        )));
-    }
-    let area = doubled_signed_area(corners);
-    if area == 0.0 {
-        return Err(OpossumError::Other(
-            "the corners of the ring enclose no area, so there is no outline to walk".into(),
-        ));
-    }
-    // A negative area means the corners run clockwise. Turning the ring around here rather than in
-    // each shape keeps the counter-clockwise promise in one place.
-    let ring: Vec<Point2<Length>> = if area.is_sign_negative() {
-        corners.iter().rev().copied().collect()
-    } else {
-        corners.to_vec()
-    };
-    let perimeter = ring_perimeter(&ring);
-    let mut outline = Vec::with_capacity(segments.max(ring.len()));
-    for from in 0..ring.len() {
-        let to = (from + 1) % ring.len();
-        // At least one interval per edge, so every corner survives even when fewer segments than
-        // corners were asked for.
-        let intervals = try_f64_to_usize(
-            (to_f64(segments) * ring_edge_length(&ring, from) / perimeter).round(),
-        )
-        .unwrap_or(1)
-        .max(1);
-        outline.push(ring[from]);
-        let step = ring[to] - ring[from];
-        for point_nr in 1..intervals {
-            let along = to_f64(point_nr) / to_f64(intervals);
-            outline.push(Point2::new(
-                ring[from].x + step.x * along,
-                ring[from].y + step.y * along,
-            ));
-        }
-    }
-    Ok(outline)
-}
-impl From<ApertureShape> for Proptype {
-    fn from(value: ApertureShape) -> Self {
-        Self::Aperture(value)
     }
 }
 

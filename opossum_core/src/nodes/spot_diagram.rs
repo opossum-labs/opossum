@@ -55,7 +55,7 @@ inventory::submit! {
 /// ## Properties
 ///   - `name`
 ///   - `plot_aperture`
-///   - `clear aperture`: the window the light is recorded within, open by default; light outside
+///   - `optic shape`: the window the light is recorded within, open by default; light outside
 ///     it passes unrecorded
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
@@ -115,7 +115,7 @@ impl OpticNode for SpotDiagram {
     fn geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::detector(
             SurfaceShape::Plane,
-            self.clear_aperture()?,
+            self.cross_section()?,
         )?))
     }
     fn as_surface(&self) -> Option<&dyn Planar> {
@@ -351,7 +351,7 @@ impl Plottable for SpotDiagram {
         // Outline the window recorded within, if requested.
         if let Ok(Proptype::Bool(plot_aperture)) = self.properties().get("plot aperture")
             && *plot_aperture
-            && let Some(window) = self.clear_aperture()?
+            && let Some(window) = self.cross_section()?
             && let Some(window_plt_series) = window
                 .get()
                 .get_plot_series(&mut PlotType::Line2D(PlotParameters::default()), legend)?
@@ -384,15 +384,15 @@ mod test {
     fn the_plot_outlines_the_window() -> OpmResult<()> {
         use crate::{
             analyzers::RayTraceConfig,
-            apertures::{ApertureShape, CircleShape},
-            geometry::body::CLEAR_APERTURE,
+            apertures::{CircleShape, OpticShape},
+            geometry::body::OPTIC_SHAPE,
             millimeter,
         };
         let mut diagram = placed_at_origin::<SpotDiagram>()?;
         diagram.set_property("plot aperture", true.into())?;
         diagram.set_property(
-            CLEAR_APERTURE,
-            ApertureShape::from(CircleShape::new(millimeter!(5.0))?).into(),
+            OPTIC_SHAPE,
+            OpticShape::from(CircleShape::new(millimeter!(5.0))?).into(),
         )?;
         let rays = rays_along_z_from(&[millimeter!(0.0, 1.0, -10.0)], nanometer!(1000.0))?;
         AnalysisRayTrace::analyze(
@@ -480,8 +480,8 @@ mod test {
         Ok(())
     }
     #[test]
-    fn clear_aperture_absent_in_file() -> OpmResult<()> {
-        test_clear_aperture_absent_in_file::<SpotDiagram>()
+    fn optic_shape_absent_in_file() -> OpmResult<()> {
+        test_optic_shape_absent_in_file::<SpotDiagram>()
     }
     #[test]
     fn records_inside_and_passes_all() -> OpmResult<()> {

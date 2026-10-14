@@ -8,7 +8,7 @@
 //! 1. One collimated line ray source
 //! 2. A wavefront analyzer before the telescope
 //! 3. Refractive index data for HZF52 glass
-//! 4. A 75 mm spherical lens with a clear aperture of 25 mm radius
+//! 4. A 75 mm spherical lens with an optic shape of 25 mm radius
 //! 5. A spot diagram analyzer at the focus of the first lens
 //! 6. A 50 mm spherical lens of the same size
 //! 7. A ray propagation visualizer after the second lens
@@ -23,7 +23,7 @@
 //!
 //! This example demonstrates:
 //! - Building spherical lenses from wavelength-dependent refractive index data
-//! - Giving the lenses their size with a clear aperture
+//! - Giving the lenses their size with an optic shape
 //! - Connecting optical components with fixed propagation distances
 //! - Attaching wavefront and spot diagram analyzers to inspect the beam
 //! - Configuring a ray-tracing analyzer and saving the system as an
@@ -34,8 +34,8 @@
 //!   macros, and document types
 //! - `opossum_core::core_optics::NodeAttrExt` — extension trait for setting
 //!   node names and properties
-//! - `opossum_core::apertures::CircleShape` — the shape of a lens's clear
-//!   aperture
+//! - `opossum_core::apertures::CircleShape` — the outline of a lens's optic
+//!   shape
 //! - `opossum_core::nodes::round_collimated_ray_builder` — builds a round
 //!   collimated ray source
 //! - `std::{env, path::Path}` — used to find the output directory and save
@@ -80,8 +80,8 @@ fn main() -> OpmResult<()> {
         nanometer!(300.0)..nanometer!(2000.0),
     )?;
     // 4. Define the Lenses and their size
-    // First lens: 75 mm focal length, 10 mm thickness, with a clear aperture of 25 mm radius.
-    let lens1 = Lens::new_with_clear_aperture(
+    // First lens: 75 mm focal length, 10 mm thickness, with an optic shape of 25 mm radius.
+    let lens1 = Lens::new_with_optic_shape(
         "75 mm lens",
         millimeter!(122.25),  // radius of curvature front
         millimeter!(-122.25), // radius of curvature back
@@ -95,7 +95,7 @@ fn main() -> OpmResult<()> {
     // Add a spot diagram analyzer to inspect the beam at the focus of the first lens.
     let i_sd6 = scenery.add_node(SpotDiagram::new("spot diagram at focus")?)?;
     // Define the second lens: 50 mm focal length, 10 mm thickness and the same size as the first.
-    let lens2 = Lens::new_with_clear_aperture(
+    let lens2 = Lens::new_with_optic_shape(
         "50 mm lens",
         millimeter!(100.0),
         millimeter!(-100.0),

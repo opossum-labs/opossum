@@ -1,5 +1,5 @@
 use opossum_core::{
-    apertures::CircleShape, core_optics::NodeAttrExt, geometry::body::CLEAR_APERTURE, prelude::*,
+    apertures::CircleShape, core_optics::NodeAttrExt, geometry::body::OPTIC_SHAPE, prelude::*,
 };
 use std::path::Path;
 
@@ -10,8 +10,8 @@ fn main() -> OpmResult<()> {
     // it is a 2-inch mirror.
     let mut mirror1 = ThinMirror::new("mirror 1").with_tilt(degree!(45.0, 0.0, 0.0))?;
     mirror1.set_property(
-        CLEAR_APERTURE,
-        ApertureShape::from(CircleShape::new(millimeter!(25.4))?).into(),
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.4))?).into(),
     )?;
     let i_m1 = scenery.add_node(mirror1)?;
     let i_m2 = scenery.add_node(ThinMirror::new("mirror 2").with_tilt(degree!(2.0, 0.0, 0.0))?)?;

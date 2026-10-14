@@ -5,7 +5,7 @@ fn main() -> OpmResult<()> {
     let i_src = scenery.add_node(SourcePort::new("collimated line ray source"))?;
     // Tilted by 5°, the mirror sends the light back through the lens up to 26 mm off its axis: the
     // lens is 56 mm in diameter and still 2 mm thick at its edge.
-    let i_l1 = scenery.add_node(Lens::new_with_clear_aperture(
+    let i_l1 = scenery.add_node(Lens::new_with_optic_shape(
         "lens",
         millimeter!(100.0),
         millimeter!(-100.0),

@@ -3,11 +3,10 @@ use uom::si::f64::{Angle, Length};
 
 use crate::{
     analyzers::propagation_strategy::PropagationStrategy,
-    apertures::{Aperture, ApertureShape, ApertureType},
     coatings::CoatingType,
     core_optics::{NodeAttrExt, OpticNode, PortType},
     error::{OpmResult, OpossumError},
-    geometry::{Rim, body::CLEAR_APERTURE, geo_surface::GeoSurfaceRef},
+    geometry::{Rim, body::OPTIC_SHAPE, geo_surface::GeoSurfaceRef},
     light::{LightData, LightResult, Rays},
     nodes::fluence_detector::Fluence,
     properties::Proptype,
@@ -36,19 +35,19 @@ pub trait OpticNodeExt {
     /// - the surface with the specified name cannot be found
     fn effective_surface_iso(&self, surf_name: &str) -> OpmResult<Isometry>;
 
-    /// Return the transversal extent of this node, read from its [`CLEAR_APERTURE`] property.
+    /// Return the transversal extent of this node, read from its [`OPTIC_SHAPE`] property.
     ///
     /// # Returns
     ///
-    /// The extent, or `None` if the clear aperture is open: the node is unbounded, as a detector
+    /// The extent, or `None` if the optic shape is open: the node is unbounded, as a detector
     /// that records all light.
     ///
     /// # Errors
     ///
-    /// This function returns an error if the node does not declare a clear aperture at all or if
-    /// that clear aperture neither is open nor delimits a region, which leaves the extent
+    /// This function returns an error if the node does not declare an optic shape at all or if
+    /// that optic shape neither is open nor delimits a region, which leaves the extent
     /// undefined.
-    fn clear_aperture(&self) -> OpmResult<Option<ValidatedCrossSection>>;
+    fn cross_section(&self) -> OpmResult<Option<ValidatedCrossSection>>;
 
     /// Set local alignment (decenter, tilt) of an optical node and update its optical surfaces.
     ///
@@ -299,26 +298,20 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         Ok(eff_node_iso.append(surf.anchor_point_iso()))
     }
 
-    fn clear_aperture(&self) -> OpmResult<Option<ValidatedCrossSection>> {
-        let Ok(Proptype::Aperture(clear_aperture)) = self.node_attr().get_property(CLEAR_APERTURE)
+    fn cross_section(&self) -> OpmResult<Option<ValidatedCrossSection>> {
+        let Ok(Proptype::OpticShape(optic_shape)) = self.node_attr().get_property(OPTIC_SHAPE)
         else {
             return Err(OpossumError::Other(format!(
-                "node '{}' has no '{CLEAR_APERTURE}' property, so its extent is unknown",
+                "node '{}' has no '{OPTIC_SHAPE}' property, so its extent is unknown",
                 self.name()
             )));
         };
-        if matches!(clear_aperture, ApertureShape::Open) {
-            return Ok(None);
-        }
-        let aperture = Aperture::new(clear_aperture.clone(), ApertureType::Hole, None, None)?;
-        ValidatedCrossSection::try_new(aperture)
-            .map(Some)
-            .map_err(|e| {
-                OpossumError::Other(format!(
-                    "the {CLEAR_APERTURE} of node '{}' does not bound a region: {e}",
-                    self.name()
-                ))
-            })
+        optic_shape.cross_section().map_err(|e| {
+            OpossumError::Other(format!(
+                "the {OPTIC_SHAPE} of node '{}' does not bound a region: {e}",
+                self.name()
+            ))
+        })
     }
 
     fn set_alignment(
@@ -565,11 +558,11 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
             let (name, node_type) = (self.name(), self.node_type());
             if strategy.is_positioning_run() {
                 log::warn!(
-                    "the optical axis misses the clear aperture of detector '{name}' ({node_type}); its measurement may fail"
+                    "the optical axis misses the optic shape of detector '{name}' ({node_type}); its measurement may fail"
                 );
             } else {
                 log::warn!(
-                    "rays passed '{name}' ({node_type}) outside its clear aperture and were not recorded. Results might not be accurate."
+                    "rays passed '{name}' ({node_type}) outside its optic shape and were not recorded. Results might not be accurate."
                 );
                 self.set_apodization_warning(true);
             }
@@ -581,7 +574,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         if rays_after < rays_before {
             self.set_apodization_warning(true);
             log::warn!(
-                "Rays were lost at '{}' ({}): they ran outside its clear aperture or fell below the energy threshold. Results might not be accurate.",
+                "Rays were lost at '{}' ({}): they ran outside its optic shape or fell below the energy threshold. Results might not be accurate.",
                 self.name(),
                 self.node_type()
             );

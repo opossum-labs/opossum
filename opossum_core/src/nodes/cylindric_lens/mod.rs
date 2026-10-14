@@ -5,7 +5,7 @@ use crate::{
     analyzers::energy::AnalysisEnergy,
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, Volumetric},
     error::{OpmResult, OpossumError},
-    geometry::Geometry,
+    geometry::{Geometry, body::OPTIC_SHAPE},
     material::{MATERIAL, Material},
     millimeter,
     nodes::{NodeRegistration, create_volume_properties},
@@ -45,7 +45,7 @@ inventory::submit! {
 ///   - `rear curvature`
 ///   - `center thickness`
 ///   - `material`
-///   - `clear aperture`
+///   - `optic shape`
 pub struct CylindricLens {
     node_attr: NodeAttr,
 }
@@ -159,11 +159,17 @@ impl OpticNode for CylindricLens {
                 "cannot read the curvatures and the center thickness of the lens".into(),
             ));
         };
+        let cross_section = self.cross_section()?.ok_or_else(|| {
+            OpossumError::Analysis(format!(
+                "the {OPTIC_SHAPE} of node '{}' is open, so its medium is unbounded",
+                self.node_attr.name()
+            ))
+        })?;
         Ok(Some(Geometry::cylindrical_singlet(
             *front_curvature,
             *rear_curvature,
             *center_thickness,
-            self.cross_section()?,
+            cross_section,
         )?))
     }
     fn as_volume(&self) -> Option<&dyn Volumetric> {
@@ -275,8 +281,8 @@ mod test {
         Ok(())
     }
     #[test]
-    fn rays_beyond_clear_aperture_are_lost() -> OpmResult<()> {
-        test_rays_beyond_clear_aperture_are_lost::<CylindricLens>()
+    fn rays_beyond_optic_shape_are_lost() -> OpmResult<()> {
+        test_rays_beyond_optic_shape_are_lost::<CylindricLens>()
     }
     #[test]
     fn inverted() -> OpmResult<()> {
@@ -409,12 +415,12 @@ mod test {
         test_volume_body::<CylindricLens>()
     }
     #[test]
-    fn clear_aperture() -> OpmResult<()> {
-        test_clear_aperture::<CylindricLens>()
+    fn optic_shape() -> OpmResult<()> {
+        test_optic_shape::<CylindricLens>()
     }
     #[test]
-    fn clear_aperture_absent_in_file() -> OpmResult<()> {
-        test_clear_aperture_absent_in_file::<CylindricLens>()
+    fn optic_shape_absent_in_file() -> OpmResult<()> {
+        test_optic_shape_absent_in_file::<CylindricLens>()
     }
     /// The cylindric lens is curved along x only, so its volume thins out towards the rim in that
     /// direction while it keeps its full thickness along the cylinder axis.

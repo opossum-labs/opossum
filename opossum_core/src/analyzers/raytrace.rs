@@ -407,7 +407,7 @@ mod test {
     }
     /// A change that leaves a component without a valid shape stops the ray trace instead of
     /// tracing the shape the component had before: a mirror curved to R = 10 mm ends before its
-    /// clear aperture of 12.5 mm.
+    /// optic shape of 12.5 mm.
     #[test]
     fn a_ray_trace_stops_at_a_component_changed_into_no_valid_shape() -> OpmResult<()> {
         let (mut scenery, source, _) = scenery_with_a_mirror_changed_behind_its_back(
@@ -421,7 +421,7 @@ mod test {
         );
         let error = RayTracingAnalyzer::new(config)
             .analyze(&mut scenery)
-            .expect_err("the mirror ends before its clear aperture");
+            .expect_err("the mirror ends before its optic shape");
         assert!(error.to_string().contains("does not reach"), "{error}");
         Ok(())
     }

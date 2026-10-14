@@ -233,7 +233,7 @@ impl Face {
             return Ok(());
         }
         Err(OpossumError::Other(format!(
-            "the {name} does not reach the edge of its clear aperture, {:.3} mm from the axis: its \
+            "the {name} does not reach the edge of its optic shape, {:.3} mm from the axis: its \
              radius of curvature is smaller",
             transversal_reach.get::<uom::si::length::millimeter>()
         )))

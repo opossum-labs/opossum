@@ -4,7 +4,7 @@
     scenery: {
         "node_type": "group",
         "name": "All node types round-trip test",
-        "uuid": "8e5ac320-f6e4-483c-af88-cfe62666b3da",
+        "uuid": "e3f76c6a-dc8f-4bde-9976-82705768fcd7",
         "props": {
             "expand view": Bool(false),
         },
@@ -13,82 +13,94 @@
                 {
                     "node_type": "source port",
                     "name": "source port",
-                    "uuid": "991f42cf-f88c-421a-ad1e-c854434bc73d",
+                    "uuid": "9ac54962-b7b7-4f25-a1e0-d40a576dd532",
                     "positioning": Absolute(),
                 },
                 {
                     "node_type": "beam splitter",
                     "name": "beam splitter",
-                    "uuid": "417dce25-8549-498e-9114-487d05c82964",
+                    "uuid": "4b08bc29-7f39-49fc-81f5-27ab3485f3f9",
                     "props": {
                         "splitter config builder": SplittingConfigBuilder(FixedRatio(0.5)),
-                        "clear aperture": Aperture(BinaryCircle(
-                            radius: 0.0125,
+                        "optic shape": OpticShape(Bounded(
+                            shape: Circle(
+                                radius: 0.0125,
+                            ),
+                            bores: [],
                         )),
                     },
                 },
                 {
                     "node_type": "cylindric lens",
                     "name": "cylindric lens",
-                    "uuid": "e206ebf4-325f-4caa-b48b-fd3a96c1461d",
+                    "uuid": "374321db-efb4-4870-b8a7-983bee9a20de",
                     "props": {
                         "front curvature": Curvature(0.5),
                         "rear curvature": Curvature(-0.5),
                         "center thickness": Length(0.01),
-                        "Material": Material(Id("40e60555-d26a-45aa-8b1f-10ee4a94ec17")),
-                        "clear aperture": Aperture(BinaryCircle(
-                            radius: 0.0125,
+                        "Material": Material(Id("863c2c36-e5f1-4f80-9ea6-90e17ec0fda6")),
+                        "optic shape": OpticShape(Bounded(
+                            shape: Circle(
+                                radius: 0.0125,
+                            ),
+                            bores: [],
                         )),
                     },
                 },
                 {
                     "node_type": "fluence detector",
                     "name": "fluence detector",
-                    "uuid": "7d87de4b-ae56-42d4-b33b-4505d47ad8ce",
+                    "uuid": "af69a35b-3c39-41c2-ae71-123032674f54",
                     "props": {
                         "fluence estimator": FluenceEstimator(Voronoi),
-                        "clear aperture": Aperture(Open),
+                        "optic shape": OpticShape(Open),
                     },
                 },
                 {
                     "node_type": "lens",
                     "name": "lens",
-                    "uuid": "a171c6dc-f7cb-4ffe-8999-961b0586c250",
+                    "uuid": "b28aa61f-336b-43b8-82a3-979bbacced23",
                     "props": {
                         "front curvature": Curvature(0.5),
                         "rear curvature": Curvature(-0.5),
                         "center thickness": Length(0.01),
-                        "Material": Material(Id("ab5cbf68-c5b9-4e52-8267-32dee4cc6768")),
-                        "clear aperture": Aperture(BinaryCircle(
-                            radius: 0.0125,
+                        "Material": Material(Id("ecd061b6-84e2-4496-b598-2d88fb4239df")),
+                        "optic shape": OpticShape(Bounded(
+                            shape: Circle(
+                                radius: 0.0125,
+                            ),
+                            bores: [],
                         )),
                     },
                 },
                 {
                     "node_type": "wedge",
                     "name": "wedge",
-                    "uuid": "3baa96c9-1a8a-4dce-8a8e-3bd2e1c1492b",
+                    "uuid": "3a9a81ef-148e-4927-aad2-5eac4baba078",
                     "props": {
                         "center thickness": Length(0.01),
-                        "Material": Material(Id("ef8257c6-f076-4f8a-a9d7-ae2db0493029")),
+                        "Material": Material(Id("521e40dd-9238-4422-b4c4-07f27b22f624")),
                         "wedge": Angle(0.0),
-                        "clear aperture": Aperture(BinaryCircle(
-                            radius: 0.0125,
+                        "optic shape": OpticShape(Bounded(
+                            shape: Circle(
+                                radius: 0.0125,
+                            ),
+                            bores: [],
                         )),
                     },
                 },
                 {
                     "node_type": "dummy",
                     "name": "dummy",
-                    "uuid": "bf64f1af-5a2d-4384-84a0-562677c34d32",
+                    "uuid": "1afce543-ec62-4bc3-9040-0f7a873a21ba",
                     "props": {
-                        "clear aperture": Aperture(Open),
+                        "optic shape": OpticShape(Open),
                     },
                 },
                 {
                     "node_type": "group",
                     "name": "Nested Group",
-                    "uuid": "5c0f950c-d730-48ca-9d5d-89b051f089e9",
+                    "uuid": "70aebd7d-79ed-4caa-a95a-f5344b13e7b6",
                     "props": {
                         "expand view": Bool(false),
                     },
@@ -97,82 +109,88 @@
                             {
                                 "node_type": "dummy",
                                 "name": "nested dummy in",
-                                "uuid": "6c73a5ed-9168-4996-9ecd-0bf2bc26f141",
+                                "uuid": "350c9ebe-e68d-4c1c-b204-e0b064f74606",
                                 "props": {
-                                    "clear aperture": Aperture(Open),
+                                    "optic shape": OpticShape(Open),
                                 },
                             },
                             {
                                 "node_type": "dummy",
                                 "name": "nested dummy out",
-                                "uuid": "ecb5b69f-ea4c-4a60-8627-32d2fd79fcd7",
+                                "uuid": "5448b255-631c-48c1-943c-65b5f56aff09",
                                 "props": {
-                                    "clear aperture": Aperture(Open),
+                                    "optic shape": OpticShape(Open),
                                 },
                             },
                         ],
                         edges: [
                             (
-                                src_id: "6c73a5ed-9168-4996-9ecd-0bf2bc26f141",
+                                src_id: "350c9ebe-e68d-4c1c-b204-e0b064f74606",
                                 src_port: "output_1",
-                                target_id: "ecb5b69f-ea4c-4a60-8627-32d2fd79fcd7",
+                                target_id: "5448b255-631c-48c1-943c-65b5f56aff09",
                                 target_port: "input_1",
                                 distance: 0.005,
                             ),
                         ],
                         input_map: ({
-                            "input_1": ("6c73a5ed-9168-4996-9ecd-0bf2bc26f141", "input_1"),
+                            "input_1": ("350c9ebe-e68d-4c1c-b204-e0b064f74606", "input_1"),
                         }),
                         output_map: ({
-                            "output_1": ("ecb5b69f-ea4c-4a60-8627-32d2fd79fcd7", "output_1"),
+                            "output_1": ("5448b255-631c-48c1-943c-65b5f56aff09", "output_1"),
                         }),
                     ),
                 },
                 {
                     "node_type": "reference",
                     "name": "ref (nested dummy in)",
-                    "uuid": "3ab2243f-67c8-4f72-a268-f90c5d13b9eb",
+                    "uuid": "2298307d-7b74-439f-8da8-f801ffd348b3",
                     "props": {
-                        "reference id": Uuid("6c73a5ed-9168-4996-9ecd-0bf2bc26f141"),
+                        "reference id": Uuid("350c9ebe-e68d-4c1c-b204-e0b064f74606"),
                     },
                 },
                 {
                     "node_type": "energy meter",
                     "name": "energy meter",
-                    "uuid": "823723e9-6c68-4895-a341-f3101b4c6f24",
+                    "uuid": "14a46e23-0752-4d1a-a5cc-7a3dcabaaf28",
                     "props": {
                         "meter type": Metertype(IdealEnergyMeter),
-                        "clear aperture": Aperture(Open),
+                        "optic shape": OpticShape(Open),
                     },
                 },
                 {
                     "node_type": "ideal filter",
                     "name": "ideal filter",
-                    "uuid": "51f08a43-f53d-46b2-98ad-35169ef9139a",
+                    "uuid": "a63e5e89-84c2-4743-a8a0-085aeebf69c0",
                     "props": {
                         "filter type builder": FilterTypeBuilder(Constant(
                             transmission: 1.0,
                         )),
-                        "clear aperture": Aperture(BinaryCircle(
-                            radius: 0.0125,
+                        "optic shape": OpticShape(Bounded(
+                            shape: Circle(
+                                radius: 0.0125,
+                            ),
+                            bores: [],
                         )),
                     },
                 },
                 {
                     "node_type": "paraxial surface",
                     "name": "paraxial",
-                    "uuid": "f8972d36-b370-4b08-b46b-ac7771b1413f",
+                    "uuid": "74bf6968-2a9e-482a-a016-a4e8c8a0c9c0",
                     "props": {
                         "focal length": Length(1.0),
-                        "clear aperture": Aperture(BinaryCircle(
-                            radius: 0.0125,
+                        "optic shape": OpticShape(Bounded(
+                            shape: Circle(
+                                radius: 0.0125,
+                            ),
+                            bores: [],
                         )),
                     },
                 },
                 {
                     "node_type": "ray propagation",
                     "name": "ray propagation",
-                    "uuid": "956f402b-e5ce-4fa6-9a3d-0b77bce80b0b",
+                    "uuid": "3aa3d13f-d0cd-475e-81ce-badf14ba29da",
                     "props": {
                         "view_direction": Vec3(1.0, 0.0, 0.0),
                         "ray transparency": F64(0.4),
@@ -181,28 +199,28 @@
                 {
                     "node_type": "spectrometer",
                     "name": "spectrometer",
-                    "uuid": "20a99db2-06e1-44c4-b1f4-848c93749437",
+                    "uuid": "30871a14-2c9c-4232-8fd2-f280ea7df05a",
                     "props": {
                         "spectrometer type": SpectrometerType(Ideal),
-                        "clear aperture": Aperture(Open),
+                        "optic shape": OpticShape(Open),
                     },
                 },
                 {
                     "node_type": "spot diagram",
                     "name": "spot diagram",
-                    "uuid": "bd5a01a9-f8b3-4c53-a5b7-28eaf95d7438",
+                    "uuid": "91246996-75c6-4a04-a6f9-3bcd912d7dfe",
                     "props": {
                         "plot aperture": Bool(false),
-                        "clear aperture": Aperture(Open),
+                        "optic shape": OpticShape(Open),
                     },
                 },
                 {
                     "node_type": "wavefront monitor",
                     "name": "wavefront monitor",
-                    "uuid": "5a756f16-8858-42d3-aff3-4eafa4c96640",
+                    "uuid": "d70939f1-8b86-47ac-b589-335efb142a75",
                     "props": {
                         "remove tilt": Bool(false),
-                        "clear aperture": Aperture(Open),
+                        "optic shape": OpticShape(Open),
                         "decompose zernike": Bool(false),
                         "zernike max order": I32(4),
                     },
@@ -226,26 +244,32 @@
                             ),
                         },
                     ),
-                    "uuid": "46107644-11fd-4185-8fc5-1936510166f6",
+                    "uuid": "51272976-8252-4915-8af5-2463693c8950",
                     "props": {
                         "focal length": Length(1.0),
                         "off-axis angle": Angle(0.0),
                         "collimating": Bool(false),
                         "off-axis direction": Vec2(1.0, 0.0),
-                        "clear aperture": Aperture(BinaryCircle(
-                            radius: 0.0125,
+                        "optic shape": OpticShape(Bounded(
+                            shape: Circle(
+                                radius: 0.0125,
+                            ),
+                            bores: [],
                         )),
                     },
                 },
                 {
                     "node_type": "reflective grating",
                     "name": "reflective grating",
-                    "uuid": "c409e018-542d-4a8f-a554-bd9d1f188256",
+                    "uuid": "a2fd5af6-0b0a-4026-9687-6f950da870d2",
                     "props": {
                         "line density": LinearDensity(1740000.0),
                         "diffraction order": I32(-1),
-                        "clear aperture": Aperture(BinaryCircle(
-                            radius: 0.0125,
+                        "optic shape": OpticShape(Bounded(
+                            shape: Circle(
+                                radius: 0.0125,
+                            ),
+                            bores: [],
                         )),
                     },
                     "alignment": Some(
@@ -271,132 +295,135 @@
                             ),
                         },
                     ),
-                    "uuid": "c7128699-c7a2-4ea1-8fd7-9b02e3cdae93",
+                    "uuid": "561f5d70-b542-4368-a9d2-6376e3b6912b",
                     "props": {
                         "curvature": Curvature(inf),
-                        "clear aperture": Aperture(BinaryCircle(
-                            radius: 0.0125,
+                        "optic shape": OpticShape(Bounded(
+                            shape: Circle(
+                                radius: 0.0125,
+                            ),
+                            bores: [],
                         )),
                     },
                 },
             ],
             edges: [
                 (
-                    src_id: "991f42cf-f88c-421a-ad1e-c854434bc73d",
+                    src_id: "9ac54962-b7b7-4f25-a1e0-d40a576dd532",
                     src_port: "output_1",
-                    target_id: "417dce25-8549-498e-9114-487d05c82964",
+                    target_id: "4b08bc29-7f39-49fc-81f5-27ab3485f3f9",
                     target_port: "input_1",
                     distance: 0.005,
                 ),
                 (
-                    src_id: "417dce25-8549-498e-9114-487d05c82964",
+                    src_id: "4b08bc29-7f39-49fc-81f5-27ab3485f3f9",
                     src_port: "out1_trans1_refl2",
-                    target_id: "e206ebf4-325f-4caa-b48b-fd3a96c1461d",
+                    target_id: "374321db-efb4-4870-b8a7-983bee9a20de",
                     target_port: "input_1",
                     distance: 0.005,
                 ),
                 (
-                    src_id: "e206ebf4-325f-4caa-b48b-fd3a96c1461d",
+                    src_id: "374321db-efb4-4870-b8a7-983bee9a20de",
                     src_port: "output_1",
-                    target_id: "7d87de4b-ae56-42d4-b33b-4505d47ad8ce",
+                    target_id: "af69a35b-3c39-41c2-ae71-123032674f54",
                     target_port: "input_1",
                     distance: 0.005,
                 ),
                 (
-                    src_id: "7d87de4b-ae56-42d4-b33b-4505d47ad8ce",
+                    src_id: "af69a35b-3c39-41c2-ae71-123032674f54",
                     src_port: "output_1",
-                    target_id: "a171c6dc-f7cb-4ffe-8999-961b0586c250",
+                    target_id: "b28aa61f-336b-43b8-82a3-979bbacced23",
                     target_port: "input_1",
                     distance: 0.005,
                 ),
                 (
-                    src_id: "a171c6dc-f7cb-4ffe-8999-961b0586c250",
+                    src_id: "b28aa61f-336b-43b8-82a3-979bbacced23",
                     src_port: "output_1",
-                    target_id: "3baa96c9-1a8a-4dce-8a8e-3bd2e1c1492b",
+                    target_id: "3a9a81ef-148e-4927-aad2-5eac4baba078",
                     target_port: "input_1",
                     distance: 0.005,
                 ),
                 (
-                    src_id: "3baa96c9-1a8a-4dce-8a8e-3bd2e1c1492b",
+                    src_id: "3a9a81ef-148e-4927-aad2-5eac4baba078",
                     src_port: "output_1",
-                    target_id: "bf64f1af-5a2d-4384-84a0-562677c34d32",
+                    target_id: "1afce543-ec62-4bc3-9040-0f7a873a21ba",
                     target_port: "input_1",
                     distance: 0.005,
                 ),
                 (
-                    src_id: "bf64f1af-5a2d-4384-84a0-562677c34d32",
+                    src_id: "1afce543-ec62-4bc3-9040-0f7a873a21ba",
                     src_port: "output_1",
-                    target_id: "5c0f950c-d730-48ca-9d5d-89b051f089e9",
+                    target_id: "70aebd7d-79ed-4caa-a95a-f5344b13e7b6",
                     target_port: "input_1",
                     distance: 0.005,
                 ),
                 (
-                    src_id: "5c0f950c-d730-48ca-9d5d-89b051f089e9",
+                    src_id: "70aebd7d-79ed-4caa-a95a-f5344b13e7b6",
                     src_port: "output_1",
-                    target_id: "823723e9-6c68-4895-a341-f3101b4c6f24",
+                    target_id: "14a46e23-0752-4d1a-a5cc-7a3dcabaaf28",
                     target_port: "input_1",
                     distance: 0.005,
                 ),
                 (
-                    src_id: "823723e9-6c68-4895-a341-f3101b4c6f24",
+                    src_id: "14a46e23-0752-4d1a-a5cc-7a3dcabaaf28",
                     src_port: "output_1",
-                    target_id: "51f08a43-f53d-46b2-98ad-35169ef9139a",
+                    target_id: "a63e5e89-84c2-4743-a8a0-085aeebf69c0",
                     target_port: "input_1",
                     distance: 0.005,
                 ),
                 (
-                    src_id: "51f08a43-f53d-46b2-98ad-35169ef9139a",
+                    src_id: "a63e5e89-84c2-4743-a8a0-085aeebf69c0",
                     src_port: "output_1",
-                    target_id: "f8972d36-b370-4b08-b46b-ac7771b1413f",
+                    target_id: "74bf6968-2a9e-482a-a016-a4e8c8a0c9c0",
                     target_port: "input_1",
                     distance: 0.005,
                 ),
                 (
-                    src_id: "f8972d36-b370-4b08-b46b-ac7771b1413f",
+                    src_id: "74bf6968-2a9e-482a-a016-a4e8c8a0c9c0",
                     src_port: "output_1",
-                    target_id: "956f402b-e5ce-4fa6-9a3d-0b77bce80b0b",
+                    target_id: "3aa3d13f-d0cd-475e-81ce-badf14ba29da",
                     target_port: "input_1",
                     distance: 0.005,
                 ),
                 (
-                    src_id: "956f402b-e5ce-4fa6-9a3d-0b77bce80b0b",
+                    src_id: "3aa3d13f-d0cd-475e-81ce-badf14ba29da",
                     src_port: "output_1",
-                    target_id: "20a99db2-06e1-44c4-b1f4-848c93749437",
+                    target_id: "30871a14-2c9c-4232-8fd2-f280ea7df05a",
                     target_port: "input_1",
                     distance: 0.005,
                 ),
                 (
-                    src_id: "20a99db2-06e1-44c4-b1f4-848c93749437",
+                    src_id: "30871a14-2c9c-4232-8fd2-f280ea7df05a",
                     src_port: "output_1",
-                    target_id: "bd5a01a9-f8b3-4c53-a5b7-28eaf95d7438",
+                    target_id: "91246996-75c6-4a04-a6f9-3bcd912d7dfe",
                     target_port: "input_1",
                     distance: 0.005,
                 ),
                 (
-                    src_id: "bd5a01a9-f8b3-4c53-a5b7-28eaf95d7438",
+                    src_id: "91246996-75c6-4a04-a6f9-3bcd912d7dfe",
                     src_port: "output_1",
-                    target_id: "5a756f16-8858-42d3-aff3-4eafa4c96640",
+                    target_id: "d70939f1-8b86-47ac-b589-335efb142a75",
                     target_port: "input_1",
                     distance: 0.005,
                 ),
                 (
-                    src_id: "5a756f16-8858-42d3-aff3-4eafa4c96640",
+                    src_id: "d70939f1-8b86-47ac-b589-335efb142a75",
                     src_port: "output_1",
-                    target_id: "46107644-11fd-4185-8fc5-1936510166f6",
+                    target_id: "51272976-8252-4915-8af5-2463693c8950",
                     target_port: "input_1",
                     distance: 0.005,
                 ),
                 (
-                    src_id: "46107644-11fd-4185-8fc5-1936510166f6",
+                    src_id: "51272976-8252-4915-8af5-2463693c8950",
                     src_port: "output_1",
-                    target_id: "c409e018-542d-4a8f-a554-bd9d1f188256",
+                    target_id: "a2fd5af6-0b0a-4026-9687-6f950da870d2",
                     target_port: "input_1",
                     distance: 0.05,
                 ),
                 (
-                    src_id: "c409e018-542d-4a8f-a554-bd9d1f188256",
+                    src_id: "a2fd5af6-0b0a-4026-9687-6f950da870d2",
                     src_port: "output_1",
-                    target_id: "c7128699-c7a2-4ea1-8fd7-9b02e3cdae93",
+                    target_id: "561f5d70-b542-4368-a9d2-6376e3b6912b",
                     target_port: "input_1",
                     distance: 0.05,
                 ),
@@ -404,10 +431,10 @@
         ),
     },
     analyzers: {
-        "f8a3be41-2404-4335-878a-8907333e138d": (
+        "f9adff22-6a45-4bbd-8674-dd62ff0e70f5": (
             analyzer_type: Energy(
                 source_map: {
-                    "991f42cf-f88c-421a-ad1e-c854434bc73d": LaserLines(
+                    "9ac54962-b7b7-4f25-a1e0-d40a576dd532": LaserLines(
                         lines: (
                             values: [
                                 (0.000001054, 1.0),
@@ -418,14 +445,14 @@
                 },
             ),
         ),
-        "8c5c8036-4499-460a-b55b-c301e3868ab6": (
+        "2a1a3c66-5ab9-4ddd-8609-7b1fa3210e7c": (
             analyzer_type: RayTrace(
                 min_energy_per_ray: 0.000000000001,
                 max_number_of_bounces: 1000,
                 max_number_of_refractions: 1000,
                 missed_surface_strategy: Stop,
                 source_map: {
-                    "991f42cf-f88c-421a-ad1e-c854434bc73d": (
+                    "9ac54962-b7b7-4f25-a1e0-d40a576dd532": (
                         source: Collimated(
                             pos: Hexapolar(
                                 nr_of_rings: 1,
@@ -454,12 +481,12 @@
                 },
             ),
         ),
-        "a6d4fcb9-0779-4652-8b33-637db7530fdc": (
+        "1197101b-7224-4a1a-a81d-dc121ea34a27": (
             analyzer_type: GhostFocus(
                 max_bounces: 1,
                 fluence_estimator: Voronoi,
                 source_map: {
-                    "991f42cf-f88c-421a-ad1e-c854434bc73d": (
+                    "9ac54962-b7b7-4f25-a1e0-d40a576dd532": (
                         source: Collimated(
                             pos: Hexapolar(
                                 nr_of_rings: 1,
@@ -490,9 +517,9 @@
         ),
     },
     embedded_materials: {
-        "40e60555-d26a-45aa-8b1f-10ee4a94ec17": {
+        "863c2c36-e5f1-4f80-9ea6-90e17ec0fda6": {
             "schema_version": 1,
-            "id": "40e60555-d26a-45aa-8b1f-10ee4a94ec17",
+            "id": "863c2c36-e5f1-4f80-9ea6-90e17ec0fda6",
             "version": 0,
             "name": "lens material",
             "optical": (
@@ -502,9 +529,9 @@
                 absorption: r#None,
             ),
         },
-        "ab5cbf68-c5b9-4e52-8267-32dee4cc6768": {
+        "ecd061b6-84e2-4496-b598-2d88fb4239df": {
             "schema_version": 1,
-            "id": "ab5cbf68-c5b9-4e52-8267-32dee4cc6768",
+            "id": "ecd061b6-84e2-4496-b598-2d88fb4239df",
             "version": 0,
             "name": "lens material",
             "optical": (
@@ -514,9 +541,9 @@
                 absorption: r#None,
             ),
         },
-        "ef8257c6-f076-4f8a-a9d7-ae2db0493029": {
+        "521e40dd-9238-4422-b4c4-07f27b22f624": {
             "schema_version": 1,
-            "id": "ef8257c6-f076-4f8a-a9d7-ae2db0493029",
+            "id": "521e40dd-9238-4422-b4c4-07f27b22f624",
             "version": 0,
             "name": "lens material",
             "optical": (

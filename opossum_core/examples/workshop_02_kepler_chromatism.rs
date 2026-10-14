@@ -9,7 +9,7 @@
 //! 2. A wavelength-dependent refractive index material (Schott model)
 //! 3. Two spherical lenses ("75 mm lens" and "50 mm lens") using that
 //!    material
-//! 4. A clear aperture of 25 mm radius on the first lens and of 27.5 mm on the
+//! 4. An optic shape of 25 mm radius on the first lens and of 27.5 mm on the
 //!    second one, the size of the lenses
 //! 5. A ray propagation visualizer after the second lens
 //! 6. A ray-tracing analyzer configured for two wavelengths
@@ -33,8 +33,8 @@
 //!   macros, and document types
 //! - `opossum_core::core_optics::NodeAttrExt` — extension trait for setting
 //!   node names and properties
-//! - `opossum_core::apertures::CircleShape` — the shape of a lens's clear
-//!   aperture
+//! - `opossum_core::apertures::CircleShape` — the outline of a lens's optic
+//!   shape
 //! - `opossum_core::distributions::{energy::UniformDist, position::Grid,
 //!   spectral::LaserLines}` — beam energy, spatial, and spectral
 //!   distributions
@@ -78,8 +78,8 @@ fn main() -> OpmResult<()> {
         nanometer!(300.0)..nanometer!(2000.0),
     )?;
     // Create the first spherical lens with a curvature of 130.0 mm / -130.0 mm. It is 50 mm in
-    // diameter, which limits the beam diameter: its clear aperture is a circle of 25 mm radius.
-    let lens1 = Lens::new_with_clear_aperture(
+    // diameter, which limits the beam diameter: its optic shape is a circle of 25 mm radius.
+    let lens1 = Lens::new_with_optic_shape(
         "75 mm lens",
         millimeter!(130.0),
         millimeter!(-130.0),
@@ -91,7 +91,7 @@ fn main() -> OpmResult<()> {
     let i_pl1 = scenery.add_node(lens1)?;
     // Create the second spherical lens of the telescope. It is slightly larger than the first one,
     // because the 350 nm light reaches it up to 26.4 mm off its axis.
-    let lens2 = Lens::new_with_clear_aperture(
+    let lens2 = Lens::new_with_optic_shape(
         "50 mm lens",
         millimeter!(100.0),
         millimeter!(-100.0),

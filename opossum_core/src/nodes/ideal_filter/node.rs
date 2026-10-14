@@ -38,7 +38,7 @@ inventory::submit! {
 ///   - `name`
 ///   - `inverted`
 ///   - `filter type builder`: Config data for the filter type. See [`FilterTypeBuilder`] for details.
-///   - `clear aperture`: the extent of the filter; a ray beyond it misses the filter, is not
+///   - `optic shape`: the extent of the filter; a ray beyond it misses the filter, is not
 ///     filtered and follows the analyzer's missed surface strategy
 pub struct IdealFilter {
     node_attr: NodeAttr,
@@ -139,7 +139,7 @@ impl Planar for IdealFilter {
 }
 impl OpticNode for IdealFilter {
     fn geometry(&self) -> OpmResult<Option<Geometry>> {
-        Ok(Some(Geometry::plane(self.clear_aperture()?)))
+        Ok(Some(Geometry::plane(self.cross_section()?)))
     }
     fn as_surface(&self) -> Option<&dyn Planar> {
         Some(self)
@@ -250,8 +250,8 @@ mod test {
         millimeter, nanometer,
         nodes::test_helper::helper::{
             assert_valid_energies, placed_at_origin, rays_along_z_from, test_analyze_empty,
-            test_analyze_wrong_data_type, test_clear_aperture_absent_in_file, test_inverted,
-            test_rays_beyond_clear_aperture_are_lost,
+            test_analyze_wrong_data_type, test_inverted, test_optic_shape_absent_in_file,
+            test_rays_beyond_optic_shape_are_lost,
         },
         percent,
         prelude::{BandFilter, Isometry},
@@ -444,12 +444,12 @@ mod test {
         Ok(())
     }
     #[test]
-    fn clear_aperture_absent_in_file() -> OpmResult<()> {
-        test_clear_aperture_absent_in_file::<IdealFilter>()
+    fn optic_shape_absent_in_file() -> OpmResult<()> {
+        test_optic_shape_absent_in_file::<IdealFilter>()
     }
     #[test]
-    fn rays_beyond_clear_aperture_are_lost() -> OpmResult<()> {
-        test_rays_beyond_clear_aperture_are_lost::<IdealFilter>()
+    fn rays_beyond_optic_shape_are_lost() -> OpmResult<()> {
+        test_rays_beyond_optic_shape_are_lost::<IdealFilter>()
     }
     /// A filter of 30 % at the origin.
     fn placed_filter() -> OpmResult<IdealFilter> {

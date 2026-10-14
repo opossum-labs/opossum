@@ -116,7 +116,7 @@ mod test {
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
     use opossum_core::{
         core_optics::node_attr::HasNodeAttr,
-        geometry::body::CLEAR_APERTURE,
+        geometry::body::OPTIC_SHAPE,
         material::{MATERIAL, Material},
         nodes::{Dummy, Lens, ParaxialSurface},
         properties::{proptype::AssetRef, validator::Validator},
@@ -246,8 +246,8 @@ mod test {
         assert_eq!(index_model_of_node(), index_model(2.0));
     }
 
-    /// The GUI offers only the shapes a clear aperture can take, and learns them from the property's
-    /// validator: a lens must have an edge, a paraxial surface may also be open.
+    /// The GUI offers only the optic shapes a node can take, and learns them from the property's
+    /// validator: a lens must be bounded, a paraxial surface has no validator and may also be open.
     #[actix_web::test]
     async fn test_get_properties_carries_the_validators() {
         let app_state = create_test_state();
@@ -263,8 +263,8 @@ mod test {
         };
         let app = test::init_service(App::new().app_data(app_state).service(get_properties)).await;
         for (node_id, expected) in [
-            (lens_id, Validator::ApertureDelimitsRegion),
-            (paraxial_id, Validator::ApertureDelimitsRegionOrIsOpen),
+            (lens_id, Some(Validator::OpticShapeIsBounded)),
+            (paraxial_id, None),
         ] {
             let req = test::TestRequest::get()
                 .uri(&format!("/{node_id}/properties"))
@@ -275,7 +275,7 @@ mod test {
             let body = test::read_body(resp).await;
             let response: NodePropertiesResponse =
                 ron::from_str(std::str::from_utf8(&body).unwrap()).unwrap();
-            assert_eq!(response.validators.get(CLEAR_APERTURE), Some(&expected));
+            assert_eq!(response.validators.get(OPTIC_SHAPE), expected.as_ref());
         }
     }
 

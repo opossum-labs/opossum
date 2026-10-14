@@ -55,7 +55,7 @@ inventory::submit! {
 ///   - `name`
 ///   - `inverted`
 ///   - `line density`
-///   - `clear aperture`: the extent of the grating; a ray beyond it misses the grating
+///   - `optic shape`: the extent of the grating; a ray beyond it misses the grating
 pub struct ReflectiveGrating {
     node_attr: NodeAttr,
 }
@@ -369,7 +369,7 @@ impl Planar for ReflectiveGrating {
 }
 impl OpticNode for ReflectiveGrating {
     fn geometry(&self) -> OpmResult<Option<Geometry>> {
-        Ok(Some(Geometry::plane(self.clear_aperture()?)))
+        Ok(Some(Geometry::plane(self.cross_section()?)))
     }
     fn as_surface(&self) -> Option<&dyn Planar> {
         Some(self)
@@ -511,12 +511,12 @@ mod test {
         );
     }
     #[test]
-    fn clear_aperture_absent_in_file() -> OpmResult<()> {
-        test_clear_aperture_absent_in_file::<ReflectiveGrating>()
+    fn optic_shape_absent_in_file() -> OpmResult<()> {
+        test_optic_shape_absent_in_file::<ReflectiveGrating>()
     }
     #[test]
-    fn reflections_beyond_clear_aperture_are_lost() -> OpmResult<()> {
-        test_reflections_beyond_clear_aperture_are_lost::<ReflectiveGrating>()
+    fn reflections_beyond_optic_shape_are_lost() -> OpmResult<()> {
+        test_reflections_beyond_optic_shape_are_lost::<ReflectiveGrating>()
     }
     #[test]
     fn invalid_line_density() {

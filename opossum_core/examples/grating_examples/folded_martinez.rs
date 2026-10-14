@@ -1,7 +1,7 @@
 use opossum_core::{
     apertures::{CircleShape, RectangleShape},
     core_optics::NodeAttrExt,
-    geometry::body::CLEAR_APERTURE,
+    geometry::body::OPTIC_SHAPE,
     prelude::*,
     refractive_index::RefractiveIndexType,
 };
@@ -21,14 +21,14 @@ pub fn folded_martinez(
     let mut grating = ReflectiveGrating::new("grating 1", num_per_mm!(1740.), -1)?
         .with_rot_from_littrow(alignment_wvl, degree!(-4.))?;
     grating.set_property(
-        CLEAR_APERTURE,
-        ApertureShape::from(RectangleShape::new(millimeter!(140.0), millimeter!(60.0))?).into(),
+        OPTIC_SHAPE,
+        OpticShape::from(RectangleShape::new(millimeter!(140.0), millimeter!(60.0))?).into(),
     )?;
     let i_g1 = cb.add_node(grating)?;
     // focal length = 996.7 mm (Thorlabs LA1779-B). The dispersed beam passes the lens up to 70 mm
     // off its center; at that radius the lens is only 0.2 mm thick at its edge.
     let lens1 = cb.add_node(
-        Lens::new_with_clear_aperture(
+        Lens::new_with_optic_shape(
             "Lens 1",
             millimeter!(515.1),
             millimeter!(f64::INFINITY),
@@ -42,8 +42,8 @@ pub fn folded_martinez(
     // The spectrum spreads up to 58 mm across the mirror in the focal plane: 5 inches.
     let mut mirror = ThinMirror::new("mirr").align_like_node_at_distance(lens1, telescope_distance);
     mirror.set_property(
-        CLEAR_APERTURE,
-        ApertureShape::from(CircleShape::new(millimeter!(63.5))?).into(),
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(63.5))?).into(),
     )?;
     let mir_1 = cb.add_node(mirror)?;
     let mir_1_ref = cb.add_node(NodeReference::from_node(&cb.node(mir_1)?)?)?;
@@ -64,8 +64,8 @@ pub fn folded_martinez(
     // The spatially chirped beam is up to 19 mm off the center of the retro mirror: 2 inches.
     let mut retro_mirror = ThinMirror::new("retro_mir1");
     retro_mirror.set_property(
-        CLEAR_APERTURE,
-        ApertureShape::from(CircleShape::new(millimeter!(25.4))?).into(),
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.4))?).into(),
     )?;
     let retro_mir1 = cb.add_node(retro_mirror)?;
 
