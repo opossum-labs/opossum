@@ -171,6 +171,9 @@ impl Property {
             Proptype::NodeReport(report) => {
                 report.export(report_path)?;
             }
+            Proptype::SpotDiagram(spot_diagram) => {
+                spot_diagram.to_plot(report_path, id, PltBackEnd::SVG)?;
+            }
             _ => {}
         }
         Ok(())

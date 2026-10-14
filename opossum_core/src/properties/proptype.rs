@@ -4,7 +4,7 @@ use std::cell::RefCell;
 
 use crate::{
     analyzers::ghostfocus::GhostFocusHistory,
-    apertures::{ApertureShape, OpticShape},
+    apertures::OpticShape,
     core_optics::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
     error::{OpmResult, OpossumError},
     light::{
@@ -17,7 +17,8 @@ use crate::{
     },
     material::Material,
     nodes::{
-        Metertype, SpectrometerType, SplittingConfigBuilder, WaveFrontMap, WavefrontDecomposition,
+        Metertype, SpectrometerType, SplittingConfigBuilder, SpotDiagramData, WaveFrontMap,
+        WavefrontDecomposition,
         fluence_detector::{Fluence, fluence_data::FluenceData},
         ideal_filter::FilterTypeBuilder,
         ray_propagation_visualizer::RayPositionHistories,
@@ -160,8 +161,6 @@ pub enum Proptype {
     Metertype(Metertype),
     /// An [`Uuid`] for identifying an optical node.
     Uuid(Uuid),
-    /// A clear aperture as older files stated it, read only to upgrade it to an [`OpticShape`].
-    Aperture(ApertureShape),
     /// The optic shape of a component: an outline on its axis with bores through it.
     OpticShape(OpticShape),
     /// A property for storing a [`Spectrum`].
@@ -203,8 +202,10 @@ pub enum Proptype {
     Isometry(Option<Isometry>),
     /// Three dimensional Vector
     Vec3(Vector3<f64>),
-    /// a hit map (position fo rays hitting a given surface)
+    /// a hit map (position of rays hitting a given surface)
     HitMap(HitMap),
+    /// 2D spot diagram data resolved by wavelength
+    SpotDiagram(SpotDiagramData),
     /// 2-dimenstional vector
     Vec2(Vector2<f64>),
     /// [`LightData`] build configuration
@@ -239,6 +240,7 @@ impl Proptype {
                 Self::Metertype(value) => template_engine.render("simple", &value.to_string()),
                 Self::Spectrum(_)
                 | Self::HitMap(_)
+                | Self::SpotDiagram(_)
                 | Self::RayPositionHistory(_)
                 | Self::GhostFocusHistory(_) => template_engine.render(
                     "image",
@@ -277,7 +279,6 @@ impl Proptype {
                 Self::Energy(value) => {
                     template_engine.render("simple", &format_quantity(joule, *value))
                 }
-                Self::Aperture(shape) => template_engine.render("simple", &shape.to_string()),
                 Self::OpticShape(optic_shape) => {
                     template_engine.render("simple", &optic_shape.to_string())
                 }
@@ -472,6 +473,11 @@ impl From<LinearNumberDensity> for Proptype {
 impl From<FluenceEstimator> for Proptype {
     fn from(val: FluenceEstimator) -> Self {
         Self::FluenceEstimator(val)
+    }
+}
+impl From<SpotDiagramData> for Proptype {
+    fn from(value: SpotDiagramData) -> Self {
+        Self::SpotDiagram(value)
     }
 }
 impl From<Vector2<f64>> for Proptype {

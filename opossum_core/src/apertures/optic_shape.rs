@@ -61,6 +61,11 @@ impl From<OutlineShape> for ApertureShape {
         }
     }
 }
+/// The edge of a binary shape.
+///
+/// # Errors
+///
+/// This function returns an error if the shape has no edge: a soft, a stacked or an open shape.
 impl TryFrom<&ApertureShape> for OutlineShape {
     type Error = OpossumError;
 
@@ -140,30 +145,6 @@ impl Bore {
     pub const fn rotation(&self) -> Angle {
         self.rotation
     }
-    /// Read a bore that an older file stated as an [`Aperture`]: its shape, shifted and turned the
-    /// way the aperture is.
-    ///
-    /// # Arguments
-    ///
-    /// * `aperture` - the aperture; its type is not looked at.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the shape of the aperture has no edge.
-    pub(crate) fn from_aperture(aperture: &Aperture) -> OpmResult<Self> {
-        let (center, rotation) = aperture.isometry().map_or_else(
-            || (Point2::origin(), Angle::zero()),
-            |isometry| {
-                let shift = isometry.translation();
-                (Point2::new(shift.x, shift.y), isometry.rotation().z)
-            },
-        );
-        Ok(Self::new(
-            OutlineShape::try_from(aperture.shape())?,
-            center,
-            rotation,
-        ))
-    }
     /// The region of this bore as an [`Aperture`] of the given type, placed where the bore is.
     fn aperture(&self, aperture_type: ApertureType) -> OpmResult<Aperture> {
         Aperture::new(
@@ -196,6 +177,30 @@ impl Bore {
             point.y,
             Length::zero(),
         )) > 0.0)
+    }
+}
+/// A bore of the shape of an aperture, shifted and turned the way the aperture is. Whether the
+/// aperture is a hole or an obstruction is not looked at.
+///
+/// # Errors
+///
+/// This function returns an error if the shape of the aperture has no edge.
+impl TryFrom<&Aperture> for Bore {
+    type Error = OpossumError;
+
+    fn try_from(aperture: &Aperture) -> OpmResult<Self> {
+        let (center, rotation) = aperture.isometry().map_or_else(
+            || (Point2::origin(), Angle::zero()),
+            |isometry| {
+                let shift = isometry.translation();
+                (Point2::new(shift.x, shift.y), isometry.rotation().z)
+            },
+        );
+        Ok(Self::new(
+            OutlineShape::try_from(aperture.shape())?,
+            center,
+            rotation,
+        ))
     }
 }
 
@@ -349,6 +354,17 @@ fn ring_edges(ring: &[Point2<Length>]) -> Vec<(Point2<f64>, Point2<f64>)> {
         .zip(ring.iter().cycle().skip(1))
         .map(|(from, to)| (from.map(|c| c.value), to.map(|c| c.value)))
         .collect()
+}
+
+/// Whether the edges of two closed polygons cross or touch each other: come closer than
+/// [`TOUCHING`].
+fn rings_meet(one: &[Point2<Length>], other: &[Point2<Length>]) -> bool {
+    let other_edges = ring_edges(other);
+    ring_edges(one).iter().any(|&edge| {
+        other_edges
+            .iter()
+            .any(|&other_edge| segments_meet(edge, other_edge))
+    })
 }
 
 /// Whether the edges of two closed polygons cross or touch each other: come closer than
@@ -558,7 +574,7 @@ impl From<OpticShape> for Proptype {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{apertures::StackShape, degree, millimeter};
+    use crate::{apertures::GaussianShape, degree, millimeter};
     use approx::assert_relative_eq;
     use std::f64::consts::PI;
 
@@ -599,8 +615,8 @@ mod test {
         to_f64(transmitting) * step * step
     }
 
-    /// A ring transmits where the stack of a hole and a central obstruction did, which older files
-    /// stated it as, on an area of π (R² - r²).
+    /// A ring transmits where the stack of a hole and a central obstruction it replaces did, on an
+    /// area of π (R² - r²).
     #[test]
     fn a_ring_is_the_region_of_the_stack_it_replaces() -> OpmResult<()> {
         let ring = OpticShape::from(Outline::new(
@@ -832,20 +848,18 @@ mod test {
         assert!(ron::from_str::<Outline>(&overlapping).is_err());
         Ok(())
     }
-    /// An optic shape as an older file stated it, as an aperture shape: a shape with an edge is
-    /// the edge, a stack of one centred hole and obstructions an edge with bores shifted and turned
-    /// as the obstructions were. A hole shifted off the axis, or a second hole, has no such form.
+    /// A binary shape has an edge, a soft or an open one has none. A bore of an aperture is
+    /// shifted and turned the way the aperture is, a hole as well as an obstruction.
     #[test]
-    fn an_old_aperture_shape_reads_as_an_edge_with_bores() -> OpmResult<()> {
-        let plate = || {
-            Aperture::new_rectangle(
-                millimeter!(20.0),
-                millimeter!(20.0),
-                ApertureType::Hole,
-                None,
-                None,
-            )
-        };
+    fn an_aperture_with_an_edge_becomes_a_bore() -> OpmResult<()> {
+        assert_eq!(
+            OutlineShape::try_from(&ApertureShape::BinaryCircle(circle(5.0)?))?,
+            circle(5.0)?.into()
+        );
+        let soft = GaussianShape::new((millimeter!(5.0), millimeter!(5.0)))?;
+        for shape in [ApertureShape::Gaussian(soft), ApertureShape::Open] {
+            assert!(OutlineShape::try_from(&shape).is_err(), "{shape:?}");
+        }
         let slot = Aperture::new_rectangle(
             millimeter!(3.0),
             millimeter!(1.0),
@@ -853,18 +867,7 @@ mod test {
             Some(millimeter!(-4.0, -3.0)),
             Some(degree!(30.0)),
         )?;
-        let stack = |members| -> OpmResult<ApertureShape> {
-            Ok(ApertureShape::Stack(StackShape::new(members)?))
-        };
-        let OpticShape::Bounded(outline) =
-            OpticShape::from_aperture_shape(&stack(vec![plate()?, slot.clone()])?)?
-        else {
-            panic!("a plate with a slot is bounded");
-        };
-        assert_eq!(outline.shape(), &OutlineShape::from(rectangle(20.0, 20.0)?));
-        let [read] = outline.bores() else {
-            panic!("the plate has one bore");
-        };
+        let read = Bore::try_from(&slot)?;
         assert_eq!(read.shape(), &OutlineShape::from(rectangle(3.0, 1.0)?));
         assert_relative_eq!(read.center().x.value, -0.004, max_relative = 1e-12);
         assert_relative_eq!(read.center().y.value, -0.003, max_relative = 1e-12);
@@ -873,25 +876,18 @@ mod test {
             30.0_f64.to_radians(),
             max_relative = 1e-12
         );
+        let unplaced = Aperture::new_circle(millimeter!(2.0), ApertureType::Hole, None)?;
         assert_eq!(
-            OpticShape::from_aperture_shape(&ApertureShape::BinaryCircle(circle(5.0)?))?,
-            circle(5.0)?.into()
+            Bore::try_from(&unplaced)?,
+            bore(circle(2.0)?, 0.0, 0.0, 0.0)
         );
-        assert_eq!(
-            OpticShape::from_aperture_shape(&ApertureShape::Open)?,
-            OpticShape::Open
-        );
-        let shifted = Aperture::new_circle(
-            millimeter!(5.0),
-            ApertureType::Hole,
-            Some(millimeter!(1.0, 0.0)),
+        let soft = Aperture::new_gaussian(
+            (millimeter!(5.0), millimeter!(5.0)),
+            ApertureType::Obstruction,
+            None,
+            None,
         )?;
-        for members in [vec![shifted, slot.clone()], vec![plate()?, plate()?, slot]] {
-            assert!(
-                OpticShape::from_aperture_shape(&stack(members.clone())?).is_err(),
-                "{members:?}"
-            );
-        }
+        assert!(Bore::try_from(&soft).is_err());
         Ok(())
     }
     #[test]

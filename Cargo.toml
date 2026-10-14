@@ -59,13 +59,13 @@ log = "0.4"
 nalgebra = { version = "0.35.0", features = ["serde-serialize", "rayon"] }
 ron = "0.12"
 serde = { version = "1.0", features = ["derive", "rc"] }
-serde_json = "1.0"
+serde_json = "1.0.154"
 strum = { version = "0.28", features = ["derive"] }
 strum_macros = "0.28"
 tempfile = "3.27"
 uom = { version = "0.38", features = ["serde"] }
 utoipa = { version = "6", features = ["actix_extras", "uuid"] }
-uuid = { version = "1.27.0", features = ["v4", "fast-rng", "serde", "js"] }
+uuid = { version = "1.28.0", features = ["v4", "fast-rng", "serde", "js"] }
 
 # The profile that 'cargo dist' will build with
 [profile.dist]

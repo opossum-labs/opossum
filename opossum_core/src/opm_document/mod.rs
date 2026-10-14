@@ -9,17 +9,14 @@
 mod analysis;
 mod analyzer_info;
 mod io;
-mod migration;
 
 #[cfg(test)]
 mod tests;
 
 pub use analyzer_info::AnalyzerInfo;
-pub(crate) use migration::{CLEAR_APERTURE, upgrade_node, upgrade_optic_shape};
 
 use crate::{
     analyzers::AnalyzerType,
-    core_optics::NodeAttrExt,
     error::{OpmResult, OpossumError},
     gain::{GainModel, PumpScenario},
     material::Material,
@@ -30,11 +27,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use uuid::Uuid;
 
+/// Current version of the .opm file format schema.
+pub const CURRENT_OPM_FILE_VERSION: u32 = 0;
+
 /// The main structure of an OPOSSUM model.
 /// It contains the [`NodeGroup`] representing the optical model, a list of analyzers, and a global configuration.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OpmDocument {
-    pub(crate) opm_file_version: String,
+    pub(crate) opm_file_version: u32,
     #[serde(default)]
     pub(crate) scenery: NodeGroup,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
@@ -51,7 +51,7 @@ pub struct OpmDocument {
 impl Default for OpmDocument {
     fn default() -> Self {
         Self {
-            opm_file_version: env!("OPM_FILE_VERSION").to_string(),
+            opm_file_version: CURRENT_OPM_FILE_VERSION,
             scenery: NodeGroup::default(),
             analyzers: IndexMap::default(),
             pump_scenarios: IndexMap::default(),
@@ -245,23 +245,5 @@ impl OpmDocument {
     /// Replaces the whole amplifier candidate set at once (e.g. for undo/redo).
     pub fn set_amplifier_nodes(&mut self, nodes: HashSet<Uuid>) {
         self.amplifier_nodes = nodes;
-    }
-
-    /// Checks if any node or analyzer in the document is missing its GUI coordinates.
-    ///
-    /// This signals to frontends that an automatic layout is required.
-    #[must_use]
-    pub fn needs_autolayout(&self) -> bool {
-        // 1. Check if any analyzer is missing its GUI position
-        if self.analyzers.values().any(|a| a.gui_position().is_none()) {
-            return true;
-        }
-        // 2. Check optical nodes
-        for node_ref in self.scenery.nodes() {
-            if node_ref.gui_position().is_none() {
-                return true;
-            }
-        }
-        false
     }
 }

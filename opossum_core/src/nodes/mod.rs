@@ -62,7 +62,7 @@ pub use source_helper::{
 };
 pub use source_port::SourcePort;
 pub use spectrometer::{Spectrometer, SpectrometerType};
-pub use spot_diagram::SpotDiagram;
+pub use spot_diagram::{SpotDiagram, SpotDiagramData};
 pub use thin_mirror::ThinMirror;
 pub use wavefront::WaveFront;
 pub use wavefront::wavefront_data::{WaveFrontData, WaveFrontMap};

@@ -57,7 +57,9 @@ pub async fn undo_document() -> Result<UndoRedoResponse, String> {
 pub async fn redo_document() -> Result<UndoRedoResponse, String> {
     HTTP_API_CLIENT().post("/api/document/redo", ()).await
 }
-
+pub async fn delete_undo_history() -> Result<(), String> {
+    HTTP_API_CLIENT().delete("/api/document/undo").await
+}
 /// Batch-update the GUI positions of several nodes/analyzers in one undo step.
 ///
 /// # Errors

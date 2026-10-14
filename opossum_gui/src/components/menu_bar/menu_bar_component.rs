@@ -1,7 +1,7 @@
 use dioxus::{document::eval, prelude::*};
 use dioxus_free_icons::{
     Icon,
-    icons::fa_solid_icons::{FaAngleRight, FaBars, FaWindowMaximize},
+    icons::fa_solid_icons::{FaAngleRight, FaArrowUpRightFromSquare, FaBars, FaWindowMaximize},
 };
 use opossum_core::prelude::*;
 use std::path::PathBuf;
@@ -24,6 +24,9 @@ use crate::components::menu_bar::controls::controls_menu::ControlsMenu;
 
 #[allow(clippy::volatile_composites)]
 const FAVICON: Asset = asset!("/assets/favicon.ico");
+
+/// URL pointing to the online mdBook documentation of OPOSSUM
+const HANDBOOK_URL: &str = "https://opossum-labs.github.io/opossum/";
 
 #[derive(Debug, Clone)]
 pub enum AppCommand {
@@ -306,6 +309,27 @@ pub fn MenuBar(
                             "Help"
                         }
                         ul { class: "dropdown-menu",
+                            li {
+                                a {
+                                    class: "dropdown-item d-flex justify-content-between align-items-center",
+                                    role: "button",
+                                    onclick: move |_| {
+                                        // Open the online documentation in the default browser
+                                        if let Err(err) = webbrowser::open(HANDBOOK_URL) {
+                                            eprintln!("Failed to open handbook URL: {err}");
+                                        }
+                                    },
+                                    "Handbook"
+                                    Icon {
+                                        height: 12,
+                                        icon: FaArrowUpRightFromSquare,
+                                        class: "text-muted ms-2",
+                                    }
+                                }
+                            }
+                            li {
+                                hr { class: "dropdown-divider" }
+                            }
                             li {
                                 a {
                                     class: "dropdown-item",

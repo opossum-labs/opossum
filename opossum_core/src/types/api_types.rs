@@ -751,7 +751,6 @@ pub struct MoveNodesRequest {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct LoadDocumentResponse {
     pub name: String,
-    pub needs_autolayout: bool,
 }
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema, Eq, PartialEq)]
 pub struct SourcePortDto {

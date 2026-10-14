@@ -176,7 +176,7 @@ impl Analyzer for GhostFocusAnalyzer {
     }
     fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport> {
         let mut analysis_report = AnalysisReport::default();
-        analysis_report.add_scenery(scenery);
+        analysis_report.set_scenery(scenery.clone());
         let mut props = Properties::default();
         let ghost_focus_history = GhostFocusHistory::from(scenery.accumulated_rays().clone());
 
@@ -327,8 +327,10 @@ mod test_ghost_analysis_nested_groups_inversion {
         core_optics::{NodeAttrExt, OpticNodeExt},
         distributions::{position::Hexapolar, spectral::LaserLines},
         error::OpmResult,
-        joule, millimeter, nanometer,
-        nodes::{Lens, NodeGroup, SourcePort},
+        joule,
+        light::lightdata::ray_data_builder::RayDataBuilder,
+        millimeter, nanometer,
+        nodes::{Dummy, Lens, NodeGroup, SourcePort},
         percent,
         prelude::{
             AnalyzerType, CollimatedSrc, OpmDocument, PortType, RayDataSource, RefrIndexConst,
@@ -559,6 +561,22 @@ mod test_ghost_analysis_nested_groups_inversion {
 
         let scenery = document.scenery();
         assert!(check_not_inverted(scenery));
+        Ok(())
+    }
+    #[test]
+    fn analysis_with_no_reflection() -> OpmResult<()> {
+        // Check wether ghost focus analysis works if no reflections are present at all.
+        let mut scenery = NodeGroup::default();
+        let sp = scenery.add_node(SourcePort::default())?;
+        let dn = scenery.add_node(Dummy::default())?;
+        scenery.connect_nodes(sp, "output_1", dn, "input_1", millimeter!(100.0))?;
+
+        let mut doc: OpmDocument = OpmDocument::new(scenery);
+        let mut config = GhostFocusConfig::default();
+        config.set_max_bounces(2);
+        config.map_source(sp, RayDataBuilder::default());
+        doc.add_analyzer(AnalyzerType::GhostFocus(config));
+        let _ = doc.analyze()?;
         Ok(())
     }
 }

@@ -5,7 +5,6 @@ use std::process::Command;
 pub fn main() {
     // Re-run this script if build.rs itself changes
     println!("cargo::rerun-if-changed=build.rs");
-    println!("cargo::rustc-env=OPM_FILE_VERSION=1");
 
     // Inform Cargo when to re-run the build script based on Git repository changes
     track_git_changes();
