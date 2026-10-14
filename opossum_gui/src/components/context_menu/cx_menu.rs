@@ -106,7 +106,7 @@ pub fn ContextMenu(cxt_command_handler: EventHandler<Option<CxtCommand>>) -> Ele
                         key: "{index}",
                         class: "context-menu-item",
                         onclick: move |_| {
-                            match &action {
+                            match &cmd {
                                 MenuAction::Command(cmd) => cxt_command_handler.call(Some(cmd.clone())),
                                 MenuAction::View(run) => run.call(()),
                             }

@@ -313,9 +313,9 @@ pub fn SceneView() -> Element {
                     // must never receive a selection box.
                     for object in objects.write().iter_mut() {
                         object.selected =
-                            !is_ray_object(&object.id) && Some(&object.id) == picked.id.as_ref();
-                            && Some(&object.id) == picked.id.as_ref(); // Mirror the 2D canvas: a hit opens the component's properties without leaving
-                        &&Some(&object.id) == picked.id.as_ref();
+                            !is_ray_object(&object.id) && Some(&object.id) == picked.id.as_ref()
+                            && Some(&object.id) == picked.id.as_ref() // Mirror the 2D canvas: a hit opens the component's properties without leaving
+                        && Some(&object.id) == picked.id.as_ref()
                     }
                     if let Some(Ok(fetched)) = &*manifest.read()
                         && let Some(action) = action_for_pick(&picked, fetched)
