@@ -14,7 +14,7 @@ use crate::{
         LightData, Rays,
         spectrum::{Spectrum, merge_spectra},
     },
-    nodes::{NodeRegistration, create_surface_properties, ideal_filter::SpectralFilterBuilder},
+    nodes::{NodeRegistration, create_component_properties, ideal_filter::SpectralFilterBuilder},
     properties::{Proptype, validator::Validator},
     utils::default_from_name::DefaultFromName,
 };
@@ -229,7 +229,7 @@ impl Default for BeamSplitter {
                 SplittingConfigBuilder::FixedRatio(0.5).into(),
             )
             .unwrap();
-        create_surface_properties(&mut node_attr, default_optic_shape()).unwrap();
+        create_component_properties(&mut node_attr, default_optic_shape()).unwrap();
         let mut bs = Self { node_attr };
         bs.update_surfaces().unwrap();
         bs

@@ -79,40 +79,14 @@ use crate::{
 };
 use std::{collections::HashSet, sync::LazyLock};
 
-/// Declare the property every node with a physical volume carries: how far its medium extends
-/// transversally ([`OPTIC_SHAPE`]).
+/// Declare the property every real component carries: how far it extends transversally
+/// ([`OPTIC_SHAPE`]), be it the medium of a lens or the one surface of a mirror.
 ///
 /// Declaring it from one place keeps the node types that call this in sync with each other, and
-/// together with [`create_surface_properties`], [`create_ideal_surface_properties`],
-/// [`create_detector_properties`] and [`create_dummy_properties`] they are exactly the node types
-/// whose geometry can have a rim — which is what the tests in `volumetric.rs` check.
-///
-/// Creates standard volumetric properties for a node.
-///
-/// # Arguments
-///
-/// * `node_attr` - the attributes of the node under construction.
-/// * `default` - the optic shape the node starts out with.
-///
-/// # Errors
-///
-/// This function returns an error if the property is already declared.
-pub fn create_volume_properties(node_attr: &mut NodeAttr, default: OpticShape) -> OpmResult<()> {
-    node_attr.create_property_with_validator(
-        OPTIC_SHAPE,
-        "transversal extent of the medium",
-        Validator::OpticShapeIsBounded,
-        default.into(),
-    )
-}
-
-/// Declare the property every node that is one optical surface carries: how far that surface
-/// extends transversally ([`OPTIC_SHAPE`]).
-///
-/// The sibling of [`create_volume_properties`] for nodes whose geometry is a single surface - a
-/// mirror or a grating has no second surface to bound a medium between, but its one surface still
-/// needs a transversal extent to be hit at all, and it is declared under the very same property
-/// name so the two kinds of nodes share one meaning for it.
+/// together with [`create_ideal_surface_properties`], [`create_detector_properties`] and
+/// [`create_dummy_properties`] they are exactly the node types whose geometry can have a rim —
+/// which is what the tests in `volumetric.rs` check. Unlike theirs, this optic shape must be
+/// bounded.
 ///
 /// # Arguments
 ///
@@ -122,10 +96,10 @@ pub fn create_volume_properties(node_attr: &mut NodeAttr, default: OpticShape) -
 /// # Errors
 ///
 /// This function returns an error if the property is already declared.
-pub fn create_surface_properties(node_attr: &mut NodeAttr, default: OpticShape) -> OpmResult<()> {
+pub fn create_component_properties(node_attr: &mut NodeAttr, default: OpticShape) -> OpmResult<()> {
     node_attr.create_property_with_validator(
         OPTIC_SHAPE,
-        "transversal extent of the surface",
+        "transversal extent of the component",
         Validator::OpticShapeIsBounded,
         default.into(),
     )
@@ -134,7 +108,7 @@ pub fn create_surface_properties(node_attr: &mut NodeAttr, default: OpticShape) 
 /// Declare the property of a surface that is an idealization, such as a paraxial lens: how far it
 /// extends transversally ([`OPTIC_SHAPE`]).
 ///
-/// The sibling of [`create_surface_properties`], starting as a round optic
+/// The sibling of [`create_component_properties`], starting as a round optic
 /// ([`default_optic_shape`]). Unlike a real component, an idealized surface may also be unbounded
 /// ([`OpticShape::Open`]).
 ///
@@ -156,7 +130,7 @@ pub fn create_ideal_surface_properties(node_attr: &mut NodeAttr) -> OpmResult<()
 /// Declare the property every detector carries: the window it records the light within
 /// ([`OPTIC_SHAPE`]).
 ///
-/// The sibling of [`create_surface_properties`] for detectors. A detector lets all light pass and
+/// The sibling of [`create_component_properties`] for detectors. A detector lets all light pass and
 /// only records the light within its window, which starts as a 25 mm square
 /// ([`default_square_optic_shape`]). Set to [`OpticShape::Open`], it records all of it.
 ///

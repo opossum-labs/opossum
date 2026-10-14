@@ -9,7 +9,7 @@ use crate::{
     geometry::{Geometry, body::OPTIC_SHAPE},
     material::{MATERIAL, Material},
     millimeter,
-    nodes::{NodeRegistration, create_volume_properties},
+    nodes::{NodeRegistration, create_component_properties},
     properties::{Proptype, validator::Validator},
     refractive_index::RefrIndexConst,
 };
@@ -102,7 +102,7 @@ impl Default for CylindricLens {
             .unwrap();
         // 20 mm across the curvature (x), 30 mm along the cylinder axis (y)
         let rectangle = RectangleShape::new(millimeter!(20.0), millimeter!(30.0)).unwrap();
-        create_volume_properties(&mut node_attr, rectangle.into()).unwrap();
+        create_component_properties(&mut node_attr, rectangle.into()).unwrap();
         let mut cyl_lens = Self { node_attr };
         cyl_lens.update_surfaces().unwrap();
         cyl_lens
