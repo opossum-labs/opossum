@@ -42,8 +42,8 @@
 //!   the `.opm` file
 
 use opossum_core::{
-    apertures::CircleShape, core_optics::NodeAttrExt, nodes::round_collimated_ray_builder,
-    prelude::*,
+    apertures::CircleShape, core_optics::NodeAttrExt, geometry::body::OPTIC_SHAPE,
+    nodes::round_collimated_ray_builder, prelude::*,
 };
 use std::{env, path::Path};
 /// Entry point for the Kepler wavefront aberration example.
@@ -81,13 +81,16 @@ fn main() -> OpmResult<()> {
     )?;
     // 4. Define the Lenses and their size
     // First lens: 75 mm focal length, 10 mm thickness, with an optic shape of 25 mm radius.
-    let lens1 = Lens::new_with_optic_shape(
+    let mut lens1 = Lens::new(
         "75 mm lens",
         millimeter!(122.25),  // radius of curvature front
         millimeter!(-122.25), // radius of curvature back
         millimeter!(10.0),    // thickness
         &refr_index_hzf52,
-        CircleShape::new(millimeter!(25.0))?.into(),
+    )?;
+    lens1.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
     )?;
     // Add the first lens to the optical system.
     let i_pl1 = scenery.add_node(lens1)?;
@@ -95,13 +98,16 @@ fn main() -> OpmResult<()> {
     // Add a spot diagram analyzer to inspect the beam at the focus of the first lens.
     let i_sd6 = scenery.add_node(SpotDiagram::new("spot diagram at focus")?)?;
     // Define the second lens: 50 mm focal length, 10 mm thickness and the same size as the first.
-    let lens2 = Lens::new_with_optic_shape(
+    let mut lens2 = Lens::new(
         "50 mm lens",
         millimeter!(100.0),
         millimeter!(-100.0),
         millimeter!(10.0),
         &refr_index_hzf52,
-        CircleShape::new(millimeter!(25.0))?.into(),
+    )?;
+    lens2.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
     )?;
     let i_pl2 = scenery.add_node(lens2)?;
     // 6. Define the Ray Propagation Visualizer

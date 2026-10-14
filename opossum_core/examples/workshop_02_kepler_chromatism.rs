@@ -48,6 +48,7 @@ use num_traits::Zero;
 use opossum_core::apertures::CircleShape;
 use opossum_core::core_optics::NodeAttrExt;
 use opossum_core::distributions::{energy::UniformDist, position::Grid, spectral::LaserLines};
+use opossum_core::geometry::body::OPTIC_SHAPE;
 use opossum_core::prelude::*;
 use std::env;
 use std::path::Path;
@@ -79,25 +80,31 @@ fn main() -> OpmResult<()> {
     )?;
     // Create the first spherical lens with a curvature of 130.0 mm / -130.0 mm. It is 50 mm in
     // diameter, which limits the beam diameter: its optic shape is a circle of 25 mm radius.
-    let lens1 = Lens::new_with_optic_shape(
+    let mut lens1 = Lens::new(
         "75 mm lens",
         millimeter!(130.0),
         millimeter!(-130.0),
         millimeter!(10.0),
         &refr_index_hzf52,
-        CircleShape::new(millimeter!(25.0))?.into(),
+    )?;
+    lens1.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
     )?;
     // Add the first lens to the optical scene.
     let i_pl1 = scenery.add_node(lens1)?;
     // Create the second spherical lens of the telescope. It is slightly larger than the first one,
     // because the 350 nm light reaches it up to 26.4 mm off its axis.
-    let lens2 = Lens::new_with_optic_shape(
+    let mut lens2 = Lens::new(
         "50 mm lens",
         millimeter!(100.0),
         millimeter!(-100.0),
         millimeter!(10.0),
         &refr_index_hzf52,
-        CircleShape::new(millimeter!(27.5))?.into(),
+    )?;
+    lens2.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(27.5))?).into(),
     )?;
     // Add the second lens to the scene.
     let i_pl2 = scenery.add_node(lens2)?;

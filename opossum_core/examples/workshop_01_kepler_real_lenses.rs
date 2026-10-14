@@ -41,7 +41,8 @@
 //! - `std::{env, path::Path}` — used to find the output directory and save
 //!   the `.opm` file
 use opossum_core::{
-    apertures::CircleShape, core_optics::NodeAttrExt, material::Material, prelude::*,
+    apertures::CircleShape, core_optics::NodeAttrExt, geometry::body::OPTIC_SHAPE,
+    material::Material, prelude::*,
 };
 use std::{env, path::Path};
 
@@ -67,24 +68,30 @@ fn main() -> OpmResult<()> {
     material_hzf52.header.name = "HZF52".to_string();
     // Create the first spherical lens with real optical parameters. It is 50 mm in diameter: its
     // optic shape is a circle of 25 mm radius.
-    let lens1 = Lens::new_with_optic_shape(
+    let mut lens1 = Lens::new(
         "75 mm lens",
         millimeter!(122.25),
         millimeter!(-122.25),
         millimeter!(10.0),
         material_hzf52.clone(),
-        CircleShape::new(millimeter!(25.0))?.into(),
+    )?;
+    lens1.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
     )?;
     // Add first lens to the optical scene.
     let i_pl1 = scenery.add_node(lens1)?;
     // Create the second spherical lens of the telescope, of the same size as the first one.
-    let lens2 = Lens::new_with_optic_shape(
+    let mut lens2 = Lens::new(
         "50 mm lens",
         millimeter!(100.0),
         millimeter!(-100.0),
         millimeter!(10.0),
         material_hzf52,
-        CircleShape::new(millimeter!(25.0))?.into(),
+    )?;
+    lens2.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
     )?;
     // Add second lens to the scene.
     let i_pl2 = scenery.add_node(lens2)?;

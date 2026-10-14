@@ -27,14 +27,18 @@ pub fn folded_martinez_longer_f(
     let i_g1 = cb.add_node(grating)?;
     // focal length = 996.7 mm (Thorlabs LA1779-B). The dispersed beam passes the lens up to 150 mm
     // off its center: 12 inches, only 0.7 mm thick at its edge.
-    let lens1 = cb.add_node(Lens::new_with_optic_shape(
+    let mut lens1 = Lens::new(
         "Lens 1",
         millimeter!(1250.),
         millimeter!(f64::INFINITY),
         millimeter!(10.),
         refr_index.into(),
-        CircleShape::new(millimeter!(152.4))?.into(),
-    )?)?;
+    )?;
+    lens1.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(152.4))?).into(),
+    )?;
+    let lens1 = cb.add_node(lens1)?;
 
     // The spectrum spreads up to 140 mm across the mirror in the focal plane: 300 mm in diameter.
     let mut mirror = ThinMirror::new("mirr").align_like_node_at_distance(lens1, telescope_distance);

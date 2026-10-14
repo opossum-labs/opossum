@@ -16,17 +16,19 @@ pub fn main() -> OpmResult<()> {
 
     // focal length = 996.7 mm (Thorlabs LA1779-B). The beam of 10 mm radius passes the lens 20 mm
     // off its center, so the lens is 3 inches in diameter.
-    let lens1 = scenery.add_node(
-        Lens::new_with_optic_shape(
-            "Lens 1",
-            millimeter!(515.1),
-            millimeter!(f64::INFINITY),
-            millimeter!(3.6),
-            &nbk7,
-            CircleShape::new(millimeter!(38.1))?.into(),
-        )?
-        .with_decenter(centimeter!(2., 0., 0.))?,
+    let mut lens1 = Lens::new(
+        "Lens 1",
+        millimeter!(515.1),
+        millimeter!(f64::INFINITY),
+        millimeter!(3.6),
+        &nbk7,
+    )?
+    .with_decenter(centimeter!(2., 0., 0.))?;
+    lens1.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(38.1))?).into(),
     )?;
+    let lens1 = scenery.add_node(lens1)?;
 
     // The focus lies 20 mm off the center of the mirror: it is 2 inches in diameter.
     let mut mir_1 = ThinMirror::new("mirr").align_like_node_at_distance(lens1, millimeter!(996.7));

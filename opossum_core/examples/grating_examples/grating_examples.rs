@@ -326,14 +326,15 @@ fn main() -> OpmResult<()> {
     // Both lenses take the beam of 50 mm radius: they are 4 inches in diameter.
     let a_4inch: OpticShape = CircleShape::new(millimeter!(50.8))?.into();
     // focal length = 996.7 mm (Thorlabs LA1779-B)
-    let lens1 = scenery.add_node(Lens::new_with_optic_shape(
+    let mut lens1 = Lens::new(
         "Lens 1",
         millimeter!(515.1),
         millimeter!(f64::INFINITY),
         millimeter!(3.0),
         &nbk7,
-        a_4inch.clone(),
-    )?)?;
+    )?;
+    lens1.set_property(OPTIC_SHAPE, a_4inch.clone().into())?;
+    let lens1 = scenery.add_node(lens1)?;
     let mir_1 =
         scenery.add_node(ThinMirror::new("mirr").align_like_node_at_distance(lens1, tel_dist))?;
     let mut lens_1_ref1 = NodeReference::from_node(&scenery.node(lens1)?)?;
