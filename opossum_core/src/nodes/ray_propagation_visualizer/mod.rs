@@ -152,7 +152,7 @@ impl OpticNode for RayPropagationVisualizer {
             if self.apodization_warning {
                 report.add_note(ReportNote::new(
                     ReportLevel::Warning,
-                    "Rays have been apodized at input aperture. Results might not be accurate.",
+                    "Rays were lost while passing this node. Results might not be accurate.",
                 ));
             }
         }

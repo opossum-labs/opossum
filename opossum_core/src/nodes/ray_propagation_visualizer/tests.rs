@@ -141,7 +141,7 @@ fn report() -> OpmResult<()> {
         node_report.notes()[0].level,
         crate::reporting::report_note::ReportLevel::Warning
     );
-    assert!(node_report.notes()[0].message.contains("apodized"));
+    assert!(node_report.notes()[0].message.contains("Rays were lost"));
 
     // Energy warning test
     fd.set_apodization_warning(false);

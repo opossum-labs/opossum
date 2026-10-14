@@ -39,8 +39,11 @@
                         "rear curvature": Curvature(-0.5),
                         "center thickness": Length(0.01),
                         "Material": Material(Id("080b7ced-292d-403e-afa9-6f022e58801b")),
-                        "clear aperture": Aperture(BinaryCircle(
-                            radius: 0.0125,
+                        "optic shape": OpticShape(Bounded(
+                            shape: Circle(
+                                radius: 0.0125,
+                            ),
+                            bores: [],
                         )),
                     },
                 },
@@ -62,8 +65,11 @@
                         "rear curvature": Curvature(-0.5),
                         "center thickness": Length(0.01),
                         "Material": Material(Id("c278deba-11b5-4e1c-bd2e-0a08ca2dcdd2")),
-                        "clear aperture": Aperture(BinaryCircle(
-                            radius: 0.0125,
+                        "optic shape": OpticShape(Bounded(
+                            shape: Circle(
+                                radius: 0.0125,
+                            ),
+                            bores: [],
                         )),
                     },
                 },
@@ -87,6 +93,9 @@
                     "node_type": "dummy",
                     "name": "dummy",
                     "uuid": "3012318f-6d95-4cdd-b7a8-0c2b2ee650a7",
+                    "props": {
+                        "optic shape": OpticShape(Open),
+                    },
                 },
                 {
                     "node_type": "group",
@@ -101,11 +110,17 @@
                                 "node_type": "dummy",
                                 "name": "nested dummy in",
                                 "uuid": "79b54421-7fca-40ef-9d14-0262529640ee",
+                                "props": {
+                                    "optic shape": OpticShape(Open),
+                                },
                             },
                             {
                                 "node_type": "dummy",
                                 "name": "nested dummy out",
                                 "uuid": "62563234-52e3-488a-bdd4-5a79bf441da2",
+                                "props": {
+                                    "optic shape": OpticShape(Open),
+                                },
                             },
                         ],
                         edges: [

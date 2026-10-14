@@ -136,25 +136,6 @@ the optical axis misses the optic shape of a component, beside its edge or throu
 stops with an error naming that node. A bore meant to let the beam pass along the axis, as on a scraper mirror for
 the main beam, is therefore not supported yet. At a detector a missed window only warns that the measurement may fail.
 
-**Older model files** are upgraded when they are read. Before the optic shape had its name, files stated it as the
-`clear aperture` of a node. That value is read as the optic shape: a shape with an edge becomes the edge, a stack of
-one centered hole and obstructions within it becomes an edge with bores. A value that cannot be stated this way, a
-soft (Gaussian) shape for instance, is dropped with a warning, and the node keeps its default.
-
-Files of format version 0 let every port hold an aperture that masked the light passing it:
-
-- A centered hole at the input port that gave a component its size becomes the edge of its optic shape, together with
-  the same hole at its other ports; a detector records within it.
-- A binary obstruction becomes a bore, shifted and turned as it was. Rays through it now miss the component, with the
-  consequences described above.
-- A port aperture that cannot become part of the optic shape is dropped: a soft (Gaussian) or stacked one; a further
-  or a shifted hole, since the one edge of an optic shape is centered; one measured in another frame than the optic
-  shape (an off-axis parabola, the tilted exit face of a wedge); an obstruction that does not lie within the edge; and
-  every port aperture of a node without a bounded optic shape.
-
-An optic shape that a curvature cannot reach is reduced to fit. Components that had no such hole get the default of
-12.5 mm. The log lists what was changed, naming node and port; saving the model writes the upgraded version.
-
 ## Analysis interface
 
 As discussed, the actual calculation is performed by the nodes. The presented framework will only make sure that all necessary input data will be provided. For this, each node has to implement an Analysis function with light data from the incoming edges as parameters. This function can now either directly perform a calculation or call specific external modules (such as C/C++ library code or a Python script).
