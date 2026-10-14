@@ -163,7 +163,7 @@ impl AnalysisGhostFocus for IdealFilter {
             true,
         )?;
         for (rays, hits) in rays_bundle.iter_mut().zip(&hits) {
-            rays.filter_energy_hits(&filter_type, hits)?;
+            rays.filter_energy(&filter_type, hits)?;
         }
         Ok(LightRays::from([(out_port.clone(), rays_bundle)]))
     }
@@ -221,7 +221,7 @@ impl AnalysisRayTrace for IdealFilter {
             config.missed_surface_strategy(),
         )?;
         // A ray that ran past the filter is not filtered.
-        rays.filter_energy_hits(&filter_type, &hits)?;
+        rays.filter_energy(&filter_type, &hits)?;
         // The optical axis is placed by geometry alone; its energy does not decide where it runs.
         if !config.is_positioning_run() {
             rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;

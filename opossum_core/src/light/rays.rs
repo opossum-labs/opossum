@@ -888,69 +888,45 @@ impl Rays {
     pub fn add_rays(&mut self, rays: &mut Self) {
         self.ray_bundle.append(&mut rays.ray_bundle);
     }
-    /// Refract a ray bundle on a paraxial surface of given focal length.
+    /// Refract the rays of this bundle that hit a paraxial surface of given focal length.
     ///
-    /// This function refracts all valid [`Ray`]s.
-    ///
-    /// # Errors
-    /// This function returns an error if
-    ///  - the z component of a ray direction is zero.
-    ///  - the focal length is zero or not finite.
-    pub fn refract_paraxial(&mut self, focal_length: Length, iso: &Isometry) -> OpmResult<()> {
-        self.refract_paraxial_where(focal_length, iso, |_| true)
-    }
-    /// Refract only the rays of this bundle that hit a surface, as
-    /// [`refract_paraxial`](Self::refract_paraxial) does for all of them.
-    ///
-    /// A ray that missed the surface never passed the lens and keeps its direction.
+    /// Every valid [`Ray`] that hit the surface is refracted, together with its helper rays. A ray
+    /// that missed the surface never passed the lens and keeps its direction.
     ///
     /// # Arguments
     ///
     /// * `focal_length` - the focal length of the paraxial surface.
     /// * `iso` - the isometry the paraxial surface is placed at.
     /// * `hits` - for every ray of this bundle in order, whether it hit the surface, as returned by
-    ///   [`refract_on_surface`](Self::refract_on_surface).
+    ///   [`refract_on_surface`](Self::refract_on_surface). Rays beyond its end count as missed.
     ///
     /// # Errors
-    ///
-    /// See [`refract_paraxial`](Self::refract_paraxial).
-    pub fn refract_paraxial_hits(
+    /// This function returns an error if
+    ///  - the z component of a ray direction is zero.
+    ///  - the focal length is zero or not finite.
+    pub fn refract_paraxial(
         &mut self,
         focal_length: Length,
         iso: &Isometry,
         hits: &[bool],
-    ) -> OpmResult<()> {
-        self.refract_paraxial_where(focal_length, iso, |index| {
-            hits.get(index).copied().unwrap_or(false)
-        })
-    }
-    /// The common implementation of [`refract_paraxial`](Self::refract_paraxial) and
-    /// [`refract_paraxial_hits`](Self::refract_paraxial_hits): refract the rays whose index is
-    /// selected.
-    ///
-    /// # Errors
-    ///
-    /// See [`refract_paraxial`](Self::refract_paraxial).
-    fn refract_paraxial_where(
-        &mut self,
-        focal_length: Length,
-        iso: &Isometry,
-        selected: impl Fn(usize) -> bool,
     ) -> OpmResult<()> {
         if focal_length.is_zero() || !focal_length.is_finite() {
             return Err(OpossumError::Other(
                 "focal length must be !=0.0 and finite".into(),
             ));
         }
-        for (index, ray) in self.ray_bundle.iter_mut().enumerate() {
-            if !selected(index) {
-                continue;
-            }
+        for (ray, _) in self
+            .ray_bundle
+            .iter_mut()
+            .zip(hits)
+            .filter(|(_, hit)| **hit)
+        {
             if ray.valid() {
                 ray.refract_paraxial(focal_length, iso)?;
             }
             if let Some(helper_rays) = ray.helper_rays_mut() {
-                helper_rays.refract_paraxial(focal_length, iso)?;
+                let all = vec![true; helper_rays.nr_of_rays(false)];
+                helper_rays.refract_paraxial(focal_length, iso, &all)?;
             }
         }
         Ok(())
@@ -1233,47 +1209,28 @@ impl Rays {
         Ok(reflected_rays)
     }
 
-    /// Filter a ray bundle by a given filter.
+    /// Filter the rays of this bundle that hit a surface by a given filter.
     ///
-    /// Filter the energy of of all `valid` rays by a given [`FilterType`].
-    ///
-    /// # Errors
-    /// This function will return an error if the underlying function for filtering a single [`Ray`] with the given
-    /// [`FilterType`] fails for any of the rays in the bundle.
-    pub fn filter_energy(&mut self, filter: &FilterType) -> OpmResult<()> {
-        self.filter_energy_where(filter, |_| true)
-    }
-    /// Filter only the rays of this bundle that hit a surface, as
-    /// [`filter_energy`](Self::filter_energy) does for all of them.
-    ///
-    /// A ray that missed the surface never passed the filter and keeps its energy.
+    /// Filter the energy of every `valid` ray that hit the surface by a given [`FilterType`]. A ray
+    /// that missed the surface never passed the filter and keeps its energy.
     ///
     /// # Arguments
     ///
     /// * `filter` - the filter to apply.
     /// * `hits` - for every ray of this bundle in order, whether it hit the surface, as returned by
-    ///   [`refract_on_surface`](Self::refract_on_surface).
+    ///   [`refract_on_surface`](Self::refract_on_surface). Rays beyond its end count as missed.
     ///
     /// # Errors
-    ///
-    /// See [`filter_energy`](Self::filter_energy).
-    pub fn filter_energy_hits(&mut self, filter: &FilterType, hits: &[bool]) -> OpmResult<()> {
-        self.filter_energy_where(filter, |index| hits.get(index).copied().unwrap_or(false))
-    }
-    /// The common implementation of [`filter_energy`](Self::filter_energy) and
-    /// [`filter_energy_hits`](Self::filter_energy_hits): filter the valid rays whose index is
-    /// selected.
-    ///
-    /// # Errors
-    ///
-    /// See [`filter_energy`](Self::filter_energy).
-    fn filter_energy_where(
-        &mut self,
-        filter: &FilterType,
-        selected: impl Fn(usize) -> bool,
-    ) -> OpmResult<()> {
-        for (index, ray) in self.ray_bundle.iter_mut().enumerate() {
-            if ray.valid() && selected(index) {
+    /// This function will return an error if the underlying function for filtering a single [`Ray`] with the given
+    /// [`FilterType`] fails for any of the rays in the bundle.
+    pub fn filter_energy(&mut self, filter: &FilterType, hits: &[bool]) -> OpmResult<()> {
+        for (ray, _) in self
+            .ray_bundle
+            .iter_mut()
+            .zip(hits)
+            .filter(|(_, hit)| **hit)
+        {
+            if ray.valid() {
                 ray.filter_energy(filter)?;
             }
         }
@@ -2396,30 +2353,30 @@ mod test {
     fn refract_paraxial() -> OpmResult<()> {
         let mut rays = Rays::default();
         assert!(
-            rays.refract_paraxial(millimeter!(0.0), &Isometry::identity())
+            rays.refract_paraxial(millimeter!(0.0), &Isometry::identity(), &[])
                 .is_err()
         );
         assert!(
-            rays.refract_paraxial(millimeter!(f64::NAN), &Isometry::identity())
+            rays.refract_paraxial(millimeter!(f64::NAN), &Isometry::identity(), &[])
                 .is_err()
         );
         assert!(
-            rays.refract_paraxial(millimeter!(f64::INFINITY), &Isometry::identity())
+            rays.refract_paraxial(millimeter!(f64::INFINITY), &Isometry::identity(), &[])
                 .is_err()
         );
         assert!(
-            rays.refract_paraxial(millimeter!(f64::NEG_INFINITY), &Isometry::identity())
+            rays.refract_paraxial(millimeter!(f64::NEG_INFINITY), &Isometry::identity(), &[])
                 .is_err()
         );
         assert!(
-            rays.refract_paraxial(millimeter!(100.0), &Isometry::identity())
+            rays.refract_paraxial(millimeter!(100.0), &Isometry::identity(), &[])
                 .is_ok()
         );
         let ray0 = Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0))?;
         let ray1 = Ray::new_collimated(millimeter!(0., 1., 0.), nanometer!(1053.0), joule!(1.0))?;
         rays.add_ray(ray0.clone());
         rays.add_ray(ray1.clone());
-        rays.refract_paraxial(millimeter!(100.0), &Isometry::identity())?;
+        rays.refract_paraxial(millimeter!(100.0), &Isometry::identity(), &[true, true])?;
         assert_eq!(rays.ray_bundle[0].position(), ray0.position());
         assert_eq!(rays.ray_bundle[0].direction(), ray0.direction());
         assert_eq!(rays.ray_bundle[1].position(), ray1.position());
@@ -2427,6 +2384,53 @@ mod test {
         assert_abs_diff_eq!(rays.ray_bundle[1].direction().x, new_dir.x);
         assert_abs_diff_eq!(rays.ray_bundle[1].direction().y, new_dir.y);
         assert_abs_diff_eq!(rays.ray_bundle[1].direction().z, new_dir.z);
+        Ok(())
+    }
+    /// A ray that hits a paraxial surface takes its helper rays along: each is refracted as a single
+    /// ray would be. A ray that misses keeps its direction, and so do its helper rays.
+    #[test]
+    fn refract_paraxial_takes_the_helper_rays_of_a_hit_along() -> OpmResult<()> {
+        let focal_length = millimeter!(100.0);
+        let iso = Isometry::new_translation(millimeter!(1.0, -2.0, 0.0))?;
+        let with_helpers = |y: f64| {
+            Ray::new_collimated_w_fluence_helper(
+                millimeter!(0.0, y, 0.0),
+                nanometer!(1000.0),
+                joule!(1.0),
+                J_per_cm2!(1.0),
+            )
+        };
+        let directions = |ray: &mut Ray| -> Vec<Vector3<f64>> {
+            let helpers = ray
+                .helper_rays_mut()
+                .map(|helpers| helpers.iter().map(Ray::direction).collect::<Vec<_>>())
+                .unwrap_or_default();
+            std::iter::once(ray.direction()).chain(helpers).collect()
+        };
+        let (hit, missed) = (with_helpers(5.0)?, with_helpers(-5.0)?);
+        let mut rays = Rays::default();
+        rays.add_ray(hit.clone());
+        rays.add_ray(missed.clone());
+        rays.refract_paraxial(focal_length, &iso, &[true, false])?;
+
+        let mut refracted = hit;
+        refracted.refract_paraxial(focal_length, &iso)?;
+        let Some(helpers) = refracted.helper_rays_mut() else {
+            panic!("the ray has helper rays");
+        };
+        for helper in helpers.iter_mut() {
+            helper.refract_paraxial(focal_length, &iso)?;
+        }
+        let expected = [directions(&mut refracted), directions(&mut missed.clone())];
+        assert_eq!(expected[0].len(), 4, "a ray with three helper rays");
+        assert!(
+            expected[0]
+                .iter()
+                .all(|direction| *direction != Vector3::z())
+        );
+        for (ray, expected) in rays.ray_bundle.iter_mut().zip(&expected) {
+            assert_eq!(&directions(ray), expected);
+        }
         Ok(())
     }
     #[test]
@@ -2680,19 +2684,28 @@ mod test {
     fn filter_energy() -> OpmResult<()> {
         let mut rays = Rays::default();
         assert!(
-            rays.filter_energy(&FilterType::Constant(FilterConst::new(percent!(50.0))?))
-                .is_ok()
+            rays.filter_energy(
+                &FilterType::Constant(FilterConst::new(percent!(50.0))?),
+                &[]
+            )
+            .is_ok()
         );
         let mut ray =
             Ray::new_collimated(millimeter!(0., 1., 0.), nanometer!(1054.0), joule!(1.0))?;
         rays.add_ray(ray.clone());
+        // a ray that missed the filter keeps its energy
+        rays.add_ray(ray.clone());
         ray.filter_energy(&FilterType::Constant(FilterConst::new(percent!(30.0))?))?;
-        rays.filter_energy(&FilterType::Constant(FilterConst::new(percent!(30.0))?))?;
+        rays.filter_energy(
+            &FilterType::Constant(FilterConst::new(percent!(30.0))?),
+            &[true, false],
+        )?;
         assert_eq!(rays.ray_bundle[0].position(), ray.position());
         assert_eq!(rays.ray_bundle[0].direction(), ray.direction());
         assert_eq!(rays.ray_bundle[0].wavelength(), ray.wavelength());
         assert_eq!(rays.ray_bundle[0].energy(), ray.energy());
-        assert_eq!(rays.ray_bundle.len(), 1);
+        assert_eq!(rays.ray_bundle[1].energy(), joule!(1.0));
+        assert_eq!(rays.ray_bundle.len(), 2);
         Ok(())
     }
     #[test]
