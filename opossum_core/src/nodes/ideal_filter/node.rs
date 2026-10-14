@@ -10,7 +10,7 @@ use crate::{
     },
     core_optics::{NodeAttr, NodeAttrExt, OpticNodeExt},
     error::{OpmResult, OpossumError},
-    geometry::Geometry,
+    geometry::{Geometry, body::default_optic_shape},
     light::{LightData, LightRays, LightResult, Rays},
     nodes::{
         FilterType, NodeRegistration, create_surface_properties,
@@ -56,7 +56,7 @@ impl Default for IdealFilter {
                 FilterTypeBuilder::default().into(),
             )
             .unwrap();
-        create_surface_properties(&mut node_attr).unwrap();
+        create_surface_properties(&mut node_attr, default_optic_shape()).unwrap();
         let mut idf = Self { node_attr };
         idf.update_surfaces().unwrap();
         idf

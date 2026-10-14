@@ -5,7 +5,10 @@ use crate::{
     analyzers::energy::AnalysisEnergy,
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, Volumetric},
     error::{OpmResult, OpossumError},
-    geometry::{Geometry, body::OPTIC_SHAPE},
+    geometry::{
+        Geometry,
+        body::{OPTIC_SHAPE, default_optic_shape},
+    },
     material::{MATERIAL, Material},
     millimeter,
     nodes::{NodeRegistration, create_volume_properties},
@@ -97,7 +100,7 @@ impl Default for Lens {
                 .into(),
             )
             .unwrap();
-        create_volume_properties(&mut node_attr).unwrap();
+        create_volume_properties(&mut node_attr, default_optic_shape()).unwrap();
         let mut lens = Self { node_attr };
         lens.update_surfaces().unwrap();
         lens
@@ -107,10 +110,9 @@ impl Lens {
     /// Creates a new [`Lens`].
     ///
     /// This function creates a lens with spherical front and back surfaces, a given center
-    /// thickness and material, bounded by the default optic shape
-    /// ([`default_optic_shape`](crate::geometry::body::default_optic_shape)). The radii of
-    /// curvature must not be zero. A radius of curvature of +/- infinity corresponds to a flat
-    /// surface. Another optic shape is set afterwards via the [`OPTIC_SHAPE`] property.
+    /// thickness and material, bounded by the default optic shape ([`default_optic_shape`]). The
+    /// radii of curvature must not be zero. A radius of curvature of +/- infinity corresponds to a
+    /// flat surface. Another optic shape is set afterwards via the [`OPTIC_SHAPE`] property.
     ///
     /// # Arguments
     ///
@@ -560,7 +562,7 @@ mod test {
     }
     #[test]
     fn optic_shape() -> OpmResult<()> {
-        test_optic_shape::<Lens>()
+        test_optic_shape::<Lens>(millimeter!(12.5))
     }
     #[test]
     fn optic_shape_absent_in_file() -> OpmResult<()> {

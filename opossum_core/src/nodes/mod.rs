@@ -74,7 +74,7 @@ use crate::{
     apertures::OpticShape,
     core_optics::{NodeAttr, OpticRef},
     error::{OpmResult, OpossumError},
-    geometry::body::{OPTIC_SHAPE, default_optic_shape},
+    geometry::body::{OPTIC_SHAPE, default_optic_shape, default_square_optic_shape},
     properties::validator::Validator,
 };
 use std::{collections::HashSet, sync::LazyLock};
@@ -92,16 +92,17 @@ use std::{collections::HashSet, sync::LazyLock};
 /// # Arguments
 ///
 /// * `node_attr` - the attributes of the node under construction.
+/// * `default` - the optic shape the node starts out with.
 ///
 /// # Errors
 ///
 /// This function returns an error if the property is already declared.
-pub fn create_volume_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
+pub fn create_volume_properties(node_attr: &mut NodeAttr, default: OpticShape) -> OpmResult<()> {
     node_attr.create_property_with_validator(
         OPTIC_SHAPE,
         "transversal extent of the medium",
         Validator::OpticShapeIsBounded,
-        default_optic_shape().into(),
+        default.into(),
     )
 }
 
@@ -116,24 +117,26 @@ pub fn create_volume_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
 /// # Arguments
 ///
 /// * `node_attr` - the attributes of the node under construction.
+/// * `default` - the optic shape the node starts out with.
 ///
 /// # Errors
 ///
 /// This function returns an error if the property is already declared.
-pub fn create_surface_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
+pub fn create_surface_properties(node_attr: &mut NodeAttr, default: OpticShape) -> OpmResult<()> {
     node_attr.create_property_with_validator(
         OPTIC_SHAPE,
         "transversal extent of the surface",
         Validator::OpticShapeIsBounded,
-        default_optic_shape().into(),
+        default.into(),
     )
 }
 
 /// Declare the property of a surface that is an idealization, such as a paraxial lens: how far it
 /// extends transversally ([`OPTIC_SHAPE`]).
 ///
-/// The sibling of [`create_surface_properties`], with the same default size. Unlike a real
-/// component, an idealized surface may also be unbounded ([`OpticShape::Open`]).
+/// The sibling of [`create_surface_properties`], starting as a round optic
+/// ([`default_optic_shape`]). Unlike a real component, an idealized surface may also be unbounded
+/// ([`OpticShape::Open`]).
 ///
 /// # Arguments
 ///
@@ -154,8 +157,8 @@ pub fn create_ideal_surface_properties(node_attr: &mut NodeAttr) -> OpmResult<()
 /// ([`OPTIC_SHAPE`]).
 ///
 /// The sibling of [`create_surface_properties`] for detectors. A detector lets all light pass and
-/// only records it, so it starts unbounded ([`OpticShape::Open`]): a measurement changes only if
-/// its window is set.
+/// only records the light within its window, which starts as a 25 mm square
+/// ([`default_square_optic_shape`]). Set to [`OpticShape::Open`], it records all of it.
 ///
 /// # Arguments
 ///
@@ -168,7 +171,7 @@ pub fn create_detector_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
     node_attr.create_property(
         OPTIC_SHAPE,
         "window the light is recorded within",
-        OpticShape::Open.into(),
+        default_square_optic_shape().into(),
     )
 }
 
@@ -431,7 +434,7 @@ mod test {
                     "cylindric lens",
                     &[
                         "frame t=(10.406345, -17.828447, 30.345311) x=(0.964207, 0.204382, 0.168918) z=(-0.136689, -0.162745, 0.977154)",
-                        "box x=[-12.500000, 12.500000] y=[-12.500000, 12.500000] z=[0.000000, 10.000000]",
+                        "box x=[-10.000000, 10.000000] y=[-15.000000, 15.000000] z=[0.000000, 10.000000]",
                         "chord from (0, 0) at 0 deg: 10.000000",
                         "chord from (0, 0) at 10 deg: 10.154266",
                         "chord from (5, 0) at 0 deg: 9.949999",
@@ -439,12 +442,12 @@ mod test {
                         "chord from (0, 5) at 0 deg: 10.000000",
                         "chord from (0, 5) at 10 deg: none",
                         "chord from (-8, 3) at 0 deg: 9.871992",
-                        "chord from (-8, 3) at 10 deg: none",
-                        "chord from (12.4, 0) at 0 deg: 9.692433",
+                        "chord from (-8, 3) at 10 deg: 10.024283",
+                        "chord from (12.4, 0) at 0 deg: none",
                         "chord from (12.4, 0) at 10 deg: none",
                         "chord from (12.6, 0) at 0 deg: none",
                         "chord from (12.6, 0) at 10 deg: none",
-                        "inside: ...............#####.........#####..#####..#####..#####..#####......................",
+                        "inside: .............................#####..#####..#####..#####.............................",
                     ],
                 ),
                 (

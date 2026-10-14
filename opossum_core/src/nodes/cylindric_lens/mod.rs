@@ -3,6 +3,7 @@
 
 use crate::{
     analyzers::energy::AnalysisEnergy,
+    apertures::RectangleShape,
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, Volumetric},
     error::{OpmResult, OpossumError},
     geometry::{Geometry, body::OPTIC_SHAPE},
@@ -52,6 +53,7 @@ pub struct CylindricLens {
 
 impl Default for CylindricLens {
     /// Create a cylindric biconvex lens with a center thickness of 10.0 mm. front & back radii of curvature of 500.0 mm and a refractive index of 1.5.
+    /// Its optic shape is a rectangle of 20 mm × 30 mm.
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("cylindric lens");
         node_attr
@@ -98,7 +100,9 @@ impl Default for CylindricLens {
                 .into(),
             )
             .unwrap();
-        create_volume_properties(&mut node_attr).unwrap();
+        // 20 mm across the curvature (x), 30 mm along the cylinder axis (y)
+        let rectangle = RectangleShape::new(millimeter!(20.0), millimeter!(30.0)).unwrap();
+        create_volume_properties(&mut node_attr, rectangle.into()).unwrap();
         let mut cyl_lens = Self { node_attr };
         cyl_lens.update_surfaces().unwrap();
         cyl_lens
@@ -191,6 +195,7 @@ mod test {
         },
         core_optics::{NodeAttrExt, node_attr::NodePositioning},
         distributions::position::Hexapolar,
+        geometry::body::default_optic_shape,
         joule,
         light::{LightData, LightResult, Rays},
         millimeter, nanometer,
@@ -282,7 +287,12 @@ mod test {
     }
     #[test]
     fn rays_beyond_optic_shape_are_lost() -> OpmResult<()> {
-        test_rays_beyond_optic_shape_are_lost::<CylindricLens>()
+        test_rays_beyond_optic_shape_are_lost_for(|| {
+            let mut lens = placed_at_origin::<CylindricLens>()?;
+            lens.set_property(OPTIC_SHAPE, default_optic_shape().into())?;
+            lens.update_surfaces()?;
+            Ok(lens)
+        })
     }
     #[test]
     fn inverted() -> OpmResult<()> {
@@ -416,7 +426,7 @@ mod test {
     }
     #[test]
     fn optic_shape() -> OpmResult<()> {
-        test_optic_shape::<CylindricLens>()
+        test_optic_shape::<CylindricLens>(millimeter!(10.0))
     }
     #[test]
     fn optic_shape_absent_in_file() -> OpmResult<()> {

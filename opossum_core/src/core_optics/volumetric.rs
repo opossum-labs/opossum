@@ -459,7 +459,7 @@ mod test {
             ghostfocus::{AnalysisGhostFocus, GhostFocusAnalyzer},
             raytrace::{AnalysisRayTrace, RayTracingAnalyzer},
         },
-        apertures::OpticShape,
+        apertures::{CircleShape, OpticShape, RectangleShape},
         coatings::CoatingConstantR,
         core_optics::{
             Alignable, PortType,
@@ -480,7 +480,9 @@ mod test {
             EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort, SpotDiagram, ThinMirror,
             create_node_ref, node_types, round_collimated_ray_builder,
         },
-        percent, reciprocal_centimeter,
+        percent,
+        properties::Proptype,
+        reciprocal_centimeter,
         refractive_index::RefrIndexConst,
         utils::test_helper::helper::metered_energy,
     };
@@ -1676,6 +1678,47 @@ mod test {
                 "spectrometer",
                 "spot diagram",
                 "wavefront monitor",
+            ]
+        );
+        Ok(())
+    }
+    /// Every node type with an optic shape starts out with the one stated for it: round optics in
+    /// the usual 1 inch mount, the cylindric lens as a rectangle 20 mm across its curvature and
+    /// 30 mm along its cylinder axis, gratings and detectors as a 25 mm square, the dummy open.
+    #[test]
+    fn every_node_type_starts_with_its_default_optic_shape() -> OpmResult<()> {
+        let round = OpticShape::from(CircleShape::new(millimeter!(12.5))?);
+        let square = OpticShape::from(RectangleShape::new(millimeter!(25.0), millimeter!(25.0))?);
+        let cylindric =
+            OpticShape::from(RectangleShape::new(millimeter!(20.0), millimeter!(30.0))?);
+        let mut actual = Vec::new();
+        for (node_type, _) in node_types() {
+            let optic_ref = create_node_ref(node_type)?;
+            if let Ok(Proptype::OpticShape(optic_shape)) =
+                optic_ref.node_attr().get_property(OPTIC_SHAPE)
+            {
+                actual.push((node_type, optic_shape.clone()));
+            }
+        }
+        actual.sort_by_key(|(node_type, _)| *node_type);
+        assert_eq!(
+            actual,
+            [
+                ("beam splitter", round.clone()),
+                ("cylindric lens", cylindric),
+                ("dummy", OpticShape::Open),
+                ("energy meter", square.clone()),
+                ("fluence detector", square.clone()),
+                ("ideal filter", round.clone()),
+                ("lens", round.clone()),
+                ("mirror", round.clone()),
+                ("parabolic mirror", round.clone()),
+                ("paraxial surface", round.clone()),
+                ("reflective grating", square.clone()),
+                ("spectrometer", square.clone()),
+                ("spot diagram", square.clone()),
+                ("wavefront monitor", square),
+                ("wedge", round),
             ]
         );
         Ok(())

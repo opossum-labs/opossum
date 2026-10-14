@@ -9,7 +9,7 @@ use crate::{
     coatings::{CoatingConstantR, CoatingType},
     core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType},
     error::{OpmResult, OpossumError},
-    geometry::Geometry,
+    geometry::{Geometry, body::default_optic_shape},
     light::{
         LightData, Rays,
         spectrum::{Spectrum, merge_spectra},
@@ -229,7 +229,7 @@ impl Default for BeamSplitter {
                 SplittingConfigBuilder::FixedRatio(0.5).into(),
             )
             .unwrap();
-        create_surface_properties(&mut node_attr).unwrap();
+        create_surface_properties(&mut node_attr, default_optic_shape()).unwrap();
         let mut bs = Self { node_attr };
         bs.update_surfaces().unwrap();
         bs
