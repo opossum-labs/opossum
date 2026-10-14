@@ -159,9 +159,9 @@ pub fn ClearApertureEditor(
             options: select_options_from_enum_iterator(&*aperture_sig.read(), Some(&excluded)),
             readonly,
             onchange: move |e: Event<FormData>| {
-                let val = e.value();
-                if let Some(shape) = ApertureShape::default_from_name(val.as_str()) {
-                    on_save.call(shape_to_switch_to(shape, &aperture_sig.read()));
+                if let Some(shape) = ApertureShape::default_from_name(&e.value()) {
+                    let switch_to_shape = shape_to_switch_to(shape, &aperture_sig.read());
+                    on_save.call(switch_to_shape);
                 }
             },
         }
@@ -172,7 +172,6 @@ pub fn ClearApertureEditor(
 #[cfg(test)]
 mod test {
     use super::*;
-
     fn names(shapes: &[ApertureShape]) -> Vec<String> {
         shapes.iter().map(ToString::to_string).collect()
     }
