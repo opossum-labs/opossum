@@ -245,7 +245,12 @@ fn ScenarioCard(
                                     );
                                 });
                             },
-                            Icon { icon: FaCopy, width: 14, height: 14, fill: "currentColor" }
+                            Icon {
+                                icon: FaCopy,
+                                width: 14,
+                                height: 14,
+                                fill: "currentColor",
+                            }
                         }
                         button {
                             r#type: "button",
@@ -313,7 +318,12 @@ fn ScenarioCard(
                             );
                         });
                     },
-                    Icon { icon: FaCopy, width: 14, height: 14, fill: "currentColor" }
+                    Icon {
+                        icon: FaCopy,
+                        width: 14,
+                        height: 14,
+                        fill: "currentColor",
+                    }
                     " Duplicate"
                 }
             }

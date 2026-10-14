@@ -12,6 +12,6 @@ pub fn launch(root_component: fn() -> Element) {
 #[component]
 pub fn PlatformLifecycle(children: Element) -> Element {
     rsx! {
-      {children}
+        {children}
     }
 }

@@ -272,7 +272,11 @@ pub fn MenuBar(
                                 }
                             }
                             li {
-                                a { class: "dropdown-item text-muted disabled", role: "button", "Coating catalog" }
+                                a {
+                                    class: "dropdown-item text-muted disabled",
+                                    role: "button",
+                                    "Coating catalog"
+                                }
                             }
                             li {
                                 hr { class: "dropdown-divider" }
