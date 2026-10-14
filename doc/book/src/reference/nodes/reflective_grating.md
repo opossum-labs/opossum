@@ -21,4 +21,4 @@
 : The diffraction order delivered a output port `output_1`.
 
 `optic shape`
-: Transversal extent of the grating. It decides which rays are diffracted: a ray outside of it is lost in every analysis (see [Optic shape](../nodes.md#optic-shape)). Defaults to a circle of 12.5 mm radius; gratings are often rectangles. `Open` is refused.
+: Transversal extent of the grating. It decides which rays are diffracted: a ray outside of it is lost in every analysis (see [Optic shape](../nodes.md#optic-shape)). Defaults to a square of 25 mm × 25 mm. `Open` is refused.
