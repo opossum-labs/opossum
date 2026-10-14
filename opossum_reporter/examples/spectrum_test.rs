@@ -1,8 +1,6 @@
 use opossum_core::prelude::*;
-use opossum_core::{
-    light::Spectrum, light::spectrum_helper::create_visible_spec, reporting::plottable::Plottable,
-    reporting::plottable::PltBackEnd,
-};
+use opossum_core::{light::Spectrum, light::spectrum_helper::create_visible_spec};
+use opossum_reporter::plotting::{Plottable, PltBackEnd};
 use std::path::Path;
 
 fn main() -> OpmResult<()> {

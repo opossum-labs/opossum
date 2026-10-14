@@ -19,6 +19,7 @@ eula = false
 
 [dependencies]
 opossum_core = { workspace = true }
+opossum_reporter = { workspace = true }
 
 log.workspace = true
 nalgebra.workspace = true

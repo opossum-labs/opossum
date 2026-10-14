@@ -9,8 +9,8 @@ use crate::{
     kde::Kde,
     meter, micrometer,
     nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
-    reporting::plottable::AxLims,
     utils::{
+        AxLims,
         geom_transformation::Isometry,
         griddata::{
             VoronoiedData, calc_closed_poly_area, create_voronoi_cells,

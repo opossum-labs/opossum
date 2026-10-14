@@ -1,18 +1,14 @@
 use super::Shape;
 use crate::{
-    apertures::{Aperture, CircleShape},
+    apertures::Aperture,
     error::OpmResult,
     generic_validators::{AllNotEmpty, Pass},
-    prelude::Isometry,
-    reporting::plottable::{PlotData, PlotSeries},
-    utils::math_distribution_functions::ellipse,
     validated_vec, validated_vec_type,
 };
-use nalgebra::{Matrix2xX, Point3};
+use nalgebra::Point3;
 use opm_macros_lib::EnsureValidated;
-use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
-use uom::si::{f64::Length, length::millimeter};
+use uom::si::f64::Length;
 use utoipa::ToSchema;
 
 type ValidatedApertureStack = validated_vec_type!(Vec<Aperture>, Pass, AllNotEmpty);
@@ -98,38 +94,6 @@ impl Shape for StackShape {
         }
         transmission
     }
-}
-pub fn plot_circle(conf: CircleShape, isometry: Option<&Isometry>) -> OpmResult<Vec<PlotSeries>> {
-    // Extract translation values if isometry exists, otherwise default to 0.0 (identity)
-    let (trans_x, trans_y) = isometry.map_or((0.0, 0.0), |iso| {
-        (
-            iso.translation().x.get::<millimeter>(),
-            iso.translation().y.get::<millimeter>(),
-        )
-    });
-
-    let circle_points = ellipse(
-        (trans_x, trans_y),
-        (
-            conf.radius().get::<millimeter>(),
-            conf.radius().get::<millimeter>(),
-        ),
-        100,
-    )?;
-    let plt_dat = PlotData::Dim2 {
-        xy_data: Matrix2xX::from_vec(
-            circle_points
-                .iter()
-                .flat_map(|p| vec![p.x, p.y])
-                .collect::<Vec<f64>>(),
-        )
-        .transpose(),
-    };
-    Ok(vec![PlotSeries::new(
-        &plt_dat,
-        RGBAColor(0, 0, 0, 1.),
-        Some("Aperture".to_owned()),
-    )])
 }
 #[cfg(test)]
 mod test {

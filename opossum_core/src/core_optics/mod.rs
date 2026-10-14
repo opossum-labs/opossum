@@ -11,6 +11,7 @@ pub use node_attr::NodeAttr;
 pub use node_attr_ext::NodeAttrExt;
 pub use optic_node::Alignable;
 pub use optic_node::OpticNode;
+pub use optic_node::VisualNode;
 pub use optic_node_ext::OpticNodeExt;
 pub use optic_ports::{OpticPorts, PortType};
 pub use optic_ref::OpticRef;

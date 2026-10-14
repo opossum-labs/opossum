@@ -5713,6 +5713,7 @@ dependencies = [
 name = "opm_macros_lib"
 version = "0.8.1"
 dependencies = [
+ "opossum_core",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -5728,6 +5729,7 @@ dependencies = [
  "opossum_cli",
  "opossum_core",
  "opossum_gui",
+ "opossum_reporter",
 ]
 
 [[package]]
@@ -5741,6 +5743,7 @@ dependencies = [
  "log",
  "nalgebra",
  "opossum_core",
+ "opossum_reporter",
  "parking_lot",
  "ron",
  "semver",
@@ -5764,6 +5767,7 @@ dependencies = [
  "env_logger",
  "log",
  "opossum_core",
+ "opossum_reporter",
  "rprompt",
 ]
 
@@ -5774,7 +5778,6 @@ dependencies = [
  "approx",
  "assert_matches",
  "chrono",
- "colorous",
  "criterion",
  "delaunator",
  "earcutr",
@@ -5791,7 +5794,6 @@ dependencies = [
  "num-traits",
  "opm_macros_lib",
  "petgraph",
- "plotters",
  "rayon",
  "regex",
  "ron",
@@ -5804,7 +5806,6 @@ dependencies = [
  "strum_macros",
  "tempfile",
  "testing_logger",
- "tinytemplate",
  "uom",
  "utoipa",
  "uuid",
@@ -5858,6 +5859,32 @@ dependencies = [
  "ron",
  "serde",
  "tempfile",
+ "uom",
+ "uuid",
+]
+
+[[package]]
+name = "opossum_reporter"
+version = "0.8.1"
+dependencies = [
+ "approx",
+ "chrono",
+ "colorous",
+ "image 0.25.10",
+ "itertools 0.15.0",
+ "log",
+ "nalgebra",
+ "num-traits",
+ "opossum_core",
+ "petgraph",
+ "plotters",
+ "ron",
+ "serde",
+ "strum",
+ "strum_macros",
+ "tempfile",
+ "testing_logger",
+ "tinytemplate",
  "uom",
  "uuid",
 ]

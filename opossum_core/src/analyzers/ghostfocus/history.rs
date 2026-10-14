@@ -1,7 +1,6 @@
 use std::collections::{HashMap, hash_map::Values};
 
 use nalgebra::{MatrixXx2, MatrixXx3, Vector3};
-use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 use uom::si::length::millimeter;
@@ -14,7 +13,6 @@ use crate::{
     millimeter,
     nodes::OpticGraph,
     prelude::Proptype,
-    reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
 };
 
 /// Struct to store the node origin uuid and parent ray bundle Uuid of a ray bundle
@@ -78,7 +76,7 @@ impl GhostFocusHistory {
     /// This function errors if the length of the plane normal vector is zero
     /// # Returns
     /// This function returns a set of 2d vectors in the defined plane projected to a view that is perpendicular to this plane.
-    fn project_to_plane(
+    pub fn project_to_plane(
         &self,
         plane_normal_vec: Vector3<f64>,
     ) -> OpmResult<Vec<Vec<Vec<MatrixXx2<Length>>>>> {
@@ -260,74 +258,6 @@ impl From<(&Vec<HashMap<Uuid, Rays>>, Uuid, usize)> for GhostFocusHistory {
         ghost_focus_history.add_specific_ray_history(acc_rays, rays_uuid, hist_idx);
 
         ghost_focus_history
-    }
-}
-impl Plottable for GhostFocusHistory {
-    fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
-        plt_params
-            .set(&PlotArgs::XLabel("position in mm (z axis)".into()))?
-            .set(&PlotArgs::YLabel("position in mm (y axis)".into()))?
-            .set(&PlotArgs::PlotSize((1200, 1200)))?
-            .set(&PlotArgs::AxisEqual(true))?
-            .set(&PlotArgs::PlotAutoSize(true))?
-            .set(&PlotArgs::Legend(false))?;
-        Ok(())
-    }
-
-    fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
-        PlotType::MultiLine2D(plt_params.clone())
-    }
-
-    fn get_plot_series(
-        &self,
-        _plt_type: &mut PlotType,
-        _legend: bool,
-    ) -> OpmResult<Option<Vec<PlotSeries>>> {
-        if self.rays_pos_history.is_empty() {
-            Ok(None)
-        } else {
-            let num_series = self.rays_pos_history.len();
-            let mut plt_series = Vec::<PlotSeries>::with_capacity(num_series);
-
-            let Some(plot_view_direction) = self.plot_view_direction else {
-                return Err(OpossumError::Other("cannot get plot series for raypropagationvisualizer, plot_view_direction not defined".into()));
-            };
-
-            let projected_positions = self.project_to_plane(plot_view_direction)?;
-            for (i, bounce_positions) in projected_positions.iter().enumerate() {
-                let mut proj_pos_mm =
-                    Vec::<MatrixXx2<f64>>::with_capacity(projected_positions.len());
-                for rays_in_bounce in bounce_positions {
-                    for ray_pos in rays_in_bounce {
-                        proj_pos_mm.push(MatrixXx2::from_vec(
-                            ray_pos
-                                .iter()
-                                .map(uom::si::f64::Length::get::<millimeter>)
-                                .collect::<Vec<f64>>(),
-                        ));
-                    }
-                }
-                let gradient = colorous::TURBO;
-
-                let c = if projected_positions.len() > 10 {
-                    gradient.eval_rational(i, projected_positions.len())
-                } else {
-                    colorous::CATEGORY10[i]
-                };
-
-                let plt_data = PlotData::MultiDim2 {
-                    vec_of_xy_data: proj_pos_mm,
-                };
-                let series_label = format!("Bounce: {i}");
-
-                plt_series.push(PlotSeries::new(
-                    &plt_data,
-                    RGBAColor(c.r, c.g, c.b, 0.2),
-                    Some(series_label),
-                ));
-            }
-            Ok(Some(plt_series))
-        }
     }
 }
 #[cfg(test)]

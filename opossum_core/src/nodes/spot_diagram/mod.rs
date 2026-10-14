@@ -16,10 +16,9 @@ use crate::{
     light::{LightData, LightResult, Rays},
     nanometer,
     nodes::NodeRegistration,
-    properties::{Properties, Proptype},
+    properties::Properties,
     reporting::{
         node_report::{NodeReport, NodeReportResult},
-        plottable::{PlotArgs, PlotParameters, PlotSeries, PlotType, Plottable},
         report_note::{ReportLevel, ReportNote},
     },
     utils::geom_transformation::Isometry,
@@ -183,61 +182,6 @@ impl AnalysisEnergy for SpotDiagram {
 
 impl AnalysisGhostFocus for SpotDiagram {}
 impl AnalysisRayTrace for SpotDiagram {}
-
-impl Plottable for SpotDiagram {
-    fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
-        plt_params
-            .set(&PlotArgs::XLabel("x position (m)".into()))?
-            .set(&PlotArgs::YLabel("y position (m)".into()))?
-            .set(&PlotArgs::AxisEqual(true))?
-            .set(&PlotArgs::PlotAutoSize(true))?;
-        Ok(())
-    }
-
-    fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
-        PlotType::Scatter2D(plt_params.clone())
-    }
-
-    fn get_plot_series(
-        &self,
-        plt_type: &mut PlotType,
-        legend: bool,
-    ) -> OpmResult<Option<Vec<PlotSeries>>> {
-        let Some(LightData::Geometric(rays)) = &self.light_data else {
-            return Ok(None);
-        };
-
-        let input_port = self
-            .ports()
-            .names(&PortType::Input)
-            .first()
-            .cloned()
-            .unwrap_or_else(|| "input_1".to_string());
-        let iso = self.effective_surface_iso(&input_port)?;
-
-        let spot_data = SpotDiagramData::from_rays(rays, &iso, nanometer!(0.2))?;
-        let mut plt_series = spot_data
-            .get_plot_series(plt_type, legend)?
-            .unwrap_or_default();
-
-        // Render aperture contour if requested and available
-        if let Ok(Proptype::Bool(plot_aperture)) = self.properties().get("plot aperture")
-            && *plot_aperture
-            && let Some(aperture) = self.ports().aperture(&PortType::Input, &input_port)
-        {
-            let plt_series_opt = aperture
-                .get_plot_series(&mut PlotType::Line2D(PlotParameters::default()), legend)?;
-            if let Some(aperture_plt_series) = plt_series_opt {
-                plt_series.extend(aperture_plt_series);
-            }
-        }
-
-        match plt_type {
-            PlotType::Scatter2D(_) => Ok(Some(plt_series)),
-            _ => Ok(None),
-        }
-    }
-}
 
 #[cfg(test)]
 mod test {

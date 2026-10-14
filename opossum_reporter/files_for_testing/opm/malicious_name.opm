@@ -1,0 +1,151 @@
+(
+    opm_file_version: "0",
+    scenery: (
+        node_attr: (
+            node_type: "group",
+            name: "group",
+            ports: (
+                inputs: {},
+                outputs: {},
+            ),
+            uuid: "b5f10b53-7cef-41ce-8679-7d832d6995ae",
+            lidt: 10000.0,
+            props: {
+                "expand view": Bool(false),
+            },
+            inverted: false,
+        ),
+        graph: (
+            nodes: [
+                (
+                    attributes: (
+                        node_type: "source",
+                        name: "source",
+                        ports: (
+                            inputs: {
+                                "input_1": (
+                                    anchor_point_iso: (
+                                        transform: (
+                                            rotation: (0.0, 0.0, 0.0, 1.0),
+                                            translation: (0.0, 0.0, 0.0),
+                                        ),
+                                    ),
+                                    coating: IdealAR,
+                                    lidt: 10000.0,
+                                ),
+                            },
+                            outputs: {
+                                "output_1": (
+                                    anchor_point_iso: (
+                                        transform: (
+                                            rotation: (0.0, 0.0, 0.0, 1.0),
+                                            translation: (0.0, 0.0, 0.0),
+                                        ),
+                                    ),
+                                    coating: IdealAR,
+                                    lidt: 10000.0,
+                                ),
+                            },
+                        ),
+                        uuid: "b46e62cb-ea69-4d52-8122-4d743ca4c2f7",
+                        lidt: 10000.0,
+                        props: {
+                            "alignment wavelength": LengthOption(None),
+                            "light data": LightDataBuilder(Geometric(Collimated((
+                                pos: Hexapolar((
+                                    nr_of_rings: 7,
+                                    radius: 0.005,
+                                )),
+                                energy: Uniform((
+                                    total_energy: 0.1,
+                                )),
+                                spect: LaserLines((
+                                    lines: (
+                                        values: [
+                                            (0.000001054, 1.0),
+                                        ],
+                                    ),
+                                )),
+                            )))),
+                            "light data iso": Isometry(None),
+                        },
+                        isometry: Some((
+                            transform: (
+                                rotation: (0.0, 0.0, 0.0, 1.0),
+                                translation: (0.0, 0.0, 0.0),
+                            ),
+                        )),
+                        inverted: false,
+                        gui_position: Some((160.0, 215.5)),
+                    ),
+                ),
+                (
+                    attributes: (
+                        node_type: "ray propagation",
+                        name: "../bad",
+                        ports: (
+                            inputs: {
+                                "input_1": (
+                                    anchor_point_iso: (
+                                        transform: (
+                                            rotation: (0.0, 0.0, 0.0, 1.0),
+                                            translation: (0.0, 0.0, 0.0),
+                                        ),
+                                    ),
+                                    coating: IdealAR,
+                                    lidt: 10000.0,
+                                ),
+                            },
+                            outputs: {
+                                "output_1": (
+                                    anchor_point_iso: (
+                                        transform: (
+                                            rotation: (0.0, 0.0, 0.0, 1.0),
+                                            translation: (0.0, 0.0, 0.0),
+                                        ),
+                                    ),
+                                    coating: IdealAR,
+                                    lidt: 10000.0,
+                                ),
+                            },
+                        ),
+                        uuid: "f024d27c-9262-4260-918c-fc65dcd13163",
+                        lidt: 10000.0,
+                        props: {
+                            "ray transparency": F64(0.4),
+                            "view_direction": Vec3((1.0, 0.0, 0.0)),
+                        },
+                        inverted: false,
+                        gui_position: Some((446.0, 216.5)),
+                    ),
+                ),
+            ],
+            edges: [
+                (
+                    src_id: "b46e62cb-ea69-4d52-8122-4d743ca4c2f7",
+                    src_port: "output_1",
+                    target_id: "f024d27c-9262-4260-918c-fc65dcd13163",
+                    target_port: "input_1",
+                    distance: 0.1,
+                ),
+            ],
+        ),
+    ),
+    global: (
+        ambient_refr_index: Const((
+            refractive_index: 1.0,
+        )),
+    ),
+    analyzers: {
+        "9e0096a1-ff8b-494a-936d-e94612de7f1b": (
+            analyzer_type: RayTrace((
+                min_energy_per_ray: 0.000000000001,
+                max_number_of_bounces: 1000,
+                max_number_of_refractions: 1000,
+                missed_surface_strategy: Stop,
+            )),
+            id: "9e0096a1-ff8b-494a-936d-e94612de7f1b",
+            gui_position: Some((145.0, 36.5)),
+        ),
+    },
+)

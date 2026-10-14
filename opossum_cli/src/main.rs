@@ -16,7 +16,7 @@ fn read_and_parse_model(path: &Path) -> OpmResult<OpmDocument> {
     OpmDocument::from_file(path)
 }
 
-fn opossum() -> OpmResult<()> {
+fn opossum() -> Result<(), Box<dyn std::error::Error>> {
     // by default, log everything from level `info` and up.
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     info!(
@@ -33,13 +33,12 @@ fn opossum() -> OpmResult<()> {
     let mut document = read_and_parse_model(&opossum_args.file_path)?;
 
     // create the dot file of the scenery (non-critical: only logs a warning on failure)
-    document
-        .create_dot_file(&opossum_args.report_directory)
+    opossum_reporter::create_dot_file(document.scenery(), &opossum_args.report_directory)
         .unwrap_or_else(|e| warn!("{e}"));
 
     let reports = document.analyze()?;
     for (report_nr, report) in reports.iter().enumerate() {
-        report.save(&opossum_args.report_directory, report_nr)?;
+        opossum_reporter::save_report(report, &opossum_args.report_directory, report_nr)?;
     }
     Ok(())
 }

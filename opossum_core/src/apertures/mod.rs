@@ -36,22 +36,17 @@ use crate::{
     meter,
     prelude::Isometry,
     properties::Proptype,
-    reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     types::validated_type_definitions::{ValidatedAngle1D, ValidatedCenter2D},
-    utils::{default_from_name::DefaultFromName, math_distribution_functions::ellipse},
+    utils::default_from_name::DefaultFromName,
 };
 use core::f64;
-use nalgebra::{Matrix2xX, MatrixXx2, Point2, Point3};
+use nalgebra::{Point2, Point3};
 use num_traits::Zero;
 use opm_macros_lib::EnsureValidated;
-use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum::{EnumIter, IntoEnumIterator};
-use uom::si::{
-    f64::{Angle, Length},
-    length::millimeter,
-};
+use uom::si::f64::{Angle, Length};
 
 pub use circle::CircleShape;
 pub use gaussian::GaussianShape;
@@ -207,6 +202,7 @@ impl Aperture {
     pub const fn is_geometric_bound(&self) -> bool {
         matches!(self.a_type, ApertureType::Hole) && self.shape.is_binary()
     }
+
     /// Set the shape of this [`Aperture`].
     pub fn set_shape(&mut self, shape: ApertureShape) {
         self.shape = shape;
@@ -453,126 +449,6 @@ pub trait Shape {
     /// Calculate the transmission factor (always treated as aperture type `hole`).
     fn transmission_factor(&self, point: &Point3<Length>) -> f64;
 }
-
-impl Plottable for Aperture {
-    fn get_plot_series(
-        &self,
-        plt_type: &mut PlotType,
-        legend: bool,
-    ) -> OpmResult<Option<Vec<PlotSeries>>> {
-        let iso = self.isometry();
-        let plt_series_opt = match plt_type {
-            PlotType::Line2D(_) | PlotType::Scatter2D(_) => match &self.shape {
-                ApertureShape::Open => None,
-                ApertureShape::BinaryCircle(conf) => Some(stack::plot_circle(*conf, iso)?),
-                ApertureShape::BinaryRectangle(conf) => {
-                    let mut points = [
-                        Point2::new(conf.width() / 2., conf.height() / 2.),
-                        Point2::new(-conf.width() / 2., conf.height() / 2.),
-                        Point2::new(-conf.width() / 2., -conf.height() / 2.),
-                        Point2::new(conf.width() / 2., -conf.height() / 2.),
-                    ];
-                    for p in &mut points {
-                        // Transform the point only if an isometry is present
-                        if let Some(iso) = iso {
-                            let transformed_p =
-                                iso.transform_point(&Point3::new(p.x, p.y, meter!(0.0)));
-                            p.x = transformed_p.x;
-                            p.y = transformed_p.y;
-                        }
-                    }
-                    let plt_data_points = points
-                        .iter()
-                        .flat_map(|p| vec![p.x.get::<millimeter>(), p.y.get::<millimeter>()])
-                        .collect::<Vec<f64>>();
-                    let plt_dat = PlotData::Dim2 {
-                        xy_data: Matrix2xX::<f64>::from_vec(plt_data_points).transpose(),
-                    };
-
-                    let series_label = if legend {
-                        Some("Aperture".to_owned())
-                    } else {
-                        None
-                    };
-                    Some(vec![PlotSeries::new(
-                        &plt_dat,
-                        RGBAColor(0, 0, 0, 1.),
-                        series_label,
-                    )])
-                }
-                ApertureShape::BinaryPolygon(conf) => {
-                    let mut xy_data = MatrixXx2::from_element(conf.points().len(), 0.);
-                    for (row, p) in conf.points().iter().enumerate() {
-                        xy_data[(row, 0)] = p.x.get::<millimeter>();
-                        xy_data[(row, 1)] = p.y.get::<millimeter>();
-                    }
-                    Some(vec![PlotSeries::new(
-                        &PlotData::Dim2 { xy_data },
-                        RGBAColor(0, 0, 0, 1.),
-                        Some("Aperture".to_owned()),
-                    )])
-                }
-                ApertureShape::Gaussian(conf) => {
-                    // Extract translation values if isometry exists, otherwise default to 0.0
-                    let (trans_x, trans_y) = iso.map_or((0.0, 0.0), |iso| {
-                        (
-                            iso.translation().x.get::<millimeter>(),
-                            iso.translation().y.get::<millimeter>(),
-                        )
-                    });
-
-                    let circle_points = ellipse(
-                        (trans_x, trans_y),
-                        (
-                            conf.sigma().0.get::<millimeter>() * 2.,
-                            conf.sigma().1.get::<millimeter>() * 2.,
-                        ),
-                        100,
-                    )?;
-                    let xy_data = Matrix2xX::from_vec(
-                        circle_points
-                            .iter()
-                            .flat_map(|p| vec![p.x, p.y])
-                            .collect::<Vec<f64>>(),
-                    )
-                    .transpose();
-                    Some(vec![PlotSeries::new(
-                        &PlotData::Dim2 { xy_data },
-                        RGBAColor(0, 0, 0, 1.),
-                        Some("Gaussian Aperture 2-sigma".to_owned()),
-                    )])
-                }
-                ApertureShape::Stack(conf) => {
-                    let mut aperture_series_vec =
-                        Vec::<PlotSeries>::with_capacity(conf.apertures().len());
-                    for aperture in conf.apertures() {
-                        if let Some(plt_series_vec) = aperture.get_plot_series(plt_type, legend)? {
-                            aperture_series_vec.extend(plt_series_vec);
-                        }
-                    }
-                    Some(aperture_series_vec)
-                }
-            },
-            _ => None,
-        };
-
-        Ok(plt_series_opt)
-    }
-
-    fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
-        plt_params
-            .set(&PlotArgs::XLabel("position in mm".into()))?
-            .set(&PlotArgs::YLabel("position in mm".into()))?
-            .set(&PlotArgs::AxisEqual(true))?
-            .set(&PlotArgs::PlotSize((800, 800)))?;
-        Ok(())
-    }
-
-    fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
-        PlotType::Line2D(plt_params.clone())
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;

@@ -3,7 +3,7 @@ pub use super::{
     analyzers::{AnalyzerType, EnergyConfig, GhostFocusConfig, RayTraceConfig},
     apertures::{Aperture, ApertureShape, ApertureType},
     centimeter,
-    core_optics::{Alignable, OpticNode, PortType},
+    core_optics::{Alignable, OpticNode, PortType, VisualNode},
     degree,
     error::{OpmResult, OpossumError},
     joule,

@@ -2,11 +2,9 @@ use super::Proptype;
 use crate::{
     error::{OpmResult, OpossumError},
     properties::validator::Validator,
-    reporting::plottable::{Plottable, PltBackEnd},
 };
-use nalgebra::vector;
 use serde::{Deserialize, Serialize};
-use std::{mem, path::Path};
+use std::mem;
 
 /// (optical) Property
 ///
@@ -135,43 +133,6 @@ impl Property {
         self.validator
             .as_ref()
             .map_or(Ok(()), |validator| validator.validate(prop))
-    }
-
-    /// Export plottable property data to a report directory.
-    ///
-    /// # Errors
-    /// This function returns an error if the underlying plot function fails
-    pub fn export_data(&self, report_path: &Path, id: &str) -> OpmResult<()> {
-        match &self.prop {
-            Proptype::FluenceData(fluence) => {
-                fluence.to_plot(report_path, id, PltBackEnd::Bitmap)?;
-            }
-            Proptype::Spectrum(spectrum) => {
-                spectrum.to_plot(report_path, id, PltBackEnd::SVG)?;
-            }
-            Proptype::RayPositionHistory(ray_hist) => {
-                ray_hist.to_plot(report_path, id, PltBackEnd::SVG)?;
-            }
-            Proptype::GhostFocusHistory(ghost_hist) => {
-                let mut ghost_hist = ghost_hist.clone();
-                ghost_hist.plot_view_direction = Some(vector![1.0, 0.0, 0.0]);
-                ghost_hist.to_plot(report_path, id, PltBackEnd::SVG)?;
-            }
-            Proptype::WaveFrontData(wavefront_error_map) => {
-                wavefront_error_map.to_plot(report_path, id, PltBackEnd::Bitmap)?;
-            }
-            Proptype::HitMap(hit_map) => {
-                hit_map.to_plot(report_path, id, PltBackEnd::SVG)?;
-            }
-            Proptype::NodeReport(report) => {
-                report.export(report_path)?;
-            }
-            Proptype::SpotDiagram(spot_diagram) => {
-                spot_diagram.to_plot(report_path, id, PltBackEnd::SVG)?;
-            }
-            _ => {}
-        }
-        Ok(())
     }
 }
 #[cfg(test)]
