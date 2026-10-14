@@ -9,9 +9,8 @@ use uuid::Uuid;
 
 use crate::{
     analyzers::Analyzable,
-    core_optics::{NodeAttr, NodeAttrExt, node_attr::HasNodeAttr, optic_ports::FilePorts},
+    core_optics::{NodeAttr, NodeAttrExt, node_attr::HasNodeAttr},
     nodes::{NodeGroup, OpticGraph, create_node_ref},
-    opm_document::{CLEAR_APERTURE, upgrade_node, upgrade_optic_shape},
 };
 
 /// Structure for storing an optical node.
@@ -121,10 +120,6 @@ struct OpticRefIntermediate {
     attributes: NodeAttr,
     #[serde(default)]
     graph: OpticGraph,
-    /// Read here rather than in `attributes`, so the upgrade of an older file gets the apertures
-    /// its ports held.
-    #[serde(default)]
-    ports: FilePorts,
 }
 
 impl<'de> Deserialize<'de> for OpticRef {
@@ -133,20 +128,11 @@ impl<'de> Deserialize<'de> for OpticRef {
         D: serde::Deserializer<'de>,
     {
         let mut intermediate = OpticRefIntermediate::deserialize(deserializer)?;
-        let (ports, port_apertures) = intermediate.ports.split();
-        intermediate.attributes.set_ports(ports);
 
         let node_type = intermediate.attributes.node_type();
         let mut node_ref =
             create_node_ref(node_type).map_err(|e| de::Error::custom(e.to_string()))?;
 
-        // The merge drops the clear aperture older files stated; it becomes the optic shape below.
-        let read_clear_aperture = intermediate
-            .attributes
-            .properties()
-            .get(CLEAR_APERTURE)
-            .ok()
-            .cloned();
         // Merge the deserialized properties on top of the node's default properties.
         {
             let mut merged_props = node_ref.node_attr().properties().clone();
@@ -157,15 +143,11 @@ impl<'de> Deserialize<'de> for OpticRef {
         node_ref
             .set_node_attr(intermediate.attributes)
             .map_err(|e| de::Error::custom(e.to_string()))?;
-        upgrade_optic_shape(&mut *node_ref, read_clear_aperture.as_ref());
 
         // If the node is a group node, set its graph.
         if let Some(group_node) = node_ref.as_any_mut().downcast_mut::<NodeGroup>() {
             group_node.set_graph(intermediate.graph);
         }
-        // A node of an older file is upgraded before it builds its surfaces.
-        upgrade_node(&mut *node_ref, port_apertures)
-            .map_err(|e| de::Error::custom(e.to_string()))?;
         node_ref
             .after_deserialization_hook()
             .map_err(|e| de::Error::custom(e.to_string()))?;

@@ -9,13 +9,11 @@
 mod analysis;
 mod analyzer_info;
 mod io;
-mod migration;
 
 #[cfg(test)]
 mod tests;
 
 pub use analyzer_info::AnalyzerInfo;
-pub(crate) use migration::{CLEAR_APERTURE, upgrade_node, upgrade_optic_shape};
 
 use crate::{
     analyzers::AnalyzerType,

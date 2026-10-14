@@ -49,11 +49,7 @@ impl AnalysisGhostFocus for SourcePort {
 mod test {
     use super::*;
     use crate::{
-        distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines},
-        joule,
-        light::{Ray, lightdata::ray_data_builder::RayDataBuilder},
-        millimeter, nanometer,
-        prelude::{Aperture, ApertureType, CollimatedSrc, RayDataSource},
+        core_optics::{OpticNode, PortType}, distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines}, joule, light::{Ray, lightdata::ray_data_builder::RayDataBuilder}, millimeter, nanometer, prelude::{Aperture, ApertureType, CollimatedSrc, RayDataSource},
     };
 
     #[test]

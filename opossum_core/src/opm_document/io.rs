@@ -1,12 +1,13 @@
 //! Serialization, deserialization, and export capabilities for [`OpmDocument`].
 
-use super::{OpmDocument, migration};
+use super::OpmDocument;
 use crate::{
     core_optics::OpticNode,
     error::{OpmResult, OpossumError},
     properties::{Proptype, proptype::AssetRef},
     utils::file_utils::{create_f_path, create_file_instance},
 };
+use log::warn;
 use ron::{extensions::Extensions, ser::PrettyConfig};
 use serde::Deserialize;
 use std::{
@@ -671,7 +672,6 @@ mod tests {
 
     #[test]
     fn test_corrupt_node_property_falls_back_to_default_and_warns() -> OpmResult<()> {
-        // A file of the current version, so that no upgrade adds warnings of its own.
         let ron_data = r#"#![enable(unwrap_variant_newtypes)]
 (
     opm_file_version: 0,

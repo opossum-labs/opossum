@@ -15,7 +15,6 @@
 //! ```
 use crate::{
     J_per_cm2,
-    apertures::Aperture,
     coatings::CoatingType,
     error::{OpmResult, OpossumError},
     generic_validators::{AllNotNan, AllPositive},
@@ -96,26 +95,10 @@ impl<'de> Deserialize<'de> for PortConfig {
     where
         D: Deserializer<'de>,
     {
-        FilePortConfig::deserialize(deserializer).map(|port| port.config)
-    }
-}
-/// A port as a file states it: its configuration, and the aperture format version 0 let a port
-/// hold (`Open` if it held none). Only the upgrade of such a file reads it (see
-/// [`upgrade_node`](crate::opm_document::upgrade_node)).
-#[derive(Default)]
-pub(crate) struct FilePortConfig {
-    config: PortConfig,
-    aperture: Aperture,
-}
-impl<'de> Deserialize<'de> for FilePortConfig {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
         struct PortConfigVisitor;
 
         impl<'de> Visitor<'de> for PortConfigVisitor {
-            type Value = FilePortConfig;
+            type Value = PortConfig;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 formatter.write_str("a port config struct or ()")
@@ -126,7 +109,7 @@ impl<'de> Deserialize<'de> for FilePortConfig {
             where
                 E: de::Error,
             {
-                Ok(FilePortConfig::default())
+                Ok(PortConfig::default())
             }
 
             // Handles optional or null values
@@ -134,7 +117,7 @@ impl<'de> Deserialize<'de> for FilePortConfig {
             where
                 E: de::Error,
             {
-                Ok(FilePortConfig::default())
+                Ok(PortConfig::default())
             }
 
             // Handles empty sequences or tuples like `()`
@@ -142,7 +125,7 @@ impl<'de> Deserialize<'de> for FilePortConfig {
             where
                 A: SeqAccess<'de>,
             {
-                Ok(FilePortConfig::default())
+                Ok(PortConfig::default())
             }
 
             // Handles regular field mapping
@@ -150,18 +133,11 @@ impl<'de> Deserialize<'de> for FilePortConfig {
             where
                 A: MapAccess<'de>,
             {
-                let mut aperture = None;
                 let mut coating = None;
                 let mut lidt = None;
 
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
-                        "aperture" => {
-                            if aperture.is_some() {
-                                return Err(de::Error::duplicate_field("aperture"));
-                            }
-                            aperture = Some(map.next_value()?);
-                        }
                         "coating" => {
                             if coating.is_some() {
                                 return Err(de::Error::duplicate_field("coating"));
@@ -181,51 +157,14 @@ impl<'de> Deserialize<'de> for FilePortConfig {
                 }
 
                 let default = PortConfig::default();
-                Ok(FilePortConfig {
-                    config: PortConfig {
-                        coating: coating.unwrap_or(default.coating),
-                        lidt: lidt.unwrap_or(default.lidt),
-                    },
-                    aperture: aperture.unwrap_or_default(),
+                Ok(PortConfig {
+                    coating: coating.unwrap_or(default.coating),
+                    lidt: lidt.unwrap_or(default.lidt),
                 })
             }
         }
 
         deserializer.deserialize_any(PortConfigVisitor)
-    }
-}
-/// The ports of a node as a file states them (see [`FilePortConfig`]).
-#[derive(Default, Deserialize)]
-pub(crate) struct FilePorts {
-    inputs: BTreeMap<String, FilePortConfig>,
-    outputs: BTreeMap<String, FilePortConfig>,
-}
-impl FilePorts {
-    /// Split these ports into their configuration and the apertures they held.
-    ///
-    /// # Returns
-    ///
-    /// The [`OpticPorts`], and the physical type, the name and the aperture of every port that
-    /// held one.
-    pub(crate) fn split(self) -> (OpticPorts, Vec<(PortType, String, Aperture)>) {
-        let mut apertures = Vec::new();
-        let mut configs = |port_type, ports: BTreeMap<String, FilePortConfig>| {
-            ports
-                .into_iter()
-                .map(|(name, port)| {
-                    if !port.aperture.is_none() {
-                        apertures.push((port_type, name.clone(), port.aperture));
-                    }
-                    (name, port.config)
-                })
-                .collect()
-        };
-        let ports = OpticPorts {
-            inputs: configs(PortType::Input, self.inputs),
-            outputs: configs(PortType::Output, self.outputs),
-            inverted: false,
-        };
-        (ports, apertures)
     }
 }
 /// Type of an [`OpticPorts`]
