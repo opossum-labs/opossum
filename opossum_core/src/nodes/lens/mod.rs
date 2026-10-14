@@ -196,11 +196,17 @@ impl OpticNode for Lens {
                 "cannot read the curvatures and the center thickness of the lens".into(),
             ));
         };
+        let cross_section = self.cross_section()?.ok_or_else(|| {
+            OpossumError::Analysis(format!(
+                "the {OPTIC_SHAPE} of node '{}' is open, so its medium is unbounded",
+                self.node_attr.name()
+            ))
+        })?;
         Ok(Some(Geometry::singlet(
             *front_curvature,
             *rear_curvature,
             *center_thickness,
-            self.medium_cross_section()?,
+            cross_section,
         )?))
     }
     fn as_volume(&self) -> Option<&dyn Volumetric> {

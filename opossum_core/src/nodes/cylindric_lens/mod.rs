@@ -5,7 +5,7 @@ use crate::{
     analyzers::energy::AnalysisEnergy,
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, Volumetric},
     error::{OpmResult, OpossumError},
-    geometry::Geometry,
+    geometry::{Geometry, body::OPTIC_SHAPE},
     material::{MATERIAL, Material},
     millimeter,
     nodes::{NodeRegistration, create_volume_properties},
@@ -159,11 +159,17 @@ impl OpticNode for CylindricLens {
                 "cannot read the curvatures and the center thickness of the lens".into(),
             ));
         };
+        let cross_section = self.cross_section()?.ok_or_else(|| {
+            OpossumError::Analysis(format!(
+                "the {OPTIC_SHAPE} of node '{}' is open, so its medium is unbounded",
+                self.node_attr.name()
+            ))
+        })?;
         Ok(Some(Geometry::cylindrical_singlet(
             *front_curvature,
             *rear_curvature,
             *center_thickness,
-            self.medium_cross_section()?,
+            cross_section,
         )?))
     }
     fn as_volume(&self) -> Option<&dyn Volumetric> {

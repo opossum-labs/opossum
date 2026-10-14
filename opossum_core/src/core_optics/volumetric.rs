@@ -22,11 +22,10 @@ use crate::{
     },
     error::{OpmResult, OpossumError},
     gain::Extraction,
-    geometry::body::{OPTIC_SHAPE, SurfaceBoundedBody},
+    geometry::body::SurfaceBoundedBody,
     light::{LightData, LightRays, LightResult, Rays},
     material::{MATERIAL, Material},
     properties::{Proptype, proptype::AssetRef},
-    types::validated_type_definitions::ValidatedCrossSection,
     utils::geom_transformation::Isometry,
 };
 
@@ -68,24 +67,6 @@ pub trait Volumetric: OpticNode {
             return Err(OpossumError::Analysis("cannot read material".into()));
         };
         Ok(material.clone())
-    }
-    /// Return the cross section of this node's medium: its optic shape, which has to bound it.
-    ///
-    /// # Returns
-    ///
-    /// The optic shape as the outline of a region.
-    ///
-    /// # Errors
-    ///
-    /// This function errors if the optic shape cannot be read, does not delimit a region or is
-    /// open, which would leave the medium unbounded.
-    fn medium_cross_section(&self) -> OpmResult<ValidatedCrossSection> {
-        self.cross_section()?.ok_or_else(|| {
-            OpossumError::Analysis(format!(
-                "the {OPTIC_SHAPE} of {} is open, so its medium is unbounded",
-                self.node_info()
-            ))
-        })
     }
     /// Return the volume enclosed by the two surfaces of this node as a
     /// [`Body`](crate::geometry::body::Body).
