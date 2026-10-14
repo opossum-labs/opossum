@@ -216,17 +216,20 @@ impl Aperture {
     /// The implementation of [`ValidatedCrossSection::outline`], which describes the points. It
     /// works on a bare aperture because the members of a stack are bare apertures.
     ///
+    /// # Arguments
+    ///
+    /// * `frame` - where the surrounding stack places this aperture; the identity at the top.
+    ///
     /// # Returns
     ///
-    /// The extreme points of the region, with the isometry of this aperture applied; none if the
-    /// shape does not bound a region.
-    fn region_outline(&self) -> Vec<Point2<Length>> {
+    /// The extreme points of the region, with the isometry of this aperture placed in `frame`
+    /// applied; none if the shape does not bound a region.
+    fn region_outline(&self, frame: &Isometry) -> Vec<Point2<Length>> {
+        let placement = self.isometry.map_or(*frame, |own| frame.append(&own));
         let transform = |point: Point2<Length>| {
-            self.isometry.as_ref().map_or(point, |iso| {
-                let transformed =
-                    iso.transform_point(&Point3::new(point.x, point.y, Length::zero()));
-                Point2::new(transformed.x, transformed.y)
-            })
+            let transformed =
+                placement.transform_point(&Point3::new(point.x, point.y, Length::zero()));
+            Point2::new(transformed.x, transformed.y)
         };
         match &self.shape {
             ApertureShape::BinaryCircle(circle) => {
@@ -267,8 +270,7 @@ impl Aperture {
                 .apertures()
                 .iter()
                 .filter(|member| *member.aperture_type() == ApertureType::Hole)
-                .flat_map(Self::region_outline)
-                .map(transform)
+                .flat_map(|member| member.region_outline(&placement))
                 .collect(),
             _ => Vec::new(),
         }
@@ -431,7 +433,7 @@ impl ValidatedCrossSection {
     /// The extreme points of the region, with the isometry of the aperture applied.
     #[must_use]
     pub(crate) fn outline(&self) -> Vec<Point2<Length>> {
-        self.get().region_outline()
+        self.get().region_outline(&Isometry::identity())
     }
     /// Return how far the region reaches from the origin of its plane.
     ///
@@ -747,6 +749,35 @@ mod test {
             millimeter!(8.0).value,
             epsilon = 1e-12
         );
+        Ok(())
+    }
+    /// A stack takes its members along where it is placed: a centered disk of 5 mm in a stack shifted
+    /// by (3, 4) mm reaches 10 mm, and in a stack turned by 45° it still spans 5 mm along x.
+    #[test]
+    fn a_stack_takes_its_members_along_where_it_is_placed() -> OpmResult<()> {
+        let placed_disk = |shift: Option<Point2<Length>>, rotation: Option<Angle>| {
+            let disk = Aperture::new_circle(millimeter!(5.0), ApertureType::Hole, None)?;
+            ValidatedCrossSection::try_new(Aperture::new_stack(
+                vec![disk],
+                ApertureType::Hole,
+                shift,
+                rotation,
+            )?)
+        };
+        let shifted = placed_disk(Some(millimeter!(3.0, 4.0)), None)?;
+        assert_abs_diff_eq!(
+            shifted.transversal_reach().value,
+            millimeter!(10.0).value,
+            epsilon = 1e-12
+        );
+        let turned = placed_disk(None, Some(degree!(45.0)))?;
+        let largest_x = turned
+            .outline()
+            .iter()
+            .fold(f64::NEG_INFINITY, |largest, point| {
+                largest.max(point.x.value)
+            });
+        assert_abs_diff_eq!(largest_x, millimeter!(5.0).value, epsilon = 1e-12);
         Ok(())
     }
     #[test]
