@@ -169,6 +169,13 @@ impl AbsorptionModel {
             }
         }
     }
+    /// Returns `true` if the absorption model is [`AbsorptionModel::None`].
+    ///
+    /// This is a helper function used during serialization.
+    #[must_use]
+    pub const fn is_none(&self) -> bool {
+        matches!(self, Self::None)
+    }
 }
 
 impl Display for AbsorptionModel {
