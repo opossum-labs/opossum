@@ -925,8 +925,9 @@ impl Rays {
                 ray.refract_paraxial(focal_length, iso)?;
             }
             if let Some(helper_rays) = ray.helper_rays_mut() {
-                let all = vec![true; helper_rays.nr_of_rays(false)];
-                helper_rays.refract_paraxial(focal_length, iso, &all)?;
+                for helper in helper_rays.iter_mut().filter(|helper| helper.valid()) {
+                    helper.refract_paraxial(focal_length, iso)?;
+                }
             }
         }
         Ok(())
@@ -1224,13 +1225,8 @@ impl Rays {
     /// This function will return an error if the underlying function for filtering a single [`Ray`] with the given
     /// [`FilterType`] fails for any of the rays in the bundle.
     pub fn filter_energy(&mut self, filter: &FilterType, hits: &[bool]) -> OpmResult<()> {
-        for (ray, _) in self
-            .ray_bundle
-            .iter_mut()
-            .zip(hits)
-            .filter(|(_, hit)| **hit)
-        {
-            if ray.valid() {
+        for (ray, &hit) in self.ray_bundle.iter_mut().zip(hits) {
+            if hit && ray.valid() {
                 ray.filter_energy(filter)?;
             }
         }
@@ -2400,17 +2396,8 @@ mod test {
                 J_per_cm2!(1.0),
             )
         };
-        let directions = |ray: &mut Ray| -> Vec<Vector3<f64>> {
-            let helpers = ray
-                .helper_rays_mut()
-                .map(|helpers| helpers.iter().map(Ray::direction).collect::<Vec<_>>())
-                .unwrap_or_default();
-            std::iter::once(ray.direction()).chain(helpers).collect()
-        };
         let (hit, missed) = (with_helpers(5.0)?, with_helpers(-5.0)?);
-        let mut rays = Rays::default();
-        rays.add_ray(hit.clone());
-        rays.add_ray(missed.clone());
+        let mut rays = Rays::from(vec![hit.clone(), missed.clone()]);
         rays.refract_paraxial(focal_length, &iso, &[true, false])?;
 
         let mut refracted = hit;
@@ -2418,19 +2405,12 @@ mod test {
         let Some(helpers) = refracted.helper_rays_mut() else {
             panic!("the ray has helper rays");
         };
+        assert_eq!(helpers.nr_of_rays(false), 3, "a ray with three helper rays");
         for helper in helpers.iter_mut() {
             helper.refract_paraxial(focal_length, &iso)?;
+            assert_ne!(helper.direction(), Vector3::z());
         }
-        let expected = [directions(&mut refracted), directions(&mut missed.clone())];
-        assert_eq!(expected[0].len(), 4, "a ray with three helper rays");
-        assert!(
-            expected[0]
-                .iter()
-                .all(|direction| *direction != Vector3::z())
-        );
-        for (ray, expected) in rays.ray_bundle.iter_mut().zip(&expected) {
-            assert_eq!(&directions(ray), expected);
-        }
+        assert_eq!(rays.ray_bundle, [refracted, missed]);
         Ok(())
     }
     #[test]
