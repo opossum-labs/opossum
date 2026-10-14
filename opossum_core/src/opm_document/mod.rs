@@ -27,11 +27,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use uuid::Uuid;
 
+/// Current version of the .opm file format schema.
+pub const CURRENT_OPM_FILE_VERSION: u32 = 0;
+
 /// The main structure of an OPOSSUM model.
 /// It contains the [`NodeGroup`] representing the optical model, a list of analyzers, and a global configuration.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OpmDocument {
-    pub(crate) opm_file_version: String,
+    pub(crate) opm_file_version: u32,
     #[serde(default)]
     pub(crate) scenery: NodeGroup,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
@@ -48,7 +51,7 @@ pub struct OpmDocument {
 impl Default for OpmDocument {
     fn default() -> Self {
         Self {
-            opm_file_version: env!("OPM_FILE_VERSION").to_string(),
+            opm_file_version: CURRENT_OPM_FILE_VERSION,
             scenery: NodeGroup::default(),
             analyzers: IndexMap::default(),
             pump_scenarios: IndexMap::default(),

@@ -1,6 +1,6 @@
 #![enable(unwrap_variant_newtypes)]
 (
-    opm_file_version: "0",
+    opm_file_version: 0,
     scenery: {
         "node_type": "group",
         "name": "All node types round-trip test",

@@ -9,11 +9,16 @@ use crate::{
 };
 use log::warn;
 use ron::{extensions::Extensions, ser::PrettyConfig};
+use serde::Deserialize;
 use std::{
     fs::{self, File},
     io::Write,
     path::Path,
 };
+#[derive(Deserialize)]
+struct OpmHeader {
+    opm_file_version: u32,
+}
 
 impl OpmDocument {
     /// Replaces all `AssetRef::Id(Uuid)` properties in scene nodes (including all nested
@@ -104,30 +109,27 @@ impl OpmDocument {
     ///
     /// Returns an error if the RON deserialization or graph hook resolution fails.
     pub fn from_string(file_string: &str) -> OpmResult<Self> {
+        // 1. Fast header check: catches mismatched versions before deep parsing fails
+        if let Ok(header) = ron::from_str::<OpmHeader>(file_string) {
+            if header.opm_file_version != super::CURRENT_OPM_FILE_VERSION {
+                warn!(
+                    "OPM file version mismatch: file has '{}', expected '{}'.",
+                    header.opm_file_version,
+                    super::CURRENT_OPM_FILE_VERSION
+                );
+            }
+        }
+
+        // 2. Full document deserialization
         let mut document: Self = ron::from_str(file_string)
             .map_err(|e| OpossumError::OpmDocument(format!("parsing of model failed: {e}")))?;
 
-        if document.opm_file_version != env!("OPM_FILE_VERSION") {
-            warn!("OPM file version does not match the used OPOSSUM version.");
-            warn!(
-                "read version '{}' <-> program file version '{}'",
-                document.opm_file_version,
-                env!("OPM_FILE_VERSION")
-            );
-            warn!(
-                "This file might have been written by an older or newer version of OPOSSUM. The model import might not be correct."
-            );
-        }
-
         document.scenery.after_deserialization_hook()?;
-        // Resolve cross-group node references across the entire graph
         document.scenery.graph_mut().resolve_all_references()?;
-
-        // Resolve embedded material references into full in-memory Material structs
         document.resolve_embedded_materials()?;
+
         Ok(document)
     }
-
     /// Saves this [`OpmDocument`] to an `.opm` file at the specified path.
     ///
     /// # Errors
@@ -408,7 +410,7 @@ mod tests {
     fn test_skip_unknown_node_type_during_deserialization() -> OpmResult<()> {
         let ron_data = r#"#![enable(unwrap_variant_newtypes)]
 (
-    opm_file_version: "0",
+    opm_file_version: 0,
     scenery: {
         "node_type": "group",
         "name": "test",
@@ -473,7 +475,7 @@ mod tests {
     fn test_skip_invalid_edge_connection() -> OpmResult<()> {
         let ron_data = r#"#![enable(unwrap_variant_newtypes)]
 (
-    opm_file_version: "0",
+    opm_file_version: 0,
     scenery: {
         "node_type": "group",
         "name": "test",
@@ -536,7 +538,7 @@ mod tests {
     fn test_load_nested_group_with_mapped_ports() -> OpmResult<()> {
         let ron_data = r#"#![enable(unwrap_variant_newtypes)]
 (
-    opm_file_version: "0",
+    opm_file_version: 0,
     scenery: {
         "node_type": "group",
         "name": "test",
@@ -672,7 +674,7 @@ mod tests {
     fn test_corrupt_node_property_falls_back_to_default_and_warns() -> OpmResult<()> {
         let ron_data = r#"#![enable(unwrap_variant_newtypes)]
 (
-    opm_file_version: "0",
+    opm_file_version: 0,
     scenery: {
         "node_type": "group",
         "name": "test",
@@ -784,7 +786,7 @@ mod tests {
     fn test_load_source_port_with_empty_transform() -> OpmResult<()> {
         let ron_data = r#"#![enable(unwrap_variant_newtypes)]
 (
-    opm_file_version: "0",
+    opm_file_version: 0,
     scenery: {
         "node_type": "group",
         "name": "test",
@@ -829,7 +831,7 @@ mod tests {
     fn test_deserialize_node_with_asymmetric_ports() -> OpmResult<()> {
         let ron_data = r#"#![enable(unwrap_variant_newtypes)]
 (
-    opm_file_version: "0",
+    opm_file_version: 0,
     scenery: {
         "node_type": "group",
         "name": "test",

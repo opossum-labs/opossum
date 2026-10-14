@@ -18,7 +18,7 @@ fn new() {
 #[test]
 fn default() {
     let document = OpmDocument::default();
-    assert_eq!(document.opm_file_version, env!("OPM_FILE_VERSION"));
+    assert_eq!(document.opm_file_version, super::CURRENT_OPM_FILE_VERSION);
     assert!(document.analyzers.is_empty());
     assert!(document.pump_scenarios.is_empty());
 }
