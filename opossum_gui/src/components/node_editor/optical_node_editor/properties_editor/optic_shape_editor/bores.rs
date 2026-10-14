@@ -9,7 +9,7 @@ use crate::components::node_editor::inputs::{
 use dioxus::prelude::*;
 use nalgebra::Point2;
 use opossum_core::{
-    apertures::{Bore, CircleShape, OutlineShape},
+    apertures::{Bore, CircleShape, Outline, OutlineShape},
     degree, meter,
     utils::default_from_name::DefaultFromName,
 };
@@ -78,15 +78,18 @@ fn list_entry(bore: &Bore) -> Vec<String> {
 /// rotation, and the list of the bores the optic shape has.
 ///
 /// Adding, updating and deleting a bore each hands the whole list on once, so each is one step to
-/// undo. Editing the draft hands nothing on.
+/// undo. Editing the draft hands nothing on; while the core refuses the outline the draft would
+/// make ([`Outline::new`]), the button looks refused, does nothing and tells why on hover.
 ///
 /// # Arguments
 ///
+/// * `edge` - the edge of the component shown, which the bores have to lie within.
 /// * `bores` - the bores the optic shape has.
 /// * `on_bores_change` - handler receiving the changed list of bores.
 /// * `readonly` - whether the inputs are shown read-only.
 #[component]
 pub fn BoreEditor(
+    edge: OutlineShape,
     bores: Vec<Bore>,
     on_bores_change: EventHandler<Vec<Bore>>,
     readonly: bool,
@@ -121,6 +124,18 @@ pub fn BoreEditor(
     });
 
     let draft_bore = draft.read().clone();
+    let index = *editing_index.read();
+    // What a click hands on: the draft in place of the bore being edited, or added.
+    let mut submitted = bores.clone();
+    match index.and_then(|index| submitted.get_mut(index)) {
+        Some(edited) => *edited = draft_bore.clone(),
+        None => submitted.push(draft_bore.clone()),
+    }
+    let refusal = (!readonly)
+        .then(|| Outline::new(edge, submitted.clone()).err())
+        .flatten()
+        .map(|refusal| refusal.to_string());
+    let refused = refusal.is_some();
     rsx! {
         LabeledSelect {
             id: "boreShapeSelector",
@@ -142,23 +157,18 @@ pub fn BoreEditor(
             RowedInputs { inputs: BoreParam::to_input_data_vec(&draft_bore, on_draft_change, readonly) }
         }
         input {
-            class: " border-start btn",
+            class: if refused { "border-start btn refused" } else { "border-start btn" },
             r#type: "button",
             id: "boreSubmit",
-            value: if editing_index.read().is_none() { "Add bore" } else { "Update bore" },
+            value: if index.is_none() { "Add bore" } else { "Update bore" },
             disabled: readonly,
-            onclick: {
-                let bores = bores;
-                move |_| {
-                    let bore = draft.read().clone();
-                    let index = *editing_index.read();
-                    let mut bores = bores.clone();
-                    match index.and_then(|index| bores.get_mut(index)) {
-                        Some(edited) => *edited = bore,
-                        None => bores.push(bore),
-                    }
+            // Refused, the button stays hoverable so that its title can say why.
+            "aria-disabled": refused,
+            title: refusal.unwrap_or_default(),
+            onclick: move |_| {
+                if !refused {
                     editing_index.set(None);
-                    on_bores_change.call(bores);
+                    on_bores_change.call(submitted.clone());
                 }
             },
         }

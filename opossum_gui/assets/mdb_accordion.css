@@ -141,6 +141,12 @@ input[type=number] {
 #laserlinesubmit:hover, #energylaserlinesubmit:hover, #polygonPointSubmit:hover, #boreSubmit:hover{
       background-color:rgb(105, 104, 104) !important;
 }
+/* A bore the core refuses: no hover highlight, reddish text; the title says why. */
+#boreSubmit.refused, #boreSubmit.refused:hover{
+    background-color:rgb(70, 70, 70) !important;
+    color:rgb(240, 140, 140);
+    cursor: not-allowed;
+}
 
 #laserLineList, #energylaserLineList, #polygonPointList, #dynamicList{
   border-radius: 0;

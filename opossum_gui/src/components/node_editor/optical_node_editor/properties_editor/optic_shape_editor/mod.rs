@@ -97,8 +97,9 @@ fn OutlineShapeInput(
 ///
 /// The edge is chosen from the kinds [`edge_options`] offers; choosing another kind starts a fresh
 /// edge of that kind without bores, which one undo step reverts. Every change is checked by the
-/// core ([`Outline::new`]): one it refuses, such as a bore outside the edge, is logged and not
-/// saved.
+/// core ([`Outline::new`]) and saved only if it accepts it. An edited edge it refuses, such as a
+/// polygon crossing itself, stays on screen with the reason, so it can be edited further; any
+/// other refused change is logged.
 ///
 /// # Arguments
 ///
@@ -127,21 +128,39 @@ pub fn OpticShapeEditor(
     });
 
     let current = optic_shape_sig.read().clone();
+    // The edge shown: the saved one, or an edit the core has not accepted yet.
+    let mut edge_draft = use_synced_signal(match &current {
+        OpticShape::Open => None,
+        OpticShape::Bounded(outline) => Some(outline.shape().clone()),
+    });
     let outline_inputs = match &current {
         OpticShape::Open => rsx! {},
         OpticShape::Bounded(outline) => {
-            let (edge, bores) = (outline.shape().clone(), outline.bores().to_vec());
+            let bores = outline.bores().to_vec();
+            let edge = edge_draft
+                .read()
+                .clone()
+                .unwrap_or_else(|| outline.shape().clone());
+            let refusal = Outline::new(edge.clone(), bores.clone()).err();
             let on_edge_change = EventHandler::new({
                 let bores = bores.clone();
-                move |edge: OutlineShape| on_outline.call((edge, bores.clone()))
+                move |edge: OutlineShape| {
+                    edge_draft.set(Some(edge.clone()));
+                    if let Ok(outline) = Outline::new(edge, bores.clone()) {
+                        on_save.call(outline.into());
+                    }
+                }
             });
             let on_bores_change = EventHandler::new({
                 let edge = edge.clone();
                 move |bores: Vec<Bore>| on_outline.call((edge.clone(), bores))
             });
             rsx! {
-                OutlineShapeInput { shape: edge, on_shape_change: on_edge_change, readonly }
-                BoreEditor { bores, on_bores_change, readonly }
+                OutlineShapeInput { shape: edge.clone(), on_shape_change: on_edge_change, readonly }
+                if let Some(refusal) = refusal {
+                    div { class: "alert alert-warning py-2 px-3 small mb-2", "{refusal}" }
+                }
+                BoreEditor { edge, bores, on_bores_change, readonly }
             }
         }
     };
