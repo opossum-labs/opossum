@@ -17,11 +17,12 @@ The shape of a component passes three stages:
    The geometry is never stored. It is derived again whenever it is needed, so it cannot fall out of step with the
    properties. The node type acts as a preset: a lens is a *singlet* whose parameters are the properties of the
    lens.
-2. **Build.** The geometry and the node's *placement* (where it sits and how it is turned) together yield the
-   objects the simulation works with:
+2. **Build.** The geometry and the node's *placement* (where it sits and how it is turned) together yield, in one
+   step, the objects the simulation works with:
    - the *surfaces* rays are intersected with,
    - the *rim* that bounds them sideways,
-   - for a component with a volume, the *body* of material between its surfaces.
+   - for a component with a volume, the *body* of material between its surfaces. The body does not get surfaces
+     of its own; it is bounded by the very surfaces rays are traced at.
 3. **Use.** The analyzers, the alignment run and the 3D view work with these objects. While tracing, a node finds a
    surface by the name of the port the light arrives at or leaves through.
 
@@ -128,8 +129,9 @@ Inverting a node rebuilds nothing; ghost focus analysis does this on every secon
 inputs and outputs, so the same lookup returns the rear surface first. The geometry stays as it physically is; only
 the direction light takes through it changes.
 
-Whether a ray hits a component is decided in exactly one place, when the ray is intersected with an optic surface.
-The point has to meet two conditions:
+Whether a ray hits a component is decided in exactly one place, by the rim. The optic surfaces ask it when a ray is
+intersected with them, and the body of a volume node asks it when it measures how far a ray travels through it. The
+point has to meet two conditions:
 
 - it lies within the rim, measured along the rim's axis;
 - on a closed surface such as a sphere, it lies on the part that contains the vertex. A ray that reaches a sphere
@@ -146,7 +148,8 @@ The alignment run always uses `Stop`.
 
 Surfaces are never moved. They are built anew from the geometry at the node's current placement. A rebuild replaces the
 geometric surface, the anchor and the rim of each existing optic surface but keeps the optic surface itself, so its
-caches and hit map survive.
+caches and hit map survive. For a volume node it also builds the body anew from the new surfaces; the body's
+inversion stays empty until the medium is prepared for an analysis.
 
 | Event | Rebuilds the surfaces |
 |---|---|
@@ -161,7 +164,8 @@ caches and hit map survive.
 | Inverting a node | no, nothing to rebuild |
 
 A property change does not rebuild anything. For that reason, every analysis that traces rays first rebuilds all
-surfaces, and the backend rebuilds a node before it meshes the node for the 3D view.
+surfaces. The 3D view does not depend on the rebuilt surfaces at all: it builds what it draws from the geometry at
+the node's current placement.
 
 ## Part 2: In the code
 
@@ -172,11 +176,12 @@ All paths are relative to `opossum_core/src` unless stated otherwise.
 | Type | File | Role |
 |---|---|---|
 | `Geometry`, `SurfaceGeometry`, `Solid`, `Extruded`, `ParametricSolid`, `Assembly`, `Part`, `Interface` | `geometry/node_geometry.rs` | the description |
+| `PlacedGeometry` | `geometry/node_geometry.rs` | the description built at a placement: entrance, exit, rim and body |
 | `Face`, `SurfaceShape` | `geometry/face.rs` | one surface, described |
 | `OpticShape`, `Outline`, `Bore` | `apertures/optic_shape.rs` | value of the `optic shape` property |
 | `ValidatedCrossSection` | `types/validated_type_definitions.rs` | an aperture that delimits a region |
 | `Rim`, `RimRole` | `geometry/rim.rs` | lateral boundary, edge or window |
-| `GeoSurface`, `GeoSurfaceRef` | `geometry/geo_surface.rs` (implemented by `Plane`, `Sphere`, `Cylinder`, `Parabola`) | unbounded surface placed in the world, shared as `Arc<Mutex<..>>` |
+| `GeoSurface`, `GeoSurfaceRef` | `geometry/geo_surface.rs` (implemented by `Plane`, `Sphere`, `Cylinder`, `Parabola`) | unbounded surface placed in the world, never changed once built, shared as `Arc<..>` |
 | `SurfaceBoundedBody`, `Body` | `geometry/body/mod.rs` | the volume between entrance and exit |
 | `OpticSurface` | `core_optics/optic_surface.rs` | the runtime surface |
 | `RuntimeSurfaces`, `RuntimeMedium` | `core_optics/node_attr.rs` | where a node keeps them, `#[serde(skip)]` |
@@ -234,10 +239,11 @@ The origin of the node, its anchor point, is the vertex of the front face.
 1. It calls `geometry()` again, so it works from the properties as they are now.
 2. It takes `effective_node_iso()`, which is the position followed by the alignment, or the identity for a node that
    has not been placed.
-3. `Geometry::entrance_and_exit(&node_iso)` calls `Extruded::entrance_and_exit`, which calls `Face::place` for front
-   and rear.
-4. `Geometry::rim()` returns `Rim::new(circle, identity, RimRole::Edge)`.
-5. It calls `update_surface` once per port name.
+3. `Geometry::place(&node_iso)` calls `Extruded::place`, which calls `Face::place` for front and rear and builds the
+   body between them from the same two surfaces. The result, a `PlacedGeometry`, also holds the rim
+   `Rim::new(circle, identity, RimRole::Edge)`.
+4. It calls `update_surface` once per port name.
+5. It stores the body as the node's `RuntimeMedium`, with an empty inversion (`NodeAttr::set_runtime_body`).
 
 `Face::place(node_frame, owner)` computes `anchor = owner ∘ vertex ∘ vertex_to_frame` and builds the geometric
 surface at `node_frame ∘ anchor`. A sphere or a cylinder has its own frame at its center of curvature, one radius
@@ -264,14 +270,14 @@ isometry of that surface followed by the inverse of its anchor (`OpticSurface::n
 **Step 4: the medium.** After the alignment run the analyzer calls `reset_data` and then `OpticNode::prepare_volume`.
 For a volume node, `prepare_volume` does the following:
 
-1. It calls `update_surfaces` once more.
-2. It calls `Volumetric::volume_body`, which calls `Geometry::body(&node_iso)` and then `Extruded::body`.
-3. `Extruded::body` places front and rear again, giving new geometric surfaces from the same description, and
-   returns `SurfaceBoundedBody::new(front, rear, circle, node_iso ∘ axis)`.
-4. `NodeAttr::set_runtime_medium` stores the body as a `RuntimeMedium`, with an inversion if the gain model needs
-   one.
+1. It calls `update_surfaces` once more, which rebuilds the surfaces and the body as in Step 3.
+2. If the gain model reads an inversion, it builds one in the body of the `RuntimeMedium`
+   (`Extraction::build_inversion`).
 
-Nothing in the body comes from the runtime surfaces or from port names.
+The body, `SurfaceBoundedBody::new(front, rear, circle, node_iso ∘ axis)`, is bounded by the very surfaces light is
+traced at: its entrance is the sphere under `input_1`, its exit the plane under `output_1`. It knows no port names.
+`Volumetric::volume_body` builds the same body anew from the current properties; the 3D view uses it, an analysis
+does not.
 
 **Step 5: trace.** `OpticGraph::analyze_raytrace` (`nodes/node_group/optic_graph/raytrace.rs`) walks the graph and
 hands each node the light that arrives at its ports. `Lens::analyze` (`nodes/lens/analysis_raytrace.rs`) calls
@@ -287,11 +293,13 @@ hands each node the light that arrives at its ports. `Lens::analyze` (`nodes/len
       `RuntimeMedium`. It does not move the rays.
    3. `pass_through_surface_generic("output_1", ambient index, ..)` runs the same chain at the rear plane.
 
-`OpticSurface::intersect` is where hit or miss is decided:
+`OpticSurface::intersect` hands an edge rim to `Rim::intersect` (`geometry/rim.rs`), where hit or miss is decided:
 
 1. `GeoSurface::calc_intersect_and_normal` intersects the ray with the unbounded surface.
-2. For an edge rim, the point counts only if `Rim::contains(point, node_frame)` and
-   `GeoSurface::is_on_vertex_sheet(point)` both hold.
+2. The point counts only if `Rim::contains(point, node_frame)` and `GeoSurface::is_on_vertex_sheet(point)` both
+   hold.
+
+`SurfaceBoundedBody::path_length_inside` decides the same way when it measures the chord through the body.
 
 A ray parallel to the axis at y = 13 mm meets the sphere, but outside the 12.5 mm circle, so it misses. With `Stop`,
 `Ray::refract_on_surface_with_coating` invalidates it; with `Ignore`, it stays unchanged. `propagate_rays` reports
@@ -305,8 +313,9 @@ paraxial surface.
   - `pass_through_volume_generic` passes `backward = self.inverted()`, and the rear plane is traced first.
   - The body stays the same.
 - *Changed property.* After `set_property("center thickness", ..)` the description changes at once. The runtime
-  surfaces stay stale until the next rebuild: at the start of an analysis, or through an explicit
-  `update_surfaces`. `volume_body` is always current, since it derives the body from `geometry()` directly.
+  surfaces, and the body of the medium with them, stay stale until the next rebuild: at the start of an analysis,
+  or through an explicit `update_surfaces`. `volume_body` and `Planar::surface_mesh` are always current, since they
+  build the shape from `geometry()` directly.
 
 ### Example 2: a flat mirror tilted by 45°
 
@@ -326,9 +335,9 @@ always passes, since a plane reaches any edge.
 1. The mirror is placed as in the lens example, at a translation by (0, 0, 100 mm).
 2. `effective_node_iso` is that position followed by the alignment: the translation, then 45° about x.
 3. `ThinMirror::update_surfaces` calls `install_geometry(&["input_1"], &["output_1"])`.
-4. For a surface, `Geometry::entrance_and_exit` calls `face.place(node_frame, axis)` once and returns the result
-   twice. `input_1` and `output_1` therefore get separate `OpticSurface`s that share one `GeoSurfaceRef`, the same
-   `Arc`.
+4. For a surface, `Geometry::place` calls `SurfaceGeometry::place`, which places the face once and uses it as entrance
+   and exit. `input_1` and `output_1` therefore get separate `OpticSurface`s that share one `GeoSurfaceRef`, the same
+   `Arc`. A surface encloses no volume, so the mirror gets no medium.
 5. `ThinMirror::default` gives both ports a 100 % `ConstantR` coating through `set_coating`, which rebuilds as well.
 
 **Trace.** `ThinMirror::analyze` (the `AnalysisRayTrace` implementation in `nodes/thin_mirror.rs`) uses neither the
@@ -347,12 +356,12 @@ names the mirror.
 **Draw.** The 3D view (`for_each_drawable` in `opossum_backend/src/scene_export.rs`) asks each node `as_volume` and
 `as_surface`:
 
-- For the mirror, `Planar::surface_mesh` (`core_optics/planar.rs`) reads the optic surface of the first input port
-  and its rim, and meshes the geometric surface within the rim.
-- A volume node is drawn from `Volumetric::volume_body`, which is derived from the geometry.
+- For the mirror, `Planar::surface_mesh` (`core_optics/planar.rs`) places the geometry itself with
+  `Geometry::place` and meshes the entrance surface within the rim.
+- A volume node is drawn from `Volumetric::volume_body`, which places the geometry the same way.
 
-The drawn mirror therefore depends on its runtime surfaces being current. This is why the endpoint for a single
-component (`opossum_backend/src/document.rs`) calls `update_surfaces` before it meshes the node.
+Neither reads the runtime surfaces, so a property that was changed without a rebuild is drawn as it is now. The
+endpoint for a single component (`opossum_backend/src/document.rs`) therefore meshes the node without rebuilding it.
 
 ### Other components
 
@@ -377,7 +386,8 @@ A ray-tracing analysis (`RayTracingAnalyzer::analyze`) runs these steps:
    - every node that gets placed rebuilds its surfaces through `set_positioning`;
    - if the axis ray leaves a node invalid and the node has successors, the run stops with an error naming the node.
 3. `reset_data` clears light data, the caches and hit maps of the optic surfaces, and the inversion.
-4. `prepare_volume` makes the volume nodes rebuild their surfaces and derive their bodies (see Example 1, Step 4).
+4. `prepare_volume` makes the volume nodes rebuild their surfaces and bodies, and builds the inversion where the gain
+   model needs one (see Example 1, Step 4).
 5. `AnalysisRayTrace::analyze` performs the trace itself.
 
 A ghost-focus analysis (`GhostFocusAnalyzer::analyze`, `analyzers/ghostfocus/analyzer.rs`) runs the same first four
@@ -408,12 +418,12 @@ analysis's sources. Then the bounce passes follow:
     through the vertex: `is_on_vertex_sheet`, and with it every hit test, is derived from it.
 - **Tracing a parametric solid or an assembly.**
   - `install_geometry` knows exactly one entrance surface and one exit surface.
-  - `Geometry::entrance_and_exit`, `Geometry::body` and `Geometry::rim` end in `not_supported_yet` for these two
-    kinds.
+  - `Geometry::place` ends in `not_supported_yet` for these two kinds.
 
-  A tracer for them has to replace those three branches and the entrance/exit assumption.
+  A tracer for them has to replace that branch and the entrance/exit assumption.
 - **Who reads what.**
-  - Read the geometry directly: `install_geometry` and `Volumetric::volume_body` (the medium and the drawn body).
-  - Read the runtime surfaces: all analyzers, `Planar::surface_mesh` and `OpticNodeExt::effective_surface_iso`
-    (used by the paraxial surface).
-  - `install_geometry` and `update_surface` are the only place that builds runtime surfaces.
+  - Read the geometry directly: `install_geometry`, and the 3D view through `Volumetric::volume_body` and
+    `Planar::surface_mesh`.
+  - Read the runtime surfaces and the medium: all analyzers and `OpticNodeExt::effective_surface_iso` (used by the
+    paraxial surface).
+  - `install_geometry` and `update_surface` are the only place that builds runtime surfaces and the runtime body.
