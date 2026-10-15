@@ -242,27 +242,6 @@ impl SurfaceBoundedBody {
             isometry,
         }
     }
-    /// Intersect the given [`Ray`] with one of the bounding surfaces of this body.
-    ///
-    /// Hits outside the transversal cross section are discarded, since they lie on the unbounded
-    /// part of the surface which is not part of the body.
-    ///
-    /// # Arguments
-    ///
-    /// - `surface`: the bounding surface to intersect with
-    /// - `ray`: the ray to be intersected
-    ///
-    /// # Returns
-    ///
-    /// The intersection point in global coordinates or `None` if the ray misses the bounded part of
-    /// the surface.
-    fn bounded_intersection(&self, surface: &GeoSurfaceRef, ray: &Ray) -> Option<Point3<Length>> {
-        surface
-            .0
-            .calc_intersect_and_normal(ray)
-            .map(|(point, _)| point)
-            .filter(|point| self.rim.contains(point, &self.isometry))
-    }
     /// Return the range of longitudinal positions one of the bounding surfaces spans over the cross
     /// section of this body, in the body's own frame.
     ///
@@ -402,7 +381,7 @@ impl Body for SurfaceBoundedBody {
             consider(ray_position);
         }
         for surface in [&self.entrance, &self.exit] {
-            if let Some(point) = self.bounded_intersection(surface, ray) {
+            if let Some((point, _)) = self.rim.intersect(&*surface.0, ray, &self.isometry) {
                 consider(point);
             }
         }
@@ -665,6 +644,47 @@ mod test {
         // starting behind the body
         let ray = test_ray(millimeter!(0.0, 0.0, 20.0), Vector3::z())?;
         assert_eq!(body.path_length_inside(&ray), None);
+        Ok(())
+    }
+    /// A hemisphere: a sphere of 15 mm radius with its vertex at the origin, cut flat at its
+    /// equator and bounded to 12.5 mm around the axis. A ray parallel to the axis at height h meets
+    /// the sphere sqrt(R² - h²) before the cut. A steep ray reaching the sphere only behind its
+    /// equator, beyond the cut, does not pass through the body at all.
+    #[test]
+    fn chords_through_a_hemisphere() -> OpmResult<()> {
+        let radius = 15.0;
+        let body = SurfaceBoundedBody::new(
+            GeoSurfaceRef(Arc::new(Sphere::new_at_position(
+                millimeter!(radius),
+                millimeter!(0.0, 0.0, 0.0),
+            )?)),
+            GeoSurfaceRef(Arc::new(Plane::new(Isometry::new_along_z(millimeter!(
+                radius
+            ))?))),
+            circular_cross_section(millimeter!(12.5))?,
+            Isometry::identity(),
+        );
+        for height in [0.0, 10.0] {
+            let ray = test_ray(millimeter!(0.0, height, -10.0), Vector3::z())?;
+            assert_abs_diff_eq!(
+                path_length(&body, &ray)?.value,
+                millimeter!(f64::sqrt(radius.mul_add(radius, -height * height))).value,
+                epsilon = 1e-12
+            );
+        }
+        // 135° from the vertex, 10.6 mm off the axis - within the rim, but behind the equator.
+        let (polar, tilt) = (135.0_f64.to_radians(), 50.0_f64.to_radians());
+        let behind = (radius * polar.sin(), radius - radius * polar.cos());
+        let direction = Vector3::new(-tilt.sin(), 0.0, tilt.cos());
+        let steep = test_ray(
+            millimeter!(
+                behind.0 - 30.0 * direction.x,
+                0.0,
+                behind.1 - 30.0 * direction.z
+            ),
+            direction,
+        )?;
+        assert_eq!(body.path_length_inside(&steep), None);
         Ok(())
     }
     /// Assert that the given range runs between the two given positions, in millimeter.

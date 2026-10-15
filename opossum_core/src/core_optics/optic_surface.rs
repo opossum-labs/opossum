@@ -119,13 +119,9 @@ impl OpticSurface {
     }
     /// Intersect a [`Ray`] with this [`OpticSurface`].
     ///
-    /// This is the one place that decides whether, and where, a ray hits this surface. A point
-    /// outside the surface's [`Rim`] is not part of the component, and neither is one on the far
-    /// side of a closed surface behind its equator (see
-    /// [`GeoSurface::is_on_vertex_sheet`](crate::geometry::geo_surface::GeoSurface::is_on_vertex_sheet));
-    /// a ray reaching the surface only there misses it. A detector's rim is a window
-    /// ([`RimRole::Window`]): it decides what is recorded (see [`OpticSurface::records_at`]), not
-    /// what is hit.
+    /// Within an edge, [`Rim::intersect`] decides whether the ray hits; the bodies of components
+    /// decide the same way. A detector's rim is a window ([`RimRole::Window`]): it decides what is
+    /// recorded (see [`OpticSurface::records_at`]), not what is hit.
     ///
     /// The rim follows the geometric surface: its frame is derived from where that surface sits
     /// right now (its isometry, minus its anchor, is the node's frame).
@@ -137,19 +133,15 @@ impl OpticSurface {
     /// # Returns
     ///
     /// The intersection point in global coordinates and the normalized surface normal there,
-    /// pointing against the ray; or `None` if the ray misses the surface or meets it outside its
-    /// rim.
+    /// pointing against the ray; or `None` if the ray misses the surface or meets it where it is not
+    /// part of the component.
     #[must_use]
     pub fn intersect(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
         let geo_surface = &*self.geo_surface.0;
-        let intersection = geo_surface.calc_intersect_and_normal(ray);
-        let Some(rim) = self.rim.as_ref().filter(|rim| rim.role() == RimRole::Edge) else {
-            return intersection;
-        };
-        let node_frame = self.node_frame(geo_surface);
-        intersection.filter(|(point, _)| {
-            rim.contains(point, &node_frame) && geo_surface.is_on_vertex_sheet(point)
-        })
+        match self.rim.as_ref().filter(|rim| rim.role() == RimRole::Edge) {
+            Some(rim) => rim.intersect(geo_surface, ray, &self.node_frame(geo_surface)),
+            None => geo_surface.calc_intersect_and_normal(ray),
+        }
     }
     /// Return whether this [`OpticSurface`] records a hit at the given point.
     ///
