@@ -185,8 +185,8 @@ async fn get_scene_node(
     uid: web::Path<Uuid>,
 ) -> Result<impl Responder, BackEndErrorResponse> {
     // The lookup hands out a deep clone of the node, so the lock is gone again before the meshing
-    // starts - and whatever is done to the copy below reaches nothing else.
-    let mut node = {
+    // starts.
+    let node = {
         let document = data.document.lock();
         document
             .scenery()
@@ -194,13 +194,6 @@ async fn get_scene_node(
             .map_err(|_| BackEndErrorResponse::not_found())?
             .0
     };
-    // A component's shape is read off the surfaces `update_surfaces()` builds from its properties,
-    // and patching a property does not run it (see `known_issue_update_surfaces.md`). Without this
-    // the endpoint would keep serving the shape a lens had *before* its thickness was changed, while
-    // the manifest - built from a placed copy, which is rebuilt on deserialization - already reports
-    // a new hash for it. The viewer would refetch, receive the old mesh, and appear to ignore the
-    // edit entirely.
-    node.update_surfaces()?;
     let glb = if let Some(volume) = node.as_volume() {
         glb_of_node(volume, default_reference_wavelength())?
     } else if let Some(surface) = node.as_surface() {

@@ -1,91 +1,62 @@
 # Known issue: a node's properties and its surfaces can disagree
 
-A node's geometry properties are the source of truth for its shape. The `GeoSurface`s that
-everything geometric actually reads are *derived* from them by `update_surfaces()`. Setting a
-property without running that step leaves the node describing one shape and behaving like another.
+A node's geometry properties are the source of truth for its shape. The traced surfaces
+(`OpticSurface`s) and the body of a volume node are *built* from them by `update_surfaces()`.
+Setting a property without running that step leaves the runtime surfaces describing the old shape.
 
-Found while building the 3D view (September 2026). Not fixed — the 3D view works around it. This
-note exists so the underlying problem is not forgotten.
+Found while building the 3D view (September 2026). The 3D view no longer depends on it (October
+2026, see below), and no reader outside an analysis is known to be affected any more. The root
+cause is not fixed; this note exists so it is not forgotten.
 
 ## What is inconsistent
 
-Four setters on a node write to `NodeAttr` and then refresh the surfaces. A fifth does not:
+Three setters on a node write to `NodeAttr` and then rebuild the surfaces. A fourth does not:
 
-| Setter | Refreshes surfaces |
+| Setter | Rebuilds surfaces |
 |---|---|
-| `OpticNodeExt::set_alignment` (`opossum_core/src/core_optics/optic_node_ext.rs:250`) | yes |
-| `OpticNodeExt::set_aperture` (`…/optic_node_ext.rs:265`) | yes |
-| `OpticNodeExt::set_coating` (`…/optic_node_ext.rs:277`) | yes |
-| `OpticNodeExt::set_lidt` (`…/optic_node_ext.rs:289`) | yes |
-| `NodeAttrExt::set_property` (`…/node_attr_ext.rs:139`) | **no** |
+| `OpticNodeExt::set_alignment` / `clear_alignment` (`opossum_core/src/core_optics/optic_node_ext.rs`) | yes |
+| `OpticNodeExt::set_coating` | yes |
+| `OpticNodeExt::set_lidt` | yes |
+| `NodeAttrExt::set_property` (`opossum_core/src/core_optics/node_attr_ext.rs`) | **no** |
 
-`NodeAttrExt` has a blanket impl for every node (`node_attr_ext.rs:89`), so all five are
-node-level setters of equal standing. The odd one out is the one that carries the **shape-defining**
-values: an aperture or a coating does not change a component's form, but `center thickness` and the
-curvatures do.
-
-`Lens::update_surfaces()` (`opossum_core/src/nodes/lens/mod.rs:232`) reads exactly
-`"front curvature"`, `"rear curvature"` and `"center thickness"` out of the property map and rebuilds
-the surfaces from them. `Volumetric::volume_body()` then reads those surfaces — never the properties.
-
-The documentation states the opposite of what the code does.
-`opossum_core/src/core_optics/volumetric.rs:84`:
-
-> Changing the node's placement or any of its geometry properties runs `update_surfaces()`, which
-> installs fresh surfaces, so the body has to be derived again afterwards.
-
-True for the placement, not for the geometry properties.
-
-The backend goes one level lower still: `apply_patch_property`
-(`opossum_backend/src/undo/node_commands.rs:300`) — the handler behind `PATCH /api/nodes/{uuid}/properties/{prop_name}`
-— calls `NodeAttr::set_property` directly. Using the node-level setter instead would not have helped.
+The odd one out is the one that carries the **shape-defining** values: `center thickness` and the
+curvatures. The backend's `apply_patch_property` (`opossum_backend/src/undo/node_commands.rs`), the
+handler behind `PATCH /api/nodes/{uuid}/properties/{prop_name}`, calls `NodeAttr::set_property`
+directly.
 
 ## Why it stays hidden
 
-Every analysis and every positioning run goes through `OpmDocument::positioned_copy`
-(`opossum_core/src/opm_document/analysis.rs:131`), which builds its copy by serializing the document
-and reading it back. Deserialization runs `after_deserialization_hook` → `update_surfaces()`
-(`opossum_core/src/core_optics/optic_node.rs:127`). The stale state is therefore repaired silently
-before anything computes with it.
+Every analysis rebuilds all surfaces before it traces (`NodeGroup::rebuild_surfaces` at the start of
+the ray-trace and ghost-focus analyzers, `OpticNode::prepare_volume` for volume nodes), and
+`OpmDocument::positioned_copy` reads the document back, which rebuilds on deserialization. The
+stale state is therefore repaired before anything computes with it.
 
-It only becomes observable where geometry is read **without** such a run.
+## How it surfaced, and how the 3D view is out of it
 
-## How it surfaced
+The 3D view serves one glTF file per component, read straight from the live document, while the
+scene manifest beside it is built from a `positioned_copy`. After changing a lens thickness the
+manifest reported a new geometry hash, the viewer refetched, and the component endpoint answered
+with the **old** mesh.
 
-The 3D view serves one glTF file per component. That endpoint originally read the node straight from
-the live document, because a component's shape does not depend on where it ended up. The scene
-manifest beside it is built from a `positioned_copy`.
+At first `get_scene_node` (`opossum_backend/src/document.rs`) rebuilt the node's surfaces before
+meshing it. That workaround is gone: the 3D view now derives every shape from the node's properties
+at its current placement (`Geometry::place`), the body of a volume node through
+`Volumetric::volume_body` and the surface of a planar node through `Planar::surface_mesh`. Neither
+reads the runtime surfaces.
 
-So after changing a lens thickness: the manifest reported a new geometry hash (fresh surfaces), the
-viewer dutifully refetched, and the component endpoint answered with the **old** mesh (stale
-surfaces). Changing the thickness appeared to do nothing at all — no error anywhere.
-
-Pinned by `reshaping_a_component_changes_the_file_its_endpoint_serves` in
-`opossum_backend/src/scene_export.rs`.
-
-## The workaround in place
-
-`get_scene_node` (`opossum_backend/src/document.rs`) calls `update_surfaces()` on the node before
-deriving its geometry. This is free of side effects: `OpticGraph::node` hands out a **deep clone**
-(`opossum_core/src/nodes/node_group/optic_graph/inspection.rs:80`, via `OpticRef`'s
-`clone_analyzable`), so the refresh reaches only that copy and never the live document.
-
-That the cheap refresh is equivalent to the expensive route is pinned by
-`a_refreshed_component_draws_the_same_as_a_placed_one` in `opossum_backend/src/scene_export.rs`:
-placing the whole model and refreshing one component produce byte-identical geometry.
-
-The workaround is local to this one endpoint. Every other reader of `volume_body()` that has not
-gone through a run still sees whatever the last refresh left behind.
+Pinned in `opossum_backend/src/scene_export.rs` by
+`reshaping_a_component_changes_the_file_its_endpoint_serves` (a lens),
+`bending_a_mirror_changes_the_file_its_endpoint_serves` (a mirror) and
+`a_component_draws_the_same_from_the_document_as_from_a_placed_model`, and in
+`opossum_core/src/core_optics/planar.rs` by `the_mesh_follows_a_changed_property_without_a_rebuild`.
 
 ## Two ways out
 
-1. **Make `NodeAttrExt::set_property` refresh like its four siblings.** Matches the documented
-   contract and fixes every reader at once. Needs thought about the blast radius: it would run on
-   every property write, including non-geometric ones, and touches analysis, undo and any other
-   caller.
-2. **Change the contract instead.** If the omission is deliberate — properties also carry
-   non-geometric data, and refreshing on each write may be wasteful — then correct
-   `volumetric.rs:84` and state plainly that a caller who writes a geometry property must run
-   `update_surfaces()` itself. Then give the callers that do so a single place to go through.
+1. **Make `NodeAttrExt::set_property` rebuild like its siblings.** Fixes every reader at once.
+   Needs thought about the blast radius: it would run on every property write, including
+   non-geometric ones, and touches analysis, undo and any other caller.
+2. **Keep the contract and state it.** A caller who writes a geometry property and then reads the
+   runtime surfaces outside an analysis has to run `update_surfaces()` itself; everything that only
+   needs the shape derives it from the properties, as the 3D view does.
 
-Either is a decision about shared core behaviour, which is why the 3D view took the local route.
+Either is a decision about shared core behaviour.

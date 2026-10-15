@@ -337,8 +337,8 @@ const fn material_of(appearance: Appearance) -> Material {
 /// a viewer places it from the manifest instead of asking for its mesh again.
 ///
 /// It also needs no positioning run — what a component looks like does not depend on where it ended
-/// up. The caller does have to hand over a node whose surfaces match its properties, which is not a
-/// given: patching a property does not rebuild them (see `known_issue_update_surfaces.md`).
+/// up — and no rebuild of the node's surfaces: the shape is derived from its properties as they are
+/// now.
 ///
 /// # Arguments
 ///
@@ -832,10 +832,20 @@ fn patch_of(face: &SurfaceMesh, material: MaterialId) -> SurfacePatch {
 mod test {
     use super::*;
     use opossum_core::{
-        analyzers::{AnalyzerType, RayTraceConfig}, apertures::{Aperture, ApertureShape, ApertureType, Bore, CircleShape, OpticShape, Outline}, core_optics::{OpticNode, node_attr::NodePositioning}, degree, geometry::body::OPTIC_SHAPE, joule, light::{Ray, lightdata::ray_data_builder::RayDataBuilder}, material::default_reference_wavelength, millimeter, nanometer, nodes::{
+        analyzers::{AnalyzerType, RayTraceConfig},
+        apertures::{Bore, CircleShape, OpticShape, Outline},
+        core_optics::{OpticNode, node_attr::NodePositioning},
+        degree,
+        geometry::body::OPTIC_SHAPE,
+        joule,
+        light::{Ray, lightdata::ray_data_builder::RayDataBuilder},
+        material::default_reference_wavelength,
+        millimeter, nanometer,
+        nodes::{
             CylindricLens, EnergyMeter, Lens, NodeGroup, NodeReference, ReflectiveGrating,
             SourcePort, ThinMirror, Wedge, round_collimated_ray_builder,
         },
+        properties::Proptype,
     };
     use uuid::Uuid;
 
@@ -1066,15 +1076,10 @@ mod test {
         let before = manifest(&document)?;
         assert_eq!(before.nodes.len(), 1);
 
-        let smaller = OpticShape::Bounded(Outline::new(
-            CircleShape::new(millimeter!(5.0))?, 
-            vec![]
-        )?);
+        let smaller =
+            OpticShape::Bounded(Outline::new(CircleShape::new(millimeter!(5.0))?, vec![])?);
         document.scenery_mut().with_node_attr_mut(mirror, |attr| {
-            attr.set_property(
-                OPTIC_SHAPE,
-                smaller.into(),
-            )
+            attr.set_property(OPTIC_SHAPE, smaller.into())
         })??;
 
         let after = manifest(&document)?;
@@ -1091,8 +1096,12 @@ mod test {
     #[test]
     fn a_mirror_with_a_bore_is_drawn() -> OpmResult<()> {
         let bored = OpticShape::Bounded(Outline::new(
-            CircleShape::new(millimeter!(12.5))?, 
-            vec![Bore::new(CircleShape::new(millimeter!(2.))?, millimeter!(6.0, 0.0), degree!(0.))]
+            CircleShape::new(millimeter!(12.5))?,
+            vec![Bore::new(
+                CircleShape::new(millimeter!(2.))?,
+                millimeter!(6.0, 0.0),
+                degree!(0.),
+            )],
         )?);
         let mut scenery = NodeGroup::default();
         let source = scenery.add_node(SourcePort::default())?;
@@ -1105,12 +1114,9 @@ mod test {
         config.map_source(source, RayDataBuilder::default());
         document.add_analyzer(AnalyzerType::RayTrace(config));
 
-        document.scenery_mut().with_node_attr_mut(mirror, |attr| {
-            attr.set_property(
-                OPTIC_SHAPE,
-                bored.into(),
-            )
-        })??;
+        document
+            .scenery_mut()
+            .with_node_attr_mut(mirror, |attr| attr.set_property(OPTIC_SHAPE, bored.into()))??;
 
         let manifest = manifest(&document)?;
         assert!(manifest.skipped.is_empty(), "{:?}", manifest.skipped);
@@ -1356,12 +1362,11 @@ mod test {
 
     /// The file a component's endpoint serves has to follow an edit to that component's shape.
     ///
-    /// The trap this pins down: a property is patched straight onto the live document, but the
-    /// surfaces a volume is derived from are rebuilt by `update_surfaces()`, which that patch does
-    /// not run. Deriving geometry from the live document therefore yields the *old* shape, while the
-    /// manifest - built from a `positioned_copy`, and so from a document that was serialized and
-    /// read back - reports a new hash. The viewer then dutifully refetches and gets the old mesh
-    /// back, and changing a lens thickness appears to do nothing at all.
+    /// The trap this pins down: a property is patched straight onto the live document without
+    /// rebuilding the node's surfaces. A shape read off those surfaces would therefore be the *old*
+    /// one, while the manifest - built from a `positioned_copy`, and so from a document that was
+    /// serialized and read back - reports a new hash. The viewer would then refetch and get the old
+    /// mesh back, and changing a lens thickness would appear to do nothing at all.
     #[test]
     fn reshaping_a_component_changes_the_file_its_endpoint_serves() -> OpmResult<()> {
         let mut document = two_lenses(millimeter!(100.0))?;
@@ -1387,14 +1392,40 @@ mod test {
         Ok(())
     }
 
-    /// Refreshing a component's own copy has to draw the same thing as placing the whole model.
+    /// The same for a component that is one surface: a flat mirror bent after it was built.
+    #[test]
+    fn bending_a_mirror_changes_the_file_its_endpoint_serves() -> OpmResult<()> {
+        let mut document = a_bit_of_everything()?;
+        let mirror = document
+            .scenery()
+            .collect_all_nodes_recursive()?
+            .into_iter()
+            .find(|node| node.as_surface().is_some() && node.properties().get("curvature").is_ok())
+            .expect("the model has a mirror")
+            .node_attr()
+            .uuid();
+        let before = served_geometry_of(&document, mirror)?;
+
+        document.scenery_mut().with_node_attr_mut(mirror, |attr| {
+            attr.set_property("curvature", Proptype::Curvature(millimeter!(100.0)))
+        })??;
+
+        assert_ne!(
+            before,
+            served_geometry_of(&document, mirror)?,
+            "the mirror's endpoint kept serving its old shape after the property changed"
+        );
+        Ok(())
+    }
+
+    /// A component drawn from the live document has to look the same as one from a placed model.
     ///
     /// The manifest hashes the shape it finds in a placed copy, while the component's endpoint
     /// serves the shape it derives on its own. If the two derivations disagreed by so much as a
     /// rounding step, every manifest would report a hash for bytes nobody serves, and the viewer
     /// would refetch a component that never stops looking changed.
     #[test]
-    fn a_refreshed_component_draws_the_same_as_a_placed_one() -> OpmResult<()> {
+    fn a_component_draws_the_same_from_the_document_as_from_a_placed_model() -> OpmResult<()> {
         let document = two_lenses(millimeter!(100.0))?;
         let lens = document
             .scenery()
@@ -1416,29 +1447,21 @@ mod test {
             default_reference_wavelength(),
         )?;
 
-        // The lookup hands out a deep clone, so refreshing it leaves the document alone.
-        let mut own_copy = document.scenery().node_recursive(lens)?.0;
-        own_copy.update_surfaces()?;
-        let from_refreshed = glb_of_node(
-            own_copy
-                .as_volume()
-                .expect("the component encloses a volume"),
-            default_reference_wavelength(),
-        )?;
-
         assert_eq!(
-            from_placed, from_refreshed,
-            "placing the model and refreshing one component produce different geometry"
+            from_placed,
+            served_geometry_of(&document, lens)?,
+            "placing the model and drawing one component produce different geometry"
         );
         Ok(())
     }
 
     /// The bytes `GET /scene/node/{uid}.glb` would answer with for one component of a document.
     fn served_geometry_of(document: &OpmDocument, uid: Uuid) -> OpmResult<Vec<u8>> {
-        let mut node = document.scenery().node_recursive(uid)?.0;
-        node.update_surfaces()?;
-        let volume = node.as_volume().expect("the component encloses a volume");
-        glb_of_node(volume, default_reference_wavelength())
+        let node = document.scenery().node_recursive(uid)?.0;
+        if let Some(volume) = node.as_volume() {
+            return glb_of_node(volume, default_reference_wavelength());
+        }
+        glb_of_surface_node(node.as_surface().expect("the component is drawn"))
     }
 
     /// A component's own file holds it at the origin: that is what lets the same file serve the

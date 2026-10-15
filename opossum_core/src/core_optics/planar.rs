@@ -14,7 +14,7 @@
 //! `Some`.
 
 use crate::{
-    core_optics::{Appearance, NodeAttrExt, OpticNode, OpticNodeExt, PortType, SurfaceFinish},
+    core_optics::{Appearance, NodeAttrExt, OpticNode, OpticNodeExt, SurfaceFinish},
     error::{OpmResult, OpossumError},
     geometry::{Rim, RimRole, SurfaceMesh, body::default_optic_shape},
     utils::geom_transformation::Isometry,
@@ -82,8 +82,9 @@ pub trait Planar: OpticNode {
     /// default clear aperture, as a nominal size to draw it at.
     ///
     /// The counterpart of [`Volumetric::volume_body`](crate::core_optics::Volumetric::volume_body)
-    /// for a node with one surface instead of two: everything needed is already on the node, so this
-    /// has a default implementation and no node type has to provide its own.
+    /// for a node with one surface instead of two: the surface is built from the node's
+    /// [`Geometry`](crate::geometry::Geometry) at its current placement, so the mesh follows the
+    /// properties as they are now even if the node's surfaces have not been rebuilt since.
     ///
     /// # Arguments
     ///
@@ -96,33 +97,19 @@ pub trait Planar: OpticNode {
     ///
     /// # Errors
     ///
-    /// This function returns an error if the node has no input port to read a surface from, if that
-    /// surface is not registered, or if the surface cannot be meshed within its rim (too few
-    /// segments, a rim without a closed edge such as a ring, or a surface that cannot reach as far
-    /// out as the rim).
+    /// This function returns an error if the node has no geometry, if its geometry cannot be
+    /// derived or built, or if the surface cannot be meshed within its rim (too few segments, a rim
+    /// without a closed edge such as a ring, or a surface that cannot reach as far out as the rim).
     fn surface_mesh(&self, segments: usize) -> OpmResult<SurfaceMesh> {
-        // Every `Planar` node registers its one surface under all of its ports alike (a mirror under
-        // `input_1` and `output_1`, a beam splitter under all four) - see e.g.
-        // `ThinMirror::update_surfaces`. The first input port therefore always names it, regardless
-        // of how many ports the node actually has.
-        let surf_name = self
-            .ports()
-            .names(&PortType::Input)
-            .first()
-            .cloned()
-            .ok_or_else(|| {
-                OpossumError::Analysis(format!(
-                    "node '{}' has no input port to read its surface from",
-                    self.name()
-                ))
-            })?;
-        let surface = self.get_optic_surface(&surf_name).ok_or_else(|| {
-            OpossumError::Other(format!(
-                "no surface with name {surf_name} defined for node '{}'",
+        let Some(geometry) = self.geometry()? else {
+            return Err(OpossumError::Other(format!(
+                "node '{}' has no geometry to draw",
                 self.name()
-            ))
-        })?;
-        let rim = match surface.rim() {
+            )));
+        };
+        let node_frame = self.effective_node_iso().unwrap_or_else(Isometry::identity);
+        let placed = geometry.place(&node_frame)?;
+        let rim = match placed.rim() {
             Some(rim) => rim.clone(),
             None => Rim::new(
                 default_optic_shape().cross_section()?.ok_or_else(|| {
@@ -135,10 +122,10 @@ pub trait Planar: OpticNode {
         // The cross section lies across the rim's axis, which need not be the node's: the surface
         // is meshed along that axis and the result is then stated in the node's frame.
         let axis = rim.frame(&Isometry::identity());
-        let node_frame = self.effective_node_iso().unwrap_or_else(Isometry::identity);
         let aperture_mesh = rim.cross_section().get().triangulate(segments)?;
-        Ok(surface
-            .geo_surface()
+        Ok(placed
+            .entrance()
+            .0
             .mesh_over(&aperture_mesh, &node_frame.append(&axis))?
             .transformed(&axis))
     }
@@ -169,6 +156,7 @@ mod test {
         geometry::body::OPTIC_SHAPE,
         millimeter,
         nodes::{EnergyMeter, IdealFilter, ParabolicMirror, ThinMirror},
+        properties::Proptype,
         utils::geom_transformation::Isometry,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
@@ -190,6 +178,29 @@ mod test {
             mesh.points().len(),
             mesh.normals().len(),
             "every meshed point needs a normal to shade or hit-test it"
+        );
+        Ok(())
+    }
+
+    /// The mesh is drawn from the node's properties as they are now, exactly like a volume node's
+    /// body: a curvature set without rebuilding the surfaces already bends it. A sphere of radius R
+    /// rises by R - sqrt(R² - r²) at the 12.5 mm rim of the default optic shape.
+    #[test]
+    fn the_mesh_follows_a_changed_property_without_a_rebuild() -> OpmResult<()> {
+        let mut mirror = ThinMirror::default();
+        mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        let radius = 100.0_f64;
+        mirror.set_property("curvature", Proptype::Curvature(millimeter!(radius)))?;
+        let mesh = mirror.surface_mesh(32)?;
+        let rise = mesh
+            .points()
+            .iter()
+            .map(|point| point.z.value.abs())
+            .fold(0.0, f64::max);
+        assert_abs_diff_eq!(
+            rise,
+            millimeter!(radius - radius.mul_add(radius, -12.5 * 12.5).sqrt()).value,
+            epsilon = 1e-9
         );
         Ok(())
     }
