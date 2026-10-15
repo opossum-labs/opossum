@@ -1,11 +1,7 @@
 //! Triangle meshes of geometric surfaces.
 
 use super::geo_surface::{GeoSurfaceRef, SurfacePlacement};
-use crate::{
-    apertures::ApertureMesh,
-    error::OpmResult,
-    utils::{LockExt, geom_transformation::Isometry},
-};
+use crate::{apertures::ApertureMesh, error::OpmResult, utils::geom_transformation::Isometry};
 use nalgebra::{Point3, Vector3};
 use uom::si::f64::Length;
 
@@ -121,31 +117,21 @@ impl GeoSurfaceRef {
     ///
     /// # Errors
     ///
-    /// This function returns an error if the surface cannot be locked, if it runs parallel to the
-    /// frame's axis, if it does not reach as far out as the aperture, or if it is both curved and
-    /// tilted against the frame.
-    // The lock cannot be released any earlier: the placement borrows the surface for as long as it
-    // lives, so the suggested `drop` does not compile.
-    #[allow(clippy::significant_drop_tightening)]
+    /// This function returns an error if the surface runs parallel to the frame's axis, if it does
+    /// not reach as far out as the aperture, or if it is both curved and tilted against the frame.
     pub fn mesh_over(
         &self,
         aperture_mesh: &ApertureMesh,
         frame: &Isometry,
     ) -> OpmResult<SurfaceMesh> {
-        // Everything the surface itself has to answer happens inside this block, so its lock is
-        // released again before the mesh is assembled.
-        let (points, normals) = {
-            let surface = self.0.lock_opm()?;
-            let placement = SurfacePlacement::new(&*surface, frame)?;
-            let mut points = Vec::with_capacity(aperture_mesh.points().len());
-            let mut normals = Vec::with_capacity(aperture_mesh.points().len());
-            for transversal_position in aperture_mesh.points() {
-                let (point, normal) = placement.above(transversal_position)?;
-                points.push(point);
-                normals.push(normal);
-            }
-            (points, normals)
-        };
+        let placement = SurfacePlacement::new(&*self.0, frame)?;
+        let mut points = Vec::with_capacity(aperture_mesh.points().len());
+        let mut normals = Vec::with_capacity(aperture_mesh.points().len());
+        for transversal_position in aperture_mesh.points() {
+            let (point, normal) = placement.above(transversal_position)?;
+            points.push(point);
+            normals.push(normal);
+        }
         Ok(SurfaceMesh {
             points,
             normals,
@@ -166,7 +152,7 @@ mod test {
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::Point2;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
 
     const SEGMENTS: usize = 24;
 
@@ -186,7 +172,7 @@ mod test {
             millimeter!(0.0, 0.0, 3.0),
             degree!(0.0, 8.0, 0.0),
         )?));
-        Ok(GeoSurfaceRef(Arc::new(Mutex::new(surface))))
+        Ok(GeoSurfaceRef(Arc::new(surface)))
     }
 
     /// One of every surface a volume node builds, each sitting at its own offset within the node.
@@ -244,20 +230,20 @@ mod test {
         assert_eq!(mesh.triangles(), aperture.triangles());
         // Where the surface itself says it lies above each meshed point — asked through its own
         // placement rather than the one the mesh was built from, so this is an independent answer.
-        let on_surface = {
-            let surface = surface.0.lock_opm()?;
-            let surface_iso = *surface.isometry();
-            mesh.points()
-                .iter()
-                .map(|point| {
-                    let local = surface_iso.inverse_transform_point(&frame.transform_point(point));
-                    let sag = surface
-                        .local_z_at(&Point2::new(local.x, local.y))
-                        .expect("the surface reaches a point it was meshed at");
-                    (local.z.value, sag.value)
-                })
-                .collect::<Vec<_>>()
-        };
+        let surface = &*surface.0;
+        let on_surface = mesh
+            .points()
+            .iter()
+            .map(|point| {
+                let local = surface
+                    .isometry()
+                    .inverse_transform_point(&frame.transform_point(point));
+                let sag = surface
+                    .local_z_at(&Point2::new(local.x, local.y))
+                    .expect("the surface reaches a point it was meshed at");
+                (local.z.value, sag.value)
+            })
+            .collect::<Vec<_>>();
         for (meshed_at, surface_at) in on_surface {
             assert_abs_diff_eq!(meshed_at, surface_at, epsilon = 1e-12);
         }
@@ -379,7 +365,7 @@ mod test {
             degree!(0.0, 90.0, 0.0),
         )?);
         assert!(
-            GeoSurfaceRef(Arc::new(Mutex::new(on_edge)))
+            GeoSurfaceRef(Arc::new(on_edge))
                 .mesh_over(&clear_aperture(10.0), &node)
                 .is_err()
         );

@@ -90,7 +90,8 @@ pub trait OpticNodeExt {
     /// under the given ports.
     ///
     /// The entrance surface is installed under every input port, the exit surface under every
-    /// output port. A single surface is both, so all ports then share it.
+    /// output port. A single surface is both, so all ports then share it. The body between the two,
+    /// which shares them, becomes the node's medium; a node without one is left without a medium.
     ///
     /// # Arguments
     ///
@@ -355,16 +356,15 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
                 self.name()
             )));
         };
-        let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
-        let ((entrance, entrance_anchor), (exit, exit_anchor)) =
-            geometry.entrance_and_exit(&node_iso)?;
-        let rim = geometry.rim()?;
+        let placed =
+            geometry.place(&self.effective_node_iso().unwrap_or_else(Isometry::identity))?;
+        let ((entrance, entrance_anchor), (exit, exit_anchor)) = (placed.entrance(), placed.exit());
         for name in inputs {
             self.update_surface(
                 name,
                 entrance.clone(),
-                entrance_anchor,
-                rim.clone(),
+                *entrance_anchor,
+                placed.rim().cloned(),
                 &PortType::Input,
             )?;
         }
@@ -372,11 +372,13 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
             self.update_surface(
                 name,
                 exit.clone(),
-                exit_anchor,
-                rim.clone(),
+                *exit_anchor,
+                placed.rim().cloned(),
                 &PortType::Output,
             )?;
         }
+        self.node_attr_mut()
+            .set_runtime_body(placed.body().cloned());
         Ok(())
     }
 

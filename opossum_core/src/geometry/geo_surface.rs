@@ -12,10 +12,7 @@ use crate::{
 };
 use nalgebra::{Point2, Point3, Vector2, Vector3};
 use num_traits::Zero;
-use std::{
-    fmt::Debug,
-    sync::{Arc, Mutex},
-};
+use std::{fmt::Debug, sync::Arc};
 use uom::si::f64::Length;
 
 /// Trait for handling geometric surfaces.
@@ -442,15 +439,17 @@ impl<'a> SurfacePlacement<'a> {
     }
 }
 
-/// Reference for a [`GeoSurface`].
+/// Shared reference to a [`GeoSurface`].
 ///
-/// This struct is necessary in order to implement a Default trait on a `Arc<Mutex<GeoSurface>>`.
+/// A surface is never changed once it is built, so it is shared without a lock: all ports of a
+/// single surface and the body of a component may hold the same one. The newtype exists to implement
+/// [`Default`].
 #[derive(Clone, Debug)]
-pub struct GeoSurfaceRef(pub Arc<Mutex<dyn GeoSurface>>);
+pub struct GeoSurfaceRef(pub Arc<dyn GeoSurface>);
 
 impl Default for GeoSurfaceRef {
     fn default() -> Self {
-        Self(Arc::new(Mutex::new(Plane::default())))
+        Self(Arc::new(Plane::default()))
     }
 }
 

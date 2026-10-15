@@ -227,10 +227,7 @@ mod test {
         },
     };
     use nalgebra::Point3;
-    use std::{
-        collections::HashMap,
-        sync::{Arc, Mutex},
-    };
+    use std::{collections::HashMap, sync::Arc};
     use uom::si::f64::Length;
 
     const SEGMENTS: usize = 32;
@@ -323,7 +320,7 @@ mod test {
                 millimeter!(0.0, 0.0, z),
                 degree!(angle, 0.0, 0.0),
             )?));
-            Ok(GeoSurfaceRef(Arc::new(Mutex::new(surface))))
+            Ok(GeoSurfaceRef(Arc::new(surface)))
         };
         Ok(vec![
             (
@@ -445,7 +442,7 @@ mod test {
                                 )
                             };
                             assert!(
-                                !body.contains(&step(1.0))?,
+                                !body.contains(&step(1.0)),
                                 "a point just outside the {name} was taken for being in it"
                             );
                             // Stepping the other way has to land inside — except from the rim of
@@ -453,7 +450,7 @@ mod test {
                             // and would leave it sideways on the slightest rounding.
                             if bounds_the_body && *index >= rim {
                                 assert!(
-                                    body.contains(&step(-1.0))?,
+                                    body.contains(&step(-1.0)),
                                     "a point just inside the {name} was taken for being outside it"
                                 );
                             }

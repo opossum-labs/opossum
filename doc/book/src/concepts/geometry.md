@@ -56,7 +56,7 @@ With this setting, the components are placed as follows:
 
 ### Anchor point
 
-We have just discussed how a component is placed at a certain position. This description is actually a bit unprecise since an optical component is not a point-like object but has a finite size. Hence we clarify here that each optical component has an *anchor point* which is normally the center of the incoming surface. This is described in the [reference](../reference/reference.md) section for each particular node type. In the above mentioned `Alignment` setting the component is turned around this point. Furthermore, a component can be shifted (e.g. for modeling a shifted lens) along all axes.
+We have just discussed how a component is placed at a certain position. This description is actually a bit unprecise since an optical component is not a point-like object but has a finite size. Hence we clarify here that each optical component has an *anchor point* which is normally the center of the incoming surface. This is described in the [reference](../reference/reference.md) section for each particular node type. In the above mentioned `Alignment` setting the component is turned around this point. Furthermore, a component can be shifted (e.g. for modeling a shifted lens) along all axes. How a component's surfaces are built around its anchor point is described in [Component geometry](./background/component_geometry.md).
 
 ### Absolute Placement
 

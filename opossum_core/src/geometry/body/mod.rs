@@ -33,26 +33,23 @@ use crate::{
     light::Ray,
     millimeter, nanometer,
     types::validated_type_definitions::ValidatedCrossSection,
-    utils::{LockExt, geom_transformation::Isometry, math_utils::distance_3d_point},
+    utils::{geom_transformation::Isometry, math_utils::distance_3d_point},
 };
 use nalgebra::{Point2, Point3};
 use num_traits::Zero;
 use std::{fmt::Debug, ops::Range};
 use uom::si::f64::Length;
 
-/// Name of the property holding the transversal extent of a volume node.
+/// Name of the property holding the transversal extent of a component: its optic shape.
 ///
-/// The optic shape is the size the material is actually available in — the figure a supplier
-/// quotes next to the curvatures and the thickness. It is a property of the component rather than
-/// of one of its ports, which is what distinguishes it from the port
-/// [`Aperture`](crate::apertures::Aperture): the latter states how much light a surface transmits
-/// where and may soften or invert that transmission, while the optic shape states where the
-/// medium ends. The two are independent — putting a pinhole in front of a lens does not make the
-/// lens smaller.
+/// The optic shape is the size the component is actually available in — the figure a supplier
+/// quotes next to the curvatures and the thickness. It bounds the surfaces light is traced at and,
+/// for a volume node, the medium between them (see [`Rim`]).
 ///
-/// Every volume node has one: a component of unstated size has no volume to speak of, and two
-/// curved surfaces only happen to close on their own if they are curved strongly enough. Shapes
-/// that leave the extent undefined — [`ApertureShape::Open`] among them — are therefore rejected.
+/// Every volume node has a bounded one: a component of unstated size has no volume to speak of,
+/// and two curved surfaces only happen to close on their own if they are curved strongly enough.
+/// Only what merely records light, is an idealization or has no optical function accepts an open
+/// optic shape.
 pub const OPTIC_SHAPE: &str = "optic shape";
 
 /// The optic shape a round optic starts out with if nothing is defined.
@@ -167,11 +164,7 @@ pub trait Body: Debug + Send + Sync {
     /// propagation: a point lying exactly on the entrance boundary counts as inside, one lying
     /// exactly on the exit boundary does not. This way neighbouring bodies sharing a surface do not
     /// both claim the points on it.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if an internal mutex of a bounding surface cannot be locked.
-    fn contains(&self, point: &Point3<Length>) -> OpmResult<bool>;
+    fn contains(&self, point: &Point3<Length>) -> bool;
     /// Return the geometrical path length of the given [`Ray`] inside this [`Body`].
     ///
     /// The ray is not refracted on the way — the returned length is the straight chord between the
@@ -185,11 +178,7 @@ pub trait Body: Debug + Send + Sync {
     /// # Returns
     ///
     /// The path length inside the body or `None` if the ray does not pass through it.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if an internal mutex of a bounding surface cannot be locked.
-    fn path_length_inside(&self, ray: &Ray) -> OpmResult<Option<Length>>;
+    fn path_length_inside(&self, ray: &Ray) -> Option<Length>;
     /// Return an axis-aligned box that encloses this [`Body`].
     ///
     /// [`Body::contains`] answers where the body is *not*, one point at a time; this states where it
@@ -204,8 +193,7 @@ pub trait Body: Debug + Send + Sync {
     ///
     /// # Errors
     ///
-    /// This function returns an error if an internal mutex of a bounding surface cannot be locked or
-    /// if the extent of the body cannot be determined.
+    /// This function returns an error if the extent of the body cannot be determined.
     fn bounding_box(&self) -> OpmResult<BoundingBox>;
     /// Return the frame this [`Body`] is placed in.
     ///
@@ -221,18 +209,12 @@ pub trait Body: Debug + Send + Sync {
 /// A point is inside this body if it lies behind the entrance surface (see
 /// [`is_behind`](crate::geometry::geo_surface::GeoSurface::is_behind)), not behind the exit surface
 /// and within its [`Rim`]. Both bounding surfaces are held as [`GeoSurfaceRef`]s. A body built by
-/// [`Geometry::body`](crate::geometry::Geometry::body) has surfaces of its own, built from the same
-/// description as the ones light is traced at; nothing realigns them afterwards.
+/// [`Geometry::place`](crate::geometry::Geometry::place) shares them with the entrance and exit
+/// placed alongside it.
 ///
 /// **Note**: The lateral boundary is the rim alone — it is not a surface rays can interact with. A
 /// ray leaving the volume sideways is therefore reported as not passing through the body rather
 /// than being reflected on a barrel surface.
-///
-/// **On cost**: every query locks the mutex of each bounding surface it needs, so a query is a few
-/// lock/unlock pairs plus the geometry itself. A caller sweeping a whole ray bundle or a
-/// discretisation grid can amortise this once a hot path exists, but it must not hold both guards
-/// at the same time: the same [`GeoSurfaceRef`] may be handed in as entrance and exit, and locking
-/// it twice would deadlock.
 #[derive(Debug, Clone)]
 pub struct SurfaceBoundedBody {
     entrance: GeoSurfaceRef,
@@ -264,34 +246,6 @@ impl SurfaceBoundedBody {
             isometry,
         }
     }
-    /// Intersect the given [`Ray`] with one of the bounding surfaces of this body.
-    ///
-    /// Hits outside the transversal cross section are discarded, since they lie on the unbounded
-    /// part of the surface which is not part of the body.
-    ///
-    /// # Arguments
-    ///
-    /// - `surface`: the bounding surface to intersect with
-    /// - `ray`: the ray to be intersected
-    ///
-    /// # Returns
-    ///
-    /// The intersection point in global coordinates or `None` if the ray misses the bounded part of
-    /// the surface.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the internal mutex of the given surface cannot be locked.
-    fn bounded_intersection(
-        &self,
-        surface: &GeoSurfaceRef,
-        ray: &Ray,
-    ) -> OpmResult<Option<Point3<Length>>> {
-        let intersection = surface.0.lock_opm()?.calc_intersect_and_normal(ray);
-        Ok(intersection
-            .map(|(point, _)| point)
-            .filter(|point| self.rim.contains(point, &self.isometry)))
-    }
     /// Return the range of longitudinal positions one of the bounding surfaces spans over the cross
     /// section of this body, in the body's own frame.
     ///
@@ -318,83 +272,68 @@ impl SurfaceBoundedBody {
     ///
     /// # Errors
     ///
-    /// This function returns an error if the surface's mutex cannot be locked, if the surface runs
-    /// parallel to the body's axis, if it does not reach as far out as the cross section, or if it
-    /// is both curved and tilted against the body.
-    // The lock cannot be released any earlier: the placement borrows the surface for as long as it
-    // lives, so the suggested `drop` does not compile.
-    #[allow(clippy::significant_drop_tightening)]
+    /// This function returns an error if the surface runs parallel to the body's axis, if it does
+    /// not reach as far out as the cross section, or if it is both curved and tilted against the
+    /// body.
     fn surface_z_range(
         &self,
         surface: &GeoSurfaceRef,
         transversal_reach: Length,
     ) -> OpmResult<Range<Length>> {
-        // Everything the surface itself has to answer happens inside this block, so its lock is
-        // released again before the result is assembled.
-        let (anchor, from_tilt, sag_span) = {
-            let surface = surface.0.lock_opm()?;
-            // How the surface stands in the body's frame is the same question a mesh laid over it
-            // asks, so both read it off the same placement.
-            let placement = SurfacePlacement::new(&*surface, &self.isometry)?;
-            let (alignment, vertex) = (placement.alignment(), placement.vertex());
-            // A tilted surface has to be looked at further out to still span the cross section.
-            let reach = transversal_reach / alignment.abs();
-            let out_of_reach = || {
-                OpossumError::Other(format!(
-                    "the '{}' surface does not reach as far out as the cross section of the body",
-                    surface.name()
-                ))
-            };
-            // The sag grows monotonically with the distance from the axis for every surface
-            // modelled here, so its extremes over the cross section are attained at the rim. Both
-            // axes are sampled because a Cylinder is curved along one of them only.
-            let mut lowest_sag = Length::zero();
-            let mut highest_sag = Length::zero();
-            for rim in [
-                Point2::new(reach, Length::zero()),
-                Point2::new(-reach, Length::zero()),
-                Point2::new(Length::zero(), reach),
-                Point2::new(Length::zero(), -reach),
-            ] {
-                let sag = surface.local_z_at(&rim).ok_or_else(out_of_reach)? - vertex;
-                lowest_sag = Length::min(lowest_sag, sag);
-                highest_sag = Length::max(highest_sag, sag);
-            }
-            if placement.is_tilted()
-                && (lowest_sag != Length::zero() || highest_sag != Length::zero())
-            {
-                return Err(OpossumError::Other(format!(
-                    "the extent of a body bounded by the curved '{}' surface tilted against it is \
-                     not supported",
-                    surface.name()
-                )));
-            }
-            let anchor = placement
-                .relative()
-                .transform_point(&Point3::new(Length::zero(), Length::zero(), vertex))
-                .z;
-            let (one_sag, other_sag) = (lowest_sag * alignment, highest_sag * alignment);
-            (
-                anchor,
-                reach * placement.tilt(),
-                Length::min(one_sag, other_sag)..Length::max(one_sag, other_sag),
-            )
+        let surface = &*surface.0;
+        // How the surface stands in the body's frame is the same question a mesh laid over it asks,
+        // so both read it off the same placement.
+        let placement = SurfacePlacement::new(surface, &self.isometry)?;
+        let (alignment, vertex) = (placement.alignment(), placement.vertex());
+        // A tilted surface has to be looked at further out to still span the cross section.
+        let reach = transversal_reach / alignment.abs();
+        let out_of_reach = || {
+            OpossumError::Other(format!(
+                "the '{}' surface does not reach as far out as the cross section of the body",
+                surface.name()
+            ))
         };
-        Ok(anchor - from_tilt + sag_span.start..anchor + from_tilt + sag_span.end)
+        // The sag grows monotonically with the distance from the axis for every surface modelled
+        // here, so its extremes over the cross section are attained at the rim. Both axes are
+        // sampled because a Cylinder is curved along one of them only.
+        let mut lowest_sag = Length::zero();
+        let mut highest_sag = Length::zero();
+        for rim in [
+            Point2::new(reach, Length::zero()),
+            Point2::new(-reach, Length::zero()),
+            Point2::new(Length::zero(), reach),
+            Point2::new(Length::zero(), -reach),
+        ] {
+            let sag = surface.local_z_at(&rim).ok_or_else(out_of_reach)? - vertex;
+            lowest_sag = Length::min(lowest_sag, sag);
+            highest_sag = Length::max(highest_sag, sag);
+        }
+        if placement.is_tilted() && (lowest_sag != Length::zero() || highest_sag != Length::zero())
+        {
+            return Err(OpossumError::Other(format!(
+                "the extent of a body bounded by the curved '{}' surface tilted against it is not \
+                 supported",
+                surface.name()
+            )));
+        }
+        let anchor = placement
+            .relative()
+            .transform_point(&Point3::new(Length::zero(), Length::zero(), vertex))
+            .z;
+        let from_tilt = reach * placement.tilt();
+        let (one_sag, other_sag) = (lowest_sag * alignment, highest_sag * alignment);
+        Ok(anchor - from_tilt + Length::min(one_sag, other_sag)
+            ..anchor + from_tilt + Length::max(one_sag, other_sag))
     }
 }
 
 impl Body for SurfaceBoundedBody {
-    fn contains(&self, point: &Point3<Length>) -> OpmResult<bool> {
-        if !self.rim.contains(point, &self.isometry) {
-            return Ok(false);
-        }
-        if !self.entrance.0.lock_opm()?.is_behind(point) {
-            return Ok(false);
-        }
-        Ok(!self.exit.0.lock_opm()?.is_behind(point))
+    fn contains(&self, point: &Point3<Length>) -> bool {
+        self.rim.contains(point, &self.isometry)
+            && self.entrance.0.is_behind(point)
+            && !self.exit.0.is_behind(point)
     }
-    fn path_length_inside(&self, ray: &Ray) -> OpmResult<Option<Length>> {
+    fn path_length_inside(&self, ray: &Ray) -> Option<Length> {
         // Every point at which the ray can enter or leave the body is a candidate: its own starting
         // point if it travels inside from there, and its hits on both bounding surfaces. Treating
         // the starting point as a candidate of its own keeps the case of a ray starting *on* a
@@ -425,29 +364,27 @@ impl Body for SurfaceBoundedBody {
                 last = Some((position, point));
             }
         };
-        if self.contains(&probe)? {
+        if self.contains(&probe) {
             consider(ray_position);
         }
         for surface in [&self.entrance, &self.exit] {
-            if let Some(point) = self.bounded_intersection(surface, ray)? {
+            if let Some((point, _)) = self.rim.intersect(&*surface.0, ray, &self.isometry) {
                 consider(point);
             }
         }
         let (Some((_, first_point)), Some((_, last_point))) = (first, last) else {
-            return Ok(None);
+            return None;
         };
         if candidates < 2 {
             // The ray either misses the body altogether or leaves it through its lateral boundary,
             // which is not part of the model.
-            return Ok(None);
+            return None;
         }
         // Guard against bodies the ray leaves and re-enters, e.g. a strongly curved meniscus: the
         // section between the outermost two candidates is only fully inside if its center is.
         let center_point = first_point + (last_point - first_point).map(|c| c * 0.5);
-        if !self.contains(&center_point)? {
-            return Ok(None);
-        }
-        Ok(Some(distance_3d_point(&first_point, &last_point)))
+        self.contains(&center_point)
+            .then(|| distance_3d_point(&first_point, &last_point))
     }
     fn bounding_box(&self) -> OpmResult<BoundingBox> {
         let extremes = self.rim.cross_section().extreme_points();
@@ -460,8 +397,6 @@ impl Body for SurfaceBoundedBody {
             ));
         };
         let transversal_reach = self.rim.cross_section().transversal_reach();
-        // The two surfaces are measured one after the other and never held at once: a node with a
-        // single surface hands out the same `GeoSurfaceRef` twice, which would deadlock.
         let entrance_z = self.surface_z_range(&self.entrance, transversal_reach)?;
         let exit_z = self.surface_z_range(&self.exit, transversal_reach)?;
         // Which of the two bounds the body from below is not assumed here: an inverted node
@@ -513,7 +448,7 @@ mod test {
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::Vector3;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
     use uom::si::{f64::Angle, length::millimeter};
 
     /// Create a circular cross section of the given radius.
@@ -523,10 +458,8 @@ mod test {
     /// Create the two plane surfaces of a plate of the given thickness.
     fn plate_surfaces(thickness: Length) -> OpmResult<(GeoSurfaceRef, GeoSurfaceRef)> {
         Ok((
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(Isometry::identity())))),
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(Isometry::new_along_z(
-                thickness,
-            )?)))),
+            GeoSurfaceRef(Arc::new(Plane::new(Isometry::identity()))),
+            GeoSurfaceRef(Arc::new(Plane::new(Isometry::new_along_z(thickness)?))),
         ))
     }
     /// Create a disk of the given thickness and radius, with its entrance surface at z = 0.
@@ -545,23 +478,23 @@ mod test {
     }
     /// Trace the given ray through the given body and require it to pass through.
     fn path_length(body: &SurfaceBoundedBody, ray: &Ray) -> OpmResult<Length> {
-        body.path_length_inside(ray)?
+        body.path_length_inside(ray)
             .ok_or_else(|| crate::error::OpossumError::Other("ray missed the body".into()))
     }
     #[test]
     fn contains_disk() -> OpmResult<()> {
         let body = disk(millimeter!(10.0), millimeter!(5.0))?;
-        assert!(body.contains(&millimeter!(0.0, 0.0, 5.0))?);
+        assert!(body.contains(&millimeter!(0.0, 0.0, 5.0)));
         // the body is half-open: the entrance surface belongs to it, the exit surface does not
-        assert!(body.contains(&millimeter!(0.0, 0.0, 0.0))?);
-        assert!(!body.contains(&millimeter!(0.0, 0.0, 10.0))?);
+        assert!(body.contains(&millimeter!(0.0, 0.0, 0.0)));
+        assert!(!body.contains(&millimeter!(0.0, 0.0, 10.0)));
         // in front of the entrance surface / behind the exit surface
-        assert!(!body.contains(&millimeter!(0.0, 0.0, -0.1))?);
-        assert!(!body.contains(&millimeter!(0.0, 0.0, 10.1))?);
+        assert!(!body.contains(&millimeter!(0.0, 0.0, -0.1)));
+        assert!(!body.contains(&millimeter!(0.0, 0.0, 10.1)));
         // outside the transversal cross section
-        assert!(body.contains(&millimeter!(4.9, 0.0, 5.0))?);
-        assert!(!body.contains(&millimeter!(5.1, 0.0, 5.0))?);
-        assert!(!body.contains(&millimeter!(0.0, -5.1, 5.0))?);
+        assert!(body.contains(&millimeter!(4.9, 0.0, 5.0)));
+        assert!(!body.contains(&millimeter!(5.1, 0.0, 5.0)));
+        assert!(!body.contains(&millimeter!(0.0, -5.1, 5.0)));
         Ok(())
     }
     #[test]
@@ -580,9 +513,9 @@ mod test {
             )?)?,
             Isometry::identity(),
         );
-        assert!(body.contains(&millimeter!(9.0, 1.9, 5.0))?);
-        assert!(!body.contains(&millimeter!(11.0, 1.9, 5.0))?);
-        assert!(!body.contains(&millimeter!(9.0, 2.1, 5.0))?);
+        assert!(body.contains(&millimeter!(9.0, 1.9, 5.0)));
+        assert!(!body.contains(&millimeter!(11.0, 1.9, 5.0)));
+        assert!(!body.contains(&millimeter!(9.0, 2.1, 5.0)));
         Ok(())
     }
     #[test]
@@ -618,18 +551,18 @@ mod test {
         let entrance = Sphere::new_at_position(millimeter!(50.0), millimeter!(0.0, 0.0, 0.0))?;
         let exit = Sphere::new_at_position(millimeter!(-50.0), millimeter!(0.0, 0.0, 10.0))?;
         let body = SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Mutex::new(entrance))),
-            GeoSurfaceRef(Arc::new(Mutex::new(exit))),
+            GeoSurfaceRef(Arc::new(entrance)),
+            GeoSurfaceRef(Arc::new(exit)),
             circular_cross_section(millimeter!(10.0))?,
             Isometry::identity(),
         );
-        assert!(body.contains(&millimeter!(0.0, 0.0, 5.0))?);
-        assert!(!body.contains(&millimeter!(0.0, 0.0, -0.1))?);
-        assert!(!body.contains(&millimeter!(0.0, 0.0, 10.1))?);
+        assert!(body.contains(&millimeter!(0.0, 0.0, 5.0)));
+        assert!(!body.contains(&millimeter!(0.0, 0.0, -0.1)));
+        assert!(!body.contains(&millimeter!(0.0, 0.0, 10.1)));
         // the sag at x = 10 mm is 1.0102 mm, so the body is thinner towards its rim
-        assert!(body.contains(&millimeter!(10.0, 0.0, 5.0))?);
-        assert!(!body.contains(&millimeter!(10.0, 0.0, 1.0))?);
-        assert!(!body.contains(&millimeter!(10.0, 0.0, 9.0))?);
+        assert!(body.contains(&millimeter!(10.0, 0.0, 5.0)));
+        assert!(!body.contains(&millimeter!(10.0, 0.0, 1.0)));
+        assert!(!body.contains(&millimeter!(10.0, 0.0, 9.0)));
         Ok(())
     }
     #[test]
@@ -695,10 +628,51 @@ mod test {
         let body = disk(millimeter!(10.0), millimeter!(5.0))?;
         // passing by outside the aperture
         let ray = test_ray(millimeter!(6.0, 0.0, -20.0), Vector3::z())?;
-        assert_eq!(body.path_length_inside(&ray)?, None);
+        assert_eq!(body.path_length_inside(&ray), None);
         // starting behind the body
         let ray = test_ray(millimeter!(0.0, 0.0, 20.0), Vector3::z())?;
-        assert_eq!(body.path_length_inside(&ray)?, None);
+        assert_eq!(body.path_length_inside(&ray), None);
+        Ok(())
+    }
+    /// A hemisphere: a sphere of 15 mm radius with its vertex at the origin, cut flat at its
+    /// equator and bounded to 12.5 mm around the axis. A ray parallel to the axis at height h meets
+    /// the sphere sqrt(R² - h²) before the cut. A steep ray reaching the sphere only behind its
+    /// equator, beyond the cut, does not pass through the body at all.
+    #[test]
+    fn chords_through_a_hemisphere() -> OpmResult<()> {
+        let radius = 15.0;
+        let body = SurfaceBoundedBody::new(
+            GeoSurfaceRef(Arc::new(Sphere::new_at_position(
+                millimeter!(radius),
+                millimeter!(0.0, 0.0, 0.0),
+            )?)),
+            GeoSurfaceRef(Arc::new(Plane::new(Isometry::new_along_z(millimeter!(
+                radius
+            ))?))),
+            circular_cross_section(millimeter!(12.5))?,
+            Isometry::identity(),
+        );
+        for height in [0.0, 10.0] {
+            let ray = test_ray(millimeter!(0.0, height, -10.0), Vector3::z())?;
+            assert_abs_diff_eq!(
+                path_length(&body, &ray)?.value,
+                millimeter!(f64::sqrt(radius.mul_add(radius, -height * height))).value,
+                epsilon = 1e-12
+            );
+        }
+        // 135° from the vertex, 10.6 mm off the axis - within the rim, but behind the equator.
+        let (polar, tilt) = (135.0_f64.to_radians(), 50.0_f64.to_radians());
+        let behind = (radius * polar.sin(), radius - radius * polar.cos());
+        let direction = Vector3::new(-tilt.sin(), 0.0, tilt.cos());
+        let steep = test_ray(
+            millimeter!(
+                behind.0 - 30.0 * direction.x,
+                0.0,
+                behind.1 - 30.0 * direction.z
+            ),
+            direction,
+        )?;
+        assert_eq!(body.path_length_inside(&steep), None);
         Ok(())
     }
     /// Assert that the given range runs between the two given positions, in millimeter.
@@ -725,8 +699,8 @@ mod test {
         let entrance = Sphere::new_at_position(millimeter!(50.0), millimeter!(0.0, 0.0, 0.0))?;
         let exit = Sphere::new_at_position(millimeter!(-50.0), millimeter!(0.0, 0.0, 10.0))?;
         let body = SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Mutex::new(entrance))),
-            GeoSurfaceRef(Arc::new(Mutex::new(exit))),
+            GeoSurfaceRef(Arc::new(entrance)),
+            GeoSurfaceRef(Arc::new(exit)),
             circular_cross_section(millimeter!(10.0))?,
             Isometry::identity(),
         );
@@ -748,7 +722,7 @@ mod test {
             let surface_at = |radius: Length, z: Length| -> OpmResult<GeoSurfaceRef> {
                 let mut surface = Sphere::new(radius, Isometry::identity())?;
                 surface.set_isometry(placement.append(&Isometry::new_along_z(z)?));
-                Ok(GeoSurfaceRef(Arc::new(Mutex::new(surface))))
+                Ok(GeoSurfaceRef(Arc::new(surface)))
             };
             Ok(SurfaceBoundedBody::new(
                 surface_at(millimeter!(50.0), millimeter!(0.0))?,
@@ -781,8 +755,8 @@ mod test {
             Point3::new(angle, Angle::zero(), Angle::zero()),
         )?);
         let body = SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(Isometry::identity())))),
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(exit_iso)))),
+            GeoSurfaceRef(Arc::new(Plane::new(Isometry::identity()))),
+            GeoSurfaceRef(Arc::new(Plane::new(exit_iso))),
             circular_cross_section(millimeter!(5.0))?,
             Isometry::identity(),
         );
@@ -864,7 +838,7 @@ mod test {
         assert_spans(&bounds.x_range(), -2.0, 8.0);
         assert_spans(&bounds.y_range(), -1.0, 9.0);
         // ... and the point of the medium farthest from the axis is the far side of that circle
-        assert!(body.contains(&millimeter!(7.5, 6.0, 5.0))?);
+        assert!(body.contains(&millimeter!(7.5, 6.0, 5.0)));
         Ok(())
     }
     #[test]
@@ -878,10 +852,10 @@ mod test {
         let mut entrance = Cylinder::new(millimeter!(50.0), Isometry::identity())?;
         entrance.set_isometry(curved_iso);
         let body = SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Mutex::new(entrance))),
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(Isometry::new_along_z(
-                millimeter!(10.0),
-            )?)))),
+            GeoSurfaceRef(Arc::new(entrance)),
+            GeoSurfaceRef(Arc::new(Plane::new(Isometry::new_along_z(millimeter!(
+                10.0
+            ))?))),
             circular_cross_section(millimeter!(10.0))?,
             Isometry::identity(),
         );
@@ -907,10 +881,10 @@ mod test {
         let mut entrance = Cylinder::new(millimeter!(50.0), Isometry::identity())?;
         entrance.set_isometry(tilted_iso);
         let body = SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Mutex::new(entrance))),
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(Isometry::new_along_z(
-                millimeter!(10.0),
-            )?)))),
+            GeoSurfaceRef(Arc::new(entrance)),
+            GeoSurfaceRef(Arc::new(Plane::new(Isometry::new_along_z(millimeter!(
+                10.0
+            ))?))),
             circular_cross_section(millimeter!(10.0))?,
             Isometry::identity(),
         );
@@ -923,10 +897,10 @@ mod test {
         // surface at all - the very case `GeoSurface::is_behind` already warns about.
         let entrance = Sphere::new_at_position(millimeter!(5.0), millimeter!(0.0, 0.0, 0.0))?;
         let body = SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Mutex::new(entrance))),
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(Isometry::new_along_z(
-                millimeter!(10.0),
-            )?)))),
+            GeoSurfaceRef(Arc::new(entrance)),
+            GeoSurfaceRef(Arc::new(Plane::new(Isometry::new_along_z(millimeter!(
+                10.0
+            ))?))),
             circular_cross_section(millimeter!(10.0))?,
             Isometry::identity(),
         );
@@ -939,8 +913,8 @@ mod test {
         // that turn is not exactly zero.
         let parallel = Isometry::new(millimeter!(0.0, 0.0, 10.0), degree!(90.0, 0.0, 0.0))?;
         let body = SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(Isometry::identity())))),
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(parallel)))),
+            GeoSurfaceRef(Arc::new(Plane::new(Isometry::identity()))),
+            GeoSurfaceRef(Arc::new(Plane::new(parallel))),
             circular_cross_section(millimeter!(5.0))?,
             Isometry::identity(),
         );
@@ -958,10 +932,10 @@ mod test {
             Point3::new(degree!(15.0), degree!(-10.0), Angle::zero()),
         )?;
         let placed = SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(placement)))),
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(
+            GeoSurfaceRef(Arc::new(Plane::new(placement))),
+            GeoSurfaceRef(Arc::new(Plane::new(
                 placement.append(&Isometry::new_along_z(millimeter!(10.0))?),
-            )))),
+            ))),
             circular_cross_section(millimeter!(5.0))?,
             placement,
         );
@@ -998,7 +972,7 @@ mod test {
         // a ray leaving through the barrel of the body is not modelled and thus reported as a miss
         let body = disk(millimeter!(10.0), millimeter!(5.0))?;
         let ray = test_ray(millimeter!(0.0, 0.0, 1.0), Vector3::new(0.0, 1.0, 0.1))?;
-        assert_eq!(body.path_length_inside(&ray)?, None);
+        assert_eq!(body.path_length_inside(&ray), None);
         Ok(())
     }
 }

@@ -25,7 +25,7 @@ use crate::{
     meter,
     nodes::{FilterType, SplittingConfig, fluence_detector::Fluence},
     percent,
-    utils::{LockExt, geom_transformation::Isometry, math_utils::distance_3d_point},
+    utils::{geom_transformation::Isometry, math_utils::distance_3d_point},
 };
 
 ///Struct that contains all information about an optical ray
@@ -456,7 +456,7 @@ impl Ray {
                 "the refractive index must be >=1.0 and finite".into(),
             ));
         }
-        if let Some((intersection_point, surface_normal)) = s.intersect(self)? {
+        if let Some((intersection_point, surface_normal)) = s.intersect(self) {
             // it is assumed that the surface normal is already normalized and points against the ray direction.
 
             // get correctly normalized k vector of ray
@@ -482,7 +482,6 @@ impl Ray {
             let dist_from_origin = s
                 .geo_surface()
                 .0
-                .lock_opm()?
                 .isometry()
                 .inverse_transform_point_f64(&intersection_in_m)
                 .x;
@@ -579,7 +578,7 @@ impl Ray {
                 "the refractive index must be >=1.0 and finite".into(),
             ));
         }
-        if let Some((intersection_point, surface_normal)) = os.intersect(self)? {
+        if let Some((intersection_point, surface_normal)) = os.intersect(self) {
             // Snell's law in vector form (src: https://www.starkeffects.com/snells-law-vector.shtml)
             // mu=n_1 / n_2
             // s1: incoming direction (normalized??)
@@ -617,13 +616,12 @@ impl Ray {
                 }
                 let mut generated_hit_point = None;
                 // A detector records no hit outside its window.
-                let recorded = os.records_at(&intersection_point)?;
+                let recorded = os.records_at(&intersection_point);
                 if self.helper_rays.is_none() && !self.is_helper {
                     if recorded {
                         generated_hit_point = Some(HitPoint::Energy(EnergyHitPoint::new(
                             os.geo_surface()
                                 .0
-                                .lock_opm()?
                                 .isometry()
                                 .inverse_transform_point(&intersection_point),
                             input_energy,
@@ -634,7 +632,6 @@ impl Ray {
                         generated_hit_point = Some(HitPoint::Fluence(FluenceHitPoint::new(
                             os.geo_surface()
                                 .0
-                                .lock_opm()?
                                 .isometry()
                                 .inverse_transform_point(&intersection_point),
                             *helper_fluence,
@@ -859,7 +856,9 @@ mod test {
     use crate::{
         J_per_cm2,
         coatings::CoatingConstantR,
-        degree, joule,
+        degree,
+        geometry::{Plane, geo_surface::GeoSurfaceRef},
+        joule,
         light::Spectrum,
         millimeter, nanometer,
         nodes::{
@@ -870,7 +869,7 @@ mod test {
     };
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_relative_eq, relative_eq};
     use itertools::izip;
-    use std::path::PathBuf;
+    use std::{path::PathBuf, sync::Arc};
     use uom::si::{energy::joule, length::millimeter};
     #[test]
     fn new() -> OpmResult<()> {
@@ -1192,7 +1191,7 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )?;
         let mut s = OpticSurface::default();
-        s.set_isometry(isometry);
+        s.set_geo_surface(GeoSurfaceRef(Arc::new(Plane::new(isometry))));
         s.set_coating(CoatingConstantR::new(reflectivity)?.into());
         assert!(
             ray.refract_on_surface(&s, Some(0.9), &MissedSurfaceStrategy::Stop)
@@ -1254,8 +1253,8 @@ mod test {
             Point3::new(Length::zero(), Length::zero(), plane_z_pos),
             degree!(0.0, 0.0, 0.0),
         )?;
-        let s = OpticSurface::default();
-        s.set_isometry(isometry);
+        let mut s = OpticSurface::default();
+        s.set_geo_surface(GeoSurfaceRef(Arc::new(Plane::new(isometry))));
         ray.refract_on_surface(&s, None, &MissedSurfaceStrategy::Stop)?;
         assert_eq!(ray.pos, millimeter!(0., 10., 10.));
         assert_eq!(ray.dir[0], 0.0);
@@ -1278,8 +1277,8 @@ mod test {
             Point3::new(Length::zero(), Length::zero(), millimeter!(10.0)),
             degree!(0.0, 0.0, 0.0),
         )?;
-        let s = OpticSurface::default();
-        s.set_isometry(isometry);
+        let mut s = OpticSurface::default();
+        s.set_geo_surface(GeoSurfaceRef(Arc::new(Plane::new(isometry))));
         ray.refract_on_surface(&s, Some(1.5), &MissedSurfaceStrategy::Stop)?;
         assert_eq!(ray.pos, millimeter!(0., 0., 0.));
         assert_eq!(ray.dir, direction);
@@ -1301,8 +1300,8 @@ mod test {
             Point3::new(Length::zero(), Length::zero(), plane_z_pos),
             degree!(0.0, 0.0, 0.0),
         )?;
-        let s = OpticSurface::default();
-        s.set_isometry(isometry);
+        let mut s = OpticSurface::default();
+        s.set_geo_surface(GeoSurfaceRef(Arc::new(Plane::new(isometry))));
         assert!(
             ray.refract_on_surface(&s, Some(0.9), &MissedSurfaceStrategy::Stop)
                 .is_err()
@@ -1350,8 +1349,8 @@ mod test {
             Point3::new(Length::zero(), Length::zero(), millimeter!(10.0)),
             degree!(0.0, 0.0, 0.0),
         )?;
-        let s = OpticSurface::default();
-        s.set_isometry(isometry);
+        let mut s = OpticSurface::default();
+        s.set_geo_surface(GeoSurfaceRef(Arc::new(Plane::new(isometry))));
         let (reflected, _hitpoint) =
             ray.refract_on_surface(&s, Some(1.0), &MissedSurfaceStrategy::Stop)?;
         assert!(reflected.is_none());

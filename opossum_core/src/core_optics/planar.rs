@@ -169,7 +169,7 @@ mod test {
         geometry::body::OPTIC_SHAPE,
         millimeter,
         nodes::{EnergyMeter, IdealFilter, ParabolicMirror, ThinMirror},
-        utils::{LockExt, geom_transformation::Isometry},
+        utils::geom_transformation::Isometry,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
     use nalgebra::Point2;
@@ -273,7 +273,7 @@ mod test {
             .expect("a mirror is bounded")
             .frame(&Isometry::identity());
         let geo_surface = surface.geo_surface();
-        let geo_surface = geo_surface.0.lock_opm()?;
+        let geo_surface = &*geo_surface.0;
         let mut reach = 0.0_f64;
         for point in mesh.points() {
             assert!(

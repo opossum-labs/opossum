@@ -24,7 +24,7 @@ pub mod helper {
         nodes::{EnergyMeter, NodeGroup, SourcePort, ThinMirror},
         percent,
         properties::Proptype,
-        utils::{LockExt, geom_transformation::Isometry},
+        utils::geom_transformation::Isometry,
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::{Point2, Point3, Vector3};
@@ -611,9 +611,9 @@ pub mod helper {
         let body = node.volume_body()?;
         let on_axis_point =
             |z_position: Length| Point3::new(millimeter!(0.0), millimeter!(0.0), z_position);
-        assert!(body.contains(&on_axis_point(center_thickness * 0.5))?);
-        assert!(!body.contains(&on_axis_point(millimeter!(-1.0)))?);
-        assert!(!body.contains(&on_axis_point(center_thickness + millimeter!(1.0)))?);
+        assert!(body.contains(&on_axis_point(center_thickness * 0.5)));
+        assert!(!body.contains(&on_axis_point(millimeter!(-1.0))));
+        assert!(!body.contains(&on_axis_point(center_thickness + millimeter!(1.0))));
         // Inverting a node reverses the direction light travels through it, not the geometry.
         node.set_inverted(true)?;
         assert_abs_diff_eq!(
@@ -643,14 +643,12 @@ pub mod helper {
         position: Point3<Length>,
     ) -> OpmResult<Length> {
         let ray = Ray::new_collimated(position, nanometer!(1053.0), joule!(1.0))?;
-        node.volume_body()?
-            .path_length_inside(&ray)?
-            .ok_or_else(|| {
-                OpossumError::Other(format!(
-                    "a ray at {position:?} does not pass through the volume of node '{}'",
-                    node.name()
-                ))
-            })
+        node.volume_body()?.path_length_inside(&ray).ok_or_else(|| {
+            OpossumError::Other(format!(
+                "a ray at {position:?} does not pass through the volume of node '{}'",
+                node.name()
+            ))
+        })
     }
 
     /// Assert that the transversal extent of a volume node is its optic shape, and nothing else.
@@ -676,16 +674,16 @@ pub mod helper {
         let mid_thickness = center_thickness_of(&node) * 0.5;
         let point_at = |radius: Length| Point3::new(radius, millimeter!(0.0), mid_thickness);
         let body = node.volume_body()?;
-        assert!(body.contains(&point_at(default_edge - millimeter!(0.1)))?);
-        assert!(!body.contains(&point_at(default_edge + millimeter!(0.1)))?);
+        assert!(body.contains(&point_at(default_edge - millimeter!(0.1))));
+        assert!(!body.contains(&point_at(default_edge + millimeter!(0.1))));
         // a wider optic shape widens it
         node.node_attr_mut().set_property(
             OPTIC_SHAPE,
             OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
         )?;
         let body = node.volume_body()?;
-        assert!(body.contains(&point_at(millimeter!(24.9)))?);
-        assert!(!body.contains(&point_at(millimeter!(25.1)))?);
+        assert!(body.contains(&point_at(millimeter!(24.9))));
+        assert!(!body.contains(&point_at(millimeter!(25.1))));
         // An open optic shape leaves the volume undefined and is rejected where it is set: two
         // curved surfaces may happen to close the volume on their own, but nothing guarantees it.
         assert!(
@@ -999,19 +997,19 @@ pub mod helper {
         let Some(geometry) = node.geometry()? else {
             return Ok(Vec::new());
         };
-        let node_iso = node.effective_node_iso().unwrap_or_else(Isometry::identity);
-        let ((entrance, entrance_anchor), (exit, exit_anchor)) =
-            geometry.entrance_and_exit(&node_iso)?;
+        let placed =
+            geometry.place(&node.effective_node_iso().unwrap_or_else(Isometry::identity))?;
+        let ((entrance, entrance_anchor), (exit, exit_anchor)) = (placed.entrance(), placed.exit());
         let runtime = node.node_attr().runtime_surfaces();
         let surfaces = runtime
             .inputs
             .keys()
-            .map(|name| ("in", name.as_str(), entrance.clone(), entrance_anchor))
+            .map(|name| ("in", name.as_str(), entrance.clone(), *entrance_anchor))
             .chain(
                 runtime
                     .outputs
                     .keys()
-                    .map(|name| ("out", name.as_str(), exit.clone(), exit_anchor)),
+                    .map(|name| ("out", name.as_str(), exit.clone(), *exit_anchor)),
             )
             .collect::<Vec<_>>();
         describe_surfaces(node, &surfaces)
@@ -1046,15 +1044,15 @@ pub mod helper {
                 })
                 .expect("a surface is shared with itself");
             let translation = anchor.translation();
-            let (name, sag) = {
-                let geo = geo_surface.0.lock_opm()?;
-                assert_same_isometry(geo.isometry(), &node_iso.append(anchor), port_name);
-                let sag = [(0.0, 0.0), (5.0, 0.0), (0.0, 5.0)].map(|(x, y)| {
+            let geo = &*geo_surface.0;
+            assert_same_isometry(geo.isometry(), &node_iso.append(anchor), port_name);
+            let sag = [(0.0, 0.0), (5.0, 0.0), (0.0, 5.0)]
+                .map(|(x, y)| {
                     geo.local_z_at(&Point2::new(millimeter!(x), millimeter!(y)))
                         .map_or_else(|| "none".to_owned(), |z| rounded(z.get::<millimeter>()))
-                });
-                (geo.name().to_owned(), sag.join(", "))
-            };
+                })
+                .join(", ");
+            let name = geo.name();
             lines.push(format!(
                 "{port_type} {port_name}: {name} t=({}, {}, {}) x={} z={} sag=({sag}) shared={shared}",
                 rounded(translation.x.get::<millimeter>()),
@@ -1180,7 +1178,7 @@ pub mod helper {
                 )?
                 .transformed_ray(node_frame);
                 let chord = body
-                    .path_length_inside(&ray)?
+                    .path_length_inside(&ray)
                     .map_or_else(|| "none".to_owned(), |l| rounded(l.get::<millimeter>()));
                 lines.push(format!("chord from ({x}, {y}) at {tilt} deg: {chord}"));
             }
@@ -1190,7 +1188,7 @@ pub mod helper {
             for y in [0.0, 7.0] {
                 for z in [-0.5, 0.5, 2.5, 4.5, 5.5, 9.5, 10.5] {
                     let point = node_frame.transform_point(&millimeter!(x, y, z));
-                    inside.push(if body.contains(&point)? { '#' } else { '.' });
+                    inside.push(if body.contains(&point) { '#' } else { '.' });
                 }
             }
         }

@@ -93,7 +93,9 @@ pub trait Volumetric: OpticNode {
     /// placement - the same description the surfaces light is traced at are installed from.
     ///
     /// The body is built from the node's properties as they are now, so it has to be derived again
-    /// after the node is moved or one of its properties changes.
+    /// after the node is moved or one of its properties changes. An analysis does not call this: it
+    /// reads the body installed together with the surfaces (see
+    /// [`RuntimeMedium`](crate::core_optics::node_attr::RuntimeMedium)).
     ///
     /// **Derive it once per node and keep it**, rather than per ray or per grid point: it reads the
     /// node's properties and builds its surfaces anew. The body is what belongs in the loop, not
@@ -102,10 +104,6 @@ pub trait Volumetric: OpticNode {
     /// The geometry states the faces in their *physical* order, so an inverted node encloses the
     /// same volume as an upright one: inverting a node reverses the direction light travels, not
     /// the geometry it travels through.
-    ///
-    /// **Note**: The port [`Aperture`](crate::apertures::Aperture)s have no say in the extent of
-    /// the body. They mask the light passing a surface, which is independent of how far the medium
-    /// behind it reaches.
     ///
     /// # Returns
     ///
@@ -122,7 +120,16 @@ pub trait Volumetric: OpticNode {
                 self.name()
             )));
         };
-        geometry.body(&self.effective_node_iso().unwrap_or_else(Isometry::identity))
+        geometry
+            .place(&self.effective_node_iso().unwrap_or_else(Isometry::identity))?
+            .body()
+            .cloned()
+            .ok_or_else(|| {
+                OpossumError::Other(format!(
+                    "node '{}' is a single surface and encloses no volume",
+                    self.name()
+                ))
+            })
     }
     /// Guides a ray bundle through the volume of a node: in through its entry surface, out through
     /// its exit surface.
@@ -415,8 +422,8 @@ pub trait Volumetric: OpticNode {
 ///
 /// # Errors
 ///
-/// This function errors if `path_length_inside` or `transmittance` fails, if the combined factor
-/// would not be finite, or if `scale_energy` rejects the resulting value.
+/// This function errors if `transmittance` fails, if the combined factor would not be finite, or if
+/// `scale_energy` rejects the resulting value.
 fn march_medium_along_chords(
     node_name: &str,
     medium: &mut RuntimeMedium,
@@ -431,10 +438,7 @@ fn march_medium_along_chords(
             if !ray.valid() {
                 continue;
             }
-            let Some(chord) = body
-                .path_length_inside(ray)
-                .map_err(|e| OpossumError::Analysis(format!("node '{node_name}': {e}")))?
-            else {
+            let Some(chord) = body.path_length_inside(ray) else {
                 continue;
             };
             if chord.value <= 0.0 {
@@ -501,6 +505,7 @@ mod test {
         utils::test_helper::helper::metered_energy,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
+    use std::sync::Arc;
     use uom::si::{
         f64::{Length, LinearNumberDensity, ReciprocalLength},
         linear_number_density::per_meter,
@@ -664,6 +669,22 @@ mod test {
             1.0,
             epsilon = 1e-12
         );
+        Ok(())
+    }
+    /// The medium is bounded by the very surfaces light is traced at, not by copies built from the
+    /// same description: besides the optic surface and the handle taken here, the body is the one
+    /// other owner of each.
+    #[test]
+    fn the_prepared_body_shares_the_surfaces_light_is_traced_at() -> OpmResult<()> {
+        let mut lens = placed_lens()?;
+        lens.prepare_volume(&RayTraceConfig::default())?;
+        for port in ["input_1", "output_1"] {
+            let surface = lens
+                .get_optic_surface(port)
+                .ok_or_else(|| OpossumError::Other(format!("the lens has no surface '{port}'")))?
+                .geo_surface();
+            assert_eq!(Arc::strong_count(&surface.0), 3, "surface '{port}'");
+        }
         Ok(())
     }
     /// A passive volume node gets a prepared body even without a gain model.
@@ -1103,14 +1124,14 @@ mod test {
         // Seed a body at the current (identity) position, simulating what
         // `init_runtime_medium` used to do inside `after_deserialization_hook`.
         let identity_body = head.as_volume().unwrap().volume_body()?;
-        head.node_attr_mut().set_runtime_medium(identity_body, None);
+        head.node_attr_mut().set_runtime_body(Some(identity_body));
 
         // Move the head 500 mm along z — what `calc_node_positions` does after deserialization.
         head.set_positioning(NodePositioning::Absolute(Isometry::new(
             millimeter!(0.0, 0.0, 500.0),
             degree!(0.0, 0.0, 0.0),
         )?))?;
-        // Simulate `reset_data`: clear only the inversion, leave the (stale, identity) body.
+        // Simulate `reset_data`, which clears only the inversion.
         head.node_attr_mut().clear_runtime_inversion();
 
         let mut config = RayTraceConfig::default();
@@ -1684,7 +1705,7 @@ mod test {
         for (node_type, _) in node_types() {
             let optic_ref = create_node_ref(node_type)?;
             let rim = match optic_ref.geometry()? {
-                Some(geometry) => geometry.rim()?,
+                Some(geometry) => geometry.place(&Isometry::identity())?.rim().cloned(),
                 None => None,
             };
             let bounded = matches!(

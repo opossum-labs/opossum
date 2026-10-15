@@ -7,7 +7,7 @@
 //! stated relative to the component it belongs to, so it can be compared, stored and placed anew
 //! wherever the component moves.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use nalgebra::Vector3;
 use serde::{Deserialize, Serialize};
@@ -157,15 +157,11 @@ impl SurfaceShape {
     /// This function returns an error if the radius or the focal length is zero or not finite.
     fn build(&self, frame: Isometry) -> OpmResult<GeoSurfaceRef> {
         Ok(match self {
-            Self::Plane => GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(frame)))),
-            Self::Sphere { radius } => {
-                GeoSurfaceRef(Arc::new(Mutex::new(Sphere::new(*radius, frame)?)))
-            }
-            Self::Cylinder { radius } => {
-                GeoSurfaceRef(Arc::new(Mutex::new(Cylinder::new(*radius, frame)?)))
-            }
+            Self::Plane => GeoSurfaceRef(Arc::new(Plane::new(frame))),
+            Self::Sphere { radius } => GeoSurfaceRef(Arc::new(Sphere::new(*radius, frame)?)),
+            Self::Cylinder { radius } => GeoSurfaceRef(Arc::new(Cylinder::new(*radius, frame)?)),
             Self::Parabola { focal_length } => {
-                GeoSurfaceRef(Arc::new(Mutex::new(Parabola::new(*focal_length, frame)?)))
+                GeoSurfaceRef(Arc::new(Parabola::new(*focal_length, frame)?))
             }
         })
     }
@@ -281,7 +277,7 @@ impl Face {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{degree, millimeter, utils::LockExt};
+    use crate::{degree, millimeter};
     use approx::assert_abs_diff_eq;
     use uom::si::length::millimeter;
 
@@ -326,7 +322,7 @@ mod test {
         );
         let (surface, anchor) = face.place(&node_frame, &owner)?;
         let expected = node_frame.append(&anchor);
-        let placed = *surface.0.lock_opm()?.isometry();
+        let placed = *surface.0.isometry();
         assert_abs_diff_eq!(
             (expected.get_inv_transform() * placed.get_transform())
                 .translation

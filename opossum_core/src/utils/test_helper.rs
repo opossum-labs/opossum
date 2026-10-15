@@ -15,7 +15,7 @@ pub mod helper {
         utils::geom_transformation::Isometry,
     };
     use nalgebra::Point2;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
     use uom::si::f64::Length;
 
     /// Read the energy an [`EnergyMeter`](crate::nodes::EnergyMeter) recorded from an analysis
@@ -107,7 +107,7 @@ pub mod helper {
         z: Length,
     ) -> OpmResult<GeoSurfaceRef> {
         surface.set_isometry(frame.append(&Isometry::new_along_z(z)?));
-        Ok(GeoSurfaceRef(Arc::new(Mutex::new(surface))))
+        Ok(GeoSurfaceRef(Arc::new(surface)))
     }
 
     /// The corners of an L, the smallest outline that is not convex.
