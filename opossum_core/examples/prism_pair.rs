@@ -1,5 +1,5 @@
 use opossum_core::{
-    apertures::CircleShape,
+    apertures::{CircleShape, RectangleShape},
     core_optics::{NodeAttrExt, node_attr::NodePositioning},
     geometry::body::OPTIC_SHAPE,
     prelude::*,
@@ -39,7 +39,13 @@ fn main() -> OpmResult<()> {
     let mut rpv = RayPropagationVisualizer::default();
     rpv.set_property("ray transparency", 1.0.into())?;
     let det = scenery.add_node(rpv)?;
-    let sd = scenery.add_node(SpotDiagram::default())?;
+    // The spot diagram takes the line of 50 mm: it is 60 mm square.
+    let mut spot_diagram = SpotDiagram::default();
+    spot_diagram.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(RectangleShape::new(millimeter!(60.0), millimeter!(60.0))?).into(),
+    )?;
+    let sd = scenery.add_node(spot_diagram)?;
 
     scenery.connect_nodes(src, "output_1", p1, "input_1", millimeter!(10.0))?;
     scenery.connect_nodes(p1, "output_1", p2, "input_1", millimeter!(100.0))?;

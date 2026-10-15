@@ -376,7 +376,19 @@ impl OpmDocument {
 mod tests {
     use super::*;
     use crate::{
-        analyzers::{AnalyzerType, energy::EnergyConfig}, apertures::{ApertureShape, CircleShape, OpticShape}, core_optics::NodeAttrExt, gain::{ConstGain, GainModel}, geometry::body::OPTIC_SHAPE, joule, light::{Ray, lightdata::energy_data_builder::{EnergyDataBuilder, EnergyLaserLines}}, millimeter, nanometer, nodes::{Dummy, EnergyMeter, Lens, NodeGroup, SourcePort, round_collimated_ray_builder}, utils::{geom_transformation::Isometry, test_helper::helper::metered_energy},
+        analyzers::{AnalyzerType, energy::EnergyConfig},
+        apertures::{CircleShape, OpticShape},
+        core_optics::NodeAttrExt,
+        gain::{ConstGain, GainModel},
+        geometry::body::OPTIC_SHAPE,
+        joule,
+        light::{
+            Ray,
+            lightdata::energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
+        },
+        millimeter, nanometer,
+        nodes::{Dummy, EnergyMeter, Lens, NodeGroup, SourcePort, round_collimated_ray_builder},
+        utils::{geom_transformation::Isometry, test_helper::helper::metered_energy},
     };
     use approx::assert_relative_eq;
     use uom::si::{f64::Length, length::millimeter};
@@ -605,7 +617,7 @@ mod tests {
         let mut aperture = Dummy::default();
         aperture.set_property(
             OPTIC_SHAPE,
-            OpticShape::from_aperture_shape(&ApertureShape::BinaryCircle(CircleShape::new(millimeter!(2.0))?))?.into()
+            OpticShape::from(CircleShape::new(millimeter!(2.0))?).into(),
         )?;
         let aperture = scenery.add_node(aperture)?;
         let screen = scenery.add_node(Dummy::default())?;

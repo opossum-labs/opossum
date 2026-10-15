@@ -24,10 +24,10 @@ mod mesh;
 pub use mesh::BodyMesh;
 
 use crate::{
-    apertures::{CircleShape, OpticShape},
+    apertures::{CircleShape, OpticShape, RectangleShape},
     error::{OpmResult, OpossumError},
     geometry::{
-        Rim,
+        Rim, RimRole,
         geo_surface::{GeoSurfaceRef, SurfacePlacement},
     },
     light::Ray,
@@ -55,13 +55,13 @@ use uom::si::f64::Length;
 /// that leave the extent undefined — [`ApertureShape::Open`] among them — are therefore rejected.
 pub const OPTIC_SHAPE: &str = "optic shape";
 
-/// The optic shape a volume node starts out with if nothing is defined.
+/// The optic shape a round optic starts out with if nothing is defined.
 ///
 /// A circle of 12.5 mm radius: the 25 mm (1 inch) mount most catalogue optics come in.
 ///
 /// # Returns
 ///
-/// The default transversal extent of a volume node.
+/// The default transversal extent of a round optic.
 ///
 /// # Panics
 ///
@@ -70,6 +70,24 @@ pub const OPTIC_SHAPE: &str = "optic shape";
 pub fn default_optic_shape() -> OpticShape {
     CircleShape::new(millimeter!(12.5))
         .expect("12.5 mm is a valid aperture radius")
+        .into()
+}
+
+/// The optic shape a grating or a detector starts out with if nothing is defined.
+///
+/// A square of 25 mm × 25 mm.
+///
+/// # Returns
+///
+/// The default transversal extent of a grating, or the default window of a detector.
+///
+/// # Panics
+///
+/// Panics if the hard-coded size is rejected by [`RectangleShape`], which cannot happen.
+#[must_use]
+pub fn default_square_optic_shape() -> OpticShape {
+    RectangleShape::new(millimeter!(25.0), millimeter!(25.0))
+        .expect("25 mm is a valid rectangle size")
         .into()
 }
 
@@ -242,7 +260,7 @@ impl SurfaceBoundedBody {
         Self {
             entrance,
             exit,
-            rim: Rim::new(cross_section, Isometry::identity()),
+            rim: Rim::new(cross_section, Isometry::identity(), RimRole::Edge),
             isometry,
         }
     }

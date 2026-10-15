@@ -1,5 +1,5 @@
 use opossum_core::{
-    apertures::CircleShape,
+    apertures::{CircleShape, RectangleShape},
     coatings::CoatingConstantR,
     core_optics::{NodeAttrExt, OpticNodeExt},
     geometry::body::OPTIC_SHAPE,
@@ -28,9 +28,17 @@ fn main() -> OpmResult<()> {
     mirror2.set_property(OPTIC_SHAPE, two_inch.into())?;
     let i_m2 = scenery.add_node(mirror2)?;
     let i_prop_vis = scenery.add_node(RayPropagationVisualizer::default())?;
-    let i_sd = scenery.add_node(SpotDiagram::default())?;
-    let i_wf = scenery.add_node(WaveFront::default())?;
-    let i_pm = scenery.add_node(EnergyMeter::default())?;
+    // The beam reaches the detectors up to 21 mm off their center: they are 50 mm square.
+    let window: OpticShape = RectangleShape::new(millimeter!(50.0), millimeter!(50.0))?.into();
+    let mut spot_diagram = SpotDiagram::default();
+    spot_diagram.set_property(OPTIC_SHAPE, window.clone().into())?;
+    let i_sd = scenery.add_node(spot_diagram)?;
+    let mut wavefront = WaveFront::default();
+    wavefront.set_property(OPTIC_SHAPE, window.clone().into())?;
+    let i_wf = scenery.add_node(wavefront)?;
+    let mut energy_meter = EnergyMeter::default();
+    energy_meter.set_property(OPTIC_SHAPE, window.into())?;
+    let i_pm = scenery.add_node(energy_meter)?;
     scenery.connect_nodes(i_src, "output_1", i_m1, "input_1", millimeter!(100.0))?;
     scenery.connect_nodes(i_m1, "output_1", i_m2, "input_1", millimeter!(100.0))?;
     scenery.connect_nodes(i_m2, "output_1", i_prop_vis, "input_1", millimeter!(80.0))?;

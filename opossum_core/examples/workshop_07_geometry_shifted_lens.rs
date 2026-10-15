@@ -43,7 +43,12 @@
 //! - `std::{env, path::Path}` is used to determine the output directory
 //!   and save the generated `.opm` file
 //!
-use opossum_core::{apertures::CircleShape, core_optics::NodeAttrExt, prelude::*};
+use opossum_core::{
+    apertures::{CircleShape, RectangleShape},
+    core_optics::NodeAttrExt,
+    geometry::body::OPTIC_SHAPE,
+    prelude::*,
+};
 /// Import `Path` from the standard library for working with file paths
 use std::{env, path::Path};
 /// Entry point for the program; returns `OpmResult<()>` to handle simulation errors safely
@@ -72,25 +77,31 @@ fn main() -> OpmResult<()> {
     //
     // The lens is shifted by +5 mm along the y-axis
     // using `with_decenter(...)`
-    let lens1 = Lens::new_with_optic_shape(
+    let mut lens1 = Lens::new(
         "75 mm lens (y shifted)",
         millimeter!(122.25),
         millimeter!(-122.25),
         millimeter!(10.0),
         &refr_index_hzf52,
-        CircleShape::new(millimeter!(25.0))?.into(),
     )?
     .with_decenter(millimeter!(0.0, 5.0, 0.0))?;
+    lens1.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
+    )?;
     // Add the first lens to the optical system
     let i_pl1 = scenery.add_node(lens1)?;
     // Create the second lens aligned with the optical axis, of the same size as the first one
-    let lens2 = Lens::new_with_optic_shape(
+    let mut lens2 = Lens::new(
         "50 mm lens",
         millimeter!(100.0),
         millimeter!(-100.0),
         millimeter!(10.0),
         &refr_index_hzf52,
-        CircleShape::new(millimeter!(25.0))?.into(),
+    )?;
+    lens2.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
     )?;
     // Add the second lens to the optical system
     let i_pl2 = scenery.add_node(lens2)?;
@@ -100,8 +111,14 @@ fn main() -> OpmResult<()> {
     ray_prop_vis.set_property("ray transparency", 1.0.into())?;
     // Add the ray visualizer to the system
     let i_sd3 = scenery.add_node(ray_prop_vis)?;
-    // Create a wavefront node after the optical system
-    let i_sd4 = scenery.add_node(WaveFront::new("wavefront after telescope")?)?;
+    // Create a wavefront node after the optical system. The beam reaches it up to 17 mm off its
+    // center: its sensor is 40 mm square.
+    let mut wavefront = WaveFront::new("wavefront after telescope")?;
+    wavefront.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(RectangleShape::new(millimeter!(40.0), millimeter!(40.0))?).into(),
+    )?;
+    let i_sd4 = scenery.add_node(wavefront)?;
     // Connect source → shifted lens
     scenery.connect_nodes(i_src, "output_1", i_pl1, "input_1", millimeter!(20.0))?;
     // Connect shifted lens → second lens

@@ -119,17 +119,27 @@ note below it says why and nothing is saved; the edge is saved as soon as it is 
 drafted breaks a rule, the label of "Add bore" (or "Update bore") turns red and the button does nothing; hovering over
 it says why.
 
-The default is a circle of 12.5 mm radius, the usual 1 inch mount. The optic shape lies in the plane perpendicular to
-the component's axis and extends along that axis: for a rod cut at Brewster's angle it is the cross section of the
-rod, as its manufacturer states it. An off-axis parabola measures it parallel to its parent axis, as catalogs do. A
+The default depends on the kind of component:
+
+| Component | Default optic shape |
+|---|---|
+| lens, wedge, mirror, parabolic mirror, beam splitter, ideal filter, paraxial surface | circle of 12.5 mm radius, the usual 1 inch mount |
+| cylindric lens | rectangle of 20 mm across its curvature (x) and 30 mm along its cylinder axis (y) |
+| grating | square of 25 mm × 25 mm |
+| detectors | square window of 25 mm × 25 mm |
+| dummy | unbounded (`Open`) |
+
+The optic shape lies in the plane perpendicular to the component's axis and extends along that axis: for a rod cut at
+Brewster's angle it is the cross section of the rod, as its manufacturer states it. An off-axis parabola measures it
+parallel to its parent axis, as catalogs do. A
 curved surface has to reach the edge of the optic shape, so its radius of curvature cannot be smaller than the
 largest distance of that edge from the axis. The edge thickness of a lens or a wedge is not checked: where its
 surfaces would cross, rays miss the rear surface.
 
-**Detectors** let all light pass. Their optic shape is the window they record within, unbounded (`Open`) by
-default. Light outside a set window passes on unrecorded, and the log and the report warn about it. The
-[paraxial surface](nodes/paraxial_surface.md) is an idealization and may be unbounded as well. Every other component
-refuses `Open`.
+**Detectors** let all light pass. Their optic shape is the window they record within, a square of 25 mm × 25 mm by
+default. Light outside the window passes on unrecorded, and the log and the report warn about it. Set the window to
+the size of the actual sensor, or to `Open` to record all light. The [paraxial surface](nodes/paraxial_surface.md) is
+an idealization and may be unbounded as well. Every other component refuses `Open`.
 
 **Iris.** A [dummy](nodes/dummy.md) passes light unchanged and is unbounded (`Open`) by default. Given an optic
 shape, it acts as an iris: a ray outside of it misses the dummy and follows the rules above.

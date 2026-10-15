@@ -1,5 +1,8 @@
 use opossum_core::{
-    apertures::CircleShape, core_optics::NodeAttrExt, geometry::body::OPTIC_SHAPE, prelude::*,
+    apertures::{CircleShape, RectangleShape},
+    core_optics::NodeAttrExt,
+    geometry::body::OPTIC_SHAPE,
+    prelude::*,
 };
 use std::path::Path;
 
@@ -18,7 +21,13 @@ fn main() -> OpmResult<()> {
     let m1_ref = NodeReference::from_node(&scenery.node(i_m1)?)?;
     let i_m1_ref = scenery.add_node(m1_ref)?;
     let i_sd3 = scenery.add_node(RayPropagationVisualizer::default())?;
-    let i_sd = scenery.add_node(SpotDiagram::default())?;
+    // The beam reaches the spot diagram up to 17 mm off its center: it is 40 mm square.
+    let mut spot_diagram = SpotDiagram::default();
+    spot_diagram.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(RectangleShape::new(millimeter!(40.0), millimeter!(40.0))?).into(),
+    )?;
+    let i_sd = scenery.add_node(spot_diagram)?;
     let sd_ref = NodeReference::from_node(&scenery.node(i_sd)?)?;
     let i_sd_ref = scenery.add_node(sd_ref)?;
     scenery.connect_nodes(i_src, "output_1", i_sd, "input_1", millimeter!(40.0))?;

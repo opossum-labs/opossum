@@ -5,10 +5,13 @@ use crate::{
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, Volumetric},
     degree,
     error::{OpmResult, OpossumError},
-    geometry::{Geometry, body::OPTIC_SHAPE},
+    geometry::{
+        Geometry,
+        body::{OPTIC_SHAPE, default_optic_shape},
+    },
     material::{MATERIAL, Material},
     millimeter,
-    nodes::{NodeRegistration, create_volume_properties},
+    nodes::{NodeRegistration, create_component_properties},
     properties::{Proptype, validator::Validator},
     refractive_index::RefrIndexConst,
 };
@@ -90,7 +93,7 @@ impl Default for Wedge {
                 Angle::zero().into(),
             )
             .unwrap();
-        create_volume_properties(&mut node_attr).unwrap();
+        create_component_properties(&mut node_attr, default_optic_shape()).unwrap();
         let mut wedge = Self { node_attr };
         wedge.update_surfaces().unwrap();
         wedge
@@ -490,7 +493,7 @@ mod test {
     }
     #[test]
     fn optic_shape() -> OpmResult<()> {
-        test_optic_shape::<Wedge>()
+        test_optic_shape::<Wedge>(millimeter!(12.5))
     }
     #[test]
     fn optic_shape_absent_in_file() -> OpmResult<()> {

@@ -116,31 +116,24 @@ pub mod helper {
     /// not: a ray trace loses it and warns about the loss, a ghost focus analysis lets it run past
     /// unchanged.
     ///
-    /// Both rays travel along z, 12.4 mm and 12.6 mm off the axis, just inside and just outside the
-    /// default optic shape of 12.5 mm. Whether a missed ray is lost or runs past is the analyzer's
-    /// missed surface strategy (`Stop` for a ray trace, `Ignore` for a ghost focus analysis).
+    /// The node is placed at the origin and bounded by the round default optic shape of 12.5 mm
+    /// ([`default_optic_shape`]), whatever its own default. Both rays travel along z, 12.4 mm and
+    /// 12.6 mm off the axis, just inside and just outside of it. Whether a missed ray is lost or
+    /// runs past is the analyzer's missed surface strategy (`Stop` for a ray trace, `Ignore` for a
+    /// ghost focus analysis).
     ///
     /// # Errors
     ///
-    /// Returns an error if the node cannot be placed or analyzed.
+    /// Returns an error if the node cannot be placed, bounded or analyzed.
     pub fn test_rays_beyond_optic_shape_are_lost<
         T: Default + AnalysisRayTrace + AnalysisGhostFocus,
     >() -> OpmResult<()> {
-        test_rays_beyond_optic_shape_are_lost_for(placed_at_origin::<T>)
-    }
-    /// The same check as [`test_rays_beyond_optic_shape_are_lost`], for a node built by `make`
-    /// rather than a default one: e.g. a node that only has an optic shape once it is set.
-    ///
-    /// # Arguments
-    ///
-    /// * `make` - builds the node at the origin, bounded by the default optic shape.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the node cannot be built or analyzed.
-    pub fn test_rays_beyond_optic_shape_are_lost_for<T: AnalysisRayTrace + AnalysisGhostFocus>(
-        make: impl Fn() -> OpmResult<T>,
-    ) -> OpmResult<()> {
+        let make = || -> OpmResult<T> {
+            let mut node = placed_at_origin::<T>()?;
+            node.set_property(OPTIC_SHAPE, default_optic_shape().into())?;
+            node.update_surfaces()?;
+            Ok(node)
+        };
         let (inside, outside) = around_the_default_rim();
         let rays = || rays_along_z_from(&[inside, outside], nanometer!(1000.0));
         let mut node = make()?;
@@ -250,9 +243,9 @@ pub mod helper {
     /// Assert that a detector records only the light within its optic shape but lets every ray
     /// pass, in a ray trace and in a ghost focus analysis alike.
     ///
-    /// Two rays travel along z, 5 mm and 20 mm off the axis. A detector starts unbounded and
-    /// records both. Bounded to a circle of 12.5 mm it records the one inside only and warns that
-    /// the other was not recorded. Either way both rays leave it valid, with their direction and
+    /// Two rays travel along z, 5 mm and 20 mm off the axis. Within its default window, a square of
+    /// 25 mm, a detector records the one inside only and warns that the other was not recorded.
+    /// Set open, it records both. Either way both rays leave it valid, with their direction and
     /// energy.
     ///
     /// # Arguments
@@ -261,7 +254,7 @@ pub mod helper {
     ///
     /// # Errors
     ///
-    /// Returns an error if the node cannot be placed, bounded or analyzed.
+    /// Returns an error if the node cannot be placed, opened or analyzed.
     ///
     /// # Panics
     ///
@@ -289,8 +282,8 @@ pub mod helper {
         };
         for bounded in [false, true] {
             let mut detector = placed_at_origin::<T>()?;
-            if bounded {
-                detector.set_property(OPTIC_SHAPE, default_optic_shape().into())?;
+            if !bounded {
+                detector.set_property(OPTIC_SHAPE, OpticShape::Open.into())?;
                 detector.update_surfaces()?;
             }
             let expected: &[f64] = if bounded { &[5.0] } else { &[5.0, 20.0] };
@@ -349,10 +342,6 @@ pub mod helper {
             let ghost_heights: Vec<f64> = ghosts.iter().flat_map(heights).collect();
             assert_recorded(&ghost_heights, "ghost focus analysis");
         }
-        // A window may be opened again.
-        let mut detector = T::default();
-        detector.set_property(OPTIC_SHAPE, default_optic_shape().into())?;
-        detector.set_property(OPTIC_SHAPE, OpticShape::Open.into())?;
         Ok(())
     }
     /// Build a source, an absolutely placed flat mirror 100 mm in front of it and an energy meter
@@ -667,7 +656,11 @@ pub mod helper {
     /// Assert that the transversal extent of a volume node is its optic shape, and nothing else.
     ///
     /// The optic shape is what a supplier quotes as the size of the component, and a volume node
-    /// starts out with the 25 mm standard.
+    /// starts out with a default of its type.
+    ///
+    /// # Arguments
+    ///
+    /// * `default_edge` - how far the default optic shape of the node type reaches along x.
     ///
     /// # Errors
     ///
@@ -677,15 +670,14 @@ pub mod helper {
     ///
     /// Panics if the node has no `center thickness` property or if its extent does not follow the
     /// optic shape.
-    pub fn test_optic_shape<T: Default + Volumetric>() -> OpmResult<()> {
+    pub fn test_optic_shape<T: Default + Volumetric>(default_edge: Length) -> OpmResult<()> {
         let mut node = T::default();
         node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let mid_thickness = center_thickness_of(&node) * 0.5;
         let point_at = |radius: Length| Point3::new(radius, millimeter!(0.0), mid_thickness);
-        // the default extent is a circle of 12.5 mm radius
         let body = node.volume_body()?;
-        assert!(body.contains(&point_at(millimeter!(12.4)))?);
-        assert!(!body.contains(&point_at(millimeter!(12.6)))?);
+        assert!(body.contains(&point_at(default_edge - millimeter!(0.1)))?);
+        assert!(!body.contains(&point_at(default_edge + millimeter!(0.1)))?);
         // a wider optic shape widens it
         node.node_attr_mut().set_property(
             OPTIC_SHAPE,

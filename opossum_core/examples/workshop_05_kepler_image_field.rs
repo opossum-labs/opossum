@@ -43,6 +43,7 @@
 use opossum_core::{
     apertures::CircleShape,
     core_optics::{NodeAttrExt, hit_map::fluence_estimator::FluenceEstimator},
+    geometry::body::OPTIC_SHAPE,
     prelude::*,
 };
 use std::path::Path;
@@ -71,24 +72,30 @@ fn main() -> OpmResult<()> {
     )?;
     // 4. Define the first lens: 75 mm focal length and 10 mm thickness.
     // Its optic shape is a circle of 25 mm radius.
-    let lens1 = Lens::new_with_optic_shape(
+    let mut lens1 = Lens::new(
         "75 mm lens",
         millimeter!(130.0),
         millimeter!(-130.0),
         millimeter!(10.0),
         &refr_index_hzf52,
-        CircleShape::new(millimeter!(25.0))?.into(),
+    )?;
+    lens1.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
     )?;
     let i_pl1 = scenery.add_node(lens1)?;
     // 5. Define the second lens: 50 mm focal length, 10 mm thickness and the same size as the
     // first.
-    let lens2 = Lens::new_with_optic_shape(
+    let mut lens2 = Lens::new(
         "50 mm lens",
         millimeter!(100.0),
         millimeter!(-100.0),
         millimeter!(10.0),
         &refr_index_hzf52,
-        CircleShape::new(millimeter!(25.0))?.into(),
+    )?;
+    lens2.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
     )?;
     // Add the second lens to the optical system.
     let i_pl2 = scenery.add_node(lens2)?;

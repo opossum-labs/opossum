@@ -131,7 +131,7 @@ impl AnalysisGhostFocus for ParaxialSurface {
             false,
         )?;
         for (rays, hits) in rays_bundle.iter_mut().zip(&hits) {
-            rays.refract_paraxial_hits(focal_length, &iso, hits)?;
+            rays.refract_paraxial(focal_length, &iso, hits)?;
         }
         let mut out_light_rays = LightRays::default();
         out_light_rays.insert(out_port.clone(), rays_bundle);
@@ -170,7 +170,7 @@ impl AnalysisRayTrace for ParaxialSurface {
             true,
         )?;
         for (rays, hits) in rays_bundle.iter_mut().zip(&hits) {
-            rays.refract_paraxial_hits(focal_length, &iso, hits)?;
+            rays.refract_paraxial(focal_length, &iso, hits)?;
         }
         let mut light_result = LightResult::default();
         light_result.insert(out_port.into(), LightData::Geometric(rays_bundle.remove(0)));

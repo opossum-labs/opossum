@@ -1,7 +1,10 @@
 use nalgebra::Vector3;
 use opossum_core::{
-    apertures::CircleShape, core_optics::NodeAttrExt, geometry::body::OPTIC_SHAPE,
-    nodes::round_collimated_ray_builder, prelude::*,
+    apertures::{CircleShape, RectangleShape},
+    core_optics::NodeAttrExt,
+    geometry::body::OPTIC_SHAPE,
+    nodes::round_collimated_ray_builder,
+    prelude::*,
 };
 use std::path::Path;
 
@@ -36,9 +39,17 @@ fn main() -> OpmResult<()> {
     let rpv =
         RayPropagationVisualizer::new("visualizer", Some(Vector3::new(10., 0., 0.).normalize()))?;
     let i_prop_vis = scenery.add_node(rpv)?;
-    let i_sd = scenery.add_node(SpotDiagram::default())?;
-    let i_wf = scenery.add_node(WaveFront::default())?;
-    let i_pm = scenery.add_node(EnergyMeter::default())?;
+    // The detectors take the beam of 30 mm radius: they are 70 mm square.
+    let window: OpticShape = RectangleShape::new(millimeter!(70.0), millimeter!(70.0))?.into();
+    let mut spot_diagram = SpotDiagram::default();
+    spot_diagram.set_property(OPTIC_SHAPE, window.clone().into())?;
+    let i_sd = scenery.add_node(spot_diagram)?;
+    let mut wavefront = WaveFront::default();
+    wavefront.set_property(OPTIC_SHAPE, window.clone().into())?;
+    let i_wf = scenery.add_node(wavefront)?;
+    let mut energy_meter = EnergyMeter::default();
+    energy_meter.set_property(OPTIC_SHAPE, window.into())?;
+    let i_pm = scenery.add_node(energy_meter)?;
     scenery.connect_nodes(i_src, "output_1", i_m1, "input_1", millimeter!(500.0))?;
     scenery.connect_nodes(i_m1, "output_1", i_m2, "input_1", millimeter!(450.0))?;
     scenery.connect_nodes(i_m2, "output_1", i_sd, "input_1", millimeter!(500.0))?;

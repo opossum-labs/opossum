@@ -1,10 +1,10 @@
 use nalgebra::Point2;
-use opossum_core::core_optics::OpticNodeExt;
+use opossum_core::core_optics::{NodeAttrExt, OpticNodeExt};
 use opossum_core::prelude::*;
 use opossum_core::{
     apertures::CircleShape, coatings::CoatingType, core_optics::PortType,
     distributions::energy::UniformDist, distributions::position::Grid,
-    distributions::spectral::LaserLines,
+    distributions::spectral::LaserLines, geometry::body::OPTIC_SHAPE,
 };
 use std::path::Path;
 
@@ -14,15 +14,16 @@ fn main() -> OpmResult<()> {
 
     let fd1 = scenery.add_node(FluenceDetector::new("before lens"))?;
 
-    // Curved to 10 mm and 9 mm, the lens reaches no further than 9 mm from its axis.
-    let mut lens1 = Lens::new_with_optic_shape(
-        "Lens",
-        millimeter!(10.0),
-        millimeter!(9.0),
-        millimeter!(1.0),
-        RefrIndexConst::new(1.5)?,
-        CircleShape::new(millimeter!(9.0))?.into(),
+    // Curved to 10 mm and 9 mm, the lens reaches no further than 9 mm from its axis. These
+    // curvatures do not reach the default optic shape, so the smaller one is set first.
+    let mut lens1 = Lens::default();
+    lens1.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(9.0))?).into(),
     )?;
+    lens1.set_property("front curvature", Proptype::Curvature(millimeter!(10.0)))?;
+    lens1.set_property("rear curvature", Proptype::Curvature(millimeter!(9.0)))?;
+    lens1.set_property("center thickness", millimeter!(1.0).into())?;
     lens1.set_coating(&PortType::Input, "input_1", &CoatingType::Fresnel)?;
     let l1 = scenery.add_node(lens1)?;
     let fd2 = scenery.add_node(FluenceDetector::new("after lens"))?;

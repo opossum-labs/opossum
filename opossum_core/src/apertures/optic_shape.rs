@@ -367,7 +367,6 @@ fn rings_meet(one: &[Point2<Length>], other: &[Point2<Length>]) -> bool {
     })
 }
 
-
 /// Whether the edge of a closed polygon crosses or touches itself, so that it bounds no region.
 ///
 /// Two edges following each other share a corner and may meet nowhere else; any other two edges

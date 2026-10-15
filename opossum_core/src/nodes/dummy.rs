@@ -98,7 +98,6 @@ mod test {
     use crate::{
         analyzers::energy::EnergyConfig,
         core_optics::{NodeAttrExt, PortType, node_attr::NodePositioning},
-        geometry::body::{OPTIC_SHAPE, default_optic_shape},
         joule,
         light::{LightData, Ray, Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer,
@@ -233,12 +232,7 @@ mod test {
     /// Bounded by an optic shape, a dummy is an iris: a ray outside it misses the dummy.
     #[test]
     fn a_bounded_dummy_is_an_iris() -> OpmResult<()> {
-        test_rays_beyond_optic_shape_are_lost_for(|| {
-            let mut dummy = placed_at_origin::<Dummy>()?;
-            dummy.set_property(OPTIC_SHAPE, default_optic_shape().into())?;
-            dummy.update_surfaces()?;
-            Ok(dummy)
-        })
+        test_rays_beyond_optic_shape_are_lost::<Dummy>()
     }
 
     /// Unbounded by default, a dummy passes every ray, however far off its axis.

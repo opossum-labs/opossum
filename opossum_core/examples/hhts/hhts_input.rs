@@ -26,7 +26,9 @@ pub fn hhts_input() -> OpmResult<NodeGroup> {
     let mut node = BeamSplitter::new("HHTS_T1_CM", &dichroic_mirror)?;
     node.set_property(OPTIC_SHAPE, input_optics.clone().into())?;
     let hhts_t1_cm = group.add_node(node)?;
-    let meter = EnergyMeter::new("Beamdump", Metertype::IdealEnergyMeter)?;
+    // The beam dump takes the full beam, as the input optics do.
+    let mut meter = EnergyMeter::new("Beamdump", Metertype::IdealEnergyMeter)?;
+    meter.set_property(OPTIC_SHAPE, input_optics.clone().into())?;
     let beam_dump = group.add_node(meter)?;
 
     let mut node = BeamSplitter::new("HHTS_T1_PM", &double_mirror)?;

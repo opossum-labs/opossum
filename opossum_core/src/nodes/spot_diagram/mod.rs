@@ -13,7 +13,7 @@ use crate::{
     },
     core_optics::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind,
-        optic_node::APERTURE_LIMIT_NOTE, optic_surface::OpticSurface,
+        optic_node::APERTURE_LIMIT_NOTE,
     },
     error::OpmResult,
     geometry::{Geometry, SurfaceShape},
@@ -45,8 +45,8 @@ inventory::submit! {
 /// ## Properties
 ///   - `name`
 ///   - `plot_aperture`
-///   - `optic shape`: the window the light is recorded within, open by default; light outside
-///     it passes unrecorded
+///   - `optic shape`: the window the light is recorded within, a 25 mm square by default; light
+///     outside it passes unrecorded
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.

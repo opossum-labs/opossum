@@ -25,8 +25,8 @@
 //! ```
 mod circle;
 mod gaussian;
-mod optic_shape;
 mod mesh;
+mod optic_shape;
 mod polygon;
 mod rectangle;
 mod stack;
@@ -62,8 +62,8 @@ use uom::si::{
 
 pub use circle::CircleShape;
 pub use gaussian::GaussianShape;
-pub use optic_shape::{Bore, OpticShape, Outline, OutlineShape};
 pub use mesh::ApertureMesh;
+pub use optic_shape::{Bore, OpticShape, Outline, OutlineShape};
 pub use polygon::PolygonShape;
 pub use rectangle::RectangleShape;
 pub use stack::StackShape;
@@ -273,23 +273,26 @@ impl Aperture {
     /// It works on a bare aperture because the members of a stack are bare apertures. A shape with
     /// an edge answers for itself ([`Bounded::extreme_points`]); a stack reaches as far as its holes.
     ///
+    /// # Arguments
+    ///
+    /// * `frame` - where the surrounding stack places this aperture; the identity at the top.
+    ///
     /// # Returns
     ///
-    /// The extreme points of the region, with the isometry of this aperture applied; none if the
-    /// shape does not bound a region.
-    fn extreme_points(&self) -> Vec<Point2<Length>> {
-        let iso = self.isometry.as_ref();
+    /// The extreme points of the region, with the isometry of this aperture placed in `frame`
+    /// applied; none if the shape does not bound a region.
+    fn extreme_points(&self, frame: &Isometry) -> Vec<Point2<Length>> {
+        let placement = self.isometry.map_or(*frame, |own| frame.append(&own));
         match &self.shape {
             ApertureShape::Stack(stack) if self.shape.delimits_region() => stack
                 .apertures()
                 .iter()
                 .filter(|member| *member.aperture_type() == ApertureType::Hole)
-                .flat_map(Self::extreme_points)
-                .map(|point| transformed(point, iso))
+                .flat_map(|member| member.extreme_points(&placement))
                 .collect(),
             shape => shape
                 .as_bounded()
-                .map_or_else(Vec::new, |bounded| bounded.extreme_points(iso)),
+                .map_or_else(Vec::new, |bounded| bounded.extreme_points(Some(&placement))),
         }
     }
     /// Set the shape of this [`Aperture`].
@@ -450,7 +453,7 @@ impl ValidatedCrossSection {
     /// The extreme points of the region, with the isometry of the aperture applied.
     #[must_use]
     pub(crate) fn extreme_points(&self) -> Vec<Point2<Length>> {
-        self.get().extreme_points()
+        self.get().extreme_points(&Isometry::identity())
     }
     /// Return how far the region reaches from the origin of its plane.
     ///
@@ -600,7 +603,6 @@ impl ApertureShape {
         }
     }
 }
-
 
 /// Carry a point of a shape's own frame through the isometry of the [`Aperture`] holding it.
 ///
@@ -954,6 +956,35 @@ mod test {
             millimeter!(8.0).value,
             epsilon = 1e-12
         );
+        Ok(())
+    }
+    /// A stack takes its members along where it is placed: a centered disk of 5 mm in a stack shifted
+    /// by (3, 4) mm reaches 10 mm, and in a stack turned by 45° it still spans 5 mm along x.
+    #[test]
+    fn a_stack_takes_its_members_along_where_it_is_placed() -> OpmResult<()> {
+        let placed_disk = |shift: Option<Point2<Length>>, rotation: Option<Angle>| {
+            let disk = Aperture::new_circle(millimeter!(5.0), ApertureType::Hole, None)?;
+            ValidatedCrossSection::try_new(Aperture::new_stack(
+                vec![disk],
+                ApertureType::Hole,
+                shift,
+                rotation,
+            )?)
+        };
+        let shifted = placed_disk(Some(millimeter!(3.0, 4.0)), None)?;
+        assert_abs_diff_eq!(
+            shifted.transversal_reach().value,
+            millimeter!(10.0).value,
+            epsilon = 1e-12
+        );
+        let turned = placed_disk(None, Some(degree!(45.0)))?;
+        let largest_x = turned
+            .extreme_points()
+            .iter()
+            .fold(f64::NEG_INFINITY, |largest, point| {
+                largest.max(point.x.value)
+            });
+        assert_abs_diff_eq!(largest_x, millimeter!(5.0).value, epsilon = 1e-12);
         Ok(())
     }
     #[test]
@@ -1320,7 +1351,7 @@ mod test {
             millimeter!(5.0, -3.0, 0.0),
             degree!(0.0, 0.0, 30.0),
         )?);
-        let extremes = aperture.extreme_points();
+        let extremes = aperture.extreme_points(&Isometry::identity());
 
         let reduce =
             |pick: fn(f64, f64) -> f64, start: f64, axis: fn(&Point2<Length>) -> Length| {

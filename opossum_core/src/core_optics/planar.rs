@@ -16,7 +16,7 @@
 use crate::{
     core_optics::{Appearance, NodeAttrExt, OpticNode, OpticNodeExt, PortType, SurfaceFinish},
     error::{OpmResult, OpossumError},
-    geometry::{Rim, SurfaceMesh, body::default_optic_shape},
+    geometry::{Rim, RimRole, SurfaceMesh, body::default_optic_shape},
     utils::geom_transformation::Isometry,
 };
 
@@ -125,8 +125,11 @@ pub trait Planar: OpticNode {
         let rim = match surface.rim() {
             Some(rim) => rim.clone(),
             None => Rim::new(
-                default_optic_shape().cross_section()?.unwrap(),
+                default_optic_shape().cross_section()?.ok_or_else(|| {
+                    OpossumError::Other("the default optic shape bounds no region".into())
+                })?,
                 Isometry::identity(),
+                RimRole::Edge,
             ),
         };
         // The cross section lies across the rim's axis, which need not be the node's: the surface
@@ -160,7 +163,13 @@ pub enum SurfaceKind {
 mod test {
     use super::*;
     use crate::{
-        apertures::{Aperture, ApertureShape, ApertureType, Bore, CircleShape, OpticShape, Outline}, core_optics::node_attr::NodePositioning, degree, geometry::body::OPTIC_SHAPE, millimeter, nodes::{EnergyMeter, IdealFilter, ParabolicMirror, ThinMirror}, utils::{LockExt, geom_transformation::Isometry},
+        apertures::{Bore, CircleShape, OpticShape, Outline},
+        core_optics::node_attr::NodePositioning,
+        degree,
+        geometry::body::OPTIC_SHAPE,
+        millimeter,
+        nodes::{EnergyMeter, IdealFilter, ParabolicMirror, ThinMirror},
+        utils::{LockExt, geom_transformation::Isometry},
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
     use nalgebra::Point2;
@@ -215,9 +224,16 @@ mod test {
     #[test]
     fn a_surface_with_a_bore_is_meshed_around_it() -> OpmResult<()> {
         let (radius, bore) = (millimeter!(12.5), millimeter!(4.0));
-        let ring = OpticShape::Bounded(Outline::new(CircleShape::new(radius)?, vec![Bore::new(CircleShape::new(bore)?, millimeter!(0.,0.), degree!(0.))])?);
+        let ring = OpticShape::Bounded(Outline::new(
+            CircleShape::new(radius)?,
+            vec![Bore::new(
+                CircleShape::new(bore)?,
+                millimeter!(0., 0.),
+                degree!(0.),
+            )],
+        )?);
         let mut mirror = ThinMirror::default();
-        mirror.set_property(OPTIC_SHAPE, ring.into());            
+        mirror.set_property(OPTIC_SHAPE, ring.into())?;
         mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let mesh = mirror.surface_mesh(64)?;
         let covered = mesh
@@ -241,12 +257,10 @@ mod test {
     fn the_mesh_of_an_off_axis_parabola_fills_its_rim() -> OpmResult<()> {
         let mut parabola =
             ParabolicMirror::new_with_off_axis_x("oap", millimeter!(100.0), true, degree!(90.0))?;
-        let optic_shape = OpticShape::Bounded(Outline::new(CircleShape::new(millimeter!(25.0))?, vec![])?);
+        let optic_shape =
+            OpticShape::Bounded(Outline::new(CircleShape::new(millimeter!(25.0))?, vec![])?);
 
-        parabola.set_property(
-            OPTIC_SHAPE,
-            optic_shape.into(),
-        )?;
+        parabola.set_property(OPTIC_SHAPE, optic_shape.into())?;
         // At the origin the node's own frame, which the mesh is stated in, is the global one.
         parabola.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let mesh = parabola.surface_mesh(32)?;

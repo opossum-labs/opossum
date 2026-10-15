@@ -1,6 +1,7 @@
 use opossum_core::apertures::CircleShape;
 use opossum_core::coatings::CoatingConstantR;
-use opossum_core::core_optics::OpticNodeExt;
+use opossum_core::core_optics::{NodeAttrExt, OpticNodeExt};
+use opossum_core::geometry::body::OPTIC_SHAPE;
 use opossum_core::{J_per_cm2, percent, prelude::*};
 use opossum_core::{
     distributions::energy::General2DGaussian, distributions::position::HexagonalTiling,
@@ -47,55 +48,57 @@ fn main() -> OpmResult<()> {
     let src = scenery.add_node(SourcePort::new("Collimated Source"))?;
     let mut telescope = NodeGroup::new("HHT Sensor Telescope T1");
 
-    let t1_l1a = telescope.add_node(Lens::new_with_optic_shape(
+    let mut node = Lens::new(
         "T1 L1a",
         millimeter!(518.34008),
         millimeter!(-847.40402),
         millimeter!(30.0),
         &refr_index_hk9l,
-        front_lens.clone(),
-    )?)?;
-    let t1_l1b = telescope.add_node(Lens::new_with_optic_shape(
+    )?;
+    node.set_property(OPTIC_SHAPE, front_lens.clone().into())?;
+    let t1_l1a = telescope.add_node(node)?;
+    let mut node = Lens::new(
         "T1 L1b",
         millimeter!(-788.45031),
         millimeter!(-2551.88619),
         millimeter!(21.66602),
         &refr_index_hzf52,
-        front_lens,
-    )?)?;
-    let mut node = Lens::new_with_optic_shape(
+    )?;
+    node.set_property(OPTIC_SHAPE, front_lens.into())?;
+    let t1_l1b = telescope.add_node(node)?;
+    let mut node = Lens::new(
         "T1 L2a",
         millimeter!(-88.51496),
         millimeter!(f64::INFINITY),
         millimeter!(5.77736),
         &refr_index_hzf52,
-        a_2inch.clone(),
     )?;
+    node.set_property(OPTIC_SHAPE, a_2inch.clone().into())?;
     node.set_coating(&PortType::Input, "input_1", ar_coating)?;
     node.set_lidt(&PortType::Input, "input_1", J_per_cm2!(0.1))?;
     node.set_lidt(&PortType::Output, "output_1", J_per_cm2!(0.1))?;
     let t1_l2a = telescope.add_node(node)?;
 
-    let mut node = Lens::new_with_optic_shape(
+    let mut node = Lens::new(
         "T1 L2b",
         millimeter!(76.76954),
         millimeter!(-118.59590),
         millimeter!(14.0),
         &refr_index_hzf52,
-        a_2inch.clone(),
     )?;
+    node.set_property(OPTIC_SHAPE, a_2inch.clone().into())?;
     node.set_coating(&PortType::Input, "input_1", ar_coating)?;
     node.set_lidt(&PortType::Input, "input_1", J_per_cm2!(0.1))?;
     node.set_lidt(&PortType::Output, "output_1", J_per_cm2!(0.1))?;
     let t1_l2b = telescope.add_node(node)?;
-    let mut node = Lens::new_with_optic_shape(
+    let mut node = Lens::new(
         "T1 L2c",
         millimeter!(-63.45837),
         millimeter!(66.33014),
         millimeter!(7.68327),
         &refr_index_hzf2,
-        a_2inch,
     )?;
+    node.set_property(OPTIC_SHAPE, a_2inch.into())?;
     node.set_coating(&PortType::Input, "input_1", ar_coating)?;
     node.set_lidt(&PortType::Input, "input_1", J_per_cm2!(0.1))?;
     node.set_lidt(&PortType::Output, "output_1", J_per_cm2!(0.1))?;

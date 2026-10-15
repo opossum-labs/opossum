@@ -56,5 +56,6 @@ Since this element encloses a volume of material, it can be operated as an ampli
 
 `optic shape`
 : Transversal extent of the lens: the size the material is actually available in. It decides which
-  rays hit the lens. Defaults to a circle of 12.5 mm radius, i.e. the usual 1 inch mount. Both
-  curvatures must reach its edge; `Open` is refused.
+  rays hit the lens. Defaults to a rectangle 20 mm across the curvature (x) and 30 mm along the
+  cylinder axis (y). Both curvatures must reach the point of its edge farthest from the axis, 18 mm
+  for the default; `Open` is refused.

@@ -1,7 +1,7 @@
 use nalgebra::Point2;
 use num_traits::Zero;
 use opossum_core::{
-    apertures::CircleShape,
+    apertures::{CircleShape, RectangleShape},
     core_optics::NodeAttrExt,
     distributions::energy::{EnergyDistType, UniformDist},
     distributions::position::{
@@ -43,7 +43,13 @@ fn main() -> OpmResult<()> {
     let i_bs4 = scenery.add_node(beam_splitter()?)?;
     let i_bs5 = scenery.add_node(beam_splitter()?)?;
 
-    let i_sd = scenery.add_node(SpotDiagram::default())?;
+    // The sources spread up to 25 mm off the axis: the spot diagram is 60 mm square.
+    let mut spot_diagram = SpotDiagram::default();
+    spot_diagram.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(RectangleShape::new(millimeter!(60.0), millimeter!(60.0))?).into(),
+    )?;
+    let i_sd = scenery.add_node(spot_diagram)?;
 
     scenery.connect_nodes(src_hexapolar, "output_1", i_bs, "input_1", Length::zero())?;
     scenery.connect_nodes(src_hexagonal, "output_1", i_bs, "input_2", Length::zero())?;

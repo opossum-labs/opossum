@@ -14,10 +14,10 @@ use crate::{
         node_attr::HasNodeAttr,
     },
     error::{OpmResult, OpossumError},
-    geometry::{Geometry, SurfaceShape},
+    geometry::{Geometry, SurfaceShape, body::default_optic_shape},
     light::{LightData, LightResult, Rays, light_result::LightRays},
     millimeter,
-    nodes::{NodeRegistration, create_surface_properties},
+    nodes::{NodeRegistration, create_component_properties},
     percent,
     properties::{Proptype, validator::Validator},
     utils::geom_transformation::Isometry,
@@ -67,7 +67,7 @@ impl Default for ThinMirror {
                 Proptype::Curvature(millimeter!(f64::INFINITY)),
             )
             .unwrap();
-        create_surface_properties(&mut node_attr).unwrap();
+        create_component_properties(&mut node_attr, default_optic_shape()).unwrap();
 
         let mut m = Self { node_attr };
         m.update_surfaces().unwrap();

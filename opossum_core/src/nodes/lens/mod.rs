@@ -3,7 +3,6 @@
 
 use crate::{
     analyzers::energy::AnalysisEnergy,
-    apertures::OpticShape,
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, Volumetric},
     error::{OpmResult, OpossumError},
     geometry::{
@@ -12,7 +11,7 @@ use crate::{
     },
     material::{MATERIAL, Material},
     millimeter,
-    nodes::{NodeRegistration, create_volume_properties},
+    nodes::{NodeRegistration, create_component_properties},
     properties::{Proptype, validator::Validator},
     refractive_index::RefrIndexConst,
 };
@@ -101,7 +100,7 @@ impl Default for Lens {
                 .into(),
             )
             .unwrap();
-        create_volume_properties(&mut node_attr).unwrap();
+        create_component_properties(&mut node_attr, default_optic_shape()).unwrap();
         let mut lens = Self { node_attr };
         lens.update_surfaces().unwrap();
         lens
@@ -110,36 +109,10 @@ impl Default for Lens {
 impl Lens {
     /// Creates a new [`Lens`].
     ///
-    /// This function creates a lens with spherical front and back surfaces, a given center thickness and refractive index.
-    /// The radii of curvature must not be zero. The given refractive index must not be < 1.0. A radius of curvature of +/- infinity
-    /// corresponds to a flat surface.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the given parameters are not correct, including a
-    /// curvature too tight to reach the default optic shape of 12.5 mm (see
-    /// [`Lens::new_with_optic_shape`]).
-    pub fn new(
-        name: &str,
-        front_curvature: Length,
-        rear_curvature: Length,
-        center_thickness: Length,
-        material: impl Into<Material>,
-    ) -> OpmResult<Self> {
-        Self::new_with_optic_shape(
-            name,
-            front_curvature,
-            rear_curvature,
-            center_thickness,
-            material,
-            default_optic_shape(),
-        )
-    }
-    /// Creates a new [`Lens`] of the given optic shape.
-    ///
-    /// As [`Lens::new`], but with the transversal extent of the lens given as well. A lens curved
-    /// more tightly than the default optic shape of 12.5 mm needs it: a spherical face ends at its
-    /// radius of curvature, so it cannot reach a wider edge.
+    /// This function creates a lens with spherical front and back surfaces, a given center
+    /// thickness and material, bounded by the default optic shape ([`default_optic_shape`]). The
+    /// radii of curvature must not be zero. A radius of curvature of +/- infinity corresponds to a
+    /// flat surface. Another optic shape is set afterwards via the [`OPTIC_SHAPE`] property.
     ///
     /// # Arguments
     ///
@@ -148,24 +121,21 @@ impl Lens {
     /// * `rear_curvature` - radius of curvature of the rear face; infinite for a flat face.
     /// * `center_thickness` - distance between the two vertices.
     /// * `material` - the material of the lens.
-    /// * `optic_shape` - the transversal extent of the lens.
     ///
     /// # Errors
     ///
-    /// This function returns an error if the given parameters are not correct, the optic shape
-    /// does not delimit a region, or a face is curved too tightly to reach its edge.
-    pub fn new_with_optic_shape(
+    /// This function returns an error if the given parameters are not correct, including a face
+    /// curved too tightly to reach the edge of the default optic shape. A lens curved that tightly
+    /// is built from [`Lens::default`]: set its optic shape first, then its curvatures.
+    pub fn new(
         name: &str,
         front_curvature: Length,
         rear_curvature: Length,
         center_thickness: Length,
         material: impl Into<Material>,
-        optic_shape: OpticShape,
     ) -> OpmResult<Self> {
         let mut lens = Self::default();
         lens.node_attr.set_name(name);
-        lens.node_attr
-            .set_property(OPTIC_SHAPE, optic_shape.into())?;
         lens.node_attr
             .set_property("front curvature", Proptype::Curvature(front_curvature))?;
         lens.node_attr
@@ -234,7 +204,16 @@ mod test {
             RayTraceConfig,
             energy::{AnalysisEnergy, EnergyConfig},
             raytrace::AnalysisRayTrace,
-        }, apertures::CircleShape, core_optics::{NodeAttrExt, node_attr::NodePositioning}, distributions::position::Hexapolar, joule, light::{LightData, LightResult, Rays}, millimeter, nanometer, nodes::test_helper::helper::*, properties::{Proptype, proptype::AssetRef}, utils::geom_transformation::Isometry,
+        },
+        apertures::{CircleShape, OpticShape},
+        core_optics::{NodeAttrExt, node_attr::NodePositioning},
+        distributions::position::Hexapolar,
+        joule,
+        light::{LightData, LightResult, Rays},
+        millimeter, nanometer,
+        nodes::test_helper::helper::*,
+        properties::{Proptype, proptype::AssetRef},
+        utils::geom_transformation::Isometry,
     };
     use approx::assert_relative_eq;
     use nalgebra::Vector3;
@@ -435,20 +414,18 @@ mod test {
         assert!(Lens::new("lens", flat, millimeter!(-10.0), millimeter!(5.0), index).is_err());
         Ok(())
     }
-    /// A lens smaller than the default optic shape is built with its own: a concentric meniscus
-    /// of 10 mm and 9 mm radius fits an optic shape of 9 mm, its rear face a full hemisphere.
+    /// A lens smaller than the default optic shape is built with its own, set before its
+    /// curvatures: a concentric meniscus of 10 mm and 9 mm radius fits an optic shape of 9 mm,
+    /// its rear face a full hemisphere.
     #[test]
     fn a_small_lens_is_built_with_its_own_optic_shape() -> OpmResult<()> {
-        use crate::apertures::CircleShape;
         let optic_shape: OpticShape = CircleShape::new(millimeter!(9.0))?.into();
-        let lens = Lens::new_with_optic_shape(
-            "meniscus",
-            millimeter!(10.0),
-            millimeter!(9.0),
-            millimeter!(1.0),
-            RefrIndexConst::new(1.5)?,
-            optic_shape.clone(),
-        )?;
+        let mut lens = Lens::default();
+        lens.set_property(OPTIC_SHAPE, optic_shape.clone().into())?;
+        lens.set_property("front curvature", Proptype::Curvature(millimeter!(10.0)))?;
+        lens.set_property("rear curvature", Proptype::Curvature(millimeter!(9.0)))?;
+        lens.set_property("center thickness", millimeter!(1.0).into())?;
+        lens.update_surfaces()?;
         assert_eq!(
             lens.node_attr.get_property(OPTIC_SHAPE)?,
             &Proptype::OpticShape(optic_shape)
@@ -585,7 +562,7 @@ mod test {
     }
     #[test]
     fn optic_shape() -> OpmResult<()> {
-        test_optic_shape::<Lens>()
+        test_optic_shape::<Lens>(millimeter!(12.5))
     }
     #[test]
     fn optic_shape_absent_in_file() -> OpmResult<()> {
@@ -700,9 +677,7 @@ mod test {
             millimeter!(50.0),
             RefrIndexConst::new(1.5)?,
         )?;
-        bi_convex
-            .node_attr
-            .set_property(OPTIC_SHAPE, aperture)?;
+        bi_convex.node_attr.set_property(OPTIC_SHAPE, aperture)?;
         bi_convex
             .as_volume()
             .expect("a lens is volumetric")

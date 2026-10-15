@@ -13,9 +13,9 @@ use crate::{
         SurfaceFinish, SurfaceKind, node_attr::HasNodeAttr,
     },
     error::{OpmResult, OpossumError},
-    geometry::Geometry,
+    geometry::{Geometry, body::default_square_optic_shape},
     light::{LightData, LightRays, LightResult, Ray, Rays},
-    nodes::{NodeRegistration, create_surface_properties},
+    nodes::{NodeRegistration, create_component_properties},
     num_per_mm,
     properties::{Proptype, validator::Validator},
     radian,
@@ -85,7 +85,7 @@ impl Default for ReflectiveGrating {
                 (-1).into(),
             )
             .unwrap();
-        create_surface_properties(&mut node_attr).unwrap();
+        create_component_properties(&mut node_attr, default_square_optic_shape()).unwrap();
         let mut g = Self { node_attr };
         g.update_surfaces().unwrap();
         g

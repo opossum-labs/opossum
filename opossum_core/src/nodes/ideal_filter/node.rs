@@ -10,10 +10,10 @@ use crate::{
     },
     core_optics::{NodeAttr, NodeAttrExt, OpticNodeExt, Planar, SurfaceKind},
     error::{OpmResult, OpossumError},
-    geometry::Geometry,
+    geometry::{Geometry, body::default_optic_shape},
     light::{LightData, LightRays, LightResult, Rays},
     nodes::{
-        FilterType, NodeRegistration, create_surface_properties,
+        FilterType, NodeRegistration, create_component_properties,
         ideal_filter::filter_types::FilterConst,
     },
     prelude::{FilterTypeBuilder, GhostFocusConfig, OpticNode, PortType, Proptype, RayTraceConfig},
@@ -56,7 +56,7 @@ impl Default for IdealFilter {
                 FilterTypeBuilder::default().into(),
             )
             .unwrap();
-        create_surface_properties(&mut node_attr).unwrap();
+        create_component_properties(&mut node_attr, default_optic_shape()).unwrap();
         let mut idf = Self { node_attr };
         idf.update_surfaces().unwrap();
         idf
@@ -171,7 +171,7 @@ impl AnalysisGhostFocus for IdealFilter {
             true,
         )?;
         for (rays, hits) in rays_bundle.iter_mut().zip(&hits) {
-            rays.filter_energy_hits(&filter_type, hits)?;
+            rays.filter_energy(&filter_type, hits)?;
         }
         Ok(LightRays::from([(out_port.clone(), rays_bundle)]))
     }
@@ -229,7 +229,7 @@ impl AnalysisRayTrace for IdealFilter {
             config.missed_surface_strategy(),
         )?;
         // A ray that ran past the filter is not filtered.
-        rays.filter_energy_hits(&filter_type, &hits)?;
+        rays.filter_energy(&filter_type, &hits)?;
         // The optical axis is placed by geometry alone; its energy does not decide where it runs.
         if !config.is_positioning_run() {
             rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
