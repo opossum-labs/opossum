@@ -205,8 +205,8 @@ pub trait Body: Debug + Send + Sync {
 /// A point is inside this body if it lies behind the entrance surface (see
 /// [`is_behind`](crate::geometry::geo_surface::GeoSurface::is_behind)), not behind the exit surface
 /// and within its [`Rim`]. Both bounding surfaces are held as [`GeoSurfaceRef`]s. A body built by
-/// [`Geometry::body`](crate::geometry::Geometry::body) has surfaces of its own, built from the same
-/// description as the ones light is traced at; nothing realigns them afterwards.
+/// [`Geometry::place`](crate::geometry::Geometry::place) shares them with the entrance and exit
+/// placed alongside it.
 ///
 /// **Note**: The lateral boundary is the rim alone — it is not a surface rays can interact with. A
 /// ray leaving the volume sideways is therefore reported as not passing through the body rather

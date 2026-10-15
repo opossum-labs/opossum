@@ -355,16 +355,15 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
                 self.name()
             )));
         };
-        let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
-        let ((entrance, entrance_anchor), (exit, exit_anchor)) =
-            geometry.entrance_and_exit(&node_iso)?;
-        let rim = geometry.rim()?;
+        let placed =
+            geometry.place(&self.effective_node_iso().unwrap_or_else(Isometry::identity))?;
+        let ((entrance, entrance_anchor), (exit, exit_anchor)) = (placed.entrance(), placed.exit());
         for name in inputs {
             self.update_surface(
                 name,
                 entrance.clone(),
-                entrance_anchor,
-                rim.clone(),
+                *entrance_anchor,
+                placed.rim().cloned(),
                 &PortType::Input,
             )?;
         }
@@ -372,8 +371,8 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
             self.update_surface(
                 name,
                 exit.clone(),
-                exit_anchor,
-                rim.clone(),
+                *exit_anchor,
+                placed.rim().cloned(),
                 &PortType::Output,
             )?;
         }

@@ -25,8 +25,8 @@ pub mod geo_surface;
 pub use cylinder::Cylinder;
 pub use face::{Face, SurfaceShape};
 pub use node_geometry::{
-    Assembly, Extruded, FaceId, Geometry, Interface, ParametricSolid, Part, PlacedSurface, Side,
-    Solid, SurfaceGeometry,
+    Assembly, Extruded, FaceId, Geometry, Interface, ParametricSolid, Part, PlacedGeometry,
+    PlacedSurface, Side, Solid, SurfaceGeometry,
 };
 pub use parabola::Parabola;
 pub use plane::Plane;

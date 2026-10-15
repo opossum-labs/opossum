@@ -38,6 +38,47 @@ use crate::{
 /// the node (see [`Face::place`]).
 pub type PlacedSurface = (GeoSurfaceRef, Isometry);
 
+/// A [`Geometry`] built at the placement of its node (see [`Geometry::place`]).
+///
+/// Everything in it comes from one description: the surfaces light enters and leaves through, the
+/// rim that bounds them and, for a solid, the body between them. The body shares its surfaces with
+/// the entrance and the exit rather than having its own.
+#[derive(Debug, Clone)]
+pub struct PlacedGeometry {
+    entrance: PlacedSurface,
+    exit: PlacedSurface,
+    rim: Option<Rim>,
+    body: Option<SurfaceBoundedBody>,
+}
+
+impl PlacedGeometry {
+    /// Return the surface light enters through, with its anchor relative to the node.
+    #[must_use]
+    pub const fn entrance(&self) -> &PlacedSurface {
+        &self.entrance
+    }
+    /// Return the surface light leaves through, with its anchor relative to the node.
+    ///
+    /// For a single surface this is the entrance again: the same geometric surface, so that every
+    /// port of the node shares it.
+    #[must_use]
+    pub const fn exit(&self) -> &PlacedSurface {
+        &self.exit
+    }
+    /// Return the lateral boundary, stated relative to the node, or `None` for a surface without a
+    /// cross section, which is unbounded.
+    #[must_use]
+    pub const fn rim(&self) -> Option<&Rim> {
+        self.rim.as_ref()
+    }
+    /// Return the body of material between entrance and exit, placed at the node's frame followed
+    /// by the extrusion axis, or `None` for a single surface, which encloses no volume.
+    #[must_use]
+    pub const fn body(&self) -> Option<&SurfaceBoundedBody> {
+        self.body.as_ref()
+    }
+}
+
 /// The shape of an optical component.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Geometry {
@@ -217,84 +258,21 @@ impl Geometry {
             cross_section,
         )?))))
     }
-    /// Build the surfaces light enters and leaves through.
-    ///
-    /// A single surface is both: the same geometric surface is returned twice, so that every port
-    /// of the node shares it.
+    /// Build this geometry at the placement of its node: the surfaces light enters and leaves
+    /// through, the rim bounding them and, for a solid, the body between them.
     ///
     /// # Arguments
     ///
     /// * `node_frame` - the placement of the node.
-    ///
-    /// # Returns
-    ///
-    /// The entrance and the exit surface, each with its anchor relative to the node.
     ///
     /// # Errors
     ///
     /// This function returns an error if a face cannot be built or if the geometry is not traced
     /// through an entrance and an exit surface yet ([`ParametricSolid`], [`Assembly`]).
-    pub fn entrance_and_exit(
-        &self,
-        node_frame: &Isometry,
-    ) -> OpmResult<(PlacedSurface, PlacedSurface)> {
+    pub fn place(&self, node_frame: &Isometry) -> OpmResult<PlacedGeometry> {
         match self {
-            Self::Surface(surface) => {
-                let placed = surface.face.place(node_frame, &surface.axis)?;
-                Ok((placed.clone(), placed))
-            }
-            Self::Solid(solid) => solid.entrance_and_exit(node_frame),
-        }
-    }
-    /// Build the body of material this geometry encloses.
-    ///
-    /// The body gets surfaces of its own, built from the same description as the ones light is
-    /// traced at (see [`Geometry::entrance_and_exit`]), and the cross section as its lateral bound.
-    ///
-    /// # Arguments
-    ///
-    /// * `node_frame` - the placement of the node.
-    ///
-    /// # Returns
-    ///
-    /// The body, placed at the node's frame followed by the extrusion axis.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error for a single surface, which encloses no volume, if a face
-    /// cannot be built, or if the solid cannot be traced yet ([`ParametricSolid`], [`Assembly`]).
-    pub fn body(&self, node_frame: &Isometry) -> OpmResult<SurfaceBoundedBody> {
-        match self {
-            Self::Surface(_) => Err(OpossumError::Other(
-                "a single surface encloses no volume".into(),
-            )),
-            Self::Solid(Solid::Extruded(extruded)) => extruded.body(node_frame),
-            Self::Solid(Solid::Parametric(_)) => Err(not_supported_yet("a parametric solid")),
-            Self::Solid(Solid::Assembly(_)) => Err(not_supported_yet("an assembly")),
-        }
-    }
-    /// Return the lateral boundary of this geometry, stated relative to the node.
-    ///
-    /// # Returns
-    ///
-    /// The [`Rim`] of an extruded solid or of a bounded surface, or `None` for a surface without
-    /// a cross section, which is unbounded.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error for a solid that cannot be traced yet ([`ParametricSolid`],
-    /// [`Assembly`]): `None` would declare it unbounded.
-    pub fn rim(&self) -> OpmResult<Option<Rim>> {
-        match self {
-            Self::Surface(surface) => Ok(surface
-                .cross_section
-                .clone()
-                .map(|cross_section| Rim::new(cross_section, surface.axis, surface.role))),
-            Self::Solid(Solid::Extruded(extruded)) => Ok(Some(Rim::new(
-                extruded.cross_section.clone(),
-                extruded.axis,
-                RimRole::Edge,
-            ))),
+            Self::Surface(surface) => surface.place(node_frame),
+            Self::Solid(Solid::Extruded(extruded)) => extruded.place(node_frame),
             Self::Solid(Solid::Parametric(_)) => Err(not_supported_yet("a parametric solid")),
             Self::Solid(Solid::Assembly(_)) => Err(not_supported_yet("an assembly")),
         }
@@ -344,6 +322,19 @@ impl SurfaceGeometry {
             role,
         })
     }
+    /// See [`Geometry::place`]. The one surface is entrance and exit at once.
+    fn place(&self, node_frame: &Isometry) -> OpmResult<PlacedGeometry> {
+        let placed = self.face.place(node_frame, &self.axis)?;
+        Ok(PlacedGeometry {
+            entrance: placed.clone(),
+            exit: placed,
+            rim: self
+                .cross_section
+                .clone()
+                .map(|cross_section| Rim::new(cross_section, self.axis, self.role)),
+            body: None,
+        })
+    }
 }
 
 /// A component enclosing a volume of material.
@@ -377,17 +368,6 @@ impl Solid {
                 .get(index)
                 .map(|(face, side)| (face, Isometry::identity(), *side)),
             Self::Assembly(_) => None,
-        }
-    }
-    /// See [`Geometry::entrance_and_exit`].
-    fn entrance_and_exit(
-        &self,
-        node_frame: &Isometry,
-    ) -> OpmResult<(PlacedSurface, PlacedSurface)> {
-        match self {
-            Self::Extruded(extruded) => extruded.entrance_and_exit(node_frame),
-            Self::Parametric(_) => Err(not_supported_yet("a parametric solid")),
-            Self::Assembly(_) => Err(not_supported_yet("an assembly")),
         }
     }
 }
@@ -436,15 +416,27 @@ impl Extruded {
             cross_section,
         })
     }
-    /// See [`Geometry::body`].
-    fn body(&self, node_frame: &Isometry) -> OpmResult<SurfaceBoundedBody> {
-        let ((front, _), (rear, _)) = self.entrance_and_exit(node_frame)?;
-        Ok(SurfaceBoundedBody::new(
-            front,
-            rear,
+    /// See [`Geometry::place`]. The body is bounded by the very surfaces light enters and leaves
+    /// through.
+    fn place(&self, node_frame: &Isometry) -> OpmResult<PlacedGeometry> {
+        let entrance = self.front.place(node_frame, &self.axis)?;
+        let exit = self.rear.place(node_frame, &self.axis)?;
+        let body = SurfaceBoundedBody::new(
+            entrance.0.clone(),
+            exit.0.clone(),
             self.cross_section.clone(),
             node_frame.append(&self.axis),
-        ))
+        );
+        Ok(PlacedGeometry {
+            entrance,
+            exit,
+            rim: Some(Rim::new(
+                self.cross_section.clone(),
+                self.axis,
+                RimRole::Edge,
+            )),
+            body: Some(body),
+        })
     }
     /// See [`Solid::face`]. The profile lies behind the front face and in front of the rear face.
     const fn face(&self, index: usize) -> Option<(&Face, Isometry, Side)> {
@@ -453,16 +445,6 @@ impl Extruded {
             1 => Some((&self.rear, self.axis, Side::InFront)),
             _ => None,
         }
-    }
-    /// See [`Geometry::entrance_and_exit`].
-    fn entrance_and_exit(
-        &self,
-        node_frame: &Isometry,
-    ) -> OpmResult<(PlacedSurface, PlacedSurface)> {
-        Ok((
-            self.front.place(node_frame, &self.axis)?,
-            self.rear.place(node_frame, &self.axis)?,
-        ))
     }
 }
 
@@ -778,9 +760,8 @@ mod test {
     }
     #[test]
     fn a_surface_is_entrance_and_exit_at_once() -> OpmResult<()> {
-        let ((entrance, _), (exit, _)) =
-            Geometry::plane(None).entrance_and_exit(&Isometry::identity())?;
-        assert!(Arc::ptr_eq(&entrance.0, &exit.0));
+        let placed = Geometry::plane(None).place(&Isometry::identity())?;
+        assert!(Arc::ptr_eq(&placed.entrance().0.0, &placed.exit().0.0));
         Ok(())
     }
     #[test]
@@ -791,15 +772,18 @@ mod test {
             millimeter!(5.0),
             circle()?,
         )?;
-        let ((_, front), (_, rear)) = geometry.entrance_and_exit(&Isometry::identity())?;
-        assert_abs_diff_eq!(front.translation().z.get::<millimeter>(), 50.0);
-        assert_abs_diff_eq!(rear.translation().z.get::<millimeter>(), 5.0);
+        let placed = geometry.place(&Isometry::identity())?;
+        assert_abs_diff_eq!(
+            placed.entrance().1.translation().z.get::<millimeter>(),
+            50.0
+        );
+        assert_abs_diff_eq!(placed.exit().1.translation().z.get::<millimeter>(), 5.0);
         Ok(())
     }
     #[test]
     fn a_wedge_tilts_its_rear_face() -> OpmResult<()> {
         let geometry = Geometry::wedge(millimeter!(10.0), degree!(5.0), circle()?)?;
-        let (_, (_, rear)) = geometry.entrance_and_exit(&Isometry::identity())?;
+        let rear = geometry.place(&Isometry::identity())?.exit().1;
         let normal = rear.transform_vector_f64(&nalgebra::Vector3::z());
         assert_abs_diff_eq!(normal.y, -(5.0_f64.to_radians().sin()), epsilon = 1e-12);
         Ok(())
@@ -816,11 +800,11 @@ mod test {
             ),
             circle()?,
         )?;
-        let ((_, front), (_, rear)) = Geometry::Solid(Solid::Extruded(Box::new(extruded)))
-            .entrance_and_exit(&Isometry::identity())?;
-        assert_eq!(front, axis);
+        let placed =
+            Geometry::Solid(Solid::Extruded(Box::new(extruded))).place(&Isometry::identity())?;
+        assert_eq!(placed.entrance().1, axis);
         assert_eq!(
-            rear,
+            placed.exit().1,
             axis.append(&Isometry::new_along_z(millimeter!(20.0))?)
         );
         Ok(())
@@ -831,13 +815,7 @@ mod test {
         let assembly =
             Geometry::Solid(Solid::Assembly(Assembly::new(vec![prism_part()?], vec![])?));
         for geometry in [parametric, assembly] {
-            let error = geometry
-                .entrance_and_exit(&Isometry::identity())
-                .unwrap_err();
-            assert!(error.to_string().contains("not supported yet"));
-            let error = geometry.body(&Isometry::identity()).unwrap_err();
-            assert!(error.to_string().contains("not supported yet"));
-            let error = geometry.rim().unwrap_err();
+            let error = geometry.place(&Isometry::identity()).unwrap_err();
             assert!(error.to_string().contains("not supported yet"));
         }
         Ok(())
@@ -890,12 +868,12 @@ mod test {
         let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
         let vertex = Isometry::new_along_z(millimeter!(20.0))?;
         let geometry = Geometry::surface(axis, SurfaceShape::Plane, vertex, Some(circle()?))?;
-        let ((_, entrance), (_, exit)) = geometry.entrance_and_exit(&Isometry::identity())?;
-        assert_eq!(entrance, axis.append(&vertex));
-        assert_eq!(exit, entrance);
+        let placed = geometry.place(&Isometry::identity())?;
+        assert_eq!(placed.entrance().1, axis.append(&vertex));
+        assert_eq!(placed.exit().1, placed.entrance().1);
         assert_eq!(
-            geometry.rim()?,
-            Some(Rim::new(circle()?, axis, RimRole::Edge))
+            placed.rim(),
+            Some(&Rim::new(circle()?, axis, RimRole::Edge))
         );
         Ok(())
     }
@@ -903,9 +881,12 @@ mod test {
     /// a rim, stated along the extrusion axis.
     #[test]
     fn rim_is_none_for_a_virtual_plane() -> OpmResult<()> {
-        assert_eq!(Geometry::plane(None).rim()?, None);
+        let rim_of = |geometry: Geometry| -> OpmResult<Option<Rim>> {
+            Ok(geometry.place(&Isometry::identity())?.rim().cloned())
+        };
+        assert_eq!(rim_of(Geometry::plane(None))?, None);
         assert_eq!(
-            Geometry::plane(Some(circle()?)).rim()?,
+            rim_of(Geometry::plane(Some(circle()?)))?,
             Some(Rim::new(circle()?, Isometry::identity(), RimRole::Edge))
         );
         let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
@@ -919,14 +900,16 @@ mod test {
             circle()?,
         )?)));
         assert_eq!(
-            extruded.rim()?,
+            rim_of(extruded)?,
             Some(Rim::new(circle()?, axis, RimRole::Edge))
         );
         Ok(())
     }
     #[test]
-    fn a_single_surface_encloses_no_volume() {
-        assert!(Geometry::plane(None).body(&Isometry::identity()).is_err());
+    fn a_single_surface_encloses_no_volume() -> OpmResult<()> {
+        let placed = Geometry::plane(None).place(&Isometry::identity())?;
+        assert!(placed.body().is_none());
+        Ok(())
     }
     #[test]
     fn an_extruded_body_is_placed_along_its_axis() -> OpmResult<()> {
@@ -941,7 +924,10 @@ mod test {
             circle()?,
         )?;
         let node_frame = Isometry::new(millimeter!(0.0, 5.0, 0.0), degree!(0.0, 0.0, 0.0))?;
-        let body = Geometry::Solid(Solid::Extruded(Box::new(extruded))).body(&node_frame)?;
+        let placed = Geometry::Solid(Solid::Extruded(Box::new(extruded))).place(&node_frame)?;
+        let body = placed
+            .body()
+            .ok_or_else(|| OpossumError::Other("an extruded solid encloses a volume".into()))?;
         assert_eq!(*body.isometry(), node_frame.append(&axis));
         // halfway along the extrusion axis, which runs along the node's x axis
         let halfway = node_frame

@@ -106,7 +106,16 @@ pub trait Volumetric: OpticNode {
                 self.name()
             )));
         };
-        geometry.body(&self.effective_node_iso().unwrap_or_else(Isometry::identity))
+        geometry
+            .place(&self.effective_node_iso().unwrap_or_else(Isometry::identity))?
+            .body()
+            .cloned()
+            .ok_or_else(|| {
+                OpossumError::Other(format!(
+                    "node '{}' is a single surface and encloses no volume",
+                    self.name()
+                ))
+            })
     }
     /// Guides a ray bundle through the volume of a node: in through its entry surface, out through
     /// its exit surface.
@@ -1622,7 +1631,7 @@ mod test {
         for (node_type, _) in node_types() {
             let optic_ref = create_node_ref(node_type)?;
             let rim = match optic_ref.geometry()? {
-                Some(geometry) => geometry.rim()?,
+                Some(geometry) => geometry.place(&Isometry::identity())?.rim().cloned(),
                 None => None,
             };
             let bounded = matches!(

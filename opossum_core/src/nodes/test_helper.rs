@@ -997,19 +997,19 @@ pub mod helper {
         let Some(geometry) = node.geometry()? else {
             return Ok(Vec::new());
         };
-        let node_iso = node.effective_node_iso().unwrap_or_else(Isometry::identity);
-        let ((entrance, entrance_anchor), (exit, exit_anchor)) =
-            geometry.entrance_and_exit(&node_iso)?;
+        let placed =
+            geometry.place(&node.effective_node_iso().unwrap_or_else(Isometry::identity))?;
+        let ((entrance, entrance_anchor), (exit, exit_anchor)) = (placed.entrance(), placed.exit());
         let runtime = node.node_attr().runtime_surfaces();
         let surfaces = runtime
             .inputs
             .keys()
-            .map(|name| ("in", name.as_str(), entrance.clone(), entrance_anchor))
+            .map(|name| ("in", name.as_str(), entrance.clone(), *entrance_anchor))
             .chain(
                 runtime
                     .outputs
                     .keys()
-                    .map(|name| ("out", name.as_str(), exit.clone(), exit_anchor)),
+                    .map(|name| ("out", name.as_str(), exit.clone(), *exit_anchor)),
             )
             .collect::<Vec<_>>();
         describe_surfaces(node, &surfaces)
