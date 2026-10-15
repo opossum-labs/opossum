@@ -1,10 +1,13 @@
 use super::OutlineShapeInput;
-use crate::components::node_editor::inputs::{
-    InputParam, IntoInputData, IntoInputDataStrings,
-    dynamic_list::DynamicListComponent,
-    format_si_with_base_unit,
-    input_components::{LabeledSelect, RowedInputs, UnitHandling},
-    select_options_from_enum_iterator,
+use crate::components::node_editor::{
+    accordion::{AccordionItem, open_accordion_content},
+    inputs::{
+        InputParam, IntoInputData, IntoInputDataStrings,
+        dynamic_list::DynamicListComponent,
+        format_si_with_base_unit,
+        input_components::{LabeledSelect, RowedInputs, UnitHandling},
+        select_options_from_enum_iterator,
+    },
 };
 use dioxus::prelude::*;
 use nalgebra::Point2;
@@ -74,8 +77,12 @@ fn list_entry(bore: &Bore) -> Vec<String> {
     ]
 }
 
-/// Editor for the bores through a component: a bore being drafted, with its shape, offset and
-/// rotation, and the list of the bores the optic shape has.
+/// Id of the collapsible holding the bore draft inputs.
+const BORE_CONTENT_ID: &str = "boreEditorCollapse";
+
+/// Editor for the bores through a component: a collapsed section with the bore being drafted
+/// (shape, offset and rotation), and below it the list of the bores the optic shape has, which is
+/// shown only when there are any.
 ///
 /// Adding, updating and deleting a bore each hands the whole list on once, so each is one step to
 /// undo. Editing the draft hands nothing on.
@@ -116,12 +123,19 @@ pub fn BoreEditor(
             if let Some(bore) = bores.get(index).cloned() {
                 draft.set(bore);
                 editing_index.set(Some(index));
+                open_accordion_content(BORE_CONTENT_ID);
             }
         }
     });
 
     let draft_bore = draft.read().clone();
-    rsx! {
+    let header = if bores.is_empty() {
+        "Bores".to_string()
+    } else {
+        format!("Bores ({})", bores.len())
+    };
+    let list_entries = bores.iter().map(list_entry).collect::<Vec<_>>();
+    let draft_inputs = rsx! {
         LabeledSelect {
             id: "boreShapeSelector",
             label: "Bore",
@@ -162,12 +176,24 @@ pub fn BoreEditor(
                 }
             },
         }
-        DynamicListComponent {
-            list_entries: bores.iter().map(list_entry).collect::<Vec<_>>(),
-            delete_entry_handler,
-            modify_entry_handler,
-            edit_index: editing_index,
-            readonly,
+    };
+    rsx! {
+        AccordionItem {
+            elements: vec![draft_inputs],
+            header,
+            header_id: "boreEditorHeading",
+            parent_id: "boreEditorAccordion",
+            content_id: BORE_CONTENT_ID,
+            level: 2,
+        }
+        if !list_entries.is_empty() {
+            DynamicListComponent {
+                list_entries,
+                delete_entry_handler,
+                modify_entry_handler,
+                edit_index: editing_index,
+                readonly,
+            }
         }
     }
 }
