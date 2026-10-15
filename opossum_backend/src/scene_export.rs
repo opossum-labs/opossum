@@ -832,16 +832,7 @@ fn patch_of(face: &SurfaceMesh, material: MaterialId) -> SurfacePatch {
 mod test {
     use super::*;
     use opossum_core::{
-        analyzers::{AnalyzerType, RayTraceConfig},
-        apertures::{Aperture, ApertureShape, ApertureType, CircleShape, OpticShape},
-        core_optics::{OpticNode, node_attr::NodePositioning},
-        degree,
-        geometry::body::OPTIC_SHAPE,
-        joule,
-        light::{Ray, lightdata::ray_data_builder::RayDataBuilder},
-        material::default_reference_wavelength,
-        millimeter, nanometer,
-        nodes::{
+        analyzers::{AnalyzerType, RayTraceConfig}, apertures::{Aperture, ApertureShape, ApertureType, Bore, CircleShape, OpticShape, Outline}, core_optics::{OpticNode, node_attr::NodePositioning}, degree, geometry::body::OPTIC_SHAPE, joule, light::{Ray, lightdata::ray_data_builder::RayDataBuilder}, material::default_reference_wavelength, millimeter, nanometer, nodes::{
             CylindricLens, EnergyMeter, Lens, NodeGroup, NodeReference, ReflectiveGrating,
             SourcePort, ThinMirror, Wedge, round_collimated_ray_builder,
         },
@@ -1075,11 +1066,14 @@ mod test {
         let before = manifest(&document)?;
         assert_eq!(before.nodes.len(), 1);
 
-        let smaller: ApertureShape = CircleShape::new(millimeter!(5.0))?.into();
+        let smaller = OpticShape::Bounded(Outline::new(
+            CircleShape::new(millimeter!(5.0))?, 
+            vec![]
+        )?);
         document.scenery_mut().with_node_attr_mut(mirror, |attr| {
             attr.set_property(
                 OPTIC_SHAPE,
-                OpticShape::from_aperture_shape(&smaller)?.into(),
+                smaller.into(),
             )
         })??;
 
@@ -1096,19 +1090,10 @@ mod test {
     /// optical axis — is drawn like any other component rather than left out.
     #[test]
     fn a_mirror_with_a_bore_is_drawn() -> OpmResult<()> {
-        let bored = Aperture::new_stack(
-            vec![
-                Aperture::new_circle(millimeter!(12.5), ApertureType::Hole, None)?,
-                Aperture::new_circle(
-                    millimeter!(2.0),
-                    ApertureType::Obstruction,
-                    Some(millimeter!(6.0, 0.0)),
-                )?,
-            ],
-            ApertureType::Hole,
-            None,
-            None,
-        )?;
+        let bored = OpticShape::Bounded(Outline::new(
+            CircleShape::new(millimeter!(12.5))?, 
+            vec![Bore::new(CircleShape::new(millimeter!(2.))?, millimeter!(6.0, 0.0), degree!(0.))]
+        )?);
         let mut scenery = NodeGroup::default();
         let source = scenery.add_node(SourcePort::default())?;
         let mirror = scenery.add_node(ThinMirror::default())?;
@@ -1119,10 +1104,11 @@ mod test {
         let mut config = RayTraceConfig::default();
         config.map_source(source, RayDataBuilder::default());
         document.add_analyzer(AnalyzerType::RayTrace(config));
+
         document.scenery_mut().with_node_attr_mut(mirror, |attr| {
             attr.set_property(
                 OPTIC_SHAPE,
-                OpticShape::from_aperture_shape(bored.shape())?.into(),
+                bored.into(),
             )
         })??;
 
