@@ -491,6 +491,7 @@ mod test {
         utils::test_helper::helper::metered_energy,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
+    use std::sync::Arc;
     use uom::si::{
         f64::{Length, LinearNumberDensity, ReciprocalLength},
         linear_number_density::per_meter,
@@ -654,6 +655,22 @@ mod test {
             1.0,
             epsilon = 1e-12
         );
+        Ok(())
+    }
+    /// The medium is bounded by the very surfaces light is traced at, not by copies built from the
+    /// same description: besides the optic surface and the handle taken here, the body is the one
+    /// other owner of each.
+    #[test]
+    fn the_prepared_body_shares_the_surfaces_light_is_traced_at() -> OpmResult<()> {
+        let mut lens = placed_lens()?;
+        lens.prepare_volume(&RayTraceConfig::default())?;
+        for port in ["input_1", "output_1"] {
+            let surface = lens
+                .get_optic_surface(port)
+                .ok_or_else(|| OpossumError::Other(format!("the lens has no surface '{port}'")))?
+                .geo_surface();
+            assert_eq!(Arc::strong_count(&surface.0), 3, "surface '{port}'");
+        }
         Ok(())
     }
     /// A passive volume node gets a prepared body even without a gain model.
@@ -1093,14 +1110,14 @@ mod test {
         // Seed a body at the current (identity) position, simulating what
         // `init_runtime_medium` used to do inside `after_deserialization_hook`.
         let identity_body = head.as_volume().unwrap().volume_body()?;
-        head.node_attr_mut().set_runtime_medium(identity_body, None);
+        head.node_attr_mut().set_runtime_body(Some(identity_body));
 
         // Move the head 500 mm along z — what `calc_node_positions` does after deserialization.
         head.set_positioning(NodePositioning::Absolute(Isometry::new(
             millimeter!(0.0, 0.0, 500.0),
             degree!(0.0, 0.0, 0.0),
         )?))?;
-        // Simulate `reset_data`: clear only the inversion, leave the (stale, identity) body.
+        // Simulate `reset_data`, which clears only the inversion.
         head.node_attr_mut().clear_runtime_inversion();
 
         let mut config = RayTraceConfig::default();

@@ -90,7 +90,8 @@ pub trait OpticNodeExt {
     /// under the given ports.
     ///
     /// The entrance surface is installed under every input port, the exit surface under every
-    /// output port. A single surface is both, so all ports then share it.
+    /// output port. A single surface is both, so all ports then share it. The body between the two,
+    /// which shares them, becomes the node's medium; a node without one is left without a medium.
     ///
     /// # Arguments
     ///
@@ -376,6 +377,8 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
                 &PortType::Output,
             )?;
         }
+        self.node_attr_mut()
+            .set_runtime_body(placed.body().cloned());
         Ok(())
     }
 

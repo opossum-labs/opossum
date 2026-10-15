@@ -40,13 +40,14 @@ impl RuntimeSurfaces {
     }
 }
 
-/// The volume state a node was prepared with for the current analysis run.
+/// The volume state of a node: the body between its surfaces and the inversion in it.
 ///
-/// The counterpart of [`RuntimeSurfaces`] for what lies *between* the surfaces. Built once per node
-/// per run by [`OpticNode::prepare_volume`](crate::core_optics::OpticNode::prepare_volume).
-/// Between analysis passes [`OpticNode::reset_data`](crate::core_optics::OpticNode::reset_data)
-/// clears only the inversion field — the body is always re-derived by the next `prepare_volume`
-/// call and does not need to be cached across resets.
+/// The counterpart of [`RuntimeSurfaces`] for what lies *between* the surfaces. The body is built
+/// together with them and shares them (see
+/// [`OpticNodeExt::install_geometry`](crate::core_optics::OpticNodeExt::install_geometry)), which
+/// leaves the inversion empty; [`OpticNode::prepare_volume`](crate::core_optics::OpticNode::prepare_volume)
+/// fills it for an analysis run, and [`OpticNode::reset_data`](crate::core_optics::OpticNode::reset_data)
+/// clears it again.
 #[derive(Debug, Clone)]
 pub struct RuntimeMedium {
     body: SurfaceBoundedBody,
@@ -472,9 +473,17 @@ impl NodeAttr {
         self.runtime_medium.as_mut()
     }
 
-    /// Stores the prepared medium for this node.
-    pub fn set_runtime_medium(&mut self, body: SurfaceBoundedBody, inversion: Option<Inversion>) {
-        self.runtime_medium = Some(RuntimeMedium { body, inversion });
+    /// Stores the body of this node as its medium, with an empty inversion.
+    ///
+    /// # Arguments
+    ///
+    /// * `body` - the body between the node's surfaces, or `None` for a node that encloses no
+    ///   volume.
+    pub fn set_runtime_body(&mut self, body: Option<SurfaceBoundedBody>) {
+        self.runtime_medium = body.map(|body| RuntimeMedium {
+            body,
+            inversion: None,
+        });
     }
 
     /// Clears the inversion field of the prepared medium between analysis runs.
@@ -638,7 +647,7 @@ mod test {
     #[test]
     fn set_and_clear_runtime_inversion() -> OpmResult<()> {
         let mut attr = NodeAttr::new("test");
-        attr.set_runtime_medium(test_body()?, None);
+        attr.set_runtime_body(Some(test_body()?));
         assert!(attr.runtime_medium().is_some());
         attr.clear_runtime_inversion();
         assert!(attr.runtime_medium().is_some());
@@ -649,7 +658,7 @@ mod test {
     #[test]
     fn runtime_medium_is_not_in_ron_roundtrip() -> OpmResult<()> {
         let mut attr = NodeAttr::new("test");
-        attr.set_runtime_medium(test_body()?, None);
+        attr.set_runtime_body(Some(test_body()?));
         let serialized = ron::to_string(&attr).map_err(|e| OpossumError::Other(e.to_string()))?;
         assert!(
             !serialized.contains("runtime_medium"),
