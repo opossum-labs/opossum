@@ -5,12 +5,13 @@
   <desc>Five stages from top to bottom. The .opm file stores the node's properties, its optic shape,
         its position and alignment, and a coating and LIDT per port. From the properties and the optic
         shape the node derives its Geometry on demand; from position and alignment its placement.
-        The Geometry builds, at that placement, the entrance and exit surfaces, the rim, and the body. The
-        surfaces and the rim, together with each port's coating and LIDT, become one OpticSurface per
-        port name in RuntimeSurfaces; the body becomes the RuntimeMedium. update_surfaces rebuilds the
-        runtime surfaces, and the alignment run triggers it by placing a node. The analyzers address
-        the surfaces by port name, the medium is used inside volume nodes, and the 3D view draws a
-        surface from the runtime surfaces but a body straight from the geometry.</desc>
+        Geometry::place builds, in one step at that placement, the entrance and exit surfaces, the rim,
+        and a body bounded by those same surfaces. The surfaces and the rim, together with each port's
+        coating and LIDT, become one OpticSurface per port name in RuntimeSurfaces; the body becomes the
+        RuntimeMedium, whose inversion prepare_volume fills. update_surfaces rebuilds surfaces and body,
+        and the alignment run triggers it by placing a node. The analyzers address the surfaces by port
+        name, the medium is used inside volume nodes, and the 3D view draws surfaces and bodies straight
+        from the geometry, not from the runtime state.</desc>
 
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
@@ -98,21 +99,22 @@
   <rect x="24" y="336" width="1072" height="124" rx="8"
         fill="none" stroke="#a0aec0" stroke-dasharray="6 4"/>
   <text x="36" y="360" font-size="12" font-weight="bold" fill="#4a5568">built</text>
-  <text x="36" y="376" font-size="11" fill="#718096">at the node's</text>
-  <text x="36" y="390" font-size="11" fill="#718096">placement</text>
+  <text x="36" y="376" font-size="11" fill="#718096">together by</text>
+  <text x="36" y="390" font-size="11" fill="#718096">place(), at the</text>
+  <text x="36" y="404" font-size="11" fill="#718096">node's placement</text>
 
   <rect x="140" y="380" width="204" height="68" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
-  <text x="242" y="404" font-size="14" text-anchor="middle" fill="#1a202c">body(node_iso)</text>
-  <text x="242" y="422" font-size="11" text-anchor="middle" fill="#4a5568">SurfaceBoundedBody with</text>
-  <text x="242" y="438" font-size="11" text-anchor="middle" fill="#4a5568">GeoSurfaces of its own</text>
+  <text x="242" y="404" font-size="14" text-anchor="middle" fill="#1a202c">body</text>
+  <text x="242" y="422" font-size="11" text-anchor="middle" fill="#4a5568">SurfaceBoundedBody that</text>
+  <text x="242" y="438" font-size="11" text-anchor="middle" fill="#4a5568">shares entrance and exit</text>
 
   <rect x="360" y="380" width="252" height="68" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
-  <text x="486" y="404" font-size="14" text-anchor="middle" fill="#1a202c">entrance_and_exit(node_iso)</text>
+  <text x="486" y="404" font-size="14" text-anchor="middle" fill="#1a202c">entrance, exit</text>
   <text x="486" y="422" font-size="11" text-anchor="middle" fill="#4a5568">Face::place &#8594; GeoSurface + anchor</text>
   <text x="486" y="438" font-size="11" text-anchor="middle" fill="#4a5568">a single surface: the same one twice</text>
 
   <rect x="628" y="380" width="252" height="68" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
-  <text x="754" y="404" font-size="14" text-anchor="middle" fill="#1a202c">rim()</text>
+  <text x="754" y="404" font-size="14" text-anchor="middle" fill="#1a202c">rim</text>
   <text x="754" y="422" font-size="11" text-anchor="middle" fill="#4a5568">Rim: cross section, axis, role</text>
   <text x="754" y="438" font-size="11" text-anchor="middle" fill="#4a5568">stated relative to the node</text>
 
@@ -138,9 +140,9 @@
   <rect x="140" y="504" width="204" height="124" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
   <text x="242" y="530" font-size="14" text-anchor="middle" fill="#1a202c">RuntimeMedium</text>
   <text x="242" y="550" font-size="12" text-anchor="middle" fill="#4a5568">{ body, inversion }</text>
-  <text x="242" y="576" font-size="11" text-anchor="middle" fill="#4a5568">built by</text>
-  <text x="242" y="592" font-size="11" text-anchor="middle" fill="#4a5568">prepare_volume(),</text>
-  <text x="242" y="608" font-size="11" text-anchor="middle" fill="#4a5568">once per analysis run</text>
+  <text x="242" y="576" font-size="11" text-anchor="middle" fill="#4a5568">body: installed with the surfaces</text>
+  <text x="242" y="592" font-size="11" text-anchor="middle" fill="#4a5568">inversion: filled by</text>
+  <text x="242" y="608" font-size="11" text-anchor="middle" fill="#4a5568">prepare_volume() per run</text>
 
   <rect x="360" y="504" width="520" height="124" rx="6" fill="#c6f6d5" stroke="#276749"/>
   <text x="620" y="532" font-size="14" text-anchor="middle" fill="#1a202c">RuntimeSurfaces { inputs, outputs }</text>
@@ -151,10 +153,10 @@
 
   <rect x="896" y="504" width="188" height="124" rx="6" fill="#fefcbf" stroke="#b7791f"/>
   <text x="990" y="526" font-size="13" text-anchor="middle" fill="#1a202c">update_surfaces()</text>
-  <text x="990" y="544" font-size="11" text-anchor="middle" fill="#744210">rebuilds on create, load,</text>
-  <text x="990" y="558" font-size="11" text-anchor="middle" fill="#744210">placement, alignment,</text>
-  <text x="990" y="572" font-size="11" text-anchor="middle" fill="#744210">coating, LIDT, analysis</text>
-  <text x="990" y="586" font-size="11" text-anchor="middle" fill="#744210">start, prepare_volume</text>
+  <text x="990" y="544" font-size="11" text-anchor="middle" fill="#744210">rebuilds surfaces + body</text>
+  <text x="990" y="558" font-size="11" text-anchor="middle" fill="#744210">on create, load, placement,</text>
+  <text x="990" y="572" font-size="11" text-anchor="middle" fill="#744210">alignment, coating, LIDT,</text>
+  <text x="990" y="586" font-size="11" text-anchor="middle" fill="#744210">analysis start, prepare_volume</text>
   <text x="990" y="606" font-size="11" text-anchor="middle" fill="#c53030">not on set_property</text>
   <text x="990" y="620" font-size="11" text-anchor="middle" fill="#c53030">or inverting a node</text>
   <line x1="896" y1="566" x2="884" y2="566" stroke="#b7791f" stroke-dasharray="4 3"
@@ -188,13 +190,13 @@
   <rect x="628" y="684" width="252" height="76" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
   <text x="754" y="706" font-size="13" text-anchor="middle" fill="#1a202c">ray trace, ghost focus, alignment</text>
   <text x="754" y="724" font-size="11" text-anchor="middle" fill="#4a5568">the surface under the port name</text>
-  <text x="754" y="740" font-size="11" text-anchor="middle" fill="#4a5568">intersect: hit or miss at the rim</text>
+  <text x="754" y="740" font-size="11" text-anchor="middle" fill="#4a5568">Rim::intersect: hit or miss</text>
 
   <!-- band 4 to band 5 -->
   <line x1="242" y1="628" x2="242" y2="680" stroke="#4a5568" marker-end="url(#arrow)"/>
-  <line x1="486" y1="628" x2="486" y2="680" stroke="#4a5568" marker-end="url(#arrow)"/>
   <line x1="754" y1="628" x2="754" y2="680" stroke="#4a5568" marker-end="url(#arrow)"/>
-  <!-- The 3D view draws a body straight from the geometry, not from the runtime state. -->
+  <!-- The 3D view draws surfaces and bodies straight from the geometry, not from the runtime state. -->
+  <path d="M 380 448 L 380 468 L 352 468" fill="none" stroke="#4a5568"/>
   <path d="M 344 430 L 352 430 L 352 668 L 400 668 L 400 680" fill="none" stroke="#4a5568"
         marker-end="url(#arrow)"/>
   <!-- Placing a node rebuilds its surfaces. -->
