@@ -102,8 +102,7 @@ impl InversionField {
     /// # Errors
     ///
     /// This function returns an error if any of the three dimensions is zero — a grid without cells
-    /// has no extent to interpret its ranges against — or if the body cannot state its bounding box
-    /// or answer where it is.
+    /// has no extent to interpret its ranges against — or if the body cannot state its bounding box.
     pub fn from_body(body: &dyn Body, dimensions: CellIndex) -> OpmResult<Self> {
         let (nx, ny, nz) = dimensions;
         if nx == 0 || ny == 0 || nz == 0 {
@@ -129,7 +128,7 @@ impl InversionField {
                 for j in 0..ny {
                     let y = cell_center(&y_range, ny, j);
                     let center = placement.transform_point(&Point3::new(x, y, z));
-                    mask.push(body.contains(&center)?);
+                    mask.push(body.contains(&center));
                 }
             }
             inside.push(DMatrix::from_vec(ny, nx, mask));
@@ -554,10 +553,7 @@ mod test {
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::Vector3;
-    use std::{
-        f64::consts::PI,
-        sync::{Arc, Mutex},
-    };
+    use std::{f64::consts::PI, sync::Arc};
 
     /// Create a disk of the given thickness and radius, placed by the given isometry.
     fn disk(
@@ -566,10 +562,10 @@ mod test {
         placement: Isometry,
     ) -> OpmResult<SurfaceBoundedBody> {
         Ok(SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(placement)))),
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(
+            GeoSurfaceRef(Arc::new(Plane::new(placement))),
+            GeoSurfaceRef(Arc::new(Plane::new(
                 placement.append(&Isometry::new_along_z(thickness)?),
-            )))),
+            ))),
             ValidatedCrossSection::try_new(Aperture::new_circle(
                 radius,
                 ApertureType::Hole,

@@ -519,17 +519,15 @@ mod test {
         utils::geom_transformation::Isometry,
     };
     use approx::assert_relative_eq;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
     use strum::IntoEnumIterator;
     use uom::si::f64::Length;
 
     /// Create a disk of the given thickness and radius, sitting at the origin.
     fn disk(thickness: Length, radius: Length) -> OpmResult<SurfaceBoundedBody> {
         Ok(SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(Isometry::identity())))),
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(Isometry::new_along_z(
-                thickness,
-            )?)))),
+            GeoSurfaceRef(Arc::new(Plane::new(Isometry::identity()))),
+            GeoSurfaceRef(Arc::new(Plane::new(Isometry::new_along_z(thickness)?))),
             ValidatedCrossSection::try_new(Aperture::new_circle(
                 radius,
                 ApertureType::Hole,

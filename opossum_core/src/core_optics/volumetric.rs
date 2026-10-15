@@ -399,8 +399,8 @@ pub trait Volumetric: OpticNode {
 ///
 /// # Errors
 ///
-/// This function errors if `path_length_inside` or `transmittance` fails, if the combined factor
-/// would not be finite, or if `scale_energy` rejects the resulting value.
+/// This function errors if `transmittance` fails, if the combined factor would not be finite, or if
+/// `scale_energy` rejects the resulting value.
 fn march_medium_along_chords(
     node_name: &str,
     medium: &mut RuntimeMedium,
@@ -415,10 +415,7 @@ fn march_medium_along_chords(
             if !ray.valid() {
                 continue;
             }
-            let Some(chord) = body
-                .path_length_inside(ray)
-                .map_err(|e| OpossumError::Analysis(format!("node '{node_name}': {e}")))?
-            else {
+            let Some(chord) = body.path_length_inside(ray) else {
                 continue;
             };
             if chord.value <= 0.0 {

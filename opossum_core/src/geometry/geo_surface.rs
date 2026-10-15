@@ -6,10 +6,7 @@
 use super::Plane;
 use crate::{light::Ray, nanometer, utils::geom_transformation::Isometry};
 use nalgebra::{Point2, Point3, Vector3};
-use std::{
-    fmt::Debug,
-    sync::{Arc, Mutex},
-};
+use std::{fmt::Debug, sync::Arc};
 use uom::si::f64::Length;
 
 /// Trait for handling geometric surfaces.
@@ -186,15 +183,17 @@ pub(super) fn curved_local_z(distance_from_axis: f64, radius: f64) -> Option<f64
     (half_chord_squared >= 0.0).then(|| -radius.signum() * half_chord_squared.sqrt())
 }
 
-/// Reference for a [`GeoSurface`].
+/// Shared reference to a [`GeoSurface`].
 ///
-/// This struct is necessary in order to implement a Default trait on a `Arc<Mutex<GeoSurface>>`.
+/// A surface is never changed once it is built, so it is shared without a lock: all ports of a
+/// single surface and the body of a component may hold the same one. The newtype exists to implement
+/// [`Default`].
 #[derive(Clone, Debug)]
-pub struct GeoSurfaceRef(pub Arc<Mutex<dyn GeoSurface>>);
+pub struct GeoSurfaceRef(pub Arc<dyn GeoSurface>);
 
 impl Default for GeoSurfaceRef {
     fn default() -> Self {
-        Self(Arc::new(Mutex::new(Plane::default())))
+        Self(Arc::new(Plane::default()))
     }
 }
 

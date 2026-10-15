@@ -542,14 +542,14 @@ mod test {
         millimeter,
         types::validated_type_definitions::ValidatedCrossSection,
     };
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
 
     fn test_body() -> OpmResult<SurfaceBoundedBody> {
         Ok(SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(Isometry::identity())))),
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(Isometry::new_along_z(
-                millimeter!(10.0),
-            )?)))),
+            GeoSurfaceRef(Arc::new(Plane::new(Isometry::identity()))),
+            GeoSurfaceRef(Arc::new(Plane::new(Isometry::new_along_z(millimeter!(
+                10.0
+            ))?))),
             ValidatedCrossSection::try_new(Aperture::new_circle(
                 millimeter!(5.0),
                 ApertureType::Hole,

@@ -947,7 +947,7 @@ mod test {
         let halfway = node_frame
             .append(&axis)
             .transform_point(&millimeter!(0.0, 0.0, 10.0));
-        assert!(body.contains(&halfway)?);
+        assert!(body.contains(&halfway));
         Ok(())
     }
     #[test]

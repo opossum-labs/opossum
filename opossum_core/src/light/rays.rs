@@ -1874,7 +1874,7 @@ mod test {
     use approx::{assert_abs_diff_eq, assert_relative_eq};
     use itertools::izip;
     use nalgebra::Vector3;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
     use testing_logger;
     use uom::si::{energy::joule, length::nanometer};
 
@@ -2550,7 +2550,7 @@ mod test {
     fn tilted_splitting_surface() -> OpmResult<OpticSurface> {
         let iso = Isometry::new(millimeter!(0., 0., 0.), degree!(0., 45., 0.))?;
         OpticSurface::new(
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(iso)))),
+            GeoSurfaceRef(Arc::new(Plane::new(iso))),
             CoatingType::IdealAR,
             J_per_cm2!(1.),
         )
