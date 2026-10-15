@@ -15,6 +15,7 @@
     - [Software architecture](./concepts/background/architecture.md)
     - [OpticScenery](./concepts/background/opticscenery.md)
     - [OpticNode](./concepts/background/opticnode.md)
+    - [Component geometry](./concepts/background/component_geometry.md)
     - [OpticAnalyzer](./concepts/background/opticanalyzer.md)
     - [Existing software](./concepts/background/existing_software.md)
     - [Project plan](./concepts/background/plan.md)
