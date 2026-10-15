@@ -13,10 +13,13 @@ use crate::{
     },
     degree,
     error::{OpmResult, OpossumError},
-    geometry::{Geometry, SurfaceShape, body::default_optic_shape},
+    geometry::{
+        Geometry, SurfaceShape,
+        body::{OPTIC_SHAPE, default_optic_shape},
+    },
     light::{LightData, LightRays, LightResult, Rays},
     meter,
-    nodes::{NodeRegistration, create_component_properties},
+    nodes::NodeRegistration,
     percent,
     properties::{Proptype, validator::Validator},
     radian,
@@ -99,7 +102,14 @@ impl Default for ParabolicMirror {
                 Vector2::new(1., 0.).into(),
             )
             .unwrap();
-        create_component_properties(&mut node_attr, default_optic_shape()).unwrap();
+        node_attr
+            .create_property_with_validator(
+                OPTIC_SHAPE,
+                "transversal extent of the component",
+                Validator::OpticShapeIsBounded,
+                default_optic_shape().into(),
+            )
+            .unwrap();
 
         let mut parabola = Self { node_attr };
         parabola.update_surfaces().unwrap();

@@ -8,11 +8,12 @@ use crate::{
         RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
+    apertures::OpticShape,
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, optic_node_ext::single_io_port_names},
     error::OpmResult,
-    geometry::Geometry,
+    geometry::{Geometry, body::OPTIC_SHAPE},
     light::LightResult,
-    nodes::{NodeRegistration, create_dummy_properties},
+    nodes::NodeRegistration,
 };
 
 inventory::submit! {
@@ -50,7 +51,13 @@ pub struct Dummy {
 impl Default for Dummy {
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("dummy");
-        create_dummy_properties(&mut node_attr).expect("Failed to declare dummy properties");
+        node_attr
+            .create_property(
+                OPTIC_SHAPE,
+                "transversal extent of the surface, open for an unbounded one",
+                OpticShape::Open.into(),
+            )
+            .expect("Failed to declare dummy properties");
         let mut dummy = Self { node_attr };
         dummy
             .update_surfaces()

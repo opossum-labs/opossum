@@ -7,10 +7,13 @@ use crate::{
     },
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind},
     error::{OpmResult, OpossumError},
-    geometry::Geometry,
+    geometry::{
+        Geometry,
+        body::{OPTIC_SHAPE, default_optic_shape},
+    },
     light::{LightData, LightRays, LightResult, Rays},
     millimeter,
-    nodes::{NodeRegistration, create_ideal_surface_properties},
+    nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
 };
 use log::warn;
@@ -64,7 +67,13 @@ impl Default for ParaxialSurface {
                 millimeter!(10.0).into(),
             )
             .unwrap();
-        create_ideal_surface_properties(&mut node_attr).unwrap();
+        node_attr
+            .create_property(
+                OPTIC_SHAPE,
+                "transversal extent of the surface, open for an unbounded ideal surface",
+                default_optic_shape().into(),
+            )
+            .unwrap();
         let mut ps = Self { node_attr };
         ps.update_surfaces().unwrap();
         ps

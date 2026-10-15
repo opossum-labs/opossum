@@ -11,7 +11,7 @@ use crate::{
     },
     material::{MATERIAL, Material},
     millimeter,
-    nodes::{NodeRegistration, create_component_properties},
+    nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
     refractive_index::RefrIndexConst,
 };
@@ -93,7 +93,14 @@ impl Default for Wedge {
                 Angle::zero().into(),
             )
             .unwrap();
-        create_component_properties(&mut node_attr, default_optic_shape()).unwrap();
+        node_attr
+            .create_property_with_validator(
+                OPTIC_SHAPE,
+                "transversal extent of the component",
+                Validator::OpticShapeIsBounded,
+                default_optic_shape().into(),
+            )
+            .unwrap();
         let mut wedge = Self { node_attr };
         wedge.update_surfaces().unwrap();
         wedge
