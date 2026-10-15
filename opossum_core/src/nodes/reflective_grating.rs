@@ -12,9 +12,12 @@ use crate::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, node_attr::HasNodeAttr,
     },
     error::{OpmResult, OpossumError},
-    geometry::{Geometry, body::default_square_optic_shape},
+    geometry::{
+        Geometry,
+        body::{OPTIC_SHAPE, default_square_optic_shape},
+    },
     light::{LightData, LightRays, LightResult, Rays},
-    nodes::{NodeRegistration, create_component_properties},
+    nodes::NodeRegistration,
     num_per_mm,
     properties::{Proptype, validator::Validator},
     radian,
@@ -84,7 +87,14 @@ impl Default for ReflectiveGrating {
                 (-1).into(),
             )
             .unwrap();
-        create_component_properties(&mut node_attr, default_square_optic_shape()).unwrap();
+        node_attr
+            .create_property_with_validator(
+                OPTIC_SHAPE,
+                "transversal extent of the component",
+                Validator::OpticShapeIsBounded,
+                default_square_optic_shape().into(),
+            )
+            .unwrap();
         let mut g = Self { node_attr };
         g.update_surfaces().unwrap();
         g

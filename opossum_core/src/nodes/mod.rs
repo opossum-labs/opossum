@@ -71,106 +71,10 @@ pub use wedge::Wedge;
 
 use crate::{
     analyzers::Analyzable,
-    apertures::OpticShape,
-    core_optics::{NodeAttr, OpticRef},
+    core_optics::OpticRef,
     error::{OpmResult, OpossumError},
-    geometry::body::{OPTIC_SHAPE, default_optic_shape, default_square_optic_shape},
-    properties::validator::Validator,
 };
 use std::{collections::HashSet, sync::LazyLock};
-
-/// Declare the property every real component carries: how far it extends transversally
-/// ([`OPTIC_SHAPE`]), be it the medium of a lens or the one surface of a mirror.
-///
-/// Declaring it from one place keeps the node types that call this in sync with each other, and
-/// together with [`create_ideal_surface_properties`], [`create_detector_properties`] and
-/// [`create_dummy_properties`] they are exactly the node types whose geometry can have a rim —
-/// which is what the tests in `volumetric.rs` check. Unlike theirs, this optic shape must be
-/// bounded.
-///
-/// # Arguments
-///
-/// * `node_attr` - the attributes of the node under construction.
-/// * `default` - the optic shape the node starts out with.
-///
-/// # Errors
-///
-/// This function returns an error if the property is already declared.
-pub fn create_component_properties(node_attr: &mut NodeAttr, default: OpticShape) -> OpmResult<()> {
-    node_attr.create_property_with_validator(
-        OPTIC_SHAPE,
-        "transversal extent of the component",
-        Validator::OpticShapeIsBounded,
-        default.into(),
-    )
-}
-
-/// Declare the property of a surface that is an idealization, such as a paraxial lens: how far it
-/// extends transversally ([`OPTIC_SHAPE`]).
-///
-/// The sibling of [`create_component_properties`], starting as a round optic
-/// ([`default_optic_shape`]). Unlike a real component, an idealized surface may also be unbounded
-/// ([`OpticShape::Open`]).
-///
-/// # Arguments
-///
-/// * `node_attr` - the attributes of the node under construction.
-///
-/// # Errors
-///
-/// This function returns an error if the property is already declared.
-pub fn create_ideal_surface_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
-    node_attr.create_property(
-        OPTIC_SHAPE,
-        "transversal extent of the surface, open for an unbounded ideal surface",
-        default_optic_shape().into(),
-    )
-}
-
-/// Declare the property every detector carries: the window it records the light within
-/// ([`OPTIC_SHAPE`]).
-///
-/// The sibling of [`create_component_properties`] for detectors. A detector lets all light pass and
-/// only records the light within its window, which starts as a 25 mm square
-/// ([`default_square_optic_shape`]). Set to [`OpticShape::Open`], it records all of it.
-///
-/// # Arguments
-///
-/// * `node_attr` - the attributes of the node under construction.
-///
-/// # Errors
-///
-/// This function returns an error if the property is already declared.
-pub fn create_detector_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
-    node_attr.create_property(
-        OPTIC_SHAPE,
-        "window the light is recorded within",
-        default_square_optic_shape().into(),
-    )
-}
-
-/// Declare the property of a [`Dummy`]: how far its surface extends transversally
-/// ([`OPTIC_SHAPE`]).
-///
-/// The sibling of [`create_detector_properties`]. A dummy has no optical function, so it starts
-/// unbounded ([`OpticShape::Open`]) and changes nothing unless its optic shape is set.
-/// Bounded, it is an iris: a ray outside misses it and follows the analyzer's missed surface
-/// strategy.
-///
-/// # Arguments
-///
-/// * `node_attr` - the attributes of the node under construction.
-///
-/// # Errors
-///
-/// This function returns an error if the property is already declared.
-pub fn create_dummy_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
-    node_attr.create_property(
-        OPTIC_SHAPE,
-        "transversal extent of the surface, open for an unbounded one",
-        OpticShape::Open.into(),
-    )
-}
 
 /// Struct to hold all info about a node type
 pub struct NodeRegistration {

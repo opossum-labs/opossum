@@ -9,12 +9,15 @@ use crate::{
     coatings::{CoatingConstantR, CoatingType},
     core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType},
     error::{OpmResult, OpossumError},
-    geometry::{Geometry, body::default_optic_shape},
+    geometry::{
+        Geometry,
+        body::{OPTIC_SHAPE, default_optic_shape},
+    },
     light::{
         LightData, Rays,
         spectrum::{Spectrum, merge_spectra},
     },
-    nodes::{NodeRegistration, create_component_properties, ideal_filter::SpectralFilterBuilder},
+    nodes::{NodeRegistration, ideal_filter::SpectralFilterBuilder},
     properties::{Proptype, validator::Validator},
     utils::default_from_name::DefaultFromName,
 };
@@ -229,7 +232,14 @@ impl Default for BeamSplitter {
                 SplittingConfigBuilder::FixedRatio(0.5).into(),
             )
             .unwrap();
-        create_component_properties(&mut node_attr, default_optic_shape()).unwrap();
+        node_attr
+            .create_property_with_validator(
+                OPTIC_SHAPE,
+                "transversal extent of the component",
+                Validator::OpticShapeIsBounded,
+                default_optic_shape().into(),
+            )
+            .unwrap();
         let mut bs = Self { node_attr };
         bs.update_surfaces().unwrap();
         bs

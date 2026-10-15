@@ -10,12 +10,12 @@ use crate::{
     },
     core_optics::{NodeAttr, NodeAttrExt, OpticNodeExt},
     error::{OpmResult, OpossumError},
-    geometry::{Geometry, body::default_optic_shape},
-    light::{LightData, LightRays, LightResult, Rays},
-    nodes::{
-        FilterType, NodeRegistration, create_component_properties,
-        ideal_filter::filter_types::FilterConst,
+    geometry::{
+        Geometry,
+        body::{OPTIC_SHAPE, default_optic_shape},
     },
+    light::{LightData, LightRays, LightResult, Rays},
+    nodes::{FilterType, NodeRegistration, ideal_filter::filter_types::FilterConst},
     prelude::{FilterTypeBuilder, GhostFocusConfig, OpticNode, PortType, Proptype, RayTraceConfig},
     properties::validator::Validator,
 };
@@ -56,7 +56,14 @@ impl Default for IdealFilter {
                 FilterTypeBuilder::default().into(),
             )
             .unwrap();
-        create_component_properties(&mut node_attr, default_optic_shape()).unwrap();
+        node_attr
+            .create_property_with_validator(
+                OPTIC_SHAPE,
+                "transversal extent of the component",
+                Validator::OpticShapeIsBounded,
+                default_optic_shape().into(),
+            )
+            .unwrap();
         let mut idf = Self { node_attr };
         idf.update_surfaces().unwrap();
         idf

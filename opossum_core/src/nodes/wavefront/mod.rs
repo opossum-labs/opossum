@@ -14,12 +14,15 @@ use crate::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, optic_node::APERTURE_LIMIT_NOTE,
     },
     error::{OpmResult, OpossumError},
-    geometry::{Geometry, SurfaceShape},
+    geometry::{
+        Geometry, SurfaceShape,
+        body::{OPTIC_SHAPE, default_square_optic_shape},
+    },
     light::{LightData, LightResult},
     millimeter,
     nodes::{
+        NodeRegistration,
         wavefront::zernike::{WavefrontDecomposition, ZernikeNoll},
-        {NodeRegistration, create_detector_properties},
     },
     properties::{Properties, Proptype},
     reporting::node_report::{NodeReport, NodeReportResult},
@@ -74,7 +77,13 @@ impl Default for WaveFront {
                 false.into(),
             )
             .unwrap();
-        create_detector_properties(&mut node_attr).unwrap();
+        node_attr
+            .create_property(
+                OPTIC_SHAPE,
+                "window the light is recorded within",
+                default_square_optic_shape().into(),
+            )
+            .unwrap();
         node_attr
             .create_property(
                 "decompose zernike",

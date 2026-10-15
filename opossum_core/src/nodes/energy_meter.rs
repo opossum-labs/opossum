@@ -17,10 +17,13 @@ use crate::{
         optic_node::APERTURE_LIMIT_NOTE,
     },
     error::OpmResult,
-    geometry::{Geometry, SurfaceShape},
+    geometry::{
+        Geometry, SurfaceShape,
+        body::{OPTIC_SHAPE, default_square_optic_shape},
+    },
     joule,
     light::LightData,
-    nodes::{NodeRegistration, create_detector_properties},
+    nodes::NodeRegistration,
     properties::{Properties, Proptype},
     reporting::{
         node_report::{NodeReport, NodeReportResult},
@@ -105,7 +108,12 @@ impl Default for EnergyMeter {
                 Metertype::default().into(),
             )
             .expect("Hardcoded property creation must not fail");
-        create_detector_properties(&mut node_attr)
+        node_attr
+            .create_property(
+                OPTIC_SHAPE,
+                "window the light is recorded within",
+                default_square_optic_shape().into(),
+            )
             .expect("Hardcoded property creation must not fail");
         let mut em = Self {
             light_data: None,
