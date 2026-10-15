@@ -138,10 +138,13 @@ impl OpticSurface {
     #[must_use]
     pub fn intersect(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
         let geo_surface = &*self.geo_surface.0;
-        match self.rim.as_ref().filter(|rim| rim.role() == RimRole::Edge) {
-            Some(rim) => rim.intersect(geo_surface, ray, &self.node_frame(geo_surface)),
-            None => geo_surface.calc_intersect_and_normal(ray),
-        }
+        self.rim
+            .as_ref()
+            .filter(|rim| rim.role() == RimRole::Edge)
+            .map_or_else(
+                || geo_surface.calc_intersect_and_normal(ray),
+                |rim| rim.intersect(geo_surface, ray, &self.node_frame(geo_surface)),
+            )
     }
     /// Return whether this [`OpticSurface`] records a hit at the given point.
     ///
