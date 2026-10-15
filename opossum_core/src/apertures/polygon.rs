@@ -37,7 +37,7 @@ impl TryFrom<PolygonFields> for PolygonShape {
     type Error = OpossumError;
 
     fn try_from(fields: PolygonFields) -> OpmResult<Self> {
-        Self::new(fields.points.get().to_vec())
+        Self::new(fields.points.get().clone())
     }
 }
 impl From<PolygonShape> for ApertureShape {
@@ -139,7 +139,7 @@ impl PolygonShape {
     pub fn delete_point(&mut self, index: usize) -> OpmResult<()> {
         let mut points = self.points.clone();
         points.remove(index)?;
-        *self = Self::new(points.get().to_vec())?;
+        *self = Self::new(points.get().clone())?;
         Ok(())
     }
 }
