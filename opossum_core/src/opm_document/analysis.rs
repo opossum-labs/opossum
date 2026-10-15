@@ -108,9 +108,8 @@ impl OpmDocument {
     /// It happens on a copy, and that is the point of this method. A placement is written into the
     /// node itself and saved with the document, and a later run leaves an already placed node
     /// alone; running one on the live document would therefore freeze whatever the drawing happened
-    /// to be asked for into the model itself. The copy is taken through the file format, which is
-    /// the only copy that is genuinely independent — [`clone_deep`](OpmDocument::clone_deep) leaves
-    /// the references of the copy pointing at the nodes of the original.
+    /// to be asked for into the model itself. The copy is a plain [`Clone`], which copies every
+    /// node.
     ///
     /// Which source the axis starts from comes from an analyzer, because that is where source data
     /// lives; see [`AnalyzerType::positioning_config`]. A model with no analyzer that places
@@ -129,11 +128,11 @@ impl OpmDocument {
     ///
     /// # Errors
     ///
-    /// This function returns an error if the copy cannot be made, if the named analyzer does not
-    /// exist or does not place anything, if no analyzer was named and several place something, or
-    /// if the positioning run itself fails.
+    /// This function returns an error if the named analyzer does not exist or does not place
+    /// anything, if no analyzer was named and several place something, or if the positioning run
+    /// itself fails.
     pub fn positioned_copy(&self, analyzer_id: Option<Uuid>) -> OpmResult<Self> {
-        let mut copy = Self::from_string(&self.to_opm_file_string()?)?;
+        let mut copy = self.clone();
         let config = copy.placing_config(analyzer_id)?;
         AnalysisRayTrace::calc_node_positions(&mut copy.scenery, LightResult::default(), &config)?;
         copy.scenery.reset_data();
@@ -163,9 +162,9 @@ impl OpmDocument {
     /// This function returns an error in the same cases as
     /// [`positioned_copy`](OpmDocument::positioned_copy).
     pub fn positioning_rays(&self, analyzer_id: Option<Uuid>) -> OpmResult<Vec<Rays>> {
-        let mut copy = Self::from_string(&self.to_opm_file_string()?)?;
+        let mut copy = self.clone();
         let mut config = copy.placing_config(analyzer_id)?;
-        // The copy was just read from file, so it holds no ray ends yet.
+        // Only copies collect ray ends, so the document the copy came from holds none.
         config.set_collect_ray_ends(true);
         AnalysisRayTrace::calc_node_positions(&mut copy.scenery, LightResult::default(), &config)?;
         Ok(copy.scenery.ray_ends().into_iter().cloned().collect())
@@ -199,7 +198,7 @@ impl OpmDocument {
     /// [`positioned_copy`](OpmDocument::positioned_copy), or if a source cannot be built or the
     /// trace fails.
     pub fn traced_rays(&self, analyzer_id: Option<Uuid>, max_rays: usize) -> OpmResult<Vec<Rays>> {
-        let mut copy = Self::from_string(&self.to_opm_file_string()?)?;
+        let mut copy = self.clone();
         let Some(placing) = copy.analyzer_ray_config(analyzer_id)? else {
             return Ok(Vec::new());
         };
@@ -210,7 +209,7 @@ impl OpmDocument {
 
         let mut config = placing;
         config.set_positioning_run(false);
-        // The copy was just read from file, so it holds no ray ends yet.
+        // Only copies collect ray ends, so the document the copy came from holds none.
         config.set_collect_ray_ends(true);
         let thinned = config
             .source_map()
