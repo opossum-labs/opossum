@@ -1364,9 +1364,9 @@ mod test {
     ///
     /// The trap this pins down: a property is patched straight onto the live document without
     /// rebuilding the node's surfaces. A shape read off those surfaces would therefore be the *old*
-    /// one, while the manifest - built from a `positioned_copy`, and so from a document that was
-    /// serialized and read back - reports a new hash. The viewer would then refetch and get the old
-    /// mesh back, and changing a lens thickness would appear to do nothing at all.
+    /// one, while the manifest - built from a `positioned_copy` - reports a new hash. The viewer
+    /// would then refetch and get the old mesh back, and changing a lens thickness would appear to
+    /// do nothing at all.
     #[test]
     fn reshaping_a_component_changes_the_file_its_endpoint_serves() -> OpmResult<()> {
         let mut document = two_lenses(millimeter!(100.0))?;
