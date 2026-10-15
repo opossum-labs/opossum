@@ -4,12 +4,16 @@ use crate::{
         AnalyzerType, GhostFocusConfig, RayTraceConfig, energy::EnergyConfig,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::node_attr::HasNodeAttr,
+    core_optics::{Alignable, node_attr::HasNodeAttr},
+    degree,
     gain::{ConstGain, GainModel},
     joule,
     light::{LightResult, lightdata::ray_data_builder::RayDataBuilder},
     millimeter,
-    nodes::{Dummy, Lens, ReflectiveGrating, SourcePort, ThinMirror, round_collimated_ray_builder},
+    nodes::{
+        Dummy, Lens, NodeReference, ReflectiveGrating, SourcePort, ThinMirror,
+        round_collimated_ray_builder,
+    },
 };
 use approx::assert_relative_eq;
 
@@ -354,6 +358,95 @@ fn an_energy_analysis_places_nothing() -> OpmResult<()> {
 
     let placed = document.positioned_copy(None)?;
     assert_relative_eq!(placed_at(&placed, first)?, 0.1, epsilon = 1e-12);
+    Ok(())
+}
+
+/// The placement a document that went through its file form arrives at: what a placement copy
+/// started from before it was a plain clone, and so the oracle the clone has to agree with.
+fn placed_through_file(document: &OpmDocument) -> OpmResult<OpmDocument> {
+    OpmDocument::from_string(&document.to_opm_file_string()?)?.positioned_copy(None)
+}
+
+/// Where a node sits along the optical axis, or `None` if it was not placed.
+fn z_of(document: &OpmDocument, node_id: Uuid) -> OpmResult<Option<f64>> {
+    let (node_ref, _) = document.scenery().node_recursive(node_id)?;
+    Ok(node_ref
+        .node_attr()
+        .effective_position()
+        .map(|placement| placement.translation().z.value))
+}
+
+/// A property changed on the live document, with nothing rebuilt afterwards, has to reach the
+/// placement. The file form rebuilt every node's surfaces from its properties on the way in; a
+/// plain clone only carries over what the live node holds.
+#[test]
+fn a_property_changed_after_adding_the_node_reaches_the_placement() -> OpmResult<()> {
+    let mut scenery = NodeGroup::default();
+    let source = scenery.add_node(SourcePort::default())?;
+    let lens = scenery.add_node(Lens::default())?;
+    let after = scenery.add_node(Dummy::default())?;
+    scenery.connect_nodes(source, "output_1", lens, "input_1", millimeter!(100.0))?;
+    scenery.connect_nodes(lens, "output_1", after, "input_1", millimeter!(50.0))?;
+    let mut document = OpmDocument::new(scenery);
+    let default_thickness = document.positioned_copy(None)?;
+
+    document
+        .scenery_mut()
+        .graph_mut()
+        .node_recursive_mut(lens)?
+        .node_attr_mut()
+        .set_property("center thickness", millimeter!(30.0).into())?;
+
+    let placed = document.positioned_copy(None)?;
+    let oracle = placed_through_file(&document)?;
+    assert_eq!(z_of(&placed, after)?, z_of(&oracle, after)?);
+    assert_ne!(
+        z_of(&placed, after)?,
+        z_of(&default_thickness, after)?,
+        "the thicker lens has to push the component behind it"
+    );
+    Ok(())
+}
+
+/// A group, a node passed a second time through a reference, and a tilted mirror between them:
+/// everything the clone has to copy besides plain nodes. The placement is the one the file form
+/// gives, for the nodes inside the group as well, and the document it came from stays unplaced.
+#[test]
+fn a_group_and_a_reference_are_placed_as_through_the_file_form() -> OpmResult<()> {
+    let mut group = NodeGroup::new("group");
+    let inner_first = group.add_node(Dummy::default())?;
+    let inner_second = group.add_node(Dummy::default())?;
+    group.connect_nodes(
+        inner_first,
+        "output_1",
+        inner_second,
+        "input_1",
+        millimeter!(20.0),
+    )?;
+    group.map_input_port(inner_first, "input_1", "input_1")?;
+    group.map_output_port(inner_second, "output_1", "output_1")?;
+
+    let mut scenery = NodeGroup::default();
+    let source = scenery.add_node(SourcePort::default())?;
+    let group = scenery.add_node(group)?;
+    let fold = scenery.add_node(ThinMirror::new("fold").with_tilt(degree!(2.0, 0.0, 0.0))?)?;
+    let second_pass = scenery.add_node(NodeReference::from_node(&scenery.node(group)?)?)?;
+    scenery.connect_nodes(source, "output_1", group, "input_1", millimeter!(30.0))?;
+    scenery.connect_nodes(group, "output_1", fold, "input_1", millimeter!(50.0))?;
+    scenery.connect_nodes(fold, "output_1", second_pass, "input_1", millimeter!(50.0))?;
+    let document = OpmDocument::new(scenery);
+    let before = document.to_opm_file_string()?;
+
+    let placed = document.positioned_copy(None)?;
+    let oracle = placed_through_file(&document)?;
+
+    for node_id in [source, group, inner_first, inner_second, fold, second_pass] {
+        assert_eq!(z_of(&placed, node_id)?, z_of(&oracle, node_id)?);
+    }
+    assert!(is_placed(&placed, inner_second)?);
+    assert!(is_placed(&placed, fold)?);
+    assert_eq!(document.to_opm_file_string()?, before);
+    assert!(!is_placed(&document, inner_second)?);
     Ok(())
 }
 
