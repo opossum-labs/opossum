@@ -77,7 +77,9 @@ pub trait Volumetric: OpticNode {
     /// placement - the same description the surfaces light is traced at are installed from.
     ///
     /// The body is built from the node's properties as they are now, so it has to be derived again
-    /// after the node is moved or one of its properties changes.
+    /// after the node is moved or one of its properties changes. An analysis does not call this: it
+    /// reads the body installed together with the surfaces (see
+    /// [`RuntimeMedium`](crate::core_optics::node_attr::RuntimeMedium)).
     ///
     /// **Derive it once per node and keep it**, rather than per ray or per grid point: it reads the
     /// node's properties and builds its surfaces anew. The body is what belongs in the loop, not
@@ -86,10 +88,6 @@ pub trait Volumetric: OpticNode {
     /// The geometry states the faces in their *physical* order, so an inverted node encloses the
     /// same volume as an upright one: inverting a node reverses the direction light travels, not
     /// the geometry it travels through.
-    ///
-    /// **Note**: The port [`Aperture`](crate::apertures::Aperture)s have no say in the extent of
-    /// the body. They mask the light passing a surface, which is independent of how far the medium
-    /// behind it reaches.
     ///
     /// # Returns
     ///

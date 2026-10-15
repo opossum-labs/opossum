@@ -33,19 +33,16 @@ use num_traits::Zero;
 use std::{fmt::Debug, ops::Range};
 use uom::si::f64::Length;
 
-/// Name of the property holding the transversal extent of a volume node.
+/// Name of the property holding the transversal extent of a component: its optic shape.
 ///
-/// The optic shape is the size the material is actually available in — the figure a supplier
-/// quotes next to the curvatures and the thickness. It is a property of the component rather than
-/// of one of its ports, which is what distinguishes it from the port
-/// [`Aperture`](crate::apertures::Aperture): the latter states how much light a surface transmits
-/// where and may soften or invert that transmission, while the optic shape states where the
-/// medium ends. The two are independent — putting a pinhole in front of a lens does not make the
-/// lens smaller.
+/// The optic shape is the size the component is actually available in — the figure a supplier
+/// quotes next to the curvatures and the thickness. It bounds the surfaces light is traced at and,
+/// for a volume node, the medium between them (see [`Rim`]).
 ///
-/// Every volume node has one: a component of unstated size has no volume to speak of, and two
-/// curved surfaces only happen to close on their own if they are curved strongly enough. Shapes
-/// that leave the extent undefined — [`ApertureShape::Open`] among them — are therefore rejected.
+/// Every volume node has a bounded one: a component of unstated size has no volume to speak of,
+/// and two curved surfaces only happen to close on their own if they are curved strongly enough.
+/// Only what merely records light, is an idealization or has no optical function accepts an open
+/// optic shape.
 pub const OPTIC_SHAPE: &str = "optic shape";
 
 /// The optic shape a round optic starts out with if nothing is defined.
