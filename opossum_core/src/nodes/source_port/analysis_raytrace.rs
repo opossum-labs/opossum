@@ -53,16 +53,13 @@ impl AnalysisRayTrace for SourcePort {
         })?;
         // The axis is a single ray: the source's rays are only built when no alignment wavelength
         // is given and their central wavelength has to stand in for it.
-        let mut axis_ray = match ray_data_builder.alignment_wavelength() {
-            Some(alignment_wvl) => {
-                Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), alignment_wvl, joule!(1.0))?
-            }
-            None => {
-                info!(
-                    "No alignment wavelength defined, using energy-weighted central wavelength for alignment"
-                );
-                ray_data_builder.build()?.get_optical_axis_ray()?
-            }
+        let mut axis_ray = if let Some(alignment_wvl) = ray_data_builder.alignment_wavelength() {
+            Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), alignment_wvl, joule!(1.0))?
+        } else {
+            info!(
+                "No alignment wavelength defined, using energy-weighted central wavelength for alignment"
+            );
+            ray_data_builder.build()?.get_optical_axis_ray()?
         };
 
         // Explicitly assign the ambient refractive index for the axis ray at its specific wavelength
