@@ -297,34 +297,37 @@ fn a_positioned_copy_leaves_the_document_it_came_from_alone() -> OpmResult<()> {
     Ok(())
 }
 
-/// Without an analyzer there is no source data, but the model still says where its own light
-/// comes in — default rays from there are enough to lay the setup out.
+/// Placing a model needs the light an analyzer defines for its source ports. A model nobody
+/// analyzes is not placed, and the error says what is missing.
 #[test]
-fn a_model_without_an_analyzer_is_placed_from_its_own_source_ports() -> OpmResult<()> {
-    let (document, _, first, second) = lined_up_model()?;
-    let placed = document.positioned_copy(None)?;
-    assert_relative_eq!(placed_at(&placed, first)?, 0.1, epsilon = 1e-12);
-    assert_relative_eq!(placed_at(&placed, second)?, 0.15, epsilon = 1e-12);
-    assert_eq!(placed.scenery().find_source_ports()?.len(), 1);
+fn a_model_without_an_analyzer_is_not_placed() -> OpmResult<()> {
+    let (document, ..) = lined_up_model()?;
+    let Err(error) = document.positioned_copy(None) else {
+        panic!("a model nobody analyzes has no light to place it with");
+    };
+    assert!(error.to_string().contains("no analyzer"), "{error}");
     Ok(())
 }
 
-/// A model that was never analyzed may mark no source at all. Rather than leaving it unplaced,
-/// one is put in front of it — in the copy only.
+/// A model without a source port has nowhere to start the optical axis. It is not placed - a
+/// stand-in source would have to guess which of several strands is meant - and the error says
+/// what is missing. The model itself is left as it was.
 #[test]
-fn a_model_without_a_source_is_placed_from_its_first_component() -> OpmResult<()> {
+fn a_model_without_a_source_port_is_not_placed() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
     let first = scenery.add_node(Dummy::default())?;
     let second = scenery.add_node(Dummy::default())?;
     scenery.connect_nodes(first, "output_1", second, "input_1", millimeter!(50.0))?;
-    let document = OpmDocument::new(scenery);
+    let mut document = OpmDocument::new(scenery);
+    document.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    let before = document.to_opm_file_string()?;
 
-    let placed = document.positioned_copy(None)?;
+    let Err(error) = document.positioned_copy(None) else {
+        panic!("a model without a source port has nowhere to start the optical axis");
+    };
 
-    assert_relative_eq!(placed_at(&placed, first)?, 0.0, epsilon = 1e-12);
-    assert_relative_eq!(placed_at(&placed, second)?, 0.05, epsilon = 1e-12);
-    assert_eq!(placed.scenery().find_source_ports()?.len(), 1);
-    assert!(document.scenery().find_source_ports()?.is_empty());
+    assert!(error.to_string().contains("no source port"), "{error}");
+    assert_eq!(document.to_opm_file_string()?, before);
     Ok(())
 }
 
@@ -355,13 +358,14 @@ fn a_model_is_not_drawn_after_an_analyzer_it_does_not_have() -> OpmResult<()> {
     Ok(())
 }
 
-/// A model with nothing in it places nothing. That is an empty answer, not a failure — a view
-/// of an empty document should come out empty rather than refuse.
+/// An empty model is no exception: it has neither a source port nor an analyzer, and the error
+/// says so.
 #[test]
-fn an_empty_model_is_placed_without_complaint() -> OpmResult<()> {
-    let placed = OpmDocument::default().positioned_copy(None)?;
-    assert_eq!(placed.scenery().nr_of_nodes(), 0);
-    Ok(())
+fn an_empty_model_says_what_it_lacks() {
+    let Err(error) = OpmDocument::default().positioned_copy(None) else {
+        panic!("an empty model has nothing to place");
+    };
+    assert!(error.to_string().contains("neither"), "{error}");
 }
 
 /// The placement a document that went through its file form arrives at: what a placement copy

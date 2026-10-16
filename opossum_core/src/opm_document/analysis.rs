@@ -113,10 +113,8 @@ impl OpmDocument {
     ///
     /// Which source the axis starts from comes from an analyzer, because that is where source data
     /// lives; see [`AnalyzerType::positioning_config`]. Unless one is named, it is the first
-    /// analyzer whose light is rays, or else the first of all. A model with no analyzer at all is
-    /// placed from its own source ports with default ray data, and one without even those gets a
-    /// source port put in front of its first component, so that a setup which was never analyzed
-    /// can still be looked at.
+    /// analyzer whose light is rays, or else the first of all. Without a source port, or without an
+    /// analyzer to define its light, there is nothing to start the axis from.
     ///
     /// # Arguments
     ///
@@ -129,11 +127,11 @@ impl OpmDocument {
     ///
     /// # Errors
     ///
-    /// This function returns an error if the named analyzer does not exist, or if the positioning
-    /// run itself fails.
+    /// This function returns an error if the model has no source port or no analyzer, if the
+    /// named analyzer does not exist, or if the positioning run itself fails.
     pub fn positioned_copy(&self, analyzer_id: Option<Uuid>) -> OpmResult<Self> {
+        let config = self.placing_config(analyzer_id)?;
         let mut copy = self.clone();
-        let config = copy.placing_config(analyzer_id)?;
         AnalysisRayTrace::calc_node_positions(&mut copy.scenery, LightResult::default(), &config)?;
         copy.scenery.reset_data();
         Ok(copy)
@@ -162,8 +160,8 @@ impl OpmDocument {
     /// This function returns an error in the same cases as
     /// [`positioned_copy`](OpmDocument::positioned_copy).
     pub fn positioning_rays(&self, analyzer_id: Option<Uuid>) -> OpmResult<Vec<Rays>> {
+        let mut config = self.placing_config(analyzer_id)?;
         let mut copy = self.clone();
-        let mut config = copy.placing_config(analyzer_id)?;
         // Only copies collect ray ends, so the document the copy came from holds none.
         config.set_collect_ray_ends(true);
         AnalysisRayTrace::calc_node_positions(&mut copy.scenery, LightResult::default(), &config)?;
@@ -194,9 +192,8 @@ impl OpmDocument {
     ///
     /// # Errors
     ///
-    /// This function returns an error in the same cases as
-    /// [`positioned_copy`](OpmDocument::positioned_copy), or if a source cannot be built or the
-    /// trace fails.
+    /// This function returns an error if the named analyzer does not exist, if the positioning run
+    /// fails, or if a source cannot be built or the trace fails.
     pub fn traced_rays(&self, analyzer_id: Option<Uuid>, max_rays: usize) -> OpmResult<Vec<Rays>> {
         let Some(analyzer) = self
             .drawing_analyzer(analyzer_id)?
@@ -233,8 +230,7 @@ impl OpmDocument {
     /// # Arguments
     ///
     /// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen
-    ///   as for [`positioned_copy`](OpmDocument::positioned_copy), falling back to default rays
-    ///   from the model's own source ports
+    ///   as for [`positioned_copy`](OpmDocument::positioned_copy)
     ///
     /// # Returns
     ///
@@ -242,16 +238,21 @@ impl OpmDocument {
     ///
     /// # Errors
     ///
-    /// This function returns an error if the named analyzer does not exist, or if the default
-    /// configuration cannot be built.
-    fn placing_config(&mut self, analyzer_id: Option<Uuid>) -> OpmResult<RayTraceConfig> {
-        // If nothing analyzes this model, there is no source data to go by. Default rays from
-        // wherever the model marks its sources still say where everything sits relative to
-        // everything else.
-        let analyzed = self
-            .drawing_analyzer(analyzer_id)?
-            .map(|analyzer| analyzer.analyzer_type().positioning_config());
-        analyzed.map_or_else(|| self.default_positioning_config(), Ok)
+    /// This function returns an error if the model has no source port or no analyzer, saying which
+    /// it lacks, if the named analyzer does not exist, or if the source ports cannot be found.
+    fn placing_config(&self, analyzer_id: Option<Uuid>) -> OpmResult<RayTraceConfig> {
+        let analyzer = self.drawing_analyzer(analyzer_id)?;
+        let has_source_port = !self.scenery.find_source_ports()?.is_empty();
+        let lacks = match (has_source_port, analyzer) {
+            (true, Some(analyzer)) => return Ok(analyzer.analyzer_type().positioning_config()),
+            (false, Some(_)) => "no source port",
+            (true, None) => "no analyzer",
+            (false, None) => "neither",
+        };
+        Err(OpossumError::OpmDocument(format!(
+            "placing a model needs a source port and an analyzer defining its light, and this \
+             model has {lacks}"
+        )))
     }
 
     /// Returns the analyzer a drawing of this model follows.
@@ -283,35 +284,6 @@ impl OpmDocument {
         self.analyzers.get(&id).map(Some).ok_or_else(|| {
             OpossumError::OpmDocument(format!("this model has no analyzer {id} to draw it after"))
         })
-    }
-
-    /// Build a positioning configuration for a model nobody analyzes.
-    ///
-    /// Every source port of the model is given default ray data. A model that has none at all gets
-    /// one put in front of the first component whose input is still free, at no distance, so that
-    /// the setup is drawn starting from that component rather than not at all.
-    ///
-    /// # Returns
-    ///
-    /// A configuration covering every source port of the model.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the source ports cannot be found, or if a model that has
-    /// components but no source port has nothing to put one in front of.
-    fn default_positioning_config(&mut self) -> OpmResult<RayTraceConfig> {
-        let mut config = RayTraceConfig::default();
-        config.set_positioning_run(true);
-        let mut source_ports = self.scenery.find_source_ports()?;
-        // An empty model places nothing, which is not a failure — and there would be nothing to put
-        // a source port in front of either.
-        if source_ports.is_empty() && self.scenery.nr_of_nodes() > 0 {
-            source_ports.push(self.scenery.prepend_source_port()?);
-        }
-        for source_port in source_ports {
-            config.map_source(source_port, RayDataBuilder::default());
-        }
-        Ok(config)
     }
 
     /// Expands the analyzers of this [`OpmDocument`] into individual executable runs.

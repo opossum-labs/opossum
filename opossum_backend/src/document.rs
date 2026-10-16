@@ -1599,14 +1599,15 @@ mod test {
         assert!(body.starts_with(b"glTF"));
     }
 
-    /// A model with nothing in it has nothing to show. That is an empty file, not a refusal.
+    /// A model with nothing in it has neither a source port nor an analyzer to place it with, so
+    /// it cannot be exported, and the answer says why.
     #[actix_web::test]
-    async fn the_scene_of_an_empty_model_is_still_a_file() {
+    async fn the_scene_of_an_empty_model_is_refused_with_the_reason() {
         let resp = request_scene(&Data::new(AppState::default()), "").await;
 
-        assert_eq!(resp.status(), StatusCode::OK);
-        let body = test::read_body(resp).await;
-        assert!(body.starts_with(b"glTF"));
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let error: ErrorResponse = test::read_body_json(resp).await;
+        assert!(error.message.contains("neither"), "{}", error.message);
     }
 
     /// A model analyzed several ways is drawn after the analyzer named, or else after its first
@@ -1819,14 +1820,18 @@ mod test {
         assert!(!manifest.nodes[0].geometry.is_empty());
     }
 
-    /// A model with nothing to draw still answers with a list, an empty one.
+    /// A model with nothing to draw still answers with a list, an empty one that says why.
     #[actix_web::test]
-    async fn the_manifest_of_an_empty_model_is_empty() {
+    async fn the_manifest_of_an_empty_model_is_empty_and_says_why() {
         let resp = request_manifest(&Data::new(AppState::default())).await;
 
         assert_eq!(resp.status(), StatusCode::OK);
         let manifest: SceneManifest = test::read_body_json(resp).await;
         assert!(manifest.nodes.is_empty());
+        let notice = manifest
+            .notice
+            .expect("the manifest says why nothing is drawn");
+        assert!(notice.contains("neither"), "{notice}");
     }
 
     /// A model that cannot be placed is answered with an empty list that says why, not with a
