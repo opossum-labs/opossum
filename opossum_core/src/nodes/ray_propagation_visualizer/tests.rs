@@ -338,11 +338,10 @@ fn test_legend_and_colorbar_thresholds() -> OpmResult<()> {
 
     if let PlotType::MultiLine2D(params) = plt_type {
         assert_eq!(params.get_cbar_label()?, "wavelength (nm)".to_string());
-        assert_eq!(params.get_legend_flag()?, false);
+        assert!(!params.get_legend_flag()?);
         assert!(params.get_zlim()?.is_some());
     } else {
         panic!("Expected PlotType::MultiLine2D");
     }
-
     Ok(())
 }
