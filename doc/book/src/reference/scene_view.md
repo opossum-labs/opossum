@@ -70,22 +70,42 @@ walls of the bores as well. OPOSSUM only accepts shapes that enclose an area and
 within the edge and apart from each other, so every optic shape it accepts can be drawn. A
 component that cannot be drawn all the same is left out, and the status line and the log say so.
 
-A component only knows where it is once the optical axis has been traced, so the model needs an
-analyzer that places its nodes — a ray trace. Without one there is nothing to place, and the view
-stays empty. Components the trace does not reach are reported in the log and left out rather than
-stopping the rest of the setup from being drawn.
+A component only knows where it is once the optical axis has been traced from a source, so the
+model needs a **source port** and an **analyzer** that defines its light — see
+[Which analyzer the view follows](#which-analyzer-the-view-follows). Without either there is
+nothing to place: the view stays empty, and its status line says what is missing.
+
+Components the axis does not reach — a block pasted next to the setup, say, or any other strand no
+source feeds — are left out rather than stopping the rest of the setup from being drawn. The status
+line counts them: click the count for a list, and pick one to go to it in the graph.
 
 If the optical axis ends *at* a component that still has others after it, those cannot be placed,
-and the view cannot be drawn at all. The log names the component the axis ended at. There are two
-usual causes:
+and the view cannot be drawn at all. The status line says why and names the component the axis
+ended at. There are two usual causes:
 
 - **The axis passes the component outside its optic shape** — a lens decentered by more than its
   radius, say, a double pass whose return path walks off, or a bore the axis runs through. Enlarge
   the optic shape or correct the position (see [Geometry](../concepts/geometry.md)).
-- **A grating is not tilted**: its diffraction order then does not propagate at the source's
-  wavelength, and the message names the Littrow angle to tilt the grating by.
+- **A grating is not tilted**: its diffraction order then does not propagate at the wavelength the
+  setup is placed at, and the message names the Littrow angle to tilt the grating by.
 
 A component with nothing after it is drawn either way.
+
+## Which analyzer the view follows
+
+Where a component ends up depends on the light that reaches it: an off-axis source, another
+alignment wavelength or another ambient medium all move it. The view therefore places the setup
+after one analyzer, and draws the optical axis and the rays of that same one.
+
+- **Unless you choose one**, it follows the first analyzer whose light is rays — a ray trace or a
+  ghost focus analysis — and the first analyzer of all only when none has rays.
+- **An energy analysis** knows its light only as spectra. When the view follows one, each source is
+  placed at the center wavelength of its own spectrum, which is what decides where a grating or a
+  wedge sends the axis. It has no rays of its own, so **Rays** shows nothing while the view follows
+  it.
+- **To follow another**, click the analyzer's name at the left of the status line and pick one from
+  the list; the one followed is marked. The choice lasts while OPOSSUM runs but is not saved with the
+  model, and when the chosen analyzer is deleted, the view goes back to the default.
 
 ## Light: the optical axis and the rays
 
@@ -94,14 +114,13 @@ Two kinds of light can be drawn over the components, each switched on and off in
 **The optical axis** (**Optical axis** in the menu, on by default) is the path the positioning run follows: one ray
 per source, the one every component is placed on. It is drawn as a purple line from each source
 through the components to wherever the axis leaves the setup, and shows how the setup is built up —
-why a component sits where it does, which way a fold turns. A model without an analyzer is placed
-from default rays, and its axis is drawn from those.
+why a component sits where it does, which way a fold turns.
 
-**The rays** (**Rays**, off by default) are the light of the sources an analyzer defines, traced
-through the setup like a ray trace does. They show what the axis alone cannot: how a bundle widens
-and focuses, where an optic shape clips it, where a beam splitter divides it. Each ray is coloured
-by its wavelength; infrared light, which has no colour of its own, is drawn red, and ultraviolet
-light violet.
+**The rays** (**Rays**, off by default) are the light of the sources as the analyzer the view
+follows defines it, traced through the setup like a ray trace does. They show what the axis alone
+cannot: how a bundle widens and focuses, where an optic shape clips it, where a beam splitter divides
+it. Each ray is colored by its wavelength; infrared light, which has no color of its own, is drawn
+red, and ultraviolet light violet.
 
 A ray that is stopped for passing a component outside its optic shape is drawn up to the last
 component it reached before, not up to the one it missed. One that misses a mirror, a parabolic
@@ -116,9 +135,8 @@ A few things to know about the rays:
   picture.
 - **Only the primary path is drawn.** A ghost focus analyzer contributes its sources, but not its
   reflections.
-- **They need an analyzer with sources.** Without one there is no light of the setup's own to draw,
-  and the **Rays** entry shows nothing. A model analyzed in several ways cannot be drawn at all, since
-  each analyzer may place it differently.
+- **They need an analyzer whose light is rays.** An energy analysis has none of its own, and the
+  **Rays** entry shows nothing while the view follows one.
 - **They cost a trace.** While Rays is on, every change to the model traces the sources again. Turn
   it off when you do not need it; while it is off nothing is traced.
 - Light that ends in a component without an output is drawn up to the component before it, not into
@@ -179,11 +197,23 @@ sidebar are never caught by them. Only bare keys count: holding Ctrl, Cmd, Alt o
 whatever else the combination belongs to. `L` rather than `R` toggles the rays, because `R` is kept
 for resetting the camera. Each key is also shown beside its entry in the menu.
 
+## The status line
+
+Above the picture the view keeps a single line about itself:
+
+| Part | Effect |
+| :--- | :--- |
+| **Analyzer name ▾** | The analyzer the view follows; click it to follow another |
+| Red message | Why nothing could be drawn: no source port, no analyzer, or where the optical axis ends |
+| **N component(s) could not be drawn** | Click it for a list of them; pick one to go to it in the graph |
+| **N components** | How many components are drawn |
+
+A long message is cut off at the end of the line; hover over it to read all of it. Every component
+that could not be drawn is noted in the log as well, with the reason.
+
 ## The 3D View menu
 
-Everything the view can be told sits in the **3D View** menu in the top navigation bar. The view
-itself keeps only a status line above the picture, with the count of drawn components and a note about
-any that had to be left out.
+Everything else the view can be told sits in the **3D View** menu in the top navigation bar.
 
 | Entry | Effect |
 | :--- | :--- |
@@ -210,7 +240,7 @@ Three things are worth knowing about the menu itself:
   it always names what a click would do.
 - **Everything below the first entry needs an open view** and is greyed out until there is one.
 - **What the view shows is remembered.** Close the view and open it again and the toggles, the ray
-  count and the opacity are as you left them. The camera is not — see below.
+  count, the opacity and the analyzer it follows are as you left them. The camera is not — see below.
 
 Refresh, Fit view, and Reset camera move the camera, and so does clicking a gizmo axis in the
 viewport. Table, World axes, Optical axis and Rays are visibility toggles and do not move the camera.
