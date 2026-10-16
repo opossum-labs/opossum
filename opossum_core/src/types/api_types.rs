@@ -1030,6 +1030,15 @@ pub struct SkippedSceneNode {
     pub reason: String,
 }
 
+/// The analyzer a 3D view of a model is drawn after.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, ToSchema, Eq)]
+pub struct SceneAnalyzer {
+    /// The analyzer's UUID, for asking for the same one again.
+    pub uid: Uuid,
+    /// The name the analyzer is shown by: its own, or else its type's.
+    pub name: String,
+}
+
 /// Every drawable component of a model, with its placement but without its geometry.
 ///
 /// This is the cheap half of a 3D view. A viewer fetches it whenever the model changed and compares
@@ -1052,4 +1061,10 @@ pub struct SceneManifest {
     /// no longer matches the model.
     #[serde(default)]
     pub notice: Option<String>,
+    /// The analyzer the placement follows, or `None` if the model has none.
+    ///
+    /// Named even when the model cannot be placed after it, so that a viewer can offer to follow
+    /// another one instead.
+    #[serde(default)]
+    pub analyzer: Option<SceneAnalyzer>,
 }

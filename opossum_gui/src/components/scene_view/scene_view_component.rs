@@ -6,12 +6,14 @@ use dioxus::prelude::*;
 use dioxus_glb_viewer::{
     Environment, GlbObject, GlbViewer, PickEvent, ViewerEvent, ViewerOptions, use_glb_viewer_handle,
 };
-use opossum_core::types::api_types::SceneManifest;
+use opossum_core::types::api_types::{AnalyzerItemDto, SceneAnalyzer, SceneManifest};
 
 use crate::{
-    HTTP_API_CLIENT, OPOSSUM_UI_LOGS, SCENE_REVISION, SCENE_VIEW_CONTROLS, SCENE_VIEW_REQUEST, api,
+    CONTEXT_MENU, HTTP_API_CLIENT, OPOSSUM_UI_LOGS, SCENE_REVISION, SCENE_VIEW_ANALYZER,
+    SCENE_VIEW_CONTROLS, SCENE_VIEW_REQUEST, api,
     api::eval_action_run,
     components::{
+        context_menu::cx_menu::CxMenu,
         scene_view::{
             AXIS_OBJECT_ID, RAYS_OBJECT_ID, SceneShortcut, SceneViewRequest, action_for_pick,
             apply_node_selection, is_ray_object, objects_of, ray_object, table_ground,
@@ -52,6 +54,9 @@ pub fn SceneView() -> Element {
     let mut skipped_count = use_signal(|| 0_usize);
     // Why nothing of the model can be drawn, as the last fetch said; `None` while it can be.
     let mut notice = use_signal(|| None::<String>);
+    // The analyzer the last fetch was placed after. The axis and the rays follow the same one, and
+    // the status line names it.
+    let mut drawn_after = use_signal(|| None::<SceneAnalyzer>);
     let viewer_handle = use_glb_viewer_handle();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     // The graph editor provides its workspace store to this whole subtree, so the 3D view can read
@@ -85,6 +90,7 @@ pub fn SceneView() -> Element {
                 HTTP_API_CLIENT().base_url(),
                 *fetches.peek(),
                 controls.max_rays,
+                drawn_after.peek().as_ref().map(|analyzer| analyzer.uid),
             ),
             true,
             controls.opacity,
@@ -110,10 +116,11 @@ pub fn SceneView() -> Element {
     });
 
     // Reading `SCENE_REVISION` inside is what keeps the view live: the resource re-runs on every
-    // model change, and once on mount so the tab is never shown empty. It only exists while the tab
-    // is open, so a closed 3D view costs the backend nothing at all.
+    // model change, on every other choice of analyzer, and once on mount so the tab is never shown
+    // empty. It only exists while the tab is open, so a closed 3D view costs the backend nothing.
     let mut manifest = use_resource(move || async move {
         SCENE_REVISION();
+        let analyzer = SCENE_VIEW_ANALYZER();
         // A burst of edits - dragging a value through a range, or a paste that touches several
         // nodes - would otherwise re-mesh the whole model once per step. Restarting the resource
         // drops the sleeping future, so only the last edit of a burst survives to fetch anything.
@@ -121,7 +128,7 @@ pub fn SceneView() -> Element {
         if *fetches.peek() > 0 {
             debounce().await;
         }
-        api::get_scene_manifest(None).await
+        api::get_scene_manifest(analyzer).await
     });
 
     use_effect(move || {
@@ -133,6 +140,7 @@ pub fn SceneView() -> Element {
                 Some(move |fetched: SceneManifest| {
                     let fetch = *fetches.peek() + 1;
                     fetches.set(fetch);
+                    drawn_after.set(fetched.analyzer.clone());
                     notice.set(fetched.notice.clone());
                     skipped_count.set(fetched.skipped.len());
                     for s in &fetched.skipped {
@@ -154,7 +162,11 @@ pub fn SceneView() -> Element {
                     let mut list = objects_of(&fetched, &base_url);
                     list.push(ray_object(
                         AXIS_OBJECT_ID,
-                        api::scene_axis_url(&base_url, fetch),
+                        api::scene_axis_url(
+                            &base_url,
+                            fetch,
+                            fetched.analyzer.as_ref().map(|analyzer| analyzer.uid),
+                        ),
                         controls.beam_axis,
                         // Always solid, whatever the rays are set to: the axis is the single line the
                         // whole setup is built on, and it is one line per source rather than a bundle
@@ -297,9 +309,42 @@ pub fn SceneView() -> Element {
                     }
                 }
             },
-            // What the view has to say about itself, now that everything it can be told sits in the
-            // 3D View menu: why nothing could be drawn, what was left out, and how much is drawn.
+            // What the view has to say about itself: the analyzer it follows, why nothing could be
+            // drawn, what was left out, and how much is drawn. The analyzer is chosen here, where its
+            // effect shows; everything else the view can be told sits in the 3D View menu.
             div { class: "scene-view-status",
+                if let Some(analyzer) = drawn_after() {
+                    span {
+                        class: "scene-view-analyzer",
+                        title: "The analyzer the 3D view is drawn after. Click to follow another.",
+                        onclick: move |event: MouseEvent| {
+                            let (x, y) = (event.page_coordinates().x, event.page_coordinates().y);
+                            spawn(async move {
+                                eval_action_run(
+                                    api::get_analyzers().await,
+                                    Some(move |analyzers: Vec<AnalyzerItemDto>| {
+                                        let mut menu = CxMenu::new(x, y, vec![]);
+                                        for AnalyzerItemDto { id, info } in analyzers {
+                                            let mark = if id == analyzer.uid {
+                                                "\u{25cf}"
+                                            } else {
+                                                "\u{2003}"
+                                            };
+                                            menu.add_view_entry(
+                                                format!("{mark} {}", info.display_name()),
+                                                Callback::new(move |()| {
+                                                    *SCENE_VIEW_ANALYZER.write() = Some(id);
+                                                }),
+                                            );
+                                        }
+                                        *CONTEXT_MENU.write() = Some(menu);
+                                    }),
+                                );
+                            });
+                        },
+                        "{analyzer.name} \u{25be}"
+                    }
+                }
                 if let Some(text) = notice() {
                     span { class: "scene-view-notice", title: "{text}", "{text}" }
                 }

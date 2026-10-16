@@ -129,6 +129,12 @@ static SCENE_VIEW_OPEN: GlobalSignal<bool> = Signal::global(|| false);
 /// at its default the next time it is opened.
 static SCENE_VIEW_CONTROLS: GlobalSignal<SceneViewControls> =
     Signal::global(SceneViewControls::default);
+/// The analyzer the user chose for the 3D view to follow, or `None` for the one the model is drawn
+/// after by default.
+///
+/// Global so that the choice outlives a closed view, like [`SCENE_VIEW_CONTROLS`], but a signal of
+/// its own: the view fetches the model again when it changes, and toggling the table must not.
+static SCENE_VIEW_ANALYZER: GlobalSignal<Option<Uuid>> = Signal::global(|| None);
 /// A one-off request to the 3D view - refresh the model, frame the components, put the camera back -
 /// set by the 3D View menu and consumed (cleared) by the view's effect that carries it out.
 ///

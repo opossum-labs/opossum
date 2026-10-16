@@ -20,7 +20,7 @@ use opossum_core::{
     opm_document::OpmDocument,
     types::api_types::{
         DocumentChange, ErrorResponse, JumpTarget, LoadDocumentResponse, PositionUpdate,
-        SceneManifest, UndoRedoResponse, UpdateNodeRequest, ViewportChangeRequest,
+        SceneAnalyzer, SceneManifest, UndoRedoResponse, UpdateNodeRequest, ViewportChangeRequest,
     },
 };
 use serde::Deserialize;
@@ -38,7 +38,7 @@ const GLB_MEDIA_TYPE: &str = "model/gltf-binary";
 #[derive(Debug, Deserialize, IntoParams)]
 struct SceneQuery {
     /// Uuid of the analyzer to take the placement from, or none to follow the first analyzer whose
-    /// light is rays, else the first.
+    /// light is rays, else the first. One the document no longer has is ignored.
     analyzer: Option<Uuid>,
 }
 
@@ -52,10 +52,28 @@ const MAX_DISPLAY_RAYS: usize = 5000;
 #[derive(Debug, Deserialize, IntoParams)]
 struct RaysQuery {
     /// Uuid of the analyzer to take the sources from, or none to follow the first analyzer whose
-    /// light is rays, else the first.
+    /// light is rays, else the first. One the document no longer has is ignored.
     analyzer: Option<Uuid>,
     /// The most rays drawn per source (default 500, at most 5000).
     max_rays: Option<usize>,
+}
+
+/// The analyzer a 3D view asked to follow, if the document still has it.
+///
+/// A viewer holds on to its choice while the document changes underneath it: the analyzer may have
+/// been deleted, undone, or belong to a document since loaded over it. A choice that is gone is
+/// dropped, so the view follows the analyzer the model is drawn after by default rather than fail.
+///
+/// # Arguments
+///
+/// - `document`: the live document
+/// - `asked`: the analyzer the viewer asked for, if any
+///
+/// # Returns
+///
+/// `asked`, or `None` if the document has no such analyzer.
+fn analyzer_still_there(document: &OpmDocument, asked: Option<Uuid>) -> Option<Uuid> {
+    asked.filter(|id| document.drawing_analyzer(Some(*id)).is_ok())
 }
 
 /// Delete the current document and create new (empty) one
@@ -121,7 +139,7 @@ async fn get_scene(
     // holding the document across that would block every other edit for as long as it takes.
     let placed = {
         let document = data.document.lock();
-        document.placed_scenery(query.analyzer)?
+        document.placed_scenery(analyzer_still_there(&document, query.analyzer))?
     };
     let glb = scene_of(&placed, default_reference_wavelength())?
         .to_glb()
@@ -142,7 +160,7 @@ async fn get_scene(
 ///
 /// As with `/scene.glb`, the components only have a place in space once the optical axis has been
 /// traced, so that run happens here on a copy, and the `analyzer` parameter picks which analyzer to
-/// follow when the model has more than one.
+/// follow when the model has more than one. The list names the analyzer it followed.
 ///
 /// A model that cannot be placed is answered with an empty list whose `notice` says why: that is
 /// a state of the model a viewer has to show, not a failed request.
@@ -160,17 +178,25 @@ async fn get_scene_manifest(
 ) -> Result<impl Responder, BackEndErrorResponse> {
     // Same split as `get_scene`: only the copy needs the live model, and the meshing that follows
     // must not block every other edit for as long as it takes.
-    let placed = {
+    let (placed, analyzer) = {
         let document = data.document.lock();
-        document.placed_scenery(query.analyzer)
+        let asked = analyzer_still_there(&document, query.analyzer);
+        let analyzer = document
+            .drawing_analyzer(asked)?
+            .map(|(uid, info)| SceneAnalyzer {
+                uid,
+                name: info.display_name(),
+            });
+        (document.placed_scenery(asked), analyzer)
     };
-    let manifest = match placed {
+    let mut manifest = match placed {
         Ok(placed) => manifest_of(&placed, default_reference_wavelength())?,
         Err(e) => SceneManifest {
             notice: Some(e.to_string()),
             ..SceneManifest::default()
         },
     };
+    manifest.analyzer = analyzer;
     Ok(Json(manifest))
 }
 
@@ -242,7 +268,7 @@ async fn get_scene_axis(
 ) -> Result<impl Responder, BackEndErrorResponse> {
     let axes = {
         let document = data.document.lock();
-        document.positioning_rays(query.analyzer)?
+        document.positioning_rays(analyzer_still_there(&document, query.analyzer))?
     };
     // One ray per source: nothing to thin out.
     let glb = rays_glb(&axes, Some(AXIS_COLOR), usize::MAX)?;
@@ -279,10 +305,15 @@ async fn get_scene_rays(
         .max_rays
         .unwrap_or(DEFAULT_DISPLAY_RAYS)
         .min(MAX_DISPLAY_RAYS);
-    let analyzer = query.analyzer;
     // The trace is the long part, so it must hold neither the document nor the request thread. The
     // model is taken as its file, the only copy that shares nothing with the live document.
-    let model = data.document.lock().to_opm_file_string()?;
+    let (model, analyzer) = {
+        let document = data.document.lock();
+        (
+            document.to_opm_file_string()?,
+            analyzer_still_there(&document, query.analyzer),
+        )
+    };
     let glb = web::block(move || {
         let rays = OpmDocument::from_string(&model)?.traced_rays(analyzer, max_rays)?;
         rays_glb(&rays, None, max_rays)
@@ -1767,7 +1798,10 @@ mod test {
     }
 
     /// Ask a state for the list of its drawable components.
-    async fn request_manifest(app_state: &Data<AppState>) -> actix_web::dev::ServiceResponse {
+    async fn request_manifest(
+        app_state: &Data<AppState>,
+        query: &str,
+    ) -> actix_web::dev::ServiceResponse {
         let app = test::init_service(
             App::new()
                 .app_data(app_state.clone())
@@ -1775,9 +1809,69 @@ mod test {
         )
         .await;
         let req = test::TestRequest::get()
-            .uri("/document/scene/manifest")
+            .uri(&format!("/document/scene/manifest{query}"))
             .to_request();
         app.call(req).await.unwrap()
+    }
+
+    /// The first analyzer of the model `app_state` holds: the one a view follows by default here.
+    fn first_analyzer(app_state: &Data<AppState>) -> Uuid {
+        *app_state.document.lock().analyzers().keys().next().unwrap()
+    }
+
+    /// The manifest names the analyzer it was drawn after, so a viewer can say which one it shows.
+    #[actix_web::test]
+    async fn the_manifest_names_the_analyzer_it_is_drawn_after() {
+        let app_state = state_with_a_lens();
+        let ray_trace = first_analyzer(&app_state);
+
+        let manifest: SceneManifest =
+            test::read_body_json(request_manifest(&app_state, "").await).await;
+
+        let analyzer = manifest.analyzer.expect("the model is analyzed");
+        assert_eq!(analyzer.uid, ray_trace);
+        assert_eq!(analyzer.name, "RayTracing");
+    }
+
+    /// Named, an analyzer is the one the manifest is drawn after.
+    #[actix_web::test]
+    async fn the_manifest_is_drawn_after_the_analyzer_named() {
+        let app_state = state_with_a_lens();
+        let named = analyze_two_more_ways(&app_state);
+
+        let manifest: SceneManifest =
+            test::read_body_json(request_manifest(&app_state, &format!("?analyzer={named}")).await)
+                .await;
+
+        assert_eq!(manifest.analyzer.map(|analyzer| analyzer.uid), Some(named));
+    }
+
+    /// A view may still ask for an analyzer that has gone since - deleted, undone, or part of a
+    /// document loaded over it. The model is drawn after the one it follows by default instead.
+    #[actix_web::test]
+    async fn an_analyzer_that_is_gone_falls_back_to_the_default() {
+        let app_state = state_with_a_lens();
+        let ray_trace = first_analyzer(&app_state);
+
+        let resp = request_manifest(&app_state, &format!("?analyzer={}", Uuid::new_v4())).await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        let manifest: SceneManifest = test::read_body_json(resp).await;
+        assert!(manifest.notice.is_none(), "{:?}", manifest.notice);
+        assert_eq!(
+            manifest.analyzer.map(|analyzer| analyzer.uid),
+            Some(ray_trace)
+        );
+    }
+
+    /// The rays fall back the same way for an analyzer that has gone.
+    #[actix_web::test]
+    async fn the_rays_of_an_analyzer_that_is_gone_are_those_of_the_default() {
+        let query = format!("?analyzer={}", Uuid::new_v4());
+        let resp = request_rays(&state_with_a_traced_source(), &query).await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(holds_lines(&test::read_body(resp).await));
     }
 
     /// Ask a state for one component's geometry.
@@ -1811,7 +1905,7 @@ mod test {
             .node_attr()
             .uuid();
 
-        let resp = request_manifest(&app_state).await;
+        let resp = request_manifest(&app_state, "").await;
 
         assert_eq!(resp.status(), StatusCode::OK);
         let manifest: SceneManifest = test::read_body_json(resp).await;
@@ -1823,7 +1917,7 @@ mod test {
     /// A model with nothing to draw still answers with a list, an empty one that says why.
     #[actix_web::test]
     async fn the_manifest_of_an_empty_model_is_empty_and_says_why() {
-        let resp = request_manifest(&Data::new(AppState::default())).await;
+        let resp = request_manifest(&Data::new(AppState::default()), "").await;
 
         assert_eq!(resp.status(), StatusCode::OK);
         let manifest: SceneManifest = test::read_body_json(resp).await;
@@ -1867,11 +1961,15 @@ mod test {
         let app_state = Data::new(AppState::default());
         *app_state.document.lock() = document;
 
-        let resp = request_manifest(&app_state).await;
+        let resp = request_manifest(&app_state, "").await;
 
         assert_eq!(resp.status(), StatusCode::OK);
         let manifest: SceneManifest = test::read_body_json(resp).await;
         assert!(manifest.nodes.is_empty());
+        assert!(
+            manifest.analyzer.is_some(),
+            "the analyzer that cannot place the model is still named, so another can be chosen"
+        );
         let notice = manifest
             .notice
             .expect("the manifest says why nothing is drawn");
@@ -1884,7 +1982,7 @@ mod test {
     async fn a_component_named_by_the_manifest_is_served_as_a_gltf_binary() {
         let app_state = state_with_a_lens();
         let manifest: SceneManifest =
-            test::read_body_json(request_manifest(&app_state).await).await;
+            test::read_body_json(request_manifest(&app_state, "").await).await;
 
         let resp = request_scene_node(&app_state, manifest.nodes[0].uid).await;
 

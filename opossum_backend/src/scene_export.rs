@@ -606,7 +606,7 @@ pub fn manifest_of(placed: &NodeGroup, wavelength: Length) -> OpmResult<SceneMan
     Ok(SceneManifest {
         nodes,
         skipped,
-        notice: None,
+        ..SceneManifest::default()
     })
 }
 

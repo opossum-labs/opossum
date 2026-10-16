@@ -196,9 +196,9 @@ impl OpmDocument {
     /// This function returns an error if the named analyzer does not exist, if the positioning run
     /// fails, or if a source cannot be built or the trace fails.
     pub fn traced_rays(&self, analyzer_id: Option<Uuid>, max_rays: usize) -> OpmResult<Vec<Rays>> {
-        let Some(analyzer) = self
+        let Some((_, analyzer)) = self
             .drawing_analyzer(analyzer_id)?
-            .filter(|analyzer| analyzer.analyzer_type().has_ray_sources())
+            .filter(|(_, analyzer)| analyzer.analyzer_type().has_ray_sources())
         else {
             return Ok(Vec::new());
         };
@@ -245,7 +245,9 @@ impl OpmDocument {
         let analyzer = self.drawing_analyzer(analyzer_id)?;
         let has_source_port = !self.scenery.find_source_ports()?.is_empty();
         let lacks = match (has_source_port, analyzer) {
-            (true, Some(analyzer)) => return Ok(analyzer.analyzer_type().positioning_config()),
+            (true, Some((_, analyzer))) => {
+                return Ok(analyzer.analyzer_type().positioning_config());
+            }
             (false, Some(_)) => "no source port",
             (true, None) => "no analyzer",
             (false, None) => "neither",
@@ -269,22 +271,31 @@ impl OpmDocument {
     ///
     /// # Returns
     ///
-    /// The analyzer, or `None` if the model has none.
+    /// The analyzer with its [`Uuid`], or `None` if the model has none.
     ///
     /// # Errors
     ///
     /// This function returns an error if the named analyzer does not exist.
-    fn drawing_analyzer(&self, analyzer_id: Option<Uuid>) -> OpmResult<Option<&AnalyzerInfo>> {
+    pub fn drawing_analyzer(
+        &self,
+        analyzer_id: Option<Uuid>,
+    ) -> OpmResult<Option<(Uuid, &AnalyzerInfo)>> {
         let Some(id) = analyzer_id else {
             return Ok(self
                 .analyzers
-                .values()
-                .find(|analyzer| analyzer.analyzer_type().has_ray_sources())
-                .or_else(|| self.analyzers.values().next()));
+                .iter()
+                .find(|(_, analyzer)| analyzer.analyzer_type().has_ray_sources())
+                .or_else(|| self.analyzers.first())
+                .map(|(id, analyzer)| (*id, analyzer)));
         };
-        self.analyzers.get(&id).map(Some).ok_or_else(|| {
-            OpossumError::OpmDocument(format!("this model has no analyzer {id} to draw it after"))
-        })
+        self.analyzers
+            .get(&id)
+            .map(|analyzer| Some((id, analyzer)))
+            .ok_or_else(|| {
+                OpossumError::OpmDocument(format!(
+                    "this model has no analyzer {id} to draw it after"
+                ))
+            })
     }
 
     /// Expands the analyzers of this [`OpmDocument`] into individual executable runs.

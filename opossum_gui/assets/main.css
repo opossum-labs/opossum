@@ -352,9 +352,10 @@ body {
 }
 
 /* What the 3D view reports about itself. It used to be a toolbar; everything it can be told moved
-   into the 3D View menu, so it carries only text now - and it is then the same thing the graph's
-   breadcrumb bar is: one line of text over a canvas. Same grey, same height as `.graph-breadcrumbs`,
-   so switching between a graph tab and this one does not move the canvas underneath. */
+   into the 3D View menu but the analyzer it follows, which is chosen here where its effect shows. So
+   it is one line of text over a canvas, the same thing the graph's breadcrumb bar is. Same grey, same
+   height as `.graph-breadcrumbs`, so switching between a graph tab and this one does not move the
+   canvas underneath. */
 .scene-view-status {
     height: 20px;
     flex-shrink: 0;
@@ -364,6 +365,20 @@ body {
     padding: 0 6px;
     background-color: #363636;
     border-bottom: 1px solid #252525;
+}
+
+/* The analyzer the view follows; a click lists the others to follow instead. */
+.scene-view-analyzer {
+    flex-shrink: 0;
+    padding: 0 4px;
+    border-radius: 3px;
+    color: #d0d0d0;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+.scene-view-analyzer:hover {
+    background-color: #4a4a4a;
 }
 
 .scene-view-skipped {

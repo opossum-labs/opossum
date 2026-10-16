@@ -516,10 +516,10 @@ mod tests {
     fn every_fetch_gives_the_axis_a_new_url() {
         let base = "http://localhost:8001";
         assert_ne!(
-            crate::api::scene_axis_url(base, 1),
-            crate::api::scene_axis_url(base, 2)
+            crate::api::scene_axis_url(base, 1, None),
+            crate::api::scene_axis_url(base, 2, None)
         );
-        assert!(crate::api::scene_axis_url(base, 1).starts_with(base));
+        assert!(crate::api::scene_axis_url(base, 1, None).starts_with(base));
     }
 
     /// A new number of rays has to be a new URL, or the viewer would keep showing the old rays.
@@ -527,12 +527,24 @@ mod tests {
     fn a_new_ray_count_gives_the_rays_a_new_url() {
         let base = "http://localhost:8001";
         assert_ne!(
-            crate::api::scene_rays_url(base, 1, 500),
-            crate::api::scene_rays_url(base, 1, 50)
+            crate::api::scene_rays_url(base, 1, 500, None),
+            crate::api::scene_rays_url(base, 1, 50, None)
         );
         assert_ne!(
-            crate::api::scene_rays_url(base, 1, 500),
-            crate::api::scene_rays_url(base, 2, 500)
+            crate::api::scene_rays_url(base, 1, 500, None),
+            crate::api::scene_rays_url(base, 2, 500, None)
         );
+    }
+
+    /// The axis and the rays follow the analyzer the components were placed after, so their URLs
+    /// name it - and name none when the model is drawn after its default.
+    #[test]
+    fn the_light_follows_the_analyzer_the_components_were_placed_after() {
+        let base = "http://localhost:8001";
+        let analyzer = Uuid::new_v4();
+        let named = format!("analyzer={analyzer}");
+        assert!(crate::api::scene_axis_url(base, 1, Some(analyzer)).contains(&named));
+        assert!(crate::api::scene_rays_url(base, 1, 500, Some(analyzer)).contains(&named));
+        assert!(!crate::api::scene_axis_url(base, 1, None).contains("analyzer"));
     }
 }

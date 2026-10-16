@@ -11,7 +11,8 @@ use crate::{
 };
 
 /// Everything the 3D view can be told, in one menu: whether it is open at all, what it shows, and
-/// the three things that move its camera.
+/// the three things that move its camera. Only the analyzer it follows is chosen elsewhere, in the
+/// view's own status line, where its effect shows.
 ///
 /// The entries below the first one need a view to act on, so they are disabled while it is closed -
 /// disabled rather than hidden, so the menu always has the same shape and says what the view offers

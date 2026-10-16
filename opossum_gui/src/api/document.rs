@@ -108,14 +108,13 @@ pub async fn post_viewport_change(
 ///
 /// # Arguments
 ///
-/// - `analyzer`: which analyzer's positioning run to take the placement from, or `None` when the
-///   model has only one and it need not be named
+/// - `analyzer`: the analyzer to take the placement from, or `None` for the one the model is drawn
+///   after by default
 ///
 /// # Errors
 ///
-/// This function will return an error if
-/// - the model cannot be placed (e.g. it has several analyzers and none was named)
-/// - a component cannot be meshed
+/// This function will return an error if the components cannot be listed. A model that cannot be
+/// placed is no error: the manifest's `notice` says why.
 pub async fn get_scene_manifest(analyzer: Option<Uuid>) -> Result<SceneManifest, String> {
     let route = analyzer.map_or_else(
         || "/api/document/scene/manifest".to_owned(),
@@ -159,13 +158,17 @@ pub fn scene_node_url(base_url: &str, uid: Uuid, geometry: &str) -> String {
 ///
 /// - `base_url`: the backend's root, from [`crate::api::http_client::HTTPClient::base_url`]
 /// - `fetch`: how many times the view has fetched the model so far
+/// - `analyzer`: the analyzer the components were placed after, so the axis follows the same one
 ///
 /// # Returns
 ///
 /// An absolute URL the webview can fetch.
 #[must_use]
-pub fn scene_axis_url(base_url: &str, fetch: usize) -> String {
-    format!("{base_url}/api/document/scene/axis.glb?v={fetch}")
+pub fn scene_axis_url(base_url: &str, fetch: usize, analyzer: Option<Uuid>) -> String {
+    format!(
+        "{base_url}/api/document/scene/axis.glb?v={fetch}{}",
+        analyzer_param(analyzer)
+    )
 }
 
 /// The URL the 3D viewer fetches the light of the model's sources from.
@@ -179,11 +182,27 @@ pub fn scene_axis_url(base_url: &str, fetch: usize) -> String {
 /// - `base_url`: the backend's root, from [`crate::api::http_client::HTTPClient::base_url`]
 /// - `fetch`: how many times the view has fetched the model so far
 /// - `max_rays`: the most rays drawn per source; the backend caps it
+/// - `analyzer`: the analyzer the components were placed after, so the rays are its light
 ///
 /// # Returns
 ///
 /// An absolute URL the webview can fetch.
 #[must_use]
-pub fn scene_rays_url(base_url: &str, fetch: usize, max_rays: usize) -> String {
-    format!("{base_url}/api/document/scene/rays.glb?max_rays={max_rays}&v={fetch}")
+pub fn scene_rays_url(
+    base_url: &str,
+    fetch: usize,
+    max_rays: usize,
+    analyzer: Option<Uuid>,
+) -> String {
+    format!(
+        "{base_url}/api/document/scene/rays.glb?max_rays={max_rays}&v={fetch}{}",
+        analyzer_param(analyzer)
+    )
+}
+
+/// The query parameter naming `analyzer`, to append after another one; empty for none.
+fn analyzer_param(analyzer: Option<Uuid>) -> String {
+    analyzer
+        .map(|id| format!("&analyzer={id}"))
+        .unwrap_or_default()
 }
