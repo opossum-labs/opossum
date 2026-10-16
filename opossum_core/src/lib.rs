@@ -71,11 +71,11 @@ mod test {
     #[test]
     fn get_ver() -> OpmResult<()> {
         let version_string = get_version();
-        
+
         // Akzeptiert entweder Datum "YYYY/MM/DD HH:MM" ODER Fallback "unknown date"
         let re = Regex::new(r"^.+ \((?:\d{4}/\d{2}/\d{2} \d{2}:\d{2}|unknown date)\)$")
             .map_err(|e| OpossumError::Other(format!("Error in regular expression: {e}")))?;
-        
+
         assert!(
             re.is_match(&version_string),
             "version_string '{version_string}' does not match expected pattern"
