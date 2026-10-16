@@ -6,7 +6,9 @@ use dioxus::prelude::*;
 use dioxus_glb_viewer::{
     Environment, GlbObject, GlbViewer, PickEvent, ViewerEvent, ViewerOptions, use_glb_viewer_handle,
 };
-use opossum_core::types::api_types::{AnalyzerItemDto, SceneAnalyzer, SceneManifest};
+use opossum_core::types::api_types::{
+    AnalyzerItemDto, SceneAnalyzer, SceneManifest, SkippedSceneNode,
+};
 
 use crate::{
     CONTEXT_MENU, HTTP_API_CLIENT, OPOSSUM_UI_LOGS, SCENE_REVISION, SCENE_VIEW_ANALYZER,
@@ -51,7 +53,8 @@ async fn debounce() {
 #[component]
 pub fn SceneView() -> Element {
     let mut objects = use_signal(Vec::<GlbObject>::new);
-    let mut skipped_count = use_signal(|| 0_usize);
+    // The components the last fetch had to leave out, each with why and the graph it sits in.
+    let mut skipped = use_signal(Vec::<SkippedSceneNode>::new);
     // Why nothing of the model can be drawn, as the last fetch said; `None` while it can be.
     let mut notice = use_signal(|| None::<String>);
     // The analyzer the last fetch was placed after. The axis and the rays follow the same one, and
@@ -142,7 +145,7 @@ pub fn SceneView() -> Element {
                     fetches.set(fetch);
                     drawn_after.set(fetched.analyzer.clone());
                     notice.set(fetched.notice.clone());
-                    skipped_count.set(fetched.skipped.len());
+                    skipped.set(fetched.skipped.clone());
                     for s in &fetched.skipped {
                         OPOSSUM_UI_LOGS.write().add_log(&format!(
                             "3D view: '{}' could not be drawn: {}",
@@ -311,7 +314,8 @@ pub fn SceneView() -> Element {
             },
             // What the view has to say about itself: the analyzer it follows, why nothing could be
             // drawn, what was left out, and how much is drawn. The analyzer is chosen here, where its
-            // effect shows; everything else the view can be told sits in the 3D View menu.
+            // effect shows, and what was left out is listed here to jump to in the graph; everything
+            // else the view can be told sits in the 3D View menu.
             div { class: "scene-view-status",
                 if let Some(analyzer) = drawn_after() {
                     span {
@@ -348,9 +352,34 @@ pub fn SceneView() -> Element {
                 if let Some(text) = notice() {
                     span { class: "scene-view-notice", title: "{text}", "{text}" }
                 }
-                if *skipped_count.read() > 0 {
-                    span { class: "scene-view-skipped",
-                        "{skipped_count} component(s) could not be drawn \u{2013} see logs"
+                if !skipped.read().is_empty() {
+                    span {
+                        class: "scene-view-skipped",
+                        title: "Click to list them and go to one in the graph.",
+                        onclick: move |event: MouseEvent| {
+                            let mut menu = CxMenu::new(
+                                event.page_coordinates().x,
+                                event.page_coordinates().y,
+                                vec![],
+                            );
+                            // Cloned out first, so no borrow of the signal outlives this line.
+                            let components = skipped.peek().clone();
+                            for component in components {
+                                menu.add_view_entry(
+                                    format!("{} ({})", component.name, component.reason),
+                                    Callback::new(move |()| {
+                                        workspace_processor
+                                            .send(GraphsWorkspaceAction::RevealNode {
+                                                node_id: component.uid,
+                                                graph_id: component.group,
+                                                bring_to_front: true,
+                                            });
+                                    }),
+                                );
+                            }
+                            *CONTEXT_MENU.write() = Some(menu);
+                        },
+                        "{skipped.read().len()} component(s) could not be drawn \u{2013} click to list"
                     }
                 }
                 span { class: "scene-view-count",

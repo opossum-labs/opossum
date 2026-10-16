@@ -1024,6 +1024,9 @@ pub struct SceneNodeEntry {
 pub struct SkippedSceneNode {
     /// The component's node UUID.
     pub uid: Uuid,
+    /// The UUID of the graph that directly contains the component, so that a viewer can take the
+    /// user to it in the graph editor - just as [`SceneNodeEntry::group`] does for a drawn one.
+    pub group: Uuid,
     /// The component's name, for labelling it in error messages.
     pub name: String,
     /// Why the component was left out of the scene.

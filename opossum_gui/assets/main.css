@@ -381,9 +381,15 @@ body {
     background-color: #4a4a4a;
 }
 
+/* What was left out of the scene; a click lists it, and an entry goes to it in the graph. */
 .scene-view-skipped {
     color: #f0a500;
     font-size: 0.75rem;
+    cursor: pointer;
+}
+
+.scene-view-skipped:hover {
+    text-decoration: underline;
 }
 
 /* Why nothing of the model can be drawn. One line in the strip's fixed height; the whole message is

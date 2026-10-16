@@ -138,8 +138,8 @@ enum Drawn<'a> {
 ///
 /// # Errors
 ///
-/// This function returns an error if the nodes cannot be walked. An error from `draw` is reported
-/// and skipped, not returned.
+/// This function returns an error if the nodes cannot be walked, or if the graph of a skipped
+/// component cannot be found. An error from `draw` is reported and skipped, not returned.
 fn for_each_drawable<F>(placed: &NodeGroup, mut draw: F) -> OpmResult<Vec<SkippedSceneNode>>
 where
     F: FnMut(Drawn<'_>) -> OpmResult<()>,
@@ -157,6 +157,7 @@ where
             warn!("{node_ref} has no place in the setup and is left out of the scene");
             skipped.push(SkippedSceneNode {
                 uid: node_ref.uuid(),
+                group: parent_group_id_or_self(placed, node_ref.uuid())?,
                 name: node_ref.name().to_string(),
                 reason: "has no place in the setup".to_string(),
             });
@@ -174,6 +175,7 @@ where
             warn!("{node_ref} cannot be drawn and is left out of the scene: {e}");
             skipped.push(SkippedSceneNode {
                 uid: node_ref.uuid(),
+                group: parent_group_id_or_self(placed, node_ref.uuid())?,
                 name: node_ref.name().to_string(),
                 reason: e.to_string(),
             });
@@ -1340,6 +1342,30 @@ mod test {
             "the reason should mention placement: '{}'",
             m.skipped[0].reason
         );
+        Ok(())
+    }
+
+    /// A component left out of the scene is listed with the graph that contains it, so a viewer can
+    /// take the user there: here a lens inside a group no light reaches.
+    #[test]
+    fn a_skipped_component_inside_a_group_is_listed_with_that_group() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let connected = scenery.add_node(Lens::default())?;
+        scenery.connect_nodes(source, "output_1", connected, "input_1", millimeter!(50.0))?;
+        let mut inner = NodeGroup::new("inner");
+        let unreached = inner.add_node(Lens::default())?;
+        let group_id = scenery.add_node(inner)?;
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(source, RayDataBuilder::default());
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+
+        let m = manifest(&document)?;
+
+        assert_eq!(m.skipped.len(), 1);
+        assert_eq!(m.skipped[0].uid, unreached);
+        assert_eq!(m.skipped[0].group, group_id);
         Ok(())
     }
 
