@@ -602,7 +602,11 @@ pub fn manifest_of(placed: &OpmDocument, wavelength: Length) -> OpmResult<SceneM
         });
         Ok(())
     })?;
-    Ok(SceneManifest { nodes, skipped })
+    Ok(SceneManifest {
+        nodes,
+        skipped,
+        notice: None,
+    })
 }
 
 /// What a component looks like, as a short string that changes when its shape or material does.

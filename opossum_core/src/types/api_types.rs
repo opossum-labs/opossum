@@ -1045,4 +1045,11 @@ pub struct SceneManifest {
     /// leaving them to wonder why part of the setup is not shown.
     #[serde(default)]
     pub skipped: Vec<SkippedSceneNode>,
+    /// Why nothing of the model can be drawn, if that is so.
+    ///
+    /// Set when the model cannot be placed at all - the optical axis cannot be traced through it,
+    /// say - and `nodes` and `skipped` are empty then. A viewer shows this instead of a picture that
+    /// no longer matches the model.
+    #[serde(default)]
+    pub notice: Option<String>,
 }

@@ -371,6 +371,17 @@ body {
     font-size: 0.75rem;
 }
 
+/* Why nothing of the model can be drawn. One line in the strip's fixed height; the whole message is
+   in the tooltip. */
+.scene-view-notice {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: #ff7b72;
+    font-size: 0.75rem;
+}
+
 .scene-view-count {
     margin-left: auto;
     color: #9e9e9e;

@@ -143,11 +143,14 @@ async fn get_scene(
 /// As with `/scene.glb`, the components only have a place in space once the optical axis has been
 /// traced, so that run happens here on a copy, and the `analyzer` parameter picks which analyzer to
 /// follow when the model has more than one.
+///
+/// A model that cannot be placed is answered with an empty list whose `notice` says why: that is
+/// a state of the model a viewer has to show, not a failed request.
 #[utoipa::path(tag = "document",
     params(SceneQuery),
     responses(
-        (status = 200, description = "the drawable components of the model", body = SceneManifest),
-        (status = 400, description = "the model could not be drawn", body = ErrorResponse)
+        (status = 200, description = "the drawable components of the model, or why there are none", body = SceneManifest),
+        (status = 400, description = "the components could not be listed", body = ErrorResponse)
     )
 )]
 #[get("/scene/manifest")]
@@ -159,9 +162,16 @@ async fn get_scene_manifest(
     // must not block every other edit for as long as it takes.
     let placed = {
         let document = data.document.lock();
-        document.positioned_copy(query.analyzer)?
+        document.positioned_copy(query.analyzer)
     };
-    Ok(Json(manifest_of(&placed, default_reference_wavelength())?))
+    let manifest = match placed {
+        Ok(placed) => manifest_of(&placed, default_reference_wavelength())?,
+        Err(e) => SceneManifest {
+            notice: Some(e.to_string()),
+            ..SceneManifest::default()
+        },
+    };
+    Ok(Json(manifest))
 }
 
 /// Get one component of the model as a 3D scene
@@ -1817,6 +1827,50 @@ mod test {
         assert_eq!(resp.status(), StatusCode::OK);
         let manifest: SceneManifest = test::read_body_json(resp).await;
         assert!(manifest.nodes.is_empty());
+    }
+
+    /// A model that cannot be placed is answered with an empty list that says why, not with a
+    /// failed request: the untilted grating swallows the optical axis at 1000 nm, so the mirror
+    /// behind it has no place.
+    #[actix_web::test]
+    async fn the_manifest_of_a_model_that_cannot_be_placed_says_why() {
+        use opossum_core::{
+            analyzers::{AnalyzerType, RayTraceConfig},
+            joule, millimeter,
+            nodes::{
+                NodeGroup, ReflectiveGrating, SourcePort, ThinMirror, round_collimated_ray_builder,
+            },
+        };
+
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default()).unwrap();
+        let grating = scenery.add_node(ReflectiveGrating::default()).unwrap();
+        let mirror = scenery.add_node(ThinMirror::default()).unwrap();
+        scenery
+            .connect_nodes(source, "output_1", grating, "input_1", millimeter!(50.0))
+            .unwrap();
+        scenery
+            .connect_nodes(grating, "output_1", mirror, "input_1", millimeter!(50.0))
+            .unwrap();
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 0).unwrap(),
+        );
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+        let app_state = Data::new(AppState::default());
+        *app_state.document.lock() = document;
+
+        let resp = request_manifest(&app_state).await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        let manifest: SceneManifest = test::read_body_json(resp).await;
+        assert!(manifest.nodes.is_empty());
+        let notice = manifest
+            .notice
+            .expect("the manifest says why nothing is drawn");
+        assert!(notice.contains("evanescent"), "{notice}");
     }
 
     /// Every component the manifest names has to be fetchable, or a viewer would be left asking for

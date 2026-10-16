@@ -264,7 +264,7 @@ mod tests {
         let uid = Uuid::new_v4();
         let manifest = SceneManifest {
             nodes: vec![entry(uid)],
-            skipped: vec![],
+            ..SceneManifest::default()
         };
 
         let objects = objects_of(&manifest, "http://localhost:8001");
@@ -297,7 +297,7 @@ mod tests {
     fn a_components_placement_is_passed_through_unchanged() {
         let manifest = SceneManifest {
             nodes: vec![entry(Uuid::new_v4())],
-            skipped: vec![],
+            ..SceneManifest::default()
         };
 
         let objects = objects_of(&manifest, "http://localhost:8001");
@@ -330,7 +330,7 @@ mod tests {
         let second = Uuid::new_v4();
         let manifest = SceneManifest {
             nodes: vec![entry(first), entry(second)],
-            skipped: vec![],
+            ..SceneManifest::default()
         };
 
         let objects = objects_of(&manifest, "http://localhost:8001");
@@ -349,7 +349,7 @@ mod tests {
         let unselected = Uuid::new_v4();
         let manifest = SceneManifest {
             nodes: vec![entry(selected), entry(unselected)],
-            skipped: vec![],
+            ..SceneManifest::default()
         };
         let mut objects = objects_of(&manifest, "http://localhost:8001");
         objects.push(ray_object(
@@ -393,7 +393,7 @@ mod tests {
         let uid = Uuid::new_v4();
         let manifest = SceneManifest {
             nodes: vec![entry(uid)],
-            skipped: vec![],
+            ..SceneManifest::default()
         };
 
         let action = reveal_action_for_pick(&pick(Some(uid)), &manifest)
@@ -420,7 +420,7 @@ mod tests {
     fn a_miss_reveals_nothing() {
         let manifest = SceneManifest {
             nodes: vec![entry(Uuid::new_v4())],
-            skipped: vec![],
+            ..SceneManifest::default()
         };
 
         assert!(reveal_action_for_pick(&pick(None), &manifest).is_none());
@@ -432,7 +432,7 @@ mod tests {
     fn a_stale_id_reveals_nothing() {
         let manifest = SceneManifest {
             nodes: vec![entry(Uuid::new_v4())],
-            skipped: vec![],
+            ..SceneManifest::default()
         };
 
         assert!(reveal_action_for_pick(&pick(Some(Uuid::new_v4())), &manifest).is_none());
@@ -444,7 +444,7 @@ mod tests {
     fn a_miss_clears_the_selection_in_the_active_tab() {
         let manifest = SceneManifest {
             nodes: vec![entry(Uuid::new_v4())],
-            skipped: vec![],
+            ..SceneManifest::default()
         };
 
         assert!(
@@ -462,7 +462,7 @@ mod tests {
         let uid = Uuid::new_v4();
         let manifest = SceneManifest {
             nodes: vec![entry(uid)],
-            skipped: vec![],
+            ..SceneManifest::default()
         };
 
         let Some(GraphsWorkspaceAction::RevealNode { node_id, .. }) =
@@ -479,7 +479,7 @@ mod tests {
     fn a_stale_hit_does_not_clear_the_selection() {
         let manifest = SceneManifest {
             nodes: vec![entry(Uuid::new_v4())],
-            skipped: vec![],
+            ..SceneManifest::default()
         };
 
         assert!(

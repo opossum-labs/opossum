@@ -6,6 +6,7 @@ use dioxus::prelude::*;
 use dioxus_glb_viewer::{
     Environment, GlbObject, GlbViewer, PickEvent, ViewerEvent, ViewerOptions, use_glb_viewer_handle,
 };
+use opossum_core::types::api_types::SceneManifest;
 
 use crate::{
     HTTP_API_CLIENT, OPOSSUM_UI_LOGS, SCENE_REVISION, SCENE_VIEW_CONTROLS, SCENE_VIEW_REQUEST, api,
@@ -49,6 +50,8 @@ async fn debounce() {
 pub fn SceneView() -> Element {
     let mut objects = use_signal(Vec::<GlbObject>::new);
     let mut skipped_count = use_signal(|| 0_usize);
+    // Why nothing of the model can be drawn, as the last fetch said; `None` while it can be.
+    let mut notice = use_signal(|| None::<String>);
     let viewer_handle = use_glb_viewer_handle();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     // The graph editor provides its workspace store to this whole subtree, so the 3D view can read
@@ -115,7 +118,7 @@ pub fn SceneView() -> Element {
         // nodes - would otherwise re-mesh the whole model once per step. Restarting the resource
         // drops the sleeping future, so only the last edit of a burst survives to fetch anything.
         // The first load is not delayed: there is nothing on screen yet to keep steady.
-        if !objects.peek().is_empty() {
+        if *fetches.peek() > 0 {
             debounce().await;
         }
         api::get_scene_manifest(None).await
@@ -127,12 +130,26 @@ pub fn SceneView() -> Element {
             // the write to `objects`.
             eval_action_run(
                 fetched.clone(),
-                Some(move |fetched| {
+                Some(move |fetched: SceneManifest| {
+                    let fetch = *fetches.peek() + 1;
+                    fetches.set(fetch);
+                    notice.set(fetched.notice.clone());
+                    skipped_count.set(fetched.skipped.len());
+                    for s in &fetched.skipped {
+                        OPOSSUM_UI_LOGS.write().add_log(&format!(
+                            "3D view: '{}' could not be drawn: {}",
+                            s.name, s.reason
+                        ));
+                    }
+                    // Nothing is placed, so there is no axis or light to fetch either: asking for
+                    // them would only fail again.
+                    if fetched.notice.is_some() {
+                        objects.set(Vec::new());
+                        return;
+                    }
                     // Handing over a whole new list is the point: the viewer compares it against
                     // what it already draws and moves, reloads or removes only what differs.
                     let base_url = HTTP_API_CLIENT().base_url().to_owned();
-                    let fetch = *fetches.peek() + 1;
-                    fetches.set(fetch);
                     let controls = *SCENE_VIEW_CONTROLS.peek();
                     let mut list = objects_of(&fetched, &base_url);
                     list.push(ray_object(
@@ -153,13 +170,6 @@ pub fn SceneView() -> Element {
                     let selected = selected_ids.peek();
                     apply_node_selection(&mut list, &selected);
                     objects.set(list);
-                    skipped_count.set(fetched.skipped.len());
-                    for s in &fetched.skipped {
-                        OPOSSUM_UI_LOGS.write().add_log(&format!(
-                            "3D view: '{}' could not be drawn: {}",
-                            s.name, s.reason
-                        ));
-                    }
                 }),
             );
         }
@@ -191,7 +201,8 @@ pub fn SceneView() -> Element {
                 object.visible = controls.beam_axis;
             }
         }
-        if controls.rays {
+        // A model that cannot be placed has no light to draw either.
+        if controls.rays && notice.peek().is_none() {
             list.push(rays_object());
         }
         if list != *objects.peek() {
@@ -287,8 +298,11 @@ pub fn SceneView() -> Element {
                 }
             },
             // What the view has to say about itself, now that everything it can be told sits in the
-            // 3D View menu: what was left out, and how much is drawn.
+            // 3D View menu: why nothing could be drawn, what was left out, and how much is drawn.
             div { class: "scene-view-status",
+                if let Some(text) = notice() {
+                    span { class: "scene-view-notice", title: "{text}", "{text}" }
+                }
                 if *skipped_count.read() > 0 {
                     span { class: "scene-view-skipped",
                         "{skipped_count} component(s) could not be drawn \u{2013} see logs"
