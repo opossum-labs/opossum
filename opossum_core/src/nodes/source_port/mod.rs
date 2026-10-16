@@ -1,14 +1,11 @@
-use std::{
-    fmt::Display,
-    sync::{Arc, Mutex},
-};
+use std::fmt::Display;
 
 use crate::{
     core_optics::{NodeAttr, OpticNodeExt, node_attr::NodePositioning},
     error::OpmResult,
-    geometry::{Plane, geo_surface::GeoSurfaceRef},
+    geometry::Geometry,
     nodes::NodeRegistration,
-    prelude::{Isometry, OpticNode, PortType},
+    prelude::{Isometry, OpticNode},
 };
 use opm_macros_lib::OpmNode;
 
@@ -62,17 +59,12 @@ impl Display for SourcePort {
 }
 
 impl OpticNode for SourcePort {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::plane(None)))
+    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        // A source port only has an output port, so we only need to update the flat single surface for the output port.
-        let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
-        let geosurface = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso))));
-        self.update_surface(
-            "output_1",
-            geosurface,
-            Isometry::identity(),
-            &PortType::Output,
-        )?;
-        Ok(())
+        // A source port only has an output port.
+        self.install_geometry(&[], &["output_1"])
     }
 }
 

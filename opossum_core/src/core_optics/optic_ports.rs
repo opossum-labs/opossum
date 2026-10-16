@@ -2,21 +2,19 @@
 //! Handling of input and output ports of optical elements.
 //!
 //! The optical ports represent an interface of an optical element. The ports define the way how nodes can be connected to each other.
-//! For example, a simple filter contains one input and one output port. Each port has a unique name, an [`Aperture`] (set to
-//! `no aperture` by default), and a [`CoatingType`] ([`CoatingType::IdealAR`] by default). Furthermore, [`OpticPorts`] can be
-//! inverted (see inverted optic nodes). In this case input and output ports are swapped.
+//! For example, a simple filter contains one input and one output port. Each port has a unique name, a [`CoatingType`]
+//! ([`CoatingType::IdealAR`] by default) and an LIDT. Furthermore, [`OpticPorts`] can be inverted (see inverted optic
+//! nodes). In this case input and output ports are swapped.
 //! ```rust
 //! use opossum_core::prelude::*;
-//! use opossum_core::core_optics::OpticPorts;
+//! use opossum_core::{coatings::CoatingType, core_optics::OpticPorts};
 //!
 //! let mut ports = OpticPorts::new();
 //! ports.add(&PortType::Input, "my input").unwrap();
-//! let aperture = Aperture::new_circle(millimeter!(1.5), ApertureType::Hole, Some(millimeter!(1.0, 1.0))).unwrap();
-//! ports.set_aperture(&PortType::Input, "my input", &aperture).unwrap();
+//! ports.set_coating(&PortType::Input, "my input", &CoatingType::Fresnel).unwrap();
 //! ```
 use crate::{
     J_per_cm2,
-    apertures::Aperture,
     coatings::CoatingType,
     error::{OpmResult, OpossumError},
     generic_validators::{AllNotNan, AllPositive},
@@ -48,10 +46,6 @@ const fn is_ideal_ar(coating: &CoatingType) -> bool {
 const fn is_default_lidt(lidt: &validated_type!(Fluence, AllPositive && AllNotNan)) -> bool {
     lidt.get().value.is_infinite()
 }
-/// Checks if an aperture configuration matches the default (Open hole without isometry).
-fn is_default_aperture(aperture: &Aperture) -> bool {
-    *aperture == Aperture::default()
-}
 /// Ein Type-Alias, um das Makro vor dem Utoipa-Parser zu verstecken.
 pub type ValidatedLidt = validated_type!(Fluence, AllPositive && AllNotNan);
 /// Configuration of an optical port containing user-adjustable parameters.
@@ -60,9 +54,6 @@ pub type ValidatedLidt = validated_type!(Fluence, AllPositive && AllNotNan);
 /// It does NOT contain geometric runtime data like `GeoSurface` or `HitMap`.
 #[derive(Debug, Clone, Serialize, ToSchema, PartialEq)]
 pub struct PortConfig {
-    /// The aperture of the port, defining the spatial transmission.
-    #[serde(default, skip_serializing_if = "is_default_aperture")]
-    pub aperture: Aperture,
     /// The coating of the port, defining reflection and transmission properties.
     #[serde(default, skip_serializing_if = "is_ideal_ar")]
     pub coating: CoatingType,
@@ -76,14 +67,13 @@ impl PortConfig {
     /// Checks if this configuration exactly matches the default values.
     #[must_use]
     pub fn is_default_config(&self) -> bool {
-        self.aperture.is_none() && is_ideal_ar(&self.coating) && is_default_lidt(&self.lidt)
+        is_ideal_ar(&self.coating) && is_default_lidt(&self.lidt)
     }
 }
 
 impl Default for PortConfig {
     fn default() -> Self {
         Self {
-            aperture: Aperture::default(),
             coating: CoatingType::IdealAR,
             lidt: default_lidt(),
         }
@@ -94,8 +84,7 @@ impl Display for PortConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "aperture: {:?}, coating: {:?}, lidt: {:?} J/cm^2",
-            self.aperture,
+            "coating: {:?}, lidt: {:?} J/cm^2",
             self.coating,
             self.lidt.get().get::<joule_per_square_centimeter>()
         )
@@ -144,18 +133,11 @@ impl<'de> Deserialize<'de> for PortConfig {
             where
                 A: MapAccess<'de>,
             {
-                let mut aperture = None;
                 let mut coating = None;
                 let mut lidt = None;
 
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
-                        "aperture" => {
-                            if aperture.is_some() {
-                                return Err(de::Error::duplicate_field("aperture"));
-                            }
-                            aperture = Some(map.next_value()?);
-                        }
                         "coating" => {
                             if coating.is_some() {
                                 return Err(de::Error::duplicate_field("coating"));
@@ -176,7 +158,6 @@ impl<'de> Deserialize<'de> for PortConfig {
 
                 let default = PortConfig::default();
                 Ok(PortConfig {
-                    aperture: aperture.unwrap_or(default.aperture),
                     coating: coating.unwrap_or(default.coating),
                     lidt: lidt.unwrap_or(default.lidt),
                 })
@@ -239,7 +220,7 @@ impl OpticPorts {
     pub fn new() -> Self {
         Self::default()
     }
-    /// Check if all registered ports (Inputs and Outputs) are on default values (aperture: `Open`, coating: `IdealAR`, LIDT: `inf J/cm^2`).
+    /// Check if all registered ports (Inputs and Outputs) are on default values (coating: `IdealAR`, LIDT: `inf J/cm^2`).
     pub fn is_all_default(&self) -> bool {
         self.inputs.values().all(PortConfig::is_default_config)
             && self.outputs.values().all(PortConfig::is_default_config)
@@ -319,30 +300,6 @@ impl OpticPorts {
         self.ports(port_type).keys().cloned().collect()
     }
 
-    /// Sets the aperture of a port with the given name.
-    ///
-    /// # Errors
-    /// This function will return an error if the port name does not exist.
-    pub fn set_aperture(
-        &mut self,
-        port_type: &PortType,
-        port_name: &str,
-        aperture: &Aperture,
-    ) -> OpmResult<()> {
-        let ports = self.ports_mut(port_type);
-        ports.get_mut(port_name).map_or_else(
-            || {
-                Err(OpossumError::OpticPort(format!(
-                    "port name <{port_name}> does not exist",
-                )))
-            },
-            |config| {
-                config.aperture = aperture.clone();
-                Ok(())
-            },
-        )
-    }
-
     /// Sets the coating of a port with the given name.
     ///
     /// # Errors
@@ -390,28 +347,6 @@ impl OpticPorts {
             },
         )
     }
-    /// Sets the (input & ouput port) apertures of this [`OpticPorts`] from another [`OpticPorts`].
-    ///
-    /// # Errors
-    /// This function will return an error if the port name of the set ports does not exist in this [`OpticPorts`].
-    pub fn set_apertures(&mut self, set_ports: Self) -> OpmResult<()> {
-        for (name, config) in set_ports.inputs {
-            self.set_aperture(&PortType::Input, &name, &config.aperture)?;
-        }
-        for (name, config) in set_ports.outputs {
-            self.set_aperture(&PortType::Output, &name, &config.aperture)?;
-        }
-        Ok(())
-    }
-
-    /// Get the [`Aperture`] of the port with the given name.
-    #[must_use]
-    pub fn aperture(&self, port_type: &PortType, port_name: &str) -> Option<&Aperture> {
-        self.ports(port_type)
-            .get(port_name)
-            .map(|config| &config.aperture)
-    }
-
     /// Get the coating of the given input port.
     #[must_use]
     pub fn coating(&self, port_type: &PortType, port_name: &str) -> Option<&CoatingType> {
@@ -568,7 +503,7 @@ mod test {
         ports.add(&PortType::Output, "test2")?;
         assert_eq!(
             ports.to_string(),
-            "inputs:\n  <test1> aperture: Aperture { shape: Open, a_type: Hole, isometry: None }, coating: IdealAR, lidt: inf J/cm^2\noutput:\n  <test2> aperture: Aperture { shape: Open, a_type: Hole, isometry: None }, coating: IdealAR, lidt: inf J/cm^2\n".to_owned()
+            "inputs:\n  <test1> coating: IdealAR, lidt: inf J/cm^2\noutput:\n  <test2> coating: IdealAR, lidt: inf J/cm^2\n".to_owned()
         );
         Ok(())
     }
@@ -580,7 +515,7 @@ mod test {
         ports.set_inverted(true);
         assert_eq!(
             ports.to_string(),
-            "inputs:\n  <test2> aperture: Aperture { shape: Open, a_type: Hole, isometry: None }, coating: IdealAR, lidt: inf J/cm^2\noutput:\n  <test1> aperture: Aperture { shape: Open, a_type: Hole, isometry: None }, coating: IdealAR, lidt: inf J/cm^2\nports are inverted\n".to_owned()
+            "inputs:\n  <test2> coating: IdealAR, lidt: inf J/cm^2\noutput:\n  <test1> coating: IdealAR, lidt: inf J/cm^2\nports are inverted\n".to_owned()
         );
         Ok(())
     }

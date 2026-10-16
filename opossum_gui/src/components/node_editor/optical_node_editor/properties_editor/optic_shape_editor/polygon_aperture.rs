@@ -10,8 +10,8 @@ use crate::{
     },
 };
 use dioxus::prelude::*;
+use opossum_core::apertures::{OutlineShape, PolygonShape};
 use opossum_core::meter;
-use opossum_core::{apertures::PolygonShape, prelude::ApertureShape};
 use strum::EnumIter;
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq, EnumIter)]
@@ -50,7 +50,7 @@ impl IntoInputDataStrings<PolygonShape> for PolygonConfigParam {
     }
 }
 
-impl IntoInputData<f64, PolygonShape, ApertureShape> for PolygonConfigParam {
+impl IntoInputData<f64, PolygonShape, OutlineShape> for PolygonConfigParam {
     fn parse_value(&self, e: Event<FormData>) -> Option<f64> {
         let e_value = e.value();
         e_value.parse::<f64>().ok()
@@ -64,7 +64,7 @@ impl IntoInputData<f64, PolygonShape, ApertureShape> for PolygonConfigParam {
 #[component]
 pub fn PolygonApertureInput(
     polygon_config: PolygonShape,
-    on_shape_change: EventHandler<ApertureShape>,
+    on_shape_change: EventHandler<OutlineShape>,
     readonly: bool,
 ) -> Element {
     let inputs = PolygonConfigParam::to_input_data_vec(&polygon_config, on_shape_change, readonly);
@@ -96,7 +96,7 @@ pub fn PolygonApertureInput(
                                     match pp.add_points(&[meter!(x, y)]) {
                                         Ok(()) => {
                                             on_shape_change
-                                                .call(ApertureShape::BinaryPolygon(pp.clone()));
+                                                .call(OutlineShape::Polygon(pp.clone()));
                                         }
                                         Err(e) => {
                                             OPOSSUM_UI_LOGS
@@ -151,7 +151,7 @@ pub fn PolygonApertureInput(
 #[component]
 fn PolygonPointList(
     polygon_config: PolygonShape,
-    on_shape_change: EventHandler<ApertureShape>,
+    on_shape_change: EventHandler<OutlineShape>,
     readonly: bool,
 ) -> Element {
     rsx! {
@@ -205,7 +205,7 @@ fn PolygonPointList(
                                             polygon_config
                                                 .delete_point(i)
                                                 .log_err_with_context("Deleting point failed");
-                                            on_shape_change.call(ApertureShape::BinaryPolygon(polygon_config));
+                                            on_shape_change.call(OutlineShape::Polygon(polygon_config));
                                         }
                                     }
                                 },

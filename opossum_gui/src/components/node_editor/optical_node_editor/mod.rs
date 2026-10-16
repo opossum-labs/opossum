@@ -22,8 +22,10 @@ use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use opossum_core::{
     prelude::Properties,
+    properties::validator::Validator,
     types::api_types::{NodeEditorPanel, NodeInfo},
 };
+use std::collections::BTreeMap;
 
 #[component]
 pub fn OpticalNodeEditor(
@@ -37,6 +39,7 @@ pub fn OpticalNodeEditor(
     // We no longer need a memo to extract the node_id, as it's passed directly.
     let mut node_info_sig = use_signal(NodeInfo::default);
     let mut node_properties = use_signal(Properties::default);
+    let mut node_validators = use_signal(BTreeMap::<String, Validator>::new);
     let mut readonly = use_signal(|| false);
 
     // Fine-grained selector memos to decouple sub-editor renders
@@ -84,6 +87,9 @@ pub fn OpticalNodeEditor(
 
             let properties = match api::get_node_properties(current_node_id).await {
                 Ok(properties_res) => {
+                    if *node_validators.peek() != properties_res.validators {
+                        node_validators.set(properties_res.validators.clone());
+                    }
                     if *node_properties.peek() != properties_res.properties {
                         node_properties.set(properties_res.properties.clone());
                     }
@@ -155,6 +161,7 @@ pub fn OpticalNodeEditor(
                         PropertiesEditor {
                             node_id: *node_id.read(),
                             node_properties,
+                            node_validators,
                             node_info_sig,
                             on_change,
                             readonly: readonly(),

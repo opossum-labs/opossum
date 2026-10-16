@@ -4,7 +4,7 @@ use std::cell::RefCell;
 
 use crate::{
     analyzers::ghostfocus::GhostFocusHistory,
-    apertures::ApertureShape,
+    apertures::OpticShape,
     core_optics::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
     error::{OpmResult, OpossumError},
     light::{
@@ -161,8 +161,8 @@ pub enum Proptype {
     Metertype(Metertype),
     /// An [`Uuid`] for identifying an optical node.
     Uuid(Uuid),
-    /// A property for storing an optical [`Aperture`](crate::apertures::Aperture).
-    Aperture(ApertureShape),
+    /// The optic shape of a component: an outline on its axis with bores through it.
+    OpticShape(OpticShape),
     /// A property for storing a [`Spectrum`].
     Spectrum(Spectrum),
     /// This property stores the fluence information [`FluenceData`]
@@ -279,7 +279,9 @@ impl Proptype {
                 Self::Energy(value) => {
                     template_engine.render("simple", &format_quantity(joule, *value))
                 }
-                Self::Aperture(shape) => template_engine.render("simple", &shape.to_string()),
+                Self::OpticShape(optic_shape) => {
+                    template_engine.render("simple", &optic_shape.to_string())
+                }
                 Self::Material(AssetRef::Inline(mat)) => template_engine
                     .render("simple", &format!("{} (v{})", mat.name(), mat.version())),
                 Self::Material(AssetRef::Id(mat_id)) => {

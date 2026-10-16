@@ -15,12 +15,18 @@ use crate::{
         node_attr::{HasNodeAttr, NodePositioning},
         volumetric::Volumetric,
     },
-    error::OpmResult,
+    error::{OpmResult, OpossumError},
+    geometry::Geometry,
     light::LightData,
     nodes::fluence_detector::Fluence,
     reporting::{Dottable, node_report::NodeReportResult},
     utils::geom_transformation::Isometry,
 };
+
+/// The report note of a detector whose apodization warning is set (see
+/// [`OpticNode::set_apodization_warning`]): an optic shape limited what it measured.
+pub(crate) const APERTURE_LIMIT_NOTE: &str =
+    "An optic shape limits this measurement. Results might not be accurate.";
 
 /// Helper trait for dynamic downcasting of optical nodes.
 ///
@@ -81,37 +87,38 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
 
     /// Prepare this node's medium before the first ray is traced (Phase A).
     ///
-    /// Derives the node's [`SurfaceBoundedBody`](crate::geometry::body::SurfaceBoundedBody) from the
-    /// **current** node isometry and stores it in [`NodeAttr`](crate::core_optics::node_attr::NodeAttr)'s
-    /// `runtime_medium` slot so that [`Volumetric::propagate_inside_medium`] (Phase B) can read it without
-    /// rebuilding per ray pass. If the operating point provides a gain model that reads the inversion, the
+    /// Installs the node's surfaces anew from its **current** properties and placement, which also
+    /// builds the body between them as the node's medium (see
+    /// [`OpticNodeExt::install_geometry`](crate::core_optics::OpticNodeExt::install_geometry)), so
+    /// [`Volumetric::propagate_inside_medium`] (Phase B) reads the very surfaces rays are traced at.
+    /// If the operating point provides a gain model that reads the inversion, the
     /// [`InversionField`](crate::gain::InversionField) is built from the pump configuration and stored
-    /// alongside the body; otherwise the inversion slot is `None`.
-    ///
-    /// The body is always re-derived on every call, so geometry edits (e.g. changed centre thickness)
-    /// and repositioning by the analyzer's `calc_node_positions` are picked up correctly. Non-volume nodes
-    /// return immediately without touching the medium slot.
+    /// in that medium; otherwise the inversion stays `None`. Non-volume nodes return immediately,
+    /// without installing surfaces or touching the medium.
     ///
     /// [`NodeGroup`](crate::nodes::NodeGroup) overrides this to recurse into every child node.
     ///
     /// # Errors
     ///
-    /// Returns an error if the body cannot be derived from the node's surfaces or if building the
-    /// inversion field fails.
+    /// Returns an error if the node's surfaces cannot be installed, if the node encloses no body, or
+    /// if building the inversion field fails.
     fn prepare_volume(&mut self, strategy: &dyn PropagationStrategy) -> OpmResult<()> {
-        let Some(volumetric) = self.as_volume() else {
+        if self.as_volume().is_none() {
             return Ok(());
-        };
-        // The body is pure geometry — build it for every volume node regardless of the operating
-        // point, so it is available whenever anything needs to query the medium.
-        let body = volumetric.volume_body()?;
+        }
+        self.update_surfaces()?;
         let config = strategy.pump_config(self.node_attr().uuid());
-        // The inversion is gain-specific: only build it when the gain model reads one.
-        let inversion = match config.gain_model().as_extraction() {
-            Some(model) => model.build_inversion(&body, &config)?,
-            None => None,
+        let name = self.name().to_owned();
+        let Some(medium) = self.node_attr_mut().runtime_medium_mut() else {
+            return Err(OpossumError::Other(format!(
+                "volume node '{name}' encloses no body"
+            )));
         };
-        self.node_attr_mut().set_runtime_medium(body, inversion);
+        // The inversion is gain-specific: only build it when the gain model reads one.
+        if let Some(model) = config.gain_model().as_extraction() {
+            let (body, inversion) = medium.parts_mut();
+            *inversion = model.build_inversion(body, &config)?;
+        }
         Ok(())
     }
 
@@ -134,6 +141,22 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     ///
     /// Returns an error if geometry evaluation or surface construction fails.
     fn update_surfaces(&mut self) -> OpmResult<()>;
+
+    /// Describe the shape of this node, derived from its current properties.
+    ///
+    /// The node type acts as a preset: a lens, for instance, describes itself as a
+    /// [`Geometry::singlet`] whose parameters are its curvatures, center thickness and optic
+    /// shape. The runtime surfaces rays are traced against are built from this description.
+    ///
+    /// # Returns
+    ///
+    /// The node's [`Geometry`], or `None` for a node without a shape of its own, such as a group
+    /// or a reference to another node.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a geometry property cannot be read or describes no valid shape.
+    fn geometry(&self) -> OpmResult<Option<Geometry>>;
 
     /// Return the effective (input & output) ports of this [`OpticNode`].
     ///

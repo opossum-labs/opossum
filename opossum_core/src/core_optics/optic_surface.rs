@@ -6,7 +6,6 @@ use uuid::Uuid;
 use crate::{
     J_per_cm2,
     analyzers::propagation_strategy::PropagationStrategy,
-    apertures::Aperture,
     coatings::CoatingType,
     core_optics::hit_map::{
         HitMap,
@@ -14,13 +13,18 @@ use crate::{
         rays_hit_map::{HitPoint, RaysHitMap},
     },
     error::{OpmResult, OpossumError},
-    geometry::geo_surface::GeoSurfaceRef,
-    light::Rays,
+    geometry::{
+        Rim, RimRole,
+        geo_surface::{GeoSurface, GeoSurfaceRef},
+    },
+    light::{Ray, Rays},
     nodes::fluence_detector::Fluence,
     refractive_index::RefractiveIndexType,
-    utils::{LockExt, geom_transformation::Isometry},
+    utils::geom_transformation::Isometry,
 };
 use core::fmt::Debug;
+use nalgebra::{Point3, Vector3};
+use uom::si::f64::Length;
 
 /// This struct represents an optical surface, which consists of the geometric surface shape
 /// ([`GeoSurface`](crate::geometry::geo_surface::GeoSurface)) and further properties such as the [`CoatingType`].
@@ -29,8 +33,8 @@ pub struct OpticSurface {
     #[serde(skip)]
     geo_surface: GeoSurfaceRef,
     anchor_point_iso: Isometry,
-    #[serde(skip_serializing_if = "Aperture::is_none", default)]
-    aperture: Aperture,
+    #[serde(skip)]
+    rim: Option<Rim>,
     coating: CoatingType,
     lidt: Fluence,
     #[serde(skip)]
@@ -43,13 +47,13 @@ pub struct OpticSurface {
 impl Default for OpticSurface {
     /// Returns a default [`OpticSurface`].
     ///
-    /// The default is a flat surface with an ideal antireflective coating (=no reflection), no limiting aperture
-    /// and a lidt of 1 J/cm².
+    /// The default is an unbounded flat surface with an ideal antireflective coating (=no
+    /// reflection) and a lidt of 1 J/cm².
     fn default() -> Self {
         Self {
             geo_surface: GeoSurfaceRef::default(),
             anchor_point_iso: Isometry::identity(),
-            aperture: Aperture::default(),
+            rim: None,
             coating: CoatingType::IdealAR,
             lidt: J_per_cm2!(1.),
             backward_rays_cache: Vec::<Rays>::new(),
@@ -67,12 +71,7 @@ impl OpticSurface {
     /// # Errors
     ///
     /// This function returns an error if the given lidt is negative or NaN.
-    pub fn new(
-        geo_surface: GeoSurfaceRef,
-        coating: CoatingType,
-        aperture: Aperture,
-        lidt: Fluence,
-    ) -> OpmResult<Self> {
+    pub fn new(geo_surface: GeoSurfaceRef, coating: CoatingType, lidt: Fluence) -> OpmResult<Self> {
         if lidt.is_sign_negative() || lidt.is_nan() {
             return Err(OpossumError::Other(
                 "LIDT must be positive and not NaN".into(),
@@ -80,7 +79,6 @@ impl OpticSurface {
         }
         Ok(Self {
             geo_surface,
-            aperture,
             coating,
             lidt,
             ..Default::default()
@@ -100,10 +98,6 @@ impl OpticSurface {
         self.geo_surface = geo_surface;
     }
 
-    /// Sets the aperture of this [`OpticSurface`].
-    pub fn set_aperture(&mut self, aperture: Aperture) {
-        self.aperture = aperture;
-    }
     /// Sets the coating of this [`OpticSurface`].
     pub const fn set_coating(&mut self, coating: CoatingType) {
         self.coating = coating;
@@ -113,10 +107,90 @@ impl OpticSurface {
     pub fn geo_surface(&self) -> GeoSurfaceRef {
         self.geo_surface.clone()
     }
-    /// Returns a reference to the aperture of this [`OpticSurface`].
+    /// Sets the [`Rim`] of this [`OpticSurface`]: the lateral boundary of its component, stated
+    /// relative to the node. `None` leaves the surface unbounded.
+    pub fn set_rim(&mut self, rim: Option<Rim>) {
+        self.rim = rim;
+    }
+    /// Returns the [`Rim`] of this [`OpticSurface`], or `None` if it is unbounded.
     #[must_use]
-    pub const fn aperture(&self) -> &Aperture {
-        &self.aperture
+    pub const fn rim(&self) -> Option<&Rim> {
+        self.rim.as_ref()
+    }
+    /// Intersect a [`Ray`] with this [`OpticSurface`].
+    ///
+    /// Within an edge, [`Rim::intersect`] decides whether the ray hits; the bodies of components
+    /// decide the same way. A detector's rim is a window ([`RimRole::Window`]): it decides what is
+    /// recorded (see [`OpticSurface::records_at`]), not what is hit.
+    ///
+    /// The rim follows the geometric surface: its frame is derived from where that surface sits
+    /// right now (its isometry, minus its anchor, is the node's frame).
+    ///
+    /// # Arguments
+    ///
+    /// * `ray` - the ray to be intersected.
+    ///
+    /// # Returns
+    ///
+    /// The intersection point in global coordinates and the normalized surface normal there,
+    /// pointing against the ray; or `None` if the ray misses the surface or meets it where it is not
+    /// part of the component.
+    #[must_use]
+    pub fn intersect(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
+        let geo_surface = &*self.geo_surface.0;
+        self.rim
+            .as_ref()
+            .filter(|rim| rim.role() == RimRole::Edge)
+            .map_or_else(
+                || geo_surface.calc_intersect_and_normal(ray),
+                |rim| rim.intersect(geo_surface, ray, &self.node_frame(geo_surface)),
+            )
+    }
+    /// Return whether this [`OpticSurface`] records a hit at the given point.
+    ///
+    /// Only a detector's window ([`RimRole::Window`]) leaves points unrecorded: those outside it.
+    ///
+    /// # Arguments
+    ///
+    /// * `point` - a point on this surface, in global coordinates.
+    #[must_use]
+    pub fn records_at(&self, point: &Point3<Length>) -> bool {
+        match &self.rim {
+            Some(rim) if rim.role() == RimRole::Window => {
+                rim.contains(point, &self.node_frame(&*self.geo_surface.0))
+            }
+            _ => true,
+        }
+    }
+    /// Cut a bundle of rays that passed this [`OpticSurface`] to what it records: the rays within
+    /// a detector's window ([`RimRole::Window`]).
+    ///
+    /// # Arguments
+    ///
+    /// * `rays` - rays at this surface; those outside the window are invalidated.
+    ///
+    /// # Returns
+    ///
+    /// `true` if valid rays were cut.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if a ray cannot be apodized.
+    pub fn clip_to_window(&self, rays: &mut Rays) -> OpmResult<bool> {
+        match &self.rim {
+            Some(rim) if rim.role() == RimRole::Window => {
+                let frame = rim.frame(&self.node_frame(&*self.geo_surface.0));
+                rays.apodize(rim.cross_section().get(), &frame)
+            }
+            _ => Ok(false),
+        }
+    }
+    /// Return the frame of the node this surface belongs to, derived from where its geometric
+    /// surface sits right now: that surface's isometry, minus its anchor.
+    fn node_frame(&self, geo_surface: &dyn GeoSurface) -> Isometry {
+        Isometry::new_from_transform(
+            geo_surface.isometry().get_transform() * self.anchor_point_iso.get_inv_transform(),
+        )
     }
     /// Returns a reference to the coating of this [`OpticSurface`].
     #[must_use]
@@ -139,14 +213,6 @@ impl OpticSurface {
         } else {
             self.backward_rays_cache.push(rays);
         }
-    }
-    /// Sets the isometry of this [`OpticSurface`].
-    ///
-    /// # Panics
-    ///
-    /// This function might theoretically panic if locking of an internal mutex fails.
-    pub fn set_isometry(&self, iso: Isometry) {
-        self.geo_surface.0.lock_opm().unwrap().set_isometry(iso);
     }
     /// Returns a reference to the hit map of this [`OpticSurface`].
     ///
@@ -187,13 +253,6 @@ impl OpticSurface {
     /// Reset hit map of this [`OpticSurface`].
     pub fn reset_hit_map(&mut self) {
         self.hit_map.reset();
-    }
-
-    /// Prunes the hit map of this [`OpticSurface`] by removing all points that are outside the aperture.
-    pub fn prune_hit_map(&mut self, iso: &Isometry) {
-        if !self.aperture.is_none() {
-            self.hit_map.prune_by_aperture(&self.aperture, iso);
-        }
     }
 
     /// Evaluate the fluence of a given ray bundle on this surface. If the fluence
@@ -261,30 +320,32 @@ impl OpticSurface {
     /// # Parameters
     /// * `rays_bundle`: The bundle of rays to be propagated.
     /// * `node_uuid`: The UUID of the parent optical node (used for setting the origin of reflected rays).
-    /// * `iso`: The effective isometry of this surface in 3D space.
     /// * `refri_after_surf`: The refractive index after the surface.
     /// * `backward`: The direction of propagation (`true` if backwards).
     /// * `refraction_intended`: Indicates whether refraction should be calculated.
     /// * `strategy`: The strategy defining the behavior of the current analysis mode.
     ///
+    /// # Returns
+    /// For every bundle in `rays_bundle` after the call, whether each of its rays hit this surface
+    /// (see [`Rays::refract_on_surface`]). The ghost reflections appended from the cache of this
+    /// surface left it from a hit, so all of them count as hits.
+    ///
     /// # Errors
     /// This function errors if the optical calculations (refraction/reflection) or the
     /// strategy-specific hooks (e.g., fluence evaluation) fail.
-    #[allow(clippy::too_many_arguments)]
     pub fn propagate_rays(
         &mut self,
         rays_bundle: &mut Vec<Rays>,
         node_uuid: Uuid,
-        iso: &Isometry,
         refri_after_surf: Option<&RefractiveIndexType>,
         backward: bool,
         refraction_intended: bool,
         strategy: &dyn PropagationStrategy,
-    ) -> OpmResult<()> {
+    ) -> OpmResult<Vec<Vec<bool>>> {
         let missed_strategy = strategy.missed_surface_strategy();
-
+        let mut hits_per_bundle = Vec::with_capacity(rays_bundle.len());
         for rays in &mut *rays_bundle {
-            let mut reflected = rays.refract_on_surface(
+            let (mut reflected, hits) = rays.refract_on_surface(
                 self,
                 refri_after_surf,
                 refraction_intended,
@@ -292,31 +353,23 @@ impl OpticSurface {
             )?;
             reflected.set_node_origin_uuid(node_uuid);
             strategy.on_surface_interaction(self, rays, reflected, backward)?;
-            rays.apodize(self.aperture(), iso)?;
-            strategy.on_after_apodization(rays)?;
+            hits_per_bundle.push(hits);
         }
         for rays in self.get_rays_cache(backward) {
+            hits_per_bundle.push(vec![true; rays.nr_of_rays(false)]);
             rays_bundle.push(rays.clone());
         }
-        self.prune_hit_map(iso);
-        Ok(())
+        Ok(hits_per_bundle)
     }
 }
 
 impl Debug for OpticSurface {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut ds = f.debug_struct("OpticSurface");
-        ds.field("aperture", &self.aperture);
-        ds.field("coating", &self.coating);
-
-        // Try to lock, if it fails, provide a descriptive string instead
-        match self.geo_surface.0.lock_opm() {
-            Ok(guard) => ds.field("geometric surface", &*guard),
-            Err(_) => ds.field("geometric surface", &"<Locked/Poisoned>"),
-        };
-
-        ds.field("lidt", &self.lidt);
-        ds.finish_non_exhaustive()
+        f.debug_struct("OpticSurface")
+            .field("coating", &self.coating)
+            .field("geometric surface", &self.geo_surface.0)
+            .field("lidt", &self.lidt)
+            .finish_non_exhaustive()
     }
 }
 #[cfg(test)]
@@ -324,22 +377,162 @@ mod test {
     use super::OpticSurface;
     use crate::{
         J_per_cm2,
-        apertures::{Aperture, ApertureShape, ApertureType, CircleShape},
+        analyzers::RayTraceConfig,
+        apertures::{Aperture, ApertureType},
         coatings::CoatingType,
+        degree,
         error::{OpmResult, OpossumError},
-        geometry::{Sphere, geo_surface::GeoSurfaceRef},
+        geometry::{Plane, Rim, RimRole, Sphere, geo_surface::GeoSurfaceRef},
         joule,
         light::{Ray, Rays},
-        meter, nanometer,
+        meter, millimeter, nanometer,
+        types::validated_type_definitions::ValidatedCrossSection,
         utils::geom_transformation::Isometry,
     };
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
     use uuid::Uuid;
+
+    /// A plane placed at the given anchor of a node at the origin, its component reaching 5 mm
+    /// around the node's axis.
+    fn bounded_plane(anchor: Isometry) -> OpmResult<OpticSurface> {
+        let mut surface = OpticSurface::new(
+            GeoSurfaceRef(Arc::new(Plane::new(anchor))),
+            CoatingType::IdealAR,
+            J_per_cm2!(1.0),
+        )?;
+        surface.set_anchor_point_iso(anchor);
+        surface.set_rim(Some(Rim::new(
+            ValidatedCrossSection::try_new(Aperture::new_circle(
+                millimeter!(5.0),
+                ApertureType::Hole,
+                None,
+            )?)?,
+            Isometry::identity(),
+            RimRole::Edge,
+        )));
+        Ok(surface)
+    }
+    /// A ray along z, the given distance off the axis in y.
+    fn ray_at(y: f64) -> OpmResult<Ray> {
+        Ray::new_collimated(millimeter!(0.0, y, -10.0), nanometer!(1000.0), joule!(1.0))
+    }
+    #[test]
+    fn intersect_misses_outside_the_rim() -> OpmResult<()> {
+        let surface = bounded_plane(Isometry::identity())?;
+        assert!(surface.intersect(&ray_at(4.9)?).is_some());
+        assert!(surface.intersect(&ray_at(5.1)?).is_none());
+        Ok(())
+    }
+    /// The surface pass tells for each ray of each bundle whether it hit. Ghost reflections cached
+    /// at the surface left it from a hit, so when they are appended they count as hits.
+    #[test]
+    fn propagation_tells_which_rays_hit() -> OpmResult<()> {
+        let mut surface = bounded_plane(Isometry::identity())?;
+        surface.set_forward_rays_cache(vec![Rays::from(vec![ray_at(0.0)?, ray_at(7.0)?])]);
+        let mut bundles = vec![Rays::from(vec![ray_at(4.9)?, ray_at(5.1)?])];
+        let hits = surface.propagate_rays(
+            &mut bundles,
+            Uuid::new_v4(),
+            None,
+            false,
+            true,
+            &RayTraceConfig::default(),
+        )?;
+        assert_eq!(hits, [vec![true, false], vec![true, true]]);
+        assert_eq!(bundles.len(), 2);
+        Ok(())
+    }
+    /// A ray trace invalidates the rays the surface pass leaves below its energy threshold. The
+    /// positioning run keeps them: geometry alone places the optical axis.
+    #[test]
+    fn a_ray_trace_drops_rays_below_the_energy_threshold() -> OpmResult<()> {
+        let mut config = RayTraceConfig::default();
+        config.set_min_energy_per_ray(joule!(0.5))?;
+        for (config, valid) in [(config.for_positioning(), 2), (config, 1)] {
+            let weak = Ray::new_collimated(
+                millimeter!(0.0, 0.0, -10.0),
+                nanometer!(1000.0),
+                joule!(0.1),
+            )?;
+            let mut bundles = vec![Rays::from(vec![ray_at(0.0)?, weak])];
+            bounded_plane(Isometry::identity())?.propagate_rays(
+                &mut bundles,
+                Uuid::new_v4(),
+                None,
+                false,
+                true,
+                &config,
+            )?;
+            assert_eq!(bundles[0].nr_of_rays(true), valid);
+        }
+        Ok(())
+    }
+    #[test]
+    fn the_rim_is_measured_in_the_node_frame() -> OpmResult<()> {
+        // Tilted by 30°, the plane is hit at y = 4.9 mm by a ray along the node's axis. In the plane's
+        // own frame that point lies 4.9 / cos 30° = 5.66 mm out, beyond the 5 mm rim.
+        let surface = bounded_plane(Isometry::new(
+            millimeter!(0.0, 0.0, 0.0),
+            degree!(30.0, 0.0, 0.0),
+        )?)?;
+        assert!(surface.intersect(&ray_at(4.9)?).is_some());
+        assert!(surface.intersect(&ray_at(5.1)?).is_none());
+        Ok(())
+    }
+    #[test]
+    fn the_rim_follows_its_surface() -> OpmResult<()> {
+        // A surface built at a moved node takes the rim along, as when a node is placed anew.
+        let mut surface = bounded_plane(Isometry::identity())?;
+        surface.set_geo_surface(GeoSurfaceRef(Arc::new(Plane::new(
+            Isometry::new_translation(millimeter!(0.0, 20.0, 0.0))?,
+        ))));
+        assert!(surface.intersect(&ray_at(0.0)?).is_none());
+        assert!(surface.intersect(&ray_at(20.0)?).is_some());
+        Ok(())
+    }
+    #[test]
+    fn a_hit_behind_the_equator_is_a_miss() -> OpmResult<()> {
+        // A sphere of 15 mm radius with its vertex at the node, bounded to 12.5 mm around the axis.
+        let anchor = Isometry::new_along_z(millimeter!(15.0))?;
+        let mut surface = OpticSurface::new(
+            GeoSurfaceRef(Arc::new(Sphere::new(millimeter!(15.0), anchor)?)),
+            CoatingType::IdealAR,
+            J_per_cm2!(1.0),
+        )?;
+        surface.set_anchor_point_iso(anchor);
+        surface.set_rim(Some(Rim::new(
+            ValidatedCrossSection::try_new(Aperture::new_circle(
+                millimeter!(12.5),
+                ApertureType::Hole,
+                None,
+            )?)?,
+            Isometry::identity(),
+            RimRole::Edge,
+        )));
+        // 135° from the vertex, the point lies behind the equator, 10.6 mm off the axis - within the
+        // rim when seen along the axis. A ray tilted by 50° reaches the sphere there first.
+        let (radius, polar, tilt) = (15.0, 135.0_f64.to_radians(), 50.0_f64.to_radians());
+        let behind = (radius * polar.sin(), radius - radius * polar.cos());
+        let direction = nalgebra::Vector3::new(-tilt.sin(), 0.0, tilt.cos());
+        let steep = Ray::new(
+            millimeter!(
+                behind.0 - 30.0 * direction.x,
+                0.0,
+                behind.1 - 30.0 * direction.z
+            ),
+            direction,
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?;
+        assert!(surface.intersect(&steep).is_none());
+        // A ray along the axis 5 mm out meets the sphere on the sheet through its vertex.
+        assert!(surface.intersect(&ray_at(5.0)?).is_some());
+        Ok(())
+    }
 
     #[test]
     fn default() {
         let os = OpticSurface::default();
-        assert!(matches!(os.aperture.shape(), ApertureShape::Open));
         assert!(matches!(os.coating, CoatingType::IdealAR));
         assert_eq!(os.backward_rays_cache.len(), 0);
         assert_eq!(os.forward_rays_cache.len(), 0);
@@ -349,61 +542,62 @@ mod test {
     #[test]
     fn new() -> OpmResult<()> {
         let gs = GeoSurfaceRef::default();
+        assert!(OpticSurface::new(gs.clone(), CoatingType::IdealAR, J_per_cm2!(f64::NAN)).is_err());
         assert!(
             OpticSurface::new(
                 gs.clone(),
                 CoatingType::IdealAR,
-                Aperture::default(),
-                J_per_cm2!(f64::NAN)
-            )
-            .is_err()
-        );
-        assert!(
-            OpticSurface::new(
-                gs.clone(),
-                CoatingType::IdealAR,
-                Aperture::default(),
                 J_per_cm2!(f64::NEG_INFINITY)
             )
             .is_err()
         );
+        assert!(OpticSurface::new(gs.clone(), CoatingType::IdealAR, J_per_cm2!(-0.1)).is_err());
         assert!(
-            OpticSurface::new(
-                gs.clone(),
-                CoatingType::IdealAR,
-                Aperture::default(),
-                J_per_cm2!(-0.1)
-            )
-            .is_err()
-        );
-        assert!(
-            OpticSurface::new(
-                gs.clone(),
-                CoatingType::IdealAR,
-                Aperture::default(),
-                J_per_cm2!(f64::INFINITY)
-            )
-            .is_ok()
+            OpticSurface::new(gs.clone(), CoatingType::IdealAR, J_per_cm2!(f64::INFINITY)).is_ok()
         );
 
-        let aperture = Aperture::new(
-            ApertureShape::BinaryCircle(CircleShape::new(meter!(1.0))?),
-            ApertureType::Hole,
-            Some(meter!(0.0, 0.0)),
-            None,
-        )?;
         let os = OpticSurface::new(
-            GeoSurfaceRef(Arc::new(Mutex::new(Sphere::new(
-                meter!(1.0),
-                Isometry::identity(),
-            )?))),
+            GeoSurfaceRef(Arc::new(Sphere::new(meter!(1.0), Isometry::identity())?)),
             CoatingType::Fresnel,
-            aperture,
             J_per_cm2!(2.0),
         )?;
         assert_eq!(os.lidt, J_per_cm2!(2.0));
         assert!(matches!(os.coating, CoatingType::Fresnel));
-        assert!(matches!(os.aperture, _aperture));
+        Ok(())
+    }
+    #[test]
+    fn intersect_finds_where_a_ray_meets_the_surface() -> OpmResult<()> {
+        // A sphere of 1 m radius with its vertex at the origin, curving away towards +z.
+        let surface = OpticSurface::new(
+            GeoSurfaceRef(Arc::new(Sphere::new(
+                meter!(1.0),
+                Isometry::new_along_z(meter!(1.0))?,
+            )?)),
+            CoatingType::IdealAR,
+            J_per_cm2!(1.0),
+        )?;
+        let towards = Ray::new(
+            meter!(0.0, 0.0, -1.0),
+            nalgebra::Vector3::z(),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?;
+        let (point, normal) = surface
+            .intersect(&towards)
+            .ok_or_else(|| OpossumError::Other("the ray missed the surface".into()))?;
+        assert!(point.coords.map(|c| c.value).norm() < 1e-15, "{point:?}");
+        assert!(
+            (normal - (-nalgebra::Vector3::z())).norm() < 1e-15,
+            "{normal:?}"
+        );
+        // A ray running past the sphere sideways does not hit it.
+        let past = Ray::new(
+            meter!(2.0, 0.0, -1.0),
+            nalgebra::Vector3::z(),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?;
+        assert!(surface.intersect(&past).is_none());
         Ok(())
     }
     #[test]

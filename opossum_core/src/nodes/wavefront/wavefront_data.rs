@@ -544,6 +544,7 @@ mod test {
         core_optics::optic_surface::OpticSurface,
         degree,
         error::OpmResult,
+        geometry::{Plane, geo_surface::GeoSurfaceRef},
         joule,
         light::{Ray, Rays},
         millimeter, nanometer,
@@ -553,6 +554,7 @@ mod test {
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
     use nalgebra::{MatrixXx3, Point3, Vector3};
+    use std::sync::Arc;
     use uom::si::f64::Length;
 
     #[test]
@@ -571,7 +573,9 @@ mod test {
         )?;
 
         let mut s = OpticSurface::default();
-        s.set_isometry(Isometry::new_along_z(millimeter!(10.0))?);
+        s.set_geo_surface(GeoSurfaceRef(Arc::new(Plane::new(Isometry::new_along_z(
+            millimeter!(10.0),
+        )?))));
         rays.refract_on_surface(
             &mut s,
             Some(&refr_index_vaccuum()),

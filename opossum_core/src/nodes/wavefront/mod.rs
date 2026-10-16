@@ -10,9 +10,14 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType},
+    core_optics::{
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, optic_node::APERTURE_LIMIT_NOTE,
+    },
     error::{OpmResult, OpossumError},
-    geometry::geo_surface::GeoSurfaceRef,
+    geometry::{
+        Geometry, SurfaceShape,
+        body::{OPTIC_SHAPE, default_square_optic_shape},
+    },
     light::{LightData, LightResult},
     millimeter,
     nodes::{
@@ -44,6 +49,8 @@ inventory::submit! {
 ///
 /// ## Properties
 ///   - `name`
+///   - `optic shape`: the window the light is recorded within, a 25 mm square by default; light
+///     outside it passes unrecorded
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
@@ -53,9 +60,10 @@ pub struct WaveFront {
     light_data: Option<LightData>,
     node_attr: NodeAttr,
     apodization_warning: bool,
-    /// Optional custom reference surface for wavefront evaluation (e.g. Sphere).
+    /// Optional custom reference surface for wavefront evaluation (e.g. a sphere), with its vertex
+    /// at the node.
     #[serde(skip)]
-    reference_surface: Option<GeoSurfaceRef>,
+    reference_surface: Option<SurfaceShape>,
 }
 
 impl Default for WaveFront {
@@ -67,6 +75,13 @@ impl Default for WaveFront {
                 "remove tilt",
                 "remove a wavefront tilt (plane surface)",
                 false.into(),
+            )
+            .unwrap();
+        node_attr
+            .create_property(
+                OPTIC_SHAPE,
+                "window the light is recorded within",
+                default_square_optic_shape().into(),
             )
             .unwrap();
         node_attr
@@ -83,7 +98,6 @@ impl Default for WaveFront {
                 4.into(), // Default n=4 yields 15 modes up to spherical aberration
             )
             .unwrap();
-
         let mut wf = Self {
             light_data: None,
             node_attr,
@@ -106,14 +120,20 @@ impl WaveFront {
         wf.update_surfaces()?;
         Ok(wf)
     }
-    /// Sets a custom geometric reference surface for wavefront calculation.
-    /// Allows analyzing wavefronts against curved surfaces like spheres.
+    /// Sets a custom reference surface for wavefront calculation.
+    ///
+    /// Allows analyzing wavefronts against curved surfaces like spheres. The surface's vertex sits
+    /// at the node, so it moves with the node.
+    ///
+    /// # Arguments
+    ///
+    /// * `shape` - the shape of the reference surface.
     ///
     /// # Errors
     ///
-    /// Ths funtion returns an error if the internal update with the given surface reference fails.
-    pub fn set_reference_surface(&mut self, geo: GeoSurfaceRef) -> OpmResult<()> {
-        self.reference_surface = Some(geo);
+    /// This function returns an error if the surface cannot be built from the given shape.
+    pub fn set_reference_surface(&mut self, shape: SurfaceShape) -> OpmResult<()> {
+        self.reference_surface = Some(shape);
         self.update_surfaces()
     }
     /// Helper function to evaluate and append polynomial basis decomposition to the report properties.
@@ -162,31 +182,21 @@ impl WaveFront {
 }
 
 impl OpticNode for WaveFront {
+    /// The surface wavefronts are measured on: the reference surface, or a plane if none is set,
+    /// within the recording window.
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::detector(
+            self.reference_surface
+                .clone()
+                .unwrap_or(SurfaceShape::Plane),
+            self.cross_section()?,
+        )?))
+    }
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        // Use custom reference surface if defined, otherwise default to a Plane
-        let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
-        let geosurface = self.reference_surface.clone().unwrap_or_else(|| {
-            GeoSurfaceRef(std::sync::Arc::new(std::sync::Mutex::new(
-                crate::geometry::Plane::new(node_iso),
-            )))
-        });
-
-        self.update_surface(
-            "input_1",
-            geosurface.clone(),
-            Isometry::identity(),
-            &PortType::Input,
-        )?;
-        self.update_surface(
-            "output_1",
-            geosurface,
-            Isometry::identity(),
-            &PortType::Output,
-        )?;
-        Ok(())
+        self.install_geometry(&["input_1"], &["output_1"])
     }
     fn node_report(&self, uuid: &str, analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
         if analyzer == AnalyzerKind::Energy {
@@ -272,8 +282,7 @@ impl OpticNode for WaveFront {
                     props.create(
                         "Warning",
                         "warning during analysis",
-                        "Rays have been apodized at input aperture. Results might not be accurate."
-                            .into(),
+                        APERTURE_LIMIT_NOTE.into(),
                     )?;
                 }
             } else {
@@ -403,8 +412,14 @@ mod test {
         Ok(())
     }
     #[test]
-    fn analyze_apodazation_warning() -> OpmResult<()> {
-        test_analyze_apodization_warning::<WaveFront>()
+    fn optic_shape_absent_in_file() -> OpmResult<()> {
+        test_optic_shape_absent_in_file::<WaveFront>()
+    }
+    #[test]
+    fn records_inside_and_passes_all() -> OpmResult<()> {
+        test_detector_records_inside_and_passes_all::<WaveFront>(|monitor| {
+            monitor.light_data.as_ref()
+        })
     }
     #[test]
     fn analyze_inverse() -> OpmResult<()> {

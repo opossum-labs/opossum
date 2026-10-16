@@ -48,7 +48,7 @@ fn NodeList(
     let drop_group_id = (*workspace.drop_in_group().read()).map(|(id, _)| id);
 
     rsx! {
-        for (id , node) in graph_store.nodes().iter() {
+        for (id, node) in graph_store.nodes().iter() {
             {
                 let node_id = id;
                 let is_active = selected_node_ids.contains(&node_id);

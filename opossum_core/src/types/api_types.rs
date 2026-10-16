@@ -19,7 +19,8 @@ use crate::{
     gain::{GainModel, PumpConfig, PumpScenario, PumpSource},
     nodes::ConnectionInfo,
     opm_document::AnalyzerInfo,
-    prelude::{AnalyzerType, Aperture, Isometry, PortMap, PortType, Properties},
+    prelude::{AnalyzerType, Isometry, PortMap, PortType, Properties},
+    properties::validator::Validator,
 };
 
 // ============================================================================
@@ -282,6 +283,9 @@ pub struct UpdateNodeRequest {
 pub struct NodePropertiesResponse {
     #[schema(value_type = Object)] // Hides internal Properties structure from Utoipa
     pub properties: Properties,
+    /// The validator of each property that has one, by property name: what values it can take
+    #[schema(value_type = Object)]
+    pub validators: BTreeMap<String, Validator>,
     /// True if the properties belong to a reference node
     pub is_reference: bool,
 }
@@ -415,10 +419,6 @@ pub struct NodePortsResponse {
 /// Request payload for partial updates of a specific port
 #[derive(Debug, Default, Serialize, Deserialize, ToSchema, Clone, PartialEq)]
 pub struct UpdatePortRequest {
-    /// The new aperture of the port
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub aperture: Option<Aperture>,
-
     /// The new coating of the port
     #[serde(skip_serializing_if = "Option::is_none")]
     pub coating: Option<CoatingType>,

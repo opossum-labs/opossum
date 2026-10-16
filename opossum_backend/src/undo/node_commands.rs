@@ -159,9 +159,6 @@ pub(super) fn apply_patch_port(
                     "{port_type} port '{port_name}' not found"
                 )));
             };
-            if let Some(aperture) = new.aperture.clone() {
-                port.aperture = aperture;
-            }
             if let Some(coating) = new.coating {
                 port.coating = coating;
             }

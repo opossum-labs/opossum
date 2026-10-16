@@ -22,7 +22,6 @@ pub fn cambox_2w() -> OpmResult<NodeGroup> {
     let ff_cam = cb.add_node(node)?;
 
     let ff_fluence = FluenceDetector::new("FF fluence");
-    //ff_fluence.set_aperture(&PortType::Input, "input_1", &cam_aperture)?;
     let ff_fluence_cam = cb.add_node(ff_fluence)?;
 
     cb.connect_nodes(

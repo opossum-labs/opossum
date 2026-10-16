@@ -84,11 +84,6 @@ fn analyze_ok() -> OpmResult<()> {
 }
 
 #[test]
-fn analyze_apodization_warning() -> OpmResult<()> {
-    test_analyze_apodization_warning::<RayPropagationVisualizer>()
-}
-
-#[test]
 fn analyze_inverse() -> OpmResult<()> {
     let mut node = RayPropagationVisualizer::default();
     node.set_inverted(true)?;
@@ -146,7 +141,7 @@ fn report() -> OpmResult<()> {
         node_report.notes()[0].level,
         crate::reporting::report_note::ReportLevel::Warning
     );
-    assert!(node_report.notes()[0].message.contains("apodized"));
+    assert!(node_report.notes()[0].message.contains("Rays were lost"));
 
     // Energy warning test
     fd.set_apodization_warning(false);

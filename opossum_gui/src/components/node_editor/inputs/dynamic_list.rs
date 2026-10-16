@@ -12,7 +12,7 @@ pub fn DynamicListComponent(
     rsx! {
         ul {
             class: "list-group border-start dynamic-list",
-            id: "stackedAperturesList",
+            id: "dynamicList",
             for (entry_index, entry) in list_entries.iter().enumerate() {
                 {
                     let class = if let Some(editing_index) = *edit_index.read()

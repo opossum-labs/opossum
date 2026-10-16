@@ -8,7 +8,7 @@ use crate::{
     light::{LightData, LightResult, Ray, Rays},
     millimeter,
     nodes::SourcePort,
-    prelude::{OpticNode, PortType, RayTraceConfig},
+    prelude::RayTraceConfig,
 };
 
 impl AnalysisRayTrace for SourcePort {
@@ -34,18 +34,7 @@ impl AnalysisRayTrace for SourcePort {
 
         if let Ok(iso) = self.effective_surface_iso("output_1") {
             rays = rays.transformed_by_iso(&iso);
-            // consider aperture only if not inverted (there is only an output port)
-            if !self.inverted() {
-                match self.ports().aperture(&PortType::Output, "output_1") {
-                    Some(aperture) => {
-                        rays.apodize(aperture, &iso)?;
-                        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                    }
-                    _ => {
-                        return Err(OpossumError::OpticPort("output aperture not found".into()));
-                    }
-                }
-            }
+            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
         }
         Ok(LightResult::from([(
             "output_1".into(),
@@ -93,7 +82,6 @@ impl AnalysisRayTrace for SourcePort {
 mod test {
     use super::*;
     use crate::{
-        apertures::{Aperture, ApertureType},
         distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines},
         light::lightdata::ray_data_builder::RayDataBuilder,
         nanometer,
@@ -148,50 +136,6 @@ mod test {
             rays.total_energy(),
             rays_from_ray_data_builder.total_energy()
         );
-        Ok(())
-    }
-    #[test]
-    fn analyze_raytrace_with_aperture_clipping() -> OpmResult<()> {
-        let mut node = SourcePort::default();
-
-        let aperture = Aperture::new_rectangle(
-            millimeter!(5.),
-            millimeter!(5.),
-            ApertureType::Hole,
-            None,
-            None,
-        )?;
-        node.ports_mut()
-            .set_aperture(&PortType::Output, "output_1", &aperture)?;
-
-        // 3. Create a hexapolar ray distribution that is wide enough to be clipped by the aperture
-        let ray_data_source = RayDataSource::Collimated(CollimatedSrc::new(
-            Hexapolar::new(millimeter!(10.), 3)?.into(), // Large radius (10mm) to ensure clipping
-            UniformDist::new(joule!(1.))?.into(),
-            LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
-        ));
-
-        let ray_data_builder = RayDataBuilder::from(ray_data_source);
-        let mut ray_tracing_config = RayTraceConfig::default();
-        ray_tracing_config.map_source(node.node_attr().uuid(), ray_data_builder.clone());
-
-        // 4. Run the raytrace analysis
-        let output =
-            AnalysisRayTrace::analyze(&mut node, LightResult::default(), &ray_tracing_config)?;
-
-        // 5. Extract the resulting rays from the output port
-        let LightData::Geometric(rays_after) = output.get("output_1").unwrap().clone() else {
-            panic!("Expected LightData::Geometric");
-        };
-
-        let rays_before = ray_data_builder.build()?;
-
-        // 6. Verification: The number of active rays must be less than before due to the aperture
-        assert!(
-            rays_after.nr_of_rays(true) < rays_before.nr_of_rays(true),
-            "Rays were not clipped by the aperture! Check if the correct port string is used."
-        );
-
         Ok(())
     }
     #[test]
