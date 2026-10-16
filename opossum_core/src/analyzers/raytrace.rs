@@ -5,9 +5,7 @@ use std::collections::HashMap;
 use super::{Analyzer, AnalyzerType};
 use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
-    core_optics::{
-        NodeAttrExt, OpticNode, OpticNodeExt, node_attr::HasNodeAttr, optic_surface::OpticSurface,
-    },
+    core_optics::{OpticNode, OpticNodeExt, node_attr::HasNodeAttr, optic_surface::OpticSurface},
     error::{OpmResult, OpossumError},
     gain::{ActiveScenario, PumpConfig, PumpScenario},
     light::{LightResult, Rays, lightdata::ray_data_builder::RayDataBuilder},

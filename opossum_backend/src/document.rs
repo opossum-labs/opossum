@@ -1508,15 +1508,50 @@ mod test {
         assert_eq!(root_uuid, expected_uuid);
     }
 
-    /// A backend state holding a model with a single lens in it — enough to draw.
+    /// A backend state holding a model with a single lens behind a source port, which a ray-trace
+    /// analyzer defines — enough to draw. The lens is the model's first node.
     fn state_with_a_lens() -> Data<AppState> {
-        let mut scenery = opossum_core::nodes::NodeGroup::default();
+        use opossum_core::{
+            analyzers::{AnalyzerType, RayTraceConfig},
+            light::lightdata::ray_data_builder::RayDataBuilder,
+            millimeter,
+            nodes::{Lens, NodeGroup, SourcePort},
+        };
+
+        let mut scenery = NodeGroup::default();
+        let lens = scenery.add_node(Lens::default()).unwrap();
+        let source = scenery.add_node(SourcePort::default()).unwrap();
         scenery
-            .add_node(opossum_core::nodes::Lens::default())
+            .connect_nodes(source, "output_1", lens, "input_1", millimeter!(50.0))
             .unwrap();
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(source, RayDataBuilder::default());
+        document.add_analyzer(AnalyzerType::RayTrace(config));
         let app_state = Data::new(AppState::default());
-        *app_state.document.lock() = OpmDocument::new(scenery);
+        *app_state.document.lock() = document;
         app_state
+    }
+
+    /// Analyze the model of `app_state` two more ways, each of them defining its source port.
+    ///
+    /// # Returns
+    ///
+    /// The analyzer added last, a ray trace.
+    fn analyze_two_more_ways(app_state: &Data<AppState>) -> Uuid {
+        use opossum_core::{
+            analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
+            light::lightdata::ray_data_builder::RayDataBuilder,
+        };
+
+        let mut document = app_state.document.lock();
+        let source = document.scenery().find_source_ports().unwrap()[0];
+        let mut ghost_focus = GhostFocusConfig::default();
+        ghost_focus.map_source(source, RayDataBuilder::default());
+        document.add_analyzer(AnalyzerType::GhostFocus(ghost_focus));
+        let mut ray_trace = RayTraceConfig::default();
+        ray_trace.map_source(source, RayDataBuilder::default());
+        document.add_analyzer(AnalyzerType::RayTrace(ray_trace))
     }
 
     /// Ask a state for its 3D view.
@@ -1566,14 +1601,8 @@ mod test {
     /// said rather than guessed at.
     #[actix_web::test]
     async fn a_model_analyzed_several_ways_needs_the_analyzer_named() {
-        use opossum_core::analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig};
-
         let app_state = state_with_a_lens();
-        let named = {
-            let mut document = app_state.document.lock();
-            document.add_analyzer(AnalyzerType::GhostFocus(GhostFocusConfig::default()));
-            document.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()))
-        };
+        let named = analyze_two_more_ways(&app_state);
 
         let resp = request_scene(&app_state, "").await;
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
@@ -1599,8 +1628,7 @@ mod test {
         app.call(req).await.unwrap()
     }
 
-    /// A lens nobody analyzed still has an axis: a source is put in front of it, and the axis runs
-    /// through the lens to its open output.
+    /// The axis runs from the source through the lens to its open output, drawn as lines.
     #[actix_web::test]
     async fn the_axis_of_a_model_is_drawn_as_lines() {
         let resp = request_axis(&state_with_a_lens(), "").await;
@@ -1683,7 +1711,10 @@ mod test {
     /// error, so the view simply shows none.
     #[actix_web::test]
     async fn a_model_nobody_analyzes_has_no_rays_to_draw() {
-        let resp = request_rays(&state_with_a_lens(), "").await;
+        let app_state = state_with_a_lens();
+        app_state.document.lock().analyzers_mut().clear();
+
+        let resp = request_rays(&app_state, "").await;
 
         assert_eq!(resp.status(), StatusCode::OK);
         let body = test::read_body(resp).await;
@@ -1710,14 +1741,8 @@ mod test {
     /// when the scene itself does.
     #[actix_web::test]
     async fn the_axis_of_a_model_analyzed_several_ways_needs_the_analyzer_named() {
-        use opossum_core::analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig};
-
         let app_state = state_with_a_lens();
-        let named = {
-            let mut document = app_state.document.lock();
-            document.add_analyzer(AnalyzerType::GhostFocus(GhostFocusConfig::default()));
-            document.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()))
-        };
+        let named = analyze_two_more_ways(&app_state);
 
         let resp = request_axis(&app_state, "").await;
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);

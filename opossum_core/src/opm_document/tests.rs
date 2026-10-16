@@ -388,6 +388,7 @@ fn a_property_changed_after_adding_the_node_reaches_the_placement() -> OpmResult
     scenery.connect_nodes(source, "output_1", lens, "input_1", millimeter!(100.0))?;
     scenery.connect_nodes(lens, "output_1", after, "input_1", millimeter!(50.0))?;
     let mut document = OpmDocument::new(scenery);
+    document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
     let default_thickness = document.positioned_copy(None)?;
 
     document
@@ -434,7 +435,8 @@ fn a_group_and_a_reference_are_placed_as_through_the_file_form() -> OpmResult<()
     scenery.connect_nodes(source, "output_1", group, "input_1", millimeter!(30.0))?;
     scenery.connect_nodes(group, "output_1", fold, "input_1", millimeter!(50.0))?;
     scenery.connect_nodes(fold, "output_1", second_pass, "input_1", millimeter!(50.0))?;
-    let document = OpmDocument::new(scenery);
+    let mut document = OpmDocument::new(scenery);
+    document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
     let before = document.to_opm_file_string()?;
 
     let placed = document.positioned_copy(None)?;

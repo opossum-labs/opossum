@@ -1145,15 +1145,7 @@ mod test {
     /// that shape once and told to draw it twice.
     #[test]
     fn identical_components_share_one_mesh() -> OpmResult<()> {
-        let mut scenery = NodeGroup::default();
-        let source = scenery.add_node(SourcePort::default())?;
-        let first = scenery.add_node(Lens::default())?;
-        let second = scenery.add_node(Lens::default())?;
-        scenery.connect_nodes(source, "output_1", first, "input_1", millimeter!(50.0))?;
-        scenery.connect_nodes(first, "output_1", second, "input_1", millimeter!(50.0))?;
-        let document = OpmDocument::new(scenery);
-
-        let scene = exported(&document)?;
+        let scene = exported(&two_lenses(millimeter!(50.0))?)?;
         assert_eq!(drawn_components(&scene).len(), 2);
         assert_eq!(
             scene["meshes"]

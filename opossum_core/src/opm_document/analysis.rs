@@ -560,7 +560,10 @@ mod tests {
         let second = scenery.add_node(Lens::default())?;
         scenery.connect_nodes(source, "output_1", first, "input_1", millimeter!(100.0))?;
         scenery.connect_nodes(first, "output_1", second, "input_1", millimeter!(50.0))?;
-        let document = OpmDocument::new(scenery);
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(source, RayDataBuilder::default());
+        document.add_analyzer(AnalyzerType::RayTrace(config));
 
         let axes = document.positioning_rays(None)?;
         assert_eq!(axes.len(), 1, "one open output, so one end");
