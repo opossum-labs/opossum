@@ -115,17 +115,17 @@ impl AnalyzerType {
     /// different alignment wavelength or another ambient medium all move it. Anything that needs to
     /// know where the components of a model are, rather than to run the analysis itself, asks here
     /// instead of assembling a configuration of its own, so that a drawing of the setup shows the
-    /// same geometry the analysis worked on.
+    /// same geometry the analysis worked on. An energy analysis, which knows its light only as
+    /// spectra, places it at their center wavelengths (see [`EnergyConfig::positioning_config`]).
     ///
     /// # Returns
     ///
-    /// The configuration for the positioning run, or `None` for an analyzer that does not place
-    /// anything: an energy analysis carries no geometry at all.
+    /// The configuration for the positioning run.
     #[must_use]
-    pub fn positioning_config(&self) -> Option<RayTraceConfig> {
+    pub fn positioning_config(&self) -> RayTraceConfig {
         match self {
-            Self::Energy(_) => None,
-            Self::RayTrace(config) => Some(config.for_positioning()),
+            Self::Energy(config) => config.positioning_config(),
+            Self::RayTrace(config) => config.for_positioning(),
             Self::GhostFocus(config) => {
                 // A ghost focus analysis places its nodes with a plain ray trace and takes only the
                 // sources across: the bounce limits and the ambient medium of the ghost focus run
@@ -133,8 +133,19 @@ impl AnalyzerType {
                 let mut positioning = RayTraceConfig::default();
                 positioning.set_source_map(config.source_map().clone());
                 positioning.set_positioning_run(true);
-                Some(positioning)
+                positioning
             }
+        }
+    }
+    /// Whether this analysis defines its light as rays, which can be traced and drawn.
+    ///
+    /// An energy analysis defines spectra only: it places a model, but has no rays of its own to
+    /// show.
+    #[must_use]
+    pub const fn has_ray_sources(&self) -> bool {
+        match self {
+            Self::Energy(_) => false,
+            Self::RayTrace(_) | Self::GhostFocus(_) => true,
         }
     }
     /// Returns the corresponding [`AnalyzerKind`] for this analyzer configuration.
@@ -174,7 +185,19 @@ pub trait Analyzer {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::light::lightdata::ray_data_builder::RayDataBuilder;
+    use crate::{
+        joule,
+        light::{
+            Spectrum,
+            lightdata::{
+                energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
+                ray_data_builder::RayDataBuilder,
+            },
+        },
+        nanometer,
+    };
+    use approx::assert_relative_eq;
+    use uom::si::length::nanometer;
     #[test]
     fn display() {
         assert_eq!(
@@ -190,43 +213,72 @@ mod test {
             "GhostFocus"
         );
     }
-    /// Only an analysis that traces light through space can say where anything is.
+    /// An energy analysis knows its light only as spectra, so it places each source with default
+    /// rays aligned at the center wavelength of that source's spectrum.
     #[test]
-    fn only_the_geometric_analyses_place_anything() {
-        assert!(
-            AnalyzerType::Energy(EnergyConfig::default())
-                .positioning_config()
-                .is_none()
+    fn an_energy_analysis_places_at_the_center_wavelength_of_each_source() -> OpmResult<()> {
+        let source = uuid::Uuid::new_v4();
+        let mut energy = EnergyConfig::default();
+        energy.map_source(
+            source,
+            EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
+                vec![(nanometer!(500.0), joule!(1.0))],
+                nanometer!(1.0),
+            )?),
         );
-        assert!(
-            AnalyzerType::RayTrace(RayTraceConfig::default())
-                .positioning_config()
-                .is_some()
+        let alignment = AnalyzerType::Energy(energy)
+            .positioning_config()
+            .get_source(&source)
+            .and_then(RayDataBuilder::alignment_wavelength)
+            .expect("the source is aligned at the center of its spectrum");
+        assert_relative_eq!(alignment.get::<nanometer>(), 500.0, epsilon = 1.0);
+        Ok(())
+    }
+    /// A spectrum without a center - dark all over - leaves its source at the default alignment
+    /// wavelength rather than at none.
+    #[test]
+    fn a_dark_spectrum_leaves_its_source_at_the_default_wavelength() -> OpmResult<()> {
+        let source = uuid::Uuid::new_v4();
+        let mut energy = EnergyConfig::default();
+        energy.map_source(
+            source,
+            EnergyDataBuilder::Raw(Spectrum::new(
+                nanometer!(500.0)..nanometer!(510.0),
+                nanometer!(1.0),
+            )?),
         );
-        assert!(
-            AnalyzerType::GhostFocus(GhostFocusConfig::default())
-                .positioning_config()
-                .is_some()
-        );
+        let config = AnalyzerType::Energy(energy).positioning_config();
+        let rays = config
+            .get_source(&source)
+            .expect("the source is placed all the same");
+        assert!(rays.alignment_wavelength().is_none());
+        Ok(())
+    }
+    /// Only an analysis whose light is rays has light of its own to draw.
+    #[test]
+    fn only_the_ray_analyses_have_rays_to_show() {
+        assert!(!AnalyzerType::Energy(EnergyConfig::default()).has_ray_sources());
+        assert!(AnalyzerType::RayTrace(RayTraceConfig::default()).has_ray_sources());
+        assert!(AnalyzerType::GhostFocus(GhostFocusConfig::default()).has_ray_sources());
     }
     /// The sources have to come across into the positioning run, which has nothing to start the
     /// optical axis from without them.
     #[test]
     fn a_positioning_config_keeps_the_sources() {
         let source = uuid::Uuid::new_v4();
+        let mut energy = EnergyConfig::default();
+        energy.map_source(source, EnergyDataBuilder::default());
         let mut ray_trace = RayTraceConfig::default();
         ray_trace.map_source(source, RayDataBuilder::default());
         let mut ghost_focus = GhostFocusConfig::default();
         ghost_focus.map_source(source, RayDataBuilder::default());
         for analyzer in [
+            AnalyzerType::Energy(energy),
             AnalyzerType::RayTrace(ray_trace),
             AnalyzerType::GhostFocus(ghost_focus),
         ] {
-            let config = analyzer
-                .positioning_config()
-                .expect("both of these place their nodes");
             assert!(
-                config.get_source(&source).is_some(),
+                analyzer.positioning_config().get_source(&source).is_some(),
                 "the {analyzer} analysis lost its sources on the way"
             );
         }

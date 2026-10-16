@@ -37,7 +37,8 @@ const GLB_MEDIA_TYPE: &str = "model/gltf-binary";
 /// Which analyzer a 3D view of the model should follow.
 #[derive(Debug, Deserialize, IntoParams)]
 struct SceneQuery {
-    /// Uuid of the analyzer to take the placement from, or none to use the only one there is.
+    /// Uuid of the analyzer to take the placement from, or none to follow the first analyzer whose
+    /// light is rays, else the first.
     analyzer: Option<Uuid>,
 }
 
@@ -50,7 +51,8 @@ const MAX_DISPLAY_RAYS: usize = 5000;
 /// Which analyzer's light a 3D view of the model should draw, and how much of it.
 #[derive(Debug, Deserialize, IntoParams)]
 struct RaysQuery {
-    /// Uuid of the analyzer to take the sources from, or none to use the only one there is.
+    /// Uuid of the analyzer to take the sources from, or none to follow the first analyzer whose
+    /// light is rays, else the first.
     analyzer: Option<Uuid>,
     /// The most rays drawn per source (default 500, at most 5000).
     max_rays: Option<usize>,
@@ -100,8 +102,8 @@ async fn get_document(data: web::Data<AppState>) -> Result<impl Responder, BackE
 ///
 /// The components of a model only have a place in space once its optical axis has been traced, so
 /// that run happens here — on a copy, leaving the document itself untouched. Which analyzer the
-/// axis is traced after can be named with the `analyzer` parameter; without it, the only analyzer
-/// that places anything is used, and a model with several has to be told which one to follow.
+/// axis is traced after can be named with the `analyzer` parameter; without it, the first analyzer
+/// whose light is rays is used, or else the first of all.
 #[utoipa::path(tag = "document",
     params(SceneQuery),
     responses(
@@ -247,9 +249,9 @@ async fn get_scene_axis(
 /// Each source is thinned to at most `max_rays` rays before the trace, spread evenly over its
 /// cross section, so a source of millions of rays costs no more than one of a few hundred. Only the
 /// primary path is traced; a ghost focus analyzer contributes its sources, not its reflections.
-/// Without an analyzer that defines sources the file is empty. The trace runs on a copy, off the
-/// request thread, and the `analyzer` parameter picks which analyzer's sources to follow exactly
-/// as for `/scene.glb`.
+/// Without an analyzer whose light is rays - none at all, or an energy analysis - the file is
+/// empty. The trace runs on a copy, off the request thread, and the `analyzer` parameter picks
+/// which analyzer's sources to follow exactly as for `/scene.glb`.
 #[utoipa::path(tag = "document",
     params(RaysQuery),
     responses(
@@ -1597,15 +1599,15 @@ mod test {
         assert!(body.starts_with(b"glTF"));
     }
 
-    /// Two analyses can place the same model differently, so which one a view follows has to be
-    /// said rather than guessed at.
+    /// A model analyzed several ways is drawn after the analyzer named, or else after its first
+    /// analysis with rays.
     #[actix_web::test]
-    async fn a_model_analyzed_several_ways_needs_the_analyzer_named() {
+    async fn a_model_analyzed_several_ways_is_drawn_without_the_analyzer_named() {
         let app_state = state_with_a_lens();
         let named = analyze_two_more_ways(&app_state);
 
         let resp = request_scene(&app_state, "").await;
-        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(resp.status(), StatusCode::OK);
 
         let resp = request_scene(&app_state, &format!("?analyzer={named}")).await;
         assert_eq!(resp.status(), StatusCode::OK);
@@ -1722,9 +1724,10 @@ mod test {
         assert!(!holds_lines(&body));
     }
 
-    /// The rays follow an analyzer's sources, so a model analyzed several ways has to say which.
+    /// The rays of a model analyzed several ways are those of its first analysis with rays: the ray
+    /// trace here, not the ghost focus analysis added after it.
     #[actix_web::test]
-    async fn the_rays_of_a_model_analyzed_several_ways_need_the_analyzer_named() {
+    async fn the_rays_of_a_model_analyzed_several_ways_are_those_of_its_first_analysis_with_rays() {
         use opossum_core::analyzers::{AnalyzerType, GhostFocusConfig};
 
         let app_state = state_with_a_traced_source();
@@ -1734,18 +1737,19 @@ mod test {
             .add_analyzer(AnalyzerType::GhostFocus(GhostFocusConfig::default()));
 
         let resp = request_rays(&app_state, "").await;
-        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(holds_lines(&test::read_body(resp).await));
     }
 
-    /// The axis follows an analyzer's sources, so it asks for the analyzer to be named exactly
-    /// when the scene itself does.
+    /// The axis follows the same analyzer as the scene: the one named, or else the first with
+    /// rays.
     #[actix_web::test]
-    async fn the_axis_of_a_model_analyzed_several_ways_needs_the_analyzer_named() {
+    async fn the_axis_of_a_model_analyzed_several_ways_is_drawn_without_the_analyzer_named() {
         let app_state = state_with_a_lens();
         let named = analyze_two_more_ways(&app_state);
 
         let resp = request_axis(&app_state, "").await;
-        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(resp.status(), StatusCode::OK);
 
         let resp = request_axis(&app_state, &format!("?analyzer={named}")).await;
         assert_eq!(resp.status(), StatusCode::OK);

@@ -6,7 +6,7 @@ use super::{GhostFocusConfig, GhostFocusHistory};
 use crate::{
     analyzers::{Analyzer, AnalyzerType, raytrace::AnalysisRayTrace},
     core_optics::{NodeAttrExt, OpticNodeExt, node_attr::HasNodeAttr},
-    error::{OpmResult, OpossumError},
+    error::OpmResult,
     light::{
         Rays,
         light_result::{
@@ -137,11 +137,7 @@ impl Analyzer for GhostFocusAnalyzer {
 
         // Asked for rather than assembled here, so that whatever draws this setup places its
         // components exactly where this analysis does.
-        let raytrace_config = AnalyzerType::GhostFocus(self.config.clone())
-            .positioning_config()
-            .ok_or_else(|| {
-                OpossumError::Analysis("a ghost focus analysis has to place its nodes".into())
-            })?;
+        let raytrace_config = AnalyzerType::GhostFocus(self.config.clone()).positioning_config();
         AnalysisRayTrace::calc_node_positions(scenery, LightResult::default(), &raytrace_config)?;
         scenery.reset_data();
         scenery.prepare_volume(self.config())?;

@@ -2,20 +2,22 @@
 #![warn(missing_docs)]
 use std::collections::HashMap;
 
-use super::{Analyzer, AnalyzerRegistration, AnalyzerType};
+use super::{Analyzer, AnalyzerRegistration, AnalyzerType, RayTraceConfig};
 use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
     core_optics::{NodeAttrExt, OpticNode, node_attr::HasNodeAttr},
     error::OpmResult,
     gain::{ActiveScenario, PumpConfig, PumpScenario},
-    light::LightResult,
+    light::{LightResult, lightdata::ray_data_builder::RayDataBuilder},
     nodes::NodeGroup,
     prelude::EnergyDataBuilder,
     refractive_index::RefrIndexConst,
     reporting::analysis_report::AnalysisReport,
 };
-use log::info;
+use log::{info, warn};
+use num_traits::Zero;
 use serde::{Deserialize, Serialize};
+use uom::si::f64::Length;
 use uuid::Uuid;
 
 inventory::submit! {
@@ -75,6 +77,38 @@ impl EnergyConfig {
             .chain(other.source_map.keys())
             .copied()
             .find(|uuid| self.source_map.get(uuid) != other.source_map.get(uuid))
+    }
+    /// Return the configuration a positioning run after this analysis places a model with.
+    ///
+    /// An energy analysis knows its light only as spectra. Each source is placed with default
+    /// rays aligned at the center wavelength of its own spectrum, which decides where a component
+    /// acting by wavelength - a grating, a wedge - sends the optical axis. A spectrum that cannot be
+    /// built or has no center leaves its source at the default alignment wavelength, with a
+    /// warning.
+    ///
+    /// # Returns
+    ///
+    /// The configuration for the positioning run, covering every source of this analysis.
+    #[must_use]
+    pub fn positioning_config(&self) -> RayTraceConfig {
+        let mut positioning = RayTraceConfig::default();
+        positioning.set_positioning_run(true);
+        for (source, spectrum) in &self.source_map {
+            let center = spectrum
+                .build()
+                .ok()
+                .map(|spectrum| spectrum.center_wavelength())
+                .filter(|center| center.is_finite() && *center > Length::zero());
+            if center.is_none() {
+                warn!(
+                    "the energy spectrum of source {source} has no center wavelength, so it is placed at the default alignment wavelength"
+                );
+            }
+            let mut rays = RayDataBuilder::default();
+            rays.set_alignment_wavelength(center);
+            positioning.map_source(*source, rays);
+        }
+        positioning
     }
 }
 

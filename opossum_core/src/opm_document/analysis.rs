@@ -1,6 +1,6 @@
 //! Execution and orchestration of optical analyses for [`OpmDocument`].
 
-use super::OpmDocument;
+use super::{AnalyzerInfo, OpmDocument};
 use crate::{
     analyzers::{
         Analyzer, AnalyzerRegistration, AnalyzerType, RayTraceConfig,
@@ -112,15 +112,16 @@ impl OpmDocument {
     /// node.
     ///
     /// Which source the axis starts from comes from an analyzer, because that is where source data
-    /// lives; see [`AnalyzerType::positioning_config`]. A model with no analyzer that places
-    /// anything is placed from its own source ports with default ray data, and one without even
-    /// those gets a source port put in front of its first component, so that a setup which was
-    /// never analyzed can still be looked at.
+    /// lives; see [`AnalyzerType::positioning_config`]. Unless one is named, it is the first
+    /// analyzer whose light is rays, or else the first of all. A model with no analyzer at all is
+    /// placed from its own source ports with default ray data, and one without even those gets a
+    /// source port put in front of its first component, so that a setup which was never analyzed
+    /// can still be looked at.
     ///
     /// # Arguments
     ///
-    /// - `analyzer_id`: the analyzer to take the sources from, or `None` to pick the only one that
-    ///   places anything
+    /// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen
+    ///   as above
     ///
     /// # Returns
     ///
@@ -128,9 +129,8 @@ impl OpmDocument {
     ///
     /// # Errors
     ///
-    /// This function returns an error if the named analyzer does not exist or does not place
-    /// anything, if no analyzer was named and several place something, or if the positioning run
-    /// itself fails.
+    /// This function returns an error if the named analyzer does not exist, or if the positioning
+    /// run itself fails.
     pub fn positioned_copy(&self, analyzer_id: Option<Uuid>) -> OpmResult<Self> {
         let mut copy = self.clone();
         let config = copy.placing_config(analyzer_id)?;
@@ -149,8 +149,8 @@ impl OpmDocument {
     ///
     /// # Arguments
     ///
-    /// - `analyzer_id`: the analyzer to take the sources from, or `None` to pick the only one that
-    ///   places anything — chosen exactly as for [`positioned_copy`](OpmDocument::positioned_copy)
+    /// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen
+    ///   exactly as for [`positioned_copy`](OpmDocument::positioned_copy)
     ///
     /// # Returns
     ///
@@ -181,16 +181,16 @@ impl OpmDocument {
     ///
     /// # Arguments
     ///
-    /// - `analyzer_id`: the analyzer to take the sources from, or `None` to pick the only one that
-    ///   places anything
+    /// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen
+    ///   exactly as for [`positioned_copy`](OpmDocument::positioned_copy)
     /// - `max_rays`: the most rays traced per source
     ///
     /// # Returns
     ///
     /// One bundle per open output port the light reaches, each ray carrying its path in global
-    /// coordinates; rays stopped on the way are included up to where they stopped. Empty if no
-    /// analyzer defines sources: default rays would only show something that is not the setup's
-    /// own light.
+    /// coordinates; rays stopped on the way are included up to where they stopped. Empty if the
+    /// model has no analyzer, or if the one followed has no rays of its own, as an energy analysis:
+    /// default rays would only show something that is not the setup's own light.
     ///
     /// # Errors
     ///
@@ -198,10 +198,14 @@ impl OpmDocument {
     /// [`positioned_copy`](OpmDocument::positioned_copy), or if a source cannot be built or the
     /// trace fails.
     pub fn traced_rays(&self, analyzer_id: Option<Uuid>, max_rays: usize) -> OpmResult<Vec<Rays>> {
-        let mut copy = self.clone();
-        let Some(placing) = copy.analyzer_ray_config(analyzer_id)? else {
+        let Some(analyzer) = self
+            .drawing_analyzer(analyzer_id)?
+            .filter(|analyzer| analyzer.analyzer_type().has_ray_sources())
+        else {
             return Ok(Vec::new());
         };
+        let placing = analyzer.analyzer_type().positioning_config();
+        let mut copy = self.clone();
         // Placed from the full sources first, exactly as the components are drawn: the trace below
         // leaves placed nodes where they are, so the thinned sources cannot move anything.
         AnalysisRayTrace::calc_node_positions(&mut copy.scenery, LightResult::default(), &placing)?;
@@ -228,8 +232,9 @@ impl OpmDocument {
     ///
     /// # Arguments
     ///
-    /// - `analyzer_id`: the analyzer to take the sources from, or `None` to pick the only one that
-    ///   places anything, falling back to default rays from the model's own source ports
+    /// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen
+    ///   as for [`positioned_copy`](OpmDocument::positioned_copy), falling back to default rays
+    ///   from the model's own source ports
     ///
     /// # Returns
     ///
@@ -237,64 +242,50 @@ impl OpmDocument {
     ///
     /// # Errors
     ///
-    /// This function returns an error if the named analyzer does not exist or does not place
-    /// anything, if no analyzer was named and several place something, or if the default
+    /// This function returns an error if the named analyzer does not exist, or if the default
     /// configuration cannot be built.
     fn placing_config(&mut self, analyzer_id: Option<Uuid>) -> OpmResult<RayTraceConfig> {
-        // If nothing analyzes this model geometrically, there is no source data to go by. Default
-        // rays from wherever the model marks its sources still say where everything sits relative
-        // to everything else.
-        self.analyzer_ray_config(analyzer_id)?
-            .map_or_else(|| self.default_positioning_config(), Ok)
+        // If nothing analyzes this model, there is no source data to go by. Default rays from
+        // wherever the model marks its sources still say where everything sits relative to
+        // everything else.
+        let analyzed = self
+            .drawing_analyzer(analyzer_id)?
+            .map(|analyzer| analyzer.analyzer_type().positioning_config());
+        analyzed.map_or_else(|| self.default_positioning_config(), Ok)
     }
 
-    /// Returns the ray-trace configuration of the analyzer that places this model, if one does.
+    /// Returns the analyzer a drawing of this model follows.
+    ///
+    /// Two analyses can place the same model differently — another source, another alignment
+    /// wavelength — so a drawing follows the one named. Without a name it follows the first
+    /// analysis whose light is rays, as that one can show its light as well, and the first of all
+    /// only when none has rays.
     ///
     /// # Arguments
     ///
-    /// - `analyzer_id`: the analyzer to take the configuration from, or `None` to pick the only one
-    ///   that places anything
+    /// - `analyzer_id`: the analyzer to follow, or `None` to choose one as above
     ///
     /// # Returns
     ///
-    /// The analyzer's configuration for a positioning run, with its sources, or `None` if no
-    /// analyzer was named and none places anything.
+    /// The analyzer, or `None` if the model has none.
     ///
     /// # Errors
     ///
-    /// This function returns an error if the named analyzer does not exist or does not place
-    /// anything, or if no analyzer was named and several place something.
-    fn analyzer_ray_config(&self, analyzer_id: Option<Uuid>) -> OpmResult<Option<RayTraceConfig>> {
-        if let Some(id) = analyzer_id {
-            let analyzer = self.analyzer(id)?;
-            return analyzer
-                .analyzer_type()
-                .positioning_config()
-                .map(Some)
-                .ok_or_else(|| {
-                    OpossumError::OpmDocument(format!(
-                        "the '{}' analyzer does not place the nodes of a model and cannot be used \
-                         to draw it",
-                        analyzer.display_name()
-                    ))
-                });
-        }
-        let mut placing = self
-            .analyzers
-            .values()
-            .filter_map(|info| info.analyzer_type().positioning_config());
-        match (placing.next(), placing.next()) {
-            (only, None) => Ok(only),
-            (Some(_), Some(_)) => Err(OpossumError::OpmDocument(
-                "this model is analyzed several ways, each of which may place its nodes \
-                 differently — name the analyzer to draw it after"
-                    .into(),
-            )),
-            (None, Some(_)) => Ok(None),
-        }
+    /// This function returns an error if the named analyzer does not exist.
+    fn drawing_analyzer(&self, analyzer_id: Option<Uuid>) -> OpmResult<Option<&AnalyzerInfo>> {
+        let Some(id) = analyzer_id else {
+            return Ok(self
+                .analyzers
+                .values()
+                .find(|analyzer| analyzer.analyzer_type().has_ray_sources())
+                .or_else(|| self.analyzers.values().next()));
+        };
+        self.analyzers.get(&id).map(Some).ok_or_else(|| {
+            OpossumError::OpmDocument(format!("this model has no analyzer {id} to draw it after"))
+        })
     }
 
-    /// Build a positioning configuration for a model no analyzer places.
+    /// Build a positioning configuration for a model nobody analyzes.
     ///
     /// Every source port of the model is given default ray data. A model that has none at all gets
     /// one put in front of the first component whose input is still free, at no distance, so that

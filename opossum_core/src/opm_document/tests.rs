@@ -8,14 +8,21 @@ use crate::{
     degree,
     gain::{ConstGain, GainModel},
     joule,
-    light::{LightResult, lightdata::ray_data_builder::RayDataBuilder},
-    millimeter,
+    light::{
+        LightResult,
+        lightdata::{
+            energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
+            ray_data_builder::RayDataBuilder,
+        },
+    },
+    millimeter, nanometer,
     nodes::{
         BeamSplitter, Dummy, Lens, NodeReference, ReflectiveGrating, SourcePort, ThinMirror,
         round_collimated_ray_builder,
     },
 };
 use approx::assert_relative_eq;
+use uom::si::f64::Length;
 
 #[test]
 fn new() {
@@ -321,20 +328,30 @@ fn a_model_without_a_source_is_placed_from_its_first_component() -> OpmResult<()
     Ok(())
 }
 
-/// Two analyses can place the same model differently — another source, another alignment
-/// wavelength — so which one a drawing follows has to be said rather than guessed.
+/// Two analyses can place the same model differently, so a drawing follows the one named, or else
+/// the first. Named, a ghost focus analysis that defines no light for the source stops the run;
+/// unnamed, the ray trace added before it places the model.
 #[test]
-fn a_model_analyzed_several_ways_has_to_be_told_which_one_to_draw() -> OpmResult<()> {
+fn a_model_analyzed_several_ways_is_drawn_after_its_first_analysis_unless_one_is_named()
+-> OpmResult<()> {
     let (mut document, source, first, _) = lined_up_model()?;
     let mut config = RayTraceConfig::default();
     config.map_source(source, RayDataBuilder::default());
-    let ray_trace = document.add_analyzer(AnalyzerType::RayTrace(config));
-    document.add_analyzer(AnalyzerType::GhostFocus(GhostFocusConfig::default()));
+    document.add_analyzer(AnalyzerType::RayTrace(config));
+    let ghost_focus = document.add_analyzer(AnalyzerType::GhostFocus(GhostFocusConfig::default()));
 
-    assert!(document.positioned_copy(None).is_err());
-
-    let placed = document.positioned_copy(Some(ray_trace))?;
+    let placed = document.positioned_copy(None)?;
     assert_relative_eq!(placed_at(&placed, first)?, 0.1, epsilon = 1e-12);
+
+    assert!(document.positioned_copy(Some(ghost_focus)).is_err());
+    Ok(())
+}
+
+/// A drawing cannot follow an analyzer the model does not have.
+#[test]
+fn a_model_is_not_drawn_after_an_analyzer_it_does_not_have() -> OpmResult<()> {
+    let (document, ..) = lined_up_model()?;
+    assert!(document.positioned_copy(Some(Uuid::new_v4())).is_err());
     Ok(())
 }
 
@@ -344,20 +361,6 @@ fn a_model_analyzed_several_ways_has_to_be_told_which_one_to_draw() -> OpmResult
 fn an_empty_model_is_placed_without_complaint() -> OpmResult<()> {
     let placed = OpmDocument::default().positioned_copy(None)?;
     assert_eq!(placed.scenery().nr_of_nodes(), 0);
-    Ok(())
-}
-
-/// An energy analysis knows nothing of geometry, so it can neither be drawn after nor stand in
-/// the way of the sources the model brings itself.
-#[test]
-fn an_energy_analysis_places_nothing() -> OpmResult<()> {
-    let (mut document, _, first, _) = lined_up_model()?;
-    let energy = document.add_analyzer(AnalyzerType::Energy(EnergyConfig::default()));
-
-    assert!(document.positioned_copy(Some(energy)).is_err());
-
-    let placed = document.positioned_copy(None)?;
-    assert_relative_eq!(placed_at(&placed, first)?, 0.1, epsilon = 1e-12);
     Ok(())
 }
 
@@ -548,6 +551,73 @@ fn an_empty_outgoing_bundle_at_the_last_node_stops_nothing() -> OpmResult<()> {
     )?;
 
     assert!(is_placed(&OpmDocument::new(scenery), grating)?);
+    Ok(())
+}
+
+/// An energy analysis whose only source shines a single laser line at `wavelength`.
+fn energy_config_at(source: Uuid, wavelength: Length) -> OpmResult<EnergyConfig> {
+    let mut config = EnergyConfig::default();
+    config.map_source(
+        source,
+        EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
+            vec![(wavelength, joule!(1.0))],
+            nanometer!(1.0),
+        )?),
+    );
+    Ok(config)
+}
+
+/// An energy analysis places a model at the wavelength of its own light. The untilted grating
+/// that swallows the optical axis at 1000 nm lets it through at 500 nm (|m·λ·g| = 0.87), so the
+/// run gets past the grating to the mirror behind it.
+#[test]
+fn an_energy_analysis_places_the_model_at_the_wavelength_of_its_light() -> OpmResult<()> {
+    let (scenery, source, grating) = source_then_untilted_grating(true)?;
+    let mut document = OpmDocument::new(scenery);
+    document.add_analyzer(AnalyzerType::Energy(energy_config_at(
+        source,
+        nanometer!(500.0),
+    )?));
+
+    let placed = document.positioned_copy(None)?;
+
+    assert!(is_placed(&placed, grating)?);
+    Ok(())
+}
+
+/// An energy analysis only knows a wavelength for each source, while one whose light is rays
+/// knows how that light runs. Unless the energy analysis is named, a drawing follows the one with
+/// rays, even when it comes second: here the ray trace at 1000 nm, at which the untilted grating
+/// swallows the axis.
+#[test]
+fn an_energy_analysis_is_passed_over_for_one_whose_light_is_rays() -> OpmResult<()> {
+    let (scenery, source, _) = source_then_untilted_grating(true)?;
+    let mut document = OpmDocument::new(scenery);
+    let energy = document.add_analyzer(AnalyzerType::Energy(energy_config_at(
+        source,
+        nanometer!(500.0),
+    )?));
+    document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
+
+    let Err(error) = document.positioned_copy(None) else {
+        panic!("the ray trace's axis ends at the grating");
+    };
+    assert!(error.to_string().contains("evanescent"), "{error}");
+    assert!(document.positioned_copy(Some(energy)).is_ok());
+    Ok(())
+}
+
+/// An energy analysis places a model, but it has no rays of its own to show.
+#[test]
+fn an_energy_analysis_has_no_rays_to_draw() -> OpmResult<()> {
+    let (scenery, source, _) = source_then_untilted_grating(true)?;
+    let mut document = OpmDocument::new(scenery);
+    document.add_analyzer(AnalyzerType::Energy(energy_config_at(
+        source,
+        nanometer!(500.0),
+    )?));
+
+    assert!(document.traced_rays(None, 100)?.is_empty());
     Ok(())
 }
 
