@@ -51,17 +51,19 @@ impl AnalysisRayTrace for SourcePort {
         let ray_data_builder = config.get_source(&self.node_attr().uuid()).ok_or_else(|| {
             OpossumError::Analysis(format!("No source data found in analyzer for {self}"))
         })?;
-        let mut rays = ray_data_builder.build()?;
-
-        // Ensure rays have the ambient refractive index set
-        rays.set_refractive_index(config.ambient_material().refractive_index_type())?;
-
-        let mut axis_ray = ray_data_builder.alignment_wavelength().map_or_else(|| {
-                     info!(
-                         "No alignment wavelength defined, using energy-weighted central wavelength for alignment"
-                     );
-                     rays.get_optical_axis_ray()
-                 }, |alignment_wvl| Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), alignment_wvl, joule!(1.0)))?;
+        // The axis is a single ray: the source's rays are only built when no alignment wavelength
+        // is given and their central wavelength has to stand in for it.
+        let mut axis_ray = match ray_data_builder.alignment_wavelength() {
+            Some(alignment_wvl) => {
+                Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), alignment_wvl, joule!(1.0))?
+            }
+            None => {
+                info!(
+                    "No alignment wavelength defined, using energy-weighted central wavelength for alignment"
+                );
+                ray_data_builder.build()?.get_optical_axis_ray()?
+            }
+        };
 
         // Explicitly assign the ambient refractive index for the axis ray at its specific wavelength
         let ambient_n = config
@@ -85,8 +87,97 @@ mod test {
         distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines},
         light::lightdata::ray_data_builder::RayDataBuilder,
         nanometer,
-        prelude::{CollimatedSrc, RayDataSource},
+        prelude::{CollimatedSrc, ImageSrc, RayDataSource},
     };
+    use approx::assert_relative_eq;
+    use uom::si::{f64::Length, length::nanometer};
+
+    /// A collimated source of a few rays, all at `wavelength`.
+    fn collimated_at(wavelength: Length) -> OpmResult<RayDataBuilder> {
+        Ok(RayDataBuilder::from(RayDataSource::Collimated(
+            CollimatedSrc::new(
+                Hexapolar::new(millimeter!(5.), 1)?.into(),
+                UniformDist::new(joule!(1.))?.into(),
+                LaserLines::new(vec![(wavelength, 1.0)])?.into(),
+            ),
+        )))
+    }
+
+    /// A ray-trace configuration feeding `node` the light `builder` describes.
+    fn feeding(node: &SourcePort, builder: RayDataBuilder) -> RayTraceConfig {
+        let mut config = RayTraceConfig::default();
+        config.map_source(node.node_attr().uuid(), builder);
+        config
+    }
+
+    /// The optical axis a positioning run sends out of `node`: a single ray.
+    fn axis_ray_of(node: &mut SourcePort, config: &RayTraceConfig) -> OpmResult<Ray> {
+        let output = AnalysisRayTrace::calc_node_positions(node, LightResult::default(), config)?;
+        let Some(LightData::Geometric(rays)) = output.get("output_1") else {
+            return Err(OpossumError::Other("no axis left the source".into()));
+        };
+        assert_eq!(rays.nr_of_rays(true), 1, "the axis is a single ray");
+        rays.iter()
+            .next()
+            .cloned()
+            .ok_or_else(|| OpossumError::Other("no axis ray".into()))
+    }
+
+    /// The axis leaves a source at its alignment wavelength, whatever its rays shine at.
+    #[test]
+    fn the_axis_leaves_at_the_alignment_wavelength() -> OpmResult<()> {
+        let mut node = SourcePort::default();
+        let mut builder = collimated_at(nanometer!(1000.0))?;
+        builder.set_alignment_wavelength(Some(nanometer!(500.0)));
+        let config = feeding(&node, builder);
+        let axis = axis_ray_of(&mut node, &config)?;
+        assert_relative_eq!(axis.wavelength().get::<nanometer>(), 500.0, epsilon = 1e-9);
+        Ok(())
+    }
+
+    /// Without an alignment wavelength the axis takes the central wavelength of the source's rays.
+    #[test]
+    fn without_an_alignment_wavelength_the_axis_takes_that_of_the_rays() -> OpmResult<()> {
+        let mut node = SourcePort::default();
+        let config = feeding(&node, collimated_at(nanometer!(1000.0))?);
+        let axis = axis_ray_of(&mut node, &config)?;
+        assert_relative_eq!(axis.wavelength().get::<nanometer>(), 1000.0, epsilon = 1e-9);
+        Ok(())
+    }
+
+    /// The axis carries the ambient medium's refractive index, with an alignment wavelength or
+    /// without.
+    #[test]
+    fn the_axis_carries_the_ambient_refractive_index() -> OpmResult<()> {
+        for alignment in [Some(nanometer!(500.0)), None] {
+            let mut node = SourcePort::default();
+            let mut builder = collimated_at(nanometer!(1000.0))?;
+            builder.set_alignment_wavelength(alignment);
+            let mut config = feeding(&node, builder);
+            config.set_ambient_material(crate::material::Material::new_draft(
+                "ambient",
+                None,
+                None,
+                crate::refractive_index::RefrIndexConst::new(1.45)?.into(),
+            ));
+            let axis = axis_ray_of(&mut node, &config)?;
+            assert_relative_eq!(axis.refractive_index(), 1.45, epsilon = 1e-12);
+        }
+        Ok(())
+    }
+
+    /// The axis is one ray, so with an alignment wavelength the source's own rays are never built:
+    /// an image source whose file is missing still sends out its axis.
+    #[test]
+    fn an_alignment_wavelength_spares_building_the_rays() -> OpmResult<()> {
+        let mut node = SourcePort::default();
+        let mut builder = RayDataBuilder::from(RayDataSource::Image(ImageSrc::default()));
+        builder.set_alignment_wavelength(Some(nanometer!(500.0)));
+        let config = feeding(&node, builder);
+        let axis = axis_ray_of(&mut node, &config)?;
+        assert_relative_eq!(axis.wavelength().get::<nanometer>(), 500.0, epsilon = 1e-9);
+        Ok(())
+    }
 
     #[test]
     fn analyze_raytrace_no_source_definition() {
