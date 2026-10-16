@@ -341,6 +341,9 @@ fn update_outgoing_edges_and_up_direction(
 
 /// Places one node of the graph on the optical axis and passes the axis on to its successors.
 ///
+/// A node with inputs that no axis reaches - one in a strand no source feeds - is passed over
+/// with a warning: there is nothing to place it along, and nothing to pass on.
+///
 /// # Arguments
 ///
 /// * `graph` - The optical graph to operate on.
@@ -370,6 +373,12 @@ fn calculate_single_node_position(
 
     ensure_node_isometry(graph, node_idx, &incoming_edges, up_direction)?;
 
+    if incoming_edges.is_empty() && !graph.g[node_idx].ports().names(&PortType::Input).is_empty() {
+        warn!(
+            "{node_info} got no valid optical axis data from previous node and can thus not being placed. Skipping."
+        );
+        return Ok(());
+    }
     let output = execute_node_calculation(graph, node_idx, incoming_edges, config);
 
     let outgoing_edges = match output {

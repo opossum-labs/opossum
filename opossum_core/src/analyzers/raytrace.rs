@@ -17,7 +17,7 @@ use crate::{
     reporting::analysis_report::AnalysisReport,
     utils::geom_transformation::Isometry,
 };
-use log::{info, warn};
+use log::info;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -325,7 +325,8 @@ pub trait AnalysisRayTrace: OpticNode {
     ///
     /// This function calculates the position of this [`OpticNode`] element in 3D space. This is based on the analysis of a single,
     /// central [`Ray`](crate::light::ray::Ray) representing the optical axis. The default implementation is to use the normal `analyze`
-    /// function. For a [`NodeGroup`] however, this must be separately implemented in order to allow nesting.
+    /// function. For a [`NodeGroup`] however, this must be separately implemented in order to allow nesting. Within a graph,
+    /// a node no axis reaches is passed over before this is called.
     ///
     /// # Errors
     /// This function will return an error if internal element-specific errors occur and the analysis cannot be performed.
@@ -334,15 +335,7 @@ pub trait AnalysisRayTrace: OpticNode {
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        if incoming_data.is_empty() {
-            warn!(
-                "{} got no valid optical axis data from previous node and can thus not being placed. Skipping.",
-                self.node_info()
-            );
-            Ok(LightResult::default())
-        } else {
-            self.analyze(incoming_data, config)
-        }
+        self.analyze(incoming_data, config)
     }
     /// Return the local frame from which the optical axis enters the given input port.
     ///

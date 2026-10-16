@@ -11,7 +11,7 @@ use crate::{
     light::{LightResult, lightdata::ray_data_builder::RayDataBuilder},
     millimeter,
     nodes::{
-        Dummy, Lens, NodeReference, ReflectiveGrating, SourcePort, ThinMirror,
+        BeamSplitter, Dummy, Lens, NodeReference, ReflectiveGrating, SourcePort, ThinMirror,
         round_collimated_ray_builder,
     },
 };
@@ -546,5 +546,43 @@ fn an_empty_outgoing_bundle_at_the_last_node_stops_nothing() -> OpmResult<()> {
     )?;
 
     assert!(is_placed(&OpmDocument::new(scenery), grating)?);
+    Ok(())
+}
+
+/// A strand no source feeds - a block pasted next to the setup, say - is left unplaced, and the
+/// rest is placed all the same. A beam splitter in it with something after it used to stop the
+/// whole run, as the only component that fails without an incoming axis.
+#[test]
+fn a_strand_the_axis_does_not_reach_leaves_the_rest_placed() -> OpmResult<()> {
+    let mut scenery = NodeGroup::default();
+    let source = scenery.add_node(SourcePort::default())?;
+    let lens = scenery.add_node(Lens::default())?;
+    scenery.connect_nodes(source, "output_1", lens, "input_1", millimeter!(50.0))?;
+    let loose_lens = scenery.add_node(Lens::default())?;
+    let splitter = scenery.add_node(BeamSplitter::default())?;
+    let after = scenery.add_node(Dummy::default())?;
+    scenery.connect_nodes(
+        loose_lens,
+        "output_1",
+        splitter,
+        "input_1",
+        millimeter!(50.0),
+    )?;
+    scenery.connect_nodes(
+        splitter,
+        "out1_trans1_refl2",
+        after,
+        "input_1",
+        millimeter!(50.0),
+    )?;
+    let mut document = OpmDocument::new(scenery);
+    document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
+
+    let placed = document.positioned_copy(None)?;
+
+    assert!(is_placed(&placed, lens)?);
+    for unreached in [loose_lens, splitter, after] {
+        assert!(!is_placed(&placed, unreached)?);
+    }
     Ok(())
 }
