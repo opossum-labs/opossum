@@ -260,9 +260,9 @@ fn lined_up_model() -> OpmResult<(OpmDocument, Uuid, Uuid, Uuid)> {
     Ok((OpmDocument::new(scenery), source, first, second))
 }
 
-/// Where along the optical axis a node of the given document sits, in meter.
-fn placed_at(document: &OpmDocument, node_id: Uuid) -> OpmResult<f64> {
-    let (node_ref, _) = document.scenery().node_recursive(node_id)?;
+/// Where along the optical axis a node of the given scenery sits, in meter.
+fn placed_at(scenery: &NodeGroup, node_id: Uuid) -> OpmResult<f64> {
+    let (node_ref, _) = scenery.node_recursive(node_id)?;
     let placement = node_ref.node_attr().effective_position();
     Ok(placement
         .expect("this node was expected to be placed")
@@ -271,26 +271,26 @@ fn placed_at(document: &OpmDocument, node_id: Uuid) -> OpmResult<f64> {
         .value)
 }
 
-fn is_placed(document: &OpmDocument, node_id: Uuid) -> OpmResult<bool> {
-    let (node_ref, _) = document.scenery().node_recursive(node_id)?;
+fn is_placed(scenery: &NodeGroup, node_id: Uuid) -> OpmResult<bool> {
+    let (node_ref, _) = scenery.node_recursive(node_id)?;
     Ok(node_ref.node_attr().effective_position().is_some())
 }
 
 /// A placement is saved with the model and a later run leaves an already placed node alone, so
 /// drawing a setup must not reach back into the document it was asked about.
 #[test]
-fn a_positioned_copy_leaves_the_document_it_came_from_alone() -> OpmResult<()> {
+fn a_placed_scenery_leaves_the_document_it_came_from_alone() -> OpmResult<()> {
     let (mut document, source, first, second) = lined_up_model()?;
     let mut config = RayTraceConfig::default();
     config.map_source(source, RayDataBuilder::default());
     document.add_analyzer(AnalyzerType::RayTrace(config));
     let before = document.to_opm_file_string()?;
 
-    let placed = document.positioned_copy(None)?;
+    let placed = document.placed_scenery(None)?;
 
     assert_eq!(document.to_opm_file_string()?, before);
-    assert!(!is_placed(&document, first)?);
-    assert!(!is_placed(&document, second)?);
+    assert!(!is_placed(document.scenery(), first)?);
+    assert!(!is_placed(document.scenery(), second)?);
     // The distances of the connections, measured from the source port in the origin.
     assert_relative_eq!(placed_at(&placed, first)?, 0.1, epsilon = 1e-12);
     assert_relative_eq!(placed_at(&placed, second)?, 0.15, epsilon = 1e-12);
@@ -302,7 +302,7 @@ fn a_positioned_copy_leaves_the_document_it_came_from_alone() -> OpmResult<()> {
 #[test]
 fn a_model_without_an_analyzer_is_not_placed() -> OpmResult<()> {
     let (document, ..) = lined_up_model()?;
-    let Err(error) = document.positioned_copy(None) else {
+    let Err(error) = document.placed_scenery(None) else {
         panic!("a model nobody analyzes has no light to place it with");
     };
     assert!(error.to_string().contains("no analyzer"), "{error}");
@@ -322,7 +322,7 @@ fn a_model_without_a_source_port_is_not_placed() -> OpmResult<()> {
     document.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
     let before = document.to_opm_file_string()?;
 
-    let Err(error) = document.positioned_copy(None) else {
+    let Err(error) = document.placed_scenery(None) else {
         panic!("a model without a source port has nowhere to start the optical axis");
     };
 
@@ -343,10 +343,10 @@ fn a_model_analyzed_several_ways_is_drawn_after_its_first_analysis_unless_one_is
     document.add_analyzer(AnalyzerType::RayTrace(config));
     let ghost_focus = document.add_analyzer(AnalyzerType::GhostFocus(GhostFocusConfig::default()));
 
-    let placed = document.positioned_copy(None)?;
+    let placed = document.placed_scenery(None)?;
     assert_relative_eq!(placed_at(&placed, first)?, 0.1, epsilon = 1e-12);
 
-    assert!(document.positioned_copy(Some(ghost_focus)).is_err());
+    assert!(document.placed_scenery(Some(ghost_focus)).is_err());
     Ok(())
 }
 
@@ -354,7 +354,7 @@ fn a_model_analyzed_several_ways_is_drawn_after_its_first_analysis_unless_one_is
 #[test]
 fn a_model_is_not_drawn_after_an_analyzer_it_does_not_have() -> OpmResult<()> {
     let (document, ..) = lined_up_model()?;
-    assert!(document.positioned_copy(Some(Uuid::new_v4())).is_err());
+    assert!(document.placed_scenery(Some(Uuid::new_v4())).is_err());
     Ok(())
 }
 
@@ -362,7 +362,7 @@ fn a_model_is_not_drawn_after_an_analyzer_it_does_not_have() -> OpmResult<()> {
 /// says so.
 #[test]
 fn an_empty_model_says_what_it_lacks() {
-    let Err(error) = OpmDocument::default().positioned_copy(None) else {
+    let Err(error) = OpmDocument::default().placed_scenery(None) else {
         panic!("an empty model has nothing to place");
     };
     assert!(error.to_string().contains("neither"), "{error}");
@@ -370,13 +370,13 @@ fn an_empty_model_says_what_it_lacks() {
 
 /// The placement a document that went through its file form arrives at: what a placement copy
 /// started from before it was a plain clone, and so the oracle the clone has to agree with.
-fn placed_through_file(document: &OpmDocument) -> OpmResult<OpmDocument> {
-    OpmDocument::from_string(&document.to_opm_file_string()?)?.positioned_copy(None)
+fn placed_through_file(document: &OpmDocument) -> OpmResult<NodeGroup> {
+    OpmDocument::from_string(&document.to_opm_file_string()?)?.placed_scenery(None)
 }
 
 /// Where a node sits along the optical axis, or `None` if it was not placed.
-fn z_of(document: &OpmDocument, node_id: Uuid) -> OpmResult<Option<f64>> {
-    let (node_ref, _) = document.scenery().node_recursive(node_id)?;
+fn z_of(scenery: &NodeGroup, node_id: Uuid) -> OpmResult<Option<f64>> {
+    let (node_ref, _) = scenery.node_recursive(node_id)?;
     Ok(node_ref
         .node_attr()
         .effective_position()
@@ -396,7 +396,7 @@ fn a_property_changed_after_adding_the_node_reaches_the_placement() -> OpmResult
     scenery.connect_nodes(lens, "output_1", after, "input_1", millimeter!(50.0))?;
     let mut document = OpmDocument::new(scenery);
     document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
-    let default_thickness = document.positioned_copy(None)?;
+    let default_thickness = document.placed_scenery(None)?;
 
     document
         .scenery_mut()
@@ -405,7 +405,7 @@ fn a_property_changed_after_adding_the_node_reaches_the_placement() -> OpmResult
         .node_attr_mut()
         .set_property("center thickness", millimeter!(30.0).into())?;
 
-    let placed = document.positioned_copy(None)?;
+    let placed = document.placed_scenery(None)?;
     let oracle = placed_through_file(&document)?;
     assert_eq!(z_of(&placed, after)?, z_of(&oracle, after)?);
     assert_ne!(
@@ -446,7 +446,7 @@ fn a_group_and_a_reference_are_placed_as_through_the_file_form() -> OpmResult<()
     document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
     let before = document.to_opm_file_string()?;
 
-    let placed = document.positioned_copy(None)?;
+    let placed = document.placed_scenery(None)?;
     let oracle = placed_through_file(&document)?;
 
     for node_id in [source, group, inner_first, inner_second, fold, second_pass] {
@@ -455,7 +455,7 @@ fn a_group_and_a_reference_are_placed_as_through_the_file_form() -> OpmResult<()
     assert!(is_placed(&placed, inner_second)?);
     assert!(is_placed(&placed, fold)?);
     assert_eq!(document.to_opm_file_string()?, before);
-    assert!(!is_placed(&document, inner_second)?);
+    assert!(!is_placed(document.scenery(), inner_second)?);
     Ok(())
 }
 
@@ -495,7 +495,7 @@ fn positioning_stops_at_an_evanescent_grating_with_a_clear_error() -> OpmResult<
     let mut document = OpmDocument::new(scenery);
     document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
 
-    let Err(error) = document.positioned_copy(None) else {
+    let Err(error) = document.placed_scenery(None) else {
         panic!("the mirror after the grating cannot be placed");
     };
     let error = error.to_string();
@@ -515,7 +515,7 @@ fn a_terminal_evanescent_grating_is_still_placed() -> OpmResult<()> {
     let mut document = OpmDocument::new(scenery);
     document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
 
-    let placed = document.positioned_copy(None)?;
+    let placed = document.placed_scenery(None)?;
 
     assert!(is_placed(&placed, grating)?);
     Ok(())
@@ -554,7 +554,7 @@ fn an_empty_outgoing_bundle_at_the_last_node_stops_nothing() -> OpmResult<()> {
         &single_ray_config(source)?,
     )?;
 
-    assert!(is_placed(&OpmDocument::new(scenery), grating)?);
+    assert!(is_placed(&scenery, grating)?);
     Ok(())
 }
 
@@ -583,7 +583,7 @@ fn an_energy_analysis_places_the_model_at_the_wavelength_of_its_light() -> OpmRe
         nanometer!(500.0),
     )?));
 
-    let placed = document.positioned_copy(None)?;
+    let placed = document.placed_scenery(None)?;
 
     assert!(is_placed(&placed, grating)?);
     Ok(())
@@ -603,11 +603,11 @@ fn an_energy_analysis_is_passed_over_for_one_whose_light_is_rays() -> OpmResult<
     )?));
     document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
 
-    let Err(error) = document.positioned_copy(None) else {
+    let Err(error) = document.placed_scenery(None) else {
         panic!("the ray trace's axis ends at the grating");
     };
     assert!(error.to_string().contains("evanescent"), "{error}");
-    assert!(document.positioned_copy(Some(energy)).is_ok());
+    assert!(document.placed_scenery(Some(energy)).is_ok());
     Ok(())
 }
 
@@ -654,7 +654,7 @@ fn a_strand_the_axis_does_not_reach_leaves_the_rest_placed() -> OpmResult<()> {
     let mut document = OpmDocument::new(scenery);
     document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
 
-    let placed = document.positioned_copy(None)?;
+    let placed = document.placed_scenery(None)?;
 
     assert!(is_placed(&placed, lens)?);
     for unreached in [loose_lens, splitter, after] {

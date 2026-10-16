@@ -13,6 +13,7 @@ use crate::{
         light_result::LightResult,
         lightdata::{ray_data_builder::RayDataBuilder, ray_data_source::RayDataSource},
     },
+    nodes::NodeGroup,
     reporting::analysis_report::AnalysisReport,
 };
 use log::info;
@@ -98,7 +99,7 @@ impl OpmDocument {
         Ok(reports)
     }
 
-    /// Return a copy of this document whose nodes have been placed in space.
+    /// Return a copy of this model's scenery whose nodes have been placed in space.
     ///
     /// A model states what is connected to what and how far apart, not where anything is: a node
     /// only learns its own placement from a positioning run, which traces the optical axis from a
@@ -108,8 +109,8 @@ impl OpmDocument {
     /// It happens on a copy, and that is the point of this method. A placement is written into the
     /// node itself and saved with the document, and a later run leaves an already placed node
     /// alone; running one on the live document would therefore freeze whatever the drawing happened
-    /// to be asked for into the model itself. The copy is a plain [`Clone`], which copies every
-    /// node.
+    /// to be asked for into the model itself. The copy is a plain [`Clone`] of the scenery, which
+    /// copies every node; the rest of the document places nothing and is not copied.
     ///
     /// Which source the axis starts from comes from an analyzer, because that is where source data
     /// lives; see [`AnalyzerType::positioning_config`]. Unless one is named, it is the first
@@ -123,23 +124,23 @@ impl OpmDocument {
     ///
     /// # Returns
     ///
-    /// An independent copy of this document with its nodes placed.
+    /// An independent copy of this model's scenery with its nodes placed.
     ///
     /// # Errors
     ///
     /// This function returns an error if the model has no source port or no analyzer, if the
     /// named analyzer does not exist, or if the positioning run itself fails.
-    pub fn positioned_copy(&self, analyzer_id: Option<Uuid>) -> OpmResult<Self> {
+    pub fn placed_scenery(&self, analyzer_id: Option<Uuid>) -> OpmResult<NodeGroup> {
         let config = self.placing_config(analyzer_id)?;
-        let mut copy = self.clone();
-        AnalysisRayTrace::calc_node_positions(&mut copy.scenery, LightResult::default(), &config)?;
-        copy.scenery.reset_data();
-        Ok(copy)
+        let mut scenery = self.scenery.clone();
+        AnalysisRayTrace::calc_node_positions(&mut scenery, LightResult::default(), &config)?;
+        scenery.reset_data();
+        Ok(scenery)
     }
 
     /// Returns the paths the optical axis takes through this model when it is placed.
     ///
-    /// The positioning run behind [`positioned_copy`](OpmDocument::positioned_copy) follows one
+    /// The positioning run behind [`placed_scenery`](OpmDocument::placed_scenery) follows one
     /// ray per source — the optical axis — through the setup and places every component where
     /// that ray meets it. The ray bundles that leave the model through an open output port carry
     /// the whole path back to their source, which shows how the setup is built up. The run happens
@@ -148,7 +149,7 @@ impl OpmDocument {
     /// # Arguments
     ///
     /// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen
-    ///   exactly as for [`positioned_copy`](OpmDocument::positioned_copy)
+    ///   exactly as for [`placed_scenery`](OpmDocument::placed_scenery)
     ///
     /// # Returns
     ///
@@ -158,20 +159,20 @@ impl OpmDocument {
     /// # Errors
     ///
     /// This function returns an error in the same cases as
-    /// [`positioned_copy`](OpmDocument::positioned_copy).
+    /// [`placed_scenery`](OpmDocument::placed_scenery).
     pub fn positioning_rays(&self, analyzer_id: Option<Uuid>) -> OpmResult<Vec<Rays>> {
         let mut config = self.placing_config(analyzer_id)?;
-        let mut copy = self.clone();
-        // Only copies collect ray ends, so the document the copy came from holds none.
+        let mut scenery = self.scenery.clone();
+        // Only copies collect ray ends, so the scenery the copy came from holds none.
         config.set_collect_ray_ends(true);
-        AnalysisRayTrace::calc_node_positions(&mut copy.scenery, LightResult::default(), &config)?;
-        Ok(copy.scenery.ray_ends().into_iter().cloned().collect())
+        AnalysisRayTrace::calc_node_positions(&mut scenery, LightResult::default(), &config)?;
+        Ok(scenery.ray_ends().into_iter().cloned().collect())
     }
 
     /// Returns the rays of the model's sources, traced through it, for drawing them.
     ///
     /// The sources are the ones the analyzer defines, and the model is placed exactly as
-    /// [`positioned_copy`](OpmDocument::positioned_copy) places it, so the rays run through the
+    /// [`placed_scenery`](OpmDocument::placed_scenery) places it, so the rays run through the
     /// components where the 3D view shows them. Each source is thinned to at most `max_rays` rays
     /// first (see [`Rays::thinned`]), which keeps the trace cheap however many rays the source
     /// holds. Only the primary path is traced: a ghost focus analyzer contributes its sources, not
@@ -180,7 +181,7 @@ impl OpmDocument {
     /// # Arguments
     ///
     /// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen
-    ///   exactly as for [`positioned_copy`](OpmDocument::positioned_copy)
+    ///   exactly as for [`placed_scenery`](OpmDocument::placed_scenery)
     /// - `max_rays`: the most rays traced per source
     ///
     /// # Returns
@@ -202,15 +203,15 @@ impl OpmDocument {
             return Ok(Vec::new());
         };
         let placing = analyzer.analyzer_type().positioning_config();
-        let mut copy = self.clone();
+        let mut scenery = self.scenery.clone();
         // Placed from the full sources first, exactly as the components are drawn: the trace below
         // leaves placed nodes where they are, so the thinned sources cannot move anything.
-        AnalysisRayTrace::calc_node_positions(&mut copy.scenery, LightResult::default(), &placing)?;
-        copy.scenery.reset_data();
+        AnalysisRayTrace::calc_node_positions(&mut scenery, LightResult::default(), &placing)?;
+        scenery.reset_data();
 
         let mut config = placing;
         config.set_positioning_run(false);
-        // Only copies collect ray ends, so the document the copy came from holds none.
+        // Only copies collect ray ends, so the scenery the copy came from holds none.
         config.set_collect_ray_ends(true);
         let thinned = config
             .source_map()
@@ -221,8 +222,8 @@ impl OpmDocument {
             })
             .collect::<OpmResult<_>>()?;
         config.set_source_map(thinned);
-        RayTracingAnalyzer::new(config).analyze(&mut copy.scenery)?;
-        Ok(copy.scenery.ray_ends().into_iter().cloned().collect())
+        RayTracingAnalyzer::new(config).analyze(&mut scenery)?;
+        Ok(scenery.ray_ends().into_iter().cloned().collect())
     }
 
     /// Returns the configuration a positioning run of this model starts from.
@@ -230,7 +231,7 @@ impl OpmDocument {
     /// # Arguments
     ///
     /// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen
-    ///   as for [`positioned_copy`](OpmDocument::positioned_copy)
+    ///   as for [`placed_scenery`](OpmDocument::placed_scenery)
     ///
     /// # Returns
     ///
@@ -537,10 +538,9 @@ mod tests {
             .map(Ray::position_history_with_current)
             .ok_or_else(|| OpossumError::Other("no axis ray".into()))?;
 
-        let placed = document.positioned_copy(None)?;
+        let placed = document.placed_scenery(None)?;
         for lens in [first, second] {
             let position = placed
-                .scenery()
                 .with_node_attr(lens, |attr| {
                     attr.effective_position().map(Isometry::translation)
                 })?

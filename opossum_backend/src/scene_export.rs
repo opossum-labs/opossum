@@ -18,7 +18,7 @@ use opossum_core::{
     },
     light::Rays,
     nanometer,
-    opm_document::OpmDocument,
+    nodes::NodeGroup,
     types::api_types::{SceneManifest, SceneNodeEntry, SkippedSceneNode},
     utils::geom_transformation::Isometry,
 };
@@ -51,13 +51,14 @@ const FALLBACK_REFRACTIVE_INDEX: f64 = 1.5;
 /// scene, so one unusual lens does not cost the view of the rest of the setup.
 ///
 /// The model has to be placed already — a component only learns where it is from a positioning run,
-/// see [`OpmDocument::positioned_copy`]. Placing it is kept out of here on purpose: that half needs
-/// the live document while this one, the longer of the two, does not, so a caller holding a lock on
-/// it can let go before the meshing starts.
+/// see [`OpmDocument::placed_scenery`](opossum_core::opm_document::OpmDocument::placed_scenery).
+/// Placing it is kept out of here on purpose: that half needs the live document while this one,
+/// the longer of the two, does not, so a caller holding a lock on it can let go before the meshing
+/// starts.
 ///
 /// # Arguments
 ///
-/// - `placed`: a model whose nodes carry their placement
+/// - `placed`: a scenery whose nodes carry their placement
 /// - `wavelength`: the wavelength the glass of a volume node is given its refractive index at
 ///
 /// # Returns
@@ -67,7 +68,7 @@ const FALLBACK_REFRACTIVE_INDEX: f64 = 1.5;
 /// # Errors
 ///
 /// This function returns an error if the nodes cannot be walked.
-pub fn scene_of(placed: &OpmDocument, wavelength: Length) -> OpmResult<Scene> {
+pub fn scene_of(placed: &NodeGroup, wavelength: Length) -> OpmResult<Scene> {
     let mut scene = Scene::new(SceneOptions::default());
     for_each_drawable(placed, |drawn| match drawn {
         Drawn::Volume(node, body) => add_volume_at(
@@ -126,7 +127,7 @@ enum Drawn<'a> {
 ///
 /// # Arguments
 ///
-/// - `placed`: a model whose nodes carry their placement
+/// - `placed`: a scenery whose nodes carry their placement
 /// - `draw`: called once per drawable component with the component and its shape
 ///
 /// # Returns
@@ -139,12 +140,12 @@ enum Drawn<'a> {
 ///
 /// This function returns an error if the nodes cannot be walked. An error from `draw` is reported
 /// and skipped, not returned.
-fn for_each_drawable<F>(placed: &OpmDocument, mut draw: F) -> OpmResult<Vec<SkippedSceneNode>>
+fn for_each_drawable<F>(placed: &NodeGroup, mut draw: F) -> OpmResult<Vec<SkippedSceneNode>>
 where
     F: FnMut(Drawn<'_>) -> OpmResult<()>,
 {
     let mut skipped = Vec::new();
-    for node_ref in placed.scenery().collect_all_nodes_recursive()? {
+    for node_ref in placed.collect_all_nodes_recursive()? {
         let drawable = if let Some(volume) = node_ref.as_volume() {
             Drawable::Volume(volume)
         } else if let Some(surface) = node_ref.as_surface() {
@@ -552,7 +553,7 @@ fn ray_trace_of(rays: &Rays, uid: String, wavelength: Length) -> RayTrace {
 ///
 /// # Arguments
 ///
-/// - `placed`: a model whose nodes carry their placement
+/// - `placed`: a scenery whose nodes carry their placement
 /// - `wavelength`: the wavelength the glass is given its refractive index at
 ///
 /// # Returns
@@ -566,7 +567,7 @@ fn ray_trace_of(rays: &Rays, uid: String, wavelength: Length) -> RayTrace {
 // picture - and `f32` still resolves a metre to well under a micrometre; see
 // [`SceneNodeEntry::position`].
 #[allow(clippy::cast_possible_truncation)]
-pub fn manifest_of(placed: &OpmDocument, wavelength: Length) -> OpmResult<SceneManifest> {
+pub fn manifest_of(placed: &NodeGroup, wavelength: Length) -> OpmResult<SceneManifest> {
     let mut nodes = Vec::new();
     let skipped = for_each_drawable(placed, |drawn| {
         let (uid, name, geometry, transform) = match drawn {
@@ -589,7 +590,7 @@ pub fn manifest_of(placed: &OpmDocument, wavelength: Length) -> OpmResult<SceneM
         let rotation = transform.rotation.quaternion();
         nodes.push(SceneNodeEntry {
             uid,
-            group: parent_group_id_or_self(placed.scenery(), uid)?,
+            group: parent_group_id_or_self(placed, uid)?,
             name,
             geometry,
             position: [position.x as f32, position.y as f32, position.z as f32],
@@ -846,9 +847,10 @@ mod test {
         material::default_reference_wavelength,
         millimeter, nanometer,
         nodes::{
-            CylindricLens, EnergyMeter, Lens, NodeGroup, NodeReference, ReflectiveGrating,
-            SourcePort, ThinMirror, Wedge, round_collimated_ray_builder,
+            CylindricLens, EnergyMeter, Lens, NodeReference, ReflectiveGrating, SourcePort,
+            ThinMirror, Wedge, round_collimated_ray_builder,
         },
+        opm_document::OpmDocument,
         properties::Proptype,
     };
     use uuid::Uuid;
@@ -896,7 +898,7 @@ mod test {
 
     /// Export a model and read back what the exported scene says about itself.
     fn exported(document: &OpmDocument) -> OpmResult<serde_json::Value> {
-        let placed = document.positioned_copy(None)?;
+        let placed = document.placed_scenery(None)?;
         let glb = scene_of(&placed, default_reference_wavelength())?
             .to_glb()
             .map_err(|e| OpossumError::Other(format!("the scene could not be written: {e}")))?;
@@ -1138,7 +1140,7 @@ mod test {
         let document = a_bit_of_everything()?;
         let before = document.to_opm_file_string()?;
         scene_of(
-            &document.positioned_copy(None)?,
+            &document.placed_scenery(None)?,
             default_reference_wavelength(),
         )?;
         assert_eq!(document.to_opm_file_string()?, before);
@@ -1217,7 +1219,7 @@ mod test {
     /// The list of components of a model, as a viewer would ask for it.
     fn manifest(document: &OpmDocument) -> OpmResult<SceneManifest> {
         manifest_of(
-            &document.positioned_copy(None)?,
+            &document.placed_scenery(None)?,
             default_reference_wavelength(),
         )
     }
@@ -1346,7 +1348,7 @@ mod test {
     #[test]
     fn the_manifest_names_what_the_scene_draws() -> OpmResult<()> {
         let document = a_bit_of_everything()?;
-        let placed = document.positioned_copy(None)?;
+        let placed = document.placed_scenery(None)?;
         let scene = exported(&document)?;
         let drawn = drawn_components(&scene);
 
@@ -1360,7 +1362,7 @@ mod test {
     ///
     /// The trap this pins down: a property is patched straight onto the live document without
     /// rebuilding the node's surfaces. A shape read off those surfaces would therefore be the *old*
-    /// one, while the manifest - built from a `positioned_copy` - reports a new hash. The viewer
+    /// one, while the manifest - built from a `placed_scenery` - reports a new hash. The viewer
     /// would then refetch and get the old mesh back, and changing a lens thickness would appear to
     /// do nothing at all.
     #[test]
@@ -1432,10 +1434,9 @@ mod test {
             .node_attr()
             .uuid();
 
-        let placed = document.positioned_copy(None)?;
+        let placed = document.placed_scenery(None)?;
         let from_placed = glb_of_node(
             placed
-                .scenery()
                 .node_recursive(lens)?
                 .0
                 .as_volume()
@@ -1465,9 +1466,8 @@ mod test {
     #[test]
     fn a_components_own_file_holds_it_at_the_origin() -> OpmResult<()> {
         let document = two_lenses(millimeter!(100.0))?;
-        let placed = document.positioned_copy(None)?;
+        let placed = document.placed_scenery(None)?;
         let far = placed
-            .scenery()
             .collect_all_nodes_recursive()?
             .into_iter()
             .filter_map(|node| {

@@ -121,7 +121,7 @@ async fn get_scene(
     // holding the document across that would block every other edit for as long as it takes.
     let placed = {
         let document = data.document.lock();
-        document.positioned_copy(query.analyzer)?
+        document.placed_scenery(query.analyzer)?
     };
     let glb = scene_of(&placed, default_reference_wavelength())?
         .to_glb()
@@ -162,7 +162,7 @@ async fn get_scene_manifest(
     // must not block every other edit for as long as it takes.
     let placed = {
         let document = data.document.lock();
-        document.positioned_copy(query.analyzer)
+        document.placed_scenery(query.analyzer)
     };
     let manifest = match placed {
         Ok(placed) => manifest_of(&placed, default_reference_wavelength())?,
