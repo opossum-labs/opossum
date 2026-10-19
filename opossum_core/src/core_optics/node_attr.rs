@@ -553,20 +553,22 @@ mod test {
     };
 
     fn test_body() -> OpmResult<Placed<Extruded>> {
-        Extruded::new(
-            Isometry::identity(),
-            Face::new(SurfaceShape::Plane, Isometry::identity()),
-            Face::new(
-                SurfaceShape::Plane,
-                Isometry::new_along_z(millimeter!(10.0))?,
-            ),
-            ValidatedCrossSection::try_new(Aperture::new_circle(
-                millimeter!(5.0),
-                ApertureType::Hole,
-                None,
-            )?)?,
-        )?
-        .place(&Isometry::identity())
+        Placed::new(
+            Extruded::new(
+                Isometry::identity(),
+                Face::new(SurfaceShape::Plane, Isometry::identity()),
+                Face::new(
+                    SurfaceShape::Plane,
+                    Isometry::new_along_z(millimeter!(10.0))?,
+                ),
+                ValidatedCrossSection::try_new(Aperture::new_circle(
+                    millimeter!(5.0),
+                    ApertureType::Hole,
+                    None,
+                )?)?,
+            )?,
+            &Isometry::identity(),
+        )
     }
 
     #[test]

@@ -557,17 +557,19 @@ mod test {
 
     /// Create a disk of the given thickness and radius, placed by the given isometry.
     fn disk(thickness: Length, radius: Length, placement: Isometry) -> OpmResult<Placed<Extruded>> {
-        Extruded::new(
-            Isometry::identity(),
-            Face::new(SurfaceShape::Plane, Isometry::identity()),
-            Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
-            ValidatedCrossSection::try_new(Aperture::new_circle(
-                radius,
-                ApertureType::Hole,
-                None,
-            )?)?,
-        )?
-        .place(&placement)
+        Placed::new(
+            Extruded::new(
+                Isometry::identity(),
+                Face::new(SurfaceShape::Plane, Isometry::identity()),
+                Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
+                ValidatedCrossSection::try_new(Aperture::new_circle(
+                    radius,
+                    ApertureType::Hole,
+                    None,
+                )?)?,
+            )?,
+            &placement,
+        )
     }
     /// Return the volume of all cells of the given field that hold medium.
     fn covered_volume(field: &InversionField) -> Volume {

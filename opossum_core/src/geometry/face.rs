@@ -167,10 +167,6 @@ impl SurfaceShape {
     }
 }
 
-/// A geometric surface built from a [`Face`] and its anchor: the surface's own frame relative to
-/// the node (see [`Face::place`]).
-pub type PlacedSurface = (GeoSurfaceRef, Isometry);
-
 /// One optical surface of a component: its [`SurfaceShape`] and where its vertex sits.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Face {
@@ -189,6 +185,25 @@ impl Face {
     pub const fn new(shape: SurfaceShape, vertex: Isometry) -> Self {
         Self { shape, vertex }
     }
+    /// Return the anchor of this face: the frame of its geometric surface relative to the node.
+    ///
+    /// # Arguments
+    ///
+    /// * `owner` - the frame this face is stated in, relative to the node.
+    ///
+    /// # Returns
+    ///
+    /// The owner frame followed by the vertex of this face and the step from the vertex to the
+    /// surface's own frame (see [`SurfaceShape::vertex_to_frame`]).
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the radius of the shape is not finite.
+    pub fn anchor(&self, owner: &Isometry) -> OpmResult<Isometry> {
+        Ok(owner
+            .append(&self.vertex)
+            .append(&self.shape.vertex_to_frame()?))
+    }
     /// Build the geometric surface of this face.
     ///
     /// # Arguments
@@ -198,18 +213,15 @@ impl Face {
     ///
     /// # Returns
     ///
-    /// The geometric surface, placed at `node_frame` followed by the returned anchor, and that
-    /// anchor: the surface's own frame relative to the node.
+    /// The geometric surface, placed at `node_frame` followed by the anchor of this face (see
+    /// [`Face::anchor`]).
     ///
     /// # Errors
     ///
     /// This function returns an error if the shape cannot be built (radius or focal length zero or
     /// not finite).
-    pub fn place(&self, node_frame: &Isometry, owner: &Isometry) -> OpmResult<PlacedSurface> {
-        let anchor = owner
-            .append(&self.vertex)
-            .append(&self.shape.vertex_to_frame()?);
-        Ok((self.shape.build(node_frame.append(&anchor))?, anchor))
+    pub fn place(&self, node_frame: &Isometry, owner: &Isometry) -> OpmResult<GeoSurfaceRef> {
+        self.shape.build(node_frame.append(&self.anchor(owner)?))
     }
     /// Check that this face reaches as far out as the cross section that bounds it.
     ///
@@ -306,7 +318,7 @@ mod test {
             },
             Isometry::new_along_z(millimeter!(5.0))?,
         );
-        let (_, anchor) = face.place(&Isometry::identity(), &Isometry::identity())?;
+        let anchor = face.anchor(&Isometry::identity())?;
         assert_abs_diff_eq!(anchor.translation().z.get::<millimeter>(), -75.0);
         Ok(())
     }
@@ -320,7 +332,8 @@ mod test {
             },
             Isometry::new_along_z(millimeter!(2.0))?,
         );
-        let (surface, anchor) = face.place(&node_frame, &owner)?;
+        let surface = face.place(&node_frame, &owner)?;
+        let anchor = face.anchor(&owner)?;
         let expected = node_frame.append(&anchor);
         let placed = *surface.0.isometry();
         assert_abs_diff_eq!(

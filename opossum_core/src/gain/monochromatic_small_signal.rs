@@ -314,17 +314,19 @@ mod test {
     /// Plane faces on purpose: the chord of an on-axis ray is then exactly the thickness, so every
     /// expected value below can be worked out from `exp(g₀·L)` by hand.
     fn disk(thickness: Length, radius: Length) -> OpmResult<Placed<Extruded>> {
-        Extruded::new(
-            Isometry::identity(),
-            Face::new(SurfaceShape::Plane, Isometry::identity()),
-            Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
-            ValidatedCrossSection::try_new(Aperture::new_circle(
-                radius,
-                ApertureType::Hole,
-                None,
-            )?)?,
-        )?
-        .place(&Isometry::identity())
+        Placed::new(
+            Extruded::new(
+                Isometry::identity(),
+                Face::new(SurfaceShape::Plane, Isometry::identity()),
+                Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
+                ValidatedCrossSection::try_new(Aperture::new_circle(
+                    radius,
+                    ApertureType::Hole,
+                    None,
+                )?)?,
+            )?,
+            &Isometry::identity(),
+        )
     }
     /// The disk every physics test below is performed on: 10 mm thick, 5 mm in radius.
     fn test_disk() -> OpmResult<Placed<Extruded>> {
@@ -919,17 +921,19 @@ mod test {
             },
             Isometry::new_along_z(millimeter!(radius_mm))?, // vertex at z = R
         );
-        let body = Extruded::new(
-            Isometry::identity(),
-            entrance,
-            exit,
-            ValidatedCrossSection::try_new(Aperture::new_circle(
-                millimeter!(aperture_mm),
-                ApertureType::Hole,
-                None,
-            )?)?,
-        )?
-        .place(&Isometry::identity())?;
+        let body = Placed::new(
+            Extruded::new(
+                Isometry::identity(),
+                entrance,
+                exit,
+                ValidatedCrossSection::try_new(Aperture::new_circle(
+                    millimeter!(aperture_mm),
+                    ApertureType::Hole,
+                    None,
+                )?)?,
+            )?,
+            &Isometry::identity(),
+        )?;
 
         // At x = R·√3/2 the chord equals R/2 exactly: √(R² − 3R²/4) = R/2.
         let x_ray_mm = radius_mm * f64::sqrt(3.0) / 2.0;
@@ -985,17 +989,19 @@ mod test {
             SurfaceShape::Plane,
             Isometry::new_along_z(millimeter!(radius_mm))?, // flat exit at z = R
         );
-        let body = Extruded::new(
-            Isometry::identity(),
-            entrance,
-            exit,
-            ValidatedCrossSection::try_new(Aperture::new_circle(
-                millimeter!(aperture_mm),
-                ApertureType::Hole,
-                None,
-            )?)?,
-        )?
-        .place(&Isometry::identity())?;
+        let body = Placed::new(
+            Extruded::new(
+                Isometry::identity(),
+                entrance,
+                exit,
+                ValidatedCrossSection::try_new(Aperture::new_circle(
+                    millimeter!(aperture_mm),
+                    ApertureType::Hole,
+                    None,
+                )?)?,
+            )?,
+            &Isometry::identity(),
+        )?;
 
         // At x = R·√3/2 the entrance is at z = R/2, giving chord R − R/2 = R/2 exactly.
         let x_ray_mm = radius_mm * f64::sqrt(3.0) / 2.0;

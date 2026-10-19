@@ -106,8 +106,7 @@ pub trait Volumetric: OpticNode {
         };
         geometry
             .place(&self.effective_node_iso().unwrap_or_else(Isometry::identity))?
-            .body()
-            .cloned()
+            .into_extruded()
             .ok_or_else(|| {
                 OpossumError::Other(format!(
                     "node '{}' is a single surface and encloses no volume",

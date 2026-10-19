@@ -358,27 +358,32 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         };
         let placed =
             geometry.place(&self.effective_node_iso().unwrap_or_else(Isometry::identity))?;
-        let ((entrance, entrance_anchor), (exit, exit_anchor)) = (placed.entrance(), placed.exit());
-        for name in inputs {
-            self.update_surface(
-                name,
-                entrance.clone(),
-                *entrance_anchor,
-                placed.rim().cloned(),
-                &PortType::Input,
-            )?;
-        }
-        for name in outputs {
-            self.update_surface(
-                name,
-                exit.clone(),
-                *exit_anchor,
-                placed.rim().cloned(),
-                &PortType::Output,
-            )?;
+        // Until the nodes name the face of every port, the first face goes under the inputs and
+        // the last under the outputs.
+        let last_face = placed.face_count().saturating_sub(1);
+        for (names, face, port_type) in [
+            (inputs, 0, PortType::Input),
+            (outputs, last_face, PortType::Output),
+        ] {
+            let surface = placed.surface(face).cloned().ok_or_else(|| {
+                OpossumError::Other(format!(
+                    "the geometry of node '{}' has no face {face}",
+                    self.name()
+                ))
+            })?;
+            let anchor = placed.anchor(face)?;
+            for name in names {
+                self.update_surface(
+                    name,
+                    surface.clone(),
+                    anchor,
+                    placed.rim().cloned(),
+                    &port_type,
+                )?;
+            }
         }
         self.node_attr_mut()
-            .set_runtime_body(placed.body().cloned());
+            .set_runtime_body(placed.into_extruded());
         Ok(())
     }
 

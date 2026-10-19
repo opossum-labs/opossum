@@ -5,9 +5,9 @@
 //! intersection of the inner sides of several faces ([`ParametricSolid`]) or several solids sharing
 //! interfaces ([`Assembly`]). Each kind lives in a file of its own, together with what it can do.
 //!
-//! A solid is described rather than built. A [`Placed`] solid is the description built at the
-//! placement of its node, which is what can answer geometric questions such as whether a point
-//! lies inside it (see [`Body`](crate::geometry::body::Body)).
+//! A solid is described rather than built. Built at the placement of its node it becomes a
+//! [`Placed`](crate::geometry::Placed) solid, which is what can answer geometric questions such as
+//! whether a point lies inside it (see [`Body`](crate::geometry::body::Body)).
 
 mod assembly;
 mod extruded;
@@ -20,7 +20,7 @@ pub use parametric::ParametricSolid;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    geometry::{Face, PlacedSurface},
+    geometry::{Face, Placeable, Rim},
     utils::geom_transformation::Isometry,
 };
 
@@ -66,41 +66,40 @@ pub enum Side {
     InFront,
 }
 
-/// A solid built at the placement of its node (see [`Extruded::place`]).
-///
-/// It keeps the description it was built from next to what building adds: the placement of the
-/// node and the geometric surfaces light enters and leaves through. Those are the very surfaces a
-/// node traces its rays at (see [`PlacedGeometry`]), shared rather than built a second time.
-///
-/// **Note**: A solid placed this way has exactly one entrance and one exit surface, the assumption
-/// the tracing of a node makes as a whole.
-#[derive(Debug, Clone)]
-pub struct Placed<T> {
-    solid: T,
-    node_frame: Isometry,
-    entrance: PlacedSurface,
-    exit: PlacedSurface,
+impl Solid {
+    /// Return the kind of solid this is, as the one thing the faces and the rim are asked of.
+    const fn as_placeable(&self) -> &dyn Placeable {
+        match self {
+            Self::Extruded(extruded) => &**extruded,
+            Self::Parametric(parametric) => parametric,
+            Self::Assembly(assembly) => assembly,
+        }
+    }
 }
 
-impl<T> Placed<T> {
-    /// Return the description this solid was built from.
-    #[must_use]
-    pub const fn solid(&self) -> &T {
-        &self.solid
+impl Placeable for Solid {
+    fn faces(&self) -> Vec<(&Face, Isometry)> {
+        self.as_placeable().faces()
     }
-    /// Return the placement of the node this solid was built at.
-    #[must_use]
-    pub const fn node_frame(&self) -> &Isometry {
-        &self.node_frame
+    fn rim(&self) -> Option<&Rim> {
+        self.as_placeable().rim()
     }
-    /// Return the surface light enters through, with its anchor relative to the node.
-    #[must_use]
-    pub const fn entrance(&self) -> &PlacedSurface {
-        &self.entrance
-    }
-    /// Return the surface light leaves through, with its anchor relative to the node.
-    #[must_use]
-    pub const fn exit(&self) -> &PlacedSurface {
-        &self.exit
-    }
+}
+
+/// Collect the faces a solid numbers, one after the other until the numbering ends.
+///
+/// # Arguments
+///
+/// * `face` - the face with the given number, as [`Solid::face`] returns it.
+///
+/// # Returns
+///
+/// Every face with the frame it is stated in, in the order of the numbering.
+fn collect_faces<'a>(
+    face: impl Fn(usize) -> Option<(&'a Face, Isometry, Side)>,
+) -> Vec<(&'a Face, Isometry)> {
+    (0..)
+        .map_while(face)
+        .map(|(face, owner, _)| (face, owner))
+        .collect()
 }

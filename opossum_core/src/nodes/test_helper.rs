@@ -999,19 +999,28 @@ pub mod helper {
         };
         let placed =
             geometry.place(&node.effective_node_iso().unwrap_or_else(Isometry::identity))?;
-        let ((entrance, entrance_anchor), (exit, exit_anchor)) = (placed.entrance(), placed.exit());
         let runtime = node.node_attr().runtime_surfaces();
-        let surfaces = runtime
-            .inputs
-            .keys()
-            .map(|name| ("in", name.as_str(), entrance.clone(), *entrance_anchor))
-            .chain(
-                runtime
-                    .outputs
-                    .keys()
-                    .map(|name| ("out", name.as_str(), exit.clone(), *exit_anchor)),
-            )
-            .collect::<Vec<_>>();
+        // Which face a port sits at is the node's business: find it by where the installed surface
+        // is anchored.
+        let face_at_anchor = |name: &str, anchor: &Isometry| -> OpmResult<usize> {
+            (0..placed.face_count())
+                .find(|index| placed.anchor(*index).is_ok_and(|face| face == *anchor))
+                .ok_or_else(|| {
+                    OpossumError::Other(format!(
+                        "no face of the geometry is anchored where the surface at port '{name}' is"
+                    ))
+                })
+        };
+        let mut surfaces = Vec::new();
+        for (port_type, ports) in [("in", &runtime.inputs), ("out", &runtime.outputs)] {
+            for (name, installed) in ports {
+                let face = face_at_anchor(name, installed.anchor_point_iso())?;
+                let surface = placed.surface(face).cloned().ok_or_else(|| {
+                    OpossumError::Other(format!("the geometry has no face {face}"))
+                })?;
+                surfaces.push((port_type, name.as_str(), surface, placed.anchor(face)?));
+            }
+        }
         describe_surfaces(node, &surfaces)
     }
 

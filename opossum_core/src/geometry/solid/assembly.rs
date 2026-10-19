@@ -3,10 +3,10 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{Side, Solid};
+use super::{Side, Solid, collect_faces};
 use crate::{
     error::{OpmResult, OpossumError},
-    geometry::Face,
+    geometry::{Face, Placeable, Rim},
     material::Material,
     properties::proptype::AssetRef,
     utils::geom_transformation::Isometry,
@@ -175,20 +175,38 @@ impl Assembly {
     }
 }
 
+impl Placeable for Assembly {
+    /// The faces of all parts, part after part, each stated with the placement of its part.
+    fn faces(&self) -> Vec<(&Face, Isometry)> {
+        self.parts
+            .iter()
+            .flat_map(|part| collect_faces(|index| part.face(index)))
+            .collect()
+    }
+    /// An assembly has no lateral boundary of its own; its parts may have one each.
+    fn rim(&self) -> Option<&Rim> {
+        None
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::{
         apertures::{Aperture, ApertureType, CircleShape},
         degree,
-        geometry::{Geometry, ParametricSolid, SurfaceShape},
+        geometry::{Geometry, ParametricSolid, Placed, SurfaceShape},
         millimeter,
         refractive_index::RefrIndexConst,
         types::validated_type_definitions::ValidatedCrossSection,
     };
+    use approx::assert_abs_diff_eq;
     use nalgebra::Point3;
     use num_traits::Zero;
-    use uom::si::f64::{Angle, Length};
+    use uom::si::{
+        f64::{Angle, Length},
+        length::millimeter,
+    };
 
     fn circle() -> OpmResult<ValidatedCrossSection> {
         ValidatedCrossSection::try_new(Aperture::new(
@@ -311,6 +329,36 @@ mod test {
         assert!(Assembly::new(parts()?, vec![cemented]).is_ok());
         let beyond_the_rear = Interface::new(FaceId::new(0, 2), FaceId::new(1, 0));
         assert!(Assembly::new(parts()?, vec![beyond_the_rear]).is_err());
+        Ok(())
+    }
+    /// The faces of a placed assembly are those of its parts, part after part, each stated with the
+    /// placement of its part - so the cemented faces of a doublet come out at the same place.
+    #[test]
+    fn a_placed_assembly_numbers_the_faces_of_its_parts_one_after_the_other() -> OpmResult<()> {
+        let behind_the_crown = Isometry::new_along_z(millimeter!(5.0))?;
+        let doublet = Assembly::new(
+            vec![
+                crown_part()?,
+                flint_part(millimeter!(-40.0), behind_the_crown)?,
+            ],
+            vec![Interface::new(FaceId::new(0, 1), FaceId::new(1, 0))],
+        )?;
+        let frame = Isometry::new_along_z(millimeter!(100.0))?;
+        let placed = Placed::new(doublet, &frame)?;
+        assert_eq!(placed.face_count(), 4);
+        assert!(placed.rim().is_none());
+        // crown front (R = 60), crown rear and flint front (both R = -40), flint rear (flat)
+        for (index, z) in [60.0, -35.0, -35.0, 10.0].into_iter().enumerate() {
+            assert_abs_diff_eq!(
+                placed.anchor(index)?.translation().z.get::<millimeter>(),
+                z,
+                epsilon = 1e-9
+            );
+            let surface = placed
+                .surface(index)
+                .ok_or_else(|| OpossumError::Other(format!("face {index} has no surface")))?;
+            assert_eq!(*surface.0.isometry(), frame.append(&placed.anchor(index)?));
+        }
         Ok(())
     }
     /// The cemented faces of a doublet have to be the same surface at the same place.

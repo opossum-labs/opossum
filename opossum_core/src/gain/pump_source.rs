@@ -524,17 +524,19 @@ mod test {
 
     /// Create a disk of the given thickness and radius, sitting at the origin.
     fn disk(thickness: Length, radius: Length) -> OpmResult<Placed<Extruded>> {
-        Extruded::new(
-            Isometry::identity(),
-            Face::new(SurfaceShape::Plane, Isometry::identity()),
-            Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
-            ValidatedCrossSection::try_new(Aperture::new_circle(
-                radius,
-                ApertureType::Hole,
-                None,
-            )?)?,
-        )?
-        .place(&Isometry::identity())
+        Placed::new(
+            Extruded::new(
+                Isometry::identity(),
+                Face::new(SurfaceShape::Plane, Isometry::identity()),
+                Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
+                ValidatedCrossSection::try_new(Aperture::new_circle(
+                    radius,
+                    ApertureType::Hole,
+                    None,
+                )?)?,
+            )?,
+            &Isometry::identity(),
+        )
     }
     /// The disk every field below is laid over: 10 mm thick, 5 mm in radius, sitting at the origin.
     ///
