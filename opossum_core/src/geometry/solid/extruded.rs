@@ -15,7 +15,7 @@ use super::{Side, collect_faces};
 use crate::{
     error::{OpmResult, OpossumError},
     geometry::{
-        Face, Placeable, Placement, Rim, RimRole,
+        Face, FaceBoundary, Placeable, Placement, Rim, RimRole,
         body::{Body, BoundingBox},
         geo_surface::GeoSurfaceRef,
     },
@@ -90,8 +90,17 @@ impl Placeable for Extruded {
     fn faces(&self) -> Vec<(&Face, Isometry)> {
         collect_faces(|index| self.face(index))
     }
-    fn rim(&self) -> Option<&Rim> {
-        Some(&self.rim)
+    fn window(&self) -> Option<&Rim> {
+        None
+    }
+}
+
+/// Both faces end at the rim of the profile, on the sheet through their vertex.
+impl FaceBoundary for Extruded {
+    fn includes(&self, at: Placement<'_>, face: usize, point: &Point3<Length>) -> bool {
+        at.surfaces()
+            .get(face)
+            .is_some_and(|surface| self.rim.bounds(&*surface.0, point, at.node_frame()))
     }
 }
 
@@ -221,13 +230,7 @@ impl Body for Extruded {
     fn path_length_inside(&self, at: Placement<'_>, ray: &Ray) -> Option<Length> {
         // A ray leaving the body through its lateral boundary meets no hit there: that boundary is
         // not part of the model.
-        let hits = Self::bounding_surfaces(at)
-            .into_iter()
-            .filter_map(|surface| {
-                self.rim
-                    .intersect(&*surface.0, ray, at.node_frame())
-                    .map(|(point, _)| point)
-            });
+        let hits = at.face_hits(ray, |face, point| self.includes(at, face, point));
         self.chord_through(at, ray.position(), ray.direction(), hits)
     }
     fn bounding_box(&self, at: Placement<'_>) -> OpmResult<BoundingBox> {
@@ -346,6 +349,41 @@ mod test {
     fn path_length(body: &Placed<Extruded>, ray: &Ray) -> OpmResult<Length> {
         body.path_length_inside(ray)
             .ok_or_else(|| crate::error::OpossumError::Other("ray missed the body".into()))
+    }
+    /// Both faces end at the rim of the profile; a closed surface also only on the sheet through its
+    /// vertex, not on the far side of its equator.
+    #[test]
+    fn the_faces_end_at_the_rim_and_on_the_sheet_through_the_vertex() -> OpmResult<()> {
+        let (_, rear) = plate_faces(millimeter!(30.0))?;
+        let body = body_between(
+            sphere_face(millimeter!(15.0), millimeter!(0.0))?,
+            rear,
+            circular_cross_section(millimeter!(12.5))?,
+            Isometry::identity(),
+        )?;
+        // The points lie on the sphere: the sheet check allows a nanometer.
+        let on_sphere = |x: f64| 15.0 - 15.0_f64.mul_add(15.0, -(x * x)).sqrt();
+        for (face, (x, y, z), included) in [
+            (Extruded::FRONT, (0.0, 0.0, 0.0), true),
+            (Extruded::FRONT, (12.4, 0.0, on_sphere(12.4)), true),
+            (Extruded::FRONT, (12.6, 0.0, on_sphere(12.6)), false),
+            (Extruded::REAR, (12.4, 0.0, 30.0), true),
+            (Extruded::REAR, (0.0, -12.6, 30.0), false),
+            // There is no third face.
+            (2, (0.0, 0.0, 0.0), false),
+        ] {
+            assert_eq!(
+                body.includes(face, &millimeter!(x, y, z)),
+                included,
+                "face {face} at ({x}, {y}, {z})"
+            );
+        }
+        // 135° from the vertex of the sphere: behind its equator, 10.6 mm off the axis and so within
+        // the rim when seen along the axis.
+        let polar = 135.0_f64.to_radians();
+        let far_sheet = millimeter!(15.0 * polar.sin(), 0.0, 15.0 - 15.0 * polar.cos());
+        assert!(!body.includes(Extruded::FRONT, &far_sheet));
+        Ok(())
     }
     #[test]
     fn contains_disk() -> OpmResult<()> {

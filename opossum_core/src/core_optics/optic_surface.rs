@@ -14,7 +14,7 @@ use crate::{
     },
     error::{OpmResult, OpossumError},
     geometry::{
-        Rim, RimRole,
+        Geometry, Placed, Rim, RimRole,
         geo_surface::{GeoSurface, GeoSurfaceRef},
     },
     light::{Ray, Rays},
@@ -24,7 +24,23 @@ use crate::{
 };
 use core::fmt::Debug;
 use nalgebra::{Point3, Vector3};
+use std::sync::Arc;
 use uom::si::f64::Length;
+
+/// A face of a placed description: the thing a surface belongs to, which decides where the surface
+/// ends.
+#[derive(Clone)]
+struct PlacedFace {
+    placed: Arc<Placed<Geometry>>,
+    face: usize,
+}
+
+impl PlacedFace {
+    /// Return whether a point on the unbounded surface of this face belongs to the component.
+    fn includes(&self, point: &Point3<Length>) -> bool {
+        self.placed.includes(self.face, point)
+    }
+}
 
 /// This struct represents an optical surface, which consists of the geometric surface shape
 /// ([`GeoSurface`](crate::geometry::geo_surface::GeoSurface)) and further properties such as the [`CoatingType`].
@@ -34,7 +50,9 @@ pub struct OpticSurface {
     geo_surface: GeoSurfaceRef,
     anchor_point_iso: Isometry,
     #[serde(skip)]
-    rim: Option<Rim>,
+    window: Option<Rim>,
+    #[serde(skip)]
+    face: Option<PlacedFace>,
     coating: CoatingType,
     lidt: Fluence,
     #[serde(skip)]
@@ -53,7 +71,8 @@ impl Default for OpticSurface {
         Self {
             geo_surface: GeoSurfaceRef::default(),
             anchor_point_iso: Isometry::identity(),
-            rim: None,
+            window: None,
+            face: None,
             coating: CoatingType::IdealAR,
             lidt: J_per_cm2!(1.),
             backward_rays_cache: Vec::<Rays>::new(),
@@ -94,8 +113,38 @@ impl OpticSurface {
         }
     }
     /// Sets the geo surface of this [`OpticSurface`].
+    ///
+    /// A surface set this way is no face of a placed description: it is unbounded from then on.
     pub fn set_geo_surface(&mut self, geo_surface: GeoSurfaceRef) {
         self.geo_surface = geo_surface;
+        self.face = None;
+    }
+    /// Makes this [`OpticSurface`] a face of a placed description.
+    ///
+    /// The geometric surface of the face, its anchor and the window of a detector are taken from
+    /// the description. Where the surface ends sideways is asked of the description, so the surface
+    /// ends where the component does, whatever kind of component that is.
+    ///
+    /// # Arguments
+    ///
+    /// * `placed` - the description, shared by all faces of the component.
+    /// * `face` - the number of the face this surface is.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the description has no such face.
+    pub fn set_face(&mut self, placed: Arc<Placed<Geometry>>, face: usize) -> OpmResult<()> {
+        let geo_surface = placed.surface(face).cloned().ok_or_else(|| {
+            OpossumError::Other(format!(
+                "there is no face {face}: the geometry has {} faces",
+                placed.face_count()
+            ))
+        })?;
+        self.anchor_point_iso = placed.anchor(face)?;
+        self.window = placed.window().cloned();
+        self.geo_surface = geo_surface;
+        self.face = Some(PlacedFace { placed, face });
+        Ok(())
     }
 
     /// Sets the coating of this [`OpticSurface`].
@@ -107,24 +156,19 @@ impl OpticSurface {
     pub fn geo_surface(&self) -> GeoSurfaceRef {
         self.geo_surface.clone()
     }
-    /// Sets the [`Rim`] of this [`OpticSurface`]: the lateral boundary of its component, stated
-    /// relative to the node. `None` leaves the surface unbounded.
-    pub fn set_rim(&mut self, rim: Option<Rim>) {
-        self.rim = rim;
-    }
-    /// Returns the [`Rim`] of this [`OpticSurface`], or `None` if it is unbounded.
+    /// Returns the window of this [`OpticSurface`], or `None` if it records all light.
+    ///
+    /// The window of a detector ([`RimRole::Window`]) decides what is recorded (see
+    /// [`OpticSurface::records_at`]), not what is hit.
     #[must_use]
-    pub const fn rim(&self) -> Option<&Rim> {
-        self.rim.as_ref()
+    pub const fn window(&self) -> Option<&Rim> {
+        self.window.as_ref()
     }
     /// Intersect a [`Ray`] with this [`OpticSurface`].
     ///
-    /// Within an edge, [`Rim::intersect`] decides whether the ray hits; the bodies of components
-    /// decide the same way. A detector's rim is a window ([`RimRole::Window`]): it decides what is
-    /// recorded (see [`OpticSurface::records_at`]), not what is hit.
-    ///
-    /// The rim follows the geometric surface: its frame is derived from where that surface sits
-    /// right now (its isometry, minus its anchor, is the node's frame).
+    /// A surface that is a face of a placed description (see [`OpticSurface::set_face`]) ends where
+    /// that description says; the bodies of components decide the same way. Any other surface is
+    /// unbounded.
     ///
     /// # Arguments
     ///
@@ -137,14 +181,10 @@ impl OpticSurface {
     /// part of the component.
     #[must_use]
     pub fn intersect(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
-        let geo_surface = &*self.geo_surface.0;
-        self.rim
-            .as_ref()
-            .filter(|rim| rim.role() == RimRole::Edge)
-            .map_or_else(
-                || geo_surface.calc_intersect_and_normal(ray),
-                |rim| rim.intersect(geo_surface, ray, &self.node_frame(geo_surface)),
-            )
+        self.geo_surface
+            .0
+            .calc_intersect_and_normal(ray)
+            .filter(|(point, _)| self.face.as_ref().is_none_or(|face| face.includes(point)))
     }
     /// Return whether this [`OpticSurface`] records a hit at the given point.
     ///
@@ -155,7 +195,7 @@ impl OpticSurface {
     /// * `point` - a point on this surface, in global coordinates.
     #[must_use]
     pub fn records_at(&self, point: &Point3<Length>) -> bool {
-        match &self.rim {
+        match &self.window {
             Some(rim) if rim.role() == RimRole::Window => {
                 rim.contains(point, &self.node_frame(&*self.geo_surface.0))
             }
@@ -177,7 +217,7 @@ impl OpticSurface {
     ///
     /// This function returns an error if a ray cannot be apodized.
     pub fn clip_to_window(&self, rays: &mut Rays) -> OpmResult<bool> {
-        match &self.rim {
+        match &self.window {
             Some(rim) if rim.role() == RimRole::Window => {
                 let frame = rim.frame(&self.node_frame(&*self.geo_surface.0));
                 rays.apodize(rim.cross_section().get(), &frame)
@@ -304,11 +344,6 @@ impl OpticSurface {
         Ok(())
     }
 
-    /// Sets the anchor point isometry of this [`OpticSurface`]
-    pub const fn set_anchor_point_iso(&mut self, iso: Isometry) {
-        self.anchor_point_iso = iso;
-    }
-
     ///Returns a reference to the anchor point isometry of this [`OpticSurface`]
     #[must_use]
     pub const fn anchor_point_iso(&self) -> &Isometry {
@@ -382,7 +417,10 @@ mod test {
         coatings::CoatingType,
         degree,
         error::{OpmResult, OpossumError},
-        geometry::{Plane, Rim, RimRole, Sphere, geo_surface::GeoSurfaceRef},
+        geometry::{
+            Face, Geometry, ParametricSolid, Plane, Side, Solid, Sphere, SurfaceShape,
+            geo_surface::GeoSurfaceRef,
+        },
         joule,
         light::{Ray, Rays},
         meter, millimeter, nanometer,
@@ -392,25 +430,30 @@ mod test {
     use std::sync::Arc;
     use uuid::Uuid;
 
-    /// A plane placed at the given anchor of a node at the origin, its component reaching 5 mm
-    /// around the node's axis.
-    fn bounded_plane(anchor: Isometry) -> OpmResult<OpticSurface> {
-        let mut surface = OpticSurface::new(
-            GeoSurfaceRef(Arc::new(Plane::new(anchor))),
-            CoatingType::IdealAR,
-            J_per_cm2!(1.0),
-        )?;
-        surface.set_anchor_point_iso(anchor);
-        surface.set_rim(Some(Rim::new(
-            ValidatedCrossSection::try_new(Aperture::new_circle(
-                millimeter!(5.0),
-                ApertureType::Hole,
-                None,
-            )?)?,
-            Isometry::identity(),
-            RimRole::Edge,
-        )));
+    /// A circular cross section of the given radius in millimeter.
+    fn circle(radius: f64) -> OpmResult<ValidatedCrossSection> {
+        ValidatedCrossSection::try_new(Aperture::new_circle(
+            millimeter!(radius),
+            ApertureType::Hole,
+            None,
+        )?)
+    }
+    /// The face of the geometry with the given number, placed at the given node.
+    fn face_of(geometry: &Geometry, node_frame: &Isometry, face: usize) -> OpmResult<OpticSurface> {
+        let mut surface = OpticSurface::default();
+        surface.set_face(Arc::new(geometry.place(node_frame)?), face)?;
         Ok(surface)
+    }
+    /// A plane with its vertex at the given pose of a node at the origin, its component reaching 5 mm
+    /// around the node's axis.
+    fn bounded_plane(vertex: Isometry) -> OpmResult<OpticSurface> {
+        let geometry = Geometry::surface(
+            Isometry::identity(),
+            SurfaceShape::Plane,
+            vertex,
+            Some(circle(5.0)?),
+        )?;
+        face_of(&geometry, &Isometry::identity(), 0)
     }
     /// A ray along z, the given distance off the axis in y.
     fn ray_at(y: f64) -> OpmResult<Ray> {
@@ -479,36 +522,78 @@ mod test {
         assert!(surface.intersect(&ray_at(5.1)?).is_none());
         Ok(())
     }
+    /// A surface set by hand is not a face of a placed description, so nothing bounds it any more.
     #[test]
-    fn the_rim_follows_its_surface() -> OpmResult<()> {
-        // A surface built at a moved node takes the rim along, as when a node is placed anew.
+    fn a_surface_set_by_hand_is_unbounded() -> OpmResult<()> {
         let mut surface = bounded_plane(Isometry::identity())?;
-        surface.set_geo_surface(GeoSurfaceRef(Arc::new(Plane::new(
-            Isometry::new_translation(millimeter!(0.0, 20.0, 0.0))?,
-        ))));
-        assert!(surface.intersect(&ray_at(0.0)?).is_none());
-        assert!(surface.intersect(&ray_at(20.0)?).is_some());
+        assert!(surface.intersect(&ray_at(7.0)?).is_none());
+        surface.set_geo_surface(GeoSurfaceRef(Arc::new(Plane::new(Isometry::identity()))));
+        assert!(surface.intersect(&ray_at(7.0)?).is_some());
+        Ok(())
+    }
+    /// A face that is not there cannot be set, and leaves the surface as it was.
+    #[test]
+    fn a_face_that_does_not_exist_cannot_be_set() -> OpmResult<()> {
+        let geometry = Geometry::plane(Some(circle(5.0)?));
+        let mut surface = face_of(&geometry, &Isometry::identity(), 0)?;
+        let error = surface
+            .set_face(Arc::new(geometry.place(&Isometry::identity())?), 1)
+            .unwrap_err();
+        assert!(error.to_string().contains("no face 1"), "{error}");
+        assert!(surface.intersect(&ray_at(4.9)?).is_some());
+        assert!(surface.intersect(&ray_at(5.1)?).is_none());
+        Ok(())
+    }
+    /// The window of a detector is no edge: a ray outside it hits the surface, it is just not recorded.
+    #[test]
+    fn a_detector_window_decides_what_is_recorded_not_what_is_hit() -> OpmResult<()> {
+        let detector = Geometry::detector(SurfaceShape::Plane, Some(circle(5.0)?))?;
+        let surface = face_of(&detector, &Isometry::identity(), 0)?;
+        assert!(surface.window().is_some());
+        assert!(surface.intersect(&ray_at(7.0)?).is_some());
+        assert!(surface.records_at(&millimeter!(0.0, 4.9, 0.0)));
+        assert!(!surface.records_at(&millimeter!(0.0, 5.1, 0.0)));
+        Ok(())
+    }
+    /// A surface ends where its component does, whatever kind of component that is: the front face of
+    /// this wedge-shaped solid ends where the side face cuts it, which no cross section states.
+    #[test]
+    fn a_face_of_a_parametric_solid_ends_at_the_other_faces() -> OpmResult<()> {
+        let side = Isometry::new(millimeter!(5.0, 0.0, 5.0), degree!(0.0, 90.0, 0.0))?;
+        let solid = Solid::Parametric(ParametricSolid::new(vec![
+            (
+                Face::new(SurfaceShape::Plane, Isometry::identity()),
+                Side::Behind,
+            ),
+            (
+                Face::new(
+                    SurfaceShape::Plane,
+                    Isometry::new_along_z(millimeter!(10.0))?,
+                ),
+                Side::InFront,
+            ),
+            (Face::new(SurfaceShape::Plane, side), Side::InFront),
+        ])?);
+        let front = face_of(&Geometry::Solid(solid), &Isometry::identity(), 0)?;
+        let ray_at_x = |x: f64| {
+            Ray::new_collimated(millimeter!(x, 0.0, -10.0), nanometer!(1000.0), joule!(1.0))
+        };
+        assert!(front.intersect(&ray_at_x(4.9)?).is_some());
+        assert!(front.intersect(&ray_at_x(5.1)?).is_none());
         Ok(())
     }
     #[test]
     fn a_hit_behind_the_equator_is_a_miss() -> OpmResult<()> {
         // A sphere of 15 mm radius with its vertex at the node, bounded to 12.5 mm around the axis.
-        let anchor = Isometry::new_along_z(millimeter!(15.0))?;
-        let mut surface = OpticSurface::new(
-            GeoSurfaceRef(Arc::new(Sphere::new(millimeter!(15.0), anchor)?)),
-            CoatingType::IdealAR,
-            J_per_cm2!(1.0),
-        )?;
-        surface.set_anchor_point_iso(anchor);
-        surface.set_rim(Some(Rim::new(
-            ValidatedCrossSection::try_new(Aperture::new_circle(
-                millimeter!(12.5),
-                ApertureType::Hole,
-                None,
-            )?)?,
+        let sphere = Geometry::surface(
             Isometry::identity(),
-            RimRole::Edge,
-        )));
+            SurfaceShape::Sphere {
+                radius: millimeter!(15.0),
+            },
+            Isometry::identity(),
+            Some(circle(12.5)?),
+        )?;
+        let surface = face_of(&sphere, &Isometry::identity(), 0)?;
         // 135° from the vertex, the point lies behind the equator, 10.6 mm off the axis - within the
         // rim when seen along the axis. A ray tilted by 50° reaches the sphere there first.
         let (radius, polar, tilt) = (15.0, 135.0_f64.to_radians(), 50.0_f64.to_radians());

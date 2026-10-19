@@ -4,16 +4,17 @@
 //! A component's [`GeoSurface`]s are unbounded; how far the component reaches sideways is its cross
 //! section. A [`Rim`] places that cross section in space and answers the questions both a
 //! [`Body`](crate::geometry::body::Body) and the surfaces light is traced at have to ask: does a
-//! point lie within it, and where does a ray hit the component? Questions about the region itself,
-//! in its own plane, are answered by the [`ValidatedCrossSection`].
+//! point lie within it, and does a point on the unbounded surface belong to the component?
+//! Questions about the region itself, in its own plane, are answered by the
+//! [`ValidatedCrossSection`].
 
-use nalgebra::{Point2, Point3, Vector3};
+use nalgebra::{Point2, Point3};
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 use crate::{
-    geometry::geo_surface::GeoSurface, light::Ray,
-    types::validated_type_definitions::ValidatedCrossSection, utils::geom_transformation::Isometry,
+    geometry::geo_surface::GeoSurface, types::validated_type_definitions::ValidatedCrossSection,
+    utils::geom_transformation::Isometry,
 };
 
 /// The lateral boundary of a component: its cross section, extruded along an axis.
@@ -104,33 +105,24 @@ impl Rim {
         self.cross_section
             .contains(Point2::new(local_point.x, local_point.y))
     }
-    /// Intersect a [`Ray`] with a surface of the component this [`Rim`] bounds.
+    /// Return whether a point on an unbounded surface is part of the component this [`Rim`] bounds.
     ///
-    /// This is the one place that decides whether a ray hits a component's surface. A point
-    /// outside the rim is not part of the component, and neither is one on the far side of a
-    /// closed surface behind its equator (see [`GeoSurface::is_on_vertex_sheet`]).
+    /// A point outside the rim is not part of the component, and neither is one on the far side of
+    /// a closed surface behind its equator (see [`GeoSurface::is_on_vertex_sheet`]).
     ///
     /// # Arguments
     ///
     /// * `surface` - the unbounded surface.
-    /// * `ray` - the ray to be intersected.
+    /// * `point` - a point on the surface, in global coordinates.
     /// * `reference` - the frame this rim is stated relative to.
-    ///
-    /// # Returns
-    ///
-    /// The intersection point in global coordinates and the normalized surface normal there,
-    /// pointing against the ray; or `None` if the ray misses the surface or meets it where it is
-    /// not part of the component.
     #[must_use]
-    pub fn intersect(
+    pub fn bounds(
         &self,
         surface: &dyn GeoSurface,
-        ray: &Ray,
+        point: &Point3<Length>,
         reference: &Isometry,
-    ) -> Option<(Point3<Length>, Vector3<f64>)> {
-        surface.calc_intersect_and_normal(ray).filter(|(point, _)| {
-            self.contains(point, reference) && surface.is_on_vertex_sheet(point)
-        })
+    ) -> bool {
+        self.contains(point, reference) && surface.is_on_vertex_sheet(point)
     }
 }
 

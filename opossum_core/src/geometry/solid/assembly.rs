@@ -9,7 +9,7 @@ use super::{Side, Solid, collect_faces};
 use crate::{
     error::{OpmResult, OpossumError},
     geometry::{
-        Face, Placeable, Placement, Rim,
+        Face, FaceBoundary, Placeable, Placement, Rim,
         body::{Body, BoundingBox},
         geo_surface::GeoSurfaceRef,
     },
@@ -196,9 +196,32 @@ impl Placeable for Assembly {
             .flat_map(|part| collect_faces(|index| part.face(index)))
             .collect()
     }
-    /// An assembly has no lateral boundary of its own; its parts may have one each.
-    fn rim(&self) -> Option<&Rim> {
+    fn window(&self) -> Option<&Rim> {
         None
+    }
+}
+
+/// A part of a placed assembly: where it sits and which faces of the assembly are its own.
+struct PartAt<'a> {
+    /// The number of the first face of the part in the assembly.
+    first_face: usize,
+    part: &'a Part,
+    /// The frame the part is placed in.
+    frame: Isometry,
+    /// The surfaces of the faces of the part.
+    surfaces: &'a [GeoSurfaceRef],
+}
+
+impl PartAt<'_> {
+    /// Return where the part sits, as the solid of the part is asked about its volume and its faces.
+    fn placement(&self) -> Placement<'_> {
+        Placement::new(&self.frame, self.surfaces)
+    }
+    /// Return the number the given face of the assembly has in the solid of the part, or `None` if
+    /// the face is not one of the part.
+    fn own_face(&self, face: usize) -> Option<usize> {
+        face.checked_sub(self.first_face)
+            .filter(|&own| own < self.surfaces.len())
     }
 }
 
@@ -212,14 +235,33 @@ impl Assembly {
     /// # Arguments
     ///
     /// * `at` - where the assembly sits.
-    fn parts_at<'a>(
-        &'a self,
-        at: Placement<'a>,
-    ) -> impl Iterator<Item = (&'a Part, Isometry, &'a [GeoSurfaceRef])> + 'a {
-        self.parts.iter().scan(0, move |first, part| {
-            let surfaces = at.surfaces().get(*first..*first + part.face_count())?;
-            *first += surfaces.len();
-            Some((part, at.node_frame().append(&part.placement), surfaces))
+    fn parts_at<'a>(&'a self, at: Placement<'a>) -> impl Iterator<Item = PartAt<'a>> + 'a {
+        self.parts.iter().scan(0, move |first_face, part| {
+            let surfaces = at
+                .surfaces()
+                .get(*first_face..*first_face + part.face_count())?;
+            let part_at = PartAt {
+                first_face: *first_face,
+                part,
+                frame: at.node_frame().append(&part.placement),
+                surfaces,
+            };
+            *first_face += surfaces.len();
+            Some(part_at)
+        })
+    }
+}
+
+/// A face of an assembly is a face of one of its parts and ends where that part's solid says.
+impl FaceBoundary for Assembly {
+    fn includes(&self, at: Placement<'_>, face: usize, point: &Point3<Length>) -> bool {
+        self.parts_at(at).any(|part_at| {
+            part_at.own_face(face).is_some_and(|own_face| {
+                part_at
+                    .part
+                    .solid
+                    .includes(part_at.placement(), own_face, point)
+            })
         })
     }
 }
@@ -229,15 +271,16 @@ impl Assembly {
 /// surfaces: parts must not overlap, or the overlap counts twice.
 impl Body for Assembly {
     fn contains(&self, at: Placement<'_>, point: &Point3<Length>) -> bool {
-        self.parts_at(at).any(|(part, frame, surfaces)| {
-            part.solid.contains(Placement::new(&frame, surfaces), point)
-        })
+        self.parts_at(at)
+            .any(|part_at| part_at.part.solid.contains(part_at.placement(), point))
     }
     fn path_length_inside(&self, at: Placement<'_>, ray: &Ray) -> Option<Length> {
         self.parts_at(at)
-            .filter_map(|(part, frame, surfaces)| {
-                part.solid
-                    .path_length_inside(Placement::new(&frame, surfaces), ray)
+            .filter_map(|part_at| {
+                part_at
+                    .part
+                    .solid
+                    .path_length_inside(part_at.placement(), ray)
             })
             .reduce(|one, other| one + other)
     }
@@ -249,11 +292,11 @@ impl Body for Assembly {
     /// its extent.
     fn bounding_box(&self, at: Placement<'_>) -> OpmResult<BoundingBox> {
         self.parts_at(at)
-            .map(|(part, frame, surfaces)| {
-                let at_part = Placement::new(&frame, surfaces);
-                part.solid
-                    .bounding_box(at_part)?
-                    .in_frame(&part.solid.isometry(at_part), at.node_frame())
+            .map(|part_at| {
+                let solid = &part_at.part.solid;
+                solid
+                    .bounding_box(part_at.placement())?
+                    .in_frame(&solid.isometry(part_at.placement()), at.node_frame())
             })
             .reduce(|one, other| Ok(one?.union(&other?)))
             .unwrap_or_else(|| {
@@ -427,7 +470,7 @@ mod test {
         let frame = Isometry::new_along_z(millimeter!(100.0))?;
         let placed = Placed::new(doublet, &frame)?;
         assert_eq!(placed.face_count(), 4);
-        assert!(placed.rim().is_none());
+        assert!(placed.window().is_none());
         // crown front (R = 60), crown rear and flint front (both R = -40), flint rear (flat)
         for (index, z) in [60.0, -35.0, -35.0, 10.0].into_iter().enumerate() {
             assert_abs_diff_eq!(
@@ -557,6 +600,37 @@ mod test {
                 placed.contains(&global(&node_frame, x, y, z)),
                 inside,
                 "({x}, {y}, {z})"
+            );
+        }
+        Ok(())
+    }
+    /// A face of an assembly is a face of one of its parts and ends where that part does, in the
+    /// frame of the part. Faces 0 and 1 are those of the crown, 2 and 3 those of the second lens.
+    #[test]
+    fn a_face_of_an_assembly_ends_where_the_solid_of_its_part_does() -> OpmResult<()> {
+        let node_frame = node_frame()?;
+        let placed = Placed::new(side_by_side()?, &node_frame)?;
+        // The points lie on the spheres, the sheet check allows a nanometer: the front of the crown
+        // has a radius of 60 mm, the front of the second lens one of -40 mm and its vertex at z = 8.
+        let on_sphere = |radius: f64, off_axis: f64| {
+            radius.signum() * (radius.abs() - radius.mul_add(radius, -(off_axis * off_axis)).sqrt())
+        };
+        for (face, (x, y, z), included) in [
+            (0, (0.0, 0.0, 0.0), true),
+            (0, (12.4, 0.0, on_sphere(60.0, 12.4)), true),
+            (0, (30.0, 0.0, on_sphere(60.0, 30.0)), false),
+            (2, (30.0, 0.0, 8.0), true),
+            (2, (30.0, 12.4, 8.0 + on_sphere(-40.0, 12.4)), true),
+            (2, (30.0, 13.0, 8.0 + on_sphere(-40.0, 13.0)), false),
+            // Where the second lens would be without its placement.
+            (2, (0.0, 0.0, 8.0 + on_sphere(-40.0, 30.0)), false),
+            // There is no fifth face.
+            (4, (0.0, 0.0, 0.0), false),
+        ] {
+            assert_eq!(
+                placed.includes(face, &global(&node_frame, x, y, z)),
+                included,
+                "face {face} at ({x}, {y}, {z})"
             );
         }
         Ok(())

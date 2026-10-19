@@ -25,7 +25,7 @@ use uom::si::f64::Length;
 use crate::{
     error::OpmResult,
     geometry::{
-        Face, Placeable, Placement, Rim,
+        Face, FaceBoundary, Placeable, Placement, Rim,
         body::{Body, BoundingBox},
     },
     light::Ray,
@@ -114,14 +114,28 @@ impl Solid {
             Self::Assembly(assembly) => assembly,
         }
     }
+    /// Return the kind of solid this is, as the one thing the ends of its faces are asked of.
+    const fn as_boundary(&self) -> &dyn FaceBoundary {
+        match self {
+            Self::Extruded(extruded) => &**extruded,
+            Self::Parametric(parametric) => parametric,
+            Self::Assembly(assembly) => assembly,
+        }
+    }
 }
 
 impl Placeable for Solid {
     fn faces(&self) -> Vec<(&Face, Isometry)> {
         self.as_placeable().faces()
     }
-    fn rim(&self) -> Option<&Rim> {
-        self.as_placeable().rim()
+    fn window(&self) -> Option<&Rim> {
+        self.as_placeable().window()
+    }
+}
+
+impl FaceBoundary for Solid {
+    fn includes(&self, at: Placement<'_>, face: usize, point: &Point3<Length>) -> bool {
+        self.as_boundary().includes(at, face, point)
     }
 }
 

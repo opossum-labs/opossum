@@ -9,7 +9,7 @@ use super::{Side, collect_faces};
 use crate::{
     error::{OpmResult, OpossumError},
     geometry::{
-        Face, Placeable, Placement, Rim,
+        Face, FaceBoundary, Placeable, Placement, Rim,
         body::{Body, BoundingBox},
     },
     light::Ray,
@@ -75,24 +75,20 @@ impl ParametricSolid {
             .zip(at.surfaces())
             .map(move |((_, side), surface)| side.contains(surface.0.is_behind(point)))
     }
-    /// Return whether a point on the surface of a face lies on the inner side of every *other* face.
-    ///
-    /// Only there does the solid have this face: the rest of the unbounded surface lies outside.
-    ///
-    /// # Arguments
-    ///
-    /// * `at` - where the solid sits.
-    /// * `face` - the number of the face the point lies on.
-    /// * `point` - the point to be tested, in global coordinates.
-    fn lies_within_the_other_faces(
-        &self,
-        at: Placement<'_>,
-        face: usize,
-        point: &Point3<Length>,
-    ) -> bool {
-        self.inner_sides(at, point)
-            .enumerate()
-            .all(|(index, inside)| index == face || inside)
+}
+
+/// A face ends where it meets the others: a point on its surface belongs to the solid if it lies on
+/// the inner side of every *other* face. As for every component, a face is the part of its surface
+/// on the sheet through its vertex.
+impl FaceBoundary for ParametricSolid {
+    fn includes(&self, at: Placement<'_>, face: usize, point: &Point3<Length>) -> bool {
+        at.surfaces()
+            .get(face)
+            .is_some_and(|surface| surface.0.is_on_vertex_sheet(point))
+            && self
+                .inner_sides(at, point)
+                .enumerate()
+                .all(|(index, inside)| index == face || inside)
     }
 }
 
@@ -103,20 +99,7 @@ impl Body for ParametricSolid {
         self.inner_sides(at, point).all(|inside| inside)
     }
     fn path_length_inside(&self, at: Placement<'_>, ray: &Ray) -> Option<Length> {
-        let hits = at
-            .surfaces()
-            .iter()
-            .enumerate()
-            .filter_map(|(face, surface)| {
-                surface
-                    .0
-                    .calc_intersect_and_normal(ray)
-                    .map(|(point, _)| point)
-                    .filter(|point| {
-                        surface.0.is_on_vertex_sheet(point)
-                            && self.lies_within_the_other_faces(at, face, point)
-                    })
-            });
+        let hits = at.face_hits(ray, |face, point| self.includes(at, face, point));
         self.chord_through(at, ray.position(), ray.direction(), hits)
     }
     /// The extent of the solid is not determined yet.
@@ -139,8 +122,7 @@ impl Placeable for ParametricSolid {
     fn faces(&self) -> Vec<(&Face, Isometry)> {
         collect_faces(|index| self.face(index))
     }
-    /// A parametric solid has no lateral boundary: its faces bound it by themselves.
-    fn rim(&self) -> Option<&Rim> {
+    fn window(&self) -> Option<&Rim> {
         None
     }
 }
@@ -233,7 +215,7 @@ mod test {
         let frame = Isometry::new_along_z(millimeter!(100.0))?;
         let placed = Placed::new(solid, &frame)?;
         assert_eq!(placed.face_count(), 3);
-        assert!(placed.rim().is_none());
+        assert!(placed.window().is_none());
         let expected_z = [0.0, 10.0, 42.0];
         for (index, z) in expected_z.into_iter().enumerate() {
             assert_abs_diff_eq!(
@@ -296,6 +278,34 @@ mod test {
         }
         Ok(())
     }
+    /// A face of the block reaches as far as the others let it: the front face covers the 10 mm
+    /// square in its plane, not the plane. Faces 0 and 1 are the front and the rear, 2 to 5 the
+    /// sides at x = -5, x = 5, y = -5 and y = 5.
+    #[test]
+    fn a_face_of_the_block_ends_where_it_meets_the_others() -> OpmResult<()> {
+        let block = placed_block(&Isometry::identity())?;
+        for (face, (x, y, z), included) in [
+            (0, (4.9, -4.9, 0.0), true),
+            (0, (5.1, 0.0, 0.0), false),
+            (0, (0.0, -5.1, 0.0), false),
+            (1, (-4.9, 4.9, 10.0), true),
+            (1, (0.0, 5.1, 10.0), false),
+            (3, (5.0, 0.0, 5.0), true),
+            (3, (5.0, 0.0, 10.1), false),
+            (3, (5.0, 5.1, 5.0), false),
+            (4, (0.0, -5.0, 0.1), true),
+            (4, (5.1, -5.0, 5.0), false),
+            // There is no seventh face.
+            (6, (0.0, 0.0, 5.0), false),
+        ] {
+            assert_eq!(
+                block.includes(face, &millimeter!(x, y, z)),
+                included,
+                "face {face} at ({x}, {y}, {z})"
+            );
+        }
+        Ok(())
+    }
     #[test]
     fn a_ray_crosses_the_block_from_one_face_to_the_opposite_one() -> OpmResult<()> {
         let block = placed_block(&Isometry::identity())?;
@@ -349,6 +359,41 @@ mod test {
             node_frame.transform_vector_f64(&Vector3::z()),
         )?;
         assert_abs_diff_eq!(chord(&block, &ray)?, 10.0, epsilon = 1e-9);
+        Ok(())
+    }
+    /// The front face of a dome is the cap of a sphere of 40 mm radius with its vertex at z = 0. It
+    /// ends where another face cuts it, and it is the cap only: not the far half of the sphere.
+    #[test]
+    fn a_curved_face_ends_at_the_other_faces_on_the_sheet_through_its_vertex() -> OpmResult<()> {
+        let dome_with = |other: Face, side: Side| -> OpmResult<Placed<ParametricSolid>> {
+            let sphere = Face::new(
+                SurfaceShape::Sphere {
+                    radius: millimeter!(40.0),
+                },
+                Isometry::identity(),
+            );
+            Placed::new(
+                ParametricSolid::new(vec![(sphere, Side::Behind), (other, side)])?,
+                &Isometry::identity(),
+            )
+        };
+        let on_sphere = |x: f64| 40.0 - 40.0_f64.mul_add(40.0, -(x * x)).sqrt();
+        // A rear face at z = 20 mm cuts the cap at 34.6 mm off the axis.
+        let rear = Face::new(
+            SurfaceShape::Plane,
+            Isometry::new_along_z(millimeter!(20.0))?,
+        );
+        let cut = dome_with(rear, Side::InFront)?;
+        assert!(cut.includes(0, &millimeter!(10.0, 0.0, on_sphere(10.0))));
+        assert!(!cut.includes(0, &millimeter!(36.0, 0.0, on_sphere(36.0))));
+        // A face that cuts nothing: the far half of the sphere is still no part of the front face.
+        let behind_the_vertex = Face::new(
+            SurfaceShape::Plane,
+            Isometry::new_along_z(millimeter!(-10.0))?,
+        );
+        let uncut = dome_with(behind_the_vertex, Side::Behind)?;
+        assert!(uncut.includes(0, &millimeter!(10.0, 0.0, on_sphere(10.0))));
+        assert!(!uncut.includes(0, &millimeter!(10.0, 0.0, 80.0 - on_sphere(10.0))));
         Ok(())
     }
     #[test]

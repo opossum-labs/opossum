@@ -5,7 +5,8 @@
 //! [`Placed`] is that description together with the placement of the node and the geometric surface
 //! of every face, which is what rays are traced against. The description stays the single truth;
 //! the surfaces are what building it at a placement yields, and every other fact about a face — its
-//! anchor, the rim bounding it — is derived from the description when it is asked for.
+//! anchor, where it ends sideways (see [`FaceBoundary`]) — is derived from the description when it
+//! is asked for.
 //!
 //! The faces of a placed thing are numbered. What a face means (which one light enters through, which
 //! one it leaves through) is not decided here: that is up to the node using it.
@@ -16,7 +17,7 @@ use uom::si::f64::Length;
 use crate::{
     error::{OpmResult, OpossumError},
     geometry::{
-        Face, Geometry, Rim, Solid,
+        Face, FaceBoundary, Geometry, Rim, Solid,
         body::{Body, BoundingBox},
         geo_surface::GeoSurfaceRef,
     },
@@ -24,8 +25,8 @@ use crate::{
     utils::geom_transformation::Isometry,
 };
 
-/// A description that can be built at the placement of a node: it states its faces and the rim that
-/// bounds them.
+/// A description that can be built at the placement of a node: it states its faces and, for a
+/// detector, the window it records within.
 pub trait Placeable {
     /// Return every face of this description, in the order they are numbered.
     ///
@@ -33,8 +34,11 @@ pub trait Placeable {
     ///
     /// Each face with the frame it is stated in, relative to the node.
     fn faces(&self) -> Vec<(&Face, Isometry)>;
-    /// Return the lateral boundary of the faces, or `None` if they are unbounded.
-    fn rim(&self) -> Option<&Rim>;
+    /// Return the window a detector records within, or `None` if all light on its faces is recorded.
+    ///
+    /// A window is no boundary: light outside it passes the face like light inside, it is just not
+    /// recorded (see [`FaceBoundary`] for where a face ends).
+    fn window(&self) -> Option<&Rim>;
 }
 
 /// A description built at the placement of its node.
@@ -106,6 +110,36 @@ impl<'a> Placement<'a> {
     #[must_use]
     pub const fn surfaces(&self) -> &'a [GeoSurfaceRef] {
         self.surfaces
+    }
+    /// Return the points at which a ray meets the faces where they really are.
+    ///
+    /// # Arguments
+    ///
+    /// * `ray` - the ray to be intersected with the surface of every face.
+    /// * `includes` - whether a point on the surface of the face with the given number belongs to
+    ///   the described thing (see [`FaceBoundary::includes`]).
+    ///
+    /// # Returns
+    ///
+    /// The intersection points, at most one per face, in the order the faces are numbered.
+    pub fn face_hits<'b>(
+        self,
+        ray: &'b Ray,
+        includes: impl Fn(usize, &Point3<Length>) -> bool + 'b,
+    ) -> impl Iterator<Item = Point3<Length>> + 'b
+    where
+        'a: 'b,
+    {
+        self.surfaces
+            .iter()
+            .enumerate()
+            .filter_map(move |(face, surface)| {
+                surface
+                    .0
+                    .calc_intersect_and_normal(ray)
+                    .map(|(point, _)| point)
+                    .filter(|point| includes(face, point))
+            })
     }
 }
 
@@ -185,11 +219,21 @@ impl<T: Placeable> Placed<T> {
         })?;
         face.anchor(owner)
     }
-    /// Return the lateral boundary of the faces, stated relative to the node, or `None` if they are
-    /// unbounded.
+    /// Return the window a detector records within, stated relative to the node, or `None` if all
+    /// light on its faces is recorded.
     #[must_use]
-    pub fn rim(&self) -> Option<&Rim> {
-        self.description.rim()
+    pub fn window(&self) -> Option<&Rim> {
+        self.description.window()
+    }
+}
+
+/// A placed description knows where its faces end sideways.
+impl<T: FaceBoundary> Placed<T> {
+    /// Return whether a point on the unbounded surface of a face belongs to this (see
+    /// [`FaceBoundary::includes`]).
+    #[must_use]
+    pub fn includes(&self, face: usize, point: &Point3<Length>) -> bool {
+        self.description.includes(self.placement(), face, point)
     }
 }
 

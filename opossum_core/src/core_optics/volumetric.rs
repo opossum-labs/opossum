@@ -650,8 +650,8 @@ mod test {
         Ok(())
     }
     /// The medium is bounded by the very surfaces light is traced at, not by copies built from the
-    /// same description: besides the optic surface and the handle taken here, the body is the one
-    /// other owner of each.
+    /// same description: besides the optic surface and the handle taken here, the body and the
+    /// placed geometry the optic surface asks where it ends own each of them.
     #[test]
     fn the_prepared_body_shares_the_surfaces_light_is_traced_at() -> OpmResult<()> {
         let mut lens = placed_lens()?;
@@ -661,7 +661,7 @@ mod test {
                 .get_optic_surface(port)
                 .ok_or_else(|| OpossumError::Other(format!("the lens has no surface '{port}'")))?
                 .geo_surface();
-            assert_eq!(Arc::strong_count(&surface.0), 3, "surface '{port}'");
+            assert_eq!(Arc::strong_count(&surface.0), 4, "surface '{port}'");
         }
         Ok(())
     }
@@ -1628,36 +1628,42 @@ mod test {
         }
         Ok(())
     }
-    /// A node declares an [`OPTIC_SHAPE`] that bounds a region exactly when its geometry has a
-    /// rim, and every surface it installs carries exactly that rim. The dummy starts with an open
-    /// optic shape and has no rim.
+    /// A node declares an [`OPTIC_SHAPE`] that bounds a region exactly when its geometry ends
+    /// sideways or records within a window, and every surface it installs carries exactly the
+    /// window of that geometry. The dummy starts with an open optic shape and neither ends sideways
+    /// nor has a window.
     ///
-    /// The extent of a component is stated by the property, decides the hits through the rim of
-    /// each surface, and bounds the medium through the geometry; all three have to agree, or rays
-    /// would hit a component of one size while the medium has another.
+    /// The extent of a component is stated by the property, decides the hits through the geometry
+    /// each surface is a face of, and bounds the medium through the same geometry; all three have to
+    /// agree, or rays would hit a component of one size while the medium has another.
     #[test]
     fn a_declared_optic_shape_bounds_every_installed_surface() -> OpmResult<()> {
+        // A point a kilometer off the axis: no component reaches that far.
+        let far = millimeter!(1.0e6, 1.0e6, 0.0);
         for (node_type, _) in node_types() {
             let optic_ref = create_node_ref(node_type)?;
-            let rim = match optic_ref.geometry()? {
-                Some(geometry) => geometry.place(&Isometry::identity())?.rim().cloned(),
+            let placed = match optic_ref.geometry()? {
+                Some(geometry) => Some(geometry.place(&Isometry::identity())?),
                 None => None,
             };
+            let window = placed.as_ref().and_then(|placed| placed.window().cloned());
+            let ends_sideways = placed
+                .as_ref()
+                .is_some_and(|placed| placed.window().is_some() || !placed.includes(0, &far));
             let bounded = matches!(
                 optic_ref.node_attr().get_property(OPTIC_SHAPE),
                 Ok(Proptype::OpticShape(OpticShape::Bounded(_)))
             );
             assert_eq!(
-                bounded,
-                rim.is_some(),
-                "node type '{node_type}' declares a bounding '{OPTIC_SHAPE}' or has a rim, \
-                 but not both"
+                bounded, ends_sideways,
+                "node type '{node_type}' declares a bounding '{OPTIC_SHAPE}' or has a geometry \
+                 that ends sideways, but not both"
             );
             let surfaces = optic_ref.node_attr().runtime_surfaces();
             for (name, surface) in surfaces.inputs.iter().chain(&surfaces.outputs) {
                 assert_eq!(
-                    surface.rim(),
-                    rim.as_ref(),
+                    surface.window(),
+                    window.as_ref(),
                     "surface '{name}' of node type '{node_type}'"
                 );
             }

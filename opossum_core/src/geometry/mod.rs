@@ -11,6 +11,7 @@
 //! [`Body`](crate::geometry::body::Body) is a closed volume bounded by such surfaces. It is the
 //! domain volumetric quantities are defined on.
 
+mod boundary;
 mod cylinder;
 mod face;
 mod node_geometry;
@@ -24,6 +25,7 @@ mod sphere;
 pub mod body;
 pub mod geo_surface;
 
+pub use boundary::FaceBoundary;
 pub use cylinder::Cylinder;
 pub use face::{Face, SurfaceShape};
 pub use node_geometry::{Geometry, SurfaceGeometry};

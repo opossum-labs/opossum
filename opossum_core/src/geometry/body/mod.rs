@@ -33,7 +33,7 @@ use crate::{
     millimeter, nanometer,
     utils::{geom_transformation::Isometry, math_utils::distance_3d_point},
 };
-use nalgebra::Point3;
+use nalgebra::{Point3, Vector3};
 use std::{fmt::Debug, ops::Range};
 use uom::si::f64::Length;
 
@@ -292,7 +292,8 @@ pub trait Body: Debug + Send + Sync {
     /// # Arguments
     ///
     /// - `at`: where the body sits.
-    /// - `ray`: the ray to be traced through the body.
+    /// - `ray_position`: where the ray starts.
+    /// - `ray_direction`: the direction the ray travels in.
     /// - `boundary_hits`: the points at which the ray meets the boundary of the body, each only
     ///   where the boundary really is (not on the unbounded surface beyond an edge).
     ///
@@ -309,7 +310,6 @@ pub trait Body: Debug + Send + Sync {
     where
         Self: Sized,
     {
-        let ray_direction = ray.direction();
         // A ray refracted at a boundary starts on it, and rounding may put it just outside (and its
         // hit there at t = -ε). Whether it travels inside is asked 1 nm further along.
         let probe = ray_position + ray_direction.normalize().map(|c| nanometer!(c));

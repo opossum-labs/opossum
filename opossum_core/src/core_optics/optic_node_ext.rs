@@ -1,4 +1,5 @@
 use nalgebra::Vector3;
+use std::sync::Arc;
 use uom::si::f64::{Angle, Length};
 
 use crate::{
@@ -6,7 +7,7 @@ use crate::{
     coatings::CoatingType,
     core_optics::{NodeAttrExt, OpticNode, PortType},
     error::{OpmResult, OpossumError},
-    geometry::{Placed, Rim, Solid, body::OPTIC_SHAPE, geo_surface::GeoSurfaceRef},
+    geometry::{Geometry, Placed, Solid, body::OPTIC_SHAPE},
     light::{LightData, LightResult, Rays},
     nodes::fluence_detector::Fluence,
     properties::Proptype,
@@ -116,20 +117,19 @@ pub trait OpticNodeExt {
     /// # Arguments
     ///
     /// * `surf_name` - name of the surface, which is the physical name of its port.
-    /// * `geo_surface` - the geometric surface reference [`GeoSurfaceRef`].
-    /// * `anchor_point_iso` - the isometry of the geometrical anchor point.
-    /// * `rim` - the lateral boundary of the component, or `None` for an unbounded surface.
+    /// * `placed` - the placed geometry of the node, shared by the surfaces of all its ports.
+    /// * `face` - the number of the face of `placed` this surface is.
     /// * `port_type` - the physical port type (`Input` or `Output`) of this surface.
     ///
     /// # Errors
     ///
-    /// This function returns an error if surface creation or registration fails.
+    /// This function returns an error if the geometry has no such face or if surface creation or
+    /// registration fails.
     fn update_surface(
         &mut self,
         surf_name: &str,
-        geo_surface: GeoSurfaceRef,
-        anchor_point_iso: Isometry,
-        rim: Option<Rim>,
+        placed: &Arc<Placed<Geometry>>,
+        face: usize,
         port_type: &PortType,
     ) -> OpmResult<()>;
 
@@ -367,38 +367,32 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
                 self.name()
             )));
         };
-        let placed =
-            geometry.place(&self.effective_node_iso().unwrap_or_else(Isometry::identity))?;
+        let placed = Arc::new(
+            geometry.place(&self.effective_node_iso().unwrap_or_else(Isometry::identity))?,
+        );
         for (ports, port_type) in [(inputs, PortType::Input), (outputs, PortType::Output)] {
             for &(name, face) in ports {
-                let surface = placed.surface(face).cloned().ok_or_else(|| {
-                    OpossumError::Other(format!(
+                if placed.surface(face).is_none() {
+                    return Err(OpossumError::Other(format!(
                         "node '{}': port '{name}' sits on face {face}, which does not exist (face count: {})",
                         self.name(),
                         placed.face_count()
-                    ))
-                })?;
-                self.update_surface(
-                    name,
-                    surface,
-                    placed.anchor(face)?,
-                    placed.rim().cloned(),
-                    &port_type,
-                )?;
+                    )));
+                }
+                self.update_surface(name, &placed, face, &port_type)?;
             }
         }
         // A single surface encloses no volume and leaves the node without a medium.
         self.node_attr_mut()
-            .set_runtime_body(Placed::<Solid>::try_from(placed).ok());
+            .set_runtime_body(Placed::<Solid>::try_from((*placed).clone()).ok());
         Ok(())
     }
 
     fn update_surface(
         &mut self,
         surf_name: &str,
-        geo_surface: GeoSurfaceRef,
-        anchor_point_iso: Isometry,
-        rim: Option<Rim>,
+        placed: &Arc<Placed<Geometry>>,
+        face: usize,
         port_type: &PortType,
     ) -> OpmResult<()> {
         let config = {
@@ -420,19 +414,14 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         };
 
         if let Some(optic_surf) = self.get_optic_surface_mut(surf_name) {
-            optic_surf.set_geo_surface(geo_surface);
-            optic_surf.set_anchor_point_iso(anchor_point_iso);
-            optic_surf.set_rim(rim);
+            optic_surf.set_face(Arc::clone(placed), face)?;
             optic_surf.set_coating(config.coating);
             optic_surf.set_lidt(*config.lidt.get())?;
         } else {
-            let mut optic_surf = crate::core_optics::optic_surface::OpticSurface::new(
-                geo_surface,
-                config.coating,
-                *config.lidt.get(),
-            )?;
-            optic_surf.set_anchor_point_iso(anchor_point_iso);
-            optic_surf.set_rim(rim);
+            let mut optic_surf = crate::core_optics::optic_surface::OpticSurface::default();
+            optic_surf.set_face(Arc::clone(placed), face)?;
+            optic_surf.set_coating(config.coating);
+            optic_surf.set_lidt(*config.lidt.get())?;
             let runtime = self.node_attr_mut().runtime_surfaces_mut();
             match port_type {
                 PortType::Input => runtime.inputs.insert(surf_name.to_string(), optic_surf),

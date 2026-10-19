@@ -11,18 +11,15 @@
 //! encloses a volume ([`Geometry::Solid`]). The kinds of [`Solid`] are described next to it, one
 //! file each.
 //!
-//! Only surfaces and extruded solids can be traced so far. The other two kinds of solid are
-//! described, but everything that would have to trace them returns an error saying so.
-
 use nalgebra::Point3;
 use num_traits::Zero;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::{Angle, Length};
 
 use crate::{
-    error::{OpmResult, OpossumError},
+    error::OpmResult,
     geometry::{
-        Extruded, Placeable, Placed, Rim, RimRole, Solid,
+        Extruded, FaceBoundary, Placeable, Placed, Placement, Rim, RimRole, Solid,
         face::{Face, SurfaceShape},
     },
     types::validated_type_definitions::ValidatedCrossSection,
@@ -220,19 +217,19 @@ impl Geometry {
     ///
     /// # Errors
     ///
-    /// This function returns an error if a face cannot be built or if the geometry cannot be traced
-    /// yet ([`ParametricSolid`], [`Assembly`]).
+    /// This function returns an error if a face cannot be built.
     pub fn place(&self, node_frame: &Isometry) -> OpmResult<Placed<Self>> {
+        Placed::new(self.clone(), node_frame)
+    }
+    /// Return the kind of geometry this is, as the one thing the faces and the window are asked of.
+    fn as_placeable(&self) -> &dyn Placeable {
         match self {
-            Self::Solid(Solid::Parametric(_)) => Err(not_supported_yet("a parametric solid")),
-            Self::Solid(Solid::Assembly(_)) => Err(not_supported_yet("an assembly")),
-            Self::Surface(_) | Self::Solid(Solid::Extruded(_)) => {
-                Placed::new(self.clone(), node_frame)
-            }
+            Self::Surface(surface) => &**surface,
+            Self::Solid(solid) => solid,
         }
     }
-    /// Return the kind of geometry this is, as the one thing the faces and the rim are asked of.
-    fn as_placeable(&self) -> &dyn Placeable {
+    /// Return the kind of geometry this is, as the one thing the ends of its faces are asked of.
+    fn as_boundary(&self) -> &dyn FaceBoundary {
         match self {
             Self::Surface(surface) => &**surface,
             Self::Solid(solid) => solid,
@@ -244,8 +241,14 @@ impl Placeable for Geometry {
     fn faces(&self) -> Vec<(&Face, Isometry)> {
         self.as_placeable().faces()
     }
-    fn rim(&self) -> Option<&Rim> {
-        self.as_placeable().rim()
+    fn window(&self) -> Option<&Rim> {
+        self.as_placeable().window()
+    }
+}
+
+impl FaceBoundary for Geometry {
+    fn includes(&self, at: Placement<'_>, face: usize, point: &Point3<Length>) -> bool {
+        self.as_boundary().includes(at, face, point)
     }
 }
 
@@ -300,17 +303,25 @@ impl Placeable for SurfaceGeometry {
     fn faces(&self) -> Vec<(&Face, Isometry)> {
         vec![(&self.face, Isometry::identity())]
     }
-    fn rim(&self) -> Option<&Rim> {
-        self.rim.as_ref()
+    fn window(&self) -> Option<&Rim> {
+        self.rim
+            .as_ref()
+            .filter(|rim| rim.role() == RimRole::Window)
     }
 }
 
-/// The error for a geometry that is described but cannot be traced yet.
-fn not_supported_yet(what: &str) -> OpossumError {
-    OpossumError::Other(format!(
-        "{what} is not supported yet: the lateral boundary of its faces is not implemented, so it \
-         cannot be traced"
-    ))
+/// A surface ends at the edge of its cross section, if it has one. The window of a detector is no
+/// edge: the surface reaches as far as light does.
+impl FaceBoundary for SurfaceGeometry {
+    fn includes(&self, at: Placement<'_>, face: usize, point: &Point3<Length>) -> bool {
+        let Some(surface) = at.surfaces().get(face) else {
+            return false;
+        };
+        self.rim
+            .as_ref()
+            .filter(|rim| rim.role() == RimRole::Edge)
+            .is_none_or(|rim| rim.bounds(&*surface.0, point, at.node_frame()))
+    }
 }
 
 #[cfg(test)]
@@ -319,6 +330,7 @@ mod test {
     use crate::{
         apertures::{Aperture, ApertureType, CircleShape},
         degree,
+        error::OpossumError,
         geometry::{Assembly, ParametricSolid, Part, Side},
         material::Material,
         millimeter,
@@ -381,8 +393,9 @@ mod test {
         assert_abs_diff_eq!(normal.y, -(5.0_f64.to_radians().sin()), epsilon = 1e-12);
         Ok(())
     }
+    /// Every kind of solid can be placed: one surface per face, and a body to ask.
     #[test]
-    fn solids_that_cannot_be_traced_yet_say_so() -> OpmResult<()> {
+    fn every_kind_of_solid_can_be_placed() -> OpmResult<()> {
         let parametric = Solid::Parametric(ParametricSolid::new(vec![(
             Face::new(SurfaceShape::Plane, Isometry::identity()),
             Side::Behind,
@@ -391,10 +404,9 @@ mod test {
         let part = Part::new(Isometry::identity(), parametric.clone(), glass);
         let assembly = Solid::Assembly(Assembly::new(vec![part], vec![])?);
         for solid in [parametric, assembly] {
-            let error = Geometry::Solid(solid)
-                .place(&Isometry::identity())
-                .unwrap_err();
-            assert!(error.to_string().contains("not supported yet"));
+            let placed = Geometry::Solid(solid).place(&Isometry::identity())?;
+            assert_eq!(placed.face_count(), 1);
+            assert!(Placed::<Solid>::try_from(placed).is_ok());
         }
         Ok(())
     }
@@ -441,21 +453,33 @@ mod test {
         );
         Ok(())
     }
+    /// A surface with a cross section ends at its edge, which is measured across the axis the cross
+    /// section is extruded along: here the node's x axis, so the circle lies in the node's yz plane.
     #[test]
-    fn a_surface_places_its_face_and_its_rim_along_its_axis() -> OpmResult<()> {
+    fn a_surface_ends_at_its_edge_across_its_axis() -> OpmResult<()> {
         let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
         let vertex = Isometry::new_along_z(millimeter!(20.0))?;
         let geometry = Geometry::surface(axis, SurfaceShape::Plane, vertex, Some(circle()?))?;
         let placed = geometry.place(&Isometry::identity())?;
         assert_eq!(placed.anchor(SurfaceGeometry::FACE)?, axis.append(&vertex));
-        assert_eq!(
-            placed.rim(),
-            Some(&Rim::new(circle()?, axis, RimRole::Edge))
-        );
+        for ((x, y, z), included) in [
+            ((23.0, 0.0, 0.0), true),
+            ((23.0, 0.0, 12.0), true),
+            ((23.0, 12.0, 0.0), true),
+            ((23.0, 0.0, 13.0), false),
+            ((23.0, -13.0, 0.0), false),
+        ] {
+            assert_eq!(
+                placed.includes(SurfaceGeometry::FACE, &millimeter!(x, y, z)),
+                included,
+                "({x}, {y}, {z})"
+            );
+        }
+        assert!(placed.window().is_none());
         Ok(())
     }
-    /// Without a cross section there is no rim to carry the axis, but the face is still stated in the
-    /// axis frame.
+    /// Without a cross section there is nothing to end at, but the face is still stated in the axis
+    /// frame.
     #[test]
     fn an_unbounded_surface_is_placed_along_its_axis() -> OpmResult<()> {
         let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
@@ -463,33 +487,48 @@ mod test {
         let geometry = Geometry::surface(axis, SurfaceShape::Plane, vertex, None)?;
         let placed = geometry.place(&Isometry::identity())?;
         assert_eq!(placed.anchor(SurfaceGeometry::FACE)?, axis.append(&vertex));
-        assert_eq!(placed.rim(), None);
+        assert!(placed.includes(SurfaceGeometry::FACE, &millimeter!(23.0, 1000.0, 1000.0)));
+        assert!(placed.window().is_none());
         Ok(())
     }
     /// A detector's cross section is a window: light outside it still passes, it is just not recorded.
     #[test]
     fn a_detector_bounds_its_window_not_its_edge() -> OpmResult<()> {
-        let bounded = Geometry::detector(SurfaceShape::Plane, Some(circle()?))?;
+        let far = millimeter!(1000.0, 1000.0, 0.0);
+        let bounded = Geometry::detector(SurfaceShape::Plane, Some(circle()?))?
+            .place(&Isometry::identity())?;
         assert_eq!(
-            bounded.place(&Isometry::identity())?.rim(),
+            bounded.window(),
             Some(&Rim::new(circle()?, Isometry::identity(), RimRole::Window))
         );
-        let open = Geometry::detector(SurfaceShape::Plane, None)?;
-        assert_eq!(open.place(&Isometry::identity())?.rim(), None);
+        assert!(bounded.includes(SurfaceGeometry::FACE, &far));
+        let open = Geometry::detector(SurfaceShape::Plane, None)?.place(&Isometry::identity())?;
+        assert!(open.window().is_none());
+        assert!(open.includes(SurfaceGeometry::FACE, &far));
         Ok(())
     }
-    /// A surface without a cross section is unbounded; a bounded surface and an extruded solid have
-    /// a rim, stated along the extrusion axis.
+    /// A surface without a cross section is unbounded, a bounded surface ends at its edge and an
+    /// extruded solid at the rim of its profile, stated along the extrusion axis.
     #[test]
-    fn rim_is_none_for_a_virtual_plane() -> OpmResult<()> {
-        let rim_of = |geometry: Geometry| -> OpmResult<Option<Rim>> {
-            Ok(geometry.place(&Isometry::identity())?.rim().cloned())
+    fn only_a_geometry_with_a_cross_section_ends_sideways() -> OpmResult<()> {
+        // A point 5 mm and a point a meter off the axis, on the face at the given distance along it.
+        let bounded = |geometry: Geometry, along_axis: f64| -> OpmResult<(bool, bool)> {
+            let placed = geometry.place(&Isometry::identity())?;
+            Ok((
+                placed.includes(0, &millimeter!(along_axis, 5.0, 0.0)),
+                placed.includes(0, &millimeter!(along_axis, 1000.0, 1000.0)),
+            ))
         };
-        assert_eq!(rim_of(Geometry::plane(None))?, None);
-        assert_eq!(
-            rim_of(Geometry::plane(Some(circle()?)))?,
-            Some(Rim::new(circle()?, Isometry::identity(), RimRole::Edge))
-        );
+        // The plane faces along z, so its points are given in the xy plane: x off the axis.
+        let plane = |geometry: Geometry| -> OpmResult<(bool, bool)> {
+            let placed = geometry.place(&Isometry::identity())?;
+            Ok((
+                placed.includes(0, &millimeter!(0.0, 5.0, 0.0)),
+                placed.includes(0, &millimeter!(1000.0, 1000.0, 0.0)),
+            ))
+        };
+        assert_eq!(plane(Geometry::plane(None))?, (true, true));
+        assert_eq!(plane(Geometry::plane(Some(circle()?)))?, (true, false));
         let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
         let extruded = Geometry::Solid(Solid::Extruded(Box::new(Extruded::new(
             axis,
@@ -500,10 +539,9 @@ mod test {
             ),
             circle()?,
         )?)));
-        assert_eq!(
-            rim_of(extruded)?,
-            Some(Rim::new(circle()?, axis, RimRole::Edge))
-        );
+        // Extruded along the node's x axis, the profile reaches around it in y and z; the front face
+        // lies at x = 3 mm.
+        assert_eq!(bounded(extruded, 3.0)?, (true, false));
         Ok(())
     }
     #[test]
