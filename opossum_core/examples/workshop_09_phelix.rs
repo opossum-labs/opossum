@@ -178,7 +178,8 @@ fn main() -> OpmResult<()> {
     amps.map_input_port(i_amp1, "input", "input")?;
     amps.map_output_port(i_amp6, "output", "output")?;
 
-    // Double-pass amplifier section
+    // Double-pass amplifier section. The periscope turns the beam upside down (up is -y here),
+    // which flips the sense of the tilts below and in `amp`.
     let mut main_amp = NodeGroup::new("Double-Pass Amps");
 
     // Add forward amplifier chain
@@ -186,7 +187,7 @@ fn main() -> OpmResult<()> {
     // Steering mirror for the return path. Tilted by 0.1°, it sends the beam back through the
     // disks at most 230 mm off their centers, within their octagonal outline.
     let i_mm1 = main_amp.add_node(with_optic_shape(
-        ThinMirror::new("MM1").with_tilt(degree!(0.0, 0.1, 0.0))?,
+        ThinMirror::new("MM1").with_tilt(degree!(0.0, -0.1, 0.0))?,
         amplifier_optics,
     )?)?;
     // Create inverted reference for reverse propagation
@@ -376,13 +377,13 @@ fn amp(name: &str, disk_material: Material) -> OpmResult<NodeGroup> {
         degree!(0.0),
         disk_material.clone(),
     )?
-    .with_tilt(degree!(0.0, -56.0, 0.0))?;
+    .with_tilt(degree!(0.0, 56.0, 0.0))?;
     disk_a.set_property(OPTIC_SHAPE, octagon.clone().into())?;
     let i_a1 = amp.add_node(disk_a)?;
 
     // Second wedge element
     let mut disk_b = Wedge::new("disk B", millimeter!(45.0), degree!(0.0), disk_material)?
-        .with_tilt(degree!(0.0, 56.0, 0.0))?;
+        .with_tilt(degree!(0.0, -56.0, 0.0))?;
     disk_b.set_property(OPTIC_SHAPE, octagon.into())?;
     let i_a2 = amp.add_node(disk_b)?;
 
