@@ -15,7 +15,7 @@ pub mod helper {
         },
         error::{OpmResult, OpossumError},
         geometry::{
-            Extruded, Placed,
+            Placed, Solid,
             body::{OPTIC_SHAPE, default_optic_shape},
             geo_surface::GeoSurfaceRef,
         },
@@ -1137,7 +1137,7 @@ pub mod helper {
     /// # Errors
     ///
     /// Returns an error if the body cannot answer one of the questions.
-    pub fn body_snapshot(body: &Placed<Extruded>, node_frame: &Isometry) -> OpmResult<Vec<String>> {
+    pub fn body_snapshot(body: &Placed<Solid>, node_frame: &Isometry) -> OpmResult<Vec<String>> {
         let frame = body.isometry();
         let translation = frame.translation();
         let range = |range: std::ops::Range<Length>| {

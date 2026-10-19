@@ -20,9 +20,8 @@ use crate::{
         geo_surface::GeoSurfaceRef,
     },
     light::Ray,
-    nanometer,
     types::validated_type_definitions::ValidatedCrossSection,
-    utils::{geom_transformation::Isometry, math_utils::distance_3d_point},
+    utils::geom_transformation::Isometry,
 };
 
 /// Two faces capping a profile that is extruded along an axis.
@@ -220,57 +219,16 @@ impl Body for Extruded {
             && !rear.0.is_behind(point)
     }
     fn path_length_inside(&self, at: Placement<'_>, ray: &Ray) -> Option<Length> {
-        // Every point at which the ray can enter or leave the body is a candidate: its own starting
-        // point if it travels inside from there, and its hits on both bounding surfaces. Treating
-        // the starting point as a candidate of its own keeps the case of a ray starting *on* a
-        // bounding surface correct: such a ray hits that surface at zero distance, which must not
-        // be mistaken for the point where it leaves the body again.
-        let ray_position = ray.position();
-        let direction = ray.direction();
-        // A ray refracted at a bounding surface starts on it, and rounding may put it just outside
-        // (and its hit there at t = -ε). Whether it travels inside is asked 1 nm further along.
-        let probe = ray_position + direction.normalize().map(|c| nanometer!(c));
-        let position_along_ray =
-            |point: &Point3<Length>| (point - ray_position).map(|c| c.value).dot(&direction);
-        // Only the outermost two candidates matter, so they are tracked directly instead of being
-        // collected and sorted. Their number is counted rather than derived from their positions:
-        // two candidates may well coincide — a ray starting on a bounding surface hits that surface
-        // at zero distance — and such a ray does travel a (zero) length inside the body, whereas a
-        // single candidate means it never entered.
-        let mut candidates = 0_usize;
-        let mut first: Option<(f64, Point3<Length>)> = None;
-        let mut last: Option<(f64, Point3<Length>)> = None;
-        let mut consider = |point: Point3<Length>| {
-            candidates += 1;
-            let position = position_along_ray(&point);
-            if first.is_none_or(|(first_position, _)| position < first_position) {
-                first = Some((position, point));
-            }
-            if last.is_none_or(|(last_position, _)| position > last_position) {
-                last = Some((position, point));
-            }
-        };
-        if self.contains(at, &probe) {
-            consider(ray_position);
-        }
-        for surface in Self::bounding_surfaces(at) {
-            if let Some((point, _)) = self.rim.intersect(&*surface.0, ray, at.node_frame()) {
-                consider(point);
-            }
-        }
-        let (Some((_, first_point)), Some((_, last_point))) = (first, last) else {
-            return None;
-        };
-        if candidates < 2 {
-            // The ray either misses the body altogether or leaves it through its lateral boundary,
-            // which is not part of the model.
-            return None;
-        }
-        // Guard against bodies the ray leaves and re-enters, e.g. a strongly curved meniscus: the
-        // section between the outermost two candidates is only fully inside if its center is.
-        let center_point = first_point + (last_point - first_point).map(|c| c * 0.5);
-        self.contains(at, &center_point)
-            .then(|| distance_3d_point(&first_point, &last_point))
+        // A ray leaving the body through its lateral boundary meets no hit there: that boundary is
+        // not part of the model.
+        let hits = Self::bounding_surfaces(at)
+            .into_iter()
+            .filter_map(|surface| {
+                self.rim
+                    .intersect(&*surface.0, ray, at.node_frame())
+                    .map(|(point, _)| point)
+            });
+        self.chord_through(at, ray.position(), ray.direction(), hits)
     }
     fn bounding_box(&self, at: Placement<'_>) -> OpmResult<BoundingBox> {
         let cross_section = self.rim.cross_section();
@@ -915,7 +873,7 @@ mod test {
         )?;
         let node_frame = Isometry::new(millimeter!(0.0, 5.0, 0.0), degree!(0.0, 0.0, 0.0))?;
         let placed = Geometry::Solid(Solid::Extruded(Box::new(extruded))).place(&node_frame)?;
-        let body = Placed::<Extruded>::try_from(placed)?;
+        let body = Placed::<Solid>::try_from(placed)?;
         assert_eq!(body.isometry(), node_frame.append(&axis));
         // halfway along the extrusion axis, which runs along the node's x axis
         let halfway = node_frame
@@ -940,7 +898,7 @@ mod test {
         )?;
         let node_frame = Isometry::new(millimeter!(0.0, 5.0, 0.0), degree!(0.0, 0.0, 0.0))?;
         let placed = Geometry::Solid(Solid::Extruded(Box::new(extruded))).place(&node_frame)?;
-        let body = Placed::<Extruded>::try_from(placed)?;
+        let body = Placed::<Solid>::try_from(placed)?;
         // The extrusion axis runs along the node's x axis, from x = 3 mm to x = 23 mm, 5 mm off the
         // node's origin in y. The circle of 12.5 mm radius lies around that line.
         let ray_at = |y: f64, z: f64| {

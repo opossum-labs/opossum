@@ -39,7 +39,7 @@
 
 use crate::{
     error::{OpmResult, OpossumError},
-    geometry::{Extruded, Placed, body::BoundingBox},
+    geometry::{Placed, Solid, body::BoundingBox},
     utils::math_utils::{to_f64, try_f64_to_usize},
 };
 use nalgebra::{DMatrix, Point3, Vector3};
@@ -103,7 +103,7 @@ impl InversionField {
     ///
     /// This function returns an error if any of the three dimensions is zero — a grid without cells
     /// has no extent to interpret its ranges against — or if the body cannot state its bounding box.
-    pub fn from_body(body: &Placed<Extruded>, dimensions: CellIndex) -> OpmResult<Self> {
+    pub fn from_body(body: &Placed<Solid>, dimensions: CellIndex) -> OpmResult<Self> {
         let (nx, ny, nz) = dimensions;
         if nx == 0 || ny == 0 || nz == 0 {
             return Err(OpossumError::Other(
@@ -556,7 +556,7 @@ mod test {
     use std::f64::consts::PI;
 
     /// Create a disk of the given thickness and radius, placed by the given isometry.
-    fn disk(thickness: Length, radius: Length, placement: Isometry) -> OpmResult<Placed<Extruded>> {
+    fn disk(thickness: Length, radius: Length, placement: Isometry) -> OpmResult<Placed<Solid>> {
         Placed::new(
             Extruded::new(
                 Isometry::identity(),
@@ -567,7 +567,8 @@ mod test {
                     ApertureType::Hole,
                     None,
                 )?)?,
-            )?,
+            )?
+            .into(),
             &placement,
         )
     }

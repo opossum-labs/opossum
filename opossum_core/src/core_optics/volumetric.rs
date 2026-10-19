@@ -22,7 +22,7 @@ use crate::{
     },
     error::{OpmResult, OpossumError},
     gain::Extraction,
-    geometry::{Extruded, Placed},
+    geometry::{Placed, Solid},
     light::{LightData, LightRays, LightResult, Rays},
     material::{MATERIAL, Material},
     properties::{Proptype, proptype::AssetRef},
@@ -91,20 +91,20 @@ pub trait Volumetric: OpticNode {
     ///
     /// # Returns
     ///
-    /// The [`Extruded`] solid enclosed by the node's entrance and exit face, placed at the node.
+    /// The [`Solid`] enclosed by the node's faces, placed at the node.
     ///
     /// # Errors
     ///
     /// This function returns an error if the node's geometry cannot be derived or encloses no
     /// volume that can be traced.
-    fn volume_body(&self) -> OpmResult<Placed<Extruded>> {
+    fn volume_body(&self) -> OpmResult<Placed<Solid>> {
         let Some(geometry) = self.geometry()? else {
             return Err(OpossumError::Other(format!(
                 "node '{}' has no geometry to enclose a volume",
                 self.name()
             )));
         };
-        Placed::<Extruded>::try_from(
+        Placed::<Solid>::try_from(
             geometry.place(&self.effective_node_iso().unwrap_or_else(Isometry::identity))?,
         )
         .map_err(|error| OpossumError::Other(format!("node '{}': {error}", self.name())))

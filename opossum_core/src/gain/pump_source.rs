@@ -513,7 +513,7 @@ mod test {
         degree,
         error::OpossumError,
         gain::inversion_field::CellIndex,
-        geometry::{Extruded, Face, Placed, SurfaceShape},
+        geometry::{Extruded, Face, Placed, Solid, SurfaceShape},
         millimeter,
         types::validated_type_definitions::ValidatedCrossSection,
         utils::geom_transformation::Isometry,
@@ -523,7 +523,7 @@ mod test {
     use uom::si::f64::Length;
 
     /// Create a disk of the given thickness and radius, sitting at the origin.
-    fn disk(thickness: Length, radius: Length) -> OpmResult<Placed<Extruded>> {
+    fn disk(thickness: Length, radius: Length) -> OpmResult<Placed<Solid>> {
         Placed::new(
             Extruded::new(
                 Isometry::identity(),
@@ -534,7 +534,8 @@ mod test {
                     ApertureType::Hole,
                     None,
                 )?)?,
-            )?,
+            )?
+            .into(),
             &Isometry::identity(),
         )
     }
@@ -542,7 +543,7 @@ mod test {
     ///
     /// Its bounding box therefore spans -5..5 mm transversally and 0..10 mm along the axis, which is
     /// what the expected values are worked out from.
-    fn test_disk() -> OpmResult<Placed<Extruded>> {
+    fn test_disk() -> OpmResult<Placed<Solid>> {
         disk(millimeter!(10.0), millimeter!(5.0))
     }
     /// Create an unpumped field over the disk, coarse enough for its corners to lie outside the body.

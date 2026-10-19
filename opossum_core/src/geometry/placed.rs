@@ -16,7 +16,7 @@ use uom::si::f64::Length;
 use crate::{
     error::{OpmResult, OpossumError},
     geometry::{
-        Extruded, Face, Geometry, Rim, Solid,
+        Face, Geometry, Rim, Solid,
         body::{Body, BoundingBox},
         geo_surface::GeoSurfaceRef,
     },
@@ -68,10 +68,7 @@ impl<T> Placed<T> {
     /// Return where this sits: the placement of its node and the surface of every face.
     #[must_use]
     pub fn placement(&self) -> Placement<'_> {
-        Placement {
-            node_frame: &self.node_frame,
-            surfaces: &self.surfaces,
-        }
+        Placement::new(&self.node_frame, &self.surfaces)
     }
 }
 
@@ -87,6 +84,19 @@ pub struct Placement<'a> {
 }
 
 impl<'a> Placement<'a> {
+    /// Create a new [`Placement`].
+    ///
+    /// # Arguments
+    ///
+    /// * `node_frame` - the placement of the node the description is built at.
+    /// * `surfaces` - the geometric surface of every face, in the order the faces are numbered.
+    #[must_use]
+    pub const fn new(node_frame: &'a Isometry, surfaces: &'a [GeoSurfaceRef]) -> Self {
+        Self {
+            node_frame,
+            surfaces,
+        }
+    }
     /// Return the placement of the node the description is built at.
     #[must_use]
     pub const fn node_frame(&self) -> &'a Isometry {
@@ -99,27 +109,24 @@ impl<'a> Placement<'a> {
     }
 }
 
-impl TryFrom<Placed<Geometry>> for Placed<Extruded> {
+impl TryFrom<Placed<Geometry>> for Placed<Solid> {
     type Error = OpossumError;
 
-    /// Take the body out of a placed geometry, keeping the surfaces it was placed with.
+    /// Take the solid out of a placed geometry, keeping the surfaces it was placed with.
     ///
     /// # Errors
     ///
-    /// This function returns an error if the geometry is not an extruded solid: a single surface
-    /// encloses no volume, and no other kind of solid is a body yet.
+    /// This function returns an error if the geometry is a single surface, which encloses no
+    /// volume.
     fn try_from(placed: Placed<Geometry>) -> Result<Self, Self::Error> {
         match placed.description {
-            Geometry::Solid(Solid::Extruded(extruded)) => Ok(Self {
-                description: *extruded,
+            Geometry::Solid(solid) => Ok(Self {
+                description: solid,
                 node_frame: placed.node_frame,
                 surfaces: placed.surfaces,
             }),
             Geometry::Surface(_) => Err(OpossumError::Other(
                 "a single surface encloses no volume".into(),
-            )),
-            Geometry::Solid(_) => Err(OpossumError::Other(
-                "only an extruded solid is a body so far".into(),
             )),
         }
     }

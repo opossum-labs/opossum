@@ -9,12 +9,15 @@
 //!
 //! A body is a description, not a placed thing: it knows its shape, and every question is asked
 //! with the [`Placement`] it is built at. A [`Placed`](crate::geometry::Placed) body forwards the
-//! questions with its own placement. So far an [`Extruded`](crate::geometry::Extruded) solid is the
-//! implementation, a volume bounded by two faces and the transversal cross section of its rim; it
-//! implements the trait next to its definition. Since the bounding surfaces are the ones a node
-//! already uses for refraction, the usual optical volumes are simply different parameter sets of
-//! the same solid: a disk is two [`Plane`](crate::geometry::Plane)s with a circular cross section,
-//! a slab two planes with a rectangular one, a lens two [`Sphere`](crate::geometry::Sphere)s.
+//! questions with its own placement. Every kind of [`Solid`](crate::geometry::Solid) implements the
+//! trait next to its definition: an [`Extruded`](crate::geometry::Extruded) solid, a volume bounded
+//! by two faces and the transversal cross section of its rim; a
+//! [`ParametricSolid`](crate::geometry::ParametricSolid), bounded by its faces alone; and an
+//! [`Assembly`](crate::geometry::Assembly), the parts of which answer for themselves. Since the
+//! bounding surfaces are the ones a node already uses for refraction, the usual optical volumes are
+//! simply different parameter sets of the same solid: a disk is two
+//! [`Plane`](crate::geometry::Plane)s with a circular cross section, a slab two planes with a
+//! rectangular one, a lens two [`Sphere`](crate::geometry::Sphere)s.
 //!
 //! The cross section is expressed as an [`Aperture`](crate::apertures::Aperture), but only those
 //! apertures that actually delimit a region qualify, which is what
@@ -27,8 +30,8 @@ use crate::{
     error::{OpmResult, OpossumError},
     geometry::Placement,
     light::Ray,
-    millimeter,
-    utils::geom_transformation::Isometry,
+    millimeter, nanometer,
+    utils::{geom_transformation::Isometry, math_utils::distance_3d_point},
 };
 use nalgebra::Point3;
 use std::{fmt::Debug, ops::Range};
@@ -138,6 +141,71 @@ impl BoundingBox {
     pub fn z_range(&self) -> Range<Length> {
         self.min.z..self.max.z
     }
+    /// Return the smallest axis-aligned box in another frame that encloses this [`BoundingBox`].
+    ///
+    /// # Arguments
+    ///
+    /// - `own`: the frame this box is expressed in.
+    /// - `target`: the frame the result is to be expressed in. A box turned against it is enclosed
+    ///   by its corners, so the result is larger than the box itself.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if a corner cannot be expressed in the target frame.
+    pub fn in_frame(&self, own: &Isometry, target: &Isometry) -> OpmResult<Self> {
+        let unbounded = millimeter!(f64::INFINITY);
+        let (min, max) = [self.min.x, self.max.x]
+            .into_iter()
+            .flat_map(|x| {
+                [self.min.y, self.max.y].into_iter().flat_map(move |y| {
+                    [self.min.z, self.max.z]
+                        .into_iter()
+                        .map(move |z| Point3::new(x, y, z))
+                })
+            })
+            .map(|corner| target.inverse_transform_point(&own.transform_point(&corner)))
+            .fold(
+                (
+                    Point3::new(unbounded, unbounded, unbounded),
+                    Point3::new(-unbounded, -unbounded, -unbounded),
+                ),
+                |(min, max), corner| {
+                    (
+                        Point3::new(
+                            Length::min(min.x, corner.x),
+                            Length::min(min.y, corner.y),
+                            Length::min(min.z, corner.z),
+                        ),
+                        Point3::new(
+                            Length::max(max.x, corner.x),
+                            Length::max(max.y, corner.y),
+                            Length::max(max.z, corner.z),
+                        ),
+                    )
+                },
+            );
+        Self::new(min, max)
+    }
+    /// Return the smallest axis-aligned box that encloses this [`BoundingBox`] and another one.
+    ///
+    /// # Arguments
+    ///
+    /// - `other`: the other box, expressed in the same frame as this one.
+    #[must_use]
+    pub fn union(&self, other: &Self) -> Self {
+        Self {
+            min: Point3::new(
+                Length::min(self.min.x, other.min.x),
+                Length::min(self.min.y, other.min.y),
+                Length::min(self.min.z, other.min.z),
+            ),
+            max: Point3::new(
+                Length::max(self.max.x, other.max.x),
+                Length::max(self.max.y, other.max.y),
+                Length::max(self.max.z, other.max.z),
+            ),
+        }
+    }
 }
 
 /// Trait for handling closed bodies.
@@ -210,13 +278,134 @@ pub trait Body: Debug + Send + Sync {
     ///
     /// - `at`: where the body sits.
     fn isometry(&self, at: Placement<'_>) -> Isometry;
+    /// Return the length of the straight chord a [`Ray`] cuts through this [`Body`], found from the
+    /// points where it meets the boundary.
+    ///
+    /// This is the one way [`Body::path_length_inside`] is answered for a body that knows its
+    /// boundary as surfaces, so it is provided here rather than written once per body. It is not a
+    /// question a body answers for itself, which is why it has no place among the required methods.
+    ///
+    /// The ray is not refracted on the way. The chord runs between the outermost two of the points
+    /// at which the ray can enter or leave the body: its own starting point, if it travels inside
+    /// from there, and the points at which it meets the boundary.
+    ///
+    /// # Arguments
+    ///
+    /// - `at`: where the body sits.
+    /// - `ray`: the ray to be traced through the body.
+    /// - `boundary_hits`: the points at which the ray meets the boundary of the body, each only
+    ///   where the boundary really is (not on the unbounded surface beyond an edge).
+    ///
+    /// # Returns
+    ///
+    /// The length of the chord, or `None` if the ray does not pass through the body.
+    fn chord_through(
+        &self,
+        at: Placement<'_>,
+        ray_position: Point3<Length>,
+        ray_direction: Vector3<f64>,
+        boundary_hits: impl IntoIterator<Item = Point3<Length>>,
+    ) -> Option<Length>
+    where
+        Self: Sized,
+    {
+        let ray_direction = ray.direction();
+        // A ray refracted at a boundary starts on it, and rounding may put it just outside (and its
+        // hit there at t = -ε). Whether it travels inside is asked 1 nm further along.
+        let probe = ray_position + ray_direction.normalize().map(|c| nanometer!(c));
+        let position_along_ray =
+            |point: &Point3<Length>| (point - ray_position).map(|c| c.value).dot(&ray_direction);
+        // Only the outermost two candidates matter, so they are tracked directly instead of being
+        // collected and sorted. Their number is counted rather than derived from their positions:
+        // two candidates may well coincide - a ray starting on the boundary hits it at zero
+        // distance - and such a ray does travel a (zero) length inside the body, whereas a single
+        // candidate means it never entered.
+        let mut candidates = 0_usize;
+        let mut first: Option<(f64, Point3<Length>)> = None;
+        let mut last: Option<(f64, Point3<Length>)> = None;
+        let mut consider = |point: Point3<Length>| {
+            candidates += 1;
+            let position = position_along_ray(&point);
+            if first.is_none_or(|(first_position, _)| position < first_position) {
+                first = Some((position, point));
+            }
+            if last.is_none_or(|(last_position, _)| position > last_position) {
+                last = Some((position, point));
+            }
+        };
+        if self.contains(at, &probe) {
+            consider(ray_position);
+        }
+        boundary_hits.into_iter().for_each(consider);
+        let (Some((_, first_point)), Some((_, last_point))) = (first, last) else {
+            return None;
+        };
+        if candidates < 2 {
+            // The ray either misses the body altogether or leaves it through a boundary that is
+            // not part of the model.
+            return None;
+        }
+        // Guard against bodies the ray leaves and re-enters, e.g. a strongly curved meniscus: the
+        // section between the outermost two candidates is only fully inside if its center is.
+        let center_point = first_point + (last_point - first_point).map(|c| c * 0.5);
+        self.contains(at, &center_point)
+            .then(|| distance_3d_point(&first_point, &last_point))
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::millimeter;
+    use crate::{degree, millimeter};
+    use approx::assert_abs_diff_eq;
+    use uom::si::length::millimeter;
 
+    /// The extent of a box along x, y and z in millimeter.
+    fn extent(bounds: &BoundingBox) -> [[f64; 2]; 3] {
+        [bounds.x_range(), bounds.y_range(), bounds.z_range()]
+            .map(|range| [range.start, range.end].map(|end| end.get::<millimeter>()))
+    }
+    #[test]
+    fn a_box_in_the_frame_it_is_stated_in_is_unchanged() -> OpmResult<()> {
+        let bounds = BoundingBox::new(millimeter!(-1.0, -2.0, 0.0), millimeter!(1.0, 2.0, 4.0))?;
+        let frame = Isometry::new(millimeter!(10.0, 5.0, -3.0), degree!(5.0, 20.0, 30.0))?;
+        let same = bounds.in_frame(&frame, &frame)?;
+        for (found, wanted) in extent(&same)
+            .iter()
+            .flatten()
+            .zip(extent(&bounds).iter().flatten())
+        {
+            assert_abs_diff_eq!(found, wanted, epsilon = 1e-9);
+        }
+        Ok(())
+    }
+    /// Seen from a frame shifted by 10 mm along x and turned by a quarter turn about z, the box
+    /// swaps its extents along x and y and moves with the frame.
+    #[test]
+    fn a_box_is_enclosed_by_its_corners_in_another_frame() -> OpmResult<()> {
+        let bounds = BoundingBox::new(millimeter!(-1.0, -2.0, 0.0), millimeter!(1.0, 2.0, 4.0))?;
+        let own = Isometry::new(millimeter!(10.0, 0.0, 0.0), degree!(0.0, 0.0, 90.0))?;
+        let moved = extent(&bounds.in_frame(&own, &Isometry::identity())?);
+        for (found, wanted) in moved
+            .iter()
+            .flatten()
+            .zip([[8.0, 12.0], [-1.0, 1.0], [0.0, 4.0]].iter().flatten())
+        {
+            assert_abs_diff_eq!(found, wanted, epsilon = 1e-9);
+        }
+        Ok(())
+    }
+    #[test]
+    fn the_union_of_two_boxes_spans_both() -> OpmResult<()> {
+        let one = BoundingBox::new(millimeter!(0.0, 0.0, 0.0), millimeter!(1.0, 1.0, 1.0))?;
+        let other = BoundingBox::new(millimeter!(2.0, -1.0, 0.5), millimeter!(3.0, 0.5, 4.0))?;
+        assert_eq!(
+            extent(&one.union(&other)),
+            [[0.0, 3.0], [-1.0, 1.0], [0.0, 4.0]]
+        );
+        assert_eq!(one.union(&other), other.union(&one));
+        Ok(())
+    }
     #[test]
     fn a_bounding_box_may_be_flat_but_not_inverted() {
         assert!(BoundingBox::new(millimeter!(0.0, 0.0, 0.0), millimeter!(1.0, 1.0, 0.0)).is_ok());

@@ -31,7 +31,7 @@ use super::{
 use crate::{
     error::{OpmResult, OpossumError},
     generic_validators::AllFinite,
-    geometry::{Extruded, Placed},
+    geometry::{Placed, Solid},
     light::{Ray, Spectrum},
     reciprocal_centimeter, validated, validated_type,
 };
@@ -156,7 +156,7 @@ impl Extraction for MonochromaticSmallSignalGain {
     /// it. Neither half knows the other; the field, or the uniform number, is all they share.
     fn build_inversion(
         &self,
-        body: &Placed<Extruded>,
+        body: &Placed<Solid>,
         config: &PumpConfig,
     ) -> OpmResult<Option<Inversion>> {
         Ok(Some(match config.pump() {
@@ -171,7 +171,7 @@ impl Extraction for MonochromaticSmallSignalGain {
     }
     fn path_exponent(
         &self,
-        body: &Placed<Extruded>,
+        body: &Placed<Solid>,
         ray: &Ray,
         inversion: &mut Option<Inversion>,
     ) -> f64 {
@@ -276,7 +276,7 @@ impl Extraction for MonochromaticSmallSignalGain {
     }
     fn amplify_spectrum(
         &self,
-        _body: &Placed<Extruded>,
+        _body: &Placed<Solid>,
         _inversion: Option<&Inversion>,
         _spectrum: &mut Spectrum,
     ) -> OpmResult<()> {
@@ -318,7 +318,7 @@ mod test {
     ///
     /// Plane faces on purpose: the chord of an on-axis ray is then exactly the thickness, so every
     /// expected value below can be worked out from `exp(g₀·L)` by hand.
-    fn disk(thickness: Length, radius: Length) -> OpmResult<Placed<Extruded>> {
+    fn disk(thickness: Length, radius: Length) -> OpmResult<Placed<Solid>> {
         Placed::new(
             Extruded::new(
                 Isometry::identity(),
@@ -329,12 +329,13 @@ mod test {
                     ApertureType::Hole,
                     None,
                 )?)?,
-            )?,
+            )?
+            .into(),
             &Isometry::identity(),
         )
     }
     /// The disk every physics test below is performed on: 10 mm thick, 5 mm in radius.
-    fn test_disk() -> OpmResult<Placed<Extruded>> {
+    fn test_disk() -> OpmResult<Placed<Solid>> {
         disk(millimeter!(THICKNESS), millimeter!(5.0))
     }
     /// A ray entering the medium at the given transversal offset, travelling along the axis.
@@ -368,7 +369,7 @@ mod test {
     /// exercise what runs in the analysis. Keeping `inversion` mutable lets `the_inversion_is_frozen`
     /// verify that [`MonochromaticSmallSignalGain`] does not write back into it.
     fn traverse_factor(
-        body: &Placed<Extruded>,
+        body: &Placed<Solid>,
         model: &MonochromaticSmallSignalGain,
         inversion: &mut Option<Inversion>,
         ray: &Ray,
@@ -390,7 +391,7 @@ mod test {
     }
     /// The factor a ray picks up crossing the given body in the given operating point.
     fn factor_through(
-        body: &Placed<Extruded>,
+        body: &Placed<Solid>,
         model: &MonochromaticSmallSignalGain,
         config: &PumpConfig,
         ray: &Ray,
@@ -698,7 +699,7 @@ mod test {
     /// Bypasses the pump/profile path so tests can prescribe an exact piecewise-constant field and
     /// compute analytic expectations without profile-discretisation error.
     fn field_with(
-        body: &Placed<Extruded>,
+        body: &Placed<Solid>,
         dims: CellIndex,
         peak: ReciprocalLength,
         g: impl Fn(CellIndex) -> OpmResult<ReciprocalLength>,
@@ -936,7 +937,8 @@ mod test {
                     ApertureType::Hole,
                     None,
                 )?)?,
-            )?,
+            )?
+            .into(),
             &Isometry::identity(),
         )?;
 
@@ -1004,7 +1006,8 @@ mod test {
                     ApertureType::Hole,
                     None,
                 )?)?,
-            )?,
+            )?
+            .into(),
             &Isometry::identity(),
         )?;
 

@@ -1,12 +1,18 @@
 #![warn(missing_docs)]
 //! Solids bounded by several faces, each stating which of its sides is inside.
 
+use nalgebra::Point3;
 use serde::{Deserialize, Serialize};
+use uom::si::f64::Length;
 
 use super::{Side, collect_faces};
 use crate::{
     error::{OpmResult, OpossumError},
-    geometry::{Face, Placeable, Rim},
+    geometry::{
+        Face, Placeable, Placement, Rim,
+        body::{Body, BoundingBox},
+    },
+    light::Ray,
     utils::geom_transformation::Isometry,
 };
 
@@ -52,6 +58,81 @@ impl ParametricSolid {
             .get(index)
             .map(|(face, side)| (face, Isometry::identity(), *side))
     }
+    /// Return, for every face in the order they are numbered, whether the point lies on the side of
+    /// it that is inside the solid.
+    ///
+    /// # Arguments
+    ///
+    /// * `at` - where the solid sits.
+    /// * `point` - the point to be tested, in global coordinates.
+    fn inner_sides<'a>(
+        &'a self,
+        at: Placement<'a>,
+        point: &'a Point3<Length>,
+    ) -> impl Iterator<Item = bool> + 'a {
+        self.faces
+            .iter()
+            .zip(at.surfaces())
+            .map(move |((_, side), surface)| side.contains(surface.0.is_behind(point)))
+    }
+    /// Return whether a point on the surface of a face lies on the inner side of every *other* face.
+    ///
+    /// Only there does the solid have this face: the rest of the unbounded surface lies outside.
+    ///
+    /// # Arguments
+    ///
+    /// * `at` - where the solid sits.
+    /// * `face` - the number of the face the point lies on.
+    /// * `point` - the point to be tested, in global coordinates.
+    fn lies_within_the_other_faces(
+        &self,
+        at: Placement<'_>,
+        face: usize,
+        point: &Point3<Length>,
+    ) -> bool {
+        self.inner_sides(at, point)
+            .enumerate()
+            .all(|(index, inside)| index == face || inside)
+    }
+}
+
+/// A point is inside this solid if it lies on the inner side of every one of its faces. A face
+/// bounds the solid only where it lies within all the other faces, which is where a ray meets it.
+impl Body for ParametricSolid {
+    fn contains(&self, at: Placement<'_>, point: &Point3<Length>) -> bool {
+        self.inner_sides(at, point).all(|inside| inside)
+    }
+    fn path_length_inside(&self, at: Placement<'_>, ray: &Ray) -> Option<Length> {
+        let hits = at
+            .surfaces()
+            .iter()
+            .enumerate()
+            .filter_map(|(face, surface)| {
+                surface
+                    .0
+                    .calc_intersect_and_normal(ray)
+                    .map(|(point, _)| point)
+                    .filter(|point| {
+                        surface.0.is_on_vertex_sheet(point)
+                            && self.lies_within_the_other_faces(at, face, point)
+                    })
+            });
+        self.chord_through(at, ray.position(), ray.direction(), hits)
+    }
+    /// The extent of the solid is not determined yet.
+    ///
+    /// # Errors
+    ///
+    /// This function always returns an error.
+    fn bounding_box(&self, _at: Placement<'_>) -> OpmResult<BoundingBox> {
+        Err(OpossumError::Other(
+            "the extent of a parametric solid cannot be determined yet".into(),
+        ))
+    }
+    /// The faces are stated relative to the node, so the solid sits in the frame of the node.
+    fn isometry(&self, at: Placement<'_>) -> Isometry {
+        *at.node_frame()
+    }
 }
 
 impl Placeable for ParametricSolid {
@@ -68,11 +149,64 @@ impl Placeable for ParametricSolid {
 mod test {
     use super::*;
     use crate::{
+        degree,
         geometry::{Placed, SurfaceShape},
-        millimeter,
+        joule,
+        light::Ray,
+        millimeter, nanometer,
     };
     use approx::assert_abs_diff_eq;
-    use uom::si::length::millimeter;
+    use nalgebra::{Point3, Vector3};
+    use uom::si::{f64::Length, length::millimeter};
+
+    /// A block of 10 mm × 10 mm × 10 mm from six flat faces: the front face at z = 0, the rear face
+    /// at z = 10, and one face at each of x = ±5 mm and y = ±5 mm. The faces on the sides are turned
+    /// so that their z axis points into the block at the negative side and out of it at the positive.
+    fn block() -> OpmResult<ParametricSolid> {
+        let plane = |x: f64, y: f64, z: f64, about_x: f64, about_y: f64| {
+            Isometry::new(millimeter!(x, y, z), degree!(about_x, about_y, 0.0))
+        };
+        ParametricSolid::new(vec![
+            (
+                Face::new(SurfaceShape::Plane, plane(0.0, 0.0, 0.0, 0.0, 0.0)?),
+                Side::Behind,
+            ),
+            (
+                Face::new(SurfaceShape::Plane, plane(0.0, 0.0, 10.0, 0.0, 0.0)?),
+                Side::InFront,
+            ),
+            (
+                Face::new(SurfaceShape::Plane, plane(-5.0, 0.0, 5.0, 0.0, 90.0)?),
+                Side::Behind,
+            ),
+            (
+                Face::new(SurfaceShape::Plane, plane(5.0, 0.0, 5.0, 0.0, 90.0)?),
+                Side::InFront,
+            ),
+            (
+                Face::new(SurfaceShape::Plane, plane(0.0, -5.0, 5.0, -90.0, 0.0)?),
+                Side::Behind,
+            ),
+            (
+                Face::new(SurfaceShape::Plane, plane(0.0, 5.0, 5.0, -90.0, 0.0)?),
+                Side::InFront,
+            ),
+        ])
+    }
+    /// The block placed at the given node frame.
+    fn placed_block(node_frame: &Isometry) -> OpmResult<Placed<ParametricSolid>> {
+        Placed::new(block()?, node_frame)
+    }
+    fn test_ray(position: Point3<Length>, direction: Vector3<f64>) -> OpmResult<Ray> {
+        Ray::new(position, direction, nanometer!(1053.0), joule!(1.0))
+    }
+    /// The chord of the ray through the block, in millimeter.
+    fn chord(block: &Placed<ParametricSolid>, ray: &Ray) -> OpmResult<f64> {
+        block
+            .path_length_inside(ray)
+            .map(|length| length.get::<millimeter>())
+            .ok_or_else(|| OpossumError::Other("the ray missed the block".into()))
+    }
 
     #[test]
     fn a_parametric_solid_needs_a_face() {
@@ -112,6 +246,126 @@ mod test {
                 .ok_or_else(|| OpossumError::Other(format!("face {index} has no surface")))?;
             assert_eq!(*surface.0.isometry(), frame.append(&placed.anchor(index)?));
         }
+        Ok(())
+    }
+    #[test]
+    fn a_block_contains_what_is_on_the_inner_side_of_all_its_faces() -> OpmResult<()> {
+        let block = placed_block(&Isometry::identity())?;
+        assert!(block.contains(&millimeter!(0.0, 0.0, 5.0)));
+        for (x, y, z) in [
+            (4.9, 0.0, 5.0),
+            (-4.9, 0.0, 5.0),
+            (0.0, 4.9, 5.0),
+            (0.0, -4.9, 5.0),
+            (0.0, 0.0, 0.1),
+            (0.0, 0.0, 9.9),
+        ] {
+            assert!(block.contains(&millimeter!(x, y, z)), "({x}, {y}, {z})");
+        }
+        // Beyond any single one of the six faces.
+        for (x, y, z) in [
+            (5.1, 0.0, 5.0),
+            (-5.1, 0.0, 5.0),
+            (0.0, 5.1, 5.0),
+            (0.0, -5.1, 5.0),
+            (0.0, 0.0, -0.1),
+            (0.0, 0.0, 10.1),
+        ] {
+            assert!(!block.contains(&millimeter!(x, y, z)), "({x}, {y}, {z})");
+        }
+        Ok(())
+    }
+    /// The solid owns the points on a face it lies behind, not those on a face it lies in front of:
+    /// two solids sharing a face do not both claim its points.
+    #[test]
+    fn a_point_on_a_face_belongs_to_the_solid_only_if_it_lies_behind_that_face() -> OpmResult<()> {
+        let block = placed_block(&Isometry::identity())?;
+        for (x, y, z, belongs) in [
+            (0.0, 0.0, 0.0, true),
+            (0.0, 0.0, 10.0, false),
+            (-5.0, 0.0, 5.0, true),
+            (5.0, 0.0, 5.0, false),
+            (0.0, -5.0, 5.0, true),
+            (0.0, 5.0, 5.0, false),
+        ] {
+            assert_eq!(
+                block.contains(&millimeter!(x, y, z)),
+                belongs,
+                "({x}, {y}, {z})"
+            );
+        }
+        Ok(())
+    }
+    #[test]
+    fn a_ray_crosses_the_block_from_one_face_to_the_opposite_one() -> OpmResult<()> {
+        let block = placed_block(&Isometry::identity())?;
+        for (position, direction, expected) in [
+            // through the front and the rear face, along x through the sides
+            (millimeter!(0.0, 0.0, -20.0), Vector3::z(), 10.0),
+            (millimeter!(-20.0, 0.0, 5.0), Vector3::x(), 10.0),
+            (millimeter!(0.0, 20.0, 5.0), -Vector3::y(), 10.0),
+            // starting inside, and starting on the front face
+            (millimeter!(0.0, 0.0, 5.0), Vector3::z(), 5.0),
+            (millimeter!(0.0, 0.0, 5.0), -Vector3::z(), 5.0),
+            (millimeter!(0.0, 0.0, 0.0), Vector3::z(), 10.0),
+        ] {
+            let ray = test_ray(position, direction)?;
+            assert_abs_diff_eq!(chord(&block, &ray)?, expected, epsilon = 1e-9);
+        }
+        Ok(())
+    }
+    /// The ray enters through the face at x = -5 and leaves through the front face at z = 0. The plane
+    /// of the face at x = 5 is hit further on, at z = -2.25, outside the block: counting that hit
+    /// would stretch the chord to the far side.
+    #[test]
+    fn a_hit_beyond_the_edge_of_a_face_does_not_count() -> OpmResult<()> {
+        let block = placed_block(&Isometry::identity())?;
+        let ray = test_ray(
+            millimeter!(-20.0, 0.0, 4.0),
+            Vector3::new(1.0, 0.0, -0.25).normalize(),
+        )?;
+        assert_abs_diff_eq!(chord(&block, &ray)?, 1.0625_f64.sqrt(), epsilon = 1e-9);
+        Ok(())
+    }
+    #[test]
+    fn a_ray_beside_the_block_does_not_pass_through_it() -> OpmResult<()> {
+        let block = placed_block(&Isometry::identity())?;
+        // It meets the planes of the front and the rear face, but outside the block.
+        let beside = test_ray(millimeter!(0.0, 7.0, -20.0), Vector3::z())?;
+        assert!(block.path_length_inside(&beside).is_none());
+        let pointing_away = test_ray(millimeter!(0.0, 0.0, -20.0), -Vector3::z())?;
+        assert!(block.path_length_inside(&pointing_away).is_none());
+        Ok(())
+    }
+    #[test]
+    fn a_placed_block_follows_its_node() -> OpmResult<()> {
+        let node_frame = Isometry::new(millimeter!(3.0, -2.0, 100.0), degree!(10.0, -20.0, 30.0))?;
+        let block = placed_block(&node_frame)?;
+        assert!(block.contains(&node_frame.transform_point(&millimeter!(0.0, 0.0, 5.0))));
+        assert!(!block.contains(&node_frame.transform_point(&millimeter!(5.1, 0.0, 5.0))));
+        assert!(!block.contains(&millimeter!(0.0, 0.0, 5.0)));
+        let ray = test_ray(
+            node_frame.transform_point(&millimeter!(0.0, 0.0, -20.0)),
+            node_frame.transform_vector_f64(&Vector3::z()),
+        )?;
+        assert_abs_diff_eq!(chord(&block, &ray)?, 10.0, epsilon = 1e-9);
+        Ok(())
+    }
+    #[test]
+    fn the_extent_of_a_parametric_solid_cannot_be_determined_yet() -> OpmResult<()> {
+        let error = placed_block(&Isometry::identity())?
+            .bounding_box()
+            .unwrap_err();
+        assert!(
+            error.to_string().contains("cannot be determined"),
+            "{error}"
+        );
+        Ok(())
+    }
+    #[test]
+    fn a_parametric_solid_is_placed_in_the_frame_of_its_node() -> OpmResult<()> {
+        let node_frame = Isometry::new(millimeter!(3.0, -2.0, 100.0), degree!(10.0, -20.0, 30.0))?;
+        assert_eq!(placed_block(&node_frame)?.isometry(), node_frame);
         Ok(())
     }
 }

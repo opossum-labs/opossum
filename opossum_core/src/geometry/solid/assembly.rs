@@ -1,12 +1,19 @@
 #![warn(missing_docs)]
 //! Several solids, each with its own material, sharing interfaces.
 
+use nalgebra::Point3;
 use serde::{Deserialize, Serialize};
+use uom::si::f64::Length;
 
 use super::{Side, Solid, collect_faces};
 use crate::{
     error::{OpmResult, OpossumError},
-    geometry::{Face, Placeable, Rim},
+    geometry::{
+        Face, Placeable, Placement, Rim,
+        body::{Body, BoundingBox},
+        geo_surface::GeoSurfaceRef,
+    },
+    light::Ray,
     material::Material,
     properties::proptype::AssetRef,
     utils::geom_transformation::Isometry,
@@ -50,6 +57,12 @@ impl Part {
         self.solid
             .face(index)
             .map(|(face, owner, side)| (face, self.placement.append(&owner), side))
+    }
+    /// Return the number of faces of this part's solid.
+    fn face_count(&self) -> usize {
+        (0..)
+            .take_while(|&index| self.face(index).is_some())
+            .count()
     }
 }
 
@@ -189,19 +202,87 @@ impl Placeable for Assembly {
     }
 }
 
+impl Assembly {
+    /// Return every part with where it sits: the frame it is placed in and the surfaces of its faces.
+    ///
+    /// The surfaces of a placed assembly are those of its parts one after the other (see
+    /// [`Placeable::faces`]), so the surfaces of a part are the stretch after those of the parts
+    /// before it.
+    ///
+    /// # Arguments
+    ///
+    /// * `at` - where the assembly sits.
+    fn parts_at<'a>(
+        &'a self,
+        at: Placement<'a>,
+    ) -> impl Iterator<Item = (&'a Part, Isometry, &'a [GeoSurfaceRef])> + 'a {
+        self.parts.iter().scan(0, move |first, part| {
+            let surfaces = at.surfaces().get(*first..*first + part.face_count())?;
+            *first += surfaces.len();
+            Some((part, at.node_frame().append(&part.placement), surfaces))
+        })
+    }
+}
+
+/// An assembly contains what one of its parts contains; a ray travels through its parts one after
+/// the other, so the chord is the sum of theirs. Every part answers in its own frame, with its own
+/// surfaces: parts must not overlap, or the overlap counts twice.
+impl Body for Assembly {
+    fn contains(&self, at: Placement<'_>, point: &Point3<Length>) -> bool {
+        self.parts_at(at).any(|(part, frame, surfaces)| {
+            part.solid.contains(Placement::new(&frame, surfaces), point)
+        })
+    }
+    fn path_length_inside(&self, at: Placement<'_>, ray: &Ray) -> Option<Length> {
+        self.parts_at(at)
+            .filter_map(|(part, frame, surfaces)| {
+                part.solid
+                    .path_length_inside(Placement::new(&frame, surfaces), ray)
+            })
+            .reduce(|one, other| one + other)
+    }
+    /// The box of an assembly is the union of the boxes of its parts, in the frame of the assembly.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the assembly has no parts or if one of them cannot state
+    /// its extent.
+    fn bounding_box(&self, at: Placement<'_>) -> OpmResult<BoundingBox> {
+        self.parts_at(at)
+            .map(|(part, frame, surfaces)| {
+                let at_part = Placement::new(&frame, surfaces);
+                part.solid
+                    .bounding_box(at_part)?
+                    .in_frame(&part.solid.isometry(at_part), at.node_frame())
+            })
+            .reduce(|one, other| Ok(one?.union(&other?)))
+            .unwrap_or_else(|| {
+                Err(OpossumError::Other(
+                    "an assembly without parts has no extent".into(),
+                ))
+            })
+    }
+    /// The parts are stated relative to the node, so the assembly sits in the frame of the node.
+    fn isometry(&self, at: Placement<'_>) -> Isometry {
+        *at.node_frame()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::{
         apertures::{Aperture, ApertureType, CircleShape},
         degree,
-        geometry::{Geometry, ParametricSolid, Placed, SurfaceShape},
-        millimeter,
+        geometry::{Geometry, ParametricSolid, Placed, SurfaceShape, body::BoundingBox},
+        joule,
+        light::Ray,
+        millimeter, nanometer,
         refractive_index::RefrIndexConst,
         types::validated_type_definitions::ValidatedCrossSection,
     };
     use approx::assert_abs_diff_eq;
-    use nalgebra::Point3;
+    use nalgebra::{Point3, Vector3};
     use num_traits::Zero;
     use uom::si::{
         f64::{Angle, Length},
@@ -412,6 +493,204 @@ mod test {
                 "flint turned by {roll}°"
             );
         }
+        Ok(())
+    }
+    /// The crown and the flint lens of a doublet, cemented along the flint's front at z = 5 mm.
+    fn doublet() -> OpmResult<Assembly> {
+        let behind_the_crown = Isometry::new_along_z(millimeter!(5.0))?;
+        Assembly::new(
+            vec![
+                crown_part()?,
+                flint_part(millimeter!(-40.0), behind_the_crown)?,
+            ],
+            vec![Interface::new(FaceId::new(0, 1), FaceId::new(1, 0))],
+        )
+    }
+    /// The crown lens at the origin and a second lens 30 mm aside and 8 mm further along z, without
+    /// an interface between them.
+    fn side_by_side() -> OpmResult<Assembly> {
+        let aside = Isometry::new_translation(millimeter!(30.0, 0.0, 8.0))?;
+        Assembly::new(
+            vec![crown_part()?, flint_part(millimeter!(-40.0), aside)?],
+            vec![],
+        )
+    }
+    /// A node frame away from the origin and turned about all three axes.
+    fn node_frame() -> OpmResult<Isometry> {
+        Isometry::new(millimeter!(3.0, -2.0, 100.0), degree!(10.0, -20.0, 30.0))
+    }
+    /// One part of the assembly on its own, placed where the assembly places it.
+    fn alone(assembly: &Assembly, index: usize, node_frame: &Isometry) -> OpmResult<Placed<Solid>> {
+        let part = assembly
+            .parts
+            .get(index)
+            .ok_or_else(|| OpossumError::Other(format!("there is no part {index}")))?;
+        Placed::new(part.solid.clone(), &node_frame.append(&part.placement))
+    }
+    fn test_ray(position: Point3<Length>, direction: Vector3<f64>) -> OpmResult<Ray> {
+        Ray::new(position, direction, nanometer!(1053.0), joule!(1.0))
+    }
+    /// The extent of a box along x, y and z in millimeter.
+    fn extent(bounds: &BoundingBox) -> [[f64; 2]; 3] {
+        [bounds.x_range(), bounds.y_range(), bounds.z_range()]
+            .map(|range| [range.start, range.end].map(|end| end.get::<millimeter>()))
+    }
+    /// A point of an assembly's own frame, in global coordinates.
+    fn global(node_frame: &Isometry, x: f64, y: f64, z: f64) -> Point3<Length> {
+        node_frame.transform_point(&millimeter!(x, y, z))
+    }
+    /// Every part is asked in its own frame: the second lens sits aside, so a point in front of
+    /// it is in the lens only where its edge is measured from that place.
+    #[test]
+    fn an_assembly_contains_what_one_of_its_parts_contains() -> OpmResult<()> {
+        let node_frame = node_frame()?;
+        let placed = Placed::new(side_by_side()?, &node_frame)?;
+        for ((x, y, z), inside) in [
+            ((0.0, 0.0, 2.0), true),
+            ((30.0, 0.0, 10.0), true),
+            ((15.0, 0.0, 2.0), false),
+            ((0.0, 0.0, 10.0), false),
+            ((30.0, 0.0, 2.0), false),
+            ((55.0, 0.0, 10.0), false),
+        ] {
+            assert_eq!(
+                placed.contains(&global(&node_frame, x, y, z)),
+                inside,
+                "({x}, {y}, {z})"
+            );
+        }
+        Ok(())
+    }
+    /// The chord through an assembly is what each part cuts out of the ray, added up - checked
+    /// against the parts placed on their own.
+    #[test]
+    fn a_ray_travels_through_the_parts_one_after_the_other() -> OpmResult<()> {
+        let node_frame = node_frame()?;
+        let doublet = doublet()?;
+        let placed = Placed::new(doublet.clone(), &node_frame)?;
+        for (x, direction) in [(0.0, Vector3::z()), (4.0, Vector3::new(0.05, 0.0, 1.0))] {
+            let ray = test_ray(
+                global(&node_frame, x, 3.0, -20.0),
+                node_frame.transform_vector_f64(&direction.normalize()),
+            )?;
+            let crown = alone(&doublet, 0, &node_frame)?.path_length_inside(&ray);
+            let flint = alone(&doublet, 1, &node_frame)?.path_length_inside(&ray);
+            let (Some(crown), Some(flint)) = (crown, flint) else {
+                return Err(OpossumError::Other("the ray missed a lens".into()));
+            };
+            assert_abs_diff_eq!(
+                placed
+                    .path_length_inside(&ray)
+                    .ok_or_else(|| OpossumError::Other("the ray missed the doublet".into()))?
+                    .get::<millimeter>(),
+                (crown + flint).get::<millimeter>(),
+                epsilon = 1e-9
+            );
+        }
+        // Along the axis the two centers add up to the 10 mm of the doublet.
+        let axis = test_ray(
+            global(&node_frame, 0.0, 0.0, -20.0),
+            node_frame.transform_vector_f64(&Vector3::z()),
+        )?;
+        let chord = Placed::new(doublet, &node_frame)?
+            .path_length_inside(&axis)
+            .ok_or_else(|| OpossumError::Other("the ray missed the doublet".into()))?;
+        assert_abs_diff_eq!(chord.get::<millimeter>(), 10.0, epsilon = 1e-9);
+        Ok(())
+    }
+    /// Only the part the ray goes through contributes, wherever that part sits.
+    #[test]
+    fn a_ray_through_one_part_of_an_assembly_has_the_chord_of_that_part() -> OpmResult<()> {
+        let node_frame = node_frame()?;
+        let assembly = side_by_side()?;
+        let placed = Placed::new(assembly.clone(), &node_frame)?;
+        for (x, part) in [(0.0, 0), (30.0, 1)] {
+            let ray = test_ray(
+                global(&node_frame, x, 0.0, -20.0),
+                node_frame.transform_vector_f64(&Vector3::z()),
+            )?;
+            let chord = placed.path_length_inside(&ray);
+            assert_eq!(
+                chord,
+                alone(&assembly, part, &node_frame)?.path_length_inside(&ray)
+            );
+            assert!(chord.is_some(), "x = {x}");
+        }
+        let between = test_ray(
+            global(&node_frame, 15.0, 0.0, -20.0),
+            node_frame.transform_vector_f64(&Vector3::z()),
+        )?;
+        assert!(placed.path_length_inside(&between).is_none());
+        Ok(())
+    }
+    /// Both prisms of a beam splitter cube are slabs on their own; the ray crosses the first from
+    /// its front face to the diagonal, the second from the diagonal to its rear face.
+    #[test]
+    fn a_ray_crosses_the_prisms_of_a_cube_one_after_the_other() -> OpmResult<()> {
+        let node_frame = node_frame()?;
+        let placed = Placed::new(cube()?, &node_frame)?;
+        let ray = test_ray(
+            global(&node_frame, 0.0, 0.0, -20.0),
+            node_frame.transform_vector_f64(&Vector3::z()),
+        )?;
+        let chord = placed
+            .path_length_inside(&ray)
+            .ok_or_else(|| OpossumError::Other("the ray missed the cube".into()))?;
+        assert_abs_diff_eq!(chord.get::<millimeter>(), 20.0, epsilon = 1e-9);
+        Ok(())
+    }
+    /// The box of an assembly is the union of the boxes of its parts, in the frame of the assembly.
+    #[test]
+    fn the_box_of_an_assembly_encloses_the_boxes_of_its_parts() -> OpmResult<()> {
+        let node_frame = Isometry::new_along_z(millimeter!(100.0))?;
+        let assembly = side_by_side()?;
+        let crown = extent(&alone(&assembly, 0, &node_frame)?.bounding_box()?);
+        let aside = extent(&alone(&assembly, 1, &node_frame)?.bounding_box()?);
+        // The second lens sits 30 mm aside and 8 mm further along z.
+        let expected = [
+            [
+                crown[0][0].min(aside[0][0] + 30.0),
+                crown[0][1].max(aside[0][1] + 30.0),
+            ],
+            [crown[1][0].min(aside[1][0]), crown[1][1].max(aside[1][1])],
+            [
+                crown[2][0].min(aside[2][0] + 8.0),
+                crown[2][1].max(aside[2][1] + 8.0),
+            ],
+        ];
+        let bounds = extent(&Placed::new(assembly, &node_frame)?.bounding_box()?);
+        for (found, wanted) in bounds.iter().flatten().zip(expected.iter().flatten()) {
+            assert_abs_diff_eq!(found, wanted, epsilon = 1e-9);
+        }
+        // Not a statement about the lenses alone: the box spans from the crown to beyond the other lens.
+        assert!(bounds[0][1] > 40.0 && bounds[0][0] < -12.0);
+        Ok(())
+    }
+    #[test]
+    fn an_assembly_has_the_frame_of_its_node() -> OpmResult<()> {
+        let node_frame = node_frame()?;
+        assert_eq!(Placed::new(doublet()?, &node_frame)?.isometry(), node_frame);
+        Ok(())
+    }
+    #[test]
+    fn an_assembly_without_parts_has_no_volume() -> OpmResult<()> {
+        let empty = Placed::new(Assembly::new(vec![], vec![])?, &Isometry::identity())?;
+        assert!(!empty.contains(&millimeter!(0.0, 0.0, 0.0)));
+        let ray = test_ray(millimeter!(0.0, 0.0, -20.0), Vector3::z())?;
+        assert!(empty.path_length_inside(&ray).is_none());
+        assert!(empty.bounding_box().is_err());
+        Ok(())
+    }
+    /// A part that cannot state its extent leaves the assembly without one.
+    #[test]
+    fn an_assembly_has_no_box_if_a_part_has_none() -> OpmResult<()> {
+        let error = Placed::new(cube()?, &Isometry::identity())?
+            .bounding_box()
+            .unwrap_err();
+        assert!(
+            error.to_string().contains("cannot be determined"),
+            "{error}"
+        );
         Ok(())
     }
     #[test]

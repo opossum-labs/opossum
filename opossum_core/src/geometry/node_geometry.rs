@@ -202,12 +202,15 @@ impl Geometry {
         rear_vertex: Isometry,
         cross_section: ValidatedCrossSection,
     ) -> OpmResult<Self> {
-        Ok(Self::Solid(Solid::Extruded(Box::new(Extruded::new(
-            Isometry::identity(),
-            Face::new(front, Isometry::identity()),
-            Face::new(rear, rear_vertex),
-            cross_section,
-        )?))))
+        Ok(Self::Solid(
+            Extruded::new(
+                Isometry::identity(),
+                Face::new(front, Isometry::identity()),
+                Face::new(rear, rear_vertex),
+                cross_section,
+            )?
+            .into(),
+        ))
     }
     /// Build this geometry at the placement of its node, for tracing rays against it.
     ///
@@ -305,8 +308,8 @@ impl Placeable for SurfaceGeometry {
 /// The error for a geometry that is described but cannot be traced yet.
 fn not_supported_yet(what: &str) -> OpossumError {
     OpossumError::Other(format!(
-        "{what} is not supported yet: it has no lateral boundary to clip a hit to, so it cannot be \
-         traced"
+        "{what} is not supported yet: the lateral boundary of its faces is not implemented, so it \
+         cannot be traced"
     ))
 }
 
@@ -506,7 +509,7 @@ mod test {
     #[test]
     fn a_single_surface_encloses_no_volume() -> OpmResult<()> {
         let placed = Geometry::plane(None).place(&Isometry::identity())?;
-        assert!(Placed::<Extruded>::try_from(placed).is_err());
+        assert!(Placed::<Solid>::try_from(placed).is_err());
         Ok(())
     }
     #[test]

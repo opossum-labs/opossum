@@ -16,7 +16,7 @@ use super::scenario::PumpConfig;
 use crate::{
     error::OpmResult,
     gain::inversion_field::Inversion,
-    geometry::{Extruded, Placed},
+    geometry::{Placed, Solid},
     light::{Ray, Spectrum},
 };
 
@@ -66,7 +66,7 @@ pub trait Extraction {
     /// pumped.
     fn build_inversion(
         &self,
-        body: &Placed<Extruded>,
+        body: &Placed<Solid>,
         config: &PumpConfig,
     ) -> OpmResult<Option<Inversion>>;
     /// Gain exponent accumulated along the whole chord a ray travels through the medium.
@@ -101,7 +101,7 @@ pub trait Extraction {
     /// contributes nothing — a degenerate direction, no inversion, or no populated cells on the path.
     fn path_exponent(
         &self,
-        body: &Placed<Extruded>,
+        body: &Placed<Solid>,
         ray: &Ray,
         inversion: &mut Option<Inversion>,
     ) -> f64;
@@ -122,7 +122,7 @@ pub trait Extraction {
     /// `exp(path_exponent(body, ray, inversion))`.
     fn gain_factor(
         &self,
-        body: &Placed<Extruded>,
+        body: &Placed<Solid>,
         ray: &Ray,
         inversion: &mut Option<Inversion>,
     ) -> f64 {
@@ -147,7 +147,7 @@ pub trait Extraction {
     /// without a beam path at all.
     fn amplify_spectrum(
         &self,
-        body: &Placed<Extruded>,
+        body: &Placed<Solid>,
         inversion: Option<&Inversion>,
         spectrum: &mut Spectrum,
     ) -> OpmResult<()>;

@@ -14,7 +14,7 @@ use crate::{
     core_optics::{OpticPorts, optic_surface::OpticSurface},
     error::{OpmResult, OpossumError},
     gain::Inversion,
-    geometry::{Extruded, Placed},
+    geometry::{Placed, Solid},
     properties::{Properties, Proptype, validator::Validator},
     utils::{file_utils::sanitize_filename, geom_transformation::Isometry},
 };
@@ -50,14 +50,14 @@ impl RuntimeSurfaces {
 /// clears it again.
 #[derive(Debug, Clone)]
 pub struct RuntimeMedium {
-    body: Placed<Extruded>,
+    body: Placed<Solid>,
     inversion: Option<Inversion>,
 }
 
 impl RuntimeMedium {
     /// Return the volume body this node was prepared with.
     #[must_use]
-    pub const fn body(&self) -> &Placed<Extruded> {
+    pub const fn body(&self) -> &Placed<Solid> {
         &self.body
     }
 
@@ -75,9 +75,9 @@ impl RuntimeMedium {
     ///
     /// # Returns
     ///
-    /// `(&Placed<Extruded>, &mut Option<Inversion>)` — the body for geometric queries and the
+    /// `(&Placed<Solid>, &mut Option<Inversion>)` — the body for geometric queries and the
     /// inversion that saturating models may deplete between substeps.
-    pub const fn parts_mut(&mut self) -> (&Placed<Extruded>, &mut Option<Inversion>) {
+    pub const fn parts_mut(&mut self) -> (&Placed<Solid>, &mut Option<Inversion>) {
         (&self.body, &mut self.inversion)
     }
 }
@@ -479,7 +479,7 @@ impl NodeAttr {
     ///
     /// * `body` - the body between the node's surfaces, or `None` for a node that encloses no
     ///   volume.
-    pub fn set_runtime_body(&mut self, body: Option<Placed<Extruded>>) {
+    pub fn set_runtime_body(&mut self, body: Option<Placed<Solid>>) {
         self.runtime_medium = body.map(|body| RuntimeMedium {
             body,
             inversion: None,
@@ -547,12 +547,12 @@ mod test {
     use super::*;
     use crate::{
         apertures::{Aperture, ApertureType},
-        geometry::{Face, SurfaceShape},
+        geometry::{Extruded, Face, SurfaceShape},
         millimeter,
         types::validated_type_definitions::ValidatedCrossSection,
     };
 
-    fn test_body() -> OpmResult<Placed<Extruded>> {
+    fn test_body() -> OpmResult<Placed<Solid>> {
         Placed::new(
             Extruded::new(
                 Isometry::identity(),
@@ -566,7 +566,8 @@ mod test {
                     ApertureType::Hole,
                     None,
                 )?)?,
-            )?,
+            )?
+            .into(),
             &Isometry::identity(),
         )
     }
