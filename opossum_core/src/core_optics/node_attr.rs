@@ -57,7 +57,7 @@ pub struct RuntimeMedium {
 impl RuntimeMedium {
     /// Return the volume body this node was prepared with.
     #[must_use]
-    pub fn body(&self) -> &dyn crate::geometry::body::Body {
+    pub const fn body(&self) -> &Placed<Extruded> {
         &self.body
     }
 
@@ -75,9 +75,9 @@ impl RuntimeMedium {
     ///
     /// # Returns
     ///
-    /// `(&dyn Body, &mut Option<Inversion>)` — the body for geometric queries and the inversion
-    /// that saturating models may deplete between substeps.
-    pub fn parts_mut(&mut self) -> (&dyn crate::geometry::body::Body, &mut Option<Inversion>) {
+    /// `(&Placed<Extruded>, &mut Option<Inversion>)` — the body for geometric queries and the
+    /// inversion that saturating models may deplete between substeps.
+    pub const fn parts_mut(&mut self) -> (&Placed<Extruded>, &mut Option<Inversion>) {
         (&self.body, &mut self.inversion)
     }
 }

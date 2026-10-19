@@ -28,7 +28,7 @@ pub use scenario::{ActiveScenario, PumpConfig, PumpScenario};
 use crate::{
     error::OpmResult,
     generic_validators::{AllFinite, AllPositive},
-    geometry::body::Body,
+    geometry::{Extruded, Placed},
     light::{Ray, Spectrum},
     utils::default_from_name::DefaultFromName,
     validated, validated_type,
@@ -133,7 +133,7 @@ impl Extraction for ConstGain {
     }
     fn build_inversion(
         &self,
-        _body: &dyn Body,
+        _body: &Placed<Extruded>,
         _config: &PumpConfig,
     ) -> OpmResult<Option<Inversion>> {
         // Reading no inversion, this model must not pay for a grid either.
@@ -141,7 +141,7 @@ impl Extraction for ConstGain {
     }
     fn path_exponent(
         &self,
-        _body: &dyn Body,
+        _body: &Placed<Extruded>,
         _ray: &Ray,
         _inversion: &mut Option<Inversion>,
     ) -> f64 {
@@ -151,7 +151,7 @@ impl Extraction for ConstGain {
     }
     fn amplify_spectrum(
         &self,
-        _body: &dyn Body,
+        _body: &Placed<Extruded>,
         _inversion: Option<&Inversion>,
         spectrum: &mut Spectrum,
     ) -> OpmResult<()> {

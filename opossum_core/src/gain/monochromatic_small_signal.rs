@@ -31,7 +31,7 @@ use super::{
 use crate::{
     error::{OpmResult, OpossumError},
     generic_validators::AllFinite,
-    geometry::body::Body,
+    geometry::{Extruded, Placed},
     light::{Ray, Spectrum},
     reciprocal_centimeter, validated, validated_type,
 };
@@ -156,7 +156,7 @@ impl Extraction for MonochromaticSmallSignalGain {
     /// it. Neither half knows the other; the field, or the uniform number, is all they share.
     fn build_inversion(
         &self,
-        body: &dyn Body,
+        body: &Placed<Extruded>,
         config: &PumpConfig,
     ) -> OpmResult<Option<Inversion>> {
         Ok(Some(match config.pump() {
@@ -169,7 +169,12 @@ impl Extraction for MonochromaticSmallSignalGain {
             }
         }))
     }
-    fn path_exponent(&self, body: &dyn Body, ray: &Ray, inversion: &mut Option<Inversion>) -> f64 {
+    fn path_exponent(
+        &self,
+        body: &Placed<Extruded>,
+        ray: &Ray,
+        inversion: &mut Option<Inversion>,
+    ) -> f64 {
         match inversion.as_ref() {
             None => 0.0,
             // A uniform inversion needs no grid: the local gain is the same everywhere, so the
@@ -271,7 +276,7 @@ impl Extraction for MonochromaticSmallSignalGain {
     }
     fn amplify_spectrum(
         &self,
-        _body: &dyn Body,
+        _body: &Placed<Extruded>,
         _inversion: Option<&Inversion>,
         _spectrum: &mut Spectrum,
     ) -> OpmResult<()> {
@@ -363,7 +368,7 @@ mod test {
     /// exercise what runs in the analysis. Keeping `inversion` mutable lets `the_inversion_is_frozen`
     /// verify that [`MonochromaticSmallSignalGain`] does not write back into it.
     fn traverse_factor(
-        body: &dyn Body,
+        body: &Placed<Extruded>,
         model: &MonochromaticSmallSignalGain,
         inversion: &mut Option<Inversion>,
         ray: &Ray,
@@ -385,7 +390,7 @@ mod test {
     }
     /// The factor a ray picks up crossing the given body in the given operating point.
     fn factor_through(
-        body: &dyn Body,
+        body: &Placed<Extruded>,
         model: &MonochromaticSmallSignalGain,
         config: &PumpConfig,
         ray: &Ray,
@@ -693,7 +698,7 @@ mod test {
     /// Bypasses the pump/profile path so tests can prescribe an exact piecewise-constant field and
     /// compute analytic expectations without profile-discretisation error.
     fn field_with(
-        body: &dyn Body,
+        body: &Placed<Extruded>,
         dims: CellIndex,
         peak: ReciprocalLength,
         g: impl Fn(CellIndex) -> OpmResult<ReciprocalLength>,

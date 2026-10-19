@@ -7,13 +7,14 @@
 //! through it. This is the domain any volumetric quantity (such as an inversion density) is defined
 //! on.
 //!
-//! So far the only implementation is a [`Placed`](crate::geometry::Placed)
-//! [`Extruded`](crate::geometry::Extruded) solid, a volume bounded by an entrance surface, an exit
-//! surface and the transversal cross section of its rim; it implements the trait next to its
-//! definition. Since the bounding surfaces are the ones a node already uses for refraction, the
-//! usual optical volumes are simply different parameter sets of the same solid: a disk is two
-//! [`Plane`](crate::geometry::Plane)s with a circular cross section, a slab two planes with a
-//! rectangular one, a lens two [`Sphere`](crate::geometry::Sphere)s.
+//! A body is a description, not a placed thing: it knows its shape, and every question is asked
+//! with the [`Placement`] it is built at. A [`Placed`](crate::geometry::Placed) body forwards the
+//! questions with its own placement. So far an [`Extruded`](crate::geometry::Extruded) solid is the
+//! implementation, a volume bounded by two faces and the transversal cross section of its rim; it
+//! implements the trait next to its definition. Since the bounding surfaces are the ones a node
+//! already uses for refraction, the usual optical volumes are simply different parameter sets of
+//! the same solid: a disk is two [`Plane`](crate::geometry::Plane)s with a circular cross section,
+//! a slab two planes with a rectangular one, a lens two [`Sphere`](crate::geometry::Sphere)s.
 //!
 //! The cross section is expressed as an [`Aperture`](crate::apertures::Aperture), but only those
 //! apertures that actually delimit a region qualify, which is what
@@ -24,6 +25,7 @@
 use crate::{
     apertures::{CircleShape, OpticShape, RectangleShape},
     error::{OpmResult, OpossumError},
+    geometry::Placement,
     light::Ray,
     millimeter,
     utils::geom_transformation::Isometry,
@@ -143,11 +145,16 @@ impl BoundingBox {
 /// A body is the volumetric counterpart of a
 /// [`GeoSurface`](crate::geometry::geo_surface::GeoSurface): it defines an inside and can state how
 /// far a [`Ray`] travels within it.
+///
+/// Implemented by the description of a body, which does not know where it sits: every method is
+/// given the [`Placement`] it is built at. Asking a [`Placed`](crate::geometry::Placed) body
+/// supplies it.
 pub trait Body: Debug + Send + Sync {
     /// Return whether the given point lies inside this [`Body`].
     ///
     /// # Arguments
     ///
+    /// - `at`: where the body sits.
     /// - `point`: the point to be tested, given in global coordinates.
     ///
     /// # Returns
@@ -156,7 +163,7 @@ pub trait Body: Debug + Send + Sync {
     /// propagation: a point lying exactly on the entrance boundary counts as inside, one lying
     /// exactly on the exit boundary does not. This way neighbouring bodies sharing a surface do not
     /// both claim the points on it.
-    fn contains(&self, point: &Point3<Length>) -> bool;
+    fn contains(&self, at: Placement<'_>, point: &Point3<Length>) -> bool;
     /// Return the geometrical path length of the given [`Ray`] inside this [`Body`].
     ///
     /// The ray is not refracted on the way — the returned length is the straight chord between the
@@ -165,17 +172,22 @@ pub trait Body: Debug + Send + Sync {
     ///
     /// # Arguments
     ///
+    /// - `at`: where the body sits.
     /// - `ray`: the ray to be traced through the body.
     ///
     /// # Returns
     ///
     /// The path length inside the body or `None` if the ray does not pass through it.
-    fn path_length_inside(&self, ray: &Ray) -> Option<Length>;
+    fn path_length_inside(&self, at: Placement<'_>, ray: &Ray) -> Option<Length>;
     /// Return an axis-aligned box that encloses this [`Body`].
     ///
     /// [`Body::contains`] answers where the body is *not*, one point at a time; this states where it
     /// is worth asking at all. Anything discretising the body needs both: the box gives the domain
     /// to lay a grid over, [`Body::contains`] carves the body out of it.
+    ///
+    /// # Arguments
+    ///
+    /// - `at`: where the body sits.
     ///
     /// # Returns
     ///
@@ -186,14 +198,18 @@ pub trait Body: Debug + Send + Sync {
     /// # Errors
     ///
     /// This function returns an error if the extent of the body cannot be determined.
-    fn bounding_box(&self) -> OpmResult<BoundingBox>;
+    fn bounding_box(&self, at: Placement<'_>) -> OpmResult<BoundingBox>;
     /// Return the frame this [`Body`] is placed in.
     ///
     /// This is the frame [`Body::bounding_box`] is expressed in, so it is what turns that box back
     /// into the global coordinates [`Body::contains`] expects. It is the frame of the component the
     /// body belongs to, which is what makes a grid over the body follow the component when it is
     /// moved or tilted.
-    fn isometry(&self) -> Isometry;
+    ///
+    /// # Arguments
+    ///
+    /// - `at`: where the body sits.
+    fn isometry(&self, at: Placement<'_>) -> Isometry;
 }
 
 #[cfg(test)]

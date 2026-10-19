@@ -10,9 +10,17 @@
 //! The faces of a placed thing are numbered. What a face means (which one light enters through, which
 //! one it leaves through) is not decided here: that is up to the node using it.
 
+use nalgebra::Point3;
+use uom::si::f64::Length;
+
 use crate::{
     error::{OpmResult, OpossumError},
-    geometry::{Extruded, Face, Geometry, Rim, Solid, geo_surface::GeoSurfaceRef},
+    geometry::{
+        Extruded, Face, Geometry, Rim, Solid,
+        body::{Body, BoundingBox},
+        geo_surface::GeoSurfaceRef,
+    },
+    light::Ray,
     utils::geom_transformation::Isometry,
 };
 
@@ -56,6 +64,38 @@ impl<T> Placed<T> {
     #[must_use]
     pub fn surfaces(&self) -> &[GeoSurfaceRef] {
         &self.surfaces
+    }
+    /// Return where this sits: the placement of its node and the surface of every face.
+    #[must_use]
+    pub fn placement(&self) -> Placement<'_> {
+        Placement {
+            node_frame: &self.node_frame,
+            surfaces: &self.surfaces,
+        }
+    }
+}
+
+/// Where a description sits: the placement of its node and the geometric surface of each of its
+/// faces, in the order the faces are numbered.
+///
+/// This is what a description is asked about its volume with (see [`Body`]): it knows its shape,
+/// the placement tells it where that shape is.
+#[derive(Debug, Clone, Copy)]
+pub struct Placement<'a> {
+    node_frame: &'a Isometry,
+    surfaces: &'a [GeoSurfaceRef],
+}
+
+impl<'a> Placement<'a> {
+    /// Return the placement of the node the description is built at.
+    #[must_use]
+    pub const fn node_frame(&self) -> &'a Isometry {
+        self.node_frame
+    }
+    /// Return the geometric surface of every face, in the order the faces are numbered.
+    #[must_use]
+    pub const fn surfaces(&self) -> &'a [GeoSurfaceRef] {
+        self.surfaces
     }
 }
 
@@ -143,6 +183,35 @@ impl<T: Placeable> Placed<T> {
     #[must_use]
     pub fn rim(&self) -> Option<&Rim> {
         self.description.rim()
+    }
+}
+
+/// A placed description that encloses a volume answers the questions of a [`Body`] at the place it
+/// was built at.
+impl<T: Body> Placed<T> {
+    /// Return whether the given point lies inside this body (see [`Body::contains`]).
+    #[must_use]
+    pub fn contains(&self, point: &Point3<Length>) -> bool {
+        self.description.contains(self.placement(), point)
+    }
+    /// Return the geometrical path length of the given ray inside this body (see
+    /// [`Body::path_length_inside`]).
+    #[must_use]
+    pub fn path_length_inside(&self, ray: &Ray) -> Option<Length> {
+        self.description.path_length_inside(self.placement(), ray)
+    }
+    /// Return an axis-aligned box that encloses this body (see [`Body::bounding_box`]).
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the extent of the body cannot be determined.
+    pub fn bounding_box(&self) -> OpmResult<BoundingBox> {
+        self.description.bounding_box(self.placement())
+    }
+    /// Return the frame this body is placed in (see [`Body::isometry`]).
+    #[must_use]
+    pub fn isometry(&self) -> Isometry {
+        self.description.isometry(self.placement())
     }
 }
 
