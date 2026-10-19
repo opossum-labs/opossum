@@ -191,7 +191,7 @@ impl<T: Placeable> Placed<T> {
     }
     /// Return the number of faces.
     #[must_use]
-    pub fn face_count(&self) -> usize {
+    pub const fn face_count(&self) -> usize {
         self.surfaces.len()
     }
     /// Return the geometric surface of the face with the given number.

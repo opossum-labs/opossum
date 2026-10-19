@@ -108,7 +108,7 @@ impl Extruded {
     /// Return the geometric surfaces of the front and the rear face, in this order.
     ///
     /// Building places one surface per face, so a placement of this solid always holds both.
-    fn bounding_surfaces(at: Placement<'_>) -> [&GeoSurfaceRef; 2] {
+    const fn bounding_surfaces(at: Placement<'_>) -> [&GeoSurfaceRef; 2] {
         [&at.surfaces()[Self::FRONT], &at.surfaces()[Self::REAR]]
     }
     /// Return the range of longitudinal positions one of the bounding surfaces spans over the cross

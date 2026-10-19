@@ -60,9 +60,7 @@ impl Part {
     }
     /// Return the number of faces of this part's solid.
     fn face_count(&self) -> usize {
-        (0..)
-            .take_while(|&index| self.face(index).is_some())
-            .count()
+        (0..).map_while(|index| self.face(index)).count()
     }
 }
 
@@ -214,7 +212,7 @@ struct PartAt<'a> {
 
 impl PartAt<'_> {
     /// Return where the part sits, as the solid of the part is asked about its volume and its faces.
-    fn placement(&self) -> Placement<'_> {
+    const fn placement(&self) -> Placement<'_> {
         Placement::new(&self.frame, self.surfaces)
     }
     /// Return the number the given face of the assembly has in the solid of the part, or `None` if
