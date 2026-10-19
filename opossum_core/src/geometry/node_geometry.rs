@@ -664,7 +664,9 @@ mod test {
         apertures::{Aperture, ApertureType, CircleShape},
         degree,
         geometry::body::Body,
-        millimeter,
+        joule,
+        light::Ray,
+        millimeter, nanometer,
         refractive_index::RefrIndexConst,
     };
     use approx::assert_abs_diff_eq;
@@ -934,6 +936,53 @@ mod test {
             .append(&axis)
             .transform_point(&millimeter!(0.0, 0.0, 10.0));
         assert!(body.contains(&halfway));
+        Ok(())
+    }
+    /// The chord and the box of an extruded body follow its axis, not the node: pinned for an axis
+    /// that is turned and shifted against the node.
+    #[test]
+    fn an_extruded_body_measures_chords_and_its_box_along_its_axis() -> OpmResult<()> {
+        let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
+        let extruded = Extruded::new(
+            axis,
+            Face::new(SurfaceShape::Plane, Isometry::identity()),
+            Face::new(
+                SurfaceShape::Plane,
+                Isometry::new_along_z(millimeter!(20.0))?,
+            ),
+            circle()?,
+        )?;
+        let node_frame = Isometry::new(millimeter!(0.0, 5.0, 0.0), degree!(0.0, 0.0, 0.0))?;
+        let placed = Geometry::Solid(Solid::Extruded(Box::new(extruded))).place(&node_frame)?;
+        let body = placed
+            .body()
+            .ok_or_else(|| OpossumError::Other("an extruded solid encloses a volume".into()))?;
+        // The extrusion axis runs along the node's x axis, from x = 3 mm to x = 23 mm, 5 mm off the
+        // node's origin in y. The circle of 12.5 mm radius lies around that line.
+        let ray_at = |y: f64, z: f64| {
+            Ray::new(
+                millimeter!(-10.0, y, z),
+                nalgebra::Vector3::x(),
+                nanometer!(1053.0),
+                joule!(1.0),
+            )
+        };
+        let chord = body
+            .path_length_inside(&ray_at(5.0, 0.0)?)
+            .ok_or_else(|| OpossumError::Other("the ray along the axis missed the body".into()))?;
+        assert_abs_diff_eq!(chord.get::<millimeter>(), 20.0, epsilon = 1e-9);
+        assert!(body.path_length_inside(&ray_at(18.0, 0.0)?).is_none());
+        assert!(body.path_length_inside(&ray_at(5.0, 13.0)?).is_none());
+        // The box is stated in the body's own frame, where the extrusion runs along z.
+        let bounds = body.bounding_box()?;
+        for (range, from, to) in [
+            (bounds.x_range(), -12.5, 12.5),
+            (bounds.y_range(), -12.5, 12.5),
+            (bounds.z_range(), 0.0, 20.0),
+        ] {
+            assert_abs_diff_eq!(range.start.get::<millimeter>(), from, epsilon = 1e-9);
+            assert_abs_diff_eq!(range.end.get::<millimeter>(), to, epsilon = 1e-9);
+        }
         Ok(())
     }
     #[test]
