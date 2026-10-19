@@ -70,6 +70,8 @@ impl AnalysisRayTrace for SourcePort {
 
         let iso = self.effective_surface_iso("output_1")?;
         axis_ray = axis_ray.transformed_ray(&iso);
+        // The axis carries the up direction that places every node along it.
+        axis_ray.set_up_direction(axis_ray.define_up_direction());
         let rays = Rays::from(axis_ray);
         let mut outgoing_edges = LightResult::new();
         outgoing_edges.insert("output_1".into(), LightData::Geometric(rays));

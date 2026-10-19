@@ -3,14 +3,14 @@
 use super::{InvertGraphGuard, OpticGraph};
 use crate::{
     analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
-    core_optics::{NodeAttrExt, OpticNodeExt, PortType, node_attr::NodePositioning},
+    core_optics::{NodeAttrExt, PortType, node_attr::NodePositioning},
     error::{OpmResult, OpossumError},
     light::{LightData, LightResult, Rays},
     radian,
     utils::geom_transformation::Isometry,
 };
 use log::{info, warn};
-use nalgebra::{Point3, Vector3};
+use nalgebra::Point3;
 use num_traits::Zero;
 use petgraph::graph::NodeIndex;
 use uom::si::f64::Length;
@@ -115,7 +115,6 @@ impl OpticGraph {
     ) -> OpmResult<LightResult> {
         let sorted = self.topologically_sorted()?;
         let mut light_result = LightResult::default();
-        let mut up_direction = Vector3::<f64>::y();
 
         for idx in sorted {
             let node_id = self
@@ -138,7 +137,6 @@ impl OpticGraph {
                     self,
                     idx,
                     incoming_data,
-                    &mut up_direction,
                     config,
                     &mut light_result,
                     ray_ends.as_deref_mut(),
@@ -154,7 +152,6 @@ fn position_node(
     graph: &mut OpticGraph,
     node_idx: NodeIndex,
     incoming_edges: &LightResult,
-    up_direction: &Vector3<f64>,
 ) -> OpmResult<()> {
     let node_attr = graph.g[node_idx].node_attr().clone();
     let node_id = node_attr.uuid();
@@ -179,10 +176,10 @@ fn position_node(
                 "Cannot align node like NodeIdx:{}. Fall back to standard positioning method",
                 node_idx.index()
             );
-            graph.set_node_isometry(incoming_edges, *align_id, *up_direction)?;
+            graph.set_node_isometry(incoming_edges, *align_id)?;
         }
     } else {
-        graph.set_node_isometry(incoming_edges, node_id, *up_direction)?;
+        graph.set_node_isometry(incoming_edges, node_id)?;
     }
     Ok(())
 }
@@ -191,7 +188,6 @@ fn ensure_node_isometry(
     graph: &mut OpticGraph,
     node_idx: NodeIndex,
     incoming_edges: &LightResult,
-    up_direction: &Vector3<f64>,
 ) -> OpmResult<()> {
     let node_attr = graph.g[node_idx].node_attr().clone();
     let node_info = format!("{}", graph.g[node_idx]);
@@ -226,7 +222,7 @@ fn ensure_node_isometry(
             return Ok(());
         }
 
-        position_node(graph, node_idx, incoming_edges, up_direction)?;
+        position_node(graph, node_idx, incoming_edges)?;
 
         let calculated_iso = graph.g[node_idx]
             .positioning()
@@ -244,7 +240,7 @@ fn ensure_node_isometry(
         return Ok(());
     }
 
-    position_node(graph, node_idx, incoming_edges, up_direction)?;
+    position_node(graph, node_idx, incoming_edges)?;
     Ok(())
 }
 
@@ -262,81 +258,6 @@ fn execute_node_calculation(
         let node = &mut graph.g[node_idx];
         AnalysisRayTrace::calc_node_positions(&mut **node, incoming_edges, config)
     }
-}
-
-/// Stores outgoing edge data in the graph and updates the up-direction reference vector.
-///
-/// When `ray_ends` is `Some`, ray bundles that are returned by [`OpticGraph::set_outgoing_edge_data`]
-/// (i.e. bundles with no connected edge) are pushed into it, provided the port is not a mapped
-/// external output port of the group.  When `ray_ends` is `None`, behavior is identical to the
-/// previous (flag-off) path.
-///
-/// # Arguments
-///
-/// * `graph` - The optical graph to operate on.
-/// * `node_idx` - Index of the node whose outgoing beams are being processed.
-/// * `outgoing_edges` - The light data produced by the node for each of its output ports.
-/// * `up_direction` - Running "up" direction vector, updated by this function.
-/// * `ray_ends` - Optional collector for unconnected, unmapped ray bundles.
-///
-/// # Errors
-///
-/// This function returns an error if a referenced node cannot be found, if the up-direction cannot
-/// be derived from an outgoing beam, or if an outgoing beam of a node with successors carries no
-/// valid axis ray: the optical axis ends at this node then, and nothing after it can be placed.
-fn update_outgoing_edges_and_up_direction(
-    graph: &mut OpticGraph,
-    node_idx: NodeIndex,
-    outgoing_edges: LightResult,
-    up_direction: &mut Vector3<f64>,
-    mut ray_ends: Option<&mut Vec<Rays>>,
-) -> OpmResult<()> {
-    let referenced_id = graph.g[node_idx].referenced_node_id();
-    let fallback_node_type = graph.g[node_idx].node_attr().node_type().to_string();
-    let node_id = graph.g[node_idx].uuid();
-    let has_successors = graph.has_output_connections(node_id)?;
-
-    for (port, data) in outgoing_edges {
-        // The first ray of a bundle carries the axis. Swallowed by the node or stopped beside it
-        // (`RayTraceConfig::for_positioning`), it gives no direction to place a successor along.
-        if matches!(&data, LightData::Geometric(rays) if rays.iter().next().is_none_or(|ray| !ray.valid()))
-        {
-            if has_successors {
-                return Err(OpossumError::Analysis(format!(
-                    "no light leaves {} at port '{}' within its clear aperture: the optical axis \
-                     ends there, so the components after it cannot be placed",
-                    graph.g[node_idx], port
-                )));
-            }
-        } else if let Some(target_uuid) = referenced_id {
-            let target_idx = graph.node_idx_by_uuid(target_uuid).ok_or_else(|| {
-                OpossumError::Analysis(format!(
-                    "referenced node with id {target_uuid} not found in graph"
-                ))
-            })?;
-            let target = &graph.g[target_idx];
-            if target.node_type() == "source port" {
-                *up_direction = target.define_up_direction(&data)?;
-            } else {
-                target.calc_new_up_direction(&data, up_direction)?;
-            }
-        } else {
-            let node = &graph.g[node_idx];
-            if fallback_node_type == "source port" {
-                *up_direction = node.define_up_direction(&data)?;
-            } else {
-                node.calc_new_up_direction(&data, up_direction)?;
-            }
-        }
-        let leftover = graph.set_outgoing_edge_data(node_idx, &port, data);
-        if let Some(ray_ends) = ray_ends.as_deref_mut()
-            && let Some(LightData::Geometric(rays)) = leftover
-            && !graph.is_mapped_output_port(node_id, &port)
-        {
-            ray_ends.push(rays);
-        }
-    }
-    Ok(())
 }
 
 /// Places one node of the graph on the optical axis and passes the axis on to its successors.
@@ -362,7 +283,6 @@ fn calculate_single_node_position(
     graph: &mut OpticGraph,
     node_idx: NodeIndex,
     incoming_data: &LightResult,
-    up_direction: &mut Vector3<f64>,
     config: &RayTraceConfig,
     light_result: &mut LightResult,
     ray_ends: Option<&mut Vec<Rays>>,
@@ -371,7 +291,7 @@ fn calculate_single_node_position(
     let node_info = format!("{}", graph.g[node_idx]);
     let incoming_edges: LightResult = graph.get_incoming(node_id, incoming_data)?;
 
-    ensure_node_isometry(graph, node_idx, &incoming_edges, up_direction)?;
+    ensure_node_isometry(graph, node_idx, &incoming_edges)?;
 
     if incoming_edges.is_empty() && !graph.g[node_idx].ports().names(&PortType::Input).is_empty() {
         warn!(
@@ -397,14 +317,9 @@ fn calculate_single_node_position(
     };
 
     graph.collect_group_output_ports(node_id, &outgoing_edges, light_result)?;
-    update_outgoing_edges_and_up_direction(
-        graph,
-        node_idx,
-        outgoing_edges,
-        up_direction,
-        ray_ends,
-    )?;
-
+    for (port, data) in outgoing_edges {
+        graph.set_outgoing_edge_data(node_idx, &port, data);
+    }
     Ok(())
 }
 
@@ -413,14 +328,16 @@ mod test {
     use crate::{
         analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
         apertures::{CircleShape, OpticShape},
-        core_optics::{Alignable, NodeAttrExt},
+        core_optics::{Alignable, NodeAttrExt, OpticRef, PortType},
+        degree,
         error::{OpmResult, OpossumError},
         geometry::body::{OPTIC_SHAPE, default_optic_shape},
         joule,
         light::LightResult,
         millimeter,
         nodes::{
-            Dummy, IdealFilter, Lens, NodeGroup, SourcePort, SpotDiagram,
+            BeamSplitter, Dummy, IdealFilter, Lens, NodeGroup, ParaxialSurface, SourcePort,
+            SpotDiagram, ThinMirror,
             ideal_filter::{FilterConst, FilterTypeBuilder},
             round_collimated_ray_builder,
         },
@@ -576,6 +493,150 @@ mod test {
                 assert_eq!(warned, warns, "detector decentred by {decentre} mm");
             });
         }
+        Ok(())
+    }
+    /// Add `row` to `group` as a chain, 100 mm apart, each node's first output feeding the next
+    /// node's first input.
+    ///
+    /// # Returns
+    ///
+    /// The uuids of the first and the last node of the row.
+    fn chain(group: &mut NodeGroup, row: &[OpticRef]) -> OpmResult<(Uuid, Uuid)> {
+        let mut ids = Vec::new();
+        for node in row {
+            ids.push(group.add_node_ref(node.clone())?);
+        }
+        for pair in row.windows(2) {
+            let output = pair[0].ports().names(&PortType::Output)[0].clone();
+            let input = pair[1].ports().names(&PortType::Input)[0].clone();
+            group.connect_nodes(
+                pair[0].uuid(),
+                &output,
+                pair[1].uuid(),
+                &input,
+                millimeter!(100.0),
+            )?;
+        }
+        Ok((ids[0], ids[ids.len() - 1]))
+    }
+    /// A group holding `row` as a chain, with the row's first input and last output mapped outward.
+    fn grouped(row: &[OpticRef]) -> OpmResult<OpticRef> {
+        let mut group = NodeGroup::new("group");
+        let (first, last) = chain(&mut group, row)?;
+        group.map_input_port(first, "input_1", "input_1")?;
+        group.map_output_port(last, "output_1", "output_1")?;
+        Ok(OpticRef::new(Box::new(group)))
+    }
+    /// Put a source 100 mm in front of `row`, position the model and return where each of the
+    /// nodes `placed` was put, wherever it sits in the model.
+    fn placements(row: &[OpticRef], placed: &[Uuid]) -> OpmResult<Vec<Isometry>> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let (first, _) = chain(&mut scenery, row)?;
+        scenery.connect_nodes(source, "output_1", first, "input_1", millimeter!(100.0))?;
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1)?,
+        );
+        AnalysisRayTrace::calc_node_positions(
+            &mut scenery,
+            LightResult::default(),
+            &config.for_positioning(),
+        )?;
+        placed
+            .iter()
+            .map(|id| {
+                scenery
+                    .node_recursive(*id)?
+                    .0
+                    .effective_position()
+                    .copied()
+                    .ok_or_else(|| OpossumError::Other(format!("node {id} was not placed")))
+            })
+            .collect()
+    }
+    /// Assert that both rows of placements put every node at the same place, turned the same way.
+    fn assert_same_placements(expected: &[Isometry], actual: &[Isometry]) {
+        assert_eq!(expected.len(), actual.len());
+        for (expected, actual) in expected.iter().zip(actual) {
+            assert_relative_eq!(
+                expected.get_transform().to_homogeneous(),
+                actual.get_transform().to_homogeneous(),
+                epsilon = 1e-9
+            );
+        }
+    }
+    /// The bridge of `workshop_09_phelix`: a mirror sending the axis up, one sending it aside, a
+    /// lens, then a mirror whose tilt folds the axis in a plane given by the up direction the axis
+    /// arrives with, and a screen.
+    fn bridge() -> OpmResult<[OpticRef; 5]> {
+        Ok([
+            OpticRef::new(Box::new(
+                ThinMirror::new("up").with_tilt(degree!(45.0, 0.0, 0.0))?,
+            )),
+            OpticRef::new(Box::new(
+                ThinMirror::new("aside").with_tilt(degree!(0.0, 45.0, 0.0))?,
+            )),
+            OpticRef::new(Box::new(ParaxialSurface::new("lens", millimeter!(1000.0))?)),
+            OpticRef::new(Box::new(
+                ThinMirror::new("fold").with_tilt(degree!(0.0, 45.0, 0.0))?,
+            )),
+            OpticRef::new(Box::new(Dummy::new("screen"))),
+        ])
+    }
+    /// A group only organizes a model: grouping components, whether the group ends behind the
+    /// mirrors that turn the up direction or starts after them, places every component exactly as
+    /// the flat model does.
+    #[test]
+    fn grouping_does_not_change_placement() -> OpmResult<()> {
+        let [up, aside, lens, fold, screen] = bridge()?;
+        let ids = [&up, &aside, &lens, &fold, &screen].map(OpticRef::uuid);
+        let flat = placements(
+            &[
+                up.clone(),
+                aside.clone(),
+                lens.clone(),
+                fold.clone(),
+                screen.clone(),
+            ],
+            &ids,
+        )?;
+        let turning_mirrors_grouped = placements(
+            &[
+                grouped(&[up.clone(), aside.clone(), lens.clone()])?,
+                fold.clone(),
+                screen.clone(),
+            ],
+            &ids,
+        )?;
+        assert_same_placements(&flat, &turning_mirrors_grouped);
+        let fold_grouped = placements(&[up, aside, lens, grouped(&[fold, screen])?], &ids)?;
+        assert_same_placements(&flat, &fold_grouped);
+        Ok(())
+    }
+    /// The transmitted arm of a beam splitter continues the incoming axis unchanged, whatever the
+    /// reflected arm does: it is placed exactly as behind a plain window, even when the splitter
+    /// reflects out of the plane the up direction lies in.
+    #[test]
+    fn the_transmitted_arm_of_a_splitter_is_placed_as_behind_a_window() -> OpmResult<()> {
+        let fold = OpticRef::new(Box::new(
+            ThinMirror::new("fold").with_tilt(degree!(0.0, 45.0, 0.0))?,
+        ));
+        let screen = OpticRef::new(Box::new(Dummy::new("screen")));
+        let ids = [&fold, &screen].map(OpticRef::uuid);
+        let splitter = BeamSplitter::default().with_tilt(degree!(45.0, 0.0, 0.0))?;
+        let behind_splitter = placements(
+            &[
+                OpticRef::new(Box::new(splitter)),
+                fold.clone(),
+                screen.clone(),
+            ],
+            &ids,
+        )?;
+        let window = OpticRef::new(Box::new(Dummy::new("window")));
+        let behind_window = placements(&[window, fold, screen], &ids)?;
+        assert_same_placements(&behind_window, &behind_splitter);
         Ok(())
     }
 }
