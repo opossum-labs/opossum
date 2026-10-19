@@ -144,13 +144,7 @@ impl OpticGraph {
     {
         if let Some(target_uuid) = self.g[idx].referenced_node_id() {
             let pass_inverted = self.g[idx].inverted();
-            let target_idx = self.node_idx_by_uuid(target_uuid).ok_or_else(|| {
-                OpossumError::Analysis(format!(
-                    "referenced node with id {target_uuid} not found in graph"
-                ))
-            })?;
-
-            let target_node = &mut self.g[target_idx];
+            let target_node = self.reference_target_mut(target_uuid)?;
             let target_inverted = target_node.inverted();
             if pass_inverted != target_inverted {
                 target_node.set_inverted(pass_inverted).map_err(|_e| {
@@ -528,17 +522,16 @@ impl OpticGraph {
     /// [`AnalysisRayTrace::axis_entrance_frame`]). It is the identity for ordinary single-input
     /// nodes. For a reference proxy the referenced target answers, since the proxy has no geometry
     /// of its own. Returns the identity if the node cannot be found.
-    fn axis_entrance_frame_of(&self, node_id: Uuid, port_name: &str) -> Isometry {
+    fn axis_entrance_frame_of(&mut self, node_id: Uuid, port_name: &str) -> Isometry {
         let Some(idx) = self.node_idx_by_uuid(node_id) else {
             return Isometry::identity();
         };
-        let node = &self.g[idx];
-        if let Some(target_uuid) = node.referenced_node_id()
-            && let Some(target_idx) = self.node_idx_by_uuid(target_uuid)
+        if let Some(target_uuid) = self.g[idx].referenced_node_id()
+            && let Ok(target) = self.reference_target_mut(target_uuid)
         {
-            return self.g[target_idx].axis_entrance_frame(port_name);
+            return target.axis_entrance_frame(port_name);
         }
-        node.axis_entrance_frame(port_name)
+        self.g[idx].axis_entrance_frame(port_name)
     }
     /// Sets the outgoing edge data of this [`OpticGraph`].
     /// Returns `None` if data has been assigned to an edge, or `Some(data)` if no matching edge was found.
