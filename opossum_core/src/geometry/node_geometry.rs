@@ -193,7 +193,8 @@ impl Geometry {
     ) -> OpmResult<Self> {
         Ok(Self::Surface(Box::new(SurfaceGeometry::new(
             axis,
-            Face::new(shape, vertex),
+            shape,
+            vertex,
             cross_section,
             RimRole::Edge,
         )?)))
@@ -215,7 +216,8 @@ impl Geometry {
     ) -> OpmResult<Self> {
         Ok(Self::Surface(Box::new(SurfaceGeometry::new(
             Isometry::identity(),
-            Face::new(shape, Isometry::identity()),
+            shape,
+            Isometry::identity(),
             cross_section,
             RimRole::Window,
         )?)))
@@ -229,10 +231,9 @@ impl Geometry {
     pub fn plane(cross_section: Option<ValidatedCrossSection>) -> Self {
         // A plane reaches every cross section, so nothing is left to check.
         Self::Surface(Box::new(SurfaceGeometry {
-            axis: Isometry::identity(),
             face: Face::new(SurfaceShape::Plane, Isometry::identity()),
-            cross_section,
-            role: RimRole::Edge,
+            rim: cross_section
+                .map(|cross_section| Rim::new(cross_section, Isometry::identity(), RimRole::Edge)),
         }))
     }
     /// An extruded solid along the node's own axis whose front vertex sits at the node.
@@ -283,15 +284,14 @@ impl Geometry {
 
 /// A single surface without thickness.
 ///
-/// The face and the cross section are stated in the frame of the axis, as for an [`Extruded`]
-/// solid. An off-axis parabola uses the axis to measure its optic shape parallel to the axis of
-/// its parent parabola.
+/// The face is stated relative to the node. The rim, if there is one, keeps the axis its cross
+/// section is extruded along; an off-axis parabola uses it to measure its optic shape parallel to
+/// the axis of its parent parabola. A surface without a cross section has no rim and so no axis
+/// of its own, which is why the axis is already applied to the face.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SurfaceGeometry {
-    axis: Isometry,
     face: Face,
-    cross_section: Option<ValidatedCrossSection>,
-    role: RimRole,
+    rim: Option<Rim>,
 }
 
 impl SurfaceGeometry {
@@ -300,7 +300,8 @@ impl SurfaceGeometry {
     /// # Arguments
     ///
     /// * `axis` - the frame of the cross section relative to the node.
-    /// * `face` - the surface, stated in the `axis` frame.
+    /// * `shape` - the shape of the surface.
+    /// * `vertex` - position and orientation of its vertex, stated in the `axis` frame.
     /// * `cross_section` - its transversal extent, or `None` for an unbounded surface.
     /// * `role` - what the edge of the cross section means for a ray outside it.
     ///
@@ -310,30 +311,27 @@ impl SurfaceGeometry {
     /// cross section, or if the outline of the cross section cannot be determined.
     fn new(
         axis: Isometry,
-        face: Face,
+        shape: SurfaceShape,
+        vertex: Isometry,
         cross_section: Option<ValidatedCrossSection>,
         role: RimRole,
     ) -> OpmResult<Self> {
+        let face = Face::new(shape, axis.append(&vertex));
         if let Some(cross_section) = &cross_section {
             face.check_reach(cross_section.transversal_reach(), "surface")?;
         }
         Ok(Self {
-            axis,
             face,
-            cross_section,
-            role,
+            rim: cross_section.map(|cross_section| Rim::new(cross_section, axis, role)),
         })
     }
     /// See [`Geometry::place`]. The one surface is entrance and exit at once.
     fn place(&self, node_frame: &Isometry) -> OpmResult<PlacedGeometry> {
-        let placed = self.face.place(node_frame, &self.axis)?;
+        let placed = self.face.place(node_frame, &Isometry::identity())?;
         Ok(PlacedGeometry {
             entrance: placed.clone(),
             exit: placed,
-            rim: self
-                .cross_section
-                .clone()
-                .map(|cross_section| Rim::new(cross_section, self.axis, self.role)),
+            rim: self.rim.clone(),
             body: None,
         })
     }
@@ -472,6 +470,30 @@ mod test {
             placed.rim(),
             Some(&Rim::new(circle()?, axis, RimRole::Edge))
         );
+        Ok(())
+    }
+    /// Without a cross section there is no rim to carry the axis, but the face is still stated in the
+    /// axis frame.
+    #[test]
+    fn an_unbounded_surface_is_placed_along_its_axis() -> OpmResult<()> {
+        let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
+        let vertex = Isometry::new_along_z(millimeter!(20.0))?;
+        let geometry = Geometry::surface(axis, SurfaceShape::Plane, vertex, None)?;
+        let placed = geometry.place(&Isometry::identity())?;
+        assert_eq!(placed.entrance().1, axis.append(&vertex));
+        assert_eq!(placed.rim(), None);
+        Ok(())
+    }
+    /// A detector's cross section is a window: light outside it still passes, it is just not recorded.
+    #[test]
+    fn a_detector_bounds_its_window_not_its_edge() -> OpmResult<()> {
+        let bounded = Geometry::detector(SurfaceShape::Plane, Some(circle()?))?;
+        assert_eq!(
+            bounded.place(&Isometry::identity())?.rim(),
+            Some(&Rim::new(circle()?, Isometry::identity(), RimRole::Window))
+        );
+        let open = Geometry::detector(SurfaceShape::Plane, None)?;
+        assert_eq!(open.place(&Isometry::identity())?.rim(), None);
         Ok(())
     }
     /// A surface without a cross section is unbounded; a bounded surface and an extruded solid have
