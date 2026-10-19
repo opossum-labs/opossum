@@ -13,7 +13,7 @@ use crate::{
     degree,
     error::{OpmResult, OpossumError},
     geometry::{
-        Geometry, SurfaceShape,
+        Geometry, SurfaceGeometry, SurfaceShape,
         body::{OPTIC_SHAPE, default_optic_shape},
     },
     light::{LightData, LightRays, LightResult, Rays},
@@ -394,7 +394,10 @@ impl OpticNode for ParabolicMirror {
         )?))
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(&["input_1"], &["output_1"])
+        self.install_geometry(
+            &[("input_1", SurfaceGeometry::FACE)],
+            &[("output_1", SurfaceGeometry::FACE)],
+        )
     }
 }
 impl AnalysisGhostFocus for ParabolicMirror {

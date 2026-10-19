@@ -10,7 +10,7 @@ use crate::{
     core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType},
     error::{OpmResult, OpossumError},
     geometry::{
-        Geometry,
+        Geometry, SurfaceGeometry,
         body::{OPTIC_SHAPE, default_optic_shape},
     },
     light::{
@@ -440,8 +440,14 @@ impl OpticNode for BeamSplitter {
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         self.install_geometry(
-            &["input_1", "input_2"],
-            &["out1_trans1_refl2", "out2_trans2_refl1"],
+            &[
+                ("input_1", SurfaceGeometry::FACE),
+                ("input_2", SurfaceGeometry::FACE),
+            ],
+            &[
+                ("out1_trans1_refl2", SurfaceGeometry::FACE),
+                ("out2_trans2_refl1", SurfaceGeometry::FACE),
+            ],
         )
     }
 }

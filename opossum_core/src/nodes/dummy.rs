@@ -11,7 +11,7 @@ use crate::{
     apertures::OpticShape,
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, optic_node_ext::single_io_port_names},
     error::OpmResult,
-    geometry::{Geometry, body::OPTIC_SHAPE},
+    geometry::{Geometry, SurfaceGeometry, body::OPTIC_SHAPE},
     light::LightResult,
     nodes::NodeRegistration,
 };
@@ -95,7 +95,10 @@ impl OpticNode for Dummy {
         Ok(Some(Geometry::plane(self.cross_section()?)))
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(&["input_1"], &["output_1"])
+        self.install_geometry(
+            &[("input_1", SurfaceGeometry::FACE)],
+            &[("output_1", SurfaceGeometry::FACE)],
+        )
     }
 }
 

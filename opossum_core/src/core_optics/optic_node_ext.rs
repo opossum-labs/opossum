@@ -89,20 +89,27 @@ pub trait OpticNodeExt {
     /// Build the surfaces of this node's [`Geometry`](crate::geometry::Geometry) and install them
     /// under the given ports.
     ///
-    /// The entrance surface is installed under every input port, the exit surface under every
-    /// output port. A single surface is both, so all ports then share it. The body between the two,
-    /// which shares them, becomes the node's medium; a node without one is left without a medium.
+    /// The node decides which face of its geometry every port sits on; several ports may share a
+    /// face. The solid, whose faces these are, becomes the node's medium; a node without one is
+    /// left without a medium.
     ///
     /// # Arguments
     ///
-    /// * `inputs` - the input ports light enters through, by their (physical) names.
-    /// * `outputs` - the output ports light leaves through, by their (physical) names.
+    /// * `inputs` - the input ports light enters through: their (physical) names and the index of
+    ///   the face each one sits on.
+    /// * `outputs` - the output ports light leaves through: their (physical) names and the index
+    ///   of the face each one sits on.
     ///
     /// # Errors
     ///
     /// This function returns an error if the node has no geometry, if the geometry cannot be
-    /// derived or built, or if a surface cannot be installed.
-    fn install_geometry(&mut self, inputs: &[&str], outputs: &[&str]) -> OpmResult<()>;
+    /// derived or built, if a port names a face the geometry does not have, or if a surface cannot
+    /// be installed.
+    fn install_geometry(
+        &mut self,
+        inputs: &[(&str, usize)],
+        outputs: &[(&str, usize)],
+    ) -> OpmResult<()>;
 
     /// Updates a single surface of this node, adding its port if the node does not have it yet.
     ///
@@ -349,7 +356,11 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         self.update_surfaces()
     }
 
-    fn install_geometry(&mut self, inputs: &[&str], outputs: &[&str]) -> OpmResult<()> {
+    fn install_geometry(
+        &mut self,
+        inputs: &[(&str, usize)],
+        outputs: &[(&str, usize)],
+    ) -> OpmResult<()> {
         let Some(geometry) = self.geometry()? else {
             return Err(OpossumError::Other(format!(
                 "node '{}' has no geometry to install surfaces from",
@@ -358,25 +369,19 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         };
         let placed =
             geometry.place(&self.effective_node_iso().unwrap_or_else(Isometry::identity))?;
-        // Until the nodes name the face of every port, the first face goes under the inputs and
-        // the last under the outputs.
-        let last_face = placed.face_count().saturating_sub(1);
-        for (names, face, port_type) in [
-            (inputs, 0, PortType::Input),
-            (outputs, last_face, PortType::Output),
-        ] {
-            let surface = placed.surface(face).cloned().ok_or_else(|| {
-                OpossumError::Other(format!(
-                    "the geometry of node '{}' has no face {face}",
-                    self.name()
-                ))
-            })?;
-            let anchor = placed.anchor(face)?;
-            for name in names {
+        for (ports, port_type) in [(inputs, PortType::Input), (outputs, PortType::Output)] {
+            for &(name, face) in ports {
+                let surface = placed.surface(face).cloned().ok_or_else(|| {
+                    OpossumError::Other(format!(
+                        "node '{}': port '{name}' sits on face {face}, which does not exist (face count: {})",
+                        self.name(),
+                        placed.face_count()
+                    ))
+                })?;
                 self.update_surface(
                     name,
-                    surface.clone(),
-                    anchor,
+                    surface,
+                    placed.anchor(face)?,
                     placed.rim().cloned(),
                     &port_type,
                 )?;

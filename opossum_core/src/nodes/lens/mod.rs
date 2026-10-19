@@ -6,7 +6,7 @@ use crate::{
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, Volumetric},
     error::{OpmResult, OpossumError},
     geometry::{
-        Geometry,
+        Extruded, Geometry,
         body::{OPTIC_SHAPE, default_optic_shape},
     },
     material::{MATERIAL, Material},
@@ -190,7 +190,10 @@ impl OpticNode for Lens {
         Some(self)
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(&["input_1"], &["output_1"])
+        self.install_geometry(
+            &[("input_1", Extruded::FRONT)],
+            &[("output_1", Extruded::REAR)],
+        )
     }
 }
 impl AnalysisEnergy for Lens {}

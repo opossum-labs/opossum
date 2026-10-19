@@ -173,7 +173,7 @@ mod test {
     use crate::{
         core_optics::{OpticNode, OpticNodeExt, node_attr::NodePositioning},
         degree,
-        geometry::SurfaceShape,
+        geometry::{Extruded, SurfaceGeometry, SurfaceShape},
         millimeter,
         nodes::test_helper::helper::{
             assert_snapshots, body_snapshot, geometry_snapshot, surface_snapshot,
@@ -432,9 +432,34 @@ mod test {
     fn a_node_without_geometry_cannot_install_surfaces() {
         assert!(
             NodeGroup::default()
-                .install_geometry(&["input_1"], &["output_1"])
+                .install_geometry(
+                    &[("input_1", SurfaceGeometry::FACE)],
+                    &[("output_1", SurfaceGeometry::FACE)],
+                )
                 .is_err()
         );
+    }
+
+    /// A port sits on a face the geometry has: a lens has two, a single surface one. The error
+    /// names the node, the port and the number of faces.
+    #[test]
+    fn a_port_cannot_sit_on_a_face_the_geometry_does_not_have() {
+        let mut lens = Lens::default();
+        let error = lens
+            .install_geometry(&[("input_1", Extruded::FRONT)], &[("output_1", 2)])
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("output_1"), "{error}");
+        assert!(error.contains("face 2"), "{error}");
+        assert!(error.contains("face count: 2"), "{error}");
+
+        let mut dummy = Dummy::default();
+        let error = dummy
+            .install_geometry(&[("input_1", SurfaceGeometry::FACE)], &[("output_1", 1)])
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("face 1"), "{error}");
+        assert!(error.contains("face count: 1"), "{error}");
     }
 
     /// Place a node (see [`place`]) and take its surface snapshot.

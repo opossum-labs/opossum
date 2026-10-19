@@ -6,7 +6,7 @@ use crate::{
     apertures::{OpticShape, RectangleShape},
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, Volumetric},
     error::{OpmResult, OpossumError},
-    geometry::{Geometry, body::OPTIC_SHAPE},
+    geometry::{Extruded, Geometry, body::OPTIC_SHAPE},
     material::{MATERIAL, Material},
     millimeter,
     nodes::NodeRegistration,
@@ -187,7 +187,10 @@ impl OpticNode for CylindricLens {
         Some(self)
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(&["input_1"], &["output_1"])
+        self.install_geometry(
+            &[("input_1", Extruded::FRONT)],
+            &[("output_1", Extruded::REAR)],
+        )
     }
 }
 impl AnalysisEnergy for CylindricLens {}

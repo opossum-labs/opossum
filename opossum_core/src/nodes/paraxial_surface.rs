@@ -8,7 +8,7 @@ use crate::{
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType},
     error::{OpmResult, OpossumError},
     geometry::{
-        Geometry,
+        Geometry, SurfaceGeometry,
         body::{OPTIC_SHAPE, default_optic_shape},
     },
     light::{LightData, LightRays, LightResult, Rays},
@@ -99,7 +99,10 @@ impl OpticNode for ParaxialSurface {
         Ok(Some(Geometry::plane(self.cross_section()?)))
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(&["input_1"], &["output_1"])
+        self.install_geometry(
+            &[("input_1", SurfaceGeometry::FACE)],
+            &[("output_1", SurfaceGeometry::FACE)],
+        )
     }
 }
 impl AnalysisGhostFocus for ParaxialSurface {
