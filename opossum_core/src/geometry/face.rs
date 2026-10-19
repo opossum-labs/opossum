@@ -167,6 +167,10 @@ impl SurfaceShape {
     }
 }
 
+/// A geometric surface built from a [`Face`] and its anchor: the surface's own frame relative to
+/// the node (see [`Face::place`]).
+pub type PlacedSurface = (GeoSurfaceRef, Isometry);
+
 /// One optical surface of a component: its [`SurfaceShape`] and where its vertex sits.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Face {
@@ -201,11 +205,7 @@ impl Face {
     ///
     /// This function returns an error if the shape cannot be built (radius or focal length zero or
     /// not finite).
-    pub fn place(
-        &self,
-        node_frame: &Isometry,
-        owner: &Isometry,
-    ) -> OpmResult<(GeoSurfaceRef, Isometry)> {
+    pub fn place(&self, node_frame: &Isometry, owner: &Isometry) -> OpmResult<PlacedSurface> {
         let anchor = owner
             .append(&self.vertex)
             .append(&self.shape.vertex_to_frame()?);

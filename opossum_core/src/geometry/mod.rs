@@ -17,18 +17,19 @@ mod node_geometry;
 mod parabola;
 mod plane;
 mod rim;
+mod solid;
 mod sphere;
 
 pub mod body;
 pub mod geo_surface;
 
 pub use cylinder::Cylinder;
-pub use face::{Face, SurfaceShape};
-pub use node_geometry::{
-    Assembly, Extruded, FaceId, Geometry, Interface, ParametricSolid, Part, Placed, PlacedGeometry,
-    PlacedSurface, Side, Solid, SurfaceGeometry,
-};
+pub use face::{Face, PlacedSurface, SurfaceShape};
+pub use node_geometry::{Geometry, PlacedGeometry, SurfaceGeometry};
 pub use parabola::Parabola;
 pub use plane::Plane;
 pub use rim::{Rim, RimRole};
+pub use solid::{
+    Assembly, Extruded, FaceId, Interface, ParametricSolid, Part, Placed, Side, Solid,
+};
 pub use sphere::Sphere;
