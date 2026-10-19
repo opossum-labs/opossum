@@ -96,6 +96,8 @@ They are described already so that the data model is settled before the first co
   - a *role*: an **edge** means the component ends there, so a ray outside misses it. A **window** (detectors only)
     lets all light pass but records only the light inside it.
 
+An extruded solid holds exactly such a rim, always with the role edge, next to its two faces.
+
 A curved face has to reach the edge of its cross section. A sphere or a cylinder ends at its radius of curvature, so
 a radius smaller than the largest distance of the edge from the axis is rejected when the geometry is derived. A
 hemisphere is still allowed.
@@ -175,14 +177,20 @@ All paths are relative to `opossum_core/src` unless stated otherwise.
 
 | Type | File | Role |
 |---|---|---|
-| `Geometry`, `SurfaceGeometry`, `Solid`, `Extruded`, `ParametricSolid`, `Assembly`, `Part`, `Interface` | `geometry/node_geometry.rs` | the description |
+| `Geometry`, `SurfaceGeometry` | `geometry/node_geometry.rs` | the description |
+| `Solid` | `geometry/solid/mod.rs` | the three kinds of solid |
+| `Extruded` | `geometry/solid/extruded.rs` | two faces capping a profile; holds a `Rim` |
+| `ParametricSolid` | `geometry/solid/parametric.rs` | the intersection of the inner sides of several faces |
+| `Assembly`, `Part`, `Interface`, `FaceId` | `geometry/solid/assembly.rs` | several solids sharing interfaces |
 | `PlacedGeometry` | `geometry/node_geometry.rs` | the description built at a placement: entrance, exit, rim and body |
-| `Face`, `SurfaceShape` | `geometry/face.rs` | one surface, described |
+| `Face`, `SurfaceShape`, `PlacedSurface` | `geometry/face.rs` | one surface, described, and the geometric surface built from it with its anchor |
 | `OpticShape`, `Outline`, `Bore` | `apertures/optic_shape.rs` | value of the `optic shape` property |
 | `ValidatedCrossSection` | `types/validated_type_definitions.rs` | an aperture that delimits a region |
 | `Rim`, `RimRole` | `geometry/rim.rs` | lateral boundary, edge or window |
 | `GeoSurface`, `GeoSurfaceRef` | `geometry/geo_surface.rs` (implemented by `Plane`, `Sphere`, `Cylinder`, `Parabola`) | unbounded surface placed in the world, never changed once built, shared as `Arc<..>` |
-| `SurfaceBoundedBody`, `Body` | `geometry/body/mod.rs` | the volume between entrance and exit |
+| `Placed` | `geometry/solid/mod.rs` | a solid built at the placement of its node: the description, the node frame, entrance and exit |
+| `Body`, `BoundingBox` | `geometry/body/mod.rs` | what a volume answers: is a point inside, how far a ray travels in it, which box encloses it |
+| `Body` for `Placed<Extruded>` | `geometry/solid/extruded.rs` | the volume between entrance and exit, implemented next to the solid |
 | `OpticSurface` | `core_optics/optic_surface.rs` | the runtime surface |
 | `RuntimeSurfaces`, `RuntimeMedium` | `core_optics/node_attr.rs` | where a node keeps them, `#[serde(skip)]` |
 | `OpticPorts`, `PortConfig` | `core_optics/optic_ports.rs` | coating and LIDT per port |
@@ -239,9 +247,10 @@ The origin of the node, its anchor point, is the vertex of the front face.
 1. It calls `geometry()` again, so it works from the properties as they are now.
 2. It takes `effective_node_iso()`, which is the position followed by the alignment, or the identity for a node that
    has not been placed.
-3. `Geometry::place(&node_iso)` calls `Extruded::place`, which calls `Face::place` for front and rear and builds the
-   body between them from the same two surfaces. The result, a `PlacedGeometry`, also holds the rim
-   `Rim::new(circle, identity, RimRole::Edge)`.
+3. `Geometry::place(&node_iso)` calls `Extruded::place`, which calls `Face::place` for front and rear. The result is a
+   `Placed<Extruded>`: the extruded solid, the node frame and the two built surfaces. The `PlacedGeometry` takes
+   entrance and exit from it, the rim of the solid, `Rim::new(circle, identity, RimRole::Edge)`, as its rim, and the
+   `Placed<Extruded>` itself as its body.
 4. It calls `update_surface` once per port name.
 5. It stores the body as the node's `RuntimeMedium`, with an empty inversion (`NodeAttr::set_runtime_body`).
 
@@ -274,10 +283,10 @@ For a volume node, `prepare_volume` does the following:
 2. If the gain model reads an inversion, it builds one in the body of the `RuntimeMedium`
    (`Extraction::build_inversion`).
 
-The body, `SurfaceBoundedBody::new(front, rear, circle, node_iso ∘ axis)`, is bounded by the very surfaces light is
-traced at: its entrance is the sphere under `input_1`, its exit the plane under `output_1`. It knows no port names.
-`Volumetric::volume_body` builds the same body anew from the current properties; the 3D view uses it, an analysis
-does not.
+The body is the `Placed<Extruded>` from Step 3, with the frame `node_iso ∘ axis`. It is bounded by the very surfaces
+light is traced at: its entrance is the sphere under `input_1`, its exit the plane under `output_1`. It knows no port
+names. `Volumetric::volume_body` builds the same body anew from the current properties; the 3D view uses it, an
+analysis does not.
 
 **Step 5: trace.** `OpticGraph::analyze_raytrace` (`nodes/node_group/optic_graph/raytrace.rs`) walks the graph and
 hands each node the light that arrives at its ports. `Lens::analyze` (`nodes/lens/analysis_raytrace.rs`) calls
@@ -299,7 +308,7 @@ hands each node the light that arrives at its ports. `Lens::analyze` (`nodes/len
 2. The point counts only if `Rim::contains(point, node_frame)` and `GeoSurface::is_on_vertex_sheet(point)` both
    hold.
 
-`SurfaceBoundedBody::path_length_inside` decides the same way when it measures the chord through the body.
+`Body::path_length_inside` of the placed solid decides the same way when it measures the chord through the body.
 
 A ray parallel to the axis at y = 13 mm meets the sphere, but outside the 12.5 mm circle, so it misses. With `Stop`,
 `Ray::refract_on_surface_with_coating` invalidates it; with `Ignore`, it stays unchanged. `propagate_rays` reports
@@ -420,7 +429,9 @@ analysis's sources. Then the bounce passes follow:
   - `install_geometry` knows exactly one entrance surface and one exit surface.
   - `Geometry::place` ends in `not_supported_yet` for these two kinds.
 
-  A tracer for them has to replace that branch and the entrance/exit assumption.
+  A tracer for them has to replace that branch and the entrance/exit assumption. Their `Body` implementations
+  belong next to the solids, in `geometry/solid/parametric.rs` and `geometry/solid/assembly.rs`, as
+  `impl Body for Placed<Extruded>` is in `geometry/solid/extruded.rs`.
 - **Who reads what.**
   - Read the geometry directly: `install_geometry`, and the 3D view through `Volumetric::volume_body` and
     `Planar::surface_mesh`.
