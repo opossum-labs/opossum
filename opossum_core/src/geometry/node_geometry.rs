@@ -24,7 +24,6 @@ use crate::{
     error::{OpmResult, OpossumError},
     geometry::{
         Rim, RimRole,
-        body::SurfaceBoundedBody,
         face::{Face, SurfaceShape},
         geo_surface::GeoSurfaceRef,
     },
@@ -38,6 +37,45 @@ use crate::{
 /// the node (see [`Face::place`]).
 pub type PlacedSurface = (GeoSurfaceRef, Isometry);
 
+/// A solid built at the placement of its node (see [`Extruded::place`]).
+///
+/// It keeps the description it was built from next to what building adds: the placement of the
+/// node and the geometric surfaces light enters and leaves through. Those are the very surfaces a
+/// node traces its rays at (see [`PlacedGeometry`]), shared rather than built a second time.
+///
+/// **Note**: A solid placed this way has exactly one entrance and one exit surface, the assumption
+/// the tracing of a node makes as a whole.
+#[derive(Debug, Clone)]
+pub struct Placed<T> {
+    solid: T,
+    node_frame: Isometry,
+    entrance: PlacedSurface,
+    exit: PlacedSurface,
+}
+
+impl<T> Placed<T> {
+    /// Return the description this solid was built from.
+    #[must_use]
+    pub const fn solid(&self) -> &T {
+        &self.solid
+    }
+    /// Return the placement of the node this solid was built at.
+    #[must_use]
+    pub const fn node_frame(&self) -> &Isometry {
+        &self.node_frame
+    }
+    /// Return the surface light enters through, with its anchor relative to the node.
+    #[must_use]
+    pub const fn entrance(&self) -> &PlacedSurface {
+        &self.entrance
+    }
+    /// Return the surface light leaves through, with its anchor relative to the node.
+    #[must_use]
+    pub const fn exit(&self) -> &PlacedSurface {
+        &self.exit
+    }
+}
+
 /// A [`Geometry`] built at the placement of its node (see [`Geometry::place`]).
 ///
 /// Everything in it comes from one description: the surfaces light enters and leaves through, the
@@ -48,7 +86,18 @@ pub struct PlacedGeometry {
     entrance: PlacedSurface,
     exit: PlacedSurface,
     rim: Option<Rim>,
-    body: Option<SurfaceBoundedBody>,
+    body: Option<Placed<Extruded>>,
+}
+
+impl From<Placed<Extruded>> for PlacedGeometry {
+    fn from(placed: Placed<Extruded>) -> Self {
+        Self {
+            entrance: placed.entrance.clone(),
+            exit: placed.exit.clone(),
+            rim: Some(placed.solid.rim().clone()),
+            body: Some(placed),
+        }
+    }
 }
 
 impl PlacedGeometry {
@@ -74,7 +123,7 @@ impl PlacedGeometry {
     /// Return the body of material between entrance and exit, placed at the node's frame followed
     /// by the extrusion axis, or `None` for a single surface, which encloses no volume.
     #[must_use]
-    pub const fn body(&self) -> Option<&SurfaceBoundedBody> {
+    pub const fn body(&self) -> Option<&Placed<Extruded>> {
         self.body.as_ref()
     }
 }
@@ -272,7 +321,7 @@ impl Geometry {
     pub fn place(&self, node_frame: &Isometry) -> OpmResult<PlacedGeometry> {
         match self {
             Self::Surface(surface) => surface.place(node_frame),
-            Self::Solid(Solid::Extruded(extruded)) => extruded.place(node_frame),
+            Self::Solid(Solid::Extruded(extruded)) => Ok(extruded.place(node_frame)?.into()),
             Self::Solid(Solid::Parametric(_)) => Err(not_supported_yet("a parametric solid")),
             Self::Solid(Solid::Assembly(_)) => Err(not_supported_yet("an assembly")),
         }
@@ -414,22 +463,32 @@ impl Extruded {
             rear,
         })
     }
-    /// See [`Geometry::place`]. The body is bounded by the very surfaces light enters and leaves
-    /// through.
-    fn place(&self, node_frame: &Isometry) -> OpmResult<PlacedGeometry> {
-        let entrance = self.front.place(node_frame, self.rim.axis())?;
-        let exit = self.rear.place(node_frame, self.rim.axis())?;
-        let body = SurfaceBoundedBody::new(
-            entrance.0.clone(),
-            exit.0.clone(),
-            self.rim.cross_section().clone(),
-            node_frame.append(self.rim.axis()),
-        );
-        Ok(PlacedGeometry {
-            entrance,
-            exit,
-            rim: Some(self.rim.clone()),
-            body: Some(body),
+    /// Return the rim bounding this solid sideways: its profile, the axis it is extruded along and
+    /// the role of its edge.
+    #[must_use]
+    pub const fn rim(&self) -> &Rim {
+        &self.rim
+    }
+    /// Build this solid at the placement of its node.
+    ///
+    /// # Arguments
+    ///
+    /// * `node_frame` - the placement of the node.
+    ///
+    /// # Returns
+    ///
+    /// The solid with the front and the rear face built as geometric surfaces. They are the
+    /// entrance and the exit of the placed solid and bound the body between them.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if a face cannot be built (see [`Face::place`]).
+    pub fn place(&self, node_frame: &Isometry) -> OpmResult<Placed<Self>> {
+        Ok(Placed {
+            solid: self.clone(),
+            node_frame: *node_frame,
+            entrance: self.front.place(node_frame, self.rim.axis())?,
+            exit: self.rear.place(node_frame, self.rim.axis())?,
         })
     }
     /// See [`Solid::face`]. The profile lies behind the front face and in front of the rear face.
@@ -924,7 +983,7 @@ mod test {
         let body = placed
             .body()
             .ok_or_else(|| OpossumError::Other("an extruded solid encloses a volume".into()))?;
-        assert_eq!(*body.isometry(), node_frame.append(&axis));
+        assert_eq!(body.isometry(), node_frame.append(&axis));
         // halfway along the extrusion axis, which runs along the node's x axis
         let halfway = node_frame
             .append(&axis)
@@ -965,7 +1024,14 @@ mod test {
             .path_length_inside(&ray_at(5.0, 0.0)?)
             .ok_or_else(|| OpossumError::Other("the ray along the axis missed the body".into()))?;
         assert_abs_diff_eq!(chord.get::<millimeter>(), 20.0, epsilon = 1e-9);
-        assert!(body.path_length_inside(&ray_at(18.0, 0.0)?).is_none());
+        // 11 mm off the axis, inside the circle around the body's axis but outside a circle around
+        // the node's own origin, and the other way round at y = -10 mm: only a rim that is asked in
+        // the node's frame tells them apart.
+        let off_axis = body
+            .path_length_inside(&ray_at(16.0, 0.0)?)
+            .ok_or_else(|| OpossumError::Other("the ray 11 mm off the axis missed".into()))?;
+        assert_abs_diff_eq!(off_axis.get::<millimeter>(), 20.0, epsilon = 1e-9);
+        assert!(body.path_length_inside(&ray_at(-10.0, 0.0)?).is_none());
         assert!(body.path_length_inside(&ray_at(5.0, 13.0)?).is_none());
         // The box is stated in the body's own frame, where the extrusion runs along z.
         let bounds = body.bounding_box()?;

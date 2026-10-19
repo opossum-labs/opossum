@@ -22,7 +22,7 @@ use crate::{
     },
     error::{OpmResult, OpossumError},
     gain::Extraction,
-    geometry::body::SurfaceBoundedBody,
+    geometry::{Extruded, Placed},
     light::{LightData, LightRays, LightResult, Rays},
     material::{MATERIAL, Material},
     properties::{Proptype, proptype::AssetRef},
@@ -91,13 +91,13 @@ pub trait Volumetric: OpticNode {
     ///
     /// # Returns
     ///
-    /// The [`SurfaceBoundedBody`] enclosed by the node's entrance and exit face.
+    /// The [`Extruded`] solid enclosed by the node's entrance and exit face, placed at the node.
     ///
     /// # Errors
     ///
     /// This function returns an error if the node's geometry cannot be derived or encloses no
     /// volume that can be traced.
-    fn volume_body(&self) -> OpmResult<SurfaceBoundedBody> {
+    fn volume_body(&self) -> OpmResult<Placed<Extruded>> {
         let Some(geometry) = self.geometry()? else {
             return Err(OpossumError::Other(format!(
                 "node '{}' has no geometry to enclose a volume",

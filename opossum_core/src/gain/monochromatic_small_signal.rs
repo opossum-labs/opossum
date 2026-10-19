@@ -295,7 +295,7 @@ mod test {
             PumpSource, TransversalProfile,
             inversion_field::{CellIndex, cells},
         },
-        geometry::{Plane, Sphere, body::SurfaceBoundedBody, geo_surface::GeoSurfaceRef},
+        geometry::{Extruded, Face, Placed, SurfaceShape},
         joule,
         light::Ray,
         millimeter, nanometer, reciprocal_centimeter,
@@ -304,7 +304,6 @@ mod test {
     };
     use approx::assert_relative_eq;
     use nalgebra::{Point2, Vector3};
-    use std::sync::Arc;
     use uom::si::f64::{Length, ReciprocalLength};
 
     /// The thickness of the disk every physics test below amplifies through.
@@ -314,20 +313,21 @@ mod test {
     ///
     /// Plane faces on purpose: the chord of an on-axis ray is then exactly the thickness, so every
     /// expected value below can be worked out from `exp(g₀·L)` by hand.
-    fn disk(thickness: Length, radius: Length) -> OpmResult<SurfaceBoundedBody> {
-        Ok(SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Plane::new(Isometry::identity()))),
-            GeoSurfaceRef(Arc::new(Plane::new(Isometry::new_along_z(thickness)?))),
+    fn disk(thickness: Length, radius: Length) -> OpmResult<Placed<Extruded>> {
+        Extruded::new(
+            Isometry::identity(),
+            Face::new(SurfaceShape::Plane, Isometry::identity()),
+            Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
             ValidatedCrossSection::try_new(Aperture::new_circle(
                 radius,
                 ApertureType::Hole,
                 None,
             )?)?,
-            Isometry::identity(),
-        ))
+        )?
+        .place(&Isometry::identity())
     }
     /// The disk every physics test below is performed on: 10 mm thick, 5 mm in radius.
-    fn test_disk() -> OpmResult<SurfaceBoundedBody> {
+    fn test_disk() -> OpmResult<Placed<Extruded>> {
         disk(millimeter!(THICKNESS), millimeter!(5.0))
     }
     /// A ray entering the medium at the given transversal offset, travelling along the axis.
@@ -912,12 +912,15 @@ mod test {
         // strictly less than R so the sphere does not degenerate at the aperture edge
         // (at x = R the sphere would reach z = 0 = entrance, giving zero thickness).
         let aperture_mm = 18.0_f64;
-        let entrance = GeoSurfaceRef(Arc::new(Plane::new(Isometry::identity())));
-        let exit = GeoSurfaceRef(Arc::new(Sphere::new_at_position(
-            millimeter!(-radius_mm), // stored radius −R → center at vertex_z − R = 0
-            millimeter!(0.0, 0.0, radius_mm), // vertex at z = R
-        )?));
-        let body = SurfaceBoundedBody::new(
+        let entrance = Face::new(SurfaceShape::Plane, Isometry::identity());
+        let exit = Face::new(
+            SurfaceShape::Sphere {
+                radius: millimeter!(-radius_mm), // stored radius −R → center at vertex_z − R = 0
+            },
+            Isometry::new_along_z(millimeter!(radius_mm))?, // vertex at z = R
+        );
+        let body = Extruded::new(
+            Isometry::identity(),
             entrance,
             exit,
             ValidatedCrossSection::try_new(Aperture::new_circle(
@@ -925,8 +928,8 @@ mod test {
                 ApertureType::Hole,
                 None,
             )?)?,
-            Isometry::identity(),
-        );
+        )?
+        .place(&Isometry::identity())?;
 
         // At x = R·√3/2 the chord equals R/2 exactly: √(R² − 3R²/4) = R/2.
         let x_ray_mm = radius_mm * f64::sqrt(3.0) / 2.0;
@@ -972,14 +975,18 @@ mod test {
         // strictly less than R so the sphere does not degenerate at the aperture edge
         // (at x = R the entrance would reach z = R = exit, giving zero thickness).
         let aperture_mm = 18.0_f64;
-        let entrance = GeoSurfaceRef(Arc::new(Sphere::new_at_position(
-            millimeter!(radius_mm),     // stored radius +R → center at vertex_z + R = R
-            millimeter!(0.0, 0.0, 0.0), // vertex at z = 0
-        )?));
-        let exit = GeoSurfaceRef(Arc::new(Plane::new(
+        let entrance = Face::new(
+            SurfaceShape::Sphere {
+                radius: millimeter!(radius_mm), // stored radius +R → center at vertex_z + R = R
+            },
+            Isometry::identity(), // vertex at z = 0
+        );
+        let exit = Face::new(
+            SurfaceShape::Plane,
             Isometry::new_along_z(millimeter!(radius_mm))?, // flat exit at z = R
-        )));
-        let body = SurfaceBoundedBody::new(
+        );
+        let body = Extruded::new(
+            Isometry::identity(),
             entrance,
             exit,
             ValidatedCrossSection::try_new(Aperture::new_circle(
@@ -987,8 +994,8 @@ mod test {
                 ApertureType::Hole,
                 None,
             )?)?,
-            Isometry::identity(),
-        );
+        )?
+        .place(&Isometry::identity())?;
 
         // At x = R·√3/2 the entrance is at z = R/2, giving chord R − R/2 = R/2 exactly.
         let x_ray_mm = radius_mm * f64::sqrt(3.0) / 2.0;

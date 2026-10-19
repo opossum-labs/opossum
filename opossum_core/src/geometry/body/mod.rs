@@ -7,11 +7,12 @@
 //! through it. This is the domain any volumetric quantity (such as an inversion density) is defined
 //! on.
 //!
-//! The only implementation is [`SurfaceBoundedBody`], a volume bounded by an entrance surface, an
-//! exit surface and a transversal cross section. Since the bounding surfaces are the ones a node
-//! already uses for refraction, the usual optical volumes are simply different parameter sets of
-//! the same body: a disk is two [`Plane`](crate::geometry::Plane)s with a circular cross section, a
-//! slab two planes with a rectangular one, a lens two [`Sphere`](crate::geometry::Sphere)s.
+//! So far the only implementation is a [`Placed`] [`Extruded`] solid, a volume bounded by an
+//! entrance surface, an exit surface and the transversal cross section of its rim. Since the
+//! bounding surfaces are the ones a node already uses for refraction, the usual optical volumes are
+//! simply different parameter sets of the same solid: a disk is two
+//! [`Plane`](crate::geometry::Plane)s with a circular cross section, a slab two planes with a
+//! rectangular one, a lens two [`Sphere`](crate::geometry::Sphere)s.
 //!
 //! The cross section is expressed as an [`Aperture`](crate::apertures::Aperture), but only those
 //! apertures that actually delimit a region qualify, which is what
@@ -22,10 +23,9 @@
 use crate::{
     apertures::{CircleShape, OpticShape, RectangleShape},
     error::{OpmResult, OpossumError},
-    geometry::{Rim, RimRole, geo_surface::GeoSurfaceRef},
+    geometry::{Extruded, Placed, geo_surface::GeoSurfaceRef},
     light::Ray,
     millimeter, nanometer,
-    types::validated_type_definitions::ValidatedCrossSection,
     utils::{geom_transformation::Isometry, math_utils::distance_3d_point},
 };
 use nalgebra::{Point2, Point3, Vector3};
@@ -194,51 +194,10 @@ pub trait Body: Debug + Send + Sync {
     /// into the global coordinates [`Body::contains`] expects. It is the frame of the component the
     /// body belongs to, which is what makes a grid over the body follow the component when it is
     /// moved or tilted.
-    fn isometry(&self) -> &Isometry;
+    fn isometry(&self) -> Isometry;
 }
 
-/// A [`Body`] bounded by an entrance surface, an exit surface and a transversal cross section.
-///
-/// A point is inside this body if it lies behind the entrance surface (see
-/// [`is_behind`](crate::geometry::geo_surface::GeoSurface::is_behind)), not behind the exit surface
-/// and within its [`Rim`]. Both bounding surfaces are held as [`GeoSurfaceRef`]s. A body built by
-/// [`Geometry::place`](crate::geometry::Geometry::place) shares them with the entrance and exit
-/// placed alongside it.
-///
-/// **Note**: The lateral boundary is the rim alone — it is not a surface rays can interact with. A
-/// ray leaving the volume sideways is therefore reported as not passing through the body rather
-/// than being reflected on a barrel surface.
-#[derive(Debug, Clone)]
-pub struct SurfaceBoundedBody {
-    entrance: GeoSurfaceRef,
-    exit: GeoSurfaceRef,
-    rim: Rim,
-    isometry: Isometry,
-}
-
-impl SurfaceBoundedBody {
-    /// Create a new [`SurfaceBoundedBody`].
-    ///
-    /// # Arguments
-    ///
-    /// - `entrance`: the surface bounding the body towards -z
-    /// - `exit`: the surface bounding the body towards +z
-    /// - `cross_section`: the transversal boundary of the body, in the xy plane of `isometry`
-    /// - `isometry`: the frame of the body, usually the isometry of the node the body belongs to
-    #[must_use]
-    pub fn new(
-        entrance: GeoSurfaceRef,
-        exit: GeoSurfaceRef,
-        cross_section: ValidatedCrossSection,
-        isometry: Isometry,
-    ) -> Self {
-        Self {
-            entrance,
-            exit,
-            rim: Rim::new(cross_section, Isometry::identity(), RimRole::Edge),
-            isometry,
-        }
-    }
+impl Placed<Extruded> {
     /// Return the range of longitudinal positions one of the bounding surfaces spans over the cross
     /// section of this body, in the body's own frame.
     ///
@@ -277,7 +236,7 @@ impl SurfaceBoundedBody {
         const ORIENTATION_NOISE: f64 = 1.0e-12;
         let surface = &*surface.0;
         let relative = Isometry::new_from_transform(
-            self.isometry.get_inv_transform() * surface.isometry().get_transform(),
+            self.isometry().get_inv_transform() * surface.isometry().get_transform(),
         );
         // The body's own z axis, written in the surface's frame: dotted with a point of the
         // surface it yields that point's longitudinal position in the body. Its transversal part
@@ -337,11 +296,20 @@ impl SurfaceBoundedBody {
     }
 }
 
-impl Body for SurfaceBoundedBody {
+/// A point is inside this body if it lies behind the entrance surface (see
+/// [`is_behind`](crate::geometry::geo_surface::GeoSurface::is_behind)), not behind the exit surface
+/// and within the [`Rim`](crate::geometry::Rim) of the solid. Both bounding surfaces are the ones
+/// the solid was placed with, shared with the entrance and exit a node traces its rays at.
+///
+/// **Note**: The lateral boundary is the rim alone — it is not a surface rays can interact with. A
+/// ray leaving the volume sideways is therefore reported as not passing through the body rather
+/// than being reflected on a barrel surface.
+impl Body for Placed<Extruded> {
     fn contains(&self, point: &Point3<Length>) -> bool {
-        self.rim.contains(point, &self.isometry)
-            && self.entrance.0.is_behind(point)
-            && !self.exit.0.is_behind(point)
+        let ((entrance, _), (exit, _)) = (self.entrance(), self.exit());
+        self.solid().rim().contains(point, self.node_frame())
+            && entrance.0.is_behind(point)
+            && !exit.0.is_behind(point)
     }
     fn path_length_inside(&self, ray: &Ray) -> Option<Length> {
         // Every point at which the ray can enter or leave the body is a candidate: its own starting
@@ -377,8 +345,12 @@ impl Body for SurfaceBoundedBody {
         if self.contains(&probe) {
             consider(ray_position);
         }
-        for surface in [&self.entrance, &self.exit] {
-            if let Some((point, _)) = self.rim.intersect(&*surface.0, ray, &self.isometry) {
+        for (surface, _) in [self.entrance(), self.exit()] {
+            if let Some((point, _)) =
+                self.solid()
+                    .rim()
+                    .intersect(&*surface.0, ray, self.node_frame())
+            {
                 consider(point);
             }
         }
@@ -397,7 +369,8 @@ impl Body for SurfaceBoundedBody {
             .then(|| distance_3d_point(&first_point, &last_point))
     }
     fn bounding_box(&self) -> OpmResult<BoundingBox> {
-        let outline = self.rim.cross_section().outline();
+        let cross_section = self.solid().rim().cross_section();
+        let outline = cross_section.outline();
         let (Some(x_range), Some(y_range)) = (
             span(outline.iter().map(|point| point.x)),
             span(outline.iter().map(|point| point.y)),
@@ -406,9 +379,9 @@ impl Body for SurfaceBoundedBody {
                 "the cross section of the body has no extent at all".into(),
             ));
         };
-        let transversal_reach = self.rim.cross_section().transversal_reach();
-        let entrance_z = self.surface_z_range(&self.entrance, transversal_reach)?;
-        let exit_z = self.surface_z_range(&self.exit, transversal_reach)?;
+        let transversal_reach = cross_section.transversal_reach();
+        let entrance_z = self.surface_z_range(&self.entrance().0, transversal_reach)?;
+        let exit_z = self.surface_z_range(&self.exit().0, transversal_reach)?;
         // Which of the two bounds the body from below is not assumed here: an inverted node
         // encloses the same volume as an upright one, so the two are simply united.
         BoundingBox::new(
@@ -424,8 +397,8 @@ impl Body for SurfaceBoundedBody {
             ),
         )
     }
-    fn isometry(&self) -> &Isometry {
-        &self.isometry
+    fn isometry(&self) -> Isometry {
+        self.solid().rim().frame(self.node_frame())
     }
 }
 
@@ -452,41 +425,59 @@ mod test {
     use crate::{
         apertures::{Aperture, ApertureType},
         degree,
-        geometry::{Cylinder, Plane, Sphere, geo_surface::GeoSurface},
+        geometry::{Face, SurfaceShape},
         joule, millimeter, nanometer,
+        types::validated_type_definitions::ValidatedCrossSection,
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::Vector3;
-    use std::sync::Arc;
     use uom::si::{f64::Angle, length::millimeter};
 
     /// Create a circular cross section of the given radius.
     fn circular_cross_section(radius: Length) -> OpmResult<ValidatedCrossSection> {
         ValidatedCrossSection::try_new(Aperture::new_circle(radius, ApertureType::Hole, None)?)
     }
-    /// Create the two plane surfaces of a plate of the given thickness.
-    fn plate_surfaces(thickness: Length) -> OpmResult<(GeoSurfaceRef, GeoSurfaceRef)> {
+    /// Create the two flat faces of a plate of the given thickness.
+    fn plate_faces(thickness: Length) -> OpmResult<(Face, Face)> {
         Ok((
-            GeoSurfaceRef(Arc::new(Plane::new(Isometry::identity()))),
-            GeoSurfaceRef(Arc::new(Plane::new(Isometry::new_along_z(thickness)?))),
+            Face::new(SurfaceShape::Plane, Isometry::identity()),
+            Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
         ))
     }
+    /// Create a spherical face of the given radius of curvature, its vertex at the given position
+    /// along z.
+    fn sphere_face(radius: Length, vertex_z: Length) -> OpmResult<Face> {
+        Ok(Face::new(
+            SurfaceShape::Sphere { radius },
+            Isometry::new_along_z(vertex_z)?,
+        ))
+    }
+    /// Create the body between two faces, extruded along the node's own axis, at the given node
+    /// frame.
+    fn body_between(
+        front: Face,
+        rear: Face,
+        cross_section: ValidatedCrossSection,
+        node_frame: Isometry,
+    ) -> OpmResult<Placed<Extruded>> {
+        Extruded::new(Isometry::identity(), front, rear, cross_section)?.place(&node_frame)
+    }
     /// Create a disk of the given thickness and radius, with its entrance surface at z = 0.
-    fn disk(thickness: Length, radius: Length) -> OpmResult<SurfaceBoundedBody> {
-        let (entrance, exit) = plate_surfaces(thickness)?;
-        Ok(SurfaceBoundedBody::new(
-            entrance,
-            exit,
+    fn disk(thickness: Length, radius: Length) -> OpmResult<Placed<Extruded>> {
+        let (front, rear) = plate_faces(thickness)?;
+        body_between(
+            front,
+            rear,
             circular_cross_section(radius)?,
             Isometry::identity(),
-        ))
+        )
     }
     /// Create a ray at the given position, propagating along the given direction.
     fn test_ray(position: Point3<Length>, direction: Vector3<f64>) -> OpmResult<Ray> {
         Ray::new(position, direction, nanometer!(1053.0), joule!(1.0))
     }
     /// Trace the given ray through the given body and require it to pass through.
-    fn path_length(body: &SurfaceBoundedBody, ray: &Ray) -> OpmResult<Length> {
+    fn path_length(body: &Placed<Extruded>, ray: &Ray) -> OpmResult<Length> {
         body.path_length_inside(ray)
             .ok_or_else(|| crate::error::OpossumError::Other("ray missed the body".into()))
     }
@@ -509,10 +500,10 @@ mod test {
     #[test]
     fn contains_slab() -> OpmResult<()> {
         // a slab is the same body with a rectangular instead of a circular cross section
-        let (entrance, exit) = plate_surfaces(millimeter!(10.0))?;
-        let body = SurfaceBoundedBody::new(
-            entrance,
-            exit,
+        let (front, rear) = plate_faces(millimeter!(10.0))?;
+        let body = body_between(
+            front,
+            rear,
             ValidatedCrossSection::try_new(Aperture::new_rectangle(
                 millimeter!(20.0),
                 millimeter!(4.0),
@@ -521,7 +512,7 @@ mod test {
                 None,
             )?)?,
             Isometry::identity(),
-        );
+        )?;
         assert!(body.contains(&millimeter!(9.0, 1.9, 5.0)));
         assert!(!body.contains(&millimeter!(11.0, 1.9, 5.0)));
         assert!(!body.contains(&millimeter!(9.0, 2.1, 5.0)));
@@ -557,14 +548,12 @@ mod test {
     #[test]
     fn contains_lens() -> OpmResult<()> {
         // a biconvex lens: both centers of curvature lie inside the body
-        let entrance = Sphere::new_at_position(millimeter!(50.0), millimeter!(0.0, 0.0, 0.0))?;
-        let exit = Sphere::new_at_position(millimeter!(-50.0), millimeter!(0.0, 0.0, 10.0))?;
-        let body = SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(entrance)),
-            GeoSurfaceRef(Arc::new(exit)),
+        let body = body_between(
+            sphere_face(millimeter!(50.0), millimeter!(0.0))?,
+            sphere_face(millimeter!(-50.0), millimeter!(10.0))?,
             circular_cross_section(millimeter!(10.0))?,
             Isometry::identity(),
-        );
+        )?;
         assert!(body.contains(&millimeter!(0.0, 0.0, 5.0)));
         assert!(!body.contains(&millimeter!(0.0, 0.0, -0.1)));
         assert!(!body.contains(&millimeter!(0.0, 0.0, 10.1)));
@@ -650,17 +639,15 @@ mod test {
     #[test]
     fn chords_through_a_hemisphere() -> OpmResult<()> {
         let radius = 15.0;
-        let body = SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Sphere::new_at_position(
-                millimeter!(radius),
-                millimeter!(0.0, 0.0, 0.0),
-            )?)),
-            GeoSurfaceRef(Arc::new(Plane::new(Isometry::new_along_z(millimeter!(
-                radius
-            ))?))),
+        let body = body_between(
+            sphere_face(millimeter!(radius), millimeter!(0.0))?,
+            Face::new(
+                SurfaceShape::Plane,
+                Isometry::new_along_z(millimeter!(radius))?,
+            ),
             circular_cross_section(millimeter!(12.5))?,
             Isometry::identity(),
-        );
+        )?;
         for height in [0.0, 10.0] {
             let ray = test_ray(millimeter!(0.0, height, -10.0), Vector3::z())?;
             assert_abs_diff_eq!(
@@ -705,14 +692,12 @@ mod test {
         // The same biconvex lens as `contains_lens`: its two vertices are the extreme points along
         // z, since both surfaces curve *into* the body from there. The sag at the rim is 1.0102 mm,
         // so a box derived from the surfaces without their curvature would be that much too large.
-        let entrance = Sphere::new_at_position(millimeter!(50.0), millimeter!(0.0, 0.0, 0.0))?;
-        let exit = Sphere::new_at_position(millimeter!(-50.0), millimeter!(0.0, 0.0, 10.0))?;
-        let body = SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(entrance)),
-            GeoSurfaceRef(Arc::new(exit)),
+        let body = body_between(
+            sphere_face(millimeter!(50.0), millimeter!(0.0))?,
+            sphere_face(millimeter!(-50.0), millimeter!(10.0))?,
             circular_cross_section(millimeter!(10.0))?,
             Isometry::identity(),
-        );
+        )?;
         let bounds = body.bounding_box()?;
         assert_spans(&bounds.x_range(), -10.0, 10.0);
         assert_spans(&bounds.y_range(), -10.0, 10.0);
@@ -729,12 +714,12 @@ mod test {
             Point3::origin(),
             Point3::new(angle, Angle::zero(), Angle::zero()),
         )?);
-        let body = SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Plane::new(Isometry::identity()))),
-            GeoSurfaceRef(Arc::new(Plane::new(exit_iso))),
+        let body = body_between(
+            Face::new(SurfaceShape::Plane, Isometry::identity()),
+            Face::new(SurfaceShape::Plane, exit_iso),
             circular_cross_section(millimeter!(5.0))?,
             Isometry::identity(),
-        );
+        )?;
         let overhang = 5.0 * angle.value.tan();
         let bounds = body.bounding_box()?;
         assert_spans(&bounds.x_range(), -5.0, 5.0);
@@ -744,10 +729,10 @@ mod test {
     }
     #[test]
     fn bounding_box_of_a_rectangular_cross_section() -> OpmResult<()> {
-        let (entrance, exit) = plate_surfaces(millimeter!(10.0))?;
-        let body = SurfaceBoundedBody::new(
-            entrance,
-            exit,
+        let (front, rear) = plate_faces(millimeter!(10.0))?;
+        let body = body_between(
+            front,
+            rear,
             ValidatedCrossSection::try_new(Aperture::new_rectangle(
                 millimeter!(20.0),
                 millimeter!(4.0),
@@ -756,7 +741,7 @@ mod test {
                 None,
             )?)?,
             Isometry::identity(),
-        );
+        )?;
         let bounds = body.bounding_box()?;
         assert_spans(&bounds.x_range(), -10.0, 10.0);
         assert_spans(&bounds.y_range(), -2.0, 2.0);
@@ -767,7 +752,7 @@ mod test {
     #[test]
     fn bounding_box_of_a_ring_is_that_of_its_outer_circle() -> OpmResult<()> {
         let bounds_of_disk_with = |obstruction: Aperture| -> OpmResult<BoundingBox> {
-            let (entrance, exit) = plate_surfaces(millimeter!(10.0))?;
+            let (front, rear) = plate_faces(millimeter!(10.0))?;
             let cross_section = ValidatedCrossSection::try_new(Aperture::new_stack(
                 vec![
                     Aperture::new_circle(millimeter!(8.0), ApertureType::Hole, None)?,
@@ -777,8 +762,7 @@ mod test {
                 None,
                 None,
             )?)?;
-            SurfaceBoundedBody::new(entrance, exit, cross_section, Isometry::identity())
-                .bounding_box()
+            body_between(front, rear, cross_section, Isometry::identity())?.bounding_box()
         };
         let bore = Aperture::new_circle(millimeter!(3.0), ApertureType::Obstruction, None)?;
         let notch = Aperture::new_circle(
@@ -798,17 +782,17 @@ mod test {
     fn bounding_box_follows_a_decentred_cross_section() -> OpmResult<()> {
         // The cross section may carry an isometry of its own, which shifts the medium off the axis
         // of the node. A box ignoring it would disagree with `contains`.
-        let (entrance, exit) = plate_surfaces(millimeter!(10.0))?;
-        let body = SurfaceBoundedBody::new(
-            entrance,
-            exit,
+        let (front, rear) = plate_faces(millimeter!(10.0))?;
+        let body = body_between(
+            front,
+            rear,
             ValidatedCrossSection::try_new(Aperture::new_circle(
                 millimeter!(5.0),
                 ApertureType::Hole,
                 Some(Point2::new(millimeter!(3.0), millimeter!(4.0))),
             )?)?,
             Isometry::identity(),
-        );
+        )?;
         let bounds = body.bounding_box()?;
         assert_spans(&bounds.x_range(), -2.0, 8.0);
         assert_spans(&bounds.y_range(), -1.0, 9.0);
@@ -824,16 +808,20 @@ mod test {
             Point3::origin(),
             Point3::new(Angle::zero(), Angle::zero(), degree!(90.0)),
         )?;
-        let mut entrance = Cylinder::new(millimeter!(50.0), Isometry::identity())?;
-        entrance.set_isometry(curved_iso);
-        let body = SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(entrance)),
-            GeoSurfaceRef(Arc::new(Plane::new(Isometry::new_along_z(millimeter!(
-                10.0
-            ))?))),
+        let body = body_between(
+            Face::new(
+                SurfaceShape::Cylinder {
+                    radius: millimeter!(50.0),
+                },
+                curved_iso,
+            ),
+            Face::new(
+                SurfaceShape::Plane,
+                Isometry::new_along_z(millimeter!(10.0))?,
+            ),
             circular_cross_section(millimeter!(10.0))?,
             Isometry::identity(),
-        );
+        )?;
         let bounds = body.bounding_box()?;
         // same sag as the spherical lens above, since the radius and the aperture are the same
         assert_spans(&bounds.z_range(), 0.0, 10.0);
@@ -853,33 +841,49 @@ mod test {
             Point3::origin(),
             Point3::new(degree!(30.0), Angle::zero(), Angle::zero()),
         )?;
-        let mut entrance = Cylinder::new(millimeter!(50.0), Isometry::identity())?;
-        entrance.set_isometry(tilted_iso);
-        let body = SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(entrance)),
-            GeoSurfaceRef(Arc::new(Plane::new(Isometry::new_along_z(millimeter!(
-                10.0
-            ))?))),
+        let body = body_between(
+            Face::new(
+                SurfaceShape::Cylinder {
+                    radius: millimeter!(50.0),
+                },
+                tilted_iso,
+            ),
+            Face::new(
+                SurfaceShape::Plane,
+                Isometry::new_along_z(millimeter!(10.0))?,
+            ),
             circular_cross_section(millimeter!(10.0))?,
             Isometry::identity(),
-        );
+        )?;
         assert!(body.bounding_box().is_err());
         Ok(())
     }
     #[test]
-    fn bounding_box_rejects_a_cross_section_beyond_the_curvature() -> OpmResult<()> {
-        // A body wider than the radius of curvature of its bounding surface is not closed by that
-        // surface at all - the very case `GeoSurface::is_behind` already warns about.
-        let entrance = Sphere::new_at_position(millimeter!(5.0), millimeter!(0.0, 0.0, 0.0))?;
-        let body = SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(entrance)),
-            GeoSurfaceRef(Arc::new(Plane::new(Isometry::new_along_z(millimeter!(
-                10.0
-            ))?))),
+    fn bounding_box_rejects_a_tilted_surface_that_does_not_reach_the_cross_section() -> OpmResult<()>
+    {
+        // `Extruded::new` already refuses a face that ends before the cross section does, but a
+        // tilted face has to be looked at further out to span it: 10 mm across the body is
+        // 10 mm / cos 50° = 15.6 mm along the sphere of 12 mm radius, which does not reach that far.
+        let tilted_iso = Isometry::new(
+            Point3::origin(),
+            Point3::new(degree!(50.0), Angle::zero(), Angle::zero()),
+        )?;
+        let body = body_between(
+            Face::new(
+                SurfaceShape::Sphere {
+                    radius: millimeter!(12.0),
+                },
+                tilted_iso,
+            ),
+            Face::new(
+                SurfaceShape::Plane,
+                Isometry::new_along_z(millimeter!(10.0))?,
+            ),
             circular_cross_section(millimeter!(10.0))?,
             Isometry::identity(),
-        );
-        assert!(body.bounding_box().is_err());
+        )?;
+        let error = body.bounding_box().unwrap_err();
+        assert!(error.to_string().contains("does not reach"), "{error}");
         Ok(())
     }
     #[test]
@@ -887,12 +891,12 @@ mod test {
         // Turned by 90 degrees the exit plane bounds nothing, even though the rounded cosine of
         // that turn is not exactly zero.
         let parallel = Isometry::new(millimeter!(0.0, 0.0, 10.0), degree!(90.0, 0.0, 0.0))?;
-        let body = SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Plane::new(Isometry::identity()))),
-            GeoSurfaceRef(Arc::new(Plane::new(parallel))),
+        let body = body_between(
+            Face::new(SurfaceShape::Plane, Isometry::identity()),
+            Face::new(SurfaceShape::Plane, parallel),
             circular_cross_section(millimeter!(5.0))?,
             Isometry::identity(),
-        );
+        )?;
         let error = body.bounding_box().unwrap_err();
         assert!(error.to_string().contains("runs parallel"), "{error}");
         Ok(())
@@ -901,26 +905,23 @@ mod test {
     fn bounding_box_is_expressed_in_the_body_frame() -> OpmResult<()> {
         // Moving and tilting the whole body must not change its box: it is stated in the body's own
         // frame, which is exactly what lets a grid over it follow the component.
-        let (entrance, exit) = plate_surfaces(millimeter!(10.0))?;
         let placement = Isometry::new(
             millimeter!(20.0, -5.0, 100.0),
             Point3::new(degree!(15.0), degree!(-10.0), Angle::zero()),
         )?;
-        let placed = SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Plane::new(placement))),
-            GeoSurfaceRef(Arc::new(Plane::new(
-                placement.append(&Isometry::new_along_z(millimeter!(10.0))?),
-            ))),
-            circular_cross_section(millimeter!(5.0))?,
-            placement,
+        let plate_at = |node_frame: Isometry| -> OpmResult<Placed<Extruded>> {
+            let (front, rear) = plate_faces(millimeter!(10.0))?;
+            body_between(
+                front,
+                rear,
+                circular_cross_section(millimeter!(5.0))?,
+                node_frame,
+            )
+        };
+        let (placed_bounds, upright_bounds) = (
+            plate_at(placement)?.bounding_box()?,
+            plate_at(Isometry::identity())?.bounding_box()?,
         );
-        let upright = SurfaceBoundedBody::new(
-            entrance,
-            exit,
-            circular_cross_section(millimeter!(5.0))?,
-            Isometry::identity(),
-        );
-        let (placed_bounds, upright_bounds) = (placed.bounding_box()?, upright.bounding_box()?);
         for (placed_range, upright_range) in [
             (placed_bounds.x_range(), upright_bounds.x_range()),
             (placed_bounds.y_range(), upright_bounds.y_range()),
@@ -940,19 +941,13 @@ mod test {
     /// its frame, and that noise was mistaken for a curved surface tilted against the body.
     #[test]
     fn a_placed_curved_body_has_the_bounding_box_of_an_upright_one() -> OpmResult<()> {
-        let lens_at = |placement: Isometry| -> OpmResult<SurfaceBoundedBody> {
-            let sphere = |radius: f64, center: f64| -> OpmResult<GeoSurfaceRef> {
-                Ok(GeoSurfaceRef(Arc::new(Sphere::new(
-                    millimeter!(radius),
-                    placement.append(&Isometry::new_along_z(millimeter!(center))?),
-                )?)))
-            };
-            Ok(SurfaceBoundedBody::new(
-                sphere(50.0, 50.0)?,
-                sphere(-50.0, -40.0)?,
+        let lens_at = |placement: Isometry| -> OpmResult<Placed<Extruded>> {
+            body_between(
+                sphere_face(millimeter!(50.0), millimeter!(0.0))?,
+                sphere_face(millimeter!(-50.0), millimeter!(10.0))?,
                 circular_cross_section(millimeter!(10.0))?,
                 placement,
-            ))
+            )
         };
         let placement = Isometry::new(
             millimeter!(20.0, -5.0, 100.0),

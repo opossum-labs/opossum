@@ -545,7 +545,7 @@ mod test {
         apertures::{Aperture, ApertureType},
         core_optics::{OpticNode, node_attr::NodePositioning, volumetric::Volumetric},
         degree,
-        geometry::{Plane, body::SurfaceBoundedBody, geo_surface::GeoSurfaceRef},
+        geometry::{Extruded, Face, Placed, SurfaceShape},
         millimeter,
         nodes::Lens,
         types::validated_type_definitions::ValidatedCrossSection,
@@ -553,26 +553,21 @@ mod test {
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::Vector3;
-    use std::{f64::consts::PI, sync::Arc};
+    use std::f64::consts::PI;
 
     /// Create a disk of the given thickness and radius, placed by the given isometry.
-    fn disk(
-        thickness: Length,
-        radius: Length,
-        placement: Isometry,
-    ) -> OpmResult<SurfaceBoundedBody> {
-        Ok(SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Plane::new(placement))),
-            GeoSurfaceRef(Arc::new(Plane::new(
-                placement.append(&Isometry::new_along_z(thickness)?),
-            ))),
+    fn disk(thickness: Length, radius: Length, placement: Isometry) -> OpmResult<Placed<Extruded>> {
+        Extruded::new(
+            Isometry::identity(),
+            Face::new(SurfaceShape::Plane, Isometry::identity()),
+            Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
             ValidatedCrossSection::try_new(Aperture::new_circle(
                 radius,
                 ApertureType::Hole,
                 None,
             )?)?,
-            placement,
-        ))
+        )?
+        .place(&placement)
     }
     /// Return the volume of all cells of the given field that hold medium.
     fn covered_volume(field: &InversionField) -> Volume {

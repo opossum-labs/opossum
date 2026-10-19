@@ -14,7 +14,7 @@ use crate::{
     core_optics::{OpticPorts, optic_surface::OpticSurface},
     error::{OpmResult, OpossumError},
     gain::Inversion,
-    geometry::body::SurfaceBoundedBody,
+    geometry::{Extruded, Placed},
     properties::{Properties, Proptype, validator::Validator},
     utils::{file_utils::sanitize_filename, geom_transformation::Isometry},
 };
@@ -50,7 +50,7 @@ impl RuntimeSurfaces {
 /// clears it again.
 #[derive(Debug, Clone)]
 pub struct RuntimeMedium {
-    body: SurfaceBoundedBody,
+    body: Placed<Extruded>,
     inversion: Option<Inversion>,
 }
 
@@ -479,7 +479,7 @@ impl NodeAttr {
     ///
     /// * `body` - the body between the node's surfaces, or `None` for a node that encloses no
     ///   volume.
-    pub fn set_runtime_body(&mut self, body: Option<SurfaceBoundedBody>) {
+    pub fn set_runtime_body(&mut self, body: Option<Placed<Extruded>>) {
         self.runtime_medium = body.map(|body| RuntimeMedium {
             body,
             inversion: None,
@@ -547,25 +547,26 @@ mod test {
     use super::*;
     use crate::{
         apertures::{Aperture, ApertureType},
-        geometry::{Plane, body::SurfaceBoundedBody, geo_surface::GeoSurfaceRef},
+        geometry::{Face, SurfaceShape},
         millimeter,
         types::validated_type_definitions::ValidatedCrossSection,
     };
-    use std::sync::Arc;
 
-    fn test_body() -> OpmResult<SurfaceBoundedBody> {
-        Ok(SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Plane::new(Isometry::identity()))),
-            GeoSurfaceRef(Arc::new(Plane::new(Isometry::new_along_z(millimeter!(
-                10.0
-            ))?))),
+    fn test_body() -> OpmResult<Placed<Extruded>> {
+        Extruded::new(
+            Isometry::identity(),
+            Face::new(SurfaceShape::Plane, Isometry::identity()),
+            Face::new(
+                SurfaceShape::Plane,
+                Isometry::new_along_z(millimeter!(10.0))?,
+            ),
             ValidatedCrossSection::try_new(Aperture::new_circle(
                 millimeter!(5.0),
                 ApertureType::Hole,
                 None,
             )?)?,
-            Isometry::identity(),
-        ))
+        )?
+        .place(&Isometry::identity())
     }
 
     #[test]

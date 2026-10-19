@@ -20,9 +20,9 @@ use crate::{
 ///
 /// A point lies within the rim if its projection along the axis falls into the cross section. The
 /// rim stores no absolute frame. It is stated relative to a reference frame handed to
-/// [`Rim::contains`] (the node's frame for a component, the body's own frame for a
-/// [`SurfaceBoundedBody`](crate::geometry::body::SurfaceBoundedBody)), so it follows wherever that
-/// frame is when it is asked.
+/// [`Rim::contains`], which is the node's frame for the surfaces of a component as well as for the
+/// body of a placed [`Extruded`](crate::geometry::Extruded) solid. The rim therefore follows
+/// wherever that frame is when it is asked.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Rim {
     cross_section: ValidatedCrossSection,
