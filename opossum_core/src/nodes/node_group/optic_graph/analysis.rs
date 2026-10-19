@@ -440,9 +440,9 @@ impl OpticGraph {
     /// Sets the node isometry of this [`OpticGraph`].
     ///
     /// The node is placed from the first connected input port (in the ports' deterministic declared
-    /// order) that carries axis data. Every further connected port is only checked against that
-    /// placement: an inconsistent one is reported as a warning (with a suggested fix), not an error,
-    /// and the placement is kept.
+    /// order) that carries axis data, turned about the axis by the up direction the axis ray carries.
+    /// Every further connected port is only checked against that placement: an inconsistent one is
+    /// reported as a warning (with a suggested fix), not an error, and the placement is kept.
     ///
     /// # Errors
     ///
@@ -456,7 +456,6 @@ impl OpticGraph {
         &mut self,
         incoming_edges: &LightResult,
         node_id: Uuid,
-        up_direction: Vector3<f64>,
     ) -> OpmResult<()> {
         let idx = self.node_idx_by_uuid(node_id).ok_or_else(|| {
             OpossumError::Analysis(format!("node with id {node_id} not found in graph"))
@@ -493,7 +492,7 @@ impl OpticGraph {
             };
             let mut ray = ray.to_owned();
             ray.propagate(distance_from_predecessor)?;
-            let world_frame = ray.to_isometry(up_direction);
+            let world_frame = ray.to_isometry()?;
             let entrance_frame = self.axis_entrance_frame_of(node_id, &port_name);
             if let Some(placed_iso) = self.g[idx].positioning().effective_position().copied() {
                 let expected_entrance = placed_iso.append(&entrance_frame);
