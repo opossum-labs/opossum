@@ -748,4 +748,117 @@ mod test {
         );
         assert_routed_through_r(&app_state);
     }
+
+    /// Positions a copy of `scenery` along the axis of `source` and returns where each of the nodes
+    /// `placed` was put, wherever it sits in the model.
+    fn placements(
+        scenery: &NodeGroup,
+        source: Uuid,
+        placed: &[Uuid],
+    ) -> Vec<opossum_core::utils::geom_transformation::Isometry> {
+        use opossum_core::{
+            analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
+            joule,
+            light::LightResult,
+            millimeter,
+            nodes::round_collimated_ray_builder,
+        };
+        let mut scenery = scenery.clone();
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1).unwrap(),
+        );
+        AnalysisRayTrace::calc_node_positions(
+            &mut scenery,
+            LightResult::default(),
+            &config.for_positioning(),
+        )
+        .unwrap();
+        placed
+            .iter()
+            .map(|id| {
+                *scenery
+                    .node_recursive(*id)
+                    .unwrap()
+                    .0
+                    .effective_position()
+                    .expect("every component of the row is placed")
+            })
+            .collect()
+    }
+
+    /// Regression test for grouping changing the alignment: the positioning walk restarted the up
+    /// direction in every group and only passed the group's last turn of the axis back out. Builds a
+    /// source followed by the bridge of `workshop_09_phelix` (a mirror sending the axis up, one
+    /// sending it aside, a lens), then a mirror folding the axis in the plane given by the up
+    /// direction it arrives with, and a screen. Converting the bridge into a group must leave every
+    /// component exactly where, and turned exactly as, it was before.
+    #[actix_web::test]
+    async fn test_convert_nodes_to_group_keeps_placements() {
+        use opossum_core::{
+            core_optics::Alignable,
+            degree, millimeter,
+            nodes::{Dummy, ParaxialSurface, SourcePort, ThinMirror},
+        };
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, source, row) = {
+            let mut document = app_state.document.lock();
+            let scenery = document.scenery_mut();
+            let root_id = scenery.node_attr().uuid();
+            let source = scenery.add_node(SourcePort::default()).unwrap();
+            let mirror = |name: &str, tilt| ThinMirror::new(name).with_tilt(tilt).unwrap();
+            let row = [
+                scenery
+                    .add_node(mirror("up", degree!(45.0, 0.0, 0.0)))
+                    .unwrap(),
+                scenery
+                    .add_node(mirror("aside", degree!(0.0, 45.0, 0.0)))
+                    .unwrap(),
+                scenery
+                    .add_node(ParaxialSurface::new("lens", millimeter!(1000.0)).unwrap())
+                    .unwrap(),
+                scenery
+                    .add_node(mirror("fold", degree!(0.0, 45.0, 0.0)))
+                    .unwrap(),
+                scenery.add_node(Dummy::new("screen")).unwrap(),
+            ];
+            let mut upstream = source;
+            for node in row {
+                scenery
+                    .connect_nodes(upstream, "output_1", node, "input_1", millimeter!(100.0))
+                    .unwrap();
+                upstream = node;
+            }
+            (root_id, source, row)
+        };
+        let before = placements(app_state.document.lock().scenery(), source, &row);
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_convert_nodes_to_group),
+        )
+        .await;
+        let req = test::TestRequest::post()
+            .uri("/convert_to_group")
+            .set_json(&ConvertToGroupRequest {
+                group_id: root_id,
+                nodes_to_convert: row[..3].to_vec(),
+            })
+            .to_request();
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
+
+        let after = placements(app_state.document.lock().scenery(), source, &row);
+        for (before, after) in before.iter().zip(&after) {
+            let deviation = (before.get_transform().to_homogeneous()
+                - after.get_transform().to_homogeneous())
+            .amax();
+            assert!(
+                deviation < 1e-9,
+                "grouping moved or turned a component by {deviation}"
+            );
+        }
+    }
 }

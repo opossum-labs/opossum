@@ -1,4 +1,3 @@
-use nalgebra::Vector3;
 use uom::si::f64::{Angle, Length};
 
 use crate::{
@@ -124,28 +123,6 @@ pub trait OpticNodeExt {
         anchor_point_iso: Isometry,
         rim: Option<Rim>,
         port_type: &PortType,
-    ) -> OpmResult<()>;
-
-    /// Defines the up-direction of this light data's first ray, needed to create an isometry from this ray.
-    ///
-    /// This function should only be used during the node positioning process, and only for source nodes.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if `ray_data` is not geometric light data or contains no rays.
-    fn define_up_direction(&self, ray_data: &LightData) -> OpmResult<Vector3<f64>>;
-
-    /// Modifies the current up-direction of a ray, stored in light data, which is needed to create an isometry from this ray.
-    ///
-    /// This function should only be used during the node positioning process.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the light data is not geometric.
-    fn calc_new_up_direction(
-        &self,
-        ray_data: &LightData,
-        up_direction: &mut Vector3<f64>,
     ) -> OpmResult<()>;
 
     /// Finds a surface by its name and guides the ray bundle through it.
@@ -427,31 +404,6 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
                 PortType::Input => runtime.inputs.insert(surf_name.to_string(), optic_surf),
                 PortType::Output => runtime.outputs.insert(surf_name.to_string(), optic_surf),
             };
-        }
-        Ok(())
-    }
-
-    fn define_up_direction(&self, ray_data: &LightData) -> OpmResult<Vector3<f64>> {
-        if let LightData::Geometric(rays) = ray_data {
-            rays.define_up_direction()
-        } else {
-            Err(OpossumError::Other(
-                "Wrong light data for \"up-direction\" definition".into(),
-            ))
-        }
-    }
-
-    fn calc_new_up_direction(
-        &self,
-        ray_data: &LightData,
-        up_direction: &mut Vector3<f64>,
-    ) -> OpmResult<()> {
-        if let LightData::Geometric(rays) = ray_data {
-            rays.calc_new_up_direction(up_direction)?;
-        } else {
-            return Err(OpossumError::Other(
-                "Wrong light data for \"up-direction\" calculation".into(),
-            ));
         }
         Ok(())
     }
