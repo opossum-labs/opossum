@@ -374,15 +374,14 @@ impl Solid {
 
 /// Two faces capping a profile that is extruded along an axis.
 ///
-/// The profile is the cross section, stated in the plane perpendicular to the axis; it is also the
-/// component's optic shape. The center thickness is not stored separately: it is where the rear
-/// face's vertex sits, together with any tilt of that face.
+/// The profile is the cross section of the [`Rim`], stated in the plane perpendicular to the rim's
+/// axis; it is also the component's optic shape. The center thickness is not stored separately: it
+/// is where the rear face's vertex sits, together with any tilt of that face.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Extruded {
-    axis: Isometry,
+    rim: Rim,
     front: Face,
     rear: Face,
-    cross_section: ValidatedCrossSection,
 }
 
 impl Extruded {
@@ -410,39 +409,34 @@ impl Extruded {
         front.check_reach(reach, "front face")?;
         rear.check_reach(reach, "rear face")?;
         Ok(Self {
-            axis,
+            rim: Rim::new(cross_section, axis, RimRole::Edge),
             front,
             rear,
-            cross_section,
         })
     }
     /// See [`Geometry::place`]. The body is bounded by the very surfaces light enters and leaves
     /// through.
     fn place(&self, node_frame: &Isometry) -> OpmResult<PlacedGeometry> {
-        let entrance = self.front.place(node_frame, &self.axis)?;
-        let exit = self.rear.place(node_frame, &self.axis)?;
+        let entrance = self.front.place(node_frame, self.rim.axis())?;
+        let exit = self.rear.place(node_frame, self.rim.axis())?;
         let body = SurfaceBoundedBody::new(
             entrance.0.clone(),
             exit.0.clone(),
-            self.cross_section.clone(),
-            node_frame.append(&self.axis),
+            self.rim.cross_section().clone(),
+            node_frame.append(self.rim.axis()),
         );
         Ok(PlacedGeometry {
             entrance,
             exit,
-            rim: Some(Rim::new(
-                self.cross_section.clone(),
-                self.axis,
-                RimRole::Edge,
-            )),
+            rim: Some(self.rim.clone()),
             body: Some(body),
         })
     }
     /// See [`Solid::face`]. The profile lies behind the front face and in front of the rear face.
     const fn face(&self, index: usize) -> Option<(&Face, Isometry, Side)> {
         match index {
-            0 => Some((&self.front, self.axis, Side::Behind)),
-            1 => Some((&self.rear, self.axis, Side::InFront)),
+            0 => Some((&self.front, *self.rim.axis(), Side::Behind)),
+            1 => Some((&self.rear, *self.rim.axis(), Side::InFront)),
             _ => None,
         }
     }

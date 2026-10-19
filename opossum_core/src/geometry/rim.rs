@@ -23,7 +23,7 @@ use crate::{
 /// [`Rim::contains`] (the node's frame for a component, the body's own frame for a
 /// [`SurfaceBoundedBody`](crate::geometry::body::SurfaceBoundedBody)), so it follows wherever that
 /// frame is when it is asked.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Rim {
     cross_section: ValidatedCrossSection,
     axis: Isometry,
@@ -63,6 +63,12 @@ impl Rim {
     #[must_use]
     pub const fn cross_section(&self) -> &ValidatedCrossSection {
         &self.cross_section
+    }
+    /// Return the axis of this [`Rim`]: the frame of its cross section relative to the reference
+    /// frame, with the z axis as the direction the cross section is extruded along.
+    #[must_use]
+    pub const fn axis(&self) -> &Isometry {
+        &self.axis
     }
     /// Return what this [`Rim`] means for a ray outside of it.
     #[must_use]
