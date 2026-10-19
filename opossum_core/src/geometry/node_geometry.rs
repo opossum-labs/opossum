@@ -246,26 +246,6 @@ impl Placeable for Geometry {
     }
 }
 
-impl Placed<Geometry> {
-    /// Take the body out of this placed geometry.
-    ///
-    /// # Returns
-    ///
-    /// The placed extruded solid the geometry consists of, or `None` for a single surface, which
-    /// encloses no volume.
-    pub(crate) fn into_extruded(self) -> Option<Placed<Extruded>> {
-        let (description, node_frame, surfaces) = self.into_parts();
-        match description {
-            Geometry::Solid(Solid::Extruded(extruded)) => {
-                Some(Placed::from_parts(*extruded, node_frame, surfaces))
-            }
-            Geometry::Surface(_) | Geometry::Solid(Solid::Parametric(_) | Solid::Assembly(_)) => {
-                None
-            }
-        }
-    }
-}
-
 /// A single surface without thickness.
 ///
 /// The face is stated relative to the node. The rim, if there is one, keeps the axis its cross
@@ -526,7 +506,7 @@ mod test {
     #[test]
     fn a_single_surface_encloses_no_volume() -> OpmResult<()> {
         let placed = Geometry::plane(None).place(&Isometry::identity())?;
-        assert!(placed.into_extruded().is_none());
+        assert!(Placed::<Extruded>::try_from(placed).is_err());
         Ok(())
     }
     #[test]

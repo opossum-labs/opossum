@@ -919,9 +919,7 @@ mod test {
         )?;
         let node_frame = Isometry::new(millimeter!(0.0, 5.0, 0.0), degree!(0.0, 0.0, 0.0))?;
         let placed = Geometry::Solid(Solid::Extruded(Box::new(extruded))).place(&node_frame)?;
-        let body = placed
-            .into_extruded()
-            .ok_or_else(|| OpossumError::Other("an extruded solid encloses a volume".into()))?;
+        let body = Placed::<Extruded>::try_from(placed)?;
         assert_eq!(body.isometry(), node_frame.append(&axis));
         // halfway along the extrusion axis, which runs along the node's x axis
         let halfway = node_frame
@@ -946,9 +944,7 @@ mod test {
         )?;
         let node_frame = Isometry::new(millimeter!(0.0, 5.0, 0.0), degree!(0.0, 0.0, 0.0))?;
         let placed = Geometry::Solid(Solid::Extruded(Box::new(extruded))).place(&node_frame)?;
-        let body = placed
-            .into_extruded()
-            .ok_or_else(|| OpossumError::Other("an extruded solid encloses a volume".into()))?;
+        let body = Placed::<Extruded>::try_from(placed)?;
         // The extrusion axis runs along the node's x axis, from x = 3 mm to x = 23 mm, 5 mm off the
         // node's origin in y. The circle of 12.5 mm radius lies around that line.
         let ray_at = |y: f64, z: f64| {

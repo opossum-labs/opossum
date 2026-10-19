@@ -12,7 +12,7 @@
 
 use crate::{
     error::{OpmResult, OpossumError},
-    geometry::{Face, Rim, geo_surface::GeoSurfaceRef},
+    geometry::{Extruded, Face, Geometry, Rim, Solid, geo_surface::GeoSurfaceRef},
     utils::geom_transformation::Isometry,
 };
 
@@ -57,27 +57,31 @@ impl<T> Placed<T> {
     pub fn surfaces(&self) -> &[GeoSurfaceRef] {
         &self.surfaces
     }
-    /// Assemble a [`Placed`] from its parts.
+}
+
+impl TryFrom<Placed<Geometry>> for Placed<Extruded> {
+    type Error = OpossumError;
+
+    /// Take the body out of a placed geometry, keeping the surfaces it was placed with.
     ///
-    /// # Arguments
+    /// # Errors
     ///
-    /// * `description` - the description.
-    /// * `node_frame` - the placement of the node the surfaces were built at.
-    /// * `surfaces` - one surface per face of `description`, in the order of its faces.
-    pub(crate) const fn from_parts(
-        description: T,
-        node_frame: Isometry,
-        surfaces: Vec<GeoSurfaceRef>,
-    ) -> Self {
-        Self {
-            description,
-            node_frame,
-            surfaces,
+    /// This function returns an error if the geometry is not an extruded solid: a single surface
+    /// encloses no volume, and no other kind of solid is a body yet.
+    fn try_from(placed: Placed<Geometry>) -> Result<Self, Self::Error> {
+        match placed.description {
+            Geometry::Solid(Solid::Extruded(extruded)) => Ok(Self {
+                description: *extruded,
+                node_frame: placed.node_frame,
+                surfaces: placed.surfaces,
+            }),
+            Geometry::Surface(_) => Err(OpossumError::Other(
+                "a single surface encloses no volume".into(),
+            )),
+            Geometry::Solid(_) => Err(OpossumError::Other(
+                "only an extruded solid is a body so far".into(),
+            )),
         }
-    }
-    /// Take this [`Placed`] apart into the description, the placement and the surfaces.
-    pub(crate) fn into_parts(self) -> (T, Isometry, Vec<GeoSurfaceRef>) {
-        (self.description, self.node_frame, self.surfaces)
     }
 }
 

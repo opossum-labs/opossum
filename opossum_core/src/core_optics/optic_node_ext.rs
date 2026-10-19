@@ -6,7 +6,7 @@ use crate::{
     coatings::CoatingType,
     core_optics::{NodeAttrExt, OpticNode, PortType},
     error::{OpmResult, OpossumError},
-    geometry::{Rim, body::OPTIC_SHAPE, geo_surface::GeoSurfaceRef},
+    geometry::{Extruded, Placed, Rim, body::OPTIC_SHAPE, geo_surface::GeoSurfaceRef},
     light::{LightData, LightResult, Rays},
     nodes::fluence_detector::Fluence,
     properties::Proptype,
@@ -382,8 +382,9 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
                 )?;
             }
         }
+        // A single surface encloses no volume and leaves the node without a medium.
         self.node_attr_mut()
-            .set_runtime_body(placed.into_extruded());
+            .set_runtime_body(Placed::<Extruded>::try_from(placed).ok());
         Ok(())
     }
 
