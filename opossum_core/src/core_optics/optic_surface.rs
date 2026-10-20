@@ -380,7 +380,7 @@ mod test {
         coatings::CoatingType,
         degree,
         error::{OpmResult, OpossumError},
-        geometry::{Face, Geometry, ParametricSolid, Side, Solid, Sphere, SurfaceShape},
+        geometry::{Face, Geometry, ParametricSolid, Side, Sphere, SurfaceShape},
         joule,
         light::{Ray, Rays},
         meter, millimeter, nanometer,
@@ -515,7 +515,7 @@ mod test {
     #[test]
     fn a_face_of_a_parametric_solid_ends_at_the_other_faces() -> OpmResult<()> {
         let side = Isometry::new(millimeter!(5.0, 0.0, 5.0), degree!(0.0, 90.0, 0.0))?;
-        let solid = Solid::Parametric(ParametricSolid::new(vec![
+        let solid = Geometry::Parametric(ParametricSolid::new(vec![
             (
                 Face::new(SurfaceShape::Plane, Isometry::identity()),
                 Side::Behind,
@@ -529,7 +529,7 @@ mod test {
             ),
             (Face::new(SurfaceShape::Plane, side), Side::InFront),
         ])?);
-        let front = face_of(&Geometry::Solid(solid), &Isometry::identity(), 0)?;
+        let front = face_of(&solid, &Isometry::identity(), 0)?;
         let ray_at_x = |x: f64| {
             Ray::new_collimated(millimeter!(x, 0.0, -10.0), nanometer!(1000.0), joule!(1.0))
         };

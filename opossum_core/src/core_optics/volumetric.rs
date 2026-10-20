@@ -21,12 +21,11 @@ use crate::{
         optic_node_ext::single_io_port_names,
     },
     error::{OpmResult, OpossumError},
-    gain::Extraction,
-    geometry::Solid,
+    gain::{Extraction, Inversion},
+    geometry::body::Body,
     light::{LightData, LightRays, LightResult, Rays},
     material::{MATERIAL, Material},
     properties::{Proptype, proptype::AssetRef},
-    utils::geom_transformation::Isometry,
 };
 
 /// An [`OpticNode`] that encloses a volume of material between two of its surfaces.
@@ -67,47 +66,6 @@ pub trait Volumetric: OpticNode {
             return Err(OpossumError::Analysis("cannot read material".into()));
         };
         Ok(material.clone())
-    }
-    /// Return the volume enclosed by the two surfaces of this node as a
-    /// [`Body`](crate::geometry::body::Body).
-    ///
-    /// This is the geometric counterpart of [`Volumetric::pass_through_volume_generic`]: that
-    /// function guides rays *through* the volume, this one describes the volume itself. It is
-    /// built from the node's [`Geometry`](crate::geometry::Geometry) at the node's current
-    /// placement - the same description the surfaces light is traced at are installed from.
-    ///
-    /// The body is built from the node's properties as they are now, so it has to be derived again
-    /// after the node is moved or one of its properties changes. An analysis does not call this: it
-    /// reads the body installed together with the surfaces (see
-    /// [`RuntimeMedium`](crate::core_optics::node_attr::RuntimeMedium)).
-    ///
-    /// **Derive it once per node and keep it**, rather than per ray or per grid point: it reads the
-    /// node's properties and builds its surfaces anew. The body is what belongs in the loop, not
-    /// this call.
-    ///
-    /// The geometry states the faces in their *physical* order, so an inverted node encloses the
-    /// same volume as an upright one: inverting a node reverses the direction light travels, not
-    /// the geometry it travels through.
-    ///
-    /// # Returns
-    ///
-    /// The [`Solid`] enclosed by the node's faces, placed at the node.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the node's geometry cannot be derived or encloses no
-    /// volume that can be traced.
-    fn volume_body(&self) -> OpmResult<Solid> {
-        let Some(geometry) = self.geometry()? else {
-            return Err(OpossumError::Other(format!(
-                "node '{}' has no geometry to enclose a volume",
-                self.name()
-            )));
-        };
-        Solid::try_from(
-            geometry.moved(&self.effective_node_iso().unwrap_or_else(Isometry::identity)),
-        )
-        .map_err(|error| OpossumError::Other(format!("node '{}': {error}", self.name())))
     }
     /// Guides a ray bundle through the volume of a node: in through its entry surface, out through
     /// its exit surface.
@@ -223,12 +181,23 @@ pub trait Volumetric: OpticNode {
         }
         // Capture the name before the mutable borrow of `self` through `node_attr_mut`.
         let node_name = self.name().to_owned();
-        let Some(medium) = self.node_attr_mut().runtime_medium_mut() else {
+        let Some((body, inversion)) = self
+            .node_attr_mut()
+            .runtime_medium_mut()
+            .and_then(RuntimeMedium::parts_mut)
+        else {
             return Err(OpossumError::Analysis(format!(
                 "node '{node_name}': medium was not prepared before propagation"
             )));
         };
-        march_medium_along_chords(&node_name, medium, extraction, absorption, rays_bundle)
+        march_medium_along_chords(
+            &node_name,
+            body,
+            inversion,
+            extraction,
+            absorption,
+            rays_bundle,
+        )
     }
     /// Amplify the spectral energy passing through this node's medium.
     ///
@@ -280,14 +249,18 @@ pub trait Volumetric: OpticNode {
         if strategy.is_positioning_run() {
             return Ok(());
         }
-        let Some(medium) = self.node_attr().runtime_medium() else {
+        let Some((body, inversion)) = self
+            .node_attr()
+            .runtime_medium()
+            .and_then(RuntimeMedium::parts)
+        else {
             return Err(OpossumError::Analysis(format!(
                 "node '{}': medium was not prepared before amplification",
                 self.name()
             )));
         };
         extraction
-            .amplify_spectrum(medium.body(), medium.inversion(), spectrum)
+            .amplify_spectrum(body, inversion, spectrum)
             .map_err(|e| OpossumError::Analysis(format!("node '{}': {e}", self.name())))
     }
     /// A unified helper function to analyze optical nodes that enclose a volume of material.
@@ -393,7 +366,8 @@ pub trait Volumetric: OpticNode {
 /// # Arguments
 ///
 /// * `node_name` - name of the owning node, used in error messages.
-/// * `medium` - the prepared medium for this analysis run, split into body and inversion.
+/// * `body` - the body of the prepared medium for this analysis run.
+/// * `inversion` - its inversion, which saturating models read and deplete per traversed cell.
 /// * `extraction` - the dopant gain model to apply, or `None` for a non-amplifying node.
 /// * `absorption` - the host material's absorption model, or `None` for a transparent material.
 /// * `rays_bundle` - the ray bundle inside the medium, modified in place.
@@ -404,13 +378,12 @@ pub trait Volumetric: OpticNode {
 /// `scale_energy` rejects the resulting value.
 fn march_medium_along_chords(
     node_name: &str,
-    medium: &mut RuntimeMedium,
+    body: &dyn Body,
+    inversion: &mut Option<Inversion>,
     extraction: Option<&dyn Extraction>,
     absorption: Option<&AbsorptionModel>,
     rays_bundle: &mut [Rays],
 ) -> OpmResult<()> {
-    // Split the medium so saturating models can read and deplete the inversion per traversed cell.
-    let (body, inversion) = medium.parts_mut();
     for rays in rays_bundle.iter_mut() {
         for ray in rays.iter_mut() {
             if !ray.valid() {
@@ -465,7 +438,7 @@ mod test {
         },
         degree,
         gain::{ConstGain, GainModel, MonochromaticSmallSignalGain, PumpScenario, PumpSource},
-        geometry::{Geometry, body::OPTIC_SHAPE},
+        geometry::body::OPTIC_SHAPE,
         joule,
         light::{
             Ray, Rays, Spectrum,
@@ -473,14 +446,16 @@ mod test {
             spectrum_helper::create_he_ne_spec,
         },
         micrometer, millimeter, nanometer,
-        nodes::test_helper::helper::{assert_ray_bundle_snapshot, ray_bundle_snapshot},
+        nodes::test_helper::helper::{
+            assert_ray_bundle_snapshot, placed_geometry, ray_bundle_snapshot,
+        },
         nodes::{
             EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort, SpotDiagram, ThinMirror,
             create_node_ref, node_types, round_collimated_ray_builder,
         },
         percent, reciprocal_centimeter,
         refractive_index::RefrIndexConst,
-        utils::test_helper::helper::metered_energy,
+        utils::{geom_transformation::Isometry, test_helper::helper::metered_energy},
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
     use nalgebra::Point3;
@@ -656,9 +631,10 @@ mod test {
     fn the_prepared_body_is_bounded_by_the_surfaces_light_is_traced_at() -> OpmResult<()> {
         let mut lens = placed_lens()?;
         lens.prepare_volume(&RayTraceConfig::default())?;
-        let medium = lens
+        let (body, _) = lens
             .node_attr()
             .runtime_medium()
+            .and_then(RuntimeMedium::parts)
             .ok_or_else(|| OpossumError::Other("the lens has no medium".into()))?;
         let vertex = |port: &str| -> OpmResult<Point3<Length>> {
             Ok(lens
@@ -675,12 +651,9 @@ mod test {
             nanometer!(1053.0),
             joule!(1.0),
         )?;
-        let chord = medium
-            .body()
-            .path_length_inside(&along_the_axis)
-            .ok_or_else(|| {
-                OpossumError::Other("the ray along the axis missed the medium".into())
-            })?;
+        let chord = body.path_length_inside(&along_the_axis).ok_or_else(|| {
+            OpossumError::Other("the ray along the axis missed the medium".into())
+        })?;
         assert_abs_diff_eq!(
             chord.value,
             (rear - front).map(|c| c.value).norm(),
@@ -1124,8 +1097,8 @@ mod test {
 
         // Seed a body at the current (identity) position, simulating what
         // `init_runtime_medium` used to do inside `after_deserialization_hook`.
-        let identity_body = head.as_volume().unwrap().volume_body()?;
-        head.node_attr_mut().set_runtime_body(Some(identity_body));
+        let identity_body = placed_geometry(&head)?;
+        head.node_attr_mut().set_runtime_body(identity_body);
 
         // Move the head 500 mm along z — what `calc_node_positions` does after deserialization.
         head.set_positioning(NodePositioning::Absolute(Isometry::new(
@@ -1771,7 +1744,9 @@ mod test {
             let optic_ref = create_node_ref(node_type)?;
             assert_eq!(
                 optic_ref.as_volume().is_some(),
-                matches!(optic_ref.geometry()?, Some(Geometry::Solid(_))),
+                optic_ref
+                    .geometry()?
+                    .is_some_and(|geometry| geometry.kind().as_body().is_some()),
                 "node type '{node_type}' presents itself as volumetric or describes a solid, \
                  but not both"
             );

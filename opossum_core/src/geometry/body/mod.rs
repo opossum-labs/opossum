@@ -8,9 +8,10 @@
 //! on.
 //!
 //! A body answers in the frame its solid is stated in; moved to its node (see
-//! [`Geometry::moved`](crate::geometry::Geometry::moved)), it answers there. Every kind of
-//! [`Solid`](crate::geometry::Solid) implements the
-//! trait next to its definition: an [`Extruded`](crate::geometry::Extruded) solid, a volume bounded
+//! [`Geometry::moved`](crate::geometry::Geometry::moved)), it answers there. Every kind of solid
+//! implements the trait next to its definition and hands it out through
+//! [`GeometryKind::as_body`](crate::geometry::GeometryKind::as_body): an
+//! [`Extruded`](crate::geometry::Extruded) solid, a volume bounded
 //! by two faces and the transversal cross section of its rim; a
 //! [`ParametricSolid`](crate::geometry::ParametricSolid), bounded by its faces alone; and an
 //! [`Assembly`](crate::geometry::Assembly), the parts of which answer for themselves. Since the
@@ -25,6 +26,7 @@
 use crate::{
     apertures::{CircleShape, OpticShape, RectangleShape},
     error::{OpmResult, OpossumError},
+    geometry::Side,
     light::Ray,
     millimeter, nanometer,
     utils::{geom_transformation::Isometry, math_utils::distance_3d_point},
@@ -137,71 +139,6 @@ impl BoundingBox {
     pub fn z_range(&self) -> Range<Length> {
         self.min.z..self.max.z
     }
-    /// Return the smallest axis-aligned box in another frame that encloses this [`BoundingBox`].
-    ///
-    /// # Arguments
-    ///
-    /// - `own`: the frame this box is expressed in.
-    /// - `target`: the frame the result is to be expressed in. A box turned against it is enclosed
-    ///   by its corners, so the result is larger than the box itself.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if a corner cannot be expressed in the target frame.
-    pub fn in_frame(&self, own: &Isometry, target: &Isometry) -> OpmResult<Self> {
-        let unbounded = millimeter!(f64::INFINITY);
-        let (min, max) = [self.min.x, self.max.x]
-            .into_iter()
-            .flat_map(|x| {
-                [self.min.y, self.max.y].into_iter().flat_map(move |y| {
-                    [self.min.z, self.max.z]
-                        .into_iter()
-                        .map(move |z| Point3::new(x, y, z))
-                })
-            })
-            .map(|corner| target.inverse_transform_point(&own.transform_point(&corner)))
-            .fold(
-                (
-                    Point3::new(unbounded, unbounded, unbounded),
-                    Point3::new(-unbounded, -unbounded, -unbounded),
-                ),
-                |(min, max), corner| {
-                    (
-                        Point3::new(
-                            Length::min(min.x, corner.x),
-                            Length::min(min.y, corner.y),
-                            Length::min(min.z, corner.z),
-                        ),
-                        Point3::new(
-                            Length::max(max.x, corner.x),
-                            Length::max(max.y, corner.y),
-                            Length::max(max.z, corner.z),
-                        ),
-                    )
-                },
-            );
-        Self::new(min, max)
-    }
-    /// Return the smallest axis-aligned box that encloses this [`BoundingBox`] and another one.
-    ///
-    /// # Arguments
-    ///
-    /// - `other`: the other box, expressed in the same frame as this one.
-    #[must_use]
-    pub fn union(&self, other: &Self) -> Self {
-        Self {
-            min: Point3::new(
-                Length::min(self.min.x, other.min.x),
-                Length::min(self.min.y, other.min.y),
-                Length::min(self.min.z, other.min.z),
-            ),
-            max: Point3::new(
-                Length::max(self.max.x, other.max.x),
-                Length::max(self.max.y, other.max.y),
-                Length::max(self.max.z, other.max.z),
-            ),
-        }
-    }
 }
 
 /// Trait for handling closed bodies.
@@ -210,7 +147,7 @@ impl BoundingBox {
 /// [`GeoSurface`](crate::geometry::GeoSurface): it defines an inside and can state how
 /// far a [`Ray`] travels within it.
 ///
-/// Implemented by every kind of [`Solid`](crate::geometry::Solid), next to its definition.
+/// Implemented by every kind of solid, next to its definition.
 pub trait Body: Debug + Send + Sync {
     /// Return whether the given point lies inside this [`Body`].
     ///
@@ -262,6 +199,17 @@ pub trait Body: Debug + Send + Sync {
     /// body belongs to, which is what makes a grid over the body follow the component when it is
     /// moved or tilted.
     fn isometry(&self) -> Isometry;
+    /// Return which side of one of its faces this [`Body`] lies on.
+    ///
+    /// # Arguments
+    ///
+    /// - `face`: the number of the face, as [`GeometryKind`](crate::geometry::GeometryKind) numbers
+    ///   them.
+    ///
+    /// # Returns
+    ///
+    /// The side of the face the body lies on, or `None` if there is no such face.
+    fn side(&self, face: usize) -> Option<Side>;
     /// Return the length of the straight chord a [`Ray`] cuts through this [`Body`], found from the
     /// points where it meets the boundary.
     ///
@@ -338,56 +286,8 @@ pub trait Body: Debug + Send + Sync {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{degree, millimeter};
-    use approx::assert_abs_diff_eq;
-    use uom::si::length::millimeter;
+    use crate::millimeter;
 
-    /// The extent of a box along x, y and z in millimeter.
-    fn extent(bounds: &BoundingBox) -> [[f64; 2]; 3] {
-        [bounds.x_range(), bounds.y_range(), bounds.z_range()]
-            .map(|range| [range.start, range.end].map(|end| end.get::<millimeter>()))
-    }
-    #[test]
-    fn a_box_in_the_frame_it_is_stated_in_is_unchanged() -> OpmResult<()> {
-        let bounds = BoundingBox::new(millimeter!(-1.0, -2.0, 0.0), millimeter!(1.0, 2.0, 4.0))?;
-        let frame = Isometry::new(millimeter!(10.0, 5.0, -3.0), degree!(5.0, 20.0, 30.0))?;
-        let same = bounds.in_frame(&frame, &frame)?;
-        for (found, wanted) in extent(&same)
-            .iter()
-            .flatten()
-            .zip(extent(&bounds).iter().flatten())
-        {
-            assert_abs_diff_eq!(found, wanted, epsilon = 1e-9);
-        }
-        Ok(())
-    }
-    /// Seen from a frame shifted by 10 mm along x and turned by a quarter turn about z, the box
-    /// swaps its extents along x and y and moves with the frame.
-    #[test]
-    fn a_box_is_enclosed_by_its_corners_in_another_frame() -> OpmResult<()> {
-        let bounds = BoundingBox::new(millimeter!(-1.0, -2.0, 0.0), millimeter!(1.0, 2.0, 4.0))?;
-        let own = Isometry::new(millimeter!(10.0, 0.0, 0.0), degree!(0.0, 0.0, 90.0))?;
-        let moved = extent(&bounds.in_frame(&own, &Isometry::identity())?);
-        for (found, wanted) in moved
-            .iter()
-            .flatten()
-            .zip([[8.0, 12.0], [-1.0, 1.0], [0.0, 4.0]].iter().flatten())
-        {
-            assert_abs_diff_eq!(found, wanted, epsilon = 1e-9);
-        }
-        Ok(())
-    }
-    #[test]
-    fn the_union_of_two_boxes_spans_both() -> OpmResult<()> {
-        let one = BoundingBox::new(millimeter!(0.0, 0.0, 0.0), millimeter!(1.0, 1.0, 1.0))?;
-        let other = BoundingBox::new(millimeter!(2.0, -1.0, 0.5), millimeter!(3.0, 0.5, 4.0))?;
-        assert_eq!(
-            extent(&one.union(&other)),
-            [[0.0, 3.0], [-1.0, 1.0], [0.0, 4.0]]
-        );
-        assert_eq!(one.union(&other), other.union(&one));
-        Ok(())
-    }
     #[test]
     fn a_bounding_box_may_be_flat_but_not_inverted() {
         assert!(BoundingBox::new(millimeter!(0.0, 0.0, 0.0), millimeter!(1.0, 1.0, 0.0)).is_ok());

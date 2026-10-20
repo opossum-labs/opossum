@@ -12,7 +12,7 @@ use crate::{
     analyzers::{Analyzable, AnalyzerKind, propagation_strategy::PropagationStrategy},
     core_optics::{
         NodeAttrExt, OpticPorts, PortType,
-        node_attr::{HasNodeAttr, NodePositioning},
+        node_attr::{HasNodeAttr, NodePositioning, RuntimeMedium},
         volumetric::Volumetric,
     },
     error::{OpmResult, OpossumError},
@@ -109,14 +109,17 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
         self.update_surfaces()?;
         let config = strategy.pump_config(self.node_attr().uuid());
         let name = self.name().to_owned();
-        let Some(medium) = self.node_attr_mut().runtime_medium_mut() else {
+        let Some((body, inversion)) = self
+            .node_attr_mut()
+            .runtime_medium_mut()
+            .and_then(RuntimeMedium::parts_mut)
+        else {
             return Err(OpossumError::Other(format!(
                 "volume node '{name}' encloses no body"
             )));
         };
         // The inversion is gain-specific: only build it when the gain model reads one.
         if let Some(model) = config.gain_model().as_extraction() {
-            let (body, inversion) = medium.parts_mut();
             *inversion = model.build_inversion(body, &config)?;
         }
         Ok(())

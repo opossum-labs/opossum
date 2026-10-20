@@ -176,7 +176,8 @@ mod test {
         geometry::{Extruded, Sphere, SurfaceGeometry, SurfaceShape},
         millimeter,
         nodes::test_helper::helper::{
-            assert_snapshots, body_snapshot, geometry_snapshot, hit_snapshot, surface_snapshot,
+            assert_snapshots, body_of, body_snapshot, geometry_snapshot, hit_snapshot,
+            placed_geometry, surface_snapshot,
         },
         refractive_index::RefrIndexConst,
         utils::geom_transformation::Isometry,
@@ -278,11 +279,11 @@ mod test {
     fn every_volume_body_is_recorded() -> OpmResult<()> {
         let mut actual = Vec::new();
         for (label, node) in placed_configurations()? {
-            if let Some(volume) = node.as_volume() {
+            if node.as_volume().is_some() {
                 let frame = node.effective_node_iso().unwrap_or_else(Isometry::identity);
                 actual.push((
                     label,
-                    body_snapshot(volume.volume_body()?.as_body(), &frame)?,
+                    body_snapshot(body_of(&placed_geometry(&*node)?)?, &frame)?,
                 ));
             }
         }

@@ -543,11 +543,14 @@ mod test {
     use super::*;
     use crate::{
         apertures::{CircleShape, Outline},
-        core_optics::{OpticNode, node_attr::NodePositioning, volumetric::Volumetric},
+        core_optics::{OpticNode, node_attr::NodePositioning},
         degree,
         geometry::{Extruded, Face, SurfaceShape},
         millimeter,
-        nodes::Lens,
+        nodes::{
+            Lens,
+            test_helper::helper::{body_of, placed_geometry},
+        },
         utils::geom_transformation::Isometry,
     };
     use approx::assert_abs_diff_eq;
@@ -743,8 +746,8 @@ mod test {
         // body its own surfaces and optic shape enclose.
         let mut lens = Lens::default();
         lens.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
-        let body = lens.volume_body()?;
-        let field = InversionField::from_body(body.as_body(), (9, 9, 5))?;
+        let geometry = placed_geometry(&lens)?;
+        let field = InversionField::from_body(body_of(&geometry)?, (9, 9, 5))?;
         assert_eq!(field.dimensions(), (9, 9, 5));
         // the axis of the lens runs through the middle column of cells, which is all medium
         assert!((0..5).all(|k| field.is_inside((4, 4, k))));

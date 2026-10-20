@@ -7,7 +7,7 @@ use crate::{
     coatings::CoatingType,
     core_optics::{NodeAttrExt, OpticNode, PortType},
     error::{OpmResult, OpossumError},
-    geometry::{Geometry, Solid, body::OPTIC_SHAPE},
+    geometry::{Geometry, body::OPTIC_SHAPE},
     light::{LightData, LightResult, Rays},
     nodes::fluence_detector::Fluence,
     properties::Proptype,
@@ -352,9 +352,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
                 self.update_surface(name, &placed, face, &port_type)?;
             }
         }
-        // A single surface encloses no volume and leaves the node without a medium.
-        self.node_attr_mut()
-            .set_runtime_body(Solid::try_from((*placed).clone()).ok());
+        self.node_attr_mut().set_runtime_body((*placed).clone());
         Ok(())
     }
 

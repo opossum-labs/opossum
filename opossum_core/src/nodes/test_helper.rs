@@ -15,7 +15,7 @@ pub mod helper {
         },
         error::{OpmResult, OpossumError},
         geometry::{
-            Face,
+            Face, Geometry,
             body::{Body, OPTIC_SHAPE, default_optic_shape},
         },
         joule,
@@ -607,8 +607,8 @@ pub mod helper {
             center_thickness.value,
             epsilon = 1e-12
         );
-        let solid = node.volume_body()?;
-        let body = solid.as_body();
+        let geometry = placed_geometry(&node)?;
+        let body = body_of(&geometry)?;
         let on_axis_point =
             |z_position: Length| Point3::new(millimeter!(0.0), millimeter!(0.0), z_position);
         assert!(body.contains(&on_axis_point(center_thickness * 0.5)));
@@ -643,8 +643,7 @@ pub mod helper {
         position: Point3<Length>,
     ) -> OpmResult<Length> {
         let ray = Ray::new_collimated(position, nanometer!(1053.0), joule!(1.0))?;
-        node.volume_body()?
-            .as_body()
+        body_of(&placed_geometry(node)?)?
             .path_length_inside(&ray)
             .ok_or_else(|| {
                 OpossumError::Other(format!(
@@ -652,6 +651,33 @@ pub mod helper {
                     node.name()
                 ))
             })
+    }
+
+    /// Return the geometry of a node, moved to where the node sits.
+    ///
+    /// The geometry states the faces in their physical order, so an inverted node encloses the
+    /// same volume as an upright one.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node's geometry cannot be derived or if the node has none.
+    pub fn placed_geometry<T: OpticNode + ?Sized>(node: &T) -> OpmResult<Geometry> {
+        let geometry = node.geometry()?.ok_or_else(|| {
+            OpossumError::Other(format!("node '{}' has no geometry", node.name()))
+        })?;
+        Ok(geometry.moved(&node.effective_node_iso().unwrap_or_else(Isometry::identity)))
+    }
+
+    /// Return the volume a geometry encloses.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the geometry is a single surface, which encloses no volume.
+    pub fn body_of(geometry: &Geometry) -> OpmResult<&dyn Body> {
+        geometry
+            .kind()
+            .as_body()
+            .ok_or_else(|| OpossumError::Other("a single surface encloses no volume".into()))
     }
 
     /// Assert that the transversal extent of a volume node is its optic shape, and nothing else.
@@ -676,8 +702,8 @@ pub mod helper {
         node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let mid_thickness = center_thickness_of(&node) * 0.5;
         let point_at = |radius: Length| Point3::new(radius, millimeter!(0.0), mid_thickness);
-        let solid = node.volume_body()?;
-        let body = solid.as_body();
+        let geometry = placed_geometry(&node)?;
+        let body = body_of(&geometry)?;
         assert!(body.contains(&point_at(default_edge - millimeter!(0.1))));
         assert!(!body.contains(&point_at(default_edge + millimeter!(0.1))));
         // a wider optic shape widens it
@@ -685,8 +711,8 @@ pub mod helper {
             OPTIC_SHAPE,
             OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
         )?;
-        let solid = node.volume_body()?;
-        let body = solid.as_body();
+        let geometry = placed_geometry(&node)?;
+        let body = body_of(&geometry)?;
         assert!(body.contains(&point_at(millimeter!(24.9))));
         assert!(!body.contains(&point_at(millimeter!(25.1))));
         // An open optic shape leaves the volume undefined and is rejected where it is set: two

@@ -14,7 +14,7 @@ use crate::{
     core_optics::{OpticPorts, optic_surface::OpticSurface},
     error::{OpmResult, OpossumError},
     gain::Inversion,
-    geometry::{Solid, body::Body},
+    geometry::{Geometry, body::Body},
     properties::{Properties, Proptype, validator::Validator},
     utils::{file_utils::sanitize_filename, geom_transformation::Isometry},
 };
@@ -43,28 +43,33 @@ impl RuntimeSurfaces {
 /// The volume state of a node: the body between its surfaces and the inversion in it.
 ///
 /// The counterpart of [`RuntimeSurfaces`] for what lies *between* the surfaces. The body is the
-/// solid the surfaces are faces of, moved to the node with them (see
+/// geometry the surfaces are faces of, moved to the node with them (see
 /// [`OpticNodeExt::install_geometry`](crate::core_optics::OpticNodeExt::install_geometry)), which
 /// leaves the inversion empty; [`OpticNode::prepare_volume`](crate::core_optics::OpticNode::prepare_volume)
 /// fills it for an analysis run, and [`OpticNode::reset_data`](crate::core_optics::OpticNode::reset_data)
 /// clears it again.
 #[derive(Debug, Clone)]
 pub struct RuntimeMedium {
-    body: Solid,
+    geometry: Geometry,
     inversion: Option<Inversion>,
 }
 
 impl RuntimeMedium {
-    /// Return the volume body this node was prepared with.
-    #[must_use]
-    pub fn body(&self) -> &dyn Body {
-        self.body.as_body()
-    }
-
     /// Return the inversion, if the model built one.
     #[must_use]
     pub const fn inversion(&self) -> Option<&Inversion> {
         self.inversion.as_ref()
+    }
+
+    /// Return the body this node was prepared with and its inversion.
+    ///
+    /// # Returns
+    ///
+    /// The body for geometric queries and the inversion, if the model built one; or `None` if the
+    /// geometry encloses no volume, which [`NodeAttr::set_runtime_body`] does not keep.
+    #[must_use]
+    pub fn parts(&self) -> Option<(&dyn Body, Option<&Inversion>)> {
+        Some((self.geometry.kind().as_body()?, self.inversion.as_ref()))
     }
 
     /// Return the body and inversion as a split mutable borrow.
@@ -76,9 +81,10 @@ impl RuntimeMedium {
     /// # Returns
     ///
     /// `(&dyn Body, &mut Option<Inversion>)` — the body for geometric queries and the
-    /// inversion that saturating models may deplete between substeps.
-    pub fn parts_mut(&mut self) -> (&dyn Body, &mut Option<Inversion>) {
-        (self.body.as_body(), &mut self.inversion)
+    /// inversion that saturating models may deplete between substeps; or `None` as for
+    /// [`RuntimeMedium::parts`].
+    pub fn parts_mut(&mut self) -> Option<(&dyn Body, &mut Option<Inversion>)> {
+        Some((self.geometry.kind().as_body()?, &mut self.inversion))
     }
 }
 
@@ -477,11 +483,11 @@ impl NodeAttr {
     ///
     /// # Arguments
     ///
-    /// * `body` - the body between the node's surfaces, or `None` for a node that encloses no
-    ///   volume.
-    pub fn set_runtime_body(&mut self, body: Option<Solid>) {
-        self.runtime_medium = body.map(|body| RuntimeMedium {
-            body,
+    /// * `geometry` - the geometry of the node, moved to where the node sits. A geometry that
+    ///   encloses no volume leaves the node without a medium.
+    pub fn set_runtime_body(&mut self, geometry: Geometry) {
+        self.runtime_medium = geometry.kind().as_body().is_some().then(|| RuntimeMedium {
+            geometry,
             inversion: None,
         });
     }
@@ -547,21 +553,17 @@ mod test {
     use super::*;
     use crate::{
         apertures::{CircleShape, Outline},
-        geometry::{Extruded, Face, SurfaceShape},
         millimeter,
     };
 
-    fn test_body() -> OpmResult<Solid> {
-        Ok(Extruded::new(
-            Isometry::identity(),
-            Face::new(SurfaceShape::Plane, Isometry::identity()),
-            Face::new(
-                SurfaceShape::Plane,
-                Isometry::new_along_z(millimeter!(10.0))?,
-            ),
+    /// A disk 10 mm thick and 5 mm in radius.
+    fn test_body() -> OpmResult<Geometry> {
+        Geometry::singlet(
+            millimeter!(f64::INFINITY),
+            millimeter!(f64::INFINITY),
+            millimeter!(10.0),
             Outline::new(CircleShape::new(millimeter!(5.0))?, Vec::new())?,
-        )?
-        .into())
+        )
     }
 
     #[test]
@@ -641,9 +643,18 @@ mod test {
     }
 
     #[test]
+    fn a_single_surface_leaves_a_node_without_a_medium() -> OpmResult<()> {
+        let mut attr = NodeAttr::new("test");
+        attr.set_runtime_body(test_body()?);
+        attr.set_runtime_body(Geometry::plane(None));
+        assert!(attr.runtime_medium().is_none());
+        Ok(())
+    }
+
+    #[test]
     fn set_and_clear_runtime_inversion() -> OpmResult<()> {
         let mut attr = NodeAttr::new("test");
-        attr.set_runtime_body(Some(test_body()?));
+        attr.set_runtime_body(test_body()?);
         assert!(attr.runtime_medium().is_some());
         attr.clear_runtime_inversion();
         assert!(attr.runtime_medium().is_some());
@@ -654,7 +665,7 @@ mod test {
     #[test]
     fn runtime_medium_is_not_in_ron_roundtrip() -> OpmResult<()> {
         let mut attr = NodeAttr::new("test");
-        attr.set_runtime_body(Some(test_body()?));
+        attr.set_runtime_body(test_body()?);
         let serialized = ron::to_string(&attr).map_err(|e| OpossumError::Other(e.to_string()))?;
         assert!(
             !serialized.contains("runtime_medium"),

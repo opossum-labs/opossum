@@ -8,9 +8,9 @@
 //! traced against. The node type thereby acts as a preset: a lens is a [`Geometry::singlet`] whose
 //! parameters are the lens's properties.
 //!
-//! The first distinction is whether a component is a single surface ([`Geometry::Surface`]) or
-//! encloses a volume ([`Geometry::Solid`]). The kinds of [`Solid`] are described next to it, one
-//! file each. Every kind answers what [`GeometryKind`] asks.
+//! A component is a single surface ([`Geometry::Surface`]) or one of the kinds of solid enclosing a
+//! volume of material. Every kind is described in a file of its own and answers what
+//! [`GeometryKind`] asks; [`Geometry::kind`] is the one place that tells the kinds apart.
 
 use nalgebra::Point3;
 use num_traits::Zero;
@@ -20,7 +20,7 @@ use uom::si::f64::{Angle, Length};
 use crate::{
     apertures::Outline,
     error::OpmResult,
-    geometry::{Extruded, Face, Rim, Solid, SurfaceShape},
+    geometry::{Assembly, Extruded, Face, ParametricSolid, Rim, SurfaceShape, body::Body},
     utils::geom_transformation::Isometry,
 };
 
@@ -29,8 +29,12 @@ use crate::{
 pub enum Geometry {
     /// A single surface without thickness, such as a thin mirror, a grating or a detector.
     Surface(Box<SurfaceGeometry>),
-    /// A component enclosing a volume of material.
-    Solid(Solid),
+    /// Two faces capping a profile extruded along an axis: lens, cylindric lens, wedge, plate.
+    Extruded(Box<Extruded>),
+    /// A solid bounded by several faces: the intersection of the inner sides of all of them.
+    Parametric(ParametricSolid),
+    /// Several solids, each with its own material, sharing interfaces.
+    Assembly(Assembly),
 }
 
 impl Geometry {
@@ -195,15 +199,12 @@ impl Geometry {
         rear_vertex: Isometry,
         outline: Outline,
     ) -> OpmResult<Self> {
-        Ok(Self::Solid(
-            Extruded::new(
-                Isometry::identity(),
-                Face::new(front, Isometry::identity()),
-                Face::new(rear, rear_vertex),
-                outline,
-            )?
-            .into(),
-        ))
+        Ok(Self::Extruded(Box::new(Extruded::new(
+            Isometry::identity(),
+            Face::new(front, Isometry::identity()),
+            Face::new(rear, rear_vertex),
+            outline,
+        )?)))
     }
     /// Return this geometry moved by an isometry, such as the placement of its node.
     ///
@@ -214,22 +215,21 @@ impl Geometry {
     /// * `by` - the frame this geometry is stated in, given in the frame it is moved to.
     #[must_use]
     pub fn moved(&self, by: &Isometry) -> Self {
-        match self {
-            Self::Surface(surface) => Self::Surface(Box::new(surface.moved(by))),
-            Self::Solid(solid) => Self::Solid(solid.moved(by)),
-        }
+        self.kind().moved(by)
     }
-    /// Return the kind of geometry this is, as the one thing its faces are asked of.
+    /// Return the kind of geometry this is, as the one thing every question is asked of.
     #[must_use]
     pub fn kind(&self) -> &dyn GeometryKind {
         match self {
             Self::Surface(surface) => &**surface,
-            Self::Solid(solid) => solid.kind(),
+            Self::Extruded(extruded) => &**extruded,
+            Self::Parametric(parametric) => parametric,
+            Self::Assembly(assembly) => assembly,
         }
     }
 }
 
-/// What every kind of geometry answers about its faces.
+/// What every kind of geometry answers about its faces, its volume and its placement.
 ///
 /// The faces of a geometry are numbered. What a face means, for instance which one light enters
 /// through, is not decided here but by the node using the geometry. Every kind answers each
@@ -266,6 +266,15 @@ pub trait GeometryKind {
     /// A window is no boundary: light outside it passes the face like light inside, it is just not
     /// recorded (see [`GeometryKind::includes`] for where a face ends).
     fn window(&self) -> Option<&Rim>;
+    /// Return the volume this geometry encloses, or `None` for a single surface, which encloses
+    /// none.
+    fn as_body(&self) -> Option<&dyn Body>;
+    /// Return this geometry moved by an isometry (see [`Geometry::moved`]).
+    ///
+    /// # Arguments
+    ///
+    /// * `by` - the frame this geometry is stated in, given in the frame it is moved to.
+    fn moved(&self, by: &Isometry) -> Geometry;
 }
 
 /// A single surface without thickness.
@@ -339,13 +348,6 @@ impl SurfaceGeometry {
     }
     /// The number of the one face of a surface.
     pub const FACE: usize = 0;
-    /// Return this surface moved by an isometry (see [`Geometry::moved`]).
-    fn moved(&self, by: &Isometry) -> Self {
-        Self {
-            face: self.face.moved(by),
-            extent: self.extent.moved(by),
-        }
-    }
 }
 
 /// A surface ends at its edge, if it has one. The window of a detector is no edge: the surface
@@ -369,6 +371,15 @@ impl GeometryKind for SurfaceGeometry {
             SurfaceExtent::Open | SurfaceExtent::Edge(_) => None,
         }
     }
+    fn as_body(&self) -> Option<&dyn Body> {
+        None
+    }
+    fn moved(&self, by: &Isometry) -> Geometry {
+        Geometry::Surface(Box::new(Self {
+            face: self.face.moved(by),
+            extent: self.extent.moved(by),
+        }))
+    }
 }
 
 #[cfg(test)]
@@ -378,7 +389,7 @@ mod test {
         apertures::CircleShape,
         degree,
         error::OpossumError,
-        geometry::{Assembly, Parabola, ParametricSolid, Part, Side},
+        geometry::{Parabola, Part, Side},
         material::Material,
         millimeter,
         properties::proptype::AssetRef,
@@ -476,21 +487,27 @@ mod test {
         );
         Ok(())
     }
-    /// Every kind of solid has its faces numbered, and a solid can be taken out of its geometry.
+    /// Every kind of solid has its faces numbered, encloses a volume and moves its faces along; a
+    /// single surface encloses none.
     #[test]
-    fn every_kind_of_solid_numbers_its_faces() -> OpmResult<()> {
-        let parametric = Solid::Parametric(ParametricSolid::new(vec![(
+    fn every_kind_of_solid_numbers_its_faces_and_encloses_a_volume() -> OpmResult<()> {
+        let parametric = Geometry::Parametric(ParametricSolid::new(vec![(
             Face::new(SurfaceShape::Plane, Isometry::identity()),
             Side::Behind,
         )])?);
         let glass = AssetRef::Inline(Material::from(&RefrIndexConst::new(1.5)?));
-        let part = Part::new(&Isometry::identity(), parametric.clone(), glass);
-        let assembly = Solid::Assembly(Assembly::new(vec![part], vec![])?);
-        for solid in [parametric, assembly] {
-            let geometry = Geometry::Solid(solid);
+        let part = Part::new(&Isometry::identity(), parametric.clone(), glass)?;
+        let assembly = Geometry::Assembly(Assembly::new(vec![part], vec![])?);
+        let frame = Isometry::new(millimeter!(1.0, -2.0, 30.0), degree!(10.0, 5.0, 0.0))?;
+        for geometry in [parametric, assembly] {
             assert_eq!(geometry.kind().face_count(), 1);
-            assert!(Solid::try_from(geometry).is_ok());
+            assert!(geometry.kind().as_body().is_some());
+            assert_eq!(
+                frame_of(&geometry.moved(&frame), 0)?,
+                frame.append(&frame_of(&geometry, 0)?)
+            );
         }
+        assert!(Geometry::plane(None).kind().as_body().is_none());
         Ok(())
     }
     /// A curved face has to reach as far out as the outline it is bounded by; a sphere or a
@@ -624,7 +641,7 @@ mod test {
         assert_eq!(plane(Geometry::plane(None)), (true, true));
         assert_eq!(plane(Geometry::plane(Some(circle()?))), (true, false));
         let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
-        let extruded = Geometry::Solid(Solid::Extruded(Box::new(Extruded::new(
+        let extruded = Geometry::Extruded(Box::new(Extruded::new(
             axis,
             Face::new(SurfaceShape::Plane, Isometry::identity()),
             Face::new(
@@ -632,15 +649,11 @@ mod test {
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),
             circle()?,
-        )?)));
+        )?));
         // Extruded along the node's x axis, the profile reaches around it in y and z; the front face
         // lies at x = 3 mm.
         assert_eq!(bounded(extruded, 3.0), (true, false));
         Ok(())
-    }
-    #[test]
-    fn a_single_surface_encloses_no_volume() {
-        assert!(Solid::try_from(Geometry::plane(None)).is_err());
     }
     #[test]
     fn a_geometry_survives_a_round_trip_through_a_file() -> OpmResult<()> {

@@ -9,7 +9,7 @@ use super::{Side, face_hits};
 use crate::{
     error::{OpmResult, OpossumError},
     geometry::{
-        Face, GeometryKind, Rim,
+        Face, Geometry, GeometryKind, Rim,
         body::{Body, BoundingBox},
     },
     light::Ray,
@@ -47,12 +47,7 @@ impl ParametricSolid {
             faces,
         })
     }
-    /// See [`Solid::face_and_side`](super::Solid). The face at the given position in the list of
-    /// faces, and the side of it that is inside.
-    pub(super) fn face_and_side(&self, index: usize) -> Option<(&Face, Side)> {
-        self.faces.get(index).map(|(face, side)| (face, *side))
-    }
-    /// Return this solid moved by an isometry (see [`Geometry::moved`](crate::geometry::Geometry::moved)).
+    /// Return this solid moved by an isometry (see [`Geometry::moved`]).
     #[must_use]
     pub fn moved(&self, by: &Isometry) -> Self {
         Self {
@@ -97,6 +92,12 @@ impl GeometryKind for ParametricSolid {
     fn window(&self) -> Option<&Rim> {
         None
     }
+    fn as_body(&self) -> Option<&dyn Body> {
+        Some(self)
+    }
+    fn moved(&self, by: &Isometry) -> Geometry {
+        Geometry::Parametric(Self::moved(self, by))
+    }
 }
 
 /// A point is inside this solid if it lies on the inner side of every one of its faces. A face
@@ -123,6 +124,9 @@ impl Body for ParametricSolid {
     /// The frame the faces are stated in: the node's, once the solid is moved there.
     fn isometry(&self) -> Isometry {
         self.frame
+    }
+    fn side(&self, face: usize) -> Option<Side> {
+        self.faces.get(face).map(|(_, side)| *side)
     }
 }
 

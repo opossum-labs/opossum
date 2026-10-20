@@ -15,7 +15,7 @@ use crate::{
     apertures::Outline,
     error::{OpmResult, OpossumError},
     geometry::{
-        Face, GeometryKind, Rim,
+        Face, Geometry, GeometryKind, Rim,
         body::{Body, BoundingBox},
     },
     light::Ray,
@@ -68,16 +68,16 @@ impl Extruded {
     pub const FRONT: usize = 0;
     /// The number of the face capping the profile towards +z.
     pub const REAR: usize = 1;
-    /// See [`Solid::face_and_side`](super::Solid). The profile lies behind the front face and in
-    /// front of the rear face.
-    pub(super) const fn face_and_side(&self, index: usize) -> Option<(&Face, Side)> {
+    /// Return the face with the given number and the side of it the profile lies on: behind the
+    /// front face and in front of the rear face.
+    const fn face_and_side(&self, index: usize) -> Option<(&Face, Side)> {
         match index {
             Self::FRONT => Some((&self.front, Side::Behind)),
             Self::REAR => Some((&self.rear, Side::InFront)),
             _ => None,
         }
     }
-    /// Return this solid moved by an isometry (see [`Geometry::moved`](crate::geometry::Geometry::moved)).
+    /// Return this solid moved by an isometry (see [`Geometry::moved`]).
     #[must_use]
     pub fn moved(&self, by: &Isometry) -> Self {
         Self {
@@ -101,6 +101,12 @@ impl GeometryKind for Extruded {
     }
     fn window(&self) -> Option<&Rim> {
         None
+    }
+    fn as_body(&self) -> Option<&dyn Body> {
+        Some(self)
+    }
+    fn moved(&self, by: &Isometry) -> Geometry {
+        Geometry::Extruded(Box::new(Self::moved(self, by)))
     }
 }
 
@@ -251,6 +257,9 @@ impl Body for Extruded {
     }
     fn isometry(&self) -> Isometry {
         *self.rim.frame()
+    }
+    fn side(&self, face: usize) -> Option<Side> {
+        self.face_and_side(face).map(|(_, side)| side)
     }
 }
 

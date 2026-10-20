@@ -5,11 +5,11 @@ use nalgebra::Point3;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
-use super::Solid;
+use super::Side;
 use crate::{
     error::{OpmResult, OpossumError},
     geometry::{
-        Face, GeometryKind, Rim,
+        Face, Geometry, GeometryKind, Rim,
         body::{Body, BoundingBox},
     },
     light::Ray,
@@ -21,7 +21,7 @@ use crate::{
 /// One solid of an [`Assembly`], placed where it sits in the assembly, with its material.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Part {
-    solid: Solid,
+    geometry: Geometry,
     material: AssetRef<Material>,
 }
 
@@ -31,19 +31,38 @@ impl Part {
     /// # Arguments
     ///
     /// * `placement` - where the solid sits relative to the node.
-    /// * `solid` - the solid itself; it must not be an [`Assembly`] (see [`Assembly::new`]).
+    /// * `geometry` - the solid itself.
     /// * `material` - the material the solid is made of.
-    #[must_use]
-    pub fn new(placement: &Isometry, solid: Solid, material: AssetRef<Material>) -> Self {
-        Self {
-            solid: solid.moved(placement),
-            material,
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the geometry encloses no volume or is an assembly itself;
+    /// the parts of an inner assembly are added directly instead.
+    pub fn new(
+        placement: &Isometry,
+        geometry: Geometry,
+        material: AssetRef<Material>,
+    ) -> OpmResult<Self> {
+        if geometry.kind().as_body().is_none() {
+            return Err(OpossumError::Other(
+                "a part of an assembly has to enclose a volume".into(),
+            ));
         }
+        if matches!(geometry, Geometry::Assembly(_)) {
+            return Err(OpossumError::Other(
+                "a part of an assembly must not be an assembly itself; add its parts directly"
+                    .into(),
+            ));
+        }
+        Ok(Self {
+            geometry: geometry.moved(placement),
+            material,
+        })
     }
     /// Return this part moved by an isometry.
     fn moved(&self, by: &Isometry) -> Self {
         Self {
-            solid: self.solid.moved(by),
+            geometry: self.geometry.moved(by),
             material: self.material.clone(),
         }
     }
@@ -62,8 +81,10 @@ impl FaceId {
     /// # Arguments
     ///
     /// * `part` - the index of the part in the assembly.
-    /// * `face` - the index of the face in that part's solid (see [`Solid`]'s face numbering: 0 and
-    ///   1 are front and rear of an [`Extruded`] solid, a [`ParametricSolid`] counts its faces).
+    /// * `face` - the index of the face in that part's solid, as
+    ///   [`GeometryKind`] numbers them: 0 and 1 are front and rear of an
+    ///   [`Extruded`](crate::geometry::Extruded) solid, a
+    ///   [`ParametricSolid`](crate::geometry::ParametricSolid) counts its faces.
     #[must_use]
     pub const fn new(part: usize, face: usize) -> Self {
         Self { part, face }
@@ -119,20 +140,11 @@ impl Assembly {
     /// # Errors
     ///
     /// This function returns an error if
-    /// - a part is itself an assembly,
     /// - an interface refers to a part or face that does not exist or joins two faces of the same
     ///   part,
     /// - the two faces of an interface are not the same surface at the same place (see
     ///   [`Face::coincides_with`]), or the two parts lie on the same side of it.
     pub fn new(parts: Vec<Part>, interfaces: Vec<Interface>) -> OpmResult<Self> {
-        if let Some(index) = parts
-            .iter()
-            .position(|part| matches!(part.solid, Solid::Assembly(_)))
-        {
-            return Err(OpossumError::Other(format!(
-                "part {index} of an assembly is an assembly itself; add its parts directly"
-            )));
-        }
         for interface in &interfaces {
             if interface.a.part == interface.b.part {
                 return Err(OpossumError::Other(format!(
@@ -143,7 +155,10 @@ impl Assembly {
             let resolve = |id: FaceId| {
                 parts
                     .get(id.part)
-                    .and_then(|part| part.solid.face_and_side(id.face))
+                    .and_then(|part| {
+                        let kind = part.geometry.kind();
+                        Some((kind.face(id.face)?, kind.as_body()?.side(id.face)?))
+                    })
                     .ok_or_else(|| {
                         OpossumError::Other(format!(
                             "an interface refers to face {} of part {}, which does not exist",
@@ -174,8 +189,7 @@ impl Assembly {
             interfaces,
         })
     }
-    /// Return this assembly moved by an isometry (see
-    /// [`Geometry::moved`](crate::geometry::Geometry::moved)).
+    /// Return this assembly moved by an isometry (see [`Geometry::moved`]).
     #[must_use]
     pub fn moved(&self, by: &Isometry) -> Self {
         Self {
@@ -195,7 +209,7 @@ impl Assembly {
     fn locate(&self, face: usize) -> Option<(&Part, usize)> {
         let mut first_face = 0;
         for part in &self.parts {
-            let count = part.solid.kind().face_count();
+            let count = part.geometry.kind().face_count();
             if face < first_face + count {
                 return Some((part, face - first_face));
             }
@@ -209,20 +223,26 @@ impl Assembly {
 impl GeometryKind for Assembly {
     fn face(&self, index: usize) -> Option<&Face> {
         self.locate(index)
-            .and_then(|(part, own_face)| part.solid.kind().face(own_face))
+            .and_then(|(part, own_face)| part.geometry.kind().face(own_face))
     }
     fn face_count(&self) -> usize {
         self.parts
             .iter()
-            .map(|part| part.solid.kind().face_count())
+            .map(|part| part.geometry.kind().face_count())
             .sum()
     }
     fn includes(&self, face: usize, point: &Point3<Length>) -> bool {
         self.locate(face)
-            .is_some_and(|(part, own_face)| part.solid.kind().includes(own_face, point))
+            .is_some_and(|(part, own_face)| part.geometry.kind().includes(own_face, point))
     }
     fn window(&self) -> Option<&Rim> {
         None
+    }
+    fn as_body(&self) -> Option<&dyn Body> {
+        Some(self)
+    }
+    fn moved(&self, by: &Isometry) -> Geometry {
+        Geometry::Assembly(Self::moved(self, by))
     }
 }
 
@@ -231,39 +251,36 @@ impl GeometryKind for Assembly {
 /// overlap, or the overlap counts twice.
 impl Body for Assembly {
     fn contains(&self, point: &Point3<Length>) -> bool {
-        self.parts
-            .iter()
-            .any(|part| part.solid.as_body().contains(point))
+        self.parts.iter().any(|part| {
+            part.geometry
+                .kind()
+                .as_body()
+                .is_some_and(|body| body.contains(point))
+        })
     }
     fn path_length_inside(&self, ray: &Ray) -> Option<Length> {
         self.parts
             .iter()
-            .filter_map(|part| part.solid.as_body().path_length_inside(ray))
+            .filter_map(|part| part.geometry.kind().as_body()?.path_length_inside(ray))
             .reduce(|one, other| one + other)
     }
-    /// The box of an assembly is the union of the boxes of its parts, in the frame of the assembly.
+    /// The extent of an assembly is not determined yet.
     ///
     /// # Errors
     ///
-    /// This function returns an error if the assembly has no parts or if one of them cannot state
-    /// its extent.
+    /// This function always returns an error.
     fn bounding_box(&self) -> OpmResult<BoundingBox> {
-        self.parts
-            .iter()
-            .map(|part| {
-                let body = part.solid.as_body();
-                body.bounding_box()?.in_frame(&body.isometry(), &self.frame)
-            })
-            .reduce(|one, other| Ok(one?.union(&other?)))
-            .unwrap_or_else(|| {
-                Err(OpossumError::Other(
-                    "an assembly without parts has no extent".into(),
-                ))
-            })
+        Err(OpossumError::Other(
+            "the extent of an assembly cannot be determined yet".into(),
+        ))
     }
     /// The frame the parts are stated in: the node's, once the assembly is moved there.
     fn isometry(&self) -> Isometry {
         self.frame
+    }
+    fn side(&self, face: usize) -> Option<Side> {
+        self.locate(face)
+            .and_then(|(part, own_face)| part.geometry.kind().as_body()?.side(own_face))
     }
 }
 
@@ -273,7 +290,7 @@ mod test {
     use crate::{
         apertures::{CircleShape, Outline},
         degree,
-        geometry::{Geometry, ParametricSolid, Side, SurfaceShape, body::BoundingBox},
+        geometry::{ParametricSolid, SurfaceShape},
         joule,
         light::Ray,
         millimeter, nanometer,
@@ -290,20 +307,14 @@ mod test {
     fn circle() -> OpmResult<Outline> {
         Outline::new(CircleShape::new(millimeter!(12.5))?, Vec::new())
     }
-    /// A part made of glass with a refractive index of 1.5.
-    fn glass_part(placement: Isometry, solid: Solid) -> OpmResult<Part> {
-        Ok(Part::new(
-            &placement,
-            solid,
-            AssetRef::Inline(Material::from(&RefrIndexConst::new(1.5)?)),
-        ))
-    }
-    /// The solid of the given geometry as a glass part at the given placement.
+    /// The given geometry as a part made of glass with a refractive index of 1.5, at the given
+    /// placement.
     fn part_of(geometry: Geometry, placement: Isometry) -> OpmResult<Part> {
-        let Geometry::Solid(solid) = geometry else {
-            unreachable!("only solids are made into parts");
-        };
-        glass_part(placement, solid)
+        Part::new(
+            &placement,
+            geometry,
+            AssetRef::Inline(Material::from(&RefrIndexConst::new(1.5)?)),
+        )
     }
     /// The diagonal of a beam splitter cube: tilted by 45° about x, 10 mm along z.
     fn diagonal() -> OpmResult<Face> {
@@ -315,18 +326,18 @@ mod test {
     /// The front prism of a beam splitter cube: behind its entrance face, in front of the
     /// diagonal (face 1).
     fn prism_part() -> OpmResult<Part> {
-        let solid = Solid::Parametric(ParametricSolid::new(vec![
+        let solid = Geometry::Parametric(ParametricSolid::new(vec![
             (
                 Face::new(SurfaceShape::Plane, Isometry::identity()),
                 Side::Behind,
             ),
             (diagonal()?, Side::InFront),
         ])?);
-        glass_part(Isometry::identity(), solid)
+        part_of(solid, Isometry::identity())
     }
     /// The rear prism of the same cube: behind the diagonal (face 0), in front of its exit face.
     fn opposite_prism_part() -> OpmResult<Part> {
-        let solid = Solid::Parametric(ParametricSolid::new(vec![
+        let solid = Geometry::Parametric(ParametricSolid::new(vec![
             (diagonal()?, Side::Behind),
             (
                 Face::new(
@@ -336,7 +347,7 @@ mod test {
                 Side::InFront,
             ),
         ])?);
-        glass_part(Isometry::identity(), solid)
+        part_of(solid, Isometry::identity())
     }
     /// A beam splitter cube: both prisms cemented along the diagonal.
     fn cube() -> OpmResult<Assembly> {
@@ -518,21 +529,27 @@ mod test {
     fn node_frame() -> OpmResult<Isometry> {
         Isometry::new(millimeter!(3.0, -2.0, 100.0), degree!(10.0, -20.0, 30.0))
     }
-    /// One part of the assembly on its own, placed where the assembly places it.
-    fn alone(assembly: &Assembly, index: usize, node_frame: &Isometry) -> OpmResult<Solid> {
+    /// The chord of a ray through one part of the assembly on its own, placed where the assembly
+    /// places it.
+    fn chord_through_part(
+        assembly: &Assembly,
+        index: usize,
+        node_frame: &Isometry,
+        ray: &Ray,
+    ) -> OpmResult<Option<Length>> {
         let part = assembly
             .parts
             .get(index)
             .ok_or_else(|| OpossumError::Other(format!("there is no part {index}")))?;
-        Ok(part.solid.moved(node_frame))
+        Ok(part
+            .geometry
+            .moved(node_frame)
+            .kind()
+            .as_body()
+            .and_then(|body| body.path_length_inside(ray)))
     }
     fn test_ray(position: Point3<Length>, direction: Vector3<f64>) -> OpmResult<Ray> {
         Ray::new(position, direction, nanometer!(1053.0), joule!(1.0))
-    }
-    /// The extent of a box along x, y and z in millimeter.
-    fn extent(bounds: &BoundingBox) -> [[f64; 2]; 3] {
-        [bounds.x_range(), bounds.y_range(), bounds.z_range()]
-            .map(|range| [range.start, range.end].map(|end| end.get::<millimeter>()))
     }
     /// A point of an assembly's own frame, in global coordinates.
     fn global(node_frame: &Isometry, x: f64, y: f64, z: f64) -> Point3<Length> {
@@ -603,13 +620,10 @@ mod test {
                 global(&node_frame, x, 3.0, -20.0),
                 node_frame.transform_vector_f64(&direction.normalize()),
             )?;
-            let crown = alone(&doublet, 0, &node_frame)?
-                .as_body()
-                .path_length_inside(&ray);
-            let flint = alone(&doublet, 1, &node_frame)?
-                .as_body()
-                .path_length_inside(&ray);
-            let (Some(crown), Some(flint)) = (crown, flint) else {
+            let (Some(crown), Some(flint)) = (
+                chord_through_part(&doublet, 0, &node_frame, &ray)?,
+                chord_through_part(&doublet, 1, &node_frame, &ray)?,
+            ) else {
                 return Err(OpossumError::Other("the ray missed a lens".into()));
             };
             assert_abs_diff_eq!(
@@ -647,9 +661,7 @@ mod test {
             let chord = placed.path_length_inside(&ray);
             assert_eq!(
                 chord,
-                alone(&assembly, part, &node_frame)?
-                    .as_body()
-                    .path_length_inside(&ray)
+                chord_through_part(&assembly, part, &node_frame, &ray)?
             );
             assert!(chord.is_some(), "x = {x}");
         }
@@ -676,31 +688,32 @@ mod test {
         assert_abs_diff_eq!(chord.get::<millimeter>(), 20.0, epsilon = 1e-9);
         Ok(())
     }
-    /// The box of an assembly is the union of the boxes of its parts, in the frame of the assembly.
+    /// Even an assembly of parts that each state their extent has none yet.
     #[test]
-    fn the_box_of_an_assembly_encloses_the_boxes_of_its_parts() -> OpmResult<()> {
-        let node_frame = Isometry::new_along_z(millimeter!(100.0))?;
-        let assembly = side_by_side()?;
-        let crown = extent(&alone(&assembly, 0, &node_frame)?.as_body().bounding_box()?);
-        let aside = extent(&alone(&assembly, 1, &node_frame)?.as_body().bounding_box()?);
-        // The second lens sits 30 mm aside and 8 mm further along z.
-        let expected = [
+    fn the_extent_of_an_assembly_cannot_be_determined_yet() -> OpmResult<()> {
+        let error = side_by_side()?.bounding_box().unwrap_err();
+        assert!(
+            error.to_string().contains("cannot be determined yet"),
+            "{error}"
+        );
+        Ok(())
+    }
+    /// A face of an assembly lies on the side of it its part lies on: the front prism of the cube
+    /// behind its entrance face and in front of the diagonal, the rear prism the other way round.
+    #[test]
+    fn an_assembly_lies_on_the_sides_its_parts_lie_on() -> OpmResult<()> {
+        let cube = cube()?;
+        let sides: Vec<_> = (0..5).map(|face| cube.side(face)).collect();
+        assert_eq!(
+            sides,
             [
-                crown[0][0].min(aside[0][0] + 30.0),
-                crown[0][1].max(aside[0][1] + 30.0),
-            ],
-            [crown[1][0].min(aside[1][0]), crown[1][1].max(aside[1][1])],
-            [
-                crown[2][0].min(aside[2][0] + 8.0),
-                crown[2][1].max(aside[2][1] + 8.0),
-            ],
-        ];
-        let bounds = extent(&assembly.moved(&node_frame).bounding_box()?);
-        for (found, wanted) in bounds.iter().flatten().zip(expected.iter().flatten()) {
-            assert_abs_diff_eq!(found, wanted, epsilon = 1e-9);
-        }
-        // Not a statement about the lenses alone: the box spans from the crown to beyond the other lens.
-        assert!(bounds[0][1] > 40.0 && bounds[0][0] < -12.0);
+                Some(Side::Behind),
+                Some(Side::InFront),
+                Some(Side::Behind),
+                Some(Side::InFront),
+                None
+            ]
+        );
         Ok(())
     }
     #[test]
@@ -718,26 +731,22 @@ mod test {
         assert!(empty.bounding_box().is_err());
         Ok(())
     }
-    /// A part that cannot state its extent leaves the assembly without one.
+    /// A part is a solid: neither a single surface nor an assembly of its own.
     #[test]
-    fn an_assembly_has_no_box_if_a_part_has_none() -> OpmResult<()> {
-        let error = cube()?.bounding_box().unwrap_err();
+    fn a_part_is_a_solid_but_not_an_assembly() -> OpmResult<()> {
+        let inner = Assembly::new(vec![prism_part()?], vec![])?;
+        let nested = part_of(Geometry::Assembly(inner), Isometry::identity()).unwrap_err();
+        assert!(nested.to_string().contains("assembly itself"), "{nested}");
+        let surface = part_of(Geometry::plane(None), Isometry::identity()).unwrap_err();
         assert!(
-            error.to_string().contains("cannot be determined"),
-            "{error}"
+            surface.to_string().contains("enclose a volume"),
+            "{surface}"
         );
         Ok(())
     }
     #[test]
-    fn an_assembly_cannot_contain_an_assembly() -> OpmResult<()> {
-        let inner = Assembly::new(vec![prism_part()?], vec![])?;
-        let nested = glass_part(Isometry::identity(), Solid::Assembly(inner))?;
-        assert!(Assembly::new(vec![nested], vec![]).is_err());
-        Ok(())
-    }
-    #[test]
     fn an_assembly_survives_a_round_trip_through_a_file() -> OpmResult<()> {
-        let splitter_cube = Geometry::Solid(Solid::Assembly(cube()?));
+        let splitter_cube = Geometry::Assembly(cube()?);
         let text =
             ron::to_string(&splitter_cube).map_err(|e| OpossumError::Other(e.to_string()))?;
         let read: Geometry =
