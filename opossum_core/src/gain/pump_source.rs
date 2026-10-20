@@ -509,13 +509,12 @@ impl PumpSource {
 mod test {
     use super::*;
     use crate::{
-        apertures::{Aperture, ApertureType},
+        apertures::{CircleShape, Outline},
         degree,
         error::OpossumError,
         gain::inversion_field::CellIndex,
         geometry::{Extruded, Face, Placed, Solid, SurfaceShape},
         millimeter,
-        types::validated_type_definitions::ValidatedCrossSection,
         utils::geom_transformation::Isometry,
     };
     use approx::assert_relative_eq;
@@ -529,11 +528,7 @@ mod test {
                 Isometry::identity(),
                 Face::new(SurfaceShape::Plane, Isometry::identity()),
                 Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
-                ValidatedCrossSection::try_new(Aperture::new_circle(
-                    radius,
-                    ApertureType::Hole,
-                    None,
-                )?)?,
+                Outline::new(CircleShape::new(radius)?, Vec::new())?,
             )?
             .into(),
             &Isometry::identity(),

@@ -13,22 +13,22 @@ use uom::si::f64::Length;
 
 use super::{Side, collect_faces};
 use crate::{
+    apertures::Outline,
     error::{OpmResult, OpossumError},
     geometry::{
-        Face, FaceBoundary, Placeable, Placement, Rim, RimRole,
+        Face, FaceBoundary, Placeable, Placement, Rim,
         body::{Body, BoundingBox},
         geo_surface::GeoSurfaceRef,
     },
     light::Ray,
-    types::validated_type_definitions::ValidatedCrossSection,
     utils::geom_transformation::Isometry,
 };
 
 /// Two faces capping a profile that is extruded along an axis.
 ///
-/// The profile is the cross section of the [`Rim`], stated in the plane perpendicular to the rim's
-/// axis; it is also the component's optic shape. The center thickness is not stored separately: it
-/// is where the rear face's vertex sits, together with any tilt of that face.
+/// The profile is the outline of the [`Rim`], stated in the plane perpendicular to the rim's axis;
+/// it is the component's optic shape. The center thickness is not stored separately: it is where
+/// the rear face's vertex sits, together with any tilt of that face.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Extruded {
     rim: Rim,
@@ -45,23 +45,18 @@ impl Extruded {
     ///   direction. The identity for a component used along its own axis, such as a lens.
     /// * `front` - the face capping the profile towards -z, stated in the `axis` frame.
     /// * `rear` - the face capping the profile towards +z, stated in the `axis` frame.
-    /// * `cross_section` - the profile, in the xy plane of the `axis` frame.
+    /// * `outline` - the profile, in the xy plane of the `axis` frame.
     ///
     /// # Errors
     ///
     /// This function returns an error if a face is curved too tightly to reach the edge of the
-    /// profile, or if the outline of the profile cannot be determined.
-    pub fn new(
-        axis: Isometry,
-        front: Face,
-        rear: Face,
-        cross_section: ValidatedCrossSection,
-    ) -> OpmResult<Self> {
-        let reach = cross_section.transversal_reach();
+    /// profile.
+    pub fn new(axis: Isometry, front: Face, rear: Face, outline: Outline) -> OpmResult<Self> {
+        let reach = outline.transversal_reach();
         front.check_reach(reach, "front face")?;
         rear.check_reach(reach, "rear face")?;
         Ok(Self {
-            rim: Rim::new(cross_section, axis, RimRole::Edge),
+            rim: Rim::new(outline, axis),
             front,
             rear,
         })
@@ -234,17 +229,17 @@ impl Body for Extruded {
         self.chord_through(at, ray.position(), ray.direction(), hits)
     }
     fn bounding_box(&self, at: Placement<'_>) -> OpmResult<BoundingBox> {
-        let cross_section = self.rim.cross_section();
-        let outline = cross_section.outline();
+        let outline = self.rim.outline();
+        let extremes = outline.extreme_points();
         let (Some(x_range), Some(y_range)) = (
-            span(outline.iter().map(|point| point.x)),
-            span(outline.iter().map(|point| point.y)),
+            span(extremes.iter().map(|point| point.x)),
+            span(extremes.iter().map(|point| point.y)),
         ) else {
             return Err(OpossumError::Other(
-                "the cross section of the body has no extent at all".into(),
+                "the outline of the body has no extent at all".into(),
             ));
         };
-        let transversal_reach = cross_section.transversal_reach();
+        let transversal_reach = outline.transversal_reach();
         let [front, rear] = Self::bounding_surfaces(at);
         let front_z = self.surface_z_range(at, front, transversal_reach)?;
         let rear_z = self.surface_z_range(at, rear, transversal_reach)?;
@@ -289,19 +284,18 @@ fn span(values: impl Iterator<Item = Length>) -> Option<Range<Length>> {
 mod test {
     use super::*;
     use crate::{
-        apertures::{Aperture, ApertureType},
+        apertures::{Bore, CircleShape, RectangleShape},
         degree,
         geometry::{Face, Geometry, Placed, Solid, SurfaceShape},
         joule, millimeter, nanometer,
-        types::validated_type_definitions::ValidatedCrossSection,
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::Vector3;
     use uom::si::{f64::Angle, length::millimeter};
 
-    /// Create a circular cross section of the given radius.
-    fn circular_cross_section(radius: Length) -> OpmResult<ValidatedCrossSection> {
-        ValidatedCrossSection::try_new(Aperture::new_circle(radius, ApertureType::Hole, None)?)
+    /// Create a circular outline of the given radius.
+    fn circular_cross_section(radius: Length) -> OpmResult<Outline> {
+        Outline::new(CircleShape::new(radius)?, Vec::new())
     }
     /// Create the two flat faces of a plate of the given thickness.
     fn plate_faces(thickness: Length) -> OpmResult<(Face, Face)> {
@@ -323,11 +317,11 @@ mod test {
     fn body_between(
         front: Face,
         rear: Face,
-        cross_section: ValidatedCrossSection,
+        outline: Outline,
         node_frame: Isometry,
     ) -> OpmResult<Placed<Extruded>> {
         Placed::new(
-            Extruded::new(Isometry::identity(), front, rear, cross_section)?,
+            Extruded::new(Isometry::identity(), front, rear, outline)?,
             &node_frame,
         )
     }
@@ -408,45 +402,15 @@ mod test {
         let body = body_between(
             front,
             rear,
-            ValidatedCrossSection::try_new(Aperture::new_rectangle(
-                millimeter!(20.0),
-                millimeter!(4.0),
-                ApertureType::Hole,
-                None,
-                None,
-            )?)?,
+            Outline::new(
+                RectangleShape::new(millimeter!(20.0), millimeter!(4.0))?,
+                Vec::new(),
+            )?,
             Isometry::identity(),
         )?;
         assert!(body.contains(&millimeter!(9.0, 1.9, 5.0)));
         assert!(!body.contains(&millimeter!(11.0, 1.9, 5.0)));
         assert!(!body.contains(&millimeter!(9.0, 2.1, 5.0)));
-        Ok(())
-    }
-    #[test]
-    fn cross_section_has_to_delimit_a_region() -> OpmResult<()> {
-        // A Gaussian aperture attenuates everywhere, an open one does not restrict anything at all
-        // and an obstruction is transparent outside its shape. None of them states where the
-        // material ends, so none of them can bound a body.
-        let soft_edged = Aperture::new_gaussian(
-            (millimeter!(5.0), millimeter!(5.0)),
-            ApertureType::Hole,
-            None,
-            None,
-        )?;
-        let unrestricted = Aperture::default();
-        let inverted = Aperture::new_circle(millimeter!(5.0), ApertureType::Obstruction, None)?;
-        for aperture in [soft_edged, unrestricted, inverted] {
-            assert!(ValidatedCrossSection::try_new(aperture).is_err());
-        }
-        // ... while a binary hole does
-        assert!(
-            ValidatedCrossSection::try_new(Aperture::new_circle(
-                millimeter!(5.0),
-                ApertureType::Hole,
-                None
-            )?)
-            .is_ok()
-        );
         Ok(())
     }
     #[test]
@@ -637,13 +601,10 @@ mod test {
         let body = body_between(
             front,
             rear,
-            ValidatedCrossSection::try_new(Aperture::new_rectangle(
-                millimeter!(20.0),
-                millimeter!(4.0),
-                ApertureType::Hole,
-                None,
-                None,
-            )?)?,
+            Outline::new(
+                RectangleShape::new(millimeter!(20.0), millimeter!(4.0))?,
+                Vec::new(),
+            )?,
             Isometry::identity(),
         )?;
         let bounds = body.bounding_box()?;
@@ -651,57 +612,28 @@ mod test {
         assert_spans(&bounds.y_range(), -2.0, 2.0);
         Ok(())
     }
-    /// A ring (a plate with a central bore) reaches as far as its outer circle. An obstruction only
-    /// takes away from the plate, so a notch cut into its edge does not widen the box either.
+    /// A ring (a plate with a central bore) reaches as far as its outer circle. A bore only takes
+    /// away from the plate, so one beside the axis does not change the box either.
     #[test]
     fn bounding_box_of_a_ring_is_that_of_its_outer_circle() -> OpmResult<()> {
-        let bounds_of_disk_with = |obstruction: Aperture| -> OpmResult<BoundingBox> {
+        let bounds_of_disk_with = |bore: Bore| -> OpmResult<BoundingBox> {
             let (front, rear) = plate_faces(millimeter!(10.0))?;
-            let cross_section = ValidatedCrossSection::try_new(Aperture::new_stack(
-                vec![
-                    Aperture::new_circle(millimeter!(8.0), ApertureType::Hole, None)?,
-                    obstruction,
-                ],
-                ApertureType::Hole,
-                None,
-                None,
-            )?)?;
-            body_between(front, rear, cross_section, Isometry::identity())?.bounding_box()
+            let outline = Outline::new(CircleShape::new(millimeter!(8.0))?, vec![bore])?;
+            body_between(front, rear, outline, Isometry::identity())?.bounding_box()
         };
-        let bore = Aperture::new_circle(millimeter!(3.0), ApertureType::Obstruction, None)?;
-        let notch = Aperture::new_circle(
-            millimeter!(3.0),
-            ApertureType::Obstruction,
-            Some(millimeter!(0.0, 9.0)),
-        )?;
-        for obstruction in [bore, notch] {
-            let bounds = bounds_of_disk_with(obstruction)?;
+        let bore = |x: f64, y: f64| -> OpmResult<Bore> {
+            Ok(Bore::new(
+                CircleShape::new(millimeter!(3.0))?,
+                millimeter!(x, y),
+                Angle::zero(),
+            ))
+        };
+        for bore in [bore(0.0, 0.0)?, bore(0.0, 4.0)?] {
+            let bounds = bounds_of_disk_with(bore)?;
             assert_spans(&bounds.x_range(), -8.0, 8.0);
             assert_spans(&bounds.y_range(), -8.0, 8.0);
             assert_spans(&bounds.z_range(), 0.0, 10.0);
         }
-        Ok(())
-    }
-    #[test]
-    fn bounding_box_follows_a_decentred_cross_section() -> OpmResult<()> {
-        // The cross section may carry an isometry of its own, which shifts the medium off the axis
-        // of the node. A box ignoring it would disagree with `contains`.
-        let (front, rear) = plate_faces(millimeter!(10.0))?;
-        let body = body_between(
-            front,
-            rear,
-            ValidatedCrossSection::try_new(Aperture::new_circle(
-                millimeter!(5.0),
-                ApertureType::Hole,
-                Some(Point2::new(millimeter!(3.0), millimeter!(4.0))),
-            )?)?,
-            Isometry::identity(),
-        )?;
-        let bounds = body.bounding_box()?;
-        assert_spans(&bounds.x_range(), -2.0, 8.0);
-        assert_spans(&bounds.y_range(), -1.0, 9.0);
-        // ... and the point of the medium farthest from the axis is the far side of that circle
-        assert!(body.contains(&millimeter!(7.5, 6.0, 5.0)));
         Ok(())
     }
     #[test]

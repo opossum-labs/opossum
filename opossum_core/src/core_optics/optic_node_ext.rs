@@ -3,6 +3,7 @@ use uom::si::f64::{Angle, Length};
 
 use crate::{
     analyzers::propagation_strategy::PropagationStrategy,
+    apertures::Outline,
     coatings::CoatingType,
     core_optics::{NodeAttrExt, OpticNode, PortType},
     error::{OpmResult, OpossumError},
@@ -11,7 +12,6 @@ use crate::{
     nodes::fluence_detector::Fluence,
     properties::Proptype,
     refractive_index::RefractiveIndexType,
-    types::validated_type_definitions::ValidatedCrossSection,
     utils::geom_transformation::Isometry,
 };
 
@@ -39,15 +39,13 @@ pub trait OpticNodeExt {
     ///
     /// # Returns
     ///
-    /// The extent, or `None` if the optic shape is open: the node is unbounded, as a detector
-    /// that records all light.
+    /// The outline of the optic shape, or `None` if the optic shape is open: the node is
+    /// unbounded, as a detector that records all light.
     ///
     /// # Errors
     ///
-    /// This function returns an error if the node does not declare an optic shape at all or if
-    /// that optic shape neither is open nor delimits a region, which leaves the extent
-    /// undefined.
-    fn cross_section(&self) -> OpmResult<Option<ValidatedCrossSection>>;
+    /// This function returns an error if the node does not declare an optic shape at all.
+    fn cross_section(&self) -> OpmResult<Option<Outline>>;
 
     /// Set local alignment (decenter, tilt) of an optical node and update its optical surfaces.
     ///
@@ -283,7 +281,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         Ok(eff_node_iso.append(surf.anchor_point_iso()))
     }
 
-    fn cross_section(&self) -> OpmResult<Option<ValidatedCrossSection>> {
+    fn cross_section(&self) -> OpmResult<Option<Outline>> {
         let Ok(Proptype::OpticShape(optic_shape)) = self.node_attr().get_property(OPTIC_SHAPE)
         else {
             return Err(OpossumError::Other(format!(
@@ -291,12 +289,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
                 self.name()
             )));
         };
-        optic_shape.cross_section().map_err(|e| {
-            OpossumError::Other(format!(
-                "the {OPTIC_SHAPE} of node '{}' does not bound a region: {e}",
-                self.name()
-            ))
-        })
+        Ok(optic_shape.outline().cloned())
     }
 
     fn set_alignment(
@@ -506,7 +499,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         };
         let mut cut = false;
         for rays in bundles.iter_mut() {
-            cut |= surface.clip_to_window(rays)?;
+            cut |= surface.clip_to_window(rays);
         }
         if cut {
             let (name, node_type) = (self.name(), self.node_type());

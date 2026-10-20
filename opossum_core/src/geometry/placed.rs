@@ -270,23 +270,21 @@ impl<T: Body> Placed<T> {
 mod test {
     use super::*;
     use crate::{
-        apertures::{Aperture, ApertureType},
+        apertures::{CircleShape, Outline},
         degree,
         geometry::{Extruded, Geometry, SurfaceShape},
         millimeter,
-        types::validated_type_definitions::ValidatedCrossSection,
     };
 
+    fn circle() -> OpmResult<Outline> {
+        Outline::new(CircleShape::new(millimeter!(10.0))?, Vec::new())
+    }
     fn lens() -> OpmResult<Geometry> {
         Geometry::singlet(
             millimeter!(50.0),
             millimeter!(-80.0),
             millimeter!(5.0),
-            ValidatedCrossSection::try_new(Aperture::new_circle(
-                millimeter!(10.0),
-                ApertureType::Hole,
-                None,
-            )?)?,
+            circle()?,
         )
     }
     #[test]
@@ -311,11 +309,7 @@ mod test {
                 SurfaceShape::Plane,
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),
-            ValidatedCrossSection::try_new(Aperture::new_circle(
-                millimeter!(10.0),
-                ApertureType::Hole,
-                None,
-            )?)?,
+            circle()?,
         )?;
         assert_placed_at_anchors(&Placed::new(turned, &node_frame)?)
     }

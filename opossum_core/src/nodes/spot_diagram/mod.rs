@@ -11,6 +11,7 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
+    apertures::Aperture,
     core_optics::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, optic_node::APERTURE_LIMIT_NOTE,
     },
@@ -248,8 +249,7 @@ impl Plottable for SpotDiagram {
         if let Ok(Proptype::Bool(plot_aperture)) = self.properties().get("plot aperture")
             && *plot_aperture
             && let Some(window) = self.cross_section()?
-            && let Some(window_plt_series) = window
-                .get()
+            && let Some(window_plt_series) = Aperture::try_from(&window)?
                 .get_plot_series(&mut PlotType::Line2D(PlotParameters::default()), legend)?
         {
             plt_series.extend(window_plt_series);

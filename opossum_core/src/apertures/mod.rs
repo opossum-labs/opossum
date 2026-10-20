@@ -32,14 +32,11 @@ mod stack;
 
 use crate::{
     degree,
-    error::{OpmResult, OpossumError},
-    generic_validators::Validate,
+    error::OpmResult,
     meter,
     prelude::Isometry,
     reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
-    types::validated_type_definitions::{
-        ValidatedAngle1D, ValidatedCenter2D, ValidatedCrossSection,
-    },
+    types::validated_type_definitions::{ValidatedAngle1D, ValidatedCenter2D},
     utils::{default_from_name::DefaultFromName, math_distribution_functions::ellipse},
 };
 use core::f64;
@@ -194,87 +191,6 @@ impl Aperture {
     pub const fn isometry(&self) -> Option<&Isometry> {
         self.isometry.as_ref()
     }
-    /// Return whether this [`Aperture`] delimits a region geometrically.
-    ///
-    /// An aperture describes how much light a surface transmits where, which is more general than
-    /// an outline: only a binary shape used as a [`ApertureType::Hole`] encloses a well-defined
-    /// region. A [`ApertureShape::Gaussian`] has no edge at all — it attenuates everywhere and
-    /// transmits nowhere completely — an [`ApertureType::Obstruction`] delimits the *complement* of
-    /// a region, and a [`ApertureShape::Stack`] bounds one only if it holds a hole with an edge
-    /// (see [`ApertureShape::delimits_region`]). Anything that has to know where a body ends,
-    /// rather than how much light passes, has to ask this first.
-    ///
-    /// # Returns
-    ///
-    /// `true` if the aperture can be read as the outline of a region.
-    #[must_use]
-    pub fn is_geometric_bound(&self) -> bool {
-        matches!(self.a_type, ApertureType::Hole) && self.shape.delimits_region()
-    }
-    /// Return the points the region of this [`Aperture`] reaches farthest in, in its xy plane.
-    ///
-    /// The implementation of [`ValidatedCrossSection::outline`], which describes the points. It
-    /// works on a bare aperture because the members of a stack are bare apertures.
-    ///
-    /// # Arguments
-    ///
-    /// * `frame` - where the surrounding stack places this aperture; the identity at the top.
-    ///
-    /// # Returns
-    ///
-    /// The extreme points of the region, with the isometry of this aperture placed in `frame`
-    /// applied; none if the shape does not bound a region.
-    fn region_outline(&self, frame: &Isometry) -> Vec<Point2<Length>> {
-        let placement = self.isometry.map_or(*frame, |own| frame.append(&own));
-        let transform = |point: Point2<Length>| {
-            let transformed =
-                placement.transform_point(&Point3::new(point.x, point.y, Length::zero()));
-            Point2::new(transformed.x, transformed.y)
-        };
-        match &self.shape {
-            ApertureShape::BinaryCircle(circle) => {
-                // A circle is indifferent to the rotation of its aperture, so only its center
-                // moves. The axis-aligned bounds follow from that center alone, while the point
-                // farthest from the origin lies on the far side of the shifted circle.
-                let center = transform(Point2::origin());
-                let radius = circle.radius();
-                let mut outline = vec![
-                    Point2::new(center.x + radius, center.y),
-                    Point2::new(center.x - radius, center.y),
-                    Point2::new(center.x, center.y + radius),
-                    Point2::new(center.x, center.y - radius),
-                ];
-                let shift = center.x.value.hypot(center.y.value);
-                if shift > 0.0 {
-                    let stretch = 1.0 + radius.value / shift;
-                    outline.push(Point2::new(center.x * stretch, center.y * stretch));
-                }
-                outline
-            }
-            ApertureShape::BinaryRectangle(rectangle) => {
-                let half_width = rectangle.width() / 2.0;
-                let half_height = rectangle.height() / 2.0;
-                [
-                    Point2::new(half_width, half_height),
-                    Point2::new(-half_width, half_height),
-                    Point2::new(-half_width, -half_height),
-                    Point2::new(half_width, -half_height),
-                ]
-                .map(transform)
-                .to_vec()
-            }
-            ApertureShape::BinaryPolygon(polygon) => {
-                polygon.points().iter().map(|p| transform(*p)).collect()
-            }
-            ApertureShape::Stack(stack) if self.shape.delimits_region() => stack
-                .apertures()
-                .iter()
-                .filter(|member| *member.aperture_type() == ApertureType::Hole)
-                .flat_map(|member| member.region_outline(&placement))
-                .collect(),
-            _ => Vec::new(),
-        }
-    }
     /// Set the shape of this [`Aperture`].
     pub fn set_shape(&mut self, shape: ApertureShape) {
         self.shape = shape;
@@ -397,69 +313,6 @@ impl Aperture {
     }
 }
 
-/// Validator accepting only those [`Aperture`]s that delimit a region.
-///
-/// See [`Aperture::is_geometric_bound`] for what that rules out and why.
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GeometricBound;
-
-impl Validate<Aperture> for GeometricBound {
-    fn validate(&self, value: &Aperture) -> OpmResult<()> {
-        if value.is_geometric_bound() {
-            Ok(())
-        } else {
-            Err(OpossumError::Other(format!(
-                "a {} aperture of shape '{}' does not delimit a region",
-                value.aperture_type(),
-                value.shape()
-            )))
-        }
-    }
-}
-
-/// The questions about the region a cross section bounds, asked in its own plane. Where the
-/// region lies in space is the business of a [`Rim`](crate::geometry::Rim).
-impl ValidatedCrossSection {
-    /// Return the points the region reaches farthest in, in its plane.
-    ///
-    /// Both the axis-aligned bounds and the largest distance from the origin follow from these
-    /// points. They are not a tessellation of the outline: a circle is described by four points
-    /// plus, if it is shifted off the origin, the single point of it lying farthest out — a
-    /// direction none of the axis-aligned extremes points in. A stack reaches as far as its holes;
-    /// its obstructions only take away from them.
-    ///
-    /// # Returns
-    ///
-    /// The extreme points of the region, with the isometry of the aperture applied.
-    #[must_use]
-    pub(crate) fn outline(&self) -> Vec<Point2<Length>> {
-        self.get().region_outline(&Isometry::identity())
-    }
-    /// Return how far the region reaches from the origin of its plane.
-    ///
-    /// # Returns
-    ///
-    /// The largest distance of a point of the region from the origin.
-    #[must_use]
-    pub(crate) fn transversal_reach(&self) -> Length {
-        self.outline().iter().fold(Length::zero(), |reach, point| {
-            Length::max(reach, meter!(point.x.value.hypot(point.y.value)))
-        })
-    }
-    /// Return whether a point of the plane lies within the region.
-    ///
-    /// # Arguments
-    ///
-    /// * `point` - the point, in the plane of the cross section.
-    #[must_use]
-    pub(crate) fn contains(&self, point: Point2<Length>) -> bool {
-        // The region has hard edges only, so a transmission above zero means "inside".
-        self.get()
-            .apodize(&Point3::new(point.x, point.y, Length::zero()))
-            > 0.0
-    }
-}
-
 /// Different aperture types
 #[derive(
     Default, Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema, EnumIter, EnsureValidated,
@@ -501,41 +354,6 @@ impl ApertureShape {
     /// Check if the aperture is [`ApertureShape::Open`]
     pub const fn is_none(&self) -> bool {
         matches!(self, Self::Open)
-    }
-    /// Check whether this shape has a hard edge, i.e. transmits either fully or not at all.
-    ///
-    /// # Returns
-    ///
-    /// `true` for the binary shapes, `false` for [`ApertureShape::Open`],
-    /// [`ApertureShape::Gaussian`] and [`ApertureShape::Stack`].
-    #[must_use]
-    pub const fn is_binary(&self) -> bool {
-        matches!(
-            self,
-            Self::BinaryCircle(_) | Self::BinaryRectangle(_) | Self::BinaryPolygon(_)
-        )
-    }
-    /// Return whether this shape bounds a region.
-    ///
-    /// A binary shape does. A stack does if all its members are binary shapes and at least one of
-    /// them is a hole: a ring, or a disk with a central bore. Obstructions alone bound nothing, a
-    /// soft member has no edge, and a nested stack is not supported.
-    ///
-    /// # Returns
-    ///
-    /// `true` if the shape can be read as the outline of a region.
-    #[must_use]
-    pub fn delimits_region(&self) -> bool {
-        match self {
-            Self::Stack(stack) => {
-                let members = stack.apertures();
-                members.iter().all(|member| member.shape().is_binary())
-                    && members
-                        .iter()
-                        .any(|member| *member.aperture_type() == ApertureType::Hole)
-            }
-            shape => shape.is_binary(),
-        }
     }
     /// Calculate the transmission factor of a given point on the [`Aperture`]. The value is in the range (0.0..=1.0)
     /// 0.0 is fully opaque, 1.0 fully transparent.
@@ -685,100 +503,9 @@ impl Plottable for Aperture {
 mod test {
     use super::*;
     use crate::{meter, millimeter};
-    use approx::assert_abs_diff_eq;
     #[test]
     fn default() {
         assert!(matches!(ApertureShape::default(), ApertureShape::Open));
-    }
-    /// A stack bounds a region if all its members are shapes with an edge and at least one of them
-    /// is a hole: a ring does, obstructions alone do not, nor does a soft or a nested member.
-    #[test]
-    fn a_stack_delimits_a_region_if_it_holds_a_hole_with_an_edge() -> OpmResult<()> {
-        let hole = Aperture::new_circle(millimeter!(10.0), ApertureType::Hole, None)?;
-        let obstruction = Aperture::new_circle(millimeter!(3.0), ApertureType::Obstruction, None)?;
-        let soft = Aperture::new_gaussian(
-            (millimeter!(5.0), millimeter!(5.0)),
-            ApertureType::Hole,
-            None,
-            None,
-        )?;
-        let stack = |members: Vec<Aperture>| -> OpmResult<ApertureShape> {
-            Ok(ApertureShape::Stack(StackShape::new(members)?))
-        };
-        let nested = Aperture::new(stack(vec![hole.clone()])?, ApertureType::Hole, None, None)?;
-        assert!(stack(vec![hole.clone(), obstruction.clone()])?.delimits_region());
-        assert!(!stack(vec![obstruction])?.delimits_region());
-        assert!(!stack(vec![hole, soft])?.delimits_region());
-        assert!(!stack(vec![nested])?.delimits_region());
-        assert!(ApertureShape::BinaryCircle(CircleShape::default()).delimits_region());
-        assert!(!ApertureShape::Open.delimits_region());
-        Ok(())
-    }
-    /// A cross section reaches as far from its origin as its farthest point: a disk of 5 mm
-    /// shifted by (3, 4) mm reaches 10 mm, a ring as far as its outer circle, even with a notch cut
-    /// into its edge.
-    #[test]
-    fn a_cross_section_reaches_as_far_as_its_farthest_point() -> OpmResult<()> {
-        let reach = |aperture: Aperture| -> OpmResult<f64> {
-            Ok(ValidatedCrossSection::try_new(aperture)?
-                .transversal_reach()
-                .value)
-        };
-        let shifted = Aperture::new_circle(
-            millimeter!(5.0),
-            ApertureType::Hole,
-            Some(millimeter!(3.0, 4.0)),
-        )?;
-        let notched_ring = Aperture::new_stack(
-            vec![
-                Aperture::new_circle(millimeter!(8.0), ApertureType::Hole, None)?,
-                Aperture::new_circle(millimeter!(2.0), ApertureType::Obstruction, None)?,
-                Aperture::new_circle(
-                    millimeter!(3.0),
-                    ApertureType::Obstruction,
-                    Some(millimeter!(0.0, 9.0)),
-                )?,
-            ],
-            ApertureType::Hole,
-            None,
-            None,
-        )?;
-        assert_abs_diff_eq!(reach(shifted)?, millimeter!(10.0).value, epsilon = 1e-12);
-        assert_abs_diff_eq!(
-            reach(notched_ring)?,
-            millimeter!(8.0).value,
-            epsilon = 1e-12
-        );
-        Ok(())
-    }
-    /// A stack takes its members along where it is placed: a centered disk of 5 mm in a stack shifted
-    /// by (3, 4) mm reaches 10 mm, and in a stack turned by 45° it still spans 5 mm along x.
-    #[test]
-    fn a_stack_takes_its_members_along_where_it_is_placed() -> OpmResult<()> {
-        let placed_disk = |shift: Option<Point2<Length>>, rotation: Option<Angle>| {
-            let disk = Aperture::new_circle(millimeter!(5.0), ApertureType::Hole, None)?;
-            ValidatedCrossSection::try_new(Aperture::new_stack(
-                vec![disk],
-                ApertureType::Hole,
-                shift,
-                rotation,
-            )?)
-        };
-        let shifted = placed_disk(Some(millimeter!(3.0, 4.0)), None)?;
-        assert_abs_diff_eq!(
-            shifted.transversal_reach().value,
-            millimeter!(10.0).value,
-            epsilon = 1e-12
-        );
-        let turned = placed_disk(None, Some(degree!(45.0)))?;
-        let largest_x = turned
-            .outline()
-            .iter()
-            .fold(f64::NEG_INFINITY, |largest, point| {
-                largest.max(point.x.value)
-            });
-        assert_abs_diff_eq!(largest_x, millimeter!(5.0).value, epsilon = 1e-12);
-        Ok(())
     }
     #[test]
     fn test_new_circle() {

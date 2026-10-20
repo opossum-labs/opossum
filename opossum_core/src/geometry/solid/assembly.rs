@@ -313,14 +313,13 @@ impl Body for Assembly {
 mod test {
     use super::*;
     use crate::{
-        apertures::{Aperture, ApertureType, CircleShape},
+        apertures::{CircleShape, Outline},
         degree,
         geometry::{Geometry, ParametricSolid, Placed, SurfaceShape, body::BoundingBox},
         joule,
         light::Ray,
         millimeter, nanometer,
         refractive_index::RefrIndexConst,
-        types::validated_type_definitions::ValidatedCrossSection,
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::{Point3, Vector3};
@@ -330,13 +329,8 @@ mod test {
         length::millimeter,
     };
 
-    fn circle() -> OpmResult<ValidatedCrossSection> {
-        ValidatedCrossSection::try_new(Aperture::new(
-            CircleShape::new(millimeter!(12.5))?.into(),
-            ApertureType::Hole,
-            None,
-            None,
-        )?)
+    fn circle() -> OpmResult<Outline> {
+        Outline::new(CircleShape::new(millimeter!(12.5))?, Vec::new())
     }
     /// A part made of glass with a refractive index of 1.5.
     fn glass_part(placement: Isometry, solid: Solid) -> OpmResult<Part> {

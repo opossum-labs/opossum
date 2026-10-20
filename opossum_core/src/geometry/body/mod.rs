@@ -19,11 +19,8 @@
 //! [`Plane`](crate::geometry::Plane)s with a circular cross section, a slab two planes with a
 //! rectangular one, a lens two [`Sphere`](crate::geometry::Sphere)s.
 //!
-//! The cross section is expressed as an [`Aperture`](crate::apertures::Aperture), but only those
-//! apertures that actually delimit a region qualify, which is what
-//! [`ValidatedCrossSection`](crate::types::validated_type_definitions::ValidatedCrossSection)
-//! guarantees — an aperture is in general a transmission mask, and softening, inverting or omitting
-//! the transmission edge says nothing about where the material ends.
+//! The cross section is the [`Outline`](crate::apertures::Outline) of the optic shape: an edge
+//! with bores through it, which always delimits a region.
 
 use crate::{
     apertures::{CircleShape, OpticShape, RectangleShape},

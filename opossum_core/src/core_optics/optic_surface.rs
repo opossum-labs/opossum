@@ -14,7 +14,7 @@ use crate::{
     },
     error::{OpmResult, OpossumError},
     geometry::{
-        Geometry, Placed, Rim, RimRole,
+        Geometry, Placed, Rim,
         geo_surface::{GeoSurface, GeoSurfaceRef},
     },
     light::{Ray, Rays},
@@ -158,7 +158,7 @@ impl OpticSurface {
     }
     /// Returns the window of this [`OpticSurface`], or `None` if it records all light.
     ///
-    /// The window of a detector ([`RimRole::Window`]) decides what is recorded (see
+    /// The window of a detector ([`SurfaceExtent::Window`]) decides what is recorded (see
     /// [`OpticSurface::records_at`]), not what is hit.
     #[must_use]
     pub const fn window(&self) -> Option<&Rim> {
@@ -188,22 +188,20 @@ impl OpticSurface {
     }
     /// Return whether this [`OpticSurface`] records a hit at the given point.
     ///
-    /// Only a detector's window ([`RimRole::Window`]) leaves points unrecorded: those outside it.
+    /// Only a detector's window ([`SurfaceExtent::Window`]) leaves points unrecorded: those outside
+    /// it.
     ///
     /// # Arguments
     ///
     /// * `point` - a point on this surface, in global coordinates.
     #[must_use]
     pub fn records_at(&self, point: &Point3<Length>) -> bool {
-        match &self.window {
-            Some(rim) if rim.role() == RimRole::Window => {
-                rim.contains(point, &self.node_frame(&*self.geo_surface.0))
-            }
-            _ => true,
-        }
+        self.window
+            .as_ref()
+            .is_none_or(|rim| rim.contains(point, &self.node_frame(&*self.geo_surface.0)))
     }
     /// Cut a bundle of rays that passed this [`OpticSurface`] to what it records: the rays within
-    /// a detector's window ([`RimRole::Window`]).
+    /// a detector's window ([`SurfaceExtent::Window`]).
     ///
     /// # Arguments
     ///
@@ -212,18 +210,10 @@ impl OpticSurface {
     /// # Returns
     ///
     /// `true` if valid rays were cut.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if a ray cannot be apodized.
-    pub fn clip_to_window(&self, rays: &mut Rays) -> OpmResult<bool> {
-        match &self.window {
-            Some(rim) if rim.role() == RimRole::Window => {
-                let frame = rim.frame(&self.node_frame(&*self.geo_surface.0));
-                rays.apodize(rim.cross_section().get(), &frame)
-            }
-            _ => Ok(false),
-        }
+    pub fn clip_to_window(&self, rays: &mut Rays) -> bool {
+        self.window
+            .as_ref()
+            .is_some_and(|rim| rays.invalidate_outside(rim, &self.node_frame(&*self.geo_surface.0)))
     }
     /// Return the frame of the node this surface belongs to, derived from where its geometric
     /// surface sits right now: that surface's isometry, minus its anchor.
@@ -413,7 +403,7 @@ mod test {
     use crate::{
         J_per_cm2,
         analyzers::RayTraceConfig,
-        apertures::{Aperture, ApertureType},
+        apertures::{CircleShape, Outline},
         coatings::CoatingType,
         degree,
         error::{OpmResult, OpossumError},
@@ -424,19 +414,14 @@ mod test {
         joule,
         light::{Ray, Rays},
         meter, millimeter, nanometer,
-        types::validated_type_definitions::ValidatedCrossSection,
         utils::geom_transformation::Isometry,
     };
     use std::sync::Arc;
     use uuid::Uuid;
 
-    /// A circular cross section of the given radius in millimeter.
-    fn circle(radius: f64) -> OpmResult<ValidatedCrossSection> {
-        ValidatedCrossSection::try_new(Aperture::new_circle(
-            millimeter!(radius),
-            ApertureType::Hole,
-            None,
-        )?)
+    /// A circular outline of the given radius in millimeter.
+    fn circle(radius: f64) -> OpmResult<Outline> {
+        Outline::new(CircleShape::new(millimeter!(radius))?, Vec::new())
     }
     /// The face of the geometry with the given number, placed at the given node.
     fn face_of(geometry: &Geometry, node_frame: &Isometry, face: usize) -> OpmResult<OpticSurface> {

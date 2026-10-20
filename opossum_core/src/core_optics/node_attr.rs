@@ -546,10 +546,9 @@ pub trait HasNodeAttr {
 mod test {
     use super::*;
     use crate::{
-        apertures::{Aperture, ApertureType},
+        apertures::{CircleShape, Outline},
         geometry::{Extruded, Face, SurfaceShape},
         millimeter,
-        types::validated_type_definitions::ValidatedCrossSection,
     };
 
     fn test_body() -> OpmResult<Placed<Solid>> {
@@ -561,11 +560,7 @@ mod test {
                     SurfaceShape::Plane,
                     Isometry::new_along_z(millimeter!(10.0))?,
                 ),
-                ValidatedCrossSection::try_new(Aperture::new_circle(
-                    millimeter!(5.0),
-                    ApertureType::Hole,
-                    None,
-                )?)?,
+                Outline::new(CircleShape::new(millimeter!(5.0))?, Vec::new())?,
             )?
             .into(),
             &Isometry::identity(),

@@ -17,12 +17,12 @@ use serde::{Deserialize, Serialize};
 use uom::si::f64::{Angle, Length};
 
 use crate::{
+    apertures::Outline,
     error::OpmResult,
     geometry::{
-        Extruded, FaceBoundary, Placeable, Placed, Placement, Rim, RimRole, Solid,
+        Extruded, FaceBoundary, Placeable, Placed, Placement, Rim, Solid,
         face::{Face, SurfaceShape},
     },
-    types::validated_type_definitions::ValidatedCrossSection,
     utils::geom_transformation::Isometry,
 };
 
@@ -43,23 +43,23 @@ impl Geometry {
     /// * `front_radius` - radius of curvature of the front face; infinite for a flat face.
     /// * `rear_radius` - radius of curvature of the rear face; infinite for a flat face.
     /// * `center_thickness` - distance between the two vertices.
-    /// * `cross_section` - the transversal extent (optic shape).
+    /// * `outline` - the transversal extent (optic shape).
     ///
     /// # Errors
     ///
     /// This function returns an error if the center thickness is not finite or if a face is curved
-    /// too tightly to reach the edge of the cross section.
+    /// too tightly to reach the edge of the outline.
     pub fn singlet(
         front_radius: Length,
         rear_radius: Length,
         center_thickness: Length,
-        cross_section: ValidatedCrossSection,
+        outline: Outline,
     ) -> OpmResult<Self> {
         Self::two_faced(
             SurfaceShape::spherical(front_radius),
             SurfaceShape::spherical(rear_radius),
             Isometry::new_along_z(center_thickness)?,
-            cross_section,
+            outline,
         )
     }
     /// A cylindrical singlet lens: two cylindrical (or flat) faces a center thickness apart.
@@ -69,23 +69,23 @@ impl Geometry {
     /// * `front_radius` - radius of curvature of the front face; infinite for a flat face.
     /// * `rear_radius` - radius of curvature of the rear face; infinite for a flat face.
     /// * `center_thickness` - distance between the two vertices.
-    /// * `cross_section` - the transversal extent (optic shape).
+    /// * `outline` - the transversal extent (optic shape).
     ///
     /// # Errors
     ///
     /// This function returns an error if the center thickness is not finite or if a face is curved
-    /// too tightly to reach the edge of the cross section.
+    /// too tightly to reach the edge of the outline.
     pub fn cylindrical_singlet(
         front_radius: Length,
         rear_radius: Length,
         center_thickness: Length,
-        cross_section: ValidatedCrossSection,
+        outline: Outline,
     ) -> OpmResult<Self> {
         Self::two_faced(
             SurfaceShape::cylindrical(front_radius),
             SurfaceShape::cylindrical(rear_radius),
             Isometry::new_along_z(center_thickness)?,
-            cross_section,
+            outline,
         )
     }
     /// A wedge: two flat faces, the rear one tilted about the local x axis.
@@ -94,7 +94,7 @@ impl Geometry {
     ///
     /// * `center_thickness` - distance between the two faces on the axis.
     /// * `wedge_angle` - tilt of the rear face.
-    /// * `cross_section` - the transversal extent (optic shape).
+    /// * `outline` - the transversal extent (optic shape).
     ///
     /// # Errors
     ///
@@ -102,7 +102,7 @@ impl Geometry {
     pub fn wedge(
         center_thickness: Length,
         wedge_angle: Angle,
-        cross_section: ValidatedCrossSection,
+        outline: Outline,
     ) -> OpmResult<Self> {
         let tilt = Isometry::new(
             Point3::origin(),
@@ -112,73 +112,71 @@ impl Geometry {
             SurfaceShape::Plane,
             SurfaceShape::Plane,
             Isometry::new_along_z(center_thickness)?.append(&tilt),
-            cross_section,
+            outline,
         )
     }
     /// A single surface.
     ///
     /// # Arguments
     ///
-    /// * `axis` - the frame of the cross section relative to the node; its z axis is the direction
-    ///   the cross section is projected along. The identity for a surface used along its own axis.
+    /// * `axis` - the frame of the outline relative to the node; its z axis is the direction the
+    ///   outline is projected along. The identity for a surface used along its own axis.
     /// * `shape` - the shape of the surface.
     /// * `vertex` - position and orientation of its vertex, stated in the `axis` frame.
-    /// * `cross_section` - its transversal extent in the xy plane of the `axis` frame, or `None`
-    ///   for an unbounded (virtual) surface.
+    /// * `outline` - its transversal extent in the xy plane of the `axis` frame, or `None` for an
+    ///   unbounded (virtual) surface.
     ///
     /// # Errors
     ///
     /// This function returns an error if the surface is curved too tightly to reach the edge of the
-    /// cross section, or if the outline of the cross section cannot be determined.
+    /// outline.
     pub fn surface(
         axis: Isometry,
         shape: SurfaceShape,
         vertex: Isometry,
-        cross_section: Option<ValidatedCrossSection>,
+        outline: Option<Outline>,
     ) -> OpmResult<Self> {
         Ok(Self::Surface(Box::new(SurfaceGeometry::new(
             axis,
             shape,
             vertex,
-            cross_section,
-            RimRole::Edge,
+            outline,
+            SurfaceExtent::Edge,
         )?)))
     }
-    /// A detector: a surface at the node that records the light within its cross section and lets
-    /// all of it pass (see [`RimRole::Window`]).
+    /// A detector: a surface at the node that records the light within its outline and lets all
+    /// of it pass (see [`SurfaceExtent::Window`]).
     ///
     /// # Arguments
     ///
     /// * `shape` - the shape of the surface the light is recorded on.
-    /// * `cross_section` - the window the light is recorded within, or `None` to record all of it.
+    /// * `outline` - the window the light is recorded within, or `None` to record all of it.
     ///
     /// # Errors
     ///
     /// See [`Geometry::surface`].
-    pub fn detector(
-        shape: SurfaceShape,
-        cross_section: Option<ValidatedCrossSection>,
-    ) -> OpmResult<Self> {
+    pub fn detector(shape: SurfaceShape, outline: Option<Outline>) -> OpmResult<Self> {
         Ok(Self::Surface(Box::new(SurfaceGeometry::new(
             Isometry::identity(),
             shape,
             Isometry::identity(),
-            cross_section,
-            RimRole::Window,
+            outline,
+            SurfaceExtent::Window,
         )?)))
     }
     /// A flat surface at the node itself.
     ///
     /// # Arguments
     ///
-    /// * `cross_section` - its transversal extent, or `None` for an unbounded (virtual) surface.
+    /// * `outline` - its transversal extent, or `None` for an unbounded (virtual) surface.
     #[must_use]
-    pub fn plane(cross_section: Option<ValidatedCrossSection>) -> Self {
-        // A plane reaches every cross section, so nothing is left to check.
+    pub fn plane(outline: Option<Outline>) -> Self {
+        // A plane reaches every outline, so nothing is left to check.
         Self::Surface(Box::new(SurfaceGeometry {
             face: Face::new(SurfaceShape::Plane, Isometry::identity()),
-            rim: cross_section
-                .map(|cross_section| Rim::new(cross_section, Isometry::identity(), RimRole::Edge)),
+            extent: outline.map_or(SurfaceExtent::Open, |outline| {
+                SurfaceExtent::Edge(Rim::new(outline, Isometry::identity()))
+            }),
         }))
     }
     /// An extruded solid along the node's own axis whose front vertex sits at the node.
@@ -188,7 +186,7 @@ impl Geometry {
     /// * `front` - the shape of the front face.
     /// * `rear` - the shape of the rear face.
     /// * `rear_vertex` - position and orientation of the rear face's vertex relative to the node.
-    /// * `cross_section` - the transversal extent (optic shape).
+    /// * `outline` - the transversal extent (optic shape).
     ///
     /// # Errors
     ///
@@ -197,14 +195,14 @@ impl Geometry {
         front: SurfaceShape,
         rear: SurfaceShape,
         rear_vertex: Isometry,
-        cross_section: ValidatedCrossSection,
+        outline: Outline,
     ) -> OpmResult<Self> {
         Ok(Self::Solid(
             Extruded::new(
                 Isometry::identity(),
                 Face::new(front, Isometry::identity()),
                 Face::new(rear, rear_vertex),
-                cross_section,
+                outline,
             )?
             .into(),
         ))
@@ -254,14 +252,27 @@ impl FaceBoundary for Geometry {
 
 /// A single surface without thickness.
 ///
-/// The face is stated relative to the node. The rim, if there is one, keeps the axis its cross
-/// section is extruded along; an off-axis parabola uses it to measure its optic shape parallel to
-/// the axis of its parent parabola. A surface without a cross section has no rim and so no axis
-/// of its own, which is why the axis is already applied to the face.
+/// The face is stated relative to the node. The rim of its extent, if there is one, keeps the axis
+/// its outline is extruded along; an off-axis parabola uses it to measure its optic shape parallel
+/// to the axis of its parent parabola. An open surface has no rim and so no axis of its own, which
+/// is why the axis is already applied to the face.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SurfaceGeometry {
     face: Face,
-    rim: Option<Rim>,
+    extent: SurfaceExtent,
+}
+
+/// How far a [`SurfaceGeometry`] reaches sideways, and what its rim means for a ray outside it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum SurfaceExtent {
+    /// The surface is unbounded.
+    Open,
+    /// The component ends at the rim: a ray outside misses it, and the analyzer's missed surface
+    /// strategy decides what happens to the ray.
+    Edge(Rim),
+    /// The rim only bounds what a detector records: a ray outside passes the surface like one
+    /// inside, but is not recorded and leaves no hit.
+    Window(Rim),
 }
 
 impl SurfaceGeometry {
@@ -269,30 +280,32 @@ impl SurfaceGeometry {
     ///
     /// # Arguments
     ///
-    /// * `axis` - the frame of the cross section relative to the node.
+    /// * `axis` - the frame of the outline relative to the node.
     /// * `shape` - the shape of the surface.
     /// * `vertex` - position and orientation of its vertex, stated in the `axis` frame.
-    /// * `cross_section` - its transversal extent, or `None` for an unbounded surface.
-    /// * `role` - what the edge of the cross section means for a ray outside it.
+    /// * `outline` - its transversal extent, or `None` for an unbounded surface.
+    /// * `extent` - what the rim of the outline means for a ray outside it.
     ///
     /// # Errors
     ///
     /// This function returns an error if the surface is curved too tightly to reach the edge of the
-    /// cross section, or if the outline of the cross section cannot be determined.
+    /// outline.
     fn new(
         axis: Isometry,
         shape: SurfaceShape,
         vertex: Isometry,
-        cross_section: Option<ValidatedCrossSection>,
-        role: RimRole,
+        outline: Option<Outline>,
+        extent: fn(Rim) -> SurfaceExtent,
     ) -> OpmResult<Self> {
         let face = Face::new(shape, axis.append(&vertex));
-        if let Some(cross_section) = &cross_section {
-            face.check_reach(cross_section.transversal_reach(), "surface")?;
+        if let Some(outline) = &outline {
+            face.check_reach(outline.transversal_reach(), "surface")?;
         }
         Ok(Self {
             face,
-            rim: cross_section.map(|cross_section| Rim::new(cross_section, axis, role)),
+            extent: outline.map_or(SurfaceExtent::Open, |outline| {
+                extent(Rim::new(outline, axis))
+            }),
         })
     }
     /// The number of the one face of a surface.
@@ -304,23 +317,24 @@ impl Placeable for SurfaceGeometry {
         vec![(&self.face, Isometry::identity())]
     }
     fn window(&self) -> Option<&Rim> {
-        self.rim
-            .as_ref()
-            .filter(|rim| rim.role() == RimRole::Window)
+        match &self.extent {
+            SurfaceExtent::Window(rim) => Some(rim),
+            SurfaceExtent::Open | SurfaceExtent::Edge(_) => None,
+        }
     }
 }
 
-/// A surface ends at the edge of its cross section, if it has one. The window of a detector is no
-/// edge: the surface reaches as far as light does.
+/// A surface ends at its edge, if it has one. The window of a detector is no edge: the surface
+/// reaches as far as light does.
 impl FaceBoundary for SurfaceGeometry {
     fn includes(&self, at: Placement<'_>, face: usize, point: &Point3<Length>) -> bool {
         let Some(surface) = at.surfaces().get(face) else {
             return false;
         };
-        self.rim
-            .as_ref()
-            .filter(|rim| rim.role() == RimRole::Edge)
-            .is_none_or(|rim| rim.bounds(&*surface.0, point, at.node_frame()))
+        match &self.extent {
+            SurfaceExtent::Edge(rim) => rim.bounds(&*surface.0, point, at.node_frame()),
+            SurfaceExtent::Open | SurfaceExtent::Window(_) => true,
+        }
     }
 }
 
@@ -328,7 +342,7 @@ impl FaceBoundary for SurfaceGeometry {
 mod test {
     use super::*;
     use crate::{
-        apertures::{Aperture, ApertureType, CircleShape},
+        apertures::CircleShape,
         degree,
         error::OpossumError,
         geometry::{Assembly, ParametricSolid, Part, Side},
@@ -340,13 +354,8 @@ mod test {
     use approx::assert_abs_diff_eq;
     use uom::si::length::millimeter;
 
-    fn circle() -> OpmResult<ValidatedCrossSection> {
-        ValidatedCrossSection::try_new(Aperture::new(
-            CircleShape::new(millimeter!(12.5))?.into(),
-            ApertureType::Hole,
-            None,
-            None,
-        )?)
+    fn circle() -> OpmResult<Outline> {
+        Outline::new(CircleShape::new(millimeter!(12.5))?, Vec::new())
     }
     #[test]
     fn a_surface_has_one_face() -> OpmResult<()> {
@@ -410,27 +419,27 @@ mod test {
         }
         Ok(())
     }
-    /// A curved face has to reach as far out as the cross section it is bounded by; a sphere or a
+    /// A curved face has to reach as far out as the outline it is bounded by; a sphere or a
     /// cylinder ends at its radius of curvature. Exactly reaching it (a hemisphere) is still a shape.
     #[test]
-    fn a_cross_section_beyond_the_curvature_is_rejected() -> OpmResult<()> {
+    fn an_outline_beyond_the_curvature_is_rejected() -> OpmResult<()> {
         let flat = millimeter!(f64::INFINITY);
         for radius in [10.0, -10.0] {
             let curved = millimeter!(radius);
             for (front, rear) in [(curved, flat), (flat, curved)] {
                 let error = Geometry::singlet(front, rear, millimeter!(5.0), circle()?)
-                    .expect_err("a curvature tighter than the cross section was accepted");
+                    .expect_err("a curvature tighter than the outline was accepted");
                 assert!(error.to_string().contains("does not reach"), "{error}");
             }
             assert!(
                 Geometry::cylindrical_singlet(curved, flat, millimeter!(5.0), circle()?).is_err()
             );
-            let mirror = |cross_section| {
+            let mirror = |outline| {
                 Geometry::surface(
                     Isometry::identity(),
                     SurfaceShape::spherical(curved),
                     Isometry::identity(),
-                    cross_section,
+                    outline,
                 )
             };
             assert!(mirror(Some(circle()?)).is_err());
@@ -499,7 +508,7 @@ mod test {
             .place(&Isometry::identity())?;
         assert_eq!(
             bounded.window(),
-            Some(&Rim::new(circle()?, Isometry::identity(), RimRole::Window))
+            Some(&Rim::new(circle()?, Isometry::identity()))
         );
         assert!(bounded.includes(SurfaceGeometry::FACE, &far));
         let open = Geometry::detector(SurfaceShape::Plane, None)?.place(&Isometry::identity())?;

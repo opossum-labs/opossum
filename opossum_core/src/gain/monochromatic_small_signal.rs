@@ -293,7 +293,7 @@ impl Extraction for MonochromaticSmallSignalGain {
 mod test {
     use super::*;
     use crate::{
-        apertures::{Aperture, ApertureType},
+        apertures::{CircleShape, Outline},
         degree,
         gain::{
             AnalyticPump, GainModel, LambertBeerProfile, LongitudinalProfile, PumpDirection,
@@ -304,7 +304,6 @@ mod test {
         joule,
         light::Ray,
         millimeter, nanometer, reciprocal_centimeter,
-        types::validated_type_definitions::ValidatedCrossSection,
         utils::{geom_transformation::Isometry, super_gaussian::SuperGaussianShape},
     };
     use approx::assert_relative_eq;
@@ -324,11 +323,7 @@ mod test {
                 Isometry::identity(),
                 Face::new(SurfaceShape::Plane, Isometry::identity()),
                 Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
-                ValidatedCrossSection::try_new(Aperture::new_circle(
-                    radius,
-                    ApertureType::Hole,
-                    None,
-                )?)?,
+                Outline::new(CircleShape::new(radius)?, Vec::new())?,
             )?
             .into(),
             &Isometry::identity(),
@@ -932,11 +927,7 @@ mod test {
                 Isometry::identity(),
                 entrance,
                 exit,
-                ValidatedCrossSection::try_new(Aperture::new_circle(
-                    millimeter!(aperture_mm),
-                    ApertureType::Hole,
-                    None,
-                )?)?,
+                Outline::new(CircleShape::new(millimeter!(aperture_mm))?, Vec::new())?,
             )?
             .into(),
             &Isometry::identity(),
@@ -1001,11 +992,7 @@ mod test {
                 Isometry::identity(),
                 entrance,
                 exit,
-                ValidatedCrossSection::try_new(Aperture::new_circle(
-                    millimeter!(aperture_mm),
-                    ApertureType::Hole,
-                    None,
-                )?)?,
+                Outline::new(CircleShape::new(millimeter!(aperture_mm))?, Vec::new())?,
             )?
             .into(),
             &Isometry::identity(),

@@ -542,13 +542,12 @@ fn cell_center(range: &Range<Length>, count: usize, index: usize) -> Length {
 mod test {
     use super::*;
     use crate::{
-        apertures::{Aperture, ApertureType},
+        apertures::{CircleShape, Outline},
         core_optics::{OpticNode, node_attr::NodePositioning, volumetric::Volumetric},
         degree,
         geometry::{Extruded, Face, Placed, SurfaceShape},
         millimeter,
         nodes::Lens,
-        types::validated_type_definitions::ValidatedCrossSection,
         utils::geom_transformation::Isometry,
     };
     use approx::assert_abs_diff_eq;
@@ -562,11 +561,7 @@ mod test {
                 Isometry::identity(),
                 Face::new(SurfaceShape::Plane, Isometry::identity()),
                 Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
-                ValidatedCrossSection::try_new(Aperture::new_circle(
-                    radius,
-                    ApertureType::Hole,
-                    None,
-                )?)?,
+                Outline::new(CircleShape::new(radius)?, Vec::new())?,
             )?
             .into(),
             &placement,
