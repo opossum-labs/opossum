@@ -176,13 +176,8 @@ fn ensure_node_isometry(
     }
 
     if let Some(target_uuid) = graph.g[node_idx].referenced_node_id() {
-        let target_idx = graph.node_idx_by_uuid(target_uuid).ok_or_else(|| {
-            OpossumError::Analysis(format!(
-                "referenced node with id {target_uuid} not found in graph"
-            ))
-        })?;
-
-        let target_iso = graph.g[target_idx]
+        let target_iso = graph
+            .reference_target_mut(target_uuid)?
             .positioning()
             .effective_position()
             .copied();
@@ -201,7 +196,7 @@ fn ensure_node_isometry(
             .copied();
 
         if let Some(calculated_iso) = calculated_iso {
-            let target_node = &mut graph.g[target_idx];
+            let target_node = graph.reference_target_mut(target_uuid)?;
             info!(
                 "Forward reference {node_info} positioned target node {}.",
                 target_node.name()

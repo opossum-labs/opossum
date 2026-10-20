@@ -179,16 +179,205 @@ mod test {
 
     use super::*;
     use crate::{
-        analyzers::AnalyzerType,
-        core_optics::PortType,
-        joule, millimeter,
+        analyzers::{
+            Analyzer, AnalyzerType, GhostFocusConfig, energy::EnergyAnalyzer,
+            ghostfocus::GhostFocusAnalyzer, raytrace::RayTracingAnalyzer,
+        },
+        core_optics::{Alignable, PortType},
+        degree, joule,
+        light::{LightData, Rays, lightdata::energy_data_builder::EnergyDataBuilder},
+        millimeter,
         nodes::{
-            Dummy, Lens, NodeGroup, RayPropagationVisualizer, SourcePort, ThinMirror,
-            collimated_line_ray_builder, test_helper::helper::*,
+            Dummy, EnergyMeter, Lens, NodeGroup, ParaxialSurface, RayPropagationVisualizer,
+            SourcePort, ThinMirror, collimated_line_ray_builder, round_collimated_ray_builder,
+            test_helper::helper::*,
         },
         opm_document::OpmDocument,
         refractive_index::RefrIndexConst,
+        utils::geom_transformation::Isometry,
     };
+    use approx::assert_relative_eq;
+
+    /// A double pass as in `workshop_09_phelix`: a lens, a mirror sending the light back through
+    /// it at a slight angle, an inverted reference on the lens for the way back, and a meter.
+    fn double_pass() -> OpmResult<[OpticRef; 4]> {
+        let lens = OpticRef::new(Box::new(ParaxialSurface::new("lens", millimeter!(500.0))?));
+        let mirror = OpticRef::new(Box::new(
+            ThinMirror::new("mirror").with_tilt(degree!(1.0, 0.0, 0.0))?,
+        ));
+        let mut back = NodeReference::from_node(&lens)?;
+        back.set_inverted(true)?;
+        let meter = OpticRef::new(Box::new(EnergyMeter::default()));
+        Ok([lens, mirror, OpticRef::new(Box::new(back)), meter])
+    }
+    /// A part of a model: the component itself, or a group holding only it, its ports mapped
+    /// outward as `input_1` and `output_1`.
+    fn part(node: &OpticRef, grouped: bool) -> OpmResult<OpticRef> {
+        if !grouped {
+            return Ok(node.clone());
+        }
+        let mut group = NodeGroup::new("group");
+        let id = group.add_node_ref(node.clone())?;
+        group.map_input_port(id, &node.ports().names(&PortType::Input)[0], "input_1")?;
+        group.map_output_port(id, &node.ports().names(&PortType::Output)[0], "output_1")?;
+        Ok(OpticRef::new(Box::new(group)))
+    }
+    /// A model of a source followed by `parts` in a row, 100 mm apart, each component alone or in
+    /// a group of its own as `grouped` says.
+    ///
+    /// # Returns
+    ///
+    /// The model and the uuid of its source.
+    fn model(parts: &[OpticRef], grouped: &[bool]) -> OpmResult<(NodeGroup, Uuid)> {
+        let mut model = NodeGroup::default();
+        let source = model.add_node(SourcePort::default())?;
+        let mut upstream = (source, "output_1".to_string());
+        for (node, grouped) in parts.iter().zip(grouped) {
+            let node = part(node, *grouped)?;
+            let id = model.add_node_ref(node.clone())?;
+            let input = node.ports().names(&PortType::Input)[0].clone();
+            model.connect_nodes(upstream.0, &upstream.1, id, &input, millimeter!(100.0))?;
+            upstream = (id, node.ports().names(&PortType::Output)[0].clone());
+        }
+        Ok((model, source))
+    }
+    /// The light the meter of `model` recorded.
+    fn metered(model: &NodeGroup, meter: Uuid) -> OpmResult<LightData> {
+        let (meter, _) = model.node_recursive(meter)?;
+        meter
+            .as_any()
+            .downcast_ref::<EnergyMeter>()
+            .and_then(EnergyMeter::light_data)
+            .cloned()
+            .ok_or_else(|| OpossumError::Other("the meter recorded nothing".into()))
+    }
+    /// What a model of `parts` delivers in every analysis: where each part was placed, and what
+    /// its meter, the last part, recorded in a ray trace, an energy flow and a ghost focus
+    /// analysis.
+    struct Outcome {
+        placements: Vec<Isometry>,
+        traced: LightData,
+        energy: LightData,
+        ghosts: LightData,
+    }
+    fn outcome(parts: &[OpticRef], grouped: &[bool]) -> OpmResult<Outcome> {
+        let ids: Vec<Uuid> = parts.iter().map(OpticRef::uuid).collect();
+        let meter = ids[ids.len() - 1];
+        let rays = || round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 3);
+
+        let (mut placed, source) = model(parts, grouped)?;
+        let mut config = RayTraceConfig::default();
+        config.map_source(source, rays()?);
+        AnalysisRayTrace::calc_node_positions(
+            &mut placed,
+            LightResult::default(),
+            &config.for_positioning(),
+        )?;
+        let placements = ids
+            .iter()
+            .map(|id| {
+                placed
+                    .node_recursive(*id)?
+                    .0
+                    .effective_position()
+                    .copied()
+                    .ok_or_else(|| OpossumError::Other(format!("node {id} was not placed")))
+            })
+            .collect::<OpmResult<_>>()?;
+
+        let (mut traced, source) = model(parts, grouped)?;
+        let mut config = RayTraceConfig::default();
+        config.map_source(source, rays()?);
+        RayTracingAnalyzer::new(config).analyze(&mut traced)?;
+
+        let (mut flown, source) = model(parts, grouped)?;
+        let mut config = EnergyConfig::default();
+        config.map_source(source, EnergyDataBuilder::default());
+        EnergyAnalyzer::new(config).analyze(&mut flown)?;
+
+        let (mut ghosted, source) = model(parts, grouped)?;
+        let mut config = GhostFocusConfig::default();
+        config.set_max_bounces(1);
+        config.map_source(source, rays()?);
+        GhostFocusAnalyzer::new(config).analyze(&mut ghosted)?;
+
+        Ok(Outcome {
+            placements,
+            traced: metered(&traced, meter)?,
+            energy: metered(&flown, meter)?,
+            ghosts: metered(&ghosted, meter)?,
+        })
+    }
+    /// The rays in `light`, one bundle per entry.
+    fn bundles(light: &LightData) -> Vec<Rays> {
+        match light {
+            LightData::Geometric(rays) => vec![rays.clone()],
+            LightData::GhostFocus(bundles) => bundles.clone(),
+            _ => Vec::new(),
+        }
+    }
+    fn assert_same_outcome(expected: &Outcome, actual: &Outcome) {
+        assert_eq!(expected.placements.len(), actual.placements.len());
+        for (expected, actual) in expected.placements.iter().zip(&actual.placements) {
+            assert_relative_eq!(
+                expected.get_transform().to_homogeneous(),
+                actual.get_transform().to_homogeneous(),
+                epsilon = 1e-9
+            );
+        }
+        for (expected, actual) in [
+            (&expected.traced, &actual.traced),
+            (&expected.ghosts, &actual.ghosts),
+        ] {
+            let (expected, actual) = (bundles(expected), bundles(actual));
+            assert!(!expected.is_empty());
+            assert_eq!(expected.len(), actual.len());
+            for (expected, actual) in expected.iter().zip(&actual) {
+                assert_ray_bundle_snapshot(
+                    &ray_bundle_snapshot(actual),
+                    &ray_bundle_snapshot(expected),
+                );
+            }
+        }
+        let (LightData::Energy(expected), LightData::Energy(actual)) =
+            (&expected.energy, &actual.energy)
+        else {
+            panic!("the meter recorded no energy");
+        };
+        assert_relative_eq!(expected.total_energy(), actual.total_energy());
+    }
+    /// A reference finds the node it refers to inside a group, as when the optics before the main
+    /// amplifiers of `workshop_09_phelix` are grouped: every analysis gives what the flat model
+    /// gives, and the way back is placed where the lens is.
+    #[test]
+    fn a_reference_finds_its_target_in_a_group() -> OpmResult<()> {
+        let parts = double_pass()?;
+        let flat = outcome(&parts, &[false; 4])?;
+        assert_relative_eq!(
+            flat.placements[0].get_transform().to_homogeneous(),
+            flat.placements[2].get_transform().to_homogeneous()
+        );
+        assert_same_outcome(&flat, &outcome(&parts, &[true, false, false, false])?);
+        Ok(())
+    }
+    /// A reference met before the node it refers to places that node, also inside a group: the
+    /// light passes the reference first, then a mirror sends it back through the lens itself.
+    #[test]
+    fn a_forward_reference_places_its_target_in_a_group() -> OpmResult<()> {
+        let mut lens = ParaxialSurface::new("lens", millimeter!(500.0))?;
+        let ahead = NodeReference::from_node(&OpticRef::new(Box::new(lens.clone())))?;
+        lens.set_inverted(true)?;
+        let mirror = ThinMirror::new("mirror").with_tilt(degree!(1.0, 0.0, 0.0))?;
+        let parts = [
+            OpticRef::new(Box::new(ahead)),
+            OpticRef::new(Box::new(mirror)),
+            OpticRef::new(Box::new(lens)),
+            OpticRef::new(Box::new(EnergyMeter::default())),
+        ];
+        let flat = outcome(&parts, &[false; 4])?;
+        assert_same_outcome(&flat, &outcome(&parts, &[false, false, true, false])?);
+        Ok(())
+    }
 
     #[test]
     fn default() {
