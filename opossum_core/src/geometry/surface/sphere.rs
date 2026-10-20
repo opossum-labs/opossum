@@ -43,7 +43,7 @@ impl Sphere {
         self.radius
     }
     /// The center of curvature, in the vertex frame, in meter.
-    const fn center(&self) -> Vector3<f64> {
+    const fn center(self) -> Vector3<f64> {
         Vector3::new(0.0, 0.0, self.radius.value)
     }
 }

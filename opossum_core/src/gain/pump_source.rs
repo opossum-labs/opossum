@@ -525,8 +525,8 @@ mod test {
     fn disk(thickness: Length, radius: Length) -> OpmResult<Extruded> {
         Ok(Extruded::new(
             Isometry::identity(),
-            Face::new(SurfaceShape::Plane, Isometry::identity()),
-            Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
+            &Face::new(SurfaceShape::Plane, Isometry::identity()),
+            &Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
             Outline::new(CircleShape::new(radius)?, Vec::new())?,
         )?
         .moved(&Isometry::identity()))

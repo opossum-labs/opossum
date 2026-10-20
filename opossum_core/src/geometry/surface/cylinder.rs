@@ -42,7 +42,7 @@ impl Cylinder {
         self.radius
     }
     /// The point of the axis of curvature above the vertex, in the vertex frame, in meter.
-    const fn axis(&self) -> Vector3<f64> {
+    const fn axis(self) -> Vector3<f64> {
         Vector3::new(0.0, 0.0, self.radius.value)
     }
 }

@@ -40,7 +40,7 @@ impl Part {
     /// the parts of an inner assembly are added directly instead.
     pub fn new(
         placement: &Isometry,
-        geometry: Geometry,
+        geometry: &Geometry,
         material: AssetRef<Material>,
     ) -> OpmResult<Self> {
         if geometry.kind().as_body().is_none() {
@@ -312,7 +312,7 @@ mod test {
     fn part_of(geometry: Geometry, placement: Isometry) -> OpmResult<Part> {
         Part::new(
             &placement,
-            geometry,
+            &geometry,
             AssetRef::Inline(Material::from(&RefrIndexConst::new(1.5)?)),
         )
     }

@@ -49,7 +49,7 @@ impl Extruded {
     ///
     /// This function returns an error if a face is curved too tightly to reach the edge of the
     /// profile.
-    pub fn new(axis: Isometry, front: Face, rear: Face, outline: Outline) -> OpmResult<Self> {
+    pub fn new(axis: Isometry, front: &Face, rear: &Face, outline: Outline) -> OpmResult<Self> {
         let reach = outline.transversal_reach();
         front.check_reach(reach, "front face")?;
         rear.check_reach(reach, "rear face")?;
@@ -320,7 +320,7 @@ mod test {
         outline: Outline,
         node_frame: Isometry,
     ) -> OpmResult<Extruded> {
-        Ok(Extruded::new(Isometry::identity(), front, rear, outline)?.moved(&node_frame))
+        Ok(Extruded::new(Isometry::identity(), &front, &rear, outline)?.moved(&node_frame))
     }
     /// Create a disk of the given thickness and radius, with its entrance surface at z = 0.
     fn disk(thickness: Length, radius: Length) -> OpmResult<Extruded> {
@@ -804,8 +804,8 @@ mod test {
         let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
         let extruded = Extruded::new(
             axis,
-            Face::new(SurfaceShape::Plane, Isometry::identity()),
-            Face::new(
+            &Face::new(SurfaceShape::Plane, Isometry::identity()),
+            &Face::new(
                 SurfaceShape::Plane,
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),
@@ -829,8 +829,8 @@ mod test {
         let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
         let extruded = Extruded::new(
             axis,
-            Face::new(SurfaceShape::Plane, Isometry::identity()),
-            Face::new(
+            &Face::new(SurfaceShape::Plane, Isometry::identity()),
+            &Face::new(
                 SurfaceShape::Plane,
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),
@@ -853,8 +853,8 @@ mod test {
         let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
         let extruded = Extruded::new(
             axis,
-            Face::new(SurfaceShape::Plane, Isometry::identity()),
-            Face::new(
+            &Face::new(SurfaceShape::Plane, Isometry::identity()),
+            &Face::new(
                 SurfaceShape::Plane,
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),

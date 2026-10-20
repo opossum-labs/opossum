@@ -486,10 +486,14 @@ impl NodeAttr {
     /// * `geometry` - the geometry of the node, moved to where the node sits. A geometry that
     ///   encloses no volume leaves the node without a medium.
     pub fn set_runtime_body(&mut self, geometry: Geometry) {
-        self.runtime_medium = geometry.kind().as_body().is_some().then(|| RuntimeMedium {
-            geometry,
-            inversion: None,
-        });
+        self.runtime_medium = geometry
+            .kind()
+            .as_body()
+            .is_some()
+            .then_some(RuntimeMedium {
+                geometry,
+                inversion: None,
+            });
     }
 
     /// Clears the inversion field of the prepared medium between analysis runs.

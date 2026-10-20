@@ -201,8 +201,8 @@ impl Geometry {
     ) -> OpmResult<Self> {
         Ok(Self::Extruded(Box::new(Extruded::new(
             Isometry::identity(),
-            Face::new(front, Isometry::identity()),
-            Face::new(rear, rear_vertex),
+            &Face::new(front, Isometry::identity()),
+            &Face::new(rear, rear_vertex),
             outline,
         )?)))
     }
@@ -496,7 +496,7 @@ mod test {
             Side::Behind,
         )])?);
         let glass = AssetRef::Inline(Material::from(&RefrIndexConst::new(1.5)?));
-        let part = Part::new(&Isometry::identity(), parametric.clone(), glass)?;
+        let part = Part::new(&Isometry::identity(), &parametric, glass)?;
         let assembly = Geometry::Assembly(Assembly::new(vec![part], vec![])?);
         let frame = Isometry::new(millimeter!(1.0, -2.0, 30.0), degree!(10.0, 5.0, 0.0))?;
         for geometry in [parametric, assembly] {
@@ -643,8 +643,8 @@ mod test {
         let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
         let extruded = Geometry::Extruded(Box::new(Extruded::new(
             axis,
-            Face::new(SurfaceShape::Plane, Isometry::identity()),
-            Face::new(
+            &Face::new(SurfaceShape::Plane, Isometry::identity()),
+            &Face::new(
                 SurfaceShape::Plane,
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),
