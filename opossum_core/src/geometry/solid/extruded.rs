@@ -18,7 +18,6 @@ use crate::{
     geometry::{
         Face, FaceBoundary, Placeable, Placement, Rim,
         body::{Body, BoundingBox},
-        geo_surface::GeoSurfaceRef,
     },
     light::Ray,
     utils::geom_transformation::Isometry,
@@ -95,7 +94,7 @@ impl FaceBoundary for Extruded {
     fn includes(&self, at: Placement<'_>, face: usize, point: &Point3<Length>) -> bool {
         at.surfaces()
             .get(face)
-            .is_some_and(|surface| self.rim.bounds(&*surface.0, point, at.node_frame()))
+            .is_some_and(|surface| self.rim.bounds(surface, point, at.node_frame()))
     }
 }
 
@@ -103,7 +102,7 @@ impl Extruded {
     /// Return the geometric surfaces of the front and the rear face, in this order.
     ///
     /// Building places one surface per face, so a placement of this solid always holds both.
-    const fn bounding_surfaces(at: Placement<'_>) -> [&GeoSurfaceRef; 2] {
+    const fn bounding_surfaces(at: Placement<'_>) -> [&Face; 2] {
         [&at.surfaces()[Self::FRONT], &at.surfaces()[Self::REAR]]
     }
     /// Return the range of longitudinal positions one of the bounding surfaces spans over the cross
@@ -111,7 +110,7 @@ impl Extruded {
     ///
     /// The surface is asked where it lies above its own axis — its vertex — and how far it deviates
     /// from that towards the rim
-    /// ([`GeoSurface::local_z_at`](crate::geometry::geo_surface::GeoSurface::local_z_at)). Both
+    /// ([`GeoSurface::local_z_at`](crate::geometry::GeoSurface::local_z_at)). Both
     /// answers are given in the surface's own frame, which need not be the body's: a wedge tilts its
     /// exit surface against the body it bounds.
     ///
@@ -125,7 +124,7 @@ impl Extruded {
     /// # Arguments
     ///
     /// - `at`: where the body sits
-    /// - `surface`: the bounding surface to measure
+    /// - `face`: the bounding face to measure
     /// - `transversal_reach`: the largest distance from the body's axis its cross section reaches
     ///
     /// # Returns
@@ -140,14 +139,14 @@ impl Extruded {
     fn surface_z_range(
         &self,
         at: Placement<'_>,
-        surface: &GeoSurfaceRef,
+        face: &Face,
         transversal_reach: Length,
     ) -> OpmResult<Range<Length>> {
         // Placing a surface and its body leaves rounding noise in their relative orientation.
         const ORIENTATION_NOISE: f64 = 1.0e-12;
-        let surface = &*surface.0;
+        let surface = face.surface();
         let relative = Isometry::new_from_transform(
-            self.isometry(at).get_inv_transform() * surface.isometry().get_transform(),
+            self.isometry(at).get_inv_transform() * face.frame().get_transform(),
         );
         // The body's own z axis, written in the surface's frame: dotted with a point of the
         // surface it yields that point's longitudinal position in the body. Its transversal part
@@ -208,7 +207,7 @@ impl Extruded {
 }
 
 /// A point is inside this body if it lies behind the front surface (see
-/// [`is_behind`](crate::geometry::geo_surface::GeoSurface::is_behind)), not behind the rear surface
+/// [`is_behind`](crate::geometry::GeoSurface::is_behind)), not behind the rear surface
 /// and within the [`Rim`](crate::geometry::Rim) of the solid. Both bounding surfaces are the ones
 /// the solid was placed with, shared with the ones a node traces its rays at.
 ///
@@ -219,8 +218,8 @@ impl Body for Extruded {
     fn contains(&self, at: Placement<'_>, point: &Point3<Length>) -> bool {
         let [front, rear] = Self::bounding_surfaces(at);
         self.rim.contains(point, at.node_frame())
-            && front.0.is_behind(point)
-            && !rear.0.is_behind(point)
+            && front.is_behind(point)
+            && !rear.is_behind(point)
     }
     fn path_length_inside(&self, at: Placement<'_>, ray: &Ray) -> Option<Length> {
         // A ray leaving the body through its lateral boundary meets no hit there: that boundary is
@@ -286,7 +285,7 @@ mod test {
     use crate::{
         apertures::{Bore, CircleShape, RectangleShape},
         degree,
-        geometry::{Face, Geometry, Placed, Solid, SurfaceShape},
+        geometry::{Cylinder, Face, Geometry, Placed, Solid, Sphere, SurfaceShape},
         joule, millimeter, nanometer,
     };
     use approx::assert_abs_diff_eq;
@@ -308,7 +307,7 @@ mod test {
     /// along z.
     fn sphere_face(radius: Length, vertex_z: Length) -> OpmResult<Face> {
         Ok(Face::new(
-            SurfaceShape::Sphere { radius },
+            SurfaceShape::Sphere(Sphere::new(radius)?),
             Isometry::new_along_z(vertex_z)?,
         ))
     }
@@ -646,9 +645,7 @@ mod test {
         )?;
         let body = body_between(
             Face::new(
-                SurfaceShape::Cylinder {
-                    radius: millimeter!(50.0),
-                },
+                SurfaceShape::Cylinder(Cylinder::new(millimeter!(50.0))?),
                 curved_iso,
             ),
             Face::new(
@@ -679,9 +676,7 @@ mod test {
         )?;
         let body = body_between(
             Face::new(
-                SurfaceShape::Cylinder {
-                    radius: millimeter!(50.0),
-                },
+                SurfaceShape::Cylinder(Cylinder::new(millimeter!(50.0))?),
                 tilted_iso,
             ),
             Face::new(
@@ -706,9 +701,7 @@ mod test {
         )?;
         let body = body_between(
             Face::new(
-                SurfaceShape::Sphere {
-                    radius: millimeter!(12.0),
-                },
+                SurfaceShape::Sphere(Sphere::new(millimeter!(12.0))?),
                 tilted_iso,
             ),
             Face::new(

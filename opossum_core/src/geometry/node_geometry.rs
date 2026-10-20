@@ -20,8 +20,7 @@ use crate::{
     apertures::Outline,
     error::OpmResult,
     geometry::{
-        Extruded, FaceBoundary, Placeable, Placed, Placement, Rim, Solid,
-        face::{Face, SurfaceShape},
+        Extruded, Face, FaceBoundary, Placeable, Placed, Placement, Rim, Solid, SurfaceShape,
     },
     utils::geom_transformation::Isometry,
 };
@@ -56,8 +55,8 @@ impl Geometry {
         outline: Outline,
     ) -> OpmResult<Self> {
         Self::two_faced(
-            SurfaceShape::spherical(front_radius),
-            SurfaceShape::spherical(rear_radius),
+            SurfaceShape::spherical(front_radius)?,
+            SurfaceShape::spherical(rear_radius)?,
             Isometry::new_along_z(center_thickness)?,
             outline,
         )
@@ -82,8 +81,8 @@ impl Geometry {
         outline: Outline,
     ) -> OpmResult<Self> {
         Self::two_faced(
-            SurfaceShape::cylindrical(front_radius),
-            SurfaceShape::cylindrical(rear_radius),
+            SurfaceShape::cylindrical(front_radius)?,
+            SurfaceShape::cylindrical(rear_radius)?,
             Isometry::new_along_z(center_thickness)?,
             outline,
         )
@@ -332,7 +331,7 @@ impl FaceBoundary for SurfaceGeometry {
             return false;
         };
         match &self.extent {
-            SurfaceExtent::Edge(rim) => rim.bounds(&*surface.0, point, at.node_frame()),
+            SurfaceExtent::Edge(rim) => rim.bounds(surface, point, at.node_frame()),
             SurfaceExtent::Open | SurfaceExtent::Window(_) => true,
         }
     }
@@ -345,7 +344,7 @@ mod test {
         apertures::CircleShape,
         degree,
         error::OpossumError,
-        geometry::{Assembly, ParametricSolid, Part, Side},
+        geometry::{Assembly, Parabola, ParametricSolid, Part, Side},
         material::Material,
         millimeter,
         properties::proptype::AssetRef,
@@ -380,7 +379,7 @@ mod test {
                 .translation()
                 .z
                 .get::<millimeter>(),
-            50.0
+            0.0
         );
         assert_abs_diff_eq!(
             placed
@@ -437,7 +436,7 @@ mod test {
             let mirror = |outline| {
                 Geometry::surface(
                     Isometry::identity(),
-                    SurfaceShape::spherical(curved),
+                    SurfaceShape::spherical(curved)?,
                     Isometry::identity(),
                     outline,
                 )
@@ -448,9 +447,7 @@ mod test {
         }
         assert!(Geometry::singlet(millimeter!(12.5), flat, millimeter!(5.0), circle()?).is_ok());
         // A parabola opens without end, so even a short focal length reaches any edge.
-        let parabola = SurfaceShape::Parabola {
-            focal_length: millimeter!(1.0),
-        };
+        let parabola = SurfaceShape::Parabola(Parabola::new(millimeter!(1.0))?);
         assert!(
             Geometry::surface(
                 Isometry::identity(),

@@ -1,6 +1,5 @@
 //! Module handling optical surfaces
 use log::warn;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
@@ -13,10 +12,7 @@ use crate::{
         rays_hit_map::{HitPoint, RaysHitMap},
     },
     error::{OpmResult, OpossumError},
-    geometry::{
-        Geometry, Placed, Rim,
-        geo_surface::{GeoSurface, GeoSurfaceRef},
-    },
+    geometry::{Face, Geometry, Placed, Rim, SurfaceShape},
     light::{Ray, Rays},
     nodes::fluence_detector::Fluence,
     refractive_index::RefractiveIndexType,
@@ -42,24 +38,18 @@ impl PlacedFace {
     }
 }
 
-/// This struct represents an optical surface, which consists of the geometric surface shape
-/// ([`GeoSurface`](crate::geometry::geo_surface::GeoSurface)) and further properties such as the [`CoatingType`].
-#[derive(Serialize, Deserialize, Clone)]
+/// This struct represents an optical surface, which consists of the geometric surface (a
+/// [`Face`]) and further properties such as the [`CoatingType`].
+#[derive(Clone)]
 pub struct OpticSurface {
-    #[serde(skip)]
-    geo_surface: GeoSurfaceRef,
+    surface: Face,
     anchor_point_iso: Isometry,
-    #[serde(skip)]
     window: Option<Rim>,
-    #[serde(skip)]
     face: Option<PlacedFace>,
     coating: CoatingType,
     lidt: Fluence,
-    #[serde(skip)]
     backward_rays_cache: Vec<Rays>,
-    #[serde(skip)]
     forward_rays_cache: Vec<Rays>,
-    #[serde(skip)]
     hit_map: HitMap,
 }
 impl Default for OpticSurface {
@@ -69,7 +59,7 @@ impl Default for OpticSurface {
     /// reflection) and a lidt of 1 J/cm².
     fn default() -> Self {
         Self {
-            geo_surface: GeoSurfaceRef::default(),
+            surface: Face::new(SurfaceShape::Plane, Isometry::identity()),
             anchor_point_iso: Isometry::identity(),
             window: None,
             face: None,
@@ -90,14 +80,14 @@ impl OpticSurface {
     /// # Errors
     ///
     /// This function returns an error if the given lidt is negative or NaN.
-    pub fn new(geo_surface: GeoSurfaceRef, coating: CoatingType, lidt: Fluence) -> OpmResult<Self> {
+    pub fn new(surface: Face, coating: CoatingType, lidt: Fluence) -> OpmResult<Self> {
         if lidt.is_sign_negative() || lidt.is_nan() {
             return Err(OpossumError::Other(
                 "LIDT must be positive and not NaN".into(),
             ));
         }
         Ok(Self {
-            geo_surface,
+            surface,
             coating,
             lidt,
             ..Default::default()
@@ -112,11 +102,11 @@ impl OpticSurface {
             &self.forward_rays_cache
         }
     }
-    /// Sets the geo surface of this [`OpticSurface`].
+    /// Sets the geometric surface of this [`OpticSurface`].
     ///
     /// A surface set this way is no face of a placed description: it is unbounded from then on.
-    pub fn set_geo_surface(&mut self, geo_surface: GeoSurfaceRef) {
-        self.geo_surface = geo_surface;
+    pub fn set_surface(&mut self, surface: Face) {
+        self.surface = surface;
         self.face = None;
     }
     /// Makes this [`OpticSurface`] a face of a placed description.
@@ -134,7 +124,7 @@ impl OpticSurface {
     ///
     /// This function returns an error if the description has no such face.
     pub fn set_face(&mut self, placed: Arc<Placed<Geometry>>, face: usize) -> OpmResult<()> {
-        let geo_surface = placed.surface(face).cloned().ok_or_else(|| {
+        let surface = placed.surface(face).cloned().ok_or_else(|| {
             OpossumError::Other(format!(
                 "there is no face {face}: the geometry has {} faces",
                 placed.face_count()
@@ -142,7 +132,7 @@ impl OpticSurface {
         })?;
         self.anchor_point_iso = placed.anchor(face)?;
         self.window = placed.window().cloned();
-        self.geo_surface = geo_surface;
+        self.surface = surface;
         self.face = Some(PlacedFace { placed, face });
         Ok(())
     }
@@ -151,10 +141,10 @@ impl OpticSurface {
     pub const fn set_coating(&mut self, coating: CoatingType) {
         self.coating = coating;
     }
-    /// Returns a reference to the geo surface of this [`OpticSurface`].
+    /// Returns the geometric surface of this [`OpticSurface`], placed in the world.
     #[must_use]
-    pub fn geo_surface(&self) -> GeoSurfaceRef {
-        self.geo_surface.clone()
+    pub const fn surface(&self) -> &Face {
+        &self.surface
     }
     /// Returns the window of this [`OpticSurface`], or `None` if it records all light.
     ///
@@ -181,9 +171,8 @@ impl OpticSurface {
     /// part of the component.
     #[must_use]
     pub fn intersect(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
-        self.geo_surface
-            .0
-            .calc_intersect_and_normal(ray)
+        self.surface
+            .intersect(ray)
             .filter(|(point, _)| self.face.as_ref().is_none_or(|face| face.includes(point)))
     }
     /// Return whether this [`OpticSurface`] records a hit at the given point.
@@ -198,7 +187,7 @@ impl OpticSurface {
     pub fn records_at(&self, point: &Point3<Length>) -> bool {
         self.window
             .as_ref()
-            .is_none_or(|rim| rim.contains(point, &self.node_frame(&*self.geo_surface.0)))
+            .is_none_or(|rim| rim.contains(point, &self.node_frame()))
     }
     /// Cut a bundle of rays that passed this [`OpticSurface`] to what it records: the rays within
     /// a detector's window ([`SurfaceExtent::Window`]).
@@ -213,13 +202,13 @@ impl OpticSurface {
     pub fn clip_to_window(&self, rays: &mut Rays) -> bool {
         self.window
             .as_ref()
-            .is_some_and(|rim| rays.invalidate_outside(rim, &self.node_frame(&*self.geo_surface.0)))
+            .is_some_and(|rim| rays.invalidate_outside(rim, &self.node_frame()))
     }
     /// Return the frame of the node this surface belongs to, derived from where its geometric
-    /// surface sits right now: that surface's isometry, minus its anchor.
-    fn node_frame(&self, geo_surface: &dyn GeoSurface) -> Isometry {
+    /// surface sits right now: that surface's frame, minus its anchor.
+    fn node_frame(&self) -> Isometry {
         Isometry::new_from_transform(
-            geo_surface.isometry().get_transform() * self.anchor_point_iso.get_inv_transform(),
+            self.surface.frame().get_transform() * self.anchor_point_iso.get_inv_transform(),
         )
     }
     /// Returns a reference to the coating of this [`OpticSurface`].
@@ -392,7 +381,7 @@ impl Debug for OpticSurface {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OpticSurface")
             .field("coating", &self.coating)
-            .field("geometric surface", &self.geo_surface.0)
+            .field("geometric surface", &self.surface)
             .field("lidt", &self.lidt)
             .finish_non_exhaustive()
     }
@@ -407,10 +396,7 @@ mod test {
         coatings::CoatingType,
         degree,
         error::{OpmResult, OpossumError},
-        geometry::{
-            Face, Geometry, ParametricSolid, Plane, Side, Solid, Sphere, SurfaceShape,
-            geo_surface::GeoSurfaceRef,
-        },
+        geometry::{Face, Geometry, ParametricSolid, Side, Solid, Sphere, SurfaceShape},
         joule,
         light::{Ray, Rays},
         meter, millimeter, nanometer,
@@ -512,7 +498,7 @@ mod test {
     fn a_surface_set_by_hand_is_unbounded() -> OpmResult<()> {
         let mut surface = bounded_plane(Isometry::identity())?;
         assert!(surface.intersect(&ray_at(7.0)?).is_none());
-        surface.set_geo_surface(GeoSurfaceRef(Arc::new(Plane::new(Isometry::identity()))));
+        surface.set_surface(Face::new(SurfaceShape::Plane, Isometry::identity()));
         assert!(surface.intersect(&ray_at(7.0)?).is_some());
         Ok(())
     }
@@ -572,9 +558,7 @@ mod test {
         // A sphere of 15 mm radius with its vertex at the node, bounded to 12.5 mm around the axis.
         let sphere = Geometry::surface(
             Isometry::identity(),
-            SurfaceShape::Sphere {
-                radius: millimeter!(15.0),
-            },
+            SurfaceShape::Sphere(Sphere::new(millimeter!(15.0))?),
             Isometry::identity(),
             Some(circle(12.5)?),
         )?;
@@ -611,7 +595,7 @@ mod test {
     }
     #[test]
     fn new() -> OpmResult<()> {
-        let gs = GeoSurfaceRef::default();
+        let gs = Face::new(SurfaceShape::Plane, Isometry::identity());
         assert!(OpticSurface::new(gs.clone(), CoatingType::IdealAR, J_per_cm2!(f64::NAN)).is_err());
         assert!(
             OpticSurface::new(
@@ -627,7 +611,10 @@ mod test {
         );
 
         let os = OpticSurface::new(
-            GeoSurfaceRef(Arc::new(Sphere::new(meter!(1.0), Isometry::identity())?)),
+            Face::new(
+                SurfaceShape::Sphere(Sphere::new(meter!(1.0))?),
+                Isometry::identity(),
+            ),
             CoatingType::Fresnel,
             J_per_cm2!(2.0),
         )?;
@@ -639,10 +626,10 @@ mod test {
     fn intersect_finds_where_a_ray_meets_the_surface() -> OpmResult<()> {
         // A sphere of 1 m radius with its vertex at the origin, curving away towards +z.
         let surface = OpticSurface::new(
-            GeoSurfaceRef(Arc::new(Sphere::new(
-                meter!(1.0),
-                Isometry::new_along_z(meter!(1.0))?,
-            )?)),
+            Face::new(
+                SurfaceShape::Sphere(Sphere::new(meter!(1.0))?),
+                Isometry::identity(),
+            ),
             CoatingType::IdealAR,
             J_per_cm2!(1.0),
         )?;

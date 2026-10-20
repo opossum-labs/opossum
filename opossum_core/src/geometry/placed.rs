@@ -19,7 +19,6 @@ use crate::{
     geometry::{
         Face, FaceBoundary, Geometry, Rim, Solid,
         body::{Body, BoundingBox},
-        geo_surface::GeoSurfaceRef,
     },
     light::Ray,
     utils::geom_transformation::Isometry,
@@ -43,14 +42,14 @@ pub trait Placeable {
 
 /// A description built at the placement of its node.
 ///
-/// It keeps the description next to what building adds: the placement of the node and one geometric
-/// surface per face, in the order of [`Placeable::faces`]. The surfaces are the ones a node traces
-/// its rays at, shared rather than built a second time.
+/// It keeps the description next to what building adds: the placement of the node and every face
+/// moved there, in the order of [`Placeable::faces`]. These are the surfaces a node traces its rays
+/// at.
 #[derive(Debug, Clone)]
 pub struct Placed<T> {
     description: T,
     node_frame: Isometry,
-    surfaces: Vec<GeoSurfaceRef>,
+    surfaces: Vec<Face>,
 }
 
 impl<T> Placed<T> {
@@ -66,7 +65,7 @@ impl<T> Placed<T> {
     }
     /// Return the geometric surface of every face, in the order the faces are numbered.
     #[must_use]
-    pub fn surfaces(&self) -> &[GeoSurfaceRef] {
+    pub fn surfaces(&self) -> &[Face] {
         &self.surfaces
     }
     /// Return where this sits: the placement of its node and the surface of every face.
@@ -84,7 +83,7 @@ impl<T> Placed<T> {
 #[derive(Debug, Clone, Copy)]
 pub struct Placement<'a> {
     node_frame: &'a Isometry,
-    surfaces: &'a [GeoSurfaceRef],
+    surfaces: &'a [Face],
 }
 
 impl<'a> Placement<'a> {
@@ -95,7 +94,7 @@ impl<'a> Placement<'a> {
     /// * `node_frame` - the placement of the node the description is built at.
     /// * `surfaces` - the geometric surface of every face, in the order the faces are numbered.
     #[must_use]
-    pub const fn new(node_frame: &'a Isometry, surfaces: &'a [GeoSurfaceRef]) -> Self {
+    pub const fn new(node_frame: &'a Isometry, surfaces: &'a [Face]) -> Self {
         Self {
             node_frame,
             surfaces,
@@ -108,7 +107,7 @@ impl<'a> Placement<'a> {
     }
     /// Return the geometric surface of every face, in the order the faces are numbered.
     #[must_use]
-    pub const fn surfaces(&self) -> &'a [GeoSurfaceRef] {
+    pub const fn surfaces(&self) -> &'a [Face] {
         self.surfaces
     }
     /// Return the points at which a ray meets the faces where they really are.
@@ -135,8 +134,7 @@ impl<'a> Placement<'a> {
             .enumerate()
             .filter_map(move |(face, surface)| {
                 surface
-                    .0
-                    .calc_intersect_and_normal(ray)
+                    .intersect(ray)
                     .map(|(point, _)| point)
                     .filter(|point| includes(face, point))
             })
@@ -176,13 +174,13 @@ impl<T: Placeable> Placed<T> {
     ///
     /// # Errors
     ///
-    /// This function returns an error if a face cannot be built (see [`Face::place`]).
+    /// None at present: every face is valid once made, so moving it to the node cannot fail.
     pub fn new(description: T, node_frame: &Isometry) -> OpmResult<Self> {
         let surfaces = description
             .faces()
             .into_iter()
-            .map(|(face, owner)| face.place(node_frame, &owner))
-            .collect::<OpmResult<Vec<_>>>()?;
+            .map(|(face, owner)| face.moved(&owner).moved(node_frame))
+            .collect();
         Ok(Self {
             description,
             node_frame: *node_frame,
@@ -200,7 +198,7 @@ impl<T: Placeable> Placed<T> {
     ///
     /// The surface, or `None` if there is no such face.
     #[must_use]
-    pub fn surface(&self, index: usize) -> Option<&GeoSurfaceRef> {
+    pub fn surface(&self, index: usize) -> Option<&Face> {
         self.surfaces.get(index)
     }
     /// Return the anchor of the face with the given number: the frame of its geometric surface
@@ -217,7 +215,7 @@ impl<T: Placeable> Placed<T> {
                 faces.len()
             ))
         })?;
-        face.anchor(owner)
+        Ok(face.anchor(owner))
     }
     /// Return the window a detector records within, stated relative to the node, or `None` if all
     /// light on its faces is recorded.
@@ -320,7 +318,7 @@ mod test {
                 .surface(index)
                 .ok_or_else(|| OpossumError::Other(format!("face {index} has no surface")))?;
             assert_eq!(
-                *surface.0.isometry(),
+                *surface.frame(),
                 placed.node_frame().append(&placed.anchor(index)?)
             );
         }

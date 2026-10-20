@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! The capability of an optical node to enclose a volume of material.
 //!
-//! A [`GeoSurface`](crate::geometry::geo_surface::GeoSurface) is where light refracts, a
+//! A [`GeoSurface`](crate::geometry::GeoSurface) is where light refracts, a
 //! [`Body`](crate::geometry::body::Body) is what lies between two of them. Nodes such as a lens, a
 //! wedge or a cylindric lens *are* the medium in between, and everything happening inside that
 //! medium — the path light takes through it and, later on, the gain of an active medium — has to
@@ -465,7 +465,7 @@ mod test {
         },
         degree,
         gain::{ConstGain, GainModel, MonochromaticSmallSignalGain, PumpScenario, PumpSource},
-        geometry::{Geometry, body::OPTIC_SHAPE},
+        geometry::{Extruded, Geometry, body::OPTIC_SHAPE},
         joule,
         light::{
             Rays, Spectrum,
@@ -483,7 +483,6 @@ mod test {
         utils::test_helper::helper::metered_energy,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
-    use std::sync::Arc;
     use uom::si::{
         f64::{Length, LinearNumberDensity, ReciprocalLength},
         linear_number_density::per_meter,
@@ -649,19 +648,26 @@ mod test {
         );
         Ok(())
     }
-    /// The medium is bounded by the very surfaces light is traced at, not by copies built from the
-    /// same description: besides the optic surface and the handle taken here, the body and the
-    /// placed geometry the optic surface asks where it ends own each of them.
+    /// The medium is bounded by the very surfaces light is traced at: its front face is the
+    /// surface under the input port, its rear face the one under the output port.
     #[test]
-    fn the_prepared_body_shares_the_surfaces_light_is_traced_at() -> OpmResult<()> {
+    fn the_prepared_body_is_bounded_by_the_surfaces_light_is_traced_at() -> OpmResult<()> {
         let mut lens = placed_lens()?;
         lens.prepare_volume(&RayTraceConfig::default())?;
-        for port in ["input_1", "output_1"] {
-            let surface = lens
+        let medium = lens
+            .node_attr()
+            .runtime_medium()
+            .ok_or_else(|| OpossumError::Other("the lens has no medium".into()))?;
+        for (port, face) in [("input_1", Extruded::FRONT), ("output_1", Extruded::REAR)] {
+            let traced = lens
                 .get_optic_surface(port)
                 .ok_or_else(|| OpossumError::Other(format!("the lens has no surface '{port}'")))?
-                .geo_surface();
-            assert_eq!(Arc::strong_count(&surface.0), 4, "surface '{port}'");
+                .surface();
+            assert_eq!(
+                medium.body().surface(face),
+                Some(traced),
+                "surface '{port}'"
+            );
         }
         Ok(())
     }

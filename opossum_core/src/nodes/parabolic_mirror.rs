@@ -13,7 +13,7 @@ use crate::{
     degree,
     error::{OpmResult, OpossumError},
     geometry::{
-        Geometry, SurfaceGeometry, SurfaceShape,
+        Geometry, Parabola, SurfaceGeometry, SurfaceShape,
         body::{OPTIC_SHAPE, default_optic_shape},
     },
     light::{LightData, LightRays, LightResult, Rays},
@@ -386,9 +386,7 @@ impl OpticNode for ParabolicMirror {
         let (axis, vertex) = self.calc_off_axis_frames()?;
         Ok(Some(Geometry::surface(
             axis,
-            SurfaceShape::Parabola {
-                focal_length: -1. * self.calc_parent_focal_length()?,
-            },
+            SurfaceShape::Parabola(Parabola::new(-1. * self.calc_parent_focal_length()?)?),
             vertex,
             self.cross_section()?,
         )?))

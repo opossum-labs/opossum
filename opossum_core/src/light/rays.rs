@@ -927,7 +927,7 @@ impl Rays {
         }
         Ok(())
     }
-    /// Refract a ray bundle on a [`GeoSurface`](crate::geometry::geo_surface::GeoSurface) and returns a reflected [`Ray`] bundle.
+    /// Refract a ray bundle on a [`GeoSurface`](crate::geometry::GeoSurface) and returns a reflected [`Ray`] bundle.
     ///
     /// This function refracts all `valid` [`Ray`]s on a given surface.
     ///
@@ -1824,7 +1824,7 @@ mod test {
         centimeter,
         coatings::{CoatingConstantR, CoatingType},
         core_optics::optic_surface::OpticSurface,
-        geometry::{Plane, geo_surface::GeoSurfaceRef},
+        geometry::{Face, SurfaceShape},
         joule, meter, millimeter, nanometer,
         nodes::{
             SplittingConfig,
@@ -1837,7 +1837,6 @@ mod test {
     use approx::{assert_abs_diff_eq, assert_relative_eq};
     use itertools::izip;
     use nalgebra::Vector3;
-    use std::sync::Arc;
     use testing_logger;
     use uom::si::{energy::joule, length::nanometer};
 
@@ -2513,7 +2512,7 @@ mod test {
     fn tilted_splitting_surface() -> OpmResult<OpticSurface> {
         let iso = Isometry::new(millimeter!(0., 0., 0.), degree!(0., 45., 0.))?;
         OpticSurface::new(
-            GeoSurfaceRef(Arc::new(Plane::new(iso))),
+            Face::new(SurfaceShape::Plane, iso),
             CoatingType::IdealAR,
             J_per_cm2!(1.),
         )

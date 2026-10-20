@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! Where a face ends sideways.
 //!
-//! A [`GeoSurface`](crate::geometry::geo_surface::GeoSurface) is unbounded: a plane reaches in every
+//! A [`GeoSurface`](crate::geometry::GeoSurface) is unbounded: a plane reaches in every
 //! direction, a sphere closes on itself. Which of its points belong to the thing it is a face of is
 //! the lateral boundary of that face, and it depends on the kind of thing. An extruded solid ends at
 //! the [`Rim`](crate::geometry::Rim) of its cross section, the faces of a parametric solid end at

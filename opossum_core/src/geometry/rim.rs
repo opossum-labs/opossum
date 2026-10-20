@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! The lateral boundary of a component.
 //!
-//! A component's [`GeoSurface`]s are unbounded; how far the component reaches sideways is the
+//! The [`Face`]s of a component are unbounded; how far the component reaches sideways is the
 //! [`Outline`] of its optic shape. A [`Rim`] places that outline in space and answers the
 //! questions both a [`Body`](crate::geometry::body::Body) and the surfaces light is traced at have
 //! to ask: does a point lie within it, and does a point on the unbounded surface belong to the
@@ -12,9 +12,7 @@ use nalgebra::{Point2, Point3};
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
-use crate::{
-    apertures::Outline, geometry::geo_surface::GeoSurface, utils::geom_transformation::Isometry,
-};
+use crate::{apertures::Outline, geometry::Face, utils::geom_transformation::Isometry};
 
 /// The lateral boundary of a component: its outline, extruded along an axis.
 ///
@@ -84,21 +82,16 @@ impl Rim {
     /// Return whether a point on an unbounded surface is part of the component this [`Rim`] bounds.
     ///
     /// A point outside the rim is not part of the component, and neither is one on the far side of
-    /// a closed surface behind its equator (see [`GeoSurface::is_on_vertex_sheet`]).
+    /// a closed surface behind its equator (see [`Face::is_on_vertex_sheet`]).
     ///
     /// # Arguments
     ///
-    /// * `surface` - the unbounded surface.
+    /// * `face` - the face with the unbounded surface.
     /// * `point` - a point on the surface, in global coordinates.
     /// * `reference` - the frame this rim is stated relative to.
     #[must_use]
-    pub fn bounds(
-        &self,
-        surface: &dyn GeoSurface,
-        point: &Point3<Length>,
-        reference: &Isometry,
-    ) -> bool {
-        self.contains(point, reference) && surface.is_on_vertex_sheet(point)
+    pub fn bounds(&self, face: &Face, point: &Point3<Length>, reference: &Isometry) -> bool {
+        self.contains(point, reference) && face.is_on_vertex_sheet(point)
     }
 }
 

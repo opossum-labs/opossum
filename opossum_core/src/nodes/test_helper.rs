@@ -15,9 +15,8 @@ pub mod helper {
         },
         error::{OpmResult, OpossumError},
         geometry::{
-            Placed, Solid,
+            Face, Placed, Solid,
             body::{OPTIC_SHAPE, default_optic_shape},
-            geo_surface::GeoSurfaceRef,
         },
         joule,
         light::{LightData, LightRays, LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
@@ -29,7 +28,6 @@ pub mod helper {
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::{Point2, Point3, Vector3};
-    use std::sync::Arc;
     use uom::si::{energy::joule, f64::Length, length::millimeter};
     use uuid::Uuid;
     /// Assert that a node can be inverted and that reverting the inversion restores its ports.
@@ -925,7 +923,7 @@ pub mod helper {
     /// Describe every runtime surface a node has installed, one line of text per surface.
     ///
     /// Input surfaces come first, then output surfaces, each sorted by port name. A line states
-    /// the port, the kind of [`GeoSurface`](crate::geometry::geo_surface::GeoSurface), the anchor
+    /// the port, the kind of [`GeoSurface`](crate::geometry::GeoSurface), the anchor
     /// relative to the node (translation in millimeter, then its local x and z axis), the
     /// surface's own `local_z_at` at (0, 0), (5 mm, 0) and (0, 5 mm) in millimeter - which pins
     /// radius, sign and orientation of a curved surface - and the index of the first surface
@@ -964,7 +962,7 @@ pub mod helper {
                 (
                     port_type,
                     name.as_str(),
-                    surface.geo_surface(),
+                    surface.surface().clone(),
                     *surface.anchor_point_iso(),
                 )
             })
@@ -1042,20 +1040,18 @@ pub mod helper {
     /// its anchor.
     fn describe_surfaces<T: OpticNode + ?Sized>(
         node: &T,
-        surfaces: &[(&str, &str, GeoSurfaceRef, Isometry)],
+        surfaces: &[(&str, &str, Face, Isometry)],
     ) -> OpmResult<Vec<String>> {
         let node_iso = node.effective_node_iso().unwrap_or_else(Isometry::identity);
         let mut lines = Vec::with_capacity(surfaces.len());
-        for (port_type, port_name, geo_surface, anchor) in surfaces {
+        for (port_type, port_name, face, anchor) in surfaces {
             let shared = surfaces
                 .iter()
-                .position(|(_, _, other, _)| {
-                    Arc::as_ptr(&other.0).cast::<()>() == Arc::as_ptr(&geo_surface.0).cast::<()>()
-                })
+                .position(|(_, _, other, _)| other == face)
                 .expect("a surface is shared with itself");
             let translation = anchor.translation();
-            let geo = &*geo_surface.0;
-            assert_same_isometry(geo.isometry(), &node_iso.append(anchor), port_name);
+            let geo = face.surface();
+            assert_same_isometry(face.frame(), &node_iso.append(anchor), port_name);
             let sag = [(0.0, 0.0), (5.0, 0.0), (0.0, 5.0)]
                 .map(|(x, y)| {
                     geo.local_z_at(&Point2::new(millimeter!(x), millimeter!(y)))

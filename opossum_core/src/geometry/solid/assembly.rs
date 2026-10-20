@@ -11,7 +11,6 @@ use crate::{
     geometry::{
         Face, FaceBoundary, Placeable, Placement, Rim,
         body::{Body, BoundingBox},
-        geo_surface::GeoSurfaceRef,
     },
     light::Ray,
     material::Material,
@@ -207,7 +206,7 @@ struct PartAt<'a> {
     /// The frame the part is placed in.
     frame: Isometry,
     /// The surfaces of the faces of the part.
-    surfaces: &'a [GeoSurfaceRef],
+    surfaces: &'a [Face],
 }
 
 impl PartAt<'_> {
@@ -463,8 +462,9 @@ mod test {
         let placed = Placed::new(doublet, &frame)?;
         assert_eq!(placed.face_count(), 4);
         assert!(placed.window().is_none());
-        // crown front (R = 60), crown rear and flint front (both R = -40), flint rear (flat)
-        for (index, z) in [60.0, -35.0, -35.0, 10.0].into_iter().enumerate() {
+        // the vertices of the crown front, of the crown rear and flint front (cemented) and of the
+        // flint rear
+        for (index, z) in [0.0, 5.0, 5.0, 10.0].into_iter().enumerate() {
             assert_abs_diff_eq!(
                 placed.anchor(index)?.translation().z.get::<millimeter>(),
                 z,
@@ -473,7 +473,7 @@ mod test {
             let surface = placed
                 .surface(index)
                 .ok_or_else(|| OpossumError::Other(format!("face {index} has no surface")))?;
-            assert_eq!(*surface.0.isometry(), frame.append(&placed.anchor(index)?));
+            assert_eq!(*surface.frame(), frame.append(&placed.anchor(index)?));
         }
         Ok(())
     }

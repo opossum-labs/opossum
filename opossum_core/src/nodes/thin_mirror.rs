@@ -129,7 +129,7 @@ impl OpticNode for ThinMirror {
         };
         Ok(Some(Geometry::surface(
             Isometry::identity(),
-            SurfaceShape::spherical(*curvature),
+            SurfaceShape::spherical(*curvature)?,
             Isometry::identity(),
             self.cross_section()?,
         )?))

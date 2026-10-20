@@ -71,7 +71,7 @@ impl Solid {
 }
 
 /// Which side of a face lies inside a [`ParametricSolid`], as
-/// [`GeoSurface::is_behind`](crate::geometry::geo_surface::GeoSurface::is_behind) tells them apart.
+/// [`GeoSurface::is_behind`](crate::geometry::GeoSurface::is_behind) tells them apart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Side {
     /// The side the surface reports as behind it.
@@ -86,7 +86,7 @@ impl Side {
     /// # Arguments
     ///
     /// * `is_behind` - whether the face reports the point as behind it (see
-    ///   [`GeoSurface::is_behind`](crate::geometry::geo_surface::GeoSurface::is_behind)). A point on
+    ///   [`GeoSurface::is_behind`](crate::geometry::GeoSurface::is_behind)). A point on
     ///   the face counts as behind it, so it is inside a solid lying behind the face and outside a
     ///   solid lying in front of it: two solids sharing a face do not both claim its points.
     const fn contains(self, is_behind: bool) -> bool {

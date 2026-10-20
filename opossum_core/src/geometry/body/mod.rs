@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! Module for handling bounded bodies.
 //!
-//! A [`GeoSurface`](crate::geometry::geo_surface::GeoSurface) is an unbounded interface: it answers
+//! A [`GeoSurface`](crate::geometry::GeoSurface) is an unbounded interface: it answers
 //! where a [`Ray`] hits it, but it has no notion of an inside. A [`Body`] is the complementary
 //! concept — a closed volume that knows which points lie within it and how far a [`Ray`] travels
 //! through it. This is the domain any volumetric quantity (such as an inversion density) is defined
@@ -208,7 +208,7 @@ impl BoundingBox {
 /// Trait for handling closed bodies.
 ///
 /// A body is the volumetric counterpart of a
-/// [`GeoSurface`](crate::geometry::geo_surface::GeoSurface): it defines an inside and can state how
+/// [`GeoSurface`](crate::geometry::GeoSurface): it defines an inside and can state how
 /// far a [`Ray`] travels within it.
 ///
 /// Implemented by the description of a body, which does not know where it sits: every method is

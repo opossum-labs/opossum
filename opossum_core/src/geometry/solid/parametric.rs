@@ -73,7 +73,7 @@ impl ParametricSolid {
         self.faces
             .iter()
             .zip(at.surfaces())
-            .map(move |((_, side), surface)| side.contains(surface.0.is_behind(point)))
+            .map(move |((_, side), surface)| side.contains(surface.is_behind(point)))
     }
 }
 
@@ -84,7 +84,7 @@ impl FaceBoundary for ParametricSolid {
     fn includes(&self, at: Placement<'_>, face: usize, point: &Point3<Length>) -> bool {
         at.surfaces()
             .get(face)
-            .is_some_and(|surface| surface.0.is_on_vertex_sheet(point))
+            .is_some_and(|surface| surface.is_on_vertex_sheet(point))
             && self
                 .inner_sides(at, point)
                 .enumerate()
@@ -132,7 +132,7 @@ mod test {
     use super::*;
     use crate::{
         degree,
-        geometry::{Placed, SurfaceShape},
+        geometry::{Placed, Sphere, SurfaceShape},
         joule,
         light::Ray,
         millimeter, nanometer,
@@ -204,9 +204,7 @@ mod test {
             (Face::new(SurfaceShape::Plane, at(10.0)?), Side::InFront),
             (
                 Face::new(
-                    SurfaceShape::Sphere {
-                        radius: millimeter!(40.0),
-                    },
+                    SurfaceShape::Sphere(Sphere::new(millimeter!(40.0))?),
                     at(2.0)?,
                 ),
                 Side::Behind,
@@ -216,7 +214,7 @@ mod test {
         let placed = Placed::new(solid, &frame)?;
         assert_eq!(placed.face_count(), 3);
         assert!(placed.window().is_none());
-        let expected_z = [0.0, 10.0, 42.0];
+        let expected_z = [0.0, 10.0, 2.0];
         for (index, z) in expected_z.into_iter().enumerate() {
             assert_abs_diff_eq!(
                 placed.anchor(index)?.translation().z.get::<millimeter>(),
@@ -226,7 +224,7 @@ mod test {
             let surface = placed
                 .surface(index)
                 .ok_or_else(|| OpossumError::Other(format!("face {index} has no surface")))?;
-            assert_eq!(*surface.0.isometry(), frame.append(&placed.anchor(index)?));
+            assert_eq!(*surface.frame(), frame.append(&placed.anchor(index)?));
         }
         Ok(())
     }
@@ -367,9 +365,7 @@ mod test {
     fn a_curved_face_ends_at_the_other_faces_on_the_sheet_through_its_vertex() -> OpmResult<()> {
         let dome_with = |other: Face, side: Side| -> OpmResult<Placed<ParametricSolid>> {
             let sphere = Face::new(
-                SurfaceShape::Sphere {
-                    radius: millimeter!(40.0),
-                },
+                SurfaceShape::Sphere(Sphere::new(millimeter!(40.0))?),
                 Isometry::identity(),
             );
             Placed::new(

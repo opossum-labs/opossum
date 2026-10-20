@@ -300,7 +300,7 @@ mod test {
             PumpSource, TransversalProfile,
             inversion_field::{CellIndex, cells},
         },
-        geometry::{Extruded, Face, Placed, SurfaceShape},
+        geometry::{Extruded, Face, Placed, Sphere, SurfaceShape},
         joule,
         light::Ray,
         millimeter, nanometer, reciprocal_centimeter,
@@ -917,9 +917,8 @@ mod test {
         let aperture_mm = 18.0_f64;
         let entrance = Face::new(SurfaceShape::Plane, Isometry::identity());
         let exit = Face::new(
-            SurfaceShape::Sphere {
-                radius: millimeter!(-radius_mm), // stored radius −R → center at vertex_z − R = 0
-            },
+            // stored radius −R → center at vertex_z − R = 0
+            SurfaceShape::Sphere(Sphere::new(millimeter!(-radius_mm))?),
             Isometry::new_along_z(millimeter!(radius_mm))?, // vertex at z = R
         );
         let body = Placed::new(
@@ -978,9 +977,8 @@ mod test {
         // (at x = R the entrance would reach z = R = exit, giving zero thickness).
         let aperture_mm = 18.0_f64;
         let entrance = Face::new(
-            SurfaceShape::Sphere {
-                radius: millimeter!(radius_mm), // stored radius +R → center at vertex_z + R = R
-            },
+            // stored radius +R → center at vertex_z + R = R
+            SurfaceShape::Sphere(Sphere::new(millimeter!(radius_mm))?),
             Isometry::identity(), // vertex at z = 0
         );
         let exit = Face::new(
