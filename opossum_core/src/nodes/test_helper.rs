@@ -1179,16 +1179,8 @@ pub mod helper {
             (12.6, 0.0),
         ] {
             for tilt in [0.0_f64, 10.0] {
-                let direction = Vector3::new(0.0, tilt.to_radians().sin(), tilt.to_radians().cos());
-                let ray = Ray::new(
-                    Point3::new(millimeter!(x), millimeter!(y), millimeter!(-50.0)),
-                    direction,
-                    nanometer!(1053.0),
-                    joule!(1.0),
-                )?
-                .transformed_ray(node_frame);
                 let chord = body
-                    .path_length_inside(&ray)
+                    .path_length_inside(&probe_ray(x, y, tilt, node_frame)?)
                     .map_or_else(|| "none".to_owned(), |l| rounded(l.get::<millimeter>()));
                 lines.push(format!("chord from ({x}, {y}) at {tilt} deg: {chord}"));
             }
@@ -1204,6 +1196,97 @@ pub mod helper {
         }
         lines.push(format!("inside: {inside}"));
         Ok(lines)
+    }
+
+    /// Describe where rays meet every surface a node has installed.
+    ///
+    /// One line per surface and ray of a fixed set of straight and oblique rays: the hit point
+    /// and the surface normal there, or `miss`, and whether the surface records the hit. Rays,
+    /// points and normals are stated in the node's frame and rounded as by [`surface_snapshot`].
+    /// Unlike that snapshot, nothing here depends on how a surface or its placement is
+    /// represented.
+    ///
+    /// # Arguments
+    ///
+    /// * `node` - the node whose installed surfaces are hit.
+    ///
+    /// # Returns
+    ///
+    /// The lines describing the hits, ordered by port type and port name.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a ray cannot be built.
+    pub fn hit_snapshot<T: OpticNode + ?Sized>(node: &T) -> OpmResult<Vec<String>> {
+        let node_frame = node.effective_node_iso().unwrap_or_else(Isometry::identity);
+        let runtime = node.node_attr().runtime_surfaces();
+        let mut lines = Vec::new();
+        for (port_type, ports) in [("in", &runtime.inputs), ("out", &runtime.outputs)] {
+            for (name, surface) in ports {
+                for (x, y, tilt) in [
+                    (0.0, 0.0, 0.0),
+                    (5.0, 0.0, 10.0),
+                    (-8.0, 3.0, 0.0),
+                    (0.0, 5.0, 10.0),
+                    (12.4, 0.0, 0.0),
+                    (12.6, 0.0, 0.0),
+                ] {
+                    let hit = surface
+                        .intersect(&probe_ray(x, y, tilt, &node_frame)?)
+                        .map_or_else(
+                            || "miss".to_owned(),
+                            |(point, normal)| {
+                                let local = node_frame.inverse_transform_point(&point);
+                                let recorded = if surface.records_at(&point) {
+                                    "recorded"
+                                } else {
+                                    "not recorded"
+                                };
+                                format!(
+                                    "({}, {}, {}) n={} {recorded}",
+                                    rounded(local.x.get::<millimeter>()),
+                                    rounded(local.y.get::<millimeter>()),
+                                    rounded(local.z.get::<millimeter>()),
+                                    rounded_vector(
+                                        &node_frame.inverse_transform_vector_f64(&normal)
+                                    ),
+                                )
+                            },
+                        );
+                    lines.push(format!(
+                        "{port_type} {name} from ({x}, {y}) at {tilt} deg: {hit}"
+                    ));
+                }
+            }
+        }
+        Ok(lines)
+    }
+
+    /// Build a ray that starts 50 mm in front of a node and runs along its axis, tilted towards
+    /// the node's y axis.
+    ///
+    /// # Arguments
+    ///
+    /// * `x`, `y` - where the ray starts across the node's axis, in millimeter.
+    /// * `tilt` - the angle between the ray and the node's axis, in degree.
+    /// * `node_frame` - the placement of the node.
+    ///
+    /// # Returns
+    ///
+    /// The ray, in global coordinates.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the ray cannot be built.
+    fn probe_ray(x: f64, y: f64, tilt: f64, node_frame: &Isometry) -> OpmResult<Ray> {
+        let direction = Vector3::new(0.0, tilt.to_radians().sin(), tilt.to_radians().cos());
+        Ok(Ray::new(
+            Point3::new(millimeter!(x), millimeter!(y), millimeter!(-50.0)),
+            direction,
+            nanometer!(1053.0),
+            joule!(1.0),
+        )?
+        .transformed_ray(node_frame))
     }
 
     /// Assert that two isometries describe the same placement up to numerical noise.
