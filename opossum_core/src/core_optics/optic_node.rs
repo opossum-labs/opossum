@@ -368,4 +368,25 @@ mod tests {
         assert_abs_diff_eq!(iso.translation().z.value, decenter.z.value);
         Ok(())
     }
+    /// A surface away from the node sits where its face does: the flat rear face of a lens placed at
+    /// a turned node lies one center thickness behind it, along the node's axis.
+    #[test]
+    fn effective_surface_iso_of_a_face_behind_the_node() -> OpmResult<()> {
+        use crate::{nodes::Lens, refractive_index::RefrIndexConst};
+        let mut lens = Lens::new(
+            "lens",
+            millimeter!(50.0),
+            millimeter!(f64::INFINITY),
+            millimeter!(5.0),
+            &RefrIndexConst::new(1.5)?,
+        )?;
+        let node_iso = Isometry::new(millimeter!(10.0, -20.0, 30.0), degree!(5.0, -10.0, 15.0))?;
+        lens.set_positioning(NodePositioning::Absolute(node_iso))?;
+        let expected = node_iso.append(&Isometry::new_along_z(millimeter!(5.0))?);
+        let difference =
+            expected.get_inv_transform() * lens.effective_surface_iso("output_1")?.get_transform();
+        assert_abs_diff_eq!(difference.translation.vector.norm(), 0.0, epsilon = 1e-15);
+        assert_abs_diff_eq!(difference.rotation.angle(), 0.0, epsilon = 1e-15);
+        Ok(())
+    }
 }

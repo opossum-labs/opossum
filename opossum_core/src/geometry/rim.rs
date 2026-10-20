@@ -17,14 +17,11 @@ use crate::{apertures::Outline, geometry::Face, utils::geom_transformation::Isom
 /// The lateral boundary of a component: its outline, extruded along an axis.
 ///
 /// A point lies within the rim if its projection along the axis falls into the outline. The rim
-/// stores no absolute frame. It is stated relative to a reference frame handed to
-/// [`Rim::contains`], which is the node's frame for the surfaces of a component as well as for the
-/// body of a placed [`Extruded`](crate::geometry::Extruded) solid. The rim therefore follows
-/// wherever that frame is when it is asked.
+/// lies where its frame says; moving the component moves it along (see [`Rim::moved`]).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Rim {
     outline: Outline,
-    axis: Isometry,
+    frame: Isometry,
 }
 
 impl Rim {
@@ -32,50 +29,48 @@ impl Rim {
     ///
     /// # Arguments
     ///
-    /// * `outline` - the transversal extent, in the xy plane of `axis`.
-    /// * `axis` - the frame of the outline relative to the reference frame; its z axis is the
+    /// * `outline` - the transversal extent, in the xy plane of `frame`.
+    /// * `frame` - the frame of the outline, in the frame the rim is stated in; its z axis is the
     ///   direction the outline is extruded along.
     #[must_use]
-    pub const fn new(outline: Outline, axis: Isometry) -> Self {
-        Self { outline, axis }
+    pub const fn new(outline: Outline, frame: Isometry) -> Self {
+        Self { outline, frame }
     }
-    /// Return the outline of this [`Rim`], in the xy plane of its axis.
+    /// Return the outline of this [`Rim`], in the xy plane of its frame.
     #[must_use]
     pub const fn outline(&self) -> &Outline {
         &self.outline
     }
-    /// Return the axis of this [`Rim`]: the frame of its outline relative to the reference frame,
-    /// with the z axis as the direction the outline is extruded along.
+    /// Return the frame the outline of this [`Rim`] lies in, with the z axis as the direction the
+    /// outline is extruded along.
     #[must_use]
-    pub const fn axis(&self) -> &Isometry {
-        &self.axis
+    pub const fn frame(&self) -> &Isometry {
+        &self.frame
     }
-    /// Return the frame the outline of this [`Rim`] lies in.
+    /// Return this rim moved by an isometry.
     ///
     /// # Arguments
     ///
-    /// * `reference` - the frame this rim is stated relative to.
-    ///
-    /// # Returns
-    ///
-    /// The reference frame followed by the axis, in global coordinates.
+    /// * `by` - the frame this rim is stated in, given in the frame it is moved to.
     #[must_use]
-    pub fn frame(&self, reference: &Isometry) -> Isometry {
-        reference.append(&self.axis)
+    pub fn moved(&self, by: &Isometry) -> Self {
+        Self {
+            outline: self.outline.clone(),
+            frame: by.append(&self.frame),
+        }
     }
     /// Return whether the given point lies within this [`Rim`].
     ///
     /// # Arguments
     ///
-    /// * `point` - the point to be tested, in global coordinates.
-    /// * `reference` - the frame this rim is stated relative to.
+    /// * `point` - the point to be tested, in the frame this rim is stated in.
     ///
     /// # Returns
     ///
     /// `true` if the point's projection along the axis lies within the outline.
     #[must_use]
-    pub fn contains(&self, point: &Point3<Length>, reference: &Isometry) -> bool {
-        let local_point = self.frame(reference).inverse_transform_point(point);
+    pub fn contains(&self, point: &Point3<Length>) -> bool {
+        let local_point = self.frame.inverse_transform_point(point);
         self.outline
             .contains(Point2::new(local_point.x, local_point.y))
     }
@@ -87,11 +82,10 @@ impl Rim {
     /// # Arguments
     ///
     /// * `face` - the face with the unbounded surface.
-    /// * `point` - a point on the surface, in global coordinates.
-    /// * `reference` - the frame this rim is stated relative to.
+    /// * `point` - a point on the surface, in the frame this rim is stated in.
     #[must_use]
-    pub fn bounds(&self, face: &Face, point: &Point3<Length>, reference: &Isometry) -> bool {
-        self.contains(point, reference) && face.is_on_vertex_sheet(point)
+    pub fn bounds(&self, face: &Face, point: &Point3<Length>) -> bool {
+        self.contains(point) && face.is_on_vertex_sheet(point)
     }
 }
 
@@ -124,14 +118,14 @@ mod test {
             ((-1.0, 0.5, 0.0), false),
         ] {
             assert_eq!(
-                rim.contains(&placed(x, y, z), &reference),
+                rim.moved(&reference).contains(&placed(x, y, z)),
                 inside,
                 "({x}, {y}, {z})"
             );
         }
-        // The rim follows its reference: moved 20 mm across the axis, it leaves the point behind.
+        // The rim follows its frame: moved 20 mm across the axis, it leaves the point behind.
         let moved = reference.append(&Isometry::new_translation(millimeter!(0.0, 20.0, 0.0))?);
-        assert!(!rim.contains(&placed(3.0, 4.0, 0.0), &moved));
+        assert!(!rim.moved(&moved).contains(&placed(3.0, 4.0, 0.0)));
         Ok(())
     }
 }

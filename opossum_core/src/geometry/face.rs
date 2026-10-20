@@ -51,15 +51,6 @@ impl Face {
     pub fn surface(&self) -> &dyn GeoSurface {
         self.shape.as_geo_surface()
     }
-    /// Return the anchor of this face: the frame of its vertex relative to the node.
-    ///
-    /// # Arguments
-    ///
-    /// * `owner` - the frame this face is stated in, relative to the node.
-    #[must_use]
-    pub fn anchor(&self, owner: &Isometry) -> Isometry {
-        owner.append(&self.frame)
-    }
     /// Return this face moved by an isometry.
     ///
     /// # Arguments
@@ -164,32 +155,29 @@ impl Face {
     ///
     /// # Arguments
     ///
-    /// * `frame` - the frame this face is stated in.
-    /// * `other` - the face to compare with.
-    /// * `other_frame` - the frame `other` is stated in.
+    /// * `other` - the face to compare with, stated in the same frame as this one.
     ///
     /// # Returns
     ///
     /// `true` if both faces describe the same surface.
     #[must_use]
-    pub fn coincides_with(&self, frame: &Isometry, other: &Self, other_frame: &Isometry) -> bool {
+    pub fn coincides_with(&self, other: &Self) -> bool {
         // Tolerances that only absorb floating-point noise, as for the axes of two node inputs.
         let angle_tolerance = radian!(1.0e-9);
         let length_tolerance = nanometer!(1.0);
-        let vertex = frame.append(&self.frame);
-        let other_vertex = other_frame.append(&other.frame);
         // With both axes aligned, the local y axes have to run along the same line; half a turn
         // reverses them and still maps a cylinder onto itself.
         let same_roll = || {
-            vertex
+            self.frame
                 .transform_vector_f64(&Vector3::y())
-                .cross(&other_vertex.transform_vector_f64(&Vector3::y()))
+                .cross(&other.frame.transform_vector_f64(&Vector3::y()))
                 .norm()
                 <= angle_tolerance.value
         };
         self.shape.matches(&other.shape, length_tolerance)
-            && vertex
-                .axis_mismatch(&other_vertex, angle_tolerance, length_tolerance)
+            && self
+                .frame
+                .axis_mismatch(&other.frame, angle_tolerance, length_tolerance)
                 .is_none()
             && (!self.shape.depends_on_roll() || same_roll())
     }
@@ -205,24 +193,6 @@ mod test {
     };
     use approx::assert_abs_diff_eq;
 
-    /// A face is anchored at its vertex, whatever its shape: a curved surface is computed in its
-    /// vertex frame, not around its center of curvature.
-    #[test]
-    fn a_face_is_anchored_at_its_vertex() -> OpmResult<()> {
-        let owner = Isometry::new(millimeter!(0.0, 0.0, 4.0), degree!(0.0, 30.0, 0.0))?;
-        let vertex = Isometry::new_along_z(millimeter!(5.0))?;
-        for shape in [
-            SurfaceShape::Plane,
-            SurfaceShape::Sphere(Sphere::new(millimeter!(-80.0))?),
-            SurfaceShape::Cylinder(Cylinder::new(millimeter!(50.0))?),
-        ] {
-            assert_eq!(
-                Face::new(shape, vertex).anchor(&owner),
-                owner.append(&vertex)
-            );
-        }
-        Ok(())
-    }
     /// A face moved to a node sits at the node followed by its own frame, and meets a ray there:
     /// a ray along the moved axis hits the vertex.
     #[test]
@@ -260,11 +230,10 @@ mod test {
             ))
         };
         let at = |z: f64| Isometry::new_along_z(millimeter!(z));
-        let frame = Isometry::identity();
         let face = sphere(50.0, at(5.0)?)?;
-        // the same surface stated in another frame, or differing by rounding noise only
-        assert!(face.coincides_with(&frame, &sphere(50.0, at(2.0)?)?, &at(3.0)?));
-        assert!(face.coincides_with(&frame, &sphere(50.0 + 1.0e-10, at(5.0)?)?, &frame));
+        // the same surface moved there from another frame, or differing by rounding noise only
+        assert!(face.coincides_with(&sphere(50.0, at(2.0)?)?.moved(&at(3.0)?)));
+        assert!(face.coincides_with(&sphere(50.0 + 1.0e-10, at(5.0)?)?));
         // another radius, another place, the axis flipped, another shape
         for other in [
             sphere(50.001, at(5.0)?)?,
@@ -278,7 +247,7 @@ mod test {
                 at(5.0)?,
             ),
         ] {
-            assert!(!face.coincides_with(&frame, &other, &frame), "{other:?}");
+            assert!(!face.coincides_with(&other), "{other:?}");
         }
         // a parabola is compared by its focal length
         let parabola = |focal_length: f64| -> OpmResult<Face> {
@@ -287,8 +256,8 @@ mod test {
                 Isometry::identity(),
             ))
         };
-        assert!(parabola(100.0)?.coincides_with(&frame, &parabola(100.0)?, &frame));
-        assert!(!parabola(100.0)?.coincides_with(&frame, &parabola(101.0)?, &frame));
+        assert!(parabola(100.0)?.coincides_with(&parabola(100.0)?));
+        assert!(!parabola(100.0)?.coincides_with(&parabola(101.0)?));
         Ok(())
     }
 }

@@ -263,7 +263,7 @@ mod test {
         for (label, node) in placed_configurations()? {
             assert_eq!(
                 geometry_snapshot(&*node)?,
-                surface_snapshot(&*node)?,
+                surface_snapshot(&*node),
                 "the geometry of '{label}' does not describe its surfaces"
             );
         }
@@ -280,7 +280,10 @@ mod test {
         for (label, node) in placed_configurations()? {
             if let Some(volume) = node.as_volume() {
                 let frame = node.effective_node_iso().unwrap_or_else(Isometry::identity);
-                actual.push((label, body_snapshot(&volume.volume_body()?, &frame)?));
+                actual.push((
+                    label,
+                    body_snapshot(volume.volume_body()?.as_body(), &frame)?,
+                ));
             }
         }
         actual.sort_by_key(|(label, _)| *label);
@@ -883,7 +886,7 @@ mod test {
     /// Place a node (see [`place`]) and take its surface snapshot.
     fn placed_snapshot<T: OpticNode + ?Sized>(node: &mut T) -> OpmResult<Vec<String>> {
         place(node)?;
-        surface_snapshot(node)
+        Ok(surface_snapshot(node))
     }
 
     /// The surfaces every registered node type installs in its default configuration.

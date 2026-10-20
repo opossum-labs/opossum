@@ -14,7 +14,7 @@ use crate::{
     core_optics::{OpticPorts, optic_surface::OpticSurface},
     error::{OpmResult, OpossumError},
     gain::Inversion,
-    geometry::{Placed, Solid},
+    geometry::{Solid, body::Body},
     properties::{Properties, Proptype, validator::Validator},
     utils::{file_utils::sanitize_filename, geom_transformation::Isometry},
 };
@@ -42,23 +42,23 @@ impl RuntimeSurfaces {
 
 /// The volume state of a node: the body between its surfaces and the inversion in it.
 ///
-/// The counterpart of [`RuntimeSurfaces`] for what lies *between* the surfaces. The body is built
-/// together with them and shares them (see
+/// The counterpart of [`RuntimeSurfaces`] for what lies *between* the surfaces. The body is the
+/// solid the surfaces are faces of, moved to the node with them (see
 /// [`OpticNodeExt::install_geometry`](crate::core_optics::OpticNodeExt::install_geometry)), which
 /// leaves the inversion empty; [`OpticNode::prepare_volume`](crate::core_optics::OpticNode::prepare_volume)
 /// fills it for an analysis run, and [`OpticNode::reset_data`](crate::core_optics::OpticNode::reset_data)
 /// clears it again.
 #[derive(Debug, Clone)]
 pub struct RuntimeMedium {
-    body: Placed<Solid>,
+    body: Solid,
     inversion: Option<Inversion>,
 }
 
 impl RuntimeMedium {
     /// Return the volume body this node was prepared with.
     #[must_use]
-    pub const fn body(&self) -> &Placed<Solid> {
-        &self.body
+    pub fn body(&self) -> &dyn Body {
+        self.body.as_body()
     }
 
     /// Return the inversion, if the model built one.
@@ -75,10 +75,10 @@ impl RuntimeMedium {
     ///
     /// # Returns
     ///
-    /// `(&Placed<Solid>, &mut Option<Inversion>)` — the body for geometric queries and the
+    /// `(&dyn Body, &mut Option<Inversion>)` — the body for geometric queries and the
     /// inversion that saturating models may deplete between substeps.
-    pub const fn parts_mut(&mut self) -> (&Placed<Solid>, &mut Option<Inversion>) {
-        (&self.body, &mut self.inversion)
+    pub fn parts_mut(&mut self) -> (&dyn Body, &mut Option<Inversion>) {
+        (self.body.as_body(), &mut self.inversion)
     }
 }
 
@@ -479,7 +479,7 @@ impl NodeAttr {
     ///
     /// * `body` - the body between the node's surfaces, or `None` for a node that encloses no
     ///   volume.
-    pub fn set_runtime_body(&mut self, body: Option<Placed<Solid>>) {
+    pub fn set_runtime_body(&mut self, body: Option<Solid>) {
         self.runtime_medium = body.map(|body| RuntimeMedium {
             body,
             inversion: None,
@@ -551,20 +551,17 @@ mod test {
         millimeter,
     };
 
-    fn test_body() -> OpmResult<Placed<Solid>> {
-        Placed::new(
-            Extruded::new(
-                Isometry::identity(),
-                Face::new(SurfaceShape::Plane, Isometry::identity()),
-                Face::new(
-                    SurfaceShape::Plane,
-                    Isometry::new_along_z(millimeter!(10.0))?,
-                ),
-                Outline::new(CircleShape::new(millimeter!(5.0))?, Vec::new())?,
-            )?
-            .into(),
-            &Isometry::identity(),
-        )
+    fn test_body() -> OpmResult<Solid> {
+        Ok(Extruded::new(
+            Isometry::identity(),
+            Face::new(SurfaceShape::Plane, Isometry::identity()),
+            Face::new(
+                SurfaceShape::Plane,
+                Isometry::new_along_z(millimeter!(10.0))?,
+            ),
+            Outline::new(CircleShape::new(millimeter!(5.0))?, Vec::new())?,
+        )?
+        .into())
     }
 
     #[test]

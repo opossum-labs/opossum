@@ -7,7 +7,7 @@ use crate::{
     coatings::CoatingType,
     core_optics::{NodeAttrExt, OpticNode, PortType},
     error::{OpmResult, OpossumError},
-    geometry::{Geometry, Placed, Solid, body::OPTIC_SHAPE},
+    geometry::{Geometry, Solid, body::OPTIC_SHAPE},
     light::{LightData, LightResult, Rays},
     nodes::fluence_detector::Fluence,
     properties::Proptype,
@@ -26,7 +26,7 @@ pub trait OpticNodeExt {
 
     /// Return the effective input isometry of an [`OpticSurface`](crate::core_optics::optic_surface::OpticSurface).
     ///
-    /// The effective input isometry is the base isometry modified by the local alignment isometry (if any) and the anchor point isometry.  
+    /// It is the frame of the vertex of the face the surface is, placed with the node.
     ///
     /// # Errors
     ///
@@ -114,7 +114,8 @@ pub trait OpticNodeExt {
     /// # Arguments
     ///
     /// * `surf_name` - name of the surface, which is the physical name of its port.
-    /// * `placed` - the placed geometry of the node, shared by the surfaces of all its ports.
+    /// * `placed` - the geometry of the node, moved to the node and shared by the surfaces of all its
+    ///   ports.
     /// * `face` - the number of the face of `placed` this surface is.
     /// * `port_type` - the physical port type (`Input` or `Output`) of this surface.
     ///
@@ -125,7 +126,7 @@ pub trait OpticNodeExt {
     fn update_surface(
         &mut self,
         surf_name: &str,
-        placed: &Arc<Placed<Geometry>>,
+        placed: &Arc<Geometry>,
         face: usize,
         port_type: &PortType,
     ) -> OpmResult<()>;
@@ -272,13 +273,13 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
     }
 
     fn effective_surface_iso(&self, surf_name: &str) -> OpmResult<Isometry> {
-        let Some(eff_node_iso) = self.effective_node_iso() else {
+        if self.effective_node_iso().is_none() {
             return Err(OpossumError::Other("no effective node iso defined".into()));
-        };
+        }
         let surf = self.get_optic_surface(surf_name).ok_or_else(|| {
             OpossumError::Other(format!("no surface with name {surf_name} defined"))
         })?;
-        Ok(eff_node_iso.append(surf.anchor_point_iso()))
+        Ok(*surf.surface().frame())
     }
 
     fn cross_section(&self) -> OpmResult<Option<Outline>> {
@@ -337,16 +338,15 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
                 self.name()
             )));
         };
-        let placed = Arc::new(
-            geometry.place(&self.effective_node_iso().unwrap_or_else(Isometry::identity))?,
-        );
+        let placed =
+            Arc::new(geometry.moved(&self.effective_node_iso().unwrap_or_else(Isometry::identity)));
         for (ports, port_type) in [(inputs, PortType::Input), (outputs, PortType::Output)] {
             for &(name, face) in ports {
-                if placed.surface(face).is_none() {
+                if placed.kind().face(face).is_none() {
                     return Err(OpossumError::Other(format!(
                         "node '{}': port '{name}' sits on face {face}, which does not exist (face count: {})",
                         self.name(),
-                        placed.face_count()
+                        placed.kind().face_count()
                     )));
                 }
                 self.update_surface(name, &placed, face, &port_type)?;
@@ -354,14 +354,14 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         }
         // A single surface encloses no volume and leaves the node without a medium.
         self.node_attr_mut()
-            .set_runtime_body(Placed::<Solid>::try_from((*placed).clone()).ok());
+            .set_runtime_body(Solid::try_from((*placed).clone()).ok());
         Ok(())
     }
 
     fn update_surface(
         &mut self,
         surf_name: &str,
-        placed: &Arc<Placed<Geometry>>,
+        placed: &Arc<Geometry>,
         face: usize,
         port_type: &PortType,
     ) -> OpmResult<()> {

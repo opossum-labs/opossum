@@ -22,7 +22,7 @@ use crate::{
     },
     error::{OpmResult, OpossumError},
     gain::Extraction,
-    geometry::{Placed, Solid},
+    geometry::Solid,
     light::{LightData, LightRays, LightResult, Rays},
     material::{MATERIAL, Material},
     properties::{Proptype, proptype::AssetRef},
@@ -97,15 +97,15 @@ pub trait Volumetric: OpticNode {
     ///
     /// This function returns an error if the node's geometry cannot be derived or encloses no
     /// volume that can be traced.
-    fn volume_body(&self) -> OpmResult<Placed<Solid>> {
+    fn volume_body(&self) -> OpmResult<Solid> {
         let Some(geometry) = self.geometry()? else {
             return Err(OpossumError::Other(format!(
                 "node '{}' has no geometry to enclose a volume",
                 self.name()
             )));
         };
-        Placed::<Solid>::try_from(
-            geometry.place(&self.effective_node_iso().unwrap_or_else(Isometry::identity))?,
+        Solid::try_from(
+            geometry.moved(&self.effective_node_iso().unwrap_or_else(Isometry::identity)),
         )
         .map_err(|error| OpossumError::Other(format!("node '{}': {error}", self.name())))
     }
@@ -465,10 +465,10 @@ mod test {
         },
         degree,
         gain::{ConstGain, GainModel, MonochromaticSmallSignalGain, PumpScenario, PumpSource},
-        geometry::{Extruded, Geometry, body::OPTIC_SHAPE},
+        geometry::{Geometry, body::OPTIC_SHAPE},
         joule,
         light::{
-            Rays, Spectrum,
+            Ray, Rays, Spectrum,
             lightdata::energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
             spectrum_helper::create_he_ne_spec,
         },
@@ -483,6 +483,7 @@ mod test {
         utils::test_helper::helper::metered_energy,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
+    use nalgebra::Point3;
     use uom::si::{
         f64::{Length, LinearNumberDensity, ReciprocalLength},
         linear_number_density::per_meter,
@@ -649,7 +650,8 @@ mod test {
         Ok(())
     }
     /// The medium is bounded by the very surfaces light is traced at: its front face is the
-    /// surface under the input port, its rear face the one under the output port.
+    /// surface under the input port, its rear face the one under the output port: along the axis
+    /// a ray travels inside it from the vertex of the one to the vertex of the other.
     #[test]
     fn the_prepared_body_is_bounded_by_the_surfaces_light_is_traced_at() -> OpmResult<()> {
         let mut lens = placed_lens()?;
@@ -658,17 +660,32 @@ mod test {
             .node_attr()
             .runtime_medium()
             .ok_or_else(|| OpossumError::Other("the lens has no medium".into()))?;
-        for (port, face) in [("input_1", Extruded::FRONT), ("output_1", Extruded::REAR)] {
-            let traced = lens
+        let vertex = |port: &str| -> OpmResult<Point3<Length>> {
+            Ok(lens
                 .get_optic_surface(port)
                 .ok_or_else(|| OpossumError::Other(format!("the lens has no surface '{port}'")))?
-                .surface();
-            assert_eq!(
-                medium.body().surface(face),
-                Some(traced),
-                "surface '{port}'"
-            );
-        }
+                .surface()
+                .frame()
+                .transform_point(&Point3::origin()))
+        };
+        let (front, rear) = (vertex("input_1")?, vertex("output_1")?);
+        let along_the_axis = Ray::new(
+            front - (rear - front),
+            (rear - front).map(|c| c.value),
+            nanometer!(1053.0),
+            joule!(1.0),
+        )?;
+        let chord = medium
+            .body()
+            .path_length_inside(&along_the_axis)
+            .ok_or_else(|| {
+                OpossumError::Other("the ray along the axis missed the medium".into())
+            })?;
+        assert_abs_diff_eq!(
+            chord.value,
+            (rear - front).map(|c| c.value).norm(),
+            epsilon = 1e-12
+        );
         Ok(())
     }
     /// A passive volume node gets a prepared body even without a gain model.
@@ -1513,7 +1530,7 @@ mod test {
             panic!("the head has no rear surface");
         };
         assert_abs_diff_eq!(
-            rear.anchor_point_iso().translation().z.value,
+            rear.surface().frame().translation().z.value,
             thickness.value,
             epsilon = 1e-15
         );
@@ -1648,14 +1665,13 @@ mod test {
         let far = millimeter!(1.0e6, 1.0e6, 0.0);
         for (node_type, _) in node_types() {
             let optic_ref = create_node_ref(node_type)?;
-            let placed = match optic_ref.geometry()? {
-                Some(geometry) => Some(geometry.place(&Isometry::identity())?),
-                None => None,
-            };
-            let window = placed.as_ref().and_then(|placed| placed.window().cloned());
-            let ends_sideways = placed
+            let geometry = optic_ref.geometry()?;
+            let window = geometry
                 .as_ref()
-                .is_some_and(|placed| placed.window().is_some() || !placed.includes(0, &far));
+                .and_then(|geometry| geometry.kind().window().cloned());
+            let ends_sideways = geometry.as_ref().is_some_and(|geometry| {
+                geometry.kind().window().is_some() || !geometry.kind().includes(0, &far)
+            });
             let bounded = matches!(
                 optic_ref.node_attr().get_property(OPTIC_SHAPE),
                 Ok(Proptype::OpticShape(OpticShape::Bounded(_)))

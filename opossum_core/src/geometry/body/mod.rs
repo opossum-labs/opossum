@@ -7,9 +7,9 @@
 //! through it. This is the domain any volumetric quantity (such as an inversion density) is defined
 //! on.
 //!
-//! A body is a description, not a placed thing: it knows its shape, and every question is asked
-//! with the [`Placement`] it is built at. A [`Placed`](crate::geometry::Placed) body forwards the
-//! questions with its own placement. Every kind of [`Solid`](crate::geometry::Solid) implements the
+//! A body answers in the frame its solid is stated in; moved to its node (see
+//! [`Geometry::moved`](crate::geometry::Geometry::moved)), it answers there. Every kind of
+//! [`Solid`](crate::geometry::Solid) implements the
 //! trait next to its definition: an [`Extruded`](crate::geometry::Extruded) solid, a volume bounded
 //! by two faces and the transversal cross section of its rim; a
 //! [`ParametricSolid`](crate::geometry::ParametricSolid), bounded by its faces alone; and an
@@ -25,7 +25,6 @@
 use crate::{
     apertures::{CircleShape, OpticShape, RectangleShape},
     error::{OpmResult, OpossumError},
-    geometry::Placement,
     light::Ray,
     millimeter, nanometer,
     utils::{geom_transformation::Isometry, math_utils::distance_3d_point},
@@ -211,16 +210,13 @@ impl BoundingBox {
 /// [`GeoSurface`](crate::geometry::GeoSurface): it defines an inside and can state how
 /// far a [`Ray`] travels within it.
 ///
-/// Implemented by the description of a body, which does not know where it sits: every method is
-/// given the [`Placement`] it is built at. Asking a [`Placed`](crate::geometry::Placed) body
-/// supplies it.
+/// Implemented by every kind of [`Solid`](crate::geometry::Solid), next to its definition.
 pub trait Body: Debug + Send + Sync {
     /// Return whether the given point lies inside this [`Body`].
     ///
     /// # Arguments
     ///
-    /// - `at`: where the body sits.
-    /// - `point`: the point to be tested, given in global coordinates.
+    /// - `point`: the point to be tested, in the frame the body is stated in.
     ///
     /// # Returns
     ///
@@ -228,7 +224,7 @@ pub trait Body: Debug + Send + Sync {
     /// propagation: a point lying exactly on the entrance boundary counts as inside, one lying
     /// exactly on the exit boundary does not. This way neighbouring bodies sharing a surface do not
     /// both claim the points on it.
-    fn contains(&self, at: Placement<'_>, point: &Point3<Length>) -> bool;
+    fn contains(&self, point: &Point3<Length>) -> bool;
     /// Return the geometrical path length of the given [`Ray`] inside this [`Body`].
     ///
     /// The ray is not refracted on the way — the returned length is the straight chord between the
@@ -237,22 +233,17 @@ pub trait Body: Debug + Send + Sync {
     ///
     /// # Arguments
     ///
-    /// - `at`: where the body sits.
     /// - `ray`: the ray to be traced through the body.
     ///
     /// # Returns
     ///
     /// The path length inside the body or `None` if the ray does not pass through it.
-    fn path_length_inside(&self, at: Placement<'_>, ray: &Ray) -> Option<Length>;
+    fn path_length_inside(&self, ray: &Ray) -> Option<Length>;
     /// Return an axis-aligned box that encloses this [`Body`].
     ///
     /// [`Body::contains`] answers where the body is *not*, one point at a time; this states where it
     /// is worth asking at all. Anything discretising the body needs both: the box gives the domain
     /// to lay a grid over, [`Body::contains`] carves the body out of it.
-    ///
-    /// # Arguments
-    ///
-    /// - `at`: where the body sits.
     ///
     /// # Returns
     ///
@@ -263,18 +254,14 @@ pub trait Body: Debug + Send + Sync {
     /// # Errors
     ///
     /// This function returns an error if the extent of the body cannot be determined.
-    fn bounding_box(&self, at: Placement<'_>) -> OpmResult<BoundingBox>;
+    fn bounding_box(&self) -> OpmResult<BoundingBox>;
     /// Return the frame this [`Body`] is placed in.
     ///
     /// This is the frame [`Body::bounding_box`] is expressed in, so it is what turns that box back
     /// into the global coordinates [`Body::contains`] expects. It is the frame of the component the
     /// body belongs to, which is what makes a grid over the body follow the component when it is
     /// moved or tilted.
-    ///
-    /// # Arguments
-    ///
-    /// - `at`: where the body sits.
-    fn isometry(&self, at: Placement<'_>) -> Isometry;
+    fn isometry(&self) -> Isometry;
     /// Return the length of the straight chord a [`Ray`] cuts through this [`Body`], found from the
     /// points where it meets the boundary.
     ///
@@ -288,7 +275,6 @@ pub trait Body: Debug + Send + Sync {
     ///
     /// # Arguments
     ///
-    /// - `at`: where the body sits.
     /// - `ray_position`: where the ray starts.
     /// - `ray_direction`: the direction the ray travels in.
     /// - `boundary_hits`: the points at which the ray meets the boundary of the body, each only
@@ -299,7 +285,6 @@ pub trait Body: Debug + Send + Sync {
     /// The length of the chord, or `None` if the ray does not pass through the body.
     fn chord_through(
         &self,
-        at: Placement<'_>,
         ray_position: Point3<Length>,
         ray_direction: Vector3<f64>,
         boundary_hits: impl IntoIterator<Item = Point3<Length>>,
@@ -330,7 +315,7 @@ pub trait Body: Debug + Send + Sync {
                 last = Some((position, point));
             }
         };
-        if self.contains(at, &probe) {
+        if self.contains(&probe) {
             consider(ray_position);
         }
         boundary_hits.into_iter().for_each(consider);
@@ -345,7 +330,7 @@ pub trait Body: Debug + Send + Sync {
         // Guard against bodies the ray leaves and re-enters, e.g. a strongly curved meniscus: the
         // section between the outermost two candidates is only fully inside if its center is.
         let center_point = first_point + (last_point - first_point).map(|c| c * 0.5);
-        self.contains(at, &center_point)
+        self.contains(&center_point)
             .then(|| distance_3d_point(&first_point, &last_point))
     }
 }

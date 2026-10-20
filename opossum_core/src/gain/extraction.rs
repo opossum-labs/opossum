@@ -16,7 +16,7 @@ use super::scenario::PumpConfig;
 use crate::{
     error::OpmResult,
     gain::inversion_field::Inversion,
-    geometry::{Placed, Solid},
+    geometry::body::Body,
     light::{Ray, Spectrum},
 };
 
@@ -64,11 +64,8 @@ pub trait Extraction {
     ///
     /// This function errors if the grid cannot be laid over the body or the medium cannot be
     /// pumped.
-    fn build_inversion(
-        &self,
-        body: &Placed<Solid>,
-        config: &PumpConfig,
-    ) -> OpmResult<Option<Inversion>>;
+    fn build_inversion(&self, body: &dyn Body, config: &PumpConfig)
+    -> OpmResult<Option<Inversion>>;
     /// Gain exponent accumulated along the whole chord a ray travels through the medium.
     ///
     /// [`volumetric::Volumetric::propagate_inside_medium`](crate::core_optics::volumetric::Volumetric)
@@ -99,12 +96,7 @@ pub trait Extraction {
     ///
     /// The dimensionless exponent `∫ g(s) ds` for the full chord. Returns `0.0` for a ray that
     /// contributes nothing — a degenerate direction, no inversion, or no populated cells on the path.
-    fn path_exponent(
-        &self,
-        body: &Placed<Solid>,
-        ray: &Ray,
-        inversion: &mut Option<Inversion>,
-    ) -> f64;
+    fn path_exponent(&self, body: &dyn Body, ray: &Ray, inversion: &mut Option<Inversion>) -> f64;
     /// Returns the multiplicative gain factor `exp(∫ g(s) ds)` for the given ray chord.
     ///
     /// This is the result callers normally need: a dimensionless factor by which the ray's energy
@@ -120,12 +112,7 @@ pub trait Extraction {
     /// # Returns
     ///
     /// `exp(path_exponent(body, ray, inversion))`.
-    fn gain_factor(
-        &self,
-        body: &Placed<Solid>,
-        ray: &Ray,
-        inversion: &mut Option<Inversion>,
-    ) -> f64 {
+    fn gain_factor(&self, body: &dyn Body, ray: &Ray, inversion: &mut Option<Inversion>) -> f64 {
         self.path_exponent(body, ray, inversion).exp()
     }
     /// Amplify the spectral energy passing through the medium.
@@ -147,7 +134,7 @@ pub trait Extraction {
     /// without a beam path at all.
     fn amplify_spectrum(
         &self,
-        body: &Placed<Solid>,
+        body: &dyn Body,
         inversion: Option<&Inversion>,
         spectrum: &mut Spectrum,
     ) -> OpmResult<()>;

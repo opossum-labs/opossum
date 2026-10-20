@@ -1261,7 +1261,7 @@ mod test {
             Outline::new(CircleShape::new(millimeter!(10.0))?, Vec::new())?,
         )?;
         let mut surface = OpticSurface::default();
-        surface.set_face(Arc::new(lens.place(&node_frame)?), Extruded::FRONT)?;
+        surface.set_face(Arc::new(lens.moved(&node_frame)), Extruded::FRONT)?;
         let mut ray = Ray::new(
             node_frame.transform_point(&millimeter!(3.0, -4.0, -20.0)),
             node_frame.transform_vector_f64(&Vector3::z()),

@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-//! The population inversion of an active medium, discretised over the [`Placed`] body it fills.
+//! The population inversion of an active medium, discretised over the [`Body`] it fills.
 //!
 //! A pumped medium is not pumped uniformly: the inversion varies across the volume, and every pass
 //! of a beam draws it down where that beam actually went. An [`InversionField`] is where that state
@@ -39,7 +39,7 @@
 
 use crate::{
     error::{OpmResult, OpossumError},
-    geometry::{Placed, Solid, body::BoundingBox},
+    geometry::body::{Body, BoundingBox},
     utils::math_utils::{to_f64, try_f64_to_usize},
 };
 use nalgebra::{DMatrix, Point3, Vector3};
@@ -66,7 +66,7 @@ pub enum Inversion {
     Field(InversionField),
 }
 
-/// The inversion of an active medium, sampled on a grid over the medium's [`Placed`] body.
+/// The inversion of an active medium, sampled on a grid over the medium's [`Body`].
 ///
 /// See the [module documentation](self) for what a cell holds and which frame the grid lives in.
 #[derive(Debug, Clone, PartialEq)]
@@ -80,11 +80,11 @@ pub struct InversionField {
 }
 
 impl InversionField {
-    /// Lay a grid of the given size over the given [`Placed`] body and start it out unpumped.
+    /// Lay a grid of the given size over the given [`Body`] and start it out unpumped.
     ///
     /// This is the one place geometry is evaluated: the body's
-    /// [`bounding_box`](Placed::bounding_box) gives the domain, and every cell center is tested
-    /// against [`contains`](Placed::contains) once to record whether it holds medium at all. Every
+    /// [`bounding_box`](Body::bounding_box) gives the domain, and every cell center is tested
+    /// against [`contains`](Body::contains) once to record whether it holds medium at all. Every
     /// later access is a plain index.
     ///
     /// The resolution is an argument rather than a property of the node the body came from: nothing
@@ -103,7 +103,7 @@ impl InversionField {
     ///
     /// This function returns an error if any of the three dimensions is zero — a grid without cells
     /// has no extent to interpret its ranges against — or if the body cannot state its bounding box.
-    pub fn from_body(body: &Placed<Solid>, dimensions: CellIndex) -> OpmResult<Self> {
+    pub fn from_body(body: &dyn Body, dimensions: CellIndex) -> OpmResult<Self> {
         let (nx, ny, nz) = dimensions;
         if nx == 0 || ny == 0 || nz == 0 {
             return Err(OpossumError::Other(
@@ -142,7 +142,7 @@ impl InversionField {
     }
     /// Return the extent this [`InversionField`] spans.
     ///
-    /// This is the body's own [`bounding_box`](Placed::bounding_box), kept as the grid was laid out
+    /// This is the body's own [`bounding_box`](Body::bounding_box), kept as the grid was laid out
     /// over it, and it is stated in the optic's frame like everything else here. Anything evaluating
     /// a profile over the medium needs it: a distribution that decays from a face of the body has to
     /// know where that face is.
@@ -326,7 +326,7 @@ impl InversionField {
     ///
     /// The ray is expressed **in the field's own frame** (the optic's local frame). The caller
     /// transforms the global ray origin and direction into that frame before calling this method —
-    /// [`Placed::isometry`] supplies the transform, and the body's own
+    /// [`Body::isometry`] supplies the transform, and the body's own
     /// [`Isometry::inverse_transform_point`](crate::utils::geom_transformation::Isometry::inverse_transform_point)
     /// and
     /// [`Isometry::inverse_transform_vector_f64`](crate::utils::geom_transformation::Isometry::inverse_transform_vector_f64)
@@ -545,7 +545,7 @@ mod test {
         apertures::{CircleShape, Outline},
         core_optics::{OpticNode, node_attr::NodePositioning, volumetric::Volumetric},
         degree,
-        geometry::{Extruded, Face, Placed, SurfaceShape},
+        geometry::{Extruded, Face, SurfaceShape},
         millimeter,
         nodes::Lens,
         utils::geom_transformation::Isometry,
@@ -555,17 +555,14 @@ mod test {
     use std::f64::consts::PI;
 
     /// Create a disk of the given thickness and radius, placed by the given isometry.
-    fn disk(thickness: Length, radius: Length, placement: Isometry) -> OpmResult<Placed<Solid>> {
-        Placed::new(
-            Extruded::new(
-                Isometry::identity(),
-                Face::new(SurfaceShape::Plane, Isometry::identity()),
-                Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
-                Outline::new(CircleShape::new(radius)?, Vec::new())?,
-            )?
-            .into(),
-            &placement,
-        )
+    fn disk(thickness: Length, radius: Length, placement: Isometry) -> OpmResult<Extruded> {
+        Ok(Extruded::new(
+            Isometry::identity(),
+            Face::new(SurfaceShape::Plane, Isometry::identity()),
+            Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
+            Outline::new(CircleShape::new(radius)?, Vec::new())?,
+        )?
+        .moved(&placement))
     }
     /// Return the volume of all cells of the given field that hold medium.
     fn covered_volume(field: &InversionField) -> Volume {
@@ -747,7 +744,7 @@ mod test {
         let mut lens = Lens::default();
         lens.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let body = lens.volume_body()?;
-        let field = InversionField::from_body(&body, (9, 9, 5))?;
+        let field = InversionField::from_body(body.as_body(), (9, 9, 5))?;
         assert_eq!(field.dimensions(), (9, 9, 5));
         // the axis of the lens runs through the middle column of cells, which is all medium
         assert!((0..5).all(|k| field.is_inside((4, 4, k))));

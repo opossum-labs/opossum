@@ -3,12 +3,9 @@
 //!
 //! A [`Solid`] is either two faces capping a profile extruded along an axis ([`Extruded`]), the
 //! intersection of the inner sides of several faces ([`ParametricSolid`]) or several solids sharing
-//! interfaces ([`Assembly`]). Each kind lives in a file of its own, together with what it can do.
-//!
-//! A solid is described rather than built. Built at the placement of its node it becomes a
-//! [`Placed`](crate::geometry::Placed) solid, which is what can answer geometric questions such as
-//! whether a point lies inside it (see [`Body`]). Every kind answers them in its own file; the
-//! [`Solid`] only hands a question on to the kind it holds.
+//! interfaces ([`Assembly`]). Each kind lives in a file of its own, together with what it can do:
+//! where its faces end (see [`GeometryKind`]) and what it says about its volume (see [`Body`]).
+//! The [`Solid`] only hands a question on to the kind it holds.
 
 mod assembly;
 mod extruded;
@@ -23,11 +20,8 @@ use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 use crate::{
-    error::OpmResult,
-    geometry::{
-        Face, FaceBoundary, Placeable, Placement, Rim,
-        body::{Body, BoundingBox},
-    },
+    error::OpossumError,
+    geometry::{Face, Geometry, GeometryKind, body::Body},
     light::Ray,
     utils::geom_transformation::Isometry,
 };
@@ -49,8 +43,28 @@ impl From<Extruded> for Solid {
     }
 }
 
+impl TryFrom<Geometry> for Solid {
+    type Error = OpossumError;
+
+    /// Take the solid out of a geometry.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the geometry is a single surface, which encloses no
+    /// volume.
+    fn try_from(geometry: Geometry) -> Result<Self, Self::Error> {
+        match geometry {
+            Geometry::Solid(solid) => Ok(solid),
+            Geometry::Surface(_) => Err(OpossumError::Other(
+                "a single surface encloses no volume".into(),
+            )),
+        }
+    }
+}
+
 impl Solid {
-    /// Return the face with the given index, as an [`Interface`] refers to it.
+    /// Return the face with the given number and the side of it the solid lies on, as an
+    /// [`Interface`] refers to it.
     ///
     /// # Arguments
     ///
@@ -59,13 +73,44 @@ impl Solid {
     ///
     /// # Returns
     ///
-    /// The face, the frame it is stated in relative to the solid, and the side of it the solid lies
-    /// on; or `None` if there is no such face. An [`Assembly`] has no faces of its own.
-    fn face(&self, index: usize) -> Option<(&Face, Isometry, Side)> {
+    /// The face and the side of it the solid lies on; or `None` if there is no such face. An
+    /// [`Assembly`] has no faces of its own.
+    fn face_and_side(&self, index: usize) -> Option<(&Face, Side)> {
         match self {
-            Self::Extruded(extruded) => extruded.face(index),
-            Self::Parametric(parametric) => parametric.face(index),
+            Self::Extruded(extruded) => extruded.face_and_side(index),
+            Self::Parametric(parametric) => parametric.face_and_side(index),
             Self::Assembly(_) => None,
+        }
+    }
+    /// Return this solid moved by an isometry (see [`Geometry::moved`]).
+    ///
+    /// # Arguments
+    ///
+    /// * `by` - the frame this solid is stated in, given in the frame it is moved to.
+    #[must_use]
+    pub fn moved(&self, by: &Isometry) -> Self {
+        match self {
+            Self::Extruded(extruded) => Self::Extruded(Box::new(extruded.moved(by))),
+            Self::Parametric(parametric) => Self::Parametric(parametric.moved(by)),
+            Self::Assembly(assembly) => Self::Assembly(assembly.moved(by)),
+        }
+    }
+    /// Return the kind of solid this is, as the one thing its faces are asked of.
+    #[must_use]
+    pub fn kind(&self) -> &dyn GeometryKind {
+        match self {
+            Self::Extruded(extruded) => &**extruded,
+            Self::Parametric(parametric) => parametric,
+            Self::Assembly(assembly) => assembly,
+        }
+    }
+    /// Return the kind of solid this is, as the one thing its volume is asked of.
+    #[must_use]
+    pub fn as_body(&self) -> &dyn Body {
+        match self {
+            Self::Extruded(extruded) => &**extruded,
+            Self::Parametric(parametric) => parametric,
+            Self::Assembly(assembly) => assembly,
         }
     }
 }
@@ -97,77 +142,25 @@ impl Side {
     }
 }
 
-impl Solid {
-    /// Return the kind of solid this is, as the one thing the faces and the rim are asked of.
-    const fn as_placeable(&self) -> &dyn Placeable {
-        match self {
-            Self::Extruded(extruded) => &**extruded,
-            Self::Parametric(parametric) => parametric,
-            Self::Assembly(assembly) => assembly,
-        }
-    }
-    /// Return the kind of solid this is, as the one thing its volume is asked of.
-    const fn as_body(&self) -> &dyn Body {
-        match self {
-            Self::Extruded(extruded) => &**extruded,
-            Self::Parametric(parametric) => parametric,
-            Self::Assembly(assembly) => assembly,
-        }
-    }
-    /// Return the kind of solid this is, as the one thing the ends of its faces are asked of.
-    const fn as_boundary(&self) -> &dyn FaceBoundary {
-        match self {
-            Self::Extruded(extruded) => &**extruded,
-            Self::Parametric(parametric) => parametric,
-            Self::Assembly(assembly) => assembly,
-        }
-    }
-}
-
-impl Placeable for Solid {
-    fn faces(&self) -> Vec<(&Face, Isometry)> {
-        self.as_placeable().faces()
-    }
-    fn window(&self) -> Option<&Rim> {
-        self.as_placeable().window()
-    }
-}
-
-impl FaceBoundary for Solid {
-    fn includes(&self, at: Placement<'_>, face: usize, point: &Point3<Length>) -> bool {
-        self.as_boundary().includes(at, face, point)
-    }
-}
-
-impl Body for Solid {
-    fn contains(&self, at: Placement<'_>, point: &Point3<Length>) -> bool {
-        self.as_body().contains(at, point)
-    }
-    fn path_length_inside(&self, at: Placement<'_>, ray: &Ray) -> Option<Length> {
-        self.as_body().path_length_inside(at, ray)
-    }
-    fn bounding_box(&self, at: Placement<'_>) -> OpmResult<BoundingBox> {
-        self.as_body().bounding_box(at)
-    }
-    fn isometry(&self, at: Placement<'_>) -> Isometry {
-        self.as_body().isometry(at)
-    }
-}
-
-/// Collect the faces a solid numbers, one after the other until the numbering ends.
+/// Return where a ray meets the faces of a solid, each only where the solid says the face reaches.
 ///
 /// # Arguments
 ///
-/// * `face` - the face with the given number, as [`Solid::face`] returns it.
+/// * `faces` - the faces of the solid, in the order they are numbered.
+/// * `ray` - the ray.
+/// * `includes` - whether the face with the given number reaches the given point of its surface.
 ///
 /// # Returns
 ///
-/// Every face with the frame it is stated in, in the order of the numbering.
-fn collect_faces<'a>(
-    face: impl Fn(usize) -> Option<(&'a Face, Isometry, Side)>,
-) -> Vec<(&'a Face, Isometry)> {
-    (0..)
-        .map_while(face)
-        .map(|(face, owner, _)| (face, owner))
-        .collect()
+/// The points where the ray meets a face of the solid.
+fn face_hits<'a>(
+    faces: impl Iterator<Item = &'a Face> + 'a,
+    ray: &'a Ray,
+    includes: impl Fn(usize, &Point3<Length>) -> bool + 'a,
+) -> impl Iterator<Item = Point3<Length>> + 'a {
+    faces.enumerate().filter_map(move |(index, face)| {
+        face.intersect(ray)
+            .map(|(point, _)| point)
+            .filter(|point| includes(index, point))
+    })
 }

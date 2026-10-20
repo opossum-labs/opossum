@@ -5,11 +5,11 @@ use nalgebra::Point3;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
-use super::{Side, collect_faces};
+use super::{Side, face_hits};
 use crate::{
     error::{OpmResult, OpossumError},
     geometry::{
-        Face, FaceBoundary, Placeable, Placement, Rim,
+        Face, GeometryKind, Rim,
         body::{Body, BoundingBox},
     },
     light::Ray,
@@ -22,6 +22,7 @@ use crate::{
 /// curved faces with their outside as inner side also allow concave shapes.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ParametricSolid {
+    frame: Isometry,
     faces: Vec<(Face, Side)>,
 }
 
@@ -41,89 +42,87 @@ impl ParametricSolid {
                 "a parametric solid needs at least one bounding face".into(),
             ));
         }
-        Ok(Self { faces })
+        Ok(Self {
+            frame: Isometry::identity(),
+            faces,
+        })
     }
-    /// See [`Solid::face`](super::Solid). The face at the given position in the list of faces.
-    ///
-    /// # Arguments
-    ///
-    /// * `index` - the position of the face.
-    ///
-    /// # Returns
-    ///
-    /// The face, the frame it is stated in (the solid's own), and the side of it that is inside; or
-    /// `None` if there is no such face.
-    pub(super) fn face(&self, index: usize) -> Option<(&Face, Isometry, Side)> {
-        self.faces
-            .get(index)
-            .map(|(face, side)| (face, Isometry::identity(), *side))
+    /// See [`Solid::face_and_side`](super::Solid). The face at the given position in the list of
+    /// faces, and the side of it that is inside.
+    pub(super) fn face_and_side(&self, index: usize) -> Option<(&Face, Side)> {
+        self.faces.get(index).map(|(face, side)| (face, *side))
+    }
+    /// Return this solid moved by an isometry (see [`Geometry::moved`](crate::geometry::Geometry::moved)).
+    #[must_use]
+    pub fn moved(&self, by: &Isometry) -> Self {
+        Self {
+            frame: by.append(&self.frame),
+            faces: self
+                .faces
+                .iter()
+                .map(|(face, side)| (face.moved(by), *side))
+                .collect(),
+        }
     }
     /// Return, for every face in the order they are numbered, whether the point lies on the side of
     /// it that is inside the solid.
     ///
     /// # Arguments
     ///
-    /// * `at` - where the solid sits.
-    /// * `point` - the point to be tested, in global coordinates.
-    fn inner_sides<'a>(
-        &'a self,
-        at: Placement<'a>,
-        point: &'a Point3<Length>,
-    ) -> impl Iterator<Item = bool> + 'a {
+    /// * `point` - the point to be tested, in the frame the solid is stated in.
+    fn inner_sides<'a>(&'a self, point: &'a Point3<Length>) -> impl Iterator<Item = bool> + 'a {
         self.faces
             .iter()
-            .zip(at.surfaces())
-            .map(move |((_, side), surface)| side.contains(surface.is_behind(point)))
+            .map(move |(face, side)| side.contains(face.is_behind(point)))
     }
 }
 
 /// A face ends where it meets the others: a point on its surface belongs to the solid if it lies on
 /// the inner side of every *other* face. As for every component, a face is the part of its surface
 /// on the sheet through its vertex.
-impl FaceBoundary for ParametricSolid {
-    fn includes(&self, at: Placement<'_>, face: usize, point: &Point3<Length>) -> bool {
-        at.surfaces()
-            .get(face)
-            .is_some_and(|surface| surface.is_on_vertex_sheet(point))
+impl GeometryKind for ParametricSolid {
+    fn face(&self, index: usize) -> Option<&Face> {
+        self.faces.get(index).map(|(face, _)| face)
+    }
+    fn face_count(&self) -> usize {
+        self.faces.len()
+    }
+    fn includes(&self, face: usize, point: &Point3<Length>) -> bool {
+        GeometryKind::face(self, face).is_some_and(|surface| surface.is_on_vertex_sheet(point))
             && self
-                .inner_sides(at, point)
+                .inner_sides(point)
                 .enumerate()
                 .all(|(index, inside)| index == face || inside)
+    }
+    fn window(&self) -> Option<&Rim> {
+        None
     }
 }
 
 /// A point is inside this solid if it lies on the inner side of every one of its faces. A face
 /// bounds the solid only where it lies within all the other faces, which is where a ray meets it.
 impl Body for ParametricSolid {
-    fn contains(&self, at: Placement<'_>, point: &Point3<Length>) -> bool {
-        self.inner_sides(at, point).all(|inside| inside)
+    fn contains(&self, point: &Point3<Length>) -> bool {
+        self.inner_sides(point).all(|inside| inside)
     }
-    fn path_length_inside(&self, at: Placement<'_>, ray: &Ray) -> Option<Length> {
-        let hits = at.face_hits(ray, |face, point| self.includes(at, face, point));
-        self.chord_through(at, ray.position(), ray.direction(), hits)
+    fn path_length_inside(&self, ray: &Ray) -> Option<Length> {
+        let faces = self.faces.iter().map(|(face, _)| face);
+        let hits = face_hits(faces, ray, |face, point| self.includes(face, point));
+        self.chord_through(ray.position(), ray.direction(), hits)
     }
     /// The extent of the solid is not determined yet.
     ///
     /// # Errors
     ///
     /// This function always returns an error.
-    fn bounding_box(&self, _at: Placement<'_>) -> OpmResult<BoundingBox> {
+    fn bounding_box(&self) -> OpmResult<BoundingBox> {
         Err(OpossumError::Other(
             "the extent of a parametric solid cannot be determined yet".into(),
         ))
     }
-    /// The faces are stated relative to the node, so the solid sits in the frame of the node.
-    fn isometry(&self, at: Placement<'_>) -> Isometry {
-        *at.node_frame()
-    }
-}
-
-impl Placeable for ParametricSolid {
-    fn faces(&self) -> Vec<(&Face, Isometry)> {
-        collect_faces(|index| self.face(index))
-    }
-    fn window(&self) -> Option<&Rim> {
-        None
+    /// The frame the faces are stated in: the node's, once the solid is moved there.
+    fn isometry(&self) -> Isometry {
+        self.frame
     }
 }
 
@@ -132,7 +131,7 @@ mod test {
     use super::*;
     use crate::{
         degree,
-        geometry::{Placed, Sphere, SurfaceShape},
+        geometry::{Sphere, SurfaceShape},
         joule,
         light::Ray,
         millimeter, nanometer,
@@ -176,14 +175,14 @@ mod test {
         ])
     }
     /// The block placed at the given node frame.
-    fn placed_block(node_frame: &Isometry) -> OpmResult<Placed<ParametricSolid>> {
-        Placed::new(block()?, node_frame)
+    fn placed_block(node_frame: &Isometry) -> OpmResult<ParametricSolid> {
+        Ok(block()?.moved(node_frame))
     }
     fn test_ray(position: Point3<Length>, direction: Vector3<f64>) -> OpmResult<Ray> {
         Ray::new(position, direction, nanometer!(1053.0), joule!(1.0))
     }
     /// The chord of the ray through the block, in millimeter.
-    fn chord(block: &Placed<ParametricSolid>, ray: &Ray) -> OpmResult<f64> {
+    fn chord(block: &ParametricSolid, ray: &Ray) -> OpmResult<f64> {
         block
             .path_length_inside(ray)
             .map(|length| length.get::<millimeter>())
@@ -194,10 +193,10 @@ mod test {
     fn a_parametric_solid_needs_a_face() {
         assert!(ParametricSolid::new(vec![]).is_err());
     }
-    /// A placed parametric solid has one surface per face, in the order the faces were given, and no
-    /// rim: its faces bound it by themselves.
+    /// A parametric solid numbers its faces in the order they were given and has no rim: its faces
+    /// bound it by themselves. Moved, every face moves along.
     #[test]
-    fn a_placed_parametric_solid_numbers_its_faces_as_given() -> OpmResult<()> {
+    fn a_parametric_solid_numbers_its_faces_as_given() -> OpmResult<()> {
         let at = |z: f64| Isometry::new_along_z(millimeter!(z));
         let solid = ParametricSolid::new(vec![
             (Face::new(SurfaceShape::Plane, at(0.0)?), Side::Behind),
@@ -211,20 +210,19 @@ mod test {
             ),
         ])?;
         let frame = Isometry::new_along_z(millimeter!(100.0))?;
-        let placed = Placed::new(solid, &frame)?;
-        assert_eq!(placed.face_count(), 3);
-        assert!(placed.window().is_none());
-        let expected_z = [0.0, 10.0, 2.0];
-        for (index, z) in expected_z.into_iter().enumerate() {
+        let moved = solid.moved(&frame);
+        assert_eq!(moved.face_count(), 3);
+        assert!(moved.window().is_none());
+        for (index, z) in [0.0, 10.0, 2.0].into_iter().enumerate() {
+            let (Some(face), Some(moved_face)) = (solid.face(index), moved.face(index)) else {
+                return Err(OpossumError::Other(format!("there is no face {index}")));
+            };
             assert_abs_diff_eq!(
-                placed.anchor(index)?.translation().z.get::<millimeter>(),
+                face.frame().translation().z.get::<millimeter>(),
                 z,
                 epsilon = 1e-9
             );
-            let surface = placed
-                .surface(index)
-                .ok_or_else(|| OpossumError::Other(format!("face {index} has no surface")))?;
-            assert_eq!(*surface.frame(), frame.append(&placed.anchor(index)?));
+            assert_eq!(*moved_face.frame(), frame.append(face.frame()));
         }
         Ok(())
     }
@@ -363,15 +361,12 @@ mod test {
     /// ends where another face cuts it, and it is the cap only: not the far half of the sphere.
     #[test]
     fn a_curved_face_ends_at_the_other_faces_on_the_sheet_through_its_vertex() -> OpmResult<()> {
-        let dome_with = |other: Face, side: Side| -> OpmResult<Placed<ParametricSolid>> {
+        let dome_with = |other: Face, side: Side| -> OpmResult<ParametricSolid> {
             let sphere = Face::new(
                 SurfaceShape::Sphere(Sphere::new(millimeter!(40.0))?),
                 Isometry::identity(),
             );
-            Placed::new(
-                ParametricSolid::new(vec![(sphere, Side::Behind), (other, side)])?,
-                &Isometry::identity(),
-            )
+            ParametricSolid::new(vec![(sphere, Side::Behind), (other, side)])
         };
         let on_sphere = |x: f64| 40.0 - 40.0_f64.mul_add(40.0, -(x * x)).sqrt();
         // A rear face at z = 20 mm cuts the cap at 34.6 mm off the axis.

@@ -15,8 +15,8 @@ pub mod helper {
         },
         error::{OpmResult, OpossumError},
         geometry::{
-            Face, Placed, Solid,
-            body::{OPTIC_SHAPE, default_optic_shape},
+            Face,
+            body::{Body, OPTIC_SHAPE, default_optic_shape},
         },
         joule,
         light::{LightData, LightRays, LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
@@ -607,7 +607,8 @@ pub mod helper {
             center_thickness.value,
             epsilon = 1e-12
         );
-        let body = node.volume_body()?;
+        let solid = node.volume_body()?;
+        let body = solid.as_body();
         let on_axis_point =
             |z_position: Length| Point3::new(millimeter!(0.0), millimeter!(0.0), z_position);
         assert!(body.contains(&on_axis_point(center_thickness * 0.5)));
@@ -642,12 +643,15 @@ pub mod helper {
         position: Point3<Length>,
     ) -> OpmResult<Length> {
         let ray = Ray::new_collimated(position, nanometer!(1053.0), joule!(1.0))?;
-        node.volume_body()?.path_length_inside(&ray).ok_or_else(|| {
-            OpossumError::Other(format!(
-                "a ray at {position:?} does not pass through the volume of node '{}'",
-                node.name()
-            ))
-        })
+        node.volume_body()?
+            .as_body()
+            .path_length_inside(&ray)
+            .ok_or_else(|| {
+                OpossumError::Other(format!(
+                    "a ray at {position:?} does not pass through the volume of node '{}'",
+                    node.name()
+                ))
+            })
     }
 
     /// Assert that the transversal extent of a volume node is its optic shape, and nothing else.
@@ -672,7 +676,8 @@ pub mod helper {
         node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let mid_thickness = center_thickness_of(&node) * 0.5;
         let point_at = |radius: Length| Point3::new(radius, millimeter!(0.0), mid_thickness);
-        let body = node.volume_body()?;
+        let solid = node.volume_body()?;
+        let body = solid.as_body();
         assert!(body.contains(&point_at(default_edge - millimeter!(0.1))));
         assert!(!body.contains(&point_at(default_edge + millimeter!(0.1))));
         // a wider optic shape widens it
@@ -680,7 +685,8 @@ pub mod helper {
             OPTIC_SHAPE,
             OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
         )?;
-        let body = node.volume_body()?;
+        let solid = node.volume_body()?;
+        let body = solid.as_body();
         assert!(body.contains(&point_at(millimeter!(24.9))));
         assert!(!body.contains(&point_at(millimeter!(25.1))));
         // An open optic shape leaves the volume undefined and is rejected where it is set: two
@@ -937,16 +943,8 @@ pub mod helper {
     /// # Returns
     ///
     /// One line per installed surface.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the mutex of a geometric surface cannot be locked.
-    ///
-    /// # Panics
-    ///
-    /// Panics if a geometric surface is not placed at the node's effective isometry followed by
-    /// its anchor.
-    pub fn surface_snapshot<T: OpticNode + ?Sized>(node: &T) -> OpmResult<Vec<String>> {
+    #[must_use]
+    pub fn surface_snapshot<T: OpticNode + ?Sized>(node: &T) -> Vec<String> {
         let runtime = node.node_attr().runtime_surfaces();
         let surfaces = runtime
             .inputs
@@ -958,14 +956,7 @@ pub mod helper {
                     .iter()
                     .map(|(name, surface)| ("out", name, surface)),
             )
-            .map(|(port_type, name, surface)| {
-                (
-                    port_type,
-                    name.as_str(),
-                    surface.surface().clone(),
-                    *surface.anchor_point_iso(),
-                )
-            })
+            .map(|(port_type, name, surface)| (port_type, name.as_str(), surface.surface().clone()))
             .collect::<Vec<_>>();
         describe_surfaces(node, &surfaces)
     }
@@ -987,40 +978,32 @@ pub mod helper {
     ///
     /// # Errors
     ///
-    /// Returns an error if the geometry cannot be derived or built.
-    ///
-    /// # Panics
-    ///
-    /// See [`surface_snapshot`].
+    /// Returns an error if the geometry cannot be derived, or if no face of it lies where an
+    /// installed surface does.
     pub fn geometry_snapshot<T: OpticNode + ?Sized>(node: &T) -> OpmResult<Vec<String>> {
         let Some(geometry) = node.geometry()? else {
             return Ok(Vec::new());
         };
-        let placed =
-            geometry.place(&node.effective_node_iso().unwrap_or_else(Isometry::identity))?;
+        let placed = geometry.moved(&node.effective_node_iso().unwrap_or_else(Isometry::identity));
+        let kind = placed.kind();
         let runtime = node.node_attr().runtime_surfaces();
-        // Which face a port sits at is the node's business: find it by where the installed surface
-        // is anchored.
-        let face_at_anchor = |name: &str, anchor: &Isometry| -> OpmResult<usize> {
-            (0..placed.face_count())
-                .find(|index| placed.anchor(*index).is_ok_and(|face| face == *anchor))
-                .ok_or_else(|| {
-                    OpossumError::Other(format!(
-                        "no face of the geometry is anchored where the surface at port '{name}' is"
-                    ))
-                })
-        };
         let mut surfaces = Vec::new();
         for (port_type, ports) in [("in", &runtime.inputs), ("out", &runtime.outputs)] {
             for (name, installed) in ports {
-                let face = face_at_anchor(name, installed.anchor_point_iso())?;
-                let surface = placed.surface(face).cloned().ok_or_else(|| {
-                    OpossumError::Other(format!("the geometry has no face {face}"))
-                })?;
-                surfaces.push((port_type, name.as_str(), surface, placed.anchor(face)?));
+                // Which face a port sits at is the node's business: find the face that lies where
+                // the installed surface does.
+                let face = (0..kind.face_count())
+                    .filter_map(|index| kind.face(index))
+                    .find(|face| *face == installed.surface())
+                    .ok_or_else(|| {
+                        OpossumError::Other(format!(
+                            "no face of the geometry lies where the surface at port '{name}' does"
+                        ))
+                    })?;
+                surfaces.push((port_type, name.as_str(), face.clone()));
             }
         }
-        describe_surfaces(node, &surfaces)
+        Ok(describe_surfaces(node, &surfaces))
     }
 
     /// Describe surfaces one line each, as documented at [`surface_snapshot`].
@@ -1028,30 +1011,24 @@ pub mod helper {
     /// # Arguments
     ///
     /// * `node` - the node the surfaces belong to.
-    /// * `surfaces` - port type, port name, geometric surface and anchor of each surface.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the mutex of a geometric surface cannot be locked.
-    ///
-    /// # Panics
-    ///
-    /// Panics if a geometric surface is not placed at the node's effective isometry followed by
-    /// its anchor.
+    /// * `surfaces` - port type, port name and placed face of each surface.
     fn describe_surfaces<T: OpticNode + ?Sized>(
         node: &T,
-        surfaces: &[(&str, &str, Face, Isometry)],
-    ) -> OpmResult<Vec<String>> {
+        surfaces: &[(&str, &str, Face)],
+    ) -> Vec<String> {
         let node_iso = node.effective_node_iso().unwrap_or_else(Isometry::identity);
         let mut lines = Vec::with_capacity(surfaces.len());
-        for (port_type, port_name, face, anchor) in surfaces {
+        for (port_type, port_name, face) in surfaces {
             let shared = surfaces
                 .iter()
-                .position(|(_, _, other, _)| other == face)
+                .position(|(_, _, other)| other == face)
                 .expect("a surface is shared with itself");
+            // The anchor: where the face sits relative to the node.
+            let anchor = Isometry::new_from_transform(
+                node_iso.get_inv_transform() * face.frame().get_transform(),
+            );
             let translation = anchor.translation();
             let geo = face.surface();
-            assert_same_isometry(face.frame(), &node_iso.append(anchor), port_name);
             let sag = [(0.0, 0.0), (5.0, 0.0), (0.0, 5.0)]
                 .map(|(x, y)| {
                     geo.local_z_at(&Point2::new(millimeter!(x), millimeter!(y)))
@@ -1068,7 +1045,7 @@ pub mod helper {
                 rounded_vector(&anchor.transform_vector_f64(&Vector3::z())),
             ));
         }
-        Ok(lines)
+        lines
     }
 
     /// Compare labelled snapshots against the ones recorded when the behaviour was last accepted.
@@ -1133,7 +1110,7 @@ pub mod helper {
     /// # Errors
     ///
     /// Returns an error if the body cannot answer one of the questions.
-    pub fn body_snapshot(body: &Placed<Solid>, node_frame: &Isometry) -> OpmResult<Vec<String>> {
+    pub fn body_snapshot(body: &dyn Body, node_frame: &Isometry) -> OpmResult<Vec<String>> {
         let frame = body.isometry();
         let translation = frame.translation();
         let range = |range: std::ops::Range<Length>| {
@@ -1283,26 +1260,6 @@ pub mod helper {
             joule!(1.0),
         )?
         .transformed_ray(node_frame))
-    }
-
-    /// Assert that two isometries describe the same placement up to numerical noise.
-    ///
-    /// # Arguments
-    ///
-    /// * `actual` - the placement found.
-    /// * `expected` - the placement required.
-    /// * `surface_name` - the surface being checked, for the failure message.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the two placements differ by more than 1e-12 m or 1e-12 rad.
-    fn assert_same_isometry(actual: &Isometry, expected: &Isometry, surface_name: &str) {
-        let difference = expected.get_inv_transform() * actual.get_transform();
-        assert!(
-            difference.translation.vector.norm() < 1e-12
-                && difference.rotation.imag().norm() < 1e-12,
-            "surface '{surface_name}' is not placed at the node's isometry followed by its anchor"
-        );
     }
 
     /// Format a value rounded to six decimal places.

@@ -12,7 +12,7 @@ use crate::{
         rays_hit_map::{HitPoint, RaysHitMap},
     },
     error::{OpmResult, OpossumError},
-    geometry::{Face, Geometry, Placed, Rim, SurfaceShape},
+    geometry::{Face, Geometry, Rim, SurfaceShape},
     light::{Ray, Rays},
     nodes::fluence_detector::Fluence,
     refractive_index::RefractiveIndexType,
@@ -23,18 +23,18 @@ use nalgebra::{Point3, Vector3};
 use std::sync::Arc;
 use uom::si::f64::Length;
 
-/// A face of a placed description: the thing a surface belongs to, which decides where the surface
-/// ends.
+/// A face of a geometry placed at its node: the thing a surface belongs to, which decides where the
+/// surface ends.
 #[derive(Clone)]
 struct PlacedFace {
-    placed: Arc<Placed<Geometry>>,
+    geometry: Arc<Geometry>,
     face: usize,
 }
 
 impl PlacedFace {
     /// Return whether a point on the unbounded surface of this face belongs to the component.
     fn includes(&self, point: &Point3<Length>) -> bool {
-        self.placed.includes(self.face, point)
+        self.geometry.kind().includes(self.face, point)
     }
 }
 
@@ -43,7 +43,6 @@ impl PlacedFace {
 #[derive(Clone)]
 pub struct OpticSurface {
     surface: Face,
-    anchor_point_iso: Isometry,
     window: Option<Rim>,
     face: Option<PlacedFace>,
     coating: CoatingType,
@@ -60,7 +59,6 @@ impl Default for OpticSurface {
     fn default() -> Self {
         Self {
             surface: Face::new(SurfaceShape::Plane, Isometry::identity()),
-            anchor_point_iso: Isometry::identity(),
             window: None,
             face: None,
             coating: CoatingType::IdealAR,
@@ -109,31 +107,31 @@ impl OpticSurface {
         self.surface = surface;
         self.face = None;
     }
-    /// Makes this [`OpticSurface`] a face of a placed description.
+    /// Makes this [`OpticSurface`] a face of a geometry placed at its node.
     ///
-    /// The geometric surface of the face, its anchor and the window of a detector are taken from
-    /// the description. Where the surface ends sideways is asked of the description, so the surface
-    /// ends where the component does, whatever kind of component that is.
+    /// The geometric surface of the face and the window of a detector are taken from the geometry.
+    /// Where the surface ends sideways is asked of the geometry, so the surface ends where the
+    /// component does, whatever kind of component that is.
     ///
     /// # Arguments
     ///
-    /// * `placed` - the description, shared by all faces of the component.
+    /// * `geometry` - the geometry, moved to its node and shared by all faces of the component.
     /// * `face` - the number of the face this surface is.
     ///
     /// # Errors
     ///
-    /// This function returns an error if the description has no such face.
-    pub fn set_face(&mut self, placed: Arc<Placed<Geometry>>, face: usize) -> OpmResult<()> {
-        let surface = placed.surface(face).cloned().ok_or_else(|| {
+    /// This function returns an error if the geometry has no such face.
+    pub fn set_face(&mut self, geometry: Arc<Geometry>, face: usize) -> OpmResult<()> {
+        let kind = geometry.kind();
+        let surface = kind.face(face).cloned().ok_or_else(|| {
             OpossumError::Other(format!(
                 "there is no face {face}: the geometry has {} faces",
-                placed.face_count()
+                kind.face_count()
             ))
         })?;
-        self.anchor_point_iso = placed.anchor(face)?;
-        self.window = placed.window().cloned();
+        self.window = kind.window().cloned();
         self.surface = surface;
-        self.face = Some(PlacedFace { placed, face });
+        self.face = Some(PlacedFace { geometry, face });
         Ok(())
     }
 
@@ -185,9 +183,7 @@ impl OpticSurface {
     /// * `point` - a point on this surface, in global coordinates.
     #[must_use]
     pub fn records_at(&self, point: &Point3<Length>) -> bool {
-        self.window
-            .as_ref()
-            .is_none_or(|rim| rim.contains(point, &self.node_frame()))
+        self.window.as_ref().is_none_or(|rim| rim.contains(point))
     }
     /// Cut a bundle of rays that passed this [`OpticSurface`] to what it records: the rays within
     /// a detector's window ([`SurfaceExtent::Window`]).
@@ -202,14 +198,7 @@ impl OpticSurface {
     pub fn clip_to_window(&self, rays: &mut Rays) -> bool {
         self.window
             .as_ref()
-            .is_some_and(|rim| rays.invalidate_outside(rim, &self.node_frame()))
-    }
-    /// Return the frame of the node this surface belongs to, derived from where its geometric
-    /// surface sits right now: that surface's frame, minus its anchor.
-    fn node_frame(&self) -> Isometry {
-        Isometry::new_from_transform(
-            self.surface.frame().get_transform() * self.anchor_point_iso.get_inv_transform(),
-        )
+            .is_some_and(|rim| rays.invalidate_outside(rim))
     }
     /// Returns a reference to the coating of this [`OpticSurface`].
     #[must_use]
@@ -323,11 +312,6 @@ impl OpticSurface {
         Ok(())
     }
 
-    ///Returns a reference to the anchor point isometry of this [`OpticSurface`]
-    #[must_use]
-    pub const fn anchor_point_iso(&self) -> &Isometry {
-        &self.anchor_point_iso
-    }
     /// Propagates a bundle of rays through this specific surface.
     /// Utilizes the Strategy Pattern to execute analyzer-specific behavior.
     ///
@@ -412,7 +396,7 @@ mod test {
     /// The face of the geometry with the given number, placed at the given node.
     fn face_of(geometry: &Geometry, node_frame: &Isometry, face: usize) -> OpmResult<OpticSurface> {
         let mut surface = OpticSurface::default();
-        surface.set_face(Arc::new(geometry.place(node_frame)?), face)?;
+        surface.set_face(Arc::new(geometry.moved(node_frame)), face)?;
         Ok(surface)
     }
     /// A plane with its vertex at the given pose of a node at the origin, its component reaching 5 mm
@@ -508,7 +492,7 @@ mod test {
         let geometry = Geometry::plane(Some(circle(5.0)?));
         let mut surface = face_of(&geometry, &Isometry::identity(), 0)?;
         let error = surface
-            .set_face(Arc::new(geometry.place(&Isometry::identity())?), 1)
+            .set_face(Arc::new(geometry.moved(&Isometry::identity())), 1)
             .unwrap_err();
         assert!(error.to_string().contains("no face 1"), "{error}");
         assert!(surface.intersect(&ray_at(4.9)?).is_some());

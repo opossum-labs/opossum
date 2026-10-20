@@ -583,15 +583,14 @@ impl Rays {
     /// # Arguments
     ///
     /// * `rim` - the rim the rays have to lie within.
-    /// * `reference` - the frame the rim is stated relative to.
     ///
     /// # Returns
     ///
     /// `true` if valid rays were invalidated.
-    pub fn invalidate_outside(&mut self, rim: &Rim, reference: &Isometry) -> bool {
+    pub fn invalidate_outside(&mut self, rim: &Rim) -> bool {
         let mut invalidated = false;
         for ray in self.ray_bundle.iter_mut().filter(|ray| ray.valid()) {
-            if !rim.contains(&ray.position(), reference) {
+            if !rim.contains(&ray.position()) {
                 ray.add_to_pos_hist(ray.position());
                 ray.set_invalid();
                 invalidated = true;
@@ -2699,9 +2698,9 @@ mod test {
             Outline::new(CircleShape::new(millimeter!(0.5))?, Vec::new())?,
             Isometry::identity(),
         );
-        assert!(rays.invalidate_outside(&rim, &Isometry::identity()));
+        assert!(rays.invalidate_outside(&rim));
         assert_eq!(rays.total_energy(), joule!(1.0));
-        assert!(!rays.invalidate_outside(&rim, &Isometry::identity()));
+        assert!(!rays.invalidate_outside(&rim));
         Ok(())
     }
     #[test]

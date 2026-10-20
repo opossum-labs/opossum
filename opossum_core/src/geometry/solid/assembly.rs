@@ -5,11 +5,11 @@ use nalgebra::Point3;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
-use super::{Side, Solid, collect_faces};
+use super::Solid;
 use crate::{
     error::{OpmResult, OpossumError},
     geometry::{
-        Face, FaceBoundary, Placeable, Placement, Rim,
+        Face, GeometryKind, Rim,
         body::{Body, BoundingBox},
     },
     light::Ray,
@@ -18,10 +18,9 @@ use crate::{
     utils::geom_transformation::Isometry,
 };
 
-/// One solid of an [`Assembly`], with its placement and material.
+/// One solid of an [`Assembly`], placed where it sits in the assembly, with its material.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Part {
-    placement: Isometry,
     solid: Solid,
     material: AssetRef<Material>,
 }
@@ -35,31 +34,18 @@ impl Part {
     /// * `solid` - the solid itself; it must not be an [`Assembly`] (see [`Assembly::new`]).
     /// * `material` - the material the solid is made of.
     #[must_use]
-    pub const fn new(placement: Isometry, solid: Solid, material: AssetRef<Material>) -> Self {
+    pub fn new(placement: &Isometry, solid: Solid, material: AssetRef<Material>) -> Self {
         Self {
-            placement,
-            solid,
+            solid: solid.moved(placement),
             material,
         }
     }
-    /// Return a face of this part's solid, placed with the part.
-    ///
-    /// # Arguments
-    ///
-    /// * `index` - the index of the face in the part's solid (see [`FaceId::new`]).
-    ///
-    /// # Returns
-    ///
-    /// The face, the frame it is stated in relative to the node, and the side of it the part lies
-    /// on; or `None` if the solid has no such face.
-    fn face(&self, index: usize) -> Option<(&Face, Isometry, Side)> {
-        self.solid
-            .face(index)
-            .map(|(face, owner, side)| (face, self.placement.append(&owner), side))
-    }
-    /// Return the number of faces of this part's solid.
-    fn face_count(&self) -> usize {
-        (0..).map_while(|index| self.face(index)).count()
+    /// Return this part moved by an isometry.
+    fn moved(&self, by: &Isometry) -> Self {
+        Self {
+            solid: self.solid.moved(by),
+            material: self.material.clone(),
+        }
     }
 }
 
@@ -117,6 +103,7 @@ impl Interface {
 /// their parts, and bonded crystals with undoped end caps.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Assembly {
+    frame: Isometry,
     parts: Vec<Part>,
     interfaces: Vec<Interface>,
 }
@@ -156,7 +143,7 @@ impl Assembly {
             let resolve = |id: FaceId| {
                 parts
                     .get(id.part)
-                    .and_then(|part| part.face(id.face))
+                    .and_then(|part| part.solid.face_and_side(id.face))
                     .ok_or_else(|| {
                         OpossumError::Other(format!(
                             "an interface refers to face {} of part {}, which does not exist",
@@ -164,9 +151,9 @@ impl Assembly {
                         ))
                     })
             };
-            let (face_a, frame_a, side_a) = resolve(interface.a)?;
-            let (face_b, frame_b, side_b) = resolve(interface.b)?;
-            if !face_a.coincides_with(&frame_a, face_b, &frame_b) {
+            let (face_a, side_a) = resolve(interface.a)?;
+            let (face_b, side_b) = resolve(interface.b)?;
+            if !face_a.coincides_with(face_b) {
                 return Err(OpossumError::Other(format!(
                     "the faces an interface joins have to be the same surface at the same place, \
                      but face {} of part {} and face {} of part {} are not",
@@ -181,104 +168,77 @@ impl Assembly {
                 )));
             }
         }
-        Ok(Self { parts, interfaces })
+        Ok(Self {
+            frame: Isometry::identity(),
+            parts,
+            interfaces,
+        })
+    }
+    /// Return this assembly moved by an isometry (see
+    /// [`Geometry::moved`](crate::geometry::Geometry::moved)).
+    #[must_use]
+    pub fn moved(&self, by: &Isometry) -> Self {
+        Self {
+            frame: by.append(&self.frame),
+            parts: self.parts.iter().map(|part| part.moved(by)).collect(),
+            interfaces: self.interfaces.clone(),
+        }
+    }
+    /// Return the part a face of the assembly belongs to, and the number the face has in the solid
+    /// of that part.
+    ///
+    /// The faces of an assembly are those of its parts, part after part.
+    ///
+    /// # Arguments
+    ///
+    /// * `face` - the number of the face in the assembly.
+    fn locate(&self, face: usize) -> Option<(&Part, usize)> {
+        let mut first_face = 0;
+        for part in &self.parts {
+            let count = part.solid.kind().face_count();
+            if face < first_face + count {
+                return Some((part, face - first_face));
+            }
+            first_face += count;
+        }
+        None
     }
 }
 
-impl Placeable for Assembly {
-    /// The faces of all parts, part after part, each stated with the placement of its part.
-    fn faces(&self) -> Vec<(&Face, Isometry)> {
+/// A face of an assembly is a face of one of its parts and ends where that part's solid says.
+impl GeometryKind for Assembly {
+    fn face(&self, index: usize) -> Option<&Face> {
+        self.locate(index)
+            .and_then(|(part, own_face)| part.solid.kind().face(own_face))
+    }
+    fn face_count(&self) -> usize {
         self.parts
             .iter()
-            .flat_map(|part| collect_faces(|index| part.face(index)))
-            .collect()
+            .map(|part| part.solid.kind().face_count())
+            .sum()
+    }
+    fn includes(&self, face: usize, point: &Point3<Length>) -> bool {
+        self.locate(face)
+            .is_some_and(|(part, own_face)| part.solid.kind().includes(own_face, point))
     }
     fn window(&self) -> Option<&Rim> {
         None
     }
 }
 
-/// A part of a placed assembly: where it sits and which faces of the assembly are its own.
-struct PartAt<'a> {
-    /// The number of the first face of the part in the assembly.
-    first_face: usize,
-    part: &'a Part,
-    /// The frame the part is placed in.
-    frame: Isometry,
-    /// The surfaces of the faces of the part.
-    surfaces: &'a [Face],
-}
-
-impl PartAt<'_> {
-    /// Return where the part sits, as the solid of the part is asked about its volume and its faces.
-    const fn placement(&self) -> Placement<'_> {
-        Placement::new(&self.frame, self.surfaces)
-    }
-    /// Return the number the given face of the assembly has in the solid of the part, or `None` if
-    /// the face is not one of the part.
-    fn own_face(&self, face: usize) -> Option<usize> {
-        face.checked_sub(self.first_face)
-            .filter(|&own| own < self.surfaces.len())
-    }
-}
-
-impl Assembly {
-    /// Return every part with where it sits: the frame it is placed in and the surfaces of its faces.
-    ///
-    /// The surfaces of a placed assembly are those of its parts one after the other (see
-    /// [`Placeable::faces`]), so the surfaces of a part are the stretch after those of the parts
-    /// before it.
-    ///
-    /// # Arguments
-    ///
-    /// * `at` - where the assembly sits.
-    fn parts_at<'a>(&'a self, at: Placement<'a>) -> impl Iterator<Item = PartAt<'a>> + 'a {
-        self.parts.iter().scan(0, move |first_face, part| {
-            let surfaces = at
-                .surfaces()
-                .get(*first_face..*first_face + part.face_count())?;
-            let part_at = PartAt {
-                first_face: *first_face,
-                part,
-                frame: at.node_frame().append(&part.placement),
-                surfaces,
-            };
-            *first_face += surfaces.len();
-            Some(part_at)
-        })
-    }
-}
-
-/// A face of an assembly is a face of one of its parts and ends where that part's solid says.
-impl FaceBoundary for Assembly {
-    fn includes(&self, at: Placement<'_>, face: usize, point: &Point3<Length>) -> bool {
-        self.parts_at(at).any(|part_at| {
-            part_at.own_face(face).is_some_and(|own_face| {
-                part_at
-                    .part
-                    .solid
-                    .includes(part_at.placement(), own_face, point)
-            })
-        })
-    }
-}
-
 /// An assembly contains what one of its parts contains; a ray travels through its parts one after
-/// the other, so the chord is the sum of theirs. Every part answers in its own frame, with its own
-/// surfaces: parts must not overlap, or the overlap counts twice.
+/// the other, so the chord is the sum of theirs. Every part answers for itself: parts must not
+/// overlap, or the overlap counts twice.
 impl Body for Assembly {
-    fn contains(&self, at: Placement<'_>, point: &Point3<Length>) -> bool {
-        self.parts_at(at)
-            .any(|part_at| part_at.part.solid.contains(part_at.placement(), point))
+    fn contains(&self, point: &Point3<Length>) -> bool {
+        self.parts
+            .iter()
+            .any(|part| part.solid.as_body().contains(point))
     }
-    fn path_length_inside(&self, at: Placement<'_>, ray: &Ray) -> Option<Length> {
-        self.parts_at(at)
-            .filter_map(|part_at| {
-                part_at
-                    .part
-                    .solid
-                    .path_length_inside(part_at.placement(), ray)
-            })
+    fn path_length_inside(&self, ray: &Ray) -> Option<Length> {
+        self.parts
+            .iter()
+            .filter_map(|part| part.solid.as_body().path_length_inside(ray))
             .reduce(|one, other| one + other)
     }
     /// The box of an assembly is the union of the boxes of its parts, in the frame of the assembly.
@@ -287,13 +247,12 @@ impl Body for Assembly {
     ///
     /// This function returns an error if the assembly has no parts or if one of them cannot state
     /// its extent.
-    fn bounding_box(&self, at: Placement<'_>) -> OpmResult<BoundingBox> {
-        self.parts_at(at)
-            .map(|part_at| {
-                let solid = &part_at.part.solid;
-                solid
-                    .bounding_box(part_at.placement())?
-                    .in_frame(&solid.isometry(part_at.placement()), at.node_frame())
+    fn bounding_box(&self) -> OpmResult<BoundingBox> {
+        self.parts
+            .iter()
+            .map(|part| {
+                let body = part.solid.as_body();
+                body.bounding_box()?.in_frame(&body.isometry(), &self.frame)
             })
             .reduce(|one, other| Ok(one?.union(&other?)))
             .unwrap_or_else(|| {
@@ -302,9 +261,9 @@ impl Body for Assembly {
                 ))
             })
     }
-    /// The parts are stated relative to the node, so the assembly sits in the frame of the node.
-    fn isometry(&self, at: Placement<'_>) -> Isometry {
-        *at.node_frame()
+    /// The frame the parts are stated in: the node's, once the assembly is moved there.
+    fn isometry(&self) -> Isometry {
+        self.frame
     }
 }
 
@@ -314,7 +273,7 @@ mod test {
     use crate::{
         apertures::{CircleShape, Outline},
         degree,
-        geometry::{Geometry, ParametricSolid, Placed, SurfaceShape, body::BoundingBox},
+        geometry::{Geometry, ParametricSolid, Side, SurfaceShape, body::BoundingBox},
         joule,
         light::Ray,
         millimeter, nanometer,
@@ -334,7 +293,7 @@ mod test {
     /// A part made of glass with a refractive index of 1.5.
     fn glass_part(placement: Isometry, solid: Solid) -> OpmResult<Part> {
         Ok(Part::new(
-            placement,
+            &placement,
             solid,
             AssetRef::Inline(Material::from(&RefrIndexConst::new(1.5)?)),
         ))
@@ -446,10 +405,10 @@ mod test {
         assert!(Assembly::new(parts()?, vec![beyond_the_rear]).is_err());
         Ok(())
     }
-    /// The faces of a placed assembly are those of its parts, part after part, each stated with the
-    /// placement of its part - so the cemented faces of a doublet come out at the same place.
+    /// The faces of an assembly are those of its parts, part after part, each placed with its part -
+    /// so the cemented faces of a doublet come out at the same place. Moved, every face moves along.
     #[test]
-    fn a_placed_assembly_numbers_the_faces_of_its_parts_one_after_the_other() -> OpmResult<()> {
+    fn an_assembly_numbers_the_faces_of_its_parts_one_after_the_other() -> OpmResult<()> {
         let behind_the_crown = Isometry::new_along_z(millimeter!(5.0))?;
         let doublet = Assembly::new(
             vec![
@@ -459,21 +418,26 @@ mod test {
             vec![Interface::new(FaceId::new(0, 1), FaceId::new(1, 0))],
         )?;
         let frame = Isometry::new_along_z(millimeter!(100.0))?;
-        let placed = Placed::new(doublet, &frame)?;
-        assert_eq!(placed.face_count(), 4);
-        assert!(placed.window().is_none());
+        let moved = doublet.moved(&frame);
+        assert_eq!(moved.face_count(), 4);
+        assert!(moved.window().is_none());
+        assert!(moved.face(4).is_none());
         // the vertices of the crown front, of the crown rear and flint front (cemented) and of the
         // flint rear
         for (index, z) in [0.0, 5.0, 5.0, 10.0].into_iter().enumerate() {
+            let (Some(face), Some(moved_face)) = (doublet.face(index), moved.face(index)) else {
+                return Err(OpossumError::Other(format!("there is no face {index}")));
+            };
             assert_abs_diff_eq!(
-                placed.anchor(index)?.translation().z.get::<millimeter>(),
+                face.frame().translation().z.get::<millimeter>(),
                 z,
                 epsilon = 1e-9
             );
-            let surface = placed
-                .surface(index)
-                .ok_or_else(|| OpossumError::Other(format!("face {index} has no surface")))?;
-            assert_eq!(*surface.frame(), frame.append(&placed.anchor(index)?));
+            assert_abs_diff_eq!(
+                moved_face.frame().translation().z.get::<millimeter>(),
+                z + 100.0,
+                epsilon = 1e-9
+            );
         }
         Ok(())
     }
@@ -555,12 +519,12 @@ mod test {
         Isometry::new(millimeter!(3.0, -2.0, 100.0), degree!(10.0, -20.0, 30.0))
     }
     /// One part of the assembly on its own, placed where the assembly places it.
-    fn alone(assembly: &Assembly, index: usize, node_frame: &Isometry) -> OpmResult<Placed<Solid>> {
+    fn alone(assembly: &Assembly, index: usize, node_frame: &Isometry) -> OpmResult<Solid> {
         let part = assembly
             .parts
             .get(index)
             .ok_or_else(|| OpossumError::Other(format!("there is no part {index}")))?;
-        Placed::new(part.solid.clone(), &node_frame.append(&part.placement))
+        Ok(part.solid.moved(node_frame))
     }
     fn test_ray(position: Point3<Length>, direction: Vector3<f64>) -> OpmResult<Ray> {
         Ray::new(position, direction, nanometer!(1053.0), joule!(1.0))
@@ -579,7 +543,7 @@ mod test {
     #[test]
     fn an_assembly_contains_what_one_of_its_parts_contains() -> OpmResult<()> {
         let node_frame = node_frame()?;
-        let placed = Placed::new(side_by_side()?, &node_frame)?;
+        let placed = side_by_side()?.moved(&node_frame);
         for ((x, y, z), inside) in [
             ((0.0, 0.0, 2.0), true),
             ((30.0, 0.0, 10.0), true),
@@ -601,7 +565,7 @@ mod test {
     #[test]
     fn a_face_of_an_assembly_ends_where_the_solid_of_its_part_does() -> OpmResult<()> {
         let node_frame = node_frame()?;
-        let placed = Placed::new(side_by_side()?, &node_frame)?;
+        let placed = side_by_side()?.moved(&node_frame);
         // The points lie on the spheres, the sheet check allows a nanometer: the front of the crown
         // has a radius of 60 mm, the front of the second lens one of -40 mm and its vertex at z = 8.
         let on_sphere = |radius: f64, off_axis: f64| {
@@ -633,14 +597,18 @@ mod test {
     fn a_ray_travels_through_the_parts_one_after_the_other() -> OpmResult<()> {
         let node_frame = node_frame()?;
         let doublet = doublet()?;
-        let placed = Placed::new(doublet.clone(), &node_frame)?;
+        let placed = doublet.moved(&node_frame);
         for (x, direction) in [(0.0, Vector3::z()), (4.0, Vector3::new(0.05, 0.0, 1.0))] {
             let ray = test_ray(
                 global(&node_frame, x, 3.0, -20.0),
                 node_frame.transform_vector_f64(&direction.normalize()),
             )?;
-            let crown = alone(&doublet, 0, &node_frame)?.path_length_inside(&ray);
-            let flint = alone(&doublet, 1, &node_frame)?.path_length_inside(&ray);
+            let crown = alone(&doublet, 0, &node_frame)?
+                .as_body()
+                .path_length_inside(&ray);
+            let flint = alone(&doublet, 1, &node_frame)?
+                .as_body()
+                .path_length_inside(&ray);
             let (Some(crown), Some(flint)) = (crown, flint) else {
                 return Err(OpossumError::Other("the ray missed a lens".into()));
             };
@@ -658,7 +626,8 @@ mod test {
             global(&node_frame, 0.0, 0.0, -20.0),
             node_frame.transform_vector_f64(&Vector3::z()),
         )?;
-        let chord = Placed::new(doublet, &node_frame)?
+        let chord = doublet
+            .moved(&node_frame)
             .path_length_inside(&axis)
             .ok_or_else(|| OpossumError::Other("the ray missed the doublet".into()))?;
         assert_abs_diff_eq!(chord.get::<millimeter>(), 10.0, epsilon = 1e-9);
@@ -669,7 +638,7 @@ mod test {
     fn a_ray_through_one_part_of_an_assembly_has_the_chord_of_that_part() -> OpmResult<()> {
         let node_frame = node_frame()?;
         let assembly = side_by_side()?;
-        let placed = Placed::new(assembly.clone(), &node_frame)?;
+        let placed = assembly.moved(&node_frame);
         for (x, part) in [(0.0, 0), (30.0, 1)] {
             let ray = test_ray(
                 global(&node_frame, x, 0.0, -20.0),
@@ -678,7 +647,9 @@ mod test {
             let chord = placed.path_length_inside(&ray);
             assert_eq!(
                 chord,
-                alone(&assembly, part, &node_frame)?.path_length_inside(&ray)
+                alone(&assembly, part, &node_frame)?
+                    .as_body()
+                    .path_length_inside(&ray)
             );
             assert!(chord.is_some(), "x = {x}");
         }
@@ -694,7 +665,7 @@ mod test {
     #[test]
     fn a_ray_crosses_the_prisms_of_a_cube_one_after_the_other() -> OpmResult<()> {
         let node_frame = node_frame()?;
-        let placed = Placed::new(cube()?, &node_frame)?;
+        let placed = cube()?.moved(&node_frame);
         let ray = test_ray(
             global(&node_frame, 0.0, 0.0, -20.0),
             node_frame.transform_vector_f64(&Vector3::z()),
@@ -710,8 +681,8 @@ mod test {
     fn the_box_of_an_assembly_encloses_the_boxes_of_its_parts() -> OpmResult<()> {
         let node_frame = Isometry::new_along_z(millimeter!(100.0))?;
         let assembly = side_by_side()?;
-        let crown = extent(&alone(&assembly, 0, &node_frame)?.bounding_box()?);
-        let aside = extent(&alone(&assembly, 1, &node_frame)?.bounding_box()?);
+        let crown = extent(&alone(&assembly, 0, &node_frame)?.as_body().bounding_box()?);
+        let aside = extent(&alone(&assembly, 1, &node_frame)?.as_body().bounding_box()?);
         // The second lens sits 30 mm aside and 8 mm further along z.
         let expected = [
             [
@@ -724,7 +695,7 @@ mod test {
                 crown[2][1].max(aside[2][1] + 8.0),
             ],
         ];
-        let bounds = extent(&Placed::new(assembly, &node_frame)?.bounding_box()?);
+        let bounds = extent(&assembly.moved(&node_frame).bounding_box()?);
         for (found, wanted) in bounds.iter().flatten().zip(expected.iter().flatten()) {
             assert_abs_diff_eq!(found, wanted, epsilon = 1e-9);
         }
@@ -735,12 +706,12 @@ mod test {
     #[test]
     fn an_assembly_has_the_frame_of_its_node() -> OpmResult<()> {
         let node_frame = node_frame()?;
-        assert_eq!(Placed::new(doublet()?, &node_frame)?.isometry(), node_frame);
+        assert_eq!(doublet()?.moved(&node_frame).isometry(), node_frame);
         Ok(())
     }
     #[test]
     fn an_assembly_without_parts_has_no_volume() -> OpmResult<()> {
-        let empty = Placed::new(Assembly::new(vec![], vec![])?, &Isometry::identity())?;
+        let empty = Assembly::new(vec![], vec![])?;
         assert!(!empty.contains(&millimeter!(0.0, 0.0, 0.0)));
         let ray = test_ray(millimeter!(0.0, 0.0, -20.0), Vector3::z())?;
         assert!(empty.path_length_inside(&ray).is_none());
@@ -750,9 +721,7 @@ mod test {
     /// A part that cannot state its extent leaves the assembly without one.
     #[test]
     fn an_assembly_has_no_box_if_a_part_has_none() -> OpmResult<()> {
-        let error = Placed::new(cube()?, &Isometry::identity())?
-            .bounding_box()
-            .unwrap_err();
+        let error = cube()?.bounding_box().unwrap_err();
         assert!(
             error.to_string().contains("cannot be determined"),
             "{error}"

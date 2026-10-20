@@ -12,20 +12,16 @@
 //! While a [`Face`] is an unbounded interface, a [`Body`](crate::geometry::body::Body) is a closed
 //! volume bounded by such faces. It is the domain volumetric quantities are defined on.
 
-mod boundary;
 mod face;
 mod node_geometry;
-mod placed;
 mod rim;
 mod solid;
 mod surface;
 
 pub mod body;
 
-pub use boundary::FaceBoundary;
 pub use face::Face;
-pub use node_geometry::{Geometry, SurfaceExtent, SurfaceGeometry};
-pub use placed::{Placeable, Placed, Placement};
+pub use node_geometry::{Geometry, GeometryKind, SurfaceExtent, SurfaceGeometry};
 pub use rim::Rim;
 pub use solid::{Assembly, Extruded, FaceId, Interface, ParametricSolid, Part, Side, Solid};
 pub use surface::{Cylinder, GeoSurface, Parabola, Plane, Sphere, SurfaceShape};
