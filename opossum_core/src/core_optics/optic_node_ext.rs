@@ -4,7 +4,11 @@ use crate::{
     analyzers::propagation_strategy::PropagationStrategy,
     apertures::Outline,
     coatings::CoatingType,
-    core_optics::{NodeAttrExt, OpticNode, PortType},
+    core_optics::{
+        NodeAttrExt, OpticNode, PortType,
+        optic_surface::OpticSurface,
+        runtime_geometry::{RuntimeGeometry, RuntimeSurfaces},
+    },
     error::{OpmResult, OpossumError},
     geometry::body::OPTIC_SHAPE,
     light::{LightData, LightResult, Rays},
@@ -89,7 +93,8 @@ pub trait OpticNodeExt {
     ///
     /// The node decides which face of its geometry every port sits on; several ports may share a
     /// face. The volume a solid encloses is the node's medium; a single surface leaves the node
-    /// without one.
+    /// without one. The installation replaces the one before, with everything an analysis left on
+    /// it.
     ///
     /// # Arguments
     ///
@@ -109,7 +114,8 @@ pub trait OpticNodeExt {
         outputs: &[(&str, usize)],
     ) -> OpmResult<()>;
 
-    /// Updates a single surface of this node, adding its port if the node does not have it yet.
+    /// Returns a new optic surface on a face of this node's geometry, with the coating and LIDT of
+    /// its port. The port is added if the node does not have it yet.
     ///
     /// # Arguments
     ///
@@ -119,13 +125,13 @@ pub trait OpticNodeExt {
     ///
     /// # Errors
     ///
-    /// This function returns an error if surface creation or registration fails.
-    fn update_surface(
+    /// This function returns an error if the port cannot be added or if its LIDT is invalid.
+    fn surface_of_port(
         &mut self,
         surf_name: &str,
         face: usize,
         port_type: &PortType,
-    ) -> OpmResult<()>;
+    ) -> OpmResult<OpticSurface>;
 
     /// Finds a surface by its name and guides the ray bundle through it.
     ///
@@ -275,8 +281,8 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
             OpossumError::Other(format!("no surface with name {surf_name} defined"))
         })?;
         self.node_attr()
-            .runtime_geometry()
-            .and_then(|geometry| geometry.kind().face(surf.face()))
+            .runtime()
+            .and_then(|runtime| runtime.geometry().kind().face(surf.face()))
             .map(|face| *face.frame())
             .ok_or_else(|| {
                 OpossumError::Other(format!("the surface {surf_name} is no face of the node"))
@@ -340,28 +346,29 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
             )));
         };
         let placed = geometry.moved(&self.effective_node_iso().unwrap_or_else(Isometry::identity));
-        for (ports, port_type) in [(inputs, PortType::Input), (outputs, PortType::Output)] {
+        let mut surfaces = RuntimeSurfaces::default();
+        for (ports, port_type, installed) in [
+            (inputs, PortType::Input, &mut surfaces.inputs),
+            (outputs, PortType::Output, &mut surfaces.outputs),
+        ] {
             for &(name, face) in ports {
-                if placed.kind().face(face).is_none() {
-                    return Err(OpossumError::Other(format!(
-                        "node '{}': port '{name}' sits on face {face}, which does not exist (face count: {})",
-                        self.name(),
-                        placed.kind().face_count()
-                    )));
-                }
-                self.update_surface(name, face, &port_type)?;
+                installed.insert(
+                    name.to_string(),
+                    self.surface_of_port(name, face, &port_type)?,
+                );
             }
         }
-        self.node_attr_mut().set_runtime_geometry(placed);
+        let runtime = RuntimeGeometry::new(placed, surfaces)?;
+        self.node_attr_mut().set_runtime(runtime);
         Ok(())
     }
 
-    fn update_surface(
+    fn surface_of_port(
         &mut self,
         surf_name: &str,
         face: usize,
         port_type: &PortType,
-    ) -> OpmResult<()> {
+    ) -> OpmResult<OpticSurface> {
         let config = {
             let mut ports = self.node_attr().raw_ports().clone();
             if ports.ports_raw(port_type).get(surf_name).is_none() {
@@ -379,23 +386,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
                     ))
                 })?
         };
-
-        if let Some(optic_surf) = self.get_optic_surface_mut(surf_name) {
-            optic_surf.set_face(face);
-            optic_surf.set_coating(config.coating);
-            optic_surf.set_lidt(*config.lidt.get())?;
-        } else {
-            let mut optic_surf = crate::core_optics::optic_surface::OpticSurface::default();
-            optic_surf.set_face(face);
-            optic_surf.set_coating(config.coating);
-            optic_surf.set_lidt(*config.lidt.get())?;
-            let runtime = self.node_attr_mut().runtime_surfaces_mut();
-            match port_type {
-                PortType::Input => runtime.inputs.insert(surf_name.to_string(), optic_surf),
-                PortType::Output => runtime.outputs.insert(surf_name.to_string(), optic_surf),
-            };
-        }
-        Ok(())
+        OpticSurface::new(face, config.coating, *config.lidt.get())
     }
 
     fn pass_through_surface_generic(
@@ -499,8 +490,8 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         let mut cut = false;
         if let Some(window) = self
             .node_attr()
-            .runtime_geometry()
-            .and_then(|geometry| geometry.kind().window())
+            .runtime()
+            .and_then(|runtime| runtime.geometry().kind().window())
         {
             for rays in bundles.iter_mut() {
                 cut |= rays.invalidate_outside(window);
@@ -644,5 +635,35 @@ mod test {
             assert_eq!(node.ports().names(&PortType::Input), vec!["input_1"]);
         }
         Ok(())
+    }
+    /// Changing the coating or LIDT of a port installs the surfaces anew, and the surface of that
+    /// port carries them.
+    #[test]
+    fn a_changed_port_reaches_its_surface() -> OpmResult<()> {
+        let mut node = Dummy::default();
+        node.set_coating(&PortType::Input, "input_1", &CoatingType::Fresnel)?;
+        node.set_lidt(&PortType::Input, "input_1", J_per_cm2!(2.0))?;
+        let surface = node
+            .get_optic_surface("input_1")
+            .ok_or_else(|| OpossumError::Other("the dummy lost its input surface".into()))?;
+        assert!(matches!(surface.coating(), CoatingType::Fresnel));
+        assert_eq!(*surface.lidt(), J_per_cm2!(2.0));
+        Ok(())
+    }
+    /// A port on a face the geometry does not have is rejected, and the installation before stays.
+    #[test]
+    fn a_port_on_a_missing_face_is_rejected() {
+        let mut node = Dummy::default();
+        let error = node
+            .install_geometry(&[("input_1", 0)], &[("output_2", 1)])
+            .expect_err("a port on face 1 of a single surface was accepted");
+        assert!(
+            error
+                .to_string()
+                .contains("surface 'output_2' sits on face 1, which does not exist"),
+            "{error}"
+        );
+        assert!(node.get_optic_surface("output_2").is_none());
+        assert!(node.get_optic_surface("output_1").is_some());
     }
 }

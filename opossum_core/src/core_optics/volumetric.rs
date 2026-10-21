@@ -16,7 +16,10 @@
 use crate::{
     absorption::absorption_model::AbsorptionModel,
     analyzers::propagation_strategy::PropagationStrategy,
-    core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, optic_node_ext::single_io_port_names},
+    core_optics::{
+        NodeAttrExt, OpticNode, OpticNodeExt, optic_node_ext::single_io_port_names,
+        runtime_geometry::RuntimeGeometry,
+    },
     error::{OpmResult, OpossumError},
     gain::{Extraction, Inversion},
     geometry::body::Body,
@@ -178,7 +181,11 @@ pub trait Volumetric: OpticNode {
         }
         // Capture the name before the mutable borrow of `self` through `node_attr_mut`.
         let node_name = self.name().to_owned();
-        let Some((body, inversion)) = self.node_attr_mut().runtime_medium_mut() else {
+        let Some((body, inversion)) = self
+            .node_attr_mut()
+            .runtime_mut()
+            .and_then(RuntimeGeometry::medium_mut)
+        else {
             return Err(OpossumError::Analysis(format!(
                 "node '{node_name}': medium was not prepared before propagation"
             )));
@@ -242,7 +249,8 @@ pub trait Volumetric: OpticNode {
         if strategy.is_positioning_run() {
             return Ok(());
         }
-        let Some((body, inversion)) = self.node_attr().runtime_medium() else {
+        let Some((body, inversion)) = self.node_attr().runtime().and_then(RuntimeGeometry::medium)
+        else {
             return Err(OpossumError::Analysis(format!(
                 "node '{}': medium was not prepared before amplification",
                 self.name()
@@ -424,6 +432,7 @@ mod test {
         core_optics::{
             Alignable, PortType,
             node_attr::{HasNodeAttr, NodePositioning},
+            runtime_geometry::RuntimeSurfaces,
         },
         degree,
         gain::{ConstGain, GainModel, MonochromaticSmallSignalGain, PumpScenario, PumpSource},
@@ -622,7 +631,8 @@ mod test {
         lens.prepare_volume(&RayTraceConfig::default())?;
         let (body, _) = lens
             .node_attr()
-            .runtime_medium()
+            .runtime()
+            .and_then(RuntimeGeometry::medium)
             .ok_or_else(|| OpossumError::Other("the lens has no medium".into()))?;
         let vertex = |port: &str| -> OpmResult<Point3<Length>> {
             Ok(lens
@@ -662,13 +672,17 @@ mod test {
         lens.prepare_volume(&config)?;
         // The body is now available even though no gain model was set.
         assert!(
-            lens.node_attr().runtime_medium().is_some(),
+            lens.node_attr()
+                .runtime()
+                .and_then(RuntimeGeometry::medium)
+                .is_some(),
             "prepare_volume must build the body for a passive volume node"
         );
         // And the inversion slot is empty — the body alone does nothing to the rays.
         assert!(
             lens.node_attr()
-                .runtime_medium()
+                .runtime()
+                .and_then(RuntimeGeometry::medium)
                 .is_some_and(|(_, inversion)| inversion.is_none()),
             "a passive node must not have an inversion field"
         );
@@ -1082,7 +1096,10 @@ mod test {
         // Seed a body at the current (identity) position, simulating what
         // `init_runtime_medium` used to do inside `after_deserialization_hook`.
         let identity_body = placed_geometry(&head)?;
-        head.node_attr_mut().set_runtime_geometry(identity_body);
+        head.node_attr_mut().set_runtime(RuntimeGeometry::new(
+            identity_body,
+            RuntimeSurfaces::default(),
+        )?);
 
         // Move the head 500 mm along z — what `calc_node_positions` does after deserialization.
         head.set_positioning(NodePositioning::Absolute(Isometry::new(
@@ -1090,7 +1107,9 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )?))?;
         // Simulate `reset_data`, which clears only the inversion.
-        head.node_attr_mut().clear_runtime_inversion();
+        if let Some(runtime) = head.node_attr_mut().runtime_mut() {
+            runtime.clear_inversion();
+        }
 
         let mut config = RayTraceConfig::default();
         config.set_active_pump_scenario(Some(scenario_with_small_signal(node_id)?));
@@ -1640,8 +1659,8 @@ mod test {
             assert_eq!(
                 optic_ref
                     .node_attr()
-                    .runtime_geometry()
-                    .and_then(|installed| installed.kind().window()),
+                    .runtime()
+                    .and_then(|installed| installed.geometry().kind().window()),
                 window.as_ref(),
                 "node type '{node_type}'"
             );
@@ -1755,7 +1774,11 @@ mod test {
         };
         let medium_is_prepared = |model: &NodeGroup, head: Uuid| -> OpmResult<bool> {
             let head_ref = model.graph().node(head)?;
-            Ok(head_ref.node_attr().runtime_medium().is_some())
+            Ok(head_ref
+                .node_attr()
+                .runtime()
+                .and_then(RuntimeGeometry::medium)
+                .is_some())
         };
 
         // Ray trace

@@ -91,10 +91,6 @@ impl OpticSurface {
     pub const fn face(&self) -> usize {
         self.face
     }
-    /// Makes this [`OpticSurface`] the face with the given number of the node's geometry.
-    pub const fn set_face(&mut self, face: usize) {
-        self.face = face;
-    }
     /// Sets the coating of this [`OpticSurface`].
     pub const fn set_coating(&mut self, coating: CoatingType) {
         self.coating = coating;
@@ -357,8 +353,7 @@ mod test {
             millimeter!(10.0),
             Outline::new(CircleShape::new(millimeter!(5.0))?, Vec::new())?,
         )?;
-        let mut surface = OpticSurface::default();
-        surface.set_face(Extruded::REAR);
+        let mut surface = OpticSurface::new(Extruded::REAR, CoatingType::IdealAR, J_per_cm2!(1.0))?;
         assert_eq!(surface.face(), Extruded::REAR);
         let mut bundles = vec![Rays::from(ray_at(0.0)?)];
         surface.propagate_rays(

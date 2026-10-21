@@ -12,6 +12,7 @@ pub mod helper {
         core_optics::{
             NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, OpticPorts, OpticRef, PortType,
             Volumetric, node_attr::NodePositioning, optic_surface::OpticSurface,
+            runtime_geometry::RuntimeGeometry,
         },
         error::{OpmResult, OpossumError},
         geometry::{
@@ -975,9 +976,9 @@ pub mod helper {
     /// Panics if a surface is no face of the geometry the node installed.
     #[must_use]
     pub fn surface_snapshot<T: OpticNode + ?Sized>(node: &T) -> Vec<String> {
-        let installed = node.node_attr().runtime_geometry();
+        let installed = node.node_attr().runtime();
         describe_faces_under_ports(node, |face| {
-            installed.and_then(|geometry| geometry.kind().face(face).cloned())
+            installed.and_then(|runtime| runtime.geometry().kind().face(face).cloned())
         })
         .expect("every installed surface is a face of the installed geometry")
     }
@@ -1024,7 +1025,9 @@ pub mod helper {
         node: &T,
         face_of: impl Fn(usize) -> Option<Face>,
     ) -> OpmResult<Vec<String>> {
-        let runtime = node.node_attr().runtime_surfaces();
+        let Some(runtime) = node.node_attr().runtime().map(RuntimeGeometry::surfaces) else {
+            return Ok(Vec::new());
+        };
         let mut surfaces = Vec::new();
         for (port_type, ports) in [("in", &runtime.inputs), ("out", &runtime.outputs)] {
             for (name, installed) in ports {
@@ -1226,12 +1229,12 @@ pub mod helper {
     /// Returns an error if a ray cannot be built.
     pub fn hit_snapshot<T: OpticNode + ?Sized>(node: &T) -> OpmResult<Vec<String>> {
         let node_frame = node.effective_node_iso().unwrap_or_else(Isometry::identity);
-        let runtime = node.node_attr().runtime_surfaces();
-        let Some(geometry) = node.node_attr().runtime_geometry() else {
+        let Some(runtime) = node.node_attr().runtime() else {
             return Ok(Vec::new());
         };
+        let (geometry, surfaces) = (runtime.geometry(), runtime.surfaces());
         let mut lines = Vec::new();
-        for (port_type, ports) in [("in", &runtime.inputs), ("out", &runtime.outputs)] {
+        for (port_type, ports) in [("in", &surfaces.inputs), ("out", &surfaces.outputs)] {
             for (name, surface) in ports {
                 for (x, y, tilt) in [
                     (0.0, 0.0, 0.0),
