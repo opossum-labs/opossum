@@ -462,10 +462,10 @@ mod test {
         apertures::CircleShape,
         degree,
         error::OpossumError,
-        geometry::{Parabola, Part, Side},
+        geometry::{Parabola, Part, Side, Sphere},
         joule,
         material::Material,
-        millimeter, nanometer,
+        meter, millimeter, nanometer,
         properties::proptype::AssetRef,
         refractive_index::RefrIndexConst,
     };
@@ -776,6 +776,111 @@ mod test {
             .intersect(SurfaceGeometry::FACE, &ray_at(12.0)?)
             .ok_or_else(|| OpossumError::Other("the ray missed the detector".into()))?;
         assert!(!outside.recorded());
+        Ok(())
+    }
+    /// A ray along z, the given distance off the axis in x and y.
+    fn ray_along_z(x: f64, y: f64) -> OpmResult<Ray> {
+        Ray::new_collimated(millimeter!(x, y, -10.0), nanometer!(1000.0), joule!(1.0))
+    }
+    /// The edge of a surface is measured across the axis of its rim, not across its tilted face:
+    /// tilted by 30°, the plane is hit at y = 4.9 mm by a ray along the node's axis, a point
+    /// 4.9 / cos 30° = 5.66 mm out in the plane's own frame, but within the 5 mm rim.
+    #[test]
+    fn the_rim_is_measured_across_its_axis() -> OpmResult<()> {
+        let tilted = Isometry::new(millimeter!(0.0, 0.0, 0.0), degree!(30.0, 0.0, 0.0))?;
+        let circle = Outline::new(CircleShape::new(millimeter!(5.0))?, Vec::new())?;
+        let plane = Geometry::surface(
+            Isometry::identity(),
+            SurfaceShape::Plane,
+            tilted,
+            Some(circle),
+        )?;
+        assert!(
+            plane
+                .intersect(SurfaceGeometry::FACE, &ray_along_z(0.0, 4.9)?)
+                .is_some()
+        );
+        assert!(
+            plane
+                .intersect(SurfaceGeometry::FACE, &ray_along_z(0.0, 5.1)?)
+                .is_none()
+        );
+        Ok(())
+    }
+    /// A face ends where its component does, whatever kind of component that is: the front face of
+    /// this wedge-shaped solid ends where the side face cuts it, which no outline states.
+    #[test]
+    fn a_face_of_a_parametric_solid_is_hit_up_to_the_other_faces() -> OpmResult<()> {
+        let side = Isometry::new(millimeter!(5.0, 0.0, 5.0), degree!(0.0, 90.0, 0.0))?;
+        let solid = Geometry::Parametric(ParametricSolid::new(vec![
+            (
+                Face::new(SurfaceShape::Plane, Isometry::identity()),
+                Side::Behind,
+            ),
+            (
+                Face::new(
+                    SurfaceShape::Plane,
+                    Isometry::new_along_z(millimeter!(10.0))?,
+                ),
+                Side::InFront,
+            ),
+            (Face::new(SurfaceShape::Plane, side), Side::InFront),
+        ])?);
+        assert!(solid.intersect(0, &ray_along_z(4.9, 0.0)?).is_some());
+        assert!(solid.intersect(0, &ray_along_z(5.1, 0.0)?).is_none());
+        Ok(())
+    }
+    /// A sphere of 15 mm radius bounded to 12.5 mm around its axis is hit only on the sheet through
+    /// its vertex: a ray tilted by 50° that reaches the sphere 135° from the vertex first, behind its
+    /// equator and within the rim seen along the axis, misses it.
+    #[test]
+    fn a_hit_behind_the_equator_is_a_miss() -> OpmResult<()> {
+        let sphere = Geometry::surface(
+            Isometry::identity(),
+            SurfaceShape::Sphere(Sphere::new(millimeter!(15.0))?),
+            Isometry::identity(),
+            Some(circle()?),
+        )?;
+        let (radius, polar, tilt) = (15.0, 135.0_f64.to_radians(), 50.0_f64.to_radians());
+        let behind = (radius * polar.sin(), radius - radius * polar.cos());
+        let direction = Vector3::new(-tilt.sin(), 0.0, tilt.cos());
+        let steep = Ray::new(
+            millimeter!(
+                behind.0 - 30.0 * direction.x,
+                0.0,
+                behind.1 - 30.0 * direction.z
+            ),
+            direction,
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?;
+        assert!(sphere.intersect(SurfaceGeometry::FACE, &steep).is_none());
+        assert!(
+            sphere
+                .intersect(SurfaceGeometry::FACE, &ray_along_z(0.0, 5.0)?)
+                .is_some()
+        );
+        Ok(())
+    }
+    /// A sphere of 1 m radius with its vertex at the origin, curving away towards +z, is hit at its
+    /// vertex, with the normal against the ray; a ray running past it sideways misses it.
+    #[test]
+    fn a_ray_hits_a_sphere_at_its_vertex() -> OpmResult<()> {
+        let sphere = Geometry::from(Face::new(
+            SurfaceShape::Sphere(Sphere::new(meter!(1.0))?),
+            Isometry::identity(),
+        ));
+        let towards = Ray::new_collimated(meter!(0.0, 0.0, -1.0), nanometer!(1000.0), joule!(1.0))?;
+        let hit = sphere
+            .intersect(SurfaceGeometry::FACE, &towards)
+            .ok_or_else(|| OpossumError::Other("the ray missed the sphere".into()))?;
+        assert!(
+            hit.point().coords.map(|c| c.value).norm() < 1e-15,
+            "{hit:?}"
+        );
+        assert!((hit.normal() + Vector3::z()).norm() < 1e-15, "{hit:?}");
+        let past = Ray::new_collimated(meter!(2.0, 0.0, -1.0), nanometer!(1000.0), joule!(1.0))?;
+        assert!(sphere.intersect(SurfaceGeometry::FACE, &past).is_none());
         Ok(())
     }
     /// A face on its own is an unbounded surface.

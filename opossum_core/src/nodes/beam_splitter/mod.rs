@@ -7,7 +7,7 @@ mod analysis_raytrace;
 use crate::{
     analyzers::{AnalyzerType, propagation_strategy::MissedSurfaceStrategy},
     coatings::{CoatingConstantR, CoatingType},
-    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType},
+    core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
     geometry::{
         Geometry, SurfaceGeometry,
@@ -378,12 +378,13 @@ impl BeamSplitter {
             )));
         };
         let mut rays = rays.clone();
-        let Some(surf) = self.get_optic_surface_mut(port_name) else {
+        let Some((geometry, surf)) = self.node_attr_mut().traced_surface_mut(port_name) else {
             return Err(OpossumError::OpticPort(format!(
                 "Input optic surface not found for port '{port_name}'"
             )));
         };
-        let reflected = rays.split_on_surface(surf, splitting_config, &missed_surface_strategy)?;
+        let reflected =
+            rays.split_on_surface(geometry, surf, splitting_config, &missed_surface_strategy)?;
         Ok((rays, reflected))
     }
     fn analyze_raytrace(

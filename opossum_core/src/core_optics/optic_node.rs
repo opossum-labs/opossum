@@ -12,7 +12,7 @@ use crate::{
     analyzers::{Analyzable, AnalyzerKind, propagation_strategy::PropagationStrategy},
     core_optics::{
         NodeAttrExt, OpticPorts, PortType,
-        node_attr::{HasNodeAttr, NodePositioning, RuntimeMedium},
+        node_attr::{HasNodeAttr, NodePositioning},
         volumetric::Volumetric,
     },
     error::{OpmResult, OpossumError},
@@ -109,11 +109,7 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
         self.update_surfaces()?;
         let config = strategy.pump_config(self.node_attr().uuid());
         let name = self.name().to_owned();
-        let Some((body, inversion)) = self
-            .node_attr_mut()
-            .runtime_medium_mut()
-            .and_then(RuntimeMedium::parts_mut)
-        else {
+        let Some((body, inversion)) = self.node_attr_mut().runtime_medium_mut() else {
             return Err(OpossumError::Other(format!(
                 "volume node '{name}' encloses no body"
             )));

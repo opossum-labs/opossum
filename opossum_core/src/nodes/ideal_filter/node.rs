@@ -8,7 +8,7 @@ use crate::{
         propagation_strategy::PropagationStrategy,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, NodeAttrExt, OpticNodeExt},
+    core_optics::{NodeAttr, OpticNodeExt, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
     geometry::{
         Geometry, SurfaceGeometry,
@@ -220,11 +220,12 @@ impl AnalysisRayTrace for IdealFilter {
         };
         let mut rays = r.clone();
         let rays_before = rays.nr_of_rays(true);
-        let Some(surf) = self.get_optic_surface_mut(in_port) else {
+        let Some((geometry, surf)) = self.node_attr_mut().traced_surface_mut(in_port) else {
             return Err(OpossumError::Analysis("no surface found. Aborting".into()));
         };
         let refraction_intended = true;
         let (_, hits) = rays.refract_on_surface(
+            geometry,
             surf,
             None,
             refraction_intended,
@@ -245,7 +246,7 @@ impl AnalysisRayTrace for IdealFilter {
 mod test {
     use super::*;
     use crate::{
-        core_optics::node_attr::NodePositioning,
+        core_optics::{NodeAttrExt, node_attr::NodePositioning},
         distributions::position::Hexapolar,
         joule,
         light::spectrum_helper::create_he_ne_spec,

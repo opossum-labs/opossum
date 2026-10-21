@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use uom::si::f64::{Angle, Length};
 
 use crate::{
@@ -7,7 +6,7 @@ use crate::{
     coatings::CoatingType,
     core_optics::{NodeAttrExt, OpticNode, PortType},
     error::{OpmResult, OpossumError},
-    geometry::{Geometry, body::OPTIC_SHAPE},
+    geometry::body::OPTIC_SHAPE,
     light::{LightData, LightResult, Rays},
     nodes::fluence_detector::Fluence,
     properties::Proptype,
@@ -84,12 +83,13 @@ pub trait OpticNodeExt {
     /// This function returns an error if the port name does not exist.
     fn set_lidt(&mut self, port_type: &PortType, port_name: &str, lidt: Fluence) -> OpmResult<()>;
 
-    /// Build the surfaces of this node's [`Geometry`](crate::geometry::Geometry) and install them
-    /// under the given ports.
+    /// Move this node's [`Geometry`](crate::geometry::Geometry) to where the node sits, keep it as
+    /// the node's runtime geometry and install a surface on one of its faces under each of the given
+    /// ports.
     ///
     /// The node decides which face of its geometry every port sits on; several ports may share a
-    /// face. The solid, whose faces these are, becomes the node's medium; a node without one is
-    /// left without a medium.
+    /// face. The volume a solid encloses is the node's medium; a single surface leaves the node
+    /// without one.
     ///
     /// # Arguments
     ///
@@ -114,19 +114,15 @@ pub trait OpticNodeExt {
     /// # Arguments
     ///
     /// * `surf_name` - name of the surface, which is the physical name of its port.
-    /// * `placed` - the geometry of the node, moved to the node and shared by the surfaces of all its
-    ///   ports.
-    /// * `face` - the number of the face of `placed` this surface is.
+    /// * `face` - the number of the face of the node's geometry this surface is.
     /// * `port_type` - the physical port type (`Input` or `Output`) of this surface.
     ///
     /// # Errors
     ///
-    /// This function returns an error if the geometry has no such face or if surface creation or
-    /// registration fails.
+    /// This function returns an error if surface creation or registration fails.
     fn update_surface(
         &mut self,
         surf_name: &str,
-        placed: &Arc<Geometry>,
         face: usize,
         port_type: &PortType,
     ) -> OpmResult<()>;
@@ -184,9 +180,8 @@ pub trait OpticNodeExt {
 
     /// Cut copies of the ray bundles that passed a surface to what the surface records.
     ///
-    /// A detector records only the light within its window (see
-    /// [`OpticSurface::clip_to_window`](crate::core_optics::optic_surface::OpticSurface::clip_to_window)),
-    /// while all of it passes on. If rays were not recorded, a positioning run warns that the
+    /// A detector records only the light within the window of its geometry (see
+    /// [`GeometryKind::window`](crate::geometry::GeometryKind::window)), while all of it passes on. If rays were not recorded, a positioning run warns that the
     /// optical axis misses the detector; any other analysis warns that the result may be
     /// incomplete and sets the node's apodization warning.
     ///
@@ -279,7 +274,13 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         let surf = self.get_optic_surface(surf_name).ok_or_else(|| {
             OpossumError::Other(format!("no surface with name {surf_name} defined"))
         })?;
-        Ok(*surf.surface().frame())
+        self.node_attr()
+            .runtime_geometry()
+            .and_then(|geometry| geometry.kind().face(surf.face()))
+            .map(|face| *face.frame())
+            .ok_or_else(|| {
+                OpossumError::Other(format!("the surface {surf_name} is no face of the node"))
+            })
     }
 
     fn cross_section(&self) -> OpmResult<Option<Outline>> {
@@ -338,8 +339,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
                 self.name()
             )));
         };
-        let placed =
-            Arc::new(geometry.moved(&self.effective_node_iso().unwrap_or_else(Isometry::identity)));
+        let placed = geometry.moved(&self.effective_node_iso().unwrap_or_else(Isometry::identity));
         for (ports, port_type) in [(inputs, PortType::Input), (outputs, PortType::Output)] {
             for &(name, face) in ports {
                 if placed.kind().face(face).is_none() {
@@ -349,17 +349,16 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
                         placed.kind().face_count()
                     )));
                 }
-                self.update_surface(name, &placed, face, &port_type)?;
+                self.update_surface(name, face, &port_type)?;
             }
         }
-        self.node_attr_mut().set_runtime_body((*placed).clone());
+        self.node_attr_mut().set_runtime_geometry(placed);
         Ok(())
     }
 
     fn update_surface(
         &mut self,
         surf_name: &str,
-        placed: &Arc<Geometry>,
         face: usize,
         port_type: &PortType,
     ) -> OpmResult<()> {
@@ -382,12 +381,12 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         };
 
         if let Some(optic_surf) = self.get_optic_surface_mut(surf_name) {
-            optic_surf.set_face(Arc::clone(placed), face)?;
+            optic_surf.set_face(face);
             optic_surf.set_coating(config.coating);
             optic_surf.set_lidt(*config.lidt.get())?;
         } else {
             let mut optic_surf = crate::core_optics::optic_surface::OpticSurface::default();
-            optic_surf.set_face(Arc::clone(placed), face)?;
+            optic_surf.set_face(face);
             optic_surf.set_coating(config.coating);
             optic_surf.set_lidt(*config.lidt.get())?;
             let runtime = self.node_attr_mut().runtime_surfaces_mut();
@@ -411,13 +410,15 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         let uuid = self.node_attr().uuid();
         let node_name = self.name().to_string();
 
-        let Some(surf) = self.get_optic_surface_mut(optic_surf_name) else {
+        let Some((geometry, surf)) = self.node_attr_mut().traced_surface_mut(optic_surf_name)
+        else {
             return Err(OpossumError::Analysis(format!(
                 "Cannot find surface: \"{optic_surf_name}\" of node: \"{node_name}\""
             )));
         };
         let rays_before: usize = rays_bundle.iter().map(|r| r.nr_of_rays(true)).sum();
         let hits = surf.propagate_rays(
+            geometry,
             rays_bundle,
             uuid,
             refri_after_surf.as_ref(),
@@ -489,15 +490,21 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         bundles: &mut [Rays],
         strategy: &dyn PropagationStrategy,
     ) -> OpmResult<()> {
-        let Some(surface) = self.get_optic_surface(optic_surf_name) else {
+        if self.get_optic_surface(optic_surf_name).is_none() {
             return Err(OpossumError::Analysis(format!(
                 "Cannot find surface: \"{optic_surf_name}\" of node: \"{}\"",
                 self.name()
             )));
-        };
+        }
         let mut cut = false;
-        for rays in bundles.iter_mut() {
-            cut |= surface.clip_to_window(rays);
+        if let Some(window) = self
+            .node_attr()
+            .runtime_geometry()
+            .and_then(|geometry| geometry.kind().window())
+        {
+            for rays in bundles.iter_mut() {
+                cut |= rays.invalidate_outside(window);
+            }
         }
         if cut {
             let (name, node_type) = (self.name(), self.node_type());

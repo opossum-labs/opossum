@@ -12,12 +12,8 @@ use uom::si::{
 };
 
 use crate::{
-    analyzers::propagation_strategy::MissedSurfaceStrategy,
     coatings::CoatingType,
-    core_optics::{
-        hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint},
-        optic_surface::OpticSurface,
-    },
+    core_optics::hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint},
     error::{OpmResult, OpossumError},
     geometry::SurfaceHit,
     joule,
@@ -472,28 +468,6 @@ impl Ray {
         self.turn_to(iso.transform_vector_f64(&dir).normalize());
         Ok(())
     }
-    /// Diffract a [`Ray`] on a periodic surface, e.g., a grating: where it hits the surface, as
-    /// [`Ray::diffract_at`] does.
-    ///
-    /// # Returns
-    ///
-    /// The diffracted ray, or `None` if the ray misses the surface or the diffraction order is not
-    /// supported.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the refractive index is invalid.
-    pub fn diffract_on_periodic_surface(
-        &mut self,
-        s: &OpticSurface,
-        n2: f64,
-        grating_vector: Vector3<f64>,
-        diffraction_order: &i32,
-    ) -> OpmResult<Option<Self>> {
-        s.intersect(self).map_or(Ok(None), |hit| {
-            self.diffract_at(&hit, n2, grating_vector, diffraction_order)
-        })
-    }
     /// Diffract this [`Ray`] at a hit on a periodic surface, e.g., a grating.
     ///
     /// The ray is diffracted according to the periodic structure, the diffraction order, its
@@ -572,77 +546,6 @@ impl Ray {
             self.set_invalid();
             Ok(None)
         }
-    }
-    /// Refract the [`Ray`] on a given [`OpticSurface`] using Snellius' law.
-    ///
-    /// This function refracts an incoming [`Ray`] on a given [`OpticSurface`] thereby changing its position (= intersection point) and
-    /// its direction. The intial refractive index is (already) stored in the ray itself. The refractive index behind the surface is given
-    /// by the parameter `n2`. If `n2` id `None` the refractive index of the incoming beam is assumed. This is necessary for "passive" surfaces
-    /// that do not change the direction of the [`Ray`].
-    ///
-    /// This function alse returns a possible reflected [`Ray`], which corresponds to the refracted ray (same position,
-    /// wavelength) but with the reflection direction.
-    ///
-    /// This function also considers a possible surface coating which modifies the energy of the refracted and the reflected beam.
-    ///
-    /// The behaviour if the [`Ray`] does not intersect with the surface is determined by the `missed_surface_strategy` parameter.
-    ///
-    /// The strategy `Stop` invalidates the ray while `Ignore` keeps the [`Ray`] is unmodified. In both cases `None` is returned for the reflected
-    /// [`Ray`] (since there is no reflection).
-    ///
-    /// This function also considers total reflection: If the n1 > n2 and the incoming angle is larger than Brewster's angle, the beam
-    /// is totally reflected. In this case, this function also returns `None` (since there is no additional reflected ray).
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the given refractive index `n2` if <1.0 or not finite.
-    pub fn refract_on_surface(
-        &mut self,
-        os: &OpticSurface,
-        n2: Option<f64>,
-        missed_surface_strategy: &MissedSurfaceStrategy,
-    ) -> OpmResult<(Option<Self>, Option<HitPoint>)> {
-        Ok(self
-            .refract_on_surface_with_coating(os, os.coating(), n2, *missed_surface_strategy)?
-            .unwrap_or((None, None)))
-    }
-    /// Refract the [`Ray`] on a given [`OpticSurface`] as [`refract_on_surface`](Self::refract_on_surface)
-    /// does, but with the given coating instead of the coating of the surface.
-    ///
-    /// This allows a surface to split light by a coating that is not (yet) stored on the surface itself,
-    /// e.g. the splitting surface of a [`BeamSplitter`](crate::nodes::BeamSplitter), whose reflectivity
-    /// follows from its [`SplittingConfig`].
-    ///
-    /// # Arguments
-    ///
-    /// * `os` - the surface the ray is refracted on.
-    /// * `coating` - the coating determining the energies of the refracted and the reflected ray.
-    /// * `n2` - the refractive index behind the surface. `None` keeps the refractive index of the ray.
-    /// * `missed_surface_strategy` - what happens to the ray if it does not hit the surface.
-    ///
-    /// # Returns
-    ///
-    /// `None` if the ray missed the surface (see [`OpticSurface::intersect`]); otherwise what
-    /// [`Ray::refract_at`] returns.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the given refractive index `n2` if <1.0 or not finite.
-    pub(crate) fn refract_on_surface_with_coating(
-        &mut self,
-        os: &OpticSurface,
-        coating: &CoatingType,
-        n2: Option<f64>,
-        missed_surface_strategy: MissedSurfaceStrategy,
-    ) -> OpmResult<Option<(Option<Self>, Option<HitPoint>)>> {
-        let Some(hit) = os.intersect(self) else {
-            match missed_surface_strategy {
-                MissedSurfaceStrategy::Stop => self.set_invalid(),
-                MissedSurfaceStrategy::Ignore => {}
-            }
-            return Ok(None);
-        };
-        self.refract_at(&hit, coating, n2).map(Some)
     }
     /// Refract this [`Ray`] at a hit on a surface using Snellius' law.
     ///
@@ -910,7 +813,7 @@ mod test {
         J_per_cm2,
         coatings::CoatingConstantR,
         degree,
-        geometry::{Face, SurfaceShape},
+        geometry::{Face, Geometry, SurfaceGeometry, SurfaceShape},
         joule,
         light::Spectrum,
         millimeter, nanometer,
@@ -922,7 +825,7 @@ mod test {
     };
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_relative_eq, relative_eq};
     use itertools::izip;
-    use std::{path::PathBuf, sync::Arc};
+    use std::path::PathBuf;
     use uom::si::{energy::joule, length::millimeter};
     #[test]
     fn new() -> OpmResult<()> {
@@ -1231,6 +1134,18 @@ mod test {
         assert_eq!(ray.dir, Vector3::z());
         Ok(())
     }
+    /// Refract a ray where it hits an unbounded plane with its vertex at the given frame.
+    fn refract_on_plane(
+        ray: &mut Ray,
+        frame: Isometry,
+        coating: &CoatingType,
+        n2: Option<f64>,
+    ) -> OpmResult<(Option<Ray>, Option<HitPoint>)> {
+        let hit = Geometry::from(Face::new(SurfaceShape::Plane, frame))
+            .intersect(SurfaceGeometry::FACE, ray)
+            .ok_or_else(|| OpossumError::Other("the ray missed the plane".into()))?;
+        ray.refract_at(&hit, coating, n2)
+    }
     #[test]
     fn refract_on_surface_collimated() -> OpmResult<()> {
         let position = Point3::origin();
@@ -1243,23 +1158,11 @@ mod test {
             Point3::new(Length::zero(), Length::zero(), plane_z_pos),
             degree!(0.0, 0.0, 0.0),
         )?;
-        let mut s = OpticSurface::default();
-        s.set_surface(Face::new(SurfaceShape::Plane, isometry));
-        s.set_coating(CoatingConstantR::new(reflectivity)?.into());
-        assert!(
-            ray.refract_on_surface(&s, Some(0.9), &MissedSurfaceStrategy::Stop)
-                .is_err()
-        );
-        assert!(
-            ray.refract_on_surface(&s, Some(f64::NAN), &MissedSurfaceStrategy::Stop)
-                .is_err()
-        );
-        assert!(
-            ray.refract_on_surface(&s, Some(f64::INFINITY), &MissedSurfaceStrategy::Stop)
-                .is_err()
-        );
-        let (reflected_ray, _hitpoint) =
-            ray.refract_on_surface(&s, Some(1.5), &MissedSurfaceStrategy::Stop)?;
+        let coating: CoatingType = CoatingConstantR::new(reflectivity)?.into();
+        for n2 in [0.9, f64::NAN, f64::INFINITY] {
+            assert!(refract_on_plane(&mut ray, isometry, &coating, Some(n2)).is_err());
+        }
+        let (reflected_ray, _hitpoint) = refract_on_plane(&mut ray, isometry, &coating, Some(1.5))?;
 
         let reflected_ray = reflected_ray.unwrap();
         // refracted ray
@@ -1284,7 +1187,7 @@ mod test {
 
         let position = millimeter!(0., 1., 0.);
         let mut ray = Ray::new_collimated(position, wvl, e)?;
-        ray.refract_on_surface(&s, Some(1.5), &MissedSurfaceStrategy::Stop)?;
+        refract_on_plane(&mut ray, isometry, &coating, Some(1.5))?;
         assert_eq!(ray.pos, millimeter!(0., 1., 10.));
         assert_eq!(ray.dir, Vector3::z());
         assert_eq!(ray.path_length, plane_z_pos);
@@ -1307,15 +1210,17 @@ mod test {
             millimeter!(5.0),
             Outline::new(CircleShape::new(millimeter!(10.0))?, Vec::new())?,
         )?;
-        let mut surface = OpticSurface::default();
-        surface.set_face(Arc::new(lens.moved(&node_frame)), Extruded::FRONT)?;
         let mut ray = Ray::new(
             node_frame.transform_point(&millimeter!(3.0, -4.0, -20.0)),
             node_frame.transform_vector_f64(&Vector3::z()),
             nanometer!(1053.0),
             joule!(1.0),
         )?;
-        let (_, hit) = ray.refract_on_surface(&surface, Some(1.5), &MissedSurfaceStrategy::Stop)?;
+        let surface_hit = lens
+            .moved(&node_frame)
+            .intersect(Extruded::FRONT, &ray)
+            .ok_or_else(|| OpossumError::Other("the ray missed the lens".into()))?;
+        let (_, hit) = ray.refract_at(&surface_hit, &CoatingType::IdealAR, Some(1.5))?;
         let Some(HitPoint::Energy(hit)) = hit else {
             return Err(OpossumError::Other("the ray left no energy hit".into()));
         };
@@ -1329,8 +1234,7 @@ mod test {
     #[test]
     fn a_grating_adds_the_phase_of_the_hit_across_its_lines() -> OpmResult<()> {
         let frame = Isometry::new(millimeter!(1.0, -2.0, 30.0), degree!(10.0, 5.0, 20.0))?;
-        let mut grating = OpticSurface::default();
-        grating.set_surface(Face::new(SurfaceShape::Plane, frame));
+        let grating = Geometry::from(Face::new(SurfaceShape::Plane, frame));
         let lines_per_meter = 5.0e5;
         let grating_vector = frame.transform_vector_f64(&Vector3::x()) * 2.0 * PI * lines_per_meter;
         let wavelength = nanometer!(1053.0);
@@ -1340,7 +1244,10 @@ mod test {
             wavelength,
             joule!(1.0),
         )?;
-        let diffracted = ray.diffract_on_periodic_surface(&grating, 1.0, grating_vector, &1)?;
+        let hit = grating
+            .intersect(SurfaceGeometry::FACE, &ray)
+            .ok_or_else(|| OpossumError::Other("the ray missed the grating".into()))?;
+        let diffracted = ray.diffract_at(&hit, 1.0, grating_vector, &1)?;
         let diffracted = diffracted
             .ok_or_else(|| OpossumError::Other("the first order is not supported".into()))?;
         let phase = lines_per_meter * 0.003 * wavelength.get::<millimeter>();
@@ -1365,9 +1272,7 @@ mod test {
             Point3::new(Length::zero(), Length::zero(), plane_z_pos),
             degree!(0.0, 0.0, 0.0),
         )?;
-        let mut s = OpticSurface::default();
-        s.set_surface(Face::new(SurfaceShape::Plane, isometry));
-        ray.refract_on_surface(&s, None, &MissedSurfaceStrategy::Stop)?;
+        refract_on_plane(&mut ray, isometry, &CoatingType::IdealAR, None)?;
         assert_eq!(ray.pos, millimeter!(0., 10., 10.));
         assert_eq!(ray.dir[0], 0.0);
         assert_abs_diff_eq!(ray.dir[1], direction.normalize()[1]);
@@ -1378,26 +1283,20 @@ mod test {
         );
         Ok(())
     }
+    /// A ray running away from a plane does not hit it.
     #[test]
     fn refract_on_surface_non_intersecting() -> OpmResult<()> {
-        let position = millimeter!(0., 0., 0.);
-        let direction = vector![0.0, 0.0, -1.0];
-        let wvl = nanometer!(1054.0);
-        let e = joule!(1.0);
-        let mut ray = Ray::new(position, direction, wvl, e)?;
-        let isometry = Isometry::new(
-            Point3::new(Length::zero(), Length::zero(), millimeter!(10.0)),
-            degree!(0.0, 0.0, 0.0),
+        let ray = Ray::new(
+            millimeter!(0., 0., 0.),
+            vector![0.0, 0.0, -1.0],
+            nanometer!(1054.0),
+            joule!(1.0),
         )?;
-        let mut s = OpticSurface::default();
-        s.set_surface(Face::new(SurfaceShape::Plane, isometry));
-        ray.refract_on_surface(&s, Some(1.5), &MissedSurfaceStrategy::Stop)?;
-        assert_eq!(ray.pos, millimeter!(0., 0., 0.));
-        assert_eq!(ray.dir, direction);
-        assert_eq!(ray.refractive_index, 1.0);
-        assert_eq!(ray.path_length, Length::zero());
-        assert_eq!(ray.number_of_bounces(), 0);
-        assert_eq!(ray.number_of_refractions(), 0);
+        let plane = Geometry::from(Face::new(
+            SurfaceShape::Plane,
+            Isometry::new_along_z(millimeter!(10.0))?,
+        ));
+        assert!(plane.intersect(SurfaceGeometry::FACE, &ray).is_none());
         Ok(())
     }
     #[test]
@@ -1412,28 +1311,18 @@ mod test {
             Point3::new(Length::zero(), Length::zero(), plane_z_pos),
             degree!(0.0, 0.0, 0.0),
         )?;
-        let mut s = OpticSurface::default();
-        s.set_surface(Face::new(SurfaceShape::Plane, isometry));
-        assert!(
-            ray.refract_on_surface(&s, Some(0.9), &MissedSurfaceStrategy::Stop)
-                .is_err()
-        );
-        assert!(
-            ray.refract_on_surface(&s, Some(f64::NAN), &MissedSurfaceStrategy::Stop)
-                .is_err()
-        );
-        assert!(
-            ray.refract_on_surface(&s, Some(f64::INFINITY), &MissedSurfaceStrategy::Stop)
-                .is_err()
-        );
-        ray.refract_on_surface(&s, Some(1.0), &MissedSurfaceStrategy::Stop)?;
+        let coating = CoatingType::IdealAR;
+        for n2 in [0.9, f64::NAN, f64::INFINITY] {
+            assert!(refract_on_plane(&mut ray, isometry, &coating, Some(n2)).is_err());
+        }
+        refract_on_plane(&mut ray, isometry, &coating, Some(1.0))?;
         assert_eq!(ray.pos, millimeter!(0., 10., 10.));
         assert_eq!(ray.dir[0], 0.0);
         assert_abs_diff_eq!(ray.dir[1], direction.normalize()[1]);
         assert_abs_diff_eq!(ray.dir[2], direction.normalize()[2]);
         assert_abs_diff_eq!(ray.path_length.value, 2.0_f64.sqrt() * plane_z_pos.value);
         let mut ray = Ray::new(position, direction, wvl, e)?;
-        ray.refract_on_surface(&s, Some(1.5), &MissedSurfaceStrategy::Stop)?;
+        refract_on_plane(&mut ray, isometry, &coating, Some(1.5))?;
         assert_eq!(ray.number_of_bounces(), 0);
         assert_eq!(ray.number_of_refractions(), 1);
         assert_eq!(ray.pos, millimeter!(0., 10., 10.));
@@ -1442,7 +1331,7 @@ mod test {
         assert_abs_diff_eq!(ray.dir[2], 0.8819171036881969);
         let direction = vector![1.0, 0.0, 1.0];
         let mut ray = Ray::new(position, direction, wvl, e)?;
-        ray.refract_on_surface(&s, Some(1.5), &MissedSurfaceStrategy::Stop)?;
+        refract_on_plane(&mut ray, isometry, &coating, Some(1.5))?;
         assert_eq!(ray.pos, millimeter!(10., 0., 10.));
         assert_eq!(ray.dir[0], 0.4714045207910317);
         assert_abs_diff_eq!(ray.dir[1], 0.0);
@@ -1461,10 +1350,8 @@ mod test {
             Point3::new(Length::zero(), Length::zero(), millimeter!(10.0)),
             degree!(0.0, 0.0, 0.0),
         )?;
-        let mut s = OpticSurface::default();
-        s.set_surface(Face::new(SurfaceShape::Plane, isometry));
         let (reflected, _hitpoint) =
-            ray.refract_on_surface(&s, Some(1.0), &MissedSurfaceStrategy::Stop)?;
+            refract_on_plane(&mut ray, isometry, &CoatingType::IdealAR, Some(1.0))?;
         assert!(reflected.is_none());
         assert_eq!(ray.pos, millimeter!(0., 20., 10.));
         let test_reflect = vector![0.0, 2.0, -1.0].normalize();

@@ -111,11 +111,7 @@ impl<T: ?Sized + HasNodeAttr> NodeAttrExt for T {
     }
 
     fn get_optic_surface(&self, surf_name: &str) -> Option<&OpticSurface> {
-        let runtime = self.node_attr().runtime_surfaces();
-        runtime
-            .inputs
-            .get(surf_name)
-            .or_else(|| runtime.outputs.get(surf_name))
+        self.node_attr().runtime_surfaces().get(surf_name)
     }
 
     fn hit_maps(&self) -> HashMap<String, HitMap> {
@@ -136,11 +132,9 @@ impl<T: ?Sized + HasNodeAttr> NodeAttrExt for T {
     }
 
     fn get_optic_surface_mut(&mut self, surf_name: &str) -> Option<&mut OpticSurface> {
-        let runtime = self.node_attr_mut().runtime_surfaces_mut();
-        runtime
-            .inputs
+        self.node_attr_mut()
+            .runtime_surfaces_mut()
             .get_mut(surf_name)
-            .or_else(|| runtime.outputs.get_mut(surf_name))
     }
 
     fn reset_optic_surfaces(&mut self) {

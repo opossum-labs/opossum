@@ -544,7 +544,7 @@ mod test {
         core_optics::optic_surface::OpticSurface,
         degree,
         error::OpmResult,
-        geometry::{Face, SurfaceShape},
+        geometry::{Face, Geometry, SurfaceShape},
         joule,
         light::{Ray, Rays},
         millimeter, nanometer,
@@ -571,12 +571,13 @@ mod test {
             joule!(1.),
         )?;
 
-        let mut s = OpticSurface::default();
-        s.set_surface(Face::new(
+        let plane = Geometry::from(Face::new(
             SurfaceShape::Plane,
             Isometry::new_along_z(millimeter!(10.0))?,
         ));
+        let mut s = OpticSurface::default();
         rays.refract_on_surface(
+            &plane,
             &mut s,
             Some(&refr_index_vaccuum()),
             true,
@@ -603,6 +604,7 @@ mod test {
             joule!(1.),
         )?;
         rays.refract_on_surface(
+            &plane,
             &mut s,
             Some(&refr_index_vaccuum()),
             true,

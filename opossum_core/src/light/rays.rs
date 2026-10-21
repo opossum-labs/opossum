@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! Module for handling bundles of [`Ray`]s
 use crate::distributions::spectral::laser_lines::MIN_WAVELENGTH_DIFF_NM;
-use crate::geometry::Rim;
+use crate::geometry::{Geometry, Rim};
 use crate::{
     J_per_cm2,
     analyzers::propagation_strategy::MissedSurfaceStrategy,
@@ -937,7 +937,7 @@ impl Rays {
     /// # Returns
     ///
     /// The bundle of reflected rays and, for every ray of this bundle in order, whether it hit the
-    /// surface (see [`OpticSurface::intersect`]).
+    /// surface (see [`Geometry::intersect`]).
     ///
     /// # Warnings
     ///
@@ -950,6 +950,7 @@ impl Rays {
     ///   - the underlying function for refraction of a single [`Ray`] on the surface fails.
     pub fn refract_on_surface(
         &mut self,
+        geometry: &Geometry,
         surface: &mut OpticSurface,
         refractive_index: Option<&RefractiveIndexType>,
         refraction_intended: bool,
@@ -961,6 +962,7 @@ impl Rays {
             ReflectedPart::Main
         };
         self.interact_with_surface(
+            geometry,
             surface,
             refractive_index,
             *missed_surface_strategy,
@@ -980,6 +982,7 @@ impl Rays {
     ///
     /// # Arguments
     ///
+    /// * `geometry` - the geometry the splitting surface is a face of.
     /// * `surface` - the splitting surface. Hits are recorded in its hit map.
     /// * `config` - the [`SplittingConfig`] defining the transmission of the surface.
     /// * `missed_surface_strategy` - what happens to rays that do not hit the surface.
@@ -999,11 +1002,13 @@ impl Rays {
     ///   - the underlying function for refraction of a single [`Ray`] on the surface fails.
     pub fn split_on_surface(
         &mut self,
+        geometry: &Geometry,
         surface: &mut OpticSurface,
         config: &SplittingConfig,
         missed_surface_strategy: &MissedSurfaceStrategy,
     ) -> OpmResult<Self> {
         self.interact_with_surface(
+            geometry,
             surface,
             None,
             *missed_surface_strategy,
@@ -1019,6 +1024,7 @@ impl Rays {
     ///
     /// # Arguments
     ///
+    /// * `geometry` - the geometry the surface is a face of, which answers where a ray hits it.
     /// * `surface` - the surface the rays interact with. Hits are recorded in its hit map.
     /// * `refractive_index` - the refractive index behind the surface. `None` models a passive surface.
     /// * `missed_surface_strategy` - what happens to rays that do not hit the surface.
@@ -1037,6 +1043,7 @@ impl Rays {
     ///   - the underlying function for refraction of a single [`Ray`] on the surface fails.
     fn interact_with_surface(
         &mut self,
+        geometry: &Geometry,
         surface: &mut OpticSurface,
         refractive_index: Option<&RefractiveIndexType>,
         missed_surface_strategy: MissedSurfaceStrategy,
@@ -1059,14 +1066,14 @@ impl Rays {
                     ReflectedPart::Ghost | ReflectedPart::Main => *surface.coating(),
                     ReflectedPart::Branch(config) => config.coating(ray.wavelength())?,
                 };
-
-                // Wir übergeben 'surface' unveränderlich und empfangen unser neues Tupel
-                let interaction = ray.refract_on_surface_with_coating(
-                    surface,
-                    &coating,
-                    n2,
-                    missed_surface_strategy,
-                )?;
+                // The component answers where the ray hits it, the ray what happens there.
+                let interaction = if let Some(surface_hit) = geometry.intersect(surface.face(), ray)
+                {
+                    Some(ray.refract_at(&surface_hit, &coating, n2)?)
+                } else {
+                    missed_surface_strategy.apply_to(ray);
+                    None
+                };
                 *hit = interaction.is_some();
                 let (reflected_opt, hit_point_opt) = interaction.unwrap_or((None, None));
 
@@ -1078,13 +1085,12 @@ impl Rays {
                             helper_rays.ray_bundle.iter_mut(),
                             relf_helper.ray_bundle.iter_mut()
                         ) {
-                            if let Some((Some(h_reflected), _h_hit_point)) = h_ray
-                                .refract_on_surface_with_coating(
-                                    surface,
-                                    &coating,
-                                    n2,
-                                    missed_surface_strategy,
-                                )?
+                            let Some(helper_hit) = geometry.intersect(surface.face(), h_ray) else {
+                                missed_surface_strategy.apply_to(h_ray);
+                                continue;
+                            };
+                            if let (Some(h_reflected), _) =
+                                h_ray.refract_at(&helper_hit, &coating, n2)?
                             {
                                 refl_h_ray.set_direction(h_reflected.direction())?;
                             }
@@ -1103,7 +1109,6 @@ impl Rays {
                     rays_missed = true;
                 }
 
-                // Den zurückgegebenen HitPoint sequenziell in die HitMap eintragen
                 if let Some(hit_point) = hit_point_opt {
                     surface.add_to_hit_map(hit_point, ray.number_of_bounces(), self.uuid)?;
                 }
@@ -1141,7 +1146,18 @@ impl Rays {
     }
     /// Diffract a bundle of [`Rays`] on a periodic surface, e.g., a grating
     /// All valid rays that hit this surface are diffracted according to the peridic structure,
-    /// the diffraction order, the wavelength of the rays and there incoming k-vector
+    /// the diffraction order, the wavelength of the rays and there incoming k-vector (see
+    /// [`Ray::diffract_at`]).
+    ///
+    /// # Arguments
+    ///
+    /// * `geometry` - the geometry the grating surface is a face of.
+    /// * `surface` - the grating surface.
+    /// * `refractive_index` - the refractive index behind the surface.
+    /// * `grating_vector` - the grating vector, in the plane of the surface.
+    /// * `diffraction_order` - the diffraction order.
+    /// * `refraction_intended` - whether the diffracted rays are the intended beam.
+    ///
     /// # Warnings
     ///
     /// This functions emits a warning of no valid [`Ray`]s are found in the bundle.
@@ -1151,6 +1167,7 @@ impl Rays {
     /// This function only propagates errors of contained functions.
     pub fn diffract_on_periodic_surface(
         &mut self,
+        geometry: &Geometry,
         surface: &OpticSurface,
         refractive_index: &RefractiveIndexType,
         grating_vector: Vector3<f64>,
@@ -1163,12 +1180,11 @@ impl Rays {
         for ray in &mut self.ray_bundle {
             if ray.valid() {
                 let n2 = refractive_index.get_refractive_index(ray.wavelength())?;
-                if let Some(mut reflected) = ray.diffract_on_periodic_surface(
-                    surface,
-                    n2,
-                    grating_vector,
-                    diffraction_order,
-                )? {
+                let diffracted = match geometry.intersect(surface.face(), ray) {
+                    Some(hit) => ray.diffract_at(&hit, n2, grating_vector, diffraction_order)?,
+                    None => None,
+                };
+                if let Some(mut reflected) = diffracted {
                     if refraction_intended {
                         reflected.clear_pos_hist();
                     } else {
@@ -1821,7 +1837,7 @@ mod test {
     use crate::{
         apertures::{CircleShape, Outline},
         centimeter,
-        coatings::{CoatingConstantR, CoatingType},
+        coatings::CoatingConstantR,
         core_optics::optic_surface::OpticSurface,
         geometry::{Face, SurfaceShape},
         joule, meter, millimeter, nanometer,
@@ -2379,6 +2395,7 @@ mod test {
         let mut rays = Rays::default();
         testing_logger::setup();
         let (reflected, _) = rays.refract_on_surface(
+            &Geometry::plane(None),
             &mut OpticSurface::default(),
             Some(&refr_index_vaccuum()),
             true,
@@ -2409,6 +2426,7 @@ mod test {
         )?;
 
         let _ = rays.refract_on_surface(
+            &Geometry::plane(None),
             &mut OpticSurface::default(),
             Some(&refr_index_vaccuum()),
             true,
@@ -2425,6 +2443,7 @@ mod test {
         rays.set_parent_uuid(parent_uuid);
         rays.set_parent_node_split_idx(10);
         let (reflected, _) = rays.refract_on_surface(
+            &Geometry::plane(None),
             &mut OpticSurface::default(),
             Some(&refr_index_vaccuum()),
             false,
@@ -2456,6 +2475,7 @@ mod test {
         rays.add_ray(ray0);
         rays.add_ray(ray1);
         rays.refract_on_surface(
+            &Geometry::plane(None),
             &mut OpticSurface::default(),
             None,
             true,
@@ -2475,6 +2495,7 @@ mod test {
         )?);
         testing_logger::setup();
         let (reflected, _) = rays.refract_on_surface(
+            &Geometry::plane(None),
             &mut OpticSurface::default(),
             Some(&refr_index_vaccuum()),
             true,
@@ -2498,6 +2519,7 @@ mod test {
         let mut s = OpticSurface::default();
         s.set_coating(CoatingConstantR::new(percent!(20.0))?.into());
         let (reflected, _) = rays.refract_on_surface(
+            &Geometry::plane(None),
             &mut s,
             Some(&refr_index_vaccuum()),
             true,
@@ -2507,14 +2529,10 @@ mod test {
         assert_eq!(reflected.total_energy(), joule!(0.2));
         Ok(())
     }
-    /// A flat, ideal AR coated surface through the origin, tilted by 45° about the y axis.
-    fn tilted_splitting_surface() -> OpmResult<OpticSurface> {
+    /// A flat surface through the origin, tilted by 45° about the y axis.
+    fn tilted_splitting_plane() -> OpmResult<Geometry> {
         let iso = Isometry::new(millimeter!(0., 0., 0.), degree!(0., 45., 0.))?;
-        OpticSurface::new(
-            Face::new(SurfaceShape::Plane, iso),
-            CoatingType::IdealAR,
-            J_per_cm2!(1.),
-        )
+        Ok(Geometry::from(Face::new(SurfaceShape::Plane, iso)))
     }
     fn collimated_ray_along_z(wavelength: Length) -> OpmResult<Ray> {
         Ray::new_collimated(millimeter!(0., 0., -10.), wavelength, joule!(1.0))
@@ -2522,8 +2540,9 @@ mod test {
     #[test]
     fn split_on_surface_tilted() -> OpmResult<()> {
         let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1000.0))?);
-        let mut surface = tilted_splitting_surface()?;
+        let (plane, mut surface) = (tilted_splitting_plane()?, OpticSurface::default());
         let reflected = rays.split_on_surface(
+            &plane,
             &mut surface,
             &SplittingConfig::Ratio(0.6),
             &MissedSurfaceStrategy::Stop,
@@ -2542,9 +2561,10 @@ mod test {
     #[test]
     fn split_on_surface_ignores_surface_coating() -> OpmResult<()> {
         let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1000.0))?);
-        let mut surface = tilted_splitting_surface()?;
+        let (plane, mut surface) = (tilted_splitting_plane()?, OpticSurface::default());
         surface.set_coating(CoatingConstantR::new(percent!(20.0))?.into());
         let reflected = rays.split_on_surface(
+            &plane,
             &mut surface,
             &SplittingConfig::Ratio(0.6),
             &MissedSurfaceStrategy::Stop,
@@ -2556,8 +2576,9 @@ mod test {
     #[test]
     fn split_on_surface_keeps_both_parts_intended() -> OpmResult<()> {
         let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1000.0))?);
-        let mut surface = tilted_splitting_surface()?;
+        let (plane, mut surface) = (tilted_splitting_plane()?, OpticSurface::default());
         let reflected = rays.split_on_surface(
+            &plane,
             &mut surface,
             &SplittingConfig::Ratio(0.6),
             &MissedSurfaceStrategy::Stop,
@@ -2586,9 +2607,9 @@ mod test {
         let mut rays = Rays::default();
         rays.add_ray(collimated_ray_along_z(nanometer!(999.0))?);
         rays.add_ray(collimated_ray_along_z(nanometer!(1001.0))?);
-        let mut surface = tilted_splitting_surface()?;
+        let (plane, mut surface) = (tilted_splitting_plane()?, OpticSurface::default());
         let reflected =
-            rays.split_on_surface(&mut surface, &config, &MissedSurfaceStrategy::Stop)?;
+            rays.split_on_surface(&plane, &mut surface, &config, &MissedSurfaceStrategy::Stop)?;
         assert_eq!(rays.ray_bundle[0].energy(), joule!(1.0));
         assert_eq!(rays.ray_bundle[1].energy(), joule!(0.0));
         assert_eq!(reflected.ray_bundle[0].energy(), joule!(0.0));
@@ -2596,7 +2617,7 @@ mod test {
 
         let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1501.0))?);
         assert!(
-            rays.split_on_surface(&mut surface, &config, &MissedSurfaceStrategy::Stop)
+            rays.split_on_surface(&plane, &mut surface, &config, &MissedSurfaceStrategy::Stop)
                 .is_err()
         );
         Ok(())
@@ -2610,6 +2631,7 @@ mod test {
         )?);
         testing_logger::setup();
         let reflected = rays.split_on_surface(
+            &Geometry::plane(None),
             &mut OpticSurface::default(),
             &SplittingConfig::Ratio(0.6),
             &MissedSurfaceStrategy::Stop,

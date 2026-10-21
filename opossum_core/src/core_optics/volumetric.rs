@@ -16,10 +16,7 @@
 use crate::{
     absorption::absorption_model::AbsorptionModel,
     analyzers::propagation_strategy::PropagationStrategy,
-    core_optics::{
-        NodeAttrExt, OpticNode, OpticNodeExt, node_attr::RuntimeMedium,
-        optic_node_ext::single_io_port_names,
-    },
+    core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, optic_node_ext::single_io_port_names},
     error::{OpmResult, OpossumError},
     gain::{Extraction, Inversion},
     geometry::body::Body,
@@ -181,11 +178,7 @@ pub trait Volumetric: OpticNode {
         }
         // Capture the name before the mutable borrow of `self` through `node_attr_mut`.
         let node_name = self.name().to_owned();
-        let Some((body, inversion)) = self
-            .node_attr_mut()
-            .runtime_medium_mut()
-            .and_then(RuntimeMedium::parts_mut)
-        else {
+        let Some((body, inversion)) = self.node_attr_mut().runtime_medium_mut() else {
             return Err(OpossumError::Analysis(format!(
                 "node '{node_name}': medium was not prepared before propagation"
             )));
@@ -249,11 +242,7 @@ pub trait Volumetric: OpticNode {
         if strategy.is_positioning_run() {
             return Ok(());
         }
-        let Some((body, inversion)) = self
-            .node_attr()
-            .runtime_medium()
-            .and_then(RuntimeMedium::parts)
-        else {
+        let Some((body, inversion)) = self.node_attr().runtime_medium() else {
             return Err(OpossumError::Analysis(format!(
                 "node '{}': medium was not prepared before amplification",
                 self.name()
@@ -634,14 +623,10 @@ mod test {
         let (body, _) = lens
             .node_attr()
             .runtime_medium()
-            .and_then(RuntimeMedium::parts)
             .ok_or_else(|| OpossumError::Other("the lens has no medium".into()))?;
         let vertex = |port: &str| -> OpmResult<Point3<Length>> {
             Ok(lens
-                .get_optic_surface(port)
-                .ok_or_else(|| OpossumError::Other(format!("the lens has no surface '{port}'")))?
-                .surface()
-                .frame()
+                .effective_surface_iso(port)?
                 .transform_point(&Point3::origin()))
         };
         let (front, rear) = (vertex("input_1")?, vertex("output_1")?);
@@ -684,8 +669,7 @@ mod test {
         assert!(
             lens.node_attr()
                 .runtime_medium()
-                .and_then(|m| m.inversion())
-                .is_none(),
+                .is_some_and(|(_, inversion)| inversion.is_none()),
             "a passive node must not have an inversion field"
         );
         // The passive contract: no gain model → no energy change, even with a prepared body.
@@ -1098,7 +1082,7 @@ mod test {
         // Seed a body at the current (identity) position, simulating what
         // `init_runtime_medium` used to do inside `after_deserialization_hook`.
         let identity_body = placed_geometry(&head)?;
-        head.node_attr_mut().set_runtime_body(identity_body);
+        head.node_attr_mut().set_runtime_geometry(identity_body);
 
         // Move the head 500 mm along z — what `calc_node_positions` does after deserialization.
         head.set_positioning(NodePositioning::Absolute(Isometry::new(
@@ -1499,11 +1483,11 @@ mod test {
             f64::exp((head_gain_coefficient() * thickness).value),
             epsilon = 1e-9
         );
-        let Some(rear) = head.get_optic_surface("output_1") else {
-            panic!("the head has no rear surface");
-        };
         assert_abs_diff_eq!(
-            rear.surface().frame().translation().z.value,
+            head.effective_surface_iso("output_1")?
+                .translation()
+                .z
+                .value,
             thickness.value,
             epsilon = 1e-15
         );
@@ -1625,9 +1609,8 @@ mod test {
         Ok(())
     }
     /// A node declares an [`OPTIC_SHAPE`] that bounds a region exactly when its geometry ends
-    /// sideways or records within a window, and every surface it installs carries exactly the
-    /// window of that geometry. The dummy starts with an open optic shape and neither ends sideways
-    /// nor has a window.
+    /// sideways or records within a window, and the geometry it installs has exactly that window.
+    /// The dummy starts with an open optic shape and neither ends sideways nor has a window.
     ///
     /// The extent of a component is stated by the property, decides the hits through the geometry
     /// each surface is a face of, and bounds the medium through the same geometry; all three have to
@@ -1654,14 +1637,14 @@ mod test {
                 "node type '{node_type}' declares a bounding '{OPTIC_SHAPE}' or has a geometry \
                  that ends sideways, but not both"
             );
-            let surfaces = optic_ref.node_attr().runtime_surfaces();
-            for (name, surface) in surfaces.inputs.iter().chain(&surfaces.outputs) {
-                assert_eq!(
-                    surface.window(),
-                    window.as_ref(),
-                    "surface '{name}' of node type '{node_type}'"
-                );
-            }
+            assert_eq!(
+                optic_ref
+                    .node_attr()
+                    .runtime_geometry()
+                    .and_then(|installed| installed.kind().window()),
+                window.as_ref(),
+                "node type '{node_type}'"
+            );
         }
         Ok(())
     }

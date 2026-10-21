@@ -239,11 +239,12 @@ impl AnalysisRayTrace for ReflectiveGrating {
             };
 
             let iso = self.effective_surface_iso(in_port)?;
-            if let Some(surf) = self.get_optic_surface_mut(in_port) {
+            if let Some((geometry, surf)) = self.node_attr_mut().traced_surface_mut(in_port) {
                 let refraction_intended = false;
                 let grating_vector =
                     2. * PI * line_density.value * iso.transform_vector_f64(&Vector3::x());
                 let mut diffracted_rays = rays.diffract_on_periodic_surface(
+                    geometry,
                     surf,
                     &refr_index_vaccuum(),
                     grating_vector,

@@ -460,12 +460,13 @@ impl AnalysisRayTrace for ParabolicMirror {
         if rays.is_empty() {
             return Ok(LightResult::default());
         }
-        let Some(surf) = self.get_optic_surface_mut(in_port) else {
+        let Some((geometry, surf)) = self.node_attr_mut().traced_surface_mut(in_port) else {
             return Err(OpossumError::Analysis("no surface found. Aborting".into()));
         };
 
         let refraction_intended = false;
         let (mut reflected_rays, _) = rays.refract_on_surface(
+            geometry,
             surf,
             None,
             refraction_intended,

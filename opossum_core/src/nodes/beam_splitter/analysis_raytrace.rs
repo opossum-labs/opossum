@@ -192,12 +192,13 @@ impl BeamSplitter {
             )));
         };
         let mut transmitted = rays.clone();
-        let Some(surf) = self.get_optic_surface_mut(port_name) else {
+        let Some((geometry, surf)) = self.node_attr_mut().traced_surface_mut(port_name) else {
             return Err(OpossumError::OpticPort(
                 "input optic surface not found".into(),
             ));
         };
         let reflected = transmitted.split_on_surface(
+            geometry,
             surf,
             &SplittingConfig::Ratio(0.5),
             config.missed_surface_strategy(),
