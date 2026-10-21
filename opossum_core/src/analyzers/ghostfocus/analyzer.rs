@@ -299,11 +299,8 @@ mod test_ghost_focus_analyzer {
     fn analyze_single_surface_node() -> OpmResult<()> {
         let mut sd = SpotDiagram::default();
         let config = GhostFocusConfig::default();
-        let out_result = sd.unified_analyze_single_surface_node(
-            LightResult::default(),
-            &config,
-            "input_1",
-        )?;
+        let out_result =
+            sd.unified_analyze_single_surface_node(LightResult::default(), &config, "input_1")?;
         let output_data = out_result.get("output_1");
 
         match output_data {

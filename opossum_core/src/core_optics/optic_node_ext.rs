@@ -15,7 +15,6 @@ use crate::{
     light::{LightData, LightResult, Rays, rays::ReflectedPart},
     nodes::fluence_detector::Fluence,
     properties::Proptype,
-    refractive_index::RefractiveIndexType,
     utils::geom_transformation::Isometry,
 };
 
