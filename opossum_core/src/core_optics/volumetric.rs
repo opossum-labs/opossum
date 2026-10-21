@@ -18,12 +18,12 @@ use crate::{
     analyzers::propagation_strategy::PropagationStrategy,
     core_optics::{
         NodeAttrExt, OpticNode, OpticNodeExt, optic_node_ext::single_io_port_names,
-        runtime_geometry::RuntimeGeometry,
+        runtime_geometry::RuntimeGeometry, surface_effect::Refraction,
     },
     error::{OpmResult, OpossumError},
     gain::{Extraction, Inversion},
     geometry::body::Body,
-    light::{LightData, LightRays, LightResult, Rays},
+    light::{LightData, LightRays, LightResult, Rays, rays::ReflectedPart},
     material::{MATERIAL, Material},
     properties::{Proptype, proptype::AssetRef},
 };
@@ -103,16 +103,15 @@ pub trait Volumetric: OpticNode {
         // data, and potentially gain.
         let material_inside = self.material()?;
         let backward = self.inverted();
-        // The rays are meant to be refracted at both surfaces of the volume, not just traced to them.
-        let refraction_intended = true;
-        // Refraction at a surface is governed by the index alone, so only that is handed down.
+        // The rays are meant to be refracted at both surfaces of the volume, not just traced to
+        // them; what is reflected there is a ghost. Refraction is governed by the index alone.
         self.pass_through_surface_generic(
             entry_surf_name,
-            Some(material_inside.refractive_index_type().clone()),
+            &Refraction(Some(material_inside.refractive_index_type())),
             rays_bundle,
             strategy,
             backward,
-            refraction_intended,
+            ReflectedPart::Ghost,
         )?;
         let ambient_refr_idx = strategy.ambient_refractive_index();
 
@@ -120,11 +119,11 @@ pub trait Volumetric: OpticNode {
         self.propagate_inside_medium(rays_bundle, strategy)?;
         self.pass_through_surface_generic(
             exit_surf_name,
-            Some(ambient_refr_idx),
+            &Refraction(Some(&ambient_refr_idx)),
             rays_bundle,
             strategy,
             backward,
-            refraction_intended,
+            ReflectedPart::Ghost,
         )?;
         Ok(())
     }

@@ -11,8 +11,10 @@ pub mod helper {
         coatings::{CoatingConstantR, CoatingType},
         core_optics::{
             NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, OpticPorts, OpticRef, PortType,
-            Volumetric, node_attr::NodePositioning, optic_surface::OpticSurface,
-            runtime_geometry::RuntimeGeometry,
+            Volumetric,
+            node_attr::NodePositioning,
+            optic_surface::OpticSurface,
+            runtime_geometry::{RuntimeGeometry, RuntimeSurfaces},
         },
         error::{OpmResult, OpossumError},
         geometry::{
@@ -432,6 +434,16 @@ pub mod helper {
             .map(|start| Ray::new_collimated(*start, wavelength, joule!(1.0)))
             .collect::<OpmResult<Vec<_>>>()?;
         Ok(Rays::from(rays))
+    }
+    /// Return a component of the given geometry whose face 0 is the surface `input_1`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the surface is no face of the geometry.
+    pub fn traced_at(geometry: Geometry, surface: OpticSurface) -> OpmResult<RuntimeGeometry> {
+        let mut surfaces = RuntimeSurfaces::default();
+        surfaces.inputs.insert("input_1".into(), surface);
+        RuntimeGeometry::new(geometry, surfaces)
     }
     /// Return a default node of the given type, placed at the origin.
     ///

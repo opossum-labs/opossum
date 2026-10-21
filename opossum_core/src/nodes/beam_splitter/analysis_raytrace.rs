@@ -7,7 +7,7 @@ use crate::{
     },
     core_optics::{NodeAttrExt, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
-    light::{LightData, LightResult, Rays},
+    light::{LightData, LightResult, Rays, rays::ReflectedPart},
     meter,
     utils::geom_transformation::Isometry,
 };
@@ -192,16 +192,17 @@ impl BeamSplitter {
             )));
         };
         let mut transmitted = rays.clone();
-        let Some((geometry, surf)) = self.node_attr_mut().traced_surface_mut(port_name) else {
+        let Some(runtime) = self.node_attr_mut().runtime_mut() else {
             return Err(OpossumError::OpticPort(
                 "input optic surface not found".into(),
             ));
         };
-        let reflected = transmitted.split_on_surface(
-            geometry,
-            surf,
+        let (reflected, _) = runtime.interact(
+            port_name,
+            &mut transmitted,
             &SplittingConfig::Ratio(0.5),
-            config.missed_surface_strategy(),
+            ReflectedPart::Branch,
+            *config.missed_surface_strategy(),
         )?;
         Ok((transmitted, reflected))
     }

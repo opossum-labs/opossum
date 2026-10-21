@@ -8,10 +8,11 @@ use crate::{
         NodeAttrExt, OpticNode, PortType,
         optic_surface::OpticSurface,
         runtime_geometry::{RuntimeGeometry, RuntimeSurfaces},
+        surface_effect::{Refraction, SurfaceEffect},
     },
     error::{OpmResult, OpossumError},
     geometry::body::OPTIC_SHAPE,
-    light::{LightData, LightResult, Rays},
+    light::{LightData, LightResult, Rays, rays::ReflectedPart},
     nodes::fluence_detector::Fluence,
     properties::Proptype,
     refractive_index::RefractiveIndexType,
@@ -133,15 +134,21 @@ pub trait OpticNodeExt {
         port_type: &PortType,
     ) -> OpmResult<OpticSurface>;
 
-    /// Finds a surface by its name and guides the ray bundle through it.
+    /// Lets a surface of this node act on the ray bundles of an analysis (see
+    /// [`RuntimeGeometry::propagate`]) and warns if rays were lost there.
     ///
-    /// This function handles the boilerplate of retrieving the correct surface, calculating
-    /// the ray count before and after propagation, and logging a warning if rays were lost.
+    /// # Arguments
+    ///
+    /// * `optic_surf_name` - the name of the surface (its port name).
+    /// * `effect` - what the surface does to a ray that hits it.
+    /// * `rays_bundle` - the bundles of the analysis.
+    /// * `strategy` - the analysis.
+    /// * `backward` - whether the light runs through the node backward.
+    /// * `part` - what the reflected part is to each bundle.
     ///
     /// # Returns
     ///
-    /// For every bundle in `rays_bundle` after the call, whether each of its rays hit the surface
-    /// (see [`OpticSurface::propagate_rays`](crate::core_optics::optic_surface::OpticSurface::propagate_rays)).
+    /// For every bundle in `rays_bundle` after the call, whether each of its rays hit the surface.
     /// A node that processes the light further after the surface does so only for those rays.
     ///
     /// # Errors
@@ -151,11 +158,11 @@ pub trait OpticNodeExt {
     fn pass_through_surface_generic(
         &mut self,
         optic_surf_name: &str,
-        refri_after_surf: Option<RefractiveIndexType>,
+        effect: &dyn SurfaceEffect,
         rays_bundle: &mut Vec<Rays>,
         strategy: &dyn PropagationStrategy,
         backward: bool,
-        refraction_intended: bool,
+        part: ReflectedPart,
     ) -> OpmResult<Vec<Vec<bool>>>;
 
     /// A unified helper function to analyze optical nodes that feature a single interacting surface.
@@ -392,29 +399,28 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
     fn pass_through_surface_generic(
         &mut self,
         optic_surf_name: &str,
-        refri_after_surf: Option<RefractiveIndexType>,
+        effect: &dyn SurfaceEffect,
         rays_bundle: &mut Vec<Rays>,
         strategy: &dyn PropagationStrategy,
         backward: bool,
-        refraction_intended: bool,
+        part: ReflectedPart,
     ) -> OpmResult<Vec<Vec<bool>>> {
         let uuid = self.node_attr().uuid();
         let node_name = self.name().to_string();
 
-        let Some((geometry, surf)) = self.node_attr_mut().traced_surface_mut(optic_surf_name)
-        else {
+        let Some(runtime) = self.node_attr_mut().runtime_mut() else {
             return Err(OpossumError::Analysis(format!(
                 "Cannot find surface: \"{optic_surf_name}\" of node: \"{node_name}\""
             )));
         };
         let rays_before: usize = rays_bundle.iter().map(|r| r.nr_of_rays(true)).sum();
-        let hits = surf.propagate_rays(
-            geometry,
+        let hits = runtime.propagate(
+            optic_surf_name,
             rays_bundle,
-            uuid,
-            refri_after_surf.as_ref(),
+            effect,
+            part,
             backward,
-            refraction_intended,
+            uuid,
             strategy,
         )?;
         let rays_after: usize = rays_bundle.iter().map(|r| r.nr_of_rays(true)).sum();
@@ -433,17 +439,18 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         let Some(data) = incoming_data.remove(&in_port_name) else {
             return Ok(LightResult::default());
         };
+        let refraction = Refraction(refri_after_surf.as_ref());
 
         match data {
             LightData::Geometric(rays) => {
                 let mut rays_bundle = vec![rays];
                 self.pass_through_surface_generic(
                     optic_surf_name,
-                    refri_after_surf,
+                    &refraction,
                     &mut rays_bundle,
                     strategy,
                     false,
-                    true,
+                    ReflectedPart::Ghost,
                 )?;
                 let mut recorded = rays_bundle.clone();
                 self.record_within_window(optic_surf_name, &mut recorded, strategy)?;
@@ -454,11 +461,11 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
             LightData::GhostFocus(mut rays_bundle) => {
                 self.pass_through_surface_generic(
                     optic_surf_name,
-                    refri_after_surf,
+                    &refraction,
                     &mut rays_bundle,
                     strategy,
                     false,
-                    true,
+                    ReflectedPart::Ghost,
                 )?;
                 let mut recorded = rays_bundle.clone();
                 self.record_within_window(optic_surf_name, &mut recorded, strategy)?;

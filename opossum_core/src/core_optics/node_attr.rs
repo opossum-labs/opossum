@@ -10,9 +10,8 @@ use uom::si::f64::Length;
 use uuid::Uuid;
 
 use crate::{
-    core_optics::{OpticPorts, optic_surface::OpticSurface, runtime_geometry::RuntimeGeometry},
+    core_optics::{OpticPorts, runtime_geometry::RuntimeGeometry},
     error::{OpmResult, OpossumError},
-    geometry::Geometry,
     properties::{Properties, Proptype, validator::Validator},
     utils::{file_utils::sanitize_filename, geom_transformation::Isometry},
 };
@@ -411,23 +410,6 @@ impl NodeAttr {
         self.runtime = Some(runtime);
     }
 
-    /// Returns an optic surface of this node together with the geometry it is a face of (see
-    /// [`RuntimeGeometry::traced_surface_mut`]).
-    ///
-    /// # Arguments
-    ///
-    /// * `surf_name` - the name of the surface (its port name).
-    ///
-    /// # Returns
-    ///
-    /// The geometry and the surface, or `None` if there is no such surface or no geometry.
-    pub fn traced_surface_mut(
-        &mut self,
-        surf_name: &str,
-    ) -> Option<(&Geometry, &mut OpticSurface)> {
-        self.runtime.as_mut()?.traced_surface_mut(surf_name)
-    }
-
     /// Returns the unique identifier of this node.
     #[must_use]
     pub const fn uuid(&self) -> Uuid {
@@ -483,6 +465,7 @@ mod test {
     use crate::{
         apertures::{CircleShape, Outline},
         core_optics::runtime_geometry::RuntimeSurfaces,
+        geometry::Geometry,
         millimeter,
     };
 

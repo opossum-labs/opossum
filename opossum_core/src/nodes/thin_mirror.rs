@@ -11,13 +11,14 @@ use crate::{
     coatings::CoatingConstantR,
     core_optics::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, node_attr::HasNodeAttr,
+        surface_effect::Refraction,
     },
     error::{OpmResult, OpossumError},
     geometry::{
         Geometry, SurfaceGeometry, SurfaceShape,
         body::{OPTIC_SHAPE, default_optic_shape},
     },
-    light::{LightData, LightResult, Rays, light_result::LightRays},
+    light::{LightData, LightResult, Rays, light_result::LightRays, rays::ReflectedPart},
     millimeter,
     nodes::NodeRegistration,
     percent,
@@ -194,16 +195,13 @@ impl AnalysisRayTrace for ThinMirror {
             return Ok(LightResult::default());
         };
         if let LightData::Geometric(mut rays) = data.clone() {
-            let reflected = if let Some((geometry, surf)) =
-                self.node_attr_mut().traced_surface_mut(in_port)
-            {
-                let refraction_intended = false;
-                let (mut reflected_rays, _) = rays.refract_on_surface(
-                    geometry,
-                    surf,
-                    None,
-                    refraction_intended,
-                    config.missed_surface_strategy(),
+            let reflected = if let Some(runtime) = self.node_attr_mut().runtime_mut() {
+                let (mut reflected_rays, _) = runtime.interact(
+                    in_port,
+                    &mut rays,
+                    &Refraction(None),
+                    ReflectedPart::Main,
+                    *config.missed_surface_strategy(),
                 )?;
                 // The optical axis is placed by geometry alone; its energy does not decide where it runs.
                 if !config.is_positioning_run() {

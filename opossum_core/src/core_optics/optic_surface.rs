@@ -4,7 +4,6 @@ use uuid::Uuid;
 
 use crate::{
     J_per_cm2,
-    analyzers::propagation_strategy::PropagationStrategy,
     coatings::CoatingType,
     core_optics::hit_map::{
         HitMap,
@@ -12,18 +11,17 @@ use crate::{
         rays_hit_map::{HitPoint, RaysHitMap},
     },
     error::{OpmResult, OpossumError},
-    geometry::Geometry,
     light::Rays,
     nodes::fluence_detector::Fluence,
-    refractive_index::RefractiveIndexType,
 };
 use core::fmt::Debug;
 
 /// An optical surface of a node: one face of the node's geometry, with what the surface adds to it,
 /// such as its [`CoatingType`].
 ///
-/// It holds no geometry. Where a ray hits the surface is asked of the geometry the node keeps (see
-/// [`Geometry::intersect`]), with the number of the face this surface is.
+/// It holds no geometry. The component it belongs to traces rays at it (see
+/// [`RuntimeGeometry::interact`](crate::core_optics::runtime_geometry::RuntimeGeometry::interact)),
+/// with the number of the face this surface is.
 #[derive(Clone)]
 pub struct OpticSurface {
     face: usize,
@@ -206,59 +204,6 @@ impl OpticSurface {
         self.lidt = lidt;
         Ok(())
     }
-
-    /// Propagates a bundle of rays through this specific surface.
-    /// Utilizes the Strategy Pattern to execute analyzer-specific behavior.
-    ///
-    /// # Parameters
-    /// * `geometry`: The geometry of the node this surface is a face of, which answers where the
-    ///   rays hit it.
-    /// * `rays_bundle`: The bundle of rays to be propagated.
-    /// * `node_uuid`: The UUID of the parent optical node (used for setting the origin of reflected rays).
-    /// * `refri_after_surf`: The refractive index after the surface.
-    /// * `backward`: The direction of propagation (`true` if backwards).
-    /// * `refraction_intended`: Indicates whether refraction should be calculated.
-    /// * `strategy`: The strategy defining the behavior of the current analysis mode.
-    ///
-    /// # Returns
-    /// For every bundle in `rays_bundle` after the call, whether each of its rays hit this surface
-    /// (see [`Rays::refract_on_surface`]). The ghost reflections appended from the cache of this
-    /// surface left it from a hit, so all of them count as hits.
-    ///
-    /// # Errors
-    /// This function errors if the optical calculations (refraction/reflection) or the
-    /// strategy-specific hooks (e.g., fluence evaluation) fail.
-    #[allow(clippy::too_many_arguments)]
-    pub fn propagate_rays(
-        &mut self,
-        geometry: &Geometry,
-        rays_bundle: &mut Vec<Rays>,
-        node_uuid: Uuid,
-        refri_after_surf: Option<&RefractiveIndexType>,
-        backward: bool,
-        refraction_intended: bool,
-        strategy: &dyn PropagationStrategy,
-    ) -> OpmResult<Vec<Vec<bool>>> {
-        let missed_strategy = strategy.missed_surface_strategy();
-        let mut hits_per_bundle = Vec::with_capacity(rays_bundle.len());
-        for rays in &mut *rays_bundle {
-            let (mut reflected, hits) = rays.refract_on_surface(
-                geometry,
-                self,
-                refri_after_surf,
-                refraction_intended,
-                &missed_strategy,
-            )?;
-            reflected.set_node_origin_uuid(node_uuid);
-            strategy.on_surface_interaction(self, rays, reflected, backward)?;
-            hits_per_bundle.push(hits);
-        }
-        for rays in self.get_rays_cache(backward) {
-            hits_per_bundle.push(vec![true; rays.nr_of_rays(false)]);
-            rays_bundle.push(rays.clone());
-        }
-        Ok(hits_per_bundle)
-    }
 }
 
 impl Debug for OpticSurface {
@@ -275,103 +220,13 @@ mod test {
     use super::OpticSurface;
     use crate::{
         J_per_cm2,
-        analyzers::RayTraceConfig,
-        apertures::{CircleShape, Outline},
         coatings::CoatingType,
         error::{OpmResult, OpossumError},
-        geometry::{Extruded, Geometry},
         joule,
         light::{Ray, Rays},
-        meter, millimeter, nanometer,
+        meter, nanometer,
     };
     use uuid::Uuid;
-
-    /// A plane through the node, its component reaching 5 mm around the node's axis.
-    fn bounded_plane() -> OpmResult<Geometry> {
-        Ok(Geometry::plane(Some(Outline::new(
-            CircleShape::new(millimeter!(5.0))?,
-            Vec::new(),
-        )?)))
-    }
-    /// A ray along z, the given distance off the axis in y.
-    fn ray_at(y: f64) -> OpmResult<Ray> {
-        Ray::new_collimated(millimeter!(0.0, y, -10.0), nanometer!(1000.0), joule!(1.0))
-    }
-    /// The surface pass tells for each ray of each bundle whether it hit. Ghost reflections cached
-    /// at the surface left it from a hit, so when they are appended they count as hits.
-    #[test]
-    fn propagation_tells_which_rays_hit() -> OpmResult<()> {
-        let mut surface = OpticSurface::default();
-        surface.set_forward_rays_cache(vec![Rays::from(vec![ray_at(0.0)?, ray_at(7.0)?])]);
-        let mut bundles = vec![Rays::from(vec![ray_at(4.9)?, ray_at(5.1)?])];
-        let hits = surface.propagate_rays(
-            &bounded_plane()?,
-            &mut bundles,
-            Uuid::new_v4(),
-            None,
-            false,
-            true,
-            &RayTraceConfig::default(),
-        )?;
-        assert_eq!(hits, [vec![true, false], vec![true, true]]);
-        assert_eq!(bundles.len(), 2);
-        Ok(())
-    }
-    /// A ray trace invalidates the rays the surface pass leaves below its energy threshold. The
-    /// positioning run keeps them: geometry alone places the optical axis.
-    #[test]
-    fn a_ray_trace_drops_rays_below_the_energy_threshold() -> OpmResult<()> {
-        let mut config = RayTraceConfig::default();
-        config.set_min_energy_per_ray(joule!(0.5))?;
-        for (config, valid) in [(config.for_positioning(), 2), (config, 1)] {
-            let weak = Ray::new_collimated(
-                millimeter!(0.0, 0.0, -10.0),
-                nanometer!(1000.0),
-                joule!(0.1),
-            )?;
-            let mut bundles = vec![Rays::from(vec![ray_at(0.0)?, weak])];
-            OpticSurface::default().propagate_rays(
-                &bounded_plane()?,
-                &mut bundles,
-                Uuid::new_v4(),
-                None,
-                false,
-                true,
-                &config,
-            )?;
-            assert_eq!(bundles[0].nr_of_rays(true), valid);
-        }
-        Ok(())
-    }
-    /// A surface is traced at the face of the geometry it names: the rear face of a plate here, so
-    /// a ray along the axis meets it 10 mm behind the front.
-    #[test]
-    fn a_surface_is_traced_at_the_face_it_names() -> OpmResult<()> {
-        let plate = Geometry::singlet(
-            millimeter!(f64::INFINITY),
-            millimeter!(f64::INFINITY),
-            millimeter!(10.0),
-            Outline::new(CircleShape::new(millimeter!(5.0))?, Vec::new())?,
-        )?;
-        let mut surface = OpticSurface::new(Extruded::REAR, CoatingType::IdealAR, J_per_cm2!(1.0))?;
-        assert_eq!(surface.face(), Extruded::REAR);
-        let mut bundles = vec![Rays::from(ray_at(0.0)?)];
-        surface.propagate_rays(
-            &plate,
-            &mut bundles,
-            Uuid::new_v4(),
-            None,
-            false,
-            true,
-            &RayTraceConfig::default(),
-        )?;
-        let ray = bundles[0]
-            .iter()
-            .next()
-            .ok_or_else(|| OpossumError::Other("the bundle lost its ray".into()))?;
-        assert_eq!(ray.position(), millimeter!(0.0, 0.0, 10.0));
-        Ok(())
-    }
 
     #[test]
     fn default() {

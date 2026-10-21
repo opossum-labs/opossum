@@ -5,13 +5,13 @@ use crate::{
         GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType},
+    core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType, surface_effect::Refraction},
     error::{OpmResult, OpossumError},
     geometry::{
         Geometry, SurfaceGeometry,
         body::{OPTIC_SHAPE, default_optic_shape},
     },
-    light::{LightData, LightRays, LightResult, Rays},
+    light::{LightData, LightRays, LightResult, Rays, rays::ReflectedPart},
     millimeter,
     nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
@@ -128,11 +128,11 @@ impl AnalysisGhostFocus for ParaxialSurface {
         let iso = self.effective_surface_iso(in_port)?;
         let hits = self.pass_through_surface_generic(
             in_port,
-            None,
+            &Refraction(None),
             &mut rays_bundle,
             config,
             false,
-            false,
+            ReflectedPart::Main,
         )?;
         for (rays, hits) in rays_bundle.iter_mut().zip(&hits) {
             rays.refract_paraxial(focal_length, &iso, hits)?;
@@ -167,11 +167,11 @@ impl AnalysisRayTrace for ParaxialSurface {
         let mut rays_bundle = vec![rays];
         let hits = self.pass_through_surface_generic(
             in_port,
-            None,
+            &Refraction(None),
             &mut rays_bundle,
             config,
             false,
-            true,
+            ReflectedPart::Ghost,
         )?;
         for (rays, hits) in rays_bundle.iter_mut().zip(&hits) {
             rays.refract_paraxial(focal_length, &iso, hits)?;

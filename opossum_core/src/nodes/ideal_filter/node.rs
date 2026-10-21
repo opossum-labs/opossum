@@ -8,13 +8,13 @@ use crate::{
         propagation_strategy::PropagationStrategy,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, OpticNodeExt, node_attr::HasNodeAttr},
+    core_optics::{NodeAttr, OpticNodeExt, node_attr::HasNodeAttr, surface_effect::Refraction},
     error::{OpmResult, OpossumError},
     geometry::{
         Geometry, SurfaceGeometry,
         body::{OPTIC_SHAPE, default_optic_shape},
     },
-    light::{LightData, LightRays, LightResult, Rays},
+    light::{LightData, LightRays, LightResult, Rays, rays::ReflectedPart},
     nodes::{FilterType, NodeRegistration, ideal_filter::filter_types::FilterConst},
     prelude::{FilterTypeBuilder, GhostFocusConfig, OpticNode, PortType, Proptype, RayTraceConfig},
     properties::validator::Validator,
@@ -166,11 +166,11 @@ impl AnalysisGhostFocus for IdealFilter {
         };
         let hits = self.pass_through_surface_generic(
             "input_1",
-            None,
+            &Refraction(None),
             &mut rays_bundle,
             config,
             false,
-            true,
+            ReflectedPart::Ghost,
         )?;
         for (rays, hits) in rays_bundle.iter_mut().zip(&hits) {
             rays.filter_energy(&filter_type, hits)?;
@@ -220,16 +220,15 @@ impl AnalysisRayTrace for IdealFilter {
         };
         let mut rays = r.clone();
         let rays_before = rays.nr_of_rays(true);
-        let Some((geometry, surf)) = self.node_attr_mut().traced_surface_mut(in_port) else {
+        let Some(runtime) = self.node_attr_mut().runtime_mut() else {
             return Err(OpossumError::Analysis("no surface found. Aborting".into()));
         };
-        let refraction_intended = true;
-        let (_, hits) = rays.refract_on_surface(
-            geometry,
-            surf,
-            None,
-            refraction_intended,
-            config.missed_surface_strategy(),
+        let (_, hits) = runtime.interact(
+            in_port,
+            &mut rays,
+            &Refraction(None),
+            ReflectedPart::Ghost,
+            *config.missed_surface_strategy(),
         )?;
         // A ray that ran past the filter is not filtered.
         rays.filter_energy(&filter_type, &hits)?;

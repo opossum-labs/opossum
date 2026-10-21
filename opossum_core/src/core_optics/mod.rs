@@ -7,6 +7,7 @@ pub mod optic_ports;
 pub mod optic_ref;
 pub mod optic_surface;
 pub mod runtime_geometry;
+pub mod surface_effect;
 pub mod volumetric;
 pub use node_attr::NodeAttr;
 pub use node_attr_ext::NodeAttrExt;
