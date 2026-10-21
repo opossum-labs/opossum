@@ -177,7 +177,7 @@ impl AnalysisEnergy for RayPropagationVisualizer {
         config: &EnergyConfig,
     ) -> OpmResult<LightResult> {
         let result =
-            self.unified_analyze_single_surface_node(incoming_data, config, "input_1", None)?;
+            self.unified_analyze_single_surface_node(incoming_data, config, "input_1")?;
         // Energy analysis is not supported for propagation visualization; triggers report warning
         self.light_data = Some(LightData::Energy(Spectrum::default()));
         Ok(result)

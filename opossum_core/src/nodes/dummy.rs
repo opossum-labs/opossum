@@ -86,7 +86,7 @@ impl AnalysisRayTrace for Dummy {
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
         let (in_port, _) = single_io_port_names(self)?;
-        self.unified_analyze_single_surface_node(incoming_data, config, &in_port, None)
+        self.unified_analyze_single_surface_node(incoming_data, config, &in_port)
     }
 }
 

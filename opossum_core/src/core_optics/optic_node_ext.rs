@@ -173,7 +173,6 @@ pub trait OpticNodeExt {
     /// * `incoming_data`: The [`LightResult`] arriving at the node's input port.
     /// * `strategy`: The analyzer-specific [`PropagationStrategy`] determining thresholds and physical rules.
     /// * `optic_surf_name`: The name of the interacting surface (typically `"input_1"`).
-    /// * `refri_after_surf`: An optional refractive index after the surface. Usually `None` for non-refracting detectors.
     ///
     /// # Errors
     ///
@@ -183,7 +182,6 @@ pub trait OpticNodeExt {
         incoming_data: LightResult,
         strategy: &dyn PropagationStrategy,
         optic_surf_name: &str,
-        refri_after_surf: Option<RefractiveIndexType>,
     ) -> OpmResult<LightResult>;
 
     /// Cut copies of the ray bundles that passed a surface to what the surface records.
@@ -428,13 +426,12 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         mut incoming_data: LightResult,
         strategy: &dyn PropagationStrategy,
         optic_surf_name: &str,
-        refri_after_surf: Option<RefractiveIndexType>,
     ) -> OpmResult<LightResult> {
         let (in_port_name, out_port_name) = single_io_port_names(self)?;
         let Some(data) = incoming_data.remove(&in_port_name) else {
             return Ok(LightResult::default());
         };
-        let refraction = Refraction(refri_after_surf.as_ref());
+        let refraction = Refraction(None);
 
         match data {
             LightData::Geometric(rays) => {
@@ -589,7 +586,6 @@ mod test {
                 LightResult::default(),
                 &RayTraceConfig::default(),
                 "input_1",
-                None,
             )
             .unwrap_err();
         assert!(
@@ -607,7 +603,6 @@ mod test {
             LightResult::default(),
             &RayTraceConfig::default(),
             "input_1",
-            None,
         )?;
         assert!(out.is_empty());
         Ok(())

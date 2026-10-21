@@ -217,7 +217,7 @@ pub trait AnalysisGhostFocus: OpticNode + AnalysisRayTrace {
     ) -> OpmResult<LightRays> {
         let incoming_result = light_rays_to_light_result(incoming_data);
         let out_result =
-            self.unified_analyze_single_surface_node(incoming_result, config, "input_1", None)?;
+            self.unified_analyze_single_surface_node(incoming_result, config, "input_1")?;
         light_result_to_light_rays(out_result)
     }
 }
@@ -303,7 +303,6 @@ mod test_ghost_focus_analyzer {
             LightResult::default(),
             &config,
             "input_1",
-            None,
         )?;
         let output_data = out_result.get("output_1");
 
