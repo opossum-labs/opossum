@@ -11,7 +11,7 @@ use crate::{
         surface_effect::{Refraction, SurfaceEffect},
     },
     error::{OpmResult, OpossumError},
-    geometry::body::OPTIC_SHAPE,
+    geometry::{Geometry, body::OPTIC_SHAPE},
     light::{LightData, LightResult, Rays, rays::ReflectedPart},
     nodes::fluence_detector::Fluence,
     properties::Proptype,
@@ -86,6 +86,19 @@ pub trait OpticNodeExt {
     ///
     /// This function returns an error if the port name does not exist.
     fn set_lidt(&mut self, port_type: &PortType, port_name: &str, lidt: Fluence) -> OpmResult<()>;
+
+    /// Create this node's [`Geometry`](crate::geometry::Geometry) from its current properties (see
+    /// [`OpticNode::create_geometry`]) and move it to where the node sits: its position followed by
+    /// its alignment, or the identity for a node that has not been placed.
+    ///
+    /// # Returns
+    ///
+    /// The placed geometry, or `None` for a node without a shape of its own.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the geometry cannot be derived from the properties.
+    fn placed_geometry(&self) -> OpmResult<Option<Geometry>>;
 
     /// Move this node's [`Geometry`](crate::geometry::Geometry) to where the node sits, keep it as
     /// the node's runtime geometry and install a surface on one of its faces under each of the given
@@ -333,18 +346,25 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         self.update_surfaces()
     }
 
+    fn placed_geometry(&self) -> OpmResult<Option<Geometry>> {
+        let mut geometry = self.create_geometry()?;
+        if let Some(geometry) = &mut geometry {
+            geometry.move_by(&self.effective_node_iso().unwrap_or_else(Isometry::identity));
+        }
+        Ok(geometry)
+    }
+
     fn install_geometry(
         &mut self,
         inputs: &[(&str, usize)],
         outputs: &[(&str, usize)],
     ) -> OpmResult<()> {
-        let Some(geometry) = self.geometry()? else {
+        let Some(placed) = self.placed_geometry()? else {
             return Err(OpossumError::Other(format!(
                 "node '{}' has no geometry to install surfaces from",
                 self.name()
             )));
         };
-        let placed = geometry.moved(&self.effective_node_iso().unwrap_or_else(Isometry::identity));
         let mut surfaces = RuntimeSurfaces::default();
         for (ports, port_type, installed) in [
             (inputs, PortType::Input, &mut surfaces.inputs),

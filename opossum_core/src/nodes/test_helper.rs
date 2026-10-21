@@ -675,10 +675,8 @@ pub mod helper {
     ///
     /// Returns an error if the node's geometry cannot be derived or if the node has none.
     pub fn placed_geometry<T: OpticNode + ?Sized>(node: &T) -> OpmResult<Geometry> {
-        let geometry = node.geometry()?.ok_or_else(|| {
-            OpossumError::Other(format!("node '{}' has no geometry", node.name()))
-        })?;
-        Ok(geometry.moved(&node.effective_node_iso().unwrap_or_else(Isometry::identity)))
+        node.placed_geometry()?
+            .ok_or_else(|| OpossumError::Other(format!("node '{}' has no geometry", node.name())))
     }
 
     /// Return the volume a geometry encloses.
@@ -1015,10 +1013,9 @@ pub mod helper {
     /// Returns an error if the geometry cannot be derived, or if it has no face an installed
     /// surface sits on.
     pub fn geometry_snapshot<T: OpticNode + ?Sized>(node: &T) -> OpmResult<Vec<String>> {
-        let Some(geometry) = node.geometry()? else {
+        let Some(placed) = node.placed_geometry()? else {
             return Ok(Vec::new());
         };
-        let placed = geometry.moved(&node.effective_node_iso().unwrap_or_else(Isometry::identity));
         describe_faces_under_ports(node, |face| placed.kind().face(face).cloned())
     }
 

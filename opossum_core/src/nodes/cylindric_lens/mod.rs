@@ -155,7 +155,7 @@ impl CylindricLens {
 
 impl Volumetric for CylindricLens {}
 impl OpticNode for CylindricLens {
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         let (
             Ok(Proptype::Curvature(front_curvature)),
             Ok(Proptype::Curvature(rear_curvature)),

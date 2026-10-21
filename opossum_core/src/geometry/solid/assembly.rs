@@ -40,7 +40,7 @@ impl Part {
     /// the parts of an inner assembly are added directly instead.
     pub fn new(
         placement: &Isometry,
-        geometry: &Geometry,
+        mut geometry: Geometry,
         material: AssetRef<Material>,
     ) -> OpmResult<Self> {
         if geometry.kind().as_body().is_none() {
@@ -54,17 +54,8 @@ impl Part {
                     .into(),
             ));
         }
-        Ok(Self {
-            geometry: geometry.moved(placement),
-            material,
-        })
-    }
-    /// Return this part moved by an isometry.
-    fn moved(&self, by: &Isometry) -> Self {
-        Self {
-            geometry: self.geometry.moved(by),
-            material: self.material.clone(),
-        }
+        geometry.move_by(placement);
+        Ok(Self { geometry, material })
     }
 }
 
@@ -189,15 +180,6 @@ impl Assembly {
             interfaces,
         })
     }
-    /// Return this assembly moved by an isometry (see [`Geometry::moved`]).
-    #[must_use]
-    pub fn moved(&self, by: &Isometry) -> Self {
-        Self {
-            frame: by.append(&self.frame),
-            parts: self.parts.iter().map(|part| part.moved(by)).collect(),
-            interfaces: self.interfaces.clone(),
-        }
-    }
     /// Return the part a face of the assembly belongs to, and the number the face has in the solid
     /// of that part.
     ///
@@ -241,8 +223,11 @@ impl GeometryKind for Assembly {
     fn as_body(&self) -> Option<&dyn Body> {
         Some(self)
     }
-    fn moved(&self, by: &Isometry) -> Geometry {
-        Geometry::Assembly(Self::moved(self, by))
+    fn move_by(&mut self, by: &Isometry) {
+        self.frame = by.append(&self.frame);
+        for part in &mut self.parts {
+            part.geometry.move_by(by);
+        }
     }
 }
 
@@ -312,7 +297,7 @@ mod test {
     fn part_of(geometry: Geometry, placement: Isometry) -> OpmResult<Part> {
         Part::new(
             &placement,
-            &geometry,
+            geometry,
             AssetRef::Inline(Material::from(&RefrIndexConst::new(1.5)?)),
         )
     }
@@ -429,7 +414,7 @@ mod test {
             vec![Interface::new(FaceId::new(0, 1), FaceId::new(1, 0))],
         )?;
         let frame = Isometry::new_along_z(millimeter!(100.0))?;
-        let moved = doublet.moved(&frame);
+        let moved = placed_at(&doublet, &frame);
         assert_eq!(moved.face_count(), 4);
         assert!(moved.window().is_none());
         assert!(moved.face(4).is_none());
@@ -529,6 +514,12 @@ mod test {
     fn node_frame() -> OpmResult<Isometry> {
         Isometry::new(millimeter!(3.0, -2.0, 100.0), degree!(10.0, -20.0, 30.0))
     }
+    /// A copy of the assembly, moved to the given node frame.
+    fn placed_at(assembly: &Assembly, node_frame: &Isometry) -> Assembly {
+        let mut placed = assembly.clone();
+        placed.move_by(node_frame);
+        placed
+    }
     /// The chord of a ray through one part of the assembly on its own, placed where the assembly
     /// places it.
     fn chord_through_part(
@@ -541,9 +532,9 @@ mod test {
             .parts
             .get(index)
             .ok_or_else(|| OpossumError::Other(format!("there is no part {index}")))?;
-        Ok(part
-            .geometry
-            .moved(node_frame)
+        let mut geometry = part.geometry.clone();
+        geometry.move_by(node_frame);
+        Ok(geometry
             .kind()
             .as_body()
             .and_then(|body| body.path_length_inside(ray)))
@@ -560,7 +551,7 @@ mod test {
     #[test]
     fn an_assembly_contains_what_one_of_its_parts_contains() -> OpmResult<()> {
         let node_frame = node_frame()?;
-        let placed = side_by_side()?.moved(&node_frame);
+        let placed = placed_at(&side_by_side()?, &node_frame);
         for ((x, y, z), inside) in [
             ((0.0, 0.0, 2.0), true),
             ((30.0, 0.0, 10.0), true),
@@ -582,7 +573,7 @@ mod test {
     #[test]
     fn a_face_of_an_assembly_ends_where_the_solid_of_its_part_does() -> OpmResult<()> {
         let node_frame = node_frame()?;
-        let placed = side_by_side()?.moved(&node_frame);
+        let placed = placed_at(&side_by_side()?, &node_frame);
         // The points lie on the spheres, the sheet check allows a nanometer: the front of the crown
         // has a radius of 60 mm, the front of the second lens one of -40 mm and its vertex at z = 8.
         let on_sphere = |radius: f64, off_axis: f64| {
@@ -614,7 +605,7 @@ mod test {
     fn a_ray_travels_through_the_parts_one_after_the_other() -> OpmResult<()> {
         let node_frame = node_frame()?;
         let doublet = doublet()?;
-        let placed = doublet.moved(&node_frame);
+        let placed = placed_at(&doublet, &node_frame);
         for (x, direction) in [(0.0, Vector3::z()), (4.0, Vector3::new(0.05, 0.0, 1.0))] {
             let ray = test_ray(
                 global(&node_frame, x, 3.0, -20.0),
@@ -640,8 +631,7 @@ mod test {
             global(&node_frame, 0.0, 0.0, -20.0),
             node_frame.transform_vector_f64(&Vector3::z()),
         )?;
-        let chord = doublet
-            .moved(&node_frame)
+        let chord = placed
             .path_length_inside(&axis)
             .ok_or_else(|| OpossumError::Other("the ray missed the doublet".into()))?;
         assert_abs_diff_eq!(chord.get::<millimeter>(), 10.0, epsilon = 1e-9);
@@ -652,7 +642,7 @@ mod test {
     fn a_ray_through_one_part_of_an_assembly_has_the_chord_of_that_part() -> OpmResult<()> {
         let node_frame = node_frame()?;
         let assembly = side_by_side()?;
-        let placed = assembly.moved(&node_frame);
+        let placed = placed_at(&assembly, &node_frame);
         for (x, part) in [(0.0, 0), (30.0, 1)] {
             let ray = test_ray(
                 global(&node_frame, x, 0.0, -20.0),
@@ -677,7 +667,7 @@ mod test {
     #[test]
     fn a_ray_crosses_the_prisms_of_a_cube_one_after_the_other() -> OpmResult<()> {
         let node_frame = node_frame()?;
-        let placed = cube()?.moved(&node_frame);
+        let placed = placed_at(&cube()?, &node_frame);
         let ray = test_ray(
             global(&node_frame, 0.0, 0.0, -20.0),
             node_frame.transform_vector_f64(&Vector3::z()),
@@ -719,7 +709,7 @@ mod test {
     #[test]
     fn an_assembly_has_the_frame_of_its_node() -> OpmResult<()> {
         let node_frame = node_frame()?;
-        assert_eq!(doublet()?.moved(&node_frame).isometry(), node_frame);
+        assert_eq!(placed_at(&doublet()?, &node_frame).isometry(), node_frame);
         Ok(())
     }
     #[test]

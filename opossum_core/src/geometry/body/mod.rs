@@ -8,7 +8,7 @@
 //! on.
 //!
 //! A body answers in the frame its solid is stated in; moved to its node (see
-//! [`Geometry::moved`](crate::geometry::Geometry::moved)), it answers there. Every kind of solid
+//! [`Geometry::move_by`](crate::geometry::Geometry::move_by)), it answers there. Every kind of solid
 //! implements the trait next to its definition and hands it out through
 //! [`GeometryKind::as_body`](crate::geometry::GeometryKind::as_body): an
 //! [`Extruded`](crate::geometry::Extruded) solid, a volume bounded

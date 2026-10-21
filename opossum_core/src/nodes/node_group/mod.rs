@@ -707,7 +707,7 @@ impl NodeGroup {
 }
 
 impl OpticNode for NodeGroup {
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(None)
     }
     fn ports(&self) -> OpticPorts {

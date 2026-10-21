@@ -313,13 +313,12 @@ mod test {
     /// Plane faces on purpose: the chord of an on-axis ray is then exactly the thickness, so every
     /// expected value below can be worked out from `exp(g₀·L)` by hand.
     fn disk(thickness: Length, radius: Length) -> OpmResult<Extruded> {
-        Ok(Extruded::new(
+        Extruded::new(
             Isometry::identity(),
-            &Face::new(SurfaceShape::Plane, Isometry::identity()),
-            &Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
+            Face::new(SurfaceShape::Plane, Isometry::identity()),
+            Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
             Outline::new(CircleShape::new(radius)?, Vec::new())?,
-        )?
-        .moved(&Isometry::identity()))
+        )
     }
     /// The disk every physics test below is performed on: 10 mm thick, 5 mm in radius.
     fn test_disk() -> OpmResult<Extruded> {
@@ -915,8 +914,8 @@ mod test {
         );
         let body = Extruded::new(
             Isometry::identity(),
-            &entrance,
-            &exit,
+            entrance,
+            exit,
             Outline::new(CircleShape::new(millimeter!(aperture_mm))?, Vec::new())?,
         )?;
 
@@ -975,8 +974,8 @@ mod test {
         );
         let body = Extruded::new(
             Isometry::identity(),
-            &entrance,
-            &exit,
+            entrance,
+            exit,
             Outline::new(CircleShape::new(millimeter!(aperture_mm))?, Vec::new())?,
         )?;
 

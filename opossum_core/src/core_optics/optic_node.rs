@@ -162,7 +162,7 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     /// # Errors
     ///
     /// Returns an error if a geometry property cannot be read or describes no valid shape.
-    fn geometry(&self) -> OpmResult<Option<Geometry>>;
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>>;
 
     /// Return the effective (input & output) ports of this [`OpticNode`].
     ///

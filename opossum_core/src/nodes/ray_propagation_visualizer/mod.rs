@@ -107,7 +107,7 @@ impl RayPropagationVisualizer {
 }
 
 impl OpticNode for RayPropagationVisualizer {
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::plane(None)))
     }
     fn set_apodization_warning(&mut self, apodized: bool) {

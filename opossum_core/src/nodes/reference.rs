@@ -126,7 +126,7 @@ impl NodeReference {
 
 impl OpticNode for NodeReference {
     /// A reference has no shape of its own; it is traced through the node it refers to.
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(None)
     }
     fn ports(&self) -> OpticPorts {

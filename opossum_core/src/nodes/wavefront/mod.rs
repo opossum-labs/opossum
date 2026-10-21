@@ -184,7 +184,7 @@ impl WaveFront {
 impl OpticNode for WaveFront {
     /// The surface wavefronts are measured on: the reference surface, or a plane if none is set,
     /// within the recording window.
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::detector(
             self.reference_surface
                 .clone()

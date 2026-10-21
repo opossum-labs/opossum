@@ -59,7 +59,7 @@ impl Display for SourcePort {
 }
 
 impl OpticNode for SourcePort {
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::plane(None)))
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {

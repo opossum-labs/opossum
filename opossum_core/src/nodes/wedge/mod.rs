@@ -137,7 +137,7 @@ impl Wedge {
 
 impl Volumetric for Wedge {}
 impl OpticNode for Wedge {
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         let (Ok(Proptype::Length(center_thickness)), Ok(Proptype::Angle(wedge_angle))) = (
             self.node_attr.get_property("center thickness"),
             self.node_attr.get_property("wedge"),

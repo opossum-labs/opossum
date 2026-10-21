@@ -3,8 +3,9 @@
 //!
 //! A node's properties (curvatures, thickness, optic shape, ...) are what a user enters; the node
 //! derives a [`Geometry`] from them (see
-//! [`OpticNode::geometry`](crate::core_optics::OpticNode::geometry)), stated relative to the node.
-//! Moved to where the node sits (see [`Geometry::moved`]), the same geometry is what rays are
+//! [`OpticNode::create_geometry`](crate::core_optics::OpticNode::create_geometry)), stated
+//! relative to the node.
+//! Moved to where the node sits (see [`Geometry::move_by`]), the same geometry is what rays are
 //! traced against. The node type thereby acts as a preset: a lens is a [`Geometry::singlet`] whose
 //! parameters are the lens's properties.
 //!
@@ -202,21 +203,20 @@ impl Geometry {
     ) -> OpmResult<Self> {
         Ok(Self::Extruded(Box::new(Extruded::new(
             Isometry::identity(),
-            &Face::new(front, Isometry::identity()),
-            &Face::new(rear, rear_vertex),
+            Face::new(front, Isometry::identity()),
+            Face::new(rear, rear_vertex),
             outline,
         )?)))
     }
-    /// Return this geometry moved by an isometry, such as the placement of its node.
+    /// Move this geometry by an isometry, such as the placement of its node.
     ///
     /// Every face and every rim is moved; the geometry is the same thing at another place.
     ///
     /// # Arguments
     ///
     /// * `by` - the frame this geometry is stated in, given in the frame it is moved to.
-    #[must_use]
-    pub fn moved(&self, by: &Isometry) -> Self {
-        self.kind().moved(by)
+    pub fn move_by(&mut self, by: &Isometry) {
+        self.kind_mut().move_by(by);
     }
     /// Return the kind of geometry this is, as the one thing every question is asked of.
     #[must_use]
@@ -224,6 +224,15 @@ impl Geometry {
         match self {
             Self::Surface(surface) => &**surface,
             Self::Extruded(extruded) => &**extruded,
+            Self::Parametric(parametric) => parametric,
+            Self::Assembly(assembly) => assembly,
+        }
+    }
+    /// Return the kind of geometry this is, as [`Geometry::kind`] does, mutably.
+    pub fn kind_mut(&mut self) -> &mut dyn GeometryKind {
+        match self {
+            Self::Surface(surface) => &mut **surface,
+            Self::Extruded(extruded) => &mut **extruded,
             Self::Parametric(parametric) => parametric,
             Self::Assembly(assembly) => assembly,
         }
@@ -342,12 +351,12 @@ pub trait GeometryKind {
     /// Return the volume this geometry encloses, or `None` for a single surface, which encloses
     /// none.
     fn as_body(&self) -> Option<&dyn Body>;
-    /// Return this geometry moved by an isometry (see [`Geometry::moved`]).
+    /// Move this geometry by an isometry (see [`Geometry::move_by`]).
     ///
     /// # Arguments
     ///
     /// * `by` - the frame this geometry is stated in, given in the frame it is moved to.
-    fn moved(&self, by: &Isometry) -> Geometry;
+    fn move_by(&mut self, by: &Isometry);
 }
 
 /// A single surface without thickness.
@@ -376,12 +385,11 @@ pub enum SurfaceExtent {
 }
 
 impl SurfaceExtent {
-    /// Return this extent moved by an isometry (see [`Rim::moved`]).
-    fn moved(&self, by: &Isometry) -> Self {
+    /// Move the rim of this extent, if there is one, by an isometry (see [`Rim::move_by`]).
+    fn move_by(&mut self, by: &Isometry) {
         match self {
-            Self::Open => Self::Open,
-            Self::Edge(rim) => Self::Edge(rim.moved(by)),
-            Self::Window(rim) => Self::Window(rim.moved(by)),
+            Self::Open => {}
+            Self::Edge(rim) | Self::Window(rim) => rim.move_by(by),
         }
     }
 }
@@ -447,11 +455,9 @@ impl GeometryKind for SurfaceGeometry {
     fn as_body(&self) -> Option<&dyn Body> {
         None
     }
-    fn moved(&self, by: &Isometry) -> Geometry {
-        Geometry::Surface(Box::new(Self {
-            face: self.face.moved(by),
-            extent: self.extent.moved(by),
-        }))
+    fn move_by(&mut self, by: &Isometry) {
+        self.face.move_by(by);
+        self.extent.move_by(by);
     }
 }
 
@@ -482,6 +488,12 @@ mod test {
             .face(index)
             .map(|face| *face.frame())
             .ok_or_else(|| OpossumError::Other(format!("there is no face {index}")))
+    }
+    /// A copy of the geometry, moved by the given isometry.
+    fn moved_copy(geometry: &Geometry, by: &Isometry) -> Geometry {
+        let mut moved = geometry.clone();
+        moved.move_by(by);
+        moved
     }
     #[test]
     fn a_surface_has_one_face() {
@@ -540,7 +552,7 @@ mod test {
             Geometry::surface(axis, SurfaceShape::Plane, vertex, Some(circle()?))?,
         ];
         for geometry in geometries {
-            let moved = geometry.moved(&node_frame);
+            let moved = moved_copy(&geometry, &node_frame);
             assert_eq!(moved.kind().face_count(), geometry.kind().face_count());
             for index in 0..geometry.kind().face_count() {
                 assert_eq!(
@@ -554,8 +566,7 @@ mod test {
         let point = millimeter!(23.0, 0.0, 12.0);
         assert!(surface.kind().includes(SurfaceGeometry::FACE, &point));
         assert!(
-            surface
-                .moved(&node_frame)
+            moved_copy(&surface, &node_frame)
                 .kind()
                 .includes(SurfaceGeometry::FACE, &node_frame.transform_point(&point))
         );
@@ -570,14 +581,14 @@ mod test {
             Side::Behind,
         )])?);
         let glass = AssetRef::Inline(Material::from(&RefrIndexConst::new(1.5)?));
-        let part = Part::new(&Isometry::identity(), &parametric, glass)?;
+        let part = Part::new(&Isometry::identity(), parametric.clone(), glass)?;
         let assembly = Geometry::Assembly(Assembly::new(vec![part], vec![])?);
         let frame = Isometry::new(millimeter!(1.0, -2.0, 30.0), degree!(10.0, 5.0, 0.0))?;
         for geometry in [parametric, assembly] {
             assert_eq!(geometry.kind().face_count(), 1);
             assert!(geometry.kind().as_body().is_some());
             assert_eq!(
-                frame_of(&geometry.moved(&frame), 0)?,
+                frame_of(&moved_copy(&geometry, &frame), 0)?,
                 frame.append(&frame_of(&geometry, 0)?)
             );
         }
@@ -717,8 +728,8 @@ mod test {
         let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
         let extruded = Geometry::Extruded(Box::new(Extruded::new(
             axis,
-            &Face::new(SurfaceShape::Plane, Isometry::identity()),
-            &Face::new(
+            Face::new(SurfaceShape::Plane, Isometry::identity()),
+            Face::new(
                 SurfaceShape::Plane,
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),
@@ -743,7 +754,7 @@ mod test {
                 joule!(1.0),
             )
         };
-        let mirror = Geometry::plane(Some(circle()?)).moved(&frame);
+        let mirror = moved_copy(&Geometry::plane(Some(circle()?)), &frame);
         let hit = mirror
             .intersect(SurfaceGeometry::FACE, &ray_at(3.0)?)
             .ok_or_else(|| OpossumError::Other("the ray missed the mirror".into()))?;
@@ -771,7 +782,10 @@ mod test {
                 .is_none()
         );
         // A detector is hit there too, but does not record it.
-        let detector = Geometry::detector(SurfaceShape::Plane, Some(circle()?))?.moved(&frame);
+        let detector = moved_copy(
+            &Geometry::detector(SurfaceShape::Plane, Some(circle()?))?,
+            &frame,
+        );
         let outside = detector
             .intersect(SurfaceGeometry::FACE, &ray_at(12.0)?)
             .ok_or_else(|| OpossumError::Other("the ray missed the detector".into()))?;

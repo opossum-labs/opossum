@@ -91,7 +91,7 @@ impl AnalysisRayTrace for Dummy {
 }
 
 impl OpticNode for Dummy {
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::plane(self.cross_section()?)))
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {

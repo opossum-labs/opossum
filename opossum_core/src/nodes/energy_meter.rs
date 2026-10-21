@@ -197,7 +197,7 @@ impl EnergyMeter {
 }
 
 impl OpticNode for EnergyMeter {
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::detector(
             SurfaceShape::Plane,
             self.cross_section()?,

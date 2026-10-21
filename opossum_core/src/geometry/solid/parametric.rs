@@ -9,7 +9,7 @@ use super::{Side, face_hits};
 use crate::{
     error::{OpmResult, OpossumError},
     geometry::{
-        Face, Geometry, GeometryKind, Rim,
+        Face, GeometryKind, Rim,
         body::{Body, BoundingBox},
     },
     light::Ray,
@@ -47,18 +47,6 @@ impl ParametricSolid {
             faces,
         })
     }
-    /// Return this solid moved by an isometry (see [`Geometry::moved`]).
-    #[must_use]
-    pub fn moved(&self, by: &Isometry) -> Self {
-        Self {
-            frame: by.append(&self.frame),
-            faces: self
-                .faces
-                .iter()
-                .map(|(face, side)| (face.moved(by), *side))
-                .collect(),
-        }
-    }
     /// Return, for every face in the order they are numbered, whether the point lies on the side of
     /// it that is inside the solid.
     ///
@@ -95,8 +83,11 @@ impl GeometryKind for ParametricSolid {
     fn as_body(&self) -> Option<&dyn Body> {
         Some(self)
     }
-    fn moved(&self, by: &Isometry) -> Geometry {
-        Geometry::Parametric(Self::moved(self, by))
+    fn move_by(&mut self, by: &Isometry) {
+        self.frame = by.append(&self.frame);
+        for (face, _) in &mut self.faces {
+            face.move_by(by);
+        }
     }
 }
 
@@ -180,7 +171,9 @@ mod test {
     }
     /// The block placed at the given node frame.
     fn placed_block(node_frame: &Isometry) -> OpmResult<ParametricSolid> {
-        Ok(block()?.moved(node_frame))
+        let mut block = block()?;
+        block.move_by(node_frame);
+        Ok(block)
     }
     fn test_ray(position: Point3<Length>, direction: Vector3<f64>) -> OpmResult<Ray> {
         Ray::new(position, direction, nanometer!(1053.0), joule!(1.0))
@@ -214,7 +207,8 @@ mod test {
             ),
         ])?;
         let frame = Isometry::new_along_z(millimeter!(100.0))?;
-        let moved = solid.moved(&frame);
+        let mut moved = solid.clone();
+        moved.move_by(&frame);
         assert_eq!(moved.face_count(), 3);
         assert!(moved.window().is_none());
         for (index, z) in [0.0, 10.0, 2.0].into_iter().enumerate() {

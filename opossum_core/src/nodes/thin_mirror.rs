@@ -124,7 +124,7 @@ impl ThinMirror {
     }
 }
 impl OpticNode for ThinMirror {
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         let Ok(Proptype::Curvature(curvature)) = self.node_attr.get_property("curvature") else {
             return Err(OpossumError::Analysis("cannot read curvature".into()));
         };

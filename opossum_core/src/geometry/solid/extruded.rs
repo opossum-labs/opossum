@@ -15,7 +15,7 @@ use crate::{
     apertures::Outline,
     error::{OpmResult, OpossumError},
     geometry::{
-        Face, Geometry, GeometryKind, Rim,
+        Face, GeometryKind, Rim,
         body::{Body, BoundingBox},
     },
     light::Ray,
@@ -49,14 +49,21 @@ impl Extruded {
     ///
     /// This function returns an error if a face is curved too tightly to reach the edge of the
     /// profile.
-    pub fn new(axis: Isometry, front: &Face, rear: &Face, outline: Outline) -> OpmResult<Self> {
+    pub fn new(
+        axis: Isometry,
+        mut front: Face,
+        mut rear: Face,
+        outline: Outline,
+    ) -> OpmResult<Self> {
         let reach = outline.transversal_reach();
         front.check_reach(reach, "front face")?;
         rear.check_reach(reach, "rear face")?;
+        front.move_by(&axis);
+        rear.move_by(&axis);
         Ok(Self {
             rim: Rim::new(outline, axis),
-            front: front.moved(&axis),
-            rear: rear.moved(&axis),
+            front,
+            rear,
         })
     }
     /// Return the rim bounding this solid sideways: its profile and the axis it is extruded along.
@@ -75,15 +82,6 @@ impl Extruded {
             Self::FRONT => Some((&self.front, Side::Behind)),
             Self::REAR => Some((&self.rear, Side::InFront)),
             _ => None,
-        }
-    }
-    /// Return this solid moved by an isometry (see [`Geometry::moved`]).
-    #[must_use]
-    pub fn moved(&self, by: &Isometry) -> Self {
-        Self {
-            rim: self.rim.moved(by),
-            front: self.front.moved(by),
-            rear: self.rear.moved(by),
         }
     }
 }
@@ -105,8 +103,10 @@ impl GeometryKind for Extruded {
     fn as_body(&self) -> Option<&dyn Body> {
         Some(self)
     }
-    fn moved(&self, by: &Isometry) -> Geometry {
-        Geometry::Extruded(Box::new(Self::moved(self, by)))
+    fn move_by(&mut self, by: &Isometry) {
+        self.rim.move_by(by);
+        self.front.move_by(by);
+        self.rear.move_by(by);
     }
 }
 
@@ -320,7 +320,9 @@ mod test {
         outline: Outline,
         node_frame: Isometry,
     ) -> OpmResult<Extruded> {
-        Ok(Extruded::new(Isometry::identity(), &front, &rear, outline)?.moved(&node_frame))
+        let mut body = Extruded::new(Isometry::identity(), front, rear, outline)?;
+        body.move_by(&node_frame);
+        Ok(body)
     }
     /// Create a disk of the given thickness and radius, with its entrance surface at z = 0.
     fn disk(thickness: Length, radius: Length) -> OpmResult<Extruded> {
@@ -804,8 +806,8 @@ mod test {
         let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
         let extruded = Extruded::new(
             axis,
-            &Face::new(SurfaceShape::Plane, Isometry::identity()),
-            &Face::new(
+            Face::new(SurfaceShape::Plane, Isometry::identity()),
+            Face::new(
                 SurfaceShape::Plane,
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),
@@ -827,17 +829,17 @@ mod test {
     #[test]
     fn an_extruded_body_is_placed_along_its_axis() -> OpmResult<()> {
         let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
-        let extruded = Extruded::new(
+        let mut body = Extruded::new(
             axis,
-            &Face::new(SurfaceShape::Plane, Isometry::identity()),
-            &Face::new(
+            Face::new(SurfaceShape::Plane, Isometry::identity()),
+            Face::new(
                 SurfaceShape::Plane,
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),
             circular_cross_section(millimeter!(12.5))?,
         )?;
         let node_frame = Isometry::new(millimeter!(0.0, 5.0, 0.0), degree!(0.0, 0.0, 0.0))?;
-        let body = extruded.moved(&node_frame);
+        body.move_by(&node_frame);
         assert_eq!(body.isometry(), node_frame.append(&axis));
         // halfway along the extrusion axis, which runs along the node's x axis
         let halfway = node_frame
@@ -851,17 +853,17 @@ mod test {
     #[test]
     fn an_extruded_body_measures_chords_and_its_box_along_its_axis() -> OpmResult<()> {
         let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
-        let extruded = Extruded::new(
+        let mut body = Extruded::new(
             axis,
-            &Face::new(SurfaceShape::Plane, Isometry::identity()),
-            &Face::new(
+            Face::new(SurfaceShape::Plane, Isometry::identity()),
+            Face::new(
                 SurfaceShape::Plane,
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),
             circular_cross_section(millimeter!(12.5))?,
         )?;
         let node_frame = Isometry::new(millimeter!(0.0, 5.0, 0.0), degree!(0.0, 0.0, 0.0))?;
-        let body = extruded.moved(&node_frame);
+        body.move_by(&node_frame);
         // The extrusion axis runs along the node's x axis, from x = 3 mm to x = 23 mm, 5 mm off the
         // node's origin in y. The circle of 12.5 mm radius lies around that line.
         let ray_at = |y: f64, z: f64| {

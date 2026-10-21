@@ -1639,7 +1639,7 @@ mod test {
         let far = millimeter!(1.0e6, 1.0e6, 0.0);
         for (node_type, _) in node_types() {
             let optic_ref = create_node_ref(node_type)?;
-            let geometry = optic_ref.geometry()?;
+            let geometry = optic_ref.create_geometry()?;
             let window = geometry
                 .as_ref()
                 .and_then(|geometry| geometry.kind().window().cloned());
@@ -1746,7 +1746,7 @@ mod test {
             assert_eq!(
                 optic_ref.as_volume().is_some(),
                 optic_ref
-                    .geometry()?
+                    .create_geometry()?
                     .is_some_and(|geometry| geometry.kind().as_body().is_some()),
                 "node type '{node_type}' presents itself as volumetric or describes a solid, \
                  but not both"

@@ -383,7 +383,7 @@ impl ParabolicMirror {
 }
 
 impl OpticNode for ParabolicMirror {
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         let (axis, vertex) = self.calc_off_axis_frames()?;
         Ok(Some(Geometry::surface(
             axis,

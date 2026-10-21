@@ -546,7 +546,7 @@ mod test {
         apertures::{CircleShape, Outline},
         core_optics::{OpticNode, node_attr::NodePositioning},
         degree,
-        geometry::{Extruded, Face, SurfaceShape},
+        geometry::{Extruded, Face, GeometryKind, SurfaceShape},
         millimeter,
         nodes::{
             Lens,
@@ -560,13 +560,14 @@ mod test {
 
     /// Create a disk of the given thickness and radius, placed by the given isometry.
     fn disk(thickness: Length, radius: Length, placement: Isometry) -> OpmResult<Extruded> {
-        Ok(Extruded::new(
+        let mut disk = Extruded::new(
             Isometry::identity(),
-            &Face::new(SurfaceShape::Plane, Isometry::identity()),
-            &Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
+            Face::new(SurfaceShape::Plane, Isometry::identity()),
+            Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
             Outline::new(CircleShape::new(radius)?, Vec::new())?,
-        )?
-        .moved(&placement))
+        )?;
+        disk.move_by(&placement);
+        Ok(disk)
     }
     /// Return the volume of all cells of the given field that hold medium.
     fn covered_volume(field: &InversionField) -> Volume {
