@@ -3,7 +3,7 @@ use std::fmt::Display;
 use crate::{
     core_optics::{NodeAttr, OpticNodeExt, node_attr::NodePositioning},
     error::OpmResult,
-    geometry::Geometry,
+    geometry::{Geometry, SurfaceGeometry},
     nodes::NodeRegistration,
     prelude::{Isometry, OpticNode},
 };
@@ -64,7 +64,7 @@ impl OpticNode for SourcePort {
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         // A source port only has an output port.
-        self.install_geometry(&[], &["output_1"])
+        self.install_geometry(&[], &[("output_1", SurfaceGeometry::FACE)])
     }
 }
 

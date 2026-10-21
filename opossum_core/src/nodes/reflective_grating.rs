@@ -14,7 +14,7 @@ use crate::{
     },
     error::{OpmResult, OpossumError},
     geometry::{
-        Geometry,
+        Geometry, SurfaceGeometry,
         body::{OPTIC_SHAPE, default_square_optic_shape},
     },
     light::{LightData, LightRays, LightResult, Ray, Rays},
@@ -385,7 +385,10 @@ impl OpticNode for ReflectiveGrating {
         Some(self)
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(&["input_1"], &["output_1"])
+        self.install_geometry(
+            &[("input_1", SurfaceGeometry::FACE)],
+            &[("output_1", SurfaceGeometry::FACE)],
+        )
     }
 }
 

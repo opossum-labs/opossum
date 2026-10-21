@@ -3,11 +3,10 @@ use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::meter};
 use utoipa::ToSchema;
 
-use super::{Bounded, Shape, resample_ring, transformed};
+use super::{Bounded, Shape, resample_ring};
 use crate::{
     apertures::ApertureShape, error::OpmResult,
     types::validated_type_definitions::ValidatedSideLengths2D,
-    utils::geom_transformation::Isometry,
 };
 use opm_macros_lib::EnsureValidated;
 /// Configuration data for a rectangular aperture.
@@ -65,8 +64,9 @@ impl RectangleShape {
 
     /// The four corners of this rectangle in its own frame, counter-clockwise.
     ///
-    /// Both the outline and the extent are built from these, so they are named once.
-    fn corners(&self) -> [Point2<Length>; 4] {
+    /// The outline and the edge of an [`OutlineShape`](super::OutlineShape) are built from these,
+    /// so they are named once.
+    pub(super) fn corners(&self) -> [Point2<Length>; 4] {
         let (half_width, half_height) = (self.width() / 2., self.height() / 2.);
         [
             Point2::new(half_width, half_height),
@@ -80,7 +80,7 @@ impl Bounded for RectangleShape {
     /// Return the edge of this rectangle as a counter-clockwise ring of about `segments` points.
     ///
     /// The four corners are always part of it; see
-    /// [`Aperture::outline_points`](crate::apertures::Aperture::outline_points).
+    /// [`OutlineShape::outline_points`](crate::apertures::OutlineShape::outline_points).
     ///
     /// # Errors
     ///
@@ -88,13 +88,6 @@ impl Bounded for RectangleShape {
     /// lengths rule out.
     fn outline_points(&self, segments: usize) -> OpmResult<Vec<Point2<Length>>> {
         resample_ring(&self.corners(), segments)
-    }
-
-    fn extreme_points(&self, iso: Option<&Isometry>) -> Vec<Point2<Length>> {
-        // A rectangle reaches farthest out at its corners, wherever it is turned to.
-        self.corners()
-            .map(|corner| transformed(corner, iso))
-            .to_vec()
     }
 }
 impl Shape for RectangleShape {

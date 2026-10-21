@@ -16,7 +16,7 @@ use crate::{
     },
     error::{OpmResult, OpossumError},
     geometry::{
-        Geometry, SurfaceShape,
+        Geometry, SurfaceGeometry, SurfaceShape,
         body::{OPTIC_SHAPE, default_square_optic_shape},
     },
     light::{LightData, LightResult},
@@ -205,7 +205,10 @@ impl OpticNode for WaveFront {
         self.apodization_warning = apodized;
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(&["input_1"], &["output_1"])
+        self.install_geometry(
+            &[("input_1", SurfaceGeometry::FACE)],
+            &[("output_1", SurfaceGeometry::FACE)],
+        )
     }
     fn node_report(&self, uuid: &str, analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
         if analyzer == AnalyzerKind::Energy {

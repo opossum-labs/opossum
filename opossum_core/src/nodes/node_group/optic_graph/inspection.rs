@@ -139,6 +139,25 @@ impl OpticGraph {
         ))
     }
 
+    /// Returns the node a reference in this graph refers to, found in this graph or in a group
+    /// nested in it.
+    ///
+    /// # Arguments
+    ///
+    /// * `uuid` - the uuid of the referenced node.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`OpossumError::Analysis`] if the node is neither in this graph nor in a group
+    /// nested in it.
+    pub fn reference_target_mut(&mut self, uuid: Uuid) -> OpmResult<&mut OpticRef> {
+        self.node_recursive_mut(uuid).map_err(|_| {
+            OpossumError::Analysis(format!(
+                "referenced node with id {uuid} is neither in this group nor in a group nested in it"
+            ))
+        })
+    }
+
     /// Return a reference to the optical node specified by its node index.
     ///
     /// This function is mainly useful for setting up a reference node.

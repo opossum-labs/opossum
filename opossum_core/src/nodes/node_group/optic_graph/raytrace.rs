@@ -205,13 +205,8 @@ fn ensure_node_isometry(
     }
 
     if let Some(target_uuid) = graph.g[node_idx].referenced_node_id() {
-        let target_idx = graph.node_idx_by_uuid(target_uuid).ok_or_else(|| {
-            OpossumError::Analysis(format!(
-                "referenced node with id {target_uuid} not found in graph"
-            ))
-        })?;
-
-        let target_iso = graph.g[target_idx]
+        let target_iso = graph
+            .reference_target_mut(target_uuid)?
             .positioning()
             .effective_position()
             .copied();
@@ -230,7 +225,7 @@ fn ensure_node_isometry(
             .copied();
 
         if let Some(calculated_iso) = calculated_iso {
-            let target_node = &mut graph.g[target_idx];
+            let target_node = graph.reference_target_mut(target_uuid)?;
             info!(
                 "Forward reference {node_info} positioned target node {}.",
                 target_node.name()
@@ -285,7 +280,7 @@ fn calculate_single_node_position(
     incoming_data: &LightResult,
     config: &RayTraceConfig,
     light_result: &mut LightResult,
-    ray_ends: Option<&mut Vec<Rays>>,
+    mut ray_ends: Option<&mut Vec<Rays>>,
 ) -> OpmResult<()> {
     let node_id = graph.g[node_idx].uuid();
     let node_info = format!("{}", graph.g[node_idx]);
@@ -316,9 +311,26 @@ fn calculate_single_node_position(
         }
     };
 
+    let has_successors = graph.has_output_connections(node_id)?;
     graph.collect_group_output_ports(node_id, &outgoing_edges, light_result)?;
     for (port, data) in outgoing_edges {
-        graph.set_outgoing_edge_data(node_idx, &port, data);
+        // The first ray of a bundle carries the axis. Swallowed by the node or stopped beside it
+        // (`RayTraceConfig::for_positioning`), it gives no direction to place a successor along.
+        if has_successors
+            && matches!(&data, LightData::Geometric(rays) if rays.iter().next().is_none_or(|ray| !ray.valid()))
+        {
+            return Err(OpossumError::Analysis(format!(
+                "no light leaves {node_info} at port '{port}' within its clear aperture: the \
+                 optical axis ends there, so the components after it cannot be placed"
+            )));
+        }
+        let leftover = graph.set_outgoing_edge_data(node_idx, &port, data);
+        if let Some(ray_ends) = ray_ends.as_deref_mut()
+            && let Some(LightData::Geometric(rays)) = leftover
+            && !graph.is_mapped_output_port(node_id, &port)
+        {
+            ray_ends.push(rays);
+        }
     }
     Ok(())
 }

@@ -3,14 +3,18 @@
 //!
 //! A component has an edge and, possibly, bores through it, such as a mirror with a hole for the
 //! beam to pass. That is all the optic shape states: unlike a general [`Aperture`], it has no
-//! soft edges, no obstructions and no stack of arbitrary shapes. The geometry works with it as the
-//! [`Aperture`] it amounts to (see [`OpticShape::cross_section`]).
+//! soft edges, no obstructions and no stack of arbitrary shapes. The geometry works with the
+//! [`Outline`] directly (see [`OpticShape::outline`]); an [`Aperture`] is made of it only to be
+//! plotted.
 
-use super::{Aperture, ApertureShape, ApertureType, CircleShape, PolygonShape, RectangleShape};
+use super::{
+    Aperture, ApertureShape, ApertureType, Bounded, CircleShape, OutlineMesh, PolygonShape,
+    RectangleShape, Shape,
+};
 use crate::{
     error::{OpmResult, OpossumError},
+    meter,
     properties::Proptype,
-    types::validated_type_definitions::ValidatedCrossSection,
     utils::{default_from_name::DefaultFromName, math_utils::to_f64},
 };
 use nalgebra::{Point2, Point3};
@@ -61,27 +65,39 @@ impl From<OutlineShape> for ApertureShape {
         }
     }
 }
-/// The edge of a binary shape.
-///
-/// # Errors
-///
-/// This function returns an error if the shape has no edge: a soft, a stacked or an open shape.
-impl TryFrom<&ApertureShape> for OutlineShape {
-    type Error = OpossumError;
-
-    fn try_from(shape: &ApertureShape) -> OpmResult<Self> {
-        match shape {
-            ApertureShape::BinaryCircle(shape) => Ok(Self::Circle(*shape)),
-            ApertureShape::BinaryRectangle(shape) => Ok(Self::Rectangle(*shape)),
-            ApertureShape::BinaryPolygon(shape) => Ok(Self::Polygon(shape.clone())),
-            shape => Err(OpossumError::Properties(format!(
-                "a shape '{shape}' has no edge to outline a component or a bore with"
-            ))),
+impl OutlineShape {
+    /// Return whether a point lies on or within this shape, in its own frame.
+    ///
+    /// # Arguments
+    ///
+    /// * `point` - the point, in the frame of the shape.
+    fn contains(&self, point: Point2<Length>) -> bool {
+        let shape: &dyn Shape = match self {
+            Self::Circle(circle) => circle,
+            Self::Rectangle(rectangle) => rectangle,
+            Self::Polygon(polygon) => polygon,
+        };
+        shape.transmission_factor(&Point3::new(point.x, point.y, Length::zero())) > 0.0
+    }
+    /// Return the points this shape reaches farthest in, in its own frame.
+    ///
+    /// The axis-aligned bounds and the largest distance from the origin follow from them. A circle
+    /// is described exactly by its four points on the axes, which its sampled [`Self::corners`]
+    /// only approximate.
+    fn extreme_points(&self) -> Vec<Point2<Length>> {
+        match self {
+            Self::Circle(circle) => {
+                let (radius, zero) = (circle.radius(), Length::zero());
+                vec![
+                    Point2::new(radius, zero),
+                    Point2::new(-radius, zero),
+                    Point2::new(zero, radius),
+                    Point2::new(zero, -radius),
+                ]
+            }
+            Self::Rectangle(_) | Self::Polygon(_) => self.corners(),
         }
     }
-}
-
-impl OutlineShape {
     /// The corners of the edge of this shape, in its own frame; a circle is sampled at
     /// [`CIRCLE_POINTS`] points.
     fn corners(&self) -> Vec<Point2<Length>> {
@@ -92,17 +108,44 @@ impl OutlineShape {
                     Point2::new(circle.radius() * angle.cos(), circle.radius() * angle.sin())
                 })
                 .collect(),
-            Self::Rectangle(rectangle) => {
-                let (x, y) = (rectangle.width() / 2.0, rectangle.height() / 2.0);
-                vec![
-                    Point2::new(x, y),
-                    Point2::new(-x, y),
-                    Point2::new(-x, -y),
-                    Point2::new(x, -y),
-                ]
-            }
+            Self::Rectangle(rectangle) => rectangle.corners().to_vec(),
             Self::Polygon(polygon) => polygon.points().to_vec(),
         }
+    }
+    /// Return the edge of this shape as a closed polygon, in its own frame.
+    ///
+    /// Where [`Outline::contains`] answers whether a single point lies inside, this states where
+    /// the inside *ends*: the edge, walked counter-clockwise. The first point is not repeated at
+    /// the end — the ring closes from the last point back to the first.
+    ///
+    /// `segments` is the number of points to aim for, not a promise: every corner of a rectangle or
+    /// polygon is always kept, and the remaining points are spread over the edges by length, so the
+    /// count comes out near `segments` rather than exactly on it.
+    ///
+    /// # Arguments
+    ///
+    /// - `segments`: the number of points to aim for, at least 3
+    ///
+    /// # Returns
+    ///
+    /// The points of the edge in counter-clockwise order.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if fewer than three segments are asked for, or if the shape
+    /// encloses no area at all.
+    pub fn outline_points(&self, segments: usize) -> OpmResult<Vec<Point2<Length>>> {
+        if segments < 3 {
+            return Err(OpossumError::Other(format!(
+                "an outline of {segments} points encloses nothing, at least 3 are needed"
+            )));
+        }
+        let shape: &dyn Bounded = match self {
+            Self::Circle(circle) => circle,
+            Self::Rectangle(rectangle) => rectangle,
+            Self::Polygon(polygon) => polygon,
+        };
+        shape.outline_points(segments)
     }
 }
 
@@ -154,53 +197,49 @@ impl Bore {
             Some(self.rotation),
         )
     }
+    /// Move a point of the bore's own frame to where the bore is: turned about its centre, then
+    /// shifted off the axis.
+    fn placed(&self, point: Point2<Length>) -> Point2<Length> {
+        let (sin, cos) = self.rotation.value.sin_cos();
+        let (x, y) = (point.x.value, point.y.value);
+        Point2::new(
+            meter!(x.mul_add(cos, (-y).mul_add(sin, self.center.x.value))),
+            meter!(x.mul_add(sin, y.mul_add(cos, self.center.y.value))),
+        )
+    }
+    /// Move a point of the plane into the bore's own frame; the inverse of [`Self::placed`].
+    fn unplaced(&self, point: Point2<Length>) -> Point2<Length> {
+        let (sin, cos) = self.rotation.value.sin_cos();
+        let (x, y) = (
+            point.x.value - self.center.x.value,
+            point.y.value - self.center.y.value,
+        );
+        Point2::new(
+            meter!(x.mul_add(cos, y * sin)),
+            meter!(y.mul_add(cos, -x * sin)),
+        )
+    }
     /// The corners of the edge of this bore, placed where the bore is.
-    fn corners(&self) -> OpmResult<Vec<Point2<Length>>> {
-        let placed = self.aperture(ApertureType::Hole)?;
-        Ok(self
-            .shape
+    fn corners(&self) -> Vec<Point2<Length>> {
+        self.shape
             .corners()
             .into_iter()
-            .map(|corner| {
-                placed.isometry().map_or(corner, |isometry| {
-                    let moved =
-                        isometry.transform_point(&Point3::new(corner.x, corner.y, Length::zero()));
-                    Point2::new(moved.x, moved.y)
-                })
-            })
+            .map(|corner| self.placed(corner))
+            .collect()
+    }
+    /// Return whether a point of the plane lies on or within this bore.
+    fn contains(&self, point: Point2<Length>) -> bool {
+        self.shape.contains(self.unplaced(point))
+    }
+    /// The edge of this bore as a closed, counter-clockwise polygon, placed where the bore is (see
+    /// [`OutlineShape::outline_points`]).
+    fn outline_points(&self, segments: usize) -> OpmResult<Vec<Point2<Length>>> {
+        Ok(self
+            .shape
+            .outline_points(segments)?
+            .into_iter()
+            .map(|point| self.placed(point))
             .collect())
-    }
-    /// Whether a point lies within this bore.
-    fn holds(&self, point: Point2<Length>) -> OpmResult<bool> {
-        Ok(self.aperture(ApertureType::Hole)?.apodize(&Point3::new(
-            point.x,
-            point.y,
-            Length::zero(),
-        )) > 0.0)
-    }
-}
-/// A bore of the shape of an aperture, shifted and turned the way the aperture is. Whether the
-/// aperture is a hole or an obstruction is not looked at.
-///
-/// # Errors
-///
-/// This function returns an error if the shape of the aperture has no edge.
-impl TryFrom<&Aperture> for Bore {
-    type Error = OpossumError;
-
-    fn try_from(aperture: &Aperture) -> OpmResult<Self> {
-        let (center, rotation) = aperture.isometry().map_or_else(
-            || (Point2::origin(), Angle::zero()),
-            |isometry| {
-                let shift = isometry.translation();
-                (Point2::new(shift.x, shift.y), isometry.rotation().z)
-            },
-        );
-        Ok(Self::new(
-            OutlineShape::try_from(aperture.shape())?,
-            center,
-            rotation,
-        ))
     }
 }
 
@@ -263,29 +302,64 @@ impl Outline {
     pub fn bores(&self) -> &[Bore] {
         &self.bores
     }
-    /// The edge of the component, placed on its axis the way a bore is placed off it.
-    fn edge(&self) -> Bore {
-        Bore::new(self.shape.clone(), Point2::origin(), Angle::zero())
+    /// Return whether a point of the plane holds material: it lies on or within the edge and in
+    /// none of the bores.
+    ///
+    /// # Arguments
+    ///
+    /// * `point` - the point, in the plane of the outline with the axis at its origin.
+    #[must_use]
+    pub(crate) fn contains(&self, point: Point2<Length>) -> bool {
+        self.shape.contains(point) && !self.bores.iter().any(|bore| bore.contains(point))
     }
-    /// The region of the component as an [`Aperture`]: its edge as a hole, and each bore as an
-    /// obstruction in it.
-    fn aperture(&self) -> OpmResult<Aperture> {
-        let edge = self.edge().aperture(ApertureType::Hole)?;
-        if self.bores.is_empty() {
-            return Ok(edge);
-        }
-        let bores = self
-            .bores
+    /// Return the points the component reaches farthest in, in the plane of the outline.
+    ///
+    /// They are the extreme points of the edge (see [`OutlineShape::extreme_points`]): a bore
+    /// only takes material away.
+    #[must_use]
+    pub(crate) fn extreme_points(&self) -> Vec<Point2<Length>> {
+        self.shape.extreme_points()
+    }
+    /// Return how far the component reaches from its axis.
+    ///
+    /// # Returns
+    ///
+    /// The largest distance of a point of the edge from the axis.
+    #[must_use]
+    pub(crate) fn transversal_reach(&self) -> Length {
+        self.extreme_points()
             .iter()
-            .map(|bore| bore.aperture(ApertureType::Obstruction));
-        Aperture::new_stack(
-            std::iter::once(Ok(edge))
-                .chain(bores)
-                .collect::<OpmResult<_>>()?,
-            ApertureType::Hole,
-            None,
-            None,
-        )
+            .fold(Length::zero(), |reach, point| {
+                Length::max(reach, meter!(point.x.value.hypot(point.y.value)))
+            })
+    }
+    /// Triangulate the area of this outline: the region within its edge and outside its bores.
+    ///
+    /// The edge and every bore are sampled with about `segments` points each (see
+    /// [`OutlineShape::outline_points`]); those rims are held fixed and the inside is filled (see
+    /// [`OutlineMesh`]).
+    ///
+    /// # Arguments
+    ///
+    /// - `segments`: the number of points to aim for on each rim, at least 3
+    ///
+    /// # Returns
+    ///
+    /// The triangulated area, in the plane of the outline.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if an edge cannot be sampled, or if the sampled rims do not
+    /// bound the area, such as a bore that the coarser sampling of the edge cuts into.
+    pub fn triangulate(&self, segments: usize) -> OpmResult<OutlineMesh> {
+        let mut rims = vec![self.shape.outline_points(segments)?];
+        for bore in &self.bores {
+            // A bore takes its area away, so its rim runs clockwise.
+            let mut rim = bore.outline_points(segments)?;
+            rim.reverse();
+            rims.push(rim);
+        }
+        OutlineMesh::from_rims(&rims, |point| self.contains(point))
     }
     /// Check that the edge and every bore bound a region, and that every bore lies within the
     /// edge and apart from every other bore, none touching.
@@ -294,18 +368,13 @@ impl Outline {
     /// from each other have edges that do not meet and neither holds a point of the other; a bore
     /// within the edge has edges that do not meet and a corner inside it.
     fn check(&self) -> OpmResult<()> {
-        let edge = self.edge();
-        let edge_ring = edge.corners()?;
+        let edge_ring = self.shape.corners();
         if ring_meets_itself(&edge_ring) {
             return Err(OpossumError::Properties(
                 "the edge of the component crosses or touches itself".into(),
             ));
         }
-        let corners = self
-            .bores
-            .iter()
-            .map(Bore::corners)
-            .collect::<OpmResult<Vec<_>>>()?;
+        let corners = self.bores.iter().map(Bore::corners).collect::<Vec<_>>();
         if let Some(number) = corners.iter().position(|ring| ring_meets_itself(ring)) {
             return Err(OpossumError::Properties(format!(
                 "bore {} crosses or touches itself",
@@ -313,7 +382,9 @@ impl Outline {
             )));
         }
         for (number, (bore, ring)) in self.bores.iter().zip(&corners).enumerate() {
-            if rings_meet(&edge_ring, ring) || !edge.holds(ring[0])? {
+            if rings_meet(&edge_ring, ring)
+                || !ring.first().is_some_and(|&c| self.shape.contains(c))
+            {
                 return Err(OpossumError::Properties(format!(
                     "bore {} does not lie within the edge of the component without touching it",
                     number + 1
@@ -323,8 +394,8 @@ impl Outline {
                 self.bores.iter().zip(&corners).enumerate().skip(number + 1)
             {
                 if rings_meet(ring, other_ring)
-                    || bore.holds(other_ring[0])?
-                    || other.holds(ring[0])?
+                    || other_ring.first().is_some_and(|&c| bore.contains(c))
+                    || ring.first().is_some_and(|&c| other.contains(c))
                 {
                     return Err(OpossumError::Properties(format!(
                         "bores {} and {} overlap or touch",
@@ -354,6 +425,35 @@ fn ring_edges(ring: &[Point2<Length>]) -> Vec<(Point2<f64>, Point2<f64>)> {
         .zip(ring.iter().cycle().skip(1))
         .map(|(from, to)| (from.map(|c| c.value), to.map(|c| c.value)))
         .collect()
+}
+
+/// The region of an outline as an [`Aperture`], to be plotted: its edge as a hole, and each bore
+/// as an obstruction in it.
+///
+/// # Errors
+///
+/// This function returns an error if a bore cannot be placed as an [`Aperture`].
+impl TryFrom<&Outline> for Aperture {
+    type Error = OpossumError;
+
+    fn try_from(outline: &Outline) -> OpmResult<Self> {
+        let edge = Self::new(outline.shape.clone().into(), ApertureType::Hole, None, None)?;
+        if outline.bores.is_empty() {
+            return Ok(edge);
+        }
+        let bores = outline
+            .bores
+            .iter()
+            .map(|bore| bore.aperture(ApertureType::Obstruction));
+        Self::new_stack(
+            std::iter::once(Ok(edge))
+                .chain(bores)
+                .collect::<OpmResult<_>>()?,
+            ApertureType::Hole,
+            None,
+            None,
+        )
+    }
 }
 
 /// Whether the edges of two closed polygons cross or touch each other: come closer than
@@ -449,19 +549,16 @@ pub enum OpticShape {
 }
 
 impl OpticShape {
-    /// Return the region of this optic shape as the cross section the geometry works with.
+    /// Return the outline of this optic shape, which the geometry bounds the component with.
     ///
     /// # Returns
     ///
-    /// The cross section, or `None` if the optic shape is open.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if a shape cannot be placed as an [`Aperture`].
-    pub fn cross_section(&self) -> OpmResult<Option<ValidatedCrossSection>> {
+    /// The outline, or `None` if the optic shape is open.
+    #[must_use]
+    pub const fn outline(&self) -> Option<&Outline> {
         match self {
-            Self::Open => Ok(None),
-            Self::Bounded(outline) => ValidatedCrossSection::try_new(outline.aperture()?).map(Some),
+            Self::Open => None,
+            Self::Bounded(outline) => Some(outline),
         }
     }
 }
@@ -517,8 +614,8 @@ impl From<OpticShape> for Proptype {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{apertures::GaussianShape, degree, millimeter};
-    use approx::assert_relative_eq;
+    use crate::{degree, millimeter, utils::test_helper::helper::l_shape_corners};
+    use approx::{assert_abs_diff_eq, assert_relative_eq};
     use std::f64::consts::PI;
 
     fn circle(radius: f64) -> OpmResult<CircleShape> {
@@ -534,20 +631,20 @@ mod test {
     fn bore(shape: impl Into<OutlineShape>, x: f64, y: f64, rotation: f64) -> Bore {
         Bore::new(shape, millimeter!(x, y), degree!(rotation))
     }
-    /// The cross section of a bounded optic shape.
-    fn region(optic_shape: &OpticShape) -> OpmResult<Aperture> {
-        let cross_section = optic_shape
-            .cross_section()?
-            .ok_or_else(|| OpossumError::Other("the optic shape is open".into()))?;
-        Ok(cross_section.get().clone())
+    /// The outline of a bounded optic shape.
+    fn region(optic_shape: &OpticShape) -> OpmResult<Outline> {
+        optic_shape
+            .outline()
+            .cloned()
+            .ok_or_else(|| OpossumError::Other("the optic shape is open".into()))
     }
-    /// Whether the region transmits at (x, y) mm.
-    fn transmits(region: &Aperture, x: f64, y: f64) -> bool {
-        region.apodize(&millimeter!(x, y, 0.0)) > 0.0
+    /// Whether the region holds material at (x, y) mm, and thus transmits there.
+    fn transmits(region: &Outline, x: f64, y: f64) -> bool {
+        region.contains(millimeter!(x, y))
     }
     /// The area in mm² the region transmits on, counted on a grid of 0.05 mm over the square of
     /// the given half width in mm.
-    fn area(region: &Aperture, half_width: u32) -> f64 {
+    fn area(region: &Outline, half_width: u32) -> f64 {
         let step = 0.05;
         let steps = 40 * half_width;
         let at = |index: u32| (f64::from(index) + 0.5).mul_add(step, -f64::from(half_width));
@@ -559,7 +656,7 @@ mod test {
     }
 
     /// A ring transmits where the stack of a hole and a central obstruction it replaces did, on an
-    /// area of π (R² - r²).
+    /// area of π (R² - r²), and is plotted as that stack.
     #[test]
     fn a_ring_is_the_region_of_the_stack_it_replaces() -> OpmResult<()> {
         let ring = OpticShape::from(Outline::new(
@@ -576,11 +673,12 @@ mod test {
             None,
             None,
         )?;
+        assert_eq!(Aperture::try_from(&ring)?, stack);
         for x in (-130..=130).map(|tenth| f64::from(tenth) / 10.0) {
             for y in [0.0, 1.0, 1.9, 2.1, 7.0, 12.4] {
                 assert_eq!(
                     transmits(&ring, x, y),
-                    transmits(&stack, x, y),
+                    stack.apodize(&millimeter!(x, y, 0.0)) > 0.0,
                     "({x}, {y}) mm"
                 );
             }
@@ -620,6 +718,77 @@ mod test {
             PI.mul_add(-4.0, 400.0) - 3.0,
             max_relative = 2e-3
         );
+        Ok(())
+    }
+    /// A triangular plate holds material within its edge but not in its turned square bore.
+    #[test]
+    fn a_polygon_holds_material_beside_its_bore() -> OpmResult<()> {
+        let plate = region(&OpticShape::from(Outline::new(
+            triangle([(-10.0, -10.0), (10.0, -10.0), (0.0, 10.0)])?,
+            vec![bore(rectangle(2.0, 2.0)?, 0.0, -4.0, 45.0)],
+        )?))?;
+        for ((x, y), holds) in [
+            ((0.0, 0.0), true),
+            ((-9.9, -9.9), true),
+            ((0.0, 9.9), true),
+            ((5.0, 0.5), false),
+            ((0.0, -10.1), false),
+            ((0.0, -4.0), false),
+            // inside the corner of the turned square, outside an unturned one
+            ((0.0, -2.7), false),
+            // inside an unturned square, outside the turned one
+            ((0.9, -3.1), true),
+        ] {
+            assert_eq!(transmits(&plate, x, y), holds, "({x}, {y}) mm");
+        }
+        Ok(())
+    }
+    /// An outline reaches as far as its edge, wherever its bores are: a ring as far as its outer
+    /// circle, a rectangle to its corners, a polygon to its farthest corner. Its axis-aligned
+    /// bounds are those of its edge.
+    #[test]
+    fn an_outline_reaches_as_far_as_its_edge() -> OpmResult<()> {
+        let reach_and_bounds = |optic_shape: OpticShape| -> OpmResult<(f64, [f64; 4])> {
+            let outline = region(&optic_shape)?;
+            let points = outline.extreme_points();
+            let bound = |pick: fn(&Point2<Length>) -> f64, lowest: bool| {
+                points.iter().map(pick).fold(
+                    if lowest {
+                        f64::INFINITY
+                    } else {
+                        f64::NEG_INFINITY
+                    },
+                    |bound, value| {
+                        if lowest {
+                            bound.min(value)
+                        } else {
+                            bound.max(value)
+                        }
+                    },
+                )
+            };
+            Ok((
+                outline.transversal_reach().value,
+                [
+                    bound(|point| point.x.value, true),
+                    bound(|point| point.x.value, false),
+                    bound(|point| point.y.value, true),
+                    bound(|point| point.y.value, false),
+                ],
+            ))
+        };
+        let ring = Outline::new(circle(12.5)?, vec![bore(circle(2.0)?, 3.0, 0.0, 0.0)])?;
+        assert_eq!(
+            reach_and_bounds(ring.into())?,
+            (0.0125, [-0.0125, 0.0125, -0.0125, 0.0125])
+        );
+        let (reach, bounds) = reach_and_bounds(rectangle(20.0, 10.0)?.into())?;
+        assert_relative_eq!(reach, 0.01_f64.hypot(0.005), max_relative = 1e-15);
+        assert_eq!(bounds, [-0.01, 0.01, -0.005, 0.005]);
+        let (reach, bounds) =
+            reach_and_bounds(triangle([(-3.0, -4.0), (6.0, 0.0), (0.0, 2.0)])?.into())?;
+        assert_relative_eq!(reach, 0.006, max_relative = 1e-15);
+        assert_eq!(bounds, [-0.003, 0.006, -0.004, 0.002]);
         Ok(())
     }
     /// A bore lies within the edge, and apart from every other bore; none touches another or the
@@ -791,48 +960,6 @@ mod test {
         assert!(ron::from_str::<Outline>(&overlapping).is_err());
         Ok(())
     }
-    /// A binary shape has an edge, a soft or an open one has none. A bore of an aperture is
-    /// shifted and turned the way the aperture is, a hole as well as an obstruction.
-    #[test]
-    fn an_aperture_with_an_edge_becomes_a_bore() -> OpmResult<()> {
-        assert_eq!(
-            OutlineShape::try_from(&ApertureShape::BinaryCircle(circle(5.0)?))?,
-            circle(5.0)?.into()
-        );
-        let soft = GaussianShape::new((millimeter!(5.0), millimeter!(5.0)))?;
-        for shape in [ApertureShape::Gaussian(soft), ApertureShape::Open] {
-            assert!(OutlineShape::try_from(&shape).is_err(), "{shape:?}");
-        }
-        let slot = Aperture::new_rectangle(
-            millimeter!(3.0),
-            millimeter!(1.0),
-            ApertureType::Obstruction,
-            Some(millimeter!(-4.0, -3.0)),
-            Some(degree!(30.0)),
-        )?;
-        let read = Bore::try_from(&slot)?;
-        assert_eq!(read.shape(), &OutlineShape::from(rectangle(3.0, 1.0)?));
-        assert_relative_eq!(read.center().x.value, -0.004, max_relative = 1e-12);
-        assert_relative_eq!(read.center().y.value, -0.003, max_relative = 1e-12);
-        assert_relative_eq!(
-            read.rotation().value,
-            30.0_f64.to_radians(),
-            max_relative = 1e-12
-        );
-        let unplaced = Aperture::new_circle(millimeter!(2.0), ApertureType::Hole, None)?;
-        assert_eq!(
-            Bore::try_from(&unplaced)?,
-            bore(circle(2.0)?, 0.0, 0.0, 0.0)
-        );
-        let soft = Aperture::new_gaussian(
-            (millimeter!(5.0), millimeter!(5.0)),
-            ApertureType::Obstruction,
-            None,
-            None,
-        )?;
-        assert!(Bore::try_from(&soft).is_err());
-        Ok(())
-    }
     #[test]
     fn display() -> OpmResult<()> {
         let plate = |bores| -> OpmResult<OpticShape> {
@@ -849,6 +976,176 @@ mod test {
             plate(vec![hole_at(4.0)?, hole_at(-4.0)?])?.to_string(),
             "Rectangle with 2 bores"
         );
+        Ok(())
+    }
+
+    /// Shortest distance from a point to the closed ring through `corners`, in meters.
+    ///
+    /// Used to check that a resampled edge really stayed on the edge it describes.
+    fn distance_to_ring(point: &Point2<Length>, corners: &[Point2<Length>]) -> f64 {
+        (0..corners.len())
+            .map(|from| {
+                let to = (from + 1) % corners.len();
+                let edge = corners[to] - corners[from];
+                let offset = point - corners[from];
+                let edge_length_squared = edge.x.value.mul_add(edge.x.value, edge.y.value.powi(2));
+                let along = if edge_length_squared == 0.0 {
+                    0.0
+                } else {
+                    (offset
+                        .x
+                        .value
+                        .mul_add(edge.x.value, offset.y.value * edge.y.value)
+                        / edge_length_squared)
+                        .clamp(0.0, 1.0)
+                };
+                along
+                    .mul_add(-edge.x.value, offset.x.value)
+                    .hypot(along.mul_add(-edge.y.value, offset.y.value))
+            })
+            .fold(f64::INFINITY, f64::min)
+    }
+    #[test]
+    fn outline_points_of_a_circle_lie_on_it() -> OpmResult<()> {
+        let radius = millimeter!(12.5);
+        let outline = OutlineShape::from(CircleShape::new(radius)?).outline_points(64)?;
+        assert_eq!(outline.len(), 64);
+        for point in &outline {
+            assert_abs_diff_eq!(
+                point.x.value.hypot(point.y.value),
+                radius.value,
+                epsilon = 1e-12
+            );
+        }
+        assert!(
+            super::super::doubled_signed_area(&outline) > 0.0,
+            "must run counter-clockwise"
+        );
+        assert_ne!(
+            outline[0],
+            outline[outline.len() - 1],
+            "the ring must not repeat its first point"
+        );
+        Ok(())
+    }
+    #[test]
+    fn outline_points_of_a_rectangle_keep_its_corners() -> OpmResult<()> {
+        let (width, height) = (millimeter!(30.0), millimeter!(10.0));
+        let outline = OutlineShape::from(RectangleShape::new(width, height)?).outline_points(40)?;
+        let corners = [
+            Point2::new(width / 2., height / 2.),
+            Point2::new(-width / 2., height / 2.),
+            Point2::new(-width / 2., -height / 2.),
+            Point2::new(width / 2., -height / 2.),
+        ];
+        for corner in &corners {
+            assert!(
+                outline.contains(corner),
+                "corner {corner:?} is missing from the outline"
+            );
+        }
+        for point in &outline {
+            assert_abs_diff_eq!(distance_to_ring(point, &corners), 0.0, epsilon = 1e-12);
+        }
+        assert!(super::super::doubled_signed_area(&outline) > 0.0);
+        // The perimeter splits into 15 + 5 + 15 + 5 intervals, so the points asked for are handed
+        // out exactly: a long side is sampled as densely as a short one, not as coarsely.
+        assert_eq!(outline.len(), 40);
+        Ok(())
+    }
+    #[test]
+    fn outline_points_of_a_polygon_keep_its_corners() -> OpmResult<()> {
+        // An L, so that a shape which is not convex is covered as well.
+        let corners = l_shape_corners();
+        let outline = OutlineShape::from(PolygonShape::new(corners.clone())?).outline_points(30)?;
+        for corner in &corners {
+            assert!(
+                outline.contains(corner),
+                "corner {corner:?} is missing from the outline"
+            );
+        }
+        for point in &outline {
+            assert_abs_diff_eq!(distance_to_ring(point, &corners), 0.0, epsilon = 1e-12);
+        }
+        assert!(super::super::doubled_signed_area(&outline) > 0.0);
+        assert!(outline.len() >= corners.len());
+        Ok(())
+    }
+    /// The outline is promised counter-clockwise, so a polygon given the other way round has to be
+    /// turned around rather than handed on as it is.
+    #[test]
+    fn a_clockwise_polygon_is_turned_around() -> OpmResult<()> {
+        let counter_clockwise = vec![
+            millimeter!(-10.0, -10.0),
+            millimeter!(10.0, -10.0),
+            millimeter!(10.0, 10.0),
+            millimeter!(-10.0, 10.0),
+        ];
+        let mut clockwise = counter_clockwise.clone();
+        clockwise.reverse();
+        for corners in [counter_clockwise, clockwise] {
+            let outline = OutlineShape::from(PolygonShape::new(corners)?).outline_points(8)?;
+            assert!(super::super::doubled_signed_area(&outline) > 0.0);
+        }
+        Ok(())
+    }
+    #[test]
+    fn a_shifted_bore_moves_its_outline() -> OpmResult<()> {
+        let (shift, radius) = (millimeter!(5.0, -3.0), millimeter!(12.5));
+        let outline =
+            Bore::new(CircleShape::new(radius)?, shift, degree!(0.0)).outline_points(32)?;
+        assert_eq!(outline.len(), 32);
+        for point in &outline {
+            assert_abs_diff_eq!(
+                (point.x - shift.x).value.hypot((point.y - shift.y).value),
+                radius.value,
+                epsilon = 1e-12
+            );
+        }
+        assert!(super::super::doubled_signed_area(&outline) > 0.0);
+        Ok(())
+    }
+    #[test]
+    fn a_turned_bore_turns_its_outline() -> OpmResult<()> {
+        let (width, height) = (millimeter!(30.0), millimeter!(10.0));
+        let outline = Bore::new(
+            RectangleShape::new(width, height)?,
+            millimeter!(0.0, 0.0),
+            degree!(90.0),
+        )
+        .outline_points(40)?;
+        // A quarter turn swaps the sides, whichever way it goes: the outline now reaches half the
+        // height along x and half the width along y.
+        let reach = |coordinate: fn(&Point2<Length>) -> Length| {
+            outline
+                .iter()
+                .map(|point| coordinate(point).value.abs())
+                .fold(0.0, f64::max)
+        };
+        assert_abs_diff_eq!(reach(|p| p.x), (height / 2.).value, epsilon = 1e-12);
+        assert_abs_diff_eq!(reach(|p| p.y), (width / 2.).value, epsilon = 1e-12);
+        assert!(super::super::doubled_signed_area(&outline) > 0.0);
+        Ok(())
+    }
+    #[test]
+    fn an_outline_needs_at_least_three_points() -> OpmResult<()> {
+        let shape = OutlineShape::from(CircleShape::new(millimeter!(1.0))?);
+        assert!(shape.outline_points(0).is_err());
+        assert!(shape.outline_points(2).is_err());
+        assert!(shape.outline_points(3).is_ok());
+        Ok(())
+    }
+    #[test]
+    fn a_ring_without_area_has_no_outline() -> OpmResult<()> {
+        let collinear = [
+            millimeter!(-1.0, 0.0),
+            millimeter!(0.0, 0.0),
+            millimeter!(1.0, 0.0),
+        ];
+        assert!(super::super::resample_ring(&collinear, 16).is_err());
+        assert!(super::super::resample_ring(&collinear[0..2], 16).is_err());
+        let point_circle = OutlineShape::from(CircleShape::new(millimeter!(0.0))?);
+        assert!(point_circle.outline_points(16).is_err());
         Ok(())
     }
 }

@@ -1,8 +1,7 @@
 #![warn(missing_docs)]
 //! Module for handling bundles of [`Ray`]s
-use crate::apertures::Aperture;
 use crate::distributions::spectral::laser_lines::MIN_WAVELENGTH_DIFF_NM;
-use crate::nodes::ideal_filter::FilterConst;
+use crate::geometry::Rim;
 use crate::{
     J_per_cm2,
     analyzers::propagation_strategy::MissedSurfaceStrategy,
@@ -586,30 +585,25 @@ impl Rays {
     pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, Ray> {
         self.ray_bundle.iter_mut()
     }
-    /// Apodize (cut out or attenuate) the ray bundle by a given [`Aperture`].
+    /// Invalidate every valid [`Ray`] of this bundle that lies outside a [`Rim`].
     ///
-    /// This function only affects `valid` [`Ray`]s in the bundle. This functions returns `true` if valid beams have been invalidated due to the
-    /// apodization. Otherwise the functions returns `false`. **Note**: This only works with "binary" [`Aperture`]s. If using a non-binary aperture
-    /// (e.g. Gaussian), rays are filtered but not invalidated. Hence the return type is always `false`.
+    /// # Arguments
     ///
-    /// # Errors
+    /// * `rim` - the rim the rays have to lie within.
     ///
-    /// This function returns an error if a single ray cannot be properly apodized (e.g. filter factor outside (0.0..=1.0)).
-    pub fn apodize(&mut self, aperture: &Aperture, iso: &Isometry) -> OpmResult<bool> {
-        let mut beams_invalided = false;
-        for ray in &mut self.ray_bundle {
-            if ray.valid() {
-                let ap_factor = aperture.apodize(&ray.inverse_transformed_ray(iso).position());
-                if ap_factor > 0.0 {
-                    ray.filter_energy(&FilterType::Constant(FilterConst::new(ap_factor.into())?))?;
-                } else {
-                    ray.add_to_pos_hist(ray.position());
-                    ray.set_invalid();
-                    beams_invalided = true;
-                }
+    /// # Returns
+    ///
+    /// `true` if valid rays were invalidated.
+    pub fn invalidate_outside(&mut self, rim: &Rim) -> bool {
+        let mut invalidated = false;
+        for ray in self.ray_bundle.iter_mut().filter(|ray| ray.valid()) {
+            if !rim.contains(&ray.position()) {
+                ray.add_to_pos_hist(ray.position());
+                ray.set_invalid();
+                invalidated = true;
             }
         }
-        Ok(beams_invalided)
+        invalidated
     }
     /// Finds all unique wavelengths in this raybundle and returns them in a vector
     ///
@@ -939,7 +933,7 @@ impl Rays {
         }
         Ok(())
     }
-    /// Refract a ray bundle on a [`GeoSurface`](crate::geometry::geo_surface::GeoSurface) and returns a reflected [`Ray`] bundle.
+    /// Refract a ray bundle on a [`GeoSurface`](crate::geometry::GeoSurface) and returns a reflected [`Ray`] bundle.
     ///
     /// This function refracts all `valid` [`Ray`]s on a given surface.
     ///
@@ -2019,26 +2013,23 @@ mod test {
         position::{FibonacciEllipse, FibonacciRectangle, Random},
     };
     use crate::{
-        apertures::{ApertureType, CircleShape},
+        apertures::{CircleShape, Outline},
         centimeter,
         coatings::{CoatingConstantR, CoatingType},
         core_optics::optic_surface::OpticSurface,
-        geometry::{Plane, geo_surface::GeoSurfaceRef},
+        geometry::{Face, SurfaceShape},
         joule, meter, millimeter, nanometer,
         nodes::{
             SplittingConfig,
-            ideal_filter::{EdgeFilter, EdgeFilterType},
+            ideal_filter::{EdgeFilter, EdgeFilterType, FilterConst},
         },
-        percent,
-        prelude::ApertureShape,
-        radian,
+        percent, radian,
         refractive_index::{RefrIndexConst, refr_index_vaccuum},
         utils::test_helper::helper::check_logs,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
     use itertools::izip;
     use nalgebra::Vector3;
-    use std::sync::Arc;
     use testing_logger;
     use uom::si::{energy::joule, length::nanometer};
 
@@ -2825,7 +2816,7 @@ mod test {
     fn tilted_splitting_surface() -> OpmResult<OpticSurface> {
         let iso = Isometry::new(millimeter!(0., 0., 0.), degree!(0., 45., 0.))?;
         OpticSurface::new(
-            GeoSurfaceRef(Arc::new(Plane::new(iso))),
+            Face::new(SurfaceShape::Plane, iso),
             CoatingType::IdealAR,
             J_per_cm2!(1.),
         )
@@ -2993,23 +2984,28 @@ mod test {
         assert_eq!(rays.nr_of_rays(true), 0);
         Ok(())
     }
+    /// Rays outside a rim are invalidated with their energy, the others keep theirs; only a cut
+    /// that invalidates valid rays counts.
     #[test]
-    fn apodize() -> OpmResult<()> {
+    fn invalidate_outside() -> OpmResult<()> {
         let mut rays = Rays::default();
-        let ray0 = Ray::new_collimated(Point3::origin(), nanometer!(1053.0), joule!(1.0))?;
-        let ray1 = Ray::new_collimated(millimeter!(1.0, 1.0, 0.), nanometer!(1053.0), joule!(1.0))?;
-        rays.add_ray(ray0);
-        rays.add_ray(ray1);
-        assert_eq!(rays.total_energy(), joule!(2.0));
-        let circle_config = CircleShape::new(millimeter!(0.5))?;
-        let aperture = Aperture::new(
-            ApertureShape::BinaryCircle(circle_config),
-            ApertureType::Hole,
-            None,
-            None,
-        )?;
-        rays.apodize(&aperture, &Isometry::identity())?;
+        rays.add_ray(Ray::new_collimated(
+            Point3::origin(),
+            nanometer!(1053.0),
+            joule!(1.0),
+        )?);
+        rays.add_ray(Ray::new_collimated(
+            millimeter!(1.0, 1.0, 0.),
+            nanometer!(1053.0),
+            joule!(1.0),
+        )?);
+        let rim = Rim::new(
+            Outline::new(CircleShape::new(millimeter!(0.5))?, Vec::new())?,
+            Isometry::identity(),
+        );
+        assert!(rays.invalidate_outside(&rim));
         assert_eq!(rays.total_energy(), joule!(1.0));
+        assert!(!rays.invalidate_outside(&rim));
         Ok(())
     }
     #[test]

@@ -3,7 +3,7 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use nalgebra::Vector3;
 use opossum_core::{
-    geometry::{Cylinder, Parabola, Plane, Sphere, geo_surface::GeoSurface},
+    geometry::{Cylinder, Face, Parabola, Sphere, SurfaceShape},
     joule,
     light::Ray,
     millimeter, nanometer,
@@ -28,7 +28,10 @@ fn criterion_config() -> Criterion {
 /// Benchmarks for the Plane surface
 fn plane_benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("Plane Intersection");
-    let surface = Plane::new(Isometry::new_along_z(millimeter!(10.0)).unwrap());
+    let surface = Face::new(
+        SurfaceShape::Plane,
+        Isometry::new_along_z(millimeter!(10.0)).unwrap(),
+    );
 
     // --- Scenarios ---
     let on_axis_ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
@@ -46,17 +49,13 @@ fn plane_benchmarks(c: &mut Criterion) {
 
     // --- Benchmarks ---
     group.bench_function("on-axis hit", |b| {
-        b.iter(|| surface.calc_intersect_and_normal(&on_axis_ray))
+        b.iter(|| surface.intersect(&on_axis_ray))
     });
     group.bench_function("off-axis hit", |b| {
-        b.iter(|| surface.calc_intersect_and_normal(&off_axis_ray))
+        b.iter(|| surface.intersect(&off_axis_ray))
     });
-    group.bench_function("angled hit", |b| {
-        b.iter(|| surface.calc_intersect_and_normal(&angled_ray))
-    });
-    group.bench_function("miss", |b| {
-        b.iter(|| surface.calc_intersect_and_normal(&miss_ray))
-    });
+    group.bench_function("angled hit", |b| b.iter(|| surface.intersect(&angled_ray)));
+    group.bench_function("miss", |b| b.iter(|| surface.intersect(&miss_ray)));
     group.finish();
 }
 
@@ -64,11 +63,10 @@ fn plane_benchmarks(c: &mut Criterion) {
 fn sphere_benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("Sphere Intersection");
     // Sphere with vertex at z=20mm
-    let surface = Sphere::new(
-        millimeter!(10.0),
+    let surface = Face::new(
+        SurfaceShape::Sphere(Sphere::new(millimeter!(10.0)).unwrap()),
         Isometry::new_along_z(millimeter!(20.0)).unwrap(),
-    )
-    .unwrap();
+    );
 
     // --- Scenarios ---
     let on_axis_ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
@@ -87,28 +85,23 @@ fn sphere_benchmarks(c: &mut Criterion) {
 
     // --- Benchmarks ---
     group.bench_function("on-axis hit", |b| {
-        b.iter(|| surface.calc_intersect_and_normal(&on_axis_ray))
+        b.iter(|| surface.intersect(&on_axis_ray))
     });
     group.bench_function("off-axis hit", |b| {
-        b.iter(|| surface.calc_intersect_and_normal(&off_axis_ray))
+        b.iter(|| surface.intersect(&off_axis_ray))
     });
-    group.bench_function("angled hit", |b| {
-        b.iter(|| surface.calc_intersect_and_normal(&angled_ray))
-    });
-    group.bench_function("miss", |b| {
-        b.iter(|| surface.calc_intersect_and_normal(&miss_ray))
-    });
+    group.bench_function("angled hit", |b| b.iter(|| surface.intersect(&angled_ray)));
+    group.bench_function("miss", |b| b.iter(|| surface.intersect(&miss_ray)));
     group.finish();
 }
 
 /// Benchmarks for the Cylinder surface
 fn cylinder_benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("Cylinder Intersection");
-    let surface = Cylinder::new(
-        millimeter!(10.0),
+    let surface = Face::new(
+        SurfaceShape::Cylinder(Cylinder::new(millimeter!(10.0)).unwrap()),
         Isometry::new_along_z(millimeter!(20.0)).unwrap(),
-    )
-    .unwrap();
+    );
 
     // --- Scenarios ---
     let on_axis_ray = Ray::origin_along_z(nanometer!(1053.0), joule!(1.0)).unwrap();
@@ -127,28 +120,23 @@ fn cylinder_benchmarks(c: &mut Criterion) {
 
     // --- Benchmarks ---
     group.bench_function("on-axis hit", |b| {
-        b.iter(|| surface.calc_intersect_and_normal(&on_axis_ray))
+        b.iter(|| surface.intersect(&on_axis_ray))
     });
     group.bench_function("off-axis hit", |b| {
-        b.iter(|| surface.calc_intersect_and_normal(&off_axis_ray))
+        b.iter(|| surface.intersect(&off_axis_ray))
     });
-    group.bench_function("angled hit", |b| {
-        b.iter(|| surface.calc_intersect_and_normal(&angled_ray))
-    });
-    group.bench_function("miss", |b| {
-        b.iter(|| surface.calc_intersect_and_normal(&miss_ray))
-    });
+    group.bench_function("angled hit", |b| b.iter(|| surface.intersect(&angled_ray)));
+    group.bench_function("miss", |b| b.iter(|| surface.intersect(&miss_ray)));
     group.finish();
 }
 
 /// Benchmarks for the Parabola surface
 fn parabola_benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("Parabola Intersection");
-    let surface = Parabola::new(
-        millimeter!(20.0),                                // focal length
-        Isometry::new_along_z(millimeter!(5.0)).unwrap(), // vertex at z=5mm
-    )
-    .unwrap();
+    let surface = Face::new(
+        SurfaceShape::Parabola(Parabola::new(millimeter!(20.0)).unwrap()),
+        Isometry::new_along_z(millimeter!(5.0)).unwrap(),
+    );
 
     // --- Scenarios ---
     // All rays start behind the parabola's vertex
@@ -173,17 +161,13 @@ fn parabola_benchmarks(c: &mut Criterion) {
 
     // --- Benchmarks ---
     group.bench_function("on-axis hit", |b| {
-        b.iter(|| surface.calc_intersect_and_normal(&on_axis_ray))
+        b.iter(|| surface.intersect(&on_axis_ray))
     });
     group.bench_function("off-axis hit", |b| {
-        b.iter(|| surface.calc_intersect_and_normal(&off_axis_ray))
+        b.iter(|| surface.intersect(&off_axis_ray))
     });
-    group.bench_function("angled hit", |b| {
-        b.iter(|| surface.calc_intersect_and_normal(&angled_ray))
-    });
-    group.bench_function("miss", |b| {
-        b.iter(|| surface.calc_intersect_and_normal(&miss_ray))
-    });
+    group.bench_function("angled hit", |b| b.iter(|| surface.intersect(&angled_ray)));
+    group.bench_function("miss", |b| b.iter(|| surface.intersect(&miss_ray)));
     group.finish();
 }
 

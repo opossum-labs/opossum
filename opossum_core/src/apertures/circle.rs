@@ -1,10 +1,10 @@
-use super::{Bounded, Shape, transformed};
+use super::{Bounded, Shape};
 use crate::{
     error::{OpmResult, OpossumError},
     meter,
     prelude::ApertureShape,
     types::validated_type_definitions::ValidatedRadius,
-    utils::{geom_transformation::Isometry, math_distribution_functions::ellipse},
+    utils::math_distribution_functions::ellipse,
 };
 use nalgebra::{Point2, Point3};
 use opm_macros_lib::EnsureValidated;
@@ -57,7 +57,7 @@ impl CircleShape {
 impl Bounded for CircleShape {
     /// Return `segments` points evenly spaced on this circle, counter-clockwise.
     ///
-    /// See [`Aperture::outline_points`](crate::apertures::Aperture::outline_points).
+    /// See [`OutlineShape::outline_points`](crate::apertures::OutlineShape::outline_points).
     ///
     /// # Errors
     ///
@@ -79,26 +79,6 @@ impl Bounded for CircleShape {
             .into_iter()
             .map(|point| Point2::new(meter!(point.x), meter!(point.y)))
             .collect())
-    }
-
-    fn extreme_points(&self, iso: Option<&Isometry>) -> Vec<Point2<Length>> {
-        // A circle is indifferent to the rotation of its aperture, so only its center moves. The
-        // axis-aligned bounds follow from that center alone, while the point farthest from the
-        // origin lies on the far side of the shifted circle.
-        let center = transformed(Point2::origin(), iso);
-        let radius = self.radius();
-        let mut extremes = vec![
-            Point2::new(center.x + radius, center.y),
-            Point2::new(center.x - radius, center.y),
-            Point2::new(center.x, center.y + radius),
-            Point2::new(center.x, center.y - radius),
-        ];
-        let shift = center.x.value.hypot(center.y.value);
-        if shift > 0.0 {
-            let stretch = 1.0 + radius.value / shift;
-            extremes.push(Point2::new(center.x * stretch, center.y * stretch));
-        }
-        extremes
     }
 }
 impl Shape for CircleShape {

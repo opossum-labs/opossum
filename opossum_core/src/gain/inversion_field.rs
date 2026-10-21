@@ -542,37 +542,30 @@ fn cell_center(range: &Range<Length>, count: usize, index: usize) -> Length {
 mod test {
     use super::*;
     use crate::{
-        apertures::{Aperture, ApertureType},
-        core_optics::{OpticNode, node_attr::NodePositioning, volumetric::Volumetric},
+        apertures::{CircleShape, Outline},
+        core_optics::{OpticNode, node_attr::NodePositioning},
         degree,
-        geometry::{Plane, body::SurfaceBoundedBody, geo_surface::GeoSurfaceRef},
+        geometry::{Extruded, Face, SurfaceShape},
         millimeter,
-        nodes::Lens,
-        types::validated_type_definitions::ValidatedCrossSection,
+        nodes::{
+            Lens,
+            test_helper::helper::{body_of, placed_geometry},
+        },
         utils::geom_transformation::Isometry,
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::Vector3;
-    use std::{f64::consts::PI, sync::Arc};
+    use std::f64::consts::PI;
 
     /// Create a disk of the given thickness and radius, placed by the given isometry.
-    fn disk(
-        thickness: Length,
-        radius: Length,
-        placement: Isometry,
-    ) -> OpmResult<SurfaceBoundedBody> {
-        Ok(SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Plane::new(placement))),
-            GeoSurfaceRef(Arc::new(Plane::new(
-                placement.append(&Isometry::new_along_z(thickness)?),
-            ))),
-            ValidatedCrossSection::try_new(Aperture::new_circle(
-                radius,
-                ApertureType::Hole,
-                None,
-            )?)?,
-            placement,
-        ))
+    fn disk(thickness: Length, radius: Length, placement: Isometry) -> OpmResult<Extruded> {
+        Ok(Extruded::new(
+            Isometry::identity(),
+            &Face::new(SurfaceShape::Plane, Isometry::identity()),
+            &Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
+            Outline::new(CircleShape::new(radius)?, Vec::new())?,
+        )?
+        .moved(&placement))
     }
     /// Return the volume of all cells of the given field that hold medium.
     fn covered_volume(field: &InversionField) -> Volume {
@@ -753,8 +746,8 @@ mod test {
         // body its own surfaces and optic shape enclose.
         let mut lens = Lens::default();
         lens.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
-        let body = lens.volume_body()?;
-        let field = InversionField::from_body(&body, (9, 9, 5))?;
+        let geometry = placed_geometry(&lens)?;
+        let field = InversionField::from_body(body_of(&geometry)?, (9, 9, 5))?;
         assert_eq!(field.dimensions(), (9, 9, 5));
         // the axis of the lens runs through the middle column of cells, which is all medium
         assert!((0..5).all(|k| field.is_inside((4, 4, k))));

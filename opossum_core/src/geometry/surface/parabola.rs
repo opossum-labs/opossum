@@ -1,52 +1,56 @@
 //! Parabolic surface
 //!
-//! This module implements a parabolic surface with a given focal length and a given z position on the optical axis.
+//! This module implements a parabolic surface with a given focal length.
 
 use crate::{
     error::{OpmResult, OpossumError},
+    light::Ray,
     meter,
-    utils::geom_transformation::Isometry,
 };
 use nalgebra::{Point2, Point3, Vector3, vector};
 use roots::{Roots, find_roots_quadratic};
+use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
-use super::geo_surface::GeoSurface;
+use super::GeoSurface;
 
-#[derive(Clone, Debug)]
-/// A parabolic surface with a given focal length and a given z position on the optical axis.
+/// A parabolic surface with a given focal length, its vertex at the origin of its frame.
+///
+/// **Note**: A positive focal length leads to a parabolic surface with its "opening" towards the
+/// positive z axis.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Parabola {
     focal_length: Length,
-    isometry: Isometry,
 }
 
 impl Parabola {
-    /// Create a new [`Parabola`] located and oriented by the given [`Isometry`].
+    /// Create a new [`Parabola`].
     ///
-    /// **Note**: A positive focal length leads to a parabolic surface with its "opening" towards the positive z axis.
+    /// # Arguments
+    ///
+    /// * `focal_length` - the focal length; a positive one opens the parabola towards +z.
     ///
     /// # Errors
     ///
     /// This function will return an error if the focal length is 0.0 or not finite.
-    pub fn new(focal_length: Length, isometry: Isometry) -> OpmResult<Self> {
+    pub fn new(focal_length: Length) -> OpmResult<Self> {
         if !focal_length.is_normal() {
             return Err(OpossumError::Other(
                 "focal length must be != 0.0 and finite".into(),
             ));
         }
-        Ok(Self {
-            focal_length,
-            isometry,
-        })
+        Ok(Self { focal_length })
+    }
+    /// Returns the focal length of this [`Parabola`].
+    #[must_use]
+    pub const fn focal_length(&self) -> Length {
+        self.focal_length
     }
 }
 
 impl GeoSurface for Parabola {
     #[allow(clippy::suboptimal_flops)] // don't use mul_add here for a,b,c because the current implementation is faster!
-    fn calc_intersect_and_normal_do(
-        &self,
-        ray: &crate::light::Ray,
-    ) -> Option<(Point3<Length>, Vector3<f64>)> {
+    fn calc_intersect_and_normal(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
         let dir = ray.direction();
         let pos_vec = ray.position().coords.map(|v| v.value);
         let f_length = self.focal_length.value;
@@ -87,16 +91,8 @@ impl GeoSurface for Parabola {
                 normal,
             ));
         }
-        let roots = find_roots_quadratic(a, b, c);
-        let real_t = match roots {
-            Roots::No(_) => return None,
-            Roots::One(t) => {
-                if t[0] >= 0.0 {
-                    t[0]
-                } else {
-                    return None;
-                }
-            }
+        let real_t = match find_roots_quadratic(a, b, c) {
+            Roots::One(t) => t[0],
             Roots::Two(t) => {
                 if self.focal_length.is_sign_negative() {
                     // Concave (opens towards -z)
@@ -106,7 +102,7 @@ impl GeoSurface for Parabola {
                     f64::min(t[0], t[1])
                 }
             }
-            _ => unreachable!(),
+            _ => return None,
         };
         if real_t < 0.0 {
             return None;
@@ -141,17 +137,13 @@ impl GeoSurface for Parabola {
         let focal_length = self.focal_length.value;
         Some(vector![-x, -y, 2. * focal_length].normalize() * focal_length.signum())
     }
-    fn is_behind_do(&self, point: &Point3<Length>) -> bool {
+    fn is_behind(&self, point: &Point3<Length>) -> bool {
         self.local_z_at(&Point2::new(point.x, point.y))
             .is_some_and(|sag| point.z >= sag)
     }
-    fn isometry(&self) -> &Isometry {
-        &self.isometry
+    fn reaches(&self, _distance: Length) -> bool {
+        true
     }
-    fn set_isometry(&mut self, isometry: Isometry) {
-        self.isometry = isometry;
-    }
-
     fn name(&self) -> &'static str {
         "parabolic"
     }
@@ -162,25 +154,26 @@ mod test {
     use super::Parabola;
     use crate::{
         error::{OpmResult, OpossumError},
-        geometry::geo_surface::GeoSurface,
+        geometry::GeoSurface,
         joule,
         light::Ray,
         meter, nanometer,
-        utils::geom_transformation::Isometry,
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::vector;
     #[test]
-    fn new() {
-        assert!(Parabola::new(meter!(0.0), Isometry::identity()).is_err());
-        assert!(Parabola::new(meter!(f64::NAN), Isometry::identity()).is_err());
-        assert!(Parabola::new(meter!(f64::INFINITY), Isometry::identity()).is_err());
-        assert!(Parabola::new(meter!(f64::NEG_INFINITY), Isometry::identity()).is_err());
+    fn new() -> OpmResult<()> {
+        assert!(Parabola::new(meter!(0.0)).is_err());
+        assert!(Parabola::new(meter!(f64::NAN)).is_err());
+        assert!(Parabola::new(meter!(f64::INFINITY)).is_err());
+        assert!(Parabola::new(meter!(f64::NEG_INFINITY)).is_err());
+        assert_eq!(Parabola::new(meter!(1.0))?.focal_length(), meter!(1.0));
+        Ok(())
     }
     #[test]
     fn is_behind() -> OpmResult<()> {
         // opening towards +z: the sag at x = 1 m is 1 / (4 * 1 m) = 0.25 m
-        let parabola = Parabola::new(meter!(1.0), Isometry::identity())?;
+        let parabola = Parabola::new(meter!(1.0))?;
         assert!(parabola.is_behind(&meter!(0.0, 0.0, 0.1)));
         // a point exactly on the surface counts as behind it
         assert!(parabola.is_behind(&meter!(0.0, 0.0, 0.0)));
@@ -194,7 +187,7 @@ mod test {
     #[test]
     fn is_behind_negative_focal_length() -> OpmResult<()> {
         // opening towards -z: the sag at x = 1 m is now -0.25 m
-        let parabola = Parabola::new(meter!(-1.0), Isometry::identity())?;
+        let parabola = Parabola::new(meter!(-1.0))?;
         assert!(parabola.is_behind(&meter!(0.0, 0.0, 0.1)));
         assert!(!parabola.is_behind(&meter!(0.0, 0.0, -0.1)));
         assert!(parabola.is_behind(&meter!(1.0, 0.0, -0.2)));
@@ -203,10 +196,10 @@ mod test {
     }
     #[test]
     fn intersect() -> OpmResult<()> {
-        let parabola = Parabola::new(meter!(1.0), Isometry::identity())?;
+        let parabola = Parabola::new(meter!(1.0))?;
         let ray = Ray::new_collimated(meter!(-1.0, -1.0, -10.0), nanometer!(1000.0), joule!(1.0))?;
         let (intersection_point, surface_normal) = parabola
-            .calc_intersect_and_normal_do(&ray)
+            .calc_intersect_and_normal(&ray)
             .ok_or(OpossumError::Other("no intersect and normal found".into()))?;
         assert_eq!(intersection_point, meter!(-1., -1., 0.5));
         assert_abs_diff_eq!(
@@ -221,7 +214,7 @@ mod test {
     }
     #[test]
     fn intersect_ray_through_focus_concave() -> OpmResult<()> {
-        let parabola = Parabola::new(meter!(-1.0), Isometry::identity())?;
+        let parabola = Parabola::new(meter!(-1.0))?;
         let direction = vector![0.0, 1.0, 1. - 0.25];
         let ray = Ray::new(
             meter!(0.0, 0.0, -1.0),
@@ -229,12 +222,12 @@ mod test {
             nanometer!(1000.0),
             joule!(1.0),
         )?;
-        assert!(parabola.calc_intersect_and_normal_do(&ray).is_some());
+        assert!(parabola.calc_intersect_and_normal(&ray).is_some());
         Ok(())
     }
     #[test]
     fn intersect_ray_through_focus_convex() -> OpmResult<()> {
-        let parabola = Parabola::new(meter!(1.0), Isometry::identity())?;
+        let parabola = Parabola::new(meter!(1.0))?;
         let direction = vector![0.0, 0.5, 2.];
         let ray = Ray::new(
             meter!(0.0, -0.5, -1.0),
@@ -242,12 +235,12 @@ mod test {
             nanometer!(1000.0),
             joule!(1.0),
         )?;
-        assert!(parabola.calc_intersect_and_normal_do(&ray).is_some());
+        assert!(parabola.calc_intersect_and_normal(&ray).is_some());
         Ok(())
     }
     #[test]
     fn intersect_touching() -> OpmResult<()> {
-        let parabola = Parabola::new(meter!(1.0), Isometry::identity())?;
+        let parabola = Parabola::new(meter!(1.0))?;
         let direction = vector![0.0, 1.0, 0.0];
         let ray = Ray::new(
             meter!(0.0, -1.0, 0.0),
@@ -256,7 +249,7 @@ mod test {
             joule!(1.0),
         )?;
         let (i_point, r_point) = parabola
-            .calc_intersect_and_normal_do(&ray)
+            .calc_intersect_and_normal(&ray)
             .ok_or(OpossumError::Other("no intersect and normal found".into()))?;
         assert_eq!(i_point.x, meter!(0.0));
         assert_eq!(i_point.y, meter!(0.0));
@@ -266,7 +259,7 @@ mod test {
     }
     #[test]
     fn intersect_not() -> OpmResult<()> {
-        let parabola = Parabola::new(meter!(1.0), Isometry::identity())?;
+        let parabola = Parabola::new(meter!(1.0))?;
         let direction = vector![0.0, 1.0, 0.0];
         let ray = Ray::new(
             meter!(0.0, -1.0, -1.0),
@@ -274,7 +267,7 @@ mod test {
             nanometer!(1000.0),
             joule!(1.0),
         )?;
-        assert!(parabola.calc_intersect_and_normal_do(&ray).is_none());
+        assert!(parabola.calc_intersect_and_normal(&ray).is_none());
 
         let direction = vector![0.0, 0.0, -1.0];
         let ray = Ray::new(
@@ -283,20 +276,7 @@ mod test {
             nanometer!(1000.0),
             joule!(1.0),
         )?;
-        assert!(parabola.calc_intersect_and_normal_do(&ray).is_none());
-        Ok(())
-    }
-    #[test]
-    fn isometry() -> OpmResult<()> {
-        let parabola = Parabola::new(meter!(1.0), Isometry::identity())?;
-        assert_eq!(parabola.isometry(), &Isometry::new_along_z(meter!(0.0))?);
-        Ok(())
-    }
-    #[test]
-    fn set_isometry() -> OpmResult<()> {
-        let mut parabola = Parabola::new(meter!(1.0), Isometry::identity())?;
-        parabola.set_isometry(Isometry::new_along_z(meter!(0.5))?);
-        assert_eq!(parabola.isometry(), &Isometry::new_along_z(meter!(0.5))?);
+        assert!(parabola.calc_intersect_and_normal(&ray).is_none());
         Ok(())
     }
 }

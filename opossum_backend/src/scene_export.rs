@@ -12,10 +12,7 @@ use opossum_core::{
         volumetric::Volumetric,
     },
     error::{OpmResult, OpossumError},
-    geometry::{
-        SurfaceMesh,
-        body::{Body, SurfaceBoundedBody},
-    },
+    geometry::SurfaceMesh,
     light::Rays,
     nanometer,
     nodes::NodeGroup,
@@ -71,23 +68,25 @@ const FALLBACK_REFRACTIVE_INDEX: f64 = 1.5;
 pub fn scene_of(placed: &NodeGroup, wavelength: Length) -> OpmResult<Scene> {
     let mut scene = Scene::new(SceneOptions::default());
     for_each_drawable(placed, |drawn| match drawn {
-        Drawn::Volume(node, body) => add_volume_at(
-            &mut scene,
-            node,
-            &body,
-            wavelength,
-            body.isometry().get_transform(),
-        ),
-        Drawn::Surface(node, mesh) => add_surface_at(
-            &mut scene,
-            node,
-            &mesh,
-            node.effective_node_iso()
-                .unwrap_or_else(Isometry::identity)
-                .get_transform(),
-        ),
+        Drawn::Volume(node, meshes) => {
+            add_volume_at(&mut scene, node, &meshes, wavelength, placement_of(node))
+        }
+        Drawn::Surface(node, meshes) => {
+            add_surface_at(&mut scene, node, &meshes, placement_of(node))
+        }
     })?;
     Ok(scene)
+}
+
+/// Where a component is drawn: where its node sits, which is where its geometry is traced.
+///
+/// # Arguments
+///
+/// - `node`: the placed component
+fn placement_of(node: &(impl OpticNodeExt + ?Sized)) -> Isometry3<f64> {
+    node.effective_node_iso()
+        .unwrap_or_else(Isometry::identity)
+        .get_transform()
 }
 
 /// Which drawable capability a node presents, before its shape is derived.
@@ -105,10 +104,10 @@ enum Drawable<'a> {
 /// A drawable component together with its derived shape, as [`for_each_drawable`] hands it to its
 /// caller.
 enum Drawn<'a> {
-    /// Encloses a volume of material, with the volume already derived.
-    Volume(&'a dyn Volumetric, Box<SurfaceBoundedBody>),
-    /// Is one optical surface, with the surface already meshed.
-    Surface(&'a dyn Planar, SurfaceMesh),
+    /// Encloses a volume of material, with its patches already meshed.
+    Volume(&'a dyn Volumetric, Vec<SurfaceMesh>),
+    /// Is one optical surface, with its patches already meshed.
+    Surface(&'a dyn Planar, Vec<SurfaceMesh>),
 }
 
 /// Walk a model and hand every component that can be drawn, with its shape, to `draw`.
@@ -121,9 +120,8 @@ enum Drawn<'a> {
 /// a component of its own. A component that cannot be drawn is reported and skipped rather than
 /// failing the whole walk, so one unusual component does not cost the view of the rest of the setup.
 ///
-/// The shape is derived once here and handed over as [`Drawn`], because deriving it copies the
-/// node's whole port set (see [`Volumetric::volume_body`] and [`Planar::surface_mesh`]) and every
-/// caller needs it.
+/// The shape is meshed once here (see [`OpticNodeExt::geometry_mesh`]) and handed over as
+/// [`Drawn`], because every caller needs it.
 ///
 /// # Arguments
 ///
@@ -163,14 +161,12 @@ where
             });
             continue;
         }
-        let drawn = match drawable {
-            Drawable::Volume(volume) => volume
-                .volume_body()
-                .and_then(|body| draw(Drawn::Volume(volume, Box::new(body)))),
-            Drawable::Surface(surface) => surface
-                .surface_mesh(RIM_SEGMENTS)
-                .and_then(|mesh| draw(Drawn::Surface(surface, mesh))),
-        };
+        let drawn = node_ref.geometry_mesh(RIM_SEGMENTS).and_then(|meshes| {
+            draw(match drawable {
+                Drawable::Volume(volume) => Drawn::Volume(volume, meshes),
+                Drawable::Surface(surface) => Drawn::Surface(surface, meshes),
+            })
+        });
         if let Err(e) = drawn {
             warn!("{node_ref} cannot be drawn and is left out of the scene: {e}");
             skipped.push(SkippedSceneNode {
@@ -195,28 +191,27 @@ where
 ///
 /// - `scene`: the scene to add to
 /// - `node`: the component to draw
-/// - `body`: the component's volume, already derived
+/// - `meshes`: the component's patches, already meshed in its own frame
 /// - `wavelength`: the wavelength the glass is given its refractive index at
 /// - `placement`: where to put the component
 ///
 /// # Errors
 ///
-/// This function returns an error if the component's volume cannot be meshed, or if `optoscene`
-/// rejects the resulting geometry.
+/// This function returns an error if the glass of the component cannot be described (see
+/// [`glass_of`]), or if `optoscene` rejects the resulting geometry.
 fn add_volume_at(
     scene: &mut Scene,
     node: &dyn Volumetric,
-    body: &SurfaceBoundedBody,
+    meshes: &[SurfaceMesh],
     wavelength: Length,
     placement: Isometry3<f64>,
 ) -> OpmResult<()> {
-    let mesh = body.triangulate(RIM_SEGMENTS)?;
-    let material = scene.add_material(glass_of(node, body, wavelength)?);
+    let material = scene.add_material(glass_of(node, wavelength)?);
     let mesh_id = scene
         .add_mesh(TriMesh {
-            // Three patches rather than one, so that the hard edge where the faces meet stays hard:
-            // patches do not share vertices.
-            patches: mesh.faces().map(|face| patch_of(face, material)).into(),
+            // One patch per face rather than one for all, so that the hard edge where the faces
+            // meet stays hard: patches do not share vertices.
+            patches: meshes.iter().map(|face| patch_of(face, material)).collect(),
         })
         .map_err(|e| {
             OpossumError::Other(format!("the mesh of '{}' was rejected: {e}", node.name()))
@@ -239,21 +234,22 @@ fn add_volume_at(
 /// Add one component that is a single optical surface to a scene, placed where the caller says.
 ///
 /// The single-surface counterpart of [`add_volume_at`]: a mirror, a grating, a filter or a detector
-/// has no second surface and no medium between them, so its mesh becomes a [`TriMesh`] built from
-/// [`Planar::surface_mesh`] rather than a volume's `triangulate`.
+/// has no second surface and no medium between them, so it is drawn in the material its
+/// [`Planar::appearance`] asks for rather than in glass.
 ///
-/// It is drawn as **two** patches, one the mirror image of the other (see [`SurfaceMesh::flipped`]),
-/// facing opposite ways. A volume's mesh is a closed shell with an outside and an inside, so one
-/// patch always faces the camera; a single surface has no "inside" to hide behind, and without a
-/// second, oppositely-facing patch it would vanish the moment the camera crossed to its back -
-/// `optoscene`'s `Mirror` and `Opaque` presets do not ask the renderer to draw both faces of one
-/// patch (unlike `Translucent`, which does), so the geometry has to supply both itself.
+/// Every patch is drawn **twice**, once as the mirror image of the other (see
+/// [`SurfaceMesh::flipped`]), facing opposite ways. A volume's mesh is a closed shell with an
+/// outside and an inside, so one patch always faces the camera; a single surface has no "inside" to
+/// hide behind, and without a second, oppositely-facing patch it would vanish the moment the camera
+/// crossed to its back - `optoscene`'s `Mirror` and `Opaque` presets do not ask the renderer to draw
+/// both faces of one patch (unlike `Translucent`, which does), so the geometry has to supply both
+/// itself.
 ///
 /// # Arguments
 ///
 /// - `scene`: the scene to add to
 /// - `node`: the component to draw
-/// - `mesh`: the component's meshed surface, already derived
+/// - `meshes`: the component's patches, already meshed in its own frame
 /// - `placement`: where to put the component
 ///
 /// # Errors
@@ -262,16 +258,21 @@ fn add_volume_at(
 fn add_surface_at(
     scene: &mut Scene,
     node: &dyn Planar,
-    mesh: &SurfaceMesh,
+    meshes: &[SurfaceMesh],
     placement: Isometry3<f64>,
 ) -> OpmResult<()> {
     let material = scene.add_material(material_of(node.appearance()));
     let mesh_id = scene
         .add_mesh(TriMesh {
-            patches: vec![
-                patch_of(mesh, material),
-                patch_of(&mesh.clone().flipped(), material),
-            ],
+            patches: meshes
+                .iter()
+                .flat_map(|mesh| {
+                    [
+                        patch_of(mesh, material),
+                        patch_of(&mesh.clone().flipped(), material),
+                    ]
+                })
+                .collect(),
         })
         .map_err(|e| {
             OpossumError::Other(format!("the mesh of '{}' was rejected: {e}", node.name()))
@@ -354,8 +355,8 @@ const fn material_of(appearance: Appearance) -> Material {
 ///
 /// # Errors
 ///
-/// This function returns an error if the component's volume cannot be derived or meshed, or if the
-/// scene cannot be written.
+/// This function returns an error if the component cannot be meshed, or if the scene cannot be
+/// written.
 pub fn glb_of_node(node: &dyn Volumetric, wavelength: Length) -> OpmResult<Vec<u8>> {
     // Pinned at the coordinate origin. Left to itself the exporter subtracts the centre of the
     // bounding box of whatever it holds, and the file would then no longer be the component in its
@@ -367,7 +368,7 @@ pub fn glb_of_node(node: &dyn Volumetric, wavelength: Length) -> OpmResult<Vec<u
     add_volume_at(
         &mut scene,
         node,
-        &node.volume_body()?,
+        &node.geometry_mesh(RIM_SEGMENTS)?,
         wavelength,
         Isometry3::identity(),
     )?;
@@ -402,7 +403,7 @@ pub fn glb_of_surface_node(node: &dyn Planar) -> OpmResult<Vec<u8>> {
     add_surface_at(
         &mut scene,
         node,
-        &node.surface_mesh(RIM_SEGMENTS)?,
+        &node.geometry_mesh(RIM_SEGMENTS)?,
         Isometry3::identity(),
     )?;
     scene
@@ -573,19 +574,17 @@ pub fn manifest_of(placed: &NodeGroup, wavelength: Length) -> OpmResult<SceneMan
     let mut nodes = Vec::new();
     let skipped = for_each_drawable(placed, |drawn| {
         let (uid, name, geometry, transform) = match drawn {
-            Drawn::Volume(node, body) => (
+            Drawn::Volume(node, meshes) => (
                 node.node_attr().uuid(),
                 node.name().to_string(),
-                geometry_of(node, &body, wavelength)?,
-                body.isometry().get_transform(),
+                geometry_of(node, &meshes, wavelength)?,
+                placement_of(node),
             ),
-            Drawn::Surface(node, mesh) => (
+            Drawn::Surface(node, meshes) => (
                 node.node_attr().uuid(),
                 node.name().to_string(),
-                surface_geometry_of(node, &mesh),
-                node.effective_node_iso()
-                    .unwrap_or_else(Isometry::identity)
-                    .get_transform(),
+                surface_geometry_of(node, &meshes),
+                placement_of(node),
             ),
         };
         let position = transform.translation.vector;
@@ -622,7 +621,7 @@ pub fn manifest_of(placed: &NodeGroup, wavelength: Length) -> OpmResult<SceneMan
 /// # Arguments
 ///
 /// - `node`: the component whose looks are wanted
-/// - `body`: its volume, already derived
+/// - `meshes`: its patches, already meshed
 /// - `wavelength`: the wavelength the glass is given its refractive index at
 ///
 /// # Returns
@@ -631,19 +630,18 @@ pub fn manifest_of(placed: &NodeGroup, wavelength: Length) -> OpmResult<SceneMan
 ///
 /// # Errors
 ///
-/// This function returns an error if the volume cannot be meshed, or if the component states no
-/// usable material.
+/// This function returns an error if the glass of the component cannot be described (see
+/// [`glass_of`]).
 fn geometry_of(
     node: &dyn Volumetric,
-    body: &SurfaceBoundedBody,
+    meshes: &[SurfaceMesh],
     wavelength: Length,
 ) -> OpmResult<String> {
-    let mesh = body.triangulate(RIM_SEGMENTS)?;
     let mut hash = Fnv1a::new();
-    for face in mesh.faces() {
+    for face in meshes {
         hash.write_mesh(face);
     }
-    hash.write_material(&glass_of(node, body, wavelength)?);
+    hash.write_material(&glass_of(node, wavelength)?);
     Ok(hash.finish())
 }
 
@@ -652,14 +650,16 @@ fn geometry_of(
 /// # Arguments
 ///
 /// - `node`: the component whose looks are wanted
-/// - `mesh`: its meshed surface, already derived
+/// - `meshes`: its patches, already meshed
 ///
 /// # Returns
 ///
 /// A hexadecimal digest of the component's mesh and material.
-fn surface_geometry_of(node: &dyn Planar, mesh: &SurfaceMesh) -> String {
+fn surface_geometry_of(node: &dyn Planar, meshes: &[SurfaceMesh]) -> String {
     let mut hash = Fnv1a::new();
-    hash.write_mesh(mesh);
+    for mesh in meshes {
+        hash.write_mesh(mesh);
+    }
     hash.write_material(&material_of(node.appearance()));
     hash.finish()
 }
@@ -792,17 +792,17 @@ impl Fnv1a {
 ///
 /// # Arguments
 ///
-/// - `node`: the component whose material is wanted
-/// - `body`: its volume, which the thickness is measured from
+/// - `node`: the component whose material is wanted; its volume is what the thickness is measured
+///   from
 /// - `wavelength`: the wavelength to evaluate the refractive index at
 ///
 /// # Errors
 ///
-/// This function returns an error if the component states no material, or if its volume has no
-/// extent to measure a thickness from.
+/// This function returns an error if the component states no material, if its geometry encloses no
+/// volume, or if that volume has no extent to measure a thickness from.
 // A refractive index and a thickness in millimetres are nowhere near the range of an f32.
 #[allow(clippy::cast_possible_truncation)]
-fn glass_of(node: &dyn Volumetric, body: &impl Body, wavelength: Length) -> OpmResult<Material> {
+fn glass_of(node: &dyn Volumetric, wavelength: Length) -> OpmResult<Material> {
     let material = node.material()?;
     let ior = material.refractive_index(wavelength).unwrap_or_else(|e| {
         warn!(
@@ -811,6 +811,16 @@ fn glass_of(node: &dyn Volumetric, body: &impl Body, wavelength: Length) -> OpmR
         );
         FALLBACK_REFRACTIVE_INDEX
     });
+    let geometry = node.geometry()?;
+    let body = geometry
+        .as_ref()
+        .and_then(|geometry| geometry.kind().as_body())
+        .ok_or_else(|| {
+            OpossumError::Other(format!(
+                "'{}' encloses no volume to measure a thickness from",
+                node.name()
+            ))
+        })?;
     let thickness = body.bounding_box()?.z_range();
     Ok(Material::Glass {
         color: node.glass_color(),
@@ -1051,7 +1061,7 @@ mod test {
         assert_eq!(
             primitives.len(),
             2,
-            "a surface node must draw both faces, not just the one `Planar::surface_mesh` returns"
+            "a surface node must draw both faces, not just the one its geometry is meshed as"
         );
         Ok(())
     }

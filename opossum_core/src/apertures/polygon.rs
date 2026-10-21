@@ -1,10 +1,9 @@
-use super::{Bounded, Shape, resample_ring, transformed};
+use super::{Bounded, Shape, resample_ring};
 use crate::{
     error::{OpmResult, OpossumError},
     millimeter,
     prelude::ApertureShape,
     types::validated_type_definitions::ValidatedPolygonPoints2D,
-    utils::geom_transformation::Isometry,
 };
 use earcutr::earcut;
 use nalgebra::{Point2, Point3};
@@ -147,21 +146,13 @@ impl Bounded for PolygonShape {
     /// Return the edge of this polygon as a counter-clockwise ring of about `segments` points.
     ///
     /// Every corner is part of it, and a polygon given clockwise is turned around; see
-    /// [`Aperture::outline_points`](crate::apertures::Aperture::outline_points).
+    /// [`OutlineShape::outline_points`](crate::apertures::OutlineShape::outline_points).
     ///
     /// # Errors
     ///
     /// This function returns an error if the corners enclose no area, i.e. all lie on one line.
     fn outline_points(&self, segments: usize) -> OpmResult<Vec<Point2<Length>>> {
         resample_ring(self.points(), segments)
-    }
-
-    fn extreme_points(&self, iso: Option<&Isometry>) -> Vec<Point2<Length>> {
-        // A polygon reaches farthest out at its corners, wherever it is turned to.
-        self.points()
-            .iter()
-            .map(|corner| transformed(*corner, iso))
-            .collect()
     }
 }
 impl Shape for PolygonShape {

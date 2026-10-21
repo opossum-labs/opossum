@@ -517,9 +517,8 @@ impl Ray {
                 self.refractive_index * distance_3d_point(&self.pos, &intersection_point);
             //then add additional phase shift due to lateral displacement from the grating origin
             let dist_from_origin = s
-                .geo_surface()
-                .0
-                .isometry()
+                .surface()
+                .frame()
                 .inverse_transform_point_f64(&intersection_in_m)
                 .x;
             self.path_length +=
@@ -654,9 +653,8 @@ impl Ray {
                 if self.helper_rays.is_none() && !self.is_helper {
                     if recorded {
                         generated_hit_point = Some(HitPoint::Energy(EnergyHitPoint::new(
-                            os.geo_surface()
-                                .0
-                                .isometry()
+                            os.surface()
+                                .frame()
                                 .inverse_transform_point(&intersection_point),
                             input_energy,
                         )?));
@@ -664,9 +662,8 @@ impl Ray {
                 } else if let Some(helper_fluence) = &self.helper_ray_fluence() {
                     if recorded {
                         generated_hit_point = Some(HitPoint::Fluence(FluenceHitPoint::new(
-                            os.geo_surface()
-                                .0
-                                .isometry()
+                            os.surface()
+                                .frame()
                                 .inverse_transform_point(&intersection_point),
                             *helper_fluence,
                         )?));
@@ -866,7 +863,7 @@ mod test {
         J_per_cm2,
         coatings::CoatingConstantR,
         degree,
-        geometry::{Plane, geo_surface::GeoSurfaceRef},
+        geometry::{Face, SurfaceShape},
         joule,
         light::Spectrum,
         millimeter, nanometer,
@@ -1200,7 +1197,7 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )?;
         let mut s = OpticSurface::default();
-        s.set_geo_surface(GeoSurfaceRef(Arc::new(Plane::new(isometry))));
+        s.set_surface(Face::new(SurfaceShape::Plane, isometry));
         s.set_coating(CoatingConstantR::new(reflectivity)?.into());
         assert!(
             ray.refract_on_surface(&s, Some(0.9), &MissedSurfaceStrategy::Stop)
@@ -1248,6 +1245,37 @@ mod test {
         assert_eq!(ray.number_of_refractions(), 1);
         Ok(())
     }
+    /// A hit on a curved face is recorded at its position across the face's own axis: a ray along
+    /// the axis of a turned lens, 3 mm and -4 mm off it, is recorded at (3, -4) mm.
+    #[test]
+    fn a_hit_on_a_curved_face_is_recorded_across_its_axis() -> OpmResult<()> {
+        use crate::{
+            apertures::{CircleShape, Outline},
+            geometry::{Extruded, Geometry},
+        };
+        let node_frame = Isometry::new(millimeter!(1.0, -2.0, 30.0), degree!(10.0, 5.0, 0.0))?;
+        let lens = Geometry::singlet(
+            millimeter!(50.0),
+            millimeter!(f64::INFINITY),
+            millimeter!(5.0),
+            Outline::new(CircleShape::new(millimeter!(10.0))?, Vec::new())?,
+        )?;
+        let mut surface = OpticSurface::default();
+        surface.set_face(Arc::new(lens.moved(&node_frame)), Extruded::FRONT)?;
+        let mut ray = Ray::new(
+            node_frame.transform_point(&millimeter!(3.0, -4.0, -20.0)),
+            node_frame.transform_vector_f64(&Vector3::z()),
+            nanometer!(1053.0),
+            joule!(1.0),
+        )?;
+        let (_, hit) = ray.refract_on_surface(&surface, Some(1.5), &MissedSurfaceStrategy::Stop)?;
+        let Some(HitPoint::Energy(hit)) = hit else {
+            return Err(OpossumError::Other("the ray left no energy hit".into()));
+        };
+        assert_abs_diff_eq!(hit.position().x.get::<millimeter>(), 3.0, epsilon = 1e-9);
+        assert_abs_diff_eq!(hit.position().y.get::<millimeter>(), -4.0, epsilon = 1e-9);
+        Ok(())
+    }
     #[test]
     fn refract_on_surface_same_index() -> OpmResult<()> {
         let position = Point3::origin();
@@ -1263,7 +1291,7 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )?;
         let mut s = OpticSurface::default();
-        s.set_geo_surface(GeoSurfaceRef(Arc::new(Plane::new(isometry))));
+        s.set_surface(Face::new(SurfaceShape::Plane, isometry));
         ray.refract_on_surface(&s, None, &MissedSurfaceStrategy::Stop)?;
         assert_eq!(ray.pos, millimeter!(0., 10., 10.));
         assert_eq!(ray.dir[0], 0.0);
@@ -1287,7 +1315,7 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )?;
         let mut s = OpticSurface::default();
-        s.set_geo_surface(GeoSurfaceRef(Arc::new(Plane::new(isometry))));
+        s.set_surface(Face::new(SurfaceShape::Plane, isometry));
         ray.refract_on_surface(&s, Some(1.5), &MissedSurfaceStrategy::Stop)?;
         assert_eq!(ray.pos, millimeter!(0., 0., 0.));
         assert_eq!(ray.dir, direction);
@@ -1310,7 +1338,7 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )?;
         let mut s = OpticSurface::default();
-        s.set_geo_surface(GeoSurfaceRef(Arc::new(Plane::new(isometry))));
+        s.set_surface(Face::new(SurfaceShape::Plane, isometry));
         assert!(
             ray.refract_on_surface(&s, Some(0.9), &MissedSurfaceStrategy::Stop)
                 .is_err()
@@ -1359,7 +1387,7 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )?;
         let mut s = OpticSurface::default();
-        s.set_geo_surface(GeoSurfaceRef(Arc::new(Plane::new(isometry))));
+        s.set_surface(Face::new(SurfaceShape::Plane, isometry));
         let (reflected, _hitpoint) =
             ray.refract_on_surface(&s, Some(1.0), &MissedSurfaceStrategy::Stop)?;
         assert!(reflected.is_none());

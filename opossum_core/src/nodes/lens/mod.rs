@@ -6,7 +6,7 @@ use crate::{
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, Volumetric},
     error::{OpmResult, OpossumError},
     geometry::{
-        Geometry,
+        Extruded, Geometry,
         body::{OPTIC_SHAPE, default_optic_shape},
     },
     material::{MATERIAL, Material},
@@ -190,7 +190,10 @@ impl OpticNode for Lens {
         Some(self)
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(&["input_1"], &["output_1"])
+        self.install_geometry(
+            &[("input_1", Extruded::FRONT)],
+            &[("output_1", Extruded::REAR)],
+        )
     }
 }
 
@@ -669,11 +672,7 @@ mod test {
         plano_convex
             .node_attr
             .set_property(OPTIC_SHAPE, aperture.clone())?;
-        plano_convex
-            .as_volume()
-            .expect("a lens is volumetric")
-            .volume_body()?
-            .triangulate(64)?;
+        plano_convex.geometry_mesh(64)?;
 
         // Bi-convex: both faces an exact hemisphere, so the centre thickness must reach both sags
         // (25 mm each) or the two surfaces would cross inside the lens.
@@ -685,11 +684,7 @@ mod test {
             RefrIndexConst::new(1.5)?,
         )?;
         bi_convex.node_attr.set_property(OPTIC_SHAPE, aperture)?;
-        bi_convex
-            .as_volume()
-            .expect("a lens is volumetric")
-            .volume_body()?
-            .triangulate(64)?;
+        bi_convex.geometry_mesh(64)?;
 
         Ok(())
     }

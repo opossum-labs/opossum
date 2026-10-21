@@ -20,7 +20,7 @@ use crate::{
     },
     core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt},
     error::OpmResult,
-    geometry::Geometry,
+    geometry::{Geometry, SurfaceGeometry},
     light::{LightData, LightResult, Spectrum},
     nodes::NodeRegistration,
     properties::{Properties, Proptype, validator::Validator},
@@ -115,7 +115,10 @@ impl OpticNode for RayPropagationVisualizer {
     }
 
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(&["input_1"], &["output_1"])
+        self.install_geometry(
+            &[("input_1", SurfaceGeometry::FACE)],
+            &[("output_1", SurfaceGeometry::FACE)],
+        )
     }
 
     fn node_report(&self, uuid: &str, analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
