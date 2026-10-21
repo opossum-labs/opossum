@@ -146,11 +146,6 @@ pub trait OpticNodeExt {
     /// * `backward` - whether the light runs through the node backward.
     /// * `part` - what the reflected part is to each bundle.
     ///
-    /// # Returns
-    ///
-    /// For every bundle in `rays_bundle` after the call, whether each of its rays hit the surface.
-    /// A node that processes the light further after the surface does so only for those rays.
-    ///
     /// # Errors
     ///
     /// This function returns an error if the specified surface cannot be found, if geometric propagation fails,
@@ -163,7 +158,7 @@ pub trait OpticNodeExt {
         strategy: &dyn PropagationStrategy,
         backward: bool,
         part: ReflectedPart,
-    ) -> OpmResult<Vec<Vec<bool>>>;
+    ) -> OpmResult<()>;
 
     /// A unified helper function to analyze optical nodes that feature a single interacting surface.
     ///
@@ -404,7 +399,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         strategy: &dyn PropagationStrategy,
         backward: bool,
         part: ReflectedPart,
-    ) -> OpmResult<Vec<Vec<bool>>> {
+    ) -> OpmResult<()> {
         let uuid = self.node_attr().uuid();
         let node_name = self.name().to_string();
 
@@ -414,7 +409,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
             )));
         };
         let rays_before: usize = rays_bundle.iter().map(|r| r.nr_of_rays(true)).sum();
-        let hits = runtime.propagate(
+        runtime.propagate(
             optic_surf_name,
             rays_bundle,
             effect,
@@ -425,7 +420,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         )?;
         let rays_after: usize = rays_bundle.iter().map(|r| r.nr_of_rays(true)).sum();
         self.warn_about_lost_rays(rays_before, rays_after);
-        Ok(hits)
+        Ok(())
     }
 
     fn unified_analyze_single_surface_node(

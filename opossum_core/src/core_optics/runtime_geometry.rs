@@ -155,8 +155,7 @@ impl RuntimeGeometry {
     ///
     /// # Returns
     ///
-    /// The bundle of reflected parts and, for every ray of `rays` in order, whether it hit the
-    /// surface. A ray that was already invalid did not.
+    /// The bundle of reflected parts.
     ///
     /// # Warnings
     ///
@@ -174,7 +173,7 @@ impl RuntimeGeometry {
         effect: &dyn SurfaceEffect,
         part: ReflectedPart,
         missed: MissedSurfaceStrategy,
-    ) -> OpmResult<(Rays, Vec<bool>)> {
+    ) -> OpmResult<Rays> {
         let Self {
             geometry, surfaces, ..
         } = self;
@@ -184,19 +183,13 @@ impl RuntimeGeometry {
         let mut valid_rays_found = false;
         let mut rays_missed = false;
         let mut reflected_rays = Rays::with_capacity(rays.nr_of_rays(false));
-        let mut hits = vec![false; rays.nr_of_rays(false)];
-        for (ray, hit) in rays
-            .iter_mut()
-            .zip(hits.iter_mut())
-            .filter(|(ray, _)| ray.valid())
-        {
+        for ray in rays.iter_mut().filter(|ray| ray.valid()) {
             valid_rays_found = true;
             let Some(surface_hit) = geometry.intersect(face, ray) else {
                 missed.apply_to(ray);
                 rays_missed = true;
                 continue;
             };
-            *hit = true;
             let (reflected, hit_point) = effect.act_at(ray, &surface_hit, surface.coating())?;
             if let Some(mut reflected) = reflected {
                 if let (Some(helpers), Some(reflected_helpers)) =
@@ -232,7 +225,7 @@ impl RuntimeGeometry {
             warn!("ray bundle contains no valid rays - not propagating");
         }
         part.link_bundles(rays, &mut reflected_rays);
-        Ok((reflected_rays, hits))
+        Ok(reflected_rays)
     }
     /// Lets a surface of this component act on the bundles of an analysis (see
     /// [`RuntimeGeometry::interact`]).
@@ -251,11 +244,6 @@ impl RuntimeGeometry {
     /// * `node` - the node of this component, which the reflected bundles originate from.
     /// * `strategy` - the analysis.
     ///
-    /// # Returns
-    ///
-    /// For every bundle in `bundles` after the call, whether each of its rays hit the surface. The
-    /// appended ghost reflections left the surface from a hit, so all of them count as hits.
-    ///
     /// # Errors
     ///
     /// This function returns an error if there is no such surface, if the interaction fails or if
@@ -270,11 +258,10 @@ impl RuntimeGeometry {
         backward: bool,
         node: Uuid,
         strategy: &dyn PropagationStrategy,
-    ) -> OpmResult<Vec<Vec<bool>>> {
+    ) -> OpmResult<()> {
         let missed = strategy.missed_surface_strategy();
-        let mut hits_per_bundle = Vec::with_capacity(bundles.len());
         for rays in &mut *bundles {
-            let (mut reflected, hits) = self.interact(surface, rays, effect, part, missed)?;
+            let mut reflected = self.interact(surface, rays, effect, part, missed)?;
             reflected.set_node_origin_uuid(node);
             strategy.on_surface_interaction(
                 self.surfaces.named_mut(surface)?,
@@ -282,13 +269,9 @@ impl RuntimeGeometry {
                 reflected,
                 backward,
             )?;
-            hits_per_bundle.push(hits);
         }
-        for rays in self.surfaces.named_mut(surface)?.get_rays_cache(backward) {
-            hits_per_bundle.push(vec![true; rays.nr_of_rays(false)]);
-            bundles.push(rays.clone());
-        }
-        Ok(hits_per_bundle)
+        bundles.extend_from_slice(self.surfaces.named_mut(surface)?.get_rays_cache(backward));
+        Ok(())
     }
     /// Returns the medium: the body the geometry encloses and the inversion in it.
     ///
@@ -419,7 +402,7 @@ mod test {
         traced_at(Geometry::plane(None), surface)
     }
     /// Refract a bundle into vacuum at the given component, with its ghost reflection.
-    fn refract(runtime: &mut RuntimeGeometry, rays: &mut Rays) -> OpmResult<(Rays, Vec<bool>)> {
+    fn refract(runtime: &mut RuntimeGeometry, rays: &mut Rays) -> OpmResult<Rays> {
         runtime.interact(
             "input_1",
             rays,
@@ -434,21 +417,19 @@ mod test {
         rays: &mut Rays,
         config: &SplittingConfig,
     ) -> OpmResult<Rays> {
-        runtime
-            .interact(
-                "input_1",
-                rays,
-                config,
-                ReflectedPart::Branch,
-                MissedSurfaceStrategy::Stop,
-            )
-            .map(|(reflected, _)| reflected)
+        runtime.interact(
+            "input_1",
+            rays,
+            config,
+            ReflectedPart::Branch,
+            MissedSurfaceStrategy::Stop,
+        )
     }
     #[test]
     fn refraction_of_an_empty_bundle() -> OpmResult<()> {
         let mut rays = Rays::default();
         testing_logger::setup();
-        let (reflected, _) = refract(&mut open_plane(OpticSurface::default())?, &mut rays)?;
+        let reflected = refract(&mut open_plane(OpticSurface::default())?, &mut rays)?;
         check_logs(
             log::Level::Warn,
             vec!["ray bundle contains no valid rays - not propagating"],
@@ -483,7 +464,7 @@ mod test {
         rays.set_node_origin_uuid(node_uuid);
         rays.set_parent_uuid(parent_uuid);
         rays.set_parent_node_split_idx(10);
-        let (reflected, _) = open_plane(OpticSurface::default())?.interact(
+        let reflected = open_plane(OpticSurface::default())?.interact(
             "input_1",
             &mut rays,
             &Refraction(Some(&refr_index_vaccuum())),
@@ -503,7 +484,7 @@ mod test {
         let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1000.0))?);
         let mut surface = OpticSurface::default();
         surface.set_coating(CoatingConstantR::new(percent!(20.0))?.into());
-        let (reflected, _) = refract(&mut open_plane(surface)?, &mut rays)?;
+        let reflected = refract(&mut open_plane(surface)?, &mut rays)?;
         assert_eq!(reflected.parent_id(), Some(rays.uuid()));
         assert_eq!(*reflected.parent_pos_split_idx(), rays.ray_history_len());
         assert_eq!(reflected.bounce_lvl(), rays.bounce_lvl() + 1);
@@ -570,7 +551,7 @@ mod test {
             joule!(1.0),
         )?);
         testing_logger::setup();
-        let (reflected, _) = refract(&mut open_plane(OpticSurface::default())?, &mut rays)?;
+        let reflected = refract(&mut open_plane(OpticSurface::default())?, &mut rays)?;
         check_logs(
             log::Level::Warn,
             vec!["rays totally reflected or missed a surface"],
@@ -588,7 +569,7 @@ mod test {
         )?);
         let mut s = OpticSurface::default();
         s.set_coating(CoatingConstantR::new(percent!(20.0))?.into());
-        let (reflected, _) = refract(&mut open_plane(s)?, &mut rays)?;
+        let reflected = refract(&mut open_plane(s)?, &mut rays)?;
         assert_eq!(rays.total_energy(), joule!(0.8));
         assert_eq!(reflected.total_energy(), joule!(0.2));
         Ok(())
@@ -706,7 +687,7 @@ mod test {
         runtime: &mut RuntimeGeometry,
         bundles: &mut Vec<Rays>,
         config: &RayTraceConfig,
-    ) -> OpmResult<Vec<Vec<bool>>> {
+    ) -> OpmResult<()> {
         runtime.propagate(
             "input_1",
             bundles,
@@ -717,20 +698,20 @@ mod test {
             config,
         )
     }
-    /// The surface pass tells for each ray of each bundle whether it hit. Ghost reflections cached
-    /// at the surface left it from a hit, so when they are appended they count as hits.
+    /// After the bundles, the ghost reflections cached at the surface for this direction join them.
     #[test]
-    fn propagation_tells_which_rays_hit() -> OpmResult<()> {
+    fn propagation_appends_the_ghost_reflections_cached_at_the_surface() -> OpmResult<()> {
+        let cached = Rays::from(vec![ray_at(0.0)?, ray_at(7.0)?]);
         let mut surface = OpticSurface::default();
-        surface.set_forward_rays_cache(vec![Rays::from(vec![ray_at(0.0)?, ray_at(7.0)?])]);
+        surface.set_forward_rays_cache(vec![cached.clone()]);
         let mut bundles = vec![Rays::from(vec![ray_at(4.9)?, ray_at(5.1)?])];
-        let hits = propagate(
+        propagate(
             &mut traced_at(bounded_plane()?, surface)?,
             &mut bundles,
             &RayTraceConfig::default(),
         )?;
-        assert_eq!(hits, [vec![true, false], vec![true, true]]);
         assert_eq!(bundles.len(), 2);
+        assert_eq!(bundles[1], cached);
         Ok(())
     }
     /// A ray trace invalidates the rays the surface pass leaves below its energy threshold. The

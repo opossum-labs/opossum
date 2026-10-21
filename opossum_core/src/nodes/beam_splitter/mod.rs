@@ -402,7 +402,7 @@ impl BeamSplitter {
                 "Input optic surface not found for port '{port_name}'"
             )));
         };
-        let (reflected, _) = runtime.interact(
+        let reflected = runtime.interact(
             port_name,
             &mut rays,
             splitting_config,

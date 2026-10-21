@@ -8,7 +8,7 @@ use crate::{
         propagation_strategy::PropagationStrategy,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, OpticNodeExt, node_attr::HasNodeAttr, surface_effect::Refraction},
+    core_optics::{NodeAttr, OpticNodeExt, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
     geometry::{
         Geometry, SurfaceGeometry,
@@ -164,17 +164,14 @@ impl AnalysisGhostFocus for IdealFilter {
         let Some(mut rays_bundle) = incoming_data.remove(in_port) else {
             return Err(OpossumError::Analysis("filtering of rays failed".into()));
         };
-        let hits = self.pass_through_surface_generic(
+        self.pass_through_surface_generic(
             "input_1",
-            &Refraction(None),
+            &filter_type,
             &mut rays_bundle,
             config,
             false,
             ReflectedPart::Ghost,
         )?;
-        for (rays, hits) in rays_bundle.iter_mut().zip(&hits) {
-            rays.filter_energy(&filter_type, hits)?;
-        }
         Ok(LightRays::from([(out_port.clone(), rays_bundle)]))
     }
 }
@@ -223,15 +220,13 @@ impl AnalysisRayTrace for IdealFilter {
         let Some(runtime) = self.node_attr_mut().runtime_mut() else {
             return Err(OpossumError::Analysis("no surface found. Aborting".into()));
         };
-        let (_, hits) = runtime.interact(
+        runtime.interact(
             in_port,
             &mut rays,
-            &Refraction(None),
+            &filter_type,
             ReflectedPart::Ghost,
             *config.missed_surface_strategy(),
         )?;
-        // A ray that ran past the filter is not filtered.
-        rays.filter_energy(&filter_type, &hits)?;
         // The optical axis is placed by geometry alone; its energy does not decide where it runs.
         if !config.is_positioning_run() {
             rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;

@@ -197,7 +197,7 @@ impl BeamSplitter {
                 "input optic surface not found".into(),
             ));
         };
-        let (reflected, _) = runtime.interact(
+        let reflected = runtime.interact(
             port_name,
             &mut transmitted,
             &SplittingConfig::Ratio(0.5),

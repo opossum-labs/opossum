@@ -196,7 +196,7 @@ impl AnalysisRayTrace for ThinMirror {
         };
         if let LightData::Geometric(mut rays) = data.clone() {
             let reflected = if let Some(runtime) = self.node_attr_mut().runtime_mut() {
-                let (mut reflected_rays, _) = runtime.interact(
+                let mut reflected_rays = runtime.interact(
                     in_port,
                     &mut rays,
                     &Refraction(None),
