@@ -1,15 +1,33 @@
-use opossum_core::prelude::*;
+use opossum_core::{
+    apertures::{CircleShape, RectangleShape},
+    core_optics::NodeAttrExt,
+    geometry::body::OPTIC_SHAPE,
+    prelude::*,
+};
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
     let i_src = scenery.add_node(SourcePort::new("collimated line ray source"))?;
-    let i_m1 = scenery.add_node(ThinMirror::new("mirror 1").with_tilt(degree!(45.0, 0.0, 0.0))?)?;
+    // Turned by 45°, mirror 1 meets the beam on both passes up to about 19 mm from its center:
+    // it is a 2-inch mirror.
+    let mut mirror1 = ThinMirror::new("mirror 1").with_tilt(degree!(45.0, 0.0, 0.0))?;
+    mirror1.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.4))?).into(),
+    )?;
+    let i_m1 = scenery.add_node(mirror1)?;
     let i_m2 = scenery.add_node(ThinMirror::new("mirror 2").with_tilt(degree!(2.0, 0.0, 0.0))?)?;
     let m1_ref = NodeReference::from_node(&scenery.node(i_m1)?)?;
     let i_m1_ref = scenery.add_node(m1_ref)?;
     let i_sd3 = scenery.add_node(RayPropagationVisualizer::default())?;
-    let i_sd = scenery.add_node(SpotDiagram::default())?;
+    // The beam reaches the spot diagram up to 17 mm off its center: it is 40 mm square.
+    let mut spot_diagram = SpotDiagram::default();
+    spot_diagram.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(RectangleShape::new(millimeter!(40.0), millimeter!(40.0))?).into(),
+    )?;
+    let i_sd = scenery.add_node(spot_diagram)?;
     let sd_ref = NodeReference::from_node(&scenery.node(i_sd)?)?;
     let i_sd_ref = scenery.add_node(sd_ref)?;
     scenery.connect_nodes(i_src, "output_1", i_sd, "input_1", millimeter!(40.0))?;

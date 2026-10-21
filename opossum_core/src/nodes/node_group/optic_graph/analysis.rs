@@ -127,8 +127,9 @@ impl OpticGraph {
     /// Evaluates an analysis action on the node at `idx`.
     ///
     /// If the node is a reference proxy (`referenced_node_id` is present), this method
-    /// looks up the target node, handles temporary inversion if required, executes `action`,
-    /// reverts the inversion, and attaches proper error context.
+    /// looks up the target node, turns it the way the reference is turned for the duration of
+    /// `action`, turns it back as it was, and attaches proper error context. The reference's own
+    /// flag decides, since an inverted walk has turned both the reference and the target.
     /// If the node is a standard node, `action` is executed directly.
     ///
     /// # Errors
@@ -142,16 +143,11 @@ impl OpticGraph {
         F: FnOnce(&mut OpticRef) -> OpmResult<R>,
     {
         if let Some(target_uuid) = self.g[idx].referenced_node_id() {
-            let target_is_inverted = self.g[idx].inverted();
-            let target_idx = self.node_idx_by_uuid(target_uuid).ok_or_else(|| {
-                OpossumError::Analysis(format!(
-                    "referenced node with id {target_uuid} not found in graph"
-                ))
-            })?;
-
-            let target_node = &mut self.g[target_idx];
-            if target_is_inverted {
-                target_node.set_inverted(true).map_err(|_e| {
+            let pass_inverted = self.g[idx].inverted();
+            let target_node = self.reference_target_mut(target_uuid)?;
+            let target_inverted = target_node.inverted();
+            if pass_inverted != target_inverted {
+                target_node.set_inverted(pass_inverted).map_err(|_e| {
                     OpossumError::Analysis(format!(
                         "referenced node {target_node} cannot be inverted"
                     ))
@@ -160,8 +156,8 @@ impl OpticGraph {
 
             let res = action(target_node);
 
-            if target_is_inverted {
-                target_node.set_inverted(false)?;
+            if pass_inverted != target_inverted {
+                target_node.set_inverted(target_inverted)?;
             }
 
             let node_name = format!("{target_node}");
@@ -440,9 +436,9 @@ impl OpticGraph {
     /// Sets the node isometry of this [`OpticGraph`].
     ///
     /// The node is placed from the first connected input port (in the ports' deterministic declared
-    /// order) that carries axis data. Every further connected port is only checked against that
-    /// placement: an inconsistent one is reported as a warning (with a suggested fix), not an error,
-    /// and the placement is kept.
+    /// order) that carries axis data, turned about the axis by the up direction the axis ray carries.
+    /// Every further connected port is only checked against that placement: an inconsistent one is
+    /// reported as a warning (with a suggested fix), not an error, and the placement is kept.
     ///
     /// # Errors
     ///
@@ -456,7 +452,6 @@ impl OpticGraph {
         &mut self,
         incoming_edges: &LightResult,
         node_id: Uuid,
-        up_direction: Vector3<f64>,
     ) -> OpmResult<()> {
         let idx = self.node_idx_by_uuid(node_id).ok_or_else(|| {
             OpossumError::Analysis(format!("node with id {node_id} not found in graph"))
@@ -493,7 +488,7 @@ impl OpticGraph {
             };
             let mut ray = ray.to_owned();
             ray.propagate(distance_from_predecessor)?;
-            let world_frame = ray.to_isometry(up_direction);
+            let world_frame = ray.to_isometry()?;
             let entrance_frame = self.axis_entrance_frame_of(node_id, &port_name);
             if let Some(placed_iso) = self.g[idx].positioning().effective_position().copied() {
                 let expected_entrance = placed_iso.append(&entrance_frame);
@@ -527,17 +522,16 @@ impl OpticGraph {
     /// [`AnalysisRayTrace::axis_entrance_frame`]). It is the identity for ordinary single-input
     /// nodes. For a reference proxy the referenced target answers, since the proxy has no geometry
     /// of its own. Returns the identity if the node cannot be found.
-    fn axis_entrance_frame_of(&self, node_id: Uuid, port_name: &str) -> Isometry {
+    fn axis_entrance_frame_of(&mut self, node_id: Uuid, port_name: &str) -> Isometry {
         let Some(idx) = self.node_idx_by_uuid(node_id) else {
             return Isometry::identity();
         };
-        let node = &self.g[idx];
-        if let Some(target_uuid) = node.referenced_node_id()
-            && let Some(target_idx) = self.node_idx_by_uuid(target_uuid)
+        if let Some(target_uuid) = self.g[idx].referenced_node_id()
+            && let Ok(target) = self.reference_target_mut(target_uuid)
         {
-            return self.g[target_idx].axis_entrance_frame(port_name);
+            return target.axis_entrance_frame(port_name);
         }
-        node.axis_entrance_frame(port_name)
+        self.g[idx].axis_entrance_frame(port_name)
     }
     /// Sets the outgoing edge data of this [`OpticGraph`].
     /// Returns `None` if data has been assigned to an edge, or `Some(data)` if no matching edge was found.
@@ -591,11 +585,40 @@ mod test {
         core_optics::OpticNode,
         core_optics::PortType,
         light::spectrum_helper::create_he_ne_spec,
-        nodes::{BeamSplitter, Dummy, SourcePort, SplittingConfigBuilder},
+        nodes::{BeamSplitter, Dummy, NodeReference, SourcePort, SplittingConfigBuilder},
         utils::{geom_transformation::Isometry, test_helper::helper::check_logs},
     };
     use approx::assert_abs_diff_eq;
     use num_traits::Zero;
+
+    /// A pass through a reference runs through its target the way the reference is turned, whatever
+    /// way an inverted walk has turned the target itself, and leaves the target turned as it was.
+    #[test]
+    fn a_reference_pass_turns_its_target_like_the_reference() -> OpmResult<()> {
+        for (target_inverted, reference_inverted) in
+            [(false, false), (false, true), (true, false), (true, true)]
+        {
+            let mut graph = OpticGraph::default();
+            let mut target = Dummy::default();
+            target.set_inverted(target_inverted)?;
+            let target = graph.add_node(target)?;
+            let mut reference = NodeReference::from_node(&graph.node(target)?)?;
+            reference.set_inverted(reference_inverted)?;
+            let reference = graph.add_node(reference)?;
+            let idx = graph
+                .node_idx_by_uuid(reference)
+                .ok_or_else(|| OpossumError::Other("reference not added".into()))?;
+            let seen = graph.evaluate_node_or_reference(idx, |node| Ok(node.inverted()))?;
+            let case = format!("target {target_inverted}, reference {reference_inverted}");
+            assert_eq!(seen, reference_inverted, "turned during the pass: {case}");
+            assert_eq!(
+                graph.node(target)?.inverted(),
+                target_inverted,
+                "turned after the pass: {case}"
+            );
+        }
+        Ok(())
+    }
 
     #[test]
     fn analyze_empty() -> OpmResult<()> {

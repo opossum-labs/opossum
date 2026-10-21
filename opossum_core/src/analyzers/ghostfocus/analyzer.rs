@@ -132,6 +132,7 @@ impl Analyzer for GhostFocusAnalyzer {
         } else {
             format!(" '{}'", scenery.node_attr().name())
         };
+        scenery.rebuild_surfaces()?;
         info!("Calculate node positions of scenery{scenery_name}.");
 
         // Build a positioning config with the source map so AnalysisRayTrace can find the source
@@ -232,9 +233,28 @@ mod test_ghost_focus_analyzer {
         millimeter,
         nodes::{
             Lens, NodeGroup, SourcePort, SpotDiagram, ThinMirror, round_collimated_ray_builder,
+            test_helper::helper::{
+                rays_recorded_by_meter, scenery_with_a_mirror_shrunk_behind_its_back,
+            },
         },
         percent,
     };
+    /// A ghost focus analysis rebuilds the surfaces first, so it sees a component as its
+    /// properties state it now, also when a property was changed without the node rebuilding its
+    /// surfaces: a mirror shrunk to a radius of 5 mm reflects only the ray on its axis.
+    #[test]
+    fn a_ghost_focus_analysis_sees_a_component_as_its_properties_state_it_now() -> OpmResult<()> {
+        let (mut scenery, source, meter) = scenery_with_a_mirror_shrunk_behind_its_back()?;
+        let mut config = GhostFocusConfig::default();
+        config.set_max_bounces(0);
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(8.0), joule!(1.0), 1)?,
+        );
+        GhostFocusAnalyzer::new(config).analyze(&mut scenery)?;
+        assert_eq!(rays_recorded_by_meter(&scenery, meter)?, 1);
+        Ok(())
+    }
     #[test]
     fn empty_report() -> OpmResult<()> {
         let analyzer = GhostFocusAnalyzer::default();

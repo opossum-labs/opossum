@@ -18,6 +18,7 @@ use crate::{
         NodeAttr, NodeAttrExt, OpticNode, OpticPorts, OpticRef, PortType, node_attr::HasNodeAttr,
     },
     error::{OpmResult, OpossumError},
+    geometry::Geometry,
     light::{
         Rays,
         lightdata::{LightData, light_data_builder::LightDataBuilder},
@@ -208,6 +209,26 @@ impl NodeGroup {
                 group.for_each_node_mut(f);
             }
         }
+    }
+
+    /// Rebuild the surfaces of every node in this group and its subgroups from the node's current
+    /// properties.
+    ///
+    /// A property can be changed without its node rebuilding its surfaces: the backend writes it
+    /// into the node's attributes directly. An analysis that traces rays calls this first, so it
+    /// traces each component as its properties state it now.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if a node cannot build its surfaces.
+    pub fn rebuild_surfaces(&mut self) -> OpmResult<()> {
+        let mut result = Ok(());
+        self.for_each_node_mut(&mut |node| {
+            if result.is_ok() {
+                result = node.update_surfaces();
+            }
+        });
+        result
     }
 
     /// Returns the hierarchy of nodes starting from `node_id` bottom-up to the root group.
@@ -686,9 +707,11 @@ impl NodeGroup {
 }
 
 impl OpticNode for NodeGroup {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(None)
+    }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();
-        let ports_to_be_set = self.node_attr.raw_ports();
         for p in self.graph.port_map(&PortType::Input).port_names() {
             ports.add(&PortType::Input, &p).unwrap();
         }
@@ -698,7 +721,6 @@ impl OpticNode for NodeGroup {
         if self.graph.is_inverted() {
             ports.set_inverted(true);
         }
-        ports.set_apertures(ports_to_be_set.clone()).unwrap();
         ports
     }
 

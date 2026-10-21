@@ -1,12 +1,19 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use nalgebra::{Point3, vector};
 use num_traits::Zero;
 use opossum_core::{
-    J_per_cm2, analyzers::propagation_strategy::MissedSurfaceStrategy,
-    core_optics::optic_surface::OpticSurface, degree, error::OpossumError, joule, light::Ray,
-    millimeter, nanometer, utils::geom_transformation::Isometry,
+    J_per_cm2,
+    analyzers::propagation_strategy::MissedSurfaceStrategy,
+    core_optics::optic_surface::OpticSurface,
+    degree,
+    error::OpossumError,
+    geometry::{Plane, geo_surface::GeoSurfaceRef},
+    joule,
+    light::Ray,
+    millimeter, nanometer,
+    utils::geom_transformation::Isometry,
 };
 use uom::si::f64::Length;
 
@@ -79,8 +86,8 @@ fn bench_refract_on_surface(c: &mut Criterion) {
                 degree!(0.0, 0.0, 0.0),
             )
             .expect("Setup of ray failed");
-            let surface = OpticSurface::default();
-            surface.set_isometry(isometry);
+            let mut surface = OpticSurface::default();
+            surface.set_geo_surface(GeoSurfaceRef(Arc::new(Plane::new(isometry))));
             let n2 = Some(1.5);
             let strategy = MissedSurfaceStrategy::Stop;
             (ray, surface, n2, strategy)
@@ -111,8 +118,8 @@ fn bench_diffract_on_periodic_structure(c: &mut Criterion) {
             degree!(0.0, 0.0, 0.0),
         )
         .expect("Setup of isometry failed");
-        let surface = OpticSurface::default();
-        surface.set_isometry(isometry);
+        let mut surface = OpticSurface::default();
+        surface.set_geo_surface(GeoSurfaceRef(Arc::new(Plane::new(isometry))));
 
         let n2 = 1.0; // Reflection grating
         let grating_period = nanometer!(1000.0); // 1 micron period, 1000 lines/mm

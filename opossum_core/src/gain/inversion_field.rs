@@ -102,8 +102,7 @@ impl InversionField {
     /// # Errors
     ///
     /// This function returns an error if any of the three dimensions is zero — a grid without cells
-    /// has no extent to interpret its ranges against — or if the body cannot state its bounding box
-    /// or answer where it is.
+    /// has no extent to interpret its ranges against — or if the body cannot state its bounding box.
     pub fn from_body(body: &dyn Body, dimensions: CellIndex) -> OpmResult<Self> {
         let (nx, ny, nz) = dimensions;
         if nx == 0 || ny == 0 || nz == 0 {
@@ -129,7 +128,7 @@ impl InversionField {
                 for j in 0..ny {
                     let y = cell_center(&y_range, ny, j);
                     let center = placement.transform_point(&Point3::new(x, y, z));
-                    mask.push(body.contains(&center)?);
+                    mask.push(body.contains(&center));
                 }
             }
             inside.push(DMatrix::from_vec(ny, nx, mask));
@@ -554,10 +553,7 @@ mod test {
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::Vector3;
-    use std::{
-        f64::consts::PI,
-        sync::{Arc, Mutex},
-    };
+    use std::{f64::consts::PI, sync::Arc};
 
     /// Create a disk of the given thickness and radius, placed by the given isometry.
     fn disk(
@@ -566,10 +562,10 @@ mod test {
         placement: Isometry,
     ) -> OpmResult<SurfaceBoundedBody> {
         Ok(SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(placement)))),
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(
+            GeoSurfaceRef(Arc::new(Plane::new(placement))),
+            GeoSurfaceRef(Arc::new(Plane::new(
                 placement.append(&Isometry::new_along_z(thickness)?),
-            )))),
+            ))),
             ValidatedCrossSection::try_new(Aperture::new_circle(
                 radius,
                 ApertureType::Hole,
@@ -754,7 +750,7 @@ mod test {
     #[test]
     fn a_field_over_the_volume_of_a_lens() -> OpmResult<()> {
         // The whole point of the exercise: the domain comes from a real component, through the
-        // body its own surfaces and clear aperture enclose.
+        // body its own surfaces and optic shape enclose.
         let mut lens = Lens::default();
         lens.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let body = lens.volume_body()?;
@@ -762,7 +758,7 @@ mod test {
         assert_eq!(field.dimensions(), (9, 9, 5));
         // the axis of the lens runs through the middle column of cells, which is all medium
         assert!((0..5).all(|k| field.is_inside((4, 4, k))));
-        // ... while the corners of the box are outside the round clear aperture
+        // ... while the corners of the box are outside the round optic shape
         assert!(!field.is_inside((0, 0, 2)));
         Ok(())
     }

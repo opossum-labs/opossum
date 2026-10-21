@@ -56,7 +56,7 @@ With this setting, the components are placed as follows:
 
 ### Anchor point
 
-We have just discussed how a component is placed at a certain position. This description is actually a bit unprecise since an optical component is not a point-like object but has a finite size. Hence we clarify here that each optical component has an *anchor point* which is normally the center of the incoming surface. This is described in the [reference](../reference/reference.md) section for each particular node type. In the above mentioned `Alignment` setting the component is turned around this point. Furthermore, a component can be shifted (e.g. for modeling a shifted lens) along all axes.
+We have just discussed how a component is placed at a certain position. This description is actually a bit unprecise since an optical component is not a point-like object but has a finite size. Hence we clarify here that each optical component has an *anchor point* which is normally the center of the incoming surface. This is described in the [reference](../reference/reference.md) section for each particular node type. In the above mentioned `Alignment` setting the component is turned around this point. Furthermore, a component can be shifted (e.g. for modeling a shifted lens) along all axes. How a component's surfaces are built around its anchor point is described in [Component geometry](./background/component_geometry.md).
 
 ### Absolute Placement
 
@@ -121,7 +121,9 @@ Care must be taken when mixing absolute positioning with the optical axis logic.
 The reference ray (optical axis) travels straight from the source. Because the lens is physically located outside this path, the ray misses the lens entirely.
 
 * The optical axis is "lost" at this point.
-* Any downstream components (e.g., the `Energy meter`) cannot be placed and will be excluded from the simulation.
+* The downstream components (e.g., the `Energy meter`) cannot be placed, so OPOSSUM stops the alignment with an error naming the lens. A component at the end of a path, without successors, is only warned about.
+
+The same happens if the axis reaches a component but passes it outside its `optic shape`, e.g. a lens decentered by more than its radius or a double pass whose return path walks off. Enlarge the optic shape (see [Optic shape](../reference/nodes.md#optic-shape)) or correct the position. If the axis misses the window of a detector, OPOSSUM only warns that the measurement may fail.
 
 ### Multi-pass and Reference Nodes
 

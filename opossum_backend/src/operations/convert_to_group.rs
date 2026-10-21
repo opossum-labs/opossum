@@ -748,4 +748,226 @@ mod test {
         );
         assert_routed_through_r(&app_state);
     }
+
+    /// Positions a copy of `scenery` along the axis of `source` and returns where each of the nodes
+    /// `placed` was put, wherever it sits in the model.
+    fn placements(
+        scenery: &NodeGroup,
+        source: Uuid,
+        placed: &[Uuid],
+    ) -> Vec<opossum_core::utils::geom_transformation::Isometry> {
+        use opossum_core::{
+            analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
+            joule,
+            light::LightResult,
+            millimeter,
+            nodes::round_collimated_ray_builder,
+        };
+        let mut scenery = scenery.clone();
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1).unwrap(),
+        );
+        AnalysisRayTrace::calc_node_positions(
+            &mut scenery,
+            LightResult::default(),
+            &config.for_positioning(),
+        )
+        .unwrap();
+        placed
+            .iter()
+            .map(|id| {
+                *scenery
+                    .node_recursive(*id)
+                    .unwrap()
+                    .0
+                    .effective_position()
+                    .expect("every component of the row is placed")
+            })
+            .collect()
+    }
+
+    /// Regression test for grouping changing the alignment: the positioning walk restarted the up
+    /// direction in every group and only passed the group's last turn of the axis back out. Builds a
+    /// source followed by the bridge of `workshop_09_phelix` (a mirror sending the axis up, one
+    /// sending it aside, a lens), then a mirror folding the axis in the plane given by the up
+    /// direction it arrives with, and a screen. Converting the bridge into a group must leave every
+    /// component exactly where, and turned exactly as, it was before.
+    #[actix_web::test]
+    async fn test_convert_nodes_to_group_keeps_placements() {
+        use opossum_core::{
+            core_optics::Alignable,
+            degree, millimeter,
+            nodes::{Dummy, ParaxialSurface, SourcePort, ThinMirror},
+        };
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, source, row) = {
+            let mut document = app_state.document.lock();
+            let scenery = document.scenery_mut();
+            let root_id = scenery.node_attr().uuid();
+            let source = scenery.add_node(SourcePort::default()).unwrap();
+            let mirror = |name: &str, tilt| ThinMirror::new(name).with_tilt(tilt).unwrap();
+            let row = [
+                scenery
+                    .add_node(mirror("up", degree!(45.0, 0.0, 0.0)))
+                    .unwrap(),
+                scenery
+                    .add_node(mirror("aside", degree!(0.0, 45.0, 0.0)))
+                    .unwrap(),
+                scenery
+                    .add_node(ParaxialSurface::new("lens", millimeter!(1000.0)).unwrap())
+                    .unwrap(),
+                scenery
+                    .add_node(mirror("fold", degree!(0.0, 45.0, 0.0)))
+                    .unwrap(),
+                scenery.add_node(Dummy::new("screen")).unwrap(),
+            ];
+            let mut upstream = source;
+            for node in row {
+                scenery
+                    .connect_nodes(upstream, "output_1", node, "input_1", millimeter!(100.0))
+                    .unwrap();
+                upstream = node;
+            }
+            (root_id, source, row)
+        };
+        let before = placements(app_state.document.lock().scenery(), source, &row);
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_convert_nodes_to_group),
+        )
+        .await;
+        let req = test::TestRequest::post()
+            .uri("/convert_to_group")
+            .set_json(&ConvertToGroupRequest {
+                group_id: root_id,
+                nodes_to_convert: row[..3].to_vec(),
+            })
+            .to_request();
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
+
+        let after = placements(app_state.document.lock().scenery(), source, &row);
+        for (before, after) in before.iter().zip(&after) {
+            let deviation = (before.get_transform().to_homogeneous()
+                - after.get_transform().to_homogeneous())
+            .amax();
+            assert!(
+                deviation < 1e-9,
+                "grouping moved or turned a component by {deviation}"
+            );
+        }
+    }
+
+    /// Ray traces a copy of `scenery` with `source` emitting a few collimated rays, and returns
+    /// where the rays the meter `meter` recorded ended up.
+    fn metered_ray_positions(
+        scenery: &NodeGroup,
+        source: Uuid,
+        meter: Uuid,
+    ) -> Vec<nalgebra::Point3<f64>> {
+        use opossum_core::{
+            analyzers::{Analyzer, RayTraceConfig, raytrace::RayTracingAnalyzer},
+            joule,
+            light::LightData,
+            millimeter,
+            nodes::{EnergyMeter, round_collimated_ray_builder},
+        };
+        let mut scenery = scenery.clone();
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 3).unwrap(),
+        );
+        RayTracingAnalyzer::new(config)
+            .analyze(&mut scenery)
+            .expect("the ray trace runs through");
+        let (meter, _) = scenery.node_recursive(meter).unwrap();
+        let Some(LightData::Geometric(rays)) = meter
+            .as_any()
+            .downcast_ref::<EnergyMeter>()
+            .and_then(EnergyMeter::light_data)
+        else {
+            panic!("the meter recorded no rays");
+        };
+        rays.iter()
+            .map(|ray| ray.position().map(|coordinate| coordinate.value))
+            .collect()
+    }
+
+    /// Regression test for the analysis failing once the target of a reference is grouped: the
+    /// analysis looked for a reference's target only in the graph of the reference itself. Builds
+    /// a double pass - a lens, a mirror sending the light back through it, an inverted reference
+    /// on the lens for the way back and a meter - converts the lens into a group, as when the
+    /// optics before the main amplifiers of `workshop_09_phelix` are grouped, and asserts that the
+    /// ray trace still runs and the meter records the same rays as before.
+    #[actix_web::test]
+    async fn test_convert_nodes_to_group_keeps_references_working() {
+        use opossum_core::{
+            core_optics::{Alignable, OpticNode},
+            degree, millimeter,
+            nodes::{EnergyMeter, NodeReference, ParaxialSurface, SourcePort, ThinMirror},
+        };
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, source, lens, meter) = {
+            let mut document = app_state.document.lock();
+            let scenery = document.scenery_mut();
+            let root_id = scenery.node_attr().uuid();
+            let source = scenery.add_node(SourcePort::default()).unwrap();
+            let lens = scenery
+                .add_node(ParaxialSurface::new("lens", millimeter!(500.0)).unwrap())
+                .unwrap();
+            let mirror = scenery
+                .add_node(
+                    ThinMirror::new("mirror")
+                        .with_tilt(degree!(1.0, 0.0, 0.0))
+                        .unwrap(),
+                )
+                .unwrap();
+            let mut back = NodeReference::from_node(&scenery.node(lens).unwrap()).unwrap();
+            back.set_inverted(true).unwrap();
+            let back = scenery.add_node(back).unwrap();
+            let meter = scenery.add_node(EnergyMeter::default()).unwrap();
+            for (src, src_port, target, target_port) in [
+                (source, "output_1", lens, "input_1"),
+                (lens, "output_1", mirror, "input_1"),
+                (mirror, "output_1", back, "output_1"),
+                (back, "input_1", meter, "input_1"),
+            ] {
+                scenery
+                    .connect_nodes(src, src_port, target, target_port, millimeter!(100.0))
+                    .unwrap();
+            }
+            (root_id, source, lens, meter)
+        };
+        let before = metered_ray_positions(app_state.document.lock().scenery(), source, meter);
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_convert_nodes_to_group),
+        )
+        .await;
+        let req = test::TestRequest::post()
+            .uri("/convert_to_group")
+            .set_json(&ConvertToGroupRequest {
+                group_id: root_id,
+                nodes_to_convert: vec![lens],
+            })
+            .to_request();
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
+
+        let after = metered_ray_positions(app_state.document.lock().scenery(), source, meter);
+        assert_eq!(before.len(), after.len());
+        for (before, after) in before.iter().zip(&after) {
+            assert!(
+                (before - after).amax() < 1e-12,
+                "grouping moved a recorded ray from {before} to {after}"
+            );
+        }
+    }
 }

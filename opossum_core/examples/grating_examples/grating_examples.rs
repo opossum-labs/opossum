@@ -2,6 +2,7 @@ use nalgebra::Vector3;
 use opossum_core::distributions::{energy::UniformDist, position::Hexapolar, spectral::Gaussian};
 use opossum_core::light::lightdata::ray_data_builder::RayDataBuilder;
 use opossum_core::prelude::*;
+use opossum_core::{apertures::CircleShape, core_optics::NodeAttrExt, geometry::body::OPTIC_SHAPE};
 
 mod folded_martinez;
 use folded_martinez::folded_martinez;
@@ -322,21 +323,27 @@ fn main() -> OpmResult<()> {
     ray_data_builder.set_alignment_wavelength(Some(alignment_wvl));
 
     let i_src = scenery.add_node(SourcePort::default())?;
+    // Both lenses take the beam of 50 mm radius: they are 4 inches in diameter.
+    let a_4inch: OpticShape = CircleShape::new(millimeter!(50.8))?.into();
     // focal length = 996.7 mm (Thorlabs LA1779-B)
-    let lens1 = scenery.add_node(Lens::new(
+    let mut lens1 = Lens::new(
         "Lens 1",
         millimeter!(515.1),
         millimeter!(f64::INFINITY),
         millimeter!(3.0),
         &nbk7,
-    )?)?;
+    )?;
+    lens1.set_property(OPTIC_SHAPE, a_4inch.clone().into())?;
+    let lens1 = scenery.add_node(lens1)?;
     let mir_1 =
         scenery.add_node(ThinMirror::new("mirr").align_like_node_at_distance(lens1, tel_dist))?;
     let mut lens_1_ref1 = NodeReference::from_node(&scenery.node(lens1)?)?;
     lens_1_ref1.set_inverted(true)?;
     let lens_1_ref1 = scenery.add_node(lens_1_ref1)?;
 
-    let paraxial_lens = scenery.add_node(ParaxialSurface::new("ideal lens", millimeter!(500.))?)?;
+    let mut paraxial_lens = ParaxialSurface::new("ideal lens", millimeter!(500.))?;
+    paraxial_lens.set_property(OPTIC_SHAPE, a_4inch.into())?;
+    let paraxial_lens = scenery.add_node(paraxial_lens)?;
     let spot_diag = scenery.add_node(SpotDiagram::new("spot diagram")?)?;
     let i_prop_vis = scenery.add_node(RayPropagationVisualizer::new(
         "Ray_positions",

@@ -4,12 +4,9 @@
 //! points etc. and an enum containing the concrete surface types.
 
 use super::Plane;
-use crate::{light::Ray, utils::geom_transformation::Isometry};
+use crate::{light::Ray, nanometer, utils::geom_transformation::Isometry};
 use nalgebra::{Point2, Point3, Vector3};
-use std::{
-    fmt::Debug,
-    sync::{Arc, Mutex},
-};
+use std::{fmt::Debug, sync::Arc};
 use uom::si::f64::Length;
 
 /// Trait for handling geometric surfaces.
@@ -57,7 +54,7 @@ pub trait GeoSurface: Send + Sync + Debug {
     /// coincides with the half space near the vertex and departs from it towards the rim, where
     /// the surface curves away and eventually closes on itself. Composing two of them into a body
     /// is therefore exact as long as the body reaches less far transversally than its radii of
-    /// curvature — which is what a clear aperture normally guarantees.
+    /// curvature — which is what an optic shape normally guarantees.
     ///
     /// # Arguments
     ///
@@ -111,6 +108,25 @@ pub trait GeoSurface: Send + Sync + Debug {
     /// [`Sphere`](super::Sphere) or [`Cylinder`](super::Cylinder) ends where its radius of curvature
     /// does.
     fn local_z_at(&self, transversal_position: &Point2<Length>) -> Option<Length>;
+    /// Return whether a point of this [`GeoSurface`] lies on the sheet through its vertex.
+    ///
+    /// A [`Sphere`](super::Sphere) or [`Cylinder`](super::Cylinder) closes on itself, so a ray can
+    /// meet it on its far side, behind the equator, which is not part of a component built from
+    /// it. [`GeoSurface::local_z_at`] always answers for the sheet through the vertex, so a point
+    /// lies on that sheet if its own local z agrees. A single-sheeted surface always does.
+    ///
+    /// # Arguments
+    ///
+    /// - `point`: a point on this surface, given in global coordinates.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the point lies on the sheet through the vertex, up to floating-point noise.
+    fn is_on_vertex_sheet(&self, point: &Point3<Length>) -> bool {
+        let local_point = self.isometry().inverse_transform_point(point);
+        self.local_z_at(&Point2::new(local_point.x, local_point.y))
+            .is_some_and(|sheet_z| (local_point.z - sheet_z).abs() <= nanometer!(1.0))
+    }
     /// Returns the [`Isometry`] of this [`GeoSurface`].
     fn isometry(&self) -> &Isometry;
     /// Set the [`Isometry`] of this [`GeoSurface`].
@@ -167,15 +183,17 @@ pub(super) fn curved_local_z(distance_from_axis: f64, radius: f64) -> Option<f64
     (half_chord_squared >= 0.0).then(|| -radius.signum() * half_chord_squared.sqrt())
 }
 
-/// Reference for a [`GeoSurface`].
+/// Shared reference to a [`GeoSurface`].
 ///
-/// This struct is necessary in order to implement a Default trait on a `Arc<Mutex<GeoSurface>>`.
+/// A surface is never changed once it is built, so it is shared without a lock: all ports of a
+/// single surface and the body of a component may hold the same one. The newtype exists to implement
+/// [`Default`].
 #[derive(Clone, Debug)]
-pub struct GeoSurfaceRef(pub Arc<Mutex<dyn GeoSurface>>);
+pub struct GeoSurfaceRef(pub Arc<dyn GeoSurface>);
 
 impl Default for GeoSurfaceRef {
     fn default() -> Self {
-        Self(Arc::new(Mutex::new(Plane::default())))
+        Self(Arc::new(Plane::default()))
     }
 }
 

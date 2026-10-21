@@ -7,6 +7,10 @@ use crate::{
     },
     core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType},
     error::{OpmResult, OpossumError},
+    geometry::{
+        Geometry,
+        body::{OPTIC_SHAPE, default_optic_shape},
+    },
     light::{LightData, LightRays, LightResult, Rays},
     millimeter,
     nodes::NodeRegistration,
@@ -40,6 +44,8 @@ inventory::submit! {
 ///   - `apertures`
 ///   - `inverted`
 ///   - `focal length`
+///   - `optic shape`: the extent of the lens; a ray beyond it misses the lens, is not
+///     deflected and follows the analyzer's missed surface strategy
 #[derive(OpmNode, Debug, Clone)]
 #[opm_node("palegreen")]
 pub struct ParaxialSurface {
@@ -59,6 +65,13 @@ impl Default for ParaxialSurface {
                     validators: vec![Validator::NumericIsFinite, Validator::NumericIsNotZero],
                 },
                 millimeter!(10.0).into(),
+            )
+            .unwrap();
+        node_attr
+            .create_property(
+                OPTIC_SHAPE,
+                "transversal extent of the surface, open for an unbounded ideal surface",
+                default_optic_shape().into(),
             )
             .unwrap();
         let mut ps = Self { node_attr };
@@ -82,8 +95,11 @@ impl ParaxialSurface {
     }
 }
 impl OpticNode for ParaxialSurface {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::plane(self.cross_section()?)))
+    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.update_flat_single_surfaces()
+        self.install_geometry(&["input_1"], &["output_1"])
     }
 }
 impl AnalysisGhostFocus for ParaxialSurface {
@@ -107,9 +123,16 @@ impl AnalysisGhostFocus for ParaxialSurface {
             return Ok(out_light_rays);
         };
         let iso = self.effective_surface_iso(in_port)?;
-        self.pass_through_surface_generic(in_port, None, &mut rays_bundle, config, false, false)?;
-        for rays in &mut rays_bundle {
-            rays.refract_paraxial(focal_length, &iso)?;
+        let hits = self.pass_through_surface_generic(
+            in_port,
+            None,
+            &mut rays_bundle,
+            config,
+            false,
+            false,
+        )?;
+        for (rays, hits) in rays_bundle.iter_mut().zip(&hits) {
+            rays.refract_paraxial(focal_length, &iso, hits)?;
         }
         let mut out_light_rays = LightRays::default();
         out_light_rays.insert(out_port.clone(), rays_bundle);
@@ -139,9 +162,17 @@ impl AnalysisRayTrace for ParaxialSurface {
         };
         let iso = self.effective_surface_iso(in_port)?;
         let mut rays_bundle = vec![rays];
-        self.pass_through_surface_generic(in_port, None, &mut rays_bundle, config, false, true)?;
-        let rays = &mut rays_bundle[0];
-        rays.refract_paraxial(focal_length, &iso)?;
+        let hits = self.pass_through_surface_generic(
+            in_port,
+            None,
+            &mut rays_bundle,
+            config,
+            false,
+            true,
+        )?;
+        for (rays, hits) in rays_bundle.iter_mut().zip(&hits) {
+            rays.refract_paraxial(focal_length, &iso, hits)?;
+        }
         let mut light_result = LightResult::default();
         light_result.insert(out_port.into(), LightData::Geometric(rays_bundle.remove(0)));
         Ok(light_result)
@@ -214,12 +245,43 @@ mod test {
         assert_eq!(node.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
-    fn set_aperture() {
-        test_set_aperture::<ParaxialSurface>("input_1", "output_1");
-    }
-    #[test]
     fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<ParaxialSurface>()
+    }
+    #[test]
+    fn optic_shape_absent_in_file() -> OpmResult<()> {
+        test_optic_shape_absent_in_file::<ParaxialSurface>()
+    }
+    /// Beyond its optic shape an ideal lens neither focuses nor deflects: a ray trace loses the
+    /// ray there, a ghost focus analysis lets it run past unchanged.
+    #[test]
+    fn rays_beyond_optic_shape_are_lost() -> OpmResult<()> {
+        test_rays_beyond_optic_shape_are_lost::<ParaxialSurface>()
+    }
+    /// An ideal lens may be unbounded: with an open optic shape it focuses a ray however far off
+    /// the axis it arrives.
+    #[test]
+    fn an_open_optic_shape_makes_an_unbounded_ideal_lens() -> OpmResult<()> {
+        let mut node = placed_at_origin::<ParaxialSurface>()?;
+        node.set_property(
+            crate::geometry::body::OPTIC_SHAPE,
+            crate::apertures::OpticShape::Open.into(),
+        )?;
+        node.update_surfaces()?;
+        let far_off = rays_along_z_from(&[millimeter!(0.0, 100.0, -10.0)], nanometer!(1000.0))?;
+        let output = AnalysisRayTrace::analyze(
+            &mut node,
+            LightResult::from([("input_1".into(), LightData::Geometric(far_off))]),
+            &RayTraceConfig::default(),
+        )?;
+        let Some(LightData::Geometric(rays)) = output.get("output_1") else {
+            panic!("expected ray data at the output port");
+        };
+        let ray = rays.iter().next().expect("one ray");
+        assert!(ray.valid(), "the ray far off the axis passes the lens");
+        // heading for the focus 10 mm behind the lens on its axis
+        assert_relative_eq!(ray.direction(), Vector3::new(0.0, -100.0, 10.0).normalize());
+        Ok(())
     }
     #[test]
     fn analyze_wrong_port() -> OpmResult<()> {

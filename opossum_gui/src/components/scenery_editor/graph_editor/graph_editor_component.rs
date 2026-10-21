@@ -193,7 +193,7 @@ pub fn GraphEditor(
                         let tab_order = workspace.tab_order().read().clone();
                         rsx! {
                             TabList { class: "editor-tab-list",
-                                for (i , id) in tab_order.iter().enumerate() {
+                                for (i, id) in tab_order.iter().enumerate() {
                                     if let Some(graph_state) = workspace.tabs().get(*id) {
                                         TabTrigger {
                                             key: "{id.as_simple().to_string()}",
@@ -225,7 +225,7 @@ pub fn GraphEditor(
                                 id: "graphEditorContentContainer",
                                 class: "graph-editor-tab-content",
                                 onresize: move |_| workspace_processor.send(GraphsWorkspaceAction::GetEditorArea),
-                                for (_i , id) in tab_order.iter().enumerate() {
+                                for (_i, id) in tab_order.iter().enumerate() {
                                     if let Some(graph_state) = workspace.tabs().get(*id) {
                                         div {
                                             key: "{id.as_simple().to_string()}",

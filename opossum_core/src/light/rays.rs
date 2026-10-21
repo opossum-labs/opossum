@@ -888,26 +888,46 @@ impl Rays {
     pub fn add_rays(&mut self, rays: &mut Self) {
         self.ray_bundle.append(&mut rays.ray_bundle);
     }
-    /// Refract a ray bundle on a paraxial surface of given focal length.
+    /// Refract the rays of this bundle that hit a paraxial surface of given focal length.
     ///
-    /// This function refracts all valid [`Ray`]s.
+    /// Every valid [`Ray`] that hit the surface is refracted, together with its helper rays. A ray
+    /// that missed the surface never passed the lens and keeps its direction.
+    ///
+    /// # Arguments
+    ///
+    /// * `focal_length` - the focal length of the paraxial surface.
+    /// * `iso` - the isometry the paraxial surface is placed at.
+    /// * `hits` - for every ray of this bundle in order, whether it hit the surface, as returned by
+    ///   [`refract_on_surface`](Self::refract_on_surface). Rays beyond its end count as missed.
     ///
     /// # Errors
     /// This function returns an error if
     ///  - the z component of a ray direction is zero.
     ///  - the focal length is zero or not finite.
-    pub fn refract_paraxial(&mut self, focal_length: Length, iso: &Isometry) -> OpmResult<()> {
+    pub fn refract_paraxial(
+        &mut self,
+        focal_length: Length,
+        iso: &Isometry,
+        hits: &[bool],
+    ) -> OpmResult<()> {
         if focal_length.is_zero() || !focal_length.is_finite() {
             return Err(OpossumError::Other(
                 "focal length must be !=0.0 and finite".into(),
             ));
         }
-        for ray in &mut self.ray_bundle {
+        for (ray, _) in self
+            .ray_bundle
+            .iter_mut()
+            .zip(hits)
+            .filter(|(_, hit)| **hit)
+        {
             if ray.valid() {
                 ray.refract_paraxial(focal_length, iso)?;
             }
             if let Some(helper_rays) = ray.helper_rays_mut() {
-                helper_rays.refract_paraxial(focal_length, iso)?;
+                for helper in helper_rays.iter_mut().filter(|helper| helper.valid()) {
+                    helper.refract_paraxial(focal_length, iso)?;
+                }
             }
         }
         Ok(())
@@ -919,6 +939,11 @@ impl Rays {
     /// The refractive index of the surface is given by the `refractive_index` parameter. If this parameter is
     /// set to `None`, the refractive index of the incoming individual beam is used. This way it is possible to model
     /// a "passive" surface, which does not change the direction of the [`Ray`].
+    ///
+    /// # Returns
+    ///
+    /// The bundle of reflected rays and, for every ray of this bundle in order, whether it hit the
+    /// surface (see [`OpticSurface::intersect`]).
     ///
     /// # Warnings
     ///
@@ -935,7 +960,7 @@ impl Rays {
         refractive_index: Option<&RefractiveIndexType>,
         refraction_intended: bool,
         missed_surface_strategy: &MissedSurfaceStrategy,
-    ) -> OpmResult<Self> {
+    ) -> OpmResult<(Self, Vec<bool>)> {
         let reflected_part = if refraction_intended {
             ReflectedPart::Ghost
         } else {
@@ -990,6 +1015,7 @@ impl Rays {
             *missed_surface_strategy,
             &ReflectedPart::Branch(config),
         )
+        .map(|(reflected, _)| reflected)
     }
     /// Propagate all `valid` [`Ray`]s to a surface, split them into a transmitted and a reflected part and
     /// return the reflected [`Ray`] bundle.
@@ -1006,7 +1032,8 @@ impl Rays {
     ///
     /// # Returns
     ///
-    /// The bundle of reflected rays.
+    /// The bundle of reflected rays and, for every ray of this bundle in order, whether it hit the
+    /// surface. A ray that was already invalid did not.
     ///
     /// # Errors
     ///
@@ -1020,13 +1047,14 @@ impl Rays {
         refractive_index: Option<&RefractiveIndexType>,
         missed_surface_strategy: MissedSurfaceStrategy,
         reflected_part: &ReflectedPart<'_>,
-    ) -> OpmResult<Self> {
+    ) -> OpmResult<(Self, Vec<bool>)> {
         let mut valid_rays_found = false;
         let mut rays_missed = false;
         // Pre-allocate memory to avoid massive reallocation overhead
         let mut reflected_rays = Self::with_capacity(self.ray_bundle.len());
+        let mut hits = vec![false; self.ray_bundle.len()];
 
-        for ray in &mut self.ray_bundle {
+        for (ray, hit) in self.ray_bundle.iter_mut().zip(hits.iter_mut()) {
             if ray.valid() {
                 let n2 = if let Some(refractive_index) = refractive_index {
                     Some(refractive_index.get_refractive_index(ray.wavelength())?)
@@ -1039,12 +1067,14 @@ impl Rays {
                 };
 
                 // Wir übergeben 'surface' unveränderlich und empfangen unser neues Tupel
-                let (reflected_opt, hit_point_opt) = ray.refract_on_surface_with_coating(
+                let interaction = ray.refract_on_surface_with_coating(
                     surface,
                     &coating,
                     n2,
                     missed_surface_strategy,
                 )?;
+                *hit = interaction.is_some();
+                let (reflected_opt, hit_point_opt) = interaction.unwrap_or((None, None));
 
                 if let Some(mut reflected) = reflected_opt {
                     if let (Some(helper_rays), Some(relf_helper)) =
@@ -1054,7 +1084,7 @@ impl Rays {
                             helper_rays.ray_bundle.iter_mut(),
                             relf_helper.ray_bundle.iter_mut()
                         ) {
-                            if let (Some(h_reflected), _h_hit_point) = h_ray
+                            if let Some((Some(h_reflected), _h_hit_point)) = h_ray
                                 .refract_on_surface_with_coating(
                                     surface,
                                     &coating,
@@ -1113,7 +1143,7 @@ impl Rays {
             // independent bundle rather than a branch continuing its parent's history.
             ReflectedPart::Branch(_) => {}
         }
-        Ok(reflected_rays)
+        Ok((reflected_rays, hits))
     }
     /// Diffract a bundle of [`Rays`] on a periodic surface, e.g., a grating
     /// All valid rays that hit this surface are diffracted according to the peridic structure,
@@ -1180,16 +1210,23 @@ impl Rays {
         Ok(reflected_rays)
     }
 
-    /// Filter a ray bundle by a given filter.
+    /// Filter the rays of this bundle that hit a surface by a given filter.
     ///
-    /// Filter the energy of of all `valid` rays by a given [`FilterType`].
+    /// Filter the energy of every `valid` ray that hit the surface by a given [`FilterType`]. A ray
+    /// that missed the surface never passed the filter and keeps its energy.
+    ///
+    /// # Arguments
+    ///
+    /// * `filter` - the filter to apply.
+    /// * `hits` - for every ray of this bundle in order, whether it hit the surface, as returned by
+    ///   [`refract_on_surface`](Self::refract_on_surface). Rays beyond its end count as missed.
     ///
     /// # Errors
     /// This function will return an error if the underlying function for filtering a single [`Ray`] with the given
     /// [`FilterType`] fails for any of the rays in the bundle.
-    pub fn filter_energy(&mut self, filter: &FilterType) -> OpmResult<()> {
-        for ray in &mut self.ray_bundle {
-            if (*ray).valid() {
+    pub fn filter_energy(&mut self, filter: &FilterType, hits: &[bool]) -> OpmResult<()> {
+        for (ray, &hit) in self.ray_bundle.iter_mut().zip(hits) {
+            if hit && ray.valid() {
                 ray.filter_energy(filter)?;
             }
         }
@@ -1619,36 +1656,6 @@ impl Rays {
         }
         rays
     }
-    /// define the up-direction of a ray bundle's first ray which is needed to create an isometry from this ray.
-    /// This function should only be used during the node positioning process, and only for source nodes
-    /// # Errors
-    /// This function errors if there are no rays
-    pub fn define_up_direction(&self) -> OpmResult<Vector3<f64>> {
-        if self.ray_bundle.is_empty() {
-            return Err(OpossumError::Other(
-                "empty ray bundle, cannot define up-direction".into(),
-            ));
-        }
-        if self.nr_of_rays(true) > 1 {
-            warn!("Ray bundle not used for alignment, use first ray for up-direction calculation");
-        }
-        Ok(self.ray_bundle[0].define_up_direction())
-    }
-    /// Modifies the current up-direction of a ray which is needed to create an isometry from this ray.
-    /// This function should only be used during the node positioning process
-    /// # Errors
-    /// This function errors if there are no rays
-    pub fn calc_new_up_direction(&self, up_direction: &mut Vector3<f64>) -> OpmResult<()> {
-        if self.ray_bundle.is_empty() {
-            return Err(OpossumError::Other(
-                "empty ray bundle, cannot define up-direction".into(),
-            ));
-        }
-        if self.nr_of_rays(true) > 1 {
-            warn!("Ray bundle not used for alignment, use first ray for up-direction calculation");
-        }
-        self.ray_bundle[0].calc_new_up_direction(up_direction)
-    }
 }
 
 impl From<Ray> for Rays {
@@ -1837,7 +1844,7 @@ mod test {
     use approx::{assert_abs_diff_eq, assert_relative_eq};
     use itertools::izip;
     use nalgebra::Vector3;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
     use testing_logger;
     use uom::si::{energy::joule, length::nanometer};
 
@@ -2312,30 +2319,30 @@ mod test {
     fn refract_paraxial() -> OpmResult<()> {
         let mut rays = Rays::default();
         assert!(
-            rays.refract_paraxial(millimeter!(0.0), &Isometry::identity())
+            rays.refract_paraxial(millimeter!(0.0), &Isometry::identity(), &[])
                 .is_err()
         );
         assert!(
-            rays.refract_paraxial(millimeter!(f64::NAN), &Isometry::identity())
+            rays.refract_paraxial(millimeter!(f64::NAN), &Isometry::identity(), &[])
                 .is_err()
         );
         assert!(
-            rays.refract_paraxial(millimeter!(f64::INFINITY), &Isometry::identity())
+            rays.refract_paraxial(millimeter!(f64::INFINITY), &Isometry::identity(), &[])
                 .is_err()
         );
         assert!(
-            rays.refract_paraxial(millimeter!(f64::NEG_INFINITY), &Isometry::identity())
+            rays.refract_paraxial(millimeter!(f64::NEG_INFINITY), &Isometry::identity(), &[])
                 .is_err()
         );
         assert!(
-            rays.refract_paraxial(millimeter!(100.0), &Isometry::identity())
+            rays.refract_paraxial(millimeter!(100.0), &Isometry::identity(), &[])
                 .is_ok()
         );
         let ray0 = Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0))?;
         let ray1 = Ray::new_collimated(millimeter!(0., 1., 0.), nanometer!(1053.0), joule!(1.0))?;
         rays.add_ray(ray0.clone());
         rays.add_ray(ray1.clone());
-        rays.refract_paraxial(millimeter!(100.0), &Isometry::identity())?;
+        rays.refract_paraxial(millimeter!(100.0), &Isometry::identity(), &[true, true])?;
         assert_eq!(rays.ray_bundle[0].position(), ray0.position());
         assert_eq!(rays.ray_bundle[0].direction(), ray0.direction());
         assert_eq!(rays.ray_bundle[1].position(), ray1.position());
@@ -2345,11 +2352,42 @@ mod test {
         assert_abs_diff_eq!(rays.ray_bundle[1].direction().z, new_dir.z);
         Ok(())
     }
+    /// A ray that hits a paraxial surface takes its helper rays along: each is refracted as a single
+    /// ray would be. A ray that misses keeps its direction, and so do its helper rays.
+    #[test]
+    fn refract_paraxial_takes_the_helper_rays_of_a_hit_along() -> OpmResult<()> {
+        let focal_length = millimeter!(100.0);
+        let iso = Isometry::new_translation(millimeter!(1.0, -2.0, 0.0))?;
+        let with_helpers = |y: f64| {
+            Ray::new_collimated_w_fluence_helper(
+                millimeter!(0.0, y, 0.0),
+                nanometer!(1000.0),
+                joule!(1.0),
+                J_per_cm2!(1.0),
+            )
+        };
+        let (hit, missed) = (with_helpers(5.0)?, with_helpers(-5.0)?);
+        let mut rays = Rays::from(vec![hit.clone(), missed.clone()]);
+        rays.refract_paraxial(focal_length, &iso, &[true, false])?;
+
+        let mut refracted = hit;
+        refracted.refract_paraxial(focal_length, &iso)?;
+        let Some(helpers) = refracted.helper_rays_mut() else {
+            panic!("the ray has helper rays");
+        };
+        assert_eq!(helpers.nr_of_rays(false), 3, "a ray with three helper rays");
+        for helper in helpers.iter_mut() {
+            helper.refract_paraxial(focal_length, &iso)?;
+            assert_ne!(helper.direction(), Vector3::z());
+        }
+        assert_eq!(rays.ray_bundle, [refracted, missed]);
+        Ok(())
+    }
     #[test]
     fn refract_on_surface_empty() -> OpmResult<()> {
         let mut rays = Rays::default();
         testing_logger::setup();
-        let reflected = rays.refract_on_surface(
+        let (reflected, _) = rays.refract_on_surface(
             &mut OpticSurface::default(),
             Some(&refr_index_vaccuum()),
             true,
@@ -2395,7 +2433,7 @@ mod test {
         rays.set_node_origin_uuid(node_uuid);
         rays.set_parent_uuid(parent_uuid);
         rays.set_parent_node_split_idx(10);
-        let reflected = rays.refract_on_surface(
+        let (reflected, _) = rays.refract_on_surface(
             &mut OpticSurface::default(),
             Some(&refr_index_vaccuum()),
             false,
@@ -2445,7 +2483,7 @@ mod test {
             joule!(1.0),
         )?);
         testing_logger::setup();
-        let reflected = rays.refract_on_surface(
+        let (reflected, _) = rays.refract_on_surface(
             &mut OpticSurface::default(),
             Some(&refr_index_vaccuum()),
             true,
@@ -2468,7 +2506,7 @@ mod test {
         )?);
         let mut s = OpticSurface::default();
         s.set_coating(CoatingConstantR::new(percent!(20.0))?.into());
-        let reflected = rays.refract_on_surface(
+        let (reflected, _) = rays.refract_on_surface(
             &mut s,
             Some(&refr_index_vaccuum()),
             true,
@@ -2482,9 +2520,8 @@ mod test {
     fn tilted_splitting_surface() -> OpmResult<OpticSurface> {
         let iso = Isometry::new(millimeter!(0., 0., 0.), degree!(0., 45., 0.))?;
         OpticSurface::new(
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(iso)))),
+            GeoSurfaceRef(Arc::new(Plane::new(iso))),
             CoatingType::IdealAR,
-            Aperture::default(),
             J_per_cm2!(1.),
         )
     }
@@ -2597,19 +2634,28 @@ mod test {
     fn filter_energy() -> OpmResult<()> {
         let mut rays = Rays::default();
         assert!(
-            rays.filter_energy(&FilterType::Constant(FilterConst::new(percent!(50.0))?))
-                .is_ok()
+            rays.filter_energy(
+                &FilterType::Constant(FilterConst::new(percent!(50.0))?),
+                &[]
+            )
+            .is_ok()
         );
         let mut ray =
             Ray::new_collimated(millimeter!(0., 1., 0.), nanometer!(1054.0), joule!(1.0))?;
         rays.add_ray(ray.clone());
+        // a ray that missed the filter keeps its energy
+        rays.add_ray(ray.clone());
         ray.filter_energy(&FilterType::Constant(FilterConst::new(percent!(30.0))?))?;
-        rays.filter_energy(&FilterType::Constant(FilterConst::new(percent!(30.0))?))?;
+        rays.filter_energy(
+            &FilterType::Constant(FilterConst::new(percent!(30.0))?),
+            &[true, false],
+        )?;
         assert_eq!(rays.ray_bundle[0].position(), ray.position());
         assert_eq!(rays.ray_bundle[0].direction(), ray.direction());
         assert_eq!(rays.ray_bundle[0].wavelength(), ray.wavelength());
         assert_eq!(rays.ray_bundle[0].energy(), ray.energy());
-        assert_eq!(rays.ray_bundle.len(), 1);
+        assert_eq!(rays.ray_bundle[1].energy(), joule!(1.0));
+        assert_eq!(rays.ray_bundle.len(), 2);
         Ok(())
     }
     #[test]
@@ -2938,55 +2984,6 @@ mod test {
         // --- Check invalid/empty cases ---
         let rays_empty = Rays::default();
         assert!(rays_empty.energy_weighted_centroid().is_none());
-        Ok(())
-    }
-    #[test]
-    fn define_up_direction_test() -> OpmResult<()> {
-        let mut rays = Rays::default();
-        assert!(rays.define_up_direction().is_err());
-        rays.add_ray(Ray::new(
-            meter!(0., 0., 0.),
-            Vector3::x(),
-            nanometer!(1000.),
-            joule!(1.),
-        )?);
-        rays.add_ray(Ray::new(
-            meter!(0., 0., 0.),
-            Vector3::x(),
-            nanometer!(1000.),
-            joule!(1.),
-        )?);
-        testing_logger::setup();
-        assert!(rays.define_up_direction().is_ok());
-        check_logs(
-            log::Level::Warn,
-            vec!["Ray bundle not used for alignment, use first ray for up-direction calculation"],
-        );
-        Ok(())
-    }
-    #[test]
-    fn calc_new_up_direction_test() -> OpmResult<()> {
-        let mut rays = Rays::default();
-        assert!(rays.calc_new_up_direction(&mut Vector3::y()).is_err());
-        rays.add_ray(Ray::new(
-            meter!(0., 0., 0.),
-            Vector3::x(),
-            nanometer!(1000.),
-            joule!(1.),
-        )?);
-        rays.add_ray(Ray::new(
-            meter!(0., 0., 0.),
-            Vector3::x(),
-            nanometer!(1000.),
-            joule!(1.),
-        )?);
-        testing_logger::setup();
-        //error because underlying function return error
-        assert!(rays.calc_new_up_direction(&mut Vector3::y()).is_err());
-        check_logs(
-            log::Level::Warn,
-            vec!["Ray bundle not used for alignment, use first ray for up-direction calculation"],
-        );
         Ok(())
     }
     #[test]

@@ -2,13 +2,20 @@
 //! Infinitely thin mirror with spherical or flat surface
 use crate::{
     analyzers::{
-        GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
-        propagation_strategy::MissedSurfaceStrategy, raytrace::AnalysisRayTrace,
+        GhostFocusConfig, RayTraceConfig,
+        energy::AnalysisEnergy,
+        ghostfocus::AnalysisGhostFocus,
+        propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
+        raytrace::AnalysisRayTrace,
     },
     core_optics::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, node_attr::HasNodeAttr,
     },
     error::{OpmResult, OpossumError},
+    geometry::{
+        Geometry,
+        body::{OPTIC_SHAPE, default_square_optic_shape},
+    },
     light::{LightData, LightRays, LightResult, Rays},
     nodes::NodeRegistration,
     num_per_mm,
@@ -50,6 +57,7 @@ inventory::submit! {
 ///   - `name`
 ///   - `inverted`
 ///   - `line density`
+///   - `optic shape`: the extent of the grating; a ray beyond it misses the grating
 pub struct ReflectiveGrating {
     node_attr: NodeAttr,
 }
@@ -77,6 +85,14 @@ impl Default for ReflectiveGrating {
                 "diffraction order",
                 "order of diffraction that should be used to propagate the rays",
                 (-1).into(),
+            )
+            .unwrap();
+        node_attr
+            .create_property_with_validator(
+                OPTIC_SHAPE,
+                "transversal extent of the component",
+                Validator::OpticShapeIsBounded,
+                default_square_optic_shape().into(),
             )
             .unwrap();
         let mut g = Self { node_attr };
@@ -234,17 +250,11 @@ impl AnalysisRayTrace for ReflectiveGrating {
                     &diffraction_order,
                     refraction_intended,
                 )?;
-                match self.ports().aperture(&PortType::Input, in_port) {
-                    Some(aperture) => {
-                        diffracted_rays.apodize(aperture, &iso)?;
-                        diffracted_rays
-                            .invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                    }
-                    _ => {
-                        return Err(OpossumError::OpticPort("input aperture not found".into()));
-                    }
+                // The optical axis is placed by geometry alone; its energy does not decide where
+                // it runs.
+                if !config.is_positioning_run() {
+                    diffracted_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                 }
-
                 let light_result =
                     LightResult::from([(out_port.into(), LightData::Geometric(diffracted_rays))]);
                 Ok(light_result)
@@ -260,8 +270,11 @@ impl AnalysisRayTrace for ReflectiveGrating {
 }
 
 impl OpticNode for ReflectiveGrating {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::plane(self.cross_section()?)))
+    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.update_flat_single_surfaces()
+        self.install_geometry(&["input_1"], &["output_1"])
     }
 }
 
@@ -379,6 +392,14 @@ mod test {
         Ok(())
     }
     #[test]
+    fn optic_shape_absent_in_file() -> OpmResult<()> {
+        test_optic_shape_absent_in_file::<ReflectiveGrating>()
+    }
+    #[test]
+    fn reflections_beyond_optic_shape_are_lost() -> OpmResult<()> {
+        test_reflections_beyond_optic_shape_are_lost::<ReflectiveGrating>()
+    }
+    #[test]
     fn invalid_line_density() {
         assert!(ReflectiveGrating::new("test", num_per_mm!(200.), 1).is_ok());
         assert!(ReflectiveGrating::new("test", num_per_mm!(-200.), 1).is_err());
@@ -392,10 +413,6 @@ mod test {
         let node = ReflectiveGrating::default();
         assert_eq!(node.ports().names(&PortType::Input), vec!["input_1"]);
         assert_eq!(node.ports().names(&PortType::Output), vec!["output_1"]);
-    }
-    #[test]
-    fn set_aperture() {
-        test_set_aperture::<ReflectiveGrating>("input_1", "output_1");
     }
     #[test]
     fn inverted() -> OpmResult<()> {

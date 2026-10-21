@@ -57,46 +57,46 @@ pub fn ThermalPropertiesEditor(
         .map(|e| e.get::<per_kelvin>() * 1e6);
 
     rsx! {
-      Card {
-        CardHeader {
-          CardTitle { "Thermal properties" }
-        }
-        CardContent {
-          div { class: "row gy-3",
-            div { class: "col-md-6",
-              OptionalPropertyInput {
-                id: format!("{}_conductivity", base_id),
-                label: "Heat Conductivity [W/(m K)]".to_string(),
-                value: t_cond,
-                readonly,
-                on_change: move |v: Option<f64>| {
-                    on_change
-                        .call(ThermalPropertiesChangeEvent {
-                            action: ThermalPropertiesChangeAction::Conductivity(
-                                v.map(ThermalConductivity::new::<watt_per_meter_kelvin>),
-                            ),
-                        });
-                },
-              }
+        Card {
+            CardHeader {
+                CardTitle { "Thermal properties" }
             }
-            div { class: "col-md-6",
-              OptionalPropertyInput {
-                id: format!("{}_expansion", base_id),
-                label: "Thermal Expansion [1E-6 / K]".to_string(),
-                value: t_exp,
-                readonly,
-                on_change: move |v: Option<f64>| {
-                    on_change
-                        .call(ThermalPropertiesChangeEvent {
-                            action: ThermalPropertiesChangeAction::Expansion(
-                                v.map(|val| TemperatureCoefficient::new::<per_kelvin>(val * 1e-6)),
-                            ),
-                        });
-                },
-              }
+            CardContent {
+                div { class: "row gy-3",
+                    div { class: "col-md-6",
+                        OptionalPropertyInput {
+                            id: format!("{}_conductivity", base_id),
+                            label: "Heat Conductivity [W/(m K)]".to_string(),
+                            value: t_cond,
+                            readonly,
+                            on_change: move |v: Option<f64>| {
+                                on_change
+                                    .call(ThermalPropertiesChangeEvent {
+                                        action: ThermalPropertiesChangeAction::Conductivity(
+                                            v.map(ThermalConductivity::new::<watt_per_meter_kelvin>),
+                                        ),
+                                    });
+                            },
+                        }
+                    }
+                    div { class: "col-md-6",
+                        OptionalPropertyInput {
+                            id: format!("{}_expansion", base_id),
+                            label: "Thermal Expansion [1E-6 / K]".to_string(),
+                            value: t_exp,
+                            readonly,
+                            on_change: move |v: Option<f64>| {
+                                on_change
+                                    .call(ThermalPropertiesChangeEvent {
+                                        action: ThermalPropertiesChangeAction::Expansion(
+                                            v.map(|val| TemperatureCoefficient::new::<per_kelvin>(val * 1e-6)),
+                                        ),
+                                    });
+                            },
+                        }
+                    }
+                }
             }
-          }
         }
-      }
     }
 }

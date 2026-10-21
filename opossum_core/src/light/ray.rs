@@ -2,7 +2,6 @@
 //! Module for handling optical rays
 use std::{f64::consts::PI, fmt::Display};
 
-use approx::relative_ne;
 use nalgebra::{MatrixXx3, Point3, Rotation3, Vector3, vector};
 use num_traits::{ToPrimitive, Zero};
 use serde::{Deserialize, Serialize};
@@ -25,7 +24,7 @@ use crate::{
     meter,
     nodes::{FilterType, SplittingConfig, fluence_detector::Fluence},
     percent,
-    utils::{LockExt, geom_transformation::Isometry, math_utils::distance_3d_point},
+    utils::{geom_transformation::Isometry, math_utils::distance_3d_point},
 };
 
 ///Struct that contains all information about an optical ray
@@ -37,8 +36,10 @@ pub struct Ray {
     pos_hist: Vec<Point3<Length>>,
     /// Current propagation direction of the ray (as a normalized direction cosine vector).
     dir: Vector3<f64>,
-    /// Previous propagation direction, used for node positioning.
-    prev_dir: Option<Vector3<f64>>,
+    /// Up direction carried while placing nodes. It decides how a node is turned about the ray
+    /// and turns with the ray at every surface. Only the optical axis of a positioning run has one.
+    #[serde(skip)]
+    up_direction: Option<Vector3<f64>>,
     // pol: Vector2<Complex<f64>>, // Polarization vector (Jones vector), currently unused.
     /// Energy carried by the ray.
     e: Energy,
@@ -91,7 +92,7 @@ impl Ray {
             pos: position,
             pos_hist: Vec::<Point3<Length>>::new(),
             dir: direction.normalize(),
-            prev_dir: None,
+            up_direction: None,
             e: energy,
             wvl: wave_length,
             path_length: Length::zero(),
@@ -237,6 +238,30 @@ impl Ray {
         }
         self.dir = dir;
         Ok(())
+    }
+    /// Turns this [`Ray`] into a new direction, turning the up direction it carries along.
+    ///
+    /// The up direction follows the smallest rotation that takes the old direction into the new
+    /// one. A ray sent straight back keeps its up direction, since no such rotation exists.
+    ///
+    /// # Arguments
+    ///
+    /// * `dir` - the new direction.
+    fn turn_to(&mut self, dir: Vector3<f64>) {
+        if let Some(up_direction) = self.up_direction.as_mut()
+            && let Some(rotation) = Rotation3::rotation_between(&self.dir, &dir)
+        {
+            *up_direction = rotation.transform_vector(up_direction);
+        }
+        self.dir = dir;
+    }
+    /// Lets this [`Ray`] carry an up direction while it places nodes.
+    ///
+    /// # Arguments
+    ///
+    /// * `up_direction` - the up direction, turned along from now on.
+    pub const fn set_up_direction(&mut self, up_direction: Vector3<f64>) {
+        self.up_direction = Some(up_direction);
     }
     /// Returns the energy of this [`Ray`].
     #[must_use]
@@ -392,10 +417,23 @@ impl Ray {
     }
     /// Create an [`Isometry`] from this [`Ray`].
     ///
-    /// This function creates an [`Isometry`] with its position based on the ray position and the orientation (rotation) based on the ray direction.
-    #[must_use]
-    pub fn to_isometry(&self, up_direction: Vector3<f64>) -> Isometry {
-        Isometry::new_from_view(self.position(), self.direction(), up_direction)
+    /// This function creates an [`Isometry`] with its position based on the ray position and the
+    /// orientation (rotation) based on the ray direction and the up direction the ray carries.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the ray carries no up direction.
+    pub fn to_isometry(&self) -> OpmResult<Isometry> {
+        let up_direction = self.up_direction.ok_or_else(|| {
+            OpossumError::Analysis(
+                "the optical axis carries no up direction to place a node by".into(),
+            )
+        })?;
+        Ok(Isometry::new_from_view(
+            self.position(),
+            self.direction(),
+            up_direction,
+        ))
     }
 
     /// Refract a ray on a paraxial surface of a given focal length.
@@ -412,13 +450,12 @@ impl Ray {
             ));
         }
         //to origin of paraxial surface
-        self.prev_dir = Some(self.dir);
         self.pos = iso.inverse_transform_point(&self.pos);
-        self.dir = iso.inverse_transform_vector_f64(&self.dir);
+        let mut dir = iso.inverse_transform_vector_f64(&self.dir);
         let optical_power = 1.0 / focal_length;
-        self.dir /= self.dir.z.abs();
-        self.dir.x -= (optical_power * self.pos.x).value;
-        self.dir.y -= (optical_power * self.pos.y).value;
+        dir /= dir.z.abs();
+        dir.x -= (optical_power * self.pos.x).value;
+        dir.y -= (optical_power * self.pos.y).value;
 
         // correct path length
         let r_square = self
@@ -431,7 +468,7 @@ impl Ray {
         self.number_of_refractions += 1;
         //back to original position
         self.pos = iso.transform_point(&self.pos);
-        self.dir = iso.transform_vector_f64(&self.dir).normalize();
+        self.turn_to(iso.transform_vector_f64(&dir).normalize());
         Ok(())
     }
     /// Diffract a bundle of [`Rays`] on a periodic surface, e.g., a grating.
@@ -456,9 +493,7 @@ impl Ray {
                 "the refractive index must be >=1.0 and finite".into(),
             ));
         }
-        let geo_surf = s.geo_surface();
-        let surf_vectors = geo_surf.0.lock_opm()?.calc_intersect_and_normal(self);
-        if let Some((intersection_point, surface_normal)) = surf_vectors {
+        if let Some((intersection_point, surface_normal)) = s.intersect(self) {
             // it is assumed that the surface normal is already normalized and points against the ray direction.
 
             // get correctly normalized k vector of ray
@@ -484,7 +519,6 @@ impl Ray {
             let dist_from_origin = s
                 .geo_surface()
                 .0
-                .lock_opm()?
                 .isometry()
                 .inverse_transform_point_f64(&intersection_in_m)
                 .x;
@@ -497,8 +531,7 @@ impl Ray {
             self.pos = intersection_point;
             if k_perp_norm_out.is_finite() {
                 let k_perp_out = -k_perp.normalize() * k_perp_norm_out;
-                self.prev_dir = Some(self.dir);
-                self.dir = (k_perp_out + k_para_out).normalize();
+                self.turn_to((k_perp_out + k_para_out).normalize());
                 self.number_of_bounces += 1;
                 //currently only reflection
                 let reflected_ray = self.clone();
@@ -542,7 +575,9 @@ impl Ray {
         n2: Option<f64>,
         missed_surface_strategy: &MissedSurfaceStrategy,
     ) -> OpmResult<(Option<Self>, Option<HitPoint>)> {
-        self.refract_on_surface_with_coating(os, os.coating(), n2, *missed_surface_strategy)
+        Ok(self
+            .refract_on_surface_with_coating(os, os.coating(), n2, *missed_surface_strategy)?
+            .unwrap_or((None, None)))
     }
     /// Refract the [`Ray`] on a given [`OpticSurface`] as [`refract_on_surface`](Self::refract_on_surface)
     /// does, but with the given coating instead of the coating of the surface.
@@ -560,7 +595,8 @@ impl Ray {
     ///
     /// # Returns
     ///
-    /// The reflected [`Ray`] (if any) and the [`HitPoint`] on the surface (if any).
+    /// `None` if the ray missed the surface (see [`OpticSurface::intersect`]); otherwise the
+    /// reflected [`Ray`] (if any) and the [`HitPoint`] on the surface (if any).
     ///
     /// # Errors
     ///
@@ -571,16 +607,14 @@ impl Ray {
         coating: &CoatingType,
         n2: Option<f64>,
         missed_surface_strategy: MissedSurfaceStrategy,
-    ) -> OpmResult<(Option<Self>, Option<HitPoint>)> {
+    ) -> OpmResult<Option<(Option<Self>, Option<HitPoint>)>> {
         let n_refri_2 = n2.unwrap_or_else(|| self.refractive_index());
         if n_refri_2 < 1.0 || !n_refri_2.is_finite() {
             return Err(OpossumError::Other(
                 "the refractive index must be >=1.0 and finite".into(),
             ));
         }
-        let geo_surface = os.geo_surface();
-        let surf_vectors = geo_surface.0.lock_opm()?.calc_intersect_and_normal(self);
-        if let Some((intersection_point, surface_normal)) = surf_vectors {
+        if let Some((intersection_point, surface_normal)) = os.intersect(self) {
             // Snell's law in vector form (src: https://www.starkeffects.com/snells-law-vector.shtml)
             // mu=n_1 / n_2
             // s1: incoming direction (normalized??)
@@ -605,11 +639,9 @@ impl Ray {
                 let input_energy = self.energy();
                 let refract_dir = mu * (n.cross(&(-1.0 * n.cross(&s1))))
                     - n * f64::sqrt((mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0));
-                self.prev_dir = Some(self.dir);
-                self.dir = refract_dir;
+                self.turn_to(refract_dir);
                 self.e = input_energy * (percent!(100.0) - reflectivity);
-                reflected_ray.prev_dir = Some(reflected_ray.dir);
-                reflected_ray.dir = reflected_dir;
+                reflected_ray.turn_to(reflected_dir);
                 reflected_ray.e = input_energy * reflectivity;
                 reflected_ray.number_of_bounces += 1;
                 self.refractive_index = n_refri_2;
@@ -617,42 +649,45 @@ impl Ray {
                     self.number_of_refractions += 1;
                 }
                 let mut generated_hit_point = None;
+                // A detector records no hit outside its window.
+                let recorded = os.records_at(&intersection_point);
                 if self.helper_rays.is_none() && !self.is_helper {
-                    generated_hit_point = Some(HitPoint::Energy(EnergyHitPoint::new(
-                        os.geo_surface()
-                            .0
-                            .lock_opm()?
-                            .isometry()
-                            .inverse_transform_point(&intersection_point),
-                        input_energy,
-                    )?));
+                    if recorded {
+                        generated_hit_point = Some(HitPoint::Energy(EnergyHitPoint::new(
+                            os.geo_surface()
+                                .0
+                                .isometry()
+                                .inverse_transform_point(&intersection_point),
+                            input_energy,
+                        )?));
+                    }
                 } else if let Some(helper_fluence) = &self.helper_ray_fluence() {
-                    generated_hit_point = Some(HitPoint::Fluence(FluenceHitPoint::new(
-                        os.geo_surface()
-                            .0
-                            .lock_opm()?
-                            .isometry()
-                            .inverse_transform_point(&intersection_point),
-                        *helper_fluence,
-                    )?));
+                    if recorded {
+                        generated_hit_point = Some(HitPoint::Fluence(FluenceHitPoint::new(
+                            os.geo_surface()
+                                .0
+                                .isometry()
+                                .inverse_transform_point(&intersection_point),
+                            *helper_fluence,
+                        )?));
+                    }
                     self.change_helper_fluence_by_factor(percent!(100.0) - reflectivity)?;
                     reflected_ray.change_helper_fluence_by_factor(reflectivity)?;
                 }
 
                 // Wir geben beides zurück
-                Ok((Some(reflected_ray), generated_hit_point))
+                Ok(Some((Some(reflected_ray), generated_hit_point)))
             } else {
                 self.number_of_bounces += 1;
-                self.prev_dir = Some(self.dir);
-                self.dir = reflected_dir;
-                Ok((None, None))
+                self.turn_to(reflected_dir);
+                Ok(Some((None, None)))
             }
         } else {
             match missed_surface_strategy {
                 MissedSurfaceStrategy::Stop => self.set_invalid(),
                 MissedSurfaceStrategy::Ignore => {}
             }
-            Ok((None, None))
+            Ok(None)
         }
     }
 
@@ -803,30 +838,6 @@ impl Ray {
             proj_y.normalize()
         }
     }
-    /// Modifies the current up-direction of a ray which is needed to create an isometry from this ray.
-    /// This function should only be used during the node positioning process
-    /// # Errors
-    /// This function errors
-    /// - if the position history is empty and therefore, the last direction cannot be calulated
-    /// - if the last postion cannot be unwrapped
-    pub fn calc_new_up_direction(&self, up_direction: &mut Vector3<f64>) -> OpmResult<()> {
-        let Some(old_dir) = self.prev_dir else {
-            return Err(OpossumError::Other(
-                "no previous direction of ray defined to calculate new up-direction!".into(),
-            ));
-        };
-
-        if relative_ne!(
-            (old_dir - self.dir).norm(),
-            0.,
-            epsilon = f64::EPSILON * 1000.
-        ) && let Some(rot) = Rotation3::rotation_between(&old_dir, &self.dir)
-        {
-            *up_direction = rot.transform_vector(up_direction);
-        }
-
-        Ok(())
-    }
 }
 impl Display for Ray {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -854,7 +865,9 @@ mod test {
     use crate::{
         J_per_cm2,
         coatings::CoatingConstantR,
-        degree, joule,
+        degree,
+        geometry::{Plane, geo_surface::GeoSurfaceRef},
+        joule,
         light::Spectrum,
         millimeter, nanometer,
         nodes::{
@@ -865,7 +878,7 @@ mod test {
     };
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_relative_eq, relative_eq};
     use itertools::izip;
-    use std::path::PathBuf;
+    use std::{path::PathBuf, sync::Arc};
     use uom::si::{energy::joule, length::millimeter};
     #[test]
     fn new() -> OpmResult<()> {
@@ -1187,7 +1200,7 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )?;
         let mut s = OpticSurface::default();
-        s.set_isometry(isometry);
+        s.set_geo_surface(GeoSurfaceRef(Arc::new(Plane::new(isometry))));
         s.set_coating(CoatingConstantR::new(reflectivity)?.into());
         assert!(
             ray.refract_on_surface(&s, Some(0.9), &MissedSurfaceStrategy::Stop)
@@ -1249,8 +1262,8 @@ mod test {
             Point3::new(Length::zero(), Length::zero(), plane_z_pos),
             degree!(0.0, 0.0, 0.0),
         )?;
-        let s = OpticSurface::default();
-        s.set_isometry(isometry);
+        let mut s = OpticSurface::default();
+        s.set_geo_surface(GeoSurfaceRef(Arc::new(Plane::new(isometry))));
         ray.refract_on_surface(&s, None, &MissedSurfaceStrategy::Stop)?;
         assert_eq!(ray.pos, millimeter!(0., 10., 10.));
         assert_eq!(ray.dir[0], 0.0);
@@ -1273,8 +1286,8 @@ mod test {
             Point3::new(Length::zero(), Length::zero(), millimeter!(10.0)),
             degree!(0.0, 0.0, 0.0),
         )?;
-        let s = OpticSurface::default();
-        s.set_isometry(isometry);
+        let mut s = OpticSurface::default();
+        s.set_geo_surface(GeoSurfaceRef(Arc::new(Plane::new(isometry))));
         ray.refract_on_surface(&s, Some(1.5), &MissedSurfaceStrategy::Stop)?;
         assert_eq!(ray.pos, millimeter!(0., 0., 0.));
         assert_eq!(ray.dir, direction);
@@ -1296,8 +1309,8 @@ mod test {
             Point3::new(Length::zero(), Length::zero(), plane_z_pos),
             degree!(0.0, 0.0, 0.0),
         )?;
-        let s = OpticSurface::default();
-        s.set_isometry(isometry);
+        let mut s = OpticSurface::default();
+        s.set_geo_surface(GeoSurfaceRef(Arc::new(Plane::new(isometry))));
         assert!(
             ray.refract_on_surface(&s, Some(0.9), &MissedSurfaceStrategy::Stop)
                 .is_err()
@@ -1345,8 +1358,8 @@ mod test {
             Point3::new(Length::zero(), Length::zero(), millimeter!(10.0)),
             degree!(0.0, 0.0, 0.0),
         )?;
-        let s = OpticSurface::default();
-        s.set_isometry(isometry);
+        let mut s = OpticSurface::default();
+        s.set_geo_surface(GeoSurfaceRef(Arc::new(Plane::new(isometry))));
         let (reflected, _hitpoint) =
             ray.refract_on_surface(&s, Some(1.0), &MissedSurfaceStrategy::Stop)?;
         assert!(reflected.is_none());
@@ -1677,39 +1690,52 @@ mod test {
         ));
         Ok(())
     }
+    /// The up direction a ray carries turns with it by the smallest rotation: up from y to -z when
+    /// the ray turns from z to y, back to y when it turns back, and unchanged when the ray turns
+    /// about the up direction itself or is sent straight back. A ray without one gets none.
     #[test]
-    fn calc_new_up_direction_test() -> OpmResult<()> {
-        //emulate reflection or refraction
+    fn turn_to_turns_the_up_direction_along() -> OpmResult<()> {
         let mut ray = Ray::new(
             meter!(0., 0., 0.),
             Vector3::z(),
             nanometer!(1000.),
             joule!(1.),
         )?;
-        let mut up_direction = Vector3::y();
-        assert!(ray.calc_new_up_direction(&mut up_direction).is_err());
-        //propagation
-        ray.propagate(meter!(1.))?;
-        //45° reflection to y
-        ray.prev_dir = Some(ray.dir);
-        ray.dir = Vector3::y();
+        ray.turn_to(Vector3::y());
+        assert_eq!(ray.up_direction, None);
 
-        ray.calc_new_up_direction(&mut up_direction)?;
-        assert_relative_eq!(up_direction, -Vector3::z());
-
-        ray.propagate(meter!(1.))?;
-        ray.prev_dir = Some(ray.dir);
-        ray.dir = Vector3::new(0., 0., 1.);
-
-        ray.calc_new_up_direction(&mut up_direction)?;
-        assert_relative_eq!(up_direction, Vector3::y());
-
-        ray.propagate(meter!(1.))?;
-        ray.prev_dir = Some(ray.dir);
-        ray.dir = Vector3::new(1., 0., 0.);
-
-        ray.calc_new_up_direction(&mut up_direction)?;
-        assert_relative_eq!(up_direction, Vector3::y());
+        let mut ray = Ray::new(
+            meter!(0., 0., 0.),
+            Vector3::z(),
+            nanometer!(1000.),
+            joule!(1.),
+        )?;
+        ray.set_up_direction(Vector3::y());
+        let mut assert_turned = |dir: Vector3<f64>, up_direction: Vector3<f64>| {
+            ray.turn_to(dir);
+            assert_relative_eq!(ray.up_direction.unwrap(), up_direction);
+        };
+        assert_turned(Vector3::y(), -Vector3::z());
+        assert_turned(Vector3::z(), Vector3::y());
+        assert_turned(Vector3::x(), Vector3::y());
+        assert_turned(-Vector3::x(), Vector3::y());
+        Ok(())
+    }
+    /// A ray places a node looking along the ray, its y axis towards the up direction the ray
+    /// carries. Without one there is nothing to turn the node by.
+    #[test]
+    fn to_isometry_turns_the_node_by_the_carried_up_direction() -> OpmResult<()> {
+        let mut ray = Ray::new(
+            meter!(0., 0., 0.),
+            Vector3::z(),
+            nanometer!(1000.),
+            joule!(1.),
+        )?;
+        assert!(ray.to_isometry().is_err());
+        ray.set_up_direction(-Vector3::x());
+        let isometry = ray.to_isometry()?;
+        assert_relative_eq!(isometry.transform_vector_f64(&Vector3::z()), Vector3::z());
+        assert_relative_eq!(isometry.transform_vector_f64(&Vector3::y()), -Vector3::x());
         Ok(())
     }
 

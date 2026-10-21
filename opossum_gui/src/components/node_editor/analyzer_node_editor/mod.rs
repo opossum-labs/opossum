@@ -153,7 +153,7 @@ pub fn AnalyzerNodeEditor(
                                 value: analyzer_name,
                                 container_class: "form-floating border-start".to_string(),
                                 input_class: "form-control bg-dark text-light form-control-sm noselect"
-                                                                                                    .to_string(),
+                                                                                                                                    .to_string(),
                                 label_class: "form-label text-secondary".to_string(),
                                 readonly: false,
                                 on_save: on_name_save,
@@ -271,7 +271,7 @@ fn PumpScenarioSelection(
                     "No pump scenario defined - this analysis runs on the passive model."
                 }
             } else {
-                for (scenario_id , name , is_selected , toggled) in rows {
+                for (scenario_id, name, is_selected, toggled) in rows {
                     div { class: "form-check", key: "{scenario_id}",
                         input {
                             class: "form-check-input",

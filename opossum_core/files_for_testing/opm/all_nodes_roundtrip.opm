@@ -22,6 +22,12 @@
                     "uuid": "601272ae-4cbc-4d59-a9bf-c87890069ab4",
                     "props": {
                         "splitter config builder": SplittingConfigBuilder(FixedRatio(0.5)),
+                        "optic shape": OpticShape(Bounded(
+                            shape: Circle(
+                                radius: 0.0125,
+                            ),
+                            bores: [],
+                        )),
                     },
                 },
                 {
@@ -33,8 +39,11 @@
                         "rear curvature": Curvature(-0.5),
                         "center thickness": Length(0.01),
                         "Material": Material(Id("080b7ced-292d-403e-afa9-6f022e58801b")),
-                        "clear aperture": Aperture(BinaryCircle(
-                            radius: 0.0125,
+                        "optic shape": OpticShape(Bounded(
+                            shape: Circle(
+                                radius: 0.0125,
+                            ),
+                            bores: [],
                         )),
                     },
                 },
@@ -44,6 +53,7 @@
                     "uuid": "f45856b4-86d4-46c6-800b-daff53ef1559",
                     "props": {
                         "fluence estimator": FluenceEstimator(Voronoi),
+                        "optic shape": OpticShape(Open),
                     },
                 },
                 {
@@ -55,8 +65,11 @@
                         "rear curvature": Curvature(-0.5),
                         "center thickness": Length(0.01),
                         "Material": Material(Id("c278deba-11b5-4e1c-bd2e-0a08ca2dcdd2")),
-                        "clear aperture": Aperture(BinaryCircle(
-                            radius: 0.0125,
+                        "optic shape": OpticShape(Bounded(
+                            shape: Circle(
+                                radius: 0.0125,
+                            ),
+                            bores: [],
                         )),
                     },
                 },
@@ -68,8 +81,11 @@
                         "center thickness": Length(0.01),
                         "Material": Material(Id("c06f49d2-1422-4d16-ab1e-210a8e9a6281")),
                         "wedge": Angle(0.0),
-                        "clear aperture": Aperture(BinaryCircle(
-                            radius: 0.0125,
+                        "optic shape": OpticShape(Bounded(
+                            shape: Circle(
+                                radius: 0.0125,
+                            ),
+                            bores: [],
                         )),
                     },
                 },
@@ -77,6 +93,9 @@
                     "node_type": "dummy",
                     "name": "dummy",
                     "uuid": "3012318f-6d95-4cdd-b7a8-0c2b2ee650a7",
+                    "props": {
+                        "optic shape": OpticShape(Open),
+                    },
                 },
                 {
                     "node_type": "group",
@@ -91,11 +110,17 @@
                                 "node_type": "dummy",
                                 "name": "nested dummy in",
                                 "uuid": "79b54421-7fca-40ef-9d14-0262529640ee",
+                                "props": {
+                                    "optic shape": OpticShape(Open),
+                                },
                             },
                             {
                                 "node_type": "dummy",
                                 "name": "nested dummy out",
                                 "uuid": "62563234-52e3-488a-bdd4-5a79bf441da2",
+                                "props": {
+                                    "optic shape": OpticShape(Open),
+                                },
                             },
                         ],
                         edges: [
@@ -129,6 +154,7 @@
                     "uuid": "f92d1b16-7efd-422f-ba1c-5401aae32eec",
                     "props": {
                         "meter type": Metertype(IdealEnergyMeter),
+                        "optic shape": OpticShape(Open),
                     },
                 },
                 {
@@ -139,6 +165,12 @@
                         "filter type builder": FilterTypeBuilder(Constant(
                             transmission: 1.0,
                         )),
+                        "optic shape": OpticShape(Bounded(
+                            shape: Circle(
+                                radius: 0.0125,
+                            ),
+                            bores: [],
+                        )),
                     },
                 },
                 {
@@ -147,6 +179,12 @@
                     "uuid": "98aa8890-ef29-4db8-a43f-27abc5e8f256",
                     "props": {
                         "focal length": Length(1.0),
+                        "optic shape": OpticShape(Bounded(
+                            shape: Circle(
+                                radius: 0.0125,
+                            ),
+                            bores: [],
+                        )),
                     },
                 },
                 {
@@ -164,6 +202,7 @@
                     "uuid": "822bcd22-f811-4034-bc66-297ce615a4b7",
                     "props": {
                         "spectrometer type": SpectrometerType(Ideal),
+                        "optic shape": OpticShape(Open),
                     },
                 },
                 {
@@ -172,6 +211,7 @@
                     "uuid": "b3ef4ecf-8a26-4827-90ad-1ec24e0c6343",
                     "props": {
                         "plot aperture": Bool(false),
+                        "optic shape": OpticShape(Open),
                     },
                 },
                 {
@@ -180,6 +220,7 @@
                     "uuid": "9bdbf571-beee-44ba-95c0-182248efa528",
                     "props": {
                         "remove tilt": Bool(false),
+                        "optic shape": OpticShape(Open),
                         "decompose zernike": Bool(false),
                         "zernike max order": I32(4),
                     },
@@ -209,6 +250,12 @@
                         "off-axis angle": Angle(0.0),
                         "collimating": Bool(false),
                         "off-axis direction": Vec2(1.0, 0.0),
+                        "optic shape": OpticShape(Bounded(
+                            shape: Circle(
+                                radius: 0.0125,
+                            ),
+                            bores: [],
+                        )),
                     },
                 },
                 {
@@ -218,6 +265,12 @@
                     "props": {
                         "line density": LinearDensity(1740000.0),
                         "diffraction order": I32(-1),
+                        "optic shape": OpticShape(Bounded(
+                            shape: Circle(
+                                radius: 0.0125,
+                            ),
+                            bores: [],
+                        )),
                     },
                     "alignment": Some(
                         rotation: (0.0, -0.5034621527856677, 0.0, 0.8640172803320666),
@@ -245,6 +298,12 @@
                     "uuid": "a766a7b5-a080-43bc-958a-396ed91da345",
                     "props": {
                         "curvature": Curvature(inf),
+                        "optic shape": OpticShape(Bounded(
+                            shape: Circle(
+                                radius: 0.0125,
+                            ),
+                            bores: [],
+                        )),
                     },
                 },
             ],
