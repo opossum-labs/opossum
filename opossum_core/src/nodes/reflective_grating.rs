@@ -292,7 +292,7 @@ mod test {
         light::{Ray, Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer,
         nodes::test_helper::helper::*,
-        utils::geom_transformation::Isometry,
+        utils::{geom_transformation::Isometry, test_helper::helper::check_logs},
     };
     use approx::assert_relative_eq;
     use nalgebra::vector;
@@ -507,6 +507,54 @@ mod test {
         } else {
             panic!("could not get LightData");
         }
+        Ok(())
+    }
+    /// Trace one ray of 1 J at 1000 nm from 10 mm in front of a grating along z.
+    fn diffracted_by(node: &mut ReflectiveGrating) -> OpmResult<(Rays, Rays)> {
+        let incoming = Rays::from(Ray::new_collimated(
+            millimeter!(0.0, 0.0, -10.0),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?);
+        let output = AnalysisRayTrace::analyze(
+            node,
+            LightResult::from([("input_1".into(), LightData::Geometric(incoming.clone()))]),
+            &RayTraceConfig::default(),
+        )?;
+        let Some(LightData::Geometric(diffracted)) = output.get("output_1") else {
+            panic!("expected ray data at the output port");
+        };
+        Ok((incoming, diffracted.clone()))
+    }
+    /// The grating sends the whole energy into its diffraction order. The diffracted ray is the
+    /// intended beam, not a ghost: it continues the incoming bundle, carries no extra bounce and
+    /// keeps where it came from.
+    #[test]
+    fn the_whole_energy_goes_into_the_diffracted_beam() -> OpmResult<()> {
+        let mut node =
+            ReflectiveGrating::default().with_rot_from_littrow(nanometer!(1000.), degree!(0.))?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        let (incoming, diffracted) = diffracted_by(&mut node)?;
+        assert_eq!(diffracted.uuid(), incoming.uuid());
+        assert_eq!(diffracted.nr_of_rays(true), 1);
+        let ray = diffracted.iter().next().expect("one diffracted ray");
+        assert_eq!(ray.energy(), joule!(1.0));
+        assert_eq!(ray.number_of_bounces(), 0);
+        assert_eq!(ray.position_history()[(0, 2)], millimeter!(-10.0));
+        Ok(())
+    }
+    /// An order the grating cannot diffract into lets no light out, and the analysis warns: at
+    /// normal incidence, 1740 lines/mm would send 1000 nm out at sin θ = 1.74.
+    #[test]
+    fn an_evanescent_order_lets_no_light_out() -> OpmResult<()> {
+        let mut node = placed_at_origin::<ReflectiveGrating>()?;
+        testing_logger::setup();
+        let (_, diffracted) = diffracted_by(&mut node)?;
+        check_logs(
+            log::Level::Warn,
+            vec!["rays totally reflected or missed a surface"],
+        );
+        assert_eq!(diffracted.nr_of_rays(true), 0);
         Ok(())
     }
 }
