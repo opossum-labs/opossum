@@ -8,7 +8,7 @@ use crate::{
         propagation_strategy::PropagationStrategy,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, OpticNodeExt, node_attr::HasNodeAttr, Planar, SurfaceKind},
+    core_optics::{NodeAttr, OpticNodeExt, Planar, SurfaceKind, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
     geometry::{
         Geometry, SurfaceGeometry,

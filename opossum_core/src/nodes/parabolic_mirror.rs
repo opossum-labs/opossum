@@ -9,8 +9,7 @@ use crate::{
     coatings::CoatingConstantR,
     core_optics::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind,
-        node_attr::HasNodeAttr,
-        surface_effect::Refraction,
+        node_attr::HasNodeAttr, surface_effect::Refraction,
     },
     degree,
     error::{OpmResult, OpossumError},

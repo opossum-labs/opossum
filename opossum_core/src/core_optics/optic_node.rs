@@ -13,8 +13,8 @@ use crate::{
     core_optics::{
         NodeAttrExt, OpticPorts, PortType,
         node_attr::{HasNodeAttr, NodePositioning},
-        runtime_geometry::RuntimeGeometry,
         planar::Planar,
+        runtime_geometry::RuntimeGeometry,
         volumetric::Volumetric,
     },
     error::{OpmResult, OpossumError},

@@ -12,7 +12,7 @@ use crate::{
     },
     error::{OpmResult, OpossumError},
     geometry::{
-        Geometry, SurfaceMesh,
+        SurfaceMesh,
         body::{OPTIC_SHAPE, default_optic_shape},
     },
     light::{LightData, LightResult, Rays, rays::ReflectedPart},
