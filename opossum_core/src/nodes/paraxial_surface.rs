@@ -5,16 +5,22 @@ use crate::{
         GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType},
+    coatings::CoatingType,
+    core_optics::{
+        NodeAttr, OpticNode, OpticNodeExt, PortType,
+        hit_map::rays_hit_map::HitPoint,
+        surface_effect::{Refraction, SurfaceEffect},
+    },
     error::{OpmResult, OpossumError},
     geometry::{
-        Geometry, SurfaceGeometry,
+        Geometry, SurfaceGeometry, SurfaceHit,
         body::{OPTIC_SHAPE, default_optic_shape},
     },
-    light::{LightData, LightRays, LightResult, Rays},
+    light::{LightData, LightRays, LightResult, Ray, Rays, rays::ReflectedPart},
     millimeter,
     nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
+    utils::geom_transformation::Isometry,
 };
 use log::warn;
 use opm_macros_lib::OpmNode;
@@ -93,6 +99,46 @@ impl ParaxialSurface {
             .set_property("focal length", focal_length.into())?;
         Ok(parsurf)
     }
+    /// Returns the ideal lens this node is at its input surface: its focal length, at the frame of
+    /// that surface.
+    ///
+    /// # Arguments
+    ///
+    /// * `in_port` - the input port, whose surface the lens is.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the focal length cannot be read or the node is not placed.
+    fn lens(&self, in_port: &str) -> OpmResult<ParaxialLens> {
+        let Proptype::Length(focal_length) = self.node_attr.get_property("focal length")?.clone()
+        else {
+            return Err(OpossumError::Analysis("cannot read focal length".into()));
+        };
+        Ok(ParaxialLens {
+            focal_length,
+            frame: self.effective_surface_iso(in_port)?,
+        })
+    }
+}
+
+/// An ideal thin lens at a surface: a passive surface whose transmitted part is deflected as by a
+/// lens of the given focal length (see [`Ray::refract_paraxial`]).
+struct ParaxialLens {
+    focal_length: Length,
+    frame: Isometry,
+}
+
+impl SurfaceEffect for ParaxialLens {
+    fn act_at(
+        &self,
+        ray: &mut Ray,
+        hit: &SurfaceHit,
+        coating: &CoatingType,
+    ) -> OpmResult<(Option<Ray>, Option<HitPoint>)> {
+        let split = Refraction(None).act_at(ray, hit, coating)?;
+        ray.refract_paraxial(self.focal_length, &self.frame)?;
+        Ok(split)
+    }
 }
 impl OpticNode for ParaxialSurface {
     fn geometry(&self) -> OpmResult<Option<Geometry>> {
@@ -116,27 +162,20 @@ impl AnalysisGhostFocus for ParaxialSurface {
         let in_port = &self.ports().names(&PortType::Input)[0];
         let out_port = &self.ports().names(&PortType::Output)[0];
 
-        let Proptype::Length(focal_length) = self.node_attr.get_property("focal length")?.clone()
-        else {
-            return Err(OpossumError::Analysis("cannot read focal length".into()));
-        };
         let Some(mut rays_bundle) = incoming_data.remove(in_port) else {
             let mut out_light_rays = LightRays::default();
             out_light_rays.insert(out_port.into(), Vec::<Rays>::new());
             return Ok(out_light_rays);
         };
-        let iso = self.effective_surface_iso(in_port)?;
-        let hits = self.pass_through_surface_generic(
+        let lens = self.lens(in_port)?;
+        self.pass_through_surface_generic(
             in_port,
-            None,
+            &lens,
             &mut rays_bundle,
             config,
             false,
-            false,
+            ReflectedPart::Main,
         )?;
-        for (rays, hits) in rays_bundle.iter_mut().zip(&hits) {
-            rays.refract_paraxial(focal_length, &iso, hits)?;
-        }
         let mut out_light_rays = LightRays::default();
         out_light_rays.insert(out_port.clone(), rays_bundle);
         Ok(out_light_rays)
@@ -159,23 +198,16 @@ impl AnalysisRayTrace for ParaxialSurface {
                 "No LightData::Geometric for analyzer type RayTrace".into(),
             ));
         };
-        let Proptype::Length(focal_length) = self.node_attr.get_property("focal length")?.clone()
-        else {
-            return Err(OpossumError::Analysis("cannot read focal length".into()));
-        };
-        let iso = self.effective_surface_iso(in_port)?;
+        let lens = self.lens(in_port)?;
         let mut rays_bundle = vec![rays];
-        let hits = self.pass_through_surface_generic(
+        self.pass_through_surface_generic(
             in_port,
-            None,
+            &lens,
             &mut rays_bundle,
             config,
             false,
-            true,
+            ReflectedPart::Ghost,
         )?;
-        for (rays, hits) in rays_bundle.iter_mut().zip(&hits) {
-            rays.refract_paraxial(focal_length, &iso, hits)?;
-        }
         let mut light_result = LightResult::default();
         light_result.insert(out_port.into(), LightData::Geometric(rays_bundle.remove(0)));
         Ok(light_result)
@@ -186,8 +218,12 @@ impl AnalysisRayTrace for ParaxialSurface {
 mod test {
     use super::*;
     use crate::{
-        analyzers::RayTraceConfig,
-        core_optics::{NodeAttrExt, PortType, node_attr::NodePositioning},
+        J_per_cm2,
+        analyzers::{RayTraceConfig, propagation_strategy::MissedSurfaceStrategy},
+        core_optics::{
+            NodeAttrExt, PortType, node_attr::NodePositioning, optic_surface::OpticSurface,
+            runtime_geometry::RuntimeGeometry,
+        },
         degree, joule,
         light::{Ray, Rays},
         millimeter, nanometer,
@@ -284,6 +320,109 @@ mod test {
         assert!(ray.valid(), "the ray far off the axis passes the lens");
         // heading for the focus 10 mm behind the lens on its axis
         assert_relative_eq!(ray.direction(), Vector3::new(0.0, -100.0, 10.0).normalize());
+        Ok(())
+    }
+    /// An ideal lens of 100 mm at a plane through the origin, bounded by the default optic shape.
+    fn lens_at_origin() -> OpmResult<(RuntimeGeometry, ParaxialLens)> {
+        let plane = Geometry::plane(default_optic_shape().outline().cloned());
+        let lens = ParaxialLens {
+            focal_length: millimeter!(100.0),
+            frame: Isometry::identity(),
+        };
+        Ok((traced_at(plane, OpticSurface::default())?, lens))
+    }
+    /// A ray on the axis passes the lens straight, a ray 1 mm off it heads for the focus.
+    #[test]
+    fn a_lens_deflects_a_ray_towards_its_focus() -> OpmResult<()> {
+        let (mut plane, lens) = lens_at_origin()?;
+        let ray0 = Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0))?;
+        let ray1 = Ray::new_collimated(millimeter!(0., 1., 0.), nanometer!(1053.0), joule!(1.0))?;
+        let mut rays = Rays::from(vec![ray0.clone(), ray1.clone()]);
+        plane.interact(
+            "input_1",
+            &mut rays,
+            &lens,
+            ReflectedPart::Ghost,
+            MissedSurfaceStrategy::Stop,
+        )?;
+        let (passed0, passed1) = (rays.iter().next(), rays.iter().nth(1));
+        let (passed0, passed1) = (passed0.expect("ray 0"), passed1.expect("ray 1"));
+        assert_eq!(passed0.position(), ray0.position());
+        assert_eq!(passed0.direction(), ray0.direction());
+        assert_eq!(passed1.position(), ray1.position());
+        assert_relative_eq!(
+            passed1.direction(),
+            Vector3::new(0.0, -1.0, 100.0).normalize()
+        );
+        Ok(())
+    }
+    /// A ray that hits the lens takes its helper rays along; a ray that misses it keeps its
+    /// direction, and so do its helper rays.
+    #[test]
+    fn a_lens_deflects_the_helper_rays_of_a_hit_and_leaves_a_miss_alone() -> OpmResult<()> {
+        let (mut plane, lens) = lens_at_origin()?;
+        let with_helpers = |y: f64| {
+            Ray::new_collimated_w_fluence_helper(
+                millimeter!(0.0, y, -10.0),
+                nanometer!(1000.0),
+                joule!(1.0),
+                J_per_cm2!(1.0),
+            )
+        };
+        let mut rays = Rays::from(vec![with_helpers(5.0)?, with_helpers(20.0)?]);
+        plane.interact(
+            "input_1",
+            &mut rays,
+            &lens,
+            ReflectedPart::Ghost,
+            MissedSurfaceStrategy::Ignore,
+        )?;
+        for (ray, deflected) in rays.iter_mut().zip([true, false]) {
+            assert_eq!(ray.direction() != Vector3::z(), deflected);
+            let helpers = ray.helper_rays_mut().expect("a ray with helper rays");
+            assert_eq!(helpers.nr_of_rays(false), 3, "a ray with three helper rays");
+            for helper in helpers.iter() {
+                assert_eq!(helper.direction() != Vector3::z(), deflected);
+            }
+        }
+        Ok(())
+    }
+    /// Where a missed ray passes the lens unchanged, so does a missed helper ray: a ray 0.5 µm inside
+    /// the 12.5 mm optic shape has one helper ray 0.38 µm beyond it, which is not deflected, while
+    /// the ray and its other two helper rays are focused.
+    #[test]
+    fn a_helper_ray_beyond_the_optic_shape_passes_undeflected() -> OpmResult<()> {
+        let mut node = placed_at_origin::<ParaxialSurface>()?;
+        node.set_property(OPTIC_SHAPE, default_optic_shape().into())?;
+        node.update_surfaces()?;
+        let ray = Ray::new_collimated_w_fluence_helper(
+            millimeter!(12.4995, 0.0, -10.0),
+            nanometer!(1000.0),
+            joule!(1.0),
+            J_per_cm2!(1.0),
+        )?;
+        let output = AnalysisGhostFocus::analyze(
+            &mut node,
+            LightRays::from([("input_1".into(), vec![Rays::from(ray)])]),
+            &GhostFocusConfig::default(),
+            &mut Vec::new(),
+            0,
+        )?;
+        let mut ray = output
+            .get("output_1")
+            .and_then(|bundles| bundles.first())
+            .and_then(|bundle| bundle.iter().next())
+            .cloned()
+            .expect("the ray at the output port");
+        assert_ne!(ray.direction(), Vector3::z(), "the ray inside is focused");
+        let helpers = ray
+            .helper_rays_mut()
+            .expect("the ray keeps its helper rays");
+        let deflected: Vec<bool> = helpers
+            .iter()
+            .map(|helper| helper.direction() != Vector3::z())
+            .collect();
+        assert_eq!(deflected, [false, true, true]);
         Ok(())
     }
     #[test]

@@ -541,14 +541,17 @@ mod test {
     use super::*;
     use crate::{
         analyzers::propagation_strategy::MissedSurfaceStrategy,
-        core_optics::optic_surface::OpticSurface,
+        core_optics::{optic_surface::OpticSurface, surface_effect::Refraction},
         degree,
         error::OpmResult,
-        geometry::{Face, SurfaceShape},
+        geometry::{Face, Geometry, SurfaceShape},
         joule,
-        light::{Ray, Rays},
+        light::{Ray, Rays, rays::ReflectedPart},
         millimeter, nanometer,
-        nodes::{WaveFrontData, WaveFrontMap, wavefront::zernike::ZernikeNoll},
+        nodes::{
+            WaveFrontData, WaveFrontMap, test_helper::helper::traced_at,
+            wavefront::zernike::ZernikeNoll,
+        },
         refractive_index::refr_index_vaccuum,
         utils::geom_transformation::Isometry,
     };
@@ -571,17 +574,22 @@ mod test {
             joule!(1.),
         )?;
 
-        let mut s = OpticSurface::default();
-        s.set_surface(Face::new(
+        let plane = Geometry::from(Face::new(
             SurfaceShape::Plane,
             Isometry::new_along_z(millimeter!(10.0))?,
         ));
-        rays.refract_on_surface(
-            &mut s,
-            Some(&refr_index_vaccuum()),
-            true,
-            &MissedSurfaceStrategy::Stop,
-        )?;
+        let mut plane = traced_at(plane, OpticSurface::default())?;
+        let vacuum = refr_index_vaccuum();
+        let mut refract = |rays: &mut Rays| {
+            plane.interact(
+                "input_1",
+                rays,
+                &Refraction(Some(&vacuum)),
+                ReflectedPart::Ghost,
+                MissedSurfaceStrategy::Stop,
+            )
+        };
+        refract(&mut rays)?;
         let wf_map = WaveFrontMap::from_rays(&rays, nanometer!(1000.), &Isometry::identity())?;
 
         for (i, val) in wf_map.opd.into_iter().enumerate() {
@@ -602,12 +610,7 @@ mod test {
             nanometer!(500.),
             joule!(1.),
         )?;
-        rays.refract_on_surface(
-            &mut s,
-            Some(&refr_index_vaccuum()),
-            true,
-            &MissedSurfaceStrategy::Stop,
-        )?;
+        refract(&mut rays)?;
         let wf_map = WaveFrontMap::from_rays(&rays, nanometer!(500.), &Isometry::identity())?;
         for (i, val) in wf_map.opd.into_iter().enumerate() {
             if i != 0 {

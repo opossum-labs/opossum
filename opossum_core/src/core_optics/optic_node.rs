@@ -12,7 +12,8 @@ use crate::{
     analyzers::{Analyzable, AnalyzerKind, propagation_strategy::PropagationStrategy},
     core_optics::{
         NodeAttrExt, OpticPorts, PortType,
-        node_attr::{HasNodeAttr, NodePositioning, RuntimeMedium},
+        node_attr::{HasNodeAttr, NodePositioning},
+        runtime_geometry::RuntimeGeometry,
         volumetric::Volumetric,
     },
     error::{OpmResult, OpossumError},
@@ -82,7 +83,9 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     fn reset_data(&mut self) {
         self.set_light_data(None);
         self.reset_optic_surfaces();
-        self.node_attr_mut().clear_runtime_inversion();
+        if let Some(runtime) = self.node_attr_mut().runtime_mut() {
+            runtime.clear_inversion();
+        }
     }
 
     /// Prepare this node's medium before the first ray is traced (Phase A).
@@ -111,8 +114,8 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
         let name = self.name().to_owned();
         let Some((body, inversion)) = self
             .node_attr_mut()
-            .runtime_medium_mut()
-            .and_then(RuntimeMedium::parts_mut)
+            .runtime_mut()
+            .and_then(RuntimeGeometry::medium_mut)
         else {
             return Err(OpossumError::Other(format!(
                 "volume node '{name}' encloses no body"

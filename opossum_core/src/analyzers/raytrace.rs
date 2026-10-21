@@ -287,7 +287,7 @@ pub trait AnalysisRayTrace: OpticNode {
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        self.unified_analyze_single_surface_node(incoming_data, config, "input_1", None)
+        self.unified_analyze_single_surface_node(incoming_data, config, "input_1")
     }
     /// Calculate the position of this [`OpticNode`] element.
     ///
