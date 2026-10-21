@@ -136,25 +136,26 @@ one way to state an edge, the way an extrusion does. The faces of a parametric s
 Ports belong to the graph. Edges connect them, and each port carries a coating and a laser-induced damage threshold
 (LIDT). Ports hold no geometry and no aperture.
 
-The surfaces that are traced are runtime state of the node. A node keeps one *optic surface* per port name. It
-consists of:
+The surfaces that are traced are runtime state of the node. A node keeps its placed geometry once, and one *optic
+surface* per port name. An optic surface consists of:
 
-- the face it is traced at, moved to the node,
-- the placed geometry it is a face of, shared by all the surfaces of the node, and the number of that face. The
-  surface asks the geometry where the face ends,
-- the window of a detector, if there is one,
+- the number of the face of the geometry it is,
 - the coating and the LIDT, copied from the port of the same name,
 - per-surface caches and a hit map.
 
-A volume node also keeps a *medium*: its placed geometry, as the body between its faces, and the inversion a gain
-model builds in it. Neither the surfaces nor the medium are written to the `.opm` file; they are built again after
-loading.
+It holds no geometry. Where a ray hits it, and whether a detector records the hit, is asked of the node's geometry
+with that face number. The *medium* of a volume node is the body that same geometry encloses, together with the
+inversion a gain model builds in it. None of this is written to the `.opm` file; it is built again after loading.
 
 The node decides which face goes under which port: `install_geometry` takes a pair of port name and face number for
 every port. A lens puts its input port on the front face and its output port on the rear face. What is "in" and what
 is "out" is thus the node's decision, not the geometry's. A mirror or a beam splitter has one face, so all of its
 ports name that face. Each port still has its own optic surface with its own coating. A face number the geometry does
 not have is an error that names the node, the port and the number of faces.
+
+To trace rays at a surface, a node hands both to the ray functions: the geometry and the optic surface
+(`NodeAttr::traced_surface_mut`). The geometry answers where a ray hits the face (`Geometry::intersect`, which
+returns a `SurfaceHit`); the ray then does what happens there (`Ray::refract_at`, `Ray::diffract_at`).
 
 ### Surfaces in the sequential trace
 
@@ -166,8 +167,8 @@ Inverting a node rebuilds nothing; ghost focus analysis does this on every secon
 inputs and outputs, so the same lookup returns the rear surface first. The geometry stays as it physically is; only
 the direction light takes through it changes.
 
-Whether a ray hits a component is decided in exactly one place, by the geometry (`GeometryKind::includes`). The optic
-surfaces ask it when a ray is intersected with them, and the body of a volume node asks it when it measures how far a
+Whether a ray hits a component is decided in exactly one place, by the geometry (`GeometryKind::includes`). It is
+asked when a ray is traced at a face (`Geometry::intersect`) and when the body of a volume node measures how far a
 ray travels through it. The point has to meet two conditions:
 
 - the face reaches there (see [Where a face ends](#where-a-face-ends)); for a lens, the point lies within the rim,
@@ -184,10 +185,10 @@ The alignment run always uses `Stop`.
 
 ### When surfaces are rebuilt
 
-Surfaces are never moved one by one. The geometry is moved to the node's current placement as a whole, and the
-surfaces are taken from it. A rebuild replaces the face, the placed geometry and the window of each existing optic
-surface but keeps the optic surface itself, so its caches and hit map survive. For a volume node it also replaces
-the medium with the new placed geometry; the inversion stays empty until the medium is prepared for an analysis.
+Surfaces are never moved one by one. The geometry is moved to the node's current placement as a whole and replaces
+the one the node kept; the optic surfaces keep their face numbers, caches and hit maps, and only take over coating and
+LIDT again. Since the medium is the body of that geometry, it is rebuilt with it; the inversion stays empty until the
+medium is prepared for an analysis.
 
 | Event | Rebuilds the surfaces |
 |---|---|
@@ -213,7 +214,8 @@ All paths are relative to `opossum_core/src` unless stated otherwise.
 
 | Type | File | Role |
 |---|---|---|
-| `Geometry` | `geometry/node_geometry.rs` | the geometry of a component, one variant per kind: `Surface`, `Extruded`, `Parametric`, `Assembly`. `Geometry::kind` is the one place that tells the kinds apart |
+| `Geometry` | `geometry/node_geometry.rs` | the geometry of a component, one variant per kind: `Surface`, `Extruded`, `Parametric`, `Assembly`. `Geometry::kind` is the one place that tells the kinds apart; `Geometry::intersect` answers where a ray hits a face |
+| `SurfaceHit` | `geometry/node_geometry.rs` | where a ray hits a face: the point, in the frame of the geometry and in that of the face, the normal, and whether a detector records it |
 | `GeometryKind` | `geometry/node_geometry.rs` | what every kind answers: its numbered faces, where they end (`includes`), the window of a detector, its body (`as_body`) and itself moved (`moved`). It has no default methods, so a new kind has to answer every question |
 | `SurfaceGeometry`, `SurfaceExtent` | `geometry/node_geometry.rs` | a single surface: one face, and whether it is open, ends at an edge or records within a window |
 | `Extruded` | `geometry/solid/extruded.rs` | two faces capping a profile; holds a `Rim` |
@@ -224,8 +226,8 @@ All paths are relative to `opossum_core/src` unless stated otherwise.
 | `Rim` | `geometry/rim.rs` | an outline at a frame: whether a point lies within it, whether a face reaches a point |
 | `Body`, `BoundingBox` | `geometry/body/mod.rs` | what a volume answers: is a point inside, how far a ray travels in it, which box encloses it, which side of a face it lies on. Each kind of solid implements it next to its definition |
 | `OpticShape`, `Outline`, `Bore` | `apertures/optic_shape.rs` | value of the `optic shape` property; the outline says whether a point lies within it |
-| `OpticSurface` | `core_optics/optic_surface.rs` | the runtime surface: the face, the placed geometry it is a face of and the number of that face, the window |
-| `RuntimeSurfaces`, `RuntimeMedium` | `core_optics/node_attr.rs` | where a node keeps them, `#[serde(skip)]`. The medium holds the placed geometry of a solid |
+| `OpticSurface` | `core_optics/optic_surface.rs` | the runtime surface: the number of its face, coating, LIDT, caches and hit map; no geometry |
+| `NodeAttr`, `RuntimeSurfaces` | `core_optics/node_attr.rs` | where a node keeps its placed geometry, its optic surfaces and the inversion of its medium, all `#[serde(skip)]`. `runtime_medium` hands out the body of the geometry with the inversion, `traced_surface_mut` an optic surface with the geometry |
 | `OpticPorts`, `PortConfig` | `core_optics/optic_ports.rs` | coating and LIDT per port |
 | `Volumetric`, `Planar` | `core_optics/volumetric.rs`, `core_optics/planar.rs` | the capabilities |
 
@@ -283,12 +285,12 @@ it sits on. `OpticNodeExt::install_geometry` (`core_optics/optic_node_ext.rs`) d
 2. It takes `effective_node_iso()`, which is the position followed by the alignment, or the identity for a node that
    has not been placed.
 3. `Geometry::moved(&node_iso)` moves every face and the rim: each frame becomes `node_iso ∘ frame`. The result is
-   still a `Geometry`. It is shared, as an `Arc`, by all the optic surfaces of the node.
+   still a `Geometry`.
 4. It calls `update_surface` for every pair of port name and face number. A face the geometry does not have is an
    error.
-5. It hands a copy of the placed geometry to `NodeAttr::set_runtime_body`. The node keeps it as its `RuntimeMedium`,
-   with an empty inversion, if it encloses a volume (`GeometryKind::as_body`). A single surface leaves the node
-   without a medium.
+5. It keeps the placed geometry once, in `NodeAttr::set_runtime_geometry`, which also empties the inversion. Since
+   it encloses a volume (`GeometryKind::as_body`), it is the medium of the lens too; a single surface would leave the
+   node without one.
 
 | Face | frame in the geometry | frame at the node |
 |---|---|---|
@@ -300,12 +302,12 @@ The frame of a face sits at its vertex for every shape; the sphere computes arou
 
 `update_surface` looks up the `PortConfig` of the port with the same name and adds the port if it is missing. It then
 either updates the existing `OpticSurface` in place or inserts a new one into `runtime_surfaces.inputs` or
-`runtime_surfaces.outputs`, and makes it the given face of the placed geometry (`OpticSurface::set_face`), which takes
-the face and the window from it:
+`runtime_surfaces.outputs`, and gives it the number of its face (`OpticSurface::set_face`):
 
 ```text
-runtime_surfaces.inputs ["input_1"]  = OpticSurface { Sphere, vertex at z = 100 mm, face 0 of the lens, coating + LIDT of input_1 }
-runtime_surfaces.outputs["output_1"] = OpticSurface { Plane,  vertex at z = 105 mm, face 1 of the lens, coating + LIDT of output_1 }
+runtime_geometry                     = the lens: Sphere with its vertex at z = 100 mm, Plane at z = 105 mm, circle
+runtime_surfaces.inputs ["input_1"]  = OpticSurface { face 0, coating + LIDT of input_1 }
+runtime_surfaces.outputs["output_1"] = OpticSurface { face 1, coating + LIDT of output_1 }
 ```
 
 The rim was moved together with the faces, so asking where a face ends needs no recomputation.
@@ -314,12 +316,12 @@ The rim was moved together with the faces, so asking where a face ends needs no 
 For a volume node, `prepare_volume` does the following:
 
 1. It calls `update_surfaces` once more, which rebuilds the surfaces and the medium as in Step 3.
-2. If the gain model reads an inversion, it builds one in the body of the `RuntimeMedium`
-   (`Extraction::build_inversion`).
+2. If the gain model reads an inversion, it builds one in the body of the medium (`NodeAttr::runtime_medium_mut`,
+   `Extraction::build_inversion`).
 
 The body is the extruded solid of the placed geometry from Step 3, with the frame of its rim, `node_iso ∘ axis`. It
-is bounded by the very faces light is traced at: its front face is the sphere under `input_1`, its rear face the plane
-under `output_1`. It knows no port names.
+is bounded by the very faces light is traced at: its front face is face 0 under `input_1`, the sphere, its rear face
+face 1 under `output_1`, the plane. It knows no port names.
 
 **Step 5: trace.** `OpticGraph::analyze_raytrace` (`nodes/node_group/optic_graph/raytrace.rs`) walks the graph and
 hands each node the light that arrives at its ports. `Lens::analyze` (`nodes/lens/analysis_raytrace.rs`) calls
@@ -328,26 +330,30 @@ hands each node the light that arrives at its ports. `Lens::analyze` (`nodes/len
 1. `single_io_port_names(self)` returns `("input_1", "output_1")`. It takes them from `self.ports()`, which accounts
    for inversion.
 2. `Volumetric::pass_through_volume_generic("input_1", "output_1", ..)` runs three steps:
-   1. `pass_through_surface_generic("input_1", index of the material, ..)` follows this chain:
-      `get_optic_surface_mut("input_1")` → `OpticSurface::propagate_rays` → `Rays::refract_on_surface` →
-      `Ray::refract_on_surface_with_coating` → `OpticSurface::intersect`.
-   2. `propagate_inside_medium` applies gain and absorption along the chord through the body of the
-      `RuntimeMedium`. It does not move the rays.
-   3. `pass_through_surface_generic("output_1", ambient index, ..)` runs the same chain at the rear plane.
+   1. `pass_through_surface_generic("input_1", index of the material, ..)` takes the geometry and the surface
+      together (`NodeAttr::traced_surface_mut("input_1")`) and follows this chain: `OpticSurface::propagate_rays`
+      → `Rays::refract_on_surface` → `Geometry::intersect(face 0, ray)` → `Ray::refract_at(&hit, coating, n)`.
+   2. `propagate_inside_medium` applies gain and absorption along the chord through the body of the medium. It does
+      not move the rays.
+   3. `pass_through_surface_generic("output_1", ambient index, ..)` runs the same chain at face 1, the rear plane.
 
-`OpticSurface::intersect` (`core_optics/optic_surface.rs`) decides between hit and miss:
+`Geometry::intersect` (`geometry/node_geometry.rs`) decides between hit and miss:
 
 1. `Face::intersect` turns the ray into the vertex frame of the face, intersects it with the unbounded surface
    (`GeoSurface::calc_intersect_and_normal`) and turns the result back.
-2. The point counts only if the placed geometry says its face reaches there: `GeometryKind::includes(face, point)`.
-   For the lens this is `Rim::bounds`: `Rim::contains(point)` and `Face::is_on_vertex_sheet(point)` both hold.
+2. The point counts only if the geometry says its face reaches there: `GeometryKind::includes(face, point)`. For the
+   lens this is `Rim::bounds`: `Rim::contains(point)` and `Face::is_on_vertex_sheet(point)` both hold.
+3. The `SurfaceHit` carries the point, the normal, the point in the frame of the face (for the hit map and the phase
+   of a grating) and whether it is recorded, which only the window of a detector denies.
 
-`Body::path_length_inside` of the extruded solid asks the same `includes` when it measures the chord through the body.
+`Ray::refract_at` then needs nothing geometric any more: it applies Snell's law and the coating, adds the path length
+and leaves a hit point in the frame of the face. `Body::path_length_inside` of the extruded solid asks the same
+`includes` when it measures the chord through the body.
 
 A ray parallel to the axis at y = 13 mm meets the sphere, but outside the 12.5 mm circle, so it misses. With `Stop`,
-`Ray::refract_on_surface_with_coating` invalidates it; with `Ignore`, it stays unchanged. `propagate_rays` reports
-per ray whether it hit, so later steps act only on hits: the attenuation of an ideal filter, the deflection of a
-paraxial surface.
+`Rays::refract_on_surface` invalidates it (`MissedSurfaceStrategy::apply_to`); with `Ignore`, it stays unchanged.
+`propagate_rays` reports per ray whether it hit, so later steps act only on hits: the attenuation of an ideal filter,
+the deflection of a paraxial surface.
 
 **Variations.**
 
@@ -380,16 +386,17 @@ The setup is a source, then a thin mirror 100 mm further on:
 3. `ThinMirror::update_surfaces` calls
    `install_geometry(&[("input_1", SurfaceGeometry::FACE)], &[("output_1", SurfaceGeometry::FACE)])`.
 4. The placed geometry of a surface has its one face, number 0 (`SurfaceGeometry::FACE`), and both ports name it.
-   `input_1` and `output_1` therefore get separate `OpticSurface`s on the same face of the same placed geometry. A
-   surface encloses no volume, so the mirror gets no medium.
+   `input_1` and `output_1` therefore get separate `OpticSurface`s, both face 0 of the one geometry the node keeps.
+   A surface encloses no volume, so the mirror gets no medium.
 5. `ThinMirror::default` gives both ports a 100 % `ConstantR` coating through `set_coating`, which rebuilds as well.
 
 **Trace.** `ThinMirror::analyze` (the `AnalysisRayTrace` implementation in `nodes/thin_mirror.rs`) uses neither the
 volume helper nor the single-surface helper:
 
 1. It takes the first input and output names from `self.ports()`.
-2. It looks up `get_optic_surface_mut(in_port)`.
-3. It calls `Rays::refract_on_surface(surf, None, refraction_intended = false, missed strategy)` directly.
+2. It takes the geometry and the surface under `in_port` (`NodeAttr::traced_surface_mut`).
+3. It calls `Rays::refract_on_surface(geometry, surf, None, refraction_intended = false, missed strategy)`
+   directly.
 4. It emits only the reflected bundle at the output port. Outside the alignment run it first drops rays below the
    energy threshold.
 
@@ -412,7 +419,7 @@ endpoint for a single component (`opossum_backend/src/document.rs`) therefore me
 |---|---|
 | Parabolic mirror | `Geometry::surface` with an axis other than the identity. The node sits where the chief ray hits the mirror. `calc_off_axis_frames` returns two frames: the frame of the parent parabola's axis through the node, in which the optic shape is measured, and the vertex of the parent parabola, stated in that frame. |
 | Beam splitter | One plane, face 0, under four port names: `install_geometry` gets the pairs `("input_1", FACE)` and `("input_2", FACE)` for the inputs and `("out1_trans1_refl2", FACE)` and `("out2_trans2_refl1", FACE)` for the outputs, with `FACE = SurfaceGeometry::FACE`. Its analysis addresses the ports by name itself. The second input enters mirrored on the plane (`axis_entrance_frame`). |
-| Detectors | `Geometry::detector` gives the extent window. A window is no edge: the face reaches everywhere, so all light passes. `OpticSurface::records_at` and `clip_to_window` decide what is recorded. With an open optic shape there is no window, and everything is recorded. |
+| Detectors | `Geometry::detector` gives the extent window. A window is no edge: the face reaches everywhere, so all light passes. `SurfaceHit::recorded` decides which hit points are recorded, and `record_within_window` cuts the recorded light to the window of the geometry. With an open optic shape there is no window, and everything is recorded. |
 | Ideal filter, paraxial surface | `Geometry::plane`. Both use the per-ray hits of `propagate_rays`, so only rays that hit are attenuated or deflected. The paraxial surface may be unbounded. |
 | Source, dummy, ray propagation visualizer | `Geometry::plane`. Source and visualizer are unbounded. A dummy is bounded only if it is given an optic shape, and then acts as an iris. None of them is planar, so none is drawn. A source installs only `output_1`. |
 | Group, reference | `geometry()` returns `None`, and `update_surfaces` does nothing. The nodes inside a group have their own geometry. A reference is traced through the node it refers to. |
@@ -473,6 +480,8 @@ analysis's sources. Then the bounce passes follow:
   Surfaces, the body and the analyzers ask nothing else.
 - **Who reads what.**
   - Read the geometry directly: `install_geometry` and the 3D view.
-  - Read the runtime surfaces and the medium: all analyzers and `OpticNodeExt::effective_surface_iso` (used by the
-    paraxial surface, the grating, the source, the spot diagram and the wavefront monitor).
-  - `install_geometry` and `update_surface` are the only place that builds runtime surfaces and the medium.
+  - Read the runtime geometry, surfaces and medium: all analyzers and `OpticNodeExt::effective_surface_iso`, the
+    frame of a surface's face in the runtime geometry (used by the paraxial surface, the grating, the source, the spot
+    diagram and the wavefront monitor).
+  - `install_geometry` and `update_surface` are the only place that builds the runtime geometry and surfaces; the
+    medium follows from the geometry.
