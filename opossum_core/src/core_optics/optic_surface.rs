@@ -12,30 +12,21 @@ use crate::{
         rays_hit_map::{HitPoint, RaysHitMap},
     },
     error::{OpmResult, OpossumError},
-    geometry::{Face, Geometry, Rim, SurfaceShape},
+    geometry::{Face, Geometry, Rim, SurfaceGeometry, SurfaceHit, SurfaceShape},
     light::{Ray, Rays},
     nodes::fluence_detector::Fluence,
     refractive_index::RefractiveIndexType,
     utils::geom_transformation::Isometry,
 };
 use core::fmt::Debug;
-use nalgebra::{Point3, Vector3};
 use std::sync::Arc;
-use uom::si::f64::Length;
 
-/// A face of a geometry placed at its node: the thing a surface belongs to, which decides where the
-/// surface ends.
+/// A face of a geometry placed at its node: the thing a surface belongs to, which answers where a
+/// ray hits the surface.
 #[derive(Clone)]
 struct PlacedFace {
     geometry: Arc<Geometry>,
     face: usize,
-}
-
-impl PlacedFace {
-    /// Return whether a point on the unbounded surface of this face belongs to the component.
-    fn includes(&self, point: &Point3<Length>) -> bool {
-        self.geometry.kind().includes(self.face, point)
-    }
 }
 
 /// This struct represents an optical surface, which consists of the geometric surface (a
@@ -44,7 +35,7 @@ impl PlacedFace {
 pub struct OpticSurface {
     surface: Face,
     window: Option<Rim>,
-    face: Option<PlacedFace>,
+    face: PlacedFace,
     coating: CoatingType,
     lidt: Fluence,
     backward_rays_cache: Vec<Rays>,
@@ -57,10 +48,14 @@ impl Default for OpticSurface {
     /// The default is an unbounded flat surface with an ideal antireflective coating (=no
     /// reflection) and a lidt of 1 J/cm².
     fn default() -> Self {
+        let surface = Face::new(SurfaceShape::Plane, Isometry::identity());
         Self {
-            surface: Face::new(SurfaceShape::Plane, Isometry::identity()),
+            face: PlacedFace {
+                geometry: Arc::new(Geometry::from(surface.clone())),
+                face: SurfaceGeometry::FACE,
+            },
+            surface,
             window: None,
-            face: None,
             coating: CoatingType::IdealAR,
             lidt: J_per_cm2!(1.),
             backward_rays_cache: Vec::<Rays>::new(),
@@ -84,12 +79,13 @@ impl OpticSurface {
                 "LIDT must be positive and not NaN".into(),
             ));
         }
-        Ok(Self {
-            surface,
+        let mut optic_surface = Self {
             coating,
             lidt,
             ..Default::default()
-        })
+        };
+        optic_surface.set_surface(surface);
+        Ok(optic_surface)
     }
     /// Gets a reference to the forward / backward rays cache of this [`OpticSurface`].
     #[must_use]
@@ -102,10 +98,15 @@ impl OpticSurface {
     }
     /// Sets the geometric surface of this [`OpticSurface`].
     ///
-    /// A surface set this way is no face of a placed description: it is unbounded from then on.
+    /// A surface set this way is the face of an unbounded surface of its own (see
+    /// [`Geometry::from`]): it has no edge and no window.
     pub fn set_surface(&mut self, surface: Face) {
+        self.face = PlacedFace {
+            geometry: Arc::new(Geometry::from(surface.clone())),
+            face: SurfaceGeometry::FACE,
+        };
         self.surface = surface;
-        self.face = None;
+        self.window = None;
     }
     /// Makes this [`OpticSurface`] a face of a geometry placed at its node.
     ///
@@ -131,7 +132,7 @@ impl OpticSurface {
         })?;
         self.window = kind.window().cloned();
         self.surface = surface;
-        self.face = Some(PlacedFace { geometry, face });
+        self.face = PlacedFace { geometry, face };
         Ok(())
     }
 
@@ -146,47 +147,31 @@ impl OpticSurface {
     }
     /// Returns the window of this [`OpticSurface`], or `None` if it records all light.
     ///
-    /// The window of a detector ([`SurfaceExtent::Window`]) decides what is recorded (see
-    /// [`OpticSurface::records_at`]), not what is hit.
+    /// The window of a detector
+    /// ([`SurfaceExtent::Window`](crate::geometry::SurfaceExtent::Window)) decides what is
+    /// recorded (see [`SurfaceHit::recorded`]), not what is hit.
     #[must_use]
     pub const fn window(&self) -> Option<&Rim> {
         self.window.as_ref()
     }
-    /// Intersect a [`Ray`] with this [`OpticSurface`].
-    ///
-    /// A surface that is a face of a placed description (see [`OpticSurface::set_face`]) ends where
-    /// that description says; the bodies of components decide the same way. Any other surface is
-    /// unbounded.
+    /// Intersect a [`Ray`] with this [`OpticSurface`]: ask the geometry it is a face of (see
+    /// [`Geometry::intersect`]).
     ///
     /// # Arguments
     ///
-    /// * `ray` - the ray to be intersected.
+    /// * `ray` - the ray to be intersected, in global coordinates.
     ///
     /// # Returns
     ///
-    /// The intersection point in global coordinates and the normalized surface normal there,
-    /// pointing against the ray; or `None` if the ray misses the surface or meets it where it is not
-    /// part of the component.
+    /// The hit, or `None` if the ray misses the surface or meets it where it is not part of the
+    /// component.
     #[must_use]
-    pub fn intersect(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
-        self.surface
-            .intersect(ray)
-            .filter(|(point, _)| self.face.as_ref().is_none_or(|face| face.includes(point)))
-    }
-    /// Return whether this [`OpticSurface`] records a hit at the given point.
-    ///
-    /// Only a detector's window ([`SurfaceExtent::Window`]) leaves points unrecorded: those outside
-    /// it.
-    ///
-    /// # Arguments
-    ///
-    /// * `point` - a point on this surface, in global coordinates.
-    #[must_use]
-    pub fn records_at(&self, point: &Point3<Length>) -> bool {
-        self.window.as_ref().is_none_or(|rim| rim.contains(point))
+    pub fn intersect(&self, ray: &Ray) -> Option<SurfaceHit> {
+        self.face.geometry.intersect(self.face.face, ray)
     }
     /// Cut a bundle of rays that passed this [`OpticSurface`] to what it records: the rays within
-    /// a detector's window ([`SurfaceExtent::Window`]).
+    /// a detector's window
+    /// ([`SurfaceExtent::Window`](crate::geometry::SurfaceExtent::Window)).
     ///
     /// # Arguments
     ///
@@ -380,7 +365,7 @@ mod test {
         coatings::CoatingType,
         degree,
         error::{OpmResult, OpossumError},
-        geometry::{Face, Geometry, ParametricSolid, Side, Sphere, SurfaceShape},
+        geometry::{Face, Geometry, ParametricSolid, Side, Sphere, SurfaceHit, SurfaceShape},
         joule,
         light::{Ray, Rays},
         meter, millimeter, nanometer,
@@ -505,9 +490,14 @@ mod test {
         let detector = Geometry::detector(SurfaceShape::Plane, Some(circle(5.0)?))?;
         let surface = face_of(&detector, &Isometry::identity(), 0)?;
         assert!(surface.window().is_some());
-        assert!(surface.intersect(&ray_at(7.0)?).is_some());
-        assert!(surface.records_at(&millimeter!(0.0, 4.9, 0.0)));
-        assert!(!surface.records_at(&millimeter!(0.0, 5.1, 0.0)));
+        let hit_at = |y: f64| -> OpmResult<SurfaceHit> {
+            surface
+                .intersect(&ray_at(y)?)
+                .ok_or_else(|| OpossumError::Other(format!("the ray at y = {y} mm missed")))
+        };
+        assert!(hit_at(4.9)?.recorded());
+        assert!(!hit_at(5.1)?.recorded());
+        assert!(!hit_at(7.0)?.recorded());
         Ok(())
     }
     /// A surface ends where its component does, whatever kind of component that is: the front face of
@@ -623,9 +613,10 @@ mod test {
             nanometer!(1000.0),
             joule!(1.0),
         )?;
-        let (point, normal) = surface
+        let hit = surface
             .intersect(&towards)
             .ok_or_else(|| OpossumError::Other("the ray missed the surface".into()))?;
+        let (point, normal) = (hit.point(), hit.normal());
         assert!(point.coords.map(|c| c.value).norm() < 1e-15, "{point:?}");
         assert!(
             (normal - (-nalgebra::Vector3::z())).norm() < 1e-15,

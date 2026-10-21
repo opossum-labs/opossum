@@ -21,7 +21,7 @@ mod surface;
 pub mod body;
 
 pub use face::Face;
-pub use node_geometry::{Geometry, GeometryKind, SurfaceExtent, SurfaceGeometry};
+pub use node_geometry::{Geometry, GeometryKind, SurfaceExtent, SurfaceGeometry, SurfaceHit};
 pub use rim::Rim;
 pub use solid::{Assembly, Extruded, FaceId, Interface, ParametricSolid, Part, Side};
 pub use surface::{Cylinder, GeoSurface, Parabola, Plane, Sphere, SurfaceShape};

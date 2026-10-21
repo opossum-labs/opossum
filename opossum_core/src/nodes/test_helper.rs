@@ -1234,9 +1234,9 @@ pub mod helper {
                         .intersect(&probe_ray(x, y, tilt, &node_frame)?)
                         .map_or_else(
                             || "miss".to_owned(),
-                            |(point, normal)| {
-                                let local = node_frame.inverse_transform_point(&point);
-                                let recorded = if surface.records_at(&point) {
+                            |hit| {
+                                let local = node_frame.inverse_transform_point(&hit.point());
+                                let recorded = if hit.recorded() {
                                     "recorded"
                                 } else {
                                     "not recorded"
@@ -1247,7 +1247,7 @@ pub mod helper {
                                     rounded(local.y.get::<millimeter>()),
                                     rounded(local.z.get::<millimeter>()),
                                     rounded_vector(
-                                        &node_frame.inverse_transform_vector_f64(&normal)
+                                        &node_frame.inverse_transform_vector_f64(&hit.normal())
                                     ),
                                 )
                             },

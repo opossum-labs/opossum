@@ -12,7 +12,7 @@
 //! volume of material. Every kind is described in a file of its own and answers what
 //! [`GeometryKind`] asks; [`Geometry::kind`] is the one place that tells the kinds apart.
 
-use nalgebra::Point3;
+use nalgebra::{Point3, Vector3};
 use num_traits::Zero;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::{Angle, Length};
@@ -21,6 +21,7 @@ use crate::{
     apertures::Outline,
     error::OpmResult,
     geometry::{Assembly, Extruded, Face, ParametricSolid, Rim, SurfaceShape, body::Body},
+    light::Ray,
     utils::geom_transformation::Isometry,
 };
 
@@ -227,6 +228,78 @@ impl Geometry {
             Self::Assembly(assembly) => assembly,
         }
     }
+    /// Return where a ray meets one face of this geometry.
+    ///
+    /// The ray meets the unbounded surface of the face (see [`Face::intersect`]), and the point
+    /// counts only where the face reaches (see [`GeometryKind::includes`]).
+    ///
+    /// # Arguments
+    ///
+    /// * `face` - the number of the face.
+    /// * `ray` - the ray, in the frame this geometry is stated in.
+    ///
+    /// # Returns
+    ///
+    /// The hit; or `None` if there is no such face, if the ray misses its surface or if it meets
+    /// the surface beyond the edge of the face.
+    #[must_use]
+    pub fn intersect(&self, face: usize, ray: &Ray) -> Option<SurfaceHit> {
+        let kind = self.kind();
+        let surface = kind.face(face)?;
+        let (point, normal) = surface.intersect(ray)?;
+        kind.includes(face, &point).then(|| SurfaceHit {
+            point,
+            normal,
+            local_point: surface.frame().inverse_transform_point(&point),
+            recorded: kind.window().is_none_or(|window| window.contains(&point)),
+        })
+    }
+}
+
+/// An unbounded surface made of one face, such as a virtual surface a ray is traced to.
+impl From<Face> for Geometry {
+    fn from(face: Face) -> Self {
+        Self::Surface(Box::new(SurfaceGeometry {
+            face,
+            extent: SurfaceExtent::Open,
+        }))
+    }
+}
+
+/// Where a ray meets a face of a component (see [`Geometry::intersect`]).
+///
+/// It holds all that the ray needs to know about the component to act on the hit.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SurfaceHit {
+    point: Point3<Length>,
+    normal: Vector3<f64>,
+    local_point: Point3<Length>,
+    recorded: bool,
+}
+
+impl SurfaceHit {
+    /// Return where the ray meets the face, in the frame the geometry is stated in.
+    #[must_use]
+    pub const fn point(&self) -> Point3<Length> {
+        self.point
+    }
+    /// Return the normal of the face at the hit, normalized and pointing against the ray.
+    #[must_use]
+    pub const fn normal(&self) -> Vector3<f64> {
+        self.normal
+    }
+    /// Return where the ray meets the face, in the frame of the face: what a hit map records and
+    /// where a grating measures its phase from.
+    #[must_use]
+    pub const fn local_point(&self) -> Point3<Length> {
+        self.local_point
+    }
+    /// Return whether the hit is recorded: it is not only outside the window of a detector (see
+    /// [`GeometryKind::window`]).
+    #[must_use]
+    pub const fn recorded(&self) -> bool {
+        self.recorded
+    }
 }
 
 /// What every kind of geometry answers about its faces, its volume and its placement.
@@ -390,8 +463,9 @@ mod test {
         degree,
         error::OpossumError,
         geometry::{Parabola, Part, Side},
+        joule,
         material::Material,
-        millimeter,
+        millimeter, nanometer,
         properties::proptype::AssetRef,
         refractive_index::RefrIndexConst,
     };
@@ -653,6 +727,72 @@ mod test {
         // Extruded along the node's x axis, the profile reaches around it in y and z; the front face
         // lies at x = 3 mm.
         assert_eq!(bounded(extruded, 3.0), (true, false));
+        Ok(())
+    }
+    /// A hit tells where the ray meets the face, in the frame of the geometry and in that of the
+    /// face, and whether a detector records it. Beyond the edge, or on a face that does not exist,
+    /// there is none.
+    #[test]
+    fn a_ray_hits_a_face_where_the_face_reaches() -> OpmResult<()> {
+        let frame = Isometry::new(millimeter!(1.0, -2.0, 30.0), degree!(10.0, 5.0, 0.0))?;
+        let ray_at = |x: f64| {
+            Ray::new(
+                frame.transform_point(&millimeter!(x, -4.0, -20.0)),
+                frame.transform_vector_f64(&Vector3::z()),
+                nanometer!(1053.0),
+                joule!(1.0),
+            )
+        };
+        let mirror = Geometry::plane(Some(circle()?)).moved(&frame);
+        let hit = mirror
+            .intersect(SurfaceGeometry::FACE, &ray_at(3.0)?)
+            .ok_or_else(|| OpossumError::Other("the ray missed the mirror".into()))?;
+        for (found, wanted) in hit.local_point().iter().zip([3.0, -4.0, 0.0]) {
+            assert_abs_diff_eq!(found.get::<millimeter>(), wanted, epsilon = 1e-9);
+        }
+        let point = frame.transform_point(&hit.local_point());
+        assert_abs_diff_eq!(
+            (point - hit.point()).map(|c| c.value).norm(),
+            0.0,
+            epsilon = 1e-15
+        );
+        let against = -frame.transform_vector_f64(&Vector3::z());
+        assert_abs_diff_eq!((hit.normal() - against).norm(), 0.0, epsilon = 1e-12);
+        assert!(hit.recorded());
+        // The circle reaches 12.5 mm; at (12, -4) mm, 12.6 mm out, the ray misses the mirror.
+        assert!(
+            mirror
+                .intersect(SurfaceGeometry::FACE, &ray_at(12.0)?)
+                .is_none()
+        );
+        assert!(
+            mirror
+                .intersect(SurfaceGeometry::FACE + 1, &ray_at(3.0)?)
+                .is_none()
+        );
+        // A detector is hit there too, but does not record it.
+        let detector = Geometry::detector(SurfaceShape::Plane, Some(circle()?))?.moved(&frame);
+        let outside = detector
+            .intersect(SurfaceGeometry::FACE, &ray_at(12.0)?)
+            .ok_or_else(|| OpossumError::Other("the ray missed the detector".into()))?;
+        assert!(!outside.recorded());
+        Ok(())
+    }
+    /// A face on its own is an unbounded surface.
+    #[test]
+    fn a_face_on_its_own_is_an_unbounded_surface() -> OpmResult<()> {
+        let face = Face::new(
+            SurfaceShape::Plane,
+            Isometry::new_along_z(millimeter!(5.0))?,
+        );
+        let geometry = Geometry::from(face.clone());
+        assert_eq!(geometry.kind().face(SurfaceGeometry::FACE), Some(&face));
+        assert!(geometry.kind().window().is_none());
+        assert!(
+            geometry
+                .kind()
+                .includes(SurfaceGeometry::FACE, &millimeter!(1000.0, 1000.0, 5.0))
+        );
         Ok(())
     }
     #[test]
