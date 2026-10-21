@@ -9,7 +9,7 @@ use super::{Side, face_hits};
 use crate::{
     error::{OpmResult, OpossumError},
     geometry::{
-        Face, GeometryKind, Rim,
+        Face, FaceIndex, GeometryKind, Rim,
         body::{Body, BoundingBox},
     },
     light::Ray,
@@ -64,18 +64,18 @@ impl ParametricSolid {
 /// the inner side of every *other* face. As for every component, a face is the part of its surface
 /// on the sheet through its vertex.
 impl GeometryKind for ParametricSolid {
-    fn face(&self, index: usize) -> Option<&Face> {
-        self.faces.get(index).map(|(face, _)| face)
+    fn face(&self, index: FaceIndex) -> Option<&Face> {
+        self.faces.get(usize::from(index)).map(|(face, _)| face)
     }
     fn face_count(&self) -> usize {
         self.faces.len()
     }
-    fn includes(&self, face: usize, point: &Point3<Length>) -> bool {
+    fn includes(&self, face: FaceIndex, point: &Point3<Length>) -> bool {
         GeometryKind::face(self, face).is_some_and(|surface| surface.is_on_vertex_sheet(point))
             && self
                 .inner_sides(point)
                 .enumerate()
-                .all(|(index, inside)| index == face || inside)
+                .all(|(index, inside)| FaceIndex::new(index) == face || inside)
     }
     fn window(&self) -> Option<&Rim> {
         None
@@ -116,8 +116,8 @@ impl Body for ParametricSolid {
     fn isometry(&self) -> Isometry {
         self.frame
     }
-    fn side(&self, face: usize) -> Option<Side> {
-        self.faces.get(face).map(|(_, side)| *side)
+    fn side(&self, face: FaceIndex) -> Option<Side> {
+        self.faces.get(usize::from(face)).map(|(_, side)| *side)
     }
 }
 
@@ -212,7 +212,10 @@ mod test {
         assert_eq!(moved.face_count(), 3);
         assert!(moved.window().is_none());
         for (index, z) in [0.0, 10.0, 2.0].into_iter().enumerate() {
-            let (Some(face), Some(moved_face)) = (solid.face(index), moved.face(index)) else {
+            let (Some(face), Some(moved_face)) = (
+                solid.face(FaceIndex::new(index)),
+                moved.face(FaceIndex::new(index)),
+            ) else {
                 return Err(OpossumError::Other(format!("there is no face {index}")));
             };
             assert_abs_diff_eq!(
@@ -293,7 +296,7 @@ mod test {
             (6, (0.0, 0.0, 5.0), false),
         ] {
             assert_eq!(
-                block.includes(face, &millimeter!(x, y, z)),
+                block.includes(FaceIndex::new(face), &millimeter!(x, y, z)),
                 included,
                 "face {face} at ({x}, {y}, {z})"
             );
@@ -373,16 +376,19 @@ mod test {
             Isometry::new_along_z(millimeter!(20.0))?,
         );
         let cut = dome_with(rear, Side::InFront)?;
-        assert!(cut.includes(0, &millimeter!(10.0, 0.0, on_sphere(10.0))));
-        assert!(!cut.includes(0, &millimeter!(36.0, 0.0, on_sphere(36.0))));
+        assert!(cut.includes(FaceIndex::new(0), &millimeter!(10.0, 0.0, on_sphere(10.0))));
+        assert!(!cut.includes(FaceIndex::new(0), &millimeter!(36.0, 0.0, on_sphere(36.0))));
         // A face that cuts nothing: the far half of the sphere is still no part of the front face.
         let behind_the_vertex = Face::new(
             SurfaceShape::Plane,
             Isometry::new_along_z(millimeter!(-10.0))?,
         );
         let uncut = dome_with(behind_the_vertex, Side::Behind)?;
-        assert!(uncut.includes(0, &millimeter!(10.0, 0.0, on_sphere(10.0))));
-        assert!(!uncut.includes(0, &millimeter!(10.0, 0.0, 80.0 - on_sphere(10.0))));
+        assert!(uncut.includes(FaceIndex::new(0), &millimeter!(10.0, 0.0, on_sphere(10.0))));
+        assert!(!uncut.includes(
+            FaceIndex::new(0),
+            &millimeter!(10.0, 0.0, 80.0 - on_sphere(10.0))
+        ));
         Ok(())
     }
     #[test]

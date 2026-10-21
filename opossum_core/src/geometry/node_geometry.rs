@@ -21,7 +21,9 @@ use uom::si::f64::{Angle, Length};
 use crate::{
     apertures::Outline,
     error::OpmResult,
-    geometry::{Assembly, Extruded, Face, ParametricSolid, Rim, SurfaceShape, body::Body},
+    geometry::{
+        Assembly, Extruded, Face, FaceIndex, ParametricSolid, Rim, SurfaceShape, body::Body,
+    },
     light::Ray,
     utils::geom_transformation::Isometry,
 };
@@ -252,7 +254,7 @@ impl Geometry {
     /// The hit; or `None` if there is no such face, if the ray misses its surface or if it meets
     /// the surface beyond the edge of the face.
     #[must_use]
-    pub fn intersect(&self, face: usize, ray: &Ray) -> Option<SurfaceHit> {
+    pub fn intersect(&self, face: FaceIndex, ray: &Ray) -> Option<SurfaceHit> {
         let kind = self.kind();
         let surface = kind.face(face)?;
         let (point, normal) = surface.intersect(ray)?;
@@ -322,7 +324,7 @@ pub trait GeometryKind {
     /// # Returns
     ///
     /// The face, in the frame the geometry is stated in, or `None` if there is no such face.
-    fn face(&self, index: usize) -> Option<&Face>;
+    fn face(&self, index: FaceIndex) -> Option<&Face>;
     /// Return the number of faces.
     fn face_count(&self) -> usize;
     /// Return whether a point on the unbounded surface of a face belongs to the component.
@@ -342,7 +344,7 @@ pub trait GeometryKind {
     ///
     /// `true` if the face reaches to this point; `false` if the point lies on the surface beyond
     /// the edge of the face, or if there is no such face.
-    fn includes(&self, face: usize, point: &Point3<Length>) -> bool;
+    fn includes(&self, face: FaceIndex, point: &Point3<Length>) -> bool;
     /// Return the window a detector records within, or `None` if all light on its faces is recorded.
     ///
     /// A window is no boundary: light outside it passes the face like light inside, it is just not
@@ -428,19 +430,19 @@ impl SurfaceGeometry {
         })
     }
     /// The number of the one face of a surface.
-    pub const FACE: usize = 0;
+    pub const FACE: FaceIndex = FaceIndex::new(0);
 }
 
 /// A surface ends at its edge, if it has one. The window of a detector is no edge: the surface
 /// reaches as far as light does.
 impl GeometryKind for SurfaceGeometry {
-    fn face(&self, index: usize) -> Option<&Face> {
+    fn face(&self, index: FaceIndex) -> Option<&Face> {
         (index == Self::FACE).then_some(&self.face)
     }
     fn face_count(&self) -> usize {
         1
     }
-    fn includes(&self, face: usize, point: &Point3<Length>) -> bool {
+    fn includes(&self, face: FaceIndex, point: &Point3<Length>) -> bool {
         GeometryKind::face(self, face).is_some_and(|surface| match &self.extent {
             SurfaceExtent::Edge(rim) => rim.bounds(surface, point),
             SurfaceExtent::Open | SurfaceExtent::Window(_) => true,
@@ -482,7 +484,7 @@ mod test {
         Outline::new(CircleShape::new(millimeter!(12.5))?, Vec::new())
     }
     /// Return the frame of the face with the given number.
-    fn frame_of(geometry: &Geometry, index: usize) -> OpmResult<Isometry> {
+    fn frame_of(geometry: &Geometry, index: FaceIndex) -> OpmResult<Isometry> {
         geometry
             .kind()
             .face(index)
@@ -500,7 +502,7 @@ mod test {
         let plane = Geometry::plane(None);
         assert_eq!(plane.kind().face_count(), 1);
         assert!(plane.kind().face(SurfaceGeometry::FACE).is_some());
-        assert!(plane.kind().face(SurfaceGeometry::FACE + 1).is_none());
+        assert!(plane.kind().face(FaceIndex::new(1)).is_none());
     }
     #[test]
     fn a_singlet_has_its_rear_vertex_one_center_thickness_behind_the_front() -> OpmResult<()> {
@@ -554,7 +556,7 @@ mod test {
         for geometry in geometries {
             let moved = moved_copy(&geometry, &node_frame);
             assert_eq!(moved.kind().face_count(), geometry.kind().face_count());
-            for index in 0..geometry.kind().face_count() {
+            for index in (0..geometry.kind().face_count()).map(FaceIndex::new) {
                 assert_eq!(
                     frame_of(&moved, index)?,
                     node_frame.append(&frame_of(&geometry, index)?)
@@ -588,8 +590,8 @@ mod test {
             assert_eq!(geometry.kind().face_count(), 1);
             assert!(geometry.kind().as_body().is_some());
             assert_eq!(
-                frame_of(&moved_copy(&geometry, &frame), 0)?,
-                frame.append(&frame_of(&geometry, 0)?)
+                frame_of(&moved_copy(&geometry, &frame), FaceIndex::new(0))?,
+                frame.append(&frame_of(&geometry, FaceIndex::new(0))?)
             );
         }
         assert!(Geometry::plane(None).kind().as_body().is_none());
@@ -708,19 +710,21 @@ mod test {
             (
                 geometry
                     .kind()
-                    .includes(0, &millimeter!(along_axis, 5.0, 0.0)),
+                    .includes(FaceIndex::new(0), &millimeter!(along_axis, 5.0, 0.0)),
                 geometry
                     .kind()
-                    .includes(0, &millimeter!(along_axis, 1000.0, 1000.0)),
+                    .includes(FaceIndex::new(0), &millimeter!(along_axis, 1000.0, 1000.0)),
             )
         };
         // The plane faces along z, so its points are given in the xy plane: x off the axis.
         let plane = |geometry: Geometry| {
             (
-                geometry.kind().includes(0, &millimeter!(0.0, 5.0, 0.0)),
                 geometry
                     .kind()
-                    .includes(0, &millimeter!(1000.0, 1000.0, 0.0)),
+                    .includes(FaceIndex::new(0), &millimeter!(0.0, 5.0, 0.0)),
+                geometry
+                    .kind()
+                    .includes(FaceIndex::new(0), &millimeter!(1000.0, 1000.0, 0.0)),
             )
         };
         assert_eq!(plane(Geometry::plane(None)), (true, true));
@@ -776,11 +780,7 @@ mod test {
                 .intersect(SurfaceGeometry::FACE, &ray_at(12.0)?)
                 .is_none()
         );
-        assert!(
-            mirror
-                .intersect(SurfaceGeometry::FACE + 1, &ray_at(3.0)?)
-                .is_none()
-        );
+        assert!(mirror.intersect(FaceIndex::new(1), &ray_at(3.0)?).is_none());
         // A detector is hit there too, but does not record it.
         let detector = moved_copy(
             &Geometry::detector(SurfaceShape::Plane, Some(circle()?))?,
@@ -840,8 +840,16 @@ mod test {
             ),
             (Face::new(SurfaceShape::Plane, side), Side::InFront),
         ])?);
-        assert!(solid.intersect(0, &ray_along_z(4.9, 0.0)?).is_some());
-        assert!(solid.intersect(0, &ray_along_z(5.1, 0.0)?).is_none());
+        assert!(
+            solid
+                .intersect(FaceIndex::new(0), &ray_along_z(4.9, 0.0)?)
+                .is_some()
+        );
+        assert!(
+            solid
+                .intersect(FaceIndex::new(0), &ray_along_z(5.1, 0.0)?)
+                .is_none()
+        );
         Ok(())
     }
     /// A sphere of 15 mm radius bounded to 12.5 mm around its axis is hit only on the sheet through

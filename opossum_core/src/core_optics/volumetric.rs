@@ -435,7 +435,7 @@ mod test {
         },
         degree,
         gain::{ConstGain, GainModel, MonochromaticSmallSignalGain, PumpScenario, PumpSource},
-        geometry::body::OPTIC_SHAPE,
+        geometry::{FaceIndex, body::OPTIC_SHAPE},
         joule,
         light::{
             Ray, Rays, Spectrum,
@@ -1644,7 +1644,8 @@ mod test {
                 .as_ref()
                 .and_then(|geometry| geometry.kind().window().cloned());
             let ends_sideways = geometry.as_ref().is_some_and(|geometry| {
-                geometry.kind().window().is_some() || !geometry.kind().includes(0, &far)
+                geometry.kind().window().is_some()
+                    || !geometry.kind().includes(FaceIndex::new(0), &far)
             });
             let bounded = matches!(
                 optic_ref.node_attr().get_property(OPTIC_SHAPE),

@@ -26,7 +26,7 @@
 use crate::{
     apertures::{CircleShape, OpticShape, RectangleShape},
     error::{OpmResult, OpossumError},
-    geometry::Side,
+    geometry::{FaceIndex, Side},
     light::Ray,
     millimeter, nanometer,
     utils::{geom_transformation::Isometry, math_utils::distance_3d_point},
@@ -209,7 +209,7 @@ pub trait Body: Debug + Send + Sync {
     /// # Returns
     ///
     /// The side of the face the body lies on, or `None` if there is no such face.
-    fn side(&self, face: usize) -> Option<Side>;
+    fn side(&self, face: FaceIndex) -> Option<Side>;
     /// Return the length of the straight chord a [`Ray`] cuts through this [`Body`], found from the
     /// points where it meets the boundary.
     ///

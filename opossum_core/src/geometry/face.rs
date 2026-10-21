@@ -6,6 +6,8 @@
 //! rays are intersected with. The math of the shape is done in the vertex frame (see
 //! [`GeoSurface`]); the face turns rays and points into that frame and back.
 
+use std::fmt::{self, Display, Formatter};
+
 use nalgebra::{Point2, Point3, Vector3};
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
@@ -17,6 +19,33 @@ use crate::{
     nanometer, radian,
     utils::geom_transformation::Isometry,
 };
+
+/// The number of a face in its geometry: its position among the faces the geometry has (see
+/// [`GeometryKind`](crate::geometry::GeometryKind)).
+///
+/// An extruded solid has its front face as 0 and its rear face as 1, a surface has the one face 0.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FaceIndex(usize);
+
+impl FaceIndex {
+    /// Create the number of the face at the given position in its geometry.
+    #[must_use]
+    pub const fn new(position: usize) -> Self {
+        Self(position)
+    }
+}
+
+impl From<FaceIndex> for usize {
+    fn from(index: FaceIndex) -> Self {
+        index.0
+    }
+}
+
+impl Display for FaceIndex {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 /// One optical surface of a component: its [`SurfaceShape`] and the frame of its vertex.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

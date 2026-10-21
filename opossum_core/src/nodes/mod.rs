@@ -173,7 +173,7 @@ mod test {
     use crate::{
         core_optics::{OpticNode, OpticNodeExt, node_attr::NodePositioning},
         degree,
-        geometry::{Extruded, Sphere, SurfaceGeometry, SurfaceShape},
+        geometry::{Extruded, FaceIndex, Sphere, SurfaceGeometry, SurfaceShape},
         millimeter,
         nodes::test_helper::helper::{
             assert_snapshots, body_of, body_snapshot, geometry_snapshot, hit_snapshot,
@@ -868,7 +868,10 @@ mod test {
     fn a_port_cannot_sit_on_a_face_the_geometry_does_not_have() {
         let mut lens = Lens::default();
         let error = lens
-            .install_geometry(&[("input_1", Extruded::FRONT)], &[("output_1", 2)])
+            .install_geometry(
+                &[("input_1", Extruded::FRONT)],
+                &[("output_1", FaceIndex::new(2))],
+            )
             .unwrap_err()
             .to_string();
         assert!(error.contains("output_1"), "{error}");
@@ -877,7 +880,10 @@ mod test {
 
         let mut dummy = Dummy::default();
         let error = dummy
-            .install_geometry(&[("input_1", SurfaceGeometry::FACE)], &[("output_1", 1)])
+            .install_geometry(
+                &[("input_1", SurfaceGeometry::FACE)],
+                &[("output_1", FaceIndex::new(1))],
+            )
             .unwrap_err()
             .to_string();
         assert!(error.contains("face 1"), "{error}");

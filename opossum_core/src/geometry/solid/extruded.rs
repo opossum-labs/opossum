@@ -15,7 +15,7 @@ use crate::{
     apertures::Outline,
     error::{OpmResult, OpossumError},
     geometry::{
-        Face, GeometryKind, Rim,
+        Face, FaceIndex, GeometryKind, Rim,
         body::{Body, BoundingBox},
     },
     light::Ray,
@@ -72,12 +72,12 @@ impl Extruded {
         &self.rim
     }
     /// The number of the face capping the profile towards -z.
-    pub const FRONT: usize = 0;
+    pub const FRONT: FaceIndex = FaceIndex::new(0);
     /// The number of the face capping the profile towards +z.
-    pub const REAR: usize = 1;
+    pub const REAR: FaceIndex = FaceIndex::new(1);
     /// Return the face with the given number and the side of it the profile lies on: behind the
     /// front face and in front of the rear face.
-    const fn face_and_side(&self, index: usize) -> Option<(&Face, Side)> {
+    const fn face_and_side(&self, index: FaceIndex) -> Option<(&Face, Side)> {
         match index {
             Self::FRONT => Some((&self.front, Side::Behind)),
             Self::REAR => Some((&self.rear, Side::InFront)),
@@ -88,13 +88,13 @@ impl Extruded {
 
 /// Both faces end at the rim of the profile, on the sheet through their vertex.
 impl GeometryKind for Extruded {
-    fn face(&self, index: usize) -> Option<&Face> {
+    fn face(&self, index: FaceIndex) -> Option<&Face> {
         self.face_and_side(index).map(|(face, _)| face)
     }
     fn face_count(&self) -> usize {
         2
     }
-    fn includes(&self, face: usize, point: &Point3<Length>) -> bool {
+    fn includes(&self, face: FaceIndex, point: &Point3<Length>) -> bool {
         GeometryKind::face(self, face).is_some_and(|surface| self.rim.bounds(surface, point))
     }
     fn window(&self) -> Option<&Rim> {
@@ -258,7 +258,7 @@ impl Body for Extruded {
     fn isometry(&self) -> Isometry {
         *self.rim.frame()
     }
-    fn side(&self, face: usize) -> Option<Side> {
+    fn side(&self, face: FaceIndex) -> Option<Side> {
         self.face_and_side(face).map(|(_, side)| side)
     }
 }
@@ -363,7 +363,7 @@ mod test {
             (Extruded::REAR, (12.4, 0.0, 30.0), true),
             (Extruded::REAR, (0.0, -12.6, 30.0), false),
             // There is no third face.
-            (2, (0.0, 0.0, 0.0), false),
+            (FaceIndex::new(2), (0.0, 0.0, 0.0), false),
         ] {
             assert_eq!(
                 body.includes(face, &millimeter!(x, y, z)),
@@ -813,7 +813,7 @@ mod test {
             ),
             circular_cross_section(millimeter!(12.5))?,
         )?;
-        let frame = |index: usize| {
+        let frame = |index: FaceIndex| {
             extruded
                 .face(index)
                 .map(|face| *face.frame())

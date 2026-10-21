@@ -11,7 +11,7 @@ use crate::{
         surface_effect::{Refraction, SurfaceEffect},
     },
     error::{OpmResult, OpossumError},
-    geometry::{Geometry, body::OPTIC_SHAPE},
+    geometry::{FaceIndex, Geometry, body::OPTIC_SHAPE},
     light::{LightData, LightResult, Rays, rays::ReflectedPart},
     nodes::fluence_detector::Fluence,
     properties::Proptype,
@@ -123,8 +123,8 @@ pub trait OpticNodeExt {
     /// be installed.
     fn install_geometry(
         &mut self,
-        inputs: &[(&str, usize)],
-        outputs: &[(&str, usize)],
+        inputs: &[(&str, FaceIndex)],
+        outputs: &[(&str, FaceIndex)],
     ) -> OpmResult<()>;
 
     /// Returns a new optic surface on a face of this node's geometry, with the coating and LIDT of
@@ -142,7 +142,7 @@ pub trait OpticNodeExt {
     fn surface_of_port(
         &mut self,
         surf_name: &str,
-        face: usize,
+        face: FaceIndex,
         port_type: &PortType,
     ) -> OpmResult<OpticSurface>;
 
@@ -356,8 +356,8 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
 
     fn install_geometry(
         &mut self,
-        inputs: &[(&str, usize)],
-        outputs: &[(&str, usize)],
+        inputs: &[(&str, FaceIndex)],
+        outputs: &[(&str, FaceIndex)],
     ) -> OpmResult<()> {
         let Some(placed) = self.placed_geometry()? else {
             return Err(OpossumError::Other(format!(
@@ -385,7 +385,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
     fn surface_of_port(
         &mut self,
         surf_name: &str,
-        face: usize,
+        face: FaceIndex,
         port_type: &PortType,
     ) -> OpmResult<OpticSurface> {
         let config = {
@@ -553,7 +553,9 @@ mod test {
             node_attr::{HasNodeAttr, NodePositioning},
             optic_node::LIDT,
         },
-        degree, millimeter,
+        degree,
+        geometry::SurfaceGeometry,
+        millimeter,
         nodes::{BeamSplitter, Dummy},
     };
     use approx::assert_abs_diff_eq;
@@ -671,7 +673,10 @@ mod test {
     fn a_port_on_a_missing_face_is_rejected() {
         let mut node = Dummy::default();
         let error = node
-            .install_geometry(&[("input_1", 0)], &[("output_2", 1)])
+            .install_geometry(
+                &[("input_1", SurfaceGeometry::FACE)],
+                &[("output_2", FaceIndex::new(1))],
+            )
             .expect_err("a port on face 1 of a single surface was accepted");
         assert!(
             error

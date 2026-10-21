@@ -11,6 +11,7 @@ use crate::{
         rays_hit_map::{HitPoint, RaysHitMap},
     },
     error::{OpmResult, OpossumError},
+    geometry::FaceIndex,
     light::Rays,
     nodes::fluence_detector::Fluence,
 };
@@ -24,7 +25,7 @@ use core::fmt::Debug;
 /// with the number of the face this surface is.
 #[derive(Clone)]
 pub struct OpticSurface {
-    face: usize,
+    face: FaceIndex,
     coating: CoatingType,
     lidt: Fluence,
     backward_rays_cache: Vec<Rays>,
@@ -38,7 +39,7 @@ impl Default for OpticSurface {
     /// 1 J/cm².
     fn default() -> Self {
         Self {
-            face: 0,
+            face: FaceIndex::new(0),
             coating: CoatingType::IdealAR,
             lidt: J_per_cm2!(1.),
             backward_rays_cache: Vec::<Rays>::new(),
@@ -62,7 +63,7 @@ impl OpticSurface {
     /// # Errors
     ///
     /// This function returns an error if the given lidt is negative or NaN.
-    pub fn new(face: usize, coating: CoatingType, lidt: Fluence) -> OpmResult<Self> {
+    pub fn new(face: FaceIndex, coating: CoatingType, lidt: Fluence) -> OpmResult<Self> {
         if lidt.is_sign_negative() || lidt.is_nan() {
             return Err(OpossumError::Other(
                 "LIDT must be positive and not NaN".into(),
@@ -86,7 +87,7 @@ impl OpticSurface {
     }
     /// Returns the number of the face of the node's geometry this [`OpticSurface`] is.
     #[must_use]
-    pub const fn face(&self) -> usize {
+    pub const fn face(&self) -> FaceIndex {
         self.face
     }
     /// Sets the coating of this [`OpticSurface`].
@@ -217,7 +218,7 @@ impl Debug for OpticSurface {
 }
 #[cfg(test)]
 mod test {
-    use super::OpticSurface;
+    use super::{FaceIndex, OpticSurface};
     use crate::{
         J_per_cm2,
         coatings::CoatingType,
@@ -231,7 +232,7 @@ mod test {
     #[test]
     fn default() {
         let os = OpticSurface::default();
-        assert_eq!(os.face(), 0);
+        assert_eq!(os.face(), FaceIndex::new(0));
         assert!(matches!(os.coating, CoatingType::IdealAR));
         assert_eq!(os.backward_rays_cache.len(), 0);
         assert_eq!(os.forward_rays_cache.len(), 0);
@@ -241,11 +242,21 @@ mod test {
     #[test]
     fn new() -> OpmResult<()> {
         for lidt in [f64::NAN, f64::NEG_INFINITY, -0.1] {
-            assert!(OpticSurface::new(0, CoatingType::IdealAR, J_per_cm2!(lidt)).is_err());
+            assert!(
+                OpticSurface::new(FaceIndex::new(0), CoatingType::IdealAR, J_per_cm2!(lidt))
+                    .is_err()
+            );
         }
-        assert!(OpticSurface::new(0, CoatingType::IdealAR, J_per_cm2!(f64::INFINITY)).is_ok());
-        let os = OpticSurface::new(1, CoatingType::Fresnel, J_per_cm2!(2.0))?;
-        assert_eq!(os.face(), 1);
+        assert!(
+            OpticSurface::new(
+                FaceIndex::new(0),
+                CoatingType::IdealAR,
+                J_per_cm2!(f64::INFINITY)
+            )
+            .is_ok()
+        );
+        let os = OpticSurface::new(FaceIndex::new(1), CoatingType::Fresnel, J_per_cm2!(2.0))?;
+        assert_eq!(os.face(), FaceIndex::new(1));
         assert_eq!(os.lidt, J_per_cm2!(2.0));
         assert!(matches!(os.coating, CoatingType::Fresnel));
         Ok(())

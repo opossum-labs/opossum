@@ -293,7 +293,7 @@ mod test {
         core_optics::surface_effect::Refraction,
         degree,
         distributions::{fluence::general_gaussian::General2DGaussian, position::Hexapolar},
-        geometry::{Extruded, Face, SurfaceShape},
+        geometry::{Extruded, Face, FaceIndex, SurfaceShape},
         joule,
         light::{Ray, Spectrum},
         millimeter, nanometer,
@@ -323,7 +323,7 @@ mod test {
         )
     }
     /// The surfaces of a disk: `input_1` on the front face and `output_1` on the given face.
-    fn disk_surfaces(output_face: usize) -> OpmResult<RuntimeSurfaces> {
+    fn disk_surfaces(output_face: FaceIndex) -> OpmResult<RuntimeSurfaces> {
         let surface = |face| OpticSurface::new(face, CoatingType::IdealAR, J_per_cm2!(1.0));
         let mut surfaces = RuntimeSurfaces::default();
         surfaces
@@ -352,7 +352,7 @@ mod test {
     #[test]
     fn a_surface_on_a_missing_face_is_rejected() -> OpmResult<()> {
         assert!(RuntimeGeometry::new(test_body()?, disk_surfaces(Extruded::REAR)?).is_ok());
-        let error = RuntimeGeometry::new(test_body()?, disk_surfaces(2)?)
+        let error = RuntimeGeometry::new(test_body()?, disk_surfaces(FaceIndex::new(2))?)
             .expect_err("a surface on face 2 of a disk was accepted");
         assert!(
             error

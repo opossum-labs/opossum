@@ -18,7 +18,7 @@ pub mod helper {
         },
         error::{OpmResult, OpossumError},
         geometry::{
-            Face, Geometry,
+            Face, FaceIndex, Geometry,
             body::{Body, OPTIC_SHAPE, default_optic_shape},
         },
         joule,
@@ -1032,7 +1032,7 @@ pub mod helper {
     /// Returns an error if there is no face an installed surface sits on.
     fn describe_faces_under_ports<T: OpticNode + ?Sized>(
         node: &T,
-        face_of: impl Fn(usize) -> Option<Face>,
+        face_of: impl Fn(FaceIndex) -> Option<Face>,
     ) -> OpmResult<Vec<String>> {
         let Some(runtime) = node.node_attr().runtime().map(RuntimeGeometry::surfaces) else {
             return Ok(Vec::new());

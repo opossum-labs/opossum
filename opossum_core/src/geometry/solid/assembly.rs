@@ -9,7 +9,7 @@ use super::Side;
 use crate::{
     error::{OpmResult, OpossumError},
     geometry::{
-        Face, Geometry, GeometryKind, Rim,
+        Face, FaceIndex, Geometry, GeometryKind, Rim,
         body::{Body, BoundingBox},
     },
     light::Ray,
@@ -63,7 +63,7 @@ impl Part {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FaceId {
     part: usize,
-    face: usize,
+    face: FaceIndex,
 }
 
 impl FaceId {
@@ -72,12 +72,9 @@ impl FaceId {
     /// # Arguments
     ///
     /// * `part` - the index of the part in the assembly.
-    /// * `face` - the index of the face in that part's solid, as
-    ///   [`GeometryKind`] numbers them: 0 and 1 are front and rear of an
-    ///   [`Extruded`](crate::geometry::Extruded) solid, a
-    ///   [`ParametricSolid`](crate::geometry::ParametricSolid) counts its faces.
+    /// * `face` - the number of the face in that part's solid.
     #[must_use]
-    pub const fn new(part: usize, face: usize) -> Self {
+    pub const fn new(part: usize, face: FaceIndex) -> Self {
         Self { part, face }
     }
 }
@@ -188,12 +185,13 @@ impl Assembly {
     /// # Arguments
     ///
     /// * `face` - the number of the face in the assembly.
-    fn locate(&self, face: usize) -> Option<(&Part, usize)> {
+    fn locate(&self, face: FaceIndex) -> Option<(&Part, FaceIndex)> {
+        let face = usize::from(face);
         let mut first_face = 0;
         for part in &self.parts {
             let count = part.geometry.kind().face_count();
             if face < first_face + count {
-                return Some((part, face - first_face));
+                return Some((part, FaceIndex::new(face - first_face)));
             }
             first_face += count;
         }
@@ -203,7 +201,7 @@ impl Assembly {
 
 /// A face of an assembly is a face of one of its parts and ends where that part's solid says.
 impl GeometryKind for Assembly {
-    fn face(&self, index: usize) -> Option<&Face> {
+    fn face(&self, index: FaceIndex) -> Option<&Face> {
         self.locate(index)
             .and_then(|(part, own_face)| part.geometry.kind().face(own_face))
     }
@@ -213,7 +211,7 @@ impl GeometryKind for Assembly {
             .map(|part| part.geometry.kind().face_count())
             .sum()
     }
-    fn includes(&self, face: usize, point: &Point3<Length>) -> bool {
+    fn includes(&self, face: FaceIndex, point: &Point3<Length>) -> bool {
         self.locate(face)
             .is_some_and(|(part, own_face)| part.geometry.kind().includes(own_face, point))
     }
@@ -263,7 +261,7 @@ impl Body for Assembly {
     fn isometry(&self) -> Isometry {
         self.frame
     }
-    fn side(&self, face: usize) -> Option<Side> {
+    fn side(&self, face: FaceIndex) -> Option<Side> {
         self.locate(face)
             .and_then(|(part, own_face)| part.geometry.kind().as_body()?.side(own_face))
     }
@@ -338,7 +336,10 @@ mod test {
     fn cube() -> OpmResult<Assembly> {
         Assembly::new(
             vec![prism_part()?, opposite_prism_part()?],
-            vec![Interface::new(FaceId::new(0, 1), FaceId::new(1, 0))],
+            vec![Interface::new(
+                FaceId::new(0, FaceIndex::new(1)),
+                FaceId::new(1, FaceIndex::new(0)),
+            )],
         )
     }
     /// The crown lens of a doublet at the origin, its rear face (R = -40 mm) 5 mm behind it.
@@ -368,13 +369,25 @@ mod test {
     #[test]
     fn an_assembly_checks_its_interfaces() -> OpmResult<()> {
         let parts = || -> OpmResult<Vec<Part>> { Ok(vec![prism_part()?, opposite_prism_part()?]) };
-        let joined = Interface::new(FaceId::new(0, 1), FaceId::new(1, 0));
+        let joined = Interface::new(
+            FaceId::new(0, FaceIndex::new(1)),
+            FaceId::new(1, FaceIndex::new(0)),
+        );
         assert!(Assembly::new(parts()?, vec![joined]).is_ok());
-        let no_such_face = Interface::new(FaceId::new(0, 2), FaceId::new(1, 0));
+        let no_such_face = Interface::new(
+            FaceId::new(0, FaceIndex::new(2)),
+            FaceId::new(1, FaceIndex::new(0)),
+        );
         assert!(Assembly::new(parts()?, vec![no_such_face]).is_err());
-        let no_such_part = Interface::new(FaceId::new(0, 1), FaceId::new(2, 0));
+        let no_such_part = Interface::new(
+            FaceId::new(0, FaceIndex::new(1)),
+            FaceId::new(2, FaceIndex::new(0)),
+        );
         assert!(Assembly::new(parts()?, vec![no_such_part]).is_err());
-        let same_part = Interface::new(FaceId::new(0, 0), FaceId::new(0, 1));
+        let same_part = Interface::new(
+            FaceId::new(0, FaceIndex::new(0)),
+            FaceId::new(0, FaceIndex::new(1)),
+        );
         assert!(Assembly::new(parts()?, vec![same_part]).is_err());
         Ok(())
     }
@@ -382,7 +395,10 @@ mod test {
     /// prism twice, for instance.
     #[test]
     fn the_parts_of_an_interface_lie_on_opposite_sides_of_it() -> OpmResult<()> {
-        let same_side = Interface::new(FaceId::new(0, 1), FaceId::new(1, 1));
+        let same_side = Interface::new(
+            FaceId::new(0, FaceIndex::new(1)),
+            FaceId::new(1, FaceIndex::new(1)),
+        );
         assert!(Assembly::new(vec![prism_part()?, prism_part()?], vec![same_side]).is_err());
         Ok(())
     }
@@ -395,9 +411,15 @@ mod test {
                 flint_part(millimeter!(-40.0), behind_the_crown)?,
             ])
         };
-        let cemented = Interface::new(FaceId::new(0, 1), FaceId::new(1, 0));
+        let cemented = Interface::new(
+            FaceId::new(0, FaceIndex::new(1)),
+            FaceId::new(1, FaceIndex::new(0)),
+        );
         assert!(Assembly::new(parts()?, vec![cemented]).is_ok());
-        let beyond_the_rear = Interface::new(FaceId::new(0, 2), FaceId::new(1, 0));
+        let beyond_the_rear = Interface::new(
+            FaceId::new(0, FaceIndex::new(2)),
+            FaceId::new(1, FaceIndex::new(0)),
+        );
         assert!(Assembly::new(parts()?, vec![beyond_the_rear]).is_err());
         Ok(())
     }
@@ -411,17 +433,23 @@ mod test {
                 crown_part()?,
                 flint_part(millimeter!(-40.0), behind_the_crown)?,
             ],
-            vec![Interface::new(FaceId::new(0, 1), FaceId::new(1, 0))],
+            vec![Interface::new(
+                FaceId::new(0, FaceIndex::new(1)),
+                FaceId::new(1, FaceIndex::new(0)),
+            )],
         )?;
         let frame = Isometry::new_along_z(millimeter!(100.0))?;
         let moved = placed_at(&doublet, &frame);
         assert_eq!(moved.face_count(), 4);
         assert!(moved.window().is_none());
-        assert!(moved.face(4).is_none());
+        assert!(moved.face(FaceIndex::new(4)).is_none());
         // the vertices of the crown front, of the crown rear and flint front (cemented) and of the
         // flint rear
         for (index, z) in [0.0, 5.0, 5.0, 10.0].into_iter().enumerate() {
-            let (Some(face), Some(moved_face)) = (doublet.face(index), moved.face(index)) else {
+            let (Some(face), Some(moved_face)) = (
+                doublet.face(FaceIndex::new(index)),
+                moved.face(FaceIndex::new(index)),
+            ) else {
                 return Err(OpossumError::Other(format!("there is no face {index}")));
             };
             assert_abs_diff_eq!(
@@ -440,7 +468,10 @@ mod test {
     /// The cemented faces of a doublet have to be the same surface at the same place.
     #[test]
     fn a_doublet_whose_cemented_faces_do_not_meet_is_rejected() -> OpmResult<()> {
-        let cemented = Interface::new(FaceId::new(0, 1), FaceId::new(1, 0));
+        let cemented = Interface::new(
+            FaceId::new(0, FaceIndex::new(1)),
+            FaceId::new(1, FaceIndex::new(0)),
+        );
         // Both lenses at the origin overlap, and the flint's front lies 5 mm before the crown's rear.
         let overlapping = flint_part(millimeter!(-40.0), Isometry::identity())?;
         let with_a_gap = flint_part(millimeter!(-40.0), Isometry::new_along_z(millimeter!(5.1))?)?;
@@ -480,7 +511,10 @@ mod test {
                 )?,
             )
         };
-        let cemented = Interface::new(FaceId::new(0, 1), FaceId::new(1, 0));
+        let cemented = Interface::new(
+            FaceId::new(0, FaceIndex::new(1)),
+            FaceId::new(1, FaceIndex::new(0)),
+        );
         for (roll, coincides) in [(0.0, true), (180.0, true), (90.0, false)] {
             assert_eq!(
                 Assembly::new(vec![crown()?, flint(degree!(roll))?], vec![cemented]).is_ok(),
@@ -498,7 +532,10 @@ mod test {
                 crown_part()?,
                 flint_part(millimeter!(-40.0), behind_the_crown)?,
             ],
-            vec![Interface::new(FaceId::new(0, 1), FaceId::new(1, 0))],
+            vec![Interface::new(
+                FaceId::new(0, FaceIndex::new(1)),
+                FaceId::new(1, FaceIndex::new(0)),
+            )],
         )
     }
     /// The crown lens at the origin and a second lens 30 mm aside and 8 mm further along z, without
@@ -592,7 +629,7 @@ mod test {
             (4, (0.0, 0.0, 0.0), false),
         ] {
             assert_eq!(
-                placed.includes(face, &global(&node_frame, x, y, z)),
+                placed.includes(FaceIndex::new(face), &global(&node_frame, x, y, z)),
                 included,
                 "face {face} at ({x}, {y}, {z})"
             );
@@ -693,7 +730,7 @@ mod test {
     #[test]
     fn an_assembly_lies_on_the_sides_its_parts_lie_on() -> OpmResult<()> {
         let cube = cube()?;
-        let sides: Vec<_> = (0..5).map(|face| cube.side(face)).collect();
+        let sides: Vec<_> = (0..5).map(|face| cube.side(FaceIndex::new(face))).collect();
         assert_eq!(
             sides,
             [
