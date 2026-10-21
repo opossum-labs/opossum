@@ -1,10 +1,10 @@
 #![warn(missing_docs)]
 //! Module for handling bundles of [`Ray`]s
 use crate::distributions::spectral::laser_lines::MIN_WAVELENGTH_DIFF_NM;
-use crate::geometry::{Geometry, Rim};
+use crate::geometry::Rim;
 use crate::{
     J_per_cm2, centimeter,
-    core_optics::{hit_map::fluence_estimator::FluenceEstimator, optic_surface::OpticSurface},
+    core_optics::hit_map::fluence_estimator::FluenceEstimator,
     degree,
     distributions::{
         energy::EnergyDistribution,
@@ -928,82 +928,6 @@ impl Rays {
     pub fn add_rays(&mut self, rays: &mut Self) {
         self.ray_bundle.append(&mut rays.ray_bundle);
     }
-    /// Diffract a bundle of [`Rays`] on a periodic surface, e.g., a grating
-    /// All valid rays that hit this surface are diffracted according to the peridic structure,
-    /// the diffraction order, the wavelength of the rays and there incoming k-vector (see
-    /// [`Ray::diffract_at`]).
-    ///
-    /// # Arguments
-    ///
-    /// * `geometry` - the geometry the grating surface is a face of.
-    /// * `surface` - the grating surface.
-    /// * `refractive_index` - the refractive index behind the surface.
-    /// * `grating_vector` - the grating vector, in the plane of the surface.
-    /// * `diffraction_order` - the diffraction order.
-    /// * `refraction_intended` - whether the diffracted rays are the intended beam.
-    ///
-    /// # Warnings
-    ///
-    /// This functions emits a warning of no valid [`Ray`]s are found in the bundle.
-    ///
-    /// # Errors
-    ///
-    /// This function only propagates errors of contained functions.
-    pub fn diffract_on_periodic_surface(
-        &mut self,
-        geometry: &Geometry,
-        surface: &OpticSurface,
-        refractive_index: &RefractiveIndexType,
-        grating_vector: Vector3<f64>,
-        diffraction_order: &i32,
-        refraction_intended: bool,
-    ) -> OpmResult<Self> {
-        let mut valid_rays_found = false;
-        let mut rays_missed = false;
-        let mut reflected_rays = Self::with_capacity(self.ray_bundle.len());
-        for ray in &mut self.ray_bundle {
-            if ray.valid() {
-                let n2 = refractive_index.get_refractive_index(ray.wavelength())?;
-                let diffracted = match geometry.intersect(surface.face(), ray) {
-                    Some(hit) => ray.diffract_at(&hit, n2, grating_vector, diffraction_order)?,
-                    None => None,
-                };
-                if let Some(mut reflected) = diffracted {
-                    if refraction_intended {
-                        reflected.clear_pos_hist();
-                    } else {
-                        reflected.reduce_bounce_counter();
-                        ray.clear_pos_hist();
-                    }
-                    reflected_rays.add_ray(reflected);
-                } else {
-                    rays_missed = true;
-                }
-                valid_rays_found = true;
-            }
-        }
-        if rays_missed {
-            warn!("rays totally reflected or missed a surface");
-        }
-        if !valid_rays_found {
-            warn!("ray bundle contains no valid rays - not propagating");
-        }
-        if refraction_intended {
-            reflected_rays.set_parent_uuid(self.uuid);
-            reflected_rays.set_parent_node_split_idx(self.ray_history_len());
-        } else {
-            reflected_rays.set_uuid(self.uuid);
-            if let Some(node_origin) = self.node_origin {
-                reflected_rays.set_node_origin_uuid(node_origin);
-            }
-            if let Some(parent_id) = self.parent_id {
-                reflected_rays.set_parent_uuid(parent_id);
-                reflected_rays.set_parent_node_split_idx(self.parent_pos_split_idx);
-            }
-        }
-        Ok(reflected_rays)
-    }
-
     /// Scale the energy of all `valid` [`Ray`]s of this bundle by a given factor.
     ///
     /// This is the bundle-wide counterpart of [`Ray::scale_energy`] and the way an active medium

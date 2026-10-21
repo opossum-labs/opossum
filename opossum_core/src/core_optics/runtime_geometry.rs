@@ -121,22 +121,6 @@ impl RuntimeGeometry {
     pub fn surfaces_mut(&mut self) -> impl Iterator<Item = &mut OpticSurface> {
         self.surfaces.values_mut()
     }
-    /// Returns an optic surface together with the geometry it is a face of, which answers where a
-    /// ray hits it.
-    ///
-    /// # Arguments
-    ///
-    /// * `surf_name` - the name of the surface (its port name).
-    ///
-    /// # Returns
-    ///
-    /// The geometry and the surface, or `None` if there is no such surface.
-    pub fn traced_surface_mut(
-        &mut self,
-        surf_name: &str,
-    ) -> Option<(&Geometry, &mut OpticSurface)> {
-        Some((&self.geometry, self.surfaces.get_mut(surf_name)?))
-    }
     /// Lets a surface of this component act on a bundle of rays.
     ///
     /// The geometry answers where each valid ray hits the face the surface is (see

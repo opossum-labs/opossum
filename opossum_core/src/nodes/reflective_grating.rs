@@ -8,20 +8,22 @@ use crate::{
         propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
         raytrace::AnalysisRayTrace,
     },
+    coatings::CoatingType,
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, node_attr::HasNodeAttr,
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, hit_map::rays_hit_map::HitPoint,
+        node_attr::HasNodeAttr, surface_effect::SurfaceEffect,
     },
     error::{OpmResult, OpossumError},
     geometry::{
-        Geometry, SurfaceGeometry,
+        Geometry, SurfaceGeometry, SurfaceHit,
         body::{OPTIC_SHAPE, default_square_optic_shape},
     },
-    light::{LightData, LightRays, LightResult, Rays},
+    light::{LightData, LightRays, LightResult, Ray, Rays, rays::ReflectedPart},
     nodes::NodeRegistration,
     num_per_mm,
     properties::{Proptype, validator::Validator},
     radian,
-    refractive_index::refr_index_vaccuum,
+    refractive_index::{RefractiveIndexType, refr_index_vaccuum},
     utils::to_f64,
 };
 use nalgebra::Vector3;
@@ -239,38 +241,61 @@ impl AnalysisRayTrace for ReflectiveGrating {
             };
 
             let iso = self.effective_surface_iso(in_port)?;
-            if let Some((geometry, surf)) = self
-                .node_attr_mut()
-                .runtime_mut()
-                .and_then(|runtime| runtime.traced_surface_mut(in_port))
-            {
-                let refraction_intended = false;
-                let grating_vector =
-                    2. * PI * line_density.value * iso.transform_vector_f64(&Vector3::x());
-                let mut diffracted_rays = rays.diffract_on_periodic_surface(
-                    geometry,
-                    surf,
-                    &refr_index_vaccuum(),
-                    grating_vector,
-                    &diffraction_order,
-                    refraction_intended,
-                )?;
-                // The optical axis is placed by geometry alone; its energy does not decide where
-                // it runs.
-                if !config.is_positioning_run() {
-                    diffracted_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                }
-                let light_result =
-                    LightResult::from([(out_port.into(), LightData::Geometric(diffracted_rays))]);
-                Ok(light_result)
-            } else {
-                Err(OpossumError::Analysis("no surface found. Aborting".into()))
+            let diffraction = Diffraction {
+                index: refr_index_vaccuum(),
+                grating_vector: 2.
+                    * PI
+                    * line_density.value
+                    * iso.transform_vector_f64(&Vector3::x()),
+                order: diffraction_order,
+            };
+            let Some(runtime) = self.node_attr_mut().runtime_mut() else {
+                return Err(OpossumError::Analysis("no surface found. Aborting".into()));
+            };
+            let mut diffracted_rays = runtime.interact(
+                in_port,
+                &mut rays,
+                &diffraction,
+                ReflectedPart::Main,
+                *config.missed_surface_strategy(),
+            )?;
+            // The optical axis is placed by geometry alone; its energy does not decide where it
+            // runs.
+            if !config.is_positioning_run() {
+                diffracted_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
             }
+            Ok(LightResult::from([(
+                out_port.into(),
+                LightData::Geometric(diffracted_rays),
+            )]))
         } else {
             Err(OpossumError::Analysis(
                 "expected ray data at input port".into(),
             ))
         }
+    }
+}
+
+/// Diffraction into one order of a grating (see [`Ray::diffract_at`]). The whole energy goes into
+/// the order, so the coating of the surface is not used, and the surface records no hit.
+struct Diffraction {
+    index: RefractiveIndexType,
+    grating_vector: Vector3<f64>,
+    order: i32,
+}
+
+impl SurfaceEffect for Diffraction {
+    fn act_at(
+        &self,
+        ray: &mut Ray,
+        hit: &SurfaceHit,
+        _coating: &CoatingType,
+    ) -> OpmResult<(Option<Ray>, Option<HitPoint>)> {
+        let n2 = self.index.get_refractive_index(ray.wavelength())?;
+        Ok((
+            ray.diffract_at(hit, n2, self.grating_vector, &self.order)?,
+            None,
+        ))
     }
 }
 
@@ -290,6 +315,7 @@ impl OpticNode for ReflectiveGrating {
 mod test {
     use super::*;
     use crate::{
+        J_per_cm2,
         analyzers::{RayTraceConfig, energy::EnergyConfig},
         core_optics::{PortType, node_attr::NodePositioning},
         degree, joule,
@@ -545,6 +571,43 @@ mod test {
         assert_eq!(ray.energy(), joule!(1.0));
         assert_eq!(ray.number_of_bounces(), 0);
         assert_eq!(ray.position_history()[(0, 2)], millimeter!(-10.0));
+        Ok(())
+    }
+    /// A diffracted ray takes its helper rays along: in a ghost focus analysis they leave the grating
+    /// in the direction of the ray they belong to.
+    #[test]
+    fn a_diffracted_ray_takes_its_helper_rays_along() -> OpmResult<()> {
+        let mut node =
+            ReflectiveGrating::default().with_rot_from_littrow(nanometer!(1000.), degree!(0.))?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        let ray = Ray::new_collimated_w_fluence_helper(
+            millimeter!(0.0, 0.0, -10.0),
+            nanometer!(1000.0),
+            joule!(1.0),
+            J_per_cm2!(1.0),
+        )?;
+        let output = AnalysisGhostFocus::analyze(
+            &mut node,
+            LightRays::from([("input_1".into(), vec![Rays::from(ray)])]),
+            &GhostFocusConfig::default(),
+            &mut Vec::new(),
+            0,
+        )?;
+        let mut diffracted = output
+            .get("output_1")
+            .and_then(|bundles| bundles.first())
+            .and_then(|bundle| bundle.iter().next())
+            .cloned()
+            .expect("the diffracted ray at the output port");
+        let direction = diffracted.direction();
+        assert_relative_eq!(direction, vector![0.0, 0.0, -1.0], epsilon = 1e-15);
+        let helpers = diffracted
+            .helper_rays_mut()
+            .expect("the ray keeps its helper rays");
+        assert_eq!(helpers.nr_of_rays(false), 3);
+        for helper in helpers.iter() {
+            assert_relative_eq!(helper.direction(), direction, epsilon = 1e-12);
+        }
         Ok(())
     }
     /// An order the grating cannot diffract into lets no light out, and the analysis warns: at
