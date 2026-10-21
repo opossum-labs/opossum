@@ -12,7 +12,7 @@ use crate::{
     analyzers::{Analyzable, AnalyzerKind, propagation_strategy::PropagationStrategy},
     core_optics::{
         NodeAttrExt, OpticPorts, PortType,
-        node_attr::{HasNodeAttr, NodePositioning},
+        node_attr::{HasNodeAttr, NodePositioning, RuntimeMedium},
         volumetric::Volumetric,
     },
     error::{OpmResult, OpossumError},
@@ -109,14 +109,17 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
         self.update_surfaces()?;
         let config = strategy.pump_config(self.node_attr().uuid());
         let name = self.name().to_owned();
-        let Some(medium) = self.node_attr_mut().runtime_medium_mut() else {
+        let Some((body, inversion)) = self
+            .node_attr_mut()
+            .runtime_medium_mut()
+            .and_then(RuntimeMedium::parts_mut)
+        else {
             return Err(OpossumError::Other(format!(
                 "volume node '{name}' encloses no body"
             )));
         };
         // The inversion is gain-specific: only build it when the gain model reads one.
         if let Some(model) = config.gain_model().as_extraction() {
-            let (body, inversion) = medium.parts_mut();
             *inversion = model.build_inversion(body, &config)?;
         }
         Ok(())
@@ -366,6 +369,27 @@ mod tests {
         assert_abs_diff_eq!(iso.translation().x.value, decenter.x.value);
         assert_abs_diff_eq!(iso.translation().y.value, decenter.y.value);
         assert_abs_diff_eq!(iso.translation().z.value, decenter.z.value);
+        Ok(())
+    }
+    /// A surface away from the node sits where its face does: the flat rear face of a lens placed at
+    /// a turned node lies one center thickness behind it, along the node's axis.
+    #[test]
+    fn effective_surface_iso_of_a_face_behind_the_node() -> OpmResult<()> {
+        use crate::{nodes::Lens, refractive_index::RefrIndexConst};
+        let mut lens = Lens::new(
+            "lens",
+            millimeter!(50.0),
+            millimeter!(f64::INFINITY),
+            millimeter!(5.0),
+            &RefrIndexConst::new(1.5)?,
+        )?;
+        let node_iso = Isometry::new(millimeter!(10.0, -20.0, 30.0), degree!(5.0, -10.0, 15.0))?;
+        lens.set_positioning(NodePositioning::Absolute(node_iso))?;
+        let expected = node_iso.append(&Isometry::new_along_z(millimeter!(5.0))?);
+        let difference =
+            expected.get_inv_transform() * lens.effective_surface_iso("output_1")?.get_transform();
+        assert_abs_diff_eq!(difference.translation.vector.norm(), 0.0, epsilon = 1e-15);
+        assert_abs_diff_eq!(difference.rotation.angle(), 0.0, epsilon = 1e-15);
         Ok(())
     }
 }
