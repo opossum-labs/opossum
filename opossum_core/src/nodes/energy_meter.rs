@@ -222,7 +222,9 @@ impl OpticNode for EnergyMeter {
         self.set_light_data(None);
         self.apodization_warning = false;
         self.reset_optic_surfaces();
-        self.node_attr_mut().clear_runtime_inversion();
+        if let Some(runtime) = self.node_attr_mut().runtime_mut() {
+            runtime.clear_inversion();
+        }
     }
 
     fn node_report(&self, uuid: &str, _analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {

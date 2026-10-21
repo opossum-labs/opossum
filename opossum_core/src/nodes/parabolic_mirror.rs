@@ -10,6 +10,7 @@ use crate::{
     core_optics::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind,
         node_attr::HasNodeAttr,
+        surface_effect::Refraction,
     },
     degree,
     error::{OpmResult, OpossumError},
@@ -17,7 +18,7 @@ use crate::{
         Geometry, Parabola, SurfaceGeometry, SurfaceShape,
         body::{OPTIC_SHAPE, default_optic_shape},
     },
-    light::{LightData, LightRays, LightResult, Rays},
+    light::{LightData, LightRays, LightResult, Rays, rays::ReflectedPart},
     meter,
     nodes::NodeRegistration,
     percent,
@@ -469,16 +470,15 @@ impl AnalysisRayTrace for ParabolicMirror {
         if rays.is_empty() {
             return Ok(LightResult::default());
         }
-        let Some(surf) = self.get_optic_surface_mut(in_port) else {
+        let Some(runtime) = self.node_attr_mut().runtime_mut() else {
             return Err(OpossumError::Analysis("no surface found. Aborting".into()));
         };
-
-        let refraction_intended = false;
-        let (mut reflected_rays, _) = rays.refract_on_surface(
-            surf,
-            None,
-            refraction_intended,
-            config.missed_surface_strategy(),
+        let mut reflected_rays = runtime.interact(
+            in_port,
+            &mut rays,
+            &Refraction(None),
+            ReflectedPart::Main,
+            *config.missed_surface_strategy(),
         )?;
         // The optical axis is placed by geometry alone; its energy does not decide where it runs.
         if !config.is_positioning_run() {

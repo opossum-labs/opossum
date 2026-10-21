@@ -10,8 +10,12 @@ use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 
 use crate::{
-    core_optics::optic_surface::OpticSurface, error::OpmResult, gain::PumpConfig, light::Rays,
-    refractive_index::RefractiveIndexType, utils::default_from_name::DefaultFromName,
+    core_optics::optic_surface::OpticSurface,
+    error::OpmResult,
+    gain::PumpConfig,
+    light::{Ray, Rays},
+    refractive_index::RefractiveIndexType,
+    utils::default_from_name::DefaultFromName,
 };
 use uuid::Uuid;
 
@@ -26,6 +30,20 @@ pub enum MissedSurfaceStrategy {
     Ignore,
 }
 impl DefaultFromName for MissedSurfaceStrategy {}
+
+impl MissedSurfaceStrategy {
+    /// Let a ray miss a surface: lose it or let it pass unchanged.
+    ///
+    /// # Arguments
+    ///
+    /// * `ray` - the ray that missed the surface.
+    pub const fn apply_to(self, ray: &mut Ray) {
+        match self {
+            Self::Stop => ray.set_invalid(),
+            Self::Ignore => {}
+        }
+    }
+}
 
 impl Display for MissedSurfaceStrategy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -94,6 +112,28 @@ pub trait PropagationStrategy {
         _reflected_rays: Rays,
         _backward: bool,
     ) -> OpmResult<()> {
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{error::OpmResult, joule, millimeter, nanometer};
+
+    /// A ray that misses a surface is lost with `Stop` and passes unchanged with `Ignore`.
+    #[test]
+    fn a_missed_surface_strategy_loses_or_keeps_the_ray() -> OpmResult<()> {
+        let ray = Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1000.0), joule!(1.0))?;
+        for (strategy, valid) in [
+            (MissedSurfaceStrategy::Stop, false),
+            (MissedSurfaceStrategy::Ignore, true),
+        ] {
+            let mut missed = ray.clone();
+            strategy.apply_to(&mut missed);
+            assert_eq!(missed.valid(), valid, "{strategy}");
+            assert_eq!(missed.position(), ray.position());
+        }
         Ok(())
     }
 }

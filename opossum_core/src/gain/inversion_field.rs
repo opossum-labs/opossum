@@ -56,7 +56,8 @@ pub type CellIndex = (usize, usize, usize);
 /// a single number rather than paid for as a field of identical cells. This is also what keeps an
 /// *unpumped* medium representable: `Uniform(0.0)` is a real state a three-level model can read as
 /// absorption, distinct from a model that reads no inversion at all
-/// (`Option::None` in [`RuntimeMedium`](crate::core_optics::node_attr::RuntimeMedium)).
+/// (`Option::None` in the medium of a node, see
+/// [`NodeAttr::runtime_medium`](crate::core_optics::NodeAttr::runtime_medium)).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Inversion {
     /// A spatially constant normalized inversion `β` over the whole body: an unpumped medium is

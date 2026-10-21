@@ -3,10 +3,8 @@
 use crate::distributions::spectral::laser_lines::MIN_WAVELENGTH_DIFF_NM;
 use crate::geometry::Rim;
 use crate::{
-    J_per_cm2,
-    analyzers::propagation_strategy::MissedSurfaceStrategy,
-    centimeter,
-    core_optics::{hit_map::fluence_estimator::FluenceEstimator, optic_surface::OpticSurface},
+    J_per_cm2, centimeter,
+    core_optics::hit_map::fluence_estimator::FluenceEstimator,
     degree,
     distributions::{
         energy::EnergyDistribution,
@@ -19,7 +17,7 @@ use crate::{
     light::{Ray, Spectrum},
     meter, millimeter, nanometer,
     nodes::{
-        FilterType, SplittingConfig,
+        SplittingConfig,
         fluence_detector::{Fluence, fluence_data::FluenceData},
         ray_propagation_visualizer::{RayPositionHistories, RayPositionHistorySpectrum},
     },
@@ -82,18 +80,66 @@ pub struct Rays {
 
 /// What the reflected part of a ray-surface interaction is to the incoming ray bundle.
 ///
-/// The interaction itself is the same for all variants. They differ in the coating that splits the light
-/// and in the bookkeeping (position history, bounce counter, bundle identity) of both parts.
-enum ReflectedPart<'a> {
-    /// A ghost reflection split off an intended refraction (e.g. at a lens surface). The surface coating
-    /// splits the light.
+/// At a surface every ray is split into a transmitted and a reflected part alike. Which of them is
+/// the intended beam is bookkeeping of the node, not physics: it decides the position history, the
+/// bounce counter and the bundle identity of both parts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReflectedPart {
+    /// A ghost reflection split off an intended transmission (e.g. at a lens surface).
     Ghost,
-    /// The intended beam of a reflection (e.g. at a mirror); the transmitted part is the stray one. The
-    /// surface coating splits the light.
+    /// The intended beam of a reflection (e.g. at a mirror); the transmitted part is the stray one.
     Main,
-    /// A second, equally intended beam of a beam splitter. The splitting surface reflects according to
-    /// the given [`SplittingConfig`] instead of the surface coating.
-    Branch(&'a SplittingConfig),
+    /// A second, equally intended beam (e.g. at a beam splitter).
+    Branch,
+}
+
+impl ReflectedPart {
+    /// Records on both parts of a ray split at a surface which of them is the intended beam.
+    ///
+    /// # Arguments
+    ///
+    /// * `transmitted` - the transmitted part, which is the ray that hit the surface.
+    /// * `reflected` - the reflected part.
+    pub fn record_split(self, transmitted: &mut Ray, reflected: &mut Ray) {
+        match self {
+            Self::Ghost => reflected.clear_pos_hist(),
+            Self::Main => {
+                reflected.reduce_bounce_counter();
+                transmitted.clear_pos_hist();
+            }
+            Self::Branch => reflected.reduce_bounce_counter(),
+        }
+    }
+    /// Links the bundle of reflected parts to the bundle the rays came in with.
+    ///
+    /// A ghost branches off the incoming bundle at its current position, the intended beam of a
+    /// reflection continues it, and a second beam of a beam splitter is a bundle of its own.
+    ///
+    /// # Arguments
+    ///
+    /// * `incoming` - the bundle the rays came in with, after they hit the surface.
+    /// * `reflected` - the bundle of reflected parts.
+    pub fn link_bundles(self, incoming: &Rays, reflected: &mut Rays) {
+        match self {
+            Self::Ghost => {
+                reflected.set_parent_uuid(incoming.uuid);
+                reflected.set_parent_node_split_idx(incoming.ray_history_len());
+            }
+            Self::Main => {
+                reflected.set_uuid(incoming.uuid);
+                if let Some(node_origin) = incoming.node_origin {
+                    reflected.set_node_origin_uuid(node_origin);
+                }
+                if let Some(parent_id) = incoming.parent_id {
+                    reflected.set_parent_uuid(parent_id);
+                    reflected.set_parent_node_split_idx(incoming.parent_pos_split_idx);
+                }
+            }
+            // Both parts carry their full position history, so the reflected bundle is an
+            // independent bundle rather than a branch continuing its parent's history.
+            Self::Branch => {}
+        }
+    }
 }
 
 impl Default for Rays {
@@ -889,350 +935,6 @@ impl Rays {
     pub fn add_rays(&mut self, rays: &mut Self) {
         self.ray_bundle.append(&mut rays.ray_bundle);
     }
-    /// Refract the rays of this bundle that hit a paraxial surface of given focal length.
-    ///
-    /// Every valid [`Ray`] that hit the surface is refracted, together with its helper rays. A ray
-    /// that missed the surface never passed the lens and keeps its direction.
-    ///
-    /// # Arguments
-    ///
-    /// * `focal_length` - the focal length of the paraxial surface.
-    /// * `iso` - the isometry the paraxial surface is placed at.
-    /// * `hits` - for every ray of this bundle in order, whether it hit the surface, as returned by
-    ///   [`refract_on_surface`](Self::refract_on_surface). Rays beyond its end count as missed.
-    ///
-    /// # Errors
-    /// This function returns an error if
-    ///  - the z component of a ray direction is zero.
-    ///  - the focal length is zero or not finite.
-    pub fn refract_paraxial(
-        &mut self,
-        focal_length: Length,
-        iso: &Isometry,
-        hits: &[bool],
-    ) -> OpmResult<()> {
-        if focal_length.is_zero() || !focal_length.is_finite() {
-            return Err(OpossumError::Other(
-                "focal length must be !=0.0 and finite".into(),
-            ));
-        }
-        for (ray, _) in self
-            .ray_bundle
-            .iter_mut()
-            .zip(hits)
-            .filter(|(_, hit)| **hit)
-        {
-            if ray.valid() {
-                ray.refract_paraxial(focal_length, iso)?;
-            }
-            if let Some(helper_rays) = ray.helper_rays_mut() {
-                for helper in helper_rays.iter_mut().filter(|helper| helper.valid()) {
-                    helper.refract_paraxial(focal_length, iso)?;
-                }
-            }
-        }
-        Ok(())
-    }
-    /// Refract a ray bundle on a [`GeoSurface`](crate::geometry::GeoSurface) and returns a reflected [`Ray`] bundle.
-    ///
-    /// This function refracts all `valid` [`Ray`]s on a given surface.
-    ///
-    /// The refractive index of the surface is given by the `refractive_index` parameter. If this parameter is
-    /// set to `None`, the refractive index of the incoming individual beam is used. This way it is possible to model
-    /// a "passive" surface, which does not change the direction of the [`Ray`].
-    ///
-    /// # Returns
-    ///
-    /// The bundle of reflected rays and, for every ray of this bundle in order, whether it hit the
-    /// surface (see [`OpticSurface::intersect`]).
-    ///
-    /// # Warnings
-    ///
-    /// This functions emits a warning of no valid [`Ray`]s are found in the bundle.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    ///   - the refractive index of the surface for a given ray cannot be determined (e.g. wavelength out of range, etc.).
-    ///   - the underlying function for refraction of a single [`Ray`] on the surface fails.
-    pub fn refract_on_surface(
-        &mut self,
-        surface: &mut OpticSurface,
-        refractive_index: Option<&RefractiveIndexType>,
-        refraction_intended: bool,
-        missed_surface_strategy: &MissedSurfaceStrategy,
-    ) -> OpmResult<(Self, Vec<bool>)> {
-        let reflected_part = if refraction_intended {
-            ReflectedPart::Ghost
-        } else {
-            ReflectedPart::Main
-        };
-        self.interact_with_surface(
-            surface,
-            refractive_index,
-            *missed_surface_strategy,
-            &reflected_part,
-        )
-    }
-    /// Split a ray bundle on the splitting surface of a beam splitter and return the reflected [`Ray`] bundle.
-    ///
-    /// All `valid` [`Ray`]s are propagated to the given (passive) surface. There, each ray is split as if the
-    /// surface had a coating with a reflectivity of `1 - transmission` of the given [`SplittingConfig`] at the
-    /// wavelength of the ray. The transmitted part stays in this bundle and keeps its direction, the reflected
-    /// part is mirrored about the surface normal. The coating of the surface itself is not used.
-    ///
-    /// Unlike [`refract_on_surface`](Self::refract_on_surface), both parts are intended beams: neither loses
-    /// its position history, and the reflected part keeps the bounce counter of the incoming ray, so it is not
-    /// counted as a ghost reflection. The reflected bundle is a new, independent ray bundle.
-    ///
-    /// # Arguments
-    ///
-    /// * `surface` - the splitting surface. Hits are recorded in its hit map.
-    /// * `config` - the [`SplittingConfig`] defining the transmission of the surface.
-    /// * `missed_surface_strategy` - what happens to rays that do not hit the surface.
-    ///
-    /// # Returns
-    ///
-    /// The bundle of reflected rays. Rays that missed the surface have no reflected counterpart.
-    ///
-    /// # Warnings
-    ///
-    /// This functions emits a warning of no valid [`Ray`]s are found in the bundle.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    ///   - the transmission for a given ray cannot be determined (e.g. wavelength outside the splitting spectrum).
-    ///   - the underlying function for refraction of a single [`Ray`] on the surface fails.
-    pub fn split_on_surface(
-        &mut self,
-        surface: &mut OpticSurface,
-        config: &SplittingConfig,
-        missed_surface_strategy: &MissedSurfaceStrategy,
-    ) -> OpmResult<Self> {
-        self.interact_with_surface(
-            surface,
-            None,
-            *missed_surface_strategy,
-            &ReflectedPart::Branch(config),
-        )
-        .map(|(reflected, _)| reflected)
-    }
-    /// Propagate all `valid` [`Ray`]s to a surface, split them into a transmitted and a reflected part and
-    /// return the reflected [`Ray`] bundle.
-    ///
-    /// This is the common implementation of [`refract_on_surface`](Self::refract_on_surface) and
-    /// [`split_on_surface`](Self::split_on_surface).
-    ///
-    /// # Arguments
-    ///
-    /// * `surface` - the surface the rays interact with. Hits are recorded in its hit map.
-    /// * `refractive_index` - the refractive index behind the surface. `None` models a passive surface.
-    /// * `missed_surface_strategy` - what happens to rays that do not hit the surface.
-    /// * `reflected_part` - which coating splits the light and what the reflected part is to this bundle.
-    ///
-    /// # Returns
-    ///
-    /// The bundle of reflected rays and, for every ray of this bundle in order, whether it hit the
-    /// surface. A ray that was already invalid did not.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    ///   - the refractive index of the surface for a given ray cannot be determined (e.g. wavelength out of range, etc.).
-    ///   - the splitting coating for a given ray cannot be determined (e.g. wavelength outside the splitting spectrum).
-    ///   - the underlying function for refraction of a single [`Ray`] on the surface fails.
-    fn interact_with_surface(
-        &mut self,
-        surface: &mut OpticSurface,
-        refractive_index: Option<&RefractiveIndexType>,
-        missed_surface_strategy: MissedSurfaceStrategy,
-        reflected_part: &ReflectedPart<'_>,
-    ) -> OpmResult<(Self, Vec<bool>)> {
-        let mut valid_rays_found = false;
-        let mut rays_missed = false;
-        // Pre-allocate memory to avoid massive reallocation overhead
-        let mut reflected_rays = Self::with_capacity(self.ray_bundle.len());
-        let mut hits = vec![false; self.ray_bundle.len()];
-
-        for (ray, hit) in self.ray_bundle.iter_mut().zip(hits.iter_mut()) {
-            if ray.valid() {
-                let n2 = if let Some(refractive_index) = refractive_index {
-                    Some(refractive_index.get_refractive_index(ray.wavelength())?)
-                } else {
-                    None
-                };
-                let coating = match reflected_part {
-                    ReflectedPart::Ghost | ReflectedPart::Main => *surface.coating(),
-                    ReflectedPart::Branch(config) => config.coating(ray.wavelength())?,
-                };
-
-                // Wir übergeben 'surface' unveränderlich und empfangen unser neues Tupel
-                let interaction = ray.refract_on_surface_with_coating(
-                    surface,
-                    &coating,
-                    n2,
-                    missed_surface_strategy,
-                )?;
-                *hit = interaction.is_some();
-                let (reflected_opt, hit_point_opt) = interaction.unwrap_or((None, None));
-
-                if let Some(mut reflected) = reflected_opt {
-                    if let (Some(helper_rays), Some(relf_helper)) =
-                        (ray.helper_rays_mut(), reflected.helper_rays_mut())
-                    {
-                        for (h_ray, refl_h_ray) in izip!(
-                            helper_rays.ray_bundle.iter_mut(),
-                            relf_helper.ray_bundle.iter_mut()
-                        ) {
-                            if let Some((Some(h_reflected), _h_hit_point)) = h_ray
-                                .refract_on_surface_with_coating(
-                                    surface,
-                                    &coating,
-                                    n2,
-                                    missed_surface_strategy,
-                                )?
-                            {
-                                refl_h_ray.set_direction(h_reflected.direction())?;
-                            }
-                        }
-                    }
-                    match reflected_part {
-                        ReflectedPart::Ghost => reflected.clear_pos_hist(),
-                        ReflectedPart::Main => {
-                            reflected.reduce_bounce_counter();
-                            ray.clear_pos_hist();
-                        }
-                        ReflectedPart::Branch(_) => reflected.reduce_bounce_counter(),
-                    }
-                    reflected_rays.add_ray(reflected);
-                } else {
-                    rays_missed = true;
-                }
-
-                // Den zurückgegebenen HitPoint sequenziell in die HitMap eintragen
-                if let Some(hit_point) = hit_point_opt {
-                    surface.add_to_hit_map(hit_point, ray.number_of_bounces(), self.uuid)?;
-                }
-
-                valid_rays_found = true;
-            }
-        }
-
-        if rays_missed {
-            warn!("rays totally reflected or missed a surface");
-        }
-        if !valid_rays_found {
-            warn!("ray bundle contains no valid rays - not propagating");
-        }
-        match reflected_part {
-            ReflectedPart::Ghost => {
-                reflected_rays.set_parent_uuid(self.uuid);
-                reflected_rays.set_parent_node_split_idx(self.ray_history_len());
-            }
-            ReflectedPart::Main => {
-                reflected_rays.set_uuid(self.uuid);
-                if let Some(node_origin) = self.node_origin {
-                    reflected_rays.set_node_origin_uuid(node_origin);
-                }
-                if let Some(parent_id) = self.parent_id {
-                    reflected_rays.set_parent_uuid(parent_id);
-                    reflected_rays.set_parent_node_split_idx(self.parent_pos_split_idx);
-                }
-            }
-            // Both parts carry their full position history, so the reflected bundle is an
-            // independent bundle rather than a branch continuing its parent's history.
-            ReflectedPart::Branch(_) => {}
-        }
-        Ok((reflected_rays, hits))
-    }
-    /// Diffract a bundle of [`Rays`] on a periodic surface, e.g., a grating
-    /// All valid rays that hit this surface are diffracted according to the peridic structure,
-    /// the diffraction order, the wavelength of the rays and there incoming k-vector
-    /// # Warnings
-    ///
-    /// This functions emits a warning of no valid [`Ray`]s are found in the bundle.
-    ///
-    /// # Errors
-    ///
-    /// This function only propagates errors of contained functions.
-    pub fn diffract_on_periodic_surface(
-        &mut self,
-        surface: &OpticSurface,
-        refractive_index: &RefractiveIndexType,
-        grating_vector: Vector3<f64>,
-        diffraction_order: &i32,
-        refraction_intended: bool,
-    ) -> OpmResult<Self> {
-        let mut valid_rays_found = false;
-        let mut rays_missed = false;
-        let mut reflected_rays = Self::with_capacity(self.ray_bundle.len());
-        for ray in &mut self.ray_bundle {
-            if ray.valid() {
-                let n2 = refractive_index.get_refractive_index(ray.wavelength())?;
-                if let Some(mut reflected) = ray.diffract_on_periodic_surface(
-                    surface,
-                    n2,
-                    grating_vector,
-                    diffraction_order,
-                )? {
-                    if refraction_intended {
-                        reflected.clear_pos_hist();
-                    } else {
-                        reflected.reduce_bounce_counter();
-                        ray.clear_pos_hist();
-                    }
-                    reflected_rays.add_ray(reflected);
-                } else {
-                    rays_missed = true;
-                }
-                valid_rays_found = true;
-            }
-        }
-        if rays_missed {
-            warn!("rays totally reflected or missed a surface");
-        }
-        if !valid_rays_found {
-            warn!("ray bundle contains no valid rays - not propagating");
-        }
-        if refraction_intended {
-            reflected_rays.set_parent_uuid(self.uuid);
-            reflected_rays.set_parent_node_split_idx(self.ray_history_len());
-        } else {
-            reflected_rays.set_uuid(self.uuid);
-            if let Some(node_origin) = self.node_origin {
-                reflected_rays.set_node_origin_uuid(node_origin);
-            }
-            if let Some(parent_id) = self.parent_id {
-                reflected_rays.set_parent_uuid(parent_id);
-                reflected_rays.set_parent_node_split_idx(self.parent_pos_split_idx);
-            }
-        }
-        Ok(reflected_rays)
-    }
-
-    /// Filter the rays of this bundle that hit a surface by a given filter.
-    ///
-    /// Filter the energy of every `valid` ray that hit the surface by a given [`FilterType`]. A ray
-    /// that missed the surface never passed the filter and keeps its energy.
-    ///
-    /// # Arguments
-    ///
-    /// * `filter` - the filter to apply.
-    /// * `hits` - for every ray of this bundle in order, whether it hit the surface, as returned by
-    ///   [`refract_on_surface`](Self::refract_on_surface). Rays beyond its end count as missed.
-    ///
-    /// # Errors
-    /// This function will return an error if the underlying function for filtering a single [`Ray`] with the given
-    /// [`FilterType`] fails for any of the rays in the bundle.
-    pub fn filter_energy(&mut self, filter: &FilterType, hits: &[bool]) -> OpmResult<()> {
-        for (ray, &hit) in self.ray_bundle.iter_mut().zip(hits) {
-            if hit && ray.valid() {
-                ray.filter_energy(filter)?;
-            }
-        }
-        Ok(())
-    }
     /// Scale the energy of all `valid` [`Ray`]s of this bundle by a given factor.
     ///
     /// This is the bundle-wide counterpart of [`Ray::scale_energy`] and the way an active medium
@@ -2014,17 +1716,10 @@ mod test {
     };
     use crate::{
         apertures::{CircleShape, Outline},
-        centimeter,
-        coatings::{CoatingConstantR, CoatingType},
-        core_optics::optic_surface::OpticSurface,
-        geometry::{Face, SurfaceShape},
-        joule, meter, millimeter, nanometer,
-        nodes::{
-            SplittingConfig,
-            ideal_filter::{EdgeFilter, EdgeFilterType, FilterConst},
-        },
-        percent, radian,
-        refractive_index::{RefrIndexConst, refr_index_vaccuum},
+        centimeter, joule, meter, millimeter, nanometer,
+        nodes::SplittingConfig,
+        radian,
+        refractive_index::RefrIndexConst,
         utils::test_helper::helper::check_logs,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
@@ -2609,349 +2304,6 @@ mod test {
             rays.beam_radius_rms(),
             Some(millimeter!(f64::sqrt(2.0) / 2.0))
         );
-        Ok(())
-    }
-    #[test]
-    fn refract_paraxial() -> OpmResult<()> {
-        let mut rays = Rays::default();
-        assert!(
-            rays.refract_paraxial(millimeter!(0.0), &Isometry::identity(), &[])
-                .is_err()
-        );
-        assert!(
-            rays.refract_paraxial(millimeter!(f64::NAN), &Isometry::identity(), &[])
-                .is_err()
-        );
-        assert!(
-            rays.refract_paraxial(millimeter!(f64::INFINITY), &Isometry::identity(), &[])
-                .is_err()
-        );
-        assert!(
-            rays.refract_paraxial(millimeter!(f64::NEG_INFINITY), &Isometry::identity(), &[])
-                .is_err()
-        );
-        assert!(
-            rays.refract_paraxial(millimeter!(100.0), &Isometry::identity(), &[])
-                .is_ok()
-        );
-        let ray0 = Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0))?;
-        let ray1 = Ray::new_collimated(millimeter!(0., 1., 0.), nanometer!(1053.0), joule!(1.0))?;
-        rays.add_ray(ray0.clone());
-        rays.add_ray(ray1.clone());
-        rays.refract_paraxial(millimeter!(100.0), &Isometry::identity(), &[true, true])?;
-        assert_eq!(rays.ray_bundle[0].position(), ray0.position());
-        assert_eq!(rays.ray_bundle[0].direction(), ray0.direction());
-        assert_eq!(rays.ray_bundle[1].position(), ray1.position());
-        let new_dir = vector![0.0, -1.0, 100.0].normalize();
-        assert_abs_diff_eq!(rays.ray_bundle[1].direction().x, new_dir.x);
-        assert_abs_diff_eq!(rays.ray_bundle[1].direction().y, new_dir.y);
-        assert_abs_diff_eq!(rays.ray_bundle[1].direction().z, new_dir.z);
-        Ok(())
-    }
-    /// A ray that hits a paraxial surface takes its helper rays along: each is refracted as a single
-    /// ray would be. A ray that misses keeps its direction, and so do its helper rays.
-    #[test]
-    fn refract_paraxial_takes_the_helper_rays_of_a_hit_along() -> OpmResult<()> {
-        let focal_length = millimeter!(100.0);
-        let iso = Isometry::new_translation(millimeter!(1.0, -2.0, 0.0))?;
-        let with_helpers = |y: f64| {
-            Ray::new_collimated_w_fluence_helper(
-                millimeter!(0.0, y, 0.0),
-                nanometer!(1000.0),
-                joule!(1.0),
-                J_per_cm2!(1.0),
-            )
-        };
-        let (hit, missed) = (with_helpers(5.0)?, with_helpers(-5.0)?);
-        let mut rays = Rays::from(vec![hit.clone(), missed.clone()]);
-        rays.refract_paraxial(focal_length, &iso, &[true, false])?;
-
-        let mut refracted = hit;
-        refracted.refract_paraxial(focal_length, &iso)?;
-        let Some(helpers) = refracted.helper_rays_mut() else {
-            panic!("the ray has helper rays");
-        };
-        assert_eq!(helpers.nr_of_rays(false), 3, "a ray with three helper rays");
-        for helper in helpers.iter_mut() {
-            helper.refract_paraxial(focal_length, &iso)?;
-            assert_ne!(helper.direction(), Vector3::z());
-        }
-        assert_eq!(rays.ray_bundle, [refracted, missed]);
-        Ok(())
-    }
-    #[test]
-    fn refract_on_surface_empty() -> OpmResult<()> {
-        let mut rays = Rays::default();
-        testing_logger::setup();
-        let (reflected, _) = rays.refract_on_surface(
-            &mut OpticSurface::default(),
-            Some(&refr_index_vaccuum()),
-            true,
-            &MissedSurfaceStrategy::Stop,
-        )?;
-        check_logs(
-            log::Level::Warn,
-            vec!["ray bundle contains no valid rays - not propagating"],
-        );
-        assert_eq!(reflected.nr_of_rays(false), 0);
-        Ok(())
-    }
-    #[test]
-    fn refract_on_surface_helper_rays() -> OpmResult<()> {
-        let tot_energy = joule!(1.);
-        let pos_strategy = Hexapolar::new(millimeter!(15.), 5)?;
-        let fluence_strategy =
-            crate::distributions::fluence::general_gaussian::General2DGaussian::new(
-                tot_energy,
-                millimeter!(0., 0.),
-                millimeter!(2.5, 2.5),
-                radian!(0.),
-            )?;
-        let mut rays = Rays::new_collimated_w_fluence_helper(
-            nanometer!(1000.),
-            &fluence_strategy,
-            &pos_strategy,
-        )?;
-
-        let _ = rays.refract_on_surface(
-            &mut OpticSurface::default(),
-            Some(&refr_index_vaccuum()),
-            true,
-            &MissedSurfaceStrategy::Stop,
-        )?;
-        Ok(())
-    }
-    #[test]
-    fn refract_on_surface_parent_node_split_id() -> OpmResult<()> {
-        let mut rays = Rays::default();
-        let node_uuid = Uuid::new_v4();
-        let parent_uuid = Uuid::new_v4();
-        rays.set_node_origin_uuid(node_uuid);
-        rays.set_parent_uuid(parent_uuid);
-        rays.set_parent_node_split_idx(10);
-        let (reflected, _) = rays.refract_on_surface(
-            &mut OpticSurface::default(),
-            Some(&refr_index_vaccuum()),
-            false,
-            &MissedSurfaceStrategy::Stop,
-        )?;
-        assert_eq!(*reflected.parent_pos_split_idx(), 10);
-        assert_eq!(reflected.node_origin(), &Some(node_uuid));
-        assert_eq!(reflected.parent_id(), Some(parent_uuid));
-        assert_eq!(reflected.uuid(), rays.uuid());
-        Ok(())
-    }
-    #[test]
-    fn refract_on_surface_same_index() -> OpmResult<()> {
-        let mut rays = Rays::default();
-        let mut ray0 = Ray::new(
-            millimeter!(0., 0., -10.),
-            vector![0.0, 1.0, 1.0],
-            nanometer!(1053.0),
-            joule!(1.0),
-        )?;
-        ray0.set_refractive_index(1.5)?;
-        let mut ray1 = Ray::new(
-            millimeter!(0., 1., -10.),
-            vector![0.0, 1.0, 1.0],
-            nanometer!(1053.0),
-            joule!(1.0),
-        )?;
-        ray1.set_refractive_index(2.0)?;
-        rays.add_ray(ray0);
-        rays.add_ray(ray1);
-        rays.refract_on_surface(
-            &mut OpticSurface::default(),
-            None,
-            true,
-            &MissedSurfaceStrategy::Stop,
-        )?;
-        for ray in rays.iter() {
-            assert_abs_diff_eq!(ray.direction(), vector![0.0, 1.0, 1.0].normalize())
-        }
-        Ok(())
-    }
-    #[test]
-    fn refract_on_surface_missed() -> OpmResult<()> {
-        let mut rays = Rays::from(Ray::new_collimated(
-            millimeter!(0.0, 0.0, 1.0),
-            nanometer!(1000.0),
-            joule!(1.0),
-        )?);
-        testing_logger::setup();
-        let (reflected, _) = rays.refract_on_surface(
-            &mut OpticSurface::default(),
-            Some(&refr_index_vaccuum()),
-            true,
-            &MissedSurfaceStrategy::Stop,
-        )?;
-        check_logs(
-            log::Level::Warn,
-            vec!["rays totally reflected or missed a surface"],
-        );
-        assert_eq!(reflected.nr_of_rays(false), 0);
-        Ok(())
-    }
-    #[test]
-    fn refract_on_surface_energy() -> OpmResult<()> {
-        let mut rays = Rays::default();
-        rays.add_ray(Ray::new_collimated(
-            millimeter!(0.0, 0.0, -1.0),
-            nanometer!(1000.0),
-            joule!(1.0),
-        )?);
-        let mut s = OpticSurface::default();
-        s.set_coating(CoatingConstantR::new(percent!(20.0))?.into());
-        let (reflected, _) = rays.refract_on_surface(
-            &mut s,
-            Some(&refr_index_vaccuum()),
-            true,
-            &MissedSurfaceStrategy::Stop,
-        )?;
-        assert_eq!(rays.total_energy(), joule!(0.8));
-        assert_eq!(reflected.total_energy(), joule!(0.2));
-        Ok(())
-    }
-    /// A flat, ideal AR coated surface through the origin, tilted by 45° about the y axis.
-    fn tilted_splitting_surface() -> OpmResult<OpticSurface> {
-        let iso = Isometry::new(millimeter!(0., 0., 0.), degree!(0., 45., 0.))?;
-        OpticSurface::new(
-            Face::new(SurfaceShape::Plane, iso),
-            CoatingType::IdealAR,
-            J_per_cm2!(1.),
-        )
-    }
-    fn collimated_ray_along_z(wavelength: Length) -> OpmResult<Ray> {
-        Ray::new_collimated(millimeter!(0., 0., -10.), wavelength, joule!(1.0))
-    }
-    #[test]
-    fn split_on_surface_tilted() -> OpmResult<()> {
-        let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1000.0))?);
-        let mut surface = tilted_splitting_surface()?;
-        let reflected = rays.split_on_surface(
-            &mut surface,
-            &SplittingConfig::Ratio(0.6),
-            &MissedSurfaceStrategy::Stop,
-        )?;
-        assert_abs_diff_eq!(rays.total_energy().get::<joule>(), 0.6);
-        assert_abs_diff_eq!(reflected.total_energy().get::<joule>(), 0.4);
-        let transmitted_ray = &rays.ray_bundle[0];
-        let reflected_ray = &reflected.ray_bundle[0];
-        assert_abs_diff_eq!(transmitted_ray.direction(), Vector3::z(), epsilon = 1e-12);
-        assert_abs_diff_eq!(reflected_ray.direction().x.abs(), 1.0, epsilon = 1e-12);
-        assert_abs_diff_eq!(reflected_ray.direction().y, 0.0, epsilon = 1e-12);
-        assert_abs_diff_eq!(reflected_ray.direction().z, 0.0, epsilon = 1e-12);
-        assert_eq!(reflected_ray.position(), transmitted_ray.position());
-        Ok(())
-    }
-    #[test]
-    fn split_on_surface_ignores_surface_coating() -> OpmResult<()> {
-        let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1000.0))?);
-        let mut surface = tilted_splitting_surface()?;
-        surface.set_coating(CoatingConstantR::new(percent!(20.0))?.into());
-        let reflected = rays.split_on_surface(
-            &mut surface,
-            &SplittingConfig::Ratio(0.6),
-            &MissedSurfaceStrategy::Stop,
-        )?;
-        assert_abs_diff_eq!(rays.total_energy().get::<joule>(), 0.6);
-        assert_abs_diff_eq!(reflected.total_energy().get::<joule>(), 0.4);
-        Ok(())
-    }
-    #[test]
-    fn split_on_surface_keeps_both_parts_intended() -> OpmResult<()> {
-        let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1000.0))?);
-        let mut surface = tilted_splitting_surface()?;
-        let reflected = rays.split_on_surface(
-            &mut surface,
-            &SplittingConfig::Ratio(0.6),
-            &MissedSurfaceStrategy::Stop,
-        )?;
-        // the reflected part is an intended beam, not a ghost reflection
-        assert_eq!(reflected.bounce_lvl(), rays.bounce_lvl());
-        // neither part loses the position history before the splitting surface
-        assert_eq!(rays.ray_history_len(), 1);
-        assert_eq!(reflected.ray_history_len(), 1);
-        assert_ne!(reflected.uuid(), rays.uuid());
-        assert!(reflected.parent_id().is_none());
-        Ok(())
-    }
-    #[test]
-    fn split_on_surface_spectrum() -> OpmResult<()> {
-        let spectrum: Spectrum = EdgeFilter::new(
-            EdgeFilterType::ShortPass,
-            nanometer!(1000.0),
-            0.0..1.0,
-            None,
-            nanometer!(500.0)..nanometer!(1500.0),
-            nanometer!(1.0),
-        )?
-        .into();
-        let config = SplittingConfig::Spectrum(spectrum);
-        let mut rays = Rays::default();
-        rays.add_ray(collimated_ray_along_z(nanometer!(999.0))?);
-        rays.add_ray(collimated_ray_along_z(nanometer!(1001.0))?);
-        let mut surface = tilted_splitting_surface()?;
-        let reflected =
-            rays.split_on_surface(&mut surface, &config, &MissedSurfaceStrategy::Stop)?;
-        assert_eq!(rays.ray_bundle[0].energy(), joule!(1.0));
-        assert_eq!(rays.ray_bundle[1].energy(), joule!(0.0));
-        assert_eq!(reflected.ray_bundle[0].energy(), joule!(0.0));
-        assert_eq!(reflected.ray_bundle[1].energy(), joule!(1.0));
-
-        let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1501.0))?);
-        assert!(
-            rays.split_on_surface(&mut surface, &config, &MissedSurfaceStrategy::Stop)
-                .is_err()
-        );
-        Ok(())
-    }
-    #[test]
-    fn split_on_surface_missed() -> OpmResult<()> {
-        let mut rays = Rays::from(Ray::new_collimated(
-            millimeter!(0.0, 0.0, 1.0),
-            nanometer!(1000.0),
-            joule!(1.0),
-        )?);
-        testing_logger::setup();
-        let reflected = rays.split_on_surface(
-            &mut OpticSurface::default(),
-            &SplittingConfig::Ratio(0.6),
-            &MissedSurfaceStrategy::Stop,
-        )?;
-        check_logs(
-            log::Level::Warn,
-            vec!["rays totally reflected or missed a surface"],
-        );
-        assert_eq!(reflected.nr_of_rays(false), 0);
-        Ok(())
-    }
-    #[test]
-    fn filter_energy() -> OpmResult<()> {
-        let mut rays = Rays::default();
-        assert!(
-            rays.filter_energy(
-                &FilterType::Constant(FilterConst::new(percent!(50.0))?),
-                &[]
-            )
-            .is_ok()
-        );
-        let mut ray =
-            Ray::new_collimated(millimeter!(0., 1., 0.), nanometer!(1054.0), joule!(1.0))?;
-        rays.add_ray(ray.clone());
-        // a ray that missed the filter keeps its energy
-        rays.add_ray(ray.clone());
-        ray.filter_energy(&FilterType::Constant(FilterConst::new(percent!(30.0))?))?;
-        rays.filter_energy(
-            &FilterType::Constant(FilterConst::new(percent!(30.0))?),
-            &[true, false],
-        )?;
-        assert_eq!(rays.ray_bundle[0].position(), ray.position());
-        assert_eq!(rays.ray_bundle[0].direction(), ray.direction());
-        assert_eq!(rays.ray_bundle[0].wavelength(), ray.wavelength());
-        assert_eq!(rays.ray_bundle[0].energy(), ray.energy());
-        assert_eq!(rays.ray_bundle[1].energy(), joule!(1.0));
-        assert_eq!(rays.ray_bundle.len(), 2);
         Ok(())
     }
     #[test]

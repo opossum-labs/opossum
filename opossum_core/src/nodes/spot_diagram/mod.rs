@@ -204,8 +204,7 @@ impl AnalysisEnergy for SpotDiagram {
         incoming_data: LightResult,
         config: &EnergyConfig,
     ) -> OpmResult<LightResult> {
-        let result =
-            self.unified_analyze_single_surface_node(incoming_data, config, "input_1", None)?;
+        let result = self.unified_analyze_single_surface_node(incoming_data, config, "input_1")?;
         let out_port = &self.ports().names(&PortType::Output)[0];
         if let Some(data) = result.get(out_port) {
             self.light_data = Some(data.clone());

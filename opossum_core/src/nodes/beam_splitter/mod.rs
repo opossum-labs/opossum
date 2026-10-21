@@ -7,14 +7,18 @@ mod analysis_raytrace;
 use crate::{
     analyzers::{AnalyzerType, propagation_strategy::MissedSurfaceStrategy},
     coatings::{CoatingConstantR, CoatingType},
-    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind},
+    core_optics::{
+        NodeAttr, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind, hit_map::rays_hit_map::HitPoint,
+        node_attr::HasNodeAttr, surface_effect::SurfaceEffect,
+    },
     error::{OpmResult, OpossumError},
     geometry::{
-        Geometry, SurfaceGeometry,
+        Geometry, SurfaceGeometry, SurfaceHit,
         body::{OPTIC_SHAPE, default_optic_shape},
     },
     light::{
-        LightData, Rays,
+        LightData, Ray, Rays,
+        rays::ReflectedPart,
         spectrum::{Spectrum, merge_spectra},
     },
     nodes::{NodeRegistration, ideal_filter::SpectralFilterBuilder},
@@ -169,6 +173,21 @@ impl SplittingConfig {
     pub fn coating(&self, wavelength: Length) -> OpmResult<CoatingType> {
         let reflectivity = Ratio::new::<ratio>(1.0 - self.transmission(wavelength)?);
         Ok(CoatingType::ConstantR(CoatingConstantR::new(reflectivity)?))
+    }
+}
+
+/// A splitting surface splits a ray as if it had the coating of [`SplittingConfig::coating`] at the
+/// wavelength of the ray; the coating of the surface itself is not used. The transmitted part keeps
+/// its direction, the reflected part is mirrored about the surface normal.
+impl SurfaceEffect for SplittingConfig {
+    fn act_at(
+        &self,
+        ray: &mut Ray,
+        hit: &SurfaceHit,
+        _coating: &CoatingType,
+    ) -> OpmResult<(Option<Ray>, Option<HitPoint>)> {
+        let coating = self.coating(ray.wavelength())?;
+        ray.refract_at(hit, &coating, None)
     }
 }
 
@@ -378,12 +397,18 @@ impl BeamSplitter {
             )));
         };
         let mut rays = rays.clone();
-        let Some(surf) = self.get_optic_surface_mut(port_name) else {
+        let Some(runtime) = self.node_attr_mut().runtime_mut() else {
             return Err(OpossumError::OpticPort(format!(
                 "Input optic surface not found for port '{port_name}'"
             )));
         };
-        let reflected = rays.split_on_surface(surf, splitting_config, &missed_surface_strategy)?;
+        let reflected = runtime.interact(
+            port_name,
+            &mut rays,
+            splitting_config,
+            ReflectedPart::Branch,
+            missed_surface_strategy,
+        )?;
         Ok((rays, reflected))
     }
     fn analyze_raytrace(

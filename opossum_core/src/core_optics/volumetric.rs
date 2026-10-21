@@ -17,13 +17,13 @@ use crate::{
     absorption::absorption_model::AbsorptionModel,
     analyzers::propagation_strategy::PropagationStrategy,
     core_optics::{
-        NodeAttrExt, OpticNode, OpticNodeExt, node_attr::RuntimeMedium,
-        optic_node_ext::single_io_port_names,
+        NodeAttrExt, OpticNode, OpticNodeExt, optic_node_ext::single_io_port_names,
+        runtime_geometry::RuntimeGeometry, surface_effect::Refraction,
     },
     error::{OpmResult, OpossumError},
     gain::{Extraction, Inversion},
     geometry::body::Body,
-    light::{LightData, LightRays, LightResult, Rays},
+    light::{LightData, LightRays, LightResult, Rays, rays::ReflectedPart},
     material::{MATERIAL, Material},
     properties::{Proptype, proptype::AssetRef},
 };
@@ -118,16 +118,15 @@ pub trait Volumetric: OpticNode {
         // data, and potentially gain.
         let material_inside = self.material()?;
         let backward = self.inverted();
-        // The rays are meant to be refracted at both surfaces of the volume, not just traced to them.
-        let refraction_intended = true;
-        // Refraction at a surface is governed by the index alone, so only that is handed down.
+        // The rays are meant to be refracted at both surfaces of the volume, not just traced to
+        // them; what is reflected there is a ghost. Refraction is governed by the index alone.
         self.pass_through_surface_generic(
             entry_surf_name,
-            Some(material_inside.refractive_index_type().clone()),
+            &Refraction(Some(material_inside.refractive_index_type())),
             rays_bundle,
             strategy,
             backward,
-            refraction_intended,
+            ReflectedPart::Ghost,
         )?;
         let ambient_refr_idx = strategy.ambient_refractive_index();
 
@@ -135,11 +134,11 @@ pub trait Volumetric: OpticNode {
         self.propagate_inside_medium(rays_bundle, strategy)?;
         self.pass_through_surface_generic(
             exit_surf_name,
-            Some(ambient_refr_idx),
+            &Refraction(Some(&ambient_refr_idx)),
             rays_bundle,
             strategy,
             backward,
-            refraction_intended,
+            ReflectedPart::Ghost,
         )?;
         Ok(())
     }
@@ -198,8 +197,8 @@ pub trait Volumetric: OpticNode {
         let node_name = self.name().to_owned();
         let Some((body, inversion)) = self
             .node_attr_mut()
-            .runtime_medium_mut()
-            .and_then(RuntimeMedium::parts_mut)
+            .runtime_mut()
+            .and_then(RuntimeGeometry::medium_mut)
         else {
             return Err(OpossumError::Analysis(format!(
                 "node '{node_name}': medium was not prepared before propagation"
@@ -264,10 +263,7 @@ pub trait Volumetric: OpticNode {
         if strategy.is_positioning_run() {
             return Ok(());
         }
-        let Some((body, inversion)) = self
-            .node_attr()
-            .runtime_medium()
-            .and_then(RuntimeMedium::parts)
+        let Some((body, inversion)) = self.node_attr().runtime().and_then(RuntimeGeometry::medium)
         else {
             return Err(OpossumError::Analysis(format!(
                 "node '{}': medium was not prepared before amplification",
@@ -450,6 +446,7 @@ mod test {
         core_optics::{
             Alignable, PortType,
             node_attr::{HasNodeAttr, NodePositioning},
+            runtime_geometry::RuntimeSurfaces,
         },
         degree,
         gain::{ConstGain, GainModel, MonochromaticSmallSignalGain, PumpScenario, PumpSource},
@@ -648,15 +645,12 @@ mod test {
         lens.prepare_volume(&RayTraceConfig::default())?;
         let (body, _) = lens
             .node_attr()
-            .runtime_medium()
-            .and_then(RuntimeMedium::parts)
+            .runtime()
+            .and_then(RuntimeGeometry::medium)
             .ok_or_else(|| OpossumError::Other("the lens has no medium".into()))?;
         let vertex = |port: &str| -> OpmResult<Point3<Length>> {
             Ok(lens
-                .get_optic_surface(port)
-                .ok_or_else(|| OpossumError::Other(format!("the lens has no surface '{port}'")))?
-                .surface()
-                .frame()
+                .effective_surface_iso(port)?
                 .transform_point(&Point3::origin()))
         };
         let (front, rear) = (vertex("input_1")?, vertex("output_1")?);
@@ -692,15 +686,18 @@ mod test {
         lens.prepare_volume(&config)?;
         // The body is now available even though no gain model was set.
         assert!(
-            lens.node_attr().runtime_medium().is_some(),
+            lens.node_attr()
+                .runtime()
+                .and_then(RuntimeGeometry::medium)
+                .is_some(),
             "prepare_volume must build the body for a passive volume node"
         );
         // And the inversion slot is empty — the body alone does nothing to the rays.
         assert!(
             lens.node_attr()
-                .runtime_medium()
-                .and_then(|m| m.inversion())
-                .is_none(),
+                .runtime()
+                .and_then(RuntimeGeometry::medium)
+                .is_some_and(|(_, inversion)| inversion.is_none()),
             "a passive node must not have an inversion field"
         );
         // The passive contract: no gain model → no energy change, even with a prepared body.
@@ -1113,7 +1110,10 @@ mod test {
         // Seed a body at the current (identity) position, simulating what
         // `init_runtime_medium` used to do inside `after_deserialization_hook`.
         let identity_body = placed_geometry(&head)?;
-        head.node_attr_mut().set_runtime_body(identity_body);
+        head.node_attr_mut().set_runtime(RuntimeGeometry::new(
+            identity_body,
+            RuntimeSurfaces::default(),
+        )?);
 
         // Move the head 500 mm along z — what `calc_node_positions` does after deserialization.
         head.set_positioning(NodePositioning::Absolute(Isometry::new(
@@ -1121,7 +1121,9 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )?))?;
         // Simulate `reset_data`, which clears only the inversion.
-        head.node_attr_mut().clear_runtime_inversion();
+        if let Some(runtime) = head.node_attr_mut().runtime_mut() {
+            runtime.clear_inversion();
+        }
 
         let mut config = RayTraceConfig::default();
         config.set_active_pump_scenario(Some(scenario_with_small_signal(node_id)?));
@@ -1514,11 +1516,11 @@ mod test {
             f64::exp((head_gain_coefficient() * thickness).value),
             epsilon = 1e-9
         );
-        let Some(rear) = head.get_optic_surface("output_1") else {
-            panic!("the head has no rear surface");
-        };
         assert_abs_diff_eq!(
-            rear.surface().frame().translation().z.value,
+            head.effective_surface_iso("output_1")?
+                .translation()
+                .z
+                .value,
             thickness.value,
             epsilon = 1e-15
         );
@@ -1669,9 +1671,8 @@ mod test {
         Ok(())
     }
     /// A node declares an [`OPTIC_SHAPE`] that bounds a region exactly when its geometry ends
-    /// sideways or records within a window, and every surface it installs carries exactly the
-    /// window of that geometry. The dummy starts with an open optic shape and neither ends sideways
-    /// nor has a window.
+    /// sideways or records within a window, and the geometry it installs has exactly that window.
+    /// The dummy starts with an open optic shape and neither ends sideways nor has a window.
     ///
     /// The extent of a component is stated by the property, decides the hits through the geometry
     /// each surface is a face of, and bounds the medium through the same geometry; all three have to
@@ -1698,14 +1699,14 @@ mod test {
                 "node type '{node_type}' declares a bounding '{OPTIC_SHAPE}' or has a geometry \
                  that ends sideways, but not both"
             );
-            let surfaces = optic_ref.node_attr().runtime_surfaces();
-            for (name, surface) in surfaces.inputs.iter().chain(&surfaces.outputs) {
-                assert_eq!(
-                    surface.window(),
-                    window.as_ref(),
-                    "surface '{name}' of node type '{node_type}'"
-                );
-            }
+            assert_eq!(
+                optic_ref
+                    .node_attr()
+                    .runtime()
+                    .and_then(|installed| installed.geometry().kind().window()),
+                window.as_ref(),
+                "node type '{node_type}'"
+            );
         }
         Ok(())
     }
@@ -1816,7 +1817,11 @@ mod test {
         };
         let medium_is_prepared = |model: &NodeGroup, head: Uuid| -> OpmResult<bool> {
             let head_ref = model.graph().node(head)?;
-            Ok(head_ref.node_attr().runtime_medium().is_some())
+            Ok(head_ref
+                .node_attr()
+                .runtime()
+                .and_then(RuntimeGeometry::medium)
+                .is_some())
         };
 
         // Ray trace

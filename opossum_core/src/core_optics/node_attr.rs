@@ -6,87 +6,15 @@
 
 use nalgebra::Point2;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::collections::BTreeMap;
 use uom::si::f64::Length;
 use uuid::Uuid;
 
 use crate::{
-    core_optics::{OpticPorts, optic_surface::OpticSurface},
+    core_optics::{OpticPorts, runtime_geometry::RuntimeGeometry},
     error::{OpmResult, OpossumError},
-    gain::Inversion,
-    geometry::{Geometry, body::Body},
     properties::{Properties, Proptype, validator::Validator},
     utils::{file_utils::sanitize_filename, geom_transformation::Isometry},
 };
-
-/// Container for runtime state of an optical node.
-#[derive(Default, Debug, Clone)]
-pub struct RuntimeSurfaces {
-    /// Mapping of input port names to optical surfaces.
-    pub inputs: BTreeMap<String, OpticSurface>,
-    /// Mapping of output port names to optical surfaces.
-    pub outputs: BTreeMap<String, OpticSurface>,
-}
-
-impl RuntimeSurfaces {
-    /// Returns an iterator over all mutable optic surfaces (inputs and outputs).
-    pub fn values_mut(&mut self) -> impl Iterator<Item = &mut OpticSurface> {
-        self.inputs.values_mut().chain(self.outputs.values_mut())
-    }
-
-    /// Returns an iterator over all optic surfaces (inputs and outputs) and their port names.
-    pub fn iter(&self) -> impl Iterator<Item = (&String, &OpticSurface)> {
-        self.inputs.iter().chain(self.outputs.iter())
-    }
-}
-
-/// The volume state of a node: the body between its surfaces and the inversion in it.
-///
-/// The counterpart of [`RuntimeSurfaces`] for what lies *between* the surfaces. The body is the
-/// geometry the surfaces are faces of, moved to the node with them (see
-/// [`OpticNodeExt::install_geometry`](crate::core_optics::OpticNodeExt::install_geometry)), which
-/// leaves the inversion empty; [`OpticNode::prepare_volume`](crate::core_optics::OpticNode::prepare_volume)
-/// fills it for an analysis run, and [`OpticNode::reset_data`](crate::core_optics::OpticNode::reset_data)
-/// clears it again.
-#[derive(Debug, Clone)]
-pub struct RuntimeMedium {
-    geometry: Geometry,
-    inversion: Option<Inversion>,
-}
-
-impl RuntimeMedium {
-    /// Return the inversion, if the model built one.
-    #[must_use]
-    pub const fn inversion(&self) -> Option<&Inversion> {
-        self.inversion.as_ref()
-    }
-
-    /// Return the body this node was prepared with and its inversion.
-    ///
-    /// # Returns
-    ///
-    /// The body for geometric queries and the inversion, if the model built one; or `None` if the
-    /// geometry encloses no volume, which [`NodeAttr::set_runtime_body`] does not keep.
-    #[must_use]
-    pub fn parts(&self) -> Option<(&dyn Body, Option<&Inversion>)> {
-        Some((self.geometry.kind().as_body()?, self.inversion.as_ref()))
-    }
-
-    /// Return the body and inversion as a split mutable borrow.
-    ///
-    /// Splits `&mut RuntimeMedium` into an immutable reference to the body and a mutable reference
-    /// to the inversion. The two borrows are valid simultaneously because they target different
-    /// fields of the struct.
-    ///
-    /// # Returns
-    ///
-    /// `(&dyn Body, &mut Option<Inversion>)` — the body for geometric queries and the
-    /// inversion that saturating models may deplete between substeps; or `None` as for
-    /// [`RuntimeMedium::parts`].
-    pub fn parts_mut(&mut self) -> Option<(&dyn Body, &mut Option<Inversion>)> {
-        Some((self.geometry.kind().as_body()?, &mut self.inversion))
-    }
-}
 
 fn deserialize_name<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
@@ -224,9 +152,7 @@ pub struct NodeAttr {
     #[serde(default, skip_serializing_if = "OpticPorts::is_all_default")]
     ports: OpticPorts,
     #[serde(skip)]
-    runtime_surfaces: RuntimeSurfaces,
-    #[serde(skip)]
-    runtime_medium: Option<RuntimeMedium>,
+    runtime: Option<RuntimeGeometry>,
     uuid: Uuid,
     #[serde(default, skip_serializing_if = "Properties::is_empty")]
     props: Properties,
@@ -267,8 +193,7 @@ impl NodeAttr {
             name: node_type.into(),
             props: Properties::default(),
             ports: OpticPorts::default(),
-            runtime_surfaces: RuntimeSurfaces::default(),
-            runtime_medium: None,
+            runtime: None,
             positioning: NodePositioning::Automatic(None),
             inverted: false,
             alignment: None,
@@ -457,50 +382,32 @@ impl NodeAttr {
         self.ports = ports;
     }
 
-    /// Returns a mutable reference to the runtime surfaces.
-    pub const fn runtime_surfaces_mut(&mut self) -> &mut RuntimeSurfaces {
-        &mut self.runtime_surfaces
-    }
-
-    /// Returns a reference to the runtime surfaces.
+    /// Returns the runtime state of this node: its geometry as its surfaces were installed (see
+    /// [`OpticNodeExt::install_geometry`](crate::core_optics::OpticNodeExt::install_geometry)),
+    /// with the optic surfaces and the medium it carries.
+    ///
+    /// # Returns
+    ///
+    /// The runtime state, or `None` if no geometry was installed.
     #[must_use]
-    pub const fn runtime_surfaces(&self) -> &RuntimeSurfaces {
-        &self.runtime_surfaces
+    pub const fn runtime(&self) -> Option<&RuntimeGeometry> {
+        self.runtime.as_ref()
     }
 
-    /// Return the prepared medium for this node, if any.
-    #[must_use]
-    pub const fn runtime_medium(&self) -> Option<&RuntimeMedium> {
-        self.runtime_medium.as_ref()
+    /// Returns the runtime state of this node mutably (see [`NodeAttr::runtime`]).
+    pub const fn runtime_mut(&mut self) -> Option<&mut RuntimeGeometry> {
+        self.runtime.as_mut()
     }
 
-    /// Return a mutable reference to the prepared medium for this node, if any.
-    pub const fn runtime_medium_mut(&mut self) -> Option<&mut RuntimeMedium> {
-        self.runtime_medium.as_mut()
-    }
-
-    /// Stores the body of this node as its medium, with an empty inversion.
+    /// Sets the runtime state of this node: its geometry, moved to where the node sits, with the
+    /// optic surfaces on its faces. It replaces the runtime state set before, with everything an
+    /// analysis left on it.
     ///
     /// # Arguments
     ///
-    /// * `geometry` - the geometry of the node, moved to where the node sits. A geometry that
-    ///   encloses no volume leaves the node without a medium.
-    pub fn set_runtime_body(&mut self, geometry: Geometry) {
-        self.runtime_medium = geometry
-            .kind()
-            .as_body()
-            .is_some()
-            .then_some(RuntimeMedium {
-                geometry,
-                inversion: None,
-            });
-    }
-
-    /// Clears the inversion field of the prepared medium between analysis runs.
-    pub fn clear_runtime_inversion(&mut self) {
-        if let Some(medium) = self.runtime_medium.as_mut() {
-            medium.inversion = None;
-        }
+    /// * `runtime` - the new runtime state.
+    pub fn set_runtime(&mut self, runtime: RuntimeGeometry) {
+        self.runtime = Some(runtime);
     }
 
     /// Returns the unique identifier of this node.
@@ -557,6 +464,8 @@ mod test {
     use super::*;
     use crate::{
         apertures::{CircleShape, Outline},
+        core_optics::runtime_geometry::RuntimeSurfaces,
+        geometry::Geometry,
         millimeter,
     };
 
@@ -642,42 +551,25 @@ mod test {
     }
 
     #[test]
-    fn runtime_medium_starts_unset() {
-        assert!(NodeAttr::new("test").runtime_medium().is_none());
+    fn the_runtime_state_starts_unset() {
+        assert!(NodeAttr::new("test").runtime().is_none());
     }
 
     #[test]
-    fn a_single_surface_leaves_a_node_without_a_medium() -> OpmResult<()> {
+    fn runtime_state_is_not_in_ron_roundtrip() -> OpmResult<()> {
         let mut attr = NodeAttr::new("test");
-        attr.set_runtime_body(test_body()?);
-        attr.set_runtime_body(Geometry::plane(None));
-        assert!(attr.runtime_medium().is_none());
-        Ok(())
-    }
-
-    #[test]
-    fn set_and_clear_runtime_inversion() -> OpmResult<()> {
-        let mut attr = NodeAttr::new("test");
-        attr.set_runtime_body(test_body()?);
-        assert!(attr.runtime_medium().is_some());
-        attr.clear_runtime_inversion();
-        assert!(attr.runtime_medium().is_some());
-        assert!(attr.runtime_medium().unwrap().inversion().is_none());
-        Ok(())
-    }
-
-    #[test]
-    fn runtime_medium_is_not_in_ron_roundtrip() -> OpmResult<()> {
-        let mut attr = NodeAttr::new("test");
-        attr.set_runtime_body(test_body()?);
+        attr.set_runtime(RuntimeGeometry::new(
+            test_body()?,
+            RuntimeSurfaces::default(),
+        )?);
         let serialized = ron::to_string(&attr).map_err(|e| OpossumError::Other(e.to_string()))?;
         assert!(
-            !serialized.contains("runtime_medium"),
-            "runtime_medium must not be serialized: {serialized}"
+            !serialized.contains("runtime"),
+            "the runtime state must not be serialized: {serialized}"
         );
         let back: NodeAttr =
             ron::from_str(&serialized).map_err(|e| OpossumError::Other(e.to_string()))?;
-        assert!(back.runtime_medium().is_none());
+        assert!(back.runtime().is_none());
         Ok(())
     }
 
