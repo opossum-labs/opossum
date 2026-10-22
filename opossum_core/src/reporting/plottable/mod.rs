@@ -2225,7 +2225,7 @@ impl PlotParameters {
 }
 
 /// Struct that holds all necessary attributes to describe a plot series
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PlotSeries {
     data: PlotData,
     color: RGBAColor,

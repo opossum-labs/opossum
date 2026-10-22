@@ -42,7 +42,6 @@ use crate::{
     },
     utils::{default_from_name::DefaultFromName, math_distribution_functions::ellipse},
 };
-use core::f64;
 use nalgebra::{Matrix2xX, MatrixXx2, Point2, Point3};
 use num_traits::Zero;
 use opm_macros_lib::EnsureValidated;
