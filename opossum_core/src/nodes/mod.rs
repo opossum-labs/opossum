@@ -43,7 +43,7 @@ pub(crate) mod test_helper;
 mod thin_mirror;
 mod wavefront;
 mod wedge;
-pub use beam_splitter::{BeamSplitter, SplittingConfig, SplittingConfigBuilder};
+pub use beam_splitter::BeamSplitter;
 pub use cylindric_lens::CylindricLens;
 pub use dummy::Dummy;
 pub use energy_meter::{EnergyMeter, Metertype};

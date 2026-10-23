@@ -86,7 +86,7 @@ impl OpticSurface {
         }
     }
     /// Sets the coating of this [`OpticSurface`].
-    pub const fn set_coating(&mut self, coating: CoatingType) {
+    pub fn set_coating(&mut self, coating: CoatingType) {
         self.coating = coating;
     }
     /// Returns a reference to the coating of this [`OpticSurface`].

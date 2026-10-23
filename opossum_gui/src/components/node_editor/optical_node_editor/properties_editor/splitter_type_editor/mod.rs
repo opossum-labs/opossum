@@ -9,7 +9,7 @@ use crate::components::node_editor::{
     },
 };
 use dioxus::prelude::*;
-use opossum_core::{nodes::SplittingConfigBuilder, utils::default_from_name::DefaultFromName};
+use opossum_core::{coatings::SplittingConfigBuilder, utils::default_from_name::DefaultFromName};
 use uuid::Uuid;
 
 #[component]

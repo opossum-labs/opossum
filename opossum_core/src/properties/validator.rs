@@ -6,8 +6,9 @@ use uom::si::{angle::degree, f64::Angle};
 
 use crate::{
     apertures::OpticShape,
+    coatings::SplittingConfigBuilder,
     error::{OpmResult, OpossumError},
-    nodes::{SplittingConfigBuilder, ideal_filter::FilterTypeBuilder},
+    nodes::ideal_filter::FilterTypeBuilder,
     properties::Proptype,
 };
 

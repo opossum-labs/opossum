@@ -664,20 +664,16 @@ mod test {
     use crate::{
         analyzers::RayTraceConfig,
         apertures::CircleShape,
-        coatings::{CoatingConstantR, CoatingType},
+        coatings::{CoatingConstantR, CoatingType, SplittingConfig, SplittingConfigBuilder},
         core_optics::surface_effect::Refraction,
         degree,
         distributions::{fluence::general_gaussian::General2DGaussian, position::Hexapolar},
         gain::Inversion,
         geometry::{Parabola, Part, Side, Sphere},
         joule,
-        light::Spectrum,
         material::Material,
         meter, millimeter, nanometer,
-        nodes::{
-            SplittingConfig,
-            ideal_filter::{EdgeFilter, EdgeFilterType},
-        },
+        nodes::ideal_filter::{EdgeFilter, EdgeFilterType, SpectralFilterBuilder},
         percent,
         properties::proptype::AssetRef,
         radian,
@@ -1385,18 +1381,20 @@ mod test {
         assert!(reflected.parent_id().is_none());
         Ok(())
     }
-    #[test]
-    fn splitting_by_spectrum() -> OpmResult<()> {
-        let spectrum: Spectrum = EdgeFilter::new(
+    /// A short pass transmitting below 1000 nm, defined from 500 nm to 1500 nm.
+    fn short_pass() -> OpmResult<EdgeFilter> {
+        EdgeFilter::new(
             EdgeFilterType::ShortPass,
             nanometer!(1000.0),
             0.0..1.0,
             None,
             nanometer!(500.0)..nanometer!(1500.0),
             nanometer!(1.0),
-        )?
-        .into();
-        let config = SplittingConfig::Spectrum(spectrum);
+        )
+    }
+    #[test]
+    fn splitting_by_spectrum() -> OpmResult<()> {
+        let config = SplittingConfig::Spectrum(short_pass()?.into());
         let mut rays = Rays::default();
         rays.add_ray(collimated_ray_along_z(nanometer!(999.0))?);
         rays.add_ray(collimated_ray_along_z(nanometer!(1001.0))?);
@@ -1407,6 +1405,43 @@ mod test {
 
         let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1501.0))?);
         assert!(split(&mut plane, &mut rays, &config).is_err());
+        Ok(())
+    }
+    /// Split a bundle at face 0 of the given component by the coating of its surface, keeping
+    /// both parts.
+    fn split_by_coating(geometry: &mut Geometry, rays: &mut Rays) -> OpmResult<Rays> {
+        geometry.interact_with_rays(
+            FaceIndex::new(0),
+            rays,
+            &Refraction(None),
+            ReflectedPart::Branch,
+            MissedSurfaceStrategy::Stop,
+        )
+    }
+    #[test]
+    fn a_separator_coating_splits_like_its_configuration() -> OpmResult<()> {
+        let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1000.0))?);
+        let separator = SplittingConfigBuilder::FixedRatio(0.6).into();
+        let mut plane = coated(tilted_splitting_plane()?, separator)?;
+        let reflected = split_by_coating(&mut plane, &mut rays)?;
+        assert_abs_diff_eq!(rays.total_energy().get::<joule>(), 0.6);
+        assert_abs_diff_eq!(reflected.total_energy().get::<joule>(), 0.4);
+        Ok(())
+    }
+    #[test]
+    fn a_separator_coating_splits_by_spectrum() -> OpmResult<()> {
+        let separator =
+            SplittingConfigBuilder::Spectrum(SpectralFilterBuilder::EdgeFilter(short_pass()?));
+        let mut plane = coated(tilted_splitting_plane()?, separator.into())?;
+        let mut rays = Rays::default();
+        rays.add_ray(collimated_ray_along_z(nanometer!(999.0))?);
+        rays.add_ray(collimated_ray_along_z(nanometer!(1001.0))?);
+        let reflected = split_by_coating(&mut plane, &mut rays)?;
+        assert_eq!(energies(&rays), [joule!(1.0), joule!(0.0)]);
+        assert_eq!(energies(&reflected), [joule!(0.0), joule!(1.0)]);
+
+        let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1501.0))?);
+        assert!(split_by_coating(&mut plane, &mut rays).is_err());
         Ok(())
     }
     #[test]

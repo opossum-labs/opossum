@@ -12,15 +12,16 @@ use uom::si::f64::Ratio;
 mod constant_r;
 mod fresnel;
 mod ideal_ar;
+mod separator;
 
 pub use constant_r::CoatingConstantR;
 pub use fresnel::Fresnel;
 pub use ideal_ar::IdealAR;
+pub use separator::{SplittingConfig, SplittingConfigBuilder};
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, IntoEnumIterator};
-use utoipa::ToSchema;
 
-#[derive(Default, Serialize, Deserialize, Debug, Clone, ToSchema, PartialEq, EnumIter)]
+#[derive(Default, Serialize, Deserialize, Debug, Clone, PartialEq, EnumIter)]
 /// Enum for different types of optical coatings
 pub enum CoatingType {
     /// Perfect anti-reflective coating. Reflectivity is always 0.0
@@ -30,6 +31,24 @@ pub enum CoatingType {
     ConstantR(CoatingConstantR),
     /// Fesnel reflection (e.g. uncoated surface)
     Fresnel,
+    /// Splits by a [`SplittingConfig`]: transmits a fixed ratio or a spectrum and reflects the rest,
+    /// whatever the angle of incidence
+    Separator(SplittingConfigBuilder),
+}
+impl CoatingType {
+    /// Return whether this coating is physically possible: a separator must transmit within
+    /// `[0.0, 1.0]`. A constant reflectivity is checked when it is created.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the transmission spectrum of a separator cannot be read
+    /// from its file.
+    pub fn is_valid(&self) -> OpmResult<bool> {
+        match self {
+            Self::IdealAR | Self::ConstantR(_) | Self::Fresnel => Ok(true),
+            Self::Separator(config) => config.is_valid(),
+        }
+    }
 }
 impl TryFrom<&CoatingType> for Box<dyn Coating> {
     type Error = OpossumError;
@@ -44,6 +63,7 @@ impl TryFrom<&CoatingType> for Box<dyn Coating> {
             CoatingType::IdealAR => Box::new(IdealAR),
             CoatingType::ConstantR(constant_r) => Box::new(*constant_r),
             CoatingType::Fresnel => Box::new(Fresnel),
+            CoatingType::Separator(config) => Box::new(config.build()?),
         })
     }
 }
@@ -53,6 +73,7 @@ impl Display for CoatingType {
             Self::ConstantR { .. } => write!(f, "Constant Reflectivity"),
             Self::IdealAR => write!(f, "Ideal AR"),
             Self::Fresnel => write!(f, "uncoated (Fresnel)"),
+            Self::Separator(_) => write!(f, "Separator"),
         }
     }
 }
@@ -66,6 +87,9 @@ impl DefaultFromName for CoatingType {
                     }
                     Self::IdealAR => return Some(Self::IdealAR),
                     Self::Fresnel => return Some(Self::Fresnel),
+                    Self::Separator(_) => {
+                        return Some(Self::Separator(SplittingConfigBuilder::default()));
+                    }
                 }
             }
         }
@@ -112,6 +136,29 @@ mod test {
             0.2
         );
         assert_abs_diff_eq!(reflectivity(CoatingType::Fresnel)?, 0.04);
+        assert_abs_diff_eq!(
+            reflectivity(SplittingConfigBuilder::FixedRatio(0.6).into())?,
+            0.4
+        );
+        Ok(())
+    }
+    #[test]
+    fn every_coating_type_has_a_default_by_its_name() {
+        for coating in CoatingType::iter() {
+            assert!(
+                CoatingType::default_from_name(&coating.to_string()).is_some(),
+                "{coating}"
+            );
+        }
+    }
+    #[test]
+    fn a_separator_must_transmit_within_zero_and_one() -> OpmResult<()> {
+        for transmission in [0.0, 0.5, 1.0] {
+            assert!(CoatingType::Separator(transmission.into()).is_valid()?);
+        }
+        for transmission in [-0.01, 1.01] {
+            assert!(!CoatingType::Separator(transmission.into()).is_valid()?);
+        }
         Ok(())
     }
 }

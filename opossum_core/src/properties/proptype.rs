@@ -4,6 +4,7 @@
 use crate::{
     analyzers::ghostfocus::GhostFocusHistory,
     apertures::OpticShape,
+    coatings::SplittingConfigBuilder,
     core_optics::{
         SurfaceConfig,
         hit_map::{HitMap, fluence_estimator::FluenceEstimator},
@@ -19,8 +20,7 @@ use crate::{
     },
     material::Material,
     nodes::{
-        Metertype, SpectrometerType, SplittingConfigBuilder, SpotDiagramData, WaveFrontMap,
-        WavefrontDecomposition,
+        Metertype, SpectrometerType, SpotDiagramData, WaveFrontMap, WavefrontDecomposition,
         fluence_detector::{Fluence, fluence_data::FluenceData},
         ideal_filter::FilterTypeBuilder,
         ray_propagation_visualizer::RayPositionHistories,
@@ -131,7 +131,7 @@ pub enum Proptype {
     // FilterType(FilterType),
     /// Property for storing a [`FilterTypeBuilder`] of an [`IdealFilter`](crate::nodes::IdealFilter) node.
     FilterTypeBuilder(FilterTypeBuilder),
-    /// Property for storing a [`SplittingConfig`](crate::nodes::SplittingConfig) of an [`BeamSplitter`](crate::nodes::BeamSplitter) node.
+    /// Property for storing a [`SplittingConfig`](crate::coatings::SplittingConfig) of an [`BeamSplitter`](crate::nodes::BeamSplitter) node.
     SplittingConfigBuilder(SplittingConfigBuilder),
     /// Property for storing a [`SpectrometerType`] of a [`Sepctrometer`](crate::nodes::Spectrometer) node.
     SpectrometerType(SpectrometerType),

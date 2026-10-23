@@ -12,14 +12,14 @@ use uom::si::{
 };
 
 use crate::{
-    coatings::Coating,
+    coatings::{Coating, SplittingConfig},
     core_optics::hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint},
     error::{OpmResult, OpossumError},
     geometry::SurfaceHit,
     joule,
     light::{FluenceRays, Rays},
     meter,
-    nodes::{FilterType, SplittingConfig, fluence_detector::Fluence},
+    nodes::{FilterType, fluence_detector::Fluence},
     percent,
     utils::{geom_transformation::Isometry, math_utils::distance_3d_point},
 };
@@ -817,10 +817,7 @@ mod test {
         joule,
         light::Spectrum,
         millimeter, nanometer,
-        nodes::{
-            SplittingConfig,
-            ideal_filter::{EdgeFilter, EdgeFilterType, FilterConst},
-        },
+        nodes::ideal_filter::{EdgeFilter, EdgeFilterType, FilterConst},
         percent,
     };
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_relative_eq, relative_eq};

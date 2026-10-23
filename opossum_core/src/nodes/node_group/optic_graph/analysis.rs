@@ -582,10 +582,11 @@ impl OpticGraph {
 mod test {
     use super::*;
     use crate::{
+        coatings::SplittingConfigBuilder,
         core_optics::OpticNode,
         core_optics::PortType,
         light::spectrum_helper::create_he_ne_spec,
-        nodes::{BeamSplitter, Dummy, NodeReference, SourcePort, SplittingConfigBuilder},
+        nodes::{BeamSplitter, Dummy, NodeReference, SourcePort},
         utils::{geom_transformation::Isometry, test_helper::helper::check_logs},
     };
     use approx::assert_abs_diff_eq;

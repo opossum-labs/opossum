@@ -5,6 +5,7 @@ use crate::{
         AnalyzerType, RayTraceConfig, propagation_strategy::PropagationStrategy,
         raytrace::AnalysisRayTrace,
     },
+    coatings::SplittingConfig,
     core_optics::{NodeAttrExt, OpticNodeExt, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
     light::{LightData, LightResult, Rays, rays::ReflectedPart},
@@ -12,7 +13,7 @@ use crate::{
     utils::geom_transformation::Isometry,
 };
 
-use super::{BeamSplitter, SplittingConfig};
+use super::BeamSplitter;
 
 impl AnalysisRayTrace for BeamSplitter {
     /// Splits the rays arriving at both inputs on the splitting surface and merges them per output.
@@ -216,6 +217,7 @@ mod test {
 
     use crate::{
         analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
+        coatings::SplittingConfigBuilder,
         core_optics::{OpticNode, OpticNodeExt, node_attr::NodePositioning},
         degree,
         error::OpmResult,
@@ -223,8 +225,8 @@ mod test {
         light::{LightData, LightResult, Ray, Rays},
         millimeter, nanometer,
         nodes::{
-            BeamSplitter, Dummy, NodeGroup, NodeReference, SourcePort, SplittingConfigBuilder,
-            ThinMirror, round_collimated_ray_builder,
+            BeamSplitter, Dummy, NodeGroup, NodeReference, SourcePort, ThinMirror,
+            round_collimated_ray_builder,
         },
         prelude::{AnalyzerType, OpmDocument},
         utils::geom_transformation::Isometry,
