@@ -13,12 +13,12 @@ use crate::{
         raytrace::AnalysisRayTrace,
     },
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, node_attr::HasNodeAttr,
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, SurfacePorts, node_attr::HasNodeAttr,
         optic_node::APERTURE_LIMIT_NOTE,
     },
     error::OpmResult,
     geometry::{
-        Geometry, SurfaceGeometry, SurfaceShape,
+        Geometry, SurfaceShape,
         body::{OPTIC_SHAPE, default_square_optic_shape},
     },
     joule,
@@ -120,6 +120,8 @@ impl Default for EnergyMeter {
             node_attr,
             apodization_warning: false,
         };
+        em.create_default_surface_properties()
+            .expect("Hardcoded property creation must not fail");
         em.update_surfaces()
             .expect("Updating surfaces on default energy meter must not fail");
         em
@@ -197,25 +199,26 @@ impl EnergyMeter {
 }
 
 impl OpticNode for EnergyMeter {
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::detector(
             SurfaceShape::Plane,
             self.cross_section()?,
         )?))
     }
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(
-            &[("input_1", SurfaceGeometry::FACE)],
-            &[("output_1", SurfaceGeometry::FACE)],
-        )
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::SINGLE_SURFACE
     }
 
     fn reset_data(&mut self) {
         self.set_light_data(None);
         self.apodization_warning = false;
         self.reset_optic_surfaces();
-        if let Some(runtime) = self.node_attr_mut().runtime_mut() {
-            runtime.clear_inversion();
+        if let Some(body) = self
+            .node_attr_mut()
+            .runtime_geometry_mut()
+            .and_then(|geometry| geometry.kind_mut().as_body_mut())
+        {
+            *body.inversion_mut() = None;
         }
     }
 

@@ -8,7 +8,7 @@ use crate::{
     analyzers::{AnalyzerType, propagation_strategy::MissedSurfaceStrategy},
     coatings::{CoatingConstantR, CoatingType},
     core_optics::{
-        NodeAttr, OpticNode, OpticNodeExt, PortType, hit_map::rays_hit_map::HitPoint,
+        NodeAttr, OpticNode, OpticNodeExt, PortType, SurfacePorts, hit_map::rays_hit_map::HitPoint,
         node_attr::HasNodeAttr, surface_effect::SurfaceEffect,
     },
     error::{OpmResult, OpossumError},
@@ -260,6 +260,7 @@ impl Default for BeamSplitter {
             )
             .unwrap();
         let mut bs = Self { node_attr };
+        bs.create_default_surface_properties().unwrap();
         bs.update_surfaces().unwrap();
         bs
     }
@@ -397,13 +398,14 @@ impl BeamSplitter {
             )));
         };
         let mut rays = rays.clone();
-        let Some(runtime) = self.node_attr_mut().runtime_mut() else {
+        let face = self.face_of_port(port_name)?;
+        let Some(geometry) = self.node_attr_mut().runtime_geometry_mut() else {
             return Err(OpossumError::OpticPort(format!(
                 "Input optic surface not found for port '{port_name}'"
             )));
         };
-        let reflected = runtime.interact(
-            port_name,
+        let reflected = geometry.interact_with_rays(
+            face,
             &mut rays,
             splitting_config,
             ReflectedPart::Branch,
@@ -460,20 +462,20 @@ impl BeamSplitter {
     }
 }
 impl OpticNode for BeamSplitter {
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::plane(self.cross_section()?)))
     }
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(
-            &[
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts {
+            inputs: &[
                 ("input_1", SurfaceGeometry::FACE),
                 ("input_2", SurfaceGeometry::FACE),
             ],
-            &[
+            outputs: &[
                 ("out1_trans1_refl2", SurfaceGeometry::FACE),
                 ("out2_trans2_refl1", SurfaceGeometry::FACE),
             ],
-        )
+        }
     }
 }
 #[cfg(test)]

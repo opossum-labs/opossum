@@ -2,14 +2,15 @@
 //! Solids bounded by several faces, each stating which of its sides is inside.
 
 use nalgebra::Point3;
-use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 use super::{Side, face_hits};
 use crate::{
+    core_optics::optic_surface::OpticSurface,
     error::{OpmResult, OpossumError},
+    gain::Inversion,
     geometry::{
-        Face, Geometry, GeometryKind, Rim,
+        Face, FaceIndex, GeometryKind, Rim,
         body::{Body, BoundingBox},
     },
     light::Ray,
@@ -20,10 +21,11 @@ use crate::{
 ///
 /// Built from flat faces only, such a solid is always convex (prisms, corner cubes, roof prisms);
 /// curved faces with their outside as inner side also allow concave shapes.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ParametricSolid {
     frame: Isometry,
-    faces: Vec<(Face, Side)>,
+    faces: Vec<(OpticSurface, Side)>,
+    inversion: Option<Inversion>,
 }
 
 impl ParametricSolid {
@@ -44,20 +46,12 @@ impl ParametricSolid {
         }
         Ok(Self {
             frame: Isometry::identity(),
-            faces,
-        })
-    }
-    /// Return this solid moved by an isometry (see [`Geometry::moved`]).
-    #[must_use]
-    pub fn moved(&self, by: &Isometry) -> Self {
-        Self {
-            frame: by.append(&self.frame),
-            faces: self
-                .faces
-                .iter()
-                .map(|(face, side)| (face.moved(by), *side))
+            faces: faces
+                .into_iter()
+                .map(|(face, side)| (face.into(), side))
                 .collect(),
-        }
+            inversion: None,
+        })
     }
     /// Return, for every face in the order they are numbered, whether the point lies on the side of
     /// it that is inside the solid.
@@ -68,7 +62,7 @@ impl ParametricSolid {
     fn inner_sides<'a>(&'a self, point: &'a Point3<Length>) -> impl Iterator<Item = bool> + 'a {
         self.faces
             .iter()
-            .map(move |(face, side)| side.contains(face.is_behind(point)))
+            .map(move |(surface, side)| side.contains(surface.face().is_behind(point)))
     }
 }
 
@@ -76,18 +70,31 @@ impl ParametricSolid {
 /// the inner side of every *other* face. As for every component, a face is the part of its surface
 /// on the sheet through its vertex.
 impl GeometryKind for ParametricSolid {
-    fn face(&self, index: usize) -> Option<&Face> {
-        self.faces.get(index).map(|(face, _)| face)
+    fn surface(&self, face: FaceIndex) -> Option<&OpticSurface> {
+        self.faces
+            .get(usize::from(face))
+            .map(|(surface, _)| surface)
+    }
+    fn surface_mut(&mut self, face: FaceIndex) -> Option<&mut OpticSurface> {
+        self.faces
+            .get_mut(usize::from(face))
+            .map(|(surface, _)| surface)
     }
     fn face_count(&self) -> usize {
         self.faces.len()
     }
-    fn includes(&self, face: usize, point: &Point3<Length>) -> bool {
-        GeometryKind::face(self, face).is_some_and(|surface| surface.is_on_vertex_sheet(point))
+    /// The faces are named in the order they are numbered, counting from "surface 1".
+    fn face_name(&self, face: FaceIndex) -> Option<String> {
+        let index = usize::from(face);
+        (index < self.faces.len()).then(|| format!("surface {}", index + 1))
+    }
+    fn includes(&self, face: FaceIndex, point: &Point3<Length>) -> bool {
+        GeometryKind::surface(self, face)
+            .is_some_and(|surface| surface.face().is_on_vertex_sheet(point))
             && self
                 .inner_sides(point)
                 .enumerate()
-                .all(|(index, inside)| index == face || inside)
+                .all(|(index, inside)| FaceIndex::new(index) == face || inside)
     }
     fn window(&self) -> Option<&Rim> {
         None
@@ -95,8 +102,14 @@ impl GeometryKind for ParametricSolid {
     fn as_body(&self) -> Option<&dyn Body> {
         Some(self)
     }
-    fn moved(&self, by: &Isometry) -> Geometry {
-        Geometry::Parametric(Self::moved(self, by))
+    fn as_body_mut(&mut self) -> Option<&mut dyn Body> {
+        Some(self)
+    }
+    fn move_by(&mut self, by: &Isometry) {
+        self.frame = by.append(&self.frame);
+        for (surface, _) in &mut self.faces {
+            surface.move_by(by);
+        }
     }
 }
 
@@ -107,7 +120,7 @@ impl Body for ParametricSolid {
         self.inner_sides(point).all(|inside| inside)
     }
     fn path_length_inside(&self, ray: &Ray) -> Option<Length> {
-        let faces = self.faces.iter().map(|(face, _)| face);
+        let faces = self.faces.iter().map(|(surface, _)| surface.face());
         let hits = face_hits(faces, ray, |face, point| self.includes(face, point));
         self.chord_through(ray.position(), ray.direction(), hits)
     }
@@ -125,8 +138,14 @@ impl Body for ParametricSolid {
     fn isometry(&self) -> Isometry {
         self.frame
     }
-    fn side(&self, face: usize) -> Option<Side> {
-        self.faces.get(face).map(|(_, side)| *side)
+    fn side(&self, face: FaceIndex) -> Option<Side> {
+        self.faces.get(usize::from(face)).map(|(_, side)| *side)
+    }
+    fn inversion(&self) -> Option<&Inversion> {
+        self.inversion.as_ref()
+    }
+    fn inversion_mut(&mut self) -> &mut Option<Inversion> {
+        &mut self.inversion
     }
 }
 
@@ -180,7 +199,9 @@ mod test {
     }
     /// The block placed at the given node frame.
     fn placed_block(node_frame: &Isometry) -> OpmResult<ParametricSolid> {
-        Ok(block()?.moved(node_frame))
+        let mut block = block()?;
+        block.move_by(node_frame);
+        Ok(block)
     }
     fn test_ray(position: Point3<Length>, direction: Vector3<f64>) -> OpmResult<Ray> {
         Ray::new(position, direction, nanometer!(1053.0), joule!(1.0))
@@ -214,11 +235,15 @@ mod test {
             ),
         ])?;
         let frame = Isometry::new_along_z(millimeter!(100.0))?;
-        let moved = solid.moved(&frame);
+        let mut moved = solid.clone();
+        moved.move_by(&frame);
         assert_eq!(moved.face_count(), 3);
         assert!(moved.window().is_none());
         for (index, z) in [0.0, 10.0, 2.0].into_iter().enumerate() {
-            let (Some(face), Some(moved_face)) = (solid.face(index), moved.face(index)) else {
+            let (Some(face), Some(moved_face)) = (
+                solid.surface(FaceIndex::new(index)).map(OpticSurface::face),
+                moved.surface(FaceIndex::new(index)).map(OpticSurface::face),
+            ) else {
                 return Err(OpossumError::Other(format!("there is no face {index}")));
             };
             assert_abs_diff_eq!(
@@ -299,7 +324,7 @@ mod test {
             (6, (0.0, 0.0, 5.0), false),
         ] {
             assert_eq!(
-                block.includes(face, &millimeter!(x, y, z)),
+                block.includes(FaceIndex::new(face), &millimeter!(x, y, z)),
                 included,
                 "face {face} at ({x}, {y}, {z})"
             );
@@ -379,16 +404,19 @@ mod test {
             Isometry::new_along_z(millimeter!(20.0))?,
         );
         let cut = dome_with(rear, Side::InFront)?;
-        assert!(cut.includes(0, &millimeter!(10.0, 0.0, on_sphere(10.0))));
-        assert!(!cut.includes(0, &millimeter!(36.0, 0.0, on_sphere(36.0))));
+        assert!(cut.includes(FaceIndex::new(0), &millimeter!(10.0, 0.0, on_sphere(10.0))));
+        assert!(!cut.includes(FaceIndex::new(0), &millimeter!(36.0, 0.0, on_sphere(36.0))));
         // A face that cuts nothing: the far half of the sphere is still no part of the front face.
         let behind_the_vertex = Face::new(
             SurfaceShape::Plane,
             Isometry::new_along_z(millimeter!(-10.0))?,
         );
         let uncut = dome_with(behind_the_vertex, Side::Behind)?;
-        assert!(uncut.includes(0, &millimeter!(10.0, 0.0, on_sphere(10.0))));
-        assert!(!uncut.includes(0, &millimeter!(10.0, 0.0, 80.0 - on_sphere(10.0))));
+        assert!(uncut.includes(FaceIndex::new(0), &millimeter!(10.0, 0.0, on_sphere(10.0))));
+        assert!(!uncut.includes(
+            FaceIndex::new(0),
+            &millimeter!(10.0, 0.0, 80.0 - on_sphere(10.0))
+        ));
         Ok(())
     }
     #[test]

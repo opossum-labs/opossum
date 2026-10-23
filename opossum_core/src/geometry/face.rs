@@ -2,9 +2,11 @@
 //! One optical surface of a component: its shape and the frame of its vertex.
 //!
 //! A [`Face`] is a [`SurfaceShape`] at a frame. Stated relative to the component it belongs to, it
-//! can be compared and stored; moved to where the component sits (see [`Face::moved`]), it is what
+//! can be compared and stored; moved to where the component sits (see [`Face::move_by`]), it is what
 //! rays are intersected with. The math of the shape is done in the vertex frame (see
 //! [`GeoSurface`]); the face turns rays and points into that frame and back.
+
+use std::fmt::{self, Display, Formatter};
 
 use nalgebra::{Point2, Point3, Vector3};
 use serde::{Deserialize, Serialize};
@@ -17,6 +19,33 @@ use crate::{
     nanometer, radian,
     utils::geom_transformation::Isometry,
 };
+
+/// The number of a face in its geometry: its position among the faces the geometry has (see
+/// [`GeometryKind`](crate::geometry::GeometryKind)).
+///
+/// An extruded solid has its front face as 0 and its rear face as 1, a surface has the one face 0.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FaceIndex(usize);
+
+impl FaceIndex {
+    /// Create the number of the face at the given position in its geometry.
+    #[must_use]
+    pub const fn new(position: usize) -> Self {
+        Self(position)
+    }
+}
+
+impl From<FaceIndex> for usize {
+    fn from(index: FaceIndex) -> Self {
+        index.0
+    }
+}
+
+impl Display for FaceIndex {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 /// One optical surface of a component: its [`SurfaceShape`] and the frame of its vertex.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -51,21 +80,13 @@ impl Face {
     pub fn surface(&self) -> &dyn GeoSurface {
         self.shape.as_geo_surface()
     }
-    /// Return this face moved by an isometry.
+    /// Move this face by an isometry: its vertex frame becomes `by` followed by its own frame.
     ///
     /// # Arguments
     ///
     /// * `by` - the frame this face is stated in, given in the frame it is moved to.
-    ///
-    /// # Returns
-    ///
-    /// The face with its vertex frame at `by` followed by its own frame.
-    #[must_use]
-    pub fn moved(&self, by: &Isometry) -> Self {
-        Self {
-            shape: self.shape.clone(),
-            frame: by.append(&self.frame),
-        }
+    pub fn move_by(&mut self, by: &Isometry) {
+        self.frame = by.append(&self.frame);
     }
     /// Calculate the intersection point of a [`Ray`] with the unbounded surface of this face and
     /// the normal there.
@@ -202,7 +223,8 @@ mod test {
             SurfaceShape::Cylinder(Cylinder::new(millimeter!(50.0))?),
             Isometry::new_along_z(millimeter!(2.0))?,
         );
-        let moved = face.moved(&node_frame);
+        let mut moved = face.clone();
+        moved.move_by(&node_frame);
         assert_eq!(*moved.frame(), node_frame.append(face.frame()));
         let ray = Ray::new(
             node_frame.transform_point(&millimeter!(0.0, 0.0, -10.0)),
@@ -232,7 +254,9 @@ mod test {
         let at = |z: f64| Isometry::new_along_z(millimeter!(z));
         let face = sphere(50.0, at(5.0)?)?;
         // the same surface moved there from another frame, or differing by rounding noise only
-        assert!(face.coincides_with(&sphere(50.0, at(2.0)?)?.moved(&at(3.0)?)));
+        let mut shifted = sphere(50.0, at(2.0)?)?;
+        shifted.move_by(&at(3.0)?);
+        assert!(face.coincides_with(&shifted));
         assert!(face.coincides_with(&sphere(50.0 + 1.0e-10, at(5.0)?)?));
         // another radius, another place, the axis flipped, another shape
         for other in [

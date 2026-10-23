@@ -13,6 +13,7 @@ mod material_property_editor;
 mod optic_shape_editor;
 mod splitter_type_editor;
 mod string_editor;
+mod surface_config_editor;
 mod vec2_editor;
 mod vec3_editor;
 
@@ -27,6 +28,7 @@ use crate::components::node_editor::{
         length_option_editor::LengthOptionEditor, linear_density_editor::LinearDensityEditor,
         material_property_editor::MaterialPropertyEditor, optic_shape_editor::OpticShapeEditor,
         splitter_type_editor::SplitterTypeEditor, string_editor::StringEditor,
+        surface_config_editor::SurfaceConfigEditor,
         vec2_editor::Vec2Editor, vec3_editor::Vec3Editor,
     },
 };
@@ -229,6 +231,15 @@ fn get_optical_editor(
             }
         }),
         Proptype::LightDataBuilder(_light_data_builder) => Some(rsx! { "no longer available" }),
+        Proptype::SurfaceConfig(surface_config) => Some(rsx! {
+            SurfaceConfigEditor {
+                node_id,
+                surface_config,
+                property_key,
+                on_change,
+                readonly,
+            }
+        }),
         _ => None,
     }
 }

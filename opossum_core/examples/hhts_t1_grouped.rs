@@ -1,7 +1,7 @@
 use opossum_core::apertures::CircleShape;
 use opossum_core::coatings::CoatingConstantR;
 use opossum_core::core_optics::{NodeAttrExt, OpticNodeExt};
-use opossum_core::geometry::body::OPTIC_SHAPE;
+use opossum_core::geometry::{Extruded, SurfaceGeometry, body::OPTIC_SHAPE};
 use opossum_core::{J_per_cm2, percent, prelude::*};
 use opossum_core::{
     distributions::energy::General2DGaussian, distributions::position::HexagonalTiling,
@@ -74,9 +74,9 @@ fn main() -> OpmResult<()> {
         &refr_index_hzf52,
     )?;
     node.set_property(OPTIC_SHAPE, a_2inch.clone().into())?;
-    node.set_coating(&PortType::Input, "input_1", ar_coating)?;
-    node.set_lidt(&PortType::Input, "input_1", J_per_cm2!(0.1))?;
-    node.set_lidt(&PortType::Output, "output_1", J_per_cm2!(0.1))?;
+    node.set_coating(Extruded::FRONT, ar_coating)?;
+    node.set_lidt(Extruded::FRONT, J_per_cm2!(0.1))?;
+    node.set_lidt(Extruded::REAR, J_per_cm2!(0.1))?;
     let t1_l2a = telescope.add_node(node)?;
 
     let mut node = Lens::new(
@@ -87,9 +87,9 @@ fn main() -> OpmResult<()> {
         &refr_index_hzf52,
     )?;
     node.set_property(OPTIC_SHAPE, a_2inch.clone().into())?;
-    node.set_coating(&PortType::Input, "input_1", ar_coating)?;
-    node.set_lidt(&PortType::Input, "input_1", J_per_cm2!(0.1))?;
-    node.set_lidt(&PortType::Output, "output_1", J_per_cm2!(0.1))?;
+    node.set_coating(Extruded::FRONT, ar_coating)?;
+    node.set_lidt(Extruded::FRONT, J_per_cm2!(0.1))?;
+    node.set_lidt(Extruded::REAR, J_per_cm2!(0.1))?;
     let t1_l2b = telescope.add_node(node)?;
     let mut node = Lens::new(
         "T1 L2c",
@@ -99,9 +99,9 @@ fn main() -> OpmResult<()> {
         &refr_index_hzf2,
     )?;
     node.set_property(OPTIC_SHAPE, a_2inch.into())?;
-    node.set_coating(&PortType::Input, "input_1", ar_coating)?;
-    node.set_lidt(&PortType::Input, "input_1", J_per_cm2!(0.1))?;
-    node.set_lidt(&PortType::Output, "output_1", J_per_cm2!(0.1))?;
+    node.set_coating(Extruded::FRONT, ar_coating)?;
+    node.set_lidt(Extruded::FRONT, J_per_cm2!(0.1))?;
+    node.set_lidt(Extruded::REAR, J_per_cm2!(0.1))?;
     let t1_l2c = telescope.add_node(node)?;
 
     telescope.connect_nodes(t1_l1a, "output_1", t1_l1b, "input_1", millimeter!(10.0))?;
@@ -137,8 +137,7 @@ fn main() -> OpmResult<()> {
 
     // Ray propagation visualization
     let mut rpv = RayPropagationVisualizer::default();
-    rpv.set_lidt(&PortType::Input, "input_1", J_per_cm2!(100.0))?;
-    rpv.set_lidt(&PortType::Output, "output_1", J_per_cm2!(100.0))?;
+    rpv.set_lidt(SurfaceGeometry::FACE, J_per_cm2!(100.0))?;
     let rpv = scenery.add_node(rpv)?;
     scenery.connect_nodes(tel, "output_1", rpv, "input_1", millimeter!(100.0))?;
 

@@ -11,11 +11,12 @@ use crate::{
         raytrace::AnalysisRayTrace,
     },
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, optic_node::APERTURE_LIMIT_NOTE,
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, SurfacePorts,
+        optic_node::APERTURE_LIMIT_NOTE,
     },
     error::{OpmResult, OpossumError},
     geometry::{
-        Geometry, SurfaceGeometry, SurfaceShape,
+        Geometry, SurfaceShape,
         body::{OPTIC_SHAPE, default_square_optic_shape},
     },
     light::{LightData, LightResult},
@@ -104,6 +105,7 @@ impl Default for WaveFront {
             apodization_warning: false,
             reference_surface: None,
         };
+        wf.create_default_surface_properties().unwrap();
         wf.update_surfaces().unwrap();
         wf
     }
@@ -184,7 +186,7 @@ impl WaveFront {
 impl OpticNode for WaveFront {
     /// The surface wavefronts are measured on: the reference surface, or a plane if none is set,
     /// within the recording window.
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::detector(
             self.reference_surface
                 .clone()
@@ -195,11 +197,8 @@ impl OpticNode for WaveFront {
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(
-            &[("input_1", SurfaceGeometry::FACE)],
-            &[("output_1", SurfaceGeometry::FACE)],
-        )
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::SINGLE_SURFACE
     }
     fn node_report(&self, uuid: &str, analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
         if analyzer == AnalyzerKind::Energy {

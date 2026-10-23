@@ -2,9 +2,9 @@ use nalgebra::Point2;
 use opossum_core::core_optics::{NodeAttrExt, OpticNodeExt};
 use opossum_core::prelude::*;
 use opossum_core::{
-    apertures::CircleShape, coatings::CoatingType, core_optics::PortType,
-    distributions::energy::UniformDist, distributions::position::Grid,
-    distributions::spectral::LaserLines, geometry::body::OPTIC_SHAPE,
+    apertures::CircleShape, coatings::CoatingType, distributions::energy::UniformDist,
+    distributions::position::Grid, distributions::spectral::LaserLines, geometry::Extruded,
+    geometry::body::OPTIC_SHAPE,
 };
 use std::path::Path;
 
@@ -24,7 +24,7 @@ fn main() -> OpmResult<()> {
     lens1.set_property("front curvature", Proptype::Curvature(millimeter!(10.0)))?;
     lens1.set_property("rear curvature", Proptype::Curvature(millimeter!(9.0)))?;
     lens1.set_property("center thickness", millimeter!(1.0).into())?;
-    lens1.set_coating(&PortType::Input, "input_1", &CoatingType::Fresnel)?;
+    lens1.set_coating(Extruded::FRONT, &CoatingType::Fresnel)?;
     let l1 = scenery.add_node(lens1)?;
     let fd2 = scenery.add_node(FluenceDetector::new("after lens"))?;
     let ed = scenery.add_node(EnergyMeter::default())?;

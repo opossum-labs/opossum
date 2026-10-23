@@ -8,10 +8,10 @@ use crate::{
         propagation_strategy::PropagationStrategy,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, OpticNodeExt, node_attr::HasNodeAttr},
+    core_optics::{NodeAttr, OpticNodeExt, SurfacePorts, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
     geometry::{
-        Geometry, SurfaceGeometry,
+        Geometry,
         body::{OPTIC_SHAPE, default_optic_shape},
     },
     light::{LightData, LightRays, LightResult, Rays, rays::ReflectedPart},
@@ -65,6 +65,7 @@ impl Default for IdealFilter {
             )
             .unwrap();
         let mut idf = Self { node_attr };
+        idf.create_default_surface_properties().unwrap();
         idf.update_surfaces().unwrap();
         idf
     }
@@ -140,14 +141,11 @@ impl IdealFilter {
     }
 }
 impl OpticNode for IdealFilter {
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::plane(self.cross_section()?)))
     }
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(
-            &[("input_1", SurfaceGeometry::FACE)],
-            &[("output_1", SurfaceGeometry::FACE)],
-        )
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::SINGLE_SURFACE
     }
 }
 impl AnalysisGhostFocus for IdealFilter {
@@ -217,11 +215,12 @@ impl AnalysisRayTrace for IdealFilter {
         };
         let mut rays = r.clone();
         let rays_before = rays.nr_of_rays(true);
-        let Some(runtime) = self.node_attr_mut().runtime_mut() else {
+        let face = self.face_of_port(in_port)?;
+        let Some(geometry) = self.node_attr_mut().runtime_geometry_mut() else {
             return Err(OpossumError::Analysis("no surface found. Aborting".into()));
         };
-        runtime.interact(
-            in_port,
+        geometry.interact_with_rays(
+            face,
             &mut rays,
             &filter_type,
             ReflectedPart::Ghost,

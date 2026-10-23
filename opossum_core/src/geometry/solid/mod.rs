@@ -19,7 +19,10 @@ use nalgebra::Point3;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
-use crate::{geometry::Face, light::Ray};
+use crate::{
+    geometry::{Face, FaceIndex},
+    light::Ray,
+};
 
 /// Which side of a face lies inside a solid, as
 /// [`GeoSurface::is_behind`](crate::geometry::GeoSurface::is_behind) tells them apart.
@@ -62,11 +65,11 @@ impl Side {
 fn face_hits<'a>(
     faces: impl Iterator<Item = &'a Face> + 'a,
     ray: &'a Ray,
-    includes: impl Fn(usize, &Point3<Length>) -> bool + 'a,
+    includes: impl Fn(FaceIndex, &Point3<Length>) -> bool + 'a,
 ) -> impl Iterator<Item = Point3<Length>> + 'a {
     faces.enumerate().filter_map(move |(index, face)| {
         face.intersect(ray)
             .map(|(point, _)| point)
-            .filter(|point| includes(index, point))
+            .filter(|point| includes(FaceIndex::new(index), point))
     })
 }

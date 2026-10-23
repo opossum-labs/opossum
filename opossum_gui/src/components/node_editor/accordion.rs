@@ -89,14 +89,13 @@ pub fn ElementList(element_list: Vec<Element>) -> Element {
 }
 
 /// The `content_id` each panel's `AccordionItem` was built with (see `general_editor.rs`,
-/// `port_config_editor/mod.rs`, `properties_editor/mod.rs`, `alignment_editor/mod.rs`'s
-/// `PositioningEditor`/`AlignmentEditor`) - the *only* place these 5 strings are written down; every
+/// `properties_editor/mod.rs`, `alignment_editor/mod.rs`'s
+/// `PositioningEditor`/`AlignmentEditor`) - the *only* place these 4 strings are written down; every
 /// `AccordionItem`'s own `content_id` prop is built from this function too, so the two can never
 /// drift apart.
 pub const fn content_id_for_panel(panel: NodeEditorPanel) -> &'static str {
     match panel {
         NodeEditorPanel::General => "generalCollapse",
-        NodeEditorPanel::PortConfig => "portConfigCollapse",
         NodeEditorPanel::Properties => "propertyCollapse",
         NodeEditorPanel::Positioning => "positionCollapse",
         NodeEditorPanel::Alignment => "alignmentCollapse",

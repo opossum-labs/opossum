@@ -12,11 +12,12 @@ use crate::{
         raytrace::AnalysisRayTrace,
     },
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, optic_node::APERTURE_LIMIT_NOTE,
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, SurfacePorts,
+        optic_node::APERTURE_LIMIT_NOTE,
     },
     error::OpmResult,
     geometry::{
-        Geometry, SurfaceGeometry, SurfaceShape,
+        Geometry, SurfaceShape,
         body::{OPTIC_SHAPE, default_square_optic_shape},
     },
     light::{LightData, LightResult, Rays},
@@ -81,6 +82,8 @@ impl Default for SpotDiagram {
             node_attr,
             apodization_warning: false,
         };
+        sd.create_default_surface_properties()
+            .expect("Hardcoded property creation must not fail");
         sd.update_surfaces()
             .expect("Updating surfaces on a default spot diagram must not fail");
         sd
@@ -101,7 +104,7 @@ impl SpotDiagram {
 }
 
 impl OpticNode for SpotDiagram {
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::detector(
             SurfaceShape::Plane,
             self.cross_section()?,
@@ -176,11 +179,8 @@ impl OpticNode for SpotDiagram {
         Ok(NodeReportResult::Report(report))
     }
 
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(
-            &[("input_1", SurfaceGeometry::FACE)],
-            &[("output_1", SurfaceGeometry::FACE)],
-        )
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::SINGLE_SURFACE
     }
 
     fn set_light_data(&mut self, ld: Option<LightData>) {

@@ -11,13 +11,12 @@ use uuid::Uuid;
 use crate::{
     analyzers::{Analyzable, AnalyzerKind, propagation_strategy::PropagationStrategy},
     core_optics::{
-        NodeAttrExt, OpticPorts, PortType,
+        NodeAttrExt, OpticNodeExt, OpticPorts, SurfacePorts,
         node_attr::{HasNodeAttr, NodePositioning},
-        runtime_geometry::RuntimeGeometry,
         volumetric::Volumetric,
     },
     error::{OpmResult, OpossumError},
-    geometry::Geometry,
+    geometry::{FaceIndex, Geometry},
     light::LightData,
     nodes::fluence_detector::Fluence,
     reporting::node_report::NodeReportResult,
@@ -87,12 +86,17 @@ pub trait OpticNode: VisualNode + HasNodeAttr + OpticNodeAny {
         self.update_surfaces()
     }
 
-    /// Resets internal data (e.g., captured light data in detectors and runtime medium states).
+    /// Resets internal data: the captured light data, the caches and hit maps of the optic surfaces
+    /// and the inversion in the body of the runtime geometry.
     fn reset_data(&mut self) {
         self.set_light_data(None);
         self.reset_optic_surfaces();
-        if let Some(runtime) = self.node_attr_mut().runtime_mut() {
-            runtime.clear_inversion();
+        if let Some(body) = self
+            .node_attr_mut()
+            .runtime_geometry_mut()
+            .and_then(|geometry| geometry.kind_mut().as_body_mut())
+        {
+            *body.inversion_mut() = None;
         }
     }
 
@@ -120,10 +124,10 @@ pub trait OpticNode: VisualNode + HasNodeAttr + OpticNodeAny {
         self.update_surfaces()?;
         let config = strategy.pump_config(self.node_attr().uuid());
         let name = self.name().to_owned();
-        let Some((body, inversion)) = self
+        let Some(body) = self
             .node_attr_mut()
-            .runtime_mut()
-            .and_then(RuntimeGeometry::medium_mut)
+            .runtime_geometry_mut()
+            .and_then(|geometry| geometry.kind_mut().as_body_mut())
         else {
             return Err(OpossumError::Other(format!(
                 "volume node '{name}' encloses no body"
@@ -131,7 +135,8 @@ pub trait OpticNode: VisualNode + HasNodeAttr + OpticNodeAny {
         };
         // The inversion is gain-specific: only build it when the gain model reads one.
         if let Some(model) = config.gain_model().as_extraction() {
-            *inversion = model.build_inversion(body, &config)?;
+            let inversion = model.build_inversion(body, &config)?;
+            *body.inversion_mut() = inversion;
         }
         Ok(())
     }
@@ -149,12 +154,22 @@ pub trait OpticNode: VisualNode + HasNodeAttr + OpticNodeAny {
         Ok(())
     }
 
-    /// Updates the optical surfaces of this node according to its current geometry and positioning.
+    /// Return the ports of this node, each with the face of its geometry it sits on.
+    ///
+    /// A node without a shape of its own has none ([`SurfacePorts::NONE`]).
+    fn surface_ports(&self) -> SurfacePorts;
+
+    /// Updates the optical surfaces of this node according to its current geometry and positioning:
+    /// installs its geometry under its [`OpticNode::surface_ports`] (see
+    /// [`OpticNodeExt::install_geometry`]).
     ///
     /// # Errors
     ///
     /// Returns an error if geometry evaluation or surface construction fails.
-    fn update_surfaces(&mut self) -> OpmResult<()>;
+    fn update_surfaces(&mut self) -> OpmResult<()> {
+        let ports = self.surface_ports();
+        self.install_geometry(&ports)
+    }
 
     /// Describe the shape of this node, derived from its current properties.
     ///
@@ -170,7 +185,7 @@ pub trait OpticNode: VisualNode + HasNodeAttr + OpticNodeAny {
     /// # Errors
     ///
     /// Returns an error if a geometry property cannot be read or describes no valid shape.
-    fn geometry(&self) -> OpmResult<Option<Geometry>>;
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>>;
 
     /// Return the effective (input & output) ports of this [`OpticNode`].
     ///
@@ -277,26 +292,18 @@ pub trait Alignable: OpticNode + Sized {
 
 /// Trait to define a Laser-Induced Damage Threshold (LIDT) for a node.
 pub trait LIDT: OpticNode + Analyzable + Sized {
-    /// Sets an LIDT value for all ports of this node.
+    /// Sets an LIDT value for all surfaces of this node.
     ///
     /// # Errors
     ///
     /// This function returns an error if the given LIDT is negative or NaN,
     /// or if updating runtime surfaces fails.
     fn with_lidt(mut self, lidt: Fluence) -> OpmResult<Self> {
-        let mut ports = self.ports();
-        let in_ports = ports.names(&PortType::Input);
-        let out_ports = ports.names(&PortType::Output);
-
-        for port_name in &in_ports {
-            ports.set_lidt(&PortType::Input, port_name, lidt)?;
+        if let Some(geometry) = self.create_geometry()? {
+            for face in (0..geometry.kind().face_count()).map(FaceIndex::new) {
+                self.set_lidt(face, lidt)?;
+            }
         }
-        for port_name in &out_ports {
-            ports.set_lidt(&PortType::Output, port_name, lidt)?;
-        }
-
-        self.node_attr_mut().set_ports(ports);
-        self.update_surfaces()?; // Required to propagate the port update to runtime surfaces
         Ok(self)
     }
 }

@@ -9,9 +9,11 @@ use crate::{
         raytrace::AnalysisRayTrace,
     },
     apertures::OpticShape,
-    core_optics::{NodeAttr, OpticNode, OpticNodeExt, optic_node_ext::single_io_port_names},
+    core_optics::{
+        NodeAttr, OpticNode, OpticNodeExt, SurfacePorts, optic_node_ext::single_io_port_names,
+    },
     error::OpmResult,
-    geometry::{Geometry, SurfaceGeometry, body::OPTIC_SHAPE},
+    geometry::{Geometry, body::OPTIC_SHAPE},
     light::LightResult,
     nodes::NodeRegistration,
 };
@@ -60,6 +62,9 @@ impl Default for Dummy {
             .expect("Failed to declare dummy properties");
         let mut dummy = Self { node_attr };
         dummy
+            .create_default_surface_properties()
+            .expect("Failed to declare dummy surface properties");
+        dummy
             .update_surfaces()
             .expect("Failed to initialize dummy surfaces");
         dummy
@@ -91,14 +96,11 @@ impl AnalysisRayTrace for Dummy {
 }
 
 impl OpticNode for Dummy {
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::plane(self.cross_section()?)))
     }
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(
-            &[("input_1", SurfaceGeometry::FACE)],
-            &[("output_1", SurfaceGeometry::FACE)],
-        )
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::SINGLE_SURFACE
     }
 }
 

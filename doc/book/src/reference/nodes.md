@@ -40,7 +40,8 @@ All nodes con be configured through node properties. All nodes have a common set
 
     Local position / alignment relative to the `global position`.
 
-- `damage threshold`
+Every node with a shape of its own also has one property per surface, holding its coating and its laser induced
+damage threshold, see [Surfaces](#surfaces).
 
 ## Ports
 
@@ -49,6 +50,11 @@ Ports are the connector points between nodes and can be connected by [edges](edg
 Ports have a specific name in order to distinguish them. For example, a beamsplitter cube might have one input port (e.g. named "input_1") and two output ports named "output_1" and "transmitted" for the two outgoing beams.
 
 Nodes with output ports only form the optical sources while nodes containing (usually only one) input source will be called detectors. In most cases, a simulation of the model traverses the graph from all sources to a detector node using all possible paths (see [Analyzers](analyzers.md)).
+
+A port is a connection point of the graph and nothing else: it carries no coating, no damage threshold and no
+aperture. What happens to light at a component is a matter of its [surfaces](#surfaces) and its
+[optic shape](#optic-shape). Each port sits on one surface of the node, which the node type decides: the input of a
+lens on its front surface, its output on its rear surface, both ports of a mirror on its one surface.
 
 ## Attributes
 
@@ -87,7 +93,8 @@ In addition, nodes have a set of attributes that are common to all of them. Howe
 
 1. Surface definitions
 
-   For both, sequential and non-sequential analysis, surface properties such as coating or roughness which define the way light will be reflected or propagated through should be defined. *This could also be modeled using basic nodes*
+   Each surface of a component has a coating and a laser induced damage threshold, see [Surfaces](#surfaces). Further
+   surface properties such as roughness are not modeled yet.
 
 ## Optic shape
 
@@ -137,7 +144,7 @@ an idealization and may be unbounded as well. Every other component refuses `Ope
 **Iris.** A [dummy](nodes/dummy.md) passes light unchanged and is unbounded (`Open`) by default. Given an optic
 shape, it acts as an iris: a ray outside of it misses the dummy and follows the rules above.
 
-Only the optic shape limits light; ports carry no aperture, only a coating and an LIDT. Sources, ray propagation
+Only the optic shape limits light; ports and surfaces carry no aperture. Sources, ray propagation
 visualizers and groups are idealized or abstract nodes and have no optic shape. To limit the beam of a source, place
 a dummy behind it or shrink its ray distribution.
 
@@ -145,6 +152,26 @@ a dummy behind it or shrink its ray distribution.
 the optical axis misses the optic shape of a component, beside its edge or through one of its bores, the alignment
 stops with an error naming that node. A bore meant to let the beam pass along the axis, as on a scraper mirror for
 the main beam, is therefore not supported yet. At a detector a missed window only warns that the measurement may fail.
+
+## Surfaces
+
+Every face of a component is a surface of its own, with a `coating` and a laser induced damage threshold (`LIDT`). A
+node keeps them as one property per face, named after the face:
+
+| Node | Surface properties |
+|---|---|
+| lens, cylindric lens, wedge | `front surface`, `rear surface` |
+| every other node except groups and references | `surface` |
+
+The coating decides which part of the light a surface reflects and which part it transmits; the LIDT is the fluence
+above which the ghost focus analysis reports the surface as at risk. By default a surface has an ideal antireflective
+coating (`IdealAR`, no reflection) and an infinite LIDT, so it cannot be damaged. A thin mirror and a parabolic mirror
+start with a fully reflecting coating (`ConstantR` of 100 %). The coating of a beam splitter's surface takes no part
+in the split yet; the `splitter config` alone decides it (see [Beam splitter](nodes/beam_splitter.md)).
+
+A surface is one surface, however many ports sit on it. The input and the output of a mirror or a detector, and all
+four ports of a beam splitter, share the one surface of the node: its coating, and the hits an analysis records on it.
+The ghost focus report names a surface after its face, for instance `front surface`.
 
 ## Analysis interface
 

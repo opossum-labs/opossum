@@ -6,7 +6,7 @@
 
 For energy analysis, the spectrum arriving at each input is split according to the `splitter config`: the transmitted part leaves through the output of the same number (e.g. `input_1` → `out1_trans1_refl2`), the reflected part through the other output (e.g. `input_1` → `out2_trans2_refl1`).
 
-For ray tracing, the beam splitter acts as a thin splitting surface lying in the plane of the node. The `splitter config` defines the transmission of this surface; everything that is not transmitted is reflected. The coatings of the ports are not used for the split. Transmitted rays keep their direction, while reflected rays are deflected according to the laws of reflection. The same holds for the optical axis, so nodes connected to the reflected output are placed along the *reflected* axis (see [Geometry](../../concepts/geometry.md)).
+For ray tracing, the beam splitter acts as a thin splitting surface lying in the plane of the node. The `splitter config` defines the transmission of this surface; everything that is not transmitted is reflected. The coating of its `surface` is not used for the split (see [Surfaces](../nodes.md#surfaces)). Transmitted rays keep their direction, while reflected rays are deflected according to the laws of reflection. The same holds for the optical axis, so nodes connected to the reflected output are placed along the *reflected* axis (see [Geometry](../../concepts/geometry.md)).
 
 Like a mirror, a beam splitter with an alignment of 0° therefore reflects the light directly back towards the source. To deflect the reflected beam by 90°, rotate the beam splitter in the `Node Editor` panel under the `Alignment` section, e.g. by setting the **Roll Angle** to **45°**.
 

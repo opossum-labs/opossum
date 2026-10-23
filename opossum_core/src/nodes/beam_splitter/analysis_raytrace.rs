@@ -5,7 +5,7 @@ use crate::{
         AnalyzerType, RayTraceConfig, propagation_strategy::PropagationStrategy,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttrExt, node_attr::HasNodeAttr},
+    core_optics::{NodeAttrExt, OpticNodeExt, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
     light::{LightData, LightResult, Rays, rays::ReflectedPart},
     meter,
@@ -192,13 +192,14 @@ impl BeamSplitter {
             )));
         };
         let mut transmitted = rays.clone();
-        let Some(runtime) = self.node_attr_mut().runtime_mut() else {
+        let face = self.face_of_port(port_name)?;
+        let Some(geometry) = self.node_attr_mut().runtime_geometry_mut() else {
             return Err(OpossumError::OpticPort(
                 "input optic surface not found".into(),
             ));
         };
-        let reflected = runtime.interact(
-            port_name,
+        let reflected = geometry.interact_with_rays(
+            face,
             &mut transmitted,
             &SplittingConfig::Ratio(0.5),
             ReflectedPart::Branch,

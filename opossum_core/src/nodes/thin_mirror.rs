@@ -10,7 +10,7 @@ use crate::{
     },
     coatings::CoatingConstantR,
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, node_attr::HasNodeAttr,
+        NodeAttr, OpticNode, OpticNodeExt, PortType, SurfacePorts, node_attr::HasNodeAttr,
         surface_effect::Refraction,
     },
     error::{OpmResult, OpossumError},
@@ -80,17 +80,9 @@ impl Default for ThinMirror {
             .unwrap();
 
         let mut m = Self { node_attr };
-        m.update_surfaces().unwrap();
+        m.create_default_surface_properties().unwrap();
         m.set_coating(
-            &PortType::Input,
-            "input_1",
-            &CoatingConstantR::new(percent!(100.0)).unwrap().into(),
-        )
-        .unwrap();
-
-        m.set_coating(
-            &PortType::Output,
-            "output_1",
+            SurfaceGeometry::FACE,
             &CoatingConstantR::new(percent!(100.0)).unwrap().into(),
         )
         .unwrap();
@@ -124,7 +116,7 @@ impl ThinMirror {
     }
 }
 impl OpticNode for ThinMirror {
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         let Ok(Proptype::Curvature(curvature)) = self.node_attr.get_property("curvature") else {
             return Err(OpossumError::Analysis("cannot read curvature".into()));
         };
@@ -135,11 +127,8 @@ impl OpticNode for ThinMirror {
             self.cross_section()?,
         )?))
     }
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(
-            &[("input_1", SurfaceGeometry::FACE)],
-            &[("output_1", SurfaceGeometry::FACE)],
-        )
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::SINGLE_SURFACE
     }
 }
 impl AnalysisGhostFocus for ThinMirror {
@@ -195,9 +184,10 @@ impl AnalysisRayTrace for ThinMirror {
             return Ok(LightResult::default());
         };
         if let LightData::Geometric(mut rays) = data.clone() {
-            let reflected = if let Some(runtime) = self.node_attr_mut().runtime_mut() {
-                let mut reflected_rays = runtime.interact(
-                    in_port,
+            let face = self.face_of_port(in_port)?;
+            let reflected = if let Some(geometry) = self.node_attr_mut().runtime_geometry_mut() {
+                let mut reflected_rays = geometry.interact_with_rays(
+                    face,
                     &mut rays,
                     &Refraction(None),
                     ReflectedPart::Main,
@@ -236,7 +226,7 @@ mod test {
     use crate::{
         analyzers::{RayTraceConfig, energy::EnergyConfig},
         apertures::{Bore, CircleShape, OpticShape, Outline},
-        core_optics::{Alignable, PortType, node_attr::NodePositioning},
+        core_optics::{Alignable, NodeAttrExt, PortType, node_attr::NodePositioning},
         degree,
         geometry::body::OPTIC_SHAPE,
         joule,

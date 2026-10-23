@@ -35,6 +35,7 @@
 
 use opossum_core::coatings::CoatingConstantR;
 use opossum_core::core_optics::{NodeAttrExt, OpticNodeExt};
+use opossum_core::geometry::SurfaceGeometry;
 use opossum_core::{percent, prelude::*};
 use std::env;
 // Import `Path` from the standard library for working with file paths
@@ -48,8 +49,7 @@ fn main() -> OpmResult<()> {
     // Assign a constant-reflectivity coating with 50% reflectivity.
     let mut mirror1 = ThinMirror::new("mirror 1").with_tilt(degree!(22.5, 0.0, 0.0))?;
     mirror1.set_coating(
-        &PortType::Input,
-        "input_1",
+        SurfaceGeometry::FACE,
         &CoatingConstantR::new(percent!(50.0))?.into(),
     )?;
     // Add the first mirror to the optical system.

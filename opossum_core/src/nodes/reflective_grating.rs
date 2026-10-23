@@ -10,12 +10,12 @@ use crate::{
     },
     coatings::CoatingType,
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, hit_map::rays_hit_map::HitPoint,
+        NodeAttr, OpticNode, OpticNodeExt, PortType, SurfacePorts, hit_map::rays_hit_map::HitPoint,
         node_attr::HasNodeAttr, surface_effect::SurfaceEffect,
     },
     error::{OpmResult, OpossumError},
     geometry::{
-        Geometry, SurfaceGeometry, SurfaceHit,
+        Geometry, SurfaceHit,
         body::{OPTIC_SHAPE, default_square_optic_shape},
     },
     light::{LightData, LightRays, LightResult, Ray, Rays, rays::ReflectedPart},
@@ -98,6 +98,7 @@ impl Default for ReflectiveGrating {
             )
             .unwrap();
         let mut g = Self { node_attr };
+        g.create_default_surface_properties().unwrap();
         g.update_surfaces().unwrap();
         g
     }
@@ -249,11 +250,12 @@ impl AnalysisRayTrace for ReflectiveGrating {
                     * iso.transform_vector_f64(&Vector3::x()),
                 order: diffraction_order,
             };
-            let Some(runtime) = self.node_attr_mut().runtime_mut() else {
+            let face = self.face_of_port(in_port)?;
+            let Some(geometry) = self.node_attr_mut().runtime_geometry_mut() else {
                 return Err(OpossumError::Analysis("no surface found. Aborting".into()));
             };
-            let mut diffracted_rays = runtime.interact(
-                in_port,
+            let mut diffracted_rays = geometry.interact_with_rays(
+                face,
                 &mut rays,
                 &diffraction,
                 ReflectedPart::Main,
@@ -300,14 +302,11 @@ impl SurfaceEffect for Diffraction {
 }
 
 impl OpticNode for ReflectiveGrating {
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::plane(self.cross_section()?)))
     }
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(
-            &[("input_1", SurfaceGeometry::FACE)],
-            &[("output_1", SurfaceGeometry::FACE)],
-        )
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::SINGLE_SURFACE
     }
 }
 
@@ -317,7 +316,7 @@ mod test {
     use crate::{
         J_per_cm2,
         analyzers::{RayTraceConfig, energy::EnergyConfig},
-        core_optics::{PortType, node_attr::NodePositioning},
+        core_optics::{NodeAttrExt, PortType, node_attr::NodePositioning},
         degree, joule,
         light::{Ray, Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer,

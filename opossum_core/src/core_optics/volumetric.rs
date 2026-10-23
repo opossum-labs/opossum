@@ -18,10 +18,10 @@ use crate::{
     analyzers::propagation_strategy::PropagationStrategy,
     core_optics::{
         NodeAttrExt, OpticNode, OpticNodeExt, optic_node_ext::single_io_port_names,
-        runtime_geometry::RuntimeGeometry, surface_effect::Refraction,
+        surface_effect::Refraction,
     },
     error::{OpmResult, OpossumError},
-    gain::{Extraction, Inversion},
+    gain::Extraction,
     geometry::body::Body,
     light::{LightData, LightRays, LightResult, Rays, rays::ReflectedPart},
     material::{MATERIAL, Material},
@@ -180,23 +180,16 @@ pub trait Volumetric: OpticNode {
         }
         // Capture the name before the mutable borrow of `self` through `node_attr_mut`.
         let node_name = self.name().to_owned();
-        let Some((body, inversion)) = self
+        let Some(body) = self
             .node_attr_mut()
-            .runtime_mut()
-            .and_then(RuntimeGeometry::medium_mut)
+            .runtime_geometry_mut()
+            .and_then(|geometry| geometry.kind_mut().as_body_mut())
         else {
             return Err(OpossumError::Analysis(format!(
                 "node '{node_name}': medium was not prepared before propagation"
             )));
         };
-        march_medium_along_chords(
-            &node_name,
-            body,
-            inversion,
-            extraction,
-            absorption,
-            rays_bundle,
-        )
+        march_medium_along_chords(&node_name, body, extraction, absorption, rays_bundle)
     }
     /// Amplify the spectral energy passing through this node's medium.
     ///
@@ -248,7 +241,10 @@ pub trait Volumetric: OpticNode {
         if strategy.is_positioning_run() {
             return Ok(());
         }
-        let Some((body, inversion)) = self.node_attr().runtime().and_then(RuntimeGeometry::medium)
+        let Some(body) = self
+            .node_attr()
+            .runtime_geometry()
+            .and_then(|geometry| geometry.kind().as_body())
         else {
             return Err(OpossumError::Analysis(format!(
                 "node '{}': medium was not prepared before amplification",
@@ -256,7 +252,7 @@ pub trait Volumetric: OpticNode {
             )));
         };
         extraction
-            .amplify_spectrum(body, inversion, spectrum)
+            .amplify_spectrum(body, spectrum)
             .map_err(|e| OpossumError::Analysis(format!("node '{}': {e}", self.name())))
     }
     /// A unified helper function to analyze optical nodes that enclose a volume of material.
@@ -362,8 +358,8 @@ pub trait Volumetric: OpticNode {
 /// # Arguments
 ///
 /// * `node_name` - name of the owning node, used in error messages.
-/// * `body` - the body of the prepared medium for this analysis run.
-/// * `inversion` - its inversion, which saturating models read and deplete per traversed cell.
+/// * `body` - the body of the prepared medium for this analysis run, with its inversion, which
+///   saturating models read and deplete per traversed cell.
 /// * `extraction` - the dopant gain model to apply, or `None` for a non-amplifying node.
 /// * `absorption` - the host material's absorption model, or `None` for a transparent material.
 /// * `rays_bundle` - the ray bundle inside the medium, modified in place.
@@ -374,8 +370,7 @@ pub trait Volumetric: OpticNode {
 /// `scale_energy` rejects the resulting value.
 fn march_medium_along_chords(
     node_name: &str,
-    body: &dyn Body,
-    inversion: &mut Option<Inversion>,
+    body: &mut dyn Body,
     extraction: Option<&dyn Extraction>,
     absorption: Option<&AbsorptionModel>,
     rays_bundle: &mut [Rays],
@@ -395,7 +390,7 @@ fn march_medium_along_chords(
             // absorption attenuates, and they multiply on the ray energy.
             let mut factor = 1.0_f64;
             if let Some(extraction) = extraction {
-                factor *= extraction.gain_factor(body, ray, inversion);
+                factor *= extraction.gain_factor(body, ray);
             }
             if let Some(absorption) = absorption {
                 factor *= absorption
@@ -429,13 +424,12 @@ mod test {
         apertures::{CircleShape, OpticShape, RectangleShape},
         coatings::CoatingConstantR,
         core_optics::{
-            Alignable, PortType,
+            Alignable,
             node_attr::{HasNodeAttr, NodePositioning},
-            runtime_geometry::RuntimeSurfaces,
         },
         degree,
         gain::{ConstGain, GainModel, MonochromaticSmallSignalGain, PumpScenario, PumpSource},
-        geometry::body::OPTIC_SHAPE,
+        geometry::{Extruded, FaceIndex, body::OPTIC_SHAPE},
         joule,
         light::{
             Ray, Rays, Spectrum,
@@ -628,10 +622,10 @@ mod test {
     fn the_prepared_body_is_bounded_by_the_surfaces_light_is_traced_at() -> OpmResult<()> {
         let mut lens = placed_lens()?;
         lens.prepare_volume(&RayTraceConfig::default())?;
-        let (body, _) = lens
+        let body = lens
             .node_attr()
-            .runtime()
-            .and_then(RuntimeGeometry::medium)
+            .runtime_geometry()
+            .and_then(|geometry| geometry.kind().as_body())
             .ok_or_else(|| OpossumError::Other("the lens has no medium".into()))?;
         let vertex = |port: &str| -> OpmResult<Point3<Length>> {
             Ok(lens
@@ -657,13 +651,13 @@ mod test {
     }
     /// A passive volume node gets a prepared body even without a gain model.
     ///
-    /// This is the regression test for the new `prepare_volume` contract: the body is geometry, so
-    /// it is built for every volume node regardless of the operating point. Previously a passive lens
-    /// (no active scenario) returned from `prepare_volume` immediately, leaving `runtime_medium`
-    /// unset. Now it is always set — the inversion slot is `None`, but the body is there.
+    /// This is the regression test for the `prepare_volume` contract: the body is geometry, so it is
+    /// built for every volume node regardless of the operating point. A passive lens (no active
+    /// scenario) once returned from `prepare_volume` before its body was built. Now its runtime
+    /// geometry always has a body, with no inversion.
     ///
-    /// The second assertion (energy ratio `1.0`) pins the "stays passive" guarantee: a body in the
-    /// medium slot must not cause any energy change when no gain model is present.
+    /// The last assertion (energy ratio `1.0`) pins the "stays passive" guarantee: the body must not
+    /// cause any energy change when no gain model is present.
     #[test]
     fn a_passive_volume_node_has_a_prepared_body_after_prepare_volume() -> OpmResult<()> {
         let mut lens = placed_lens()?;
@@ -672,17 +666,17 @@ mod test {
         // The body is now available even though no gain model was set.
         assert!(
             lens.node_attr()
-                .runtime()
-                .and_then(RuntimeGeometry::medium)
+                .runtime_geometry()
+                .and_then(|geometry| geometry.kind().as_body())
                 .is_some(),
             "prepare_volume must build the body for a passive volume node"
         );
         // And the inversion slot is empty — the body alone does nothing to the rays.
         assert!(
             lens.node_attr()
-                .runtime()
-                .and_then(RuntimeGeometry::medium)
-                .is_some_and(|(_, inversion)| inversion.is_none()),
+                .runtime_geometry()
+                .and_then(|geometry| geometry.kind().as_body())
+                .is_some_and(|body| body.inversion().is_none()),
             "a passive node must not have an inversion field"
         );
         // The passive contract: no gain model → no energy change, even with a prepared body.
@@ -922,11 +916,9 @@ mod test {
         max_bounces: usize,
     ) -> OpmResult<Vec<f64>> {
         let mut head = amplifier_head()?;
-        for (port_type, port_name) in [(PortType::Input, "input_1"), (PortType::Output, "output_1")]
-        {
+        for face in [Extruded::FRONT, Extruded::REAR] {
             head.set_coating(
-                &port_type,
-                port_name,
+                face,
                 &CoatingConstantR::new(percent!(GHOST_REFLECTIVITY * 100.0))?.into(),
             )?;
         }
@@ -1076,15 +1068,15 @@ mod test {
     /// `prepare_volume` always uses the current node position, not a body cached at an earlier one.
     ///
     /// This is the regression test for the bug commit `b1f766b8` identified but incompletely fixed.
-    /// `init_runtime_medium` (called from `after_deserialization_hook`) built and stored a body at
-    /// the node's position at deserialization time — which is the origin, because `set_isometry`
-    /// from `calc_node_positions` had not run yet — and `prepare_volume`'s first branch then reused
-    /// that stale body for all subsequent runs. A head placed anywhere but the origin had its
-    /// inversion field laid out at the wrong coordinates, so `gain_exponent_at` found no inversion
-    /// for any real ray and returned exactly `0.0`, giving a gain factor of `1.0`.
+    /// The body was once kept apart from the surfaces and built when the node was loaded
+    /// (`after_deserialization_hook`), at the origin, because `calc_node_positions` had not run
+    /// yet; `prepare_volume` then reused that stale body for all subsequent runs. A head placed
+    /// anywhere but the origin had its inversion field laid out at the wrong coordinates, so
+    /// `gain_exponent_at` found no inversion for any real ray and returned exactly `0.0`, giving a
+    /// gain factor of `1.0`.
     ///
-    /// After the fix: `prepare_volume` always re-derives the body from the current geometry, so the
-    /// inversion and the sampling frame are always consistent with the node's actual position.
+    /// After the fix: `prepare_volume` always installs the geometry anew at the current position,
+    /// so the inversion and the sampling frame are always consistent with the node's actual position.
     #[test]
     fn prepare_volume_uses_current_position_not_a_cached_body() -> OpmResult<()> {
         let mut head = amplifier_head()?;
@@ -1092,13 +1084,9 @@ mod test {
         head.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let node_id = head.node_attr().uuid();
 
-        // Seed a body at the current (identity) position, simulating what
-        // `init_runtime_medium` used to do inside `after_deserialization_hook`.
+        // Seed a body at the current (identity) position, as loading the node used to.
         let identity_body = placed_geometry(&head)?;
-        head.node_attr_mut().set_runtime(RuntimeGeometry::new(
-            identity_body,
-            RuntimeSurfaces::default(),
-        )?);
+        head.node_attr_mut().set_runtime_geometry(identity_body);
 
         // Move the head 500 mm along z — what `calc_node_positions` does after deserialization.
         head.set_positioning(NodePositioning::Absolute(Isometry::new(
@@ -1106,19 +1094,19 @@ mod test {
             degree!(0.0, 0.0, 0.0),
         )?))?;
         // Simulate `reset_data`, which clears only the inversion.
-        if let Some(runtime) = head.node_attr_mut().runtime_mut() {
-            runtime.clear_inversion();
+        if let Some(body) = head
+            .node_attr_mut()
+            .runtime_geometry_mut()
+            .and_then(|geometry| geometry.kind_mut().as_body_mut())
+        {
+            *body.inversion_mut() = None;
         }
 
         let mut config = RayTraceConfig::default();
         config.set_active_pump_scenario(Some(scenario_with_small_signal(node_id)?));
 
-        // `traced_energy_ratio` calls `prepare_volume` and then analyzes.
-        // Before the fix: `prepare_volume` saw `runtime_medium().is_some()` and reused the
-        // identity body; `gain_exponent_at` sampled at the real position, found no inversion, and
-        // returned `0.0` — giving factor `1.0`, a silently passive amplifier.
-        // After the fix: `prepare_volume` always rebuilds the body from the 500 mm isometry,
-        // so the inversion covers the real position and the result is the expected gain.
+        // `traced_energy_ratio` calls `prepare_volume`, which rebuilds the body at 500 mm; a reused
+        // identity body would find no inversion at the real position and give a factor of `1.0`.
         assert_relative_eq!(
             traced_energy_ratio(&mut head, &config)?,
             single_pass_gain(),
@@ -1639,12 +1627,13 @@ mod test {
         let far = millimeter!(1.0e6, 1.0e6, 0.0);
         for (node_type, _) in node_types() {
             let optic_ref = create_node_ref(node_type)?;
-            let geometry = optic_ref.geometry()?;
+            let geometry = optic_ref.create_geometry()?;
             let window = geometry
                 .as_ref()
                 .and_then(|geometry| geometry.kind().window().cloned());
             let ends_sideways = geometry.as_ref().is_some_and(|geometry| {
-                geometry.kind().window().is_some() || !geometry.kind().includes(0, &far)
+                geometry.kind().window().is_some()
+                    || !geometry.kind().includes(FaceIndex::new(0), &far)
             });
             let bounded = matches!(
                 optic_ref.node_attr().get_property(OPTIC_SHAPE),
@@ -1658,8 +1647,8 @@ mod test {
             assert_eq!(
                 optic_ref
                     .node_attr()
-                    .runtime()
-                    .and_then(|installed| installed.geometry().kind().window()),
+                    .runtime_geometry()
+                    .and_then(|installed| installed.kind().window()),
                 window.as_ref(),
                 "node type '{node_type}'"
             );
@@ -1746,7 +1735,7 @@ mod test {
             assert_eq!(
                 optic_ref.as_volume().is_some(),
                 optic_ref
-                    .geometry()?
+                    .create_geometry()?
                     .is_some_and(|geometry| geometry.kind().as_body().is_some()),
                 "node type '{node_type}' presents itself as volumetric or describes a solid, \
                  but not both"
@@ -1775,8 +1764,8 @@ mod test {
             let head_ref = model.graph().node(head)?;
             Ok(head_ref
                 .node_attr()
-                .runtime()
-                .and_then(RuntimeGeometry::medium)
+                .runtime_geometry()
+                .and_then(|geometry| geometry.kind().as_body())
                 .is_some())
         };
 

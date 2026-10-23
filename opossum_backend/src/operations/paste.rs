@@ -326,10 +326,8 @@ fn reconfigure_ports(
                 && let Some(old_node_id) = inverted_node_link.get(&n.uuid())
             {
                 scenery.with_group_node(*old_node_id, |g| {
-                    n.set_input_ports(g.ports().ports(&PortType::Input).keys().cloned().collect());
-                    n.set_output_ports(
-                        g.ports().ports(&PortType::Output).keys().cloned().collect(),
-                    );
+                    n.set_input_ports(g.ports().names(&PortType::Input));
+                    n.set_output_ports(g.ports().names(&PortType::Output));
                 })?;
             }
         }

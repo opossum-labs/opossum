@@ -3,7 +3,7 @@
 //! Where a ray hits a component is answered by its geometry (see
 //! [`Geometry::intersect`](crate::geometry::Geometry::intersect)); what the surface then does to the
 //! ray is a [`SurfaceEffect`]. The component brings both together (see
-//! [`RuntimeGeometry::interact`](crate::core_optics::runtime_geometry::RuntimeGeometry::interact)).
+//! [`Geometry::interact`](crate::geometry::Geometry::interact)).
 
 use crate::{
     coatings::CoatingType, core_optics::hit_map::rays_hit_map::HitPoint, error::OpmResult,

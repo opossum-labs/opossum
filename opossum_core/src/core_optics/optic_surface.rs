@@ -3,77 +3,78 @@ use log::warn;
 use uuid::Uuid;
 
 use crate::{
-    J_per_cm2,
     coatings::CoatingType,
-    core_optics::hit_map::{
-        HitMap,
-        fluence_estimator::FluenceEstimator,
-        rays_hit_map::{HitPoint, RaysHitMap},
+    core_optics::{
+        SurfaceConfig,
+        hit_map::{
+            HitMap,
+            fluence_estimator::FluenceEstimator,
+            rays_hit_map::{HitPoint, RaysHitMap},
+        },
     },
     error::{OpmResult, OpossumError},
+    geometry::Face,
     light::Rays,
     nodes::fluence_detector::Fluence,
+    utils::geom_transformation::Isometry,
 };
 use core::fmt::Debug;
 
-/// An optical surface of a node: one face of the node's geometry, with what the surface adds to it,
-/// such as its [`CoatingType`].
+/// An optical surface of a component
+/// 
+/// One face of its geometry, with what the surface adds to it:
+/// its [`CoatingType`], its laser induced damage threshold (LIDT), and what an analysis records
+/// there (ray caches and a hit map).
 ///
-/// It holds no geometry. The component it belongs to traces rays at it (see
-/// [`RuntimeGeometry::interact`](crate::core_optics::runtime_geometry::RuntimeGeometry::interact)),
-/// with the number of the face this surface is.
-#[derive(Clone)]
+/// The geometry holds one per face (see
+/// [`GeometryKind::surface`](crate::geometry::GeometryKind::surface)) and traces rays at it (see
+/// [`Geometry::interact`](crate::geometry::Geometry::interact)).
+#[derive(Clone, PartialEq)]
 pub struct OpticSurface {
-    face: usize,
+    face: Face,
     coating: CoatingType,
     lidt: Fluence,
     backward_rays_cache: Vec<Rays>,
     forward_rays_cache: Vec<Rays>,
     hit_map: HitMap,
 }
-impl Default for OpticSurface {
-    /// Returns a default [`OpticSurface`].
-    ///
-    /// The default is face 0 with an ideal antireflective coating (=no reflection) and a lidt of
-    /// 1 J/cm².
-    fn default() -> Self {
-        Self {
-            face: 0,
-            coating: CoatingType::IdealAR,
-            lidt: J_per_cm2!(1.),
-            backward_rays_cache: Vec::<Rays>::new(),
-            forward_rays_cache: Vec::<Rays>::new(),
-            hit_map: HitMap::default(),
-        }
+impl From<Face> for OpticSurface {
+    /// The surface of a face with the default coating and LIDT (see [`SurfaceConfig::default`]).
+    fn from(face: Face) -> Self {
+        Self::new(face, &SurfaceConfig::default())
     }
 }
 impl OpticSurface {
-    /// Creates a new [`OpticSurface`].
-    ///
-    /// **Note**: The laser induced damage threshold (LIDT) can be set to infinity to model an
-    /// "unbreakable" optical surface.
+    /// Creates a new [`OpticSurface`] with empty ray caches and an empty hit map.
     ///
     /// # Arguments
     ///
-    /// * `face` - the number of the face of the node's geometry this surface is.
-    /// * `coating` - the coating of the surface.
-    /// * `lidt` - the laser induced damage threshold of the surface.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the given lidt is negative or NaN.
-    pub fn new(face: usize, coating: CoatingType, lidt: Fluence) -> OpmResult<Self> {
-        if lidt.is_sign_negative() || lidt.is_nan() {
-            return Err(OpossumError::Other(
-                "LIDT must be positive and not NaN".into(),
-            ));
-        }
-        Ok(Self {
+    /// * `face` - the face this surface is.
+    /// * `config` - the coating and the LIDT of the surface.
+    #[must_use]
+    pub fn new(face: Face, config: &SurfaceConfig) -> Self {
+        Self {
             face,
-            coating,
-            lidt,
-            ..Default::default()
-        })
+            coating: *config.coating(),
+            lidt: config.lidt(),
+            backward_rays_cache: Vec::new(),
+            forward_rays_cache: Vec::new(),
+            hit_map: HitMap::default(),
+        }
+    }
+    /// Return the face this [`OpticSurface`] is.
+    #[must_use]
+    pub const fn face(&self) -> &Face {
+        &self.face
+    }
+    /// Move the face of this [`OpticSurface`] by an isometry (see [`Face::move_by`]).
+    pub fn move_by(&mut self, by: &Isometry) {
+        self.face.move_by(by);
+    }
+    /// Set the coating and the LIDT of this [`OpticSurface`].
+    pub fn set_config(&mut self, config: &SurfaceConfig) {
+        self.coating = *config.coating();
+        self.lidt = config.lidt();
     }
     /// Gets a reference to the forward / backward rays cache of this [`OpticSurface`].
     #[must_use]
@@ -83,11 +84,6 @@ impl OpticSurface {
         } else {
             &self.forward_rays_cache
         }
-    }
-    /// Returns the number of the face of the node's geometry this [`OpticSurface`] is.
-    #[must_use]
-    pub const fn face(&self) -> usize {
-        self.face
     }
     /// Sets the coating of this [`OpticSurface`].
     pub const fn set_coating(&mut self, coating: CoatingType) {
@@ -217,42 +213,47 @@ impl Debug for OpticSurface {
 }
 #[cfg(test)]
 mod test {
-    use super::OpticSurface;
+    use super::{Face, Isometry, OpticSurface, SurfaceConfig};
     use crate::{
         J_per_cm2,
         coatings::CoatingType,
         error::{OpmResult, OpossumError},
+        geometry::SurfaceShape,
         joule,
         light::{Ray, Rays},
         meter, nanometer,
     };
     use uuid::Uuid;
 
+    /// A plane through the origin.
+    fn plane() -> Face {
+        Face::new(SurfaceShape::Plane, Isometry::identity())
+    }
+    /// The surface of a face alone has the default coating and LIDT and records nothing yet.
     #[test]
-    fn default() {
-        let os = OpticSurface::default();
-        assert_eq!(os.face(), 0);
+    fn the_surface_of_a_face_has_the_default_configuration() {
+        let os = OpticSurface::from(plane());
+        assert_eq!(os.face(), &plane());
         assert!(matches!(os.coating, CoatingType::IdealAR));
         assert_eq!(os.backward_rays_cache.len(), 0);
         assert_eq!(os.forward_rays_cache.len(), 0);
         assert!(os.hit_map.is_empty());
-        assert_eq!(os.lidt, J_per_cm2!(1.0));
+        assert_eq!(os.lidt, J_per_cm2!(f64::INFINITY));
     }
     #[test]
-    fn new() -> OpmResult<()> {
-        for lidt in [f64::NAN, f64::NEG_INFINITY, -0.1] {
-            assert!(OpticSurface::new(0, CoatingType::IdealAR, J_per_cm2!(lidt)).is_err());
-        }
-        assert!(OpticSurface::new(0, CoatingType::IdealAR, J_per_cm2!(f64::INFINITY)).is_ok());
-        let os = OpticSurface::new(1, CoatingType::Fresnel, J_per_cm2!(2.0))?;
-        assert_eq!(os.face(), 1);
+    fn a_surface_carries_its_configuration() -> OpmResult<()> {
+        let config = SurfaceConfig::new(CoatingType::Fresnel, J_per_cm2!(2.0))?;
+        let mut os = OpticSurface::new(plane(), &config);
         assert_eq!(os.lidt, J_per_cm2!(2.0));
         assert!(matches!(os.coating, CoatingType::Fresnel));
+        os.set_config(&SurfaceConfig::default());
+        assert_eq!(os.lidt, J_per_cm2!(f64::INFINITY));
+        assert!(matches!(os.coating, CoatingType::IdealAR));
         Ok(())
     }
     #[test]
     fn set_lidt() {
-        let mut os = OpticSurface::default();
+        let mut os = OpticSurface::from(plane());
         assert!(os.set_lidt(J_per_cm2!(f64::NAN)).is_err());
         assert!(os.set_lidt(J_per_cm2!(f64::NEG_INFINITY)).is_err());
         assert!(os.set_lidt(J_per_cm2!(-0.1)).is_err());
@@ -264,7 +265,7 @@ mod test {
     }
     #[test]
     fn add_to_rays_cache() -> OpmResult<()> {
-        let mut os = OpticSurface::default();
+        let mut os = OpticSurface::from(plane());
         let rays = Rays::from(Ray::new_collimated(
             meter!(0.0, 0.0, 0.0),
             nanometer!(1000.0),
@@ -280,7 +281,7 @@ mod test {
     }
     #[test]
     fn set_backwards_rays_cache() -> OpmResult<()> {
-        let mut os = OpticSurface::default();
+        let mut os = OpticSurface::from(plane());
         let rays = Rays::from(Ray::new_collimated(
             meter!(0.0, 0.0, 0.0),
             nanometer!(1000.0),
@@ -296,7 +297,7 @@ mod test {
     }
     #[test]
     fn set_forwards_rays_cache() -> OpmResult<()> {
-        let mut os = OpticSurface::default();
+        let mut os = OpticSurface::from(plane());
         let rays = Rays::from(Ray::new_collimated(
             meter!(0.0, 0.0, 0.0),
             nanometer!(1000.0),
@@ -312,7 +313,7 @@ mod test {
     }
     #[test]
     fn add_critical_fluence() -> OpmResult<()> {
-        let mut os = OpticSurface::default();
+        let mut os = OpticSurface::from(plane());
         let uuid = Uuid::new_v4();
         os.add_critical_fluence(uuid, 1, J_per_cm2!(1.0), 2);
         let hit_map = os.hit_map();
@@ -328,7 +329,7 @@ mod test {
     }
     #[test]
     fn get_rays_cache() -> OpmResult<()> {
-        let mut os = OpticSurface::default();
+        let mut os = OpticSurface::from(plane());
         let rays = Rays::from(Ray::new_collimated(
             meter!(0.0, 0.0, 0.0),
             nanometer!(1000.0),

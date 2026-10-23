@@ -14,7 +14,8 @@ mod undo;
 use crate::{
     analyzers::{AnalyzerKind, propagation_strategy::PropagationStrategy},
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticPorts, OpticRef, PortType, node_attr::HasNodeAttr,
+        NodeAttr, NodeAttrExt, OpticNode, OpticPorts, OpticRef, PortType, SurfacePorts,
+        node_attr::HasNodeAttr,
     },
     error::{OpmResult, OpossumError},
     geometry::Geometry,
@@ -727,7 +728,7 @@ impl NodeGroup {
 }
 
 impl OpticNode for NodeGroup {
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(None)
     }
     fn ports(&self) -> OpticPorts {
@@ -792,6 +793,10 @@ impl OpticNode for NodeGroup {
         Ok(())
     }
 
+    /// The nodes inside a group have the surfaces; the group has none of its own.
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::NONE
+    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         Ok(())
     }
@@ -807,7 +812,7 @@ mod test {
             raytrace::AnalysisRayTrace,
         },
         core_optics::VisualNode,
-        core_optics::{OpticNode, node_attr::NodePositioning},
+        core_optics::{OpticNode, OpticNodeExt, node_attr::NodePositioning},
         joule,
         light::{LightResult, Ray, Rays},
         millimeter, nanometer,

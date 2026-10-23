@@ -56,8 +56,7 @@ pub type CellIndex = (usize, usize, usize);
 /// a single number rather than paid for as a field of identical cells. This is also what keeps an
 /// *unpumped* medium representable: `Uniform(0.0)` is a real state a three-level model can read as
 /// absorption, distinct from a model that reads no inversion at all
-/// (`Option::None` in the medium of a node, see
-/// [`NodeAttr::runtime_medium`](crate::core_optics::NodeAttr::runtime_medium)).
+/// (`Option::None` in the body of a node, see [`Body::inversion`]).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Inversion {
     /// A spatially constant normalized inversion `β` over the whole body: an unpumped medium is
@@ -546,7 +545,7 @@ mod test {
         apertures::{CircleShape, Outline},
         core_optics::{OpticNode, node_attr::NodePositioning},
         degree,
-        geometry::{Extruded, Face, SurfaceShape},
+        geometry::{Extruded, Face, GeometryKind, SurfaceShape},
         millimeter,
         nodes::{
             Lens,
@@ -560,13 +559,14 @@ mod test {
 
     /// Create a disk of the given thickness and radius, placed by the given isometry.
     fn disk(thickness: Length, radius: Length, placement: Isometry) -> OpmResult<Extruded> {
-        Ok(Extruded::new(
+        let mut disk = Extruded::new(
             Isometry::identity(),
-            &Face::new(SurfaceShape::Plane, Isometry::identity()),
-            &Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
+            Face::new(SurfaceShape::Plane, Isometry::identity()),
+            Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
             Outline::new(CircleShape::new(radius)?, Vec::new())?,
-        )?
-        .moved(&placement))
+        )?;
+        disk.move_by(&placement);
+        Ok(disk)
     }
     /// Return the volume of all cells of the given field that hold medium.
     fn covered_volume(field: &InversionField) -> Volume {

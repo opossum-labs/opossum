@@ -46,13 +46,10 @@ impl GhostFocusAnalyzer {
                 self.node_group_report(g, analysis_report)?;
             } else {
                 let node_name = &node_ref.name().to_string();
-                let hit_maps = node_ref.hit_maps();
-                for hit_map in &hit_maps {
-                    let critical_positions = hit_map.1.critical_fluences();
-                    let lidt = *node_ref
-                        .get_optic_surface(hit_map.0)
-                        .expect("OpticSurface not found!")
-                        .lidt();
+                for (surface_name, surface) in node_ref.surfaces_with_hits() {
+                    let hit_map = surface.hit_map();
+                    let critical_positions = hit_map.critical_fluences();
+                    let lidt = *surface.lidt();
                     if !critical_positions.is_empty() {
                         for (i, (rays_uuid, (fluence, hist_idx, bounce))) in
                             critical_positions.iter().enumerate()
@@ -71,7 +68,6 @@ impl GhostFocusAnalyzer {
                                 origin_str.clone().into(),
                             )?;
                             let fluence_data = hit_map
-                                .1
                                 .get_rays_hit_map(*bounce, *rays_uuid)
                                 .unwrap()
                                 .calc_fluence_map(
@@ -110,7 +106,7 @@ impl GhostFocusAnalyzer {
                                 &format!(
                                     "{} critical fluence on surface '{}' of node '{}'",
                                     count_str(i + 1),
-                                    hit_map.0,
+                                    surface_name,
                                     node_name
                                 ),
                                 &Uuid::new_v4().as_simple().to_string(),
@@ -227,8 +223,10 @@ mod test_ghost_focus_analyzer {
     use crate::{
         analyzers::Analyzer,
         coatings::CoatingConstantR,
-        core_optics::{PortType, optic_node::Alignable},
-        degree, joule,
+        core_optics::optic_node::Alignable,
+        degree,
+        geometry::Extruded,
+        joule,
         light::LightResult,
         millimeter,
         nodes::{
@@ -269,13 +267,11 @@ mod test_ghost_focus_analyzer {
         let i_src = scenery.add_node(SourcePort::default())?;
         let mut lens = Lens::default();
         lens.set_coating(
-            &PortType::Input,
-            "input_1",
+            Extruded::FRONT,
             &CoatingConstantR::new(percent!(20.0))?.into(),
         )?;
         lens.set_coating(
-            &PortType::Output,
-            "output_1",
+            Extruded::REAR,
             &CoatingConstantR::new(percent!(20.0))?.into(),
         )?;
         let i_l = scenery.add_node(lens)?;
@@ -326,14 +322,13 @@ mod test_ghost_analysis_nested_groups_inversion {
         core_optics::{NodeAttrExt, OpticNodeExt},
         distributions::{position::Hexapolar, spectral::LaserLines},
         error::OpmResult,
+        geometry::Extruded,
         joule,
         light::lightdata::ray_data_builder::RayDataBuilder,
         millimeter, nanometer,
         nodes::{Dummy, Lens, NodeGroup, SourcePort, round_collimated_ray_builder},
         percent,
-        prelude::{
-            AnalyzerType, CollimatedSrc, OpmDocument, PortType, RayDataSource, RefrIndexConst,
-        },
+        prelude::{AnalyzerType, CollimatedSrc, OpmDocument, RayDataSource, RefrIndexConst},
         radian,
     };
     use uuid::Uuid;
@@ -352,13 +347,11 @@ mod test_ghost_analysis_nested_groups_inversion {
             RefrIndexConst::new(1.4)?,
         )?;
         lens_01.set_coating(
-            &PortType::Input,
-            "input_1",
+            Extruded::FRONT,
             &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
         lens_01.set_coating(
-            &PortType::Output,
-            "output_1",
+            Extruded::REAR,
             &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
 
@@ -370,13 +363,11 @@ mod test_ghost_analysis_nested_groups_inversion {
             RefrIndexConst::new(1.4)?,
         )?;
         lens_02.set_coating(
-            &PortType::Input,
-            "input_1",
+            Extruded::FRONT,
             &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
         lens_02.set_coating(
-            &PortType::Output,
-            "output_1",
+            Extruded::REAR,
             &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
 
@@ -392,13 +383,11 @@ mod test_ghost_analysis_nested_groups_inversion {
             RefrIndexConst::new(1.4)?,
         )?;
         lens_1.set_coating(
-            &PortType::Input,
-            "input_1",
+            Extruded::FRONT,
             &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
         lens_1.set_coating(
-            &PortType::Output,
-            "output_1",
+            Extruded::REAR,
             &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
 
@@ -414,13 +403,11 @@ mod test_ghost_analysis_nested_groups_inversion {
             RefrIndexConst::new(1.4)?,
         )?;
         lens_2.set_coating(
-            &PortType::Input,
-            "input_1",
+            Extruded::FRONT,
             &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
         lens_2.set_coating(
-            &PortType::Output,
-            "output_1",
+            Extruded::REAR,
             &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
         let mut group_2 = NodeGroup::new("Group 2");
@@ -435,13 +422,11 @@ mod test_ghost_analysis_nested_groups_inversion {
             RefrIndexConst::new(1.4)?,
         )?;
         lens_3.set_coating(
-            &PortType::Input,
-            "input_1",
+            Extruded::FRONT,
             &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
         lens_3.set_coating(
-            &PortType::Output,
-            "output_1",
+            Extruded::REAR,
             &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
         let mut group_3 = NodeGroup::new("Group 3");

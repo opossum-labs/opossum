@@ -1204,7 +1204,7 @@ mod test {
             geometry::{Extruded, Geometry},
         };
         let node_frame = Isometry::new(millimeter!(1.0, -2.0, 30.0), degree!(10.0, 5.0, 0.0))?;
-        let lens = Geometry::singlet(
+        let mut lens = Geometry::singlet(
             millimeter!(50.0),
             millimeter!(f64::INFINITY),
             millimeter!(5.0),
@@ -1216,8 +1216,8 @@ mod test {
             nanometer!(1053.0),
             joule!(1.0),
         )?;
+        lens.move_by(&node_frame);
         let surface_hit = lens
-            .moved(&node_frame)
             .intersect(Extruded::FRONT, &ray)
             .ok_or_else(|| OpossumError::Other("the ray missed the lens".into()))?;
         let (_, hit) = ray.refract_at(&surface_hit, &CoatingType::IdealAR, Some(1.5))?;

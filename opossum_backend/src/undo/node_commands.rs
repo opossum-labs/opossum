@@ -1,15 +1,12 @@
 //! `apply`/`describe` bodies for node-field-patch [`Command`] variants:
-//! [`Command::PatchNode`], [`Command::PatchProperty`], [`Command::PatchPort`].
+//! [`Command::PatchNode`], [`Command::PatchProperty`].
 
 use nalgebra::Point2;
 use opossum_core::{
     core_optics::{NodeAttr, node_attr::NodePositioning},
-    error::OpossumError,
     opm_document::OpmDocument,
-    prelude::{PortType, Proptype},
-    types::api_types::{
-        DocumentChange, NodeEditorPanel, PositioningRequest, UpdateNodeRequest, UpdatePortRequest,
-    },
+    prelude::Proptype,
+    types::api_types::{DocumentChange, NodeEditorPanel, PositioningRequest, UpdateNodeRequest},
 };
 use uuid::Uuid;
 
@@ -34,17 +31,6 @@ pub struct PatchProperty {
     pub prop_name: String,
     pub old: Proptype,
     pub new: Proptype,
-}
-
-/// Applies `new`'s populated fields to one port's config; `old` mirrors the same shape.
-#[derive(Clone)]
-pub struct PatchPort {
-    pub uuid: Uuid,
-    pub parent_group_id: Uuid,
-    pub port_type: PortType,
-    pub port_name: String,
-    pub old: UpdatePortRequest,
-    pub new: UpdatePortRequest,
 }
 
 /// Applies `cmd.new`'s populated fields to the node's standard properties, returning the
@@ -133,52 +119,7 @@ pub(super) fn apply_patch_property(
     }))
 }
 
-/// Applies `cmd.new`'s populated fields to one port's config, returning the [`Command::PatchPort`] that
-/// undoes it (`old`/`new` swapped).
-///
-/// # Errors
-/// Returns an error if `uuid` doesn't resolve to a node or `port_name` isn't a port of `port_type`.
-pub(super) fn apply_patch_port(
-    document: &mut OpmDocument,
-    cmd: PatchPort,
-) -> Result<Command, BackEndErrorResponse> {
-    let PatchPort {
-        uuid,
-        parent_group_id,
-        port_type,
-        port_name,
-        old,
-        new,
-    } = cmd;
-    document
-        .scenery_mut()
-        .with_node_attr_mut(uuid, |node_attr| {
-            let port_map = node_attr.raw_ports_mut().ports_mut(&port_type);
-            let Some(port) = port_map.get_mut(&port_name) else {
-                return Err(OpossumError::Other(format!(
-                    "{port_type} port '{port_name}' not found"
-                )));
-            };
-            if let Some(coating) = new.coating {
-                port.coating = coating;
-            }
-            if let Some(lidt) = new.lidt {
-                port.lidt = lidt;
-            }
-            Ok(())
-        })??;
-    Ok(Command::PatchPort(PatchPort {
-        uuid,
-        parent_group_id,
-        port_type,
-        port_name,
-        old: new,
-        new: old,
-    }))
-}
-
-/// Describes the effect of a [`Command::PatchProperty`] or [`Command::PatchPort`] in the GUI-facing
-/// [`DocumentChange`] shape.
+/// Describes the effect of a [`Command::PatchProperty`] in the GUI-facing [`DocumentChange`] shape.
 pub(super) fn describe_node_details_changed(graph_id: Uuid, uuid: Uuid) -> Vec<DocumentChange> {
     vec![DocumentChange::NodeDetailsChanged { uuid, graph_id }]
 }
