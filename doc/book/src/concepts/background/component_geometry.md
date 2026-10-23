@@ -9,31 +9,42 @@ means to a user, see [Optic shape](../../reference/nodes.md#optic-shape).
 
 ## Part 1: Concepts
 
-### Three stages
+### Defined, derived, used
 
-The shape of a component passes three stages:
-
-1. **Describe.** The node derives a *geometry* from its properties: curvatures, thickness, optic shape and so on.
-   The geometry is stated relative to the node and is never stored. It is derived again whenever it is needed, so it
-   cannot fall out of step with the properties. The node type acts as a preset: a lens is a *singlet* whose
-   parameters are the properties of the lens.
-2. **Place.** Moving the geometry by the node's *placement* (where it sits and how it is turned) moves every face and
-   every rim; nothing else changes. The placed geometry is what the simulation works with:
-   - its numbered *faces*, which rays are intersected with, each with its *optic surface*: the coating, the
-     laser induced damage threshold (LIDT) and what an analysis records there,
-   - where each face ends sideways, which the geometry answers whenever a ray hits,
-   - for a component with a volume, the *body* of material between its faces, with the inversion a gain model
-     builds in it. The body has no surfaces of its own; it is bounded by the very faces rays are traced at.
-3. **Use.** The analyzers, the alignment run and the 3D view work with the placed geometry. While tracing, a node
-   finds the face under the port the light arrives at or leaves through.
-
-All three come from one description: the surface a ray hits, the edge that decides whether it hits, and the medium
-a gain model acts in. They therefore cannot disagree.
-
-The chart shows what depends on what. It runs from what the `.opm` file stores at the top to what uses the result at
-the bottom; the rest of this page explains each box.
+The chart shows what depends on what. Its three bands separate what the user defines from what is derived from it
+and from what uses the result; the rest of this page explains each box.
 
 ![What a component's geometry depends on](../../images/component_geometry_flow.svg)
+
+1. **Defined by the user.** What the user enters in the GUI and the `.opm` file stores:
+   - the *node properties*: the node type, which acts as a preset (a lens is a *singlet* whose parameters are the
+     properties of the lens), the shape (curvatures, thickness, optic shape and so on), and one surface property per
+     face with its coating and its laser induced damage threshold (LIDT);
+   - the *placement*: an absolute position, or an automatic one that the alignment run fills in, and the alignment
+     (decenter, tilt);
+   - the *connections* between ports, each with its distance.
+2. **Derived.** None of it is written to the file:
+   - The node derives its *geometry* from the shape (`create_geometry`), stated relative to the node. It is derived
+     again whenever it is needed, so it cannot fall out of step with the properties. It holds the numbered *faces*,
+     each with its *optic surface*, where each face ends sideways, and, for a solid, the *body* of material between
+     its faces. The body has no surfaces of its own; it is bounded by the very faces rays are traced at.
+   - `effective_node_iso` states where the node sits and how it is turned: its position followed by its alignment.
+   - Installing the geometry (`install_geometry`) moves it by the node's placement: every face and every rim moves,
+     nothing else changes. Every face then takes the coating and the LIDT of its surface property, and every port
+     names the face it sits on. The result is the node's *runtime geometry*. For a volume node, its body is the
+     node's *medium*, which holds the inversion a gain model builds in it. Unlike the geometry, the runtime geometry
+     is kept until it is rebuilt (see [When surfaces are rebuilt](#when-surfaces-are-rebuilt)).
+3. **Used.**
+   - Ray tracing and ghost focus analysis intersect rays with the faces and let the surface act on them. A node
+     finds the face under the port the light arrives at or leaves through.
+   - Gain and absorption act in the body: along the chord of each ray in a ray trace, and without rays in an energy
+     flow analysis.
+   - The alignment run traces the axis ray through the faces. Where the ray leaves a node, carried on by the distance
+     of the connection, is the automatic position of the next node.
+   - The 3D view moves the geometry to the node's placement itself and never reads the runtime geometry.
+
+All of it comes from one description: the surface a ray hits, the edge that decides whether it hits, and the medium a
+gain model acts in. They therefore cannot disagree.
 
 ### Surface or solid
 
