@@ -571,17 +571,15 @@ mod test_ghost_analysis_nested_groups_inversion {
         // Add a lens with low LIDT to provoke a critical fluence report
         let mut lens = Lens::default();
         lens.set_coating(
-            &PortType::Input,
-            "input_1",
+            Extruded::FRONT,
             &CoatingConstantR::new(percent!(50.0))?.into(),
         )?;
         lens.set_coating(
-            &PortType::Output,
-            "output_1",
+            Extruded::REAR,
             &CoatingConstantR::new(percent!(50.0))?.into(),
         )?;
         // Set very low LIDT on surface so any hit triggers critical fluence
-        lens.set_lidt(&PortType::Input, "input_1", J_per_cm2!(1e-9))?;
+        lens.set_lidt(Extruded::FRONT, J_per_cm2!(1e-9))?;
         let lens_id = scenery.add_node(lens)?;
         scenery.connect_nodes(src, "output_1", lens_id, "input_1", millimeter!(50.0))?;
 
