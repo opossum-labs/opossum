@@ -1,6 +1,6 @@
 mod splitting_config_editor;
 
-pub use splitting_config_editor::SplittingConfigEditor;
+use splitting_config_editor::SplittingConfigEditor;
 
 use dioxus::prelude::*;
 use opossum_core::{

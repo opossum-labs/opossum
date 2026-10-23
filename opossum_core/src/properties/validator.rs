@@ -6,7 +6,6 @@ use uom::si::{angle::degree, f64::Angle};
 
 use crate::{
     apertures::OpticShape,
-    coatings::SplittingConfigBuilder,
     error::{OpmResult, OpossumError},
     nodes::ideal_filter::FilterTypeBuilder,
     properties::Proptype,
@@ -208,10 +207,6 @@ impl Validator {
             Proptype::FilterTypeBuilder(ftb) => match ftb {
                 FilterTypeBuilder::Constant(c) => allowed_range.contains(&c.transmission().value),
                 FilterTypeBuilder::Spectrum(s) => s.values_are_in_range(min, max)?,
-            },
-            Proptype::SplittingConfigBuilder(ftb) => match ftb {
-                SplittingConfigBuilder::FixedRatio(c) => allowed_range.contains(c),
-                SplittingConfigBuilder::Spectrum(s) => s.values_are_in_range(min, max)?,
             },
             _ => true,
         };

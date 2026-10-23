@@ -4,7 +4,6 @@
 use crate::{
     analyzers::ghostfocus::GhostFocusHistory,
     apertures::OpticShape,
-    coatings::SplittingConfigBuilder,
     core_optics::{
         SurfaceConfig,
         hit_map::{HitMap, fluence_estimator::FluenceEstimator},
@@ -131,8 +130,6 @@ pub enum Proptype {
     // FilterType(FilterType),
     /// Property for storing a [`FilterTypeBuilder`] of an [`IdealFilter`](crate::nodes::IdealFilter) node.
     FilterTypeBuilder(FilterTypeBuilder),
-    /// Property for storing a [`SplittingConfig`](crate::coatings::SplittingConfig) of an [`BeamSplitter`](crate::nodes::BeamSplitter) node.
-    SplittingConfigBuilder(SplittingConfigBuilder),
     /// Property for storing a [`SpectrometerType`] of a [`Sepctrometer`](crate::nodes::Spectrometer) node.
     SpectrometerType(SpectrometerType),
     /// Property for storing a [`Metertype`] of an [`Energymeter`](crate::nodes::EnergyMeter) node.

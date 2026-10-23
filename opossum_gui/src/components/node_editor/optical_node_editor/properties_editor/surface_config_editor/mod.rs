@@ -1,4 +1,4 @@
-pub(super) mod coating_editor;
+mod coating_editor;
 
 use dioxus::prelude::*;
 use opossum_core::{

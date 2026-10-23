@@ -26,7 +26,6 @@
                     "name": "beam splitter",
                     "uuid": "042dd104-6c7d-4f7b-896d-12f67325f5fb",
                     "props": {
-                        "splitter config builder": SplittingConfigBuilder(FixedRatio(0.5)),
                         "optic shape": OpticShape(Bounded(
                             shape: Circle(
                                 radius: 0.0125,
@@ -34,7 +33,7 @@
                             bores: [],
                         )),
                         "surface": SurfaceConfig(
-                            coating: IdealAR,
+                            coating: Separator(FixedRatio(0.5)),
                         ),
                     },
                 },
