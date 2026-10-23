@@ -34,18 +34,15 @@ fn main() -> OpmResult<()> {
             let current_node_id = scenery.add_node(dummy_node)?;
 
             // Optionally establish a sequential connection to the previous node
-            if connect_sequentially {
-                if let Some(prev_id) = previous_node_id {
-                    scenery.connect_nodes(
-                        prev_id,
-                        "output_1",
-                        current_node_id,
-                        "input_1",
-                        millimeter!(0.0),
-                    )?;
-                }
+            if connect_sequentially && let Some(prev_id) = previous_node_id {
+                scenery.connect_nodes(
+                    prev_id,
+                    "output_1",
+                    current_node_id,
+                    "input_1",
+                    millimeter!(0.0),
+                )?;
             }
-
             previous_node_id = Some(current_node_id);
         }
     }

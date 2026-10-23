@@ -152,13 +152,17 @@ impl Kde {
 
 #[cfg(test)]
 mod test {
-    use super::Kde;
+    use super::*;
     use crate::{error::OpmResult, millimeter};
+    use approx::assert_relative_eq;
+    use uom::si::length::millimeter;
+
     #[test]
     fn default() {
         let kde = Kde::default();
         assert_eq!(kde.band_width, millimeter!(1.0));
     }
+
     #[test]
     fn set_bandwidth() -> OpmResult<()> {
         let mut kde = Kde::default();
@@ -170,87 +174,72 @@ mod test {
         assert_eq!(kde.band_width, millimeter!(2.0));
         Ok(())
     }
-    // #[test]
-    // fn point_distances_std_dev() {
-    //     let mut kde = Kde::default();
-    //     assert_eq!(kde.point_distances_std_dev().0.len(), 0);
-    //     assert!(kde.point_distances_std_dev().1.value.is_nan());
-    //     let hit_map = vec![(millimeter!(0.0, 0.0), joule!(0.0))];
-    //     kde.set_hit_map(hit_map);
-    //     assert_eq!(kde.point_distances_std_dev().0.len(), 0);
-    //     assert!(kde.point_distances_std_dev().1.value.is_nan());
-    //     let hit_map = vec![
-    //         (millimeter!(0.0, 0.0), joule!(0.0)),
-    //         (millimeter!(1.0, 0.0), joule!(0.0)),
-    //     ];
-    //     kde.set_hit_map(hit_map);
-    //     assert_eq!(kde.point_distances_std_dev().0, vec![millimeter!(1.0)]);
-    //     assert_eq!(kde.point_distances_std_dev().1, millimeter!(0.0));
-    //     let hit_map = vec![
-    //         (meter!(0.0, 0.0), joule!(0.0)),
-    //         (meter!(1.0, 0.0), joule!(0.0)),
-    //         (meter!(-1.0, 0.0), joule!(0.0)),
-    //     ];
-    //     kde.set_hit_map(hit_map);
-    //     assert_eq!(
-    //         kde.point_distances_std_dev().0,
-    //         vec![meter!(1.0), meter!(1.0), meter!(2.0)]
-    //     );
-    //     assert_eq!(
-    //         kde.point_distances_std_dev().1,
-    //         meter!(f64::sqrt(2.0 / 9.0))
-    //     );
-    // }
-    // #[test]
-    // fn distances_iqr() {
-    //     assert!(Kde::distances_iqr(&vec![]).is_nan());
-    //     assert_eq!(Kde::distances_iqr(&vec![meter!(1.0)]), meter!(1.0));
-    //     assert_eq!(
-    //         Kde::distances_iqr(&vec![meter!(0.0), meter!(1.0)]),
-    //         meter!(1.0)
-    //     );
-    //     assert_eq!(
-    //         Kde::distances_iqr(&vec![meter!(0.0), meter!(1.0), meter!(2.0)]),
-    //         meter!(2.0)
-    //     );
-    //     assert_eq!(
-    //         Kde::distances_iqr(&vec![meter!(0.0), meter!(1.0), meter!(2.0), meter!(3.0)]),
-    //         meter!(2.5)
-    //     );
-    //     // Example from Wikipedia
-    //     let lengths = vec![
-    //         meter!(25.0),
-    //         meter!(28.0),
-    //         meter!(4.0),
-    //         meter!(28.0),
-    //         meter!(19.0),
-    //         meter!(3.0),
-    //         meter!(9.0),
-    //         meter!(17.0),
-    //         meter!(29.0),
-    //         meter!(29.0),
-    //     ];
-    //     assert_eq!(Kde::distances_iqr(&lengths), meter!(28.0));
-    // }
-    // #[test]
-    // fn bandwidth_estimate() {
-    //     let mut kde = Kde::default();
-    //     assert!(kde.bandwidth_estimate().is_nan());
-    //     let hit_map = vec![(millimeter!(0.0, 0.0), joule!(0.0))];
-    //     kde.set_hit_map(hit_map);
-    //     assert!(kde.bandwidth_estimate().is_nan());
-    //     let hit_map = vec![
-    //         (millimeter!(0.0, 0.0), joule!(0.0)),
-    //         (millimeter!(1.0, 0.0), joule!(0.0)),
-    //     ];
-    //     kde.set_hit_map(hit_map);
-    //     assert_eq!(kde.bandwidth_estimate(), millimeter!(0.5));
-    //     let hit_map = vec![
-    //         (millimeter!(0.0, 0.0), joule!(0.0)),
-    //         (millimeter!(1.0, 0.0), joule!(0.0)),
-    //         (millimeter!(-1.0, 0.0), joule!(0.0)),
-    //     ];
-    //     kde.set_hit_map(hit_map);
-    //     assert_abs_diff_eq!(kde.bandwidth_estimate().value, 0.00034057440111656337);
-    // }
+
+    #[test]
+    fn test_bandwidth_estimate_edge_cases() {
+        let empty_pts: Vec<Point2<Length>> = vec![];
+        let one_pt = vec![point![millimeter!(10.0), millimeter!(10.0)]];
+        let accessor = |p: &Point2<Length>| *p;
+
+        // Catch deleted match arm "0 | 1"
+        assert!(Kde::bandwidth_estimate(&empty_pts, accessor).value.is_nan());
+        assert!(Kde::bandwidth_estimate(&one_pt, accessor).value.is_nan());
+    }
+
+    #[test]
+    fn test_std_dev_of_positions_boundary() {
+        let accessor = |p: &Point2<Length>| *p;
+
+        // Length < 2 returns 0
+        let empty_pts: Vec<Point2<Length>> = vec![];
+        let one_pt = vec![point![millimeter!(5.0), millimeter!(5.0)]];
+        assert_eq!(
+            Kde::std_dev_of_positions(&empty_pts, &accessor),
+            Length::zero()
+        );
+        assert_eq!(
+            Kde::std_dev_of_positions(&one_pt, &accessor),
+            Length::zero()
+        );
+
+        // Length == 2 must not return zero for distinct points (kills `< 2` -> `<= 2`)
+        let two_pts = vec![
+            point![millimeter!(0.0), millimeter!(0.0)],
+            point![millimeter!(10.0), millimeter!(0.0)],
+        ];
+        let std_dev_2 = Kde::std_dev_of_positions(&two_pts, &accessor);
+        // mean_x = 5, diffs = -5, +5 -> sum_sq = 25 + 25 = 50 -> sqrt(50 / 4) = sqrt(12.5) ~= 3.5355 mm
+        let expected = (12.5_f64).sqrt();
+        assert_relative_eq!(std_dev_2.get::<millimeter>(), expected, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn test_std_dev_of_positions_and_bandwidth_calc() {
+        let pts = vec![
+            point![millimeter!(10.0), millimeter!(20.0)],
+            point![millimeter!(20.0), millimeter!(40.0)],
+            point![millimeter!(30.0), millimeter!(60.0)],
+        ];
+        let accessor = |p: &Point2<Length>| *p;
+
+        // Mean center: (20.0, 40.0) mm
+        // Differences:
+        // pt 0: dx = -10, dy = -20 -> dx^2 + dy^2 = 100 + 400 = 500
+        // pt 1: dx =   0, dy =   0 -> dx^2 + dy^2 = 0
+        // pt 2: dx = +10, dy = +20 -> dx^2 + dy^2 = 100 + 400 = 500
+        // sum_sq_diff = 1000 mm^2
+        // std_dev = sqrt(1000 / (2 * 3)) = sqrt(1000 / 6) ~= 12.909944 mm
+        let std_dev = Kde::std_dev_of_positions(&pts, &accessor);
+        let expected_std_dev = (1000.0_f64 / 6.0).sqrt();
+        assert_relative_eq!(
+            std_dev.get::<millimeter>(),
+            expected_std_dev,
+            epsilon = 1e-10
+        );
+
+        // Bandwidth calculation: 0.9 * std_dev * (3)^(-0.2)
+        let bw = Kde::bandwidth_estimate(&pts, accessor);
+        let expected_bw = 0.9 * expected_std_dev * 3.0_f64.powf(-0.2);
+        assert_relative_eq!(bw.get::<millimeter>(), expected_bw, epsilon = 1e-10);
+    }
 }

@@ -422,7 +422,7 @@ mod test_rays_node_correlation {
 }
 
 #[cfg(test)]
-mod test_rays_ghost_focus_history {
+mod test {
     use super::*;
     use crate::{distributions::position::Grid, joule, light::Rays, millimeter, nanometer};
     use approx::assert_relative_eq;
@@ -672,5 +672,160 @@ mod test_rays_ghost_focus_history {
             GhostFocusHistory::default().into(),
             Proptype::GhostFocusHistory(_)
         ));
+    }
+    #[test]
+    fn test_project_to_plane_non_unit_normal_and_arbitrary_direction() -> OpmResult<()> {
+        let mut accumulated_rays = Vec::<HashMap<Uuid, Rays>>::new();
+        let rays = Rays::new_uniform_collimated(
+            nanometer!(1000.),
+            joule!(1.),
+            &Grid::new(millimeter!(10.0, 10.0), point![3, 3])?,
+        )?;
+        let mut hash = HashMap::new();
+        hash.insert(rays.uuid(), rays);
+        accumulated_rays.push(hash);
+
+        let hist = GhostFocusHistory::from(accumulated_rays);
+
+        // 1. Error on zero norm
+        assert!(hist.project_to_plane(Vector3::zeros()).is_err());
+
+        // 2. Kill `replace < with ==` in `vec_norm < f64::EPSILON`
+        // 0.5 * EPSILON is strictly < EPSILON, so original code returns Err
+        assert!(hist.project_to_plane(Vector3::new(f64::EPSILON * 0.5, 0.0, 0.0)).is_err());
+
+        // 3. Kill `replace < with <=` in `vec_norm < f64::EPSILON`
+        // norm == EPSILON is NOT < EPSILON, so original code returns Ok, but mutant returns Err
+        assert!(hist.project_to_plane(Vector3::new(f64::EPSILON, 0.0, 0.0)).is_ok());
+
+        // 4. Non-unit normal vector with components in all 3 axes:
+        // Kills:
+        // - `replace / with *` on line 92 (normed_normal_vec)
+        // - `replace - with +` on line 107 (proj_x)
+        // - `replace /= with *=` on line 108 (proj_x normalization)
+        // - `replace - with +` on line 131 (proj_pos)
+        let normal_diag = Vector3::new(1.0, 2.0, 3.0);
+        let proj_diag = hist.project_to_plane(normal_diag)?;
+        assert_eq!(proj_diag.len(), 1);
+        let val_0_0 = proj_diag[0][0][0][(0, 0)].value;
+        let val_0_1 = proj_diag[0][0][0][(0, 1)].value;
+        assert!(val_0_0.abs() > 1e-6);
+        assert!(val_0_1.abs() > 1e-6);
+
+        // 5. Kill `replace < with <=` on line 97 (cross with x == EPSILON)
+        // Original falls through to `else` (co_ax_1 has non-zero xy-components),
+        // mutant takes `if` (co_ax_1 is z-axis -> dot with (x, y, 0) is 0.0).
+        let normal_eps_x = Vector3::new(1.0, f64::EPSILON, 0.0);
+        let proj_eps_x = hist.project_to_plane(normal_eps_x)?;
+        assert!(proj_eps_x[0][0][0][(0, 0)].value.abs() > 1e-6);
+
+        // 6. Kill `replace < with <=` on line 100 (cross with y == EPSILON)
+        // Original falls through to `else` (co_ax_1 is x-axis -> dot is -5.0),
+        // mutant takes z-axis (dot is 0.0).
+        let normal_eps_y = Vector3::new(f64::EPSILON, 1.0, 0.0);
+        let proj_eps_y = hist.project_to_plane(normal_eps_y)?;
+        assert!(proj_eps_y[0][0][0][(0, 0)].value.abs() > 1e-6);
+
+        // 7. Kill `replace < with <=` on line 102 (cross with z == EPSILON)
+        // Ray 0 in 3x3 grid has y = -5.0 mm.
+        // In `else`, co_ax_2 is (0, -1, 0), resulting in +5.0 (> 0.0).
+        // In mutant, co_ax_2 is (0, 1, 0), resulting in -5.0 (< 0.0).
+        let normal_eps_z = Vector3::new(f64::EPSILON, 0.0, 1.0);
+        let proj_eps_z = hist.project_to_plane(normal_eps_z)?;
+        assert!(proj_eps_z[0][0][0][(0, 1)].value > 0.0);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_rays_origin_report_str() -> OpmResult<()> {
+        let mut group = crate::nodes::NodeGroup::default();
+        let n1 = group.add_node(crate::nodes::Dummy::new("NodePrimary"))?;
+        let n2 = group.add_node(crate::nodes::Dummy::new("NodeGhost"))?;
+
+        let mut hist = GhostFocusHistory::default();
+
+        // Bounce 0 (primary): should NOT have "bounce 0 at node" prefix
+        let mut corr0 = RaysNodeCorrelation::default();
+        corr0.insert(Uuid::new_v4(), &RaysOrigin::new(None, Some(n1)));
+        hist.ray_node_correlation.push(corr0);
+
+        // Bounce 1: MUST have "bounce 1 at node" prefix
+        let mut corr1 = RaysNodeCorrelation::default();
+        corr1.insert(Uuid::new_v4(), &RaysOrigin::new(None, Some(n2)));
+        hist.ray_node_correlation.push(corr1);
+
+        let report_str = hist.rays_origin_report_str(group.graph());
+
+        // Verify bounce 0 output formatting
+        assert!(report_str.contains("NodePrimary', "));
+        assert!(!report_str.contains("bounce 0 at node"));
+
+        // Verify bounce 1 output formatting
+        assert!(report_str.contains("bounce 1 at node 'NodeGhost', "));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_plot_series_color_palette_boundary() -> OpmResult<()> {
+        let dummy_rays = Rays::new_uniform_collimated(
+            nanometer!(1000.),
+            joule!(1.),
+            &Grid::new(millimeter!(1.0, 1.0), point![1, 1])?,
+        )?;
+
+        // Build accumulated rays with 10 bounces (should use Category10 palette)
+        let mut acc_rays_10 = Vec::new();
+        for _ in 0..10 {
+            let mut bounce_map = HashMap::new();
+            bounce_map.insert(dummy_rays.uuid(), dummy_rays.clone());
+            acc_rays_10.push(bounce_map);
+        }
+
+        let mut hist_10 = GhostFocusHistory::from(acc_rays_10);
+        hist_10.plot_view_direction = Some(Vector3::z());
+
+        let plt_params = PlotParameters::default();
+        let mut plt_type = hist_10.get_plot_type(&plt_params);
+        let series_10 = hist_10.get_plot_series(&mut plt_type, false)?.unwrap();
+        assert_eq!(series_10.len(), 10);
+
+        // Category10[0] is #1f77b4 -> (31, 119, 180)
+        let cat10_0 = colorous::CATEGORY10[0];
+        let cat10_str = format!("({}, {}, {}, 0.2)", cat10_0.r, cat10_0.g, cat10_0.b);
+        let series_10_debug = format!("{:?}", series_10[0]);
+        assert!(
+            series_10_debug.contains(&cat10_str),
+            "Expected Category10 color {cat10_str} in series, got {series_10_debug}"
+        );
+
+        // Build accumulated rays with 11 bounces (> 10: should switch to Turbo palette)
+        let mut acc_rays_11 = Vec::new();
+        for _ in 0..11 {
+            let mut bounce_map = HashMap::new();
+            bounce_map.insert(dummy_rays.uuid(), dummy_rays.clone());
+            acc_rays_11.push(bounce_map);
+        }
+
+        let mut hist_11 = GhostFocusHistory::from(acc_rays_11);
+        hist_11.plot_view_direction = Some(Vector3::z());
+
+        let series_11 = hist_11.get_plot_series(&mut plt_type, false)?.unwrap();
+        assert_eq!(series_11.len(), 11);
+
+        // Turbo rational eval at index 0 out of 11
+        let turbo_0 = colorous::TURBO.eval_rational(0, 11);
+        let turbo_str = format!("({}, {}, {}, 0.2)", turbo_0.r, turbo_0.g, turbo_0.b);
+        let series_11_debug = format!("{:?}", series_11[0]);
+        assert!(
+            series_11_debug.contains(&turbo_str),
+            "Expected Turbo color {turbo_str} in series, got {series_11_debug}"
+        );
+
+        // Verify that Category10 and Turbo produce different colors
+        assert_ne!(series_10_debug, series_11_debug);
+
+        Ok(())
     }
 }

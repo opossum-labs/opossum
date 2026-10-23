@@ -433,9 +433,13 @@ mod tests {
 
     #[test]
     fn test_from_trait_conversions() {
+        // By-Value
         let spec = Spectrum::default();
         let from_spec: AbsorptionModel = spec.clone().into();
-        assert_eq!(from_spec, AbsorptionModel::LambertBeerSpectrum(spec));
+        assert_eq!(
+            from_spec,
+            AbsorptionModel::LambertBeerSpectrum(spec.clone())
+        );
 
         let abs_const = AbsConst::default();
         let from_const: AbsorptionModel = abs_const.into();
@@ -447,10 +451,133 @@ mod tests {
 
         let act = AbsCatTrans::default();
         let from_act: AbsorptionModel = act.clone().into();
-        assert_eq!(from_act, AbsorptionModel::CatalogTransmittance(act));
+        assert_eq!(from_act, AbsorptionModel::CatalogTransmittance(act.clone()));
 
         let k_val = 0.05_f64;
         let from_k: AbsorptionModel = k_val.into();
         assert_eq!(from_k, AbsorptionModel::ExtinctionCoefficient(k_val));
+
+        // By-Reference (killt Mutanten From<&T>)
+        let from_spec_ref: AbsorptionModel = (&spec).into();
+        assert_eq!(from_spec_ref, AbsorptionModel::LambertBeerSpectrum(spec));
+
+        let from_const_ref: AbsorptionModel = (&abs_const).into();
+        assert_eq!(
+            from_const_ref,
+            AbsorptionModel::ConstantAttenuation(abs_const)
+        );
+
+        let from_lbc_ref: AbsorptionModel = (&lbc).into();
+        assert_eq!(from_lbc_ref, AbsorptionModel::LambertBeerConstant(lbc));
+
+        let from_act_ref: AbsorptionModel = (&act).into();
+        assert_eq!(from_act_ref, AbsorptionModel::CatalogTransmittance(act));
+
+        let from_k_ref: AbsorptionModel = (&k_val).into();
+        assert_eq!(from_k_ref, AbsorptionModel::ExtinctionCoefficient(k_val));
+    }
+    #[test]
+    fn test_zero_path_length() -> OpmResult<()> {
+        let wvl = nanometer!(1064.0);
+        let zero_path = millimeter!(0.0);
+
+        // Lambert-Beer Constant
+        let alpha = LinearNumberDensity::new::<per_meter>(50.0);
+        let lb_model = AbsorptionModel::new_lambert_beer_constant(alpha)?;
+        assert_relative_eq!(lb_model.transmittance(wvl, zero_path)?, 1.0);
+
+        // Extinction Coefficient
+        let ec_model = AbsorptionModel::ExtinctionCoefficient(1e-4);
+        assert_relative_eq!(ec_model.transmittance(wvl, zero_path)?, 1.0);
+
+        // Constant Attenuation liefert den konstanten Faktor
+        let ca_model = AbsorptionModel::new_constant_attenuation(0.8)?;
+        assert_relative_eq!(ca_model.transmittance(wvl, zero_path)?, 0.8);
+
+        Ok(())
+    }
+    #[test]
+    fn test_display() {
+        assert_eq!(AbsorptionModel::None.to_string(), "None");
+        assert_eq!(
+            AbsorptionModel::ConstantAttenuation(AbsConst::default()).to_string(),
+            "Constant Attenuation"
+        );
+        assert_eq!(
+            AbsorptionModel::LambertBeerConstant(AbsLBConst::default()).to_string(),
+            "Lambert-Beer (Constant)"
+        );
+        assert_eq!(
+            AbsorptionModel::LambertBeerSpectrum(Spectrum::default()).to_string(),
+            "Lambert-Beer (Spectrum)"
+        );
+        assert_eq!(
+            AbsorptionModel::CatalogTransmittance(AbsCatTrans::default()).to_string(),
+            "Catalog Transmittance"
+        );
+        assert_eq!(
+            AbsorptionModel::ExtinctionCoefficient(0.0).to_string(),
+            "Extinction Coefficient (k)"
+        );
+    }
+    #[test]
+    fn test_default_from_name() {
+        assert_eq!(
+            AbsorptionModel::default_from_name("None"),
+            Some(AbsorptionModel::None)
+        );
+
+        assert_eq!(
+            AbsorptionModel::default_from_name("ConstantAttenuation"),
+            Some(AbsorptionModel::ConstantAttenuation(AbsConst::default()))
+        );
+        assert_eq!(
+            AbsorptionModel::default_from_name("Constant Attenuation"),
+            Some(AbsorptionModel::ConstantAttenuation(AbsConst::default()))
+        );
+
+        assert_eq!(
+            AbsorptionModel::default_from_name("LambertBeerConstant"),
+            Some(AbsorptionModel::LambertBeerConstant(AbsLBConst::default()))
+        );
+        assert_eq!(
+            AbsorptionModel::default_from_name("Lambert-Beer (Constant)"),
+            Some(AbsorptionModel::LambertBeerConstant(AbsLBConst::default()))
+        );
+
+        assert_eq!(
+            AbsorptionModel::default_from_name("LambertBeerSpectrum"),
+            Some(AbsorptionModel::LambertBeerSpectrum(Spectrum::default()))
+        );
+        assert_eq!(
+            AbsorptionModel::default_from_name("Lambert-Beer (Spectrum)"),
+            Some(AbsorptionModel::LambertBeerSpectrum(Spectrum::default()))
+        );
+
+        assert_eq!(
+            AbsorptionModel::default_from_name("ExtinctionCoefficient"),
+            Some(AbsorptionModel::ExtinctionCoefficient(0.0))
+        );
+        assert_eq!(
+            AbsorptionModel::default_from_name("Extinction Coefficient"),
+            Some(AbsorptionModel::ExtinctionCoefficient(0.0))
+        );
+        assert_eq!(
+            AbsorptionModel::default_from_name("Extinction Coefficient (k)"),
+            Some(AbsorptionModel::ExtinctionCoefficient(0.0))
+        );
+
+        assert_eq!(
+            AbsorptionModel::default_from_name("CatalogTransmittance"),
+            Some(AbsorptionModel::CatalogTransmittance(AbsCatTrans::default()))
+        );
+        assert_eq!(
+            AbsorptionModel::default_from_name("Catalog Transmittance"),
+            Some(AbsorptionModel::CatalogTransmittance(AbsCatTrans::default()))
+        );
+
+        // Ungültige Namen müssen None liefern
+        assert_eq!(AbsorptionModel::default_from_name("Unknown"), None);
+        assert_eq!(AbsorptionModel::default_from_name(""), None);
     }
 }

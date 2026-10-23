@@ -317,7 +317,11 @@ mod test_ghost_focus_analyzer {
 #[cfg(test)]
 mod test_ghost_analysis_nested_groups_inversion {
     use crate::{
-        analyzers::ghostfocus::config::GhostFocusConfig,
+        J_per_cm2,
+        analyzers::{
+            Analyzer,
+            ghostfocus::{GhostFocusAnalyzer, config::GhostFocusConfig},
+        },
         coatings::CoatingConstantR,
         core_optics::{NodeAttrExt, OpticNodeExt},
         distributions::{position::Hexapolar, spectral::LaserLines},
@@ -325,7 +329,7 @@ mod test_ghost_analysis_nested_groups_inversion {
         joule,
         light::lightdata::ray_data_builder::RayDataBuilder,
         millimeter, nanometer,
-        nodes::{Dummy, Lens, NodeGroup, SourcePort},
+        nodes::{Dummy, Lens, NodeGroup, SourcePort, round_collimated_ray_builder},
         percent,
         prelude::{
             AnalyzerType, CollimatedSrc, OpmDocument, PortType, RayDataSource, RefrIndexConst,
@@ -572,6 +576,47 @@ mod test_ghost_analysis_nested_groups_inversion {
         config.map_source(sp, RayDataBuilder::default());
         doc.add_analyzer(AnalyzerType::GhostFocus(config));
         let _ = doc.analyze()?;
+        Ok(())
+    }
+    #[test]
+    fn test_node_group_report_generates_reports_on_critical_fluence() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let src = scenery.add_node(SourcePort::default())?;
+
+        // Add a lens with low LIDT to provoke a critical fluence report
+        let mut lens = Lens::default();
+        lens.set_coating(
+            &PortType::Input,
+            "input_1",
+            &CoatingConstantR::new(percent!(50.0))?.into(),
+        )?;
+        lens.set_coating(
+            &PortType::Output,
+            "output_1",
+            &CoatingConstantR::new(percent!(50.0))?.into(),
+        )?;
+        // Set very low LIDT on surface so any hit triggers critical fluence
+        lens.set_lidt(&PortType::Input, "input_1", J_per_cm2!(1e-9))?;
+        let lens_id = scenery.add_node(lens)?;
+        scenery.connect_nodes(src, "output_1", lens_id, "input_1", millimeter!(50.0))?;
+
+        let mut config = GhostFocusConfig::default();
+        config.set_max_bounces(1);
+        config.map_source(
+            src,
+            round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 3)?,
+        );
+
+        let analyzer = GhostFocusAnalyzer::new(config);
+        analyzer.analyze(&mut scenery)?;
+        let report = analyzer.report(&scenery)?;
+
+        // The global report is always present (index 0).
+        // If critical fluence was detected, additional node reports must be added.
+        assert!(
+            report.node_reports().len() > 1,
+            "Expected at least one critical fluence node report to be generated"
+        );
         Ok(())
     }
 }

@@ -46,7 +46,6 @@ extern crate self as opossum_core;
 /// it falls back to default placeholders.
 #[must_use]
 pub fn get_version() -> String {
-    // Attempt to read the commit timestamp (preferring OPM_*, fallback to VERGEN_*)
     let raw_timestamp = option_env!("OPM_GIT_COMMIT_TIMESTAMP");
 
     let timestamp = raw_timestamp.map_or_else(
@@ -72,9 +71,15 @@ mod test {
     #[test]
     fn get_ver() -> OpmResult<()> {
         let version_string = get_version();
-        let re = Regex::new(r"(.*) \(\d{4}/\d{2}/\d{2} \d{2}:\d{2}\)")
+
+        // Akzeptiert entweder Datum "YYYY/MM/DD HH:MM" ODER Fallback "unknown date"
+        let re = Regex::new(r"^.+ \((?:\d{4}/\d{2}/\d{2} \d{2}:\d{2}|unknown date)\)$")
             .map_err(|e| OpossumError::Other(format!("Error in regular expression: {e}")))?;
-        assert!(re.is_match(&version_string));
+
+        assert!(
+            re.is_match(&version_string),
+            "version_string '{version_string}' does not match expected pattern"
+        );
         Ok(())
     }
 }

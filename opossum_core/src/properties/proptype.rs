@@ -599,6 +599,8 @@ where
 }
 #[cfg(test)]
 mod test {
+    use std::f64::consts;
+
     use super::*;
     use crate::{J_per_m2, joule, meter, nanometer, properties::Properties};
     use assert_matches::assert_matches;
@@ -755,10 +757,10 @@ mod test {
         use uom::si::length::millimeter;
 
         // F64 variant
-        let mut prop_f64 = Proptype::F64(3.14);
-        assert_eq!(prop_f64.as_f64(), Some(3.14));
-        prop_f64.set_f64(2.718)?;
-        assert_eq!(prop_f64.as_f64(), Some(2.718));
+        let mut prop_f64 = Proptype::F64(consts::PI);
+        assert_eq!(prop_f64.as_f64(), Some(consts::PI));
+        prop_f64.set_f64(consts::E)?;
+        assert_eq!(prop_f64.as_f64(), Some(consts::E));
 
         // I32 variant
         let mut prop_i32 = Proptype::I32(10);
