@@ -10,7 +10,6 @@ pub use proptype::Proptype;
 use crate::{
     error::{OpmResult, OpossumError},
     properties::validator::Validator,
-    reporting::html_report::HtmlProperty,
 };
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -376,28 +375,6 @@ impl Properties {
             },
         )
     }
-
-    /// Generates HTML representations for all contained properties.
-    #[must_use]
-    pub fn html_props(&self, id: &str, report_number: usize) -> Vec<HtmlProperty> {
-        let mut html_props: Vec<HtmlProperty> = Vec::new();
-        for prop in &self.props {
-            if let Ok(html_prop_value) = prop.1.prop().to_html(id, prop.0, report_number) {
-                let html_prop = HtmlProperty {
-                    name: prop.0.to_owned(),
-                    description: prop.1.description().into(),
-                    prop_value: html_prop_value,
-                };
-                html_props.push(html_prop);
-            } else {
-                warn!(
-                    "Property '{}' could not be converted to HTML. Skipping.",
-                    prop.0
-                );
-            }
-        }
-        html_props
-    }
 }
 
 /// Fault-tolerant deserializer that preserves property creation order.
@@ -439,9 +416,7 @@ impl<'a> IntoIterator for &'a Properties {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::utils::test_helper::helper::check_logs;
     use assert_matches::assert_matches;
-    use log::Level;
     #[test]
     fn properties_create() {
         let mut props = Properties::default();
@@ -505,23 +480,6 @@ mod test {
             .map_err(|e| OpossumError::Other(e.to_string()))?;
         assert_eq!(props.nr_of_props(), 1);
         assert_matches!(props.get("my float")?, &Proptype::F64(_));
-        Ok(())
-    }
-    #[test]
-    fn html_props() -> OpmResult<()> {
-        let mut props = Properties::default();
-        props.create("my prop", "my description", 1.into())?;
-        testing_logger::setup();
-        let html_props = props.html_props("test123", 0);
-        let html_props = html_props
-            .first()
-            .ok_or_else(|| OpossumError::Other("no properties found".to_string()))?;
-        check_logs(Level::Warn, vec![]);
-        assert_eq!(html_props.name, "my prop");
-        assert_eq!(html_props.description, "my description");
-        assert_eq!(html_props.prop_value, "1");
-        let html_props = props.html_props("test123", 0);
-        assert_eq!(html_props.len(), 1);
         Ok(())
     }
     #[test]

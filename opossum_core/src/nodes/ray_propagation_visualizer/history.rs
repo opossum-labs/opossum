@@ -1,22 +1,13 @@
 //! Data structures and plotting routines for ray propagation histories.
 #![warn(missing_docs)]
 
-use std::cmp::Ordering;
-
 use nalgebra::{MatrixXx2, MatrixXx3, Vector3};
-use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
-use uom::si::{
-    f64::Length,
-    length::{millimeter, nanometer},
-};
+use uom::si::{f64::Length, length::millimeter};
 
 use crate::{
     error::{OpmResult, OpossumError},
     millimeter,
-    reporting::plottable::{
-        AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable,
-    },
 };
 
 /// Struct that holds the history of ray positions for rays of a specific spectral bin.
@@ -154,128 +145,5 @@ impl RayPositionHistories {
             .iter()
             .map(|r| *r.get_center_wavelength())
             .collect::<Vec<Length>>()
-    }
-}
-
-impl Plottable for RayPositionHistories {
-    fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
-        let num_series = self.rays_pos_history.len();
-        // Show legend by default for polychromatic setups with <= 5 series
-        let show_legend = num_series > 1 && num_series <= 5;
-
-        plt_params
-            .set(&PlotArgs::XLabel("position in mm (z axis)".into()))?
-            .set(&PlotArgs::YLabel("position in mm (y axis)".into()))?
-            .set(&PlotArgs::PlotSize((1200, 1200)))?
-            .set(&PlotArgs::AxisEqual(true))?
-            .set(&PlotArgs::PlotAutoSize(true))?
-            .set(&PlotArgs::Legend(show_legend))?;
-        Ok(())
-    }
-
-    fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
-        PlotType::MultiLine2D(plt_params.clone())
-    }
-
-    fn get_plot_series(
-        &self,
-        plt_type: &mut PlotType,
-        legend: bool,
-    ) -> OpmResult<Option<Vec<PlotSeries>>> {
-        if self.rays_pos_history.is_empty() {
-            return Ok(None);
-        }
-
-        let num_series = self.rays_pos_history.len();
-
-        // Sort indices by wavelength to preserve spectral colormap order
-        let mut sorted_indices: Vec<usize> = (0..num_series).collect();
-        sorted_indices.sort_by(|&a, &b| {
-            self.rays_pos_history[a]
-                .get_center_wavelength()
-                .partial_cmp(self.rays_pos_history[b].get_center_wavelength())
-                .unwrap_or(Ordering::Equal)
-        });
-
-        let min_wvl = self.rays_pos_history[sorted_indices[0]]
-            .get_center_wavelength()
-            .get::<nanometer>();
-        let max_wvl = self.rays_pos_history[sorted_indices[num_series - 1]]
-            .get_center_wavelength()
-            .get::<nanometer>();
-        let wvl_span = max_wvl - min_wvl;
-
-        // Switch to colorbar if there are more than 5 distinct wavelength series
-        let use_colorbar = if num_series > 5 {
-            plt_type.set_plot_param(&PlotArgs::CBarLabel("wavelength (nm)".into()))?;
-            // Add 170 pixels for the colorbar layout
-            plt_type.set_plot_param(&PlotArgs::PlotSize((1370, 1200)))?;
-
-            let z_lim = if wvl_span.abs() < f64::EPSILON {
-                AxLims::new(min_wvl - 0.5, max_wvl + 0.5)
-            } else {
-                AxLims::new(min_wvl, max_wvl)
-            };
-            plt_type.set_plot_param(&PlotArgs::ZLim(z_lim))?;
-            plt_type.set_plot_param(&PlotArgs::Legend(false))?;
-            true
-        } else {
-            false
-        };
-
-        let color_grad = colorous::TURBO;
-        let wvl_range = if num_series <= 1 || wvl_span.abs() < f64::EPSILON {
-            1.0
-        } else {
-            wvl_span * 2.0
-        };
-
-        let Some(plot_view_direction) = self.plot_view_direction else {
-            return Err(OpossumError::Other(
-                "cannot get plot series for raypropagationvisualizer, plot_view_direction not defined".into(),
-            ));
-        };
-
-        let mut plt_series = Vec::<PlotSeries>::with_capacity(num_series);
-
-        for &idx in &sorted_indices {
-            let ray_pos_hist = &self.rays_pos_history[idx];
-            let wvl = ray_pos_hist.get_center_wavelength().get::<nanometer>();
-            let grad_val = 0.42 + (wvl - min_wvl) / wvl_range;
-            let rgbcolor = color_grad.eval_continuous(grad_val);
-
-            let projected_positions = ray_pos_hist.project_to_plane(plot_view_direction)?;
-            let mut proj_pos_mm = Vec::<MatrixXx2<f64>>::with_capacity(projected_positions.len());
-            for ray_pos in &projected_positions {
-                proj_pos_mm.push(MatrixXx2::from_vec(
-                    ray_pos
-                        .iter()
-                        .map(uom::si::f64::Length::get::<millimeter>)
-                        .collect::<Vec<f64>>(),
-                ));
-            }
-
-            let plt_data = PlotData::MultiDim2 {
-                vec_of_xy_data: proj_pos_mm,
-            };
-
-            // Set label only if legend is requested, colorbar is not used, and polychromatic
-            let series_label = if legend && !use_colorbar && num_series > 1 {
-                Some(format!("{wvl:.1} nm"))
-            } else {
-                None
-            };
-
-            plt_series.push(PlotSeries::new(
-                &plt_data,
-                RGBAColor(rgbcolor.r, rgbcolor.g, rgbcolor.b, self.ray_transparency),
-                series_label,
-            ));
-        }
-
-        match plt_type {
-            PlotType::MultiLine2D(_) => Ok(Some(plt_series)),
-            _ => Ok(None),
-        }
     }
 }

@@ -5,7 +5,6 @@ use crate::{
     core_optics::OpticNode,
     error::{OpmResult, OpossumError},
     properties::{Proptype, proptype::AssetRef},
-    utils::file_utils::{create_f_path, create_file_instance},
 };
 use log::warn;
 use ron::{extensions::Extensions, ser::PrettyConfig};
@@ -173,20 +172,6 @@ impl OpmDocument {
         ron::ser::to_string_pretty(&doc_to_serialize, config).map_err(|e| {
             OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}"))
         })
-    }
-
-    /// Creates DOT and SVG diagram files representing the optical scenery.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if generating or writing the diagram files fails.
-    pub fn create_dot_file(&self, dot_path: &Path) -> OpmResult<()> {
-        let mut output = create_file_instance(dot_path, "scenery", "dot")?;
-        write!(output, "{}", self.scenery.toplevel_dot("")?)
-            .map_err(|e| OpossumError::Other(format!("writing diagram file (.dot) failed: {e}")))?;
-        let mut output = create_file_instance(dot_path, "scenery", "svg")?;
-        let f_path = create_f_path(dot_path, "scenery", "dot");
-        self.scenery.toplevel_dot_svg(&f_path, &mut output)
     }
 }
 
@@ -610,34 +595,6 @@ mod tests {
         assert_eq!(output_names, vec!["output_1".to_string()]);
         check_logs(log::Level::Warn, vec![]);
 
-        Ok(())
-    }
-
-    #[test]
-    fn create_dot_file_test() -> OpmResult<()> {
-        let document =
-            OpmDocument::from_file(Path::new("./files_for_testing/opm/opticscenery.opm"))?;
-        let temp_dir = tempfile::tempdir()
-            .map_err(|e| OpossumError::OpmDocument(format!("Error creating temp dir: {e}")))?;
-        let non_existent_path = temp_dir.path().join("non_existent_folder");
-        assert!(
-            document.create_dot_file(&non_existent_path).is_err(),
-            "Writing to an invalid/non-existent directory should return an error"
-        );
-        assert!(
-            document.create_dot_file(temp_dir.path()).is_ok(),
-            "Writing dot and svg files to valid directory failed"
-        );
-        let dot_file = temp_dir.path().join("scenery.dot");
-        let svg_file = temp_dir.path().join("scenery.svg");
-
-        assert!(dot_file.is_file(), "scenery.dot was not created");
-        assert!(svg_file.is_file(), "scenery.svg was not created");
-
-        let dot_len = fs::metadata(&dot_file)
-            .map_err(|e| OpossumError::OpmDocument(format!("Failed to read dot metadata: {e}")))?
-            .len();
-        assert!(dot_len > 0, "Generated scenery.dot file is empty");
         Ok(())
     }
 

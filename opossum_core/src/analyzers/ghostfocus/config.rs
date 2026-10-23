@@ -259,7 +259,10 @@ mod test {
         let mut config = GhostFocusConfig::default();
 
         // Check default missed surface strategy (MissedSurfaceStrategy::Ignore != Default::default())
-        assert_eq!(config.missed_surface_strategy(), MissedSurfaceStrategy::Ignore);
+        assert_eq!(
+            config.missed_surface_strategy(),
+            MissedSurfaceStrategy::Ignore
+        );
 
         // Check default ambient material
         assert_eq!(config.ambient_material(), &Material::vacuum());

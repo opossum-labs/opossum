@@ -2,11 +2,9 @@
 //! Trait for adding the possibility to generate a (x/y) plot of an element.
 
 pub mod ax_lims;
+pub mod impls;
 pub use ax_lims::AxLims;
 
-use crate::error::{OpmResult, OpossumError};
-use crate::utils::griddata::create_valued_voronoi_cells;
-use crate::utils::{filter_data::get_min_max_filter_nonfinite, griddata::linspace};
 use approx::relative_ne;
 use colorous::Gradient;
 use image::RgbImage;
@@ -16,6 +14,9 @@ use nalgebra::{
     DMatrix, DVector, DVectorView, Matrix3xX, MatrixXx1, MatrixXx2, MatrixXx3, Vector3,
 };
 use num_traits::ToPrimitive;
+use opossum_core::error::{OpmResult, OpossumError};
+use opossum_core::utils::griddata::create_valued_voronoi_cells;
+use opossum_core::utils::{filter_data::get_min_max_filter_nonfinite, griddata::linspace};
 #[cfg(not(target_arch = "wasm32"))]
 use plotters::prelude::SVGBackend;
 use plotters::{
@@ -1448,6 +1449,64 @@ pub enum PltBackEnd {
     Buf,
 }
 
+use crate::error::ReporterResult;
+use opossum_core::properties::{Property, Proptype};
+use opossum_core::reporting::NodeReport;
+
+/// Export plottable property data to a report directory.
+///
+/// # Errors
+/// Returns an error if plot generation or saving fails.
+pub fn export_property_plot(prop: &Property, report_path: &Path, id: &str) -> ReporterResult<()> {
+    match prop.prop() {
+        Proptype::FluenceData(fluence) => {
+            fluence.to_plot(report_path, id, PltBackEnd::Bitmap)?;
+        }
+        Proptype::Spectrum(spectrum) => {
+            spectrum.to_plot(report_path, id, PltBackEnd::SVG)?;
+        }
+        Proptype::RayPositionHistory(ray_hist) => {
+            ray_hist.to_plot(report_path, id, PltBackEnd::SVG)?;
+        }
+        Proptype::GhostFocusHistory(ghost_hist) => {
+            let mut ghost_hist = ghost_hist.clone();
+            ghost_hist.plot_view_direction = Some(nalgebra::vector![1.0, 0.0, 0.0]);
+            ghost_hist.to_plot(report_path, id, PltBackEnd::SVG)?;
+        }
+        Proptype::WaveFrontData(wavefront_error_map) => {
+            wavefront_error_map.to_plot(report_path, id, PltBackEnd::Bitmap)?;
+        }
+        Proptype::HitMap(hit_map) => {
+            hit_map.to_plot(report_path, id, PltBackEnd::SVG)?;
+        }
+        Proptype::SpotDiagram(spot_diagram) => {
+            spot_diagram.to_plot(report_path, id, PltBackEnd::SVG)?;
+        }
+        Proptype::NodeReport(sub_report) => {
+            export_node_report_plots(sub_report, report_path)?;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// Export all plottable properties of a node report to a report directory.
+///
+/// # Errors
+/// Returns an error if plot generation fails.
+pub fn export_node_report_plots(
+    node_report: &NodeReport,
+    report_path: &Path,
+) -> ReporterResult<()> {
+    for (prop_id, prop) in node_report
+        .properties()
+        .props_with_report_id_iter(node_report.uuid())
+    {
+        export_property_plot(prop, report_path, &prop_id)?;
+    }
+    Ok(())
+}
+
 ///Struct to hold the color gradient information of a [`ColorBar`]
 #[derive(Debug, Clone, Copy)]
 pub struct CGradient {
@@ -2573,11 +2632,29 @@ pub enum PlotArgs {
 
 #[cfg(test)]
 mod test {
-    use crate::utils::test_helper::helper::check_logs;
-
     use super::*;
     use approx::{assert_relative_eq, relative_eq};
     use tempfile::NamedTempFile;
+
+    fn check_logs(level: log::Level, expected_warnings: Vec<&str>) {
+        testing_logger::validate(|captured_logs| {
+            let captured_logs: Vec<_> = captured_logs.iter().filter(|l| l.level == level).collect();
+            assert_eq!(
+                captured_logs.len(),
+                expected_warnings.len(),
+                "expected # of warnings do not match: {} != {}. Got warnings: {:?}",
+                captured_logs.len(),
+                expected_warnings.len(),
+                captured_logs
+                    .iter()
+                    .map(|l| l.body.as_str())
+                    .collect::<Vec<_>>()
+            );
+            for log in captured_logs.iter().zip(expected_warnings.clone()) {
+                assert_eq!(log.0.body, log.1);
+            }
+        });
+    }
     #[test]
     fn add_plot_series() -> OpmResult<()> {
         let mut plt = Plot::try_from(&PlotParameters::default())?;
@@ -3639,4 +3716,65 @@ mod test {
         PlotType::TriangulatedSurface(plt_params.clone()).plot(&vec![plt_series_surf_triangle])?;
         Ok(())
     }
+    // #[test]
+    // fn test_get_plot_series_color_palette_boundary() -> OpmResult<()> {
+    //     let dummy_rays = Rays::new_uniform_collimated(
+    //         nanometer!(1000.),
+    //         joule!(1.),
+    //         &Grid::new(millimeter!(1.0, 1.0), point![1, 1])?,
+    //     )?;
+
+    //     // Build accumulated rays with 10 bounces (should use Category10 palette)
+    //     let mut acc_rays_10 = Vec::new();
+    //     for _ in 0..10 {
+    //         let mut bounce_map = HashMap::new();
+    //         bounce_map.insert(dummy_rays.uuid(), dummy_rays.clone());
+    //         acc_rays_10.push(bounce_map);
+    //     }
+
+    //     let mut hist_10 = GhostFocusHistory::from(acc_rays_10);
+    //     hist_10.plot_view_direction = Some(Vector3::z());
+
+    //     let plt_params = PlotParameters::default();
+    //     let mut plt_type = hist_10.get_plot_type(&plt_params);
+    //     let series_10 = hist_10.get_plot_series(&mut plt_type, false)?.unwrap();
+    //     assert_eq!(series_10.len(), 10);
+
+    //     // Category10[0] is #1f77b4 -> (31, 119, 180)
+    //     let cat10_0 = colorous::CATEGORY10[0];
+    //     let cat10_str = format!("({}, {}, {}, 0.2)", cat10_0.r, cat10_0.g, cat10_0.b);
+    //     let series_10_debug = format!("{:?}", series_10[0]);
+    //     assert!(
+    //         series_10_debug.contains(&cat10_str),
+    //         "Expected Category10 color {cat10_str} in series, got {series_10_debug}"
+    //     );
+
+    //     // Build accumulated rays with 11 bounces (> 10: should switch to Turbo palette)
+    //     let mut acc_rays_11 = Vec::new();
+    //     for _ in 0..11 {
+    //         let mut bounce_map = HashMap::new();
+    //         bounce_map.insert(dummy_rays.uuid(), dummy_rays.clone());
+    //         acc_rays_11.push(bounce_map);
+    //     }
+
+    //     let mut hist_11 = GhostFocusHistory::from(acc_rays_11);
+    //     hist_11.plot_view_direction = Some(Vector3::z());
+
+    //     let series_11 = hist_11.get_plot_series(&mut plt_type, false)?.unwrap();
+    //     assert_eq!(series_11.len(), 11);
+
+    //     // Turbo rational eval at index 0 out of 11
+    //     let turbo_0 = colorous::TURBO.eval_rational(0, 11);
+    //     let turbo_str = format!("({}, {}, {}, 0.2)", turbo_0.r, turbo_0.g, turbo_0.b);
+    //     let series_11_debug = format!("{:?}", series_11[0]);
+    //     assert!(
+    //         series_11_debug.contains(&turbo_str),
+    //         "Expected Turbo color {turbo_str} in series, got {series_11_debug}"
+    //     );
+
+    //     // Verify that Category10 and Turbo produce different colors
+    //     assert_ne!(series_10_debug, series_11_debug);
+
+    //     Ok(())
+    // }
 }

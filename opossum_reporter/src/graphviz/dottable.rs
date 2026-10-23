@@ -4,9 +4,9 @@
 //! Provides traits and implementations for exporting the optical system as a graph
 //! in (graphviz) DOT format. Enables visualization and analysis of node connectivity and structure.
 //! Types implementing [`Dottable`] can be rendered as graph nodes and edges.
-use crate::core_optics::{OpticPorts, PortType};
-use crate::error::OpmResult;
 use num_traits::ToPrimitive;
+use opossum_core::core_optics::{OpticPorts, PortType};
+use opossum_core::error::OpmResult;
 use std::fmt::Write as _;
 
 /// Structure for holding the calculated layout parameters for the node's table representation.
@@ -373,16 +373,50 @@ pub trait Dottable {
     }
 }
 
+/// Helper struct to render any node with a specified color to DOT format.
+pub struct NodeDotRenderer {
+    color: &'static str,
+}
+
+impl NodeDotRenderer {
+    /// Creates a new [`NodeDotRenderer`] with the given node color.
+    #[must_use]
+    pub const fn new(color: &'static str) -> Self {
+        Self { color }
+    }
+}
+
+impl Dottable for NodeDotRenderer {
+    fn node_color(&self) -> &'static str {
+        self.color
+    }
+}
+
+/// Formats an optical node into its Graphviz DOT representation.
+///
+/// # Errors
+/// Returns an error if DOT string formatting fails.
+pub fn format_node_to_dot(
+    node_index: &str,
+    name: &str,
+    inverted: bool,
+    ports: &OpticPorts,
+    rankdir: &str,
+    color: &'static str,
+) -> OpmResult<String> {
+    NodeDotRenderer::new(color).to_dot(node_index, name, inverted, ports, rankdir)
+}
+
 #[cfg(test)]
 mod test {
-    use crate::{
+    use num_traits::Zero;
+    use opossum_core::{
         error::{OpmResult, OpossumError},
         nodes::{
             BeamSplitter, Dummy, EnergyMeter, Metertype, NodeGroup, SourcePort,
             SplittingConfigBuilder,
         },
     };
-    use num_traits::Zero;
     use std::{fs::File, io::Read};
     use uom::si::f64::Length;
 
@@ -401,8 +435,10 @@ mod test {
 
         let scenery = NodeGroup::new("Test");
 
-        let scenery_dot_str_tb = scenery.toplevel_dot("TB")?;
-        let scenery_dot_str_lr = scenery.toplevel_dot("LR")?;
+        let scenery_dot_str_tb = crate::graphviz::scenery_to_dot(&scenery, "TB")
+            .map_err(|e| OpossumError::Other(e.to_string()))?;
+        let scenery_dot_str_lr = crate::graphviz::scenery_to_dot(&scenery, "LR")
+            .map_err(|e| OpossumError::Other(e.to_string()))?;
 
         assert_eq!(file_content_tb, scenery_dot_str_tb);
         assert_eq!(file_content_lr, scenery_dot_str_lr);
@@ -416,8 +452,10 @@ mod test {
 
         let mut scenery = NodeGroup::default();
         scenery.add_node(Dummy::new("Test"))?;
-        let scenery_dot_str_tb = scenery.toplevel_dot("TB")?;
-        let scenery_dot_str_lr = scenery.toplevel_dot("LR")?;
+        let scenery_dot_str_tb = crate::graphviz::scenery_to_dot(&scenery, "TB")
+            .map_err(|e| OpossumError::Other(e.to_string()))?;
+        let scenery_dot_str_lr = crate::graphviz::scenery_to_dot(&scenery, "LR")
+            .map_err(|e| OpossumError::Other(e.to_string()))?;
 
         assert_eq!(file_content_tb, scenery_dot_str_tb);
         assert_eq!(file_content_lr, scenery_dot_str_lr);
@@ -445,8 +483,10 @@ mod test {
         scenery.connect_nodes(i_bs, "out1_trans1_refl2", i_d1, "input_1", Length::zero())?;
         scenery.connect_nodes(i_bs, "out2_trans2_refl1", i_d2, "input_1", Length::zero())?;
 
-        let scenery_dot_str_tb = scenery.toplevel_dot("TB")?;
-        let scenery_dot_str_lr = scenery.toplevel_dot("LR")?;
+        let scenery_dot_str_tb = crate::graphviz::scenery_to_dot(&scenery, "TB")
+            .map_err(|e| OpossumError::Other(e.to_string()))?;
+        let scenery_dot_str_lr = crate::graphviz::scenery_to_dot(&scenery, "LR")
+            .map_err(|e| OpossumError::Other(e.to_string()))?;
 
         assert_eq!(file_content_tb, scenery_dot_str_tb);
         assert_eq!(file_content_lr, scenery_dot_str_lr);
@@ -502,8 +542,10 @@ mod test {
         scenery.connect_nodes(scene_g1, "output_1", scene_g2, "input_1", Length::zero())?;
         let file_content_tb = get_file_content("./files_for_testing/dot/group_dot_TB.dot")?;
         let file_content_lr = get_file_content("./files_for_testing/dot/group_dot_LR.dot")?;
-        let scenery_dot_str_tb = scenery.toplevel_dot("TB")?;
-        let scenery_dot_str_lr = scenery.toplevel_dot("LR")?;
+        let scenery_dot_str_tb = crate::graphviz::scenery_to_dot(&scenery, "TB")
+            .map_err(|e| OpossumError::Other(e.to_string()))?;
+        let scenery_dot_str_lr = crate::graphviz::scenery_to_dot(&scenery, "LR")
+            .map_err(|e| OpossumError::Other(e.to_string()))?;
 
         assert_eq!(file_content_tb, scenery_dot_str_tb);
         assert_eq!(file_content_lr, scenery_dot_str_lr);

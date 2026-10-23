@@ -20,9 +20,17 @@ use crate::{
     geometry::Geometry,
     light::LightData,
     nodes::fluence_detector::Fluence,
-    reporting::{Dottable, node_report::NodeReportResult},
+    reporting::node_report::NodeReportResult,
     utils::geom_transformation::Isometry,
 };
+
+/// Trait providing visual metadata for an optical component (such as node color for diagrams).
+pub trait VisualNode {
+    /// Defines the displayed color of the node (e.g. in diagrams or visualizations).
+    fn node_color(&self) -> &'static str {
+        "lightgray"
+    }
+}
 
 /// The report note of a detector whose apodization warning is set (see
 /// [`OpticNode::set_apodization_warning`]): an optic shape limited what it measured.
@@ -41,7 +49,7 @@ pub trait OpticNodeAny {
 }
 
 /// This is the basic trait that must be implemented by all concrete optical components.
-pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
+pub trait OpticNode: VisualNode + HasNodeAttr + OpticNodeAny {
     /// Sets the apodization warning on nodes that have that attribute.
     fn set_apodization_warning(&mut self, _apodized: bool) {
         warn!(

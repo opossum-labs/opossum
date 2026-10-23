@@ -1,7 +1,6 @@
 use std::collections::{HashMap, hash_map::Values};
 
 use nalgebra::{MatrixXx2, MatrixXx3, Vector3};
-use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 use uom::si::length::millimeter;
@@ -14,7 +13,6 @@ use crate::{
     millimeter,
     nodes::OpticGraph,
     prelude::Proptype,
-    reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
 };
 
 /// Struct to store the node origin uuid and parent ray bundle Uuid of a ray bundle
@@ -78,7 +76,7 @@ impl GhostFocusHistory {
     /// This function errors if the length of the plane normal vector is zero
     /// # Returns
     /// This function returns a set of 2d vectors in the defined plane projected to a view that is perpendicular to this plane.
-    fn project_to_plane(
+    pub fn project_to_plane(
         &self,
         plane_normal_vec: Vector3<f64>,
     ) -> OpmResult<Vec<Vec<Vec<MatrixXx2<Length>>>>> {
@@ -260,74 +258,6 @@ impl From<(&Vec<HashMap<Uuid, Rays>>, Uuid, usize)> for GhostFocusHistory {
         ghost_focus_history.add_specific_ray_history(acc_rays, rays_uuid, hist_idx);
 
         ghost_focus_history
-    }
-}
-impl Plottable for GhostFocusHistory {
-    fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
-        plt_params
-            .set(&PlotArgs::XLabel("position in mm (z axis)".into()))?
-            .set(&PlotArgs::YLabel("position in mm (y axis)".into()))?
-            .set(&PlotArgs::PlotSize((1200, 1200)))?
-            .set(&PlotArgs::AxisEqual(true))?
-            .set(&PlotArgs::PlotAutoSize(true))?
-            .set(&PlotArgs::Legend(false))?;
-        Ok(())
-    }
-
-    fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
-        PlotType::MultiLine2D(plt_params.clone())
-    }
-
-    fn get_plot_series(
-        &self,
-        _plt_type: &mut PlotType,
-        _legend: bool,
-    ) -> OpmResult<Option<Vec<PlotSeries>>> {
-        if self.rays_pos_history.is_empty() {
-            Ok(None)
-        } else {
-            let num_series = self.rays_pos_history.len();
-            let mut plt_series = Vec::<PlotSeries>::with_capacity(num_series);
-
-            let Some(plot_view_direction) = self.plot_view_direction else {
-                return Err(OpossumError::Other("cannot get plot series for raypropagationvisualizer, plot_view_direction not defined".into()));
-            };
-
-            let projected_positions = self.project_to_plane(plot_view_direction)?;
-            for (i, bounce_positions) in projected_positions.iter().enumerate() {
-                let mut proj_pos_mm =
-                    Vec::<MatrixXx2<f64>>::with_capacity(projected_positions.len());
-                for rays_in_bounce in bounce_positions {
-                    for ray_pos in rays_in_bounce {
-                        proj_pos_mm.push(MatrixXx2::from_vec(
-                            ray_pos
-                                .iter()
-                                .map(uom::si::f64::Length::get::<millimeter>)
-                                .collect::<Vec<f64>>(),
-                        ));
-                    }
-                }
-                let gradient = colorous::TURBO;
-
-                let c = if projected_positions.len() > 10 {
-                    gradient.eval_rational(i, projected_positions.len())
-                } else {
-                    colorous::CATEGORY10[i]
-                };
-
-                let plt_data = PlotData::MultiDim2 {
-                    vec_of_xy_data: proj_pos_mm,
-                };
-                let series_label = format!("Bounce: {i}");
-
-                plt_series.push(PlotSeries::new(
-                    &plt_data,
-                    RGBAColor(c.r, c.g, c.b, 0.2),
-                    Some(series_label),
-                ));
-            }
-            Ok(Some(plt_series))
-        }
     }
 }
 #[cfg(test)]
@@ -692,11 +622,17 @@ mod test {
 
         // 2. Kill `replace < with ==` in `vec_norm < f64::EPSILON`
         // 0.5 * EPSILON is strictly < EPSILON, so original code returns Err
-        assert!(hist.project_to_plane(Vector3::new(f64::EPSILON * 0.5, 0.0, 0.0)).is_err());
+        assert!(
+            hist.project_to_plane(Vector3::new(f64::EPSILON * 0.5, 0.0, 0.0))
+                .is_err()
+        );
 
         // 3. Kill `replace < with <=` in `vec_norm < f64::EPSILON`
         // norm == EPSILON is NOT < EPSILON, so original code returns Ok, but mutant returns Err
-        assert!(hist.project_to_plane(Vector3::new(f64::EPSILON, 0.0, 0.0)).is_ok());
+        assert!(
+            hist.project_to_plane(Vector3::new(f64::EPSILON, 0.0, 0.0))
+                .is_ok()
+        );
 
         // 4. Non-unit normal vector with components in all 3 axes:
         // Kills:
@@ -763,68 +699,6 @@ mod test {
 
         // Verify bounce 1 output formatting
         assert!(report_str.contains("bounce 1 at node 'NodeGhost', "));
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_get_plot_series_color_palette_boundary() -> OpmResult<()> {
-        let dummy_rays = Rays::new_uniform_collimated(
-            nanometer!(1000.),
-            joule!(1.),
-            &Grid::new(millimeter!(1.0, 1.0), point![1, 1])?,
-        )?;
-
-        // Build accumulated rays with 10 bounces (should use Category10 palette)
-        let mut acc_rays_10 = Vec::new();
-        for _ in 0..10 {
-            let mut bounce_map = HashMap::new();
-            bounce_map.insert(dummy_rays.uuid(), dummy_rays.clone());
-            acc_rays_10.push(bounce_map);
-        }
-
-        let mut hist_10 = GhostFocusHistory::from(acc_rays_10);
-        hist_10.plot_view_direction = Some(Vector3::z());
-
-        let plt_params = PlotParameters::default();
-        let mut plt_type = hist_10.get_plot_type(&plt_params);
-        let series_10 = hist_10.get_plot_series(&mut plt_type, false)?.unwrap();
-        assert_eq!(series_10.len(), 10);
-
-        // Category10[0] is #1f77b4 -> (31, 119, 180)
-        let cat10_0 = colorous::CATEGORY10[0];
-        let cat10_str = format!("({}, {}, {}, 0.2)", cat10_0.r, cat10_0.g, cat10_0.b);
-        let series_10_debug = format!("{:?}", series_10[0]);
-        assert!(
-            series_10_debug.contains(&cat10_str),
-            "Expected Category10 color {cat10_str} in series, got {series_10_debug}"
-        );
-
-        // Build accumulated rays with 11 bounces (> 10: should switch to Turbo palette)
-        let mut acc_rays_11 = Vec::new();
-        for _ in 0..11 {
-            let mut bounce_map = HashMap::new();
-            bounce_map.insert(dummy_rays.uuid(), dummy_rays.clone());
-            acc_rays_11.push(bounce_map);
-        }
-
-        let mut hist_11 = GhostFocusHistory::from(acc_rays_11);
-        hist_11.plot_view_direction = Some(Vector3::z());
-
-        let series_11 = hist_11.get_plot_series(&mut plt_type, false)?.unwrap();
-        assert_eq!(series_11.len(), 11);
-
-        // Turbo rational eval at index 0 out of 11
-        let turbo_0 = colorous::TURBO.eval_rational(0, 11);
-        let turbo_str = format!("({}, {}, {}, 0.2)", turbo_0.r, turbo_0.g, turbo_0.b);
-        let series_11_debug = format!("{:?}", series_11[0]);
-        assert!(
-            series_11_debug.contains(&turbo_str),
-            "Expected Turbo color {turbo_str} in series, got {series_11_debug}"
-        );
-
-        // Verify that Category10 and Turbo produce different colors
-        assert_ne!(series_10_debug, series_11_debug);
 
         Ok(())
     }

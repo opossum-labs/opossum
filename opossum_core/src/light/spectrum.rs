@@ -7,15 +7,12 @@ use crate::{
     micrometer,
     prelude::EnergyLaserLines,
     properties::Proptype,
-    reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     utils::{to_f64, try_f64_to_usize},
     validated, validated_type, validated_vec, validated_vec_type,
 };
 use kahan::KahanSummator;
 use log::warn;
-use nalgebra::MatrixXx2;
 use opm_macros_lib::EnsureValidated;
-use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
 use std::{
     f64::consts::PI,
@@ -657,44 +654,6 @@ impl Spectrum {
                 .map(|d| (d.0.0, (d.0.1 - d.1.1).clamp(0.0, f64::abs(d.0.1 - d.1.1))))
                 .collect::<Vec<(f64, f64)>>(),
         );
-    }
-}
-
-impl Plottable for Spectrum {
-    fn get_plot_series(
-        &self,
-        plt_type: &mut PlotType,
-        _legend: bool,
-    ) -> OpmResult<Option<Vec<PlotSeries>>> {
-        let data = self.data.clone();
-        let mut spec_mat = MatrixXx2::zeros(data.len());
-        for (i, s) in data.iter().enumerate() {
-            spec_mat[(i, 0)] = s.0 * 1000.0; // micrometer -> nanometer
-            spec_mat[(i, 1)] = s.1;
-        }
-        match plt_type {
-            PlotType::Line2D(_) | PlotType::Scatter2D(_) | PlotType::Histogram2D(_) => {
-                let plt_series = PlotSeries::new(
-                    &PlotData::Dim2 { xy_data: spec_mat },
-                    RGBAColor(255, 0, 0, 1.),
-                    None,
-                );
-                Ok(Some(vec![plt_series]))
-            }
-            _ => Ok(None),
-        }
-    }
-    fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
-        plt_params
-            .set(&PlotArgs::XLabel("wavelength in nm".into()))?
-            .set(&PlotArgs::YLabel("spectrum in arb. units".into()))?
-            .set(&PlotArgs::PlotSize((1200, 800)))?
-            .set(&PlotArgs::AxisEqual(false))?;
-
-        Ok(())
-    }
-    fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
-        PlotType::Histogram2D(plt_params.clone())
     }
 }
 

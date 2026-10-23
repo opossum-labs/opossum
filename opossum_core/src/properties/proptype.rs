@@ -1,6 +1,5 @@
 #![warn(missing_docs)]
 //! Module for handling properties of optical nodes.
-use std::cell::RefCell;
 
 use crate::{
     analyzers::ghostfocus::GhostFocusHistory,
@@ -25,7 +24,7 @@ use crate::{
         reflective_grating::LinearDensity,
     },
     refractive_index::RefractiveIndexType,
-    reporting::{html_report::HtmlNodeReport, node_report::NodeReport},
+    reporting::node_report::NodeReport,
     utils::{
         geom_transformation::Isometry,
         unit_format::{get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit},
@@ -34,36 +33,12 @@ use crate::{
 use nalgebra::{Vector2, Vector3};
 use num_traits::Float;
 use serde::{Deserialize, Serialize};
-use tinytemplate::TinyTemplate;
 use uom::si::{
     Dimension, Quantity, Unit, Units,
-    energy::joule,
     f64::{Energy, Length, LinearNumberDensity},
-    length::meter,
-    radiant_exposure::joule_per_square_centimeter,
 };
 use uom::{lib::fmt::Debug, si::f64::Angle};
 use uuid::Uuid;
-
-static HTML_PROP_SIMPLE: &str = include_str!("../html/prop_simple.html");
-static HTML_PROP_IMAGE: &str = include_str!("../html/prop_image.html");
-static HTML_PROP_GROUP: &str = include_str!("../html/node_report.html");
-static HTML_PROP_DECOMPOSITION: &str = include_str!("../html/prop_decomposition.html");
-
-thread_local! {
-    static THREAD_TEMPLATES: RefCell<TinyTemplate<'static>> = RefCell::new({
-        let mut tt = TinyTemplate::new();
-        tt.add_template("simple", HTML_PROP_SIMPLE)
-            .expect("Failed to add simple template (thread-local)");
-        tt.add_template("image", HTML_PROP_IMAGE)
-            .expect("Failed to add image template (thread-local)");
-        tt.add_template("group", HTML_PROP_GROUP)
-            .expect("Failed to add group template (thread-local)");
-        tt.add_template("decomposition", HTML_PROP_DECOMPOSITION)
-            .expect("Failed to add decomposition template (thread-local)");
-        tt
-    });
-}
 
 /// Wrapper for registry assets that can hold either the full inline data
 /// or a lightweight UUID reference for serialization.
@@ -218,82 +193,6 @@ impl Proptype {
     ///
     /// # Errors
     ///
-    /// This function will return an error if
-    ///   - underlying html templates could not be compiled
-    ///   - a property value could not be converted to html code.
-    pub fn to_html(
-        &self,
-        id: &str,
-        property_name: &str,
-        report_number: usize,
-    ) -> OpmResult<String> {
-        THREAD_TEMPLATES.with(|template_refcell| {
-            let template_engine = template_refcell.borrow();
-            let string_value = match self {
-                Self::String(value) => template_engine.render("simple", value),
-                Self::I32(value) => template_engine.render("simple", &format!("{value}")),
-                Self::F64(value) => template_engine.render("simple", &format!("{value:.6}")),
-                Self::Bool(value) => template_engine.render("simple", &format!("{value}")),
-                Self::SpectrometerType(value) => {
-                    template_engine.render("simple", &value.to_string())
-                }
-                Self::Metertype(value) => template_engine.render("simple", &value.to_string()),
-                Self::Spectrum(_)
-                | Self::HitMap(_)
-                | Self::SpotDiagram(_)
-                | Self::RayPositionHistory(_)
-                | Self::GhostFocusHistory(_) => template_engine.render(
-                    "image",
-                    &format!("data_{report_number}/{id}_{property_name}.svg"),
-                ),
-                Self::WaveFrontData(_) | Self::FluenceData(_) => template_engine.render(
-                    "image",
-                    &format!("data_{report_number}/{id}_{property_name}.png"),
-                ),
-                Self::NodeReport(report) => {
-                    let html_node_report = HtmlNodeReport::from_node_report(report, report_number);
-                    template_engine.render("group", &html_node_report)
-                }
-                Self::WavefrontDecomposition(decomp) => {
-                    render_decomposition_html(decomp, &template_engine)
-                }
-                Self::Fluence(value) => template_engine.render(
-                    "simple",
-                    &format!(
-                        "{}{}",
-                        format_value_with_prefix(value.get::<joule_per_square_centimeter>()),
-                        joule_per_square_centimeter::abbreviation()
-                    ),
-                ),
-                Self::WfLambda(value, wvl) => template_engine.render(
-                    "simple",
-                    &format!(
-                        "{}λ, (λ = {})",
-                        format_value_with_prefix(*value,),
-                        format_quantity(meter, *wvl)
-                    ),
-                ),
-                Self::Length(value) => {
-                    template_engine.render("simple", &format_quantity(meter, *value))
-                }
-                Self::Energy(value) => {
-                    template_engine.render("simple", &format_quantity(joule, *value))
-                }
-                Self::OpticShape(optic_shape) => {
-                    template_engine.render("simple", &optic_shape.to_string())
-                }
-                Self::Material(AssetRef::Inline(mat)) => template_engine
-                    .render("simple", &format!("{} (v{})", mat.name(), mat.version())),
-                Self::Material(AssetRef::Id(mat_id)) => {
-                    template_engine.render("simple", &format!("MaterialRef({mat_id})"))
-                }
-                _ => Err(tinytemplate::error::Error::GenericError {
-                    msg: "proptype not supported".into(),
-                }),
-            };
-            string_value.map_err(|e| OpossumError::Other(format!("Template rendering error: {e}")))
-        })
-    }
     /// Returns the raw scalar value as an `f64` if this variant represents a numeric scalar.
     /// For dimensional `uom` quantities, the value is returned in its fundamental SI base unit.
     #[must_use]
@@ -351,65 +250,7 @@ impl Proptype {
         }
     }
 }
-/// Helper function to build the template context and render the decomposition table to HTML.
-fn render_decomposition_html(
-    decomp_data: &WavefrontDecomposition,
-    template_engine: &TinyTemplate<'_>,
-) -> Result<String, tinytemplate::error::Error> {
-    const NOISE_THRESHOLD_LAMBDA: f64 = 1e-6;
-    let wvl = decomp_data.wavelength;
 
-    let residual_rms_val = if decomp_data.decomposition.residual_rms.abs() < NOISE_THRESHOLD_LAMBDA
-    {
-        0.0
-    } else {
-        decomp_data.decomposition.residual_rms
-    };
-
-    let mut modes = Vec::new();
-    for mode in &decomp_data.decomposition.modes {
-        // Skip global phase shift (piston)
-        if mode.is_piston {
-            continue;
-        }
-
-        // Cut off sub-micro-lambda numerical noise
-        let coeff = if mode.coefficient.abs() < NOISE_THRESHOLD_LAMBDA {
-            0.0
-        } else {
-            mode.coefficient
-        };
-
-        let coeff_lambda_str = format!("{}λ", format_value_with_prefix(coeff));
-        let physical_val = coeff * wvl.value; // Value in fundamental base unit (meter)
-        let coeff_phys_str = format_quantity(meter, Length::new::<meter>(physical_val));
-
-        modes.push(HtmlDecompMode {
-            label: mode.label.clone(),
-            coeff_lambda: coeff_lambda_str,
-            coeff_physical: coeff_phys_str,
-        });
-    }
-
-    let metadata = decomp_data
-        .decomposition
-        .metadata
-        .iter()
-        .map(|(k, v)| HtmlDecompMeta {
-            key: k.clone(),
-            val: v.clone(),
-        })
-        .collect();
-
-    let ctx = HtmlDecompContext {
-        basis_name: decomp_data.decomposition.basis_name.clone(),
-        residual_rms: format!("{}λ", format_value_with_prefix(residual_rms_val)),
-        metadata,
-        modes,
-    };
-
-    template_engine.render("decomposition", &ctx)
-}
 impl From<bool> for Proptype {
     fn from(value: bool) -> Self {
         Self::Bool(value)
@@ -527,26 +368,7 @@ impl From<WavefrontDecomposition> for Proptype {
         Self::WavefrontDecomposition(value)
     }
 }
-#[derive(Serialize)]
-struct HtmlDecompMeta {
-    key: String,
-    val: String,
-}
 
-#[derive(Serialize)]
-struct HtmlDecompMode {
-    label: String,
-    coeff_lambda: String,
-    coeff_physical: String,
-}
-
-#[derive(Serialize)]
-struct HtmlDecompContext {
-    basis_name: String,
-    residual_rms: String,
-    metadata: Vec<HtmlDecompMeta>,
-    modes: Vec<HtmlDecompMode>,
-}
 /// Generate a string suffix for an ordinal number
 #[must_use]
 pub fn count_str(i: usize) -> String {
@@ -602,9 +424,11 @@ mod test {
     use std::f64::consts;
 
     use super::*;
-    use crate::{J_per_m2, joule, meter, nanometer, properties::Properties};
     use assert_matches::assert_matches;
-    use uom::si::length::nanometer;
+    use uom::si::{
+        energy::joule,
+        length::{meter, nanometer},
+    };
     #[test]
     fn from_string() {
         assert_matches!(Proptype::from(String::new()), Proptype::String(_));
@@ -651,76 +475,6 @@ mod test {
             super::format_quantity(joule, Length::new::<nanometer>(1053.12345)),
             "   1.053 μJ"
         );
-    }
-    #[test]
-    fn to_html() -> OpmResult<()> {
-        assert_eq!(
-            Proptype::String("Test".into()).to_html("id", "property_name", 0)?,
-            "Test".to_string()
-        );
-        assert_eq!(
-            Proptype::I32(-14).to_html("id", "property_name", 0)?,
-            "-14".to_string()
-        );
-        assert_eq!(
-            Proptype::F64(-3.1415926537).to_html("id", "property_name", 0)?,
-            "-3.141593".to_string()
-        );
-        assert_eq!(
-            Proptype::Bool(true).to_html("id", "property_name", 0)?,
-            "true".to_string()
-        );
-        assert_eq!(
-            Proptype::SpectrometerType(SpectrometerType::HR2000).to_html(
-                "id",
-                "property_name",
-                0
-            )?,
-            "Ocean Optics HR2000".to_string()
-        );
-        // An embedded material is named by its header, a referenced one only by its id.
-        assert_eq!(
-            Proptype::from(Material::default()).to_html("id", "property_name", 0)?,
-            "Default Glass (v0)".to_string()
-        );
-        let material_id = Uuid::nil();
-        assert_eq!(
-            Proptype::Material(AssetRef::<Material>::Id(material_id)).to_html(
-                "id",
-                "property_name",
-                0
-            )?,
-            format!("MaterialRef({material_id})")
-        );
-        assert_eq!(
-            Proptype::WaveFrontData(WaveFrontMap::default())
-                .to_html("id", "property_name",0)
-                ?,
-            "<img src=\"data_0/id_property_name.png\" class=\"img-fluid\" style=\"max-height: 500pt;\" alt=\"measurement data\"/>".to_string()
-        );
-        assert_eq!(
-            Proptype::NodeReport(NodeReport::new("test1", "test2", "test3", Properties::default()))
-                .to_html("id", "property_name",0)
-                ?,
-            "<div class=\"accordion-item\">\n  <h5 class=\"accordion-header\">\n    <button class=\"accordion-button collapsed\" type=\"button\" data-bs-toggle=\"collapse\" data-bs-target=\"#test3\">\n      <span class=\"h5 me-2\">test2</span><small class=\"muted\">test1</small>\n    </button>\n  </h5>\n  <div id=\"test3\" class=\"accordion-collapse collapse \">\n    <div class=\"accordion-body\">\n      \n      <table class=\"table table-sm table-bordered\">\n        <tbody>\n          \n        </tbody>\n      </table>\n    </div>\n  </div>\n</div>".to_string()
-        );
-        assert_eq!(
-            Proptype::Fluence(J_per_m2!(1.234567)).to_html("id", "property_name", 0)?,
-            " 123.457 μJ/cm²".to_string()
-        );
-        assert_eq!(
-            Proptype::WfLambda(0.123456, nanometer!(1054.0)).to_html("id", "property_name", 0)?,
-            " 123.456 mλ, (λ =    1.054 μm)".to_string()
-        );
-        assert_eq!(
-            Proptype::Length(meter!(0.12345678)).to_html("id", "property_name", 0)?,
-            " 123.457 mm".to_string()
-        );
-        assert_eq!(
-            Proptype::Energy(joule!(0.12345678)).to_html("id", "property_name", 0)?,
-            " 123.457 mJ".to_string()
-        );
-        Ok(())
     }
     #[test]
     fn test_count_str() {
