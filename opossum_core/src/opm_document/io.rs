@@ -183,6 +183,7 @@ mod tests {
             Analyzer, AnalyzerType, GhostFocusConfig, RayTraceConfig,
             ghostfocus::GhostFocusAnalyzer, raytrace::RayTracingAnalyzer,
         },
+        coatings::{CoatingType, SplittingConfigBuilder},
         core_optics::{Alignable, OpticNode, PortType, node_attr::NodePositioning},
         degree,
         gain::{ConstGain, GainModel},
@@ -193,7 +194,9 @@ mod tests {
             BeamSplitter, CylindricLens, Dummy, EnergyMeter, FluenceDetector, IdealFilter, Lens,
             NodeGroup, ParabolicMirror, ParaxialSurface, RayPropagationVisualizer,
             ReflectiveGrating, SourcePort, Spectrometer, SpotDiagram, ThinMirror, WaveFront, Wedge,
-            collimated_line_ray_builder, round_collimated_ray_builder,
+            collimated_line_ray_builder,
+            ideal_filter::{EdgeFilter, EdgeFilterType, SpectralFilterBuilder},
+            round_collimated_ray_builder,
         },
         refractive_index::RefrIndexConst,
         utils::test_helper::helper::check_logs,
@@ -247,6 +250,35 @@ mod tests {
     fn a_document_without_amplifier_nodes_writes_none() -> OpmResult<()> {
         let document = OpmDocument::default();
         assert!(!document.to_opm_file_string()?.contains("amplifier_nodes"));
+        Ok(())
+    }
+
+    /// A beam splitter whose surface splits by a spectrum keeps the filter parameters defining it,
+    /// not a spectrum built from them.
+    #[test]
+    fn a_spectral_separator_survives_a_file_round_trip() -> OpmResult<()> {
+        let short_pass =
+            SplittingConfigBuilder::Spectrum(SpectralFilterBuilder::EdgeFilter(EdgeFilter::new(
+                EdgeFilterType::ShortPass,
+                nanometer!(1000.0),
+                0.0..1.0,
+                None,
+                nanometer!(500.0)..nanometer!(1500.0),
+                nanometer!(1.0),
+            )?));
+        let mut document = OpmDocument::default();
+        let splitter_id = document
+            .scenery_mut()
+            .add_node(BeamSplitter::new("splitter", &short_pass)?)?;
+
+        let reloaded = OpmDocument::from_string(&document.to_opm_file_string()?)?;
+        let surface = reloaded
+            .scenery()
+            .with_node_attr(splitter_id, |attr| attr.get_property("surface").cloned())??;
+        let Proptype::SurfaceConfig(config) = surface else {
+            panic!("a beam splitter must carry a surface property")
+        };
+        assert_eq!(config.coating(), &CoatingType::Separator(short_pass));
         Ok(())
     }
 
