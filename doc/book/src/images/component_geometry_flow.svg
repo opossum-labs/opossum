@@ -3,20 +3,20 @@
      font-family="Helvetica, Arial, sans-serif">
   <title>What a component's geometry depends on</title>
   <desc>Five stages from top to bottom. The .opm file stores the node's properties, its optic shape,
-        its position and alignment, and a coating and LIDT per port. From the properties and the optic
+        its position and alignment, and a coating and LIDT per face. From the properties and the optic
         shape the node derives its Geometry on demand, one variant per kind: Surface, Extruded,
-        ParametricSolid or Assembly, each answering GeometryKind. From position and alignment it derives
-        its placement. Geometry::moved places the geometry: the same type, with every face and rim moved.
-        Its numbered faces are traced at, GeometryKind::includes says where each face ends, and a solid
-        is the body bounded by those same faces. install_geometry builds the node's RuntimeGeometry and
-        lets every port name the face it sits on: it holds the placed geometry, one OpticSurface per port
-        name with that face number, the port's coating and LIDT and no geometry, and the inversion of the
-        medium. The medium is the body of the same geometry, whose inversion prepare_volume fills.
-        update_surfaces installs a new RuntimeGeometry, and the alignment run triggers it by placing a
-        node. The analyzers let the runtime geometry act on the rays at the surface under a port
-        (RuntimeGeometry::interact): the geometry answers where a ray hits the face (Geometry::intersect),
-        and the surface effect acts on the hit; the medium is used inside volume nodes, and the 3D view
-        moves the geometry to the node itself, not reading the runtime state.</desc>
+        ParametricSolid or Assembly, each answering GeometryKind; every face holds its optic surface.
+        From position and alignment it derives its placement. Geometry::move_by places the geometry:
+        every face and rim is moved. Its numbered faces are traced at, GeometryKind::includes says where
+        each face ends, and a solid is the body bounded by those same faces. install_geometry keeps the
+        placed geometry as the node's runtime geometry, gives every face the coating and LIDT of its
+        surface property and lets every port name the face it sits on. The medium is the body of the
+        same geometry, whose inversion prepare_volume fills. update_surfaces installs a new runtime
+        geometry, and the alignment run triggers it by placing a node. The analyzers let the runtime
+        geometry act on the rays at the face under a port (Geometry::interact_with_rays): the geometry
+        answers where a ray hits the face (Geometry::intersect), and the surface effect acts on the hit;
+        the medium is used inside volume nodes, and the 3D view moves the geometry to the node itself,
+        not reading the runtime state.</desc>
 
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
@@ -55,8 +55,8 @@
   <text x="754" y="84" font-size="12" text-anchor="middle" fill="#4a5568">OpticShape: edge with bores</text>
 
   <rect x="896" y="40" width="188" height="60" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
-  <text x="990" y="64" font-size="14" text-anchor="middle" fill="#1a202c">port config</text>
-  <text x="990" y="84" font-size="12" text-anchor="middle" fill="#4a5568">PortConfig: coating, LIDT</text>
+  <text x="990" y="64" font-size="14" text-anchor="middle" fill="#1a202c">surface properties</text>
+  <text x="990" y="84" font-size="12" text-anchor="middle" fill="#4a5568">coating + LIDT per face</text>
 
   <!-- ── band 2: described ────────────────────────────────────────────────── -->
   <rect x="24" y="136" width="1072" height="184" rx="8"
@@ -71,7 +71,7 @@
   <text x="242" y="240" font-size="12" text-anchor="middle" fill="#4a5568">position &#8728; alignment</text>
 
   <rect x="360" y="162" width="520" height="146" rx="6" fill="#edf2f7" stroke="#4a5568"/>
-  <text x="620" y="184" font-size="14" text-anchor="middle" fill="#1a202c">OpticNode::geometry() &#8594; Geometry</text>
+  <text x="620" y="184" font-size="14" text-anchor="middle" fill="#1a202c">OpticNode::create_geometry() &#8594; Geometry</text>
   <text x="620" y="202" font-size="11" text-anchor="middle" fill="#4a5568">a preset per node type: singlet, wedge, surface, plane, detector, &#8230;</text>
 
   <rect x="372" y="214" width="118" height="66" rx="5" fill="#ffffff" stroke="#4a5568"/>
@@ -92,7 +92,7 @@
   <text x="809" y="236" font-size="11" text-anchor="middle" fill="#718096">Assembly *</text>
   <text x="809" y="254" font-size="10" text-anchor="middle" fill="#718096">parts, interfaces</text>
 
-  <text x="620" y="298" font-size="11" text-anchor="middle" fill="#4a5568">every kind answers GeometryKind: faces, includes, window, as_body, moved</text>
+  <text x="620" y="298" font-size="11" text-anchor="middle" fill="#4a5568">every kind answers GeometryKind: surfaces, face names, includes, window, as_body, move_by</text>
 
   <!-- band 1 to band 2 -->
   <line x1="242" y1="100" x2="242" y2="192" stroke="#2b6cb0" marker-end="url(#arrow-placement)"/>
@@ -104,7 +104,7 @@
   <rect x="24" y="336" width="1072" height="124" rx="8"
         fill="none" stroke="#a0aec0" stroke-dasharray="6 4"/>
   <text x="36" y="360" font-size="12" font-weight="bold" fill="#4a5568">placed</text>
-  <text x="36" y="376" font-size="11" fill="#718096">by moved(), the</text>
+  <text x="36" y="376" font-size="11" fill="#718096">by move_by(), the</text>
   <text x="36" y="390" font-size="11" fill="#718096">same Geometry</text>
   <text x="36" y="404" font-size="11" fill="#718096">at the node</text>
 
@@ -115,8 +115,8 @@
 
   <rect x="360" y="380" width="252" height="68" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
   <text x="486" y="404" font-size="14" text-anchor="middle" fill="#1a202c">numbered faces</text>
-  <text x="486" y="422" font-size="11" text-anchor="middle" fill="#4a5568">Face { shape, frame }, frames moved</text>
-  <text x="486" y="438" font-size="11" text-anchor="middle" fill="#4a5568">kind().face(i); i = face number</text>
+  <text x="486" y="422" font-size="11" text-anchor="middle" fill="#4a5568">OpticSurface { face, coating, LIDT, &#8230; }</text>
+  <text x="486" y="438" font-size="11" text-anchor="middle" fill="#4a5568">kind().surface(i); i = FaceIndex</text>
 
   <rect x="628" y="380" width="252" height="68" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
   <text x="754" y="404" font-size="14" text-anchor="middle" fill="#1a202c">where a face ends</text>
@@ -144,23 +144,23 @@
 
   <rect x="140" y="504" width="204" height="124" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
   <text x="242" y="530" font-size="14" text-anchor="middle" fill="#1a202c">medium</text>
-  <text x="242" y="550" font-size="12" text-anchor="middle" fill="#4a5568">RuntimeGeometry::medium()</text>
-  <text x="242" y="576" font-size="11" text-anchor="middle" fill="#4a5568">body: as_body() of the</text>
-  <text x="242" y="592" font-size="11" text-anchor="middle" fill="#4a5568">placed geometry</text>
-  <text x="242" y="608" font-size="11" text-anchor="middle" fill="#4a5568">inversion: prepare_volume()</text>
+  <text x="242" y="550" font-size="12" text-anchor="middle" fill="#4a5568">kind().as_body()</text>
+  <text x="242" y="576" font-size="11" text-anchor="middle" fill="#4a5568">the body of the placed geometry</text>
+  <text x="242" y="592" font-size="11" text-anchor="middle" fill="#4a5568">holds its inversion (Body),</text>
+  <text x="242" y="608" font-size="11" text-anchor="middle" fill="#4a5568">filled by prepare_volume()</text>
 
   <rect x="360" y="504" width="520" height="124" rx="6" fill="#c6f6d5" stroke="#276749"/>
-  <text x="620" y="532" font-size="14" text-anchor="middle" fill="#1a202c">RuntimeGeometry</text>
-  <text x="620" y="554" font-size="12" text-anchor="middle" fill="#276749">the placed geometry, one OpticSurface per port name, the inversion</text>
-  <text x="620" y="574" font-size="11" text-anchor="middle" fill="#4a5568">OpticSurface: face number &#183; coating + LIDT &#183; caches, hit map &#8212; no geometry</text>
-  <text x="620" y="598" font-size="11" text-anchor="middle" fill="#276749">install_geometry(inputs, outputs): every port names the face it sits on;</text>
-  <text x="620" y="614" font-size="11" text-anchor="middle" fill="#276749">interact(port, rays, effect): the geometry finds the hit, the effect acts on it</text>
+  <text x="620" y="532" font-size="14" text-anchor="middle" fill="#1a202c">runtime geometry</text>
+  <text x="620" y="554" font-size="12" text-anchor="middle" fill="#276749">NodeAttr::runtime_geometry(): the placed geometry with its surfaces</text>
+  <text x="620" y="574" font-size="11" text-anchor="middle" fill="#4a5568">every face: coating + LIDT of its surface property &#183; caches, hit map</text>
+  <text x="620" y="598" font-size="11" text-anchor="middle" fill="#276749">install_geometry(surface_ports): every port names the face it sits on;</text>
+  <text x="620" y="614" font-size="11" text-anchor="middle" fill="#276749">interact_with_rays(face, rays, effect): geometry finds the hit, effect acts on it</text>
 
   <rect x="896" y="504" width="188" height="124" rx="6" fill="#fefcbf" stroke="#b7791f"/>
   <text x="990" y="526" font-size="13" text-anchor="middle" fill="#1a202c">update_surfaces()</text>
-  <text x="990" y="544" font-size="11" text-anchor="middle" fill="#744210">installs a new RuntimeGeometry</text>
+  <text x="990" y="544" font-size="11" text-anchor="middle" fill="#744210">installs a new runtime geometry</text>
   <text x="990" y="558" font-size="11" text-anchor="middle" fill="#744210">on create, load, placement,</text>
-  <text x="990" y="572" font-size="11" text-anchor="middle" fill="#744210">alignment, coating, LIDT,</text>
+  <text x="990" y="572" font-size="11" text-anchor="middle" fill="#744210">alignment, set_coating, set_lidt,</text>
   <text x="990" y="586" font-size="11" text-anchor="middle" fill="#744210">analysis start, prepare_volume</text>
   <text x="990" y="606" font-size="11" text-anchor="middle" fill="#c53030">not on set_property</text>
   <text x="990" y="620" font-size="11" text-anchor="middle" fill="#c53030">or inverting a node</text>
@@ -171,11 +171,11 @@
   <line x1="242" y1="448" x2="242" y2="500" stroke="#4a5568" marker-end="url(#arrow)"/>
   <line x1="486" y1="448" x2="486" y2="500" stroke="#4a5568" marker-end="url(#arrow)"/>
   <line x1="754" y1="448" x2="754" y2="500" stroke="#4a5568" marker-end="url(#arrow)"/>
-  <!-- The port config reaches the runtime surfaces directly, by port name. -->
+  <!-- The surface properties reach the surfaces of the installed geometry, face by face. -->
   <path d="M 990 100 L 990 486 L 840 486 L 840 500" fill="none" stroke="#4a5568"
         marker-end="url(#arrow)"/>
   <text x="998" y="300" font-size="11" fill="#4a5568">copied per</text>
-  <text x="998" y="314" font-size="11" fill="#4a5568">port name</text>
+  <text x="998" y="314" font-size="11" fill="#4a5568">face</text>
 
   <!-- ── band 5: used by ──────────────────────────────────────────────────── -->
   <rect x="24" y="660" width="1072" height="112" rx="8"
@@ -189,7 +189,7 @@
 
   <rect x="360" y="684" width="252" height="76" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
   <text x="486" y="706" font-size="14" text-anchor="middle" fill="#1a202c">3D view</text>
-  <text x="486" y="724" font-size="11" text-anchor="middle" fill="#4a5568">moves geometry() to the node itself:</text>
+  <text x="486" y="724" font-size="11" text-anchor="middle" fill="#4a5568">moves create_geometry() to the node:</text>
   <text x="486" y="740" font-size="11" text-anchor="middle" fill="#4a5568">faces and rims, no runtime state</text>
 
   <rect x="628" y="684" width="252" height="76" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
