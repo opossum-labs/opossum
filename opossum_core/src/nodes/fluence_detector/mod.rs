@@ -82,7 +82,7 @@ impl Default for FluenceDetector {
             apodization_warning: false,
             light_data: None,
         };
-        fld.create_surface_properties().unwrap();
+        fld.create_default_surface_properties().unwrap();
         fld.update_surfaces().unwrap();
         fld
     }

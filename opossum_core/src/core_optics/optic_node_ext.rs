@@ -97,7 +97,7 @@ pub trait OpticNodeExt {
     ///
     /// This function returns an error if the geometry cannot be derived or a property of that name
     /// exists already.
-    fn create_surface_properties(&mut self) -> OpmResult<()>;
+    fn create_default_surface_properties(&mut self) -> OpmResult<()>;
 
     /// Set the coating of one surface of this node, keeping its LIDT.
     ///
@@ -355,7 +355,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         }
     }
 
-    fn create_surface_properties(&mut self) -> OpmResult<()> {
+    fn create_default_surface_properties(&mut self) -> OpmResult<()> {
         let Some(geometry) = self.create_geometry()? else {
             return Ok(());
         };

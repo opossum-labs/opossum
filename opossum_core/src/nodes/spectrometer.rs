@@ -99,7 +99,7 @@ impl Default for Spectrometer {
             node_attr,
             apodization_warning: false,
         };
-        spect.create_surface_properties().unwrap();
+        spect.create_default_surface_properties().unwrap();
         spect.update_surfaces().unwrap();
         spect
     }

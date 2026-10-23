@@ -83,7 +83,7 @@ impl Default for SpotDiagram {
             node_attr,
             apodization_warning: false,
         };
-        sd.create_surface_properties()
+        sd.create_default_surface_properties()
             .expect("Hardcoded property creation must not fail");
         sd.update_surfaces()
             .expect("Updating surfaces on a default spot diagram must not fail");

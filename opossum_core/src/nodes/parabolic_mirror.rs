@@ -112,7 +112,7 @@ impl Default for ParabolicMirror {
             .unwrap();
 
         let mut parabola = Self { node_attr };
-        parabola.create_surface_properties().unwrap();
+        parabola.create_default_surface_properties().unwrap();
         parabola
             .set_coating(
                 SurfaceGeometry::FACE,

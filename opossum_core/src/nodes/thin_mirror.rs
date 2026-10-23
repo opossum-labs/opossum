@@ -80,7 +80,7 @@ impl Default for ThinMirror {
             .unwrap();
 
         let mut m = Self { node_attr };
-        m.create_surface_properties().unwrap();
+        m.create_default_surface_properties().unwrap();
         m.set_coating(
             SurfaceGeometry::FACE,
             &CoatingConstantR::new(percent!(100.0)).unwrap().into(),

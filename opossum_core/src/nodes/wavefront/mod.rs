@@ -104,7 +104,7 @@ impl Default for WaveFront {
             apodization_warning: false,
             reference_surface: None,
         };
-        wf.create_surface_properties().unwrap();
+        wf.create_default_surface_properties().unwrap();
         wf.update_surfaces().unwrap();
         wf
     }
