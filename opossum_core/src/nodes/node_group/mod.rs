@@ -15,7 +15,8 @@ mod visualization;
 use crate::{
     analyzers::{AnalyzerKind, propagation_strategy::PropagationStrategy},
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticPorts, OpticRef, PortType, node_attr::HasNodeAttr,
+        NodeAttr, NodeAttrExt, OpticNode, OpticPorts, OpticRef, PortType, SurfacePorts,
+        node_attr::HasNodeAttr,
     },
     error::{OpmResult, OpossumError},
     geometry::Geometry,
@@ -772,6 +773,10 @@ impl OpticNode for NodeGroup {
         Ok(())
     }
 
+    /// The nodes inside a group have the surfaces; the group has none of its own.
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::NONE
+    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         Ok(())
     }

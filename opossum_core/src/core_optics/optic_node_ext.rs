@@ -5,7 +5,7 @@ use crate::{
     apertures::Outline,
     coatings::CoatingType,
     core_optics::{
-        NodeAttrExt, OpticNode, PortType, SurfaceConfig,
+        NodeAttrExt, OpticNode, PortType, SurfaceConfig, SurfacePorts,
         optic_surface::OpticSurface,
         runtime_geometry::{RuntimeGeometry, RuntimeSurfaces},
         surface_effect::{Refraction, SurfaceEffect},
@@ -140,21 +140,15 @@ pub trait OpticNodeExt {
     ///
     /// # Arguments
     ///
-    /// * `inputs` - the input ports light enters through: their (physical) names and the index of
-    ///   the face each one sits on.
-    /// * `outputs` - the output ports light leaves through: their (physical) names and the index
-    ///   of the face each one sits on.
+    /// * `ports` - the ports of the node, each with the face it sits on (see
+    ///   [`OpticNode::surface_ports`]).
     ///
     /// # Errors
     ///
     /// This function returns an error if the node has no geometry, if the geometry cannot be
     /// derived or built, if a port names a face the geometry does not have, or if the node has no
     /// surface property for a face.
-    fn install_geometry(
-        &mut self,
-        inputs: &[(&str, FaceIndex)],
-        outputs: &[(&str, FaceIndex)],
-    ) -> OpmResult<()>;
+    fn install_geometry(&mut self, ports: &SurfacePorts) -> OpmResult<()>;
 
     /// Lets a surface of this node act on the ray bundles of an analysis (see
     /// [`RuntimeGeometry::propagate`]) and warns if rays were lost there.
@@ -392,11 +386,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         Ok(geometry)
     }
 
-    fn install_geometry(
-        &mut self,
-        inputs: &[(&str, FaceIndex)],
-        outputs: &[(&str, FaceIndex)],
-    ) -> OpmResult<()> {
+    fn install_geometry(&mut self, surface_ports: &SurfacePorts) -> OpmResult<()> {
         let Some(placed) = self.placed_geometry()? else {
             return Err(OpossumError::Other(format!(
                 "node '{}' has no geometry to install surfaces from",
@@ -407,8 +397,12 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         let mut ports = self.node_attr().raw_ports().clone();
         let mut surfaces = RuntimeSurfaces::default();
         for (port_names, port_type, installed) in [
-            (inputs, PortType::Input, &mut surfaces.inputs),
-            (outputs, PortType::Output, &mut surfaces.outputs),
+            (surface_ports.inputs, PortType::Input, &mut surfaces.inputs),
+            (
+                surface_ports.outputs,
+                PortType::Output,
+                &mut surfaces.outputs,
+            ),
         ] {
             for &(name, face) in port_names {
                 let Some(face_name) = kind.face_name(face) else {
@@ -745,12 +739,13 @@ mod test {
     /// A port on a face the geometry does not have is rejected, and the installation before stays.
     #[test]
     fn a_port_on_a_missing_face_is_rejected() {
+        const BEHIND_THE_SURFACE: SurfacePorts = SurfacePorts {
+            inputs: &[("input_1", SurfaceGeometry::FACE)],
+            outputs: &[("output_2", FaceIndex::new(1))],
+        };
         let mut node = Dummy::default();
         let error = node
-            .install_geometry(
-                &[("input_1", SurfaceGeometry::FACE)],
-                &[("output_2", FaceIndex::new(1))],
-            )
+            .install_geometry(&BEHIND_THE_SURFACE)
             .expect_err("a port on face 1 of a single surface was accepted");
         assert!(
             error

@@ -10,12 +10,12 @@ use crate::{
     },
     coatings::CoatingType,
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, hit_map::rays_hit_map::HitPoint,
-        node_attr::HasNodeAttr, surface_effect::SurfaceEffect,
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, SurfacePorts,
+        hit_map::rays_hit_map::HitPoint, node_attr::HasNodeAttr, surface_effect::SurfaceEffect,
     },
     error::{OpmResult, OpossumError},
     geometry::{
-        Geometry, SurfaceGeometry, SurfaceHit,
+        Geometry, SurfaceHit,
         body::{OPTIC_SHAPE, default_square_optic_shape},
     },
     light::{LightData, LightRays, LightResult, Ray, Rays, rays::ReflectedPart},
@@ -304,11 +304,8 @@ impl OpticNode for ReflectiveGrating {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::plane(self.cross_section()?)))
     }
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(
-            &[("input_1", SurfaceGeometry::FACE)],
-            &[("output_1", SurfaceGeometry::FACE)],
-        )
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::SINGLE_SURFACE
     }
 }
 

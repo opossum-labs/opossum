@@ -14,7 +14,10 @@
 //! let mut ports = OpticPorts::new();
 //! ports.add(&PortType::Input, "my input").unwrap();
 //! ```
-use crate::error::{OpmResult, OpossumError};
+use crate::{
+    error::{OpmResult, OpossumError},
+    geometry::{Extruded, FaceIndex, SurfaceGeometry},
+};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fmt::Display};
 use utoipa::ToSchema;
@@ -55,6 +58,38 @@ impl Display for PortType {
             Self::Output => write!(f, "output"),
         }
     }
+}
+
+/// The ports of a node, each with the face of the node's geometry it sits on (see
+/// [`OpticNode::surface_ports`](crate::core_optics::OpticNode::surface_ports)).
+///
+/// The node decides which face every port sits on; several ports may share a face, and a face may
+/// have no port at all.
+#[derive(Debug, Clone, Copy)]
+pub struct SurfacePorts {
+    /// The input ports light enters through: their (physical) names and the face each one sits on.
+    pub inputs: &'static [(&'static str, FaceIndex)],
+    /// The output ports light leaves through: their (physical) names and the face each one sits
+    /// on.
+    pub outputs: &'static [(&'static str, FaceIndex)],
+}
+
+impl SurfacePorts {
+    /// No ports: a node without a shape of its own, such as a group.
+    pub const NONE: Self = Self {
+        inputs: &[],
+        outputs: &[],
+    };
+    /// `input_1` and `output_1`, both on the one face of a single surface.
+    pub const SINGLE_SURFACE: Self = Self {
+        inputs: &[("input_1", SurfaceGeometry::FACE)],
+        outputs: &[("output_1", SurfaceGeometry::FACE)],
+    };
+    /// `input_1` on the front face and `output_1` on the rear face of an extruded solid.
+    pub const THROUGH_SOLID: Self = Self {
+        inputs: &[("input_1", Extruded::FRONT)],
+        outputs: &[("output_1", Extruded::REAR)],
+    };
 }
 
 /// Structure defining the optical ports (input / output terminals) of an [`OpticNode`](crate::core_optics::OpticNode).

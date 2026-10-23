@@ -8,7 +8,7 @@ use crate::{
     analyzers::{AnalyzerType, propagation_strategy::MissedSurfaceStrategy},
     coatings::{CoatingConstantR, CoatingType},
     core_optics::{
-        NodeAttr, OpticNode, OpticNodeExt, PortType, hit_map::rays_hit_map::HitPoint,
+        NodeAttr, OpticNode, OpticNodeExt, PortType, SurfacePorts, hit_map::rays_hit_map::HitPoint,
         node_attr::HasNodeAttr, surface_effect::SurfaceEffect,
     },
     error::{OpmResult, OpossumError},
@@ -464,17 +464,17 @@ impl OpticNode for BeamSplitter {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::plane(self.cross_section()?)))
     }
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(
-            &[
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts {
+            inputs: &[
                 ("input_1", SurfaceGeometry::FACE),
                 ("input_2", SurfaceGeometry::FACE),
             ],
-            &[
+            outputs: &[
                 ("out1_trans1_refl2", SurfaceGeometry::FACE),
                 ("out2_trans2_refl1", SurfaceGeometry::FACE),
             ],
-        )
+        }
     }
 }
 #[cfg(test)]

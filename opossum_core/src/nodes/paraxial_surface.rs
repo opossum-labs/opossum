@@ -7,13 +7,13 @@ use crate::{
     },
     coatings::CoatingType,
     core_optics::{
-        NodeAttr, OpticNode, OpticNodeExt, PortType,
+        NodeAttr, OpticNode, OpticNodeExt, PortType, SurfacePorts,
         hit_map::rays_hit_map::HitPoint,
         surface_effect::{Refraction, SurfaceEffect},
     },
     error::{OpmResult, OpossumError},
     geometry::{
-        Geometry, SurfaceGeometry, SurfaceHit,
+        Geometry, SurfaceHit,
         body::{OPTIC_SHAPE, default_optic_shape},
     },
     light::{LightData, LightRays, LightResult, Ray, Rays, rays::ReflectedPart},
@@ -145,11 +145,8 @@ impl OpticNode for ParaxialSurface {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::plane(self.cross_section()?)))
     }
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(
-            &[("input_1", SurfaceGeometry::FACE)],
-            &[("output_1", SurfaceGeometry::FACE)],
-        )
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::SINGLE_SURFACE
     }
 }
 impl AnalysisGhostFocus for ParaxialSurface {

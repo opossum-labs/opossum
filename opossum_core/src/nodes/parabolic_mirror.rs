@@ -8,8 +8,8 @@ use crate::{
     },
     coatings::CoatingConstantR,
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, node_attr::HasNodeAttr,
-        surface_effect::Refraction,
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, SurfacePorts,
+        node_attr::HasNodeAttr, surface_effect::Refraction,
     },
     degree,
     error::{OpmResult, OpossumError},
@@ -382,11 +382,8 @@ impl OpticNode for ParabolicMirror {
             self.cross_section()?,
         )?))
     }
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(
-            &[("input_1", SurfaceGeometry::FACE)],
-            &[("output_1", SurfaceGeometry::FACE)],
-        )
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::SINGLE_SURFACE
     }
 }
 impl AnalysisGhostFocus for ParabolicMirror {

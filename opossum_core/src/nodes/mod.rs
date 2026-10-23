@@ -171,7 +171,7 @@ pub fn is_volume_node_type(node_type: &str) -> bool {
 mod test {
     use super::*;
     use crate::{
-        core_optics::{OpticNode, OpticNodeExt, node_attr::NodePositioning},
+        core_optics::{OpticNode, OpticNodeExt, SurfacePorts, node_attr::NodePositioning},
         degree,
         geometry::{Extruded, FaceIndex, Sphere, SurfaceGeometry, SurfaceShape},
         millimeter,
@@ -854,10 +854,7 @@ mod test {
     fn a_node_without_geometry_cannot_install_surfaces() {
         assert!(
             NodeGroup::default()
-                .install_geometry(
-                    &[("input_1", SurfaceGeometry::FACE)],
-                    &[("output_1", SurfaceGeometry::FACE)],
-                )
+                .install_geometry(&SurfacePorts::SINGLE_SURFACE)
                 .is_err()
         );
     }
@@ -866,12 +863,17 @@ mod test {
     /// names the node, the port and the number of faces.
     #[test]
     fn a_port_cannot_sit_on_a_face_the_geometry_does_not_have() {
+        const BEHIND_THE_LENS: SurfacePorts = SurfacePorts {
+            inputs: &[("input_1", Extruded::FRONT)],
+            outputs: &[("output_1", FaceIndex::new(2))],
+        };
+        const BEHIND_THE_SURFACE: SurfacePorts = SurfacePorts {
+            inputs: &[("input_1", SurfaceGeometry::FACE)],
+            outputs: &[("output_1", FaceIndex::new(1))],
+        };
         let mut lens = Lens::default();
         let error = lens
-            .install_geometry(
-                &[("input_1", Extruded::FRONT)],
-                &[("output_1", FaceIndex::new(2))],
-            )
+            .install_geometry(&BEHIND_THE_LENS)
             .unwrap_err()
             .to_string();
         assert!(error.contains("output_1"), "{error}");
@@ -880,10 +882,7 @@ mod test {
 
         let mut dummy = Dummy::default();
         let error = dummy
-            .install_geometry(
-                &[("input_1", SurfaceGeometry::FACE)],
-                &[("output_1", FaceIndex::new(1))],
-            )
+            .install_geometry(&BEHIND_THE_SURFACE)
             .unwrap_err()
             .to_string();
         assert!(error.contains("face 1"), "{error}");

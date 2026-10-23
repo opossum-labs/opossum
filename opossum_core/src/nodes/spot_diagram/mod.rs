@@ -13,11 +13,12 @@ use crate::{
     },
     apertures::Aperture,
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, optic_node::APERTURE_LIMIT_NOTE,
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, SurfacePorts,
+        optic_node::APERTURE_LIMIT_NOTE,
     },
     error::OpmResult,
     geometry::{
-        Geometry, SurfaceGeometry, SurfaceShape,
+        Geometry, SurfaceShape,
         body::{OPTIC_SHAPE, default_square_optic_shape},
     },
     light::{LightData, LightResult, Rays},
@@ -180,11 +181,8 @@ impl OpticNode for SpotDiagram {
         Ok(NodeReportResult::Report(report))
     }
 
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(
-            &[("input_1", SurfaceGeometry::FACE)],
-            &[("output_1", SurfaceGeometry::FACE)],
-        )
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::SINGLE_SURFACE
     }
 
     fn set_light_data(&mut self, ld: Option<LightData>) {

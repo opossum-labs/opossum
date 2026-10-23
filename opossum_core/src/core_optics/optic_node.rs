@@ -11,7 +11,7 @@ use uuid::Uuid;
 use crate::{
     analyzers::{Analyzable, AnalyzerKind, propagation_strategy::PropagationStrategy},
     core_optics::{
-        NodeAttrExt, OpticNodeExt, OpticPorts,
+        NodeAttrExt, OpticNodeExt, OpticPorts, SurfacePorts,
         node_attr::{HasNodeAttr, NodePositioning},
         runtime_geometry::RuntimeGeometry,
         volumetric::Volumetric,
@@ -142,12 +142,22 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
         Ok(())
     }
 
-    /// Updates the optical surfaces of this node according to its current geometry and positioning.
+    /// Return the ports of this node, each with the face of its geometry it sits on.
+    ///
+    /// A node without a shape of its own has none ([`SurfacePorts::NONE`]).
+    fn surface_ports(&self) -> SurfacePorts;
+
+    /// Updates the optical surfaces of this node according to its current geometry and positioning:
+    /// installs its geometry under its [`OpticNode::surface_ports`] (see
+    /// [`OpticNodeExt::install_geometry`]).
     ///
     /// # Errors
     ///
     /// Returns an error if geometry evaluation or surface construction fails.
-    fn update_surfaces(&mut self) -> OpmResult<()>;
+    fn update_surfaces(&mut self) -> OpmResult<()> {
+        let ports = self.surface_ports();
+        self.install_geometry(&ports)
+    }
 
     /// Describe the shape of this node, derived from its current properties.
     ///

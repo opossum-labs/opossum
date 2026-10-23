@@ -2,11 +2,11 @@
 use crate::refractive_index::RefractiveIndex;
 use crate::{
     analyzers::energy::AnalysisEnergy,
-    core_optics::{NodeAttr, OpticNode, OpticNodeExt, Volumetric},
+    core_optics::{NodeAttr, OpticNode, OpticNodeExt, SurfacePorts, Volumetric},
     degree,
     error::{OpmResult, OpossumError},
     geometry::{
-        Extruded, Geometry,
+        Geometry,
         body::{OPTIC_SHAPE, default_optic_shape},
     },
     material::{MATERIAL, Material},
@@ -162,11 +162,8 @@ impl OpticNode for Wedge {
     fn as_volume(&self) -> Option<&dyn Volumetric> {
         Some(self)
     }
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(
-            &[("input_1", Extruded::FRONT)],
-            &[("output_1", Extruded::REAR)],
-        )
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::THROUGH_SOLID
     }
 }
 impl AnalysisEnergy for Wedge {}
