@@ -8,8 +8,8 @@
 //! System Overview
 //! 1. One point light source
 //! 2. Refractive index data for HZF52 glass
-//! 3. One 75 mm spherical lens with a circular aperture
-//! 4. One 50 mm spherical lens
+//! 3. One 75 mm spherical lens with an optic shape of 25 mm radius
+//! 4. One 50 mm spherical lens of the same size
 //! 5. A ray propagation visualizer
 //! 6. Two spot diagram analyzers
 //! 7. A point-source ray-tracing configuration
@@ -20,7 +20,7 @@
 //! This example demonstrates:
 //! - How to build a Keplerian optical system using two spherical lenses
 //! - How to define wavelength-dependent refractive index data
-//! - How to apply a circular aperture to a lens input
+//! - How to give a lens its size with an optic shape
 //! - How to connect optical components with physical propagation distances
 //! - How to use spot diagram analyzers to inspect ray distributions
 //! - How to visualize ray propagation through the optical system
@@ -30,15 +30,19 @@
 //! Imports:
 //! - `opossum_core::prelude::*` provides optical components, analyzers,
 //!   unit macros, and document types
-//! - `opossum_core::core_optics::{NodeAttrExt, OpticNodeExt}` provides
-//!   extension traits for optical node attributes and properties
+//! - `opossum_core::core_optics::NodeAttrExt` provides the extension trait
+//!   for optical node attributes and properties
+//! - `opossum_core::apertures::CircleShape` provides the shape of a lens's
+//!   optic shape
 //! - `opossum_core::distributions::*` provides spatial, energy, and
 //!   spectral distributions for the point source
 //! - `std::{env, path::Path}` is used to determine the output directory
 //!   and save the generated `.opm` file
 
-use opossum_core::core_optics::{NodeAttrExt, OpticNodeExt};
+use opossum_core::apertures::CircleShape;
+use opossum_core::core_optics::NodeAttrExt;
 use opossum_core::distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines};
+use opossum_core::geometry::body::OPTIC_SHAPE;
 use opossum_core::prelude::*;
 use std::env;
 use std::path::Path;
@@ -59,7 +63,7 @@ fn main() -> OpmResult<()> {
         nanometer!(300.0)..nanometer!(2000.0),
     )?;
     // 3. Define the first lens: 75 mm focal length, 10 mm thickness,
-    // with a circular aperture of 25 mm.
+    // with an optic shape of 25 mm radius.
     let mut lens1 = Lens::new(
         "75 mm lens",
         millimeter!(130.0),
@@ -67,16 +71,23 @@ fn main() -> OpmResult<()> {
         millimeter!(10.0),
         &refr_index_hzf52,
     )?;
-    let aperture = Aperture::new_circle(millimeter!(25.0), ApertureType::Hole, None)?;
-    lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
+    lens1.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
+    )?;
     let i_pl1 = scenery.add_node(lens1)?;
-    // 4. Define the second lens: 50 mm focal length and 10 mm thickness.
-    let lens2 = Lens::new(
+    // 4. Define the second lens: 50 mm focal length, 10 mm thickness and the same size as the
+    // first.
+    let mut lens2 = Lens::new(
         "50 mm lens",
         millimeter!(100.0),
         millimeter!(-100.0),
         millimeter!(10.0),
         &refr_index_hzf52,
+    )?;
+    lens2.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
     )?;
     let i_pl2 = scenery.add_node(lens2)?;
     // 5. Define the ray propagation visualizer.

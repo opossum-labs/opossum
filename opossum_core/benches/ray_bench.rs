@@ -4,9 +4,15 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use nalgebra::{Point3, vector};
 use num_traits::Zero;
 use opossum_core::{
-    J_per_cm2, analyzers::propagation_strategy::MissedSurfaceStrategy,
-    core_optics::optic_surface::OpticSurface, degree, error::OpossumError, joule, light::Ray,
-    millimeter, nanometer, utils::geom_transformation::Isometry,
+    J_per_cm2,
+    coatings::CoatingType,
+    degree,
+    error::OpossumError,
+    geometry::{Face, Geometry, SurfaceGeometry, SurfaceShape},
+    joule,
+    light::Ray,
+    millimeter, nanometer,
+    utils::geom_transformation::Isometry,
 };
 use uom::si::f64::Length;
 
@@ -66,7 +72,8 @@ fn bench_refract_paraxial(c: &mut Criterion) {
     });
 }
 
-/// Benchmarks `refract_on_surface`, a complex and common operation involving Snell's law.
+/// Benchmarks a hit on a surface and `refract_at`, a complex and common operation involving
+/// Snell's law.
 fn bench_refract_on_surface(c: &mut Criterion) {
     c.bench_function("ray_refract_on_surface", |b| {
         // Setup function to create fresh data for each measurement run.
@@ -79,16 +86,15 @@ fn bench_refract_on_surface(c: &mut Criterion) {
                 degree!(0.0, 0.0, 0.0),
             )
             .expect("Setup of ray failed");
-            let surface = OpticSurface::default();
-            surface.set_isometry(isometry);
-            let n2 = Some(1.5);
-            let strategy = MissedSurfaceStrategy::Stop;
-            (ray, surface, n2, strategy)
+            let plane = Geometry::from(Face::new(SurfaceShape::Plane, isometry));
+            (ray, plane, Some(1.5))
         };
 
-        // iter_with_setup is used because the function requires mutable access to the ray and surface.
-        b.iter_with_setup(setup, |(mut ray, surface, n2, strategy)| {
-            std::hint::black_box(ray.refract_on_surface(&surface, n2, &strategy))?;
+        // iter_with_setup is used because the function requires mutable access to the ray.
+        b.iter_with_setup(setup, |(mut ray, plane, n2)| {
+            if let Some(hit) = plane.intersect(SurfaceGeometry::FACE, &ray) {
+                std::hint::black_box(ray.refract_at(&hit, &CoatingType::IdealAR, n2))?;
+            }
             Ok::<(), OpossumError>(())
         });
     });
@@ -111,8 +117,7 @@ fn bench_diffract_on_periodic_structure(c: &mut Criterion) {
             degree!(0.0, 0.0, 0.0),
         )
         .expect("Setup of isometry failed");
-        let surface = OpticSurface::default();
-        surface.set_isometry(isometry);
+        let grating = Geometry::from(Face::new(SurfaceShape::Plane, isometry));
 
         let n2 = 1.0; // Reflection grating
         let grating_period = nanometer!(1000.0); // 1 micron period, 1000 lines/mm
@@ -120,14 +125,16 @@ fn bench_diffract_on_periodic_structure(c: &mut Criterion) {
         let diffraction_order = 1;
 
         b.iter_with_setup(
-            || (ray.clone(), surface.clone()),
-            |(mut cloned_ray, cloned_surface)| {
-                std::hint::black_box(cloned_ray.diffract_on_periodic_surface(
-                    &cloned_surface,
-                    n2,
-                    grating_vector,
-                    &diffraction_order,
-                ))?;
+            || ray.clone(),
+            |mut cloned_ray| {
+                if let Some(hit) = grating.intersect(SurfaceGeometry::FACE, &cloned_ray) {
+                    std::hint::black_box(cloned_ray.diffract_at(
+                        &hit,
+                        n2,
+                        grating_vector,
+                        &diffraction_order,
+                    ))?;
+                }
                 Ok::<(), OpossumError>(())
             },
         );

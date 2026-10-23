@@ -2,7 +2,6 @@
 //! Module for handling optical rays
 use std::{f64::consts::PI, fmt::Display};
 
-use approx::relative_ne;
 use nalgebra::{MatrixXx3, Point3, Rotation3, Vector3, vector};
 use num_traits::{ToPrimitive, Zero};
 use serde::{Deserialize, Serialize};
@@ -13,19 +12,16 @@ use uom::si::{
 };
 
 use crate::{
-    analyzers::propagation_strategy::MissedSurfaceStrategy,
     coatings::CoatingType,
-    core_optics::{
-        hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint},
-        optic_surface::OpticSurface,
-    },
+    core_optics::hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint},
     error::{OpmResult, OpossumError},
+    geometry::SurfaceHit,
     joule,
     light::{FluenceRays, Rays},
     meter,
     nodes::{FilterType, SplittingConfig, fluence_detector::Fluence},
     percent,
-    utils::{LockExt, geom_transformation::Isometry, math_utils::distance_3d_point},
+    utils::{geom_transformation::Isometry, math_utils::distance_3d_point},
 };
 
 ///Struct that contains all information about an optical ray
@@ -37,8 +33,10 @@ pub struct Ray {
     pos_hist: Vec<Point3<Length>>,
     /// Current propagation direction of the ray (as a normalized direction cosine vector).
     dir: Vector3<f64>,
-    /// Previous propagation direction, used for node positioning.
-    prev_dir: Option<Vector3<f64>>,
+    /// Up direction carried while placing nodes. It decides how a node is turned about the ray
+    /// and turns with the ray at every surface. Only the optical axis of a positioning run has one.
+    #[serde(skip)]
+    up_direction: Option<Vector3<f64>>,
     // pol: Vector2<Complex<f64>>, // Polarization vector (Jones vector), currently unused.
     /// Energy carried by the ray.
     e: Energy,
@@ -91,7 +89,7 @@ impl Ray {
             pos: position,
             pos_hist: Vec::<Point3<Length>>::new(),
             dir: direction.normalize(),
-            prev_dir: None,
+            up_direction: None,
             e: energy,
             wvl: wave_length,
             path_length: Length::zero(),
@@ -237,6 +235,30 @@ impl Ray {
         }
         self.dir = dir;
         Ok(())
+    }
+    /// Turns this [`Ray`] into a new direction, turning the up direction it carries along.
+    ///
+    /// The up direction follows the smallest rotation that takes the old direction into the new
+    /// one. A ray sent straight back keeps its up direction, since no such rotation exists.
+    ///
+    /// # Arguments
+    ///
+    /// * `dir` - the new direction.
+    fn turn_to(&mut self, dir: Vector3<f64>) {
+        if let Some(up_direction) = self.up_direction.as_mut()
+            && let Some(rotation) = Rotation3::rotation_between(&self.dir, &dir)
+        {
+            *up_direction = rotation.transform_vector(up_direction);
+        }
+        self.dir = dir;
+    }
+    /// Lets this [`Ray`] carry an up direction while it places nodes.
+    ///
+    /// # Arguments
+    ///
+    /// * `up_direction` - the up direction, turned along from now on.
+    pub const fn set_up_direction(&mut self, up_direction: Vector3<f64>) {
+        self.up_direction = Some(up_direction);
     }
     /// Returns the energy of this [`Ray`].
     #[must_use]
@@ -392,10 +414,23 @@ impl Ray {
     }
     /// Create an [`Isometry`] from this [`Ray`].
     ///
-    /// This function creates an [`Isometry`] with its position based on the ray position and the orientation (rotation) based on the ray direction.
-    #[must_use]
-    pub fn to_isometry(&self, up_direction: Vector3<f64>) -> Isometry {
-        Isometry::new_from_view(self.position(), self.direction(), up_direction)
+    /// This function creates an [`Isometry`] with its position based on the ray position and the
+    /// orientation (rotation) based on the ray direction and the up direction the ray carries.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the ray carries no up direction.
+    pub fn to_isometry(&self) -> OpmResult<Isometry> {
+        let up_direction = self.up_direction.ok_or_else(|| {
+            OpossumError::Analysis(
+                "the optical axis carries no up direction to place a node by".into(),
+            )
+        })?;
+        Ok(Isometry::new_from_view(
+            self.position(),
+            self.direction(),
+            up_direction,
+        ))
     }
 
     /// Refract a ray on a paraxial surface of a given focal length.
@@ -412,13 +447,12 @@ impl Ray {
             ));
         }
         //to origin of paraxial surface
-        self.prev_dir = Some(self.dir);
         self.pos = iso.inverse_transform_point(&self.pos);
-        self.dir = iso.inverse_transform_vector_f64(&self.dir);
+        let mut dir = iso.inverse_transform_vector_f64(&self.dir);
         let optical_power = 1.0 / focal_length;
-        self.dir /= self.dir.z.abs();
-        self.dir.x -= (optical_power * self.pos.x).value;
-        self.dir.y -= (optical_power * self.pos.y).value;
+        dir /= dir.z.abs();
+        dir.x -= (optical_power * self.pos.x).value;
+        dir.y -= (optical_power * self.pos.y).value;
 
         // correct path length
         let r_square = self
@@ -431,22 +465,39 @@ impl Ray {
         self.number_of_refractions += 1;
         //back to original position
         self.pos = iso.transform_point(&self.pos);
-        self.dir = iso.transform_vector_f64(&self.dir).normalize();
+        self.turn_to(iso.transform_vector_f64(&dir).normalize());
         Ok(())
     }
-    /// Diffract a bundle of [`Rays`] on a periodic surface, e.g., a grating.
-    /// All valid rays that hit this surface are diffracted according to the peridic structure,
-    /// the diffraction order, the wavelength of the rays and there incoming k-vector
-    /// The calculation follows the description of:
+    /// Diffract this [`Ray`] at a hit on a periodic surface, e.g., a grating.
+    ///
+    /// The ray is diffracted according to the periodic structure, the diffraction order, its
+    /// wavelength and its incoming k-vector. The calculation follows the description of:
     /// <https://doc.comsol.com/5.5/doc/com.comsol.help.roptics/roptics_ug_optics.6.58.html>
+    ///
+    /// # Arguments
+    ///
+    /// * `hit` - where the ray meets the surface (see
+    ///   [`Geometry::intersect`](crate::geometry::Geometry::intersect)). The phase of the
+    ///   structure is measured along the x axis of the face, from its vertex.
+    /// * `n2` - the refractive index behind the surface.
+    /// * `grating_vector` - the grating vector, in the plane of the surface.
+    /// * `diffraction_order` - the diffraction order.
+    ///
+    /// # Returns
+    ///
+    /// The diffracted ray, or `None` if the diffraction order is not supported; this ray is
+    /// invalidated then.
+    ///
     /// # Errors
     ///
     /// This function returns an error if the refractive index is invalid.
+    ///
     /// # Panics
-    /// This function panics if the diffraction order cannot be converted to f64
-    pub fn diffract_on_periodic_surface(
+    ///
+    /// This function panics if the diffraction order cannot be converted to f64.
+    pub fn diffract_at(
         &mut self,
-        s: &OpticSurface,
+        hit: &SurfaceHit,
         n2: f64,
         grating_vector: Vector3<f64>,
         diffraction_order: &i32,
@@ -456,121 +507,72 @@ impl Ray {
                 "the refractive index must be >=1.0 and finite".into(),
             ));
         }
-        let geo_surf = s.geo_surface();
-        let surf_vectors = geo_surf.0.lock_opm()?.calc_intersect_and_normal(self);
-        if let Some((intersection_point, surface_normal)) = surf_vectors {
-            // it is assumed that the surface normal is already normalized and points against the ray direction.
+        let surface_normal = hit.normal();
+        // get correctly normalized k vector of ray
+        let ray_dir_norm = self.dir.norm();
+        let k0_n = 2. * PI * self.refractive_index / self.wavelength().value;
+        let k_vec = self.dir * k0_n / ray_dir_norm;
 
-            // get correctly normalized k vector of ray
-            let ray_dir_norm = self.dir.norm();
-            let k0_n = 2. * PI * self.refractive_index / self.wavelength().value;
-            let k_vec = self.dir * k0_n / ray_dir_norm;
+        //split k vetor into components parallel and perpendicular to the surface
+        let k_para = surface_normal.cross(&(k_vec.cross(&surface_normal)));
+        let k_perp = surface_normal * k_vec.dot(&surface_normal);
 
-            //split k vetor into components parallel and perpendicular to the surface
-            let k_para = surface_normal.cross(&(k_vec.cross(&surface_normal)));
-            let k_perp = surface_normal * k_vec.dot(&surface_normal);
+        //outgoing vector in-plane
+        let k_para_out = k_para + diffraction_order.to_f64().unwrap() * grating_vector;
 
-            //outgoing vector in-plane
-            let k_para_out = k_para + diffraction_order.to_f64().unwrap() * grating_vector;
+        //new ratio of the perpendicular part to the full k vector
+        let k_perp_norm_out = k0_n.mul_add(k0_n, -k_para_out.norm().powi(2)).sqrt();
 
-            //new ratio of the perpendicular part to the full k vector
-            let k_perp_norm_out = k0_n.mul_add(k0_n, -k_para_out.norm().powi(2)).sqrt();
+        //first add gemometrical path length
+        self.path_length += self.refractive_index * distance_3d_point(&self.pos, &hit.point());
+        //then add additional phase shift due to lateral displacement from the grating origin
+        let dist_from_origin = hit.local_point().x.value;
+        self.path_length += diffraction_order.to_f64().unwrap() * grating_vector.norm() / 2. / PI
+            * dist_from_origin
+            * self.wavelength();
 
-            let intersection_in_m = intersection_point.map(|c| c.value);
-            //first add gemometrical path length
-            self.path_length +=
-                self.refractive_index * distance_3d_point(&self.pos, &intersection_point);
-            //then add additional phase shift due to lateral displacement from the grating origin
-            let dist_from_origin = s
-                .geo_surface()
-                .0
-                .lock_opm()?
-                .isometry()
-                .inverse_transform_point_f64(&intersection_in_m)
-                .x;
-            self.path_length +=
-                diffraction_order.to_f64().unwrap() * grating_vector.norm() / 2. / PI
-                    * dist_from_origin
-                    * self.wavelength();
-
-            self.pos_hist.push(self.pos);
-            self.pos = intersection_point;
-            if k_perp_norm_out.is_finite() {
-                let k_perp_out = -k_perp.normalize() * k_perp_norm_out;
-                self.prev_dir = Some(self.dir);
-                self.dir = (k_perp_out + k_para_out).normalize();
-                self.number_of_bounces += 1;
-                //currently only reflection
-                let reflected_ray = self.clone();
-                self.e = joule!(0.);
-                Ok(Some(reflected_ray))
-            } else {
-                // diffraction order is not supported
-                self.set_invalid();
-                Ok(None)
-            }
+        self.pos_hist.push(self.pos);
+        self.pos = hit.point();
+        if k_perp_norm_out.is_finite() {
+            let k_perp_out = -k_perp.normalize() * k_perp_norm_out;
+            self.turn_to((k_perp_out + k_para_out).normalize());
+            self.number_of_bounces += 1;
+            //currently only reflection
+            let reflected_ray = self.clone();
+            self.e = joule!(0.);
+            Ok(Some(reflected_ray))
         } else {
+            // diffraction order is not supported
+            self.set_invalid();
             Ok(None)
         }
     }
-    /// Refract the [`Ray`] on a given [`OpticSurface`] using Snellius' law.
+    /// Refract this [`Ray`] at a hit on a surface using Snellius' law.
     ///
-    /// This function refracts an incoming [`Ray`] on a given [`OpticSurface`] thereby changing its position (= intersection point) and
-    /// its direction. The intial refractive index is (already) stored in the ray itself. The refractive index behind the surface is given
-    /// by the parameter `n2`. If `n2` id `None` the refractive index of the incoming beam is assumed. This is necessary for "passive" surfaces
-    /// that do not change the direction of the [`Ray`].
-    ///
-    /// This function alse returns a possible reflected [`Ray`], which corresponds to the refracted ray (same position,
-    /// wavelength) but with the reflection direction.
-    ///
-    /// This function also considers a possible surface coating which modifies the energy of the refracted and the reflected beam.
-    ///
-    /// The behaviour if the [`Ray`] does not intersect with the surface is determined by the `missed_surface_strategy` parameter.
-    ///
-    /// The strategy `Stop` invalidates the ray while `Ignore` keeps the [`Ray`] is unmodified. In both cases `None` is returned for the reflected
-    /// [`Ray`] (since there is no reflection).
-    ///
-    /// This function also considers total reflection: If the n1 > n2 and the incoming angle is larger than Brewster's angle, the beam
-    /// is totally reflected. In this case, this function also returns `None` (since there is no additional reflected ray).
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the given refractive index `n2` if <1.0 or not finite.
-    pub fn refract_on_surface(
-        &mut self,
-        os: &OpticSurface,
-        n2: Option<f64>,
-        missed_surface_strategy: &MissedSurfaceStrategy,
-    ) -> OpmResult<(Option<Self>, Option<HitPoint>)> {
-        self.refract_on_surface_with_coating(os, os.coating(), n2, *missed_surface_strategy)
-    }
-    /// Refract the [`Ray`] on a given [`OpticSurface`] as [`refract_on_surface`](Self::refract_on_surface)
-    /// does, but with the given coating instead of the coating of the surface.
-    ///
-    /// This allows a surface to split light by a coating that is not (yet) stored on the surface itself,
-    /// e.g. the splitting surface of a [`BeamSplitter`](crate::nodes::BeamSplitter), whose reflectivity
-    /// follows from its [`SplittingConfig`].
+    /// The ray moves to the hit and changes its direction. The coating splits off a reflected ray;
+    /// if the ray is totally reflected instead, it is turned into the reflected direction and no
+    /// further ray is split off.
     ///
     /// # Arguments
     ///
-    /// * `os` - the surface the ray is refracted on.
+    /// * `hit` - where the ray meets the surface (see
+    ///   [`Geometry::intersect`](crate::geometry::Geometry::intersect)).
     /// * `coating` - the coating determining the energies of the refracted and the reflected ray.
     /// * `n2` - the refractive index behind the surface. `None` keeps the refractive index of the ray.
-    /// * `missed_surface_strategy` - what happens to the ray if it does not hit the surface.
     ///
     /// # Returns
     ///
-    /// The reflected [`Ray`] (if any) and the [`HitPoint`] on the surface (if any).
+    /// The reflected [`Ray`] (if any) and the [`HitPoint`] the surface records (if any), in the
+    /// frame of the face.
     ///
     /// # Errors
     ///
     /// This function will return an error if the given refractive index `n2` if <1.0 or not finite.
-    pub(crate) fn refract_on_surface_with_coating(
+    pub fn refract_at(
         &mut self,
-        os: &OpticSurface,
+        hit: &SurfaceHit,
         coating: &CoatingType,
         n2: Option<f64>,
-        missed_surface_strategy: MissedSurfaceStrategy,
     ) -> OpmResult<(Option<Self>, Option<HitPoint>)> {
         let n_refri_2 = n2.unwrap_or_else(|| self.refractive_index());
         if n_refri_2 < 1.0 || !n_refri_2.is_finite() {
@@ -578,82 +580,62 @@ impl Ray {
                 "the refractive index must be >=1.0 and finite".into(),
             ));
         }
-        let geo_surface = os.geo_surface();
-        let surf_vectors = geo_surface.0.lock_opm()?.calc_intersect_and_normal(self);
-        if let Some((intersection_point, surface_normal)) = surf_vectors {
-            // Snell's law in vector form (src: https://www.starkeffects.com/snells-law-vector.shtml)
-            // mu=n_1 / n_2
-            // s1: incoming direction (normalized??)
-            // n: surface normal (must be normalized)
-            // s2: refracted dir
-            //
-            // s2 = mu * [ n x ( -n x s1) ] - n* sqrt(1 - mu^2 * (n x s1) dot (n x s1))
-            let mu = self.refractive_index / n_refri_2;
-            let s1 = self.dir.normalize();
-            let n = surface_normal;
-            let dis = (mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0);
-            let reflected_dir = s1 - 2.0 * (s1.dot(&n)) * n;
-            self.path_length +=
-                self.refractive_index * distance_3d_point(&self.pos, &intersection_point);
-            self.pos_hist.push(self.pos);
-            self.pos = intersection_point;
-            // check, if total reflection
-            if dis.is_sign_positive() {
-                let mut reflected_ray = self.clone();
-                // handle energy (due to coating)
-                let reflectivity = coating.calc_reflectivity(self, surface_normal, n_refri_2)?;
-                let input_energy = self.energy();
-                let refract_dir = mu * (n.cross(&(-1.0 * n.cross(&s1))))
-                    - n * f64::sqrt((mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0));
-                self.prev_dir = Some(self.dir);
-                self.dir = refract_dir;
-                self.e = input_energy * (percent!(100.0) - reflectivity);
-                reflected_ray.prev_dir = Some(reflected_ray.dir);
-                reflected_ray.dir = reflected_dir;
-                reflected_ray.e = input_energy * reflectivity;
-                reflected_ray.number_of_bounces += 1;
-                self.refractive_index = n_refri_2;
-                if n2.is_some() {
-                    self.number_of_refractions += 1;
-                }
-                let mut generated_hit_point = None;
-                if self.helper_rays.is_none() && !self.is_helper {
-                    generated_hit_point = Some(HitPoint::Energy(EnergyHitPoint::new(
-                        os.geo_surface()
-                            .0
-                            .lock_opm()?
-                            .isometry()
-                            .inverse_transform_point(&intersection_point),
-                        input_energy,
-                    )?));
-                } else if let Some(helper_fluence) = &self.helper_ray_fluence() {
-                    generated_hit_point = Some(HitPoint::Fluence(FluenceHitPoint::new(
-                        os.geo_surface()
-                            .0
-                            .lock_opm()?
-                            .isometry()
-                            .inverse_transform_point(&intersection_point),
-                        *helper_fluence,
-                    )?));
-                    self.change_helper_fluence_by_factor(percent!(100.0) - reflectivity)?;
-                    reflected_ray.change_helper_fluence_by_factor(reflectivity)?;
-                }
-
-                // Wir geben beides zurück
-                Ok((Some(reflected_ray), generated_hit_point))
-            } else {
-                self.number_of_bounces += 1;
-                self.prev_dir = Some(self.dir);
-                self.dir = reflected_dir;
-                Ok((None, None))
-            }
-        } else {
-            match missed_surface_strategy {
-                MissedSurfaceStrategy::Stop => self.set_invalid(),
-                MissedSurfaceStrategy::Ignore => {}
-            }
-            Ok((None, None))
+        // Snell's law in vector form (src: https://www.starkeffects.com/snells-law-vector.shtml)
+        // mu=n_1 / n_2
+        // s1: incoming direction (normalized??)
+        // n: surface normal (must be normalized)
+        // s2: refracted dir
+        //
+        // s2 = mu * [ n x ( -n x s1) ] - n* sqrt(1 - mu^2 * (n x s1) dot (n x s1))
+        let mu = self.refractive_index / n_refri_2;
+        let s1 = self.dir.normalize();
+        let n = hit.normal();
+        let dis = (mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0);
+        let reflected_dir = s1 - 2.0 * (s1.dot(&n)) * n;
+        self.path_length += self.refractive_index * distance_3d_point(&self.pos, &hit.point());
+        self.pos_hist.push(self.pos);
+        self.pos = hit.point();
+        // check, if total reflection
+        if !dis.is_sign_positive() {
+            self.number_of_bounces += 1;
+            self.turn_to(reflected_dir);
+            return Ok((None, None));
         }
+        let mut reflected_ray = self.clone();
+        // handle energy (due to coating)
+        let reflectivity = coating.calc_reflectivity(self, n, n_refri_2)?;
+        let input_energy = self.energy();
+        let refract_dir = mu * (n.cross(&(-1.0 * n.cross(&s1))))
+            - n * f64::sqrt((mu * mu).mul_add(-n.cross(&s1).dot(&n.cross(&s1)), 1.0));
+        self.turn_to(refract_dir);
+        self.e = input_energy * (percent!(100.0) - reflectivity);
+        reflected_ray.turn_to(reflected_dir);
+        reflected_ray.e = input_energy * reflectivity;
+        reflected_ray.number_of_bounces += 1;
+        self.refractive_index = n_refri_2;
+        if n2.is_some() {
+            self.number_of_refractions += 1;
+        }
+        let mut generated_hit_point = None;
+        // A detector records no hit outside its window.
+        if self.helper_rays.is_none() && !self.is_helper {
+            if hit.recorded() {
+                generated_hit_point = Some(HitPoint::Energy(EnergyHitPoint::new(
+                    hit.local_point(),
+                    input_energy,
+                )?));
+            }
+        } else if let Some(helper_fluence) = &self.helper_ray_fluence() {
+            if hit.recorded() {
+                generated_hit_point = Some(HitPoint::Fluence(FluenceHitPoint::new(
+                    hit.local_point(),
+                    *helper_fluence,
+                )?));
+            }
+            self.change_helper_fluence_by_factor(percent!(100.0) - reflectivity)?;
+            reflected_ray.change_helper_fluence_by_factor(reflectivity)?;
+        }
+        Ok((Some(reflected_ray), generated_hit_point))
     }
 
     fn change_helper_fluence_by_factor(&mut self, factor: Ratio) -> OpmResult<()> {
@@ -803,30 +785,6 @@ impl Ray {
             proj_y.normalize()
         }
     }
-    /// Modifies the current up-direction of a ray which is needed to create an isometry from this ray.
-    /// This function should only be used during the node positioning process
-    /// # Errors
-    /// This function errors
-    /// - if the position history is empty and therefore, the last direction cannot be calulated
-    /// - if the last postion cannot be unwrapped
-    pub fn calc_new_up_direction(&self, up_direction: &mut Vector3<f64>) -> OpmResult<()> {
-        let Some(old_dir) = self.prev_dir else {
-            return Err(OpossumError::Other(
-                "no previous direction of ray defined to calculate new up-direction!".into(),
-            ));
-        };
-
-        if relative_ne!(
-            (old_dir - self.dir).norm(),
-            0.,
-            epsilon = f64::EPSILON * 1000.
-        ) && let Some(rot) = Rotation3::rotation_between(&old_dir, &self.dir)
-        {
-            *up_direction = rot.transform_vector(up_direction);
-        }
-
-        Ok(())
-    }
 }
 impl Display for Ray {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -854,7 +812,9 @@ mod test {
     use crate::{
         J_per_cm2,
         coatings::CoatingConstantR,
-        degree, joule,
+        degree,
+        geometry::{Face, Geometry, SurfaceGeometry, SurfaceShape},
+        joule,
         light::Spectrum,
         millimeter, nanometer,
         nodes::{
@@ -1174,6 +1134,18 @@ mod test {
         assert_eq!(ray.dir, Vector3::z());
         Ok(())
     }
+    /// Refract a ray where it hits an unbounded plane with its vertex at the given frame.
+    fn refract_on_plane(
+        ray: &mut Ray,
+        frame: Isometry,
+        coating: &CoatingType,
+        n2: Option<f64>,
+    ) -> OpmResult<(Option<Ray>, Option<HitPoint>)> {
+        let hit = Geometry::from(Face::new(SurfaceShape::Plane, frame))
+            .intersect(SurfaceGeometry::FACE, ray)
+            .ok_or_else(|| OpossumError::Other("the ray missed the plane".into()))?;
+        ray.refract_at(&hit, coating, n2)
+    }
     #[test]
     fn refract_on_surface_collimated() -> OpmResult<()> {
         let position = Point3::origin();
@@ -1186,23 +1158,11 @@ mod test {
             Point3::new(Length::zero(), Length::zero(), plane_z_pos),
             degree!(0.0, 0.0, 0.0),
         )?;
-        let mut s = OpticSurface::default();
-        s.set_isometry(isometry);
-        s.set_coating(CoatingConstantR::new(reflectivity)?.into());
-        assert!(
-            ray.refract_on_surface(&s, Some(0.9), &MissedSurfaceStrategy::Stop)
-                .is_err()
-        );
-        assert!(
-            ray.refract_on_surface(&s, Some(f64::NAN), &MissedSurfaceStrategy::Stop)
-                .is_err()
-        );
-        assert!(
-            ray.refract_on_surface(&s, Some(f64::INFINITY), &MissedSurfaceStrategy::Stop)
-                .is_err()
-        );
-        let (reflected_ray, _hitpoint) =
-            ray.refract_on_surface(&s, Some(1.5), &MissedSurfaceStrategy::Stop)?;
+        let coating: CoatingType = CoatingConstantR::new(reflectivity)?.into();
+        for n2 in [0.9, f64::NAN, f64::INFINITY] {
+            assert!(refract_on_plane(&mut ray, isometry, &coating, Some(n2)).is_err());
+        }
+        let (reflected_ray, _hitpoint) = refract_on_plane(&mut ray, isometry, &coating, Some(1.5))?;
 
         let reflected_ray = reflected_ray.unwrap();
         // refracted ray
@@ -1227,12 +1187,75 @@ mod test {
 
         let position = millimeter!(0., 1., 0.);
         let mut ray = Ray::new_collimated(position, wvl, e)?;
-        ray.refract_on_surface(&s, Some(1.5), &MissedSurfaceStrategy::Stop)?;
+        refract_on_plane(&mut ray, isometry, &coating, Some(1.5))?;
         assert_eq!(ray.pos, millimeter!(0., 1., 10.));
         assert_eq!(ray.dir, Vector3::z());
         assert_eq!(ray.path_length, plane_z_pos);
         assert_eq!(ray.number_of_bounces(), 0);
         assert_eq!(ray.number_of_refractions(), 1);
+        Ok(())
+    }
+    /// A hit on a curved face is recorded at its position across the face's own axis: a ray along
+    /// the axis of a turned lens, 3 mm and -4 mm off it, is recorded at (3, -4) mm.
+    #[test]
+    fn a_hit_on_a_curved_face_is_recorded_across_its_axis() -> OpmResult<()> {
+        use crate::{
+            apertures::{CircleShape, Outline},
+            geometry::{Extruded, Geometry},
+        };
+        let node_frame = Isometry::new(millimeter!(1.0, -2.0, 30.0), degree!(10.0, 5.0, 0.0))?;
+        let lens = Geometry::singlet(
+            millimeter!(50.0),
+            millimeter!(f64::INFINITY),
+            millimeter!(5.0),
+            Outline::new(CircleShape::new(millimeter!(10.0))?, Vec::new())?,
+        )?;
+        let mut ray = Ray::new(
+            node_frame.transform_point(&millimeter!(3.0, -4.0, -20.0)),
+            node_frame.transform_vector_f64(&Vector3::z()),
+            nanometer!(1053.0),
+            joule!(1.0),
+        )?;
+        let surface_hit = lens
+            .moved(&node_frame)
+            .intersect(Extruded::FRONT, &ray)
+            .ok_or_else(|| OpossumError::Other("the ray missed the lens".into()))?;
+        let (_, hit) = ray.refract_at(&surface_hit, &CoatingType::IdealAR, Some(1.5))?;
+        let Some(HitPoint::Energy(hit)) = hit else {
+            return Err(OpossumError::Other("the ray left no energy hit".into()));
+        };
+        assert_abs_diff_eq!(hit.position().x.get::<millimeter>(), 3.0, epsilon = 1e-9);
+        assert_abs_diff_eq!(hit.position().y.get::<millimeter>(), -4.0, epsilon = 1e-9);
+        Ok(())
+    }
+    /// A grating adds the phase of where it is hit across its lines, measured along the x axis of
+    /// its own face: a ray along the axis of a turned grating with 500 lines/mm, 3 mm off it in x,
+    /// travels 20 mm and gains 500/mm · 3 mm = 1500 wavelengths in first order.
+    #[test]
+    fn a_grating_adds_the_phase_of_the_hit_across_its_lines() -> OpmResult<()> {
+        let frame = Isometry::new(millimeter!(1.0, -2.0, 30.0), degree!(10.0, 5.0, 20.0))?;
+        let grating = Geometry::from(Face::new(SurfaceShape::Plane, frame));
+        let lines_per_meter = 5.0e5;
+        let grating_vector = frame.transform_vector_f64(&Vector3::x()) * 2.0 * PI * lines_per_meter;
+        let wavelength = nanometer!(1053.0);
+        let mut ray = Ray::new(
+            frame.transform_point(&millimeter!(3.0, -4.0, -20.0)),
+            frame.transform_vector_f64(&Vector3::z()),
+            wavelength,
+            joule!(1.0),
+        )?;
+        let hit = grating
+            .intersect(SurfaceGeometry::FACE, &ray)
+            .ok_or_else(|| OpossumError::Other("the ray missed the grating".into()))?;
+        let diffracted = ray.diffract_at(&hit, 1.0, grating_vector, &1)?;
+        let diffracted = diffracted
+            .ok_or_else(|| OpossumError::Other("the first order is not supported".into()))?;
+        let phase = lines_per_meter * 0.003 * wavelength.get::<millimeter>();
+        assert_abs_diff_eq!(
+            diffracted.path_length().get::<millimeter>(),
+            20.0 + phase,
+            epsilon = 1e-9
+        );
         Ok(())
     }
     #[test]
@@ -1249,9 +1272,7 @@ mod test {
             Point3::new(Length::zero(), Length::zero(), plane_z_pos),
             degree!(0.0, 0.0, 0.0),
         )?;
-        let s = OpticSurface::default();
-        s.set_isometry(isometry);
-        ray.refract_on_surface(&s, None, &MissedSurfaceStrategy::Stop)?;
+        refract_on_plane(&mut ray, isometry, &CoatingType::IdealAR, None)?;
         assert_eq!(ray.pos, millimeter!(0., 10., 10.));
         assert_eq!(ray.dir[0], 0.0);
         assert_abs_diff_eq!(ray.dir[1], direction.normalize()[1]);
@@ -1262,26 +1283,20 @@ mod test {
         );
         Ok(())
     }
+    /// A ray running away from a plane does not hit it.
     #[test]
     fn refract_on_surface_non_intersecting() -> OpmResult<()> {
-        let position = millimeter!(0., 0., 0.);
-        let direction = vector![0.0, 0.0, -1.0];
-        let wvl = nanometer!(1054.0);
-        let e = joule!(1.0);
-        let mut ray = Ray::new(position, direction, wvl, e)?;
-        let isometry = Isometry::new(
-            Point3::new(Length::zero(), Length::zero(), millimeter!(10.0)),
-            degree!(0.0, 0.0, 0.0),
+        let ray = Ray::new(
+            millimeter!(0., 0., 0.),
+            vector![0.0, 0.0, -1.0],
+            nanometer!(1054.0),
+            joule!(1.0),
         )?;
-        let s = OpticSurface::default();
-        s.set_isometry(isometry);
-        ray.refract_on_surface(&s, Some(1.5), &MissedSurfaceStrategy::Stop)?;
-        assert_eq!(ray.pos, millimeter!(0., 0., 0.));
-        assert_eq!(ray.dir, direction);
-        assert_eq!(ray.refractive_index, 1.0);
-        assert_eq!(ray.path_length, Length::zero());
-        assert_eq!(ray.number_of_bounces(), 0);
-        assert_eq!(ray.number_of_refractions(), 0);
+        let plane = Geometry::from(Face::new(
+            SurfaceShape::Plane,
+            Isometry::new_along_z(millimeter!(10.0))?,
+        ));
+        assert!(plane.intersect(SurfaceGeometry::FACE, &ray).is_none());
         Ok(())
     }
     #[test]
@@ -1296,28 +1311,18 @@ mod test {
             Point3::new(Length::zero(), Length::zero(), plane_z_pos),
             degree!(0.0, 0.0, 0.0),
         )?;
-        let s = OpticSurface::default();
-        s.set_isometry(isometry);
-        assert!(
-            ray.refract_on_surface(&s, Some(0.9), &MissedSurfaceStrategy::Stop)
-                .is_err()
-        );
-        assert!(
-            ray.refract_on_surface(&s, Some(f64::NAN), &MissedSurfaceStrategy::Stop)
-                .is_err()
-        );
-        assert!(
-            ray.refract_on_surface(&s, Some(f64::INFINITY), &MissedSurfaceStrategy::Stop)
-                .is_err()
-        );
-        ray.refract_on_surface(&s, Some(1.0), &MissedSurfaceStrategy::Stop)?;
+        let coating = CoatingType::IdealAR;
+        for n2 in [0.9, f64::NAN, f64::INFINITY] {
+            assert!(refract_on_plane(&mut ray, isometry, &coating, Some(n2)).is_err());
+        }
+        refract_on_plane(&mut ray, isometry, &coating, Some(1.0))?;
         assert_eq!(ray.pos, millimeter!(0., 10., 10.));
         assert_eq!(ray.dir[0], 0.0);
         assert_abs_diff_eq!(ray.dir[1], direction.normalize()[1]);
         assert_abs_diff_eq!(ray.dir[2], direction.normalize()[2]);
         assert_abs_diff_eq!(ray.path_length.value, 2.0_f64.sqrt() * plane_z_pos.value);
         let mut ray = Ray::new(position, direction, wvl, e)?;
-        ray.refract_on_surface(&s, Some(1.5), &MissedSurfaceStrategy::Stop)?;
+        refract_on_plane(&mut ray, isometry, &coating, Some(1.5))?;
         assert_eq!(ray.number_of_bounces(), 0);
         assert_eq!(ray.number_of_refractions(), 1);
         assert_eq!(ray.pos, millimeter!(0., 10., 10.));
@@ -1326,7 +1331,7 @@ mod test {
         assert_abs_diff_eq!(ray.dir[2], 0.8819171036881969);
         let direction = vector![1.0, 0.0, 1.0];
         let mut ray = Ray::new(position, direction, wvl, e)?;
-        ray.refract_on_surface(&s, Some(1.5), &MissedSurfaceStrategy::Stop)?;
+        refract_on_plane(&mut ray, isometry, &coating, Some(1.5))?;
         assert_eq!(ray.pos, millimeter!(10., 0., 10.));
         assert_eq!(ray.dir[0], 0.4714045207910317);
         assert_abs_diff_eq!(ray.dir[1], 0.0);
@@ -1345,10 +1350,8 @@ mod test {
             Point3::new(Length::zero(), Length::zero(), millimeter!(10.0)),
             degree!(0.0, 0.0, 0.0),
         )?;
-        let s = OpticSurface::default();
-        s.set_isometry(isometry);
         let (reflected, _hitpoint) =
-            ray.refract_on_surface(&s, Some(1.0), &MissedSurfaceStrategy::Stop)?;
+            refract_on_plane(&mut ray, isometry, &CoatingType::IdealAR, Some(1.0))?;
         assert!(reflected.is_none());
         assert_eq!(ray.pos, millimeter!(0., 20., 10.));
         let test_reflect = vector![0.0, 2.0, -1.0].normalize();
@@ -1677,39 +1680,52 @@ mod test {
         ));
         Ok(())
     }
+    /// The up direction a ray carries turns with it by the smallest rotation: up from y to -z when
+    /// the ray turns from z to y, back to y when it turns back, and unchanged when the ray turns
+    /// about the up direction itself or is sent straight back. A ray without one gets none.
     #[test]
-    fn calc_new_up_direction_test() -> OpmResult<()> {
-        //emulate reflection or refraction
+    fn turn_to_turns_the_up_direction_along() -> OpmResult<()> {
         let mut ray = Ray::new(
             meter!(0., 0., 0.),
             Vector3::z(),
             nanometer!(1000.),
             joule!(1.),
         )?;
-        let mut up_direction = Vector3::y();
-        assert!(ray.calc_new_up_direction(&mut up_direction).is_err());
-        //propagation
-        ray.propagate(meter!(1.))?;
-        //45° reflection to y
-        ray.prev_dir = Some(ray.dir);
-        ray.dir = Vector3::y();
+        ray.turn_to(Vector3::y());
+        assert_eq!(ray.up_direction, None);
 
-        ray.calc_new_up_direction(&mut up_direction)?;
-        assert_relative_eq!(up_direction, -Vector3::z());
-
-        ray.propagate(meter!(1.))?;
-        ray.prev_dir = Some(ray.dir);
-        ray.dir = Vector3::new(0., 0., 1.);
-
-        ray.calc_new_up_direction(&mut up_direction)?;
-        assert_relative_eq!(up_direction, Vector3::y());
-
-        ray.propagate(meter!(1.))?;
-        ray.prev_dir = Some(ray.dir);
-        ray.dir = Vector3::new(1., 0., 0.);
-
-        ray.calc_new_up_direction(&mut up_direction)?;
-        assert_relative_eq!(up_direction, Vector3::y());
+        let mut ray = Ray::new(
+            meter!(0., 0., 0.),
+            Vector3::z(),
+            nanometer!(1000.),
+            joule!(1.),
+        )?;
+        ray.set_up_direction(Vector3::y());
+        let mut assert_turned = |dir: Vector3<f64>, up_direction: Vector3<f64>| {
+            ray.turn_to(dir);
+            assert_relative_eq!(ray.up_direction.unwrap(), up_direction);
+        };
+        assert_turned(Vector3::y(), -Vector3::z());
+        assert_turned(Vector3::z(), Vector3::y());
+        assert_turned(Vector3::x(), Vector3::y());
+        assert_turned(-Vector3::x(), Vector3::y());
+        Ok(())
+    }
+    /// A ray places a node looking along the ray, its y axis towards the up direction the ray
+    /// carries. Without one there is nothing to turn the node by.
+    #[test]
+    fn to_isometry_turns_the_node_by_the_carried_up_direction() -> OpmResult<()> {
+        let mut ray = Ray::new(
+            meter!(0., 0., 0.),
+            Vector3::z(),
+            nanometer!(1000.),
+            joule!(1.),
+        )?;
+        assert!(ray.to_isometry().is_err());
+        ray.set_up_direction(-Vector3::x());
+        let isometry = ray.to_isometry()?;
+        assert_relative_eq!(isometry.transform_vector_f64(&Vector3::z()), Vector3::z());
+        assert_relative_eq!(isometry.transform_vector_f64(&Vector3::y()), -Vector3::x());
         Ok(())
     }
 

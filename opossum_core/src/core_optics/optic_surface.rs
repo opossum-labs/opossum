@@ -1,12 +1,9 @@
 //! Module handling optical surfaces
 use log::warn;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
     J_per_cm2,
-    analyzers::propagation_strategy::PropagationStrategy,
-    apertures::Aperture,
     coatings::CoatingType,
     core_optics::hit_map::{
         HitMap,
@@ -14,42 +11,34 @@ use crate::{
         rays_hit_map::{HitPoint, RaysHitMap},
     },
     error::{OpmResult, OpossumError},
-    geometry::geo_surface::GeoSurfaceRef,
     light::Rays,
     nodes::fluence_detector::Fluence,
-    refractive_index::RefractiveIndexType,
-    utils::{LockExt, geom_transformation::Isometry},
 };
 use core::fmt::Debug;
 
-/// This struct represents an optical surface, which consists of the geometric surface shape
-/// ([`GeoSurface`](crate::geometry::geo_surface::GeoSurface)) and further properties such as the [`CoatingType`].
-#[derive(Serialize, Deserialize, Clone)]
+/// An optical surface of a node: one face of the node's geometry, with what the surface adds to it,
+/// such as its [`CoatingType`].
+///
+/// It holds no geometry. The component it belongs to traces rays at it (see
+/// [`RuntimeGeometry::interact`](crate::core_optics::runtime_geometry::RuntimeGeometry::interact)),
+/// with the number of the face this surface is.
+#[derive(Clone)]
 pub struct OpticSurface {
-    #[serde(skip)]
-    geo_surface: GeoSurfaceRef,
-    anchor_point_iso: Isometry,
-    #[serde(skip_serializing_if = "Aperture::is_none", default)]
-    aperture: Aperture,
+    face: usize,
     coating: CoatingType,
     lidt: Fluence,
-    #[serde(skip)]
     backward_rays_cache: Vec<Rays>,
-    #[serde(skip)]
     forward_rays_cache: Vec<Rays>,
-    #[serde(skip)]
     hit_map: HitMap,
 }
 impl Default for OpticSurface {
     /// Returns a default [`OpticSurface`].
     ///
-    /// The default is a flat surface with an ideal antireflective coating (=no reflection), no limiting aperture
-    /// and a lidt of 1 J/cm².
+    /// The default is face 0 with an ideal antireflective coating (=no reflection) and a lidt of
+    /// 1 J/cm².
     fn default() -> Self {
         Self {
-            geo_surface: GeoSurfaceRef::default(),
-            anchor_point_iso: Isometry::identity(),
-            aperture: Aperture::default(),
+            face: 0,
             coating: CoatingType::IdealAR,
             lidt: J_per_cm2!(1.),
             backward_rays_cache: Vec::<Rays>::new(),
@@ -64,23 +53,23 @@ impl OpticSurface {
     /// **Note**: The laser induced damage threshold (LIDT) can be set to infinity to model an
     /// "unbreakable" optical surface.
     ///
+    /// # Arguments
+    ///
+    /// * `face` - the number of the face of the node's geometry this surface is.
+    /// * `coating` - the coating of the surface.
+    /// * `lidt` - the laser induced damage threshold of the surface.
+    ///
     /// # Errors
     ///
     /// This function returns an error if the given lidt is negative or NaN.
-    pub fn new(
-        geo_surface: GeoSurfaceRef,
-        coating: CoatingType,
-        aperture: Aperture,
-        lidt: Fluence,
-    ) -> OpmResult<Self> {
+    pub fn new(face: usize, coating: CoatingType, lidt: Fluence) -> OpmResult<Self> {
         if lidt.is_sign_negative() || lidt.is_nan() {
             return Err(OpossumError::Other(
                 "LIDT must be positive and not NaN".into(),
             ));
         }
         Ok(Self {
-            geo_surface,
-            aperture,
+            face,
             coating,
             lidt,
             ..Default::default()
@@ -95,28 +84,14 @@ impl OpticSurface {
             &self.forward_rays_cache
         }
     }
-    /// Sets the geo surface of this [`OpticSurface`].
-    pub fn set_geo_surface(&mut self, geo_surface: GeoSurfaceRef) {
-        self.geo_surface = geo_surface;
-    }
-
-    /// Sets the aperture of this [`OpticSurface`].
-    pub fn set_aperture(&mut self, aperture: Aperture) {
-        self.aperture = aperture;
+    /// Returns the number of the face of the node's geometry this [`OpticSurface`] is.
+    #[must_use]
+    pub const fn face(&self) -> usize {
+        self.face
     }
     /// Sets the coating of this [`OpticSurface`].
     pub const fn set_coating(&mut self, coating: CoatingType) {
         self.coating = coating;
-    }
-    /// Returns a reference to the geo surface of this [`OpticSurface`].
-    #[must_use]
-    pub fn geo_surface(&self) -> GeoSurfaceRef {
-        self.geo_surface.clone()
-    }
-    /// Returns a reference to the aperture of this [`OpticSurface`].
-    #[must_use]
-    pub const fn aperture(&self) -> &Aperture {
-        &self.aperture
     }
     /// Returns a reference to the coating of this [`OpticSurface`].
     #[must_use]
@@ -139,14 +114,6 @@ impl OpticSurface {
         } else {
             self.backward_rays_cache.push(rays);
         }
-    }
-    /// Sets the isometry of this [`OpticSurface`].
-    ///
-    /// # Panics
-    ///
-    /// This function might theoretically panic if locking of an internal mutex fails.
-    pub fn set_isometry(&self, iso: Isometry) {
-        self.geo_surface.0.lock_opm().unwrap().set_isometry(iso);
     }
     /// Returns a reference to the hit map of this [`OpticSurface`].
     ///
@@ -187,13 +154,6 @@ impl OpticSurface {
     /// Reset hit map of this [`OpticSurface`].
     pub fn reset_hit_map(&mut self) {
         self.hit_map.reset();
-    }
-
-    /// Prunes the hit map of this [`OpticSurface`] by removing all points that are outside the aperture.
-    pub fn prune_hit_map(&mut self, iso: &Isometry) {
-        if !self.aperture.is_none() {
-            self.hit_map.prune_by_aperture(&self.aperture, iso);
-        }
     }
 
     /// Evaluate the fluence of a given ray bundle on this surface. If the fluence
@@ -244,79 +204,15 @@ impl OpticSurface {
         self.lidt = lidt;
         Ok(())
     }
-
-    /// Sets the anchor point isometry of this [`OpticSurface`]
-    pub const fn set_anchor_point_iso(&mut self, iso: Isometry) {
-        self.anchor_point_iso = iso;
-    }
-
-    ///Returns a reference to the anchor point isometry of this [`OpticSurface`]
-    #[must_use]
-    pub const fn anchor_point_iso(&self) -> &Isometry {
-        &self.anchor_point_iso
-    }
-    /// Propagates a bundle of rays through this specific surface.
-    /// Utilizes the Strategy Pattern to execute analyzer-specific behavior.
-    ///
-    /// # Parameters
-    /// * `rays_bundle`: The bundle of rays to be propagated.
-    /// * `node_uuid`: The UUID of the parent optical node (used for setting the origin of reflected rays).
-    /// * `iso`: The effective isometry of this surface in 3D space.
-    /// * `refri_after_surf`: The refractive index after the surface.
-    /// * `backward`: The direction of propagation (`true` if backwards).
-    /// * `refraction_intended`: Indicates whether refraction should be calculated.
-    /// * `strategy`: The strategy defining the behavior of the current analysis mode.
-    ///
-    /// # Errors
-    /// This function errors if the optical calculations (refraction/reflection) or the
-    /// strategy-specific hooks (e.g., fluence evaluation) fail.
-    #[allow(clippy::too_many_arguments)]
-    pub fn propagate_rays(
-        &mut self,
-        rays_bundle: &mut Vec<Rays>,
-        node_uuid: Uuid,
-        iso: &Isometry,
-        refri_after_surf: Option<&RefractiveIndexType>,
-        backward: bool,
-        refraction_intended: bool,
-        strategy: &dyn PropagationStrategy,
-    ) -> OpmResult<()> {
-        let missed_strategy = strategy.missed_surface_strategy();
-
-        for rays in &mut *rays_bundle {
-            let mut reflected = rays.refract_on_surface(
-                self,
-                refri_after_surf,
-                refraction_intended,
-                &missed_strategy,
-            )?;
-            reflected.set_node_origin_uuid(node_uuid);
-            strategy.on_surface_interaction(self, rays, reflected, backward)?;
-            rays.apodize(self.aperture(), iso)?;
-            strategy.on_after_apodization(rays)?;
-        }
-        for rays in self.get_rays_cache(backward) {
-            rays_bundle.push(rays.clone());
-        }
-        self.prune_hit_map(iso);
-        Ok(())
-    }
 }
 
 impl Debug for OpticSurface {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut ds = f.debug_struct("OpticSurface");
-        ds.field("aperture", &self.aperture);
-        ds.field("coating", &self.coating);
-
-        // Try to lock, if it fails, provide a descriptive string instead
-        match self.geo_surface.0.lock_opm() {
-            Ok(guard) => ds.field("geometric surface", &*guard),
-            Err(_) => ds.field("geometric surface", &"<Locked/Poisoned>"),
-        };
-
-        ds.field("lidt", &self.lidt);
-        ds.finish_non_exhaustive()
+        f.debug_struct("OpticSurface")
+            .field("face", &self.face)
+            .field("coating", &self.coating)
+            .field("lidt", &self.lidt)
+            .finish_non_exhaustive()
     }
 }
 #[cfg(test)]
@@ -324,22 +220,18 @@ mod test {
     use super::OpticSurface;
     use crate::{
         J_per_cm2,
-        apertures::{Aperture, ApertureShape, ApertureType, CircleShape},
         coatings::CoatingType,
         error::{OpmResult, OpossumError},
-        geometry::{Sphere, geo_surface::GeoSurfaceRef},
         joule,
         light::{Ray, Rays},
         meter, nanometer,
-        utils::geom_transformation::Isometry,
     };
-    use std::sync::{Arc, Mutex};
     use uuid::Uuid;
 
     #[test]
     fn default() {
         let os = OpticSurface::default();
-        assert!(matches!(os.aperture.shape(), ApertureShape::Open));
+        assert_eq!(os.face(), 0);
         assert!(matches!(os.coating, CoatingType::IdealAR));
         assert_eq!(os.backward_rays_cache.len(), 0);
         assert_eq!(os.forward_rays_cache.len(), 0);
@@ -348,62 +240,14 @@ mod test {
     }
     #[test]
     fn new() -> OpmResult<()> {
-        let gs = GeoSurfaceRef::default();
-        assert!(
-            OpticSurface::new(
-                gs.clone(),
-                CoatingType::IdealAR,
-                Aperture::default(),
-                J_per_cm2!(f64::NAN)
-            )
-            .is_err()
-        );
-        assert!(
-            OpticSurface::new(
-                gs.clone(),
-                CoatingType::IdealAR,
-                Aperture::default(),
-                J_per_cm2!(f64::NEG_INFINITY)
-            )
-            .is_err()
-        );
-        assert!(
-            OpticSurface::new(
-                gs.clone(),
-                CoatingType::IdealAR,
-                Aperture::default(),
-                J_per_cm2!(-0.1)
-            )
-            .is_err()
-        );
-        assert!(
-            OpticSurface::new(
-                gs.clone(),
-                CoatingType::IdealAR,
-                Aperture::default(),
-                J_per_cm2!(f64::INFINITY)
-            )
-            .is_ok()
-        );
-
-        let aperture = Aperture::new(
-            ApertureShape::BinaryCircle(CircleShape::new(meter!(1.0))?),
-            ApertureType::Hole,
-            Some(meter!(0.0, 0.0)),
-            None,
-        )?;
-        let os = OpticSurface::new(
-            GeoSurfaceRef(Arc::new(Mutex::new(Sphere::new(
-                meter!(1.0),
-                Isometry::identity(),
-            )?))),
-            CoatingType::Fresnel,
-            aperture,
-            J_per_cm2!(2.0),
-        )?;
+        for lidt in [f64::NAN, f64::NEG_INFINITY, -0.1] {
+            assert!(OpticSurface::new(0, CoatingType::IdealAR, J_per_cm2!(lidt)).is_err());
+        }
+        assert!(OpticSurface::new(0, CoatingType::IdealAR, J_per_cm2!(f64::INFINITY)).is_ok());
+        let os = OpticSurface::new(1, CoatingType::Fresnel, J_per_cm2!(2.0))?;
+        assert_eq!(os.face(), 1);
         assert_eq!(os.lidt, J_per_cm2!(2.0));
         assert!(matches!(os.coating, CoatingType::Fresnel));
-        assert!(matches!(os.aperture, _aperture));
         Ok(())
     }
     #[test]

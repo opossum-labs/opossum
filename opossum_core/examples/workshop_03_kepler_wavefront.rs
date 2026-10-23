@@ -8,9 +8,9 @@
 //! 1. One collimated line ray source
 //! 2. A wavefront analyzer before the telescope
 //! 3. Refractive index data for HZF52 glass
-//! 4. A 75 mm spherical lens with a circular input aperture
+//! 4. A 75 mm spherical lens with an optic shape of 25 mm radius
 //! 5. A spot diagram analyzer at the focus of the first lens
-//! 6. A 50 mm spherical lens
+//! 6. A 50 mm spherical lens of the same size
 //! 7. A ray propagation visualizer after the second lens
 //! 8. A wavefront analyzer after the telescope
 //! 9. A ray-tracing analyzer for the source beam
@@ -23,7 +23,7 @@
 //!
 //! This example demonstrates:
 //! - Building spherical lenses from wavelength-dependent refractive index data
-//! - Applying a circular aperture to the first lens
+//! - Giving the lenses their size with an optic shape
 //! - Connecting optical components with fixed propagation distances
 //! - Attaching wavefront and spot diagram analyzers to inspect the beam
 //! - Configuring a ray-tracing analyzer and saving the system as an
@@ -32,15 +32,19 @@
 //! Imports:
 //! - `opossum_core::prelude::*` — optical components, analyzers, unit
 //!   macros, and document types
-//! - `opossum_core::core_optics::{NodeAttrExt, OpticNodeExt}` — extension
-//!   traits for setting node names and properties
+//! - `opossum_core::core_optics::NodeAttrExt` — extension trait for setting
+//!   node names and properties
+//! - `opossum_core::apertures::CircleShape` — the outline of a lens's optic
+//!   shape
 //! - `opossum_core::nodes::round_collimated_ray_builder` — builds a round
 //!   collimated ray source
 //! - `std::{env, path::Path}` — used to find the output directory and save
 //!   the `.opm` file
 
 use opossum_core::{
-    core_optics::{NodeAttrExt, OpticNodeExt},
+    apertures::{CircleShape, RectangleShape},
+    core_optics::NodeAttrExt,
+    geometry::body::OPTIC_SHAPE,
     nodes::round_collimated_ray_builder,
     prelude::*,
 };
@@ -64,8 +68,12 @@ fn main() -> OpmResult<()> {
     let i_src = scenery.add_node(SourcePort::new("collimated line ray source"))?;
     // 2. Define the Wavefront Analyzer
     // The wavefront analyzer captures phase information from the light
-    // before it enters the telescope.
-    let i_sd5 = scenery.add_node(WaveFront::new("wavefront before telescope")?)?;
+    // before it enters the telescope. Its sensor is 50 mm square, large enough for the beam of
+    // 24 mm radius.
+    let sensor: OpticShape = RectangleShape::new(millimeter!(50.0), millimeter!(50.0))?.into();
+    let mut wavefront = WaveFront::new("wavefront before telescope")?;
+    wavefront.set_property(OPTIC_SHAPE, sensor.clone().into())?;
+    let i_sd5 = scenery.add_node(wavefront)?;
     // 3. Define the Refractive Index
     // Define wavelength-dependent refractive index data for HZF52 glass
     // over the wavelength range from 300 nm to 2000 nm.
@@ -78,8 +86,8 @@ fn main() -> OpmResult<()> {
         7.52649555E-005,
         nanometer!(300.0)..nanometer!(2000.0),
     )?;
-    // 4. Define the Lenses and Aperture
-    // First lens: 75 mm focal length, 10 mm thickness, with a circular aperture of 25 mm.
+    // 4. Define the Lenses and their size
+    // First lens: 75 mm focal length, 10 mm thickness, with an optic shape of 25 mm radius.
     let mut lens1 = Lens::new(
         "75 mm lens",
         millimeter!(122.25),  // radius of curvature front
@@ -87,20 +95,26 @@ fn main() -> OpmResult<()> {
         millimeter!(10.0),    // thickness
         &refr_index_hzf52,
     )?;
-    let aperture = Aperture::new_circle(millimeter!(25.0), ApertureType::Hole, None)?;
-    lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
+    lens1.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
+    )?;
     // Add the first lens to the optical system.
     let i_pl1 = scenery.add_node(lens1)?;
     // 5. Define the Spot Diagram Analyzer
     // Add a spot diagram analyzer to inspect the beam at the focus of the first lens.
     let i_sd6 = scenery.add_node(SpotDiagram::new("spot diagram at focus")?)?;
-    // Define the second lens: 50 mm focal length and 10 mm thickness.
-    let lens2 = Lens::new(
+    // Define the second lens: 50 mm focal length, 10 mm thickness and the same size as the first.
+    let mut lens2 = Lens::new(
         "50 mm lens",
         millimeter!(100.0),
         millimeter!(-100.0),
         millimeter!(10.0),
         &refr_index_hzf52,
+    )?;
+    lens2.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
     )?;
     let i_pl2 = scenery.add_node(lens2)?;
     // 6. Define the Ray Propagation Visualizer
@@ -109,8 +123,11 @@ fn main() -> OpmResult<()> {
     ray_prop_vis.set_property("ray transparency", 1.0.into())?;
     let i_sd3 = scenery.add_node(ray_prop_vis)?;
     // 7. Define the Post-Telescope Wavefront Analyzer
-    // Add a wavefront analyzer to inspect the beam after it passes through the telescope.
-    let i_sd4 = scenery.add_node(WaveFront::new("wavefront after telescope")?)?;
+    // Add a wavefront analyzer to inspect the beam after it passes through the telescope. Its
+    // sensor is as large as the first one.
+    let mut wavefront = WaveFront::new("wavefront after telescope")?;
+    wavefront.set_property(OPTIC_SHAPE, sensor.into())?;
+    let i_sd4 = scenery.add_node(wavefront)?;
     // 8. Connect Components
     // Connect the nodes in order to create the optical path:
     // Light source → pre-telescope wavefront analyzer → first lens →

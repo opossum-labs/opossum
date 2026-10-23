@@ -3,7 +3,7 @@
 
 use crate::{
     analyzers::ghostfocus::GhostFocusHistory,
-    apertures::ApertureShape,
+    apertures::OpticShape,
     core_optics::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
     error::{OpmResult, OpossumError},
     light::{
@@ -136,8 +136,8 @@ pub enum Proptype {
     Metertype(Metertype),
     /// An [`Uuid`] for identifying an optical node.
     Uuid(Uuid),
-    /// A property for storing an optical [`Aperture`](crate::apertures::Aperture).
-    Aperture(ApertureShape),
+    /// The optic shape of a component: an outline on its axis with bores through it.
+    OpticShape(OpticShape),
     /// A property for storing a [`Spectrum`].
     Spectrum(Spectrum),
     /// This property stores the fluence information [`FluenceData`]
@@ -421,6 +421,8 @@ where
 }
 #[cfg(test)]
 mod test {
+    use std::f64::consts;
+
     use super::*;
     use assert_matches::assert_matches;
     use uom::si::{
@@ -509,10 +511,10 @@ mod test {
         use uom::si::length::millimeter;
 
         // F64 variant
-        let mut prop_f64 = Proptype::F64(3.14);
-        assert_eq!(prop_f64.as_f64(), Some(3.14));
-        prop_f64.set_f64(2.718)?;
-        assert_eq!(prop_f64.as_f64(), Some(2.718));
+        let mut prop_f64 = Proptype::F64(consts::PI);
+        assert_eq!(prop_f64.as_f64(), Some(consts::PI));
+        prop_f64.set_f64(consts::E)?;
+        assert_eq!(prop_f64.as_f64(), Some(consts::E));
 
         // I32 variant
         let mut prop_i32 = Proptype::I32(10);

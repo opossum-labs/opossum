@@ -8,8 +8,14 @@ use crate::{
         AnalyzerKind, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt},
+    core_optics::{
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, optic_node::APERTURE_LIMIT_NOTE,
+    },
     error::OpmResult,
+    geometry::{
+        Geometry, SurfaceGeometry, SurfaceShape,
+        body::{OPTIC_SHAPE, default_square_optic_shape},
+    },
     light::{LightData, Rays, Spectrum},
     nodes::NodeRegistration,
     properties::{Properties, Proptype},
@@ -57,6 +63,8 @@ inventory::submit! {
 /// ## Properties
 ///   - `name`
 ///   - `spectrometer type`
+///   - `optic shape`: the window the light is recorded within, a 25 mm square by default; light
+///     outside it passes unrecorded
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
@@ -77,6 +85,13 @@ impl Default for Spectrometer {
                 "spectrometer type",
                 "model type of the spectrometer",
                 SpectrometerType::Ideal.into(),
+            )
+            .unwrap();
+        node_attr
+            .create_property(
+                OPTIC_SHAPE,
+                "window the light is recorded within",
+                default_square_optic_shape().into(),
             )
             .unwrap();
         let mut spect = Self {
@@ -154,12 +169,21 @@ impl Spectrometer {
     }
 }
 impl OpticNode for Spectrometer {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::detector(
+            SurfaceShape::Plane,
+            self.cross_section()?,
+        )?))
+    }
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }
 
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.update_flat_single_surfaces()
+        self.install_geometry(
+            &[("input_1", SurfaceGeometry::FACE)],
+            &[("output_1", SurfaceGeometry::FACE)],
+        )
     }
 
     fn node_report(&self, uuid: &str, _analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
@@ -179,7 +203,7 @@ impl OpticNode for Spectrometer {
         if self.apodization_warning {
             report.add_note(crate::reporting::report_note::ReportNote::new(
                 crate::reporting::report_note::ReportLevel::Warning,
-                "Rays have been apodized at input aperture. Results might not be accurate.",
+                APERTURE_LIMIT_NOTE,
             ));
         }
 
@@ -322,8 +346,14 @@ mod test {
         Ok(())
     }
     #[test]
-    fn analyze_apodazation_warning() -> OpmResult<()> {
-        test_analyze_apodization_warning::<Spectrometer>()
+    fn optic_shape_absent_in_file() -> OpmResult<()> {
+        test_optic_shape_absent_in_file::<Spectrometer>()
+    }
+    #[test]
+    fn records_inside_and_passes_all() -> OpmResult<()> {
+        test_detector_records_inside_and_passes_all::<Spectrometer>(|spectrometer| {
+            spectrometer.light_data.as_ref()
+        })
     }
     #[test]
     fn analyze_inverse() -> OpmResult<()> {

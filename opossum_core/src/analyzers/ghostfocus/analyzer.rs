@@ -132,6 +132,7 @@ impl Analyzer for GhostFocusAnalyzer {
         } else {
             format!(" '{}'", scenery.node_attr().name())
         };
+        scenery.rebuild_surfaces()?;
         info!("Calculate node positions of scenery{scenery_name}.");
 
         // Build a positioning config with the source map so AnalysisRayTrace can find the source
@@ -216,7 +217,7 @@ pub trait AnalysisGhostFocus: OpticNode + AnalysisRayTrace {
     ) -> OpmResult<LightRays> {
         let incoming_result = light_rays_to_light_result(incoming_data);
         let out_result =
-            self.unified_analyze_single_surface_node(incoming_result, config, "input_1", None)?;
+            self.unified_analyze_single_surface_node(incoming_result, config, "input_1")?;
         light_result_to_light_rays(out_result)
     }
 }
@@ -232,9 +233,28 @@ mod test_ghost_focus_analyzer {
         millimeter,
         nodes::{
             Lens, NodeGroup, SourcePort, SpotDiagram, ThinMirror, round_collimated_ray_builder,
+            test_helper::helper::{
+                rays_recorded_by_meter, scenery_with_a_mirror_shrunk_behind_its_back,
+            },
         },
         percent,
     };
+    /// A ghost focus analysis rebuilds the surfaces first, so it sees a component as its
+    /// properties state it now, also when a property was changed without the node rebuilding its
+    /// surfaces: a mirror shrunk to a radius of 5 mm reflects only the ray on its axis.
+    #[test]
+    fn a_ghost_focus_analysis_sees_a_component_as_its_properties_state_it_now() -> OpmResult<()> {
+        let (mut scenery, source, meter) = scenery_with_a_mirror_shrunk_behind_its_back()?;
+        let mut config = GhostFocusConfig::default();
+        config.set_max_bounces(0);
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(8.0), joule!(1.0), 1)?,
+        );
+        GhostFocusAnalyzer::new(config).analyze(&mut scenery)?;
+        assert_eq!(rays_recorded_by_meter(&scenery, meter)?, 1);
+        Ok(())
+    }
     #[test]
     fn empty_report() -> OpmResult<()> {
         let analyzer = GhostFocusAnalyzer::default();
@@ -279,12 +299,8 @@ mod test_ghost_focus_analyzer {
     fn analyze_single_surface_node() -> OpmResult<()> {
         let mut sd = SpotDiagram::default();
         let config = GhostFocusConfig::default();
-        let out_result = sd.unified_analyze_single_surface_node(
-            LightResult::default(),
-            &config,
-            "input_1",
-            None,
-        )?;
+        let out_result =
+            sd.unified_analyze_single_surface_node(LightResult::default(), &config, "input_1")?;
         let output_data = out_result.get("output_1");
 
         match output_data {
@@ -301,7 +317,11 @@ mod test_ghost_focus_analyzer {
 #[cfg(test)]
 mod test_ghost_analysis_nested_groups_inversion {
     use crate::{
-        analyzers::ghostfocus::config::GhostFocusConfig,
+        J_per_cm2,
+        analyzers::{
+            Analyzer,
+            ghostfocus::{GhostFocusAnalyzer, config::GhostFocusConfig},
+        },
         coatings::CoatingConstantR,
         core_optics::{NodeAttrExt, OpticNodeExt},
         distributions::{position::Hexapolar, spectral::LaserLines},
@@ -309,7 +329,7 @@ mod test_ghost_analysis_nested_groups_inversion {
         joule,
         light::lightdata::ray_data_builder::RayDataBuilder,
         millimeter, nanometer,
-        nodes::{Dummy, Lens, NodeGroup, SourcePort},
+        nodes::{Dummy, Lens, NodeGroup, SourcePort, round_collimated_ray_builder},
         percent,
         prelude::{
             AnalyzerType, CollimatedSrc, OpmDocument, PortType, RayDataSource, RefrIndexConst,
@@ -556,6 +576,47 @@ mod test_ghost_analysis_nested_groups_inversion {
         config.map_source(sp, RayDataBuilder::default());
         doc.add_analyzer(AnalyzerType::GhostFocus(config));
         let _ = doc.analyze()?;
+        Ok(())
+    }
+    #[test]
+    fn test_node_group_report_generates_reports_on_critical_fluence() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let src = scenery.add_node(SourcePort::default())?;
+
+        // Add a lens with low LIDT to provoke a critical fluence report
+        let mut lens = Lens::default();
+        lens.set_coating(
+            &PortType::Input,
+            "input_1",
+            &CoatingConstantR::new(percent!(50.0))?.into(),
+        )?;
+        lens.set_coating(
+            &PortType::Output,
+            "output_1",
+            &CoatingConstantR::new(percent!(50.0))?.into(),
+        )?;
+        // Set very low LIDT on surface so any hit triggers critical fluence
+        lens.set_lidt(&PortType::Input, "input_1", J_per_cm2!(1e-9))?;
+        let lens_id = scenery.add_node(lens)?;
+        scenery.connect_nodes(src, "output_1", lens_id, "input_1", millimeter!(50.0))?;
+
+        let mut config = GhostFocusConfig::default();
+        config.set_max_bounces(1);
+        config.map_source(
+            src,
+            round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 3)?,
+        );
+
+        let analyzer = GhostFocusAnalyzer::new(config);
+        analyzer.analyze(&mut scenery)?;
+        let report = analyzer.report(&scenery)?;
+
+        // The global report is always present (index 0).
+        // If critical fluence was detected, additional node reports must be added.
+        assert!(
+            report.node_reports().len() > 1,
+            "Expected at least one critical fluence node report to be generated"
+        );
         Ok(())
     }
 }

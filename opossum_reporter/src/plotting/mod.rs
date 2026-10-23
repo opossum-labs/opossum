@@ -2284,7 +2284,7 @@ impl PlotParameters {
 }
 
 /// Struct that holds all necessary attributes to describe a plot series
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PlotSeries {
     data: PlotData,
     color: RGBAColor,
@@ -3716,4 +3716,65 @@ mod test {
         PlotType::TriangulatedSurface(plt_params.clone()).plot(&vec![plt_series_surf_triangle])?;
         Ok(())
     }
+    // #[test]
+    // fn test_get_plot_series_color_palette_boundary() -> OpmResult<()> {
+    //     let dummy_rays = Rays::new_uniform_collimated(
+    //         nanometer!(1000.),
+    //         joule!(1.),
+    //         &Grid::new(millimeter!(1.0, 1.0), point![1, 1])?,
+    //     )?;
+
+    //     // Build accumulated rays with 10 bounces (should use Category10 palette)
+    //     let mut acc_rays_10 = Vec::new();
+    //     for _ in 0..10 {
+    //         let mut bounce_map = HashMap::new();
+    //         bounce_map.insert(dummy_rays.uuid(), dummy_rays.clone());
+    //         acc_rays_10.push(bounce_map);
+    //     }
+
+    //     let mut hist_10 = GhostFocusHistory::from(acc_rays_10);
+    //     hist_10.plot_view_direction = Some(Vector3::z());
+
+    //     let plt_params = PlotParameters::default();
+    //     let mut plt_type = hist_10.get_plot_type(&plt_params);
+    //     let series_10 = hist_10.get_plot_series(&mut plt_type, false)?.unwrap();
+    //     assert_eq!(series_10.len(), 10);
+
+    //     // Category10[0] is #1f77b4 -> (31, 119, 180)
+    //     let cat10_0 = colorous::CATEGORY10[0];
+    //     let cat10_str = format!("({}, {}, {}, 0.2)", cat10_0.r, cat10_0.g, cat10_0.b);
+    //     let series_10_debug = format!("{:?}", series_10[0]);
+    //     assert!(
+    //         series_10_debug.contains(&cat10_str),
+    //         "Expected Category10 color {cat10_str} in series, got {series_10_debug}"
+    //     );
+
+    //     // Build accumulated rays with 11 bounces (> 10: should switch to Turbo palette)
+    //     let mut acc_rays_11 = Vec::new();
+    //     for _ in 0..11 {
+    //         let mut bounce_map = HashMap::new();
+    //         bounce_map.insert(dummy_rays.uuid(), dummy_rays.clone());
+    //         acc_rays_11.push(bounce_map);
+    //     }
+
+    //     let mut hist_11 = GhostFocusHistory::from(acc_rays_11);
+    //     hist_11.plot_view_direction = Some(Vector3::z());
+
+    //     let series_11 = hist_11.get_plot_series(&mut plt_type, false)?.unwrap();
+    //     assert_eq!(series_11.len(), 11);
+
+    //     // Turbo rational eval at index 0 out of 11
+    //     let turbo_0 = colorous::TURBO.eval_rational(0, 11);
+    //     let turbo_str = format!("({}, {}, {}, 0.2)", turbo_0.r, turbo_0.g, turbo_0.b);
+    //     let series_11_debug = format!("{:?}", series_11[0]);
+    //     assert!(
+    //         series_11_debug.contains(&turbo_str),
+    //         "Expected Turbo color {turbo_str} in series, got {series_11_debug}"
+    //     );
+
+    //     // Verify that Category10 and Turbo produce different colors
+    //     assert_ne!(series_10_debug, series_11_debug);
+
+    //     Ok(())
+    // }
 }

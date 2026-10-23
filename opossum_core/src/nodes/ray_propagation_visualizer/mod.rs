@@ -20,6 +20,7 @@ use crate::{
     },
     core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt},
     error::OpmResult,
+    geometry::{Geometry, SurfaceGeometry},
     light::{LightData, LightResult, Spectrum},
     nodes::NodeRegistration,
     properties::{Properties, Proptype, validator::Validator},
@@ -106,12 +107,18 @@ impl RayPropagationVisualizer {
 }
 
 impl OpticNode for RayPropagationVisualizer {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::plane(None)))
+    }
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }
 
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.update_flat_single_surfaces()
+        self.install_geometry(
+            &[("input_1", SurfaceGeometry::FACE)],
+            &[("output_1", SurfaceGeometry::FACE)],
+        )
     }
 
     fn node_report(&self, uuid: &str, analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
@@ -148,7 +155,7 @@ impl OpticNode for RayPropagationVisualizer {
             if self.apodization_warning {
                 report.add_note(ReportNote::new(
                     ReportLevel::Warning,
-                    "Rays have been apodized at input aperture. Results might not be accurate.",
+                    "Rays were lost while passing this node. Results might not be accurate.",
                 ));
             }
         }
@@ -169,8 +176,7 @@ impl AnalysisEnergy for RayPropagationVisualizer {
         incoming_data: LightResult,
         config: &EnergyConfig,
     ) -> OpmResult<LightResult> {
-        let result =
-            self.unified_analyze_single_surface_node(incoming_data, config, "input_1", None)?;
+        let result = self.unified_analyze_single_surface_node(incoming_data, config, "input_1")?;
         // Energy analysis is not supported for propagation visualization; triggers report warning
         self.light_data = Some(LightData::Energy(Spectrum::default()));
         Ok(result)

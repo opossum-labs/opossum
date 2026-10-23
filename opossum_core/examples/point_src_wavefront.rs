@@ -1,9 +1,19 @@
-use opossum_core::{nodes::point_ray_builder, prelude::*};
+use opossum_core::{
+    apertures::RectangleShape, core_optics::NodeAttrExt, geometry::body::OPTIC_SHAPE,
+    nodes::point_ray_builder, prelude::*,
+};
 use std::path::Path;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
     let i_src = scenery.add_node(SourcePort::new("point ray source"))?;
-    let i_wf1 = scenery.add_node(WaveFront::default())?;
+    // The 90° cone of the point source reaches the monitor up to 100 mm off the axis: it is
+    // 220 mm square.
+    let mut wavefront = WaveFront::default();
+    wavefront.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(RectangleShape::new(millimeter!(220.0), millimeter!(220.0))?).into(),
+    )?;
+    let i_wf1 = scenery.add_node(wavefront)?;
 
     scenery.connect_nodes(i_src, "output_1", i_wf1, "input_1", meter!(0.1))?;
 

@@ -161,25 +161,6 @@ pub trait AnalysisEnergy: OpticNode {
         if let Some(volume) = self.as_volume() {
             volume.propagate_energy_inside_medium(&mut data, config)?;
         }
-        let apodized = if let Some(surf) = self.get_optic_surface(out_port)
-            && !surf.aperture().is_none()
-        {
-            true
-        } else if let Some(surf) = self.get_optic_surface(in_port)
-            && !surf.aperture().is_none()
-        {
-            true
-        } else {
-            false
-        };
-        if apodized {
-            self.set_apodization_warning(true);
-            log::warn!(
-                "Rays have been apodized at input aperture of '{}' ({}). Results might not be accurate.",
-                self.node_attr().name(),
-                self.node_type()
-            );
-        }
         self.set_light_data(Some(data.clone()));
         Ok(LightResult::from([(out_port.clone(), data)]))
     }

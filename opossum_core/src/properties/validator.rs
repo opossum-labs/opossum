@@ -5,6 +5,7 @@ use std::fmt::Debug;
 use uom::si::{angle::degree, f64::Angle};
 
 use crate::{
+    apertures::OpticShape,
     error::{OpmResult, OpossumError},
     nodes::{SplittingConfigBuilder, ideal_filter::FilterTypeBuilder},
     properties::Proptype,
@@ -26,8 +27,8 @@ pub enum Validator {
         inclusive: bool,
     },
     StringIsNotEmpty,
-    /// The aperture shape must delimit a region, i.e. have a hard edge.
-    ApertureDelimitsRegion,
+    /// The optic shape must bound the component: it may not be open.
+    OpticShapeIsBounded,
     OrValidator {
         validators: Vec<Self>,
     },
@@ -57,23 +58,56 @@ impl Validator {
                 inclusive,
             } => Self::validate_angle_is_in_range(prop, *min, *max, *inclusive),
             Self::StringIsNotEmpty => Self::validate_string_is_not_empty(prop),
-            Self::ApertureDelimitsRegion => Self::validate_aperture_delimits_region(prop),
+            Self::OpticShapeIsBounded => Self::validate_optic_shape_is_bounded(prop),
             Self::OrValidator { validators } => Self::validate_or_validator(prop, validators),
             Self::AndValidator { validators } => Self::validate_and_validator(prop, validators),
             Self::LightDataBuilderValidator => Self::validate_light_data_builder(prop),
         }
     }
-
-    fn validate_aperture_delimits_region(prop: &Proptype) -> OpmResult<()> {
-        let Proptype::Aperture(shape) = prop else {
-            return Ok(());
-        };
-        if shape.is_binary() {
-            Ok(())
+    /// Return whether a value of the kind of `prop` can pass this validator, judged by its kind
+    /// alone and not by its contents.
+    ///
+    /// An editor that offers a choice of kinds (such as an open optic shape) asks here, so it
+    /// offers only what the property can take; the value itself is still checked by
+    /// [`Validator::validate`] when it is set. Only [`Validator::OpticShapeIsBounded`] restricts
+    /// kinds.
+    ///
+    /// # Arguments
+    ///
+    /// * `prop` - a value of the kind in question; only its kind is looked at.
+    #[must_use]
+    pub fn may_accept(&self, prop: &Proptype) -> bool {
+        match (self, prop) {
+            (Self::OpticShapeIsBounded, Proptype::OpticShape(optic_shape)) => {
+                !matches!(optic_shape, OpticShape::Open)
+            }
+            (Self::OrValidator { validators }, _) => validators
+                .iter()
+                .any(|validator| validator.may_accept(prop)),
+            (Self::AndValidator { validators }, _) => validators
+                .iter()
+                .all(|validator| validator.may_accept(prop)),
+            (
+                Self::NumericIsFinite
+                | Self::NumericIsNotNaN
+                | Self::NumericIsNotZero
+                | Self::NumericIsPositive
+                | Self::NumericInRange { .. }
+                | Self::AngleInRange { .. }
+                | Self::StringIsNotEmpty
+                | Self::OpticShapeIsBounded
+                | Self::LightDataBuilderValidator,
+                _,
+            ) => true,
+        }
+    }
+    fn validate_optic_shape_is_bounded(prop: &Proptype) -> OpmResult<()> {
+        if matches!(prop, Proptype::OpticShape(OpticShape::Open)) {
+            Err(OpossumError::Properties(
+                "a component ends somewhere, so its optic shape cannot be open".into(),
+            ))
         } else {
-            Err(OpossumError::Properties(format!(
-                "An aperture of shape '{shape}' does not delimit a region: only a shape with a hard edge can state where something begins and ends"
-            )))
+            Ok(())
         }
     }
 
@@ -381,5 +415,46 @@ mod test {
 
         let empty_or = Validator::OrValidator { validators: vec![] };
         assert!(empty_or.validate(&Proptype::F64(1.0)).is_err());
+    }
+}
+
+#[cfg(test)]
+mod test_apertures {
+    use super::*;
+    use crate::{apertures::CircleShape, millimeter};
+
+    /// A component's optic shape may be anything but open; no other validator restricts the
+    /// kinds of optic shapes.
+    #[test]
+    fn may_accept_judges_optic_shapes_by_kind() -> crate::error::OpmResult<()> {
+        let open = Proptype::OpticShape(OpticShape::Open);
+        let bounded = Proptype::OpticShape(CircleShape::new(millimeter!(5.0))?.into());
+        assert!(!Validator::OpticShapeIsBounded.may_accept(&open));
+        assert!(Validator::OpticShapeIsBounded.validate(&open).is_err());
+        assert!(Validator::OpticShapeIsBounded.may_accept(&bounded));
+        assert!(Validator::OpticShapeIsBounded.validate(&bounded).is_ok());
+        assert!(
+            Validator::NumericIsPositive.may_accept(&open),
+            "a validator of numbers does not restrict the kinds of optic shapes"
+        );
+        Ok(())
+    }
+    /// A combined validator admits a kind if any of its members does (or) or all of them do (and).
+    #[test]
+    fn may_accept_combines_its_members() {
+        let open = Proptype::OpticShape(OpticShape::Open);
+        let members = vec![Validator::OpticShapeIsBounded, Validator::NumericIsPositive];
+        assert!(
+            Validator::OrValidator {
+                validators: members.clone()
+            }
+            .may_accept(&open)
+        );
+        assert!(
+            !Validator::AndValidator {
+                validators: members
+            }
+            .may_accept(&open)
+        );
     }
 }

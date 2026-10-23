@@ -56,7 +56,8 @@ pub type CellIndex = (usize, usize, usize);
 /// a single number rather than paid for as a field of identical cells. This is also what keeps an
 /// *unpumped* medium representable: `Uniform(0.0)` is a real state a three-level model can read as
 /// absorption, distinct from a model that reads no inversion at all
-/// (`Option::None` in [`RuntimeMedium`](crate::core_optics::node_attr::RuntimeMedium)).
+/// (`Option::None` in the medium of a node, see
+/// [`NodeAttr::runtime_medium`](crate::core_optics::NodeAttr::runtime_medium)).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Inversion {
     /// A spatially constant normalized inversion `β` over the whole body: an unpumped medium is
@@ -102,8 +103,7 @@ impl InversionField {
     /// # Errors
     ///
     /// This function returns an error if any of the three dimensions is zero — a grid without cells
-    /// has no extent to interpret its ranges against — or if the body cannot state its bounding box
-    /// or answer where it is.
+    /// has no extent to interpret its ranges against — or if the body cannot state its bounding box.
     pub fn from_body(body: &dyn Body, dimensions: CellIndex) -> OpmResult<Self> {
         let (nx, ny, nz) = dimensions;
         if nx == 0 || ny == 0 || nz == 0 {
@@ -129,7 +129,7 @@ impl InversionField {
                 for j in 0..ny {
                     let y = cell_center(&y_range, ny, j);
                     let center = placement.transform_point(&Point3::new(x, y, z));
-                    mask.push(body.contains(&center)?);
+                    mask.push(body.contains(&center));
                 }
             }
             inside.push(DMatrix::from_vec(ny, nx, mask));
@@ -543,40 +543,30 @@ fn cell_center(range: &Range<Length>, count: usize, index: usize) -> Length {
 mod test {
     use super::*;
     use crate::{
-        apertures::{Aperture, ApertureType},
-        core_optics::{OpticNode, node_attr::NodePositioning, volumetric::Volumetric},
+        apertures::{CircleShape, Outline},
+        core_optics::{OpticNode, node_attr::NodePositioning},
         degree,
-        geometry::{Plane, body::SurfaceBoundedBody, geo_surface::GeoSurfaceRef},
+        geometry::{Extruded, Face, SurfaceShape},
         millimeter,
-        nodes::Lens,
-        types::validated_type_definitions::ValidatedCrossSection,
+        nodes::{
+            Lens,
+            test_helper::helper::{body_of, placed_geometry},
+        },
         utils::geom_transformation::Isometry,
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::Vector3;
-    use std::{
-        f64::consts::PI,
-        sync::{Arc, Mutex},
-    };
+    use std::f64::consts::PI;
 
     /// Create a disk of the given thickness and radius, placed by the given isometry.
-    fn disk(
-        thickness: Length,
-        radius: Length,
-        placement: Isometry,
-    ) -> OpmResult<SurfaceBoundedBody> {
-        Ok(SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(placement)))),
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(
-                placement.append(&Isometry::new_along_z(thickness)?),
-            )))),
-            ValidatedCrossSection::try_new(Aperture::new_circle(
-                radius,
-                ApertureType::Hole,
-                None,
-            )?)?,
-            placement,
-        ))
+    fn disk(thickness: Length, radius: Length, placement: Isometry) -> OpmResult<Extruded> {
+        Ok(Extruded::new(
+            Isometry::identity(),
+            &Face::new(SurfaceShape::Plane, Isometry::identity()),
+            &Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
+            Outline::new(CircleShape::new(radius)?, Vec::new())?,
+        )?
+        .moved(&placement))
     }
     /// Return the volume of all cells of the given field that hold medium.
     fn covered_volume(field: &InversionField) -> Volume {
@@ -754,15 +744,15 @@ mod test {
     #[test]
     fn a_field_over_the_volume_of_a_lens() -> OpmResult<()> {
         // The whole point of the exercise: the domain comes from a real component, through the
-        // body its own surfaces and clear aperture enclose.
+        // body its own surfaces and optic shape enclose.
         let mut lens = Lens::default();
         lens.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
-        let body = lens.volume_body()?;
-        let field = InversionField::from_body(&body, (9, 9, 5))?;
+        let geometry = placed_geometry(&lens)?;
+        let field = InversionField::from_body(body_of(&geometry)?, (9, 9, 5))?;
         assert_eq!(field.dimensions(), (9, 9, 5));
         // the axis of the lens runs through the middle column of cells, which is all medium
         assert!((0..5).all(|k| field.is_inside((4, 4, k))));
-        // ... while the corners of the box are outside the round clear aperture
+        // ... while the corners of the box are outside the round optic shape
         assert!(!field.is_inside((0, 0, 2)));
         Ok(())
     }

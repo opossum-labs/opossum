@@ -20,12 +20,10 @@ pub mod rays_hit_map;
 
 use crate::{
     J_per_cm2,
-    apertures::Aperture,
     error::{OpmResult, OpossumError},
     meter,
     nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
     properties::Proptype,
-    utils::geom_transformation::Isometry,
 };
 use fluence_estimator::FluenceEstimator;
 use log::warn;
@@ -77,12 +75,6 @@ impl BouncedHitMap {
         self.hit_map.get(&uuid)
     }
 
-    /// Prunes the [`BouncedHitMap`] by removing all hit points that are outside the given [`Aperture`].
-    pub fn prune_by_aperture(&mut self, aperture: &Aperture, surface_iso: &Isometry) {
-        for rhm in self.hit_map.values_mut() {
-            rhm.prune_by_aperture(aperture, surface_iso);
-        }
-    }
     /// Consolidates all internal `RaysHitMap`s by merging points with identical spatial coordinates.
     pub fn consolidate(&mut self) {
         for rays_hit_map in self.hit_map.values_mut() {
@@ -108,13 +100,6 @@ impl HitMap {
     #[allow(clippy::missing_const_for_fn)]
     pub fn hit_map(&self) -> &[BouncedHitMap] {
         &self.hit_map
-    }
-
-    /// Prunes the [`HitMap`] by removing all hit points that are outside the given [`Aperture`].
-    pub fn prune_by_aperture(&mut self, aperture: &Aperture, surface_iso: &Isometry) {
-        for bhm in &mut self.hit_map {
-            bhm.prune_by_aperture(aperture, surface_iso);
-        }
     }
 
     /// Add intersection point to this [`HitMap`].

@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="824" viewBox="0 0 1120 824"
+     font-family="Helvetica, Arial, sans-serif">
+  <title>What a component's geometry depends on</title>
+  <desc>Five stages from top to bottom. The .opm file stores the node's properties, its optic shape,
+        its position and alignment, and a coating and LIDT per port. From the properties and the optic
+        shape the node derives its Geometry on demand, one variant per kind: Surface, Extruded,
+        ParametricSolid or Assembly, each answering GeometryKind. From position and alignment it derives
+        its placement. Geometry::moved places the geometry: the same type, with every face and rim moved.
+        Its numbered faces are traced at, GeometryKind::includes says where each face ends, and a solid
+        is the body bounded by those same faces. install_geometry builds the node's RuntimeGeometry and
+        lets every port name the face it sits on: it holds the placed geometry, one OpticSurface per port
+        name with that face number, the port's coating and LIDT and no geometry, and the inversion of the
+        medium. The medium is the body of the same geometry, whose inversion prepare_volume fills.
+        update_surfaces installs a new RuntimeGeometry, and the alignment run triggers it by placing a
+        node. The analyzers let the runtime geometry act on the rays at the surface under a port
+        (RuntimeGeometry::interact): the geometry answers where a ray hits the face (Geometry::intersect),
+        and the surface effect acts on the hit; the medium is used inside volume nodes, and the 3D view
+        moves the geometry to the node itself, not reading the runtime state.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#4a5568"/>
+    </marker>
+    <marker id="arrow-placement" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2b6cb0"/>
+    </marker>
+    <marker id="arrow-rebuild" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#b7791f"/>
+    </marker>
+  </defs>
+
+  <!-- A background of its own keeps the arrows readable on the dark book themes. -->
+  <rect x="0" y="0" width="1120" height="824" rx="8" fill="#ffffff"/>
+
+  <!-- ── band 1: stored in the .opm file ──────────────────────────────────── -->
+  <rect x="24" y="16" width="1072" height="104" rx="8"
+        fill="none" stroke="#a0aec0" stroke-dasharray="6 4"/>
+  <text x="36" y="40" font-size="12" font-weight="bold" fill="#4a5568">stored</text>
+  <text x="36" y="56" font-size="11" fill="#718096">in the .opm file</text>
+
+  <rect x="140" y="40" width="204" height="60" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
+  <text x="242" y="64" font-size="14" text-anchor="middle" fill="#1a202c">position + alignment</text>
+  <text x="242" y="84" font-size="12" text-anchor="middle" fill="#4a5568">NodePositioning, alignment</text>
+
+  <rect x="360" y="40" width="252" height="60" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
+  <text x="486" y="64" font-size="14" text-anchor="middle" fill="#1a202c">node properties</text>
+  <text x="486" y="84" font-size="12" text-anchor="middle" fill="#4a5568">curvatures, thickness, material, &#8230;</text>
+
+  <rect x="628" y="40" width="252" height="60" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
+  <text x="754" y="64" font-size="14" text-anchor="middle" fill="#1a202c">optic shape property</text>
+  <text x="754" y="84" font-size="12" text-anchor="middle" fill="#4a5568">OpticShape: edge with bores</text>
+
+  <rect x="896" y="40" width="188" height="60" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
+  <text x="990" y="64" font-size="14" text-anchor="middle" fill="#1a202c">port config</text>
+  <text x="990" y="84" font-size="12" text-anchor="middle" fill="#4a5568">PortConfig: coating, LIDT</text>
+
+  <!-- ── band 2: described ────────────────────────────────────────────────── -->
+  <rect x="24" y="136" width="1072" height="184" rx="8"
+        fill="none" stroke="#a0aec0" stroke-dasharray="6 4"/>
+  <text x="36" y="160" font-size="12" font-weight="bold" fill="#4a5568">described</text>
+  <text x="36" y="176" font-size="11" fill="#718096">derived on</text>
+  <text x="36" y="190" font-size="11" fill="#718096">demand, never</text>
+  <text x="36" y="204" font-size="11" fill="#718096">stored</text>
+
+  <rect x="140" y="196" width="204" height="60" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
+  <text x="242" y="220" font-size="14" text-anchor="middle" fill="#1a202c">effective_node_iso()</text>
+  <text x="242" y="240" font-size="12" text-anchor="middle" fill="#4a5568">position &#8728; alignment</text>
+
+  <rect x="360" y="162" width="520" height="146" rx="6" fill="#edf2f7" stroke="#4a5568"/>
+  <text x="620" y="184" font-size="14" text-anchor="middle" fill="#1a202c">OpticNode::geometry() &#8594; Geometry</text>
+  <text x="620" y="202" font-size="11" text-anchor="middle" fill="#4a5568">a preset per node type: singlet, wedge, surface, plane, detector, &#8230;</text>
+
+  <rect x="372" y="214" width="118" height="66" rx="5" fill="#ffffff" stroke="#4a5568"/>
+  <text x="431" y="236" font-size="13" text-anchor="middle" fill="#1a202c">Surface</text>
+  <text x="431" y="254" font-size="10" text-anchor="middle" fill="#4a5568">one face; open,</text>
+  <text x="431" y="268" font-size="10" text-anchor="middle" fill="#4a5568">edge or window</text>
+
+  <rect x="498" y="214" width="118" height="66" rx="5" fill="#ffffff" stroke="#4a5568"/>
+  <text x="557" y="236" font-size="13" text-anchor="middle" fill="#1a202c">Extruded</text>
+  <text x="557" y="254" font-size="10" text-anchor="middle" fill="#4a5568">2 faces + rim</text>
+  <text x="557" y="268" font-size="10" text-anchor="middle" fill="#4a5568">of the profile</text>
+
+  <rect x="624" y="214" width="118" height="66" rx="5" fill="#f7fafc" stroke="#a0aec0" stroke-dasharray="4 3"/>
+  <text x="683" y="236" font-size="11" text-anchor="middle" fill="#718096">ParametricSolid *</text>
+  <text x="683" y="254" font-size="10" text-anchor="middle" fill="#718096">faces + sides</text>
+
+  <rect x="750" y="214" width="118" height="66" rx="5" fill="#f7fafc" stroke="#a0aec0" stroke-dasharray="4 3"/>
+  <text x="809" y="236" font-size="11" text-anchor="middle" fill="#718096">Assembly *</text>
+  <text x="809" y="254" font-size="10" text-anchor="middle" fill="#718096">parts, interfaces</text>
+
+  <text x="620" y="298" font-size="11" text-anchor="middle" fill="#4a5568">every kind answers GeometryKind: faces, includes, window, as_body, moved</text>
+
+  <!-- band 1 to band 2 -->
+  <line x1="242" y1="100" x2="242" y2="192" stroke="#2b6cb0" marker-end="url(#arrow-placement)"/>
+  <line x1="486" y1="100" x2="486" y2="158" stroke="#4a5568" marker-end="url(#arrow)"/>
+  <line x1="754" y1="100" x2="754" y2="158" stroke="#4a5568" marker-end="url(#arrow)"/>
+  <text x="762" y="132" font-size="11" fill="#4a5568">cross_section()</text>
+
+  <!-- ── band 3: placed at the node ───────────────────────────────────────── -->
+  <rect x="24" y="336" width="1072" height="124" rx="8"
+        fill="none" stroke="#a0aec0" stroke-dasharray="6 4"/>
+  <text x="36" y="360" font-size="12" font-weight="bold" fill="#4a5568">placed</text>
+  <text x="36" y="376" font-size="11" fill="#718096">by moved(), the</text>
+  <text x="36" y="390" font-size="11" fill="#718096">same Geometry</text>
+  <text x="36" y="404" font-size="11" fill="#718096">at the node</text>
+
+  <rect x="140" y="380" width="204" height="68" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
+  <text x="242" y="404" font-size="14" text-anchor="middle" fill="#1a202c">body</text>
+  <text x="242" y="422" font-size="11" text-anchor="middle" fill="#4a5568">kind().as_body(): the solid,</text>
+  <text x="242" y="438" font-size="11" text-anchor="middle" fill="#4a5568">bounded by the same faces</text>
+
+  <rect x="360" y="380" width="252" height="68" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
+  <text x="486" y="404" font-size="14" text-anchor="middle" fill="#1a202c">numbered faces</text>
+  <text x="486" y="422" font-size="11" text-anchor="middle" fill="#4a5568">Face { shape, frame }, frames moved</text>
+  <text x="486" y="438" font-size="11" text-anchor="middle" fill="#4a5568">kind().face(i); i = face number</text>
+
+  <rect x="628" y="380" width="252" height="68" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
+  <text x="754" y="404" font-size="14" text-anchor="middle" fill="#1a202c">where a face ends</text>
+  <text x="754" y="422" font-size="11" text-anchor="middle" fill="#4a5568">GeometryKind::includes(face, point)</text>
+  <text x="754" y="438" font-size="11" text-anchor="middle" fill="#4a5568">each kind answers: rim, other faces, part</text>
+
+  <!-- band 2 to band 3: the placement feeds the surfaces and the body; the boundary is asked of the geometry -->
+  <line x1="242" y1="256" x2="242" y2="376" stroke="#2b6cb0" marker-end="url(#arrow-placement)"/>
+  <path d="M 242 356 L 400 356 L 400 376" fill="none" stroke="#2b6cb0" marker-end="url(#arrow-placement)"/>
+  <text x="250" y="300" font-size="11" fill="#2b6cb0">node_iso</text>
+
+  <line x1="486" y1="308" x2="486" y2="376" stroke="#4a5568" marker-end="url(#arrow)"/>
+  <line x1="754" y1="308" x2="754" y2="376" stroke="#4a5568" marker-end="url(#arrow)"/>
+  <!-- Drawn over the placement line with a white halo, so the crossing reads as a bridge. -->
+  <path d="M 372 308 L 372 344 L 300 344 L 300 376" fill="none" stroke="#ffffff" stroke-width="6"/>
+  <path d="M 372 308 L 372 344 L 300 344 L 300 376" fill="none" stroke="#4a5568" marker-end="url(#arrow)"/>
+
+  <!-- ── band 4: runtime state of the node ────────────────────────────────── -->
+  <rect x="24" y="476" width="1072" height="168" rx="8"
+        fill="none" stroke="#a0aec0" stroke-dasharray="6 4"/>
+  <text x="36" y="500" font-size="12" font-weight="bold" fill="#4a5568">runtime</text>
+  <text x="36" y="516" font-size="11" fill="#718096">state of the</text>
+  <text x="36" y="530" font-size="11" fill="#718096">node, not</text>
+  <text x="36" y="544" font-size="11" fill="#718096">serialized</text>
+
+  <rect x="140" y="504" width="204" height="124" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
+  <text x="242" y="530" font-size="14" text-anchor="middle" fill="#1a202c">medium</text>
+  <text x="242" y="550" font-size="12" text-anchor="middle" fill="#4a5568">RuntimeGeometry::medium()</text>
+  <text x="242" y="576" font-size="11" text-anchor="middle" fill="#4a5568">body: as_body() of the</text>
+  <text x="242" y="592" font-size="11" text-anchor="middle" fill="#4a5568">placed geometry</text>
+  <text x="242" y="608" font-size="11" text-anchor="middle" fill="#4a5568">inversion: prepare_volume()</text>
+
+  <rect x="360" y="504" width="520" height="124" rx="6" fill="#c6f6d5" stroke="#276749"/>
+  <text x="620" y="532" font-size="14" text-anchor="middle" fill="#1a202c">RuntimeGeometry</text>
+  <text x="620" y="554" font-size="12" text-anchor="middle" fill="#276749">the placed geometry, one OpticSurface per port name, the inversion</text>
+  <text x="620" y="574" font-size="11" text-anchor="middle" fill="#4a5568">OpticSurface: face number &#183; coating + LIDT &#183; caches, hit map &#8212; no geometry</text>
+  <text x="620" y="598" font-size="11" text-anchor="middle" fill="#276749">install_geometry(inputs, outputs): every port names the face it sits on;</text>
+  <text x="620" y="614" font-size="11" text-anchor="middle" fill="#276749">interact(port, rays, effect): the geometry finds the hit, the effect acts on it</text>
+
+  <rect x="896" y="504" width="188" height="124" rx="6" fill="#fefcbf" stroke="#b7791f"/>
+  <text x="990" y="526" font-size="13" text-anchor="middle" fill="#1a202c">update_surfaces()</text>
+  <text x="990" y="544" font-size="11" text-anchor="middle" fill="#744210">installs a new RuntimeGeometry</text>
+  <text x="990" y="558" font-size="11" text-anchor="middle" fill="#744210">on create, load, placement,</text>
+  <text x="990" y="572" font-size="11" text-anchor="middle" fill="#744210">alignment, coating, LIDT,</text>
+  <text x="990" y="586" font-size="11" text-anchor="middle" fill="#744210">analysis start, prepare_volume</text>
+  <text x="990" y="606" font-size="11" text-anchor="middle" fill="#c53030">not on set_property</text>
+  <text x="990" y="620" font-size="11" text-anchor="middle" fill="#c53030">or inverting a node</text>
+  <line x1="896" y1="566" x2="884" y2="566" stroke="#b7791f" stroke-dasharray="4 3"
+        marker-end="url(#arrow-rebuild)"/>
+
+  <!-- band 3 to band 4 -->
+  <line x1="242" y1="448" x2="242" y2="500" stroke="#4a5568" marker-end="url(#arrow)"/>
+  <line x1="486" y1="448" x2="486" y2="500" stroke="#4a5568" marker-end="url(#arrow)"/>
+  <line x1="754" y1="448" x2="754" y2="500" stroke="#4a5568" marker-end="url(#arrow)"/>
+  <!-- The port config reaches the runtime surfaces directly, by port name. -->
+  <path d="M 990 100 L 990 486 L 840 486 L 840 500" fill="none" stroke="#4a5568"
+        marker-end="url(#arrow)"/>
+  <text x="998" y="300" font-size="11" fill="#4a5568">copied per</text>
+  <text x="998" y="314" font-size="11" fill="#4a5568">port name</text>
+
+  <!-- ── band 5: used by ──────────────────────────────────────────────────── -->
+  <rect x="24" y="660" width="1072" height="112" rx="8"
+        fill="none" stroke="#a0aec0" stroke-dasharray="6 4"/>
+  <text x="36" y="684" font-size="12" font-weight="bold" fill="#4a5568">used by</text>
+
+  <rect x="140" y="684" width="204" height="76" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
+  <text x="242" y="706" font-size="14" text-anchor="middle" fill="#1a202c">propagate_inside_medium()</text>
+  <text x="242" y="724" font-size="11" text-anchor="middle" fill="#4a5568">gain and absorption</text>
+  <text x="242" y="740" font-size="11" text-anchor="middle" fill="#4a5568">along the chord</text>
+
+  <rect x="360" y="684" width="252" height="76" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
+  <text x="486" y="706" font-size="14" text-anchor="middle" fill="#1a202c">3D view</text>
+  <text x="486" y="724" font-size="11" text-anchor="middle" fill="#4a5568">moves geometry() to the node itself:</text>
+  <text x="486" y="740" font-size="11" text-anchor="middle" fill="#4a5568">faces and rims, no runtime state</text>
+
+  <rect x="628" y="684" width="252" height="76" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
+  <text x="754" y="706" font-size="13" text-anchor="middle" fill="#1a202c">ray trace, ghost focus, alignment</text>
+  <text x="754" y="724" font-size="11" text-anchor="middle" fill="#4a5568">intersect(face, ray) &#8594; SurfaceHit</text>
+  <text x="754" y="740" font-size="11" text-anchor="middle" fill="#4a5568">effect.act_at(ray, &amp;hit, coating)</text>
+
+  <!-- band 4 to band 5 -->
+  <line x1="242" y1="628" x2="242" y2="680" stroke="#4a5568" marker-end="url(#arrow)"/>
+  <line x1="754" y1="628" x2="754" y2="680" stroke="#4a5568" marker-end="url(#arrow)"/>
+  <!-- The 3D view draws surfaces and bodies straight from the geometry, not from the runtime state. -->
+  <path d="M 380 448 L 380 468 L 352 468" fill="none" stroke="#4a5568"/>
+  <path d="M 344 430 L 352 430 L 352 668 L 400 668 L 400 680" fill="none" stroke="#4a5568"
+        marker-end="url(#arrow)"/>
+  <!-- Placing a node rebuilds its surfaces. -->
+  <path d="M 880 722 L 940 722 L 940 632" fill="none" stroke="#b7791f" stroke-dasharray="4 3"
+        marker-end="url(#arrow-rebuild)"/>
+  <text x="948" y="706" font-size="11" fill="#b7791f">set_positioning()</text>
+  <text x="948" y="720" font-size="11" fill="#b7791f">places the node</text>
+
+  <!-- ── legend ───────────────────────────────────────────────────────────── -->
+  <line x1="140" y1="800" x2="176" y2="800" stroke="#4a5568" marker-end="url(#arrow)"/>
+  <text x="184" y="804" font-size="11" fill="#4a5568">feeds into</text>
+
+  <line x1="300" y1="800" x2="336" y2="800" stroke="#2b6cb0" marker-end="url(#arrow-placement)"/>
+  <text x="344" y="804" font-size="11" fill="#2b6cb0">the node's placement</text>
+
+  <line x1="500" y1="800" x2="536" y2="800" stroke="#b7791f" stroke-dasharray="4 3"
+        marker-end="url(#arrow-rebuild)"/>
+  <text x="544" y="804" font-size="11" fill="#b7791f">triggers a rebuild</text>
+
+  <rect x="690" y="792" width="24" height="16" rx="3" fill="#f7fafc" stroke="#a0aec0" stroke-dasharray="4 3"/>
+  <text x="722" y="804" font-size="11" fill="#718096">* no node uses it yet</text>
+</svg>

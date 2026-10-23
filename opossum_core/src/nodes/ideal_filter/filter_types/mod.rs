@@ -12,9 +12,15 @@ use uom::si::f64::Ratio;
 use std::fmt::Display;
 
 use crate::{
+    coatings::CoatingType,
+    core_optics::{
+        hit_map::rays_hit_map::HitPoint,
+        surface_effect::{Refraction, SurfaceEffect},
+    },
     error::{OpmResult, OpossumError},
     generic_validators::{AllFinite, StaticBounds, StaticInRange},
-    light::Spectrum,
+    geometry::SurfaceHit,
+    light::{Ray, Spectrum},
     percent,
     utils::default_from_name::DefaultFromName,
     validated, validated_type,
@@ -139,6 +145,20 @@ pub enum FilterType {
     /// filter based on given transmission spectrum.
     Spectrum(Spectrum),
 }
+/// An ideal filter is a passive surface: its coating splits off a reflected part, and the filter
+/// attenuates the transmitted part by its transmission (see [`Ray::filter_energy`]).
+impl SurfaceEffect for FilterType {
+    fn act_at(
+        &self,
+        ray: &mut Ray,
+        hit: &SurfaceHit,
+        coating: &CoatingType,
+    ) -> OpmResult<(Option<Ray>, Option<HitPoint>)> {
+        let split = Refraction(None).act_at(ray, hit, coating)?;
+        ray.filter_energy(self)?;
+        Ok(split)
+    }
+}
 impl TryFrom<f64> for FilterTypeBuilder {
     type Error = OpossumError;
 
@@ -149,6 +169,47 @@ impl TryFrom<f64> for FilterTypeBuilder {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::{
+        analyzers::propagation_strategy::MissedSurfaceStrategy,
+        apertures::{CircleShape, Outline},
+        core_optics::optic_surface::OpticSurface,
+        geometry::Geometry,
+        joule,
+        light::{Rays, rays::ReflectedPart},
+        millimeter, nanometer,
+        nodes::test_helper::helper::traced_at,
+    };
+    /// A ray that hits a filter keeps its direction and wavelength and is attenuated as a single ray
+    /// would be (see [`Ray::filter_energy`]). A ray that misses it keeps its energy.
+    #[test]
+    fn a_filter_attenuates_the_rays_that_hit_it() -> OpmResult<()> {
+        let outline = Outline::new(CircleShape::new(millimeter!(5.0))?, Vec::new())?;
+        let mut plane = traced_at(Geometry::plane(Some(outline)), OpticSurface::default())?;
+        let ray_at =
+            |y| Ray::new_collimated(millimeter!(0.0, y, -10.0), nanometer!(1054.0), joule!(1.0));
+        let filter = FilterType::Constant(FilterConst::new(percent!(30.0))?);
+        let mut rays = Rays::from(vec![ray_at(1.0)?, ray_at(10.0)?]);
+        plane.interact(
+            "input_1",
+            &mut rays,
+            &filter,
+            ReflectedPart::Ghost,
+            MissedSurfaceStrategy::Ignore,
+        )?;
+        let mut alone = ray_at(1.0)?;
+        alone.filter_energy(&filter)?;
+        let (hit, missed) = (rays.iter().next(), rays.iter().nth(1));
+        let (hit, missed) = (
+            hit.expect("the ray hitting"),
+            missed.expect("the ray missing"),
+        );
+        assert_eq!(hit.position(), millimeter!(0.0, 1.0, 0.0));
+        assert_eq!(hit.direction(), alone.direction());
+        assert_eq!(hit.wavelength(), alone.wavelength());
+        assert_eq!(hit.energy(), alone.energy());
+        assert_eq!(missed.energy(), joule!(1.0));
+        Ok(())
+    }
     #[test]
     fn new() {
         assert!(FilterConst::new(percent!(0.0)).is_ok());

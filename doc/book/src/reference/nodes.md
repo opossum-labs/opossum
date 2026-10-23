@@ -76,9 +76,10 @@ In addition, nodes have a set of attributes that are common to all of them. Howe
 
    Besides the location (see previous point) an optical component has a given orientation in 3D space. This orientation is defined by angles around the axes of the global coordinate system.
 
-1. Aperture shape
+1. Optic shape
 
-   Each real-world optical component has a limited physical / mechanical size which also determines the area of incoming light it can handle. Incoming beams farther away from the optical axis than the component's extent will simply be lost during the analysis. Hence, each node can define an aperture with different shapes (mostly circular or rectangular). The exact handling of the aperture is defined by the specific node. Without a given aperture many nodes assume an infinitely large component such that all beams are always caught.
+   Each real-world optical component has a limited transversal size, which decides the light it can catch. Nodes state it
+   in their `optic shape` property, see [Optic shape](#optic-shape).
 
 1. 3D mechanical model
 
@@ -87,6 +88,63 @@ In addition, nodes have a set of attributes that are common to all of them. Howe
 1. Surface definitions
 
    For both, sequential and non-sequential analysis, surface properties such as coating or roughness which define the way light will be reflected or propagated through should be defined. *This could also be modeled using basic nodes*
+
+## Optic shape
+
+Every component that light hits has a transversal size, its `optic shape`: where the material or the coated surface
+actually is, the size a supplier quotes, with any bores through it. The optic shape decides which rays hit the
+component. A ray that reaches the surface outside of it, or through one of its bores, misses the component. What
+happens to that ray depends on the analysis:
+
+- **Ray tracing** follows its `missed surface strategy` (see [Analyzers](analyzers.md)): with `Stop`, the default, the
+  ray is lost; with `Ignore` it passes the component unchanged.
+- **Ghost focus** analysis always lets it pass unchanged.
+- **Energy** analysis traces no rays and ignores optic shapes.
+
+A mirror, a parabolic mirror and a grating only reflect: a ray that misses them has no way on and is lost in every
+analysis. A ray outside the optic shape of a beam splitter, or through one of its bores as on a scraper mirror,
+follows the strategy above: with `Ignore` it passes on as transmitted light, with `Stop` it is lost.
+
+**Edge and bores.** An optic shape is an edge with bores through it. The edge is a circle, a rectangle or a polygon,
+centered on the component's axis and not turned: to shift or turn a component, align its node. A bore is a circle, a
+rectangle or a polygon too, shifted off the axis and turned by its own offset and rotation; a ring, for instance, is a
+circle with a centered bore. Every bore lies within the edge, and bores neither overlap nor touch each other or the
+edge: OPOSSUM refuses a bore that does and says why. Overlapping bores and a notch cut into the edge cannot be stated.
+In the node editor, choosing another kind of edge starts a fresh edge of that kind without bores.
+
+The default depends on the kind of component:
+
+| Component | Default optic shape |
+|---|---|
+| lens, wedge, mirror, parabolic mirror, beam splitter, ideal filter, paraxial surface | circle of 12.5 mm radius, the usual 1 inch mount |
+| cylindric lens | rectangle of 20 mm across its curvature (x) and 30 mm along its cylinder axis (y) |
+| grating | square of 25 mm × 25 mm |
+| detectors | square window of 25 mm × 25 mm |
+| dummy | unbounded (`Open`) |
+
+The optic shape lies in the plane perpendicular to the component's axis and extends along that axis: for a rod cut at
+Brewster's angle it is the cross section of the rod, as its manufacturer states it. An off-axis parabola measures it
+parallel to its parent axis, as catalogs do. A
+curved surface has to reach the edge of the optic shape, so its radius of curvature cannot be smaller than the
+largest distance of that edge from the axis. The edge thickness of a lens or a wedge is not checked: where its
+surfaces would cross, rays miss the rear surface.
+
+**Detectors** let all light pass. Their optic shape is the window they record within, a square of 25 mm × 25 mm by
+default. Light outside the window passes on unrecorded, and the log and the report warn about it. Set the window to
+the size of the actual sensor, or to `Open` to record all light. The [paraxial surface](nodes/paraxial_surface.md) is
+an idealization and may be unbounded as well. Every other component refuses `Open`.
+
+**Iris.** A [dummy](nodes/dummy.md) passes light unchanged and is unbounded (`Open`) by default. Given an optic
+shape, it acts as an iris: a ray outside of it misses the dummy and follows the rules above.
+
+Only the optic shape limits light; ports carry no aperture, only a coating and an LIDT. Sources, ray propagation
+visualizers and groups are idealized or abstract nodes and have no optic shape. To limit the beam of a source, place
+a dummy behind it or shrink its ray distribution.
+
+**Alignment.** The component alignment run (see [Geometry](../concepts/geometry.md)) respects optic shapes too: if
+the optical axis misses the optic shape of a component, beside its edge or through one of its bores, the alignment
+stops with an error naming that node. A bore meant to let the beam pass along the axis, as on a scraper mirror for
+the main beam, is therefore not supported yet. At a detector a missed window only warns that the measurement may fail.
 
 ## Analysis interface
 

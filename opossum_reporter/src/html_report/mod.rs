@@ -190,7 +190,9 @@ pub fn proptype_to_html(
             Proptype::Energy(value) => {
                 template_engine.render("simple", &format_quantity(joule, *value))
             }
-            Proptype::Aperture(shape) => template_engine.render("simple", &shape.to_string()),
+            Proptype::OpticShape(optic_shape) => {
+                template_engine.render("simple", &optic_shape.to_string())
+            }
             Proptype::Material(AssetRef::Inline(mat)) => {
                 template_engine.render("simple", &format!("{} (v{})", mat.name(), mat.version()))
             }

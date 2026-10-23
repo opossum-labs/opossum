@@ -177,7 +177,7 @@ impl Extraction for MonochromaticSmallSignalGain {
             // body. This is what makes the const pump both cheaper and more accurate than voxelising
             // a uniform medium would be.
             Some(Inversion::Uniform(beta)) => match body.path_length_inside(ray) {
-                Ok(Some(chord)) if chord.value > 0.0 => {
+                Some(chord) if chord.value > 0.0 => {
                     (self.peak_gain_coefficient() * chord).value * *beta
                 }
                 _ => 0.0,
@@ -209,7 +209,7 @@ impl Extraction for MonochromaticSmallSignalGain {
                 //     surface cuts through the voxel, but the clipped segment already lies
                 //     inside the body → the midpoint check below catches it.
                 let t_body_exit = match body.path_length_inside(ray) {
-                    Ok(Some(chord)) if chord.value > 0.0 => chord.value,
+                    Some(chord) if chord.value > 0.0 => chord.value,
                     _ => return 0.0,
                 };
 
@@ -251,7 +251,7 @@ impl Extraction for MonochromaticSmallSignalGain {
                         let t_mid = f64::midpoint(t_lo, t_hi);
                         let displacement = local_dir.map(|v| Length::new::<meter>(v * t_mid));
                         let world_mid = iso.transform_point(&(local_origin + displacement));
-                        if body.contains(&world_mid).unwrap_or(false) {
+                        if body.contains(&world_mid) {
                             field.population(cell)
                         } else {
                             None
@@ -288,23 +288,21 @@ impl Extraction for MonochromaticSmallSignalGain {
 mod test {
     use super::*;
     use crate::{
-        apertures::{Aperture, ApertureType},
+        apertures::{CircleShape, Outline},
         degree,
         gain::{
             AnalyticPump, GainModel, LambertBeerProfile, LongitudinalProfile, PumpDirection,
             PumpSource, TransversalProfile,
             inversion_field::{CellIndex, cells},
         },
-        geometry::{Plane, Sphere, body::SurfaceBoundedBody, geo_surface::GeoSurfaceRef},
+        geometry::{Extruded, Face, Sphere, SurfaceShape},
         joule,
         light::Ray,
         millimeter, nanometer, reciprocal_centimeter,
-        types::validated_type_definitions::ValidatedCrossSection,
         utils::{geom_transformation::Isometry, super_gaussian::SuperGaussianShape},
     };
     use approx::assert_relative_eq;
     use nalgebra::{Point2, Vector3};
-    use std::sync::{Arc, Mutex};
     use uom::si::f64::{Length, ReciprocalLength};
 
     /// The thickness of the disk every physics test below amplifies through.
@@ -314,22 +312,17 @@ mod test {
     ///
     /// Plane faces on purpose: the chord of an on-axis ray is then exactly the thickness, so every
     /// expected value below can be worked out from `exp(g₀·L)` by hand.
-    fn disk(thickness: Length, radius: Length) -> OpmResult<SurfaceBoundedBody> {
-        Ok(SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(Isometry::identity())))),
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(Isometry::new_along_z(
-                thickness,
-            )?)))),
-            ValidatedCrossSection::try_new(Aperture::new_circle(
-                radius,
-                ApertureType::Hole,
-                None,
-            )?)?,
+    fn disk(thickness: Length, radius: Length) -> OpmResult<Extruded> {
+        Ok(Extruded::new(
             Isometry::identity(),
-        ))
+            &Face::new(SurfaceShape::Plane, Isometry::identity()),
+            &Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
+            Outline::new(CircleShape::new(radius)?, Vec::new())?,
+        )?
+        .moved(&Isometry::identity()))
     }
     /// The disk every physics test below is performed on: 10 mm thick, 5 mm in radius.
-    fn test_disk() -> OpmResult<SurfaceBoundedBody> {
+    fn test_disk() -> OpmResult<Extruded> {
         disk(millimeter!(THICKNESS), millimeter!(5.0))
     }
     /// A ray entering the medium at the given transversal offset, travelling along the axis.
@@ -368,7 +361,7 @@ mod test {
         inversion: &mut Option<Inversion>,
         ray: &Ray,
     ) -> OpmResult<f64> {
-        let Some(chord) = body.path_length_inside(ray)? else {
+        let Some(chord) = body.path_length_inside(ray) else {
             return Ok(1.0);
         };
         if chord.value <= 0.0 {
@@ -738,7 +731,7 @@ mod test {
         let factor = traverse_factor(&body, &model, &mut Some(Inversion::Field(inversion)), &ray)?;
 
         let chord = body
-            .path_length_inside(&ray)?
+            .path_length_inside(&ray)
             .expect("the ray must cross the disk");
 
         let expected = f64::exp(((g_a + g_b) * 0.5 * chord).value);
@@ -776,7 +769,7 @@ mod test {
             joule!(1.0),
         )?;
         let chord = body
-            .path_length_inside(&ray)?
+            .path_length_inside(&ray)
             .expect("the ray must cross the disk");
 
         // -- forward: g_a in cell (0,*,*), g_b in cell (1,*,*) --
@@ -821,7 +814,7 @@ mod test {
             joule!(1.0),
         )?;
         let chord = body
-            .path_length_inside(&ray)?
+            .path_length_inside(&ray)
             .expect("the ray must cross the disk");
         let exact = f64::exp((g_a * chord / 3.0 + g_b * chord * 2.0 / 3.0).value);
 
@@ -914,21 +907,18 @@ mod test {
         // strictly less than R so the sphere does not degenerate at the aperture edge
         // (at x = R the sphere would reach z = 0 = entrance, giving zero thickness).
         let aperture_mm = 18.0_f64;
-        let entrance = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(Isometry::identity()))));
-        let exit = GeoSurfaceRef(Arc::new(Mutex::new(Sphere::new_at_position(
-            millimeter!(-radius_mm), // stored radius −R → center at vertex_z − R = 0
-            millimeter!(0.0, 0.0, radius_mm), // vertex at z = R
-        )?)));
-        let body = SurfaceBoundedBody::new(
-            entrance,
-            exit,
-            ValidatedCrossSection::try_new(Aperture::new_circle(
-                millimeter!(aperture_mm),
-                ApertureType::Hole,
-                None,
-            )?)?,
-            Isometry::identity(),
+        let entrance = Face::new(SurfaceShape::Plane, Isometry::identity());
+        let exit = Face::new(
+            // stored radius −R → center at vertex_z − R = 0
+            SurfaceShape::Sphere(Sphere::new(millimeter!(-radius_mm))?),
+            Isometry::new_along_z(millimeter!(radius_mm))?, // vertex at z = R
         );
+        let body = Extruded::new(
+            Isometry::identity(),
+            &entrance,
+            &exit,
+            Outline::new(CircleShape::new(millimeter!(aperture_mm))?, Vec::new())?,
+        )?;
 
         // At x = R·√3/2 the chord equals R/2 exactly: √(R² − 3R²/4) = R/2.
         let x_ray_mm = radius_mm * f64::sqrt(3.0) / 2.0;
@@ -937,7 +927,7 @@ mod test {
 
         // Exact exponent via the Uniform path (uses path_length_inside directly).
         let chord = body
-            .path_length_inside(&ray)?
+            .path_length_inside(&ray)
             .expect("off-axis ray must cross the plano-spherical body");
         let exact_exponent = (peak * chord).value;
 
@@ -974,23 +964,21 @@ mod test {
         // strictly less than R so the sphere does not degenerate at the aperture edge
         // (at x = R the entrance would reach z = R = exit, giving zero thickness).
         let aperture_mm = 18.0_f64;
-        let entrance = GeoSurfaceRef(Arc::new(Mutex::new(Sphere::new_at_position(
-            millimeter!(radius_mm),     // stored radius +R → center at vertex_z + R = R
-            millimeter!(0.0, 0.0, 0.0), // vertex at z = 0
-        )?)));
-        let exit = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(
-            Isometry::new_along_z(millimeter!(radius_mm))?, // flat exit at z = R
-        ))));
-        let body = SurfaceBoundedBody::new(
-            entrance,
-            exit,
-            ValidatedCrossSection::try_new(Aperture::new_circle(
-                millimeter!(aperture_mm),
-                ApertureType::Hole,
-                None,
-            )?)?,
-            Isometry::identity(),
+        let entrance = Face::new(
+            // stored radius +R → center at vertex_z + R = R
+            SurfaceShape::Sphere(Sphere::new(millimeter!(radius_mm))?),
+            Isometry::identity(), // vertex at z = 0
         );
+        let exit = Face::new(
+            SurfaceShape::Plane,
+            Isometry::new_along_z(millimeter!(radius_mm))?, // flat exit at z = R
+        );
+        let body = Extruded::new(
+            Isometry::identity(),
+            &entrance,
+            &exit,
+            Outline::new(CircleShape::new(millimeter!(aperture_mm))?, Vec::new())?,
+        )?;
 
         // At x = R·√3/2 the entrance is at z = R/2, giving chord R − R/2 = R/2 exactly.
         let x_ray_mm = radius_mm * f64::sqrt(3.0) / 2.0;
@@ -999,7 +987,7 @@ mod test {
 
         // Exact exponent via the Uniform path (uses path_length_inside directly).
         let chord = body
-            .path_length_inside(&ray)?
+            .path_length_inside(&ray)
             .expect("off-axis ray must cross the plano-spherical body");
         let exact_exponent = (peak * chord).value;
 

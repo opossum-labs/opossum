@@ -1,28 +1,44 @@
 use opossum_core::{
-    coatings::CoatingConstantR, core_optics::OpticNodeExt, nodes::round_collimated_ray_builder,
-    percent, prelude::*,
+    apertures::{CircleShape, RectangleShape},
+    coatings::CoatingConstantR,
+    core_optics::{NodeAttrExt, OpticNodeExt},
+    geometry::body::OPTIC_SHAPE,
+    nodes::round_collimated_ray_builder,
+    percent,
+    prelude::*,
 };
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
+    // Both mirrors are 2 inches in diameter, large enough for the beam of 20 mm radius.
+    let two_inch: OpticShape = CircleShape::new(millimeter!(25.4))?.into();
     let mut scenery = NodeGroup::default();
     let i_src = scenery.add_node(SourcePort::new("collimated ray source"))?;
     let mut mirror1 = ThinMirror::new("mirror 1").with_tilt(degree!(22.5, 0.0, 0.0))?;
+    mirror1.set_property(OPTIC_SHAPE, two_inch.clone().into())?;
     mirror1.set_coating(
         &PortType::Input,
         "input_1",
         &CoatingConstantR::new(percent!(50.0))?.into(),
     )?;
     let i_m1 = scenery.add_node(mirror1)?;
-    let i_m2 = scenery.add_node(
-        ThinMirror::new("mirror 2")
-            .with_curvature(millimeter!(-100.0))?
-            .with_tilt(degree!(-22.5, 0.0, 0.0))?,
-    )?;
+    let mut mirror2 = ThinMirror::new("mirror 2")
+        .with_curvature(millimeter!(-100.0))?
+        .with_tilt(degree!(-22.5, 0.0, 0.0))?;
+    mirror2.set_property(OPTIC_SHAPE, two_inch.into())?;
+    let i_m2 = scenery.add_node(mirror2)?;
     let i_prop_vis = scenery.add_node(RayPropagationVisualizer::default())?;
-    let i_sd = scenery.add_node(SpotDiagram::default())?;
-    let i_wf = scenery.add_node(WaveFront::default())?;
-    let i_pm = scenery.add_node(EnergyMeter::default())?;
+    // The beam reaches the detectors up to 21 mm off their center: they are 50 mm square.
+    let window: OpticShape = RectangleShape::new(millimeter!(50.0), millimeter!(50.0))?.into();
+    let mut spot_diagram = SpotDiagram::default();
+    spot_diagram.set_property(OPTIC_SHAPE, window.clone().into())?;
+    let i_sd = scenery.add_node(spot_diagram)?;
+    let mut wavefront = WaveFront::default();
+    wavefront.set_property(OPTIC_SHAPE, window.clone().into())?;
+    let i_wf = scenery.add_node(wavefront)?;
+    let mut energy_meter = EnergyMeter::default();
+    energy_meter.set_property(OPTIC_SHAPE, window.into())?;
+    let i_pm = scenery.add_node(energy_meter)?;
     scenery.connect_nodes(i_src, "output_1", i_m1, "input_1", millimeter!(100.0))?;
     scenery.connect_nodes(i_m1, "output_1", i_m2, "input_1", millimeter!(100.0))?;
     scenery.connect_nodes(i_m2, "output_1", i_prop_vis, "input_1", millimeter!(80.0))?;

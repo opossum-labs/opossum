@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! The capability of an optical node to enclose a volume of material.
 //!
-//! A [`GeoSurface`](crate::geometry::geo_surface::GeoSurface) is where light refracts, a
+//! A [`GeoSurface`](crate::geometry::GeoSurface) is where light refracts, a
 //! [`Body`](crate::geometry::body::Body) is what lies between two of them. Nodes such as a lens, a
 //! wedge or a cylindric lens *are* the medium in between, and everything happening inside that
 //! medium — the path light takes through it and, later on, the gain of an active medium — has to
@@ -16,29 +16,26 @@
 use crate::{
     absorption::absorption_model::AbsorptionModel,
     analyzers::propagation_strategy::PropagationStrategy,
-    apertures::{Aperture, ApertureType},
     core_optics::{
-        NodeAttrExt, OpticNode, OpticNodeExt, node_attr::RuntimeMedium,
-        optic_node_ext::single_io_port_names,
+        NodeAttrExt, OpticNode, OpticNodeExt, optic_node_ext::single_io_port_names,
+        runtime_geometry::RuntimeGeometry, surface_effect::Refraction,
     },
     error::{OpmResult, OpossumError},
-    gain::Extraction,
-    geometry::body::{CLEAR_APERTURE, SurfaceBoundedBody},
-    light::{LightData, LightRays, LightResult, Rays},
+    gain::{Extraction, Inversion},
+    geometry::body::Body,
+    light::{LightData, LightRays, LightResult, Rays, rays::ReflectedPart},
     material::{MATERIAL, Material},
     properties::{Proptype, proptype::AssetRef},
-    types::validated_type_definitions::ValidatedCrossSection,
-    utils::geom_transformation::Isometry,
 };
 
 /// An [`OpticNode`] that encloses a volume of material between two of its surfaces.
 ///
 /// Implementing this trait is what makes a node a volume node. Everything the volume machinery needs
-/// is derived from what such a node already has — the two
-/// [`GeoSurface`](crate::geometry::geo_surface::GeoSurface)s its `update_surfaces()` places and its
-/// [`CLEAR_APERTURE`] property — so a node type declares the capability with an empty
-/// `impl Volumetric for ... {}`, plus the [`OpticNode::as_volume`] override that makes it visible
-/// through a trait object.
+/// is derived from what such a node already has — its [`Geometry`](crate::geometry::Geometry), a
+/// solid whose cross section is the node's
+/// [`OPTIC_SHAPE`](crate::geometry::body::OPTIC_SHAPE) — so a node type declares the
+/// capability with an empty `impl Volumetric for ... {}`, plus the [`OpticNode::as_volume`] override
+/// that makes it visible through a trait object.
 ///
 /// The methods below live here rather than on [`OpticNodeExt`], which every node type gets: they
 /// are meaningful only where there is a volume, and now the compiler says so instead of a runtime
@@ -69,66 +66,6 @@ pub trait Volumetric: OpticNode {
             return Err(OpossumError::Analysis("cannot read material".into()));
         };
         Ok(material.clone())
-    }
-    /// Return the volume enclosed by the two surfaces of this node as a
-    /// [`Body`](crate::geometry::body::Body).
-    ///
-    /// This is the geometric counterpart of [`Volumetric::pass_through_volume_generic`]: that
-    /// function guides rays *through* the volume, this one describes the volume itself. It is
-    /// derived entirely from what the node already has — the two
-    /// [`GeoSurface`](crate::geometry::geo_surface::GeoSurface)s built by `update_surfaces()` from
-    /// the node's curvature and thickness properties, and its [`CLEAR_APERTURE`] property as the
-    /// transversal extent.
-    ///
-    /// The returned body refers to the surfaces the node holds at this moment. Changing the node's
-    /// placement or any of its geometry properties runs `update_surfaces()`, which installs fresh
-    /// surfaces, so the body has to be derived again afterwards.
-    ///
-    /// **Derive it once per node and keep it**, rather than per ray or per grid point: resolving
-    /// the node's ports copies its whole `OpticPorts` (see [`OpticNode::ports`]), which is a
-    /// handful of allocations, while the body itself only shares the surfaces it is handed. The
-    /// body is what belongs in the loop, not this call.
-    ///
-    /// Both bounding surfaces are taken in their *physical* order, so an inverted node encloses the
-    /// same volume as an upright one: inverting a node reverses the direction light travels, not
-    /// the geometry it travels through.
-    ///
-    /// **Note**: The port [`Aperture`]s have no say in the extent of the body. They mask the light
-    /// passing a surface, which is independent of how far the medium behind it reaches.
-    ///
-    /// # Returns
-    ///
-    /// The [`SurfaceBoundedBody`] enclosed by the node's entrance and exit surface.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the node does not have exactly one input and one output
-    /// port or if either of the two surfaces cannot be found.
-    fn volume_body(&self) -> OpmResult<SurfaceBoundedBody> {
-        let (in_port_name, out_port_name) = single_io_port_names(self)?;
-        // `OpticNode::ports` hands out the *logical* ports, which are swapped on an inverted node.
-        // The body is a geometric object, so the physical order is restored here.
-        let (entrance_name, exit_name) = if self.inverted() {
-            (out_port_name, in_port_name)
-        } else {
-            (in_port_name, out_port_name)
-        };
-        let surface_by_name = |surf_name: &str| {
-            self.get_optic_surface(surf_name).ok_or_else(|| {
-                OpossumError::Other(format!(
-                    "no surface with name {surf_name} defined for node '{}'",
-                    self.name()
-                ))
-            })
-        };
-        let entrance_surface = surface_by_name(&entrance_name)?;
-        let exit_surface = surface_by_name(&exit_name)?;
-        Ok(SurfaceBoundedBody::new(
-            entrance_surface.geo_surface(),
-            exit_surface.geo_surface(),
-            cross_section(self)?,
-            self.effective_node_iso().unwrap_or_else(Isometry::identity),
-        ))
     }
     /// Guides a ray bundle through the volume of a node: in through its entry surface, out through
     /// its exit surface.
@@ -166,16 +103,15 @@ pub trait Volumetric: OpticNode {
         // data, and potentially gain.
         let material_inside = self.material()?;
         let backward = self.inverted();
-        // The rays are meant to be refracted at both surfaces of the volume, not just traced to them.
-        let refraction_intended = true;
-        // Refraction at a surface is governed by the index alone, so only that is handed down.
+        // The rays are meant to be refracted at both surfaces of the volume, not just traced to
+        // them; what is reflected there is a ghost. Refraction is governed by the index alone.
         self.pass_through_surface_generic(
             entry_surf_name,
-            Some(material_inside.refractive_index_type().clone()),
+            &Refraction(Some(material_inside.refractive_index_type())),
             rays_bundle,
             strategy,
             backward,
-            refraction_intended,
+            ReflectedPart::Ghost,
         )?;
         let ambient_refr_idx = strategy.ambient_refractive_index();
 
@@ -183,12 +119,13 @@ pub trait Volumetric: OpticNode {
         self.propagate_inside_medium(rays_bundle, strategy)?;
         self.pass_through_surface_generic(
             exit_surf_name,
-            Some(ambient_refr_idx),
+            &Refraction(Some(&ambient_refr_idx)),
             rays_bundle,
             strategy,
             backward,
-            refraction_intended,
-        )
+            ReflectedPart::Ghost,
+        )?;
+        Ok(())
     }
     /// Apply whatever the medium does to a ray bundle travelling through it.
     ///
@@ -243,12 +180,23 @@ pub trait Volumetric: OpticNode {
         }
         // Capture the name before the mutable borrow of `self` through `node_attr_mut`.
         let node_name = self.name().to_owned();
-        let Some(medium) = self.node_attr_mut().runtime_medium_mut() else {
+        let Some((body, inversion)) = self
+            .node_attr_mut()
+            .runtime_mut()
+            .and_then(RuntimeGeometry::medium_mut)
+        else {
             return Err(OpossumError::Analysis(format!(
                 "node '{node_name}': medium was not prepared before propagation"
             )));
         };
-        march_medium_along_chords(&node_name, medium, extraction, absorption, rays_bundle)
+        march_medium_along_chords(
+            &node_name,
+            body,
+            inversion,
+            extraction,
+            absorption,
+            rays_bundle,
+        )
     }
     /// Amplify the spectral energy passing through this node's medium.
     ///
@@ -300,14 +248,15 @@ pub trait Volumetric: OpticNode {
         if strategy.is_positioning_run() {
             return Ok(());
         }
-        let Some(medium) = self.node_attr().runtime_medium() else {
+        let Some((body, inversion)) = self.node_attr().runtime().and_then(RuntimeGeometry::medium)
+        else {
             return Err(OpossumError::Analysis(format!(
                 "node '{}': medium was not prepared before amplification",
                 self.name()
             )));
         };
         extraction
-            .amplify_spectrum(medium.body(), medium.inversion(), spectrum)
+            .amplify_spectrum(body, inversion, spectrum)
             .map_err(|e| OpossumError::Analysis(format!("node '{}': {e}", self.name())))
     }
     /// A unified helper function to analyze optical nodes that enclose a volume of material.
@@ -393,41 +342,6 @@ pub trait Volumetric: OpticNode {
     }
 }
 
-/// Determine the transversal boundary of a node's volume from its [`CLEAR_APERTURE`] property.
-///
-/// The port [`Aperture`]s are deliberately not consulted: an aperture states how much light a
-/// surface transmits where and may soften or invert that transmission, which says nothing about how
-/// far the material reaches. Masking a component down does not make it smaller.
-///
-/// # Arguments
-///
-/// * `node` - the node whose volume is to be bounded.
-///
-/// # Returns
-///
-/// The cross section of the node's volume.
-///
-/// # Errors
-///
-/// This function returns an error if the node does not declare a clear aperture at all or if that
-/// clear aperture does not delimit a region, which leaves the extent of the medium undefined.
-fn cross_section<T: ?Sized + Volumetric>(node: &T) -> OpmResult<ValidatedCrossSection> {
-    let Ok(Proptype::Aperture(clear_aperture)) = node.node_attr().get_property(CLEAR_APERTURE)
-    else {
-        return Err(OpossumError::Other(format!(
-            "node '{}' has no '{CLEAR_APERTURE}' property, so the extent of its volume is unknown",
-            node.name()
-        )));
-    };
-    let aperture = Aperture::new(clear_aperture.clone(), ApertureType::Hole, None, None)?;
-    ValidatedCrossSection::try_new(aperture).map_err(|e| {
-        OpossumError::Other(format!(
-            "the {CLEAR_APERTURE} of node '{}' cannot bound its volume: {e}",
-            node.name()
-        ))
-    })
-}
-
 /// Apply the medium's effects — gain and host-material absorption — to each ray that travels
 /// through it, in a single traversal.
 ///
@@ -448,33 +362,30 @@ fn cross_section<T: ?Sized + Volumetric>(node: &T) -> OpmResult<ValidatedCrossSe
 /// # Arguments
 ///
 /// * `node_name` - name of the owning node, used in error messages.
-/// * `medium` - the prepared medium for this analysis run, split into body and inversion.
+/// * `body` - the body of the prepared medium for this analysis run.
+/// * `inversion` - its inversion, which saturating models read and deplete per traversed cell.
 /// * `extraction` - the dopant gain model to apply, or `None` for a non-amplifying node.
 /// * `absorption` - the host material's absorption model, or `None` for a transparent material.
 /// * `rays_bundle` - the ray bundle inside the medium, modified in place.
 ///
 /// # Errors
 ///
-/// This function errors if `path_length_inside` or `transmittance` fails, if the combined factor
-/// would not be finite, or if `scale_energy` rejects the resulting value.
+/// This function errors if `transmittance` fails, if the combined factor would not be finite, or if
+/// `scale_energy` rejects the resulting value.
 fn march_medium_along_chords(
     node_name: &str,
-    medium: &mut RuntimeMedium,
+    body: &dyn Body,
+    inversion: &mut Option<Inversion>,
     extraction: Option<&dyn Extraction>,
     absorption: Option<&AbsorptionModel>,
     rays_bundle: &mut [Rays],
 ) -> OpmResult<()> {
-    // Split the medium so saturating models can read and deplete the inversion per traversed cell.
-    let (body, inversion) = medium.parts_mut();
     for rays in rays_bundle.iter_mut() {
         for ray in rays.iter_mut() {
             if !ray.valid() {
                 continue;
             }
-            let Some(chord) = body
-                .path_length_inside(ray)
-                .map_err(|e| OpossumError::Analysis(format!("node '{node_name}': {e}")))?
-            else {
+            let Some(chord) = body.path_length_inside(ray) else {
                 continue;
             };
             if chord.value <= 0.0 {
@@ -515,29 +426,36 @@ mod test {
             ghostfocus::{AnalysisGhostFocus, GhostFocusAnalyzer},
             raytrace::{AnalysisRayTrace, RayTracingAnalyzer},
         },
+        apertures::{CircleShape, OpticShape, RectangleShape},
         coatings::CoatingConstantR,
         core_optics::{
             Alignable, PortType,
             node_attr::{HasNodeAttr, NodePositioning},
+            runtime_geometry::RuntimeSurfaces,
         },
         degree,
         gain::{ConstGain, GainModel, MonochromaticSmallSignalGain, PumpScenario, PumpSource},
+        geometry::body::OPTIC_SHAPE,
         joule,
         light::{
-            Rays, Spectrum,
+            Ray, Rays, Spectrum,
             lightdata::energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
             spectrum_helper::create_he_ne_spec,
         },
         micrometer, millimeter, nanometer,
+        nodes::test_helper::helper::{
+            assert_ray_bundle_snapshot, placed_geometry, ray_bundle_snapshot,
+        },
         nodes::{
             EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort, SpotDiagram, ThinMirror,
             create_node_ref, node_types, round_collimated_ray_builder,
         },
         percent, reciprocal_centimeter,
         refractive_index::RefrIndexConst,
-        utils::test_helper::helper::metered_energy,
+        utils::{geom_transformation::Isometry, test_helper::helper::metered_energy},
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
+    use nalgebra::Point3;
     use uom::si::{
         f64::{Length, LinearNumberDensity, ReciprocalLength},
         linear_number_density::per_meter,
@@ -703,6 +621,40 @@ mod test {
         );
         Ok(())
     }
+    /// The medium is bounded by the very surfaces light is traced at: its front face is the
+    /// surface under the input port, its rear face the one under the output port: along the axis
+    /// a ray travels inside it from the vertex of the one to the vertex of the other.
+    #[test]
+    fn the_prepared_body_is_bounded_by_the_surfaces_light_is_traced_at() -> OpmResult<()> {
+        let mut lens = placed_lens()?;
+        lens.prepare_volume(&RayTraceConfig::default())?;
+        let (body, _) = lens
+            .node_attr()
+            .runtime()
+            .and_then(RuntimeGeometry::medium)
+            .ok_or_else(|| OpossumError::Other("the lens has no medium".into()))?;
+        let vertex = |port: &str| -> OpmResult<Point3<Length>> {
+            Ok(lens
+                .effective_surface_iso(port)?
+                .transform_point(&Point3::origin()))
+        };
+        let (front, rear) = (vertex("input_1")?, vertex("output_1")?);
+        let along_the_axis = Ray::new(
+            front - (rear - front),
+            (rear - front).map(|c| c.value),
+            nanometer!(1053.0),
+            joule!(1.0),
+        )?;
+        let chord = body.path_length_inside(&along_the_axis).ok_or_else(|| {
+            OpossumError::Other("the ray along the axis missed the medium".into())
+        })?;
+        assert_abs_diff_eq!(
+            chord.value,
+            (rear - front).map(|c| c.value).norm(),
+            epsilon = 1e-12
+        );
+        Ok(())
+    }
     /// A passive volume node gets a prepared body even without a gain model.
     ///
     /// This is the regression test for the new `prepare_volume` contract: the body is geometry, so
@@ -719,15 +671,18 @@ mod test {
         lens.prepare_volume(&config)?;
         // The body is now available even though no gain model was set.
         assert!(
-            lens.node_attr().runtime_medium().is_some(),
+            lens.node_attr()
+                .runtime()
+                .and_then(RuntimeGeometry::medium)
+                .is_some(),
             "prepare_volume must build the body for a passive volume node"
         );
         // And the inversion slot is empty — the body alone does nothing to the rays.
         assert!(
             lens.node_attr()
-                .runtime_medium()
-                .and_then(|m| m.inversion())
-                .is_none(),
+                .runtime()
+                .and_then(RuntimeGeometry::medium)
+                .is_some_and(|(_, inversion)| inversion.is_none()),
             "a passive node must not have an inversion field"
         );
         // The passive contract: no gain model → no energy change, even with a prepared body.
@@ -1139,16 +1094,21 @@ mod test {
 
         // Seed a body at the current (identity) position, simulating what
         // `init_runtime_medium` used to do inside `after_deserialization_hook`.
-        let identity_body = head.as_volume().unwrap().volume_body()?;
-        head.node_attr_mut().set_runtime_medium(identity_body, None);
+        let identity_body = placed_geometry(&head)?;
+        head.node_attr_mut().set_runtime(RuntimeGeometry::new(
+            identity_body,
+            RuntimeSurfaces::default(),
+        )?);
 
         // Move the head 500 mm along z — what `calc_node_positions` does after deserialization.
         head.set_positioning(NodePositioning::Absolute(Isometry::new(
             millimeter!(0.0, 0.0, 500.0),
             degree!(0.0, 0.0, 0.0),
         )?))?;
-        // Simulate `reset_data`: clear only the inversion, leave the (stale, identity) body.
-        head.node_attr_mut().clear_runtime_inversion();
+        // Simulate `reset_data`, which clears only the inversion.
+        if let Some(runtime) = head.node_attr_mut().runtime_mut() {
+            runtime.clear_inversion();
+        }
 
         let mut config = RayTraceConfig::default();
         config.set_active_pump_scenario(Some(scenario_with_small_signal(node_id)?));
@@ -1163,6 +1123,391 @@ mod test {
             traced_energy_ratio(&mut head, &config)?,
             single_pass_gain(),
             epsilon = 1e-9
+        );
+        Ok(())
+    }
+    /// An inverted, decentred and tilted biconvex lens, placed 20 mm along z.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the lens cannot be built or placed.
+    fn inverted_aligned_lens() -> OpmResult<Lens> {
+        let mut lens = Lens::new(
+            "head",
+            millimeter!(80.0),
+            millimeter!(-120.0),
+            millimeter!(8.0),
+            RefrIndexConst::new(HEAD_INDEX)?,
+        )?;
+        lens.set_inverted(true)?;
+        lens.set_positioning(NodePositioning::Absolute(Isometry::new(
+            millimeter!(0.0, 0.0, 20.0),
+            degree!(0.0, 0.0, 0.0),
+        )?))?;
+        lens.set_alignment(millimeter!(1.0, -2.0, 0.0), degree!(3.0, -2.0, 0.0))?;
+        Ok(lens)
+    }
+    /// A collimated bundle of 19 rays (1 J in total) coming from +z and travelling along -z, as an
+    /// inverted node is passed backwards.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the bundle cannot be built.
+    fn backwards_bundle() -> OpmResult<Rays> {
+        Ok(Rays::new_uniform_collimated(
+            nanometer!(1053.0),
+            joule!(1.0),
+            &crate::distributions::position::Hexapolar::new(millimeter!(5.0), 2)?,
+        )?
+        .transformed_by_iso(&Isometry::new(
+            millimeter!(0.0, 0.0, 60.0),
+            degree!(180.0, 0.0, 0.0),
+        )?))
+    }
+    /// The largest energy of a single ray in the bundle, in joule.
+    fn largest_energy(rays: &Rays) -> f64 {
+        rays.iter()
+            .map(|ray| ray.energy().value)
+            .fold(0.0, f64::max)
+    }
+    /// Assert that every one of the given number of rays left the medium valid and with more energy
+    /// than any of them entered with.
+    fn assert_every_ray_gained(rays: &Rays, ray_count: usize, entering_energy: f64) {
+        let valid: Vec<_> = rays.iter().filter(|ray| ray.valid()).collect();
+        assert_eq!(valid.len(), ray_count, "every ray has to pass the medium");
+        for (index, ray) in valid.iter().enumerate() {
+            assert!(
+                ray.energy().value > entering_energy,
+                "ray {index} left the medium with {} J, not more than the {entering_energy} J \
+                 a ray entered with",
+                ray.energy().value
+            );
+        }
+    }
+    /// Every ray crossing an inverted, curved amplifier gains.
+    ///
+    /// Regression test: on a backwards pass a ray starts on the surface it has just entered
+    /// through, and its chord was lost whenever rounding put that start just outside the medium.
+    #[test]
+    fn every_ray_through_an_inverted_curved_amplifier_gains() -> OpmResult<()> {
+        let mut lens = inverted_aligned_lens()?;
+        let mut config = RayTraceConfig::default();
+        config.set_active_pump_scenario(Some(scenario_with_small_signal(lens.node_attr().uuid())?));
+        lens.prepare_volume(&config)?;
+        let (in_port, out_port) = single_io_port_names(&lens)?;
+        let rays = backwards_bundle()?;
+        let (ray_count, entering_energy) = (rays.nr_of_rays(true), largest_energy(&rays));
+        let incoming = LightResult::from([(in_port, LightData::Geometric(rays))]);
+        let outgoing = AnalysisRayTrace::analyze(&mut lens, incoming, &config)?;
+        let Some(LightData::Geometric(rays)) = outgoing.get(&out_port) else {
+            panic!("expected ray data at the output port");
+        };
+        assert_every_ray_gained(rays, ray_count, entering_energy);
+        Ok(())
+    }
+    /// The ghost focus variant of [`every_ray_through_an_inverted_curved_amplifier_gains`]: a ghost
+    /// running back through the medium starts on a surface of it just the same.
+    #[test]
+    fn every_ghost_focus_ray_through_an_inverted_curved_amplifier_gains() -> OpmResult<()> {
+        let mut lens = inverted_aligned_lens()?;
+        let mut config = GhostFocusConfig::default();
+        config.set_active_pump_scenario(Some(scenario_with_small_signal(lens.node_attr().uuid())?));
+        lens.prepare_volume(&config)?;
+        let (in_port, out_port) = single_io_port_names(&lens)?;
+        let rays = backwards_bundle()?;
+        let (ray_count, entering_energy) = (rays.nr_of_rays(true), largest_energy(&rays));
+        let incoming = LightRays::from([(in_port, vec![rays])]);
+        let outgoing =
+            AnalysisGhostFocus::analyze(&mut lens, incoming, &config, &mut Vec::new(), 0)?;
+        let Some([rays, ..]) = outgoing.get(&out_port).map(Vec::as_slice) else {
+            panic!("expected rays at the output port");
+        };
+        assert_every_ray_gained(rays, ray_count, entering_energy);
+        Ok(())
+    }
+    /// Every ray through the inverted, curved amplifier gains exactly `exp(g₀·L)`, where `L` is the
+    /// straight path between the two points it was refracted at.
+    ///
+    /// The medium is pumped uniformly, so the factor follows from each ray's own path alone. This
+    /// checks the values recorded in [`an_inverted_aligned_lens_amplifies_as_recorded`] without
+    /// relying on them.
+    #[test]
+    fn every_ray_gains_exp_of_its_path_between_the_refractions() -> OpmResult<()> {
+        let mut lens = inverted_aligned_lens()?;
+        let mut config = RayTraceConfig::default();
+        config.set_active_pump_scenario(Some(scenario_with_small_signal(lens.node_attr().uuid())?));
+        lens.prepare_volume(&config)?;
+        let (in_port, out_port) = single_io_port_names(&lens)?;
+        let rays = backwards_bundle()?;
+        let (ray_count, entering_energy) = (rays.nr_of_rays(true), largest_energy(&rays));
+        let incoming = LightResult::from([(in_port, LightData::Geometric(rays))]);
+        let outgoing = AnalysisRayTrace::analyze(&mut lens, incoming, &config)?;
+        let Some(LightData::Geometric(rays)) = outgoing.get(&out_port) else {
+            panic!("expected ray data at the output port");
+        };
+        assert_eq!(rays.nr_of_rays(true), ray_count);
+        let mismatches: Vec<String> = rays
+            .iter()
+            .enumerate()
+            .filter_map(|(index, ray)| {
+                // The last two positions are where the ray entered and where it left the medium.
+                let positions = ray.position_history_with_current();
+                let point = |row: usize| {
+                    nalgebra::Point3::new(
+                        positions[(row, 0)],
+                        positions[(row, 1)],
+                        positions[(row, 2)],
+                    )
+                };
+                let last = positions.nrows() - 1;
+                let path =
+                    crate::utils::math_utils::distance_3d_point(&point(last - 1), &point(last));
+                let expected = entering_energy * f64::exp((head_gain_coefficient() * path).value);
+                let actual = ray.energy().value;
+                ((actual - expected).abs() > 1e-9 * expected)
+                    .then(|| format!("ray {index}: {actual} J instead of {expected} J"))
+            })
+            .collect();
+        assert!(mismatches.is_empty(), "{mismatches:#?}");
+        Ok(())
+    }
+    /// The gain an inverted, decentred and tilted biconvex lens applies, ray by ray.
+    ///
+    /// A small signal model amplifies over the chord of every ray through the medium, so this pins
+    /// the whole way from the node's geometry to the gain - in the configuration where mixing up
+    /// entrance and exit or the frame of the medium would show.
+    #[test]
+    fn an_inverted_aligned_lens_amplifies_as_recorded() -> OpmResult<()> {
+        let mut lens = inverted_aligned_lens()?;
+        let mut config = RayTraceConfig::default();
+        config.set_active_pump_scenario(Some(scenario_with_small_signal(lens.node_attr().uuid())?));
+        lens.prepare_volume(&config)?;
+        let (in_port, out_port) = single_io_port_names(&lens)?;
+        let incoming = LightResult::from([(in_port, LightData::Geometric(backwards_bundle()?))]);
+        let outgoing = AnalysisRayTrace::analyze(&mut lens, incoming, &config)?;
+        let Some(LightData::Geometric(rays)) = outgoing.get(&out_port) else {
+            panic!("expected ray data at the output port");
+        };
+        assert_ray_bundle_snapshot(
+            &ray_bundle_snapshot(rays),
+            &[
+                [
+                    0.108_379_430_584,
+                    0.085_353_442_501,
+                    20.110_507_538_352,
+                    0.008_554_139_978,
+                    -0.023_235_310_481,
+                    -0.999_693_426_524,
+                    0.078_320_617_033,
+                    43.865_635_273_265,
+                ],
+                [
+                    0.109_108_642_782,
+                    -2.358_443_047_170,
+                    19.955_879_906_753,
+                    0.008_594_586_448,
+                    0.002_600_563_590,
+                    -0.999_959_684_264,
+                    0.078_511_731_131,
+                    44.045_434_674_518,
+                ],
+                [
+                    2.225_812_155_144,
+                    -1.136_600_526_387,
+                    20.102_226_498_838,
+                    -0.013_748_195_716,
+                    -0.010_349_341_315,
+                    -0.999_851_928_162,
+                    0.078_439_558_536,
+                    43.888_931_228_945,
+                ],
+                [
+                    2.224_929_061_137,
+                    1.307_095_703_674,
+                    20.294_629_725_695,
+                    -0.013_844_859_914,
+                    -0.036_281_875_871,
+                    -0.999_245_688_175,
+                    0.077_999_622_756,
+                    43.639_682_117_745,
+                ],
+                [
+                    0.105_948_639_269,
+                    2.529_420_998_843,
+                    20.340_509_506_376,
+                    0.008_504_535_771,
+                    -0.049_262_444_790,
+                    -0.998_749_660_528,
+                    0.077_634_609_245,
+                    43.547_238_409_842,
+                ],
+                [
+                    -2.011_854_154_490,
+                    1.306_607_273_715,
+                    20.193_734_990_249,
+                    0.030_897_363_895,
+                    -0.036_220_848_334,
+                    -0.998_866_058_614,
+                    0.077_707_738_235,
+                    43.704_362_317_455,
+                ],
+                [
+                    -2.009_578_421_851,
+                    -1.137_559_259_979,
+                    20.001_509_372_798,
+                    0.030_890_943_795,
+                    -0.010_290_917_119,
+                    -0.999_469_782_743,
+                    0.078_144_927_615,
+                    43.953_308_281_885,
+                ],
+                [
+                    0.108_138_581_647,
+                    -4.804_566_961_948,
+                    19.876_119_556_703,
+                    0.008_626_386_893,
+                    0.028_371_002_571,
+                    -0.999_560_239_136,
+                    0.078_205_645_377,
+                    44.087_285_729_648,
+                ],
+                [
+                    2.553_059_228_397,
+                    -4.149_278_831_403,
+                    19.985_561_076_091,
+                    -0.017_147_757_359,
+                    0.021_433_303_873,
+                    -0.999_623_212_967,
+                    0.078_259_377_388,
+                    43.983_801_334_800,
+                ],
+                [
+                    4.342_693_227_466,
+                    -2.360_549_212_081,
+                    20.168_788_266_276,
+                    -0.036_116_375_165,
+                    0.002_499_004_365,
+                    -0.999_344_466_349,
+                    0.078_062_871_781,
+                    43.774_437_648_913,
+                ],
+                [
+                    4.997_910_596_171,
+                    0.083_513_445_716,
+                    20.377_038_075_680,
+                    -0.043_197_029_539,
+                    -0.023_446_830_064,
+                    -0.998_791_401_044,
+                    0.077_669_190_641,
+                    43.514_833_906_863,
+                ],
+                [
+                    4.342_322_219_250,
+                    2.528_966_473_540,
+                    20.554_549_265_141,
+                    -0.036_416_272_038,
+                    -0.049_496_402_765,
+                    -0.998_110_194_941,
+                    0.077_186_040_880,
+                    43.274_538_460_526,
+                ],
+                [
+                    2.550_366_986_431,
+                    4.320_308_820_382,
+                    20.653_461_309_671,
+                    -0.017_513_767_670,
+                    -0.068_624_039_745,
+                    -0.997_488_851_622,
+                    0.076_744_675_811,
+                    43.118_390_369_090,
+                ],
+                [
+                    0.101_802_235_603,
+                    4.976_365_538_721,
+                    20.646_934_727_112,
+                    0.008_444_903_079,
+                    -0.075_613_564_637,
+                    -0.997_101_435_389,
+                    0.076_462_935_216,
+                    43.088_694_571_371,
+                ],
+                [
+                    -2.346_450_877_720,
+                    4.320_410_148_376,
+                    20.536_681_960_597,
+                    0.034_425_377_719,
+                    -0.068_548_680_451,
+                    -0.997_053_645_386,
+                    0.076_414_111_901,
+                    43.193_416_320_920,
+                ],
+                [
+                    -4.137_164_875_842,
+                    2.528_455_308_276,
+                    20.352_545_257_341,
+                    0.053_389_878_737,
+                    -0.049_370_734_370,
+                    -0.997_352_521_146,
+                    0.076_609_509_278,
+                    43.404_037_819_848,
+                ],
+                [
+                    -4.790_129_833_695,
+                    0.081_834_662_742,
+                    20.144_197_161_326,
+                    0.060_260_119_515,
+                    -0.023_308_420_009,
+                    -0.997_910_534_844,
+                    0.076_997_173_485,
+                    43.663_662_049_305,
+                ],
+                [
+                    -4.131_208_995_059,
+                    -2.362_951_167_738,
+                    19.967_497_192_106,
+                    0.053_273_032_613,
+                    0.002_614_006_058,
+                    -0.998_576_562_397,
+                    0.077_475_414_614,
+                    43.902_720_179_405,
+                ],
+                [
+                    -2.338_173_706_518,
+                    -4.151_068_267_045,
+                    19.869_494_681_312,
+                    0.034_374_611_449,
+                    0.021_497_977_619,
+                    -0.999_177_773_495,
+                    0.077_917_887_922,
+                    44.057_610_428_733,
+                ],
+            ],
+        );
+        Ok(())
+    }
+    /// A new thickness takes effect in the next analysis even if nobody refreshed the node's
+    /// surfaces: the medium the gain acts in and the surfaces the rays cross are the same.
+    #[test]
+    fn prepare_volume_follows_a_changed_thickness() -> OpmResult<()> {
+        let mut head = amplifier_head()?;
+        head.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        let thickness = millimeter!(2.0 * HEAD_THICKNESS);
+        head.node_attr_mut()
+            .set_property("center thickness", thickness.into())?;
+        let mut config = RayTraceConfig::default();
+        config.set_active_pump_scenario(Some(scenario_with_small_signal(head.node_attr().uuid())?));
+        assert_relative_eq!(
+            traced_energy_ratio(&mut head, &config)?,
+            f64::exp((head_gain_coefficient() * thickness).value),
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            head.effective_surface_iso("output_1")?
+                .translation()
+                .z
+                .value,
+            thickness.value,
+            epsilon = 1e-15
         );
         Ok(())
     }
@@ -1281,21 +1626,130 @@ mod test {
         }
         Ok(())
     }
-    /// Only the nodes that really enclose a medium may present themselves as [`Volumetric`].
+    /// A node declares an [`OPTIC_SHAPE`] that bounds a region exactly when its geometry ends
+    /// sideways or records within a window, and the geometry it installs has exactly that window.
+    /// The dummy starts with an open optic shape and neither ends sideways nor has a window.
     ///
-    /// "Node with a volume" is stated twice: by this capability and by the transversal extent of
-    /// its medium ([`CLEAR_APERTURE`]), a property such a node carries. Both have to mean the same
-    /// set of node types, otherwise a node ends up with a body whose extent is undefined.
+    /// The extent of a component is stated by the property, decides the hits through the geometry
+    /// each surface is a face of, and bounds the medium through the same geometry; all three have to
+    /// agree, or rays would hit a component of one size while the medium has another.
     #[test]
-    fn the_volume_capability_matches_the_volume_properties() -> OpmResult<()> {
+    fn a_declared_optic_shape_bounds_every_installed_surface() -> OpmResult<()> {
+        // A point a kilometer off the axis: no component reaches that far.
+        let far = millimeter!(1.0e6, 1.0e6, 0.0);
         for (node_type, _) in node_types() {
             let optic_ref = create_node_ref(node_type)?;
-            let is_volumetric = optic_ref.as_volume().is_some();
+            let geometry = optic_ref.geometry()?;
+            let window = geometry
+                .as_ref()
+                .and_then(|geometry| geometry.kind().window().cloned());
+            let ends_sideways = geometry.as_ref().is_some_and(|geometry| {
+                geometry.kind().window().is_some() || !geometry.kind().includes(0, &far)
+            });
+            let bounded = matches!(
+                optic_ref.node_attr().get_property(OPTIC_SHAPE),
+                Ok(Proptype::OpticShape(OpticShape::Bounded(_)))
+            );
             assert_eq!(
-                optic_ref.node_attr().get_property(CLEAR_APERTURE).is_ok(),
-                is_volumetric,
-                "node type '{node_type}' declares '{CLEAR_APERTURE}' or presents itself as \
-                 volumetric, but not both"
+                bounded, ends_sideways,
+                "node type '{node_type}' declares a bounding '{OPTIC_SHAPE}' or has a geometry \
+                 that ends sideways, but not both"
+            );
+            assert_eq!(
+                optic_ref
+                    .node_attr()
+                    .runtime()
+                    .and_then(|installed| installed.geometry().kind().window()),
+                window.as_ref(),
+                "node type '{node_type}'"
+            );
+        }
+        Ok(())
+    }
+    /// Only what merely records light, is an idealization or has no optical function may be
+    /// unbounded: the detectors, the paraxial surface and the dummy accept an open optic shape,
+    /// every real component refuses one.
+    #[test]
+    fn only_detectors_ideal_surfaces_and_the_dummy_may_be_open() -> OpmResult<()> {
+        let mut may_be_open = Vec::new();
+        for (node_type, _) in node_types() {
+            let mut node_attr = create_node_ref(node_type)?.node_attr().clone();
+            if node_attr.get_property(OPTIC_SHAPE).is_ok()
+                && node_attr
+                    .set_property(OPTIC_SHAPE, OpticShape::Open.into())
+                    .is_ok()
+            {
+                may_be_open.push(node_type);
+            }
+        }
+        may_be_open.sort_unstable();
+        assert_eq!(
+            may_be_open,
+            [
+                "dummy",
+                "energy meter",
+                "fluence detector",
+                "paraxial surface",
+                "spectrometer",
+                "spot diagram",
+                "wavefront monitor",
+            ]
+        );
+        Ok(())
+    }
+    /// Every node type with an optic shape starts out with the one stated for it: round optics in
+    /// the usual 1 inch mount, the cylindric lens as a rectangle 20 mm across its curvature and
+    /// 30 mm along its cylinder axis, gratings and detectors as a 25 mm square, the dummy open.
+    #[test]
+    fn every_node_type_starts_with_its_default_optic_shape() -> OpmResult<()> {
+        let round = OpticShape::from(CircleShape::new(millimeter!(12.5))?);
+        let square = OpticShape::from(RectangleShape::new(millimeter!(25.0), millimeter!(25.0))?);
+        let cylindric =
+            OpticShape::from(RectangleShape::new(millimeter!(20.0), millimeter!(30.0))?);
+        let mut actual = Vec::new();
+        for (node_type, _) in node_types() {
+            let optic_ref = create_node_ref(node_type)?;
+            if let Ok(Proptype::OpticShape(optic_shape)) =
+                optic_ref.node_attr().get_property(OPTIC_SHAPE)
+            {
+                actual.push((node_type, optic_shape.clone()));
+            }
+        }
+        actual.sort_by_key(|(node_type, _)| *node_type);
+        assert_eq!(
+            actual,
+            [
+                ("beam splitter", round.clone()),
+                ("cylindric lens", cylindric),
+                ("dummy", OpticShape::Open),
+                ("energy meter", square.clone()),
+                ("fluence detector", square.clone()),
+                ("ideal filter", round.clone()),
+                ("lens", round.clone()),
+                ("mirror", round.clone()),
+                ("parabolic mirror", round.clone()),
+                ("paraxial surface", round.clone()),
+                ("reflective grating", square.clone()),
+                ("spectrometer", square.clone()),
+                ("spot diagram", square.clone()),
+                ("wavefront monitor", square),
+                ("wedge", round),
+            ]
+        );
+        Ok(())
+    }
+    /// A node presents itself as a volume exactly when its geometry encloses one.
+    #[test]
+    fn the_volume_capability_matches_the_geometry() -> OpmResult<()> {
+        for (node_type, _) in node_types() {
+            let optic_ref = create_node_ref(node_type)?;
+            assert_eq!(
+                optic_ref.as_volume().is_some(),
+                optic_ref
+                    .geometry()?
+                    .is_some_and(|geometry| geometry.kind().as_body().is_some()),
+                "node type '{node_type}' presents itself as volumetric or describes a solid, \
+                 but not both"
             );
         }
         Ok(())
@@ -1319,7 +1773,11 @@ mod test {
         };
         let medium_is_prepared = |model: &NodeGroup, head: Uuid| -> OpmResult<bool> {
             let head_ref = model.graph().node(head)?;
-            Ok(head_ref.node_attr().runtime_medium().is_some())
+            Ok(head_ref
+                .node_attr()
+                .runtime()
+                .and_then(RuntimeGeometry::medium)
+                .is_some())
         };
 
         // Ray trace

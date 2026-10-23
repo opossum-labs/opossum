@@ -12,8 +12,15 @@ use crate::{
         AnalyzerKind, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, node_attr::HasNodeAttr},
+    core_optics::{
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, node_attr::HasNodeAttr,
+        optic_node::APERTURE_LIMIT_NOTE,
+    },
     error::OpmResult,
+    geometry::{
+        Geometry, SurfaceGeometry, SurfaceShape,
+        body::{OPTIC_SHAPE, default_square_optic_shape},
+    },
     joule,
     light::LightData,
     nodes::NodeRegistration,
@@ -77,6 +84,8 @@ inventory::submit! {
 ///   - `name`
 ///   - `inverted`
 ///   - `meter type`
+///   - `optic shape`: the window the light is recorded within, a 25 mm square by default; light
+///     outside it passes unrecorded
 ///
 /// During analysis, the output port forwards an exact replica of the input beam (similar to
 /// a [`Dummy`](crate::nodes::Dummy) node). This allows detector nodes to be stacked or placed
@@ -97,6 +106,13 @@ impl Default for EnergyMeter {
                 "meter type",
                 "model type of the meter",
                 Metertype::default().into(),
+            )
+            .expect("Hardcoded property creation must not fail");
+        node_attr
+            .create_property(
+                OPTIC_SHAPE,
+                "window the light is recorded within",
+                default_square_optic_shape().into(),
             )
             .expect("Hardcoded property creation must not fail");
         let mut em = Self {
@@ -181,15 +197,26 @@ impl EnergyMeter {
 }
 
 impl OpticNode for EnergyMeter {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::detector(
+            SurfaceShape::Plane,
+            self.cross_section()?,
+        )?))
+    }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.update_flat_single_surfaces()
+        self.install_geometry(
+            &[("input_1", SurfaceGeometry::FACE)],
+            &[("output_1", SurfaceGeometry::FACE)],
+        )
     }
 
     fn reset_data(&mut self) {
         self.set_light_data(None);
         self.apodization_warning = false;
         self.reset_optic_surfaces();
-        self.node_attr_mut().clear_runtime_inversion();
+        if let Some(runtime) = self.node_attr_mut().runtime_mut() {
+            runtime.clear_inversion();
+        }
     }
 
     fn node_report(&self, uuid: &str, _analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
@@ -204,10 +231,7 @@ impl OpticNode for EnergyMeter {
         let mut report = NodeReport::new(self.node_type(), self.name(), uuid, props);
 
         if self.apodization_warning {
-            report.add_note(ReportNote::new(
-                ReportLevel::Warning,
-                "Rays have been apodized at input aperture. Results might not be accurate.",
-            ));
+            report.add_note(ReportNote::new(ReportLevel::Warning, APERTURE_LIMIT_NOTE));
         }
         Ok(NodeReportResult::Report(report))
     }
@@ -296,11 +320,6 @@ mod test {
     }
 
     #[test]
-    fn set_aperture() {
-        test_set_aperture::<EnergyMeter>("input_1", "output_1");
-    }
-
-    #[test]
     fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<EnergyMeter>()
     }
@@ -346,8 +365,14 @@ mod test {
     }
 
     #[test]
-    fn analyze_apodization_warning() -> OpmResult<()> {
-        test_analyze_apodization_warning::<EnergyMeter>()
+    fn optic_shape_absent_in_file() -> OpmResult<()> {
+        test_optic_shape_absent_in_file::<EnergyMeter>()
+    }
+    #[test]
+    fn records_inside_and_passes_all() -> OpmResult<()> {
+        test_detector_records_inside_and_passes_all::<EnergyMeter>(|meter| {
+            meter.light_data.as_ref()
+        })
     }
 
     #[test]

@@ -1,21 +1,20 @@
-use std::sync::{Arc, Mutex};
-
 #[cfg(test)]
 use crate::refractive_index::RefractiveIndex;
 use crate::{
     analyzers::energy::AnalysisEnergy,
-    core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType, Volumetric},
+    core_optics::{NodeAttr, OpticNode, OpticNodeExt, Volumetric},
     degree,
     error::{OpmResult, OpossumError},
-    geometry::{Plane, geo_surface::GeoSurfaceRef},
+    geometry::{
+        Extruded, Geometry,
+        body::{OPTIC_SHAPE, default_optic_shape},
+    },
     material::{MATERIAL, Material},
     millimeter,
-    nodes::{NodeRegistration, create_volume_properties},
+    nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
     refractive_index::RefrIndexConst,
-    utils::geom_transformation::Isometry,
 };
-use nalgebra::Point3;
 use num_traits::Zero;
 use opm_macros_lib::OpmNode;
 use uom::si::f64::{Angle, Length};
@@ -44,7 +43,7 @@ inventory::submit! {
 ///   - `center thickness`
 ///   - `material`
 ///   - `wedge`
-///   - `clear aperture`
+///   - `optic shape`
 pub struct Wedge {
     node_attr: NodeAttr,
 }
@@ -94,7 +93,14 @@ impl Default for Wedge {
                 Angle::zero().into(),
             )
             .unwrap();
-        create_volume_properties(&mut node_attr).unwrap();
+        node_attr
+            .create_property_with_validator(
+                OPTIC_SHAPE,
+                "transversal extent of the component",
+                Validator::OpticShapeIsBounded,
+                default_optic_shape().into(),
+            )
+            .unwrap();
         let mut wedge = Self { node_attr };
         wedge.update_surfaces().unwrap();
         wedge
@@ -131,52 +137,35 @@ impl Wedge {
 
 impl Volumetric for Wedge {}
 impl OpticNode for Wedge {
+    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+        let (Ok(Proptype::Length(center_thickness)), Ok(Proptype::Angle(wedge_angle))) = (
+            self.node_attr.get_property("center thickness"),
+            self.node_attr.get_property("wedge"),
+        ) else {
+            return Err(OpossumError::Analysis(
+                "cannot read the center thickness and the wedge angle".into(),
+            ));
+        };
+        let cross_section = self.cross_section()?.ok_or_else(|| {
+            OpossumError::Analysis(format!(
+                "the {OPTIC_SHAPE} of node '{}' is open, so its medium is unbounded",
+                self.node_attr.name()
+            ))
+        })?;
+        Ok(Some(Geometry::wedge(
+            *center_thickness,
+            *wedge_angle,
+            cross_section,
+        )?))
+    }
     fn as_volume(&self) -> Option<&dyn Volumetric> {
         Some(self)
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
-        let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
-
-        let front_geosurface = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso))));
-
-        self.update_surface(
-            "input_1",
-            front_geosurface,
-            Isometry::identity(),
-            &PortType::Input,
-        )?;
-
-        let Ok(Proptype::Length(center_thickness)) =
-            self.node_attr.get_property("center thickness")
-        else {
-            return Err(OpossumError::Analysis(
-                "cannot read center thickness".into(),
-            ));
-        };
-
-        let angle = if let Ok(Proptype::Angle(wedge)) = self.node_attr.get_property("wedge") {
-            *wedge
-        } else {
-            return Err(OpossumError::Analysis("cannot read wedge angle".into()));
-        };
-
-        let thickness_iso = Isometry::new_along_z(*center_thickness)?;
-        let wedge_iso = Isometry::new(
-            Point3::origin(),
-            Point3::new(angle, Angle::zero(), Angle::zero()),
-        )?;
-        let anchor_point_iso = thickness_iso.append(&wedge_iso);
-        let rear_geosurface = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(
-            node_iso.append(&anchor_point_iso),
-        ))));
-
-        self.update_surface(
-            "output_1",
-            rear_geosurface,
-            anchor_point_iso,
-            &PortType::Output,
-        )?;
-        Ok(())
+        self.install_geometry(
+            &[("input_1", Extruded::FRONT)],
+            &[("output_1", Extruded::REAR)],
+        )
     }
 }
 impl AnalysisEnergy for Wedge {}
@@ -197,6 +186,7 @@ mod test {
         nodes::test_helper::helper::*,
         properties::{Proptype, proptype::AssetRef},
         refractive_index::RefractiveIndexType,
+        utils::geom_transformation::Isometry,
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::Vector3;
@@ -368,12 +358,38 @@ mod test {
         assert_eq!(node.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
-    fn set_aperture() {
-        test_set_aperture::<Wedge>("input_1", "output_1");
-    }
-    #[test]
     fn inverted() -> OpmResult<()> {
         test_inverted::<Wedge>()
+    }
+    #[test]
+    fn rays_beyond_optic_shape_are_lost() -> OpmResult<()> {
+        test_rays_beyond_optic_shape_are_lost::<Wedge>()
+    }
+    /// A ray entering the wedge inside its optic shape but heading outwards leaves through the
+    /// barrel instead of the exit face, and a ray trace (`Stop`) loses it.
+    #[test]
+    fn a_ray_leaving_through_the_barrel_is_lost_in_a_ray_trace() -> OpmResult<()> {
+        let mut wedge = Wedge::default();
+        wedge.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        // Tilted by 10° it enters at 12.3 mm; refracted to about 6.6° it reaches about 13.5 mm at
+        // the exit face 10 mm further on, outside the optic shape of 12.5 mm.
+        let tilt = 10.0_f64.to_radians();
+        let ray = Ray::new(
+            millimeter!(0.0, 12.3 - tilt.tan(), -1.0),
+            Vector3::new(0.0, tilt.sin(), tilt.cos()),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?;
+        let traced = AnalysisRayTrace::analyze(
+            &mut wedge,
+            LightResult::from([("input_1".into(), LightData::Geometric(Rays::from(ray)))]),
+            &RayTraceConfig::default(),
+        )?;
+        let Some(LightData::Geometric(rays)) = traced.get("output_1") else {
+            panic!("expected ray data at the output port");
+        };
+        assert_eq!(rays.nr_of_rays(true), 0);
+        Ok(())
     }
     #[test]
     fn analyze_empty() -> OpmResult<()> {
@@ -486,12 +502,12 @@ mod test {
         test_volume_body::<Wedge>()
     }
     #[test]
-    fn clear_aperture() -> OpmResult<()> {
-        test_clear_aperture::<Wedge>()
+    fn optic_shape() -> OpmResult<()> {
+        test_optic_shape::<Wedge>(millimeter!(12.5))
     }
     #[test]
-    fn clear_aperture_absent_in_file() -> OpmResult<()> {
-        test_clear_aperture_absent_in_file::<Wedge>()
+    fn optic_shape_absent_in_file() -> OpmResult<()> {
+        test_optic_shape_absent_in_file::<Wedge>()
     }
     /// The wedge tilts its rear surface around the axis, so the volume thickens on one side of it
     /// by as much as it thins on the other.

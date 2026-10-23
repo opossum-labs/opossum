@@ -592,8 +592,8 @@ mod test {
             .index_of("rms_wavefront")
             .expect("Property must exist");
 
-        assert_eq!(props.is_read_only_by_index(idx_thickness)?, false);
-        assert_eq!(props.is_read_only_by_index(idx_rms)?, true);
+        assert!(!props.is_read_only_by_index(idx_thickness)?);
+        assert!(props.is_read_only_by_index(idx_rms)?);
 
         // Simulated optimizer iterations without string lookups
         for step in 1..=5 {

@@ -9,7 +9,8 @@
 //! 2. A wavelength-dependent refractive index material (Schott model)
 //! 3. Two spherical lenses ("75 mm lens" and "50 mm lens") using that
 //!    material
-//! 4. A circular aperture on the first lens's input
+//! 4. An optic shape of 25 mm radius on the first lens and of 27.5 mm on the
+//!    second one, the size of the lenses
 //! 5. A ray propagation visualizer after the second lens
 //! 6. A ray-tracing analyzer configured for two wavelengths
 //!
@@ -21,7 +22,7 @@
 //! This example demonstrates:
 //! - Defining a wavelength-dependent refractive index material and using it
 //!   to build spherical lenses
-//! - Building an optical system from spherical lenses and an aperture
+//! - Building an optical system from spherical lenses of a given size
 //! - Connecting components with fixed propagation distances
 //! - Generating rays at multiple wavelengths to observe chromatic effects
 //! - Configuring a ray-tracing analyzer and saving the system as an
@@ -30,8 +31,10 @@
 //! Imports:
 //! - `opossum_core::prelude::*` — optical components, analyzers, unit
 //!   macros, and document types
-//! - `opossum_core::core_optics::{NodeAttrExt, OpticNodeExt}` — extension
-//!   traits for setting node names and properties
+//! - `opossum_core::core_optics::NodeAttrExt` — extension trait for setting
+//!   node names and properties
+//! - `opossum_core::apertures::CircleShape` — the outline of a lens's optic
+//!   shape
 //! - `opossum_core::distributions::{energy::UniformDist, position::Grid,
 //!   spectral::LaserLines}` — beam energy, spatial, and spectral
 //!   distributions
@@ -42,8 +45,10 @@
 //!   the `.opm` file
 use nalgebra::Point2;
 use num_traits::Zero;
-use opossum_core::core_optics::{NodeAttrExt, OpticNodeExt};
+use opossum_core::apertures::CircleShape;
+use opossum_core::core_optics::NodeAttrExt;
 use opossum_core::distributions::{energy::UniformDist, position::Grid, spectral::LaserLines};
+use opossum_core::geometry::body::OPTIC_SHAPE;
 use opossum_core::prelude::*;
 use std::env;
 use std::path::Path;
@@ -73,7 +78,8 @@ fn main() -> OpmResult<()> {
         7.52649555E-005,
         nanometer!(300.0)..nanometer!(2000.0),
     )?;
-    // Create the first spherical lens with a curvature of 130.0 mm / -130.0 mm.
+    // Create the first spherical lens with a curvature of 130.0 mm / -130.0 mm. It is 50 mm in
+    // diameter, which limits the beam diameter: its optic shape is a circle of 25 mm radius.
     let mut lens1 = Lens::new(
         "75 mm lens",
         millimeter!(130.0),
@@ -81,23 +87,24 @@ fn main() -> OpmResult<()> {
         millimeter!(10.0),
         &refr_index_hzf52,
     )?;
-    // Define a circular aperture to limit beam diameter.
-    let aperture = Aperture::new_circle(
-        millimeter!(25.0),
-        ApertureType::Hole,
-        Some(millimeter!(0.0, 0.0)),
+    lens1.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
     )?;
-    // Attach the aperture to the input side of the first lens.
-    lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
     // Add the first lens to the optical scene.
     let i_pl1 = scenery.add_node(lens1)?;
-    // Create the second spherical lens of the telescope.
-    let lens2 = Lens::new(
+    // Create the second spherical lens of the telescope. It is slightly larger than the first one,
+    // because the 350 nm light reaches it up to 26.4 mm off its axis.
+    let mut lens2 = Lens::new(
         "50 mm lens",
         millimeter!(100.0),
         millimeter!(-100.0),
         millimeter!(10.0),
         &refr_index_hzf52,
+    )?;
+    lens2.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(27.5))?).into(),
     )?;
     // Add the second lens to the scene.
     let i_pl2 = scenery.add_node(lens2)?;

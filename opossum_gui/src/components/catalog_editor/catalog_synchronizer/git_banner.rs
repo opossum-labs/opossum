@@ -27,52 +27,52 @@ pub fn GitSyncBanner(props: GitSyncBannerProps) -> Element {
     let catalog_dir = config.catalog_dir().cloned();
 
     rsx! {
-      div { class: "p-3 mb-4 rounded border bg-light text-dark",
-        // Header row with repository details and sync button
-        div { class: "d-flex justify-content-between align-items-center flex-wrap gap-3",
-          div {
-            div { class: "fw-bold small d-flex align-items-center gap-1",
-              Icon { icon: FaCodeBranch }
-              "Shared Git Catalog Repository"
+        div { class: "p-3 mb-4 rounded border bg-light text-dark",
+            // Header row with repository details and sync button
+            div { class: "d-flex justify-content-between align-items-center flex-wrap gap-3",
+                div {
+                    div { class: "fw-bold small d-flex align-items-center gap-1",
+                        Icon { icon: FaCodeBranch }
+                        "Shared Git Catalog Repository"
+                    }
+                    div { class: "text-muted small", "{remote_url}" }
+                    if let Some(dir) = catalog_dir {
+                        div { class: "text-muted small font-monospace", "{dir.display()}" }
+                    }
+                }
+                div {
+                    Button {
+                        variant: ButtonVariant::Primary,
+                        size: ButtonSize::Sm,
+                        disabled: props.is_syncing,
+                        onclick: move |_| props.on_sync.call(()),
+                        Icon { icon: FaCloudArrowDown }
+                        if props.is_syncing {
+                            "Syncing with Git..."
+                        } else {
+                            "Pull Updates from Git"
+                        }
+                    }
+                }
             }
-            div { class: "text-muted small", "{remote_url}" }
-            if let Some(dir) = catalog_dir {
-              div { class: "text-muted small font-monospace", "{dir.display()}" }
-            }
-          }
-          div {
-            Button {
-              variant: ButtonVariant::Primary,
-              size: ButtonSize::Sm,
-              disabled: props.is_syncing,
-              onclick: move |_| props.on_sync.call(()),
-              Icon { icon: FaCloudArrowDown }
-              if props.is_syncing {
-                "Syncing with Git..."
-              } else {
-                "Pull Updates from Git"
-              }
-            }
-          }
-        }
 
-        // Status feedback notification
-        if let Some(ref res) = props.sync_result {
-          match res {
-              Ok(msg) => rsx! {
-                div { class: "alert alert-success mt-2 mb-0 py-1 px-2 small d-flex align-items-center gap-2",
-                  Icon { icon: FaCheck }
-                  "{msg}"
+            // Status feedback notification
+            if let Some(ref res) = props.sync_result {
+                match res {
+                    Ok(msg) => rsx! {
+                        div { class: "alert alert-success mt-2 mb-0 py-1 px-2 small d-flex align-items-center gap-2",
+                            Icon { icon: FaCheck }
+                            "{msg}"
+                        }
+                    },
+                    Err(err) => rsx! {
+                        div { class: "alert alert-danger mt-2 mb-0 py-1 px-2 small d-flex align-items-center gap-2",
+                            Icon { icon: FaCircleExclamation }
+                            "{err}"
+                        }
+                    },
                 }
-              },
-              Err(err) => rsx! {
-                div { class: "alert alert-danger mt-2 mb-0 py-1 px-2 small d-flex align-items-center gap-2",
-                  Icon { icon: FaCircleExclamation }
-                  "{err}"
-                }
-              },
-          }
+            }
         }
-      }
     }
 }

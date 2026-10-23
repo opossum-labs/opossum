@@ -62,6 +62,11 @@ impl Property {
     pub fn description(&self) -> &str {
         self.description.as_ref()
     }
+    /// Returns the [`Validator`] that guards the value of this [`Property`], if any.
+    #[must_use]
+    pub const fn validator(&self) -> Option<&Validator> {
+        self.validator.as_ref()
+    }
     /// Returns `true` if this property is marked as read-only.
     #[must_use]
     pub const fn is_read_only(&self) -> bool {

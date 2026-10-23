@@ -39,7 +39,7 @@ mod source_helper;
 mod source_port;
 mod spectrometer;
 mod spot_diagram;
-mod test_helper;
+pub(crate) mod test_helper;
 mod thin_mirror;
 mod wavefront;
 mod wedge;
@@ -71,37 +71,10 @@ pub use wedge::Wedge;
 
 use crate::{
     analyzers::Analyzable,
-    core_optics::{NodeAttr, OpticRef},
+    core_optics::OpticRef,
     error::{OpmResult, OpossumError},
-    geometry::body::{CLEAR_APERTURE, default_clear_aperture},
-    properties::validator::Validator,
 };
 use std::{collections::HashSet, sync::LazyLock};
-
-/// Declare the property every node with a physical volume carries: how far its medium extends
-/// transversally ([`CLEAR_APERTURE`]).
-///
-/// Declaring it from one place keeps the node types that call this in sync with each other, and
-/// they are exactly those implementing [`Volumetric`](crate::core_optics::Volumetric) — which is
-/// what the test in that module checks.
-///
-/// Creates standard volumetric properties for a node.
-///
-/// # Arguments
-///
-/// * `node_attr` - the attributes of the node under construction.
-///
-/// # Errors
-///
-/// This function returns an error if the property is already declared.
-pub fn create_volume_properties(node_attr: &mut NodeAttr) -> OpmResult<()> {
-    node_attr.create_property_with_validator(
-        CLEAR_APERTURE,
-        "transversal extent of the medium",
-        Validator::ApertureDelimitsRegion,
-        default_clear_aperture().into(),
-    )
-}
 
 /// Struct to hold all info about a node type
 pub struct NodeRegistration {
@@ -197,6 +170,859 @@ pub fn is_volume_node_type(node_type: &str) -> bool {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::{
+        core_optics::{OpticNode, OpticNodeExt, node_attr::NodePositioning},
+        degree,
+        geometry::{Extruded, Sphere, SurfaceGeometry, SurfaceShape},
+        millimeter,
+        nodes::test_helper::helper::{
+            assert_snapshots, body_of, body_snapshot, geometry_snapshot, hit_snapshot,
+            placed_geometry, surface_snapshot,
+        },
+        refractive_index::RefrIndexConst,
+        utils::geom_transformation::Isometry,
+    };
+
+    /// One flat surface, placed at the node itself and shared by its input and output port.
+    const FLAT_INPUT_OUTPUT: &[&str] = &[
+        "in input_1: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
+        "out output_1: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
+    ];
+
+    /// Place a node away from the origin, rotated about all three axes and with an alignment on
+    /// top, so that every part of a surface's placement is exercised.
+    fn place<T: OpticNode + ?Sized>(node: &mut T) -> OpmResult<()> {
+        node.set_positioning(NodePositioning::Absolute(Isometry::new(
+            millimeter!(10.0, -20.0, 30.0),
+            degree!(5.0, -10.0, 15.0),
+        )?))?;
+        node.set_alignment(millimeter!(1.0, 2.0, 0.0), degree!(2.0, 0.0, -3.0))
+    }
+
+    /// Node configurations the default ones do not cover: a tilted exit surface, an off-axis
+    /// parabola, an inverted lens, a flat lens surface, a curved mirror and a curved wavefront
+    /// reference surface.
+    fn node_variants() -> OpmResult<Vec<(&'static str, OpticRef)>> {
+        let glass = RefrIndexConst::new(1.5)?;
+        let mut inverted_lens = Lens::new(
+            "inverted lens",
+            millimeter!(50.0),
+            millimeter!(-80.0),
+            millimeter!(5.0),
+            &glass,
+        )?;
+        inverted_lens.set_inverted(true)?;
+        let mut spherical_wavefront = WaveFront::new("wavefront")?;
+        spherical_wavefront
+            .set_reference_surface(SurfaceShape::Sphere(Sphere::new(millimeter!(100.0))?))?;
+        Ok(vec![
+            (
+                "5 degree wedge",
+                OpticRef::new(Box::new(Wedge::new(
+                    "wedge",
+                    millimeter!(10.0),
+                    degree!(5.0),
+                    &glass,
+                )?)),
+            ),
+            (
+                "90 degree parabola",
+                OpticRef::new(Box::new(ParabolicMirror::new_with_off_axis_y(
+                    "parabola",
+                    millimeter!(100.0),
+                    true,
+                    degree!(90.0),
+                )?)),
+            ),
+            ("inverted lens", OpticRef::new(Box::new(inverted_lens))),
+            (
+                "plano-convex lens",
+                OpticRef::new(Box::new(Lens::new(
+                    "plano-convex lens",
+                    millimeter!(50.0),
+                    millimeter!(f64::INFINITY),
+                    millimeter!(5.0),
+                    &glass,
+                )?)),
+            ),
+            (
+                "spherical mirror",
+                OpticRef::new(Box::new(
+                    ThinMirror::new("mirror").with_curvature(millimeter!(200.0))?,
+                )),
+            ),
+            (
+                "spherical wavefront reference",
+                OpticRef::new(Box::new(spherical_wavefront)),
+            ),
+        ])
+    }
+
+    /// Every node's geometry describes exactly the surfaces the node installs.
+    #[test]
+    fn every_geometry_describes_the_installed_surfaces() -> OpmResult<()> {
+        for (label, node) in placed_configurations()? {
+            assert_eq!(
+                geometry_snapshot(&*node)?,
+                surface_snapshot(&*node),
+                "the geometry of '{label}' does not describe its surfaces"
+            );
+        }
+        Ok(())
+    }
+
+    /// Everything gain and absorption read from the medium of every volume node configuration.
+    ///
+    /// Pins the body the medium is made of - frame, bounding box, chords of straight and oblique
+    /// rays and which points it contains - for placed, rotated, aligned and inverted nodes.
+    #[test]
+    fn every_volume_body_is_recorded() -> OpmResult<()> {
+        let mut actual = Vec::new();
+        for (label, node) in placed_configurations()? {
+            if node.as_volume().is_some() {
+                let frame = node.effective_node_iso().unwrap_or_else(Isometry::identity);
+                actual.push((
+                    label,
+                    body_snapshot(body_of(&placed_geometry(&*node)?)?, &frame)?,
+                ));
+            }
+        }
+        actual.sort_by_key(|(label, _)| *label);
+        assert_snapshots(
+            &actual,
+            &[
+                (
+                    "5 degree wedge",
+                    &[
+                        "frame t=(10.406345, -17.828447, 30.345311) x=(0.964207, 0.204382, 0.168918) z=(-0.136689, -0.162745, 0.977154)",
+                        "box x=[-12.500000, 12.500000] y=[-12.500000, 12.500000] z=[0.000000, 11.093608]",
+                        "chord from (0, 0) at 0 deg: 10.000000",
+                        "chord from (0, 0) at 10 deg: 11.108868",
+                        "chord from (5, 0) at 0 deg: 10.000000",
+                        "chord from (5, 0) at 10 deg: 11.108868",
+                        "chord from (0, 5) at 0 deg: 10.437443",
+                        "chord from (0, 5) at 10 deg: none",
+                        "chord from (-8, 3) at 0 deg: 10.262466",
+                        "chord from (-8, 3) at 10 deg: none",
+                        "chord from (12.4, 0) at 0 deg: 10.000000",
+                        "chord from (12.4, 0) at 10 deg: none",
+                        "chord from (12.6, 0) at 0 deg: none",
+                        "chord from (12.6, 0) at 10 deg: none",
+                        "inside: ...............#####.........#####..######.#####..######.#####......................",
+                    ],
+                ),
+                (
+                    "cylindric lens",
+                    &[
+                        "frame t=(10.406345, -17.828447, 30.345311) x=(0.964207, 0.204382, 0.168918) z=(-0.136689, -0.162745, 0.977154)",
+                        "box x=[-10.000000, 10.000000] y=[-15.000000, 15.000000] z=[0.000000, 10.000000]",
+                        "chord from (0, 0) at 0 deg: 10.000000",
+                        "chord from (0, 0) at 10 deg: 10.154266",
+                        "chord from (5, 0) at 0 deg: 9.949999",
+                        "chord from (5, 0) at 10 deg: 10.103494",
+                        "chord from (0, 5) at 0 deg: 10.000000",
+                        "chord from (0, 5) at 10 deg: none",
+                        "chord from (-8, 3) at 0 deg: 9.871992",
+                        "chord from (-8, 3) at 10 deg: 10.024283",
+                        "chord from (12.4, 0) at 0 deg: none",
+                        "chord from (12.4, 0) at 10 deg: none",
+                        "chord from (12.6, 0) at 0 deg: none",
+                        "chord from (12.6, 0) at 10 deg: none",
+                        "inside: .............................#####..#####..#####..#####.............................",
+                    ],
+                ),
+                (
+                    "inverted lens",
+                    &[
+                        "frame t=(10.406345, -17.828447, 30.345311) x=(0.964207, 0.204382, 0.168918) z=(-0.136689, -0.162745, 0.977154)",
+                        "box x=[-12.500000, 12.500000] y=[-12.500000, 12.500000] z=[0.000000, 5.000000]",
+                        "chord from (0, 0) at 0 deg: 5.000000",
+                        "chord from (0, 0) at 10 deg: 3.668928",
+                        "chord from (5, 0) at 0 deg: 4.592969",
+                        "chord from (5, 0) at 10 deg: 3.244937",
+                        "chord from (0, 5) at 0 deg: 4.592969",
+                        "chord from (0, 5) at 10 deg: none",
+                        "chord from (-8, 3) at 0 deg: 3.807033",
+                        "chord from (-8, 3) at 10 deg: none",
+                        "chord from (12.4, 0) at 0 deg: 2.471159",
+                        "chord from (12.4, 0) at 10 deg: none",
+                        "chord from (12.6, 0) at 0 deg: none",
+                        "chord from (12.6, 0) at 10 deg: none",
+                        "inside: ................#............###....###....###.....#......#.........................",
+                    ],
+                ),
+                (
+                    "lens",
+                    &[
+                        "frame t=(10.406345, -17.828447, 30.345311) x=(0.964207, 0.204382, 0.168918) z=(-0.136689, -0.162745, 0.977154)",
+                        "box x=[-12.500000, 12.500000] y=[-12.500000, 12.500000] z=[0.000000, 10.000000]",
+                        "chord from (0, 0) at 0 deg: 10.000000",
+                        "chord from (0, 0) at 10 deg: 9.961841",
+                        "chord from (5, 0) at 0 deg: 9.949999",
+                        "chord from (5, 0) at 10 deg: 9.911074",
+                        "chord from (0, 5) at 0 deg: 9.949999",
+                        "chord from (0, 5) at 10 deg: none",
+                        "chord from (-8, 3) at 0 deg: 9.853989",
+                        "chord from (-8, 3) at 10 deg: none",
+                        "chord from (12.4, 0) at 0 deg: 9.692433",
+                        "chord from (12.4, 0) at 10 deg: none",
+                        "chord from (12.6, 0) at 0 deg: none",
+                        "chord from (12.6, 0) at 10 deg: none",
+                        "inside: ...............#####.........#####..#####..#####..#####..#####......................",
+                    ],
+                ),
+                (
+                    "plano-convex lens",
+                    &[
+                        "frame t=(10.406345, -17.828447, 30.345311) x=(0.964207, 0.204382, 0.168918) z=(-0.136689, -0.162745, 0.977154)",
+                        "box x=[-12.500000, 12.500000] y=[-12.500000, 12.500000] z=[0.000000, 5.000000]",
+                        "chord from (0, 0) at 0 deg: 5.000000",
+                        "chord from (0, 0) at 10 deg: 4.255460",
+                        "chord from (5, 0) at 0 deg: 4.749372",
+                        "chord from (5, 0) at 10 deg: 3.988103",
+                        "chord from (0, 5) at 0 deg: 4.749372",
+                        "chord from (0, 5) at 10 deg: none",
+                        "chord from (-8, 3) at 0 deg: 4.264592",
+                        "chord from (-8, 3) at 10 deg: none",
+                        "chord from (12.4, 0) at 0 deg: 3.438002",
+                        "chord from (12.4, 0) at 10 deg: none",
+                        "chord from (12.6, 0) at 0 deg: none",
+                        "chord from (12.6, 0) at 10 deg: none",
+                        "inside: ................##...........###....###....###.....##.....##........................",
+                    ],
+                ),
+                (
+                    "wedge",
+                    &[
+                        "frame t=(10.406345, -17.828447, 30.345311) x=(0.964207, 0.204382, 0.168918) z=(-0.136689, -0.162745, 0.977154)",
+                        "box x=[-12.500000, 12.500000] y=[-12.500000, 12.500000] z=[0.000000, 10.000000]",
+                        "chord from (0, 0) at 0 deg: 10.000000",
+                        "chord from (0, 0) at 10 deg: 10.154266",
+                        "chord from (5, 0) at 0 deg: 10.000000",
+                        "chord from (5, 0) at 10 deg: 10.154266",
+                        "chord from (0, 5) at 0 deg: 10.000000",
+                        "chord from (0, 5) at 10 deg: none",
+                        "chord from (-8, 3) at 0 deg: 10.000000",
+                        "chord from (-8, 3) at 10 deg: none",
+                        "chord from (12.4, 0) at 0 deg: 10.000000",
+                        "chord from (12.4, 0) at 10 deg: none",
+                        "chord from (12.6, 0) at 0 deg: none",
+                        "chord from (12.6, 0) at 10 deg: none",
+                        "inside: ...............#####.........#####..#####..#####..#####..#####......................",
+                    ],
+                ),
+            ],
+        );
+        Ok(())
+    }
+
+    /// Where rays meet every installed surface of every placed configuration, and whether the
+    /// surface records them there.
+    ///
+    /// Pins what tracing sees - hit points, normals and misses - independently of how surfaces and
+    /// their placement are represented, so it holds unchanged while that representation changes.
+    #[test]
+    fn every_installed_surface_is_hit_as_recorded() -> OpmResult<()> {
+        let mut actual = Vec::new();
+        for (label, node) in placed_configurations()? {
+            actual.push((label, hit_snapshot(&*node)?));
+        }
+        actual.sort_by_key(|(label, _)| *label);
+        assert_snapshots(
+            &actual,
+            &[
+                (
+                    "5 degree wedge",
+                    &[
+                        "in input_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (0, 5) at 10 deg: miss",
+                        "in input_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (12.6, 0) at 0 deg: miss",
+                        "out output_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 10.000000) n=(0.000000, 0.087156, -0.996195) recorded",
+                        "out output_1 from (5, 0) at 10 deg: (5.000000, 10.745384, 10.940099) n=(0.000000, 0.087156, -0.996195) recorded",
+                        "out output_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 10.262466) n=(0.000000, 0.087156, -0.996195) recorded",
+                        "out output_1 from (0, 5) at 10 deg: miss",
+                        "out output_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 10.000000) n=(0.000000, 0.087156, -0.996195) recorded",
+                        "out output_1 from (12.6, 0) at 0 deg: miss",
+                    ],
+                ),
+                (
+                    "90 degree parabola",
+                    &[
+                        "in input_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, -0.707107, 0.707107) recorded",
+                        "in input_1 from (5, 0) at 10 deg: (5.000000, 10.570953, 9.950856) n=(0.033623, -0.672457, 0.739372) recorded",
+                        "in input_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 2.645019) n=(-0.055739, -0.696733, 0.715162) recorded",
+                        "in input_1 from (0, 5) at 10 deg: miss",
+                        "in input_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, -0.771778) n=(0.087681, -0.707107, 0.701649) recorded",
+                        "in input_1 from (12.6, 0) at 0 deg: miss",
+                        "out output_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, -0.707107, 0.707107) recorded",
+                        "out output_1 from (5, 0) at 10 deg: (5.000000, 10.570953, 9.950856) n=(0.033623, -0.672457, 0.739372) recorded",
+                        "out output_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 2.645019) n=(-0.055739, -0.696733, 0.715162) recorded",
+                        "out output_1 from (0, 5) at 10 deg: miss",
+                        "out output_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, -0.771778) n=(0.087681, -0.707107, 0.701649) recorded",
+                        "out output_1 from (12.6, 0) at 0 deg: miss",
+                    ],
+                ),
+                (
+                    "beam splitter",
+                    &[
+                        "in input_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (0, 5) at 10 deg: miss",
+                        "in input_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (12.6, 0) at 0 deg: miss",
+                        "in input_2 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_2 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_2 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_2 from (0, 5) at 10 deg: miss",
+                        "in input_2 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_2 from (12.6, 0) at 0 deg: miss",
+                        "out out1_trans1_refl2 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out out1_trans1_refl2 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out out1_trans1_refl2 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out out1_trans1_refl2 from (0, 5) at 10 deg: miss",
+                        "out out1_trans1_refl2 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out out1_trans1_refl2 from (12.6, 0) at 0 deg: miss",
+                        "out out2_trans2_refl1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out out2_trans2_refl1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out out2_trans2_refl1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out out2_trans2_refl1 from (0, 5) at 10 deg: miss",
+                        "out out2_trans2_refl1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out out2_trans2_refl1 from (12.6, 0) at 0 deg: miss",
+                    ],
+                ),
+                (
+                    "cylindric lens",
+                    &[
+                        "in input_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (5, 0) at 10 deg: (5.000000, 8.820757, 0.025001) n=(0.010000, 0.000000, -0.999950) recorded",
+                        "in input_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.064004) n=(-0.016000, 0.000000, -0.999872) recorded",
+                        "in input_1 from (0, 5) at 10 deg: (0.000000, 13.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (12.4, 0) at 0 deg: miss",
+                        "in input_1 from (12.6, 0) at 0 deg: miss",
+                        "out output_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 10.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (5, 0) at 10 deg: (5.000000, 10.575211, 9.974999) n=(-0.010000, 0.000000, -0.999950) recorded",
+                        "out output_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 9.935996) n=(0.016000, 0.000000, -0.999872) recorded",
+                        "out output_1 from (0, 5) at 10 deg: miss",
+                        "out output_1 from (12.4, 0) at 0 deg: miss",
+                        "out output_1 from (12.6, 0) at 0 deg: miss",
+                    ],
+                ),
+                (
+                    "dummy",
+                    &[
+                        "in input_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (0, 5) at 10 deg: (0.000000, 13.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (12.6, 0) at 0 deg: (12.600000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (0, 5) at 10 deg: (0.000000, 13.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (12.6, 0) at 0 deg: (12.600000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                    ],
+                ),
+                (
+                    "energy meter",
+                    &[
+                        "in input_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (0, 5) at 10 deg: (0.000000, 13.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                        "in input_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (12.6, 0) at 0 deg: (12.600000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                        "out output_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (0, 5) at 10 deg: (0.000000, 13.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                        "out output_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (12.6, 0) at 0 deg: (12.600000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                    ],
+                ),
+                (
+                    "fluence detector",
+                    &[
+                        "in input_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (0, 5) at 10 deg: (0.000000, 13.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                        "in input_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (12.6, 0) at 0 deg: (12.600000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                        "out output_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (0, 5) at 10 deg: (0.000000, 13.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                        "out output_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (12.6, 0) at 0 deg: (12.600000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                    ],
+                ),
+                ("group", &[]),
+                (
+                    "ideal filter",
+                    &[
+                        "in input_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (0, 5) at 10 deg: miss",
+                        "in input_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (12.6, 0) at 0 deg: miss",
+                        "out output_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (0, 5) at 10 deg: miss",
+                        "out output_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (12.6, 0) at 0 deg: miss",
+                    ],
+                ),
+                (
+                    "inverted lens",
+                    &[
+                        "in input_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (5, 0) at 10 deg: (5.000000, 9.005457, 1.072485) n=(0.100000, 0.180109, -0.978550) recorded",
+                        "in input_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.735408) n=(-0.160000, 0.060000, -0.985292) recorded",
+                        "in input_1 from (0, 5) at 10 deg: miss",
+                        "in input_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 1.561998) n=(0.248000, 0.000000, -0.968760) recorded",
+                        "in input_1 from (12.6, 0) at 0 deg: miss",
+                        "out output_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 5.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (5, 0) at 10 deg: (5.000000, 9.568934, 4.268124) n=(-0.062500, -0.119612, -0.990852) recorded",
+                        "out output_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 4.542442) n=(0.100000, -0.037500, -0.994281) recorded",
+                        "out output_1 from (0, 5) at 10 deg: miss",
+                        "out output_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 4.033158) n=(-0.155000, 0.000000, -0.987914) recorded",
+                        "out output_1 from (12.6, 0) at 0 deg: miss",
+                    ],
+                ),
+                (
+                    "lens",
+                    &[
+                        "in input_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (5, 0) at 10 deg: (5.000000, 8.834521, 0.103059) n=(0.010000, 0.017669, -0.999794) recorded",
+                        "in input_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.073005) n=(-0.016000, 0.006000, -0.999854) recorded",
+                        "in input_1 from (0, 5) at 10 deg: miss",
+                        "in input_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.153784) n=(0.024800, 0.000000, -0.999692) recorded",
+                        "in input_1 from (12.6, 0) at 0 deg: miss",
+                        "out output_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 10.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (5, 0) at 10 deg: (5.000000, 10.555561, 9.863562) n=(-0.010000, -0.021111, -0.999727) recorded",
+                        "out output_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 9.926995) n=(0.016000, -0.006000, -0.999854) recorded",
+                        "out output_1 from (0, 5) at 10 deg: miss",
+                        "out output_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 9.846216) n=(-0.024800, 0.000000, -0.999692) recorded",
+                        "out output_1 from (12.6, 0) at 0 deg: miss",
+                    ],
+                ),
+                (
+                    "mirror",
+                    &[
+                        "in input_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (0, 5) at 10 deg: miss",
+                        "in input_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (12.6, 0) at 0 deg: miss",
+                        "out output_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (0, 5) at 10 deg: miss",
+                        "out output_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (12.6, 0) at 0 deg: miss",
+                    ],
+                ),
+                (
+                    "parabolic mirror",
+                    &[
+                        "in input_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, 1.000000) recorded",
+                        "in input_1 from (5, 0) at 10 deg: (5.000000, 8.811824, -0.025662) n=(0.002500, 0.004406, 0.999987) recorded",
+                        "in input_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, -0.018250) n=(-0.004000, 0.001500, 0.999991) recorded",
+                        "in input_1 from (0, 5) at 10 deg: miss",
+                        "in input_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, -0.038440) n=(0.006200, 0.000000, 0.999981) recorded",
+                        "in input_1 from (12.6, 0) at 0 deg: miss",
+                        "out output_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, 1.000000) recorded",
+                        "out output_1 from (5, 0) at 10 deg: (5.000000, 8.811824, -0.025662) n=(0.002500, 0.004406, 0.999987) recorded",
+                        "out output_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, -0.018250) n=(-0.004000, 0.001500, 0.999991) recorded",
+                        "out output_1 from (0, 5) at 10 deg: miss",
+                        "out output_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, -0.038440) n=(0.006200, 0.000000, 0.999981) recorded",
+                        "out output_1 from (12.6, 0) at 0 deg: miss",
+                    ],
+                ),
+                (
+                    "paraxial surface",
+                    &[
+                        "in input_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (0, 5) at 10 deg: miss",
+                        "in input_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (12.6, 0) at 0 deg: miss",
+                        "out output_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (0, 5) at 10 deg: miss",
+                        "out output_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (12.6, 0) at 0 deg: miss",
+                    ],
+                ),
+                (
+                    "plano-convex lens",
+                    &[
+                        "in input_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (5, 0) at 10 deg: (5.000000, 9.005457, 1.072485) n=(0.100000, 0.180109, -0.978550) recorded",
+                        "in input_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.735408) n=(-0.160000, 0.060000, -0.985292) recorded",
+                        "in input_1 from (0, 5) at 10 deg: miss",
+                        "in input_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 1.561998) n=(0.248000, 0.000000, -0.968760) recorded",
+                        "in input_1 from (12.6, 0) at 0 deg: miss",
+                        "out output_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 5.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (5, 0) at 10 deg: (5.000000, 9.697984, 5.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 5.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (0, 5) at 10 deg: miss",
+                        "out output_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 5.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (12.6, 0) at 0 deg: miss",
+                    ],
+                ),
+                (
+                    "ray propagation",
+                    &[
+                        "in input_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (0, 5) at 10 deg: (0.000000, 13.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (12.6, 0) at 0 deg: (12.600000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (0, 5) at 10 deg: (0.000000, 13.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (12.6, 0) at 0 deg: (12.600000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                    ],
+                ),
+                ("reference", &[]),
+                (
+                    "reflective grating",
+                    &[
+                        "in input_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (0, 5) at 10 deg: miss",
+                        "in input_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (12.6, 0) at 0 deg: miss",
+                        "out output_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (0, 5) at 10 deg: miss",
+                        "out output_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (12.6, 0) at 0 deg: miss",
+                    ],
+                ),
+                (
+                    "source port",
+                    &[
+                        "out output_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (0, 5) at 10 deg: (0.000000, 13.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (12.6, 0) at 0 deg: (12.600000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                    ],
+                ),
+                (
+                    "spectrometer",
+                    &[
+                        "in input_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (0, 5) at 10 deg: (0.000000, 13.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                        "in input_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (12.6, 0) at 0 deg: (12.600000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                        "out output_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (0, 5) at 10 deg: (0.000000, 13.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                        "out output_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (12.6, 0) at 0 deg: (12.600000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                    ],
+                ),
+                (
+                    "spherical mirror",
+                    &[
+                        "in input_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (5, 0) at 10 deg: (5.000000, 8.862019, 0.259006) n=(0.025000, 0.044310, -0.998705) recorded",
+                        "in input_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.182583) n=(-0.040000, 0.015000, -0.999087) recorded",
+                        "in input_1 from (0, 5) at 10 deg: miss",
+                        "in input_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.384770) n=(0.062000, 0.000000, -0.998076) recorded",
+                        "in input_1 from (12.6, 0) at 0 deg: miss",
+                        "out output_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (5, 0) at 10 deg: (5.000000, 8.862019, 0.259006) n=(0.025000, 0.044310, -0.998705) recorded",
+                        "out output_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.182583) n=(-0.040000, 0.015000, -0.999087) recorded",
+                        "out output_1 from (0, 5) at 10 deg: miss",
+                        "out output_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.384770) n=(0.062000, 0.000000, -0.998076) recorded",
+                        "out output_1 from (12.6, 0) at 0 deg: miss",
+                    ],
+                ),
+                (
+                    "spherical wavefront reference",
+                    &[
+                        "in input_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (5, 0) at 10 deg: (5.000000, 8.908601, 0.523184) n=(0.050000, 0.089086, -0.994768) recorded",
+                        "in input_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.365669) n=(-0.080000, 0.030000, -0.996343) recorded",
+                        "in input_1 from (0, 5) at 10 deg: (0.000000, 13.989749, 0.983401) n=(0.000000, 0.139897, -0.990166) not recorded",
+                        "in input_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.771778) n=(0.124000, 0.000000, -0.992282) recorded",
+                        "in input_1 from (12.6, 0) at 0 deg: (12.600000, 0.000000, 0.796976) n=(0.126000, 0.000000, -0.992030) not recorded",
+                        "out output_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (5, 0) at 10 deg: (5.000000, 8.908601, 0.523184) n=(0.050000, 0.089086, -0.994768) recorded",
+                        "out output_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.365669) n=(-0.080000, 0.030000, -0.996343) recorded",
+                        "out output_1 from (0, 5) at 10 deg: (0.000000, 13.989749, 0.983401) n=(0.000000, 0.139897, -0.990166) not recorded",
+                        "out output_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.771778) n=(0.124000, 0.000000, -0.992282) recorded",
+                        "out output_1 from (12.6, 0) at 0 deg: (12.600000, 0.000000, 0.796976) n=(0.126000, 0.000000, -0.992030) not recorded",
+                    ],
+                ),
+                (
+                    "spot diagram",
+                    &[
+                        "in input_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (0, 5) at 10 deg: (0.000000, 13.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                        "in input_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (12.6, 0) at 0 deg: (12.600000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                        "out output_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (0, 5) at 10 deg: (0.000000, 13.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                        "out output_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (12.6, 0) at 0 deg: (12.600000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                    ],
+                ),
+                (
+                    "wavefront monitor",
+                    &[
+                        "in input_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (0, 5) at 10 deg: (0.000000, 13.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                        "in input_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (12.6, 0) at 0 deg: (12.600000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                        "out output_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (0, 5) at 10 deg: (0.000000, 13.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                        "out output_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (12.6, 0) at 0 deg: (12.600000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                    ],
+                ),
+                (
+                    "wedge",
+                    &[
+                        "in input_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (0, 5) at 10 deg: miss",
+                        "in input_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (12.6, 0) at 0 deg: miss",
+                        "out output_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 10.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (5, 0) at 10 deg: (5.000000, 10.579619, 10.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 10.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (0, 5) at 10 deg: miss",
+                        "out output_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 10.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out output_1 from (12.6, 0) at 0 deg: miss",
+                    ],
+                ),
+            ],
+        );
+        Ok(())
+    }
+
+    /// Every registered node type in its default configuration, the reference node and the
+    /// [`node_variants`], each placed (see [`place`]).
+    fn placed_configurations() -> OpmResult<Vec<(&'static str, OpticRef)>> {
+        let mut nodes = node_variants()?;
+        for (node_type, _) in node_types() {
+            nodes.push((node_type, create_node_ref(node_type)?));
+        }
+        nodes.push(("reference", create_node_ref("reference")?));
+        for (_, node) in &mut nodes {
+            place(&mut **node)?;
+        }
+        Ok(nodes)
+    }
+
+    /// A node without a shape of its own has no surfaces to install.
+    #[test]
+    fn a_node_without_geometry_cannot_install_surfaces() {
+        assert!(
+            NodeGroup::default()
+                .install_geometry(
+                    &[("input_1", SurfaceGeometry::FACE)],
+                    &[("output_1", SurfaceGeometry::FACE)],
+                )
+                .is_err()
+        );
+    }
+
+    /// A port sits on a face the geometry has: a lens has two, a single surface one. The error
+    /// names the node, the port and the number of faces.
+    #[test]
+    fn a_port_cannot_sit_on_a_face_the_geometry_does_not_have() {
+        let mut lens = Lens::default();
+        let error = lens
+            .install_geometry(&[("input_1", Extruded::FRONT)], &[("output_1", 2)])
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("output_1"), "{error}");
+        assert!(error.contains("face 2"), "{error}");
+        assert!(error.contains("face count: 2"), "{error}");
+
+        let mut dummy = Dummy::default();
+        let error = dummy
+            .install_geometry(&[("input_1", SurfaceGeometry::FACE)], &[("output_1", 1)])
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("face 1"), "{error}");
+        assert!(error.contains("face count: 1"), "{error}");
+    }
+
+    /// Place a node (see [`place`]) and take its surface snapshot.
+    fn placed_snapshot<T: OpticNode + ?Sized>(node: &mut T) -> OpmResult<Vec<String>> {
+        place(node)?;
+        Ok(surface_snapshot(node))
+    }
+
+    /// The surfaces every registered node type installs in its default configuration.
+    ///
+    /// Pins today's hand-written `update_surfaces` of every node type, so that describing their
+    /// geometry generically cannot change where a surface ends up.
+    #[test]
+    fn every_node_type_installs_its_recorded_surfaces() -> OpmResult<()> {
+        let mut actual = Vec::new();
+        for (node_type, _) in node_types() {
+            let mut node = create_node_ref(node_type)?;
+            actual.push((node_type, placed_snapshot(&mut *node)?));
+        }
+        actual.sort_by_key(|(node_type, _)| *node_type);
+        assert_snapshots(
+            &actual,
+            &[
+                (
+                    "beam splitter",
+                    &[
+                        "in input_1: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
+                        "in input_2: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
+                        "out out1_trans1_refl2: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
+                        "out out2_trans2_refl1: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
+                    ],
+                ),
+                (
+                    "cylindric lens",
+                    &[
+                        "in input_1: cylindric t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.025001, 0.000000) shared=0",
+                        "out output_1: cylindric t=(0.000000, 0.000000, 10.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, -0.025001, 0.000000) shared=1",
+                    ],
+                ),
+                ("dummy", FLAT_INPUT_OUTPUT),
+                ("energy meter", FLAT_INPUT_OUTPUT),
+                ("fluence detector", FLAT_INPUT_OUTPUT),
+                ("group", &[]),
+                ("ideal filter", FLAT_INPUT_OUTPUT),
+                (
+                    "lens",
+                    &[
+                        "in input_1: sphere t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.025001, 0.025001) shared=0",
+                        "out output_1: sphere t=(0.000000, 0.000000, 10.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, -0.025001, -0.025001) shared=1",
+                    ],
+                ),
+                ("mirror", FLAT_INPUT_OUTPUT),
+                (
+                    "parabolic mirror",
+                    &[
+                        "in input_1: parabolic t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, -0.006250, -0.006250) shared=0",
+                        "out output_1: parabolic t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, -0.006250, -0.006250) shared=0",
+                    ],
+                ),
+                ("paraxial surface", FLAT_INPUT_OUTPUT),
+                ("ray propagation", FLAT_INPUT_OUTPUT),
+                ("reflective grating", FLAT_INPUT_OUTPUT),
+                (
+                    "source port",
+                    &[
+                        "out output_1: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
+                    ],
+                ),
+                ("spectrometer", FLAT_INPUT_OUTPUT),
+                ("spot diagram", FLAT_INPUT_OUTPUT),
+                ("wavefront monitor", FLAT_INPUT_OUTPUT),
+                (
+                    "wedge",
+                    &[
+                        "in input_1: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
+                        "out output_1: plane t=(0.000000, 0.000000, 10.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=1",
+                    ],
+                ),
+            ],
+        );
+        Ok(())
+    }
+
+    /// The surfaces of node configurations the default ones do not cover: a tilted exit surface,
+    /// a curved mirror, a flat lens surface, an inverted lens and an off-axis parabola.
+    #[test]
+    fn node_variants_install_their_recorded_surfaces() -> OpmResult<()> {
+        let mut actual = Vec::new();
+        for (label, mut node) in node_variants()? {
+            actual.push((label, placed_snapshot(&mut *node)?));
+        }
+        actual.sort_by_key(|(label, _)| *label);
+        assert_snapshots(
+            &actual,
+            &[
+                (
+                    "5 degree wedge",
+                    &[
+                        "in input_1: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
+                        "out output_1: plane t=(0.000000, 0.000000, 10.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, -0.087156, 0.996195) sag=(0.000000, 0.000000, 0.000000) shared=1",
+                    ],
+                ),
+                (
+                    "90 degree parabola",
+                    &[
+                        "in input_1: parabolic t=(0.000000, -50.000000, -100.000000) x=(0.000000, 0.000000, -1.000000) z=(0.000000, -1.000000, 0.000000) sag=(0.000000, -0.125000, -0.125000) shared=0",
+                        "out output_1: parabolic t=(0.000000, -50.000000, -100.000000) x=(0.000000, 0.000000, -1.000000) z=(0.000000, -1.000000, 0.000000) sag=(0.000000, -0.125000, -0.125000) shared=0",
+                    ],
+                ),
+                (
+                    "inverted lens",
+                    &[
+                        "in input_1: sphere t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.250628, 0.250628) shared=0",
+                        "out output_1: sphere t=(0.000000, 0.000000, 5.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, -0.156403, -0.156403) shared=1",
+                    ],
+                ),
+                (
+                    "plano-convex lens",
+                    &[
+                        "in input_1: sphere t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.250628, 0.250628) shared=0",
+                        "out output_1: plane t=(0.000000, 0.000000, 5.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=1",
+                    ],
+                ),
+                (
+                    "spherical mirror",
+                    &[
+                        "in input_1: sphere t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.062510, 0.062510) shared=0",
+                        "out output_1: sphere t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.062510, 0.062510) shared=0",
+                    ],
+                ),
+                (
+                    "spherical wavefront reference",
+                    &[
+                        "in input_1: sphere t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.125078, 0.125078) shared=0",
+                        "out output_1: sphere t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.125078, 0.125078) shared=0",
+                    ],
+                ),
+            ],
+        );
+        Ok(())
+    }
     #[test]
     fn create_node_ref_error() {
         assert!(create_node_ref("test").is_err());

@@ -8,7 +8,7 @@
 //! System Overview
 //! 1. One collimated line ray source
 //! 2. One decentered 75 mm lens
-//! 3. One 50 mm lens
+//! 3. One 50 mm lens of the same size
 //! 4. One ray propagation visualizer
 //! 5. One wavefront node after the optical system
 //! 6. One ray-tracing analyzer
@@ -26,7 +26,7 @@
 //! This example demonstrates:
 //! - Defining wavelength-dependent refractive index data for HZF52 glass
 //! - Creating a spherical lens with a specified decenter
-//! - Applying a circular aperture to a lens
+//! - Giving a lens its size with an optic shape
 //! - Connecting optical components with fixed propagation distances
 //! - Configuring a ray propagation visualizer
 //! - Adding a wavefront node to the optical system
@@ -36,13 +36,17 @@
 //! Imports:
 //! - `opossum_core::prelude::*` provides optical components, analyzers,
 //!   unit macros, and document types
-//! - `opossum_core::core_optics::{NodeAttrExt, OpticNodeExt}` provides
-//!   optical node extension traits
+//! - `opossum_core::core_optics::NodeAttrExt` provides the optical node
+//!   extension trait
+//! - `opossum_core::apertures::CircleShape` provides the shape of a lens's
+//!   optic shape
 //! - `std::{env, path::Path}` is used to determine the output directory
 //!   and save the generated `.opm` file
 //!
 use opossum_core::{
-    core_optics::{NodeAttrExt, OpticNodeExt},
+    apertures::{CircleShape, RectangleShape},
+    core_optics::NodeAttrExt,
+    geometry::body::OPTIC_SHAPE,
     prelude::*,
 };
 /// Import `Path` from the standard library for working with file paths
@@ -69,6 +73,8 @@ fn main() -> OpmResult<()> {
     // - 10 mm thickness
     // - HZF52 refractive index
     //
+    // - an optic shape of 25 mm radius
+    //
     // The lens is shifted by +5 mm along the y-axis
     // using `with_decenter(...)`
     let mut lens1 = Lens::new(
@@ -79,23 +85,23 @@ fn main() -> OpmResult<()> {
         &refr_index_hzf52,
     )?
     .with_decenter(millimeter!(0.0, 5.0, 0.0))?;
-    // Define a circular aperture with a value of 25 mm
-    let aperture = Aperture::new_circle(
-        millimeter!(25.0),
-        ApertureType::Hole,
-        Some(millimeter!(0.0, 0.0)),
+    lens1.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
     )?;
-    // Apply the aperture to the input side of the first lens
-    lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
     // Add the first lens to the optical system
     let i_pl1 = scenery.add_node(lens1)?;
-    // Create the second lens aligned with the optical axis
-    let lens2 = Lens::new(
+    // Create the second lens aligned with the optical axis, of the same size as the first one
+    let mut lens2 = Lens::new(
         "50 mm lens",
         millimeter!(100.0),
         millimeter!(-100.0),
         millimeter!(10.0),
         &refr_index_hzf52,
+    )?;
+    lens2.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
     )?;
     // Add the second lens to the optical system
     let i_pl2 = scenery.add_node(lens2)?;
@@ -105,8 +111,14 @@ fn main() -> OpmResult<()> {
     ray_prop_vis.set_property("ray transparency", 1.0.into())?;
     // Add the ray visualizer to the system
     let i_sd3 = scenery.add_node(ray_prop_vis)?;
-    // Create a wavefront node after the optical system
-    let i_sd4 = scenery.add_node(WaveFront::new("wavefront after telescope")?)?;
+    // Create a wavefront node after the optical system. The beam reaches it up to 17 mm off its
+    // center: its sensor is 40 mm square.
+    let mut wavefront = WaveFront::new("wavefront after telescope")?;
+    wavefront.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(RectangleShape::new(millimeter!(40.0), millimeter!(40.0))?).into(),
+    )?;
+    let i_sd4 = scenery.add_node(wavefront)?;
     // Connect source → shifted lens
     scenery.connect_nodes(i_src, "output_1", i_pl1, "input_1", millimeter!(20.0))?;
     // Connect shifted lens → second lens
