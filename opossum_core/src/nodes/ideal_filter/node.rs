@@ -219,7 +219,7 @@ impl AnalysisRayTrace for IdealFilter {
         let Some(geometry) = self.node_attr_mut().runtime_geometry_mut() else {
             return Err(OpossumError::Analysis("no surface found. Aborting".into()));
         };
-        geometry.interact(
+        geometry.interact_with_rays(
             face,
             &mut rays,
             &filter_type,

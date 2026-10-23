@@ -335,7 +335,7 @@ mod test {
         let ray0 = Ray::new_collimated(millimeter!(0., 0., 0.), nanometer!(1053.0), joule!(1.0))?;
         let ray1 = Ray::new_collimated(millimeter!(0., 1., 0.), nanometer!(1053.0), joule!(1.0))?;
         let mut rays = Rays::from(vec![ray0.clone(), ray1.clone()]);
-        plane.interact(
+        plane.interact_with_rays(
             SurfaceGeometry::FACE,
             &mut rays,
             &lens,
@@ -367,7 +367,7 @@ mod test {
             )
         };
         let mut rays = Rays::from(vec![with_helpers(5.0)?, with_helpers(20.0)?]);
-        plane.interact(
+        plane.interact_with_rays(
             SurfaceGeometry::FACE,
             &mut rays,
             &lens,

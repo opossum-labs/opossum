@@ -452,7 +452,7 @@ impl AnalysisRayTrace for ParabolicMirror {
         let Some(geometry) = self.node_attr_mut().runtime_geometry_mut() else {
             return Err(OpossumError::Analysis("no surface found. Aborting".into()));
         };
-        let mut reflected_rays = geometry.interact(
+        let mut reflected_rays = geometry.interact_with_rays(
             face,
             &mut rays,
             &Refraction(None),

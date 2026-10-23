@@ -198,7 +198,7 @@ impl BeamSplitter {
                 "input optic surface not found".into(),
             ));
         };
-        let reflected = geometry.interact(
+        let reflected = geometry.interact_with_rays(
             face,
             &mut transmitted,
             &SplittingConfig::Ratio(0.5),

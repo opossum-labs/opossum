@@ -290,7 +290,7 @@ impl Geometry {
     /// # Errors
     ///
     /// This function returns an error if there is no such face.
-    fn surface_of(&mut self, face: FaceIndex) -> OpmResult<&mut OpticSurface> {
+    fn surface_of_mut(&mut self, face: FaceIndex) -> OpmResult<&mut OpticSurface> {
         self.kind_mut()
             .surface_mut(face)
             .ok_or_else(|| OpossumError::Analysis(format!("there is no face {face}")))
@@ -324,7 +324,7 @@ impl Geometry {
     ///
     /// This function returns an error if there is no such face, if the effect fails for a ray or if
     /// a hit cannot be recorded.
-    pub fn interact(
+    pub fn interact_with_rays(
         &mut self,
         face: FaceIndex,
         rays: &mut Rays,
@@ -332,7 +332,7 @@ impl Geometry {
         part: ReflectedPart,
         missed: MissedSurfaceStrategy,
     ) -> OpmResult<Rays> {
-        let coating = *self.surface_of(face)?.coating();
+        let coating = *self.surface_of_mut(face)?.coating();
         let uuid = rays.uuid();
         let mut valid_rays_found = false;
         let mut rays_missed = false;
@@ -374,7 +374,7 @@ impl Geometry {
                 hit_points.push((hit_point, ray.number_of_bounces()));
             }
         }
-        let surface = self.surface_of(face)?;
+        let surface = self.surface_of_mut(face)?;
         for (hit_point, bounces) in hit_points {
             surface.add_to_hit_map(hit_point, bounces, uuid)?;
         }
@@ -409,7 +409,7 @@ impl Geometry {
     /// This function returns an error if there is no such face, if the interaction fails or if the
     /// analysis fails at the surface (e.g. in its fluence evaluation).
     #[allow(clippy::too_many_arguments)]
-    pub fn propagate(
+    pub fn propagate_rays(
         &mut self,
         face: FaceIndex,
         bundles: &mut Vec<Rays>,
@@ -421,11 +421,11 @@ impl Geometry {
     ) -> OpmResult<()> {
         let missed = strategy.missed_surface_strategy();
         for rays in &mut *bundles {
-            let mut reflected = self.interact(face, rays, effect, part, missed)?;
+            let mut reflected = self.interact_with_rays(face, rays, effect, part, missed)?;
             reflected.set_node_origin_uuid(node);
-            strategy.on_surface_interaction(self.surface_of(face)?, rays, reflected, backward)?;
+            strategy.on_surface_interaction(self.surface_of_mut(face)?, rays, reflected, backward)?;
         }
-        bundles.extend_from_slice(self.surface_of(face)?.get_rays_cache(backward));
+        bundles.extend_from_slice(self.surface_of_mut(face)?.get_rays_cache(backward));
         Ok(())
     }
 }
@@ -794,7 +794,7 @@ mod test {
             );
             assert!(geometry.kind().face_name(FaceIndex::new(1)).is_none());
             geometry
-                .surface_of(FaceIndex::new(0))?
+                .surface_of_mut(FaceIndex::new(0))?
                 .set_coating(CoatingType::Fresnel);
             assert!(matches!(
                 geometry
@@ -1148,7 +1148,7 @@ mod test {
     }
     /// The given geometry with the given coating on its face 0.
     fn coated(mut geometry: Geometry, coating: CoatingType) -> OpmResult<Geometry> {
-        geometry.surface_of(FaceIndex::new(0))?.set_coating(coating);
+        geometry.surface_of_mut(FaceIndex::new(0))?.set_coating(coating);
         Ok(geometry)
     }
     /// A reflectivity of 20 %.
@@ -1157,7 +1157,7 @@ mod test {
     }
     /// Refract a bundle into vacuum at face 0 of the given component, with its ghost reflection.
     fn refract(geometry: &mut Geometry, rays: &mut Rays) -> OpmResult<Rays> {
-        geometry.interact(
+        geometry.interact_with_rays(
             FaceIndex::new(0),
             rays,
             &Refraction(Some(&refr_index_vaccuum())),
@@ -1172,7 +1172,7 @@ mod test {
         rays: &mut Rays,
         config: &SplittingConfig,
     ) -> OpmResult<Rays> {
-        geometry.interact(
+        geometry.interact_with_rays(
             FaceIndex::new(0),
             rays,
             config,
@@ -1219,7 +1219,7 @@ mod test {
         rays.set_node_origin_uuid(node_uuid);
         rays.set_parent_uuid(parent_uuid);
         rays.set_parent_node_split_idx(10);
-        let reflected = Geometry::plane(None).interact(
+        let reflected = Geometry::plane(None).interact_with_rays(
             SurfaceGeometry::FACE,
             &mut rays,
             &Refraction(Some(&refr_index_vaccuum())),
@@ -1251,7 +1251,7 @@ mod test {
     fn an_unknown_face_is_an_error() -> OpmResult<()> {
         let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1000.0))?);
         let error = Geometry::plane(None)
-            .interact(
+            .interact_with_rays(
                 FaceIndex::new(1),
                 &mut rays,
                 &Refraction(None),
@@ -1282,7 +1282,7 @@ mod test {
         ray1.set_refractive_index(2.0)?;
         rays.add_ray(ray0);
         rays.add_ray(ray1);
-        Geometry::plane(None).interact(
+        Geometry::plane(None).interact_with_rays(
             SurfaceGeometry::FACE,
             &mut rays,
             &Refraction(None),
@@ -1438,7 +1438,7 @@ mod test {
         bundles: &mut Vec<Rays>,
         config: &RayTraceConfig,
     ) -> OpmResult<()> {
-        geometry.propagate(
+        geometry.propagate_rays(
             face,
             bundles,
             &Refraction(None),
@@ -1454,7 +1454,7 @@ mod test {
         let cached = Rays::from(vec![ray_at(0.0)?, ray_at(7.0)?]);
         let mut plane = bounded_plane()?;
         plane
-            .surface_of(SurfaceGeometry::FACE)?
+            .surface_of_mut(SurfaceGeometry::FACE)?
             .set_forward_rays_cache(vec![cached.clone()]);
         let mut bundles = vec![Rays::from(vec![ray_at(4.9)?, ray_at(5.1)?])];
         propagate(

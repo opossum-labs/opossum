@@ -477,7 +477,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
             )));
         };
         let rays_before: usize = rays_bundle.iter().map(|r| r.nr_of_rays(true)).sum();
-        geometry.propagate(face, rays_bundle, effect, part, backward, uuid, strategy)?;
+        geometry.propagate_rays(face, rays_bundle, effect, part, backward, uuid, strategy)?;
         let rays_after: usize = rays_bundle.iter().map(|r| r.nr_of_rays(true)).sum();
         self.warn_about_lost_rays(rays_before, rays_after);
         Ok(())

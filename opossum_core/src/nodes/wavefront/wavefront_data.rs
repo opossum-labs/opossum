@@ -577,7 +577,7 @@ mod test {
         ));
         let vacuum = refr_index_vaccuum();
         let mut refract = |rays: &mut Rays| {
-            plane.interact(
+            plane.interact_with_rays(
                 SurfaceGeometry::FACE,
                 rays,
                 &Refraction(Some(&vacuum)),

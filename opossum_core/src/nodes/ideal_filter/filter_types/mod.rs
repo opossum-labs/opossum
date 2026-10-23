@@ -187,7 +187,7 @@ mod test {
             |y| Ray::new_collimated(millimeter!(0.0, y, -10.0), nanometer!(1054.0), joule!(1.0));
         let filter = FilterType::Constant(FilterConst::new(percent!(30.0))?);
         let mut rays = Rays::from(vec![ray_at(1.0)?, ray_at(10.0)?]);
-        plane.interact(
+        plane.interact_with_rays(
             SurfaceGeometry::FACE,
             &mut rays,
             &filter,
