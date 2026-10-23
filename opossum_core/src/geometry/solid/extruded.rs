@@ -14,6 +14,7 @@ use super::{Side, face_hits};
 use crate::{
     apertures::Outline,
     error::{OpmResult, OpossumError},
+    gain::Inversion,
     geometry::{
         Face, FaceIndex, GeometryKind, Rim,
         body::{Body, BoundingBox},
@@ -32,6 +33,8 @@ pub struct Extruded {
     rim: Rim,
     front: Face,
     rear: Face,
+    #[serde(skip)]
+    inversion: Option<Inversion>,
 }
 
 impl Extruded {
@@ -64,6 +67,7 @@ impl Extruded {
             rim: Rim::new(outline, axis),
             front,
             rear,
+            inversion: None,
         })
     }
     /// Return the rim bounding this solid sideways: its profile and the axis it is extruded along.
@@ -101,6 +105,9 @@ impl GeometryKind for Extruded {
         None
     }
     fn as_body(&self) -> Option<&dyn Body> {
+        Some(self)
+    }
+    fn as_body_mut(&mut self) -> Option<&mut dyn Body> {
         Some(self)
     }
     fn move_by(&mut self, by: &Isometry) {
@@ -260,6 +267,12 @@ impl Body for Extruded {
     }
     fn side(&self, face: FaceIndex) -> Option<Side> {
         self.face_and_side(face).map(|(_, side)| side)
+    }
+    fn inversion(&self) -> Option<&Inversion> {
+        self.inversion.as_ref()
+    }
+    fn inversion_mut(&mut self) -> &mut Option<Inversion> {
+        &mut self.inversion
     }
 }
 

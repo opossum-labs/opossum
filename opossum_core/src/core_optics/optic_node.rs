@@ -112,10 +112,10 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
         self.update_surfaces()?;
         let config = strategy.pump_config(self.node_attr().uuid());
         let name = self.name().to_owned();
-        let Some((body, inversion)) = self
+        let Some(body) = self
             .node_attr_mut()
             .runtime_mut()
-            .and_then(RuntimeGeometry::medium_mut)
+            .and_then(RuntimeGeometry::body_mut)
         else {
             return Err(OpossumError::Other(format!(
                 "volume node '{name}' encloses no body"
@@ -123,7 +123,8 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
         };
         // The inversion is gain-specific: only build it when the gain model reads one.
         if let Some(model) = config.gain_model().as_extraction() {
-            *inversion = model.build_inversion(body, &config)?;
+            let inversion = model.build_inversion(body, &config)?;
+            *body.inversion_mut() = inversion;
         }
         Ok(())
     }

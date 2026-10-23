@@ -21,7 +21,7 @@ use crate::{
         runtime_geometry::RuntimeGeometry, surface_effect::Refraction,
     },
     error::{OpmResult, OpossumError},
-    gain::{Extraction, Inversion},
+    gain::Extraction,
     geometry::body::Body,
     light::{LightData, LightRays, LightResult, Rays, rays::ReflectedPart},
     material::{MATERIAL, Material},
@@ -180,23 +180,16 @@ pub trait Volumetric: OpticNode {
         }
         // Capture the name before the mutable borrow of `self` through `node_attr_mut`.
         let node_name = self.name().to_owned();
-        let Some((body, inversion)) = self
+        let Some(body) = self
             .node_attr_mut()
             .runtime_mut()
-            .and_then(RuntimeGeometry::medium_mut)
+            .and_then(RuntimeGeometry::body_mut)
         else {
             return Err(OpossumError::Analysis(format!(
                 "node '{node_name}': medium was not prepared before propagation"
             )));
         };
-        march_medium_along_chords(
-            &node_name,
-            body,
-            inversion,
-            extraction,
-            absorption,
-            rays_bundle,
-        )
+        march_medium_along_chords(&node_name, body, extraction, absorption, rays_bundle)
     }
     /// Amplify the spectral energy passing through this node's medium.
     ///
@@ -248,15 +241,14 @@ pub trait Volumetric: OpticNode {
         if strategy.is_positioning_run() {
             return Ok(());
         }
-        let Some((body, inversion)) = self.node_attr().runtime().and_then(RuntimeGeometry::medium)
-        else {
+        let Some(body) = self.node_attr().runtime().and_then(RuntimeGeometry::body) else {
             return Err(OpossumError::Analysis(format!(
                 "node '{}': medium was not prepared before amplification",
                 self.name()
             )));
         };
         extraction
-            .amplify_spectrum(body, inversion, spectrum)
+            .amplify_spectrum(body, spectrum)
             .map_err(|e| OpossumError::Analysis(format!("node '{}': {e}", self.name())))
     }
     /// A unified helper function to analyze optical nodes that enclose a volume of material.
@@ -362,8 +354,8 @@ pub trait Volumetric: OpticNode {
 /// # Arguments
 ///
 /// * `node_name` - name of the owning node, used in error messages.
-/// * `body` - the body of the prepared medium for this analysis run.
-/// * `inversion` - its inversion, which saturating models read and deplete per traversed cell.
+/// * `body` - the body of the prepared medium for this analysis run, with its inversion, which
+///   saturating models read and deplete per traversed cell.
 /// * `extraction` - the dopant gain model to apply, or `None` for a non-amplifying node.
 /// * `absorption` - the host material's absorption model, or `None` for a transparent material.
 /// * `rays_bundle` - the ray bundle inside the medium, modified in place.
@@ -374,8 +366,7 @@ pub trait Volumetric: OpticNode {
 /// `scale_energy` rejects the resulting value.
 fn march_medium_along_chords(
     node_name: &str,
-    body: &dyn Body,
-    inversion: &mut Option<Inversion>,
+    body: &mut dyn Body,
     extraction: Option<&dyn Extraction>,
     absorption: Option<&AbsorptionModel>,
     rays_bundle: &mut [Rays],
@@ -395,7 +386,7 @@ fn march_medium_along_chords(
             // absorption attenuates, and they multiply on the ray energy.
             let mut factor = 1.0_f64;
             if let Some(extraction) = extraction {
-                factor *= extraction.gain_factor(body, ray, inversion);
+                factor *= extraction.gain_factor(body, ray);
             }
             if let Some(absorption) = absorption {
                 factor *= absorption
@@ -628,10 +619,10 @@ mod test {
     fn the_prepared_body_is_bounded_by_the_surfaces_light_is_traced_at() -> OpmResult<()> {
         let mut lens = placed_lens()?;
         lens.prepare_volume(&RayTraceConfig::default())?;
-        let (body, _) = lens
+        let body = lens
             .node_attr()
             .runtime()
-            .and_then(RuntimeGeometry::medium)
+            .and_then(RuntimeGeometry::body)
             .ok_or_else(|| OpossumError::Other("the lens has no medium".into()))?;
         let vertex = |port: &str| -> OpmResult<Point3<Length>> {
             Ok(lens
@@ -673,7 +664,7 @@ mod test {
         assert!(
             lens.node_attr()
                 .runtime()
-                .and_then(RuntimeGeometry::medium)
+                .and_then(RuntimeGeometry::body)
                 .is_some(),
             "prepare_volume must build the body for a passive volume node"
         );
@@ -681,8 +672,8 @@ mod test {
         assert!(
             lens.node_attr()
                 .runtime()
-                .and_then(RuntimeGeometry::medium)
-                .is_some_and(|(_, inversion)| inversion.is_none()),
+                .and_then(RuntimeGeometry::body)
+                .is_some_and(|body| body.inversion().is_none()),
             "a passive node must not have an inversion field"
         );
         // The passive contract: no gain model → no energy change, even with a prepared body.
@@ -1777,7 +1768,7 @@ mod test {
             Ok(head_ref
                 .node_attr()
                 .runtime()
-                .and_then(RuntimeGeometry::medium)
+                .and_then(RuntimeGeometry::body)
                 .is_some())
         };
 

@@ -8,6 +8,7 @@ use uom::si::f64::Length;
 use super::{Side, face_hits};
 use crate::{
     error::{OpmResult, OpossumError},
+    gain::Inversion,
     geometry::{
         Face, FaceIndex, GeometryKind, Rim,
         body::{Body, BoundingBox},
@@ -24,6 +25,8 @@ use crate::{
 pub struct ParametricSolid {
     frame: Isometry,
     faces: Vec<(Face, Side)>,
+    #[serde(skip)]
+    inversion: Option<Inversion>,
 }
 
 impl ParametricSolid {
@@ -45,6 +48,7 @@ impl ParametricSolid {
         Ok(Self {
             frame: Isometry::identity(),
             faces,
+            inversion: None,
         })
     }
     /// Return, for every face in the order they are numbered, whether the point lies on the side of
@@ -83,6 +87,9 @@ impl GeometryKind for ParametricSolid {
     fn as_body(&self) -> Option<&dyn Body> {
         Some(self)
     }
+    fn as_body_mut(&mut self) -> Option<&mut dyn Body> {
+        Some(self)
+    }
     fn move_by(&mut self, by: &Isometry) {
         self.frame = by.append(&self.frame);
         for (face, _) in &mut self.faces {
@@ -118,6 +125,12 @@ impl Body for ParametricSolid {
     }
     fn side(&self, face: FaceIndex) -> Option<Side> {
         self.faces.get(usize::from(face)).map(|(_, side)| *side)
+    }
+    fn inversion(&self) -> Option<&Inversion> {
+        self.inversion.as_ref()
+    }
+    fn inversion_mut(&mut self) -> &mut Option<Inversion> {
+        &mut self.inversion
     }
 }
 

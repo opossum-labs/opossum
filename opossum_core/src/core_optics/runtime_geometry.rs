@@ -1,5 +1,5 @@
-//! The runtime state of a placed component: its geometry, the optic surfaces traced at its faces and
-//! the inversion of the medium it encloses.
+//! The runtime state of a placed component: its geometry, with the inversion of the medium it
+//! encloses, and the optic surfaces traced at its faces.
 
 use std::collections::BTreeMap;
 
@@ -10,7 +10,6 @@ use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
     core_optics::{optic_surface::OpticSurface, surface_effect::SurfaceEffect},
     error::{OpmResult, OpossumError},
-    gain::Inversion,
     geometry::{Geometry, body::Body},
     light::{Rays, rays::ReflectedPart},
 };
@@ -62,7 +61,8 @@ impl RuntimeSurfaces {
 }
 
 /// The geometry of a node as an analysis uses it: moved to where the node sits, together with the
-/// optic surface of every port, each a face of it, and the inversion of the medium it encloses.
+/// optic surface of every port, each a face of it. The medium the geometry encloses holds its own
+/// inversion (see [`Body::inversion`]).
 ///
 /// It is built by [`OpticNodeExt::install_geometry`](crate::core_optics::OpticNodeExt::install_geometry)
 /// and never written to a file.
@@ -70,12 +70,10 @@ impl RuntimeSurfaces {
 pub struct RuntimeGeometry {
     geometry: Geometry,
     surfaces: RuntimeSurfaces,
-    inversion: Option<Inversion>,
 }
 
 impl RuntimeGeometry {
-    /// Creates the runtime state of a placed geometry with its optic surfaces and an empty
-    /// inversion.
+    /// Creates the runtime state of a placed geometry with its optic surfaces.
     ///
     /// # Arguments
     ///
@@ -97,11 +95,7 @@ impl RuntimeGeometry {
                 kind.face_count()
             )));
         }
-        Ok(Self {
-            geometry,
-            surfaces,
-            inversion: None,
-        })
+        Ok(Self { geometry, surfaces })
     }
     /// Returns the placed geometry.
     #[must_use]
@@ -257,7 +251,8 @@ impl RuntimeGeometry {
         bundles.extend_from_slice(self.surfaces.named_mut(surface)?.get_rays_cache(backward));
         Ok(())
     }
-    /// Returns the medium: the body the geometry encloses and the inversion in it.
+    /// Returns the medium: the body the geometry encloses, with the inversion in it (see
+    /// [`Body::inversion`]).
     ///
     /// [`OpticNode::prepare_volume`](crate::core_optics::OpticNode::prepare_volume) fills the
     /// inversion for an analysis run, and
@@ -265,20 +260,21 @@ impl RuntimeGeometry {
     ///
     /// # Returns
     ///
-    /// The body and the inversion, if a model built one; or `None` for a single surface, which
-    /// encloses no volume.
+    /// The body, or `None` for a single surface, which encloses no volume.
     #[must_use]
-    pub fn medium(&self) -> Option<(&dyn Body, Option<&Inversion>)> {
-        Some((self.geometry.kind().as_body()?, self.inversion.as_ref()))
+    pub fn body(&self) -> Option<&dyn Body> {
+        self.geometry.kind().as_body()
     }
-    /// Returns the medium as [`RuntimeGeometry::medium`] does, with the inversion to be built or
+    /// Returns the medium as [`RuntimeGeometry::body`] does, with the inversion to be built or
     /// depleted.
-    pub fn medium_mut(&mut self) -> Option<(&dyn Body, &mut Option<Inversion>)> {
-        Some((self.geometry.kind().as_body()?, &mut self.inversion))
+    pub fn body_mut(&mut self) -> Option<&mut dyn Body> {
+        self.geometry.kind_mut().as_body_mut()
     }
     /// Clears the inversion of the medium between analysis runs.
     pub fn clear_inversion(&mut self) {
-        self.inversion = None;
+        if let Some(body) = self.body_mut() {
+            *body.inversion_mut() = None;
+        }
     }
 }
 
@@ -293,6 +289,7 @@ mod test {
         core_optics::surface_effect::Refraction,
         degree,
         distributions::{fluence::general_gaussian::General2DGaussian, position::Hexapolar},
+        gain::Inversion,
         geometry::{Extruded, Face, FaceIndex, SurfaceShape},
         joule,
         light::{Ray, Spectrum},
@@ -338,12 +335,12 @@ mod test {
     fn a_single_surface_has_no_medium() -> OpmResult<()> {
         assert!(
             RuntimeGeometry::new(test_body()?, RuntimeSurfaces::default())?
-                .medium()
+                .body()
                 .is_some()
         );
         assert!(
             RuntimeGeometry::new(Geometry::plane(None), RuntimeSurfaces::default())?
-                .medium()
+                .body()
                 .is_none()
         );
         Ok(())
@@ -362,20 +359,21 @@ mod test {
         );
         Ok(())
     }
-    /// The medium starts without an inversion; building one fills it, and clearing empties it.
+    /// The medium starts without an inversion; building one in its body fills it, and clearing
+    /// empties it.
     #[test]
     fn set_and_clear_the_inversion() -> OpmResult<()> {
         let mut runtime = RuntimeGeometry::new(test_body()?, RuntimeSurfaces::default())?;
         let has_inversion = |runtime: &RuntimeGeometry| {
             runtime
-                .medium()
-                .is_some_and(|(_, inversion)| inversion.is_some())
+                .body()
+                .is_some_and(|body| body.inversion().is_some())
         };
         assert!(!has_inversion(&runtime));
-        let (_, inversion) = runtime
-            .medium_mut()
+        let body = runtime
+            .body_mut()
             .ok_or_else(|| OpossumError::Other("the disk has no medium".into()))?;
-        *inversion = Some(Inversion::Uniform(1.0));
+        *body.inversion_mut() = Some(Inversion::Uniform(1.0));
         assert!(has_inversion(&runtime));
         runtime.clear_inversion();
         assert!(!has_inversion(&runtime));

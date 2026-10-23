@@ -8,6 +8,7 @@ use uom::si::f64::Length;
 use super::Side;
 use crate::{
     error::{OpmResult, OpossumError},
+    gain::Inversion,
     geometry::{
         Face, FaceIndex, Geometry, GeometryKind, Rim,
         body::{Body, BoundingBox},
@@ -115,6 +116,8 @@ pub struct Assembly {
     frame: Isometry,
     parts: Vec<Part>,
     interfaces: Vec<Interface>,
+    #[serde(skip)]
+    inversion: Option<Inversion>,
 }
 
 impl Assembly {
@@ -175,6 +178,7 @@ impl Assembly {
             frame: Isometry::identity(),
             parts,
             interfaces,
+            inversion: None,
         })
     }
     /// Return the part a face of the assembly belongs to, and the number the face has in the solid
@@ -221,6 +225,9 @@ impl GeometryKind for Assembly {
     fn as_body(&self) -> Option<&dyn Body> {
         Some(self)
     }
+    fn as_body_mut(&mut self) -> Option<&mut dyn Body> {
+        Some(self)
+    }
     fn move_by(&mut self, by: &Isometry) {
         self.frame = by.append(&self.frame);
         for part in &mut self.parts {
@@ -264,6 +271,13 @@ impl Body for Assembly {
     fn side(&self, face: FaceIndex) -> Option<Side> {
         self.locate(face)
             .and_then(|(part, own_face)| part.geometry.kind().as_body()?.side(own_face))
+    }
+    /// The inversion of the assembly as one medium, as a gain model sees its body.
+    fn inversion(&self) -> Option<&Inversion> {
+        self.inversion.as_ref()
+    }
+    fn inversion_mut(&mut self) -> &mut Option<Inversion> {
+        &mut self.inversion
     }
 }
 

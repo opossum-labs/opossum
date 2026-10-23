@@ -26,6 +26,7 @@
 use crate::{
     apertures::{CircleShape, OpticShape, RectangleShape},
     error::{OpmResult, OpossumError},
+    gain::Inversion,
     geometry::{FaceIndex, Side},
     light::Ray,
     millimeter, nanometer,
@@ -210,6 +211,10 @@ pub trait Body: Debug + Send + Sync {
     ///
     /// The side of the face the body lies on, or `None` if there is no such face.
     fn side(&self, face: FaceIndex) -> Option<Side>;
+    /// Return the inversion a gain model built in this [`Body`], or `None` if there is none.
+    fn inversion(&self) -> Option<&Inversion>;
+    /// Return the inversion of this [`Body`], to be built, depleted or cleared.
+    fn inversion_mut(&mut self) -> &mut Option<Inversion>;
     /// Return the length of the straight chord a [`Ray`] cuts through this [`Body`], found from the
     /// points where it meets the boundary.
     ///

@@ -353,6 +353,9 @@ pub trait GeometryKind {
     /// Return the volume this geometry encloses, or `None` for a single surface, which encloses
     /// none.
     fn as_body(&self) -> Option<&dyn Body>;
+    /// Return the volume this geometry encloses, as [`GeometryKind::as_body`] does, mutably: for
+    /// the inversion a gain model builds or depletes in it.
+    fn as_body_mut(&mut self) -> Option<&mut dyn Body>;
     /// Move this geometry by an isometry (see [`Geometry::move_by`]).
     ///
     /// # Arguments
@@ -457,6 +460,9 @@ impl GeometryKind for SurfaceGeometry {
     fn as_body(&self) -> Option<&dyn Body> {
         None
     }
+    fn as_body_mut(&mut self) -> Option<&mut dyn Body> {
+        None
+    }
     fn move_by(&mut self, by: &Isometry) {
         self.face.move_by(by);
         self.extent.move_by(by);
@@ -470,6 +476,7 @@ mod test {
         apertures::CircleShape,
         degree,
         error::OpossumError,
+        gain::Inversion,
         geometry::{Parabola, Part, Side, Sphere},
         joule,
         material::Material,
@@ -574,8 +581,8 @@ mod test {
         );
         Ok(())
     }
-    /// Every kind of solid has its faces numbered, encloses a volume and moves its faces along; a
-    /// single surface encloses none.
+    /// Every kind of solid has its faces numbered, encloses a volume that holds an inversion and
+    /// moves its faces along; a single surface encloses none.
     #[test]
     fn every_kind_of_solid_numbers_its_faces_and_encloses_a_volume() -> OpmResult<()> {
         let parametric = Geometry::Parametric(ParametricSolid::new(vec![(
@@ -586,15 +593,24 @@ mod test {
         let part = Part::new(&Isometry::identity(), parametric.clone(), glass)?;
         let assembly = Geometry::Assembly(Assembly::new(vec![part], vec![])?);
         let frame = Isometry::new(millimeter!(1.0, -2.0, 30.0), degree!(10.0, 5.0, 0.0))?;
-        for geometry in [parametric, assembly] {
+        for mut geometry in [parametric, assembly] {
             assert_eq!(geometry.kind().face_count(), 1);
             assert!(geometry.kind().as_body().is_some());
             assert_eq!(
                 frame_of(&moved_copy(&geometry, &frame), FaceIndex::new(0))?,
                 frame.append(&frame_of(&geometry, FaceIndex::new(0))?)
             );
+            let body = geometry
+                .kind_mut()
+                .as_body_mut()
+                .ok_or_else(|| OpossumError::Other("the solid encloses no volume".into()))?;
+            *body.inversion_mut() = Some(Inversion::Uniform(1.0));
+            assert_eq!(
+                geometry.kind().as_body().and_then(Body::inversion),
+                Some(&Inversion::Uniform(1.0))
+            );
         }
-        assert!(Geometry::plane(None).kind().as_body().is_none());
+        assert!(Geometry::plane(None).kind_mut().as_body_mut().is_none());
         Ok(())
     }
     /// A curved face has to reach as far out as the outline it is bounded by; a sphere or a
